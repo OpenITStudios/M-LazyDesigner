@@ -225,10 +225,76 @@ const CROSS_CUBE_SAMPLE_LIMIT = 1024;
 const CROSS_CUBE_ENDPOINT_EPSILON = 1e-6;
 const CROSS_CUBE_NORMAL_DOT = 0.9999;
 
-function crossCubeEdgeKey(edge: TextureSeamEdgeInput): string {
-  const start = pointKey(edge.start);
-  const end = pointKey(edge.end);
-  return start < end ? start + "|" + end : end + "|" + start;
+/**
+ * Match physical edges by actual endpoint distance, not a rounded string key:
+ * neighboring coordinates can fall on opposite sides of a quantization bin.
+ * Index both endpoints into adjacent epsilon-sized spatial cells, then check
+ * both complete segments before merging any connected matches. A nontransitive
+ * chain remains an ambiguous group (>2), never a fabricated clean pair.
+ */
+function groupCrossCubeEdges(
+  edges: readonly CrossCubeSeamEdgeInput[]
+): CrossCubeSeamEdgeInput[][] {
+  const parents = edges.map((_, index) => index);
+  const find = (index: number): number => {
+    let root = index;
+    while (parents[root] !== root) root = parents[root];
+    while (parents[index] !== root) {
+      const previous = parents[index];
+      parents[index] = root;
+      index = previous;
+    }
+    return root;
+  };
+  const unite = (a: number, b: number): void => {
+    const left = find(a), right = find(b);
+    if (left !== right) parents[right] = left;
+  };
+  const cellKey = (x: number, y: number, z: number): string =>
+    x + "," + y + "," + z;
+  const index = new Map<string, number[]>();
+  const eps = CROSS_CUBE_ENDPOINT_EPSILON;
+  const epsSquared = eps * eps;
+  const sameEdge = (a: CrossCubeSeamEdgeInput, b: CrossCubeSeamEdgeInput): boolean =>
+    (squaredDistance(a.start, b.start) <= epsSquared &&
+      squaredDistance(a.end, b.end) <= epsSquared) ||
+    (squaredDistance(a.start, b.end) <= epsSquared &&
+      squaredDistance(a.end, b.start) <= epsSquared);
+
+  edges.forEach((edge, edgeIndex) => {
+    const candidates = new Set<number>();
+    for (const point of [edge.start, edge.end]) {
+      const [x, y, z] = point.map(value => Math.floor(value / eps));
+      for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dz = -1; dz <= 1; dz++) {
+            const nearby = index.get(cellKey(x + dx, y + dy, z + dz));
+            if (nearby) for (const match of nearby) candidates.add(match);
+          }
+    }
+    for (const candidate of candidates) {
+      if (sameEdge(edge, edges[candidate])) unite(edgeIndex, candidate);
+    }
+    for (const point of [edge.start, edge.end]) {
+      const key = cellKey(
+        Math.floor(point[0] / eps),
+        Math.floor(point[1] / eps),
+        Math.floor(point[2] / eps)
+      );
+      const stored = index.get(key) ?? [];
+      stored.push(edgeIndex);
+      index.set(key, stored);
+    }
+  });
+
+  const groups = new Map<number, CrossCubeSeamEdgeInput[]>();
+  edges.forEach((edge, i) => {
+    const root = find(i);
+    const group = groups.get(root) ?? [];
+    group.push(edge);
+    groups.set(root, group);
+  });
+  return [...groups.values()];
 }
 
 function normalizedWorldNormal(edge: CrossCubeSeamEdgeInput): [number, number, number] {
@@ -328,13 +394,7 @@ export function analyzeCrossCubeSeamContinuity(
     throw new Error("Cross-Cube seam input/example budget exceeded.");
   }
   for (const edge of edges) requireCrossCubeEdge(edge);
-  const groups = new Map<string, CrossCubeSeamEdgeInput[]>();
-  for (const edge of edges) {
-    const key = crossCubeEdgeKey(edge);
-    const group = groups.get(key) ?? [];
-    group.push(edge);
-    groups.set(key, group);
-  }
+  const groups = groupCrossCubeEdges(edges);
 
   const paired: Array<ReturnType<typeof crossCubeVisibleSummary> & {
     cubes: [{ uuid: string; name: string }, { uuid: string; name: string }];
@@ -352,7 +412,7 @@ export function analyzeCrossCubeSeamContinuity(
   };
   let unpaired = 0, ambiguous = 0;
 
-  for (const group of groups.values()) {
+  for (const group of groups) {
     if (group.length === 1) { unpaired++; continue; }
     if (group.length !== 2) { ambiguous++; continue; }
     const [left, right] = group;

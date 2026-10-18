@@ -402,6 +402,18 @@ Review in this order:
 9. secondary detail density
 ```
 
+**Cross-Cube seam diagnostics:** Compare edges only when the surface/material
+identity and continuity intent agree, the world-facing normals align, and
+both physical endpoints fall within the declared tolerance (including on
+opposite sides of a coordinate rounding boundary). Merely sharing a
+quantized coordinate, one endpoint, or a nearby T-junction is insufficient.
+Three or more edges connected by tolerance remain **ambiguous**, never an
+arbitrarily accepted pair. An `INTENTIONAL_BOUNDARY` stays excluded even
+when geometry nearly coincides; a sharp color/material separation can be
+correct according to the approved reference. These checks remain advisory,
+caller-supplied texture evidence, not native sampling or automatic visual
+PASS. Verify only the ranked material seam candidates on fresh model views.
+
 `Texture Atlas exists`, `UV Layout exists`, or `paint tool succeeded` does not prove Texture Styling quality.
 
 Texture mutation makes visual evidence stale. Correct only diagnosed failures and re-check affected evidence.

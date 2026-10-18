@@ -4,6 +4,10 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**2026-10-18 Cross-Cube seam tolerance boundary (source):** `seamContinuity.ts` now groups matched physical edges by actual <=1e-6 endpoint distance, using bounded local spatial lookup rather than 1e-5 rounded exact-key equality. Intentional material boundaries remain excluded; tolerance chains are ambiguous, not clean pairs. Five focused regression fixtures written. **Bun, typecheck, CI, native Blockbench sampling, visual quality and performance NOT EXECUTED.** No user files/assets changed.
+
+
+
 **2026-10-18 Shared-UV geometry-driven texture masks — pending source acceptance:** `geometrySignalCompiler.ts` now checks exact reusable UV shading compatibility, partial shared texels, raster aliases and finite normal magnitude; nine pure tests and Texture policy reference edits are prepared. No native project or user files changed. **Bun/CI/typecheck and native visual acceptance NOT EXECUTED**; source checks are not proof of improved asset quality. See [next-action](next-action.md#current-bounded-work--one-flow-context-integrity-chatgpt--github).
 
 

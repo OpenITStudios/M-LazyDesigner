@@ -31,6 +31,14 @@ wrong/missing identity marking
 ```
 An improvement on one island is `REGRESSED` if the mapped model introduces a material seam, mirrored identity error, or cross-surface discontinuity elsewhere. Do not let atlas neatness override mapped fidelity.
 
+For cross-Cube continuity, use **declared material/surface ownership and
+intent** before comparing colors. The seam helper tolerates small world-edge
+coordinate differences across rounding boundaries but does not infer a
+defect from coincident geometry alone; an intentional boundary is excluded,
+and edge groups with multiple candidate matches remain unresolved. Do not
+repair color differences automatically or treat pure diagnostics as a fresh
+mapped-model verdict.
+
 ## Correction Convergence
 One visible cause owns one correction round. Reuse the latest atlas UUID, mapped-face state, mutation receipt, and fresh comparable capture when they already answer the next decision.
 

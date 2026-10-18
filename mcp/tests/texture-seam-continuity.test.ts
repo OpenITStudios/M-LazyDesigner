@@ -181,6 +181,70 @@ describe("cross-Cube seam continuity diagnostics", () => {
     ]).exclusions.SAMPLE_ALIGNMENT_UNVERIFIED).toBe(1);
   });
 
+  test("pairs edges across quantization boundaries when physical endpoints remain within epsilon", () => {
+    // 1.000005 is the old 1e-5 rounding boundary. Difference is only 2e-7.
+    const result = analyzeCrossCubeSeamContinuity([
+      cross({ start: [1.0000049, 0, 0], end: [1.0000049, 1, 0] }),
+      adjoining({
+        start: [1.0000051, 1, 0], end: [1.0000051, 0, 0],
+        samples: [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]],
+      }),
+    ]);
+    expect(result.compared_pair_count).toBe(1);
+    expect(result.unpaired_edge_count).toBe(0);
+    expect(result.review.candidate_count).toBe(1);
+    expect(result.visual_verdict).toBe("not_evaluated");
+  });
+
+  test("intentional boundary remains excluded even when endpoint tolerance groups it", () => {
+    const result = analyzeCrossCubeSeamContinuity([
+      cross({ start: [1.0000049, 0, 0], end: [1.0000049, 1, 0] }),
+      adjoining({
+        continuity_intent: "INTENTIONAL_BOUNDARY", material_id: "metal",
+        start: [1.0000051, 1, 0], end: [1.0000051, 0, 0],
+        samples: [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]],
+      }),
+    ]);
+    expect(result.exclusions.INTENTIONAL_BOUNDARY).toBe(1);
+    expect(result.compared_pair_count).toBe(0);
+    expect(result.review.candidate_count).toBe(0);
+    expect(result.gate.reasons).toEqual([]);
+  });
+
+  test("nearby-but-separated world edges remain unresolved even when rounded keys used to match", () => {
+    const result = analyzeCrossCubeSeamContinuity([
+      cross({ start: [1.000002, 0, 0], end: [1.000002, 1, 0] }),
+      adjoining({ start: [1.000004, 1, 0], end: [1.000004, 0, 0] }),
+    ]);
+    expect(result.compared_pair_count).toBe(0);
+    expect(result.unpaired_edge_count).toBe(2);
+    expect(result.review.candidate_count).toBe(0);
+  });
+
+  test("tolerance-chain with three candidate edges stays ambiguous instead of arbitrarily paired", () => {
+    const result = analyzeCrossCubeSeamContinuity([
+      cross({ start: [1.0000044, 0, 0], end: [1.0000044, 1, 0] }),
+      adjoining({ start: [1.0000050, 1, 0], end: [1.0000050, 0, 0] }),
+      adjoining({
+        cube_uuid: "cube-third",
+        start: [1.0000056, 1, 0], end: [1.0000056, 0, 0],
+      }),
+    ]);
+    expect(result.ambiguous_group_count).toBe(1);
+    expect(result.compared_pair_count).toBe(0);
+    expect(result.review.candidate_count).toBe(0);
+  });
+
+  test("bounded repeated endpoints are grouped without claiming false clean seams", () => {
+    const edges = Array.from({ length: 256 }, (_, i) =>
+      cross({ cube_uuid: "repeat-" + i })
+    );
+    const result = analyzeCrossCubeSeamContinuity(edges);
+    expect(result.ambiguous_group_count).toBe(1);
+    expect(result.compared_pair_count).toBe(0);
+    expect(result.input_edge_count).toBe(256);
+  });
+
   test("near-but-not-touching edges and T-junctions remain unresolved", () => {
     const offset = analyzeCrossCubeSeamContinuity([
       cross(), adjoining({ start: [1 + 5e-6, 1, 0], end: [1 + 5e-6, 0, 0] }),
