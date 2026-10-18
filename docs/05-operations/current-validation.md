@@ -46,4 +46,4 @@ The pinned **Bun 1.4.3** was installed, and `bun install --frozen-lockfile` comp
 
 ## Proof boundary
 
-Do not strengthen source/static claims into local/live/visual claims without matching evidence from the exact current source SHA. Record SHA, run, job, scope, required successful steps and separately native evidence before claiming PASS. For a docs-only head, `Head Proof` may establish that executable source did not change; this is source equivalence, not test execution. Source-impacting heads continue to require matching-SHA source gates and native proof where applicable.
+Do not strengthen source/static claims into local/live/visual claims without matching evidence from the exact current source SHA. Record SHA, run, job, scope, required successful steps and separately native evidence before claiming PASS. For a docs-only head, `Head Proof` may establish that executable source did not change; this is source-equivalence evidence, not test execution. Source-impacting heads continue to require matching-SHA source gates and native proof where applicable.
