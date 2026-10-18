@@ -225,21 +225,6 @@ export class BlockitRuntimeBackend {
     return resolution.changed;
   }
 
-  private syncProjectAffinityFromHealth(
-    health: JsonRecord,
-    bindIfUnset: boolean,
-    allowMissingBoundProject: boolean = false
-  ): boolean {
-    const resolution = resolveProjectAffinity(
-      this.projectUuid,
-      health,
-      bindIfUnset,
-      allowMissingBoundProject
-    );
-    this.projectUuid = resolution.value;
-    return resolution.changed;
-  }
-
   private async closeClientBestEffort(client: Client): Promise<void> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {

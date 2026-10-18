@@ -343,7 +343,6 @@ function inspectParticleEffects(animation: _Animation, includeKeyframes: boolean
         // previously invisible to inspect_animation diagnostics.
         preview_file: typeof particle.file === "string" && particle.file.length > 0
           ? particle.file : null,
-        locator: particle.locator || null,
         bind_to_actor: particle.bind_to_actor === false ? false : null,
         pre_effect_script: normalizePreEffectScript(particle.script),
       };

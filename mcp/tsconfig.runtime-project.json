@@ -26,6 +26,7 @@
     "blockbench-runtime-augmentations.d.ts",
     "package.json",
     "compatibility/blockbench.json",
+    "compatibility/lazydesigner-identity.ts",
     "prompts/manifest.json"
   ],
   "exclude": [
