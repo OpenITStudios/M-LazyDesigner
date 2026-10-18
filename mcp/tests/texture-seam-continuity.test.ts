@@ -79,6 +79,101 @@ describe("texture seam continuity", () => {
     expect(result.gate.reasons).toEqual([]);
   });
 
+  test("intra-Cube hidden RGB cannot create a false high-contrast review", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ samples: Array.from({ length: 4 }, () => [0, 0, 0, 0] as [number, number, number, number]) }),
+      edge({
+        face: "east", edge: "left", start: [1, 1, 0], end: [1, 0, 0],
+        samples: Array.from({ length: 4 }, () => [255, 255, 255, 0] as [number, number, number, number]),
+      }),
+    ]);
+    expect(result.paired_seam_count).toBe(1);
+    expect(result.ranked_examples[0].rgb_evaluated_sample_count).toBe(0);
+    expect(result.ranked_examples[0].mean_rgb_difference).toBeNull();
+    expect(result.ranked_examples[0].max_rgb_difference).toBeNull();
+    expect(result.ranked_examples[0].high_contrast).toBe(false);
+    expect(result.review.candidate_count).toBe(0);
+    expect(result.gate.reasons).toEqual([]);
+  });
+
+  test("non-opacity alpha masks keep underlying RGB relevant to intra-Cube seams", () => {
+    const input = [
+      edge({ samples: Array.from({ length: 4 }, () => [0, 0, 0, 0] as [number, number, number, number]) }),
+      edge({
+        face: "east", edge: "left", start: [1, 1, 0], end: [1, 0, 0],
+        samples: Array.from({ length: 4 }, () => [255, 255, 255, 0] as [number, number, number, number]),
+      }),
+    ];
+    const opacity = analyzeTextureSeamContinuity(input);
+    const mask = analyzeTextureSeamContinuity(input, 6, "NON_OPACITY");
+    expect(opacity.review.candidate_count).toBe(0);
+    expect(mask.alpha_semantics).toBe("NON_OPACITY");
+    expect(mask.ranked_examples[0].rgb_evaluated_sample_count).toBe(4);
+    expect(mask.ranked_examples[0].mean_rgb_difference).toBe(1);
+    expect(mask.review.high_contrast_count).toBe(1);
+    // A color/emissive mask is not physical transparency evidence.
+    expect(mask.review.alpha_discontinuity_count).toBe(0);
+  });
+
+  test("intra-Cube one-sided alpha hole remains an advisory seam candidate", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ samples: Array.from({ length: 4 }, () => [0, 0, 0, 0] as [number, number, number, number]) }),
+      edge({
+        face: "east", edge: "left", start: [1, 1, 0], end: [1, 0, 0],
+        samples: Array.from({ length: 4 }, () => [255, 255, 255, 255] as [number, number, number, number]),
+      }),
+    ]);
+    expect(result.ranked_examples[0].rgb_evaluated_sample_count).toBe(0);
+    expect(result.ranked_examples[0].high_contrast).toBe(false);
+    expect(result.ranked_examples[0].alpha_discontinuity).toBe(true);
+    expect(result.review.candidate_count).toBe(1);
+    expect(result.review.alpha_discontinuity_count).toBe(1);
+  });
+
+  test("only mutually visible samples count toward intra-Cube RGB contrast", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ samples: [
+        [10, 10, 10, 255], [0, 0, 0, 0],
+        [10, 10, 10, 255], [0, 0, 0, 0],
+      ] }),
+      edge({
+        face: "east", edge: "left", start: [1, 1, 0], end: [1, 0, 0],
+        samples: [
+          [255, 255, 255, 0], [10, 10, 10, 255],
+          [255, 255, 255, 0], [10, 10, 10, 255],
+        ],
+      }),
+    ]);
+    const seam = result.ranked_examples[0];
+    // Reversed alignment pairs two mutually visible matching pixels; hidden
+    // underlying RGB at the other two positions must not dilute or bias.
+    expect(seam.rgb_evaluated_sample_count).toBe(2);
+    expect(seam.mean_rgb_difference).toBe(0);
+    expect(seam.alpha_discontinuity).toBe(false);
+    expect(result.review.candidate_count).toBe(0);
+  });
+
+  test("mutually visible mismatched RGB remains a review candidate", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ samples: [
+        [0, 0, 0, 255], [0, 0, 0, 0],
+        [0, 0, 0, 255], [0, 0, 0, 0],
+      ] }),
+      edge({
+        face: "east", edge: "left", start: [1, 1, 0], end: [1, 0, 0],
+        samples: [
+          [255, 255, 255, 0], [255, 255, 255, 255],
+          [255, 255, 255, 0], [255, 255, 255, 255],
+        ],
+      }),
+    ]);
+    // Reverse alignment makes the two visible pairs 0 versus 255.
+    expect(result.ranked_examples[0].rgb_evaluated_sample_count).toBe(2);
+    expect(result.ranked_examples[0].mean_rgb_difference).toBe(1);
+    expect(result.ranked_examples[0].high_contrast).toBe(true);
+    expect(result.review.candidate_count).toBe(1);
+  });
+
   test("unpaired outer edges remain inventory rather than false seam failures", () => {
     const result = analyzeTextureSeamContinuity([edge()]);
     expect(result.paired_seam_count).toBe(0);
@@ -142,6 +237,27 @@ describe("cross-Cube seam continuity diagnostics", () => {
     expect(result.ranked_examples[0].rgb_evaluated_sample_count).toBe(0);
     expect(result.ranked_examples[0].mean_rgb_difference).toBeNull();
     expect(result.review.candidate_count).toBe(0);
+  });
+
+  test("cross-Cube opacity and non-opacity masks use the same declared RGB policy", () => {
+    const input = [
+      cross({ samples: [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]] }),
+      adjoining({ samples: [[255, 255, 255, 0], [255, 255, 255, 0], [255, 255, 255, 0]] }),
+    ];
+    const opacity = analyzeCrossCubeSeamContinuity(input);
+    const mask = analyzeCrossCubeSeamContinuity(input, 6, "NON_OPACITY");
+    expect(opacity.ranked_examples[0].mean_rgb_difference).toBeNull();
+    expect(mask.ranked_examples[0].rgb_evaluated_sample_count).toBe(3);
+    expect(mask.ranked_examples[0].mean_rgb_difference).toBe(1);
+    expect(mask.review.candidate_count).toBe(1);
+    expect(mask.visual_verdict).toBe("not_evaluated");
+  });
+
+  test("invalid alpha semantic is rejected instead of silently using opacity", () => {
+    expect(() => analyzeTextureSeamContinuity([edge()], 6, "UNKNOWN" as never))
+      .toThrow("alpha semantics");
+    expect(() => analyzeCrossCubeSeamContinuity([cross()], 6, "UNKNOWN" as never))
+      .toThrow("alpha semantics");
   });
 
   test("one-sided alpha holes remain review candidates without visible RGB samples", () => {

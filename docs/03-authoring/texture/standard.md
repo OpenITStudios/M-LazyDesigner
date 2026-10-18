@@ -414,6 +414,20 @@ correct according to the approved reference. These checks remain advisory,
 caller-supplied texture evidence, not native sampling or automatic visual
 PASS. Verify only the ranked material seam candidates on fresh model views.
 
+**RGB seam evidence and alpha meaning:** Intra-Cube and cross-Cube seam
+diagnostics use one sample-comparison rule. In `OPACITY` mode, RGB is
+compared only when both corresponding texels have nonzero alpha; alpha holes
+remain a separate discontinuity signal. When no RGB pair is visible, report
+`mean_rgb_difference=null` rather than a misleading perfect zero, and
+retain the evaluated sample count. For an atlas whose alpha represents an
+emissive or color mask rather than opacity (e.g., `entity_emissive` or
+`entity_change_color`), pass explicit `NON_OPACITY` semantics so zero-alpha
+pixels still contribute to RGB comparison. The legacy pure diagnostic
+default is `OPACITY` for compatibility, **not proof of the actual render
+profile**. If the material consumer is unknown, color-visible seam
+conclusions remain UNVERIFIED until alpha meaning is resolved. The analyzer
+does not infer the material from PNG bytes.
+
 `Texture Atlas exists`, `UV Layout exists`, or `paint tool succeeded` does not prove Texture Styling quality.
 
 Texture mutation makes visual evidence stale. Correct only diagnosed failures and re-check affected evidence.

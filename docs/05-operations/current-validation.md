@@ -4,6 +4,15 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**Seam RGB diagnostics alignment (2026-10-18, source only):** Intra-/cross-
+Cube share visible RGB calculation, distinguish zero visible sample evidence
+from matching colors, preserve alpha-only discrepancies, and allow explicit
+non-opacity alpha-mask interpretation. Pure regression cases prepared.
+Actual Bun/CI, render-profile provenance and native Blockbench quality:
+**NOT EXECUTED**. No user assets changed.
+
+
+
 **2026-10-18 Cross-Cube seam tolerance boundary (source):** `seamContinuity.ts` now groups matched physical edges by actual <=1e-6 endpoint distance, using bounded local spatial lookup rather than 1e-5 rounded exact-key equality. Intentional material boundaries remain excluded; tolerance chains are ambiguous, not clean pairs. Five focused regression fixtures written. **Bun, typecheck, CI, native Blockbench sampling, visual quality and performance NOT EXECUTED.** No user files/assets changed.
 
 

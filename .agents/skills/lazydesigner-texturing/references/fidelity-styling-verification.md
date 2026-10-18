@@ -39,6 +39,15 @@ and edge groups with multiple candidate matches remain unresolved. Do not
 repair color differences automatically or treat pure diagnostics as a fresh
 mapped-model verdict.
 
+For both intra-Cube and cross-Cube seam comparisons, inspect the alpha
+meaning before interpreting RGB. The pure seam helper defaults to `OPACITY`:
+RGB beneath a zero-alpha pixel is not visible contrast evidence and empty
+RGB coverage is reported as `null`, not zero difference. For material
+consumers using alpha as an emissive/color mask, explicitly select
+`NON_OPACITY` so underlying RGB is evaluated. Without a verified render
+profile, neither mode establishes a material or visual PASS; one-sided
+opacity holes and alpha-mask differences remain advisory evidence.
+
 ## Correction Convergence
 One visible cause owns one correction round. Reuse the latest atlas UUID, mapped-face state, mutation receipt, and fresh comparable capture when they already answer the next decision.
 

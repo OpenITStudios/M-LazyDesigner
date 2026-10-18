@@ -6,6 +6,20 @@ This file owns **current continuation only**, not the patch history. Canonical w
 
 ## Current bounded work — One-Flow context integrity (ChatGPT / GitHub)
 
+**Current next action — seam RGB evidence semantics (source prepared):** The
+single `seamSummary` now serves intra-/cross-Cube comparison, excludes RGB
+when either alpha is zero in default `OPACITY` mode, uses null + evaluated
+count when no RGB pair is visible, and supports explicit `NON_OPACITY` mode
+for color/emissive masks. Existing normal, intentional-boundary, alpha-hole
+and no-visual-PASS rules remain. Focused fixtures updated in
+`mcp/tests/texture-seam-continuity.test.ts`. On a capable cloud checkout
+run `cd mcp && bun test tests/texture-seam-continuity.test.ts` followed by
+the owning TypeScript/source gates. Bun, CI, real client/material profile,
+native mapped visuals and performance remain NOT EXECUTED. No PC localtest
+required.
+
+
+
 **2026-10-18 Cross-Cube seam endpoint grouping — SOURCE_IMPLEMENTED pending execution:** `mcp/lib/texture/seamContinuity.ts` no longer groups physical edges solely by quantized endpoint string. Candidate edges are located through bounded spatial epsilon cells (both endpoints), then matched by actual endpoint-distance checks in either orientation; connected tolerance chains with more than two candidates are ambiguous, not approved pairs. This addresses false `unpaired` outputs at a 1e-5 rounding boundary while still refusing noncoincident T-junctions, mismatched surface/material identity and explicitly intentional boundaries. Existing 2048-edge input limit and diagnostic-only/no-native/no-visual-PASS semantics remain. Five pure seam regression cases added in `mcp/tests/texture-seam-continuity.test.ts`, including near-boundary, beyond-epsilon, intentional boundary, ambiguous chain and bounded repetition; no new tool or native asset update.
 
 **Proof boundary:** source/fixture content only. Bun tests, typecheck, exact-SHA CI, actual Blockbench mapped-seam visual quality and performance measurement NOT EXECUTED. Existing repo cloud gate: `cd mcp && bun test tests/texture-seam-continuity.test.ts tests/texture-masks.test.ts tests/texture-geometry-signal-compiler.test.ts` followed by owning typecheck/source verifier when a capable cloud runner is available; do not require localtest on the user's PC.

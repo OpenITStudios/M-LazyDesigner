@@ -11,6 +11,15 @@ export type TextureSeamEdgeInput = {
 };
 
 export const TEXTURE_SEAM_EXAMPLE_LIMIT = 6;
+
+/** Alpha may represent opacity/cutout or a non-opacity color/emissive mask. */
+export type TextureSeamAlphaSemantics = "OPACITY" | "NON_OPACITY";
+
+function requireAlphaSemantics(value: TextureSeamAlphaSemantics): void {
+  if (value !== "OPACITY" && value !== "NON_OPACITY") {
+    throw new Error("Texture seam alpha semantics must be OPACITY or NON_OPACITY.");
+  }
+}
 const POSITION_QUANTIZATION = 100_000;
 
 function ratio(value: number, total: number): number {
@@ -100,7 +109,8 @@ function alignedSamples(
 
 function seamSummary(
   left: TextureSeamEdgeInput,
-  right: TextureSeamEdgeInput
+  right: TextureSeamEdgeInput,
+  alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
 ) {
   const aligned = alignedSamples(left, right);
   let rgbSum = 0;
@@ -108,21 +118,27 @@ function seamSummary(
   let alphaSum = 0;
   let alphaMax = 0;
   let visiblePairs = 0;
+  let rgbEvaluatedSamples = 0;
 
   for (let index = 0; index < aligned.left.length; index += 1) {
     const a = aligned.left[index];
     const b = aligned.right[index];
-    const rgb = normalizedRgbDifference(a, b);
+    // RGB underneath fully transparent pixels is not visible seam evidence.
+    // One-sided coverage still contributes to the separate alpha diagnostic.
+    if (alphaSemantics === "NON_OPACITY" || (a[3] > 0 && b[3] > 0)) {
+      const rgb = normalizedRgbDifference(a, b);
+      rgbSum += rgb;
+      rgbMax = Math.max(rgbMax, rgb);
+      rgbEvaluatedSamples += 1;
+    }
     const alpha = Math.abs(a[3] - b[3]) / 255;
-    rgbSum += rgb;
-    rgbMax = Math.max(rgbMax, rgb);
     alphaSum += alpha;
     alphaMax = Math.max(alphaMax, alpha);
-    if (a[3] > 0 || b[3] > 0) visiblePairs += 1;
+    if (alphaSemantics === "NON_OPACITY" || a[3] > 0 || b[3] > 0) visiblePairs += 1;
   }
 
   const count = aligned.left.length;
-  const meanRgb = count === 0 ? 0 : rgbSum / count;
+  const meanRgb = rgbEvaluatedSamples === 0 ? null : rgbSum / rgbEvaluatedSamples;
   const meanAlpha = count === 0 ? 0 : alphaSum / count;
 
   return {
@@ -133,20 +149,24 @@ function seamSummary(
       { face: right.face, edge: right.edge },
     ],
     sample_count: count,
+    alpha_semantics: alphaSemantics,
     visible_pair_ratio: ratio(visiblePairs, count),
-    mean_rgb_difference: Number(meanRgb.toFixed(4)),
-    max_rgb_difference: Number(rgbMax.toFixed(4)),
+    rgb_evaluated_sample_count: rgbEvaluatedSamples,
+    mean_rgb_difference: meanRgb === null ? null : Number(meanRgb.toFixed(4)),
+    max_rgb_difference: rgbEvaluatedSamples === 0 ? null : Number(rgbMax.toFixed(4)),
     mean_alpha_difference: Number(meanAlpha.toFixed(4)),
     max_alpha_difference: Number(alphaMax.toFixed(4)),
-    high_contrast: meanRgb >= 0.4,
+    high_contrast: meanRgb !== null && meanRgb >= 0.4,
     alpha_discontinuity: alphaMax >= 0.5,
   };
 }
 
 export function analyzeTextureSeamContinuity(
   edges: readonly TextureSeamEdgeInput[],
-  exampleLimit = TEXTURE_SEAM_EXAMPLE_LIMIT
+  exampleLimit = TEXTURE_SEAM_EXAMPLE_LIMIT,
+  alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
 ) {
+  requireAlphaSemantics(alphaSemantics);
   for (const edge of edges) requireEdge(edge);
 
   const groups = new Map<string, TextureSeamEdgeInput[]>();
@@ -159,10 +179,10 @@ export function analyzeTextureSeamContinuity(
 
   const paired = [...groups.values()]
     .filter((group) => group.length === 2 && group[0].face !== group[1].face)
-    .map((group) => seamSummary(group[0], group[1]))
+    .map((group) => seamSummary(group[0], group[1], alphaSemantics))
     .sort(
       (a, b) =>
-        b.mean_rgb_difference - a.mean_rgb_difference ||
+        (b.mean_rgb_difference ?? -1) - (a.mean_rgb_difference ?? -1) ||
         b.mean_alpha_difference - a.mean_alpha_difference
     );
   const unpaired = [...groups.values()].filter((group) => group.length === 1);
@@ -174,6 +194,7 @@ export function analyzeTextureSeamContinuity(
   return {
     state: edges.length === 0 ? ("not_applicable" as const) : ("available" as const),
     scope: "intra_cube" as const,
+    alpha_semantics: alphaSemantics,
     cross_cube_continuity: "not_evaluated" as const,
     sampled_edge_count: edges.length,
     paired_seam_count: paired.length,
@@ -193,7 +214,7 @@ export function analyzeTextureSeamContinuity(
       reasons: review.length > 0 ? ["SEAM_CONTINUITY_REVIEW"] : [],
     },
     note:
-      "Only face edges within the same Cube are paired; cross-Cube continuity is not evaluated. Seam contrast is advisory evidence, not a style score or automatic failure. Intentional face lighting/material boundaries may differ; inspect ranked candidates against the approved reference.",
+      "Only face edges within the same Cube are paired; cross-Cube continuity is not evaluated. OPACITY mode excludes RGB whenever either alpha is zero; NON_OPACITY mode retains RGB for color/emissive masks. The caller must confirm actual render-profile alpha meaning. Alpha differences remain reviewable; seam contrast is advisory evidence, not a style score or automatic visual failure.",
   };
 }
 
@@ -351,44 +372,16 @@ function crossCubeSkipReason(
 }
 
 /**
- * RGB underneath fully transparent texels is not visible color evidence.
- * Only pixels visible on BOTH adjacent surfaces enter the RGB comparison;
- * one-sided transparency remains covered by the alpha discontinuity test.
- */
-function crossCubeVisibleSummary(
-  left: CrossCubeSeamEdgeInput,
-  right: CrossCubeSeamEdgeInput
-) {
-  const base = seamSummary(left, right);
-  const aligned = alignedSamples(left, right);
-  const differences: number[] = [];
-  for (let i = 0; i < aligned.left.length; i++) {
-    const a = aligned.left[i], b = aligned.right[i];
-    if (a[3] > 0 && b[3] > 0) differences.push(normalizedRgbDifference(a, b));
-  }
-  const mean = differences.length
-    ? differences.reduce((sum, value) => sum + value, 0) / differences.length
-    : null;
-  return {
-    ...base,
-    rgb_evaluated_sample_count: differences.length,
-    mean_rgb_difference: mean === null ? null : Number(mean.toFixed(4)),
-    max_rgb_difference: differences.length
-      ? Number(Math.max(...differences).toFixed(4))
-      : null,
-    high_contrast: mean !== null && mean >= 0.4,
-  };
-}
-
-/**
  * Conservative diagnostics for exactly paired, explicitly continuous,
  * same-facing Cube surface edges. It never declares a visual PASS/FAIL,
  * silently joins T-junctions, or calls a different-material boundary broken.
  */
 export function analyzeCrossCubeSeamContinuity(
   edges: readonly CrossCubeSeamEdgeInput[],
-  exampleLimit = TEXTURE_SEAM_EXAMPLE_LIMIT
+  exampleLimit = TEXTURE_SEAM_EXAMPLE_LIMIT,
+  alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
 ) {
+  requireAlphaSemantics(alphaSemantics);
   if (edges.length > CROSS_CUBE_INPUT_LIMIT ||
       !Number.isInteger(exampleLimit) || exampleLimit < 1 || exampleLimit > 30) {
     throw new Error("Cross-Cube seam input/example budget exceeded.");
@@ -396,7 +389,7 @@ export function analyzeCrossCubeSeamContinuity(
   for (const edge of edges) requireCrossCubeEdge(edge);
   const groups = groupCrossCubeEdges(edges);
 
-  const paired: Array<ReturnType<typeof crossCubeVisibleSummary> & {
+  const paired: Array<ReturnType<typeof seamSummary> & {
     cubes: [{ uuid: string; name: string }, { uuid: string; name: string }];
     surface_id: string;
     material_id: string;
@@ -419,7 +412,7 @@ export function analyzeCrossCubeSeamContinuity(
     const reason = crossCubeSkipReason(left, right);
     if (reason) { skips[reason]++; continue; }
     paired.push({
-      ...crossCubeVisibleSummary(left, right),
+      ...seamSummary(left, right, alphaSemantics),
       cubes: [
         { uuid: left.cube_uuid, name: left.cube_name },
         { uuid: right.cube_uuid, name: right.cube_name },
@@ -438,6 +431,7 @@ export function analyzeCrossCubeSeamContinuity(
   return {
     state: edges.length === 0 ? ("not_applicable" as const) : ("available" as const),
     scope: "cross_cube" as const,
+    alpha_semantics: alphaSemantics,
     cross_cube_continuity: paired.length ? ("diagnostic_only" as const) : ("not_evaluated" as const),
     visual_verdict: "not_evaluated" as const,
     native_sampling_attested: false as const,
@@ -461,6 +455,6 @@ export function analyzeCrossCubeSeamContinuity(
       state: "advisory" as const,
       reasons: review.length ? ["CROSS_CUBE_SEAM_REVIEW"] : [],
     },
-    note: "Only caller-declared, identical-material and surface-identity, same-facing world-edge pairs are compared. Texture provenance, in-game rendering, intended highlights, and unexamined scene edges remain unverified. This is not a visual quality verdict.",
+    note: "Only caller-declared, identical-material and surface-identity, same-facing world-edge pairs are compared. OPACITY mode assumes zero alpha hides RGB; NON_OPACITY mode retains RGB for color/emissive masks. Confirm render-profile alpha meaning; texture provenance, in-game rendering and unexamined edges remain unverified. This is not a visual verdict.",
   };
 }
