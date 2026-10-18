@@ -128,7 +128,7 @@ describe("Skill quality-first context contract", () => {
       version: number;
       cases: Array<{
         id: string; skill: string; prompt: string; decision: string;
-        reference: string | null; reason: string;
+        reference?: string | null; references?: string[]; reason: string;
       }>;
     };
     expect(fixture.version).toBe(1);
@@ -147,6 +147,14 @@ describe("Skill quality-first context contract", () => {
       if (row.decision === "REQUIRED_ON_TRIGGER") {
         expect(row.reference).not.toBeNull();
         expect((owner.references as readonly string[])).toContain(row.reference);
+      } else if (row.decision === "SEQUENTIAL_REQUIRED") {
+        // Do not block valid multi-decision work with a one-module ceiling.
+        const ordered = row.references ?? [];
+        expect(ordered.length).toBeGreaterThan(1);
+        expect(new Set(ordered).size).toBe(ordered.length);
+        for (const reference of ordered) {
+          expect((owner.references as readonly string[])).toContain(reference);
+        }
       } else {
         expect(row.decision).toBe("NO_DEEP_REFERENCE");
         expect(row.reference).toBeNull();
@@ -156,6 +164,7 @@ describe("Skill quality-first context contract", () => {
       expect(fixture.cases.some((row) => row.skill === skill && row.decision === "REQUIRED_ON_TRIGGER")).toBe(true);
       expect(fixture.cases.some((row) => row.skill === skill && row.decision === "NO_DEEP_REFERENCE")).toBe(true);
     }
+    expect(fixture.cases.some((row) => row.decision === "SEQUENTIAL_REQUIRED")).toBe(true);
     // These are intended model-evaluation cases, not an executed AI trace.
   });
 

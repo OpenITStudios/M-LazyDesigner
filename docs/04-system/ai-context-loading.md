@@ -44,7 +44,9 @@ Modules are not a second router, supervisor, independent Skill, or duplicate
 policy authority; follow only direct links from the active Skill.
 
 Select one decision-changing module at a time, reuse already-loaded current
-content, and expand only for a named unresolved need. An existing path,
+content, and expand only for a named unresolved need. Multiple distinct
+decisions may legitimately require modules **sequentially**; a one-at-a-time
+loading rule must not become an absolute one-module quality ceiling. An existing path,
 content hash, `known_context_ids`, or `context_ready` does **not** attest that
 the client still has the **loaded content** after compaction; reload the current
 source before dependent work when it was lost. If required-on-trigger content

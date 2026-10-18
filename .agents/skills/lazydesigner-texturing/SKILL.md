@@ -116,12 +116,21 @@ For format-sensitive profiles, load `render-profile.md`: `entity_emissive` requi
 
 ## Fidelity / Styling / Verification Deep Reference
 
-Load `references/fidelity-styling-verification.md` only when:
+**REQUIRED_ON_TRIGGER:** load the current content of
+`references/fidelity-styling-verification.md` before:
 
 - mapped texture work is being judged against the approved reference;
 - a representative styling patch is ready to propagate;
 - render/alpha/PBR verification is required;
 - a texture-owned correction loop is active.
+
+**NO_DEEP_REFERENCE:** a bounded exact-RGBA change with known pixel/atlas
+identity and already verified UV/alpha/mapping state uses the normal
+`paint_texture_transaction` path. Do not load the fidelity module merely
+to re-enter an approved color. A new seam, material/value, alpha-render or
+reference-fidelity ambiguity activates the corresponding review above.
+Failure to obtain required-on-trigger content blocks the dependent
+large-scale styling decision, not independent known-safe edits.
 
 Hot-path invariants:
 - compare mapped model surfaces, not atlas neatness alone;

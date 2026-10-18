@@ -4,6 +4,10 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**2026-10-18 Skill activation follow-up (source only):** Three authoring Skills now explicitly differentiate required-on-trigger deep module reads and routine no-deep-reference work; Geometry allows sequential distinct modules rather than a strict single-module ceiling. Ten module-loading intent cases are prepared and 22 candidate-source consistency checks were recorded. **Bun, CI exact-SHA, AI tool/client retrieval traces and Blockbench quality NOT EXECUTED**; the cases are expectations, not observed decisions. See [next-action](next-action.md#current-bounded-work--one-flow-context-integrity-chatgpt--github).
+
+
+
 **2026-10-18 Quality-First Progressive Skills — source policy change:** The hard per-Skill character rejections have been replaced with advisory thresholds (~15,000 for core Geometry/Texturing/Animation, smaller role-specific review levels elsewhere), while preserving static owner/metadata/direct-module activation contracts. Eight development-only must-load/no-deep-reference scenarios were prepared; these do not demonstrate that the model read or followed a module. **Bun/source CI, model behavior, installed Runtime and visual improvement remain NOT EXECUTED.** This policy change does not modify any asset, main specialist content, or public Gateway tool. See [next-action](next-action.md#current-bounded-work--one-flow-context-integrity-chatgpt--github).
 
 

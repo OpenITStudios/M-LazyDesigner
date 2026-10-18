@@ -65,6 +65,25 @@
       "decision": "NO_DEEP_REFERENCE",
       "reference": null,
       "reason": "The normal timeline path already supplies sufficient context."
+    },
+    {
+      "id": "geometry-correction-to-verification",
+      "skill": "lazydesigner-modelling",
+      "prompt": "Fix the known silhouette gap, then judge the corrected form against the approved front/side views before accepting Geometry PASS.",
+      "decision": "SEQUENTIAL_REQUIRED",
+      "references": [
+        "references/correction.md",
+        "references/verification.md"
+      ],
+      "reason": "Two distinct dependent decisions—bounded causal correction then fresh fidelity verdict—require both modules in order, not bulk preload."
+    },
+    {
+      "id": "texture-known-pixel-after-reference",
+      "skill": "lazydesigner-texturing",
+      "prompt": "The exact approved RGBA pixel color is already known. Apply it to the same verified atlas region and do not perform a new reference-fidelity review.",
+      "decision": "NO_DEEP_REFERENCE",
+      "reference": null,
+      "reason": "Repeated already-resolved source context is not necessary for a deterministic pixel mutation."
     }
   ]
 }

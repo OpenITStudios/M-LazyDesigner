@@ -6,6 +6,12 @@ This file owns **current continuation only**, not the patch history. Canonical w
 
 ## Current bounded work — One-Flow context integrity (ChatGPT / GitHub)
 
+**2026-10-18 Skill activation audit (current SOURCE_IMPLEMENTED):** Geometry, Texturing and Animation `SKILL.md` now distinguish `REQUIRED_ON_TRIGGER` deep content from `NO_DEEP_REFERENCE` routine safe work. Geometry no longer uses an absolute one-reference ceiling: separate correction/fidelity/UV decisions can read directly linked modules *sequentially* without preloading them. Texturing exact mapped RGBA edits and Animation pre-agreed numeric keys remain normal hot-path operations when already verified; material fidelity/alpha and motion/contact/correction decisions require their existing specialist evidence module before dependent expansion. No additional specialist, router, runtime/tool contract, or reference file was created.
+
+**Coverage:** module-loading evaluation corpus now has 10 intended scenarios including Geometry sequential correction→verification and redundant-read avoidance; the existing budget/ownership test supports these cases. 22 targeted static consistency checks were performed against candidate file contents; this is not Bun execution or observed retrieval behavior. Next run `cd mcp && bun test tests/repository/agent-skill-context-budget.test.ts tests/repository/skill-lane-contract.test.ts tests/repository/authoring-skill-owner-integrity.test.ts tests/authoring/model-effectiveness-primary-geometry.test.ts tests/authoring/texture-production-discipline.test.ts tests/authoring/animation-professional-reasoning.test.ts` on a capable cloud checkout, then the exact-SHA repository source verifier. Evaluate must-load/must-not-load client traces separately, and reserve Blockbench visual quality for real native proof. Do not require user localtest.
+
+
+
 **2026-10-18 SKILL_SYSTEM source implementation — Quality-First Progressive Skills:**
 The 15,000-character asset specialist budget is an **advisory review threshold**, not a hard test failure, target to fill or license to skip mandatory guidance. Existing smaller reference/router/delegated budgets are also advisory. `docs/04-system/ai-context-loading.md` owns the policy: operational core always available, one-hop conditional expertise (required-on-trigger versus supporting), load/reload actual client content, preserve critical invariants, and judge quality before savings. No new Skill, second Control layer, or change to the three working specialist contents.
 

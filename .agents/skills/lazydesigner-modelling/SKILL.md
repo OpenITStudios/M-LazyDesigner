@@ -133,10 +133,13 @@ Before Geometry PASS, apply only relevant export hygiene from `docs/03-authoring
 
 ## Progressive Deep References
 
-Keep the hot path compact. Load exactly one deep reference when its decision becomes active:
+Keep the hot path compact. **REQUIRED_ON_TRIGGER** means read the current
+reference content before its dependent material decision. Select one
+decision-relevant module at a time; if a later distinct decision needs another
+module, load it sequentially without preloading all modules:
 
 ```text
-fresh Geometry fidelity / PASS judgement
+material size/format warning or Geometry fidelity / PASS judgement
 → references/verification.md
 
 user-approved Geometry → production UV / UV Layout PASS
@@ -145,6 +148,13 @@ user-approved Geometry → production UV / UV Layout PASS
 bounded local correction / convergence / evidence recovery
 → references/correction.md
 ```
+
+**NO_DEEP_REFERENCE:** an already specified, unrotated Cube with a verified
+parent and fresh reference/scale state can use the normal `manage_cubes`
+cohort path. Do not load these references as reassurance. If a new size,
+representation, contact, UV or reference-fidelity question emerges, apply
+the corresponding trigger before dependent expansion. Absence of required
+evidence blocks only that decision; it never authorizes a guessed PASS.
 
 Hot-path invariants:
 Surface Coverage / Negative Space; User Geometry APPROVED is required.

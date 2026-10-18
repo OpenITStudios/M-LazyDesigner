@@ -127,11 +127,19 @@ For action/weight when applicable: `anticipation → action/impact → follow-th
 
 ## Fidelity / Correction / Evidence Deep Reference
 
-Load `references/fidelity-correction-evidence.md` only when:
+**REQUIRED_ON_TRIGGER:** load the current content of
+`references/fidelity-correction-evidence.md` before:
 
 - keyframe motion is being judged against an approved visual/reference target;
 - a correction loop is active;
 - evidence reuse, stale views, or convergence decisions are needed.
+
+**NO_DEEP_REFERENCE:** insert a pre-agreed numeric keyframe into the
+verified bone/clip through the normal timeline route without loading
+fidelity theory as reassurance. If contact, timing, weight, controller
+transition, correction or evidence freshness becomes a material question,
+use the relevant module before expanding follower keys or effects.
+Missing required-on-trigger content never licenses fabricated motion PASS.
 
 Hot-path invariants:
 - tool success never proves motion fidelity;
