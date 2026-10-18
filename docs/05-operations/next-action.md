@@ -6,6 +6,12 @@ This file owns **current continuation only**, not the patch history. Canonical w
 
 ## Current bounded work — One-Flow context integrity (ChatGPT / GitHub)
 
+**2026-10-18 Texturing mask evidence preflight (SOURCE_IMPLEMENTED pending executable proof):** The existing `mcp/lib/texture/maskedOps.ts` owner now rejects nonfinite ScalarMask weights, invalid RGBA color channels and mismatched mask dimensions before returning a paint result. Previously NaN mask arithmetic could coerce to 0 in Uint8Array, producing black/transparent pixels without a diagnostic. The same preflight covers composed directional wear and geometry-aware material treatment, while finite RGB-only alpha-preserving behavior remains unchanged. Focused regression fixtures are in `mcp/tests/texture-masks.test.ts`. No new tool, visual quality score, Skill module, atlas or native asset change.
+
+**Next source proof:** matching-SHA cloud Bun `cd mcp && bun test tests/texture-masks.test.ts tests/procedural-texture-ops.test.ts tests/texture-treatment-intelligence.test.ts` and relevant typecheck/source gates when available. GitHub source review is not executable evidence. Native Blockbench/material fidelity remains UNVERIFIED, with no user localtest required.
+
+
+
 **2026-10-18 Skill-module maintenance contract — SOURCE_PREPARED:** Existing
 Skill Development owner now specifies smallest-surface updates for new,
 renamed, retired or revised Geometry/Texturing/Animation modules, including

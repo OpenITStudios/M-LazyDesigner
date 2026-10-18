@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { edgeMask } from "@/lib/texture/masks";
-import { applyMaskedColor } from "@/lib/texture/maskedOps";
+import { applyDirectionalWear, applyMaskedColor } from "@/lib/texture/maskedOps";
 import { applyGeometryAwareMaterialTreatment } from "@/lib/texture/geometryAwareTreatment";
 import { renderTextureSourceRecipe } from "@/lib/texture/sourceComposer";
 
@@ -66,5 +66,43 @@ describe("geometry-aware texture alpha boundaries", () => {
     expect(Array.from(applyMaskedColor(source, 1, 1, mask, [90, 90, 90, 255], 1,
       { preserveAlpha: true, skipTransparent: true })))
       .toEqual([10, 20, 30, 0]);
+  });
+});
+
+describe("mask evidence must not silently corrupt authored texture", () => {
+  const original = new Uint8Array([40, 70, 120, 0, 140, 180, 210, 128]);
+
+  test("rejects NaN/infinite coverage without mutating original RGBA", () => {
+    const before = Array.from(original);
+    for (const badWeight of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const mask = { width: 2, height: 1, values: new Float32Array([0.5, badWeight]) };
+      expect(() => applyMaskedColor(original, 2, 1, mask, [255, 0, 0, 255], 1))
+        .toThrow("finite mask weights");
+      expect(() => applyDirectionalWear(original, 2, 1, mask, [255, 0, 0, 255], "x", 1))
+        .toThrow("finite mask weights");
+      expect(() => applyGeometryAwareMaterialTreatment(original, 2, 1,
+        { edge: mask }, { wear: { color: [255, 0, 0, 255], strength: 1 } }))
+        .toThrow("finite mask weights");
+      expect(Array.from(original)).toEqual(before);
+    }
+  });
+
+  test("rejects incomplete coverage and invalid colors before any paint result", () => {
+    const incomplete = { width: 2, height: 1, values: new Float32Array([1]) };
+    expect(() => applyDirectionalWear(original, 2, 1, incomplete, [255, 255, 0, 255], "y", 1))
+      .toThrow("Mask dimensions");
+    const valid = { width: 2, height: 1, values: new Float32Array([1, 1]) };
+    expect(() => applyMaskedColor(original, 2, 1, valid, [255, Number.NaN, 0, 255], 1))
+      .toThrow("finite RGBA");
+  });
+
+  test("finite normalized masks preserve cutout alpha with protected color styling", () => {
+    const valid = { width: 2, height: 1, values: new Float32Array([1, 0.5]) };
+    const result = applyDirectionalWear(original, 2, 1, valid, [200, 10, 10, 255], "x", 1,
+      { preserveAlpha: true, skipTransparent: true });
+    expect([...result.slice(0, 4)]).toEqual([...original.slice(0, 4)]);
+    expect(result[7]).toBe(128);
+    expect(result[4]).not.toBe(original[4]);
+    expect(Array.from(original)).toEqual([40, 70, 120, 0, 140, 180, 210, 128]);
   });
 });

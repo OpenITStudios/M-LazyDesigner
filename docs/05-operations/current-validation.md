@@ -4,6 +4,10 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**2026-10-18 Texture ScalarMask source hardening:** Masked RGB/RGBA and directional wear now fail on nonfinite mask values (preventing implicit Uint8Array black/zero coercion), invalid RGBA color channels or mismatched mask shape. The geometry-aware treatment path is covered by pure fixture tests. Runtime code/test present; Bun/CI/native execution and visual-quality claims NOT EXECUTED. See [next-action](next-action.md#current-bounded-work--one-flow-context-integrity-chatgpt--github).
+
+
+
 **2026-10-18 Skill modular maintenance — repository implementation:** Added a
 bounded upgrade/retirement contract to the existing Skill Development owner;
 the Skill-budget contract now discovers actual direct reference files and
