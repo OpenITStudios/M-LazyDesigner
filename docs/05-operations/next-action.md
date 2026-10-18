@@ -14,6 +14,8 @@ This file owns **continuation only**, not history. Flow: `docs/01-product/flow.m
 
 ## Temporary Full CI
 
+**Latest evidence:** repository tests 278/278 PASS, but `MCP Verify` is still blocked by typecheck at `3a9037f`. Official MCP required conformance now PASS with optional/pending differences still visible. Both security audits remain FAIL. The present commit fixes only the unused parameter; inspect a newly completed exact-SHA run before claiming TypeScript, runtime or build acceptance.
+
 User authorized automatic non-publishing verification on `Local` pushes. Workflows: MCP full, Dependency Security, MCP Conformance, Windows Desktop Verify and Release Readiness source-only. Manual focused MCP and separate manual release/draft/package workflows remain. No changes to `main` or user installation. An automatic push is not a PASS: inspect exact SHA, required steps and artifacts.
 
 ## System boundaries

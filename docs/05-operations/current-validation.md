@@ -22,6 +22,8 @@ The pinned **Bun 1.4.3** was installed, and `bun install --frozen-lockfile` comp
 
 ## Current proof matrix
 
+**2026-10-19 incremental CI:** At `3a9037f`, all 278 repository tests PASS; TypeScript later failed one unused callback parameter in the managed-install test, so `verify:full` remains FAIL pending next execution. The pinned 2026-07-28 MCP Conformance CLI passed all scored requirements; its run [39152012603](https://github.com/MIVUBI-STD/M-LazyDesigner/actions/runs/39152012603) completed successfully. It still transparently reports 36 failing optional/pending checks. Desktop and Bun security audits remain blocked by high advisories. GitHub Actions artifact storage quota has been exhausted for supplemental uploads; a storage/upload failure must not disguise a source, protocol or package verdict.
+
 | Surface | Owner / minimum evidence | Limit |
 | --- | --- | --- |
 | Repository policy | `verify:repository` | Static tests, currently failing |

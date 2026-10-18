@@ -141,7 +141,7 @@ test("retired BlockIT configuration and plugin are rejected without changing fil
 });
 
 test("preflight catches legacy blockers before package staging, without touching user files", async () => {
-  await sandbox(async (d, options) => {
+  await sandbox(async (_directory, options) => {
     const executable = join(options.root, "versions", "a".repeat(40), "lazydesigner.exe");
     await mkdir(dirname(options.plugin), { recursive: true });
     const oldPlugin = join(dirname(options.plugin), "blockit_mcp.js");
