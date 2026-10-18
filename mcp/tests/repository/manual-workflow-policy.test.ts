@@ -22,15 +22,42 @@ function triggers(yaml: string): string[] {
   return names;
 }
 
-describe("manual-only GitHub Actions", () => {
-  test("every registered workflow has workflow_dispatch as its only event", async () => {
+describe("Local Full CI and protected manual release workflows", () => {
+  test("only authorized non-publishing workflows run on Local pushes", async () => {
     const names = (await readdir("../.github/workflows")).filter((n) => n.endsWith(".yml")).sort();
     expect(names).toEqual([...FILES].sort());
+    const auto = new Set([
+      "mcp-verify.yml",
+      "dependency-security.yml",
+      "mcp-conformance.yml",
+      "desktop-verify.yml",
+      "release-readiness.yml",
+    ]);
+    expect(auto.size).toBe(5);
     for (const file of FILES) {
       const yaml = await Bun.file(`../.github/workflows/${file}`).text();
-      expect(triggers(yaml), file).toEqual(["workflow_dispatch"]);
-      expect(yaml).toContain("contents: read");
+      if (auto.has(file)) {
+        expect(triggers(yaml), file).toEqual(["push", "workflow_dispatch"]);
+        expect(yaml, file).toMatch(/^  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+        expect(yaml, file).not.toMatch(/^    (?:tags|paths|paths-ignore):/m);
+        expect(yaml, file).not.toMatch(/contents:\s*write/);
+      } else {
+        expect(triggers(yaml), file).toEqual(["workflow_dispatch"]);
+      }
+      expect(yaml, file).not.toMatch(/^  (?:pull_request|schedule|workflow_run|release|create|delete):/m);
+      expect(yaml, file).toContain("contents: read");
     }
+  });
+
+  test("automatic MCP source verification is full, manual texture focus remains available", async () => {
+    const workflow = await Bun.file("../.github/workflows/mcp-verify.yml").text();
+    expect(workflow).toContain("default: full");
+    expect(workflow).toContain("options:\n          - full\n          - texture");
+    expect(workflow).toContain("if: ${{ github.event_name == 'push' || inputs.verification != 'texture' }}");
+    expect(workflow).toContain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.verification == 'texture' }}");
+    expect(workflow).toContain("run: bun run verify:full");
+    expect(workflow).toContain("run: bun run verify:texture:focused");
+    expect(workflow).toContain("requiredSteps.map(name => steps[name])");
   });
 
   test("verification and draft releases preserve their original proof boundaries", async () => {

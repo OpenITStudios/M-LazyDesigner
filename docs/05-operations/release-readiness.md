@@ -18,7 +18,7 @@ From the repository root, using Node 24:
 
 These operations are read-only apart from synthetic test fixtures created under the OS temporary directory. They do NOT run Bun builds, Cargo builds, cleanup, signing, installer creation or publication. A source PASS proves static configuration checks only.
 
-GitHub workflow "Release Readiness / Source Only" is manual-only (`workflow_dispatch`) on `Local`, with read-only repository permission and no packaging. It does not run on push, create/upload assets, or publish releases. The GitHub Actions UI may require the workflow to be registered on the default branch before the Run workflow control is available; do not change `main` merely to enable it.
+During temporary user-authorized Full CI, GitHub workflow "Release Readiness / Source Only" runs a read-only source preflight on every push to `Local` and remains manually dispatchable (`workflow_dispatch`). It never creates/uploads packages or publishes releases. The manual Run workflow control may still require default-branch registration; automatic Local push verification does not require changing `main`.
 
 ## For a separately authorized future build only
 

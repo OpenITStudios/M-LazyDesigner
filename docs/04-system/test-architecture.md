@@ -6,7 +6,7 @@
 
 ## Decision
 
-Modernize the **existing** `bun:test`, affected-work planner, manual CI and
+Modernize the **existing** `bun:test`, affected-work planner, temporarily automatic Local Full CI and
 native-acceptance boundaries. Do not build a second test framework, autonomous
 test router, result database, scheduler, or parallel source of truth. Use the
 single execution selector `mcp/gateway/development/affectedExecution.ts`;
@@ -43,7 +43,7 @@ not accepted-quality scores.
 | `mcp/scripts/development/plan-affected-execution.ts` | On-demand inspection of planned work |
 | `mcp/scripts/development/run-affected-execution.ts` | Sequential execution with fail-on-error |
 | `mcp/tests/**/*.test.ts` and co-located tests | Bun test evidence |
-| `.github/workflows/mcp-verify.yml` | Manual focused/full exact-SHA source verification |
+| `.github/workflows/mcp-verify.yml` | Full exact-SHA on Local push, focused/full manual source verification |
 | `.github/workflows/desktop-verify.yml` and `managed-distribution.yml` | Separate Windows packaging and desktop proof |
 | `docs/05-operations/current-validation.md` | Actual executed proof, not aspirations |
 
@@ -156,9 +156,11 @@ without reducing acceptance breadth or native fidelity standards.
 - Add a targeted selection replay corpus to the **existing planner tests**,
   covering positive match, negative unrelated change, changed test,
   toolchain change, public schema/identity and mixed-owner change.
-- Keep GitHub Actions **manual**; use focused runs during development,
-  `MCP Verify` full at release/source-acceptance milestones and on any
-  high-risk change. Do not add automatic push/schedule workflows.
+- During temporary user-authorized Full CI, push to `Local` automatically
+  runs the existing non-publishing full MCP, dependency security, MCP
+  conformance, Windows Desktop and source-only readiness workflows.
+  Focused runs and release checks remain manual; no automatic publishing,
+  `main`, PR, tag, schedule, workflow chaining or write permission.
 - Evidence artifacts record exact SHA, selected scope and required steps;
   skipped required steps cannot produce PASS.
 
@@ -201,6 +203,6 @@ run/job where executed. Git retains the retired test and its rationale.
 The plan is modular: change a phase, test owner or verifier without replacing
 the entire framework. Do not create another test-router Skill or test DB.
 
-**Stop:** no mass removal, no automatic CI, no claim that the suite is
+**Stop:** no mass removal, no automatic release, no claim that the suite is
 faster or more accurate until controlled measurements and equivalent
 behavioral coverage exist.

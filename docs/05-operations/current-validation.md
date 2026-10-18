@@ -4,6 +4,8 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**2026-10-19 Temporary Full CI activation — source implementation:** Following user authorization, five existing non-publishing workflows are configured to run on each `Local` push: MCP full `verify:full`, dependency security, MCP conformance, Windows Desktop Verify, and release readiness source-only. Manual focused MCP mode remains available; release/draft/packaging workflows stay manual. This source configuration does **NOT** prove that the jobs have run or passed. Check exact-SHA workflow runs, required steps and artifacts. Bun 1.4.3, TypeScript, dependency installation, native Blockbench and visual acceptance remain **UNVERIFIED** until corresponding execution evidence exists; native/visual proof requires separate live acceptance. No `main`, dependency/lockfile, release or user asset changes.
+
 **2026-10-18 Manual CI policy reconciliation — source-only:** `release-readiness.yml` was aligned with the manual-only GitHub Actions contract, and `manual-workflow-policy.test.ts` now covers the registered Release Readiness workflow and the current `lazydesigner-v` tag namespace instead of retired `blockit-v`. The release-readiness runbook now describes manual-only dispatch. Source-text consistency checks and exact branch/commit identity are distinct from Bun/CI execution: Bun 1.4.3 frozen install, `verify:repository`, `verify:full`, TypeScript, Windows packaging, and Blockbench remain **NOT EXECUTED** for this change. No dependency or lockfile change, release, user model, or `main` mutation was made.
 
 **2026-10-18 Progressive Bun test modernization — staged source changes:** GitHub `Local` tree enumeration identified **559** test/spec TypeScript files; staleness was not inferred. Source changes prepared an on-demand heuristic inventory, direct owner-test mapping in the canonical affected-execution planner, negative/fallback regression fixtures and a six-phase canonical plan. **No tests retired, quarantined, weakened or executed through Bun/CI in this batch.** Exact-SHA Bun 1.4.3, typecheck, selector behavior, real time savings, Windows packaging and Blockbench validation remain **NOT EXECUTED / UNVERIFIED**. Any source/static inspection only proves proposed code and file links are present; acceptance requires running the stated phase-0 verifier.
@@ -116,7 +118,7 @@ Read current `Local` SHA/checks before claiming current-head PASS; only complete
 
 ## Exact-SHA source acceptance
 
-Verification workflows are manual-only. A push is not acceptance. `MCP Verify` runs `bun run verify:full` on exact `github.sha`, then emits an identified read-only build; no live Blockbench acceptance.
+During temporary Full CI authorization, Local pushes trigger full MCP, dependency security, conformance, Windows Desktop and source-only readiness checks. A push or queued run is not acceptance: only completed required PASS steps on exact `github.sha` qualify. `MCP Verify` runs `bun run verify:full` and emits an identified read-only build on success; no live Blockbench acceptance.
 
 Narrow claims can use the appropriate targeted script. The affected-execution planner remains available locally/on demand; the old push-specific affected/full CI decision path is retired. A successful `verify:repository` plus `verify:mcp` on one SHA is composite source evidence, not an executed `verify:full`.
 

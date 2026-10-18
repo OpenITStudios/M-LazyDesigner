@@ -1,6 +1,9 @@
 name: MCP Conformance
 
 on:
+  push:
+    branches:
+      - Local
   workflow_dispatch:
 
 concurrency:

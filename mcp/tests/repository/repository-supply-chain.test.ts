@@ -113,10 +113,10 @@ describe("repository workflow supply chain", () => {
     expect(mcp).toContain("bun run verify:full");
     expect(mcp).not.toContain("verify:affected");
     expect(scripts["verify:affected"]).toContain("run-affected-execution.ts");
-    for (const workflow of [repo, mcp]) {
-      expect(workflow).toMatch(/^on:\n  workflow_dispatch:/m);
-      expect(workflow).not.toMatch(/^  push:|^  pull_request:|^  schedule:/m);
-    }
+    expect(repo).toMatch(/^on:\n  workflow_dispatch:/m);
+    expect(repo).not.toMatch(/^  push:|^  pull_request:|^  schedule:/m);
+    expect(mcp).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    expect(mcp).not.toMatch(/^  pull_request:|^  schedule:/m);
   });
 
   test("repository hygiene retains canonical static verification", async () => {

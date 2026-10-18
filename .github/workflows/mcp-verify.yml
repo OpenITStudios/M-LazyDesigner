@@ -1,6 +1,9 @@
 name: MCP Verify
 
 on:
+  push:
+    branches:
+      - Local
   workflow_dispatch:
     inputs:
       verification:
@@ -49,7 +52,7 @@ jobs:
             echo "### MCP exact-SHA proof"
             echo
             printf -- '- exact_sha: `%s`\n' "$actual_sha"
-            echo "- verification: manual source gate (scope recorded separately)"
+            echo "- verification: full on Local push; full or texture on manual dispatch"
             echo "- live_local_tests: excluded"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -63,24 +66,25 @@ jobs:
         id: frozen_install
         run: bun install --frozen-lockfile
 
-      # Run one manual gate; focused PASS is NOT full source/build acceptance.
+      # Local push always runs full verification; manual dispatch may select focused.
+      # Focused PASS is NOT full source/build acceptance.
       - name: Run canonical full source verification
-        if: ${{ inputs.verification != 'texture' }}
+        if: ${{ github.event_name == 'push' || inputs.verification != 'texture' }}
         id: source_verify
         run: bun run verify:full
 
       - name: Run focused texture tests and typecheck
-        if: ${{ inputs.verification == 'texture' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.verification == 'texture' }}
         id: focused_verify
         run: bun run verify:texture:focused
 
       - name: Record exact-SHA build provenance
-        if: ${{ inputs.verification != 'texture' }}
+        if: ${{ github.event_name == 'push' || inputs.verification != 'texture' }}
         id: build_provenance
         run: bun run ./scripts/operations/verified-build-artifact.ts write-ci
 
       - name: Upload verified compatibility bundle
-        if: ${{ inputs.verification != 'texture' }}
+        if: ${{ github.event_name == 'push' || inputs.verification != 'texture' }}
         id: verified_bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

@@ -1,6 +1,9 @@
 name: Dependency Security
 
 on:
+  push:
+    branches:
+      - Local
   workflow_dispatch:
 
 concurrency:

@@ -1,6 +1,9 @@
 name: Release Readiness / Source Only
 
 on:
+  push:
+    branches:
+      - Local
   workflow_dispatch:
 
 permissions:
