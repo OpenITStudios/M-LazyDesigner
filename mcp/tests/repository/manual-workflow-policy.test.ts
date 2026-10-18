@@ -5,7 +5,8 @@ const FILES = [
   "authoring-policy-verify.yml", "dependency-security.yml",
   "desktop-draft-release.yml", "desktop-verify.yml", "head-proof.yml",
   "managed-distribution.yml", "mcp-conformance.yml",
-  "mcp-verify.yml", "release-verify.yml", "repository-verify.yml",
+  "mcp-verify.yml", "release-readiness.yml", "release-verify.yml",
+  "repository-verify.yml",
 ] as const;
 
 function triggers(yaml: string): string[] {
@@ -51,7 +52,7 @@ describe("manual-only GitHub Actions", () => {
     expect(release).toContain("git merge-base --is-ancestor origin/main HEAD");
     expect(managed).toContain("gh release create");
     expect(managed).toContain("--draft");
-    expect(managed).toContain("startsWith(github.ref, 'refs/tags/blockit-v')");
+    expect(managed).toContain("startsWith(github.ref, 'refs/tags/lazydesigner-v')");
     expect(desktop).toContain("github.ref == 'refs/heads/main'");
   });
 });

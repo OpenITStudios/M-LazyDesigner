@@ -4,6 +4,8 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**2026-10-18 Manual CI policy reconciliation — source-only:** `release-readiness.yml` was aligned with the manual-only GitHub Actions contract, and `manual-workflow-policy.test.ts` now covers the registered Release Readiness workflow and the current `lazydesigner-v` tag namespace instead of retired `blockit-v`. The release-readiness runbook now describes manual-only dispatch. Source-text consistency checks and exact branch/commit identity are distinct from Bun/CI execution: Bun 1.4.3 frozen install, `verify:repository`, `verify:full`, TypeScript, Windows packaging, and Blockbench remain **NOT EXECUTED** for this change. No dependency or lockfile change, release, user model, or `main` mutation was made.
+
 **2026-10-18 Progressive Bun test modernization — staged source changes:** GitHub `Local` tree enumeration identified **559** test/spec TypeScript files; staleness was not inferred. Source changes prepared an on-demand heuristic inventory, direct owner-test mapping in the canonical affected-execution planner, negative/fallback regression fixtures and a six-phase canonical plan. **No tests retired, quarantined, weakened or executed through Bun/CI in this batch.** Exact-SHA Bun 1.4.3, typecheck, selector behavior, real time savings, Windows packaging and Blockbench validation remain **NOT EXECUTED / UNVERIFIED**. Any source/static inspection only proves proposed code and file links are present; acceptance requires running the stated phase-0 verifier.
 
 
