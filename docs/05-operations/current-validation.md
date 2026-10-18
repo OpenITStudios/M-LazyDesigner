@@ -4,6 +4,10 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**2026-10-18 Shared-UV geometry-driven texture masks — pending source acceptance:** `geometrySignalCompiler.ts` now checks exact reusable UV shading compatibility, partial shared texels, raster aliases and finite normal magnitude; nine pure tests and Texture policy reference edits are prepared. No native project or user files changed. **Bun/CI/typecheck and native visual acceptance NOT EXECUTED**; source checks are not proof of improved asset quality. See [next-action](next-action.md#current-bounded-work--one-flow-context-integrity-chatgpt--github).
+
+
+
 **2026-10-18 Texture ScalarMask source hardening:** Masked RGB/RGBA and directional wear now fail on nonfinite mask values (preventing implicit Uint8Array black/zero coercion), invalid RGBA color channels or mismatched mask shape. The geometry-aware treatment path is covered by pure fixture tests. Runtime code/test present; Bun/CI/native execution and visual-quality claims NOT EXECUTED. See [next-action](next-action.md#current-bounded-work--one-flow-context-integrity-chatgpt--github).
 
 

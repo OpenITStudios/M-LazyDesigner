@@ -139,6 +139,18 @@ partial-overlap candidates
 
 Exact reuse can be correct. Partial overlap is a review condition because it can silently corrupt unrelated styled regions. Degenerate/zero-area UV may occur on sheet/zero-thickness geometry and is not automatically a defect.
 
+**Geometry-aware styling on reused UVs:** before compiling face-derived wear,
+contact/cavity or upward-exposure masks, inspect the actual texel ownership.
+A single shared atlas region cannot express incompatible per-face exposure or
+contact intent. Exact UV reuse remains valid only when the reused faces demand
+compatible geometry-driven treatment. This stricter automated-mask preflight
+rejects partial rasterized overlap or different logical UV mappings that alias
+the same physical texels; it does **not** turn every general UV overlap review
+into a global geometry failure. Return conflicting ownership to the Geometry
+UV owner or use a separately verified material treatment without claiming
+independent per-face shading on shared pixels. Compiled masks are diagnostic
+authoring inputs, not mapped-model visual PASS.
+
 ## UV Stability
 
 Do not change UV Layout after substantial Texture Styling without a concrete reason.
