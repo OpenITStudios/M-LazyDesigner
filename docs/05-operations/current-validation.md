@@ -4,6 +4,10 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**2026-10-18 Intra-Cube seam explicit boundary intent (source):** Optional declared intent excludes only valid intentional paired boundaries from diagnostic seam contrast, with a dedicated exclusion count. Existing review of unspecified edges and ambiguous groups remains. Five regression cases prepared; source/static integrity reviewed. **Bun, CI, real material intent provenance, and native Blockbench visual quality NOT EXECUTED**.
+
+
+
 **Seam RGB diagnostics alignment (2026-10-18, source only):** Intra-/cross-
 Cube share visible RGB calculation, distinguish zero visible sample evidence
 from matching colors, preserve alpha-only discrepancies, and allow explicit

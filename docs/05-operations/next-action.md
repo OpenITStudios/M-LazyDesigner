@@ -6,6 +6,10 @@ This file owns **current continuation only**, not the patch history. Canonical w
 
 ## Current bounded work — One-Flow context integrity (ChatGPT / GitHub)
 
+**Current Texturing boundary-intent maintenance (2026-10-18, SOURCE_IMPLEMENTED):** The existing intra-Cube seam analyzer now accepts optional, explicitly approved `continuity_intent` and excludes only valid two-edge `INTENTIONAL_BOUNDARY` pairs from advisory color-contrast review. Required, unspecified and absent intent retain existing diagnostic behavior; ambiguous edge groups, independent review candidates and alpha/render evidence are preserved. The cross-Cube intent contract remains required and unchanged. Pure regression cases are in `mcp/tests/texture-seam-continuity.test.ts`, with canonical Texture and specialist-reference updates. Source integrity checks were performed; **Bun, typecheck, exact-SHA CI and native visual acceptance NOT EXECUTED**. Next source verification on a capable cloud checkout: `cd mcp && bun test tests/texture-seam-continuity.test.ts` and owning typecheck; no user PC localtest required.
+
+
+
 **Current next action — seam RGB evidence semantics (source prepared):** The
 single `seamSummary` now serves intra-/cross-Cube comparison, excludes RGB
 when either alpha is zero in default `OPACITY` mode, uses null + evaluated

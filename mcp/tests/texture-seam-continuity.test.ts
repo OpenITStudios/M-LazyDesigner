@@ -79,6 +79,90 @@ describe("texture seam continuity", () => {
     expect(result.gate.reasons).toEqual([]);
   });
 
+  test("explicit intentional intra-Cube boundary is not a broken seam candidate", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ continuity_intent: "INTENTIONAL_BOUNDARY" }),
+      edge({
+        face: "east", edge: "left",
+        start: [1, 1, 0], end: [1, 0, 0],
+        samples: Array.from({ length: 4 },
+          () => [255, 255, 255, 255] as [number, number, number, number]),
+      }),
+    ]);
+    expect(result.excluded_intentional_boundary_pair_count).toBe(1);
+    expect(result.paired_seam_count).toBe(0);
+    expect(result.unpaired_edge_count).toBe(0);
+    expect(result.review.candidate_count).toBe(0);
+    expect(result.ranked_examples).toEqual([]);
+    expect(result.gate).toEqual({ state: "advisory", reasons: [] });
+    expect(result.cross_cube_continuity).toBe("not_evaluated");
+  });
+
+  test("undeclared or required intra-Cube continuity keeps existing advisory contrast checks", () => {
+    const right = edge({
+      face: "east", edge: "left",
+      start: [1, 1, 0], end: [1, 0, 0],
+      samples: Array.from({ length: 4 },
+        () => [255, 255, 255, 255] as [number, number, number, number]),
+    });
+    for (const intent of [undefined, "UNSPECIFIED", "REQUIRED"] as const) {
+      const result = analyzeTextureSeamContinuity([
+        edge({ continuity_intent: intent }), right,
+      ]);
+      expect(result.paired_seam_count).toBe(1);
+      expect(result.excluded_intentional_boundary_pair_count).toBe(0);
+      expect(result.review.candidate_count).toBe(1);
+      expect(result.review.high_contrast_count).toBe(1);
+      expect(result.gate.reasons).toContain("SEAM_CONTINUITY_REVIEW");
+    }
+  });
+
+  test("intentional boundaries do not suppress independent seam review candidates", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ continuity_intent: "INTENTIONAL_BOUNDARY" }),
+      edge({
+        face: "east", edge: "left",
+        start: [1, 1, 0], end: [1, 0, 0],
+        samples: [[255, 255, 255, 255]],
+      }),
+      edge({ start: [2, 0, 0], end: [2, 1, 0] }),
+      edge({
+        face: "east", edge: "left",
+        start: [2, 1, 0], end: [2, 0, 0],
+        samples: [[255, 255, 255, 255]],
+      }),
+    ]);
+    expect(result.excluded_intentional_boundary_pair_count).toBe(1);
+    expect(result.paired_seam_count).toBe(1);
+    expect(result.review.candidate_count).toBe(1);
+    expect(result.review.high_contrast_count).toBe(1);
+  });
+
+  test("ambiguous intra-Cube edge groups stay unresolved even with boundary intent", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ continuity_intent: "INTENTIONAL_BOUNDARY" }),
+      edge({ face: "east", edge: "left", start: [1, 1, 0], end: [1, 0, 0] }),
+      edge({ face: "top", edge: "bottom", start: [1, 1, 0], end: [1, 0, 0] }),
+    ]);
+    expect(result.ambiguous_edge_count).toBe(1);
+    expect(result.excluded_intentional_boundary_pair_count).toBe(0);
+    expect(result.paired_seam_count).toBe(0);
+  });
+
+  test("invalid caller-declared continuity intent is rejected, not silently trusted", () => {
+    expect(() => analyzeTextureSeamContinuity([
+      edge({ continuity_intent: "AUTO_PASS" as never }),
+    ])).toThrow("continuity intent is invalid");
+    expect(() => analyzeCrossCubeSeamContinuity([
+      {
+        ...edge(),
+        cube_uuid: "left", material_id: "wood", surface_id: "front",
+        world_normal: [0, 0, 1],
+        continuity_intent: "AUTO_PASS" as never,
+      },
+    ])).toThrow("continuity intent is invalid");
+  });
+
   test("intra-Cube hidden RGB cannot create a false high-contrast review", () => {
     const result = analyzeTextureSeamContinuity([
       edge({ samples: Array.from({ length: 4 }, () => [0, 0, 0, 0] as [number, number, number, number]) }),

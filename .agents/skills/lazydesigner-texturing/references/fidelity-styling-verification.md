@@ -31,6 +31,14 @@ wrong/missing identity marking
 ```
 An improvement on one island is `REGRESSED` if the mapped model introduces a material seam, mirrored identity error, or cross-surface discontinuity elsewhere. Do not let atlas neatness override mapped fidelity.
 
+Within a single Cube, preserve intentional painted/material or face-light
+boundaries using the caller-declared `INTENTIONAL_BOUNDARY` on the applicable
+edge rather than “correcting” contrast. This removes only a paired boundary
+from advisory seam candidates; missing intent still receives diagnostic
+comparison, ambiguous groups remain unresolved, and exclusion counts are
+not evidence of visual PASS. Derive intent from the approved reference or
+material plan, never automatically from the measured pixel difference.
+
 For cross-Cube continuity, use **declared material/surface ownership and
 intent** before comparing colors. The seam helper tolerates small world-edge
 coordinate differences across rounding boundaries but does not infer a

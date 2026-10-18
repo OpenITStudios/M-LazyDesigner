@@ -1,5 +1,8 @@
 export type TextureSeamRgba = [number, number, number, number];
 
+export type TextureSeamContinuityIntent =
+  | "REQUIRED" | "INTENTIONAL_BOUNDARY" | "UNSPECIFIED";
+
 export type TextureSeamEdgeInput = {
   cube_uuid: string;
   cube_name: string;
@@ -8,6 +11,8 @@ export type TextureSeamEdgeInput = {
   start: [number, number, number];
   end: [number, number, number];
   samples: TextureSeamRgba[];
+  /** Optional for intra-Cube edges; an explicit intent comes from approved material design. */
+  continuity_intent?: TextureSeamContinuityIntent;
 };
 
 export const TEXTURE_SEAM_EXAMPLE_LIMIT = 6;
@@ -27,6 +32,12 @@ function ratio(value: number, total: number): number {
 }
 
 function requireEdge(edge: TextureSeamEdgeInput): void {
+  if (edge.continuity_intent !== undefined &&
+      edge.continuity_intent !== "REQUIRED" &&
+      edge.continuity_intent !== "INTENTIONAL_BOUNDARY" &&
+      edge.continuity_intent !== "UNSPECIFIED") {
+    throw new Error("Texture seam continuity intent is invalid.");
+  }
   if (
     edge.samples.length === 0 ||
     edge.samples.some(
@@ -177,8 +188,18 @@ export function analyzeTextureSeamContinuity(
     groups.set(key, group);
   }
 
-  const paired = [...groups.values()]
-    .filter((group) => group.length === 2 && group[0].face !== group[1].face)
+  const validPairs = [...groups.values()].filter(
+    (group) => group.length === 2 && group[0].face !== group[1].face
+  );
+  // Deliberate face/material transitions are not continuous surfaces.
+  // Never infer this from color contrast: only caller-declared design intent
+  // can exclude a pair. Retain ambiguous groups for separate diagnosis.
+  const intentionalBoundaries = validPairs.filter((group) =>
+    group.some((edge) => edge.continuity_intent === "INTENTIONAL_BOUNDARY")
+  );
+  const paired = validPairs
+    .filter((group) =>
+      group.every((edge) => edge.continuity_intent !== "INTENTIONAL_BOUNDARY"))
     .map((group) => seamSummary(group[0], group[1], alphaSemantics))
     .sort(
       (a, b) =>
@@ -198,6 +219,7 @@ export function analyzeTextureSeamContinuity(
     cross_cube_continuity: "not_evaluated" as const,
     sampled_edge_count: edges.length,
     paired_seam_count: paired.length,
+    excluded_intentional_boundary_pair_count: intentionalBoundaries.length,
     unpaired_edge_count: unpaired.length,
     ambiguous_edge_count: ambiguous.length,
     review: {
@@ -214,7 +236,7 @@ export function analyzeTextureSeamContinuity(
       reasons: review.length > 0 ? ["SEAM_CONTINUITY_REVIEW"] : [],
     },
     note:
-      "Only face edges within the same Cube are paired; cross-Cube continuity is not evaluated. OPACITY mode excludes RGB whenever either alpha is zero; NON_OPACITY mode retains RGB for color/emissive masks. The caller must confirm actual render-profile alpha meaning. Alpha differences remain reviewable; seam contrast is advisory evidence, not a style score or automatic visual failure.",
+      "Only face edges within the same Cube are paired; cross-Cube continuity is not evaluated. Explicit INTENTIONAL_BOUNDARY pairs are excluded, never auto-inferred from high contrast; unresolved/ambiguous edges are not visual PASS. OPACITY mode excludes RGB whenever either alpha is zero; NON_OPACITY mode retains RGB for color/emissive masks. The caller must confirm actual render-profile alpha meaning. Alpha differences remain reviewable and seam contrast is advisory evidence.",
   };
 }
 
@@ -225,7 +247,7 @@ export function analyzeTextureSeamContinuity(
  * texture revision, or a visual defect. Native sampling is a later owner.
  */
 export type CrossCubeSeamEdgeInput = TextureSeamEdgeInput & {
-  continuity_intent: "REQUIRED" | "INTENTIONAL_BOUNDARY" | "UNSPECIFIED";
+  continuity_intent: TextureSeamContinuityIntent;
   surface_id: string | null;
   material_id: string | null;
   /** Caller-supplied world-facing normal; not native-attested by this pure helper. */

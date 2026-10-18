@@ -402,6 +402,18 @@ Review in this order:
 9. secondary detail density
 ```
 
+**Intentional boundaries within one Cube:** Face edges may legitimately
+separate different materials, painted panels, or deliberately different
+lighting. The intra-Cube seam diagnostic accepts an optional, caller-declared
+`continuity_intent=INTENTIONAL_BOUNDARY` on either face edge and excludes
+only that valid paired boundary from contrast-review candidates, accounting
+for it separately. `REQUIRED`, `UNSPECIFIED` and absent intent retain the
+existing advisory comparison; never infer intentional design solely from
+strong contrast or empty findings. Ambiguous three-edge groups remain
+unresolved, not suppressed by a single boundary flag. The declaration must
+be grounded in the approved reference/material plan; it is not native proof,
+permission to modify UV, or a visual PASS.
+
 **Cross-Cube seam diagnostics:** Compare edges only when the surface/material
 identity and continuity intent agree, the world-facing normals align, and
 both physical endpoints fall within the declared tolerance (including on
