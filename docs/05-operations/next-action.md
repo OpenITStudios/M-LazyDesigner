@@ -24,4 +24,6 @@ The persistent Gateway owns client stability and Runtime recovery; Control owns 
 
 ## Local/native residue and STOP
 
+LIVE_BLOCKBENCH acceptance is separate from source/static and Windows installer CI.
+
 Matching installed Blockbench Undo/Redo, pivot/seam visuals, Texture atlas alpha, animation restoration, Save As/reopen, Windows update/rollback, particle playback, reference acceptance and cost-to-quality telemetry remain **NOT_EXECUTED / UNVERIFIED** on latest SHA. See native runbook. Work source → owner → regression → exact-SHA CI; no second router, framework, shadow registry, or automatic release.

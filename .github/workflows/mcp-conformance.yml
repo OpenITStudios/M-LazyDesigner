@@ -66,6 +66,42 @@ jobs:
             --output-dir conformance-results \
             --verbose
 
+      - name: Summarize exact required conformance failures in job log
+        if: always()
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = 'conformance-results';
+          let seen = 0;
+          function walk(dir) {
+            if (!fs.existsSync(dir)) return;
+            for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
+              const file = path.join(dir, item.name);
+              if (item.isDirectory()) { walk(file); continue; }
+              if (item.name !== 'checks.json') continue;
+              let data;
+              try { data = JSON.parse(fs.readFileSync(file, 'utf8')); }
+              catch (error) { console.log('Invalid conformance JSON:', file, String(error)); continue; }
+              const checks = Array.isArray(data) ? data : (Array.isArray(data.checks) ? data.checks : []);
+              for (const check of checks) {
+                const status = String(check.status ?? check.result ?? '').toLowerCase();
+                const failed = check.passed === false || check.success === false ||
+                  ['fail', 'failed', 'error'].includes(status);
+                if (!failed) continue;
+                seen++;
+                const id = String(check.id ?? check.check_id ?? check.name ?? 'unnamed').slice(0, 100);
+                const reason = String(check.message ?? check.reason ?? '').slice(0, 220);
+                console.log('[conformance-fail]', path.basename(path.dirname(file)), id, reason);
+              }
+            }
+          }
+          walk(root);
+          console.log('Individual failed check entries detected:', seen);
+          console.log('Use canonical required-vs-not_scored counts for acceptance; optional Tasks are not release requirements.');
+          NODE
+
       - name: Upload conformance evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

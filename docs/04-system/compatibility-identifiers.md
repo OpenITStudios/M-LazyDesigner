@@ -108,7 +108,7 @@ LOCAL_CODE
 → bun run generate:owned-artifacts
 → inspect generated API/HTML, prompt manifest and Hybrid-4 schema diffs
 → commit only generator-produced outputs from that same source state
-→ bun run docs:check and matching-SHA source verification
+→ bun run docs:build through the canonical generator, then bun run docs:check and matching-SHA source verification
 ```
 
 The source/output mismatch is an OPEN generator-coupled residue, not a passing documentation gate. Do not claim docs:check or release readiness until the output is regenerated and verified.

@@ -4,6 +4,8 @@ This file owns **current proof interpretation only**. Flow: `docs/01-product/flo
 
 ## Current authority
 
+**Temporary Full CI** is authorized on `Local` and source-only; publishing and actual native/visual acceptance are separate.
+
 Branch `Local` is source authority. The persistent Gateway owns client continuity and Runtime recovery. Runtime/Plugin executes in Blockbench. **Source/static CI never proves installed/native/visual behavior.**
 
 ### Observed automatic Full CI on `79d7afded1793aef3f9e59a851466d25c7ffcd77`
@@ -44,4 +46,4 @@ The pinned **Bun 1.4.3** was installed, and `bun install --frozen-lockfile` comp
 
 ## Proof boundary
 
-Do not strengthen source/static claims into local/live/visual claims without matching evidence from the exact current source SHA. Record SHA, run, job, scope, required successful steps and separately native evidence before claiming PASS. A documentation-only `Head Proof` is source equivalence, not executable acceptance.
+Do not strengthen source/static claims into local/live/visual claims without matching evidence from the exact current source SHA. Record SHA, run, job, scope, required successful steps and separately native evidence before claiming PASS. For a docs-only head, `Head Proof` may establish that executable source did not change; this is source equivalence, not test execution. Source-impacting heads continue to require matching-SHA source gates and native proof where applicable.

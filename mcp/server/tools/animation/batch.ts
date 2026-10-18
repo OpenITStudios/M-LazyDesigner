@@ -341,8 +341,7 @@ export function registerAnimationBatchTools(): void {
             "Batch keyframe scale",
           );
           // Native replaceOthers can remove unselected keyframes. Full-animation
-          // Undo already snapshots their authored state; the keyframe-only
-          // casualty hook would add a redundant second Undo ownership path.
+          // Undo already covers these; do not add a duplicate casualty hook.
           const expectedOverwrites = planBatchScaleOverwriteTargets(
             keyframes, targetTimelineKeyframes, plannedTimes
           );
