@@ -61,13 +61,13 @@ Live Blockbench, visual, playback, persistence, installed-plugin, and client-reg
 
 ## CI behavior
 
-GitHub Actions verification is **manual-only and on demand**. A normal `Local` push does not start tests, conformance, security audit, packaging or release checks. Prefer exact-head source inspection and the smallest relevant existing verifier; do not trigger CI as a post-commit ritual.
+During temporary Full CI authorization, a normal `Local` push runs the existing **full MCP**, dependency security, MCP conformance, Windows Desktop verification, and source-only release readiness workflows. Each remains manually dispatchable. This mode is read-only/non-publishing; push checks may cost additional CI minutes.
 
-- `Repository Verify` checks repository/routing/static contracts.
-- `Authoring Policy Verify` checks Reference/Authoring and specialist contracts.
-- `MCP Verify` runs `bun run verify:full` on demand with exact-SHA build provenance; it excludes installed/native/visual acceptance.
-- `Dependency Security`, `MCP Conformance`, `Desktop Verify`, `Managed Distribution`, `Head Proof`, and `Release Verify` remain optional proof tools.
-- Tag-based draft releases and Desktop signing still require their existing release/source/security approvals; manual dispatch is not permission to publish.
+- `Repository Verify` and `Authoring Policy Verify` remain independently available on demand; the full MCP gate also covers their source contracts.
+- `MCP Verify` runs `bun run verify:full` on every `Local` push with exact-SHA build provenance; manual `texture` focus remains available and never runs automatically.
+- `Dependency Security`, `MCP Conformance`, `Desktop Verify` and `Release Readiness / Source Only` run automatically on `Local` pushes without publication or installed native/visual acceptance.
+- `Managed Distribution`, `Head Proof`, `Release Verify`, `Desktop Draft Release`, and all release/packaging/publication workflows remain manual.
+- Tag-based draft releases and Desktop signing still require their existing release/source/security approvals; CI success is not permission to publish.
 - Completed matching-SHA steps alone count as executable proof; skipped or historical runs do not.
 - GitHub registers manual workflows on the default branch. If `main` lacks a Local-only workflow, changing `main` or settings needs separate explicit authority.
 

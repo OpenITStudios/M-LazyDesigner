@@ -99,8 +99,11 @@ describe("MCP dependency closure", () => {
     expect(repositoryFlow).toContain("bun run verify:repository");
     expect(authoringFlow).toContain("bun run verify:authoring");
     expect(mcpFlow).toContain("bun run verify:full");
-    for (const flow of [repositoryFlow, authoringFlow, mcpFlow]) {
+    for (const flow of [repositoryFlow, authoringFlow]) {
       expect(flow).toMatch(/^on:\n  workflow_dispatch:/m);
+    }
+    expect(mcpFlow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    for (const flow of [repositoryFlow, authoringFlow, mcpFlow]) {
       expect(flow).not.toContain("docs/knowledge/");
       expect(flow).not.toContain("docs/foundation/");
     }

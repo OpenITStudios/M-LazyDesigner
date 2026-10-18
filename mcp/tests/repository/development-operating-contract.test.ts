@@ -36,16 +36,16 @@ describe("material development and repository authority", () => {
     expect(rules).toContain("Commit-based work continuity");
   });
 
-  test("manual source checks and native evidence retain separate authority", async () => {
+  test("temporary Full CI and native evidence retain separate authority", async () => {
     const [rules, contribution, next, validation] = await Promise.all([
       read("../GITHUB_RULES.md"), read("../CONTRIBUTING.md"),
       read("../docs/05-operations/next-action.md"), read("../docs/05-operations/current-validation.md"),
     ]);
-    expect(rules).toContain("Manual-only GitHub Actions");
+    expect(rules).toContain("Temporary full CI on Local");
     expect(rules).toContain("workflow_dispatch");
-    expect(contribution).toContain("manual-only and on demand");
-    expect(next).toContain("manual-only");
-    expect(validation).toContain("manual-only");
+    expect(contribution).toContain("temporary Full CI authorization");
+    expect(next).toContain("Temporary Full CI");
+    expect(validation).toContain("Temporary Full CI");
     expect(validation).toContain("source-equivalence evidence");
   });
 });

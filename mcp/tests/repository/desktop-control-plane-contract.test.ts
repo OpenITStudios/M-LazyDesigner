@@ -52,10 +52,10 @@ describe("Desktop control-plane ownership", () => {
     expect(rust).toContain("runtime_listener_live: trusted_listener");
     expect(rust).toContain("runtime_health::matching_build_identity");
 
-    // All verification workflows are deliberately manual-only. Verify the
-    // real Desktop source gate rather than retired push path filters.
-    expect(workflow).toMatch(/^on:\n  workflow_dispatch:/m);
-    expect(workflow).not.toMatch(/^  push:/m);
+    // Temporary Full CI runs Windows Desktop smoke tests on Local pushes
+    // while release/publication paths remain separately authorized.
+    expect(workflow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    expect(workflow).not.toMatch(/^  pull_request:|^  schedule:/m);
     expect(workflow).toContain("apps/desktop");
   });
 
