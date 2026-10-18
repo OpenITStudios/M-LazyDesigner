@@ -1,78 +1,175 @@
 import { describe, expect, test } from "bun:test";
 
-const ROUTER_SKILLS = [
+// Character budgets are review signals, NOT hard acceptance limits.
+// Relevant expertise and safety contracts are more important than meeting an
+// arbitrary size. This test still fails on broken routing and module links.
+const SKILLS = [
   {
     path: "../.agents/skills/lazydesigner-reference-preparation/SKILL.md",
-    maxChars: 9000,
+    reviewAtChars: 9000, classMarker: "CLASS: ROUTER", references: [],
   },
-] as const;
-
-const REFERENCE_SPECIALIST_SKILLS = [
   {
     path: "../.agents/skills/lazydesigner-prompt-compiler/SKILL.md",
-    maxChars: 6000,
-    classMarker: "CLASS: DELEGATED",
+    reviewAtChars: 6000, classMarker: "CLASS: DELEGATED", references: [],
   },
   {
     path: "../.agents/skills/lazydesigner-pixel-art-authoring/SKILL.md",
-    maxChars: 11000,
-    classMarker: "CLASS: SPECIALIST",
+    reviewAtChars: 11000, classMarker: "CLASS: SPECIALIST", references: [],
   },
   {
     path: "../.agents/skills/lazydesigner-particle-reference-authoring/SKILL.md",
-    maxChars: 10000,
-    classMarker: "CLASS: SPECIALIST",
+    reviewAtChars: 10000, classMarker: "CLASS: SPECIALIST", references: [],
   },
-] as const;
-
-const HOT_PATH_SKILLS = [
   {
     path: "../.agents/skills/lazydesigner-modelling/SKILL.md",
-    maxChars: 11000,
-    references: [
-      "references/verification.md",
-      "references/uv-layout.md",
-      "references/correction.md",
-    ],
+    reviewAtChars: 15000, classMarker: "CLASS: SPECIALIST",
+    references: ["references/verification.md", "references/uv-layout.md", "references/correction.md"],
   },
   {
     path: "../.agents/skills/lazydesigner-animation/SKILL.md",
-    maxChars: 9500,
+    reviewAtChars: 15000, classMarker: "CLASS: SPECIALIST",
     references: ["references/fidelity-correction-evidence.md"],
   },
   {
     path: "../.agents/skills/lazydesigner-texturing/SKILL.md",
-    maxChars: 9800,
+    reviewAtChars: 15000, classMarker: "CLASS: SPECIALIST",
     references: ["references/fidelity-styling-verification.md"],
   },
 ] as const;
 
-describe("agent skill context budget", () => {
-  test("routing skills stay compact enough to classify before specialist loading", async () => {
-    for (const skill of ROUTER_SKILLS) {
-      const source = await Bun.file(skill.path).text();
-      expect(source.length).toBeLessThan(skill.maxChars);
-      expect(source).toContain("CLASS: ROUTER");
-    }
+export function skillSizeNeedsReview(chars: number, reviewAtChars: number): boolean {
+  return chars > reviewAtChars;
+}
+
+describe("Skill quality-first context contract", () => {
+  test("size thresholds flag review rather than causing a hard character-limit failure", () => {
+    expect(skillSizeNeedsReview(15000, 15000)).toBe(false);
+    expect(skillSizeNeedsReview(15001, 15000)).toBe(true);
+    expect(skillSizeNeedsReview(25000, 15000)).toBe(true);
+    // Above-threshold content is reviewed for relevance and quality, not
+    // automatically rejected, truncated, or split into another Skill.
   });
 
-  test("reference specialists stay bounded without forcing premature fragmentation", async () => {
-    for (const skill of REFERENCE_SPECIALIST_SKILLS) {
+  test("every Skill retains valid discovery metadata and one declared owner", async () => {
+    for (const skill of SKILLS) {
       const source = await Bun.file(skill.path).text();
-      expect(source.length).toBeLessThan(skill.maxChars);
+      expect(source).toMatch(/^---\r?\nname: lazydesigner-[a-z-]+\r?\ndescription: .+\r?\n---/);
       expect(source).toContain(skill.classMarker);
+      for (const label of ["LANE:", "DOMAIN:", "OWNER:"]) {
+        expect(source).toContain(label);
+      }
+      if (skillSizeNeedsReview(source.length, skill.reviewAtChars)) {
+        console.warn(
+          `SKILL_SIZE_REVIEW: ${skill.path}: ${source.length} characters; ` +
+          `advisory threshold ${skill.reviewAtChars}. Review scope, duplication, ` +
+          "required rules and evidence before deciding whether to split."
+        );
+      }
     }
   });
 
-  test("hot-path specialist skills stay compact and lazy-load deep references", async () => {
-    for (const skill of HOT_PATH_SKILLS) {
-      const source = await Bun.file(skill.path).text();
-      expect(source.length).toBeLessThan(skill.maxChars);
-      for (const reference of skill.references) expect(source).toContain(reference);
+  test("specialist reference routes are direct, explicit and backed by readable content", async () => {
+    for (const skill of SKILLS.filter((item) => item.references.length > 0)) {
+      const main = await Bun.file(skill.path).text();
+      const declared = [...new Set(main.match(/references\/[a-z0-9-]+\.md/g) ?? [])].sort();
+      expect(declared).toEqual([...skill.references].sort());
+      for (const reference of skill.references) {
+        // One hop only: a main Skill directly names each conditional module.
+        expect(reference).toMatch(/^references\/[a-z0-9-]+\.md$/);
+        const path = skill.path.replace(/SKILL\.md$/, reference);
+        const file = Bun.file(path);
+        expect(await file.exists(), `Missing conditional expertise: ${path}`).toBe(true);
+        const body = await file.text();
+        expect(body).toMatch(/^# .+/);
+        expect(body).toMatch(/\bLoad (?:this file )?only (?:when|for|after)\b/i);
+      }
     }
+    const obsolete = "../.agents/skills/lazydesigner-modelling/references/verification-uv-correction.md";
+    expect(await Bun.file(obsolete).exists()).toBe(false);
+  });
 
-    const modelling = await Bun.file("../.agents/skills/lazydesigner-modelling/SKILL.md").text();
-    expect(modelling).not.toContain("verification-uv-correction.md");
-    expect(await Bun.file("../.agents/skills/lazydesigner-modelling/references/verification-uv-correction.md").exists()).toBe(false);
+  test("growth or refactoring cannot silently remove specialist safety and quality gates", async () => {
+    const required = [
+      {
+        file: "lazydesigner-modelling",
+        markers: [
+          "user geometry approved", "screenshot-per-mutation loop",
+          "visual pass", "tool success", "pivot",
+        ],
+      },
+      {
+        file: "lazydesigner-texturing",
+        markers: [
+          "geometry approved + uv layout pass", "must not borrow cube/uv mutation",
+          "tool success never creates texture pass",
+          "no evidence-per-micro-mutation loop",
+        ],
+      },
+      {
+        file: "lazydesigner-animation",
+        markers: [
+          "structural rig defects hand back to geometry",
+          "user approval", "internal `pass`", "checkpoint",
+        ],
+      },
+    ] as const;
+    for (const skill of required) {
+      const source = (await Bun.file(
+        `../.agents/skills/${skill.file}/SKILL.md`
+      ).text()).toLowerCase();
+      for (const obligation of skill.markers) {
+        expect(source).toContain(obligation);
+      }
+    }
+  });
+
+  test("module-loading fixture covers required and unnecessary reads for each active specialist", async () => {
+    const fixture = await Bun.file("tests/fixtures/skill-reference-loading-cases.json").json() as {
+      version: number;
+      cases: Array<{
+        id: string; skill: string; prompt: string; decision: string;
+        reference: string | null; reason: string;
+      }>;
+    };
+    expect(fixture.version).toBe(1);
+    const ids = new Set<string>();
+    const owners = ["lazydesigner-modelling", "lazydesigner-texturing", "lazydesigner-animation"];
+    for (const row of fixture.cases) {
+      expect(row.id.length).toBeGreaterThan(0);
+      expect(ids.has(row.id)).toBe(false);
+      ids.add(row.id);
+      expect(row.prompt.trim().length).toBeGreaterThan(0);
+      expect(row.reason.trim().length).toBeGreaterThan(0);
+      expect(owners).toContain(row.skill);
+      const owner = SKILLS.find((item) => item.path.endsWith(`/${row.skill}/SKILL.md`));
+      expect(owner).toBeDefined();
+      if (!owner) continue;
+      if (row.decision === "REQUIRED_ON_TRIGGER") {
+        expect(row.reference).not.toBeNull();
+        expect((owner.references as readonly string[])).toContain(row.reference);
+      } else {
+        expect(row.decision).toBe("NO_DEEP_REFERENCE");
+        expect(row.reference).toBeNull();
+      }
+    }
+    for (const skill of owners) {
+      expect(fixture.cases.some((row) => row.skill === skill && row.decision === "REQUIRED_ON_TRIGGER")).toBe(true);
+      expect(fixture.cases.some((row) => row.skill === skill && row.decision === "NO_DEEP_REFERENCE")).toBe(true);
+    }
+    // These are intended model-evaluation cases, not an executed AI trace.
+  });
+
+  test("canonical policy keeps size advisory while requiring actual quality/evidence gates", async () => {
+    const [policy, engineering] = await Promise.all([
+      Bun.file("../docs/04-system/ai-context-loading.md").text(),
+      Bun.file("../.agents/skills/lazydesigner-skill-development/SKILL.md").text(),
+    ]);
+    expect(policy).toContain("15,000 characters");
+    expect(policy).toContain("advisory review threshold");
+    expect(policy).toContain("required-on-trigger");
+    expect(policy).toContain("loaded content");
+    expect(policy.toLowerCase()).toContain("quality before efficiency");
+    expect(engineering).toContain("quality-first progressive disclosure");
+    expect(engineering).toContain("not a pass/fail size constraint");
   });
 });

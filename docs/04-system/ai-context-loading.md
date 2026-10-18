@@ -1,6 +1,6 @@
 # LazyDesigner AI Context Loading
 
-Updated: 2026-10-01
+Updated: 2026-10-18
 
 This document is the canonical contract for **what AI context to load for a task**. It exists to reduce broad reading, duplicate authority, and repeated context delivery without reducing decision quality.
 
@@ -15,6 +15,49 @@ TASK
 ```
 
 The goal is **minimum sufficient context**, not the smallest possible prompt.
+
+### Quality-first progressive Skill budget
+
+**Quality before efficiency.** The normal asset-authoring specialist `SKILL.md`
+budget is **15,000 characters as an advisory review threshold**, not a
+mandatory length, a hard rejection limit, or an invitation to fill spare space.
+Router/delegated/reference specialists may retain smaller advisory thresholds
+because they have different loading roles. Character counts are a lint signal,
+not measured tokens or proof that the agent understood the guidance.
+
+Crossing a review threshold requires a deliberate assessment of: (1) whether
+each added rule changes a real decision, (2) whether critical invariants remain
+available on the execution hot path, (3) whether the content duplicates its
+canonical owner, (4) whether a conditional module would be clearer, and
+(5) whether routing/retrieval and representative quality checks support the
+change. A justified longer Skill is allowed. Do not automatically truncate,
+split into extra specialist Skills, or weaken instructions to pass a size test.
+
+`SKILL.md` contains ownership, critical invariants, the normal execution
+procedure, named decision triggers, verification/convergence and handoff.
+One-hop `references/*.md` contain deeper *conditional* expertise. A
+conditional module is either **required-on-trigger** (do not make its dependent
+high-cost decision without the relevant current content) or **supporting**
+(use only when it can improve the current decision). Critical safety/approval
+and native validity rules cannot live exclusively in an optional module.
+Modules are not a second router, supervisor, independent Skill, or duplicate
+policy authority; follow only direct links from the active Skill.
+
+Select one decision-changing module at a time, reuse already-loaded current
+content, and expand only for a named unresolved need. An existing path,
+content hash, `known_context_ids`, or `context_ready` does **not** attest that
+the client still has the **loaded content** after compaction; reload the current
+source before dependent work when it was lost. If required-on-trigger content
+is missing, keep only that dependent decision unverified while independent
+safe work can proceed.
+
+Skill quality evaluation separates (a) static structure/source integrity,
+(b) positive and negative module retrieval/activation cases, (c) procedural
+safety compliance, and (d) **quality of the accepted outcome**. Measure
+actual context/tool/image cost only *after* quality criteria are met; compare
+equal knowledge packaged in different ways before crediting modularization.
+Static source tests cannot prove AI retrieval, native Blockbench visuals, or
+human approval.
 
 ## Source-grounded repository knowledge retrieval
 

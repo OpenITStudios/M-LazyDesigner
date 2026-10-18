@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "purpose": "Development-only positive/negative module-loading scenarios. Intent and expected routes, NOT actual AI execution or native quality proof. Use identical cases to evaluate reference retrieval and forbidden overloading.",
+  "cases": [
+    {
+      "id": "geometry-uv-approved",
+      "skill": "lazydesigner-modelling",
+      "prompt": "The model's Geometry is approved; prepare production UV layout and assess texel integrity before texture styling.",
+      "decision": "REQUIRED_ON_TRIGGER",
+      "reference": "references/uv-layout.md",
+      "reason": "Production UV is the active material decision."
+    },
+    {
+      "id": "geometry-correction",
+      "skill": "lazydesigner-modelling",
+      "prompt": "The character silhouette has an unintended gap after a Cube correction. Diagnose the owning cause before attempting another edit.",
+      "decision": "REQUIRED_ON_TRIGGER",
+      "reference": "references/correction.md",
+      "reason": "A bounded correction/convergence loop is active."
+    },
+    {
+      "id": "geometry-scale-warning",
+      "skill": "lazydesigner-modelling",
+      "prompt": "The Bedrock Entity model is reporting a native Cube size warning; inspect format-aware dimensions before a large rebuild.",
+      "decision": "REQUIRED_ON_TRIGGER",
+      "reference": "references/verification.md",
+      "reason": "Native format and approved-size preflight are material."
+    },
+    {
+      "id": "texture-fidelity-material",
+      "skill": "lazydesigner-texturing",
+      "prompt": "The mapped gold armor material is too flat compared with the approved image; improve form and value before applying treatment to the atlas.",
+      "decision": "REQUIRED_ON_TRIGGER",
+      "reference": "references/fidelity-styling-verification.md",
+      "reason": "A reference-fidelity and coherent styling propagation decision is active."
+    },
+    {
+      "id": "animation-motion-fidelity",
+      "skill": "lazydesigner-animation",
+      "prompt": "The approved creature's attack feels weightless and fails its intended contact pose; compare key poses before propagating corrections.",
+      "decision": "REQUIRED_ON_TRIGGER",
+      "reference": "references/fidelity-correction-evidence.md",
+      "reason": "Reference-driven animation fidelity and correction are active."
+    },
+    {
+      "id": "geometry-known-coordinates",
+      "skill": "lazydesigner-modelling",
+      "prompt": "Add the already-specified unrotated Cube to its known parent. The current verified blockout and reference evidence are fresh.",
+      "decision": "NO_DEEP_REFERENCE",
+      "reference": null,
+      "reason": "Core routine execution is sufficient; no material unresolved decision requires deeper reference."
+    },
+    {
+      "id": "texture-exact-pixel",
+      "skill": "lazydesigner-texturing",
+      "prompt": "Apply the already-approved exact RGBA to a bounded known pixel region; UV, alpha and mapping decisions remain unchanged.",
+      "decision": "NO_DEEP_REFERENCE",
+      "reference": null,
+      "reason": "Known deterministic edit does not require broad styling or render verification theory."
+    },
+    {
+      "id": "animation-known-key",
+      "skill": "lazydesigner-animation",
+      "prompt": "Insert one pre-agreed numeric keyframe on the verified bone and current clip; there is no new fidelity or correction question.",
+      "decision": "NO_DEEP_REFERENCE",
+      "reference": null,
+      "reason": "The normal timeline path already supplies sufficient context."
+    }
+  ]
+}

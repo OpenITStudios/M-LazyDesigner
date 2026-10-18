@@ -86,6 +86,15 @@ The discovery description must be sufficient to reject obvious false activations
 
 Do not solve context pressure by fragmenting one coherent owner into many tiny Skills. Add a Skill only when the responsibility is independently reusable and has a distinct activation boundary.
 
+Follow the quality-first progressive disclosure budget in
+`docs/04-system/ai-context-loading.md`: ~15K characters is a **review signal**
+for each active Geometry/Texturing/Animation Skill, **not a pass/fail size constraint**. Keep always-required invariants in the hot path; use directly
+linked conditional references for deeper, decision-specific expertise.
+When the budget is exceeded, inspect duplicated policy and evaluate relevant
+task outcomes before removing knowledge. Distinguish required-on-trigger from
+supporting references, test both must-load and must-not-load cases, and never
+claim model compliance or artistic improvement from static file assertions.
+
 ## Activation Classes
 
 ```text
@@ -138,6 +147,12 @@ Do not create separate author/evaluator/maintainer Skills until one combined Ski
 ## Evaluation Corpus
 
 Use `mcp/tests/fixtures/skill-routing-cases.json` as a compact regression corpus for intended routing semantics. It is development/evaluation evidence, not runtime routing code and not a substitute for behavioral model evaluation.
+
+Use `mcp/tests/fixtures/skill-reference-loading-cases.json` to distinguish
+**required-on-trigger** from **no-deep-reference** decisions for Geometry,
+Texturing and Animation. The repository test validates fixture structure and
+direct reference integrity; a real model/tool trace must separately establish
+that the intended content was loaded only when required.
 
 When adding a case, prefer one that closes a real ambiguity over many near-duplicates. `expected_skill: NONE` is valid when the correct behavior is to keep all LazyDesigner Skills cold.
 

@@ -4,6 +4,10 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**2026-10-18 Quality-First Progressive Skills — source policy change:** The hard per-Skill character rejections have been replaced with advisory thresholds (~15,000 for core Geometry/Texturing/Animation, smaller role-specific review levels elsewhere), while preserving static owner/metadata/direct-module activation contracts. Eight development-only must-load/no-deep-reference scenarios were prepared; these do not demonstrate that the model read or followed a module. **Bun/source CI, model behavior, installed Runtime and visual improvement remain NOT EXECUTED.** This policy change does not modify any asset, main specialist content, or public Gateway tool. See [next-action](next-action.md#current-bounded-work--one-flow-context-integrity-chatgpt--github).
+
+
+
 **2026-10-18 Texturing alpha-safety source patch:** RGB-only style overlays in geometry-aware and source-composed edge/directional treatments are explicitly restricted to previously nontransparent pixels and preserve their alpha. The base masked-color helper retains its legacy RGBA default for explicit alpha effects. Focused fixtures check transparent islands, intermediate cutout alpha, repeated treatment and backward compatibility. **GitHub source only: Bun, typecheck, CI, native Blockbench, visual and Minecraft proof NOT EXECUTED.** No measured quality or performance gains claimed.
 
 
