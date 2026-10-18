@@ -124,7 +124,7 @@ describe("R07 decision probes on existing evidence and correction owners", () =>
         size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
         scope_instance_ids: ["segments:0"],
       },
-      verification_evidence_handle: "verificationevidence:r07-fixture",
+      verification_evidence_handle: "verificationevidence:r07-fixture" as const,
     };
     const missing = registry.startFromObservations({
       ...input,

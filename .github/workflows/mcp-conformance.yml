@@ -102,8 +102,12 @@ jobs:
           console.log('Use canonical required-vs-not_scored counts for acceptance; optional Tasks are not release requirements.');
           NODE
 
+      # The pinned official conformance CLI is the required gate. A temporary
+      # GitHub artifact storage quota failure must not recast its result.
+      # Scenario/check failures remain visible in the bounded job-log summary.
       - name: Upload conformance evidence
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: lazydesigner-mcp-conformance
