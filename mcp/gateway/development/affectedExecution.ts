@@ -132,6 +132,30 @@ const CONTROL_DELTA_CONTRACT_TESTS = [
   "mcp/tests/control-texture-mutation-precision.test.ts",
 ] as const;
 
+// Direct, source-grounded regressions for recent Texture owners. Keep this
+// in the existing affected-work planner; do not introduce a test router or
+// infer a false all-clear from an absent filename match.
+export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly string[]>> = {
+  "mcp/lib/texture/seamContinuity.ts": [
+    "mcp/tests/texture-seam-continuity.test.ts",
+  ],
+  "mcp/lib/texture/geometrySignalCompiler.ts": [
+    "mcp/tests/texture-geometry-signal-compiler.test.ts",
+  ],
+  "mcp/lib/texture/geometrySignalBuilder.ts": [
+    "mcp/tests/texture-geometry-signal-compiler.test.ts",
+  ],
+  "mcp/lib/texture/maskedOps.ts": [
+    "mcp/tests/texture-masks.test.ts",
+  ],
+  "mcp/lib/texture/geometryAwareTreatment.ts": [
+    "mcp/tests/texture-masks.test.ts",
+  ],
+  "mcp/lib/texture/sourceComposer.ts": [
+    "mcp/tests/texture-masks.test.ts",
+  ],
+};
+
 const GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH: Readonly<
   Record<string, readonly string[]>
 > = {
@@ -201,6 +225,8 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  const textureTests = TEXTURE_REGRESSION_TESTS_BY_PATH[path];
+  if (textureTests) return textureTests;
   const recoveryContracts = GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH[path];
   if (recoveryContracts) return recoveryContracts;
   if (path.startsWith("mcp/lib/receipts/")) {

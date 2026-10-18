@@ -15,6 +15,7 @@ implementation-map.md
 module-boundaries.md
 data-lifecycle.md
 development-operating-standard.md
+test-architecture.md
 skill-taxonomy.md
 compatibility-identifiers.md
 terminology.md
@@ -59,6 +60,9 @@ Which data is canonical, derived or user-owned, and how is Desktop metadata prot
 
 What development discipline, permission and STOP checks apply?
 → development-operating-standard.md
+
+How are Bun tests inventoried, selected, modernized and retired without losing coverage?
+→ test-architecture.md
 
 Which Skill category/semantic owner applies?
 → skill-taxonomy.md

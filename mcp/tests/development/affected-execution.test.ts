@@ -187,6 +187,52 @@ describe("affected execution planner", () => {
     );
   });
 
+  test("recent Texture source changes route directly to their owning regressions", () => {
+    const cases: Array<[string, string]> = [
+      ["mcp/lib/texture/seamContinuity.ts", "mcp/tests/texture-seam-continuity.test.ts"],
+      ["mcp/lib/texture/geometrySignalCompiler.ts", "mcp/tests/texture-geometry-signal-compiler.test.ts"],
+      ["mcp/lib/texture/geometrySignalBuilder.ts", "mcp/tests/texture-geometry-signal-compiler.test.ts"],
+      ["mcp/lib/texture/maskedOps.ts", "mcp/tests/texture-masks.test.ts"],
+      ["mcp/lib/texture/geometryAwareTreatment.ts", "mcp/tests/texture-masks.test.ts"],
+      ["mcp/lib/texture/sourceComposer.ts", "mcp/tests/texture-masks.test.ts"],
+    ];
+    for (const [source, owningTest] of cases) {
+      const plan = planAffectedExecution({
+        changedPaths: [source],
+        semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, source).toBe(false);
+      expect(plan.checks, source).toContain("PROJECT_GRAPH");
+      expect(plan.checks, source).toContain("TARGETED_TESTS");
+      expect(plan.targeted_tests, source).toContain(owningTest);
+      expect(plan.commands, source).toContain(
+        `bun test ${owningTest.slice("mcp/".length)}`
+      );
+      expect(plan.commands, source).not.toContain("bun run verify:full");
+    }
+  });
+
+  test("unrelated Texture source does not inherit arbitrary seam checks", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/lib/texture/vanillaKnowledge.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.checks).toContain("PROJECT_GRAPH");
+    expect(plan.targeted_tests).not.toContain("mcp/tests/texture-seam-continuity.test.ts");
+    expect(plan.targeted_tests).not.toContain("mcp/tests/texture-masks.test.ts");
+  });
+
+  test("toolchain and dependency changes still require full verification", () => {
+    for (const source of [".bun-version", "mcp/bun.lock", "mcp/package.json"]) {
+      const plan = planAffectedExecution({
+        changedPaths: [source],
+        semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, source).toBe(true);
+      expect(plan.commands).toContain("bun run verify:full");
+    }
+  });
+
   test("shared receipt changes run bounded receipt and continuation contracts", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/receipts/materialMutation.ts"],

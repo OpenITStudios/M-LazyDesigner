@@ -4,7 +4,7 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
-**2026-10-18 Bun 1.4.3 pinned upgrade (source selection only):** Upstream official stable version verified as `1.4.3` (2026-10-10) and Windows x64 baseline release asset exists. Root `.bun-version` is the only toolchain pin updated from `1.3.14`; the lockfile and installed package remain unchanged. Existing `tsc`, `Bun.build`, macros, default-full manual CI, and Windows baseline asset resolution remain. SOURCE_REVIEW only, **not** measured performance or executed Bun 1.4.3, frozen-install, typecheck, CI, Windows installer, Blockbench compatibility or native quality. Upgrade must pass matching-SHA manual CI before being called verified; the previous Bun 1.3.14 pin is preserved in Git history for rollback.
+**2026-10-18 Progressive Bun test modernization — staged source changes:** GitHub `Local` tree enumeration identified **559** test/spec TypeScript files; staleness was not inferred. Source changes prepared an on-demand heuristic inventory, direct owner-test mapping in the canonical affected-execution planner, negative/fallback regression fixtures and a six-phase canonical plan. **No tests retired, quarantined, weakened or executed through Bun/CI in this batch.** Exact-SHA Bun 1.4.3, typecheck, selector behavior, real time savings, Windows packaging and Blockbench validation remain **NOT EXECUTED / UNVERIFIED**. Any source/static inspection only proves proposed code and file links are present; acceptance requires running the stated phase-0 verifier.
 
 
 

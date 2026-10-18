@@ -539,6 +539,12 @@ mcp/tests/**         contract/integration regressions
 
 Completed one-shot retirement/finalization workflows and migration scripts do not remain in the active repository surface. Generated API/prompt outputs are generator-owned and must not be hand-edited.
 
+Test inventory, affected selection and staged retirement are governed by
+[the canonical test architecture](test-architecture.md). Use the existing
+`gateway/development/affectedExecution.ts` planner, not a second test router.
+On-demand `scripts/development/audit-test-inventory.ts` only identifies
+review candidates and never deletes tests or constitutes a quality PASS.
+
 ### Bun-first toolchain, without runtime lock-in
 
 - `.bun-version` pins the Gateway/test/build/package toolchain. Do not
