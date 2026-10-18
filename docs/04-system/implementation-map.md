@@ -539,6 +539,29 @@ mcp/tests/**         contract/integration regressions
 
 Completed one-shot retirement/finalization workflows and migration scripts do not remain in the active repository surface. Generated API/prompt outputs are generator-owned and must not be hand-edited.
 
+### Bun-first toolchain, without runtime lock-in
+
+- `.bun-version` pins the Gateway/test/build/package toolchain. Do not
+  auto-upgrade it or regenerate `mcp/bun.lock` from a different runtime
+  without same-source regression, benchmark and Windows package evidence.
+- `mcp/gateway/index.ts` executes through Bun. `mcp/build/index.ts`
+  uses `Bun.build(target=node, format=cjs)` to emit a Blockbench plugin
+  bundle; that plugin uses the editor's own JavaScript/native APIs rather
+  than running Bun *inside* Blockbench.
+- Desktop remains Tauri/Rust with Node/npm frontend tooling. Keep
+  Geometry/Texture/Animation pure decision algorithms independent of
+  Bun-specific APIs; isolate toolchain and native-editor requirements
+  at their existing owners. No parallel engine or generic adapter graph.
+- Manual `MCP Verify` supports `full` (canonical source/build gate) and
+  `texture` (four focused regressions plus TypeScript typecheck). The
+  default/missing selection stays `full`; focused PASS has a distinct
+  evidence scope and cannot certify full verification or native visuals.
+- The managed Windows package keeps an explicit, security-bounded source
+  allowlist in `distribution/managed-install.ts`. The
+  `managed-skill-package-references.test.ts` repository contract checks
+  live specialist reference files against that allowlist, avoiding a
+  filesystem-dependent package manifest at runtime.
+
 ## Compatibility Boundary
 
 The active **source distribution** now uses canonical LazyDesigner identities:

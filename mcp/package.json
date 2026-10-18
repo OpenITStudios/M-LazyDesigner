@@ -22,6 +22,7 @@
     "typecheck:gateway": "tsc -p gateway/tsconfig.json --noEmit",
     "typecheck:profile": "tsc --noEmit --extendedDiagnostics",
     "test": "bun test",
+    "verify:texture:focused": "bun test tests/texture-seam-continuity.test.ts tests/texture-geometry-signal-compiler.test.ts tests/texture-masks.test.ts tests/texture-treatment-intelligence.test.ts && bun run typecheck",
     "test:runtime": "bun test tests/*.test.ts tests/benchmark/*.test.ts tests/contracts/*.test.ts tests/development/*.test.ts tests/live/*.test.ts tests/runtime/*.test.ts --path-ignore-patterns '**/managed-install.test.ts' && bun test tests/managed-install.test.ts",
     "gateway": "bun run ./gateway/index.ts",
     "setup:tls": "bun run ./scripts/operations/setup-runtime-tls.ts",

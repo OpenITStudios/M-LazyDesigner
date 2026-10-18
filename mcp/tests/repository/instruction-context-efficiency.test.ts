@@ -46,6 +46,35 @@ describe("repository instruction/context efficiency", () => {
     expect(contract).toContain("Quality PASS");
   });
 
+  test("MCP manual verify provides distinct focused and full source evidence", async () => {
+    const [workflow, pkg] = await Promise.all([
+      text("../.github/workflows/mcp-verify.yml"),
+      text("package.json"),
+    ]);
+    const scripts = JSON.parse(pkg).scripts as Record<string, string>;
+    expect(workflow).toMatch(/^on:\n  workflow_dispatch:/m);
+    expect(workflow).not.toMatch(/^  (?:push|pull_request|schedule|workflow_run):/m);
+    expect(workflow).toContain("default: full");
+    expect(workflow).toContain("options:\n          - full\n          - texture");
+    expect(workflow).toContain("if: ${{ inputs.verification != 'texture' }}");
+    expect(workflow).toContain("if: ${{ inputs.verification == 'texture' }}");
+    expect(workflow).toContain("run: bun run verify:texture:focused");
+    expect(workflow).toContain("required_steps: requiredSteps");
+    expect(workflow).toContain("MCP_TEXTURE_SOURCE_NON_NATIVE");
+    expect(workflow).toContain("MCP_SOURCE_NON_NATIVE");
+    expect(workflow).toContain("requiredSteps.map(name => steps[name])");
+    expect(workflow).toContain("bun-version-file: \".bun-version\"");
+    expect(workflow).toContain("bun install --frozen-lockfile");
+    expect(workflow).toContain("run: bun run verify:full");
+    expect(scripts["verify:texture:focused"]).toContain("tests/texture-seam-continuity.test.ts");
+    expect(scripts["verify:texture:focused"]).toContain("tests/texture-geometry-signal-compiler.test.ts");
+    expect(scripts["verify:texture:focused"]).toContain("tests/texture-masks.test.ts");
+    expect(scripts["verify:texture:focused"]).toContain("tests/texture-treatment-intelligence.test.ts");
+    expect(scripts["verify:texture:focused"]).toContain("bun run typecheck");
+    expect(scripts["verify:texture:focused"]).not.toContain("verify:benchmarks");
+    expect(scripts["verify:texture:focused"]).not.toContain("bun run build");
+  });
+
   test("manual verification keeps repository context checks independent of MCP execution", async () => {
     const [repositoryWorkflow, mcpWorkflow, pkg] = await Promise.all([
       text("../.github/workflows/repository-verify.yml"),

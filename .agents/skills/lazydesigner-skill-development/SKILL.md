@@ -165,6 +165,11 @@ owner. Treat this as a small change transaction, **not** an automatic rewrite:
    retired guidance; do not keep parallel old/new authority by default.
 4. Validate existing owner/lane, link integrity (including **orphan files**),
    positive/negative/sequential activation cases, and safety invariants.
+   For packaged Geometry/Texturing/Animation reference modules, reconcile
+   `distribution/managed-install.ts` `PACKAGE_SOURCE_PATHS` before release.
+   The `managed-skill-package-references.test.ts` contract checks exact
+   on-disk module versus package inventory; runtime installers intentionally
+   do **not** discover untrusted/unavailable source directories.
    Compare the previous quality baseline against the changed behavior with
    equivalent knowledge when feasible. No increase in test-count, token
    savings, or file modularity can substitute for an accepted-quality outcome.

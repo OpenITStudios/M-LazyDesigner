@@ -2,6 +2,15 @@ name: MCP Verify
 
 on:
   workflow_dispatch:
+    inputs:
+      verification:
+        description: "Verification scope (full remains the default)"
+        required: true
+        type: choice
+        default: full
+        options:
+          - full
+          - texture
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -40,7 +49,7 @@ jobs:
             echo "### MCP exact-SHA proof"
             echo
             printf -- '- exact_sha: `%s`\n' "$actual_sha"
-            echo "- verification: manual full source gate"
+            echo "- verification: manual source gate (scope recorded separately)"
             echo "- live_local_tests: excluded"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -54,16 +63,24 @@ jobs:
         id: frozen_install
         run: bun install --frozen-lockfile
 
-      # Exact-source full verification on manual dispatch, not live Blockbench proof.
+      # Run one manual gate; focused PASS is NOT full source/build acceptance.
       - name: Run canonical full source verification
+        if: ${{ inputs.verification != 'texture' }}
         id: source_verify
         run: bun run verify:full
 
+      - name: Run focused texture tests and typecheck
+        if: ${{ inputs.verification == 'texture' }}
+        id: focused_verify
+        run: bun run verify:texture:focused
+
       - name: Record exact-SHA build provenance
+        if: ${{ inputs.verification != 'texture' }}
         id: build_provenance
         run: bun run ./scripts/operations/verified-build-artifact.ts write-ci
 
       - name: Upload verified compatibility bundle
+        if: ${{ inputs.verification != 'texture' }}
         id: verified_bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -83,6 +100,7 @@ jobs:
         env:
           SOURCE_SHA: ${{ github.sha }}
           SOURCE_REF: ${{ github.ref }}
+          VERIFICATION_MODE: ${{ inputs.verification }}
           SOURCE_REPOSITORY: ${{ github.repository }}
           SOURCE_RUN_ID: ${{ github.run_id }}
           SOURCE_RUN_ATTEMPT: ${{ github.run_attempt }}
@@ -92,6 +110,7 @@ jobs:
           STEP_BUN_SETUP: ${{ steps.bun_setup.outcome }}
           STEP_FROZEN_INSTALL: ${{ steps.frozen_install.outcome }}
           STEP_SOURCE_VERIFY: ${{ steps.source_verify.outcome }}
+          STEP_FOCUSED_VERIFY: ${{ steps.focused_verify.outcome }}
           STEP_BUILD_PROVENANCE: ${{ steps.build_provenance.outcome }}
           STEP_VERIFIED_BUNDLE: ${{ steps.verified_bundle.outcome }}
         run: |
@@ -99,16 +118,24 @@ jobs:
           const fs = require('node:fs');
           const path = require('node:path');
           const env = process.env;
+          const mode = env.VERIFICATION_MODE === 'texture' ? 'texture' : 'full';
           const steps = {
             checkout: env.STEP_CHECKOUT || 'unknown',
             exact_sha: env.STEP_SHA_PROOF || 'unknown',
             bun_setup: env.STEP_BUN_SETUP || 'unknown',
             frozen_install: env.STEP_FROZEN_INSTALL || 'unknown',
             verify_full: env.STEP_SOURCE_VERIFY || 'unknown',
+            verify_texture: env.STEP_FOCUSED_VERIFY || 'unknown',
             build_provenance: env.STEP_BUILD_PROVENANCE || 'unknown',
             verified_bundle: env.STEP_VERIFIED_BUNDLE || 'unknown',
           };
-          const outcomes = Object.values(steps);
+          // Skipped build steps are valid in focused mode; skipped required
+          // steps are always INCOMPLETE, never source acceptance.
+          const requiredSteps = mode === 'texture'
+            ? ['checkout', 'exact_sha', 'bun_setup', 'frozen_install', 'verify_texture']
+            : ['checkout', 'exact_sha', 'bun_setup', 'frozen_install',
+               'verify_full', 'build_provenance', 'verified_bundle'];
+          const outcomes = requiredSteps.map(name => steps[name]);
           const status = outcomes.every(value => value === 'success')
             ? 'PASS'
             : outcomes.some(value => value === 'failure')
@@ -116,7 +143,10 @@ jobs:
               : 'INCOMPLETE';
           const report = {
             schema: 'lazydesigner-cloud-source-evidence-v1',
-            scope: 'MCP_SOURCE_NON_NATIVE',
+            scope: mode === 'texture'
+              ? 'MCP_TEXTURE_SOURCE_NON_NATIVE' : 'MCP_SOURCE_NON_NATIVE',
+            verification_mode: mode,
+            required_steps: requiredSteps,
             verdict: status,
             source_sha: env.SOURCE_SHA,
             source_ref: env.SOURCE_REF,
@@ -124,7 +154,8 @@ jobs:
             run_attempt: env.SOURCE_RUN_ATTEMPT,
             run_url: env.SOURCE_SERVER_URL + '/' + env.SOURCE_REPOSITORY
               + '/actions/runs/' + env.SOURCE_RUN_ID,
-            verifier: 'bun run verify:full',
+            verifier: mode === 'texture'
+              ? 'bun run verify:texture:focused' : 'bun run verify:full',
             steps,
             native_blockbench: 'NOT_EXECUTED',
           };
@@ -134,7 +165,7 @@ jobs:
             '\n### Non-native verification evidence\n\n'
             + '- Verdict: **' + status + '**\n'
             + '- Exact source: \x60' + report.source_sha + '\x60\n'
-            + '- Full source verification: \x60' + steps.verify_full + '\x60\n'
+            + '- Selected verification outcome: \x60' + (mode === 'texture' ? steps.verify_texture : steps.verify_full) + '\x60\n'
             + '- Native Blockbench: **NOT EXECUTED**\n');
           NODE
 
