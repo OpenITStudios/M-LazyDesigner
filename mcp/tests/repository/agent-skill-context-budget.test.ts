@@ -189,7 +189,9 @@ describe("Skill quality-first context contract", () => {
       if (!owner) continue;
       const available = inventory.get(row.skill) ?? [];
       if (row.decision === "REQUIRED_ON_TRIGGER") {
-        expect(typeof row.reference).toBe("string");
+        if (typeof row.reference !== "string") {
+          throw new Error(`Missing required module reference for ${row.id}`);
+        }
         expect(available).toContain(row.reference);
         expect(row.references).toBeUndefined();
       } else if (row.decision === "SEQUENTIAL_REQUIRED") {

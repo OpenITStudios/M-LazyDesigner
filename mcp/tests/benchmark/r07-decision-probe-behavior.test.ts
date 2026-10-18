@@ -8,15 +8,33 @@ import benchmark from "../fixtures/quality-benchmark-cases.json";
 import {
   compileStructuredVisualObservation,
   type StructuredVisualObservation,
+  type CompiledVisualObservation,
 } from "../../lib/orchestration/visualObservation";
 import {
   minecraftQualityFocus,
   prioritizeMinecraftDiscrepancies,
+  type MinecraftQualityClass,
+  type MinecraftQualityOwner,
+  type MinecraftRepairRoute,
+  type MinecraftEvidenceNeed,
 } from "../../lib/orchestration/compactEvidence";
 import { CorrectionLoopRegistry } from "../../lib/orchestration/correctionLoop";
 import { stageReferenceSemanticFingerprint } from "../../gateway/control/contextProjection";
 import { emptyReference } from "../../gateway/control/referenceParser";
 import type { AuthoringRecipe } from "../../lib/authoringRecipe/contracts";
+
+type ProbeExpected =
+  | {
+      state: "UNVERIFIED";
+      reason: Extract<CompiledVisualObservation, { state: "UNVERIFIED" }>["reason"];
+    }
+  | {
+      state: "SUPPORTED";
+      owner: MinecraftQualityOwner;
+      quality_class: MinecraftQualityClass;
+      repair_route: MinecraftRepairRoute;
+      evidence_action?: NonNullable<MinecraftEvidenceNeed>["action"];
+    };
 
 const probes = benchmark.decision_probes.cases;
 function byId(id: string) {
@@ -49,22 +67,15 @@ describe("R07 decision probes on existing evidence and correction owners", () =>
       const observed = compileStructuredVisualObservation(
         probe.observation as unknown as StructuredVisualObservation
       );
-      const expected: {
-        state: "SUPPORTED" | "UNVERIFIED";
-        owner?: string;
-        quality_class?: string;
-        repair_route?: string;
-        reason?: string;
-        evidence_action?: string;
-      } = probe.expected as unknown as { state: "SUPPORTED" | "UNVERIFIED"; owner?: string; quality_class?: string; repair_route?: string; reason?: string; evidence_action?: string };
+      const expected = probe.expected as unknown as ProbeExpected;
       expect(observed.state).toBe(expected.state);
       if (observed.state === "UNVERIFIED") {
-        expect(expected.state).toBe("UNVERIFIED");
+        if (expected.state !== "UNVERIFIED") throw new Error(`R07 fixture ${probe.id} expects unsupported output`);
         expect(observed.reason).toBe(expected.reason);
         expect(observed.discrepancy).toBeNull();
         continue;
       }
-      expect(expected.state).toBe("SUPPORTED");
+      if (expected.state !== "SUPPORTED") throw new Error(`R07 fixture ${probe.id} expects supported output`);
       const focus = minecraftQualityFocus([observed.discrepancy]);
       expect(focus).not.toBeNull();
       expect(focus?.owner).toBe(expected.owner);
@@ -109,7 +120,7 @@ describe("R07 decision probes on existing evidence and correction owners", () =>
         verification_risk: "LOW" as const,
         views: ["front" as const],
         views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
-        size: 256,
+        size: 256 as const,
         size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
         scope_instance_ids: ["segments:0"],
       },

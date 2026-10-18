@@ -88,11 +88,11 @@ jobs:
               for (const check of checks) {
                 const status = String(check.status ?? check.result ?? '').toLowerCase();
                 const failed = check.passed === false || check.success === false ||
-                  ['fail', 'failed', 'error'].includes(status);
+                  ['fail', 'failed', 'failure', 'error'].includes(status);
                 if (!failed) continue;
                 seen++;
                 const id = String(check.id ?? check.check_id ?? check.name ?? 'unnamed').slice(0, 100);
-                const reason = String(check.message ?? check.reason ?? '').slice(0, 220);
+                const reason = String(check.errorMessage ?? check.message ?? check.reason ?? '').slice(0, 220);
                 console.log('[conformance-fail]', path.basename(path.dirname(file)), id, reason);
               }
             }

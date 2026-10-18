@@ -138,6 +138,22 @@ export function validateMcpRoutingHeaders (
     message: `Bad Request: MCP routing headers disagree with the JSON-RPC body (${reason}).`,
   });
 
+  // Missing/invalid body _meta is a JSON-RPC parameter failure, not a
+  // contradictory routing header. Reject before SDK dispatch with -32602
+  // while retaining HTTP 400 and the fail-closed native request boundary.
+  // A genuinely contradictory method header still keeps the stricter
+  // routing-mismatch classification.
+  if (modern && headers.protocolVersion === modernVersion &&
+      envelope.protocolVersion === null) {
+    if (headers.method && envelope.method && headers.method !== envelope.method) {
+      return mismatch("Mcp-Method");
+    }
+    return {
+      code: -32602,
+      message: "Invalid params: missing io.modelcontextprotocol/protocolVersion in request _meta.",
+    };
+  }
+
   if (modern && (
     headers.protocolVersion !== modernVersion ||
     envelope.protocolVersion !== modernVersion

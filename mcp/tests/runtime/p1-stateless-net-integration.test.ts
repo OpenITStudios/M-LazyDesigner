@@ -424,6 +424,34 @@ describe("P1.4 raw-net stateless integration", () => {
     expect(legacy.status).toBe(200);
   });
 
+  test("2026 malformed _meta uses Invalid params without bypassing routing mismatch protection", () => {
+    const headers = { protocolVersion: "2026-07-28", method: "tools/list", name: null };
+    for (const params of [
+      {},
+      { _meta: {} },
+      { _meta: { "io.modelcontextprotocol/protocolVersion": 17 } },
+    ]) {
+      const envelope = readRequestEnvelope(JSON.stringify({
+        jsonrpc: "2.0", id: 710, method: "tools/list", params,
+      }));
+      const result = validateMcpRoutingHeaders(envelope, headers);
+      expect(result).toMatchObject({ code: -32602 });
+      expect(result?.message).toContain("request _meta");
+    }
+
+    const mismatch = readRequestEnvelope(JSON.stringify({
+      jsonrpc: "2.0", id: 711, method: "tools/list", params: {},
+    }));
+    expect(validateMcpRoutingHeaders(mismatch, {
+      ...headers, method: "tools/call",
+    })).toMatchObject({ code: -32020 });
+    const wrongVersion = readRequestEnvelope(JSON.stringify({
+      jsonrpc: "2.0", id: 712, method: "tools/list",
+      params: { _meta: { "io.modelcontextprotocol/protocolVersion": "2025-11-25" } },
+    }));
+    expect(validateMcpRoutingHeaders(wrongVersion, headers)).toMatchObject({ code: -32020 });
+  });
+
   test("2026 routing guard decodes Mcp-Name but refuses malformed/mismatched base64", () => {
     const envelope = readRequestEnvelope(JSON.stringify({
       jsonrpc: "2.0", id: 604, method: "tools/call",
