@@ -129,7 +129,8 @@ describe("texture seam continuity", () => {
       edge({
         face: "east", edge: "left",
         start: [2, 1, 0], end: [2, 0, 0],
-        samples: [[255, 255, 255, 255]],
+        samples: Array.from({ length: 4 },
+          () => [255, 255, 255, 255] as [number, number, number, number]),
       }),
     ]);
     expect(result.excluded_intentional_boundary_pair_count).toBe(1);
@@ -161,6 +162,97 @@ describe("texture seam continuity", () => {
         continuity_intent: "AUTO_PASS" as never,
       },
     ])).toThrow("continuity intent is invalid");
+  });
+
+  test("duplicate same-face edge group remains ambiguous instead of disappearing", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge(), edge({ samples: [[255, 255, 255, 255]] }),
+    ]);
+    expect(result.sampled_edge_count).toBe(2);
+    expect(result.paired_seam_count).toBe(0);
+    expect(result.unpaired_edge_count).toBe(0);
+    expect(result.ambiguous_edge_count).toBe(1);
+    expect(result.review.candidate_count).toBe(0);
+    expect(result.gate.reasons).toContain("SEAM_EVIDENCE_AMBIGUOUS");
+    expect(result.evidence_gaps.ambiguous_examples[0]).toEqual({
+      cube_uuid: "cube-a", faces: ["north", "north"], edge_count: 2,
+    });
+  });
+
+  test("unequal sampled edge lengths remain unresolved instead of downsampled into a false clean seam", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ samples: [[20, 20, 20, 255], [255, 255, 255, 255],
+                       [20, 20, 20, 255], [255, 255, 255, 255]] }),
+      edge({
+        face: "east", edge: "left", start: [1, 1, 0], end: [1, 0, 0],
+        samples: [[20, 20, 20, 255], [20, 20, 20, 255]],
+      }),
+    ]);
+    expect(result.sampled_edge_count).toBe(2);
+    expect(result.sample_alignment_unverified_pair_count).toBe(1);
+    expect(result.paired_seam_count).toBe(0);
+    expect(result.review.candidate_count).toBe(0);
+    expect(result.gate.reasons).toContain("SEAM_SAMPLE_ALIGNMENT_UNVERIFIED");
+    expect(result.evidence_gaps.sample_alignment_examples[0]).toEqual({
+      cube_uuid: "cube-a", faces: ["north", "east"], sample_counts: [4, 2],
+    });
+  });
+
+  test("intentional material boundaries remain excluded even when sample counts differ", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ continuity_intent: "INTENTIONAL_BOUNDARY" }),
+      edge({
+        face: "east", edge: "left", start: [1, 1, 0], end: [1, 0, 0],
+        samples: [[255, 255, 255, 255]],
+      }),
+    ]);
+    expect(result.excluded_intentional_boundary_pair_count).toBe(1);
+    expect(result.sample_alignment_unverified_pair_count).toBe(0);
+    expect(result.gate.reasons).toEqual([]);
+    expect(result.review.candidate_count).toBe(0);
+  });
+
+  test("uncertain sampling and a confirmed discontinuity are reported independently", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge(),
+      edge({
+        face: "east", edge: "left", start: [1, 1, 0], end: [1, 0, 0],
+        samples: [[255, 255, 255, 255]],
+      }),
+      edge({ start: [2, 0, 0], end: [2, 1, 0] }),
+      edge({
+        face: "east", edge: "left", start: [2, 1, 0], end: [2, 0, 0],
+        samples: Array.from({ length: 4 },
+          () => [255, 255, 255, 255] as [number, number, number, number]),
+      }),
+    ]);
+    expect(result.sample_alignment_unverified_pair_count).toBe(1);
+    expect(result.paired_seam_count).toBe(1);
+    expect(result.review.candidate_count).toBe(1);
+    expect(result.gate.reasons).toContain("SEAM_SAMPLE_ALIGNMENT_UNVERIFIED");
+    expect(result.gate.reasons).toContain("SEAM_CONTINUITY_REVIEW");
+  });
+
+  test("intra-Cube evidence gaps are bounded and do not require full seam dumps", () => {
+    const edges: TextureSeamEdgeInput[] = [];
+    for (let i = 0; i < 5; i++) {
+      edges.push(edge({
+        start: [i + 5, 0, 0], end: [i + 5, 1, 0],
+      }));
+      edges.push(edge({
+        face: "east", edge: "left",
+        start: [i + 5, 1, 0], end: [i + 5, 0, 0],
+        samples: [[20, 20, 20, 255]],
+      }));
+    }
+    const result = analyzeTextureSeamContinuity(edges, 2);
+    expect(result.sample_alignment_unverified_pair_count).toBe(5);
+    expect(result.evidence_gaps.sample_alignment_examples).toHaveLength(2);
+    expect(result.evidence_gaps.sample_alignment_examples_truncated).toBe(true);
+    expect(result.paired_seam_count).toBe(0);
+    expect(result.gate.reasons).toContain("SEAM_SAMPLE_ALIGNMENT_UNVERIFIED");
+    expect(() => analyzeTextureSeamContinuity(edges, 31))
+      .toThrow("example limit");
   });
 
   test("intra-Cube hidden RGB cannot create a false high-contrast review", () => {

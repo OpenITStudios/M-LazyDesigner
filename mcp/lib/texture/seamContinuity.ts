@@ -178,6 +178,9 @@ export function analyzeTextureSeamContinuity(
   alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
 ) {
   requireAlphaSemantics(alphaSemantics);
+  if (!Number.isInteger(exampleLimit) || exampleLimit < 1 || exampleLimit > 30) {
+    throw new Error("Intra-Cube seam example limit must be 1..30.");
+  }
   for (const edge of edges) requireEdge(edge);
 
   const groups = new Map<string, TextureSeamEdgeInput[]>();
@@ -188,8 +191,15 @@ export function analyzeTextureSeamContinuity(
     groups.set(key, group);
   }
 
-  const validPairs = [...groups.values()].filter(
-    (group) => group.length === 2 && group[0].face !== group[1].face
+  const grouped = [...groups.values()];
+  // A pair from the same face is duplicate/conflicting evidence, not a
+  // meaningful face-to-face seam. Never let such a group disappear from counts.
+  const ambiguous = grouped.filter((group) =>
+    group.length > 2 ||
+    (group.length === 2 && group[0].face === group[1].face)
+  );
+  const validPairs = grouped.filter((group) =>
+    group.length === 2 && group[0].face !== group[1].face
   );
   // Deliberate face/material transitions are not continuous surfaces.
   // Never infer this from color contrast: only caller-declared design intent
@@ -197,17 +207,24 @@ export function analyzeTextureSeamContinuity(
   const intentionalBoundaries = validPairs.filter((group) =>
     group.some((edge) => edge.continuity_intent === "INTENTIONAL_BOUNDARY")
   );
-  const paired = validPairs
-    .filter((group) =>
-      group.every((edge) => edge.continuity_intent !== "INTENTIONAL_BOUNDARY"))
+  const candidatePairs = validPairs.filter((group) =>
+    group.every((edge) => edge.continuity_intent !== "INTENTIONAL_BOUNDARY")
+  );
+  // Comparing different sample counts used to silently downsample to the
+  // minimum length, losing endpoint detail and potentially hiding a seam.
+  // Require comparable sampled evidence instead of producing a false clean.
+  const sampleAlignmentUnverified = candidatePairs.filter((group) =>
+    group[0].samples.length !== group[1].samples.length
+  );
+  const paired = candidatePairs
+    .filter((group) => group[0].samples.length === group[1].samples.length)
     .map((group) => seamSummary(group[0], group[1], alphaSemantics))
     .sort(
       (a, b) =>
         (b.mean_rgb_difference ?? -1) - (a.mean_rgb_difference ?? -1) ||
         b.mean_alpha_difference - a.mean_alpha_difference
     );
-  const unpaired = [...groups.values()].filter((group) => group.length === 1);
-  const ambiguous = [...groups.values()].filter((group) => group.length > 2);
+  const unpaired = grouped.filter((group) => group.length === 1);
   const review = paired.filter(
     (seam) => seam.high_contrast || seam.alpha_discontinuity
   );
@@ -220,8 +237,25 @@ export function analyzeTextureSeamContinuity(
     sampled_edge_count: edges.length,
     paired_seam_count: paired.length,
     excluded_intentional_boundary_pair_count: intentionalBoundaries.length,
+    sample_alignment_unverified_pair_count: sampleAlignmentUnverified.length,
     unpaired_edge_count: unpaired.length,
     ambiguous_edge_count: ambiguous.length,
+    evidence_gaps: {
+      sample_alignment_examples: sampleAlignmentUnverified.slice(0, exampleLimit).map(
+        ([left, right]) => ({
+          cube_uuid: left.cube_uuid,
+          faces: [left.face, right.face],
+          sample_counts: [left.samples.length, right.samples.length],
+        })
+      ),
+      sample_alignment_examples_truncated: sampleAlignmentUnverified.length > exampleLimit,
+      ambiguous_examples: ambiguous.slice(0, exampleLimit).map((group) => ({
+        cube_uuid: group[0].cube_uuid,
+        faces: group.map((edge) => edge.face),
+        edge_count: group.length,
+      })),
+      ambiguous_examples_truncated: ambiguous.length > exampleLimit,
+    },
     review: {
       candidate_count: review.length,
       high_contrast_count: review.filter((seam) => seam.high_contrast).length,
@@ -233,10 +267,14 @@ export function analyzeTextureSeamContinuity(
     ranked_examples_truncated: paired.length > exampleLimit,
     gate: {
       state: "advisory" as const,
-      reasons: review.length > 0 ? ["SEAM_CONTINUITY_REVIEW"] : [],
+      reasons: [
+        ...(review.length > 0 ? ["SEAM_CONTINUITY_REVIEW"] : []),
+        ...(sampleAlignmentUnverified.length > 0 ? ["SEAM_SAMPLE_ALIGNMENT_UNVERIFIED"] : []),
+        ...(ambiguous.length > 0 ? ["SEAM_EVIDENCE_AMBIGUOUS"] : []),
+      ],
     },
     note:
-      "Only face edges within the same Cube are paired; cross-Cube continuity is not evaluated. Explicit INTENTIONAL_BOUNDARY pairs are excluded, never auto-inferred from high contrast; unresolved/ambiguous edges are not visual PASS. OPACITY mode excludes RGB whenever either alpha is zero; NON_OPACITY mode retains RGB for color/emissive masks. The caller must confirm actual render-profile alpha meaning. Alpha differences remain reviewable and seam contrast is advisory evidence.",
+      "Only distinct face edges within the same Cube with comparable sample counts are evaluated; cross-Cube continuity is not evaluated. Duplicate/same-face groups and unequal sample evidence are reported as unresolved, never silently considered clean. Explicit INTENTIONAL_BOUNDARY pairs are excluded, never auto-inferred from contrast. OPACITY mode excludes RGB whenever either alpha is zero; NON_OPACITY mode retains RGB for color/emissive masks. Confirm render-profile alpha meaning. All seam results remain advisory and never establish visual PASS.",
   };
 }
 

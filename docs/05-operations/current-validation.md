@@ -4,7 +4,7 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
-**2026-10-18 Intra-Cube seam explicit boundary intent (source):** Optional declared intent excludes only valid intentional paired boundaries from diagnostic seam contrast, with a dedicated exclusion count. Existing review of unspecified edges and ambiguous groups remains. Five regression cases prepared; source/static integrity reviewed. **Bun, CI, real material intent provenance, and native Blockbench visual quality NOT EXECUTED**.
+**2026-10-18 Intra-Cube seam evidence completeness (source):** Same-face duplicate edge pairs are now counted as ambiguous and unmatched per-face sample counts remain unevaluated, with bounded target examples; they are not falsely interpreted as clean RGB/alpha comparisons. Explicit intentional boundaries and independent valid candidates retain their existing contracts. Five new source regression cases prepared. **Bun/CI/typecheck, real reference comparison, native Blockbench and visual improvement NOT EXECUTED.**
 
 
 

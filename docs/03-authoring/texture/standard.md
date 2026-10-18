@@ -414,6 +414,23 @@ unresolved, not suppressed by a single boundary flag. The declaration must
 be grounded in the approved reference/material plan; it is not native proof,
 permission to modify UV, or a visual PASS.
 
+**Incomplete intra-Cube seam evidence:** Two edges from the *same face*
+are duplicate/ambiguous evidence, not a valid comparison pair. A pair of
+different faces with unequal sample counts is
+`SEAM_SAMPLE_ALIGNMENT_UNVERIFIED`, not a clean seam and not an automatic
+color defect; sample counts must be comparable before RGB/alpha evaluation.
+Ambiguous groups raise `SEAM_EVIDENCE_AMBIGUOUS`. These flags remain
+advisory but require **targeted evidence or sampling correction** before
+claiming that the affected seam is resolved. Do not paint over mismatched
+sampling or invent intentional material boundaries to suppress unknowns.
+An explicitly intentional two-face boundary is separately excluded from
+the review even if its sample counts differ. An unrelated, adequately
+sampled seam can still be reviewed without recapturing the entire atlas.
+Use the bounded `evidence_gaps.sample_alignment_examples` and
+`evidence_gaps.ambiguous_examples` to locate the affected Cube/face/sample
+cohort; counts and truncated examples are navigation, **not proof** that
+all unseen seams have been examined.
+
 **Cross-Cube seam diagnostics:** Compare edges only when the surface/material
 identity and continuity intent agree, the world-facing normals align, and
 both physical endpoints fall within the declared tolerance (including on

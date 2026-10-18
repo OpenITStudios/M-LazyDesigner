@@ -39,6 +39,16 @@ comparison, ambiguous groups remain unresolved, and exclusion counts are
 not evidence of visual PASS. Derive intent from the approved reference or
 material plan, never automatically from the measured pixel difference.
 
+Incomplete seam comparison evidence is not a paint defect: two edges from
+the same face are `SEAM_EVIDENCE_AMBIGUOUS`; distinct faces with unequal
+sample lengths are `SEAM_SAMPLE_ALIGNMENT_UNVERIFIED`. Recover only the
+missing face/edge samples, then evaluate fresh comparable model evidence.
+Do not shrink sample arrays to create a false agreement, treat an empty
+candidate list as PASS, or initiate a corrective paint batch without a
+confirmed difference and approved material intent. Read bounded
+`evidence_gaps` examples for targeted resampling; omitted examples require
+page/targeted follow-up, not a fabricated zero or full-atlas recapture.
+
 For cross-Cube continuity, use **declared material/surface ownership and
 intent** before comparing colors. The seam helper tolerates small world-edge
 coordinate differences across rounding boundaries but does not infer a
