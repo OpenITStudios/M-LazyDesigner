@@ -260,7 +260,8 @@ describe("server tool domain ownership", () => {
     expect(planner).toContain("reverseBatchTimeBounds");
     expect(planner).not.toContain("Undo.");
     expect(planner).not.toContain("Timeline.");
-    expect(planner).not.toContain("Animator.");
+    // Ban actual global API use, not local byAnimator.get.
+    expect(planner).not.toMatch(/(^|[^\w])Animator\./m);
     expect(planner).not.toContain("createTool(");
     expect(planner).not.toContain("/server/");
     expect(planner).not.toContain("/gateway/");

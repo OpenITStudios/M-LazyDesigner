@@ -51,12 +51,14 @@ describe("Desktop security boundary", () => {
       source("../apps/desktop/src-tauri/src/system_status.rs"),
     ]);
 
-    expect(main).toContain("system_status::run_managed_action(&app, &action)");
+    expect(main).toContain("system_status::run_managed_action(&app, &action, expected_source_sha.as_deref())");
     expect(status).toContain(
       'matches!(action, "update" | "rollback" | "recover" | "repair" | "setup-tls")'
     );
     expect(status).toContain("Unsupported LazyDesigner desktop action.");
-    expect(status).toContain("Command::new(&executable).arg(action)");
+    expect(status).toContain("let mut command = Command::new(&executable)");
+    expect(status).toContain('command.arg(action).arg("--root").arg(&root).arg("--progress-json")');
+    expect(status).toContain('command.arg("--expected-source-sha").arg(sha)');
     expect(status).not.toContain("cmd /C");
   });
 

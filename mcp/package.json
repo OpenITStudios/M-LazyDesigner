@@ -118,7 +118,8 @@
     "compare:golden-sessions": "bun run ./scripts/reporting/compare-golden-sessions.ts",
     "security:audit": "bun audit --audit-level=high",
     "audit:semantic-collisions": "bun run ./scripts/audit/audit-capability-collisions.ts",
-    "audit:data": "bun run ./scripts/development/audit-data-inventory.ts"
+    "audit:data": "bun run ./scripts/development/audit-data-inventory.ts",
+    "audit:tests": "bun run ./scripts/development/audit-test-inventory.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.0.0",

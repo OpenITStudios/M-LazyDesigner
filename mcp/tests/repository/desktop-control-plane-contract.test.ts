@@ -354,7 +354,8 @@ describe("Desktop control-plane ownership", () => {
     expect(browse).not.toContain("ensure_ready");
     expect(recent).not.toContain("ensure_ready");
     expect(editor).toContain('add_filter("Blockbench model", &["bbmodel"])');
-    expect(editor).toContain("is_bbmodel_file(&path)");
+    expect(editor).toContain("if !is_bbmodel_file(path)");
+    expect(editor).toContain('return Err("Choose an existing .bbmodel file."');
     expect(editor).toContain("pub(crate) fn open_model(path: &Path, user_data: &Path)");
     expect(backend).toContain("editor_profile_for_model(Some(expected))");
     expect(backend).toContain("recent_model_ids: Vec<String>");
@@ -755,7 +756,8 @@ describe("Desktop explicit Blockbench window focus", () => {
     expect(main).toContain("focus_blockbench_window,");
     expect(app).toContain("async function focusBlockbenchAfterOpen()");
     expect(app).toContain("result.status === 'FOCUSED'");
-    expect(app).toContain("Select Blockbench from the taskbar if needed.");
+    expect(app).toContain("Select your Blockbench window from the taskbar.");
+    expect(app).toContain("Blockbench is ready. Select it from the taskbar if needed.");
     const watcher = app.slice(app.indexOf("async function watchSystemStatus()"), app.indexOf("async function connectBlockbench()"));
     expect(watcher).not.toContain("focusBlockbenchAfterOpen");
   });

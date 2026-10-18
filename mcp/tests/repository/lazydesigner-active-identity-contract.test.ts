@@ -36,7 +36,9 @@ describe("single LazyDesigner managed installation identity", () => {
     expect(workflow).toContain("lazydesigner-package.json");
     expect(JSON.parse(pkg).name).toBe("lazydesigner-bedrock-entity-mcp");
     expect(JSON.parse(pkg).main).toBe("dist/lazydesigner_mcp.js");
-    expect(JSON.parse(lock).workspaces[""].name).toBe("lazydesigner-bedrock-entity-mcp");
+    // Bun lockfiles use JSONC, including trailing commas: JSON.parse is invalid.
+    // Anchor the name to the root workspace, not any transitively named package.
+    expect(lock).toMatch(/"workspaces"\s*:\s*\{\s*""\s*:\s*\{\s*"name"\s*:\s*"lazydesigner-bedrock-entity-mcp"/);
     expect(plugin).not.toContain('BBPlugin.register("blockit_mcp"');
     expect(manager).not.toContain('process.env.BLOCKIT_HOME');
   });
