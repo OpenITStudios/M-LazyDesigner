@@ -131,7 +131,7 @@ describe("generic semantics narrowing contract", () => {
     const exportSource = await source("server/tools/io/export.ts");
     expect(exportSource).toContain("exportToolDocs[0].status,\n    false");
     expect(exportSource).toContain("BLOCKIT_MODEL_CODEC_IDS = [\"bedrock\", \"project\"]");
-    expect(exportSource).toContain("const blockitModelCodecEnum = z.enum(BLOCKIT_MODEL_CODEC_IDS)");
+    expect(exportSource).toContain('const blockitModelCodecEnum = z.enum([...BLOCKIT_MODEL_CODEC_IDS, "bedrock_animation"])');
     expect(exportSource).toMatch(/codec_id:\s*blockitModelCodecEnum\s*\.optional\(\)\s*\.default\("bedrock"\)/s);
     expect(exportSource).not.toContain('codec_id: z.enum(["obj"');
   });

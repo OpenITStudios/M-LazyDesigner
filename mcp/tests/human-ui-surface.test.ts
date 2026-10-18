@@ -43,8 +43,10 @@ describe("human-facing Blockbench UI", () => {
     expect(app).toContain("<strong>{desktopVersion}</strong>");
     expect(app).toContain("LazyDesigner Desktop version");
     expect(app).not.toContain("<strong>0.1.0</strong>");
-    expect(app).toContain('title="Show Blockbench plugin file"');
-    expect(app).toContain(">Plugin file</button>");
+    expect(app).toContain("async function showPluginFile()");
+    expect(app).toContain("'show_plugin_file'");
+    expect(app).toContain("onclick={showPluginFile}");
+    expect(app).toContain("Show approval file");
     expect(app).not.toContain('aria-label="Blockbench actions"');
   });
 

@@ -225,6 +225,18 @@ export class BlockitRuntimeBackend {
     return resolution.changed;
   }
 
+  private syncProjectAffinityFromHealth(
+    health: JsonRecord,
+    bindIfUnset: boolean,
+    allowMissingBoundProject: boolean = false
+  ): boolean {
+    const resolution = resolveProjectAffinity(
+      this.projectUuid, health, bindIfUnset, allowMissingBoundProject
+    );
+    this.projectUuid = resolution.value;
+    return resolution.changed;
+  }
+
   private async closeClientBestEffort(client: Client): Promise<void> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -364,15 +376,13 @@ export class BlockitRuntimeBackend {
       // A mismatched/missing project on the first probe must not pin an
       // unrelated Runtime phase and block a later correct profile.
       const phase = resolveAuthoringPhaseAffinity(this.authoringPhase, probe.health);
-      const project = resolveProjectAffinity(
-        this.projectUuid,
-        probe.health,
-        bindProject,
-        allowMissingBoundProject
+      // Validate phase before binding project; rejected phase never
+      // leaves an unrelated or partially adopted Runtime affinity.
+      const projectChanged = this.syncProjectAffinityFromHealth(
+        probe.health, bindProject, allowMissingBoundProject
       );
-      affinityChanged = phase.changed || project.changed;
+      affinityChanged = phase.changed || projectChanged;
       this.authoringPhase = phase.value;
-      this.projectUuid = project.value;
     } catch (error) {
       await this.closeConnectionUnsafe();
       this.lastError = errorMessage(error);

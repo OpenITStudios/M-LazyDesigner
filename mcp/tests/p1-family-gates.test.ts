@@ -44,7 +44,7 @@ describe("P1.2 MCP family gates", () => {
 
     expect(indexSource).toContain("blockbenchIntegration.setupBase");
     expect(indexSource).toContain("registerMcpProfile(registrationProfile)");
-    expect(indexSource).toContain("runtimeHost.start(generation)");
+    expect(indexSource).toContain("runtimeHost.start(generation, currentBuildIdentity())");
     expect(indexSource).not.toContain("settingsSetup();");
     expect(indexSource).not.toContain("isExtendedMcpFamiliesEnabled()");
   });

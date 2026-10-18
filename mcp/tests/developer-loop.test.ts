@@ -124,15 +124,15 @@ describe("developer loop", () => {
   test("local deploy requires one explicit absolute stable plugin path", () => {
     const root = mkdtempSync(join(tmpdir(), "blockit-deploy-target-"));
     try {
-      const target = join(root, "blockit_mcp.js");
+      const target = join(root, "lazydesigner_mcp.js");
       expect(resolveDeployTarget([target], {})).toBe(target);
-      expect(resolveDeployTarget([], { BLOCKIT_PLUGIN_PATH: target })).toBe(target);
+      expect(resolveDeployTarget([], { LAZYDESIGNER_PLUGIN_PATH: target })).toBe(target);
       expect(() => resolveDeployTarget([], {})).toThrow(/Missing local Blockbench plugin destination/);
-      expect(() => resolveDeployTarget(["relative/blockit_mcp.js"], {})).toThrow(
+      expect(() => resolveDeployTarget(["relative/lazydesigner_mcp.js"], {})).toThrow(
         /absolute filesystem path/
       );
       expect(() => resolveDeployTarget([join(root, "wrong-name.js")], {})).toThrow(
-        /blockit_mcp\.js/
+        /lazydesigner_mcp\.js/
       );
       expect(() => resolveDeployTarget([target, target], {})).toThrow(
         /exactly one destination path/
@@ -150,11 +150,11 @@ describe("developer loop", () => {
       mkdirSync(sourceDir);
       mkdirSync(installDir);
 
-      const source = join(sourceDir, "blockit_mcp.js");
-      const target = join(installDir, "blockit_mcp.js");
+      const source = join(sourceDir, "lazydesigner_mcp.js");
+      const target = join(installDir, "lazydesigner_mcp.js");
       const stagedTarget = `${target}.next-${process.pid}`;
       const identity = `sha256:${"a".repeat(64)}` as const;
-      const content = `globalThis.__BLOCKIT_BUILD_ID__ = ${JSON.stringify(identity)};\nconsole.log("fixture");\n`;
+      const content = `globalThis.__LAZYDESIGNER_BUILD_ID__ = ${JSON.stringify(identity)};\nconsole.log("fixture");\n`;
       await Bun.write(source, content);
       await Bun.write(target, "old complete plugin\n");
 

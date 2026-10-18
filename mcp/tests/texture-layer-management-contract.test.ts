@@ -162,9 +162,11 @@ describe("texture layer management hardening", () => {
     const start = paint.indexOf('if (action === "flatten_layers")');
     const block = paint.slice(start);
 
-    expect(block).toContain('typeof nativeTexture.flatten !== "function"');
+    const nativeGate = await source("lib/blockbench/nativeFeatureGates.ts");
+    expect(block).toContain("supportsNativeTextureFlatten(texture)");
+    expect(nativeGate).toContain('typeof (texture as { flatten?: unknown }).flatten === "function"');
     expect(block).toContain("Refusing approximate fallback");
-    expect(block).toContain("nativeTexture.flatten()");
+    expect(block).toContain("texture.flatten()");
     expect(block).not.toContain('document.createElement("canvas")');
     expect(block).not.toContain('globalCompositeOperation = "source-over"');
   });

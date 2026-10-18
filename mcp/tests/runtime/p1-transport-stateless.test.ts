@@ -157,7 +157,7 @@ describe("P1.4 stateless Streamable HTTP ownership", () => {
       expect(source).not.toContain("mcp_sse_heartbeat");
     }
     expect(indexSource).toContain("const runtimeHost = new RuntimeHost()");
-    expect(indexSource).toContain("await runtimeHost.start(generation)");
+    expect(indexSource).toContain("await runtimeHost.start(generation, currentBuildIdentity())");
     expect(runtimeHostSource).toMatch(/const candidate = createNetServer\(this.nativeHttp, \{\s*\.\.\.config,\s*generation,/);
     expect(runtimeHostSource).not.toContain("profile:");
     expect(runtimeHostSource).not.toContain("phase:");

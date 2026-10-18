@@ -104,6 +104,7 @@ export async function resizeMappedAtlas(base: Texture, width: number, height: nu
     }
     Canvas.updateAll();
     Undo.finishEdit("Resize mapped atlas and variants");
+    recordCurrentCapabilitySemanticHistoryEffect("create_texture");
   } catch (error) {
     Undo.cancelEdit();
     Canvas.updateAll();
