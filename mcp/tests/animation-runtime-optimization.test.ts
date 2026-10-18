@@ -58,7 +58,7 @@ describe("Animation runtime efficiency contracts", () => {
     expect(tooMany.success).toBe(false);
     if (!tooMany.success) {
       expect(tooMany.error.issues.some((issue) =>
-        issue.message.includes("resolved views × times <= 8")
+        issue.message.includes("resolved views × times × optional silhouette images <= 8")
       )).toBe(true);
     }
 

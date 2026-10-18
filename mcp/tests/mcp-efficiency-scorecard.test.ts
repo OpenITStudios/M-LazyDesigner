@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { runMcpEfficiencyScorecard } from "@/scripts/measure/measure-mcp-efficiency";
 import { evaluateStaticDynamicTradeoff } from "@/lib/efficiencyScorecard";
+import { getEnabledToolDefinitions } from "@/lib/factories";
+import { getMcpSurfaceToolNames } from "@/server/tools";
 
 describe("MCP efficiency scorecard", () => {
   test("measures all prioritized hot paths with preserved quality", () => {
@@ -150,7 +152,14 @@ describe("MCP efficiency scorecard", () => {
   test("implemented optimizations reuse the existing Runtime surface", () => {
     const report = runMcpEfficiencyScorecard();
 
-    expect(report.static_surface.runtime_tool_count).toBe(47);
+    // Total enabled source catalog can exceed the normal AUTHORING surface:
+    // the scorecard inventories shared capabilities across all stage owners.
+    const authoringCount = getMcpSurfaceToolNames("bedrock_entity", "geometry").length;
+    expect(authoringCount).toBe(47);
+    expect(report.static_surface.runtime_tool_count).toBe(
+      Object.keys(getEnabledToolDefinitions()).length
+    );
+    expect(report.static_surface.runtime_tool_count).toBeGreaterThanOrEqual(authoringCount);
     expect(report.static_surface.reused_primitive_count).toBe(12);
     expect(report.static_surface.new_public_capabilities_required).toBe(0);
     expect(report.static_surface.reused_primitive_static_bytes).toBeGreaterThan(0);

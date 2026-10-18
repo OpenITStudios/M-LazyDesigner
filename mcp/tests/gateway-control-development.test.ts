@@ -42,7 +42,7 @@ describe("LazyDesigner Control system-development intent", () => {
       "audit manage_uv_layout stale receipt handling"
     );
     expect(uv).toMatchObject({
-      domain: "TEXTURING",
+      domain: "GEOMETRY",
       confidence: "EXACT",
       context_strategy: "DIRECT_SOURCE_OWNERS",
       matched_terms: ["manage_uv_layout"],
@@ -50,7 +50,7 @@ describe("LazyDesigner Control system-development intent", () => {
     expect(uv.source_owners).toEqual([
       {
         source: "mcp/server/runtime/uv/layoutService.ts",
-        specialist: ".agents/skills/lazydesigner-texturing/SKILL.md",
+        specialist: ".agents/skills/lazydesigner-modelling/SKILL.md",
         anchor_test: "mcp/tests/uv-registration-readiness.test.ts",
       },
     ]);

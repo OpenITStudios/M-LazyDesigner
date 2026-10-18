@@ -61,7 +61,7 @@ describe("surface-gap live verifier contract (mock transport, not live proof)", 
     const identity = `sha256:${"1".repeat(64)}`;
     const instanceId = "fixture-instance";
     const startupTime = "2026-09-06T00:00:00.000Z";
-    await Bun.write(bundlePath, `globalThis.__BLOCKIT_BUILD_ID__ = "${identity}";`);
+    await Bun.write(bundlePath, `globalThis.__LAZYDESIGNER_BUILD_ID__ = "${identity}";`);
     const names = getMcpSurfaceToolNames("bedrock_entity", "geometry");
     const instructions = buildMcpServerInstructions("geometry");
     const cubes: ReturnType<typeof fixtureCube>[] = [];
@@ -128,7 +128,7 @@ describe("surface-gap live verifier contract (mock transport, not live proof)", 
         ...(consent ? ["--confirm-disposable"] : []),
       ], {
         cwd: process.cwd(),
-        env: { ...process.env, BLOCKIT_MCP_URL: `http://127.0.0.1:${server.port}/bb-mcp`, BLOCKIT_MCP_BUNDLE: bundlePath },
+        env: { ...process.env, LAZYDESIGNER_MCP_URL: `http://127.0.0.1:${server.port}/bb-mcp`, LAZYDESIGNER_MCP_BUNDLE: bundlePath },
         stdout: "pipe",
         stderr: "pipe",
       });

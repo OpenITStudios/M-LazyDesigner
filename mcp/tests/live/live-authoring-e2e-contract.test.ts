@@ -12,7 +12,7 @@ describe("live authoring harness static contract", () => {
       "instance_id",
       "startup_time",
       "exposed_tool_count",
-      "BLOCKIT_AUTHORING_PHASE_AFFINITY_HEADER",
+      "LAZYDESIGNER_AUTHORING_STAGE_AFFINITY_HEADER",
       "risky_eval",
       "from_geo_json",
       "ACTIVE STAGE",
@@ -31,7 +31,7 @@ describe("live authoring harness static contract", () => {
     ]) {
       expect(helper).toContain(contract);
     }
-    expect(helper).toContain("Stale installed BlockIT build");
+    expect(helper).toContain("Stale installed LazyDesigner build");
     expect(helper).toContain("--confirm-disposable");
   });
 
