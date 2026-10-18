@@ -4,6 +4,16 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
+**2026-10-18 Skill modular maintenance — repository implementation:** Added a
+bounded upgrade/retirement contract to the existing Skill Development owner;
+the Skill-budget contract now discovers actual direct reference files and
+requires a main-Skill link plus activation fixture for every active module.
+Source cross-check: 16 expected link/fixture/policy checks matched candidate
+source text. Bun/CI, client module loading and model-quality/native claims
+remain NOT EXECUTED. New module names are no longer hardcoded into the budget
+test; owner names and routing remain explicit.
+
+
 **2026-10-18 Skill activation follow-up (source only):** Three authoring Skills now explicitly differentiate required-on-trigger deep module reads and routine no-deep-reference work; Geometry allows sequential distinct modules rather than a strict single-module ceiling. Ten module-loading intent cases are prepared and 22 candidate-source consistency checks were recorded. **Bun, CI exact-SHA, AI tool/client retrieval traces and Blockbench quality NOT EXECUTED**; the cases are expectations, not observed decisions. See [next-action](next-action.md#current-bounded-work--one-flow-context-integrity-chatgpt--github).
 
 

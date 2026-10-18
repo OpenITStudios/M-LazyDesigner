@@ -6,6 +6,22 @@ This file owns **current continuation only**, not the patch history. Canonical w
 
 ## Current bounded work — One-Flow context integrity (ChatGPT / GitHub)
 
+**2026-10-18 Skill-module maintenance contract — SOURCE_PREPARED:** Existing
+Skill Development owner now specifies smallest-surface updates for new,
+renamed, retired or revised Geometry/Texturing/Animation modules, including
+native/API ownership, direct `SKILL.md` trigger, must-load/no-load fixtures,
+content identity invalidation and separate native/visual proof. The repository
+budget test no longer duplicates a fixed module-name list: it discovers the
+real one-hop Markdown files and fails on unlinked/orphan/missing modules or
+modules without a representative positive evaluation case. No registry,
+additional router, autonomous update task or asset mutation was added.
+Inspect source contracts and pinned cloud test evidence at the next change;
+do not claim model compliance from link integrity. Pending: matching-SHA
+`cd mcp && bun test tests/repository/agent-skill-context-budget.test.ts
+tests/repository/skill-lane-contract.test.ts` and active specialist behavioral
+retrieval/visual proof; no user PC localtest required.
+
+
 **2026-10-18 Skill activation audit (current SOURCE_IMPLEMENTED):** Geometry, Texturing and Animation `SKILL.md` now distinguish `REQUIRED_ON_TRIGGER` deep content from `NO_DEEP_REFERENCE` routine safe work. Geometry no longer uses an absolute one-reference ceiling: separate correction/fidelity/UV decisions can read directly linked modules *sequentially* without preloading them. Texturing exact mapped RGBA edits and Animation pre-agreed numeric keys remain normal hot-path operations when already verified; material fidelity/alpha and motion/contact/correction decisions require their existing specialist evidence module before dependent expansion. No additional specialist, router, runtime/tool contract, or reference file was created.
 
 **Coverage:** module-loading evaluation corpus now has 10 intended scenarios including Geometry sequential correction→verification and redundant-read avoidance; the existing budget/ownership test supports these cases. 22 targeted static consistency checks were performed against candidate file contents; this is not Bun execution or observed retrieval behavior. Next run `cd mcp && bun test tests/repository/agent-skill-context-budget.test.ts tests/repository/skill-lane-contract.test.ts tests/repository/authoring-skill-owner-integrity.test.ts tests/authoring/model-effectiveness-primary-geometry.test.ts tests/authoring/texture-production-discipline.test.ts tests/authoring/animation-professional-reasoning.test.ts` on a capable cloud checkout, then the exact-SHA repository source verifier. Evaluate must-load/must-not-load client traces separately, and reserve Blockbench visual quality for real native proof. Do not require user localtest.

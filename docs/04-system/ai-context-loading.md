@@ -61,6 +61,18 @@ equal knowledge packaged in different ways before crediting modularization.
 Static source tests cannot prove AI retrieval, native Blockbench visuals, or
 human approval.
 
+**Upgrade and maintenance rule:** extend only the affected existing specialist
+or its one-hop reference. Update the main Skill's direct decision trigger and
+the positive/negative reference-loading fixture whenever a module is added,
+renamed or retired. Repository tests compare real on-disk module inventory
+with linked names in SKILL.md; an orphan or missing reference fails even when
+the test has no hardcoded list of module filenames. The canonical domain/Runtime
+owner is updated first for changed product, API or native semantics; references
+cannot silently supersede it. Changed source content invalidates cached
+identities; reuse only unchanged, still-loaded content. Preserve unrelated
+specialists and user work, and prove behavioral/visual improvement separately
+from static module integrity.
+
 ## Source-grounded repository knowledge retrieval
 
 For repository development (not ordinary asset authoring), reuse the existing components:

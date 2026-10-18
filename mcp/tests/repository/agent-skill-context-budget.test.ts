@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readdir } from "node:fs/promises";
 
 // Character budgets are review signals, NOT hard acceptance limits.
 // Relevant expertise and safety contracts are more important than meeting an
@@ -6,39 +7,67 @@ import { describe, expect, test } from "bun:test";
 const SKILLS = [
   {
     path: "../.agents/skills/lazydesigner-reference-preparation/SKILL.md",
-    reviewAtChars: 9000, classMarker: "CLASS: ROUTER", references: [],
+    reviewAtChars: 9000, classMarker: "CLASS: ROUTER", deepReferences: false,
   },
   {
     path: "../.agents/skills/lazydesigner-prompt-compiler/SKILL.md",
-    reviewAtChars: 6000, classMarker: "CLASS: DELEGATED", references: [],
+    reviewAtChars: 6000, classMarker: "CLASS: DELEGATED", deepReferences: false,
   },
   {
     path: "../.agents/skills/lazydesigner-pixel-art-authoring/SKILL.md",
-    reviewAtChars: 11000, classMarker: "CLASS: SPECIALIST", references: [],
+    reviewAtChars: 11000, classMarker: "CLASS: SPECIALIST", deepReferences: false,
   },
   {
     path: "../.agents/skills/lazydesigner-particle-reference-authoring/SKILL.md",
-    reviewAtChars: 10000, classMarker: "CLASS: SPECIALIST", references: [],
+    reviewAtChars: 10000, classMarker: "CLASS: SPECIALIST", deepReferences: false,
   },
   {
     path: "../.agents/skills/lazydesigner-modelling/SKILL.md",
     reviewAtChars: 15000, classMarker: "CLASS: SPECIALIST",
-    references: ["references/verification.md", "references/uv-layout.md", "references/correction.md"],
+    deepReferences: true,
   },
   {
     path: "../.agents/skills/lazydesigner-animation/SKILL.md",
     reviewAtChars: 15000, classMarker: "CLASS: SPECIALIST",
-    references: ["references/fidelity-correction-evidence.md"],
+    deepReferences: true,
   },
   {
     path: "../.agents/skills/lazydesigner-texturing/SKILL.md",
     reviewAtChars: 15000, classMarker: "CLASS: SPECIALIST",
-    references: ["references/fidelity-styling-verification.md"],
+    deepReferences: true,
   },
 ] as const;
 
 export function skillSizeNeedsReview(chars: number, reviewAtChars: number): boolean {
   return chars > reviewAtChars;
+}
+
+/**
+ * The canonical module inventory is the files present under each specialist.
+ * Never maintain a parallel per-module registry in a test or Runtime.
+ */
+async function specialistReferenceFiles(skillPath: string): Promise<string[]> {
+  const directory = skillPath.replace(/SKILL\.md$/, "references");
+  const entries = await readdir(directory, { withFileTypes: true });
+  const markdown = entries.filter((entry) => entry.name.endsWith(".md"));
+  for (const entry of markdown) {
+    if (!entry.isFile() || !/^[a-z0-9-]+\.md$/.test(entry.name)) {
+      throw new Error(`Invalid or unsafe direct reference module: ${directory}/${entry.name}`);
+    }
+  }
+  return markdown.map((entry) => `references/${entry.name}`).sort();
+}
+
+function specialistReferenceDrift(
+  mainSource: string,
+  actualFiles: readonly string[]
+): { missingFiles: string[]; unlinkedFiles: string[] } {
+  const linked = new Set(mainSource.match(/references\/[a-z0-9-]+\.md/g) ?? []);
+  const current = new Set(actualFiles);
+  return {
+    missingFiles: [...linked].filter((path) => !current.has(path)).sort(),
+    unlinkedFiles: [...current].filter((path) => !linked.has(path)).sort(),
+  };
 }
 
 describe("Skill quality-first context contract", () => {
@@ -68,24 +97,33 @@ describe("Skill quality-first context contract", () => {
     }
   });
 
-  test("specialist reference routes are direct, explicit and backed by readable content", async () => {
-    for (const skill of SKILLS.filter((item) => item.references.length > 0)) {
+  test("direct specialist modules cannot be missing, orphaned, or nested behind a second index", async () => {
+    for (const skill of SKILLS.filter((item) => item.deepReferences)) {
       const main = await Bun.file(skill.path).text();
-      const declared = [...new Set(main.match(/references\/[a-z0-9-]+\.md/g) ?? [])].sort();
-      expect(declared).toEqual([...skill.references].sort());
-      for (const reference of skill.references) {
-        // One hop only: a main Skill directly names each conditional module.
-        expect(reference).toMatch(/^references\/[a-z0-9-]+\.md$/);
+      const available = await specialistReferenceFiles(skill.path);
+      const drift = specialistReferenceDrift(main, available);
+      expect(drift.missingFiles, `${skill.path}: referenced modules missing from disk`).toEqual([]);
+      expect(drift.unlinkedFiles, `${skill.path}: orphan modules not discoverable from SKILL.md`).toEqual([]);
+      expect(available.length).toBeGreaterThan(0);
+      for (const reference of available) {
         const path = skill.path.replace(/SKILL\.md$/, reference);
-        const file = Bun.file(path);
-        expect(await file.exists(), `Missing conditional expertise: ${path}`).toBe(true);
-        const body = await file.text();
+        const body = await Bun.file(path).text();
         expect(body).toMatch(/^# .+/);
         expect(body).toMatch(/\bLoad (?:this file )?only (?:when|for|after)\b/i);
       }
     }
     const obsolete = "../.agents/skills/lazydesigner-modelling/references/verification-uv-correction.md";
     expect(await Bun.file(obsolete).exists()).toBe(false);
+  });
+
+  test("renamed or added modules cause observable link drift without changing a hardcoded test inventory", () => {
+    const linked = "Load references/correction.md only for a diagnosed defect.";
+    expect(specialistReferenceDrift(linked, ["references/correction.md"]))
+      .toEqual({ missingFiles: [], unlinkedFiles: [] });
+    expect(specialistReferenceDrift(linked, ["references/new-technique.md"]))
+      .toEqual({ missingFiles: ["references/correction.md"], unlinkedFiles: ["references/new-technique.md"] });
+    expect(specialistReferenceDrift(linked, ["references/correction.md", "references/new-technique.md"]))
+      .toEqual({ missingFiles: [], unlinkedFiles: ["references/new-technique.md"] });
   });
 
   test("growth or refactoring cannot silently remove specialist safety and quality gates", async () => {
@@ -134,6 +172,11 @@ describe("Skill quality-first context contract", () => {
     expect(fixture.version).toBe(1);
     const ids = new Set<string>();
     const owners = ["lazydesigner-modelling", "lazydesigner-texturing", "lazydesigner-animation"];
+    const inventory = new Map<string, string[]>();
+    for (const skill of SKILLS.filter((item) => item.deepReferences)) {
+      const name = skill.path.split("/").at(-2);
+      if (name) inventory.set(name, await specialistReferenceFiles(skill.path));
+    }
     for (const row of fixture.cases) {
       expect(row.id.length).toBeGreaterThan(0);
       expect(ids.has(row.id)).toBe(false);
@@ -144,25 +187,37 @@ describe("Skill quality-first context contract", () => {
       const owner = SKILLS.find((item) => item.path.endsWith(`/${row.skill}/SKILL.md`));
       expect(owner).toBeDefined();
       if (!owner) continue;
+      const available = inventory.get(row.skill) ?? [];
       if (row.decision === "REQUIRED_ON_TRIGGER") {
-        expect(row.reference).not.toBeNull();
-        expect((owner.references as readonly string[])).toContain(row.reference);
+        expect(typeof row.reference).toBe("string");
+        expect(available).toContain(row.reference);
+        expect(row.references).toBeUndefined();
       } else if (row.decision === "SEQUENTIAL_REQUIRED") {
         // Do not block valid multi-decision work with a one-module ceiling.
         const ordered = row.references ?? [];
         expect(ordered.length).toBeGreaterThan(1);
         expect(new Set(ordered).size).toBe(ordered.length);
+        expect(row.reference).toBeUndefined();
         for (const reference of ordered) {
-          expect((owner.references as readonly string[])).toContain(reference);
+          expect(available).toContain(reference);
         }
       } else {
         expect(row.decision).toBe("NO_DEEP_REFERENCE");
         expect(row.reference).toBeNull();
+        expect(row.references).toBeUndefined();
       }
     }
     for (const skill of owners) {
       expect(fixture.cases.some((row) => row.skill === skill && row.decision === "REQUIRED_ON_TRIGGER")).toBe(true);
       expect(fixture.cases.some((row) => row.skill === skill && row.decision === "NO_DEEP_REFERENCE")).toBe(true);
+      for (const reference of inventory.get(skill) ?? []) {
+        // New modules need at least one representative must-load decision;
+        // adding unused documentation is not quality evidence.
+        expect(fixture.cases.some((row) => row.skill === skill && (
+          (row.decision === "REQUIRED_ON_TRIGGER" && row.reference === reference) ||
+          (row.decision === "SEQUENTIAL_REQUIRED" && row.references?.includes(reference))
+        )), `Missing activation evaluation for ${skill}/${reference}`).toBe(true);
+      }
     }
     expect(fixture.cases.some((row) => row.decision === "SEQUENTIAL_REQUIRED")).toBe(true);
     // These are intended model-evaluation cases, not an executed AI trace.

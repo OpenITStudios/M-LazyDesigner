@@ -144,6 +144,42 @@ Do not rename canonical Skills solely to encode lane prefixes. Prefer explicit a
 
 Do not create separate author/evaluator/maintainer Skills until one combined Skill-development owner is proven insufficient.
 
+## Maintaining and Evolving Specialist Modules
+
+A Skill or reference update stays within its original Geometry/Texturing/Animation
+owner. Treat this as a small change transaction, **not** an automatic rewrite:
+
+1. Classify the change: a new authoring technique, obsolete instruction,
+   revised Blockbench capability, reference rename/removal, or a safety defect.
+   Identify the **current canonical policy or Runtime owner** first. Do not
+   copy a new API assumption from an external article into the Skill as fact.
+2. Change the *smallest* affected surface: a mandatory operational invariant
+   in the existing SKILL.md; domain-specific depth in one directly linked
+   `references/*.md`; native schema/contract in the exact Runtime owner.
+   Split or merge modules only when distinct decisions and retrieval evidence
+   justify it, not because character count increased.
+3. For any new/renamed/retired reference, update its direct SKILL.md trigger
+   and the affected `skill-reference-loading-cases.json` must-load case.
+   Keep a no-deep-reference case for routine work. Before removing a file,
+   reconcile all references and dependent evaluations. Git history retains
+   retired guidance; do not keep parallel old/new authority by default.
+4. Validate existing owner/lane, link integrity (including **orphan files**),
+   positive/negative/sequential activation cases, and safety invariants.
+   Compare the previous quality baseline against the changed behavior with
+   equivalent knowledge when feasible. No increase in test-count, token
+   savings, or file modularity can substitute for an accepted-quality outcome.
+5. Changed document bytes invalidate their content identity. A cached
+   `known_context_ids` handle is **not** proof the client retains the
+   updated text; reload only affected source content. Leave unaffected modules,
+   stage state, user-approved work and native files unchanged.
+6. Commit the owner and its direct consumers/tests together. Report source
+   validation separately from AI behavior, native Blockbench and visual proof.
+   Keep external-version compatibility and rollback separately verified; do
+   not auto-upgrade the installed plugin or fabricate native acceptance.
+
+This is the maintenance procedure for existing modules, not a registry,
+new Router/Control layer, background updater or second source of policy.
+
 ## Evaluation Corpus
 
 Use `mcp/tests/fixtures/skill-routing-cases.json` as a compact regression corpus for intended routing semantics. It is development/evaluation evidence, not runtime routing code and not a substitute for behavioral model evaluation.
