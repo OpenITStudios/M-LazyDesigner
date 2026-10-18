@@ -4,7 +4,7 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
-**2026-10-18 Intra-Cube seam evidence completeness (source):** Same-face duplicate edge pairs are now counted as ambiguous and unmatched per-face sample counts remain unevaluated, with bounded target examples; they are not falsely interpreted as clean RGB/alpha comparisons. Explicit intentional boundaries and independent valid candidates retain their existing contracts. Five new source regression cases prepared. **Bun/CI/typecheck, real reference comparison, native Blockbench and visual improvement NOT EXECUTED.**
+**2026-10-18 Seam continuity isolated executable verification:** Verified original GitHub `Local` source at commit `10b42b09`, file blob `4e56d894e8fb17e10a358600cdea268c7c1d7d2d`. Two sets of direct V8 behavior checks executed from extracted TypeScript function bodies after deleting type-only syntax: **12/12 intra-Cube and 12/12 cross-Cube PASS (24/24)**. Checks include required and intentional boundaries, alpha visibility modes, sample alignment, ambiguity, visible mismatch, quantization tolerance and invalid inputs. This confirms only those selected pure-code behaviors in an isolated interpreter; it does **not** execute the `bun:test` suite, typecheck, dependency/module loading, CI, installed Blockbench, actual reference imagery or visual quality. **Those gates remain NOT EXECUTED**. No Runtime/asset change was justified by this evidence.
 
 
 
