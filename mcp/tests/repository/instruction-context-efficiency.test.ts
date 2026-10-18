@@ -75,6 +75,36 @@ describe("repository instruction/context efficiency", () => {
     expect(scripts["verify:texture:focused"]).not.toContain("bun run build");
   });
 
+  test("pinned Bun is single-source across manual Linux and Windows verification", async () => {
+    const [versionFile, repositoryWorkflow, mcpWorkflow, managedWorkflow, desktopWorkflow, pkg] =
+      await Promise.all([
+        text("../.bun-version"),
+        text("../.github/workflows/repository-verify.yml"),
+        text("../.github/workflows/mcp-verify.yml"),
+        text("../.github/workflows/managed-distribution.yml"),
+        text("../.github/workflows/desktop-verify.yml"),
+        text("package.json"),
+      ]);
+    const version = versionFile.trim();
+    // A stable exact version; this is not a requirement to remain on any
+    // one historical release. A future upgrade edits the canonical pin.
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(repositoryWorkflow).toContain('bun-version-file: ".bun-version"');
+    expect(mcpWorkflow).toContain('bun-version-file: ".bun-version"');
+    expect(managedWorkflow).toContain('bun-version-file: .bun-version');
+    for (const windowsWorkflow of [managedWorkflow, desktopWorkflow]) {
+      expect(windowsWorkflow).toContain(".bun-version");
+      expect(windowsWorkflow).toContain("bun-windows-x64-baseline.zip");
+      expect(windowsWorkflow).toContain("bun-v${{ steps.bun-pin.outputs.version }}");
+    }
+    // Do not silently switch typecheck or regenerate dependencies as a
+    // side effect of the Bun runtime pin; these require separate proof.
+    const scripts = JSON.parse(pkg).scripts as Record<string, string>;
+    expect(scripts.typecheck).toBe("tsc --noEmit");
+    expect(scripts["typecheck:gateway"]).toContain("tsc -p gateway/tsconfig.json");
+    expect(mcpWorkflow).toContain("bun install --frozen-lockfile");
+  });
+
   test("manual verification keeps repository context checks independent of MCP execution", async () => {
     const [repositoryWorkflow, mcpWorkflow, pkg] = await Promise.all([
       text("../.github/workflows/repository-verify.yml"),

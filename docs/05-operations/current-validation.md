@@ -4,7 +4,7 @@ This file owns **current proof interpretation only**. Workflow: `docs/01-product
 
 ## Current authority
 
-**2026-10-18 Bun tooling source-hardening / scoped MCP CI evidence:** `Local` source now adds a manually selected focused texture verification path to the existing default-full `MCP Verify` workflow, with pinned `.bun-version`, frozen lockfile, exact-SHA check, distinct scoped PASS/FAIL/INCOMPLETE evidence and full-only bundle/provenance. Source distribution reference lists are checked against actual specialist modules in a repository test; production manifest remains explicit and fail-closed. **Six V8 invocations of the actual embedded workflow evidence script passed** across full/focused success, failure and incomplete cases. This is not an executed GitHub workflow or Bun test. **Bun/typecheck/CI/Windows package/native Blockbench NOT EXECUTED**; no measured speed-up or accepted model fidelity is claimed.
+**2026-10-18 Bun 1.4.3 pinned upgrade (source selection only):** Upstream official stable version verified as `1.4.3` (2026-10-10) and Windows x64 baseline release asset exists. Root `.bun-version` is the only toolchain pin updated from `1.3.14`; the lockfile and installed package remain unchanged. Existing `tsc`, `Bun.build`, macros, default-full manual CI, and Windows baseline asset resolution remain. SOURCE_REVIEW only, **not** measured performance or executed Bun 1.4.3, frozen-install, typecheck, CI, Windows installer, Blockbench compatibility or native quality. Upgrade must pass matching-SHA manual CI before being called verified; the previous Bun 1.3.14 pin is preserved in Git history for rollback.
 
 
 
