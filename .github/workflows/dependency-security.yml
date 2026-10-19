@@ -63,8 +63,6 @@ jobs:
           set -euo pipefail
           MANIFEST=apps/desktop/src-tauri/Cargo.toml
           rustup run 1.98.1 cargo update --manifest-path "$MANIFEST" -p tauri --precise 2.12.3
-          rustup run 1.98.1 cargo update --manifest-path "$MANIFEST" -p tauri-build --precise 2.7.2
-          rustup run 1.98.1 cargo update --manifest-path "$MANIFEST" -p tauri-utils --precise 2.10.1
           rustup run 1.98.1 cargo metadata --manifest-path "$MANIFEST" --locked --format-version 1 > /dev/null
 
       - name: Reject unrelated source edits and oversized dependency changes
@@ -88,8 +86,8 @@ jobs:
           ), "Manifest must remain unchanged"
           old_versions = {p["name"]: p["version"] for p in old["package"]}
           new_versions = {p["name"]: p["version"] for p in new["package"]}
-          for name, ver in {"tauri": "2.12.3", "tauri-build": "2.7.2",
-                            "tauri-utils": "2.10.1", "urlpattern": "0.6.0"}.items():
+          for name, ver in {"tauri": "2.12.3", "tauri-build": "2.7.3",
+                            "tauri-utils": "2.10.2", "urlpattern": "0.6.0"}.items():
               assert new_versions.get(name) == ver, f"Expected {name}@{ver}, got {new_versions.get(name)}"
           obsolete = {"zip", "serde_yaml", "ureq", "unsafe-libyaml", "unic-ucd-ident",
                       "unic-char-property", "unic-char-range", "unic-common", "unic-ucd-version"}
