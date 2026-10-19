@@ -90,6 +90,14 @@ Repository/static tests can prove source invariants and parser/recovery contract
 
 Those require matching local/live security verification.
 
+## Dependency advisory policy
+
+The existing \`Dependency Security\` workflow runs both MCP Bun's high-severity audit and a RustSec \`cargo-audit\` scan of \`apps/desktop/src-tauri/Cargo.lock\`. The scanner is pinned to version \`0.22.2\` and installed under Rust \`1.98.1\`. It fetches a current RustSec advisory database on each run; unavailable or stale data is not treated as a successful scan.
+
+Vulnerability advisories of any severity are blocking. The \`unmaintained\`, \`unsound\` and \`yanked\` informational categories are also blocking, but do not themselves establish an exploitable LazyDesigner path. These categories are reviewed separately by affected version, Cargo feature set, operating system and actual source reachability. No blanket ignore list or automatic security waiver is permitted. Any strictly bounded exception requires an identified advisory, affected package/feature/platform, evidence of non-reachability or mitigations, an expiry/review condition, and explicit maintainer authorization.
+
+An advisory-clean Cargo.lock is not evidence of native Blockbench correctness, installed build identity, visual acceptance, or Windows update/rollback. Run the relevant locked Rust tests and Windows CI checks independently.
+
 ## Scope
 
 Security-relevant areas include the local MCP transport, Gateway/Runtime trust boundary, network permission and loopback exposure, filesystem import/export behavior, plugin settings, tool/resource/prompt exposure, project affinity, recovery after interrupted mutations, and handling of untrusted input.

@@ -62,6 +62,18 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).not.toContain("contents: write");
   });
 
+  test("Cargo advisory audit is mandatory and preserves dependency-security integrity", async () => {
+    const workflow = await Bun.file("../.github/workflows/dependency-security.yml").text();
+    expect(workflow).toContain("rustsec-audit:");
+    expect(workflow).toContain("cargo install cargo-audit --locked --version 0.22.2");
+    expect(workflow).toContain("audit --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked");
+    expect(workflow).not.toContain("--no-fetch");
+    expect(workflow).not.toContain("--ignore");
+    expect(workflow).not.toContain("contents: write");
+    expect(workflow).toContain("git diff --exit-code -- apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock");
+    expect(workflow).toContain("run: bun run security:audit");
+  });
+
   test("automatic MCP source verification is full, manual texture focus remains available", async () => {
     const workflow = await Bun.file("../.github/workflows/mcp-verify.yml").text();
     expect(workflow).toContain("default: full");

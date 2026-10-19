@@ -136,3 +136,40 @@ jobs:
             rust-candidate/source.json
             rust-candidate/SHA256SUMS.txt
             rust-candidate/changes.patch
+
+  rustsec-audit:
+    # Mandatory and separate from the opt-in Cargo candidate generator.
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout pinned Local source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Verify source and pin Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          rustup toolchain install 1.98.1 --profile minimal
+          rustup run 1.98.1 rustc --version
+
+      - name: Install pinned cargo-audit scanner
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.98.1 cargo install cargo-audit --locked --version 0.22.2 --root "$RUNNER_TEMP/rustsec-tools"
+          "$RUNNER_TEMP/rustsec-tools/bin/cargo-audit" --version
+
+      - name: Audit complete Cargo.lock with a fresh RustSec database
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/rustsec-tools/bin/cargo-audit" audit --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked
+
+      - name: Prove advisory audit did not edit the Cargo source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock
