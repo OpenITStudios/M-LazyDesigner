@@ -177,73 +177,7 @@ jobs:
           }
           $lock = Join-Path $root 'apps/desktop/src-tauri/Cargo.lock'
           $sumline = (Get-Content (Join-Path $root 'rust-upstream-candidate/SHA256SUMS.txt') -Raw).Trim()
-          if ($sumline -notmatch '^([0-9a-f]{64})  apps/desktop/src-tauri/Cargo.lock
-    # Mandatory and separate from the opt-in Cargo candidate generator.
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - name: Checkout pinned Local source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-
-      - name: Verify source and pin Rust toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          rustup toolchain install 1.98.1 --profile minimal
-          rustup run 1.98.1 rustc --version
-
-      - name: Install pinned cargo-audit scanner
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustup run 1.98.1 cargo install cargo-audit --locked --version 0.22.2 --root "$RUNNER_TEMP/rustsec-tools"
-          "$RUNNER_TEMP/rustsec-tools/bin/cargo-audit" --version
-
-      - name: Classify RustSec dependencies for the Windows Cargo target
-        shell: bash
-        run: |
-          set -euo pipefail
-          rustup run 1.98.1 cargo metadata --locked --format-version 1 --manifest-path apps/desktop/src-tauri/Cargo.toml --filter-platform x86_64-pc-windows-msvc > "$RUNNER_TEMP/windows-cargo-metadata.json"
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          data = json.loads(Path(os.environ["RUNNER_TEMP"], "windows-cargo-metadata.json").read_text())
-          active_ids = {node["id"] for node in data["resolve"]["nodes"]}
-          active_names = {pkg["name"] for pkg in data["packages"] if pkg["id"] in active_ids}
-          targets = ["proc-macro-error", "unic-char-property", "unic-char-range", "unic-common",
-                     "unic-ucd-ident", "unic-ucd-version", "zbus_names", "zvariant",
-                     "zvariant_derive", "glib"]
-          lines = ["### Windows x86_64-pc-windows-msvc Cargo target graph", "",
-                   "| RustSec flagged crate | Resolved for Windows |",
-                   "| --- | --- |"]
-          for crate in targets:
-              lines.append(f"| {crate} | {'YES' if crate in active_names else 'NO'} |")
-          lines.append("")
-          lines.append("Resolved target dependency is not proof of unsafe API reachability.")
-          report = "\n".join(lines) + "\n"
-          print(report)
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as handle:
-              handle.write(report)
-          PY
-          git diff --exit-code -- apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock
-
-      - name: Audit complete Cargo.lock with a fresh RustSec database
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$RUNNER_TEMP/rustsec-tools/bin/cargo-audit" audit --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked
-
-      - name: Prove advisory audit did not edit the Cargo source
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --exit-code -- apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock
-) {
+          if ($sumline -notmatch '^([0-9a-f]{64})  apps/desktop/src-tauri/Cargo.lock$') {
             throw 'Unexpected Cargo.lock checksum manifest.'
           }
           $expected = $Matches[1]
