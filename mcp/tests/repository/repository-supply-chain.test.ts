@@ -115,7 +115,7 @@ describe("repository workflow supply chain", () => {
     expect(scripts["verify:affected"]).toContain("run-affected-execution.ts");
     expect(repo).toMatch(/^on:\n  workflow_dispatch:/m);
     expect(repo).not.toMatch(/^  push:|^  pull_request:|^  schedule:/m);
-    expect(mcp).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    expect(mcp).toMatch(/^on:\n  push:\n    branches:\n      - Local\n    paths:\n(?:      - .+\n)+  workflow_dispatch:/m);
     expect(mcp).not.toMatch(/^  pull_request:|^  schedule:/m);
   });
 

@@ -152,12 +152,14 @@ describe("repository GitHub discipline", () => {
     expect(release).toContain("bun run verify:release");
   });
 
-  test("MCP Verify retains exact-SHA full Local push source proof", async () => {
+  test("MCP Verify retains exact-SHA scoped push and manual full source proof", async () => {
     const mcp = await source("../.github/workflows/mcp-verify.yml");
-    expect(mcp).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    expect(mcp).toMatch(/^on:\n  push:\n    branches:\n      - Local\n    paths:\n(?:      - .+\n)+  workflow_dispatch:/m);
     expect(mcp).not.toMatch(/^  pull_request:|^  schedule:/m);
     expect(mcp).toContain('EXPECTED_SHA: ${{ github.sha }}');
     expect(mcp).toContain('test "$actual_sha" = "$EXPECTED_SHA"');
+    expect(mcp).toContain("Verify focused repository contracts and types");
+    expect(mcp).toContain("if: github.event_name == 'workflow_dispatch'");
     expect(mcp).toContain("bun run verify:full");
     expect(mcp).toContain("live_local_tests: excluded");
     expect(mcp).not.toContain("verify:affected");

@@ -36,16 +36,17 @@ describe("material development and repository authority", () => {
     expect(rules).toContain("Commit-based work continuity");
   });
 
-  test("temporary Full CI and native evidence retain separate authority", async () => {
+  test("focused CI and manual Full CI retain separate native authority", async () => {
     const [rules, contribution, next, validation] = await Promise.all([
       read("../GITHUB_RULES.md"), read("../CONTRIBUTING.md"),
       read("../docs/05-operations/next-action.md"), read("../docs/05-operations/current-validation.md"),
     ]);
-    expect(rules).toContain("Temporary full CI on Local");
+    expect(rules).toContain("Routine `Local` pushes use");
+    expect(rules).toContain("manual milestone gates");
     expect(rules).toContain("workflow_dispatch");
-    expect(contribution).toContain("temporary Full CI authorization");
-    expect(next).toContain("Temporary Full CI");
-    expect(validation).toContain("Temporary Full CI");
+    expect(contribution).toContain("focused path-filtered");
+    expect(next).toContain("Full CI — explicit milestone only");
+    expect(validation).toContain("Routine `Local` CI is now focused");
     expect(validation).toContain("source-equivalence evidence");
   });
 });

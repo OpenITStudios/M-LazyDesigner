@@ -61,7 +61,7 @@ Live Blockbench, visual, playback, persistence, installed-plugin, and client-reg
 
 ## CI behavior
 
-During temporary Full CI authorization, a normal `Local` push runs the existing **full MCP**, dependency security, MCP conformance, Windows Desktop verification, and source-only release readiness workflows. Each remains manually dispatchable. This mode is read-only/non-publishing; push checks may cost additional CI minutes.
+During routine development, a `Local` push runs **focused path-filtered checks**: MCP repository/types for relevant source, Windows Desktop locked source/Rust checks when Desktop changes, required MCP conformance for protocol changes, and dependency security for lockfile/security changes. Full MCP verification, integrated Windows NSIS/silent-install, and Release Readiness remain separate manual milestone gates. Skipped checks mean **NOT EXECUTED**, never PASS; verification remains read-only/non-publishing.
 
 - `Repository Verify` and `Authoring Policy Verify` remain independently available on demand; the full MCP gate also covers their source contracts.
 - `MCP Verify` runs `bun run verify:full` on every `Local` push with exact-SHA build provenance; manual `texture` focus remains available and never runs automatically.

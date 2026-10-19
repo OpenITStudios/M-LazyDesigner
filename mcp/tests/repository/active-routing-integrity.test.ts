@@ -47,14 +47,14 @@ describe("active routing integrity", () => {
     ]) expect(root).not.toContain(retired);
   });
 
-  test("full Local CI does not replace canonical specialist routing", async () => {
+  test("scoped Local CI does not replace canonical specialist routing", async () => {
     const [workflow, root, taxonomy] = await Promise.all([
       source("../.github/workflows/mcp-verify.yml"),
       source("../AGENTS.md"),
       source("../docs/04-system/skill-taxonomy.md"),
     ]);
 
-    expect(workflow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    expect(workflow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n    paths:\n(?:      - .+\n)+  workflow_dispatch:/m);
     expect(workflow).toContain("bun run verify:full");
     expect(workflow).not.toMatch(/^  pull_request:|^  schedule:/m);
     expect(root).toContain("LazyDesigner Control");

@@ -105,8 +105,8 @@ jobs:
         id: frozen_install
         run: bun install --frozen-lockfile
 
-      # Local push always runs full verification; manual dispatch may select focused.
-      # Focused PASS is NOT full source/build acceptance.
+      # Full build verification is manual; focused push checks are in the separate scoped job.
+      # A scoped PASS is NOT full source/build acceptance.
       - name: Run canonical full source verification
         if: ${{ github.event_name == 'push' || inputs.verification != 'texture' }}
         id: source_verify

@@ -53,9 +53,9 @@ describe("Desktop control-plane ownership", () => {
     expect(rust).toContain("runtime_health::matching_build_identity");
     expect(rust).toContain('run_managed_action(app, "repair", None)?;');
 
-    // Temporary Full CI runs Windows Desktop smoke tests on Local pushes
-    // while release/publication paths remain separately authorized.
-    expect(workflow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    // Routine Local push runs focused Windows source tests. Manual Desktop verification
+    // remains the separate integrated NSIS smoke/release evidence gate.
+    expect(workflow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n    paths:\n(?:      - .+\n)+  workflow_dispatch:/m);
     expect(workflow).not.toMatch(/^  pull_request:|^  schedule:/m);
     expect(workflow).toContain("apps/desktop");
   });

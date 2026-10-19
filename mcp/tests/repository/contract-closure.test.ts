@@ -102,7 +102,7 @@ describe("MCP dependency closure", () => {
     for (const flow of [repositoryFlow, authoringFlow]) {
       expect(flow).toMatch(/^on:\n  workflow_dispatch:/m);
     }
-    expect(mcpFlow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    expect(mcpFlow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n    paths:\n(?:      - .+\n)+  workflow_dispatch:/m);
     for (const flow of [repositoryFlow, authoringFlow, mcpFlow]) {
       expect(flow).not.toContain("docs/knowledge/");
       expect(flow).not.toContain("docs/foundation/");

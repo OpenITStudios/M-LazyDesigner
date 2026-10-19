@@ -46,17 +46,19 @@ describe("repository instruction/context efficiency", () => {
     expect(contract).toContain("Quality PASS");
   });
 
-  test("Local full-on-push and manual focused MCP verification provide distinct evidence", async () => {
+  test("Local scoped-on-push and manual full/texture MCP verification provide distinct evidence", async () => {
     const [workflow, pkg] = await Promise.all([
       text("../.github/workflows/mcp-verify.yml"),
       text("package.json"),
     ]);
     const scripts = JSON.parse(pkg).scripts as Record<string, string>;
-    expect(workflow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    expect(workflow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n    paths:\n(?:      - .+\n)+  workflow_dispatch:/m);
+    expect(workflow).toContain("Verify focused repository contracts and types");
+    expect(workflow).toContain("if: github.event_name == 'workflow_dispatch'");
     expect(workflow).not.toMatch(/^  (?:pull_request|schedule|workflow_run):/m);
     expect(workflow).toContain("default: full");
     expect(workflow).toContain("options:\n          - full\n          - texture");
-    expect(workflow).toContain("if: ${{ github.event_name == 'push' || inputs.verification != 'texture' }}");
+    expect(workflow).toContain("if: github.event_name == 'push'");
     expect(workflow).toContain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.verification == 'texture' }}");
     expect(workflow).toContain("run: bun run verify:texture:focused");
     expect(workflow).toContain("required_steps: requiredSteps");
@@ -113,7 +115,7 @@ describe("repository instruction/context efficiency", () => {
     ]);
     const scripts = JSON.parse(pkg).scripts as Record<string, string>;
     expect(repositoryWorkflow).toMatch(/^on:\n  workflow_dispatch:/m);
-    expect(mcpWorkflow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
+    expect(mcpWorkflow).toMatch(/^on:\n  push:\n    branches:\n      - Local\n    paths:\n(?:      - .+\n)+  workflow_dispatch:/m);
     expect(repositoryWorkflow).toContain("bun run verify:repository");
     expect(mcpWorkflow).toContain("bun run verify:full");
     expect(scripts["verify:repository"]).toBe("bun test tests/repository/*.test.ts");
