@@ -57,6 +57,11 @@ jobs:
           rustup toolchain install 1.98.1 --profile minimal
           rustup run 1.98.1 cargo --version
 
+      - name: Setup Node 24 for aligned npm candidate
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
       - name: Generate Tauri v2 upstream candidate with Cargo
         shell: bash
         run: |
@@ -65,12 +70,21 @@ jobs:
           rustup run 1.98.1 cargo update --manifest-path "$MANIFEST" -p tauri --precise 2.12.3
           rustup run 1.98.1 cargo metadata --manifest-path "$MANIFEST" --locked --format-version 1 > /dev/null
 
+      - name: Generate npm API/CLI 2.12.3 candidate with npm
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --save-exact --ignore-scripts --no-audit --no-fund @tauri-apps/api@2.12.3
+          npm install --package-lock-only --save-exact --ignore-scripts --no-audit --no-fund --save-dev @tauri-apps/cli@2.12.3
+
       - name: Reject unrelated source edits and oversized dependency changes
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
           python3 - <<'PY'
+          import json
           import subprocess
           import tomllib
           from pathlib import Path
@@ -78,7 +92,24 @@ jobs:
           manifest = "apps/desktop/src-tauri/Cargo.toml"
           lock = "apps/desktop/src-tauri/Cargo.lock"
           changed = subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
-          assert changed == [lock], f"Expected only generated Cargo.lock to change: {changed}"
+          npm_manifest, npm_lock = "apps/desktop/package.json", "apps/desktop/package-lock.json"
+          assert sorted(changed) == sorted([lock, npm_manifest, npm_lock]), f"Out-of-scope file changes: {changed}"
+          old_npm = json.loads(subprocess.check_output(["git", "show", "HEAD:" + npm_manifest], text=True))
+          new_npm = json.loads(Path(npm_manifest).read_text())
+          old_npm["dependencies"]["@tauri-apps/api"] = "2.12.3"
+          old_npm["devDependencies"]["@tauri-apps/cli"] = "2.12.3"
+          assert old_npm == new_npm, "Only two npm Tauri requirements may change"
+          npm_data = json.loads(Path(npm_lock).read_text())
+          assert npm_data["packages"][""]["dependencies"]["@tauri-apps/api"] == "2.12.3"
+          assert npm_data["packages"][""]["devDependencies"]["@tauri-apps/cli"] == "2.12.3"
+          for package in ["@tauri-apps/api", "@tauri-apps/cli"]:
+              assert npm_data["packages"]["node_modules/" + package]["version"] == "2.12.3"
+          previous_npm = json.loads(subprocess.check_output(["git", "show", "HEAD:" + npm_lock], text=True))
+          before = {k:v.get("version") for k,v in previous_npm["packages"].items()}
+          after = {k:v.get("version") for k,v in npm_data["packages"].items()}
+          delta = [k for k in set(before) | set(after) if before.get(k) != after.get(k)]
+          print("Changed npm package entries:", len(delta), sorted(delta))
+          assert len(delta) <= 35, "Npm candidate exceeds transitive change budget"
           old = tomllib.loads(subprocess.check_output(["git", "show", "HEAD:" + lock], text=True))
           new = tomllib.loads(Path(lock).read_text())
           assert tomllib.loads(Path(manifest).read_text()) == tomllib.loads(
@@ -105,8 +136,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p rust-upstream-candidate
-          git diff -- apps/desktop/src-tauri/Cargo.lock > rust-upstream-candidate/changes.patch
-          sha256sum apps/desktop/src-tauri/Cargo.lock > rust-upstream-candidate/SHA256SUMS.txt
+          git diff -- apps/desktop/src-tauri/Cargo.lock apps/desktop/package.json apps/desktop/package-lock.json > rust-upstream-candidate/changes.patch
+          sha256sum apps/desktop/src-tauri/Cargo.lock apps/desktop/package.json apps/desktop/package-lock.json > rust-upstream-candidate/SHA256SUMS.txt
           python3 - <<'PY'
           import json
           import os
@@ -116,7 +147,7 @@ jobs:
               "source_ref": os.environ["GITHUB_REF"],
               "source_sha": os.environ["GITHUB_SHA"],
               "run_id": os.environ["GITHUB_RUN_ID"],
-              "generator": "Cargo 1.98.1 targeted Tauri v2 updates",
+              "generator": "Cargo Tauri 2.12.3 and npm API/CLI 2.12.3 on Node24",
               "acceptance": "REVIEW_ONLY_NOT_COMMITTED"
           }, indent=2) + "\n")
           PY
@@ -129,6 +160,8 @@ jobs:
           retention-days: 7
           path: |
             apps/desktop/src-tauri/Cargo.lock
+            apps/desktop/package.json
+            apps/desktop/package-lock.json
             rust-upstream-candidate/source.json
             rust-upstream-candidate/SHA256SUMS.txt
             rust-upstream-candidate/changes.patch
@@ -164,7 +197,7 @@ jobs:
           name: lazydesigner-rust-upstream-candidate
           path: ${{ runner.temp }}/rust-upstream-windows
 
-      - name: Verify source SHA and candidate checksum before replacement
+      - name: Verify same-run generated candidate file identities
         shell: pwsh
         run: |
           if ((git rev-parse HEAD).Trim() -ne $env:GITHUB_SHA) { throw 'Checkout SHA mismatch.' }
@@ -173,22 +206,24 @@ jobs:
           if ($metadata.repository -ne $env:GITHUB_REPOSITORY -or $metadata.source_ref -ne 'refs/heads/Local' -or
               $metadata.source_sha -ne $env:GITHUB_SHA -or $metadata.run_id -ne $env:GITHUB_RUN_ID -or
               $metadata.acceptance -ne 'REVIEW_ONLY_NOT_COMMITTED') {
-            throw 'Candidate source identity or same-run provenance mismatch.'
+            throw 'Candidate source identity mismatch.'
           }
-          $lock = Join-Path $root 'apps/desktop/src-tauri/Cargo.lock'
-          $sumline = (Get-Content (Join-Path $root 'rust-upstream-candidate/SHA256SUMS.txt') -Raw).Trim()
-          if ($sumline -notmatch '^([0-9a-f]{64})  apps/desktop/src-tauri/Cargo.lock$') {
-            throw 'Unexpected Cargo.lock checksum manifest.'
+          $paths = @('apps/desktop/src-tauri/Cargo.lock','apps/desktop/package.json','apps/desktop/package-lock.json')
+          $checksums = @(Get-Content (Join-Path $root 'rust-upstream-candidate/SHA256SUMS.txt'))
+          if ($checksums.Count -ne 3) { throw 'Expected three checksums.' }
+          foreach ($path in $paths) {
+            $lines = @($checksums | Where-Object { $_ -match ('^[0-9a-f]{64}  ' + [regex]::Escape($path) + '$') })
+            if ($lines.Count -ne 1) { throw "Missing checksum for $path" }
+            $file = Join-Path $root $path
+            if ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant() -ne $lines[0].Substring(0,64)) {
+              throw "Candidate checksum mismatch: $path"
+            }
+            Copy-Item -LiteralPath $file -Destination $path -Force
           }
-          $expected = $Matches[1]
-          $actual = (Get-FileHash -LiteralPath $lock -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($expected -ne $actual) { throw 'Candidate Cargo.lock checksum mismatch.' }
-          Copy-Item -LiteralPath $lock -Destination 'apps/desktop/src-tauri/Cargo.lock' -Force
           git diff --check
           $changed = @(git diff --name-only)
-          if ($changed.Count -ne 1 -or $changed[0] -ne 'apps/desktop/src-tauri/Cargo.lock') {
-            throw 'Disposable candidate must change only Cargo.lock.'
-          }
+          $deltas = @(Compare-Object -ReferenceObject ($paths | Sort-Object) -DifferenceObject ($changed | Sort-Object))
+          if ($changed.Count -ne 3 -or $deltas.Count -gt 0) { throw 'Out-of-scope candidate source changes.' }
 
       - name: Validate resolved Windows candidate Cargo graph
         shell: pwsh
@@ -210,6 +245,19 @@ jobs:
             if ($packages[$item[0]] -ne $item[1]) { throw "Windows Cargo candidate version mismatch: $($item[0])" }
           }
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Cargo --locked Windows-target metadata confirms Tauri 2.12.3, tauri-utils 2.10.2, urlpattern 0.6.0 and no unic-* advisory packages.'
+
+      - name: Validate matching Tauri npm API and CLI versions
+        shell: pwsh
+        run: |
+          $pkg = Get-Content 'apps/desktop/package.json' -Raw | ConvertFrom-Json
+          $lock = Get-Content 'apps/desktop/package-lock.json' -Raw | ConvertFrom-Json
+          if ($pkg.dependencies.'@tauri-apps/api' -ne '2.12.3' -or $pkg.devDependencies.'@tauri-apps/cli' -ne '2.12.3') {
+            throw 'Tauri npm candidate manifest mismatch.'
+          }
+          foreach ($name in @('@tauri-apps/api', '@tauri-apps/cli')) {
+            $entry = $lock.packages.PSObject.Properties['node_modules/' + $name].Value
+            if ($entry.version -ne '2.12.3') { throw "Tauri npm candidate lock mismatch: $name" }
+          }
 
       - name: Install Desktop dependencies with frozen npm lock
         working-directory: apps/desktop

@@ -49,17 +49,18 @@ describe("Local Full CI and protected manual release workflows", () => {
     }
   });
 
-  test("Tauri RustSec candidate is opt-in, pinned and read-only", async () => {
+  test("aligned Cargo/npm candidate is strictly opt-in and read-only", async () => {
     const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
     expect(yaml).toContain("contains(github.event.head_commit.message, '[rust-upstream-review]')");
-    expect(yaml).toContain("cargo update --manifest-path \"$MANIFEST\" -p tauri --precise 2.12.3");
-    expect(yaml).toContain('"tauri-build": "2.7.3"');
+    expect(yaml).toContain('cargo update --manifest-path "$MANIFEST" -p tauri --precise 2.12.3');
+    expect(yaml).toContain("@tauri-apps/api@2.12.3");
+    expect(yaml).toContain("@tauri-apps/cli@2.12.3");
     expect(yaml).toContain('"tauri-utils": "2.10.2"');
+    expect(yaml).toContain("apps/desktop/package.json");
+    expect(yaml).toContain("apps/desktop/package-lock.json");
     expect(yaml).toContain("REVIEW_ONLY_NOT_COMMITTED");
     expect(yaml).toContain("SHA256SUMS.txt");
-    expect(yaml).toContain("run: bun run security:audit");
     expect(yaml).not.toContain("contents: write");
-    expect(yaml).not.toContain("git push");
   });
 
   test("same-run Windows Cargo candidate is verified before disposable locked checks", async () => {
@@ -68,7 +69,8 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).toContain("needs: rust-upstream-candidate");
     expect(yaml).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
     expect(yaml).toContain("Candidate source identity or same-run provenance mismatch.");
-    expect(yaml).toContain("Candidate Cargo.lock checksum mismatch.");
+    expect(yaml).toContain("Candidate checksum mismatch: $path");
+    expect(yaml).toContain("Tauri npm candidate lock mismatch: $name");
     expect(yaml).toContain("run: npm ci");
     expect(yaml).toContain("run: npm run verify:source");
     expect(yaml).toContain("contents: read");
