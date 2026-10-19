@@ -15,11 +15,7 @@ User-authorized autonomy replaces approval waits with verified checkpoints; neve
 
 ## ChatGPT-only user workflow
 
-**Default product contract:** produce requested Minecraft asset references, designs, artifacts, code or repository changes **directly in ChatGPT** with available tools. Do not require Codex, Work, a standalone LazyDesigner/Desktop app, a user PC setup, an installer or any separately managed system. Do not start application development in place of a user-requested output.
-
-Existing MCP Gateway/Blockbench Runtime, `apps/desktop/` and `distribution/` remain **optional retained implementations**, not mandatory user steps or automatic engineering priorities. Native actions may be claimed only after an explicit native request and actual available connection; CI/static source tests never establish live Blockbench evidence.
-
-All Control/Gateway/native-specialist routes below are conditional on that optional native context. ChatGPT-only work selects relevant knowledge and tools directly.
+**Default:** deliver in ChatGPT. No app, Codex, installer or PC required. Native MCP only if requested and connected.
 
 ## Execution Context Gate
 
@@ -165,7 +161,7 @@ At `FINALIZATION`, load only `docs/03-authoring/finalization/standard.md`.
 
 ### ChatGPT + GitHub/cloud-only continuity
 
-`GITHUB_RULES.md` owns `Local`, remote-only continuity, exact-SHA CI, recovery, security and STOP; do not require the user's PC. An `amati` request is read-only.
+GitHub CI/continuity follow `GITHUB_RULES.md`; `amati` is read-only.
 
 ## Development Operating Standard
 
