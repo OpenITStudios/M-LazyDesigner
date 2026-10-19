@@ -45,6 +45,33 @@ describe("Desktop security boundary", () => {
     expect(cargo).toContain('tauri = { version = "2", features = [] }');
   });
 
+  test("Tauri Rust runtime and npm API/CLI preserve matching minor versions", async () => {
+    const [cargoLock, npmLock] = await Promise.all([
+      source("../apps/desktop/src-tauri/Cargo.lock"),
+      source("../apps/desktop/package-lock.json"),
+    ]);
+    const rustVersion = cargoLock.match(
+      /^\[\[package\]\]\r?\nname = "tauri"\r?\nversion = "(\d+\.\d+\.\d+)"/m
+    )?.[1];
+    expect(rustVersion).toBeDefined();
+    const lock = JSON.parse(npmLock) as {
+      packages: Record<string, { version?: string }>;
+    };
+    const minor = rustVersion?.split(".").slice(0, 2).join(".");
+    for (const dependency of ["@tauri-apps/api", "@tauri-apps/cli"]) {
+      const version = lock.packages["node_modules/" + dependency]?.version;
+      expect(version, dependency).toBeDefined();
+      expect(version?.split(".").slice(0, 2).join("."), dependency).toBe(minor);
+    }
+  });
+
+  test("Desktop NSIS installer retains explicit downgrade protection", async () => {
+    const config = JSON.parse(await source("../apps/desktop/src-tauri/tauri.conf.json")) as {
+      bundle: { windows: { allowDowngrades: boolean } };
+    };
+    expect(config.bundle.windows.allowDowngrades).toBe(false);
+  });
+
   test("Desktop command surface delegates mutation to an exact managed-action allowlist", async () => {
     const [main, status] = await Promise.all([
       source("../apps/desktop/src-tauri/src/main.rs"),
