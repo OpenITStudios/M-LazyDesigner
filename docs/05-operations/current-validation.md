@@ -1,8 +1,11 @@
 # LazyDesigner Current Validation
 
-## CI DISABLED — current Local status (2026-10-20)
+## CI DISABLED — active dependency verification state (2026-10-20)
 
-Nine CI verification workflows are disabled and archived under `.github/disabled-workflows/`. Two release/distribution workflows remain manual only. Older workflow PASS/FAIL records below apply solely to historical SHAs. From this revision forward, **new exact-HEAD CI proof is NOT EXECUTED**. The package-manager-generated aligned Tauri 2.12.3 candidate artifact `12196594517` is available with checksum evidence and earlier review-only Windows source/NSIS-shell checks; integrated managed bootstrap and native Blockbench proof remain **NOT EXECUTED**. Do not promote candidate to accepted installed/secure release without separate proof.
+- CI verification workflows: **disabled**; nine YAML sources are in `.github/disabled-workflows/` and only two explicitly manual release/distribution workflows remain under `.github/workflows/`.
+- Tauri migration: **SOURCE COMMITTED**, exact Local commit [`d14aa2d`](https://github.com/OpenITStudios/M-LazyDesigner/commit/d14aa2d6ed9a32f20a6d853d4ea90dc24625345d). `Cargo.lock`, `apps/desktop/package.json`, and `apps/desktop/package-lock.json` match the generator artifact `12196594517` byte-for-byte. Rust `tauri` 2.12.3, JavaScript API 2.12.3 and CLI 2.12.3 are aligned. Cargo.toml still uses the compatible Tauri v2 constraint; locked resolved versions are authoritative.
+- Acceptance: historical candidate Windows source/NSIS-shell checks exist. **New exact-head CI/build/managed installer/native Blockbench verification is NOT EXECUTED**; source committed is not a new PASS. Candidate RustSec reported zero classified vulnerabilities and five warning findings, not a clean cross-platform audit.
+- Other dependency/kit upgrades are not yet complete. Refer to `next-action.md` for the only permitted remaining scope. Older CI/Tauri statements below record historical states and must not override this section.
 
 
 This file owns **current proof interpretation only**. Flow: `docs/01-product/flow.md`; canonical source: `docs/04-system/implementation-map.md`; continuation: `next-action.md`; native acceptance: `local-acceptance-runbook.md`. Historical detail remains in Git and linked reports.

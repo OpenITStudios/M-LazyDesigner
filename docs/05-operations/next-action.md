@@ -1,12 +1,20 @@
 # LazyDesigner Next Action
 
-## CI DISABLED — current objective (2026-10-20)
+## CI DISABLED — dependency/kit upgrades only (2026-10-20)
 
-1. CI verification is fully disabled and its nine workflow sources are archived outside GitHub Actions discovery. The two manually dispatched release/distribution workflows are retained, and no release is requested.
-2. Complete compatible **dependency/kit upgrades only**: Tauri 2.12.3 Cargo/npm candidate is prepared in GitHub Actions artifact `12196594517` but not yet an accepted Local dependency update; next write the complete generated manifest/lock bundle atomically with checksum verification, then run targeted relevant checks in an available executable environment.
-3. Assess Bun types/Zod/Svelte/svelte-check/Vite/Blockbench host types only with upstream compatibility evidence and generated lockfiles; do not add features, refactor modules, enable CI, or assert unexecuted tests PASS. **NOT EXECUTED** is the status for post-change source/runtime checks.
+**Accepted source change:** `Local` [`d14aa2d`](https://github.com/OpenITStudios/M-LazyDesigner/commit/d14aa2d6ed9a32f20a6d853d4ea90dc24625345d) atomically upgraded Tauri Rust and npm to 2.12.3 from generated artifact `12196594517`, with exact Git blob hashes and intact lockfiles. CI remains fully disabled; nine verification workflows are archived, while two release/distribution workflows are manual-only. No source check on the new SHA has been executed; **NOT EXECUTED** must not be reported as PASS.
 
-The older CI and Tauri candidate directions below are historical and are superseded by this current objective.
+**Remaining bounded upgrades — do not modify unrelated source or add new frameworks:**
+
+1. MCP runtime: compare locked client/core 2.2.0 and server/nested core 2.0.0 with upstream stable 2.3.1. Generate `mcp/bun.lock` with Bun 1.4.3 and verify client/server/transport APIs before accepting updates.
+2. Bun type declarations: compare locked `@types/bun` 1.3.8 to upstream 1.4.3, while preserving the Bun runtime 1.4.3 pin and verifying TypeScript compatibility.
+3. Desktop patches: update Svelte from locked 5.57.0 to a compatible patch (upstream 5.57.2 observed). Review svelte-check, TypeScript, Tailwind and Zod from real registry metadata; regenerate only package-manager-owned lockfiles.
+4. Desktop build toolkit: Vite 7.3.6 -> Vite 8 requires **coordinated** `@sveltejs/vite-plugin-svelte` 6.2.4 -> compatible 7.x (7.3.1 current observed). This is a major bundler migration; do not merge manifest-only or without source/build verification.
+5. Blockbench typings: `blockbench-types` 5.1.0 -> 5.2.0 may change plugin-facing contracts. Preserve `mcp/compatibility/blockbench.json` minimum/review policy and do not claim live Blockbench 5.2.2 acceptance without actual host verification.
+
+**Required integrity before each acceptance:** use actual Bun/npm/Cargo generated lockfiles, frozen/locked install, targeted typecheck, affected tests and build where an executable toolchain exists; record any missing checks as **NOT EXECUTED**. Do not re-enable CI, generate fake integrity strings, edit unrelated application behavior, run releases, or move `main`.
+
+Older CI instructions below are historical and superseded by this section.
 
 
 This file owns **continuation only**, not history. Flow: `docs/01-product/flow.md`; source ownership: `docs/04-system/implementation-map.md`; proof: `current-validation.md`; native procedure: `local-acceptance-runbook.md`. Older detailed continuation is preserved in Git history (`3bbb057a` and `79d7afd`).
