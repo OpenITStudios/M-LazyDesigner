@@ -47,7 +47,7 @@ LIVE_BLOCKBENCH = LOCAL_CODE + deployed/reloaded LazyDesigner + reconnected live
 - `REMOTE_GITHUB` may implement changes whose requested acceptance is source/static/CI-verifiable.
 - `LOCAL_CODE` additionally owns canonical local generators, filesystem proof, and work that genuinely requires an executable development workspace.
 - `LIVE_BLOCKBENCH` is required for installed build identity, native Blockbench Undo/playback/persistence, and live visual/runtime claims.
-- GitHub Actions may verify repository contracts and may emit bounded exact-SHA build artifacts with provenance. CI is not a substitute for generator-authored committed output, source writeback, or live Blockbench proof.
+- GitHub Actions may verify repository contracts and may emit bounded exact-SHA build artifacts with provenance. A narrowly approved Cargo lockfile candidate may also be generated as a read-only exact-SHA artifact under the existing Dependency Security workflow; it remains uncommitted until separately reviewed and explicitly written with its manifest. CI does not commit source or prove live Blockbench.
 
 ### GitHub-first execution partition
 
@@ -88,7 +88,7 @@ Record repository/ref, commit SHA, run/job, canonical command, and conclusion wh
 
 Do not rerun an accepted source check locally solely because it ran in CI. Reuse requires a clean matching checkout; changed source/package inputs invalidate reuse. Environment-specific failures require corresponding targeted environment proof. Missing checks remain missing; do not create commits/temporary workflows just to trigger them.
 
-A cloud development workspace can satisfy `LOCAL_CODE` when its exact checkout, Bun, generators and filesystem execution are actually available. It need not be the user's PC. A product name or an unconnected workspace is not capability proof. Canonical generated output must still be authored in a capable development workspace and committed with its source; Actions remains verification/artifact infrastructure, not a source editor/writeback path. `LIVE_BLOCKBENCH` remains separately required for installed/native/visual proof.
+A cloud development workspace can satisfy `LOCAL_CODE` when its exact checkout, Bun, generators and filesystem execution are actually available. It need not be the user's PC. A product name or an unconnected workspace is not capability proof. Canonical generated output must still be authored in a capable development workspace and committed with its source; Actions remains verification/artifact infrastructure, except for the explicitly scoped read-only Cargo candidate permitted under the existing Dependency Security workflow; it is never a source editor/writeback path. `LIVE_BLOCKBENCH` remains separately required for installed/native/visual proof.
 
 Installed-plugin identity, native Undo/playback/persistence, Gateway lifecycle and visual claims still require matching `LIVE_BLOCKBENCH` evidence. Report `LOCAL PROOF REQUIRED` only for genuinely missing local/live proof, not for an already accepted CI source gate.
 
@@ -219,7 +219,7 @@ Also:
 - Keep blob/content SHA, commit SHA, tree SHA, ref, workflow-run ID, artifact ID, and job ID distinct.
 - Low-level Git is not an iterative scratch editor or retry strategy.
 - Never force-push, rewrite history, destructive-reset, or change repository structure to work around stale state, CI failure, connector limits, or messy history.
-- GitHub Actions is verification/deployment/artifact infrastructure, not a remote shell, source editor, generator-authoring path, or transfer hack. Exact-SHA verified build artifacts are allowed when they are read-only outputs with explicit provenance and no commit-back.
+- GitHub Actions is verification/deployment/artifact infrastructure, not a remote shell, source editor, or transfer hack. Its sole additional approved generator exception is the bounded read-only Cargo candidate described under GitHub Actions below; no automatic repository writeback is permitted.
 
 ### Execution Handoff
 
@@ -430,6 +430,7 @@ Branch/tag deletion, PR merge/close, release publication/deletion, environment b
 - Verification workflows are read-only by default and do not commit back to `Local`.
 - Read-only CI may upload exact-SHA verified build/test artifacts for later local/live consumption when source SHA, artifact hash/build identity, verifier, and toolchain provenance are explicit. Artifact existence is source/build evidence, not deployment or live proof.
 - Do not create one-shot workflows to compensate for missing development/transfer capability.
+- Approved Rust dependency candidate exception (2026-10-19): only the existing `.github/workflows/dependency-security.yml`, only a `Local` push whose commit message contains `[rust-lock-refresh]`, only `Cargo.toml` and `Cargo.lock` generated with Rust 1.98.1 Cargo removal of `zip`, `serde_yaml`, and `ureq`. Upload a bounded exact-SHA artifact with checksums, source identity and diff; reject unrelated manifest/package-version edits. Keep `contents: read`, immutable action pins, existing trigger set and the normal Bun audit unchanged. The artifact is a **candidate**, not an accepted locked build, vulnerability scan or installed/native proof. An authorized ChatGPT review must verify checksum/provenance and commit the generated pair together; no runner push/writeback, blanket advisory waiver, temporary workflow or fallback generator. No extension to other packages/generators without separate review.
 - Use least-privilege permissions and preserve pinned/trusted action versions.
 - Treat event-derived strings as untrusted input; validate or pass them as data, never evaluate them as code.
 - Never execute untrusted PR code with secrets/write tokens through `pull_request_target` or privileged persistent runners.

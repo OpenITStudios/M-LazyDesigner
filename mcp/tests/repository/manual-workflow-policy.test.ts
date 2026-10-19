@@ -49,6 +49,19 @@ describe("Local Full CI and protected manual release workflows", () => {
     }
   });
 
+  test("Rust lockfile generation remains opt-in and cannot bypass security gates", async () => {
+    const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
+    expect(yaml).toContain("contains(github.event.head_commit.message, '[rust-lock-refresh]')");
+    expect(yaml).toContain("rustup run 1.98.1 cargo remove --manifest-path apps/desktop/src-tauri/Cargo.toml zip serde_yaml ureq");
+    expect(yaml).toContain("cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --locked");
+    expect(yaml).toContain("source.json");
+    expect(yaml).toContain("SHA256SUMS.txt");
+    expect(yaml).toContain("READ_ONLY_CANDIDATE_NOT_COMMITTED");
+    expect(yaml).toContain("if-no-files-found: error");
+    expect(yaml).toContain("run: bun run security:audit");
+    expect(yaml).not.toContain("contents: write");
+  });
+
   test("automatic MCP source verification is full, manual texture focus remains available", async () => {
     const workflow = await Bun.file("../.github/workflows/mcp-verify.yml").text();
     expect(workflow).toContain("default: full");
