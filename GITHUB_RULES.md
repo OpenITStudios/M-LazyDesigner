@@ -1,5 +1,10 @@
 # GitHub Rules — LazyDesigner
 
+## CI DISABLED — active Local policy (2026-10-20)
+
+All nine verification workflows have been removed from GitHub Actions discovery and preserved as inert source under `.github/disabled-workflows/`. No CI runs automatically or can be dispatched from this branch. The only active workflow definitions are **manual distribution/release** entries, not verification; no release is authorized by this change. Commands for targeted local validation remain available. Older CI guidance and workflow pass records below are historical evidence, not current configuration.
+
+
 Canonical GitHub operating rules for AI/ChatGPT in this repository. Root and nearest `AGENTS.md` files may narrow domain behavior, but they must not weaken safety, integrity, proof, efficiency, history, security, GitHub-first execution, or STOP boundaries.
 
 `Local` is the working repository authority unless the user explicitly changes it.

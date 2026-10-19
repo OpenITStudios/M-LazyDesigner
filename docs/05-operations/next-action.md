@@ -1,5 +1,14 @@
 # LazyDesigner Next Action
 
+## CI DISABLED — current objective (2026-10-20)
+
+1. CI verification is fully disabled and its nine workflow sources are archived outside GitHub Actions discovery. The two manually dispatched release/distribution workflows are retained, and no release is requested.
+2. Complete compatible **dependency/kit upgrades only**: Tauri 2.12.3 Cargo/npm candidate is prepared in GitHub Actions artifact `12196594517` but not yet an accepted Local dependency update; next write the complete generated manifest/lock bundle atomically with checksum verification, then run targeted relevant checks in an available executable environment.
+3. Assess Bun types/Zod/Svelte/svelte-check/Vite/Blockbench host types only with upstream compatibility evidence and generated lockfiles; do not add features, refactor modules, enable CI, or assert unexecuted tests PASS. **NOT EXECUTED** is the status for post-change source/runtime checks.
+
+The older CI and Tauri candidate directions below are historical and are superseded by this current objective.
+
+
 This file owns **continuation only**, not history. Flow: `docs/01-product/flow.md`; source ownership: `docs/04-system/implementation-map.md`; proof: `current-validation.md`; native procedure: `local-acceptance-runbook.md`. Older detailed continuation is preserved in Git history (`3bbb057a` and `79d7afd`).
 
 **Branch:** `Local`; work mode `REMOTE_GITHUB`. Do not use the user's PC as a prerequisite. `main`, prior recovery build `3.0`, installed models, signing and release publication are outside scope.

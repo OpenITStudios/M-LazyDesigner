@@ -36,17 +36,15 @@ describe("material development and repository authority", () => {
     expect(rules).toContain("Commit-based work continuity");
   });
 
-  test("focused CI and manual Full CI retain separate native authority", async () => {
+  test("CI remains disabled and native/runtime proof cannot be claimed from old runs", async () => {
     const [rules, contribution, next, validation] = await Promise.all([
       read("../GITHUB_RULES.md"), read("../CONTRIBUTING.md"),
       read("../docs/05-operations/next-action.md"), read("../docs/05-operations/current-validation.md"),
     ]);
-    expect(rules).toContain("Routine `Local` pushes use");
-    expect(rules).toContain("manual milestone gates");
-    expect(rules).toContain("workflow_dispatch");
-    expect(contribution).toContain("focused path-filtered");
-    expect(next).toContain("Full CI — explicit milestone only");
-    expect(validation).toContain("Routine `Local` CI is focused and path-filtered");
-    expect(validation).toContain("source-equivalence evidence");
+    for (const document of [rules, contribution, next, validation]) {
+      expect(document).toContain("CI DISABLED");
+    }
+    expect(next).toContain("NOT EXECUTED");
+    expect(validation).toContain("NOT EXECUTED");
   });
 });

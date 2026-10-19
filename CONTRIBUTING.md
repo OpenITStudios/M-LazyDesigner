@@ -1,5 +1,10 @@
 # Contributing to LazyDesigner
 
+## CI DISABLED — current repository state (2026-10-20)
+
+Routine and manual verification CI have been removed from `.github/workflows/`; previous configurations are archived under `.github/disabled-workflows/` and cannot execute there. Only explicitly dispatched manual distribution/release workflows remain. Developers may run relevant Bun/npm/Cargo checks locally on their own initiative, but the absence of CI is not proof of build or security success. Any older section describing running CI is superseded by this policy.
+
+
 LazyDesigner is developed on the `Local` branch and promoted to `main` only by explicit maintainer instruction. Keep contributions small, evidence-driven, and aligned with repository owners instead of introducing parallel workflows or frameworks.
 
 ## Branch model

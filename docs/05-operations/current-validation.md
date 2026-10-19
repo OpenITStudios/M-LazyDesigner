@@ -1,5 +1,10 @@
 # LazyDesigner Current Validation
 
+## CI DISABLED — current Local status (2026-10-20)
+
+Nine CI verification workflows are disabled and archived under `.github/disabled-workflows/`. Two release/distribution workflows remain manual only. Older workflow PASS/FAIL records below apply solely to historical SHAs. From this revision forward, **new exact-HEAD CI proof is NOT EXECUTED**. The package-manager-generated aligned Tauri 2.12.3 candidate artifact `12196594517` is available with checksum evidence and earlier review-only Windows source/NSIS-shell checks; integrated managed bootstrap and native Blockbench proof remain **NOT EXECUTED**. Do not promote candidate to accepted installed/secure release without separate proof.
+
+
 This file owns **current proof interpretation only**. Flow: `docs/01-product/flow.md`; canonical source: `docs/04-system/implementation-map.md`; continuation: `next-action.md`; native acceptance: `local-acceptance-runbook.md`. Historical detail remains in Git and linked reports.
 
 ## Current authority
