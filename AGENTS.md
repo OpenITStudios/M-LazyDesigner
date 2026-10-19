@@ -161,7 +161,7 @@ At `FINALIZATION`, load only `docs/03-authoring/finalization/standard.md`.
 
 ### ChatGPT + GitHub/cloud-only continuity
 
-GitHub CI/continuity follow `GITHUB_RULES.md`; `amati` is read-only.
+An `amati` request is read-only.
 
 ## Development Operating Standard
 
