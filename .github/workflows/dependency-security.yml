@@ -190,6 +190,27 @@ jobs:
             throw 'Disposable candidate must change only Cargo.lock.'
           }
 
+      - name: Validate resolved Windows candidate Cargo graph
+        shell: pwsh
+        run: |
+          $manifest = 'apps/desktop/src-tauri/Cargo.toml'
+          $result = (& cargo metadata --locked --format-version 1 --manifest-path $manifest --filter-platform x86_64-pc-windows-msvc | Out-String)
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate Windows Cargo metadata failed.' }
+          $metadata = $result | ConvertFrom-Json
+          $resolved = @{}
+          foreach ($node in $metadata.resolve.nodes) { $resolved[$node.id] = $true }
+          $packages = @{}
+          foreach ($package in $metadata.packages) {
+            if ($resolved.ContainsKey($package.id)) { $packages[$package.name] = $package.version }
+          }
+          foreach ($crate in @('unic-char-property','unic-char-range','unic-common','unic-ucd-ident','unic-ucd-version')) {
+            if ($packages.ContainsKey($crate)) { throw "Deprecated crate remains in Windows candidate: $crate" }
+          }
+          foreach ($item in @(@('tauri','2.12.3'),@('tauri-utils','2.10.2'),@('urlpattern','0.6.0'))) {
+            if ($packages[$item[0]] -ne $item[1]) { throw "Windows Cargo candidate version mismatch: $($item[0])" }
+          }
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Cargo --locked Windows-target metadata confirms Tauri 2.12.3, tauri-utils 2.10.2, urlpattern 0.6.0 and no unic-* advisory packages.'
+
       - name: Install Desktop dependencies with frozen npm lock
         working-directory: apps/desktop
         run: npm ci
