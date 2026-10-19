@@ -70,7 +70,9 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
     expect(yaml).toContain("Candidate source identity mismatch.");
     expect(yaml).toContain("Candidate checksum mismatch: $path");
-    expect(yaml).toContain("Tauri npm lock mismatch: $name");
+    expect(yaml).toContain("if ($entry['version'] -ne '2.12.3')");
+    expect(yaml).toContain("ConvertFrom-Json -AsHashtable");
+    expect(yaml).toContain("run: npm audit --audit-level=high");
     expect(yaml).toContain("ConvertFrom-Json -AsHashtable");
     expect(yaml).toContain("$lock[\'packages\'][\'node_modules/\' + $name]");
     expect(yaml).toContain("run: npm ci");

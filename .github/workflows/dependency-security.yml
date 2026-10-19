@@ -263,6 +263,10 @@ jobs:
         working-directory: apps/desktop
         run: npm ci
 
+      - name: Audit aligned npm candidate lock (high-severity)
+        working-directory: apps/desktop
+        run: npm audit --audit-level=high
+
       - name: Check candidate Windows frontend and locked Rust tests
         working-directory: apps/desktop
         run: npm run verify:source
