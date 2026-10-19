@@ -36,3 +36,85 @@ jobs:
 
       - name: Audit dependency advisories
         run: bun run security:audit
+
+  # One-time, read-only security lockfile refresh; does not make committed audit green.
+  security-lock-candidates:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/Local' && contains(github.event.head_commit.message, '[security-lock-refresh]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact Local source without credentials
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pinned Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: ".bun-version"
+
+      - name: Setup Node 24 for Desktop lockfile regeneration
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Record exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p security-candidate
+          node -e 'const fs=require("node:fs"); fs.writeFileSync("security-candidate/source.json", JSON.stringify({repository:process.env.GITHUB_REPOSITORY,ref:process.env.GITHUB_REF,sha:process.env.GITHUB_SHA,run_id:process.env.GITHUB_RUN_ID,mode:"READ_ONLY_CANDIDATE_NOT_ACCEPTED"},null,2))'
+
+      - name: Generate MCP candidate with Bun audit fix
+        id: bun_candidate
+        continue-on-error: true
+        working-directory: mcp
+        shell: bash
+        run: |
+          set -uo pipefail
+          bun install --frozen-lockfile
+          bun audit fix --dry-run > ../security-candidate/bun-fix-plan.log 2>&1 || true
+          bun audit fix > ../security-candidate/bun-fix.log 2>&1
+          fix_status=$?
+          cat ../security-candidate/bun-fix.log
+          bun install --frozen-lockfile > ../security-candidate/bun-frozen.log 2>&1
+          frozen_status=$?
+          bun audit --audit-level=high > ../security-candidate/bun-audit.log 2>&1
+          audit_status=$?
+          cat ../security-candidate/bun-audit.log
+          echo "Bun fix=$fix_status frozen=$frozen_status audit=$audit_status"
+          test "$fix_status" -eq 0 && test "$frozen_status" -eq 0 && test "$audit_status" -eq 0
+
+      - name: Generate Desktop candidate with npm audit fix
+        id: npm_candidate
+        continue-on-error: true
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          set -uo pipefail
+          npm ci --ignore-scripts --no-fund > ../../security-candidate/npm-baseline.log 2>&1
+          baseline_status=$?
+          npm audit fix --package-lock-only --ignore-scripts --no-fund > ../../security-candidate/npm-fix.log 2>&1
+          fix_status=$?
+          cat ../../security-candidate/npm-fix.log
+          npm ci --ignore-scripts --no-fund > ../../security-candidate/npm-frozen.log 2>&1
+          frozen_status=$?
+          npm audit --audit-level=high > ../../security-candidate/npm-audit.log 2>&1
+          audit_status=$?
+          cat ../../security-candidate/npm-audit.log
+          echo "npm baseline=$baseline_status fix=$fix_status frozen=$frozen_status audit=$audit_status"
+          test "$baseline_status" -eq 0 && test "$fix_status" -eq 0 && test "$frozen_status" -eq 0 && test "$audit_status" -eq 0
+
+      - name: Upload candidate manifest and lockfiles without repository writeback
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lazydesigner-security-lock-candidate-${{ github.sha }}
+          path: |
+            security-candidate/
+            mcp/package.json
+            mcp/bun.lock
+            apps/desktop/package.json
+            apps/desktop/package-lock.json
+          if-no-files-found: error
+          retention-days: 2
