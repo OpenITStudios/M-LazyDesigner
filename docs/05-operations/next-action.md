@@ -8,7 +8,7 @@ This file owns **continuation only**, not history. Flow: `docs/01-product/flow.m
 
 **2026-10-19 Current exact-SHA gate:** At `1e37433`, MCP full+provenance, required conformance and source-only release readiness PASS. Windows CI proved Svelte 0 errors, Rust 78/78 PASS, NSIS build and silent install PASS, but intentionally FAILS on npm security; verified Windows artifact upload is suppressed. Four MCP high advisories and two Desktop high packages remain. The source-only PowerShell timeout fix passed in real Windows CI. No current release/native Blockbench authorization or proof.
 
-1. **Preserve accepted MCP source evidence.** Matching SHA `1e37433` has successful full Bun verification, exact build provenance and uploaded MCP bundle; repeat only after the source/dependency inputs change.
+1. **Preserve accepted MCP source evidence.** Matching SHA `1e37433` has successful `bun run verify:full`, exact build provenance and uploaded MCP bundle; repeat only after source/dependency inputs change.
 
 2. **Security blockers.** Bun audit: high `@modelcontextprotocol/client@2.0.0`, `source-map-js@1.2.1` and two `undici@7.29.0` findings. Windows npm audit: high `devalue` and `source-map-js`. Use a capable Bun/npm checkout to regenerate and test real lockfiles; never hand-edit lockfiles, suppress audit or upgrade MCP major APIs without regression proof.
 3. **Protocol conformance.** Latest required MCP suite PASS; optional/extension coverage remains separate from native proof.
