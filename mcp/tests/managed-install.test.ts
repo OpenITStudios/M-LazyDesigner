@@ -135,7 +135,7 @@ test("retired BlockIT configuration and plugin are rejected without changing fil
     await writeFile(join(dirname(o.plugin), "blockit_mcp.js"), "USER LEGACY PLUGIN");
     await assert.rejects(installPackage(pkg, o, parse, true), /Retired BlockIT plugin/);
     assert.equal(await readOptional(o.plugin), null);
-    assert.equal((await readFile(join(dirname(o.plugin), "blockit_mcp.js")).toString()), "USER LEGACY PLUGIN");
+    assert.equal((await readFile(join(dirname(o.plugin), "blockit_mcp.js"))).toString(), "USER LEGACY PLUGIN");
     assert.equal(await installedState(o.root), null);
   });
 });
