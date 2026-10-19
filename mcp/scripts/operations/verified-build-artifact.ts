@@ -10,7 +10,7 @@ import {
 
 export const VERIFIED_BUNDLE_FILENAME = MCP_BUNDLE_FILENAME;
 export const VERIFIED_PROVENANCE_FILENAME = "lazydesigner-build-provenance.json";
-export const VERIFIED_REPOSITORY = "MIVUBI-STD/M-LazyDesigner";
+export const VERIFIED_REPOSITORY = "OpenITStudios/M-LazyDesigner";
 // This script lives under mcp/scripts/operations. CI uploads mcp/dist/.
 export const VERIFIED_PACKAGE_ARTIFACT_DIR = resolve(import.meta.dir, "../../dist");
 export const VERIFIED_COMMAND = "bun run verify:mcp";

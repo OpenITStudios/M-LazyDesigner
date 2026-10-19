@@ -7,6 +7,7 @@ import {
   VERIFIED_COMMAND,
   VERIFIED_PROVENANCE_FILENAME,
   VERIFIED_PACKAGE_ARTIFACT_DIR,
+  VERIFIED_REPOSITORY,
   fileSha256,
   verifyVerifiedBuildArtifact,
   writeVerifiedBuildProvenance,
@@ -31,7 +32,7 @@ describe("verified GitHub build artifact", () => {
 
       const written = await writeVerifiedBuildProvenance({
         artifact_dir: root,
-        repository: "MIVUBI-STD/M-LazyDesigner",
+        repository: VERIFIED_REPOSITORY,
         ref: "Local",
         git_sha: gitSha,
         bun_version: "1.3.14",
@@ -39,7 +40,7 @@ describe("verified GitHub build artifact", () => {
       expect(written.path).toBe(join(root, VERIFIED_PROVENANCE_FILENAME));
       expect(written.provenance).toEqual({
         schema_version: 1,
-        repository: "MIVUBI-STD/M-LazyDesigner",
+        repository: VERIFIED_REPOSITORY,
         ref: "Local",
         git_sha: gitSha,
         verifier: VERIFIED_COMMAND,
@@ -51,11 +52,40 @@ describe("verified GitHub build artifact", () => {
 
       const verified = await verifyVerifiedBuildArtifact({
         artifact_dir: root,
-        expected_repository: "MIVUBI-STD/M-LazyDesigner",
+        expected_repository: VERIFIED_REPOSITORY,
         expected_git_sha: gitSha,
       });
       expect(verified.bundle_path).toBe(bundlePath);
       expect(verified.provenance.build_identity).toBe(identity);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("canonical CI repository is exact and pre-rename provenance is rejected", async () => {
+    expect(VERIFIED_REPOSITORY).toBe("OpenITStudios/M-LazyDesigner");
+    const root = mkdtempSync(join(tmpdir(), "lazydesigner-verified-repository-"));
+    try {
+      const identity = `sha256:${"c".repeat(64)}`;
+      const sha = "d".repeat(40);
+      await Bun.write(
+        join(root, VERIFIED_BUNDLE_FILENAME),
+        `globalThis.__LAZYDESIGNER_BUILD_ID__ = ${JSON.stringify(identity)};\n`
+      );
+      await writeVerifiedBuildProvenance({
+        artifact_dir: root,
+        repository: "MIVUBI-STD/M-LazyDesigner",
+        ref: "Local",
+        git_sha: sha,
+        bun_version: "1.4.3",
+      });
+      await expect(
+        verifyVerifiedBuildArtifact({
+          artifact_dir: root,
+          expected_repository: VERIFIED_REPOSITORY,
+          expected_git_sha: sha,
+        })
+      ).rejects.toThrow(/repository mismatch/);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -73,7 +103,7 @@ describe("verified GitHub build artifact", () => {
       );
       await writeVerifiedBuildProvenance({
         artifact_dir: root,
-        repository: "MIVUBI-STD/M-LazyDesigner",
+        repository: VERIFIED_REPOSITORY,
         ref: "Local",
         git_sha: gitSha,
         bun_version: "1.3.14",
@@ -82,7 +112,7 @@ describe("verified GitHub build artifact", () => {
       await expect(
         verifyVerifiedBuildArtifact({
           artifact_dir: root,
-          expected_repository: "MIVUBI-STD/M-LazyDesigner",
+          expected_repository: VERIFIED_REPOSITORY,
           expected_git_sha: "e".repeat(40),
         })
       ).rejects.toThrow(/SHA mismatch/);
@@ -94,7 +124,7 @@ describe("verified GitHub build artifact", () => {
       await expect(
         verifyVerifiedBuildArtifact({
           artifact_dir: root,
-          expected_repository: "MIVUBI-STD/M-LazyDesigner",
+          expected_repository: VERIFIED_REPOSITORY,
           expected_git_sha: gitSha,
         })
       ).rejects.toThrow(/bundle hash mismatch/);
