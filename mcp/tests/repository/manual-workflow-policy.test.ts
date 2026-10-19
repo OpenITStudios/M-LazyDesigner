@@ -77,6 +77,10 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).toContain("$lock[\'packages\'][\'node_modules/\' + $name]");
     expect(yaml).toContain("run: npm ci");
     expect(yaml).toContain("run: npm run verify:source");
+    expect(yaml).toContain("run: npm run build:app:shell");
+    expect(yaml).toContain("Silent-install candidate shell only in temporary GitHub runner");
+    expect(yaml).toContain("Candidate NSIS shell executable missing after silent-install.");
+    expect(yaml).toContain("excludes managed-resource bootstrap, publish, signed release");
     expect(yaml).toContain("contents: read");
     expect(yaml).not.toContain("contents: write");
   });

@@ -271,10 +271,31 @@ jobs:
         working-directory: apps/desktop
         run: npm run verify:source
 
+      - name: Build candidate-only NSIS shell with aligned Tauri CLI
+        working-directory: apps/desktop
+        run: npm run build:app:shell
+
+      - name: Silent-install candidate shell only in temporary GitHub runner
+        working-directory: apps/desktop
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $PWD 'src-tauri\target\release\bundle\nsis'
+          $installers = @(Get-ChildItem -LiteralPath $bundle -Filter '*.exe' -File)
+          if ($installers.Count -ne 1) { throw "Expected one candidate NSIS installer, got $($installers.Count)." }
+          $target = Join-Path $env:RUNNER_TEMP 'lazydesigner-tauri-candidate-shell-smoke'
+          if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+          $process = Start-Process -FilePath $installers[0].FullName -ArgumentList @('/S', "/D=$target") -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Candidate NSIS silent-install exit code: $($process.ExitCode)" }
+          if (!(Test-Path -LiteralPath (Join-Path $target 'LazyDesigner.exe') -PathType Leaf)) {
+            throw 'Candidate NSIS shell executable missing after silent-install.'
+          }
+          $hash = (Get-FileHash -LiteralPath $installers[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Review-only candidate NSIS shell built and silent-installed in disposable Windows runner (SHA-256 $hash); excludes managed-resource bootstrap, publish, signed release, Windows downgrade and native Blockbench acceptance."
+
       - name: Record candidate-only proof boundary
         shell: pwsh
         run: |
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Candidate-only Windows source/typecheck/locked Cargo checks passed. This does NOT accept the updated Cargo.lock, install to a user PC, verify NSIS packaging or approve a release.'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value 'Candidate-only Tauri Rust/npm Windows source and NSIS shell checks passed. No Cargo/npm source updates accepted, no local PC installation or release.'
 
   rustsec-audit:
     # Mandatory and separate from the opt-in Cargo candidate generator.
