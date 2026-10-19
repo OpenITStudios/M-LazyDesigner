@@ -244,7 +244,7 @@ variables and `x-lazydesigner-*` headers. The manager root is
 `%LOCALAPPDATA%/LazyDesigner/managed`. The canonical owner is
 `compatibility/lazydesigner-identity.ts` and distribution owns activation.
 
-Retired BlockIT installed files/configuration are never run, removed,
+Retired BlockIT installed files/configuration are compatibility hazards, not current runtime identities. Do not bulk-rename them. They are never run, removed,
 automatically adopted or treated as newer simply because they exist. A
 legacy client entry or retired plugin in the target Blockbench profile
 refuses activation pending an explicit, backed-up migration; existing

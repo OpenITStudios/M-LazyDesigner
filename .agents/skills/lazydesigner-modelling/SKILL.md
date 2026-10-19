@@ -53,7 +53,7 @@ cross-view proportions / identity landmarks / surface-only detail reserved for T
 parent/contact + symmetry/asymmetry
 transform owner/pivot + negative-space boundary + representation
 ```
-No per-Cube plan. New whole-form blockout defaults to Core View Triad `front + left + top`; before detail, recheck affected form/views against latest user correction. Add `back` for rear topology/asymmetry or `front_left_3q` for depth ambiguity. Never recapture all five routinely.
+No per-Cube plan. New whole-form blockout defaults to Core View Triad `front + left + top`; before detail, recheck affected form/views against latest user correction. Add `back` for rear topology/asymmetry or `front_left_3q` for depth ambiguity requiring source-matched fidelity comparison. Never recapture all five routinely.
 Repeated/symmetric cohorts: derive once → one coherent `manage_cubes` batch; no per-Cube loop.
 
 ## Execution Path Preference

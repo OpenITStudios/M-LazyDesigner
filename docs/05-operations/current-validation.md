@@ -4,6 +4,8 @@ This file owns **current proof interpretation only**. Flow: `docs/01-product/flo
 
 ## Current authority
 
+**2026-10-19 Follow-up source-only authoring trim:** The preceding exact-SHA MCP verifier `a104950` progressed through repository/runtime to three authoring source contracts. README/conditional view wording updated, and gateway tool schema declarations compacted below the existing source-footprint guard with validator chain equality statically checked. Bun/CI full PASS, build, installed Blockbench and native visual quality remain **UNVERIFIED** until corresponding evidence. Dependency security and Windows audit still FAILED; no lockfile, release or user asset mutation.
+
 **2026-10-19 Authoring/source repair — pending CI:** Compared seven failing authoring assertions against canonical owners at `5db0c6d`, including source-text whitespace, renamed production bundle, shared Geometry/Texturing surface, conditional rear view, material cohorts and oversized Gateway instructions. Patch keeps typed/source behavior and rejects the legacy bundle; Gateway safety/discovery/recovery rules remain present. All checks for the new SHA require GitHub Actions execution. Security and Desktop dependency audits remain FAILED pending reproducible lockfile upgrades; neither is waived.
 
 **Temporary Full CI** is authorized on `Local` and source-only; publishing and actual native/visual acceptance are separate.

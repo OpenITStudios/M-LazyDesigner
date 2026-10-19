@@ -84,109 +84,54 @@ export type CoreGatewayRegistrationDeps = {
 };
 
 const statusInput = z.object({
-  adopt_active_project: z
-    .boolean()
-    .default(false)
-    .describe("Bind the selected Blockbench project when true."),
-  known_context_ids: z
-    .array(z.string().min(1).max(160))
-    .max(16)
-    .default([])
-    .describe("IDs only for current Skill/Profile contents still present in the client's active context. If compaction/restart removed the contents, omit those IDs so Control reissues their handles; a handle is not the instructions."),
-  workspace_path: z
-    .string()
-    .min(1)
-    .optional()
-    .describe("Workspace directory or README.md path."),
-  reference_package_path: z
-    .string()
-    .min(1)
-    .optional()
-    .describe("Reference Package directory or REFERENCE.json path."),
-  include_reference_images: z
-    .boolean()
-    .default(false)
-    .describe("Explicitly attach original source images as MCP image content for review; normal status remains text-only."),
-  reference_fact_request: z
-    .object({
-      section: z.enum(REFERENCE_FACT_PAGE_SECTIONS),
-      offset: z.number().int().nonnegative().default(0),
-      limit: z.number().int().min(1).max(24).default(8),
-      expected_reference_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    })
-    .strict()
-    .optional()
-    .describe("Explicit bounded page of omitted active-stage canonical REFERENCE.json facts. Requires current fingerprint; no automatic bulk loading."),
-  reference_image_ids: z
-    .array(z.string().min(1).max(160))
-    .min(1)
-    .max(4)
-    .optional()
-    .describe("Optional bounded subset of active-stage REFERENCE.json image IDs. Use when the stage has more than four images."),
-  current_user_delta: z
-    .string()
-    .max(1000)
-    .optional()
-    .describe("Current correction/change request."),
-  task_mode: z
-    .enum(["ASSET_AUTHORING", "SYSTEM_DEVELOPMENT"])
-    .default("ASSET_AUTHORING")
-    .describe("Asset authoring or system-development routing."),
-  task_intent: z
-    .string()
-    .max(500)
-    .optional()
-    .describe("Concrete system-development task intent."),
-  known_semantic_revisions: z
-    .object({
-      routing: z.string().regex(/^[a-f0-9]{64}$/).optional(),
-      graph: z.string().regex(/^[a-f0-9]{64}$/).optional(),
-      schema_projection: z.string().regex(/^[a-f0-9]{64}$/).optional(),
-      aggregate: z.string().regex(/^[a-f0-9]{64}$/).optional(),
-    })
-    .strict()
-    .optional()
-    .describe(
-      "Semantic catalog revisions already cached by the client. When provided, status returns only the surfaces that need refresh."
-    ),
+  adopt_active_project: z.boolean().default(false).describe("Bind selected project."),
+  known_context_ids: z.array(z.string().min(1).max(160)).max(16).default([])
+    .describe("IDs for Skill/Profile contents still present in the client's active context. After compaction/restart omit stale IDs so Control reissues handles; handles are not instructions."),
+  workspace_path: z.string().min(1).optional().describe("Workspace directory or README.md path."),
+  reference_package_path: z.string().min(1).optional().describe("Reference Package directory or REFERENCE.json path."),
+  include_reference_images: z.boolean().default(false)
+    .describe("Attach source images for review; default status stays text-only."),
+  reference_fact_request: z.object({
+    section: z.enum(REFERENCE_FACT_PAGE_SECTIONS),
+    offset: z.number().int().nonnegative().default(0),
+    limit: z.number().int().min(1).max(24).default(8),
+    expected_reference_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  }).strict().optional().describe("Page omitted active-stage REFERENCE.json facts; require current fingerprint, never bulk-load."),
+  reference_image_ids: z.array(z.string().min(1).max(160)).min(1).max(4).optional()
+    .describe("Select up to four REFERENCE.json image IDs."),
+  current_user_delta: z.string().max(1000).optional().describe("Current correction/change request."),
+  task_mode: z.enum(["ASSET_AUTHORING", "SYSTEM_DEVELOPMENT"]).default("ASSET_AUTHORING")
+    .describe("Authoring or development."),
+  task_intent: z.string().max(500).optional().describe("Concrete system-development task intent."),
+  known_semantic_revisions: z.object({
+    routing: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    graph: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    schema_projection: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    aggregate: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  }).strict().optional().describe("Cached semantic revisions; status returns changed surfaces only."),
 });
 
 const searchInput = z.object({
   query: z.string().default(""),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(8)
-    .default(CONTROL_ROUTING_POLICY.search_limit),
+  limit: z.number().int().min(1).max(8).default(CONTROL_ROUTING_POLICY.search_limit),
 });
 
 const describeInput = z.object({
   capability: z.string().min(1),
   detail: z.enum(["input", "full"]).default("input"),
-  branch: z
-    .object({
-      field: z.string().min(1),
-      value: z.string().min(1),
-    })
-    .strict()
-    .optional()
-    .describe("Consolidated schema branch."),
+  branch: z.object({
+    field: z.string().min(1),
+    value: z.string().min(1),
+  }).strict().optional().describe("Consolidated schema branch."),
 });
 
 const invokeInput = z.object({
   capability: z.string().min(1),
   arguments: z.record(z.string(), z.unknown()).default({}),
-  task_context_id: z
-    .string()
-    .min(1)
-    .max(160)
-    .optional()
-    .describe("Reuse the current Control task_context_id to group known mutations from one user intent."),
-  cohort_boundary: z
-    .enum(["CONTINUE", "COMPLETE"])
-    .default("COMPLETE")
-    .describe("CONTINUE defers verification for the same task_context_id; COMPLETE emits the merged cohort verification action."),
+  task_context_id: z.string().min(1).max(160).optional()
+    .describe("Reuse current Control task_context_id for known mutations from one intent."),
+  cohort_boundary: z.enum(["CONTINUE", "COMPLETE"]).default("COMPLETE")
+    .describe("CONTINUE defers cohort verification; COMPLETE emits merged verification."),
 });
 
 export function registerCoreGatewayTools(
