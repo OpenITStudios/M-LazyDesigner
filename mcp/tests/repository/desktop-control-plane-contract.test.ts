@@ -59,6 +59,21 @@ describe("Desktop control-plane ownership", () => {
     expect(workflow).toContain("apps/desktop");
   });
 
+  test("Desktop audit remains a mandatory failure gate without blocking independent smoke diagnostics", async () => {
+    const workflow = await source("../.github/workflows/desktop-verify.yml");
+    expect(workflow).toContain("id: desktop_security_audit");
+    expect(workflow).toContain("continue-on-error: true");
+    expect(workflow).toContain("run: npm audit --audit-level=high");
+    expect(workflow).toContain("steps.desktop_security_audit.outcome == 'success'");
+    expect(workflow).toContain("always() && steps.desktop_security_audit.outcome == 'failure'");
+    expect(workflow).toContain("throw 'Desktop dependency security audit failed.");
+    expect(workflow).toContain("Build Windows installer smoke");
+    expect(workflow.indexOf("Enforce Desktop dependency security")).toBeGreaterThan(
+      workflow.indexOf("Silent-install Desktop and smoke bundled bootstrap")
+    );
+    expect(workflow).not.toContain("npm audit --omit=dev");
+  });
+
   test("Desktop versions and Rust toolchain stay synchronized", async () => {
     const [pkgText, cargoText, tauriText, toolchain] = await Promise.all([
       source("../apps/desktop/package.json"),

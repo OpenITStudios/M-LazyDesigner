@@ -71,7 +71,11 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # Keep audit fail-closed, but allow independent Windows build/native smoke
+      # diagnostics to run before the final security verdict.
       - name: Audit Desktop npm dependencies
+        id: desktop_security_audit
+        continue-on-error: true
         run: npm audit --audit-level=high
 
       - name: Verify Desktop source
@@ -217,6 +221,7 @@ jobs:
           $provenance | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $bundle 'desktop-build-provenance.json')
 
       - name: Upload Desktop installer smoke artifact
+        if: ${{ steps.desktop_security_audit.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: lazydesigner-desktop-windows-x64
@@ -226,3 +231,9 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/nsis/desktop-build-provenance.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Enforce Desktop dependency security
+        if: ${{ always() && steps.desktop_security_audit.outcome == 'failure' }}
+        shell: pwsh
+        run: |
+          throw 'Desktop dependency security audit failed. Source/build smoke is diagnostic only; no verified installer may be accepted.'
