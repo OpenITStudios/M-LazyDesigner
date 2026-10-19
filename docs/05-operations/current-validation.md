@@ -4,37 +4,32 @@ This file owns **current proof interpretation only**. Flow: `docs/01-product/flo
 
 ## Current authority
 
-**2026-10-19 Current exact-SHA source and Windows diagnostic:** On `Local` commit `1e37433583933cd9a64a4c4e4aa6b02c94109909`, `MCP Verify` [39210284964](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39210284964) **PASS** (Bun 1.4.3 frozen install, TypeScript, runtime/authoring/contracts/benchmarks, bundled build and verified SHA/provenance). `MCP Conformance` [39210284826](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39210284826) **PASS** and source-only `Release Readiness` [39210284850](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39210284850) **PASS**. `Desktop Verify` [39210284824](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39210284824) **FAIL overall** strictly due to npm audit; diagnostics proved 0 Svelte errors, Windows Rust test **78 PASS / 0 FAIL**, NSIS package build **PASS**, silent install and managed bootstrap smoke **PASS**, SHA/provenance writing **PASS**. Installer upload is correctly **SKIPPED** because audit is not safe; there is no verified/releasable Windows installer artifact. `Dependency Security` [39210284838](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39210284838) **FAIL** with four high advisories: `@modelcontextprotocol/client@2.0.0`, `source-map-js@1.2.1`, and two `undici@7.29.0`. Desktop npm audit separately reports `devalue@5.9.2` and `source-map-js@1.2.1`. These checks are NOT waived and lockfiles are NOT upgraded. `LIVE_BLOCKBENCH`/visual/native proof remains NOT_EXECUTED.
+**2026-10-19 accepted dependency-security baseline:** `Local` source commit [`4c0accd2617117c8c149d6061e468894469c365b`](https://github.com/OpenITStudios/M-LazyDesigner/commit/4c0accd2617117c8c149d6061e468894469c365b) completed all five existing automatic non-publishing Full CI workflows successfully on the **same SHA**. The mandatory steps, rather than only the parent workflow conclusions, were checked. This is source/CI evidence, not `LIVE_BLOCKBENCH` or visual/native acceptance.
 
-**Temporary Full CI** is authorized on `Local` and source-only; publishing and actual native/visual acceptance are separate.
-
-Branch `Local` is source authority. The persistent Gateway owns client continuity and Runtime recovery. Runtime/Plugin executes in Blockbench. **Source/static CI never proves installed/native/visual behavior.**
-
-### Observed automatic Full CI on `79d7afded1793aef3f9e59a851466d25c7ffcd77`
-
-| Workflow | Evidence | Verdict |
+| Workflow | Exact-SHA run | Completed mandatory evidence |
 | --- | --- | --- |
-| Release Readiness Source Only | [39149013636](https://github.com/MIVUBI-STD/M-LazyDesigner/actions/runs/39149013636) | **PASS**, static source policy only |
-| MCP Verify / full | [39149013411](https://github.com/MIVUBI-STD/M-LazyDesigner/actions/runs/39149013411) | **FAIL**, 268 repository tests passed / 10 failed; TypeScript/runtime/build not reached |
-| Dependency Security | [39149013591](https://github.com/MIVUBI-STD/M-LazyDesigner/actions/runs/39149013591) | **FAIL**, 4 high advisories |
-| MCP Conformance | [39149013430](https://github.com/MIVUBI-STD/M-LazyDesigner/actions/runs/39149013430) | **FAIL**, 144 passed / 38 failed |
-| Desktop Verify / Windows | [39149013598](https://github.com/MIVUBI-STD/M-LazyDesigner/actions/runs/39149013598) | **FAIL**, npm audit devalue and source-map-js; installer not reached |
+| MCP Verify | [39229922814](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39229922814) | Bun 1.4.3 frozen install, `bun run verify:full`, provenance and compatibility artifact upload PASS |
+| Dependency Security | [39229922728](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39229922728) | Frozen Bun install and `bun run security:audit` PASS |
+| MCP Conformance | [39229922694](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39229922694) | Pinned official required conformance PASS; optional/extensions do not imply native acceptance |
+| Desktop Verify (Windows) | [39229922742](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39229922742) | Node 24/npm install and audit, Svelte/source verification, locked Cargo checks/tests, NSIS bundle, silent install/bootstrap, checksum/provenance and installer artifact upload PASS |
+| Release Readiness / Source Only | [39229922734](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39229922734) | Inspector test and source-only policy preflight PASS; no release publication |
 
-The pinned **Bun 1.4.3** was installed, and `bun install --frozen-lockfile` completed successfully on MCP jobs. This establishes dependency reproducibility for this SHA, not TypeScript/build quality. Later source edits require their own exact-SHA runs. Missing, failed, skipped and cancelled results remain unverified.
+Intentional conditional skips were MCP's manual `texture` branch and the Desktop audit-failure enforcement branch (because the npm audit succeeded). They were not required failures or bypassed security checks.
+
+The source-lock baseline retains MCP client/core `2.2.0`, server/nested core `2.0.0`, TypeScript `5.9.3`, Zod `4.6.5`, and `@types/bun` `1.3.8`; Desktop retains Svelte `5.57.0`, svelte-check `4.7.6`, Vite `7.3.6`, Tailwind `4.3.3`, devalue `5.9.4`, and source-map-js `1.2.2`. The previously blocking Bun/npm high advisories were remediated by package-manager-generated accepted lockfiles in the baseline commit. The lower-severity `blockbench-types`/Vue advisory is not a reason to upgrade host types without compatibility review.
+
+**Cargo-specific security remains unverified.** The existing `dependency-security.yml` audits Bun only; Desktop runs `cargo check --locked` and `cargo test --locked`, not a RustSec/Cargo advisory scan. `Cargo.lock` retains `zip 2.4.2`, `serde_yaml 0.9.34+deprecated`, `ureq 2.12.1`, and transitive `unsafe-libyaml 0.2.11`. An exact-source review of the 15 `src-tauri/src/*.rs` files plus `build.rs` found no direct `zip`, `serde_yaml`, or `ureq` usage, including conditional source. This identifies candidates for Cargo-generated removal, **not** completed dependency-graph cleanup or an exploitable Rust path. RustSec `RUSTSEC-2026-0367`, `0368`, and `0369` identify `zip` extraction risks; platform, features and reachable extraction APIs must still be assessed. No new advisory waiver has been introduced.
 
 ## Current proof matrix
 
-**2026-10-19 incremental CI:** At `3a9037f`, all 278 repository tests PASS; TypeScript later failed one unused callback parameter in the managed-install test, so `verify:full` remains FAIL pending next execution. The pinned 2026-07-28 MCP Conformance CLI passed all scored requirements; its run [39152012603](https://github.com/MIVUBI-STD/M-LazyDesigner/actions/runs/39152012603) completed successfully. It still transparently reports 36 failing optional/pending checks. Desktop and Bun security audits remain blocked by high advisories. GitHub Actions artifact storage quota has been exhausted for supplemental uploads; a storage/upload failure must not disguise a source, protocol or package verdict.
-
-| Surface | Owner / minimum evidence | Limit |
-| --- | --- | --- |
-| Repository policy | `verify:repository` | Static tests, currently failing |
-| MCP source, TypeScript, regression, build | `verify:full` | All required steps on same SHA |
-| Dependencies | `bun audit --audit-level=high` and `npm audit --audit-level=high` | High advisories block security acceptance |
-| MCP transport/protocol | Official pinned 2026-07-28 conformance | Separate required behaviors from optional Tasks extensions without hiding mandatory failures |
-| Windows packaging | `Desktop Verify` and managed package proof | Built installer, provenance and smoke |
-| LIVE_BLOCKBENCH | Native runbook on matching installed bundle | Undo, save/reopen, animation, recovery, visual |
-| Artistic quality | User review against approved reference | Not inferred from CI |
+| Surface | Accepted proof or current gap |
+| --- | --- |
+| Repository/MCP contracts, TypeScript and bundle | Exact SHA `4c0accd` MCP Verify PASS |
+| Bun/npm high-severity dependency gate | Exact SHA `4c0accd` security and Desktop npm audits PASS; lower-severity findings are not a global security guarantee |
+| Rust/Cargo advisories | **NOT EXECUTED**; must add fail-closed RustSec coverage to the existing security workflow after safe Cargo-locked remediation |
+| MCP conformance | Exact SHA `4c0accd` required conformance PASS; optional tests and installed Runtime remain separate |
+| Windows installation | Exact SHA `4c0accd` Desktop NSIS/silent-install/bootstrap and verified artifact PASS |
+| LIVE_BLOCKBENCH/visual/rollback | **NOT EXECUTED** on current source; follow the native acceptance runbook |
 
 ## Current source contracts
 
@@ -44,7 +39,7 @@ The pinned **Bun 1.4.3** was installed, and `bun install --frozen-lockfile` comp
 - Generated API/HTML/schema/prompt outputs remain generator-owned. Do not hand-edit them to pass tests.
 - No user models, installed runtime, release or `main` changes are implied by current CI.
 
-## Last reusable proven source baseline
+## Prior installed/native evidence (historical)
 
 [Native report, 2026-10-14](native-acceptance.md#consolidated-windows-local-test-report--2026-10-14) scopes successful earlier Windows and source checks to installed `e9b3bca5` (Bun 1.3.14), prior `fcf66179` and `4cd2fd06`, and separate `561ee8e4` exact-SHA source proof. Historical debug tests, recovery snapshot `3.0` and reference work are not current-head acceptance. Native Blockbench visual quality, Golden F and reliable token savings remain unverified.
 
