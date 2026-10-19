@@ -51,7 +51,7 @@ describe("model creation effectiveness — texture/animation sequencing", () => 
     ]);
 
     expect(texturing).toMatch(/unlocked\/invalid UV\s+→ Geometry owner \+ bounded UV correction; no Runtime Surface switch/);
-    expect(texturing).toContain("Geometry/UV capabilities remain callable for bounded upstream correction");
+    expect(texturing).toContain("Geometry/UV capabilities remain available in the shared AUTHORING Runtime Surface for **Modelling-owned** bounded upstream correction");
     expect(texturing).toContain("No Geometry↔Texturing Runtime Surface switch");
     expect(animation).toContain("Animation owns motion, not structural rig mutation");
     expect(animation).toContain("target_phase: geometry");

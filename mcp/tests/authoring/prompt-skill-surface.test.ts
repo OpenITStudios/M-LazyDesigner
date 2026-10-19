@@ -129,14 +129,14 @@ describe("Bedrock prompt and skill surface", () => {
     expect(workflow).toContain("Front PASS is not full 3D PASS");
   });
 
-  test("product-facing README uses LazyDesigner while compatibility bundle identity remains explicit", async () => {
+  test("product-facing README uses LazyDesigner and keeps the canonical bundle identity explicit", async () => {
     const [identity, readme] = await Promise.all([
       source("lib/product/productIdentity.ts"),
       source("README.md"),
     ]);
     expect(identity).toContain('PRODUCT_NAME = "LazyDesigner — Bedrock Entity MCP"');
     expect(readme).toContain("# LazyDesigner — Bedrock Entity MCP");
-    expect(readme).toContain("compatibility bundle filename remains `dist/blockit_mcp.js`");
+    expect(readme).toContain("The canonical production bundle filename is `dist/lazydesigner_mcp.js`");
     expect(readme).toContain("Do not bulk-rename them");
   });
 });

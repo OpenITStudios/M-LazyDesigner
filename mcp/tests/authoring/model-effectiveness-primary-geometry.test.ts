@@ -43,7 +43,7 @@ describe("model creation effectiveness — primary geometry", () => {
     expect(verification).toContain("16 Blockbench units");
     expect(verification).toContain("relevant total");
     expect(standard).toContain("whole-form envelope");
-    expect(standard).toContain("not a universal Bedrock Entity size box");
+    expect(standard.replace(/\s+/g, " ")).toContain("not a universal Bedrock Entity size box");
   });
 
   test("under-constrained geometry remains provisional rather than success-by-placement", async () => {

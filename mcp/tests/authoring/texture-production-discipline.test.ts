@@ -171,8 +171,8 @@ describe("texture production discipline", () => {
 
   test("Texturing keeps semantic ownership while using shared AUTHORING capabilities for upstream correction", async () => {
     const skill = await Promise.all([source("../.agents/skills/lazydesigner-texturing/SKILL.md"), source("../.agents/skills/lazydesigner-texturing/references/fidelity-styling-verification.md")]).then((parts) => parts.join("\n"));
-    expect(skill).toContain("Geometry/UV capabilities remain callable for bounded upstream correction");
-    expect(skill).toContain("must not borrow Cube mutation");
+    expect(skill).toContain("Geometry/UV capabilities remain available in the shared AUTHORING Runtime Surface for **Modelling-owned** bounded upstream correction");
+    expect(skill).toContain("must not borrow Cube/UV mutation");
     expect(skill).toContain("No Geometry↔Texturing Runtime Surface switch");
     expect(skill).toContain("HANDOFF_REQUIRED");
     expect(skill).toContain("switch_authoring_phase");

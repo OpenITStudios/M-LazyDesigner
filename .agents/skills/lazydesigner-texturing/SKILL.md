@@ -104,7 +104,7 @@ For production blank-atlas creation, pass explicit width/height from the current
 New production authoring normally targets the approved atlas/density contract; absent stronger project authority, logical **128×128 default, 256×256 opt-in** remains policy. Reuse an already-approved atlas UUID instead of recreating it.
 
 ## Workplan / Coverage
-Latest user correction before broad paint: verify one mapped material/seam, then propagate its cohort; palette `BASE | SHADOW | HIGHLIGHT | ACCENT/IDENTITY`.
+Latest user correction before broad paint: verify one mapped material/seam, then propagate its cohort; palette `BASE | SHADOW | HIGHLIGHT | ACCENT/IDENTITY`. Organize material cohorts by approved material and shading role; verify representative mapped faces before propagation.
 Face Coverage Ledger: `UNPAINTED | BASE_ONLY | STYLED | INTENTIONAL_FLAT | INTENTIONAL_TRANSPARENT | SHARED`.
 `list_textures.optimization_opportunities.coverage.gate`: `incomplete|partial` / `FACE_ACCOUNTING_INCOMPLETE` → no completion; one `list_textures`/pass; `ready` ≠ visual PASS.
 `states.varied` ≠ `STYLED`; `review.solid_color_faces` locates flat candidates, not failures.
