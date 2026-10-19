@@ -16,9 +16,9 @@ After Rust is resolved, separately assess narrowly scoped compatible patch candi
 
 **Execution ceiling:** GitHub-hosted pinned Rust/Cargo, Bun/npm audits, source tests and Windows installer smoke have executed; no PC installation or native Blockbench acceptance occurred. Native and visual claims remain NOT_EXECUTED. No Codex/Work, paid runner, release or main changes.
 
-## Temporary Full CI
+## Full CI — explicit milestone only
 
-Temporary `Local` push authorization remains active for the existing five non-publishing workflows: MCP Verify, Dependency Security, MCP Conformance, Desktop Verify, Release Readiness / Source Only. Manual release/draft/package gates are unchanged. A push or queued check is not PASS; evaluate required completed steps on matching SHAs. No `main`, installed user files, release, secrets, or billing changes.
+Routine `Local` push CI runs focused path-filtered checks for MCP repository/types, Desktop source/locked Rust without NSIS, protocol conformance and dependency security. Release Readiness is manual-only. Full `bun run verify:full`, integrated Windows NSIS and milestone acceptance require explicit manual same-SHA checks. Skipped checks are **NOT EXECUTED**, not PASS. No `main`, release, user-PC installation or live Blockbench.
 
 ## System boundaries
 

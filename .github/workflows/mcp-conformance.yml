@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - Local
+    paths:
+      - 'mcp/server/**'
+      - 'mcp/gateway/**'
+      - 'mcp/lib/**'
+      - 'mcp/package.json'
+      - 'mcp/bun.lock'
+      - '.github/workflows/mcp-conformance.yml'
+      - '.bun-version'
   workflow_dispatch:
 
 concurrency:

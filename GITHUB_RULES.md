@@ -307,11 +307,11 @@ Next: <one actionable next step, unless DONE>
 
 ### Temporary full CI on Local (2026-10-19 user authorization)
 
-While the user permits Full CI, pushes to **`Local` only** automatically run the existing non-publishing `MCP Verify` (always full), `Dependency Security`, `MCP Conformance`, `Desktop Verify` (Windows), and `Release Readiness / Source Only` workflows. Each also retains `workflow_dispatch`; the MCP manual `texture` scope is never selected on push. Runs must prove matching source SHA and successful mandatory steps. Superseded in-progress runs may be cancelled without being treated as PASS.
+Routine `Local` pushes use **focused, path-filtered CI only**: MCP repository/tests and TypeScript, Windows Desktop npm high-severity audit and locked source/Rust checks without NSIS, conformance only for server/protocol changes, and strict dependency security only for dependency/security changes. Release Readiness is manual-only. A skipped check is **NOT EXECUTED**, not PASS. Full MCP and integrated Windows NSIS/silent-install stay manual milestone gates for an exact SHA. No release, native proof or automatic repository writeback.
 
 `Repository Verify`, `Authoring Policy Verify`, `Head Proof`, `Release Verify`, `Managed Distribution` and `Desktop Draft Release` remain manual-only. Release tags, draft releases, signing, publication, installation on user machines, `main`, secrets and administrative settings remain outside this authorization. Do not add `pull_request`, `schedule`, `workflow_run` or tag-triggered verification; do not grant repository write permission to an automatic workflow.
 
-Targeted checks remain available for investigation, while temporary full push CI avoids user-driven dispatch. Keep immutable action pins, frozen lockfiles, security audits, read-only build provenance and distinct release gates. Full CI PASS proves only its exact SHA and executed source/platform checks, never native Blockbench or visual acceptance. If this temporary authorization ends, revert these five push triggers alongside their canonical tests/docs.
+Milestone Full CI requires explicit manual dispatch with source/run SHA proof. Preserve action pins, frozen locks, strict security and read-only provenance. Focused push PASS cannot be claimed as full build acceptance. If workflow dispatch cannot run from `Local`, report NOT EXECUTED without changing `main`.
 
 **Default branch dispatch boundary.** GitHub requires a manual workflow file to be registered on the default branch. `Local` is working authority; `main` is stable/release authority and may lack Local-only workflows. Do not silently synchronize `main`, change default branch, Actions settings, branch protection, rulesets or required checks to expose a Run workflow button or bypass a blocked check. Report missing registration and request separate authorization for administrative/stable-branch changes. Manual dispatch is never release approval; tag-backed drafts, Desktop signing, secret use and publication retain their distinct safeguards.
 
@@ -424,7 +424,7 @@ Branch/tag deletion, PR merge/close, release publication/deletion, environment b
 
 ## GitHub Actions
 
-- Verification and release-check workflows run only by explicit manual dispatch; each selected command must still falsify a relevant claim.
+- Full verification/release checks require manual dispatch; focused path-filtered `Local` push checks may run automatically and every command must falsify a relevant claim.
 - Correctly skipped irrelevant workflows are not missing proof.
 - Required-but-skipped checks are CI/ruleset routing defects, not reasons to change unrelated code.
 - Verification workflows are read-only by default and do not commit back to `Local`.

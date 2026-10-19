@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - Local
+    paths:
+      - 'mcp/package.json'
+      - 'mcp/bun.lock'
+      - 'apps/desktop/package.json'
+      - 'apps/desktop/package-lock.json'
+      - 'apps/desktop/src-tauri/Cargo.toml'
+      - 'apps/desktop/src-tauri/Cargo.lock'
+      - '.github/workflows/dependency-security.yml'
+      - '.bun-version'
+      - 'SECURITY.md'
   workflow_dispatch:
 
 concurrency:

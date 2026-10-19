@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - Local
+    paths:
+      - 'mcp/**'
+      - '.github/workflows/**'
+      - 'AGENTS.md'
+      - 'GITHUB_RULES.md'
+      - 'docs/**'
+      - '.agents/**'
+      - '.bun-version'
+      - 'README.md'
+      - 'CONTEXT.md'
   workflow_dispatch:
     inputs:
       verification:
@@ -23,7 +33,36 @@ permissions:
   contents: read
 
 jobs:
+  scoped:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Verify exact SHA
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: ".bun-version"
+      - name: Frozen install
+        run: bun install --frozen-lockfile
+      - name: Verify focused repository contracts and types
+        run: bun run verify:repository && bun run typecheck && bun run typecheck:gateway
+
   verify:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -52,7 +91,7 @@ jobs:
             echo "### MCP exact-SHA proof"
             echo
             printf -- '- exact_sha: `%s`\n' "$actual_sha"
-            echo "- verification: full on Local push; full or texture on manual dispatch"
+            echo "- verification: manual full/texture; Local push runs scoped source contracts"
             echo "- live_local_tests: excluded"
           } >> "$GITHUB_STEP_SUMMARY"
 

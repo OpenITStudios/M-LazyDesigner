@@ -23,30 +23,31 @@ function triggers(yaml: string): string[] {
 }
 
 describe("Local Full CI and protected manual release workflows", () => {
-  test("only authorized non-publishing workflows run on Local pushes", async () => {
-    const names = (await readdir("../.github/workflows")).filter((n) => n.endsWith(".yml")).sort();
+  test("routine Local push is scoped while release and full build remain manual", async () => {
+    const names = (await readdir("../.github/workflows")).filter(n => n.endsWith(".yml")).sort();
     expect(names).toEqual([...FILES].sort());
-    const auto = new Set([
-      "mcp-verify.yml",
-      "dependency-security.yml",
-      "mcp-conformance.yml",
-      "desktop-verify.yml",
-      "release-readiness.yml",
-    ]);
-    expect(auto.size).toBe(5);
+    const automatic = new Set(["mcp-verify.yml","desktop-verify.yml","mcp-conformance.yml","dependency-security.yml"]);
     for (const file of FILES) {
-      const yaml = await Bun.file(`../.github/workflows/${file}`).text();
-      if (auto.has(file)) {
-        expect(triggers(yaml), file).toEqual(["push", "workflow_dispatch"]);
-        expect(yaml, file).toMatch(/^  push:\n    branches:\n      - Local\n  workflow_dispatch:/m);
-        expect(yaml, file).not.toMatch(/^    (?:tags|paths|paths-ignore):/m);
-        expect(yaml, file).not.toMatch(/contents:\s*write/);
+      const yaml = await Bun.file("../.github/workflows/" + file).text();
+      if (automatic.has(file)) {
+        expect(triggers(yaml), file).toEqual(["push","workflow_dispatch"]);
+        expect(yaml, file).toContain("  push:\n    branches:\n      - Local\n    paths:");
       } else {
         expect(triggers(yaml), file).toEqual(["workflow_dispatch"]);
       }
       expect(yaml, file).not.toMatch(/^  (?:pull_request|schedule|workflow_run|release|create|delete):/m);
       expect(yaml, file).toContain("contents: read");
     }
+    const mcp = await Bun.file("../.github/workflows/mcp-verify.yml").text();
+    const desktop = await Bun.file("../.github/workflows/desktop-verify.yml").text();
+    expect(mcp).toContain("Verify focused repository contracts and types");
+    expect(mcp).toContain("bun run verify:repository && bun run typecheck && bun run typecheck:gateway");
+    expect(mcp).toContain("if: github.event_name == 'workflow_dispatch'");
+    expect(mcp).toContain("run: bun run verify:full");
+    expect(desktop).toContain("focused-source:");
+    expect(desktop).toContain("Verify Desktop source and locked Rust tests");
+    expect(desktop).toContain("if: github.event_name == 'workflow_dispatch'");
+    expect(desktop).toContain("run: npm run build:app");
   });
 
   test("aligned Cargo/npm candidate is strictly opt-in and read-only", async () => {
@@ -133,15 +134,16 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(auditCommand).not.toContain("--ignore");
   });
 
-  test("automatic MCP source verification is full, manual texture focus remains available", async () => {
-    const workflow = await Bun.file("../.github/workflows/mcp-verify.yml").text();
-    expect(workflow).toContain("default: full");
-    expect(workflow).toContain("options:\n          - full\n          - texture");
-    expect(workflow).toContain("if: ${{ github.event_name == 'push' || inputs.verification != 'texture' }}");
-    expect(workflow).toContain("if: ${{ github.event_name == 'workflow_dispatch' && inputs.verification == 'texture' }}");
-    expect(workflow).toContain("run: bun run verify:full");
-    expect(workflow).toContain("run: bun run verify:texture:focused");
-    expect(workflow).toContain("requiredSteps.map(name => steps[name])");
+  test("MCP pushes use focused checks; manual full and texture are available", async () => {
+    const yaml = await Bun.file("../.github/workflows/mcp-verify.yml").text();
+    expect(yaml).toContain("default: full");
+    expect(yaml).toContain("options:\n          - full\n          - texture");
+    expect(yaml).toContain("if: github.event_name == 'push'");
+    expect(yaml).toContain("if: github.event_name == 'workflow_dispatch'");
+    expect(yaml).toContain("bun run verify:repository && bun run typecheck && bun run typecheck:gateway");
+    expect(yaml).toContain("bun run verify:full");
+    expect(yaml).toContain("bun run verify:texture:focused");
+    expect(yaml).toContain("requiredSteps.map(name => steps[name])");
   });
 
   test("verification and draft releases preserve their original proof boundaries", async () => {

@@ -26,7 +26,7 @@ Risk remains open: proc-macro-error (GTK/Tauri), five unic-* packages (urlpatter
 
 **Aligned Tauri 2.12.3 review-only evidence (2026-10-19):** [Dependency Security 39276095004](https://github.com/OpenITStudios/M-LazyDesigner/actions/runs/39276095004), source `fd52b0d`, Cargo/npm artifact `12196594517`. Rust 1.98.1 and Node 24/npm generated three candidate dependency files with SHA-256 provenance, not committed to `Local`. Candidate RustSec JSON retrieved 1,338 advisory records: **0 vulnerabilities, 4 unmaintained warnings** (`proc-macro-error`, `zbus_names`, `zvariant`, `zvariant_derive`) and **1 unsound warning** (`glib 0.18.5`). Five prior `unic-*` advisories disappeared. Candidate Windows source checks, aligned npm high-severity audit, and review-only NSIS shell/silent-install have independent PASS evidence from run `39269370543`. This does **not** establish integrated managed bootstrap, update/rollback, Linux runtime safety or native Blockbench acceptance. New candidate-only target diagnostic records Linux/Windows Cargo graph membership and dependency ancestry without dropping the mandatory full-lockfile RustSec security gate. The committed source still uses Tauri 2.11.x and its security workflow remains FAIL on 10 known warnings. No ignored advisory IDs or upgrade acceptance.
 
-**Temporary Full CI** remains limited to the five existing non-publishing `Local` workflows; optional/manual release and live Blockbench gates remain separate.
+**Routine `Local` CI is now focused and path-filtered.** Full MCP, integrated Windows NSIS and Release Readiness run only for deliberate milestones/manual verification. A skipped check is NOT EXECUTED, not PASS. Native acceptance remains separate.
 
 ## Current proof matrix
 
