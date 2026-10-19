@@ -62,6 +62,19 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).not.toContain("git push");
   });
 
+  test("same-run Windows Cargo candidate is verified before disposable locked checks", async () => {
+    const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
+    expect(yaml).toContain("rust-upstream-windows:");
+    expect(yaml).toContain("needs: rust-upstream-candidate");
+    expect(yaml).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
+    expect(yaml).toContain("Candidate source identity or same-run provenance mismatch.");
+    expect(yaml).toContain("Candidate Cargo.lock checksum mismatch.");
+    expect(yaml).toContain("run: npm ci");
+    expect(yaml).toContain("run: npm run verify:source");
+    expect(yaml).toContain("contents: read");
+    expect(yaml).not.toContain("contents: write");
+  });
+
   test("Cargo advisory audit is mandatory and preserves dependency-security integrity", async () => {
     const workflow = await Bun.file("../.github/workflows/dependency-security.yml").text();
     expect(workflow).toContain("rustsec-audit:");
