@@ -8,12 +8,6 @@
 
 Own durable cross-domain authoring sequence and dependency rules without duplicating specialist procedures. Detailed domain execution remains in the active specialist Skill and its canonical standard.
 
-## Execution applicability
-
-**ChatGPT-only default:** see `docs/03-authoring/README.md#chatgpt-only-delivery-gate` for requested artifact types, representative quality checks and proof limits. Do not require Control, Codex, Gateway, a local application, a native Blockbench session, or stage approvals for a non-native ChatGPT deliverable. Native execution and its checkpoints remain unavailable unless an actual connected executor is explicitly requested.
-
-**Optional native path:** the complete lifecycle below is retained unchanged for genuinely connected Blockbench execution. Do not claim a source test or conceptual plan traversed that native lifecycle.
-
 ## Canonical Lifecycle
 
 ```text

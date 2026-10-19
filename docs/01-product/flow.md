@@ -4,20 +4,7 @@ Updated: 2026-10-10
 
 This file owns only the **product-level sequence**. It must not duplicate detailed Reference, Authoring, Control, or Operations contracts.
 
-## Canonical ChatGPT-Only Flow
-
-```text
-USER REQUEST
-→ CHATGPT REQUIREMENTS + RELEVANT KNOWLEDGE
-→ CHATGPT REFERENCE / DESIGN / FILE / SOURCE
-→ VERIFY USING AVAILABLE EVIDENCE
-→ DELIVER IN CHATGPT
-→ OPTIONAL AUTHORIZED GITHUB UPDATE
-```
-
-**No standalone application, Codex, installer or separate system is required.** Native Blockbench steps below describe retained optional integration. They can run only when the user explicitly requests them and a real connected environment is available. Passing CI alone does not prove live asset editing or visual correctness.
-
-## Optional Native MCP Flow (not mandatory)
+## Canonical Flow
 
 ```text
 USER
@@ -52,7 +39,7 @@ Control / System       → ../04-system/README.md
 Current Operations     → ../05-operations/README.md
 ```
 
-## Optional Native and Source Development Implementation Paths
+## Two execution paths at a glance
 
 These diagrams are navigation projections, not separate routing/state authority.
 Refer to [Implementation Map](../04-system/implementation-map.md) only when
@@ -200,9 +187,9 @@ Production UV mapping, packing, lock and UV Layout PASS remain Geometry/Modellin
 
 Geometry and Texturing share the AUTHORING Runtime surface. Crossing AUTHORING ↔ Animation uses the explicit phase handoff.
 
-## 6. Optional Native Agent Execution
+## 6. Codex Execution
 
-Only an explicitly connected native executor uses this path. ChatGPT-only work has no Codex dependency.
+Codex owns modelling/coding reasoning once it receives the minimum current context.
 
 Typical direct path:
 
@@ -217,9 +204,9 @@ known task
 
 Search/describe/status are fallbacks for uncertainty or stale operational state, not mandatory rituals.
 
-## 7. Optional Gateway / Runtime / Blockbench
+## 7. Gateway / Runtime / Blockbench
 
-When native MCP is explicitly requested and connected, Gateway is the stable client boundary:
+Gateway is the stable client boundary:
 
 ```text
 status
@@ -314,7 +301,7 @@ USER SYSTEM REQUEST
 → Control: SYSTEM_DEVELOPMENT
 → resolve source owner + impact boundary
 → minimum source / Skill / test context
-→ ChatGPT implementation using available repository tools
+→ Codex implementation
 → build / generate / deploy owner when required
 ```
 

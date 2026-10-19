@@ -5,10 +5,6 @@ description: In-use LazyDesigner Asset Authoring specialist for Minecraft Bedroc
 
 # LazyDesigner Bedrock Animation
 
-## ChatGPT-only scope
-
-For a motion/animation request without native Blockbench, deliver the requested gesture reference, key-pose/timing plan, or animation file **only when actually generated** with available tools. Follow the contact/clearance, pose, timing and evidence checks in `docs/03-authoring/README.md`. Do not require a Gateway, Animation Runtime surface or approved native checkpoint for a standalone artifact; do not claim actual playback, loaded controller state or Minecraft activation without live proof. Native Control, timeline and handoff instructions below apply only when explicitly requested and connected.
-
 ## Activation Contract
 
 ```text

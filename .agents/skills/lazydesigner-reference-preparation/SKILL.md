@@ -17,7 +17,7 @@ OWNER: REFERENCE_CAPABILITY_SELECTION
 Enter for preparing reference evidence before optional downstream authoring. Select only the branch that materially changes the next decision; do not preload siblings. Do not inspect or modify LazyDesigner implementation source because a reference result is weak. Proven system defects cross lanes through a bounded `DEVELOPMENT_HANDOFF`; ordinary reference-quality correction stays in this lane.
 
 
-Single ChatGPT-side orchestration authority for preparing and delivering references. It routes to existing canonical owners rather than duplicating them. A separate Codex/LazyDesigner handoff is optional and only occurs on explicit request.
+Single ChatGPT-side orchestration authority for preparing references before optional downstream Codex/LazyDesigner authoring. It routes to existing canonical owners rather than duplicating them.
 
 ## Route
 
@@ -158,4 +158,4 @@ Reference Preparation is complete when:
 - any requested package passes its consistency contract;
 - no unsupported fact was invented.
 
-For a reference-only request, deliver the completed reference in ChatGPT and stop. When the user also requests a design, source, or editable asset, continue that task in ChatGPT with the relevant specialist knowledge and tools actually available; a separate Codex/LazyDesigner app is not required. Native Blockbench operations remain optional and may only be claimed when explicitly requested, actually connected, and verified. Do not treat a reference image as a native `.bbmodel`.
+Then stop. Downstream implementation belongs to Codex/LazyDesigner authoring Skills.

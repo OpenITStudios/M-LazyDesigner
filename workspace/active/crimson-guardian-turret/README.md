@@ -25,17 +25,6 @@ User rejected the first painted version as coarse, insufficiently detailed and u
 
 Representative cloth/helmet/chest/crystal patch inspected on mapped model before final propagation. Replaced repeated black armor bars and blanket square borders with broad satin-metal facets, sparse etched details, connected chevrons/diamond on cloth, asymmetric crystal facets, and subdued cuts in stone. 35 colors, 32163 painted mapped pixels; unused area transparent. Flat underside and covered core receive fewer texels; visible identity detail retained.
 
-## Visual evidence audit — 2026-10-19 (read-only)
-
-**Status: REVIEW REQUIRED; no new visual approval.** This review inspected the committed front, back, and front-left PNG captures and the `reference/REFERENCE.json` specification. The approved primary source image `reference/redesign-target.png` was **not directly inspected together with those views** in this review. Accordingly, reference-to-model resemblance, view-aligned silhouette, materials, and complete 3D fidelity remain **UNVERIFIED**, not PASS. Do not substitute the manifest or prior prose for actual pixels.
-
-- **Observed in existing captures:** circular stone plinth, red staff crystal, paired swept gold crests, front red cloth/gem and blue-gray armor are visible. The back plate looks comparatively plain; this is a *review candidate*, not a proven geometry or texture defect.
-- **Reference-backed question:** `rear_gold_yoke` is listed in the approved Reference Package as a **PROVISIONAL** rear detail without source rear-view support. Check whether the current rear detailing fulfills the user's intended original extension; do not invent a rear reference or silently redesign it.
-- **Cross-Cube seam diagnostic: NOT_EVALUATED.** The 2026-10-15 `review/texture-detail-verification.json` records an intra-Cube bounded scan of **64 of 498 faces** and `cross_cube_continuity: not_evaluated`. A prior manual review is historical, not automated cross-Cube proof and not fresh reference matching.
-- **Next acceptance requirement:** compare the actual approved `reference/redesign-target.png` with corresponding current front/front-left captures, inspect back as a provisional original-design question, resolve significant differences, and obtain user visual approval. In-game emissive/material and native re-open/playback are outside this review.
-
-Do not modify `.bbmodel`, atlas, user-approved reference, or prior revision evidence solely to make this audit green.
-
 ## Evidence and limits
 Native UV audit ready: all 498 faces valid, in bounds, integer mapped, zero overlap or collapsed UV, autouv locked. Complete face coverage: 498/498, no omissions. Coverage still flags flat-face review; the explicit ledger classifies intentional undersides/slim trims separately from styled faces. Numeric variety does not imply visual quality. Bounded intra-Cube seam audit has no high-contrast or alpha-discontinuity candidates; cross-Cube continuity was visually reviewed. Native surface diagnostic reports zero z-fighting and no other bounded surface risks.
 

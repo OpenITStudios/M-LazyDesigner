@@ -4,10 +4,6 @@ description: In-use LazyDesigner Asset Authoring specialist for Bedrock Geometry
 ---
 # LazyDesigner Bedrock Modelling
 
-## ChatGPT-only scope
-
-For a modelling/reference request without connected native Blockbench, use the Geometry expertise to deliver the requested visual, silhouette/scale and part-structure plan, or an editable geometry file **only when actually generated**. Apply the relevant checks in `docs/03-authoring/README.md` without requiring Control or a native project. Do not claim Cube/Group/UV mutation, Undo, saved `.bbmodel` or a visual native PASS from a plan or reference. The Control-selected profile and all native execution procedures below apply only to an explicitly requested, connected native operation.
-
 ## Activation Contract
 
 ```text

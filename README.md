@@ -1,6 +1,6 @@
 # LazyDesigner
 
-LazyDesigner is a **ChatGPT-first Minecraft Bedrock visual-asset workflow**. The user interacts with ChatGPT to prepare references, designs, files and authorized repository changes. **No standalone LazyDesigner app, Codex session, local installation or separately operated system is required for the default workflow.**
+LazyDesigner is an AI-assisted **Minecraft Bedrock Entity** authoring workspace built around a local Blockbench MCP Runtime, a stable AI-client-facing Gateway, and a lightweight Control front line for context-efficient Codex work.
 
 **Former project name:** BlockIT. New source/build, managed installer, plugin and Gateway identities are canonical LazyDesigner; old BlockIT machine state is detected only for safe explicit migration and is never selected as the active Runtime.
 
@@ -17,16 +17,22 @@ Routine repository development uses `Local`. Repository behavior is routed by `A
 
 For a new ChatGPT repository chat, provide this `Local` URL and intended task. ChatGPT follows current root rules, works GitHub/cloud-first without requiring the user's PC, and treats `amati` as read-only. Continuity comes from current source and relevant work commits, not chat titles.
 
-## Canonical Product Flow — ChatGPT Only
+## Canonical Product Flow
 
 ```text
-User request → ChatGPT requirements and relevant knowledge
-→ visual reference / design / code / requested deliverable
-→ verify available evidence → deliver directly in ChatGPT
-→ authorized GitHub update only when requested
+User request
+→ ChatGPT Reference Preparation
+→ Reference Package
+→ LazyDesigner Control
+→ Codex
+→ Gateway
+→ Runtime
+→ Blockbench
+→ verification / approval / checkpoint
+→ Finalization
 ```
 
-**No new app, installer, Codex or user-managed system is necessary.** The current Gateway, Runtime and Blockbench plugin are retained optional code, and live Blockbench editing is possible only when a connected native executor is genuinely available and explicitly requested. Source CI is not native/visual proof.
+ChatGPT owns **reference preparation**, not Blockbench execution. Control remains a thin routing/context layer and must not duplicate canonical Skills, Tool schemas, workspace state, or creative reasoning.
 
 The approved image is visual authority. Requested dimensions are numeric authority. LazyDesigner has **one native modelling path**; the retired 3D-assisted/Hunyuan/PrimitiveAnything path is not part of current authoring.
 
@@ -43,7 +49,7 @@ The documentation is organized for selective AI retrieval:
 ```text
 docs/
 ├── 01-product/      product identity, requirements, end-to-end flow
-├── 02-reference/    ChatGPT references and optional downstream handoff
+├── 02-reference/    ChatGPT reference preparation and Codex handoff package
 ├── 03-authoring/    modelling, texture, animation, validation, finalization
 ├── 04-system/       Control, source ownership, Skill taxonomy
 └── 05-operations/   current proof, next action, local acceptance
@@ -66,7 +72,7 @@ Current state owners:
 
 Historical audits, retired product paths, obsolete continuation, and old roadmaps belong in Git history rather than parallel current-state owners.
 
-## Optional Native Integration Inventory (not required for ChatGPT-only work)
+## Current Product Surface
 
 ```text
 Control                     front-line context/readiness/routing
@@ -100,8 +106,8 @@ Static source/CI proof can establish routing, contracts, schemas, deterministic 
 ```text
 .agents/skills/    task/domain specialists loaded only when relevant
 docs/              hierarchical canonical documentation; start at docs/README.md
-apps/desktop/      retained optional Tauri/Svelte/Rust code
-distribution/      retained optional packaging/update code
+apps/desktop/      Tauri/Svelte/Rust desktop machine control plane
+distribution/      product install/update/rollback/package authority
 mcp/               Runtime/Gateway plus package-scoped engineering support
 workspace/         persistent active/saved asset packages
 experiments/       bounded research only
@@ -126,9 +132,7 @@ Naming contract:
 
 `distribution/` owns product packaging/install/update/rollback and may consume production artifacts; production Runtime/Gateway source must not depend on distribution. `experiments/` is non-authoritative research. Production source and active asset state must not depend on it.
 
-## Optional Technical Development (not a user setup requirement)
-
-The following commands maintain retained source; they are not steps a ChatGPT user needs to perform, nor an instruction to create an application.
+## Development
 
 LazyDesigner source/builds come from this repository; do not use an upstream hosted plugin as runtime authority for this repository. The canonical generated plugin bundle is `dist/lazydesigner_mcp.js`. Any retired BlockIT artifact is not a supported active installation fallback.
 
@@ -171,7 +175,7 @@ Manual development deployment to the canonical plugin filename remains explicit:
 bun run deploy:local -- /absolute/path/to/lazydesigner_mcp.js
 ```
 
-Only an explicitly connected native authoring task uses Control and the Gateway. See `mcp/gateway/README.md`.
+Normal AI-client use connects through Control and the Gateway. See `mcp/gateway/README.md`.
 
 ## Contributing
 

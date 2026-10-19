@@ -13,10 +13,6 @@ User-authorized autonomy replaces approval waits with verified checkpoints; neve
 - Material GitHub work follows `GITHUB_RULES.md`.
 - Canonical documentation starts at `docs/README.md`; select one domain before loading deeper docs.
 
-## ChatGPT-only user workflow
-
-**Default:** deliver in ChatGPT. No app, Codex, installer or PC required. Native MCP only if requested and connected.
-
 ## Execution Context Gate
 
 Classify by **actual capability**, not product/UI name:
@@ -107,7 +103,7 @@ Cross lane only with evidence: IN_USE defects stay with the active owner; proved
 
 ### Reference Preparation
 
-Reference generation belongs in **ChatGPT** through `.agents/skills/lazydesigner-reference-preparation/SKILL.md`. A downstream handoff is optional, not required for delivery. Use `docs/02-reference/README.md` and load only the selected branch:
+Reference generation belongs in **ChatGPT** through `.agents/skills/lazydesigner-reference-preparation/SKILL.md`; Codex consumes the approved/usable artifact rather than recreating that workflow. Use `docs/02-reference/README.md` and load only the selected branch:
 
 ```text
 smooth visual/model reference → image reference branch
@@ -119,7 +115,7 @@ Generate minimum useful evidence. Pixel Art does not own Blockbench atlas/UV/Pai
 
 ### Asset Authoring
 
-LazyDesigner Control is the canonical routing/context authority for optional, connected native MCP only. ChatGPT-only assets use specialist knowledge directly, without an extra router.
+LazyDesigner Control is the canonical routing/context authority. There is no separate asset-router Skill in the normal authoring path.
 
 ```text
 current AGENTS.md
@@ -161,7 +157,7 @@ At `FINALIZATION`, load only `docs/03-authoring/finalization/standard.md`.
 
 ### ChatGPT + GitHub/cloud-only continuity
 
-An `amati` request is read-only.
+`GITHUB_RULES.md` owns `Local`, remote-only continuity, exact-SHA CI, recovery, security and STOP; do not require the user's PC. An `amati` request is read-only.
 
 ## Development Operating Standard
 
