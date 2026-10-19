@@ -51,6 +51,7 @@ describe("Desktop control-plane ownership", () => {
     expect(rust).toContain("runtime_listener_live: runtime_session.live && runtime_build_match == Some(true)");
     expect(rust).toContain("runtime_listener_live: trusted_listener");
     expect(rust).toContain("runtime_health::matching_build_identity");
+    expect(rust).toContain('run_managed_action(app, "repair", None)?;');
 
     // Temporary Full CI runs Windows Desktop smoke tests on Local pushes
     // while release/publication paths remain separately authorized.

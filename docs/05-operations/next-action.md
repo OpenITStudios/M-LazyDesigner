@@ -6,6 +6,8 @@ This file owns **continuation only**, not history. Flow: `docs/01-product/flow.m
 
 ## Next REMOTE_GITHUB work
 
+**2026-10-19 Windows Rust source correction (CI pending):** Diagnostic Desktop Verify at `a5c2e3c` reached real Rust compilation after npm audit but revealed E0061 in `system_status.rs`: automatic repair omitted the third `expected_source_sha` parameter. Call now supplies `None`, matching existing rule that source SHA selection is update-only. The existing Desktop ownership contract asserts this call. Do not equate this code fix with Windows installer PASS; recheck the new exact-SHA CI. npm dependency audit remains FAIL and final security gate blocks verified installer upload.
+
 **2026-10-19 Final authoring + Windows proof routing (source pending CI):** Full MCP at `50cc6d7` passed repository/runtime and left one authoring source contract: bounded Geometry edits must verify affected views. Updated the modelling owner without weakening the test. Desktop's npm audit remains mandatory but now permits independent Windows source, build, and installer smoke diagnostics before an explicit failing security enforcement step; verified installer artifact upload requires a successful audit, so insecure packages never produce accepted install artifacts. New repository regression checks cover both fail-closed paths. A new exact-SHA CI run is required to prove execution; security advisories and artifact quota remain unresolved, and native Blockbench is not verified.
 
 1. **Recover full `verify:full` on the next exact SHA.** At `a9dbb6b`, repository verification reached 278 PASS but failed its current-continuation footprint ceiling; the old narratives are preserved in Git. Reach TypeScript, runtime and Bun build next.

@@ -511,7 +511,7 @@ pub fn ensure_ready(app: &AppHandle) -> Result<EnsureReadyResult, String> {
             });
         }
 
-        run_managed_action(app, "repair")?;
+        run_managed_action(app, "repair", None)?;
         current = collect_connection_status();
         if current.plugin_integrity != "ready" {
             return Ok(EnsureReadyResult {
