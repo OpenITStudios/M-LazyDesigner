@@ -4,6 +4,10 @@ description: In-use LazyDesigner Asset Authoring specialist for Texture Atlas, m
 ---
 # LazyDesigner Bedrock Texturing
 
+## ChatGPT-only scope
+
+For a texture/pixel-art deliverable without native Blockbench, work directly in ChatGPT using the relevant palette, grid/alpha and material knowledge; produce the requested image or file **only when actually generated**. Use the verification contract in `docs/03-authoring/README.md`. Do not require Geometry APPROVED, UV Layout PASS, a Gateway, a live atlas or Painter for a standalone design, and do not claim mapped-model seam/render/PBR PASS without real native evidence. The Control projection and native tool routing below apply only to explicitly connected Blockbench work.
+
 ## Activation Contract
 
 ```text
