@@ -46,7 +46,7 @@ describe("material development and repository authority", () => {
     expect(rules).toContain("workflow_dispatch");
     expect(contribution).toContain("focused path-filtered");
     expect(next).toContain("Full CI — explicit milestone only");
-    expect(validation).toContain("Routine `Local` CI is now focused");
+    expect(validation).toContain("Routine `Local` CI is focused and path-filtered");
     expect(validation).toContain("source-equivalence evidence");
   });
 });

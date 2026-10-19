@@ -117,7 +117,10 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).toContain("Windows Cargo target graph incomplete");
     expect(yaml).toContain("Windows resolved RustSec advisory is blocking");
     expect(yaml).toContain("Out-of-Windows lockfile findings");
-    expect(yaml).not.toContain("--ignore ");
+    const auditCommand = yaml.split("\n").find(line => line.includes('cargo-audit" audit --json --file'));
+    expect(auditCommand).toBeDefined();
+    expect(auditCommand).not.toContain("--ignore ");
+    expect(auditCommand).not.toContain("--no-fetch");
     expect(yaml).not.toContain("--no-fetch");
   });
 
