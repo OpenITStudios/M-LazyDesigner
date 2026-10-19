@@ -74,6 +74,16 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(workflow).toContain("run: bun run security:audit");
   });
 
+  test("RustSec retains strict denials and classifies the Windows Cargo graph", async () => {
+    const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
+    expect(yaml).toContain("Classify RustSec dependencies for the Windows Cargo target");
+    expect(yaml).toContain("cargo metadata --locked --format-version 1");
+    expect(yaml).toContain("--filter-platform x86_64-pc-windows-msvc");
+    expect(yaml).toContain("Resolved target dependency is not proof of unsafe API reachability.");
+    expect(yaml).toContain("--deny unmaintained --deny unsound --deny yanked");
+    expect(yaml).not.toContain("--ignore");
+  });
+
   test("automatic MCP source verification is full, manual texture focus remains available", async () => {
     const workflow = await Bun.file("../.github/workflows/mcp-verify.yml").text();
     expect(workflow).toContain("default: full");
