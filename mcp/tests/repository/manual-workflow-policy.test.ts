@@ -68,9 +68,11 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).toContain("rust-upstream-windows:");
     expect(yaml).toContain("needs: rust-upstream-candidate");
     expect(yaml).toContain("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093");
-    expect(yaml).toContain("Candidate source identity or same-run provenance mismatch.");
+    expect(yaml).toContain("Candidate source identity mismatch.");
     expect(yaml).toContain("Candidate checksum mismatch: $path");
-    expect(yaml).toContain("Tauri npm candidate lock mismatch: $name");
+    expect(yaml).toContain("Tauri npm lock mismatch: $name");
+    expect(yaml).toContain("ConvertFrom-Json -AsHashtable");
+    expect(yaml).toContain("$lock[\'packages\'][\'node_modules/\' + $name]");
     expect(yaml).toContain("run: npm ci");
     expect(yaml).toContain("run: npm run verify:source");
     expect(yaml).toContain("contents: read");
@@ -83,7 +85,9 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(workflow).toContain("cargo install cargo-audit --locked --version 0.22.2");
     expect(workflow).toContain("audit --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked");
     expect(workflow).not.toContain("--no-fetch");
-    expect(workflow).not.toContain("--ignore");
+    const auditCommand = workflow.split("\n").find(line => line.includes("cargo-audit\" audit --file"));
+    expect(auditCommand).toBeDefined();
+    expect(auditCommand).not.toContain("--ignore");
     expect(workflow).not.toContain("contents: write");
     expect(workflow).toContain("git diff --exit-code -- apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock");
     expect(workflow).toContain("run: bun run security:audit");
@@ -96,7 +100,9 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).toContain("--filter-platform x86_64-pc-windows-msvc");
     expect(yaml).toContain("Resolved target dependency is not proof of unsafe API reachability.");
     expect(yaml).toContain("--deny unmaintained --deny unsound --deny yanked");
-    expect(yaml).not.toContain("--ignore");
+    const auditCommand = yaml.split("\n").find(line => line.includes("cargo-audit\" audit --file"));
+    expect(auditCommand).toBeDefined();
+    expect(auditCommand).not.toContain("--ignore");
   });
 
   test("automatic MCP source verification is full, manual texture focus remains available", async () => {

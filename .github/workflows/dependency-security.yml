@@ -250,13 +250,13 @@ jobs:
         shell: pwsh
         run: |
           $pkg = Get-Content 'apps/desktop/package.json' -Raw | ConvertFrom-Json
-          $lock = Get-Content 'apps/desktop/package-lock.json' -Raw | ConvertFrom-Json
+          $lock = Get-Content 'apps/desktop/package-lock.json' -Raw | ConvertFrom-Json -AsHashtable
           if ($pkg.dependencies.'@tauri-apps/api' -ne '2.12.3' -or $pkg.devDependencies.'@tauri-apps/cli' -ne '2.12.3') {
             throw 'Tauri npm candidate manifest mismatch.'
           }
           foreach ($name in @('@tauri-apps/api', '@tauri-apps/cli')) {
-            $entry = $lock.packages.PSObject.Properties['node_modules/' + $name].Value
-            if ($entry.version -ne '2.12.3') { throw "Tauri npm candidate lock mismatch: $name" }
+            $entry = $lock['packages']['node_modules/' + $name]
+            if ($entry['version'] -ne '2.12.3') { throw "Tauri npm candidate lock mismatch: $name" }
           }
 
       - name: Install Desktop dependencies with frozen npm lock
