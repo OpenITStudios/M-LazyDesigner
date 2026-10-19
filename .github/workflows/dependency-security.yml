@@ -37,36 +37,37 @@ jobs:
       - name: Audit dependency advisories
         run: bun run security:audit
 
-  # Explicit opt-in candidate only. No new event trigger, writes or trusted release path.
-  rust-lock-candidate:
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/Local' && contains(github.event.head_commit.message, '[rust-lock-refresh]') }}
+  # Narrow read-only, opt-in candidate for the upstream RustSec fix.
+  rust-upstream-candidate:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/Local' && contains(github.event.head_commit.message, '[rust-upstream-review]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout exact Local source without credentials
+      - name: Checkout current Local without credentials
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
-      - name: Pin repository source and Rust compiler
+      - name: Install exact Rust 1.98.1
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$GITHUB_REF" = 'refs/heads/Local'
           rustup toolchain install 1.98.1 --profile minimal
-          rustup run 1.98.1 rustc --version
           rustup run 1.98.1 cargo --version
 
-      - name: Generate narrow Rust dependency removal through Cargo
+      - name: Generate Tauri v2 upstream candidate with Cargo
         shell: bash
         run: |
           set -euo pipefail
-          rustup run 1.98.1 cargo remove --manifest-path apps/desktop/src-tauri/Cargo.toml zip serde_yaml ureq
-          rustup run 1.98.1 cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --format-version 1 > /dev/null
-          rustup run 1.98.1 cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --format-version 1 > /dev/null
+          MANIFEST=apps/desktop/src-tauri/Cargo.toml
+          rustup run 1.98.1 cargo update --manifest-path "$MANIFEST" -p tauri --precise 2.12.3
+          rustup run 1.98.1 cargo update --manifest-path "$MANIFEST" -p tauri-build --precise 2.7.2
+          rustup run 1.98.1 cargo update --manifest-path "$MANIFEST" -p tauri-utils --precise 2.10.1
+          rustup run 1.98.1 cargo metadata --manifest-path "$MANIFEST" --locked --format-version 1 > /dev/null
 
-      - name: Reject unrelated changes or unresolved removed Rust crates
+      - name: Reject unrelated source edits and oversized dependency changes
         shell: bash
         run: |
           set -euo pipefail
@@ -78,64 +79,61 @@ jobs:
 
           manifest = "apps/desktop/src-tauri/Cargo.toml"
           lock = "apps/desktop/src-tauri/Cargo.lock"
-          removed = {"zip", "serde_yaml", "ureq"}
-          old_manifest = tomllib.loads(subprocess.check_output(["git", "show", "HEAD:" + manifest], text=True))
-          new_manifest = tomllib.loads(Path(manifest).read_text())
-          assert removed <= set(old_manifest["dependencies"]), "Expected direct Rust dependencies changed unexpectedly"
-          old_manifest["dependencies"] = {k: v for k, v in old_manifest["dependencies"].items() if k not in removed}
-          assert new_manifest == old_manifest, "Manifest changed beyond three approved removals"
-          old_lock = tomllib.loads(subprocess.check_output(["git", "show", "HEAD:" + lock], text=True))
-          new_lock = tomllib.loads(Path(lock).read_text())
-          old_packages = {(p["name"], p["version"]) for p in old_lock["package"]}
-          new_packages = {(p["name"], p["version"]) for p in new_lock["package"]}
-          assert not new_packages - old_packages, "Cargo refreshed or introduced unrelated package versions"
-          names = {p["name"] for p in new_lock["package"]}
-          assert not (removed | {"unsafe-libyaml"}) & names, "Removed dependencies persist in Cargo.lock"
-          assert {"unsafe-libyaml", *removed} <= {p["name"] for p in old_lock["package"]}
           changed = subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
-          assert sorted(changed) == sorted([manifest, lock]), "Cargo modified unexpected source paths"
-          print("Cargo-generated manifest and lockfile: only approved removals; no new versions")
-          print("Pruned package versions:", len(old_packages - new_packages))
+          assert changed == [lock], f"Expected only generated Cargo.lock to change: {changed}"
+          old = tomllib.loads(subprocess.check_output(["git", "show", "HEAD:" + lock], text=True))
+          new = tomllib.loads(Path(lock).read_text())
+          assert tomllib.loads(Path(manifest).read_text()) == tomllib.loads(
+              subprocess.check_output(["git", "show", "HEAD:" + manifest], text=True)
+          ), "Manifest must remain unchanged"
+          old_versions = {p["name"]: p["version"] for p in old["package"]}
+          new_versions = {p["name"]: p["version"] for p in new["package"]}
+          for name, ver in {"tauri": "2.12.3", "tauri-build": "2.7.2",
+                            "tauri-utils": "2.10.1", "urlpattern": "0.6.0"}.items():
+              assert new_versions.get(name) == ver, f"Expected {name}@{ver}, got {new_versions.get(name)}"
+          obsolete = {"zip", "serde_yaml", "ureq", "unsafe-libyaml", "unic-ucd-ident",
+                      "unic-char-property", "unic-char-range", "unic-common", "unic-ucd-version"}
+          assert obsolete.isdisjoint(new_versions), "Deprecated dependencies remain in the candidate"
+          changed_packages = sorted((k, old_versions.get(k), v) for k, v in new_versions.items()
+                                    if old_versions.get(k) != v)
+          print("Changed packages:", len(changed_packages))
+          for item in changed_packages:
+              print(*item, sep=" -> ")
+          assert len(changed_packages) <= 100, "Candidate scope exceeded the allowed dependency delta"
           PY
 
-      - name: Record exact-SHA provenance and candidate checksums
+      - name: Record exact-SHA Cargo candidate provenance
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p rust-candidate
-          git diff -- apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock > rust-candidate/changes.patch
-          sha256sum apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock > rust-candidate/SHA256SUMS.txt
+          mkdir -p rust-upstream-candidate
+          git diff -- apps/desktop/src-tauri/Cargo.lock > rust-upstream-candidate/changes.patch
+          sha256sum apps/desktop/src-tauri/Cargo.lock > rust-upstream-candidate/SHA256SUMS.txt
           python3 - <<'PY'
           import json
           import os
-          import subprocess
           from pathlib import Path
-          info = {
+          Path("rust-upstream-candidate/source.json").write_text(json.dumps({
               "repository": os.environ["GITHUB_REPOSITORY"],
-              "ref": os.environ["GITHUB_REF"],
+              "source_ref": os.environ["GITHUB_REF"],
               "source_sha": os.environ["GITHUB_SHA"],
               "run_id": os.environ["GITHUB_RUN_ID"],
-              "cargo_toolchain": "1.98.1",
-              "generator": "cargo remove zip serde_yaml ureq; cargo metadata --locked",
-              "mode": "READ_ONLY_CANDIDATE_NOT_COMMITTED",
-              "removed_direct_dependencies": ["zip", "serde_yaml", "ureq"],
-              "cargo_version": subprocess.check_output(["rustup", "run", "1.98.1", "cargo", "--version"], text=True).strip(),
-          }
-          Path("rust-candidate/source.json").write_text(json.dumps(info, indent=2) + "\n")
+              "generator": "Cargo 1.98.1 targeted Tauri v2 updates",
+              "acceptance": "REVIEW_ONLY_NOT_COMMITTED"
+          }, indent=2) + "\n")
           PY
 
-      - name: Upload reviewable Rust lockfile candidate (not accepted source)
+      - name: Upload Tauri candidate without repository writeback
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: lazydesigner-rust-lock-candidate
+          name: lazydesigner-rust-upstream-candidate
           if-no-files-found: error
           retention-days: 7
           path: |
-            apps/desktop/src-tauri/Cargo.toml
             apps/desktop/src-tauri/Cargo.lock
-            rust-candidate/source.json
-            rust-candidate/SHA256SUMS.txt
-            rust-candidate/changes.patch
+            rust-upstream-candidate/source.json
+            rust-upstream-candidate/SHA256SUMS.txt
+            rust-upstream-candidate/changes.patch
 
   rustsec-audit:
     # Mandatory and separate from the opt-in Cargo candidate generator.

@@ -49,17 +49,17 @@ describe("Local Full CI and protected manual release workflows", () => {
     }
   });
 
-  test("Rust lockfile generation remains opt-in and cannot bypass security gates", async () => {
+  test("Tauri RustSec candidate is opt-in, pinned and read-only", async () => {
     const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
-    expect(yaml).toContain("contains(github.event.head_commit.message, '[rust-lock-refresh]')");
-    expect(yaml).toContain("rustup run 1.98.1 cargo remove --manifest-path apps/desktop/src-tauri/Cargo.toml zip serde_yaml ureq");
-    expect(yaml).toContain("cargo metadata --manifest-path apps/desktop/src-tauri/Cargo.toml --locked");
-    expect(yaml).toContain("source.json");
+    expect(yaml).toContain("contains(github.event.head_commit.message, '[rust-upstream-review]')");
+    expect(yaml).toContain("cargo update --manifest-path \"$MANIFEST\" -p tauri --precise 2.12.3");
+    expect(yaml).toContain("cargo update --manifest-path \"$MANIFEST\" -p tauri-build --precise 2.7.2");
+    expect(yaml).toContain("cargo update --manifest-path \"$MANIFEST\" -p tauri-utils --precise 2.10.1");
+    expect(yaml).toContain("REVIEW_ONLY_NOT_COMMITTED");
     expect(yaml).toContain("SHA256SUMS.txt");
-    expect(yaml).toContain("READ_ONLY_CANDIDATE_NOT_COMMITTED");
-    expect(yaml).toContain("if-no-files-found: error");
     expect(yaml).toContain("run: bun run security:audit");
     expect(yaml).not.toContain("contents: write");
+    expect(yaml).not.toContain("git push");
   });
 
   test("Cargo advisory audit is mandatory and preserves dependency-security integrity", async () => {
