@@ -125,7 +125,7 @@ describe("Control source-owner registry", () => {
     });
     expect(sourceOwnerForCapability("manage_uv_layout")).toMatchObject({
       source: "mcp/server/runtime/uv/layoutService.ts",
-      specialist: ".agents/skills/lazydesigner-texturing/SKILL.md",
+      specialist: ".agents/skills/lazydesigner-modelling/SKILL.md",
     });
     expect(sourceOwnerForCapability("manage_animation_controller")).toMatchObject({
       source: "mcp/server/tools/animation/controller.ts",

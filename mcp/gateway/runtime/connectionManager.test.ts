@@ -2,6 +2,20 @@ import { describe, expect, test } from "bun:test";
 import { GatewayConnectionManager } from "./connectionManager";
 
 describe("GatewayConnectionManager", () => {
+  test("a cold offline status records one failure and repeated polls do not inflate it", () => {
+    const manager = new GatewayConnectionManager();
+    expect(manager.snapshot().state).toBe("offline");
+    expect(manager.snapshot().reconnect.failures).toBe(0);
+    const firstDelay = manager.markOffline();
+    const first = manager.snapshot();
+    expect(firstDelay).toBeGreaterThan(0);
+    expect(first.reconnect.failures).toBe(1);
+    expect(manager.needsMcpRevalidation()).toBe(true);
+    const repeatedDelay = manager.markOffline();
+    expect(manager.snapshot().reconnect.failures).toBe(1);
+    expect(repeatedDelay).toBeLessThanOrEqual(firstDelay);
+  });
+
   test("does not inflate backoff while remaining offline", () => {
     const manager = new GatewayConnectionManager();
 

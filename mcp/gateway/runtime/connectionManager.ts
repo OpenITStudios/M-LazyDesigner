@@ -64,7 +64,9 @@ export class GatewayConnectionManager {
     this.unverifiedConnectionFailure = true;
     const alreadyOffline = this.session.snapshot().state === "offline";
     this.session.transition("offline");
-    return alreadyOffline
+    // The session starts in "offline": the first failed health probe still
+    // counts as one failure. Repeated offline polls must not inflate backoff.
+    return alreadyOffline && this.reconnect.snapshot().failures > 0
       ? this.reconnect.retryAfterMs()
       : this.reconnect.markFailure();
   }

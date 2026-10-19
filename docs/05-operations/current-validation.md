@@ -4,6 +4,8 @@ This file owns **current proof interpretation only**. Flow: `docs/01-product/flo
 
 ## Current authority
 
+**2026-10-19 Gateway exact-SHA diagnostic / source-only fix:** On `a5c2e3c`, MCP full reached Gateway tests after 279 repository, 2,138 runtime, 26 installer and 166 authoring PASS, then failed two tests: initial offline reconnect failure count and stale UV specialist identity. Fixes preserve fail-closed cold probe semantics and Geometry/UV ownership. Executable proof requires subsequent current-SHA Full CI; no full build/native PASS or security acceptance yet.
+
 **2026-10-19 Windows Desktop diagnostic source evidence:** On exact SHA `a5c2e3c`, Desktop npm audit still FAIL, but the non-publishing diagnostic path independently reached `cargo check`, which failed with E0061 (`run_managed_action` missing third arg) at `src/system_status.rs:514`. Source now passes `None` for repair; only an actual next-SHA Windows compile can verify the fix. Final security enforcement must still FAIL while npm audit is unsafe; no installer accepted or native Blockbench PASS claimed.
 
 **2026-10-19 Desktop fail-closed diagnostic gate — SOURCE_IMPLEMENTED / CI PENDING:** Existing Desktop npm audit still fails high-severity dependencies. The workflow now records audit outcome without stopping independent source/Windows smoke verification, but explicitly fails the final job when audit fails and suppresses the verified-installer upload. This is not audit suppression or release approval. One outstanding authoring view-selection instruction was clarified after `50cc6d7` full-MCP logs. Current exact-SHA full CI must confirm results. No dependency/lockfile, main, release, native asset or user-machine change.
