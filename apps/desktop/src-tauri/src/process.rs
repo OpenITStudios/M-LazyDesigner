@@ -53,7 +53,10 @@ mod tests {
         let output = run_output(
             Command::new("powershell.exe").args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
                 "Add-Type -MemberDefinition '[DllImport(\"kernel32.dll\")] public static extern IntPtr GetConsoleWindow();' -Name ConsoleProbe -Namespace Test; [Console]::Out.Write([Test.ConsoleProbe]::GetConsoleWindow().ToInt64()); [Console]::Error.Write('captured')"]),
-            Duration::from_secs(20), "console probe",
+            // Cold Windows PowerShell 5.1 startup plus Add-Type's first C# compilation
+            // can exceed 20s on a fresh hosted runner. Preserve real GetConsoleWindow
+            // and captured stdout/stderr assertions rather than substituting a mock.
+            Duration::from_secs(90), "console probe",
         ).unwrap();
         assert!(output.status.success());
         assert_eq!(String::from_utf8_lossy(&output.stdout), "0");
