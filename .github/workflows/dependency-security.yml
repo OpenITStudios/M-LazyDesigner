@@ -152,6 +152,47 @@ jobs:
           }, indent=2) + "\n")
           PY
 
+      - name: Audit generated Rust lockfile with fresh RustSec database (candidate only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup run 1.98.1 cargo install cargo-audit --locked --version 0.22.2 --root "$RUNNER_TEMP/candidate-rustsec"
+          set +e
+          "$RUNNER_TEMP/candidate-rustsec/bin/cargo-audit" audit --json --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked > rust-upstream-candidate/rustsec.json 2> rust-upstream-candidate/rustsec-stderr.txt
+          audit_status=$?
+          set -e
+          AUDIT_STATUS="$audit_status" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report_path = Path("rust-upstream-candidate/rustsec.json")
+          data = json.loads(report_path.read_text())
+          vulnerabilities = data.get("vulnerabilities")
+          if not isinstance(vulnerabilities, dict) or not isinstance(vulnerabilities.get("count"), int):
+              raise SystemExit("RustSec JSON response did not contain authoritative vulnerability count")
+          vulnerability_count = vulnerabilities["count"]
+          warnings = data.get("warnings")
+          if not isinstance(warnings, dict):
+              raise SystemExit("RustSec JSON response lacked categorized informational warnings")
+          warning_count = sum(len(rows) for rows in warnings.values() if isinstance(rows, list))
+          audit_status = int(os.environ["AUDIT_STATUS"])
+          summary = (f"### Review-only generated Cargo.lock RustSec audit\n\n"
+                     f"- Classified vulnerabilities: **{vulnerability_count}**\n"
+                     f"- Informational/yanked warnings: **{warning_count}**\n"
+                     f"- Strict audit exit code: **{audit_status}**\n"
+                     f"- No ignore IDs or category suppressions; committed-source RustSec gate is independent.\n")
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as out:
+              out.write(summary)
+          if audit_status not in (0, 1):
+              raise SystemExit("Candidate RustSec scan had an operational/database error")
+          if vulnerability_count:
+              raise SystemExit("Generated candidate contains vulnerability advisories; cannot be accepted")
+          if audit_status == 1 and warning_count == 0:
+              raise SystemExit("RustSec rejected candidate for an unclassified reason")
+          print(f"Candidate RustSec: {vulnerability_count} vulnerabilities, {warning_count} informational warnings; source acceptance still pending")
+          PY
+
       - name: Upload Tauri candidate without repository writeback
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -165,6 +206,8 @@ jobs:
             rust-upstream-candidate/source.json
             rust-upstream-candidate/SHA256SUMS.txt
             rust-upstream-candidate/changes.patch
+            rust-upstream-candidate/rustsec.json
+            rust-upstream-candidate/rustsec-stderr.txt
 
   rust-upstream-windows:
     # Candidate-only Windows check: exact same-run artifact, no build upload or source writeback.

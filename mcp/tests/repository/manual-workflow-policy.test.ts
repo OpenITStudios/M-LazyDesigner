@@ -63,6 +63,16 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).not.toContain("contents: write");
   });
 
+  test("candidate RustSec scan records warnings without weakening production denials", async () => {
+    const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
+    expect(yaml).toContain("Audit generated Rust lockfile with fresh RustSec database (candidate only)");
+    expect(yaml).toContain("cargo-audit\" audit --json --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked");
+    expect(yaml).toContain("Generated candidate contains vulnerability advisories; cannot be accepted");
+    expect(yaml).toContain("RustSec JSON response did not contain authoritative vulnerability count");
+    expect(yaml).toContain("rust-upstream-candidate/rustsec.json");
+    expect(yaml).not.toContain("contents: write");
+  });
+
   test("same-run Windows Cargo candidate is verified before disposable locked checks", async () => {
     const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
     expect(yaml).toContain("rust-upstream-windows:");
