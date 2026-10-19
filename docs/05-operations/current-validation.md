@@ -20,6 +20,8 @@ The source-lock baseline retains MCP client/core `2.2.0`, server/nested core `2.
 
 **Cargo-specific security remains unverified.** The existing `dependency-security.yml` audits Bun only; Desktop runs `cargo check --locked` and `cargo test --locked`, not a RustSec/Cargo advisory scan. `Cargo.lock` retains `zip 2.4.2`, `serde_yaml 0.9.34+deprecated`, `ureq 2.12.1`, and transitive `unsafe-libyaml 0.2.11`. An exact-source review of the 15 `src-tauri/src/*.rs` files plus `build.rs` found no direct `zip`, `serde_yaml`, or `ureq` usage, including conditional source. This identifies candidates for Cargo-generated removal, **not** completed dependency-graph cleanup or an exploitable Rust path. RustSec `RUSTSEC-2026-0367`, `0368`, and `0369` identify `zip` extraction risks; platform, features and reachable extraction APIs must still be assessed. No new advisory waiver has been introduced.
 
+**Temporary Full CI** remains limited to the five existing non-publishing `Local` workflows; optional/manual release and live Blockbench gates remain separate.
+
 ## Current proof matrix
 
 | Surface | Accepted proof or current gap |
@@ -39,7 +41,9 @@ The source-lock baseline retains MCP client/core `2.2.0`, server/nested core `2.
 - Generated API/HTML/schema/prompt outputs remain generator-owned. Do not hand-edit them to pass tests.
 - No user models, installed runtime, release or `main` changes are implied by current CI.
 
-## Prior installed/native evidence (historical)
+## Last reusable proven source baseline
+
+The latest accepted source baseline is `4c0accd` with all five matched workflow passes above. Older installed/native evidence below is **historical**, not native acceptance for `4c0accd` or this documentation-only commit.
 
 [Native report, 2026-10-14](native-acceptance.md#consolidated-windows-local-test-report--2026-10-14) scopes successful earlier Windows and source checks to installed `e9b3bca5` (Bun 1.3.14), prior `fcf66179` and `4cd2fd06`, and separate `561ee8e4` exact-SHA source proof. Historical debug tests, recovery snapshot `3.0` and reference work are not current-head acceptance. Native Blockbench visual quality, Golden F and reliable token savings remain unverified.
 
