@@ -90,13 +90,13 @@ Repository/static tests can prove source invariants and parser/recovery contract
 
 Those require matching local/live security verification.
 
-## Dependency advisory policy
+## Dependency advisory policy — Windows x64 only
 
-The existing \`Dependency Security\` workflow runs both MCP Bun's high-severity audit and a RustSec \`cargo-audit\` scan of \`apps/desktop/src-tauri/Cargo.lock\`. The scanner is pinned to version \`0.22.2\` and installed under Rust \`1.98.1\`. It fetches a current RustSec advisory database on each run; unavailable or stale data is not treated as a successful scan.
+LazyDesigner Desktop is supported only on `x86_64-pc-windows-msvc`. The existing `Dependency Security` workflow uses pinned Rust 1.98.1 and `cargo-audit 0.22.2` to scan the **complete** Cargo.lock with a freshly fetched RustSec advisory database. It checks each reported package name/version against `cargo metadata --locked --filter-platform x86_64-pc-windows-msvc`.
 
-Vulnerability advisories of any severity are blocking. The \`unmaintained\`, \`unsound\` and \`yanked\` informational categories are also blocking, but do not themselves establish an exploitable LazyDesigner path. These categories are reviewed separately by affected version, Cargo feature set, operating system and actual source reachability. No blanket ignore list or automatic security waiver is permitted. Any strictly bounded exception requires an identified advisory, affected package/feature/platform, evidence of non-reachability or mitigations, an expiry/review condition, and explicit maintainer authorization.
+Every Windows-resolved vulnerability, unmaintained, unsound or yanked advisory **blocks Windows CI**. Issues exclusive to unsupported platforms are disclosed by advisory ID and crate identity without blocking Windows. This is platform scope, not an advisory exception: no `--ignore`, disabled advisory category, skipped database fetch or malformed scan is accepted. Missing or inconsistent graph/scan evidence also fails.
 
-An advisory-clean Cargo.lock is not evidence of native Blockbench correctness, installed build identity, visual acceptance, or Windows update/rollback. Run the relevant locked Rust tests and Windows CI checks independently.
+Linux/macOS or other architectures require separate safety approval if introduced. A Windows RustSec PASS does not prove integrated installer/update/rollback, signing, or live Blockbench correctness.
 
 ## Scope
 

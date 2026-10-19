@@ -493,11 +493,79 @@ jobs:
           PY
           git diff --exit-code -- apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock
 
-      - name: Audit complete Cargo.lock with a fresh RustSec database
+      - name: Verify full RustSec scan against supported Windows x64 target
         shell: bash
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/rustsec-tools/bin/cargo-audit" audit --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked
+          mkdir -p "$RUNNER_TEMP/windows-rustsec"
+          set +e
+          "$RUNNER_TEMP/rustsec-tools/bin/cargo-audit" audit --json --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked > "$RUNNER_TEMP/windows-rustsec/result.json" 2> "$RUNNER_TEMP/windows-rustsec/stderr.txt"
+          exit_code=$?
+          set -e
+          AUDIT_EXIT="$exit_code" python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          report = json.loads((temp / "windows-rustsec/result.json").read_text())
+          metadata = json.loads((temp / "windows-cargo-metadata.json").read_text())
+          if os.environ["AUDIT_EXIT"] not in ("0", "1"):
+              raise SystemExit("RustSec scanner/database failure; Windows verdict unavailable")
+          db = report.get("database")
+          if not isinstance(db, dict) or not isinstance(db.get("advisory-count"), int) or db["advisory-count"] < 1:
+              raise SystemExit("RustSec fresh advisory database not verified")
+          if not isinstance(report.get("settings"), dict) or report["settings"].get("ignore") != []:
+              raise SystemExit("RustSec advisory ignore configuration is not allowed")
+          resolve = metadata.get("resolve")
+          if not isinstance(resolve, dict) or not resolve.get("root") or not resolve.get("nodes"):
+              raise SystemExit("Windows Cargo target graph missing")
+          packages = {p["id"]: p for p in metadata["packages"]}
+          active_ids = {node["id"] for node in resolve["nodes"]}
+          if resolve["root"] not in active_ids or not active_ids.issubset(packages):
+              raise SystemExit("Windows Cargo target graph incomplete")
+          active = {(packages[i]["name"], packages[i]["version"]) for i in active_ids}
+          vulnerabilities = report.get("vulnerabilities")
+          if not isinstance(vulnerabilities, dict) or not isinstance(vulnerabilities.get("list"), list):
+              raise SystemExit("RustSec vulnerability classification missing")
+          if vulnerabilities.get("count") != len(vulnerabilities["list"]):
+              raise SystemExit("RustSec vulnerability count mismatch")
+          warnings = report.get("warnings")
+          if not isinstance(warnings, dict):
+              raise SystemExit("RustSec warning categories missing")
+          issues = [("vulnerability", item) for item in vulnerabilities["list"]]
+          for kind, entries in warnings.items():
+              if not isinstance(entries, list):
+                  raise SystemExit("Unrecognized RustSec warning category")
+              issues.extend((kind, item) for item in entries)
+          blocking, excluded = [], []
+          for kind, item in issues:
+              if not isinstance(item, dict) or not isinstance(item.get("package"), dict):
+                  raise SystemExit("RustSec issue package cannot be classified")
+              pkg = item["package"]
+              name, version = pkg.get("name"), pkg.get("version")
+              if not isinstance(name, str) or not isinstance(version, str):
+                  raise SystemExit("RustSec package name/version missing")
+              advisory = item.get("advisory") or {}
+              label = f"{kind}: {advisory.get('id', 'YANKED_OR_UNCLASSIFIED')} {name}@{version}"
+              (blocking if (name, version) in active else excluded).append(label)
+          lines = ["### Windows x64 RustSec security verdict", "",
+                   f"- RustSec advisories available: {db['advisory-count']}",
+                   f"- Resolved Windows x64 packages: {len(active)}",
+                   f"- Windows-active findings: **{len(blocking)}**",
+                   f"- Out-of-Windows lockfile findings: {len(excluded)}",
+                   "- No --ignore or disabled categories; Windows-active vulnerabilities/warnings fail.",
+                   "", "#### Windows-active issues"]
+          lines.extend(["- " + s for s in blocking] or ["- None"])
+          lines.extend(["", "#### Out-of-target (disclosed, nonblocking)"])
+          lines.extend(["- " + s for s in excluded] or ["- None"])
+          message = "\n".join(lines) + "\n"
+          print(message)
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as out:
+              out.write(message)
+          if blocking:
+              raise SystemExit("Windows resolved RustSec advisory is blocking")
+          PY
 
       - name: Prove advisory audit did not edit the Cargo source
         shell: bash

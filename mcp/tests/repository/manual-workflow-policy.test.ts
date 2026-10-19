@@ -108,13 +108,26 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).not.toContain("contents: write");
   });
 
+  test("Windows-only RustSec blocks target-resolved vulnerabilities and warnings", async () => {
+    const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
+    expect(yaml).toContain("Verify full RustSec scan against supported Windows x64 target");
+    expect(yaml).toContain("RustSec scanner/database failure; Windows verdict unavailable");
+    expect(yaml).toContain("RustSec advisory ignore configuration is not allowed");
+    expect(yaml).toContain("RustSec vulnerability classification missing");
+    expect(yaml).toContain("Windows Cargo target graph incomplete");
+    expect(yaml).toContain("Windows resolved RustSec advisory is blocking");
+    expect(yaml).toContain("Out-of-Windows lockfile findings");
+    expect(yaml).not.toContain("--ignore ");
+    expect(yaml).not.toContain("--no-fetch");
+  });
+
   test("Cargo advisory audit is mandatory and preserves dependency-security integrity", async () => {
     const workflow = await Bun.file("../.github/workflows/dependency-security.yml").text();
     expect(workflow).toContain("rustsec-audit:");
     expect(workflow).toContain("cargo install cargo-audit --locked --version 0.22.2");
-    expect(workflow).toContain("audit --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked");
+    expect(workflow).toContain("audit --json --file apps/desktop/src-tauri/Cargo.lock --deny unmaintained --deny unsound --deny yanked");
     expect(workflow).not.toContain("--no-fetch");
-    const auditCommand = workflow.split("\n").find(line => line.includes("cargo-audit\" audit --file"));
+    const auditCommand = workflow.split("\n").find(line => line.includes("cargo-audit\" audit --json --file"));
     expect(auditCommand).toBeDefined();
     expect(auditCommand).not.toContain("--ignore");
     expect(workflow).not.toContain("contents: write");
@@ -129,7 +142,7 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).toContain("--filter-platform x86_64-pc-windows-msvc");
     expect(yaml).toContain("Resolved target dependency is not proof of unsafe API reachability.");
     expect(yaml).toContain("--deny unmaintained --deny unsound --deny yanked");
-    const auditCommand = yaml.split("\n").find(line => line.includes("cargo-audit\" audit --file"));
+    const auditCommand = yaml.split("\n").find(line => line.includes("cargo-audit\" audit --json --file"));
     expect(auditCommand).toBeDefined();
     expect(auditCommand).not.toContain("--ignore");
   });
