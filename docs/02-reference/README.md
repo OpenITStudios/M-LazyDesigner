@@ -1,6 +1,6 @@
 # 02 — Reference Preparation
 
-Owns ChatGPT-side reference preparation and the compact artifacts handed to Codex or other downstream authoring systems.
+Owns ChatGPT-side reference preparation and direct artifact delivery. Compact packages for Codex or other downstream native integrations are optional, not mandatory.
 
 ## AI Read Rule
 
@@ -22,7 +22,7 @@ need deliberate integer-grid pixel art, icon, sprite, tile/pattern, or pixel con
 need to author a Bedrock/Snowstorm particle reference asset
 → particle/README.md
 
-need to build/validate/consume Codex package
+need to build/validate/consume an explicitly requested handoff package
 → package/README.md
 ```
 
@@ -45,7 +45,7 @@ PIXEL ART REFERENCE / STANDALONE ASSET
 PARTICLE / VFX REFERENCE
 → particle/
 → clean Bedrock/Snowstorm particle package
-→ optional Codex / MCP handoff
+→ optional downstream handoff on explicit request
 ```
 
 Rules:
@@ -60,4 +60,4 @@ The Pixel Art and Particle branches are ChatGPT-side reference-authoring capabil
 
 ## Boundary
 
-This domain ends when the approved/usable reference artifact or requested package is ready for downstream use. Actual Blockbench asset authoring belongs to `../03-authoring/`; MCP implementation remains under `mcp/`.
+For a reference-only request, finish when the usable artifact is delivered directly in ChatGPT. For a request that also includes design, source or an editable asset, continue with the relevant ChatGPT-side task and available tools without requiring Codex, Desktop or an installed Runtime. Actual native Blockbench mutation is an optional integration and requires a connected executor and separate evidence; its authoring standards live under `../03-authoring/`, while MCP implementation remains under `mcp/`.

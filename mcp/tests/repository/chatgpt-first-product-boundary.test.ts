@@ -15,6 +15,19 @@ describe("ChatGPT-first product contract", () => {
     expect(main).not.toContain("→ BLOCKBENCH");
   });
 
+  test("reference preparation delivers in ChatGPT and keeps native handoff optional", async () => {
+    const [readme, skill] = await Promise.all([
+      read("../docs/02-reference/README.md"),
+      read("../.agents/skills/lazydesigner-reference-preparation/SKILL.md"),
+    ]);
+    expect(readme).toContain("direct artifact delivery");
+    expect(readme).toContain("delivered directly in ChatGPT");
+    expect(readme).toContain("requires a connected executor");
+    expect(skill).toContain("a separate Codex/LazyDesigner app is not required");
+    expect(skill).toContain("Do not treat a reference image as a native `.bbmodel`");
+    expect(skill).not.toContain("Then stop. Downstream implementation belongs to Codex/LazyDesigner authoring Skills.");
+  });
+
   test("entrypoints require no standalone application", async () => {
     const paths = [
       "../README.md", "../AGENTS.md", "../CONTEXT.md", "../docs/README.md",
