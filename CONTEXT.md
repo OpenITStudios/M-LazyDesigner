@@ -16,9 +16,9 @@ Routing             → AGENTS.md
 
 ## Product
 
-LazyDesigner is a local MCP workflow for AI-assisted **Minecraft Bedrock Entity** authoring in desktop Blockbench. Normal AI-client boundary is the stable Gateway; the Blockbench plugin is the execution Runtime behind it.
+LazyDesigner is a **ChatGPT-first workflow** for Minecraft Bedrock visual assets. **No standalone LazyDesigner app, Codex, local installation or user-managed system is required by default.** Existing Gateway and Blockbench plugin code is optional native integration for explicitly requested, actually connected work.
 
-LazyDesigner also has a separate optional **Desktop machine control plane** under `apps/desktop/`. Desktop owns installation/runtime health presentation, Blockbench discovery/launch, compatibility projection, and explicit managed maintenance actions. It is not part of the authoring execution chain and does not own Control context, Gateway protocol behavior, Blockbench authored state, update/package semantics, or Runtime tools.
+The retained **optional Desktop machine control plane** in `apps/desktop/` and packaging in `distribution/` are implementation history, not an app the user must install, develop or operate.
 
 Primary editable output is `.bbmodel`. Tool/file/coordinate success is not proof of visual resemblance.
 
@@ -50,7 +50,7 @@ View selection is decision-driven; no fixed turnaround board is mandatory.
 
 Asset sizing is anchored to Minecraft player/world scale unless stronger explicit dimensions exist. Exact dimensions remain authoritative when explicitly supplied.
 
-For authoring, Codex consumes the approved reference package rather than reconstructing the original ChatGPT conversation.
+ChatGPT continues directly from approved references. External Codex/Blockbench handoff is optional, never assumed.
 
 The approved image is visual authority. Confirmed dimensions and scale constraints are numeric/world-scale authority. LazyDesigner uses one native Geometry authoring path; there is no modelling-strategy selection gate.
 
@@ -90,9 +90,9 @@ README owns current intake/stage/next-step/blocker state. Git history owns older
 
 Normal authoring has no Standard/Extended choice. Runtime internal `bedrock_entity` remains default; `extended` exists only for **Legacy UI Fallbacks** debug/maintenance compatibility. `risky_eval` and `from_geo_json` remain disabled.
 
-## MCP Architecture
+## Optional MCP Architecture (not a ChatGPT prerequisite)
 
-Authoring path:
+Native authoring path when explicitly requested and connected:
 
 ```text
 AI client
@@ -104,7 +104,7 @@ LazyDesigner Runtime inside Blockbench
 Blockbench
 ```
 
-Machine-management sidecar:
+Retained optional machine-management sidecar:
 
 ```text
 LazyDesigner Desktop

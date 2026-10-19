@@ -13,6 +13,14 @@ User-authorized autonomy replaces approval waits with verified checkpoints; neve
 - Material GitHub work follows `GITHUB_RULES.md`.
 - Canonical documentation starts at `docs/README.md`; select one domain before loading deeper docs.
 
+## ChatGPT-only user workflow
+
+**Default product contract:** produce requested Minecraft asset references, designs, artifacts, code or repository changes **directly in ChatGPT** with available tools. Do not require Codex, Work, a standalone LazyDesigner/Desktop app, a user PC setup, an installer or any separately managed system. Do not start application development in place of a user-requested output.
+
+Existing MCP Gateway/Blockbench Runtime, `apps/desktop/` and `distribution/` remain **optional retained implementations**, not mandatory user steps or automatic engineering priorities. Native actions may be claimed only after an explicit native request and actual available connection; CI/static source tests never establish live Blockbench evidence.
+
+All Control/Gateway/native-specialist routes below are conditional on that optional native context. ChatGPT-only work selects relevant knowledge and tools directly.
+
 ## Execution Context Gate
 
 Classify by **actual capability**, not product/UI name:
@@ -103,7 +111,7 @@ Cross lane only with evidence: IN_USE defects stay with the active owner; proved
 
 ### Reference Preparation
 
-Reference generation belongs in **ChatGPT** through `.agents/skills/lazydesigner-reference-preparation/SKILL.md`; Codex consumes the approved/usable artifact rather than recreating that workflow. Use `docs/02-reference/README.md` and load only the selected branch:
+Reference generation belongs in **ChatGPT** through `.agents/skills/lazydesigner-reference-preparation/SKILL.md`. A downstream handoff is optional, not required for delivery. Use `docs/02-reference/README.md` and load only the selected branch:
 
 ```text
 smooth visual/model reference → image reference branch
@@ -115,7 +123,7 @@ Generate minimum useful evidence. Pixel Art does not own Blockbench atlas/UV/Pai
 
 ### Asset Authoring
 
-LazyDesigner Control is the canonical routing/context authority. There is no separate asset-router Skill in the normal authoring path.
+For ChatGPT-only asset work, select relevant specialist knowledge directly. LazyDesigner Control is a routing/context authority only for explicitly requested and connected native authoring; no new router is required.
 
 ```text
 current AGENTS.md

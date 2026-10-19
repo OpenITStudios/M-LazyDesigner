@@ -6,16 +6,15 @@ This file maps **current source ownership only**. Product workflow belongs in `d
 
 ## Architecture
 
+**Default product path:** user → ChatGPT requirements/reference/design/requested artifact → evidence-backed delivery. **No standalone app, Codex, Desktop installer or user-managed system is required.**
+
+**Optional connected native implementation:**
+
 ```text
-ChatGPT Reference Preparation
-→ Reference Package
-→ LazyDesigner Control
-→ Codex
-→ Gateway
-→ Runtime
-→ Plugin
-→ Blockbench native APIs
+Explicit native request → existing Gateway → Runtime / Plugin → Blockbench native APIs
 ```
+
+The code ownership mappings below are factual source descriptions, not mandatory ChatGPT product steps.
 
 There is one authoring system. Supporting docs/Skills/QA may project or interpret state; they do not create alternate Runtime, routing, or authored-state systems.
 

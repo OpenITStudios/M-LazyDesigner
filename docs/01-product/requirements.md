@@ -1,15 +1,17 @@
 # LazyDesigner — Product Requirements
 
 **Status:** Active Policy  
-**Version:** 2.2  
+**Version:** 2.3  
 **Updated:** 2026-09-18  
-**Primary Output:** editable Minecraft Bedrock Entity `.bbmodel`
+**Primary Output:** requested ChatGPT deliverable; editable `.bbmodel` when feasible
 
 ## 1. Product Objective
 
-A user can hand an original source image directly to Codex, or create an approved Minecraft/Blockbench reference board in ChatGPT for stronger coverage, then have LazyDesigner create or revise a clean Bedrock model through explicit stage approval without requiring the user to specify MCP/tool details.
+A user works **directly in ChatGPT** to request Minecraft Bedrock references, designs, source or editable artifacts. No standalone LazyDesigner application, Codex or local system is required. The existing Gateway/Blockbench path is optional and may be used only when explicitly requested and actually connected.
 
 The system must prefer evidence-backed modelling decisions over assumptions and must not force unnecessary reference conversion. LazyDesigner uses one native Geometry authoring path.
+
+**Scope:** Sections 2–12 describe the retained **optional native Blockbench** authoring path, not mandatory gates for ChatGPT-only artifacts. Do not claim a model was edited in Blockbench or a native `.bbmodel` verified unless it was actually produced.
 
 ## 2. New-Model Required Input
 
@@ -45,7 +47,7 @@ actual Approved Reference Image + user message
 
 No sidecar JSON, ZIP, manifest, coordinate sheet, or modelling blueprint is required. An actual image explicitly handed to Codex for modelling is approved unless the user marks it draft/not ready.
 
-## 4. Canonical New-Model Flow
+## 4. Optional Native New-Model Flow
 
 ```text
 Approved Reference handed to Codex

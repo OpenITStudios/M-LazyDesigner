@@ -5,13 +5,9 @@
 
 ## Purpose
 
-LazyDesigner helps an AI modeller create or revise clean, editable Minecraft Bedrock Entity models in Blockbench through MCP from an approved visual reference.
+LazyDesigner handles Minecraft Bedrock reference creation, design, file generation and requested repository work **directly in ChatGPT**. No standalone application, Codex or local installation is required. Native Blockbench MCP authoring is a **separate optional integration** requiring a real connected runtime.
 
-Primary output:
-
-```text
-<model-name>.bbmodel
-```
+Output follows the actual ChatGPT request. Editable `.bbmodel` output is provided only when it can actually be produced and checked; a visual reference alone is not a native project.
 
 The model should remain understandable and editable by a downstream Bedrock modeller/developer.
 
@@ -47,7 +43,7 @@ Detailed sequence: [Current Flow](flow.md).
 
 Owns whole-form interpretation, primary masses/relationships, proportion/silhouette/orientation, global-vs-local diagnosis, causal correction, and visual approval.
 
-### MCP / Blockbench Runtime
+### MCP / Blockbench Runtime (optional)
 
 Owns deterministic mechanics: project/model observation, exact element mutation, identity/parent targeting, Undo/recovery, view capture, texture/animation operations, and export where supported.
 

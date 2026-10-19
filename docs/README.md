@@ -2,6 +2,8 @@
 
 This is the single entry point for AI and human documentation discovery.
 
+**ChatGPT-only product boundary:** no standalone LazyDesigner application, Codex, installer or local system is required. Native MCP/Blockbench integration and Desktop source are optional, not user prerequisites.
+
 ## Load Rule
 
 Do not read all documentation by default. Resolve the task domain first, then load the smallest canonical set.

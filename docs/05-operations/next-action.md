@@ -4,6 +4,8 @@ This file owns **continuation only**, not history. Flow: `docs/01-product/flow.m
 
 **Branch:** `Local`; work mode `REMOTE_GITHUB`. Do not use the user's PC as a prerequisite. `main`, prior recovery build `3.0`, installed models, signing and release publication are outside scope.
 
+**Product boundary: CHATGPT_FIRST / NO_STANDALONE_APP_REQUIRED (2026-10-19).** The user works in ChatGPT only; no separate LazyDesigner app, Codex, installer or local system is required. Desktop/MCP/Rust code is retained optional engineering, not a default user setup or app-building goal. Never infer native proof from CI.
+
 ## Next REMOTE_GITHUB work
 
 **2026-10-19 verified baseline:** All five automatic Full CI workflows passed on `Local` commit [`4c0accd2617117c8c149d6061e468894469c365b`](https://github.com/OpenITStudios/M-LazyDesigner/commit/4c0accd2617117c8c149d6061e468894469c365b), including MCP full/provenance, Bun high-severity audit, required conformance, Windows Desktop npm audit/source/Rust tests/NSIS/silent-install and verified installer upload, plus source-only release readiness. See `current-validation.md` for exact run IDs and proof limits. Earlier Bun/npm security failures are superseded; do not redo their fixed lockfile work.
