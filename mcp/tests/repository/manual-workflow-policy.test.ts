@@ -63,6 +63,18 @@ describe("Local Full CI and protected manual release workflows", () => {
     expect(yaml).not.toContain("contents: write");
   });
 
+  test("candidate RustSec target classification is evidence-only and fails on graph drift", async () => {
+    const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
+    expect(yaml).toContain("Classify candidate RustSec advisories by locked Windows and Linux target graphs");
+    expect(yaml).toContain("--filter-platform x86_64-pc-windows-msvc");
+    expect(yaml).toContain("--filter-platform x86_64-unknown-linux-gnu");
+    expect(yaml).toContain("rust-upstream-candidate/rustsec-targets.json");
+    expect(yaml).toContain("Candidate warning is newly present in Windows graph");
+    expect(yaml).toContain("Expected exactly five known candidate warnings; re-triage all new IDs");
+    expect(yaml).toContain("strict_rustsec_denials_unchanged");
+    expect(yaml).not.toContain("contents: write");
+  });
+
   test("candidate RustSec scan records warnings without weakening production denials", async () => {
     const yaml = await Bun.file("../.github/workflows/dependency-security.yml").text();
     expect(yaml).toContain("Audit generated Rust lockfile with fresh RustSec database (candidate only)");

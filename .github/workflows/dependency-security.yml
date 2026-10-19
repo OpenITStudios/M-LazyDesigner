@@ -193,6 +193,93 @@ jobs:
           print(f"Candidate RustSec: {vulnerability_count} vulnerabilities, {warning_count} informational warnings; source acceptance still pending")
           PY
 
+      - name: Classify candidate RustSec advisories by locked Windows and Linux target graphs
+        shell: bash
+        run: |
+          set -euo pipefail
+          MANIFEST=apps/desktop/src-tauri/Cargo.toml
+          rustup run 1.98.1 cargo metadata --locked --format-version 1 --manifest-path "$MANIFEST" --filter-platform x86_64-pc-windows-msvc > "$RUNNER_TEMP/candidate-windows.json"
+          rustup run 1.98.1 cargo metadata --locked --format-version 1 --manifest-path "$MANIFEST" --filter-platform x86_64-unknown-linux-gnu > "$RUNNER_TEMP/candidate-linux.json"
+          python3 - <<'PY'
+          import collections
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          report = json.loads(Path("rust-upstream-candidate/rustsec.json").read_text())
+          targets = {
+              "windows": json.loads((temp / "candidate-windows.json").read_text()),
+              "linux": json.loads((temp / "candidate-linux.json").read_text()),
+          }
+
+          def resolved_graph(metadata):
+              by_id = {p["id"]: p for p in metadata["packages"]}
+              nodes = {n["id"]: n for n in metadata["resolve"]["nodes"]}
+              root = metadata["resolve"]["root"]
+              assert root in nodes, "Missing Cargo root from filtered graph"
+              parents = {root: None}
+              work = collections.deque([root])
+              while work:
+                  current = work.popleft()
+                  for dep in nodes[current].get("deps", []):
+                      child = dep["pkg"]
+                      if child in nodes and child not in parents:
+                          parents[child] = current
+                          work.append(child)
+              return by_id, nodes, parents
+
+          graphs = {k: resolved_graph(v) for k, v in targets.items()}
+          findings = []
+          for kind, warnings in sorted(report.get("warnings", {}).items()):
+              assert isinstance(warnings, list), "Unexpected RustSec warning collection"
+              for warning in warnings:
+                  pkg = warning["package"]
+                  advisory = warning["advisory"]["id"]
+                  result = {"id": advisory, "kind": kind, "crate": pkg["name"],
+                            "version": pkg["version"], "targets": {}}
+                  for target, (by_id, nodes, parents) in graphs.items():
+                      ids = [pid for pid in nodes if by_id[pid]["name"] == pkg["name"]
+                             and by_id[pid]["version"] == pkg["version"]]
+                      paths = []
+                      for package_id in ids:
+                          if package_id not in parents:
+                              continue
+                          path = []
+                          current = package_id
+                          while current is not None:
+                              entry = by_id[current]
+                              path.append(entry["name"] + "@" + entry["version"])
+                              current = parents[current]
+                          paths.append(list(reversed(path)))
+                      result["targets"][target] = {"resolved": bool(ids),
+                                                    "root_dependency_path": min(paths, key=len) if paths else []}
+                  findings.append(result)
+          assert len(findings) == 5, "Expected exactly five known candidate warnings; re-triage all new IDs"
+          assert not [f for f in findings if f["targets"]["windows"]["resolved"]], "Candidate warning is newly present in Windows graph"
+          assert all(f["targets"]["linux"]["resolved"] for f in findings), "Linux dependency-graph expectation changed"
+          output = {
+              "source_sha": os.environ["GITHUB_SHA"],
+              "run_id": os.environ["GITHUB_RUN_ID"],
+              "target_graphs": ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"],
+              "finding_count": len(findings),
+              "findings": findings,
+              "interpretation": "Cargo feature/target reachability only; not proof of runtime API call reachability or absence of risk",
+              "strict_rustsec_denials_unchanged": True,
+          }
+          Path("rust-upstream-candidate/rustsec-targets.json").write_text(json.dumps(output, indent=2) + "\n")
+          lines = ["### Candidate RustSec advisory reachability by target graph", "",
+                   "| RustSec ID | Crate | Windows | Linux |", "| --- | --- | --- | --- |"]
+          for f in findings:
+              w = "YES" if f["targets"]["windows"]["resolved"] else "NO"
+              l = "YES" if f["targets"]["linux"]["resolved"] else "NO"
+              lines.append(f"| {f['id']} | {f['crate']}@{f['version']} | {w} | {l} |")
+              print(f"{f['id']}: Linux dependency path: {' → '.join(f['targets']['linux']['root_dependency_path'])}")
+          lines.extend(["", "**Graph presence is not runtime/API reachability.** No advisory IDs were ignored."])
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as f:
+              f.write("\n".join(lines) + "\n")
+          PY
+
       - name: Upload Tauri candidate without repository writeback
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -208,6 +295,7 @@ jobs:
             rust-upstream-candidate/changes.patch
             rust-upstream-candidate/rustsec.json
             rust-upstream-candidate/rustsec-stderr.txt
+            rust-upstream-candidate/rustsec-targets.json
 
   rust-upstream-windows:
     # Candidate-only Windows check: exact same-run artifact, no build upload or source writeback.
