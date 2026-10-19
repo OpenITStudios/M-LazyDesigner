@@ -153,4 +153,43 @@ describe("read-only saved-asset structural evidence (not visual approval)", () =
     ]) expect(problems).toContain(required);
     expect(inspectSavedProject(project)).toEqual([]);
   });
+  test("Guardian Turret reference and preview evidence cannot be mistaken for visual approval", async () => {
+    const base = "../workspace/active/crimson-guardian-turret/";
+    const [reference, evidence, summary] = await Promise.all([
+      Bun.file(base + "reference/REFERENCE.json").json() as Promise<{
+        images: Array<{ id: string; file: string; status: string }>;
+        parts: Array<{ id: string; evidence: string }>;
+      }>,
+      Bun.file(base + "review/texture-detail-verification.json").json() as Promise<{
+        current_verdict: string;
+        seams: { cross_cube_continuity: string; scan: { scanned_faces: number; budget_skipped_faces: number } };
+      }>,
+      Bun.file(base + "README.md").text(),
+    ]);
+    const approved = reference.images.find(image => image.id === "redesign_target");
+    expect(approved?.status).toBe("APPROVED");
+    expect(approved?.file).toBe("redesign-target.png");
+    for (const path of [
+      "reference/redesign-target.png",
+      "review/detail-textured-front.png",
+      "review/detail-textured-front-left.png",
+      "review/detail-textured-back.png",
+    ]) {
+      const file = Bun.file(base + path);
+      expect(await file.exists(), path).toBe(true);
+      expect(file.size, path).toBeGreaterThan(0);
+    }
+    expect(reference.parts.find(part => part.id === "rear_gold_yoke")?.evidence).toBe("PROVISIONAL");
+    expect(evidence.current_verdict).toContain("READY_FOR_USER_REVIEW");
+    expect(evidence.current_verdict).toContain("not user approval");
+    if (evidence.seams.cross_cube_continuity === "not_evaluated") {
+      expect(summary).toContain("Cross-Cube seam diagnostic: NOT_EVALUATED");
+      expect(summary).toContain("64 of 498 faces");
+      expect(evidence.seams.scan.scanned_faces).toBe(64);
+    }
+    expect(summary).toContain("no new visual approval");
+    expect(summary).toContain("reference-to-model resemblance");
+    expect(summary).toContain("user visual approval");
+  });
+
 });
