@@ -119,7 +119,7 @@ Generate minimum useful evidence. Pixel Art does not own Blockbench atlas/UV/Pai
 
 ### Asset Authoring
 
-For ChatGPT-only asset work, select relevant specialist knowledge directly. LazyDesigner Control is a routing/context authority only for explicitly requested and connected native authoring; no new router is required.
+LazyDesigner Control is the canonical routing/context authority for optional, connected native MCP only. ChatGPT-only assets use specialist knowledge directly, without an extra router.
 
 ```text
 current AGENTS.md
