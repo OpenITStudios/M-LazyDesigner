@@ -16,6 +16,8 @@
 
 **2026-10-20 Node 24 type definitions upgrade:** `@types/node` locked **24.13.4 → 24.19.2** together with its required `undici-types` **7.18.2 → 7.24.6**. Desktop `package.json` and npm lock root+two resolved entries are synchronized. Offline npm `install --package-lock-only` completed successfully on the Desktop graph with provenance-checked metadata/integrity from public published lock records. Other dependency versions remain unchanged. Runtime typecheck, `npm ci`, and packaging on the new SHA are **NOT EXECUTED**; CI remains disabled.
 
+**2026-10-20 Vite 7 maintenance upgrade:** Desktop Vite patched **7.3.6 → 7.3.7**, with `apps/desktop/package.json` and `apps/desktop/package-lock.json` synchronized. Registry integrity for 7.3.7 was cross-checked against multiple public npm-generated locks; its source manifest at upstream tag `v7.3.7` has unchanged direct dependencies and Node engine floor. Offline `npm install --package-lock-only --offline --ignore-scripts --no-audit` completed on the equivalent Desktop graph; exactly the root Vite constraint and Vite package entry changed among 149 package entries. **This is not the separate Vite 8 + Svelte plugin 7 migration.** npm package installation, source build and Windows runtime proof are **NOT EXECUTED**. CI remains disabled.
+
 **Remaining bounded upgrades — do not modify unrelated source or add new frameworks:**
 
 1. MCP runtime: compare locked client/core 2.2.0 and server/nested core 2.0.0 with upstream stable 2.3.1. Generate `mcp/bun.lock` with Bun 1.4.3 and verify client/server/transport APIs before accepting updates.
