@@ -148,7 +148,7 @@ export function animationEffectSameTime(
 
 export function animationEffectContinuationState(
   channel: AnimationEffectChannel,
-  keyframe: _Keyframe,
+  keyframe: BBKeyframe,
   dataPointIndex: number | null
 ) {
   const point =

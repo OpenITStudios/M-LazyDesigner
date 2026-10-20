@@ -128,14 +128,15 @@
   },
   "devDependencies": {
     "@types/bun": "1.4.3",
-    "blockbench-types": "5.2.0",
+    "blockbench-types": "5.2.1",
     "tinycolor2": "^1.6.0",
     "typescript": "7.0.2",
-    "@types/node": "24.19.2"
+    "@types/node": "24.19.2",
+    "typescript-compat": "npm:typescript@6.0.3"
   },
   "overrides": {
-    "electron": "41.10.7",
     "postcss": "8.5.28",
-    "nanoid": "3.3.19"
+    "nanoid": "3.3.19",
+    "@types/node": "24.19.2"
   }
 }

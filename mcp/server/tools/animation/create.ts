@@ -242,12 +242,12 @@ export function registerCreateAnimationTool(): void {
           loadFile?: (
             file: { content: string; path?: string },
             animationFilter?: string[]
-          ) => _Animation[];
+          ) => BBAnimation[];
         };
         const animationCodecApi = (
           globalThis as typeof globalThis & {
             AnimationCodec?: {
-              getCodec(animation?: _Animation): BedrockAnimationCodec | undefined;
+              getCodec(animation?: BBAnimation): BedrockAnimationCodec | undefined;
             };
           }
         ).AnimationCodec;

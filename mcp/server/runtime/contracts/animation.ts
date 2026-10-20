@@ -238,7 +238,7 @@ function animationPreviewPort() {
   };
 }
 
-function requireAnimationSampleTime(animation: _Animation, time: number): void {
+function requireAnimationSampleTime(animation: BBAnimation, time: number): void {
   const length = animation.length;
   if (!Number.isFinite(length) || length < 0) {
     throw new Error(
@@ -376,13 +376,13 @@ async function captureAnimationSamples(
 function keyframesForChannel(
   animator: BoneAnimator,
   channel: "rotation" | "position" | "scale"
-): _Keyframe[] {
-  return (((animator[channel] as _Keyframe[] | undefined) ?? []) as _Keyframe[])
+): BBKeyframe[] {
+  return (((animator[channel] as BBKeyframe[] | undefined) ?? []) as BBKeyframe[])
     .slice()
     .sort((left, right) => left.time - right.time || left.uuid.localeCompare(right.uuid));
 }
 
-function sameEffectiveKeyframeValue(left: _Keyframe, right: _Keyframe): boolean {
+function sameEffectiveKeyframeValue(left: BBKeyframe, right: BBKeyframe): boolean {
   try {
     return JSON.stringify(left.getArray(0)) === JSON.stringify(right.getArray(0));
   } catch {
@@ -390,7 +390,7 @@ function sameEffectiveKeyframeValue(left: _Keyframe, right: _Keyframe): boolean 
   }
 }
 
-function buildAnimationDiagnostics(animation: _Animation) {
+function buildAnimationDiagnostics(animation: BBAnimation) {
   const length = animation.length;
   const channels = ["rotation", "position", "scale"] as const;
   let transformKeyframeCount = 0;
@@ -428,7 +428,7 @@ function buildAnimationDiagnostics(animation: _Animation) {
   const effects = animation.animators.effects;
   if (effects instanceof EffectAnimator) {
     for (const channel of ["particle", "sound", "timeline"] as const) {
-      const keyframes = ((effects[channel] as _Keyframe[] | undefined) ?? []);
+      const keyframes = ((effects[channel] as BBKeyframe[] | undefined) ?? []);
       effectKeyframeCount += keyframes.length;
       effectsOutsideLength += keyframes.filter(
         (keyframe) => keyframe.time > length + 1e-6

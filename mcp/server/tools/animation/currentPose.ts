@@ -127,7 +127,7 @@ function readDirectLocatorCandidates(group: Group) {
  * structural snapshot dependencies did not change during synchronous native
  * position reads. It does not attest pose/time synchronization.
  */
-function captureCurrentPoseReadFence(animation: _Animation, group: Group) {
+function captureCurrentPoseReadFence(animation: BBAnimation, group: Group) {
   const projectUuid = Project.uuid;
   const animationUuid = animation.uuid;
   const animationLength = animation.length;
@@ -167,7 +167,7 @@ function captureCurrentPoseReadFence(animation: _Animation, group: Group) {
         AnimationItem.all.some((item) =>
           item !== animation && item.playing === true) ||
         (typeof AnimationController !== "undefined" &&
-          Boolean((AnimationController.selected as (_Animation & { selected_state?: unknown }) | null)?.selected_state)) ||
+          Boolean((AnimationController.selected as (BBAnimation & { selected_state?: unknown }) | null)?.selected_state)) ||
         Timeline.playing !== false ||
         Timeline.time !== timelineTime ||
         !Animator.open || Modes.animate !== true ||
@@ -204,7 +204,7 @@ function captureCurrentPoseReadFence(animation: _Animation, group: Group) {
  * origin. It does not change Timeline.time, re-evaluate animations, invoke
  * Animator.preview, move a bone, or claim an end-effector contact point.
  */
-export function readCurrentBonePoseSnapshot(animation: _Animation, group: Group) {
+export function readCurrentBonePoseSnapshot(animation: BBAnimation, group: Group) {
   const unverified = (reason: string) => ({
     state: "UNVERIFIED" as const,
     reason,
@@ -235,7 +235,7 @@ export function readCurrentBonePoseSnapshot(animation: _Animation, group: Group)
   }
   if (Timeline.playing) return unverified("TIMELINE_PLAYING");
   if (typeof AnimationController !== "undefined" &&
-      (AnimationController.selected as (_Animation & { selected_state?: unknown }) | null)?.selected_state) {
+      (AnimationController.selected as (BBAnimation & { selected_state?: unknown }) | null)?.selected_state) {
     return unverified("ANIMATION_CONTROLLER_PREVIEW_ACTIVE");
   }
   if (!Number.isFinite(Timeline.time) || Timeline.time < 0 ||
@@ -309,7 +309,7 @@ export function readCurrentBonePoseSnapshot(animation: _Animation, group: Group)
  * input, so it MUST NOT silently invent bindings from Locator names.
  */
 export function resolveCurrentContactMarkerBindings(
-  animation: _Animation,
+  animation: BBAnimation,
   group: Group,
   bindings: readonly ExplicitContactMarkerBinding[],
   sampling_window?: ContactSamplingWindow

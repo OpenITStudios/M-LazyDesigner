@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import ts from "typescript";
+import ts from "typescript-compat";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

@@ -12,7 +12,7 @@ import {
   wouldCreateControllerCompositionCycle,
 } from "@/lib/animation/controllerComposition";
 
-type RuntimeAnimationItem = _Animation | AnimationController;
+type RuntimeAnimationItem = BBAnimation | AnimationController;
 type RuntimeControllerLink = {
   uuid: string;
   key: string;

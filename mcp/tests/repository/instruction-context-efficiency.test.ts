@@ -48,7 +48,7 @@ describe("repository instruction/context efficiency", () => {
 
   test("Local scoped-on-push and manual full/texture MCP verification provide distinct evidence", async () => {
     const [workflow, pkg] = await Promise.all([
-      text("../.github/workflows/mcp-verify.yml"),
+      text("../.github/disabled-workflows/mcp-verify.yml"),
       text("package.json"),
     ]);
     const scripts = JSON.parse(pkg).scripts as Record<string, string>;
@@ -81,10 +81,10 @@ describe("repository instruction/context efficiency", () => {
     const [versionFile, repositoryWorkflow, mcpWorkflow, managedWorkflow, desktopWorkflow, pkg] =
       await Promise.all([
         text("../.bun-version"),
-        text("../.github/workflows/repository-verify.yml"),
-        text("../.github/workflows/mcp-verify.yml"),
+        text("../.github/disabled-workflows/repository-verify.yml"),
+        text("../.github/disabled-workflows/mcp-verify.yml"),
         text("../.github/workflows/managed-distribution.yml"),
-        text("../.github/workflows/desktop-verify.yml"),
+        text("../.github/disabled-workflows/desktop-verify.yml"),
         text("package.json"),
       ]);
     const version = versionFile.trim();
@@ -109,8 +109,8 @@ describe("repository instruction/context efficiency", () => {
 
   test("manual repository verification stays independent of automatic MCP verification", async () => {
     const [repositoryWorkflow, mcpWorkflow, pkg] = await Promise.all([
-      text("../.github/workflows/repository-verify.yml"),
-      text("../.github/workflows/mcp-verify.yml"),
+      text("../.github/disabled-workflows/repository-verify.yml"),
+      text("../.github/disabled-workflows/mcp-verify.yml"),
       text("package.json"),
     ]);
     const scripts = JSON.parse(pkg).scripts as Record<string, string>;

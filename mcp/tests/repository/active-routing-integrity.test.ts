@@ -49,7 +49,7 @@ describe("active routing integrity", () => {
 
   test("scoped Local CI does not replace canonical specialist routing", async () => {
     const [workflow, root, taxonomy] = await Promise.all([
-      source("../.github/workflows/mcp-verify.yml"),
+      source("../.github/disabled-workflows/mcp-verify.yml"),
       source("../AGENTS.md"),
       source("../docs/04-system/skill-taxonomy.md"),
     ]);

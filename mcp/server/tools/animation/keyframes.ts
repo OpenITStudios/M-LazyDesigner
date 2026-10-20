@@ -45,7 +45,7 @@ export const animationGraphEditorToolDoc: ToolSpec = {
   status: STATUS_EXPERIMENTAL,
 };
 
-function keyframeContinuationState(keyframe: _Keyframe) {
+function keyframeContinuationState(keyframe: BBKeyframe) {
   return {
     uuid: keyframe.uuid,
     time: keyframe.time,
@@ -93,7 +93,7 @@ export function registerAnimationKeyframeTools(): void {
         };
   
         const applyValues = (
-          keyframe: _Keyframe,
+          keyframe: BBKeyframe,
           values: number | string | Array<number | string> | undefined
         ) => {
           if (values === undefined) return;
@@ -108,11 +108,11 @@ export function registerAnimationKeyframeTools(): void {
           }
         };
   
-        const resolveRequestedTargets = (): _Keyframe[] => {
+        const resolveRequestedTargets = (): BBKeyframe[] => {
           if (!existingAnimator || !existingAnimator[channel]?.length) {
             throw new Error(`No keyframes found for ${group.name}.${channel}`);
           }
-          const channelKeyframes = existingAnimator[channel] as _Keyframe[];
+          const channelKeyframes = existingAnimator[channel] as BBKeyframe[];
           const matchedIndexes = resolveUniqueKeyframeMatchIndexes(
             channelKeyframes.map((keyframe) => keyframe.time),
             keyframes.map((keyframe) => keyframe.time)
@@ -164,7 +164,7 @@ export function registerAnimationKeyframeTools(): void {
         const targetKeyframes = action === "create" ? [] : resolveRequestedTargets();
         let affectedKeyframes =
           action === "delete" ? targetKeyframes.map(keyframeContinuationState) : [];
-        const createCasualties: _Keyframe[] = [];
+        const createCasualties: BBKeyframe[] = [];
   
         Undo.initEdit({
           animations: [animation],
@@ -181,7 +181,7 @@ export function registerAnimationKeyframeTools(): void {
             }
             animator = createdAnimator;
           }
-          const createdKeyframes: _Keyframe[] = [];
+          const createdKeyframes: BBKeyframe[] = [];
   
           switch (action) {
             case "create":
@@ -303,7 +303,7 @@ export function registerAnimationKeyframeTools(): void {
           }
         }
   
-        const keyframes = (animator[channel] as _Keyframe[]).filter((kf: _Keyframe) => {
+        const keyframes = (animator[channel] as BBKeyframe[]).filter((kf: BBKeyframe) => {
           if (!keyframe_range) return true;
           return kf.time >= keyframe_range.start && kf.time <= keyframe_range.end;
         });
@@ -316,7 +316,7 @@ export function registerAnimationKeyframeTools(): void {
             ? [0, 1, 2]
             : [axis === "x" ? 0 : axis === "y" ? 1 : 2];
         const setBezierComponents = (
-          keyframe: _Keyframe,
+          keyframe: BBKeyframe,
           property:
             | "bezier_left_time"
             | "bezier_left_value"
@@ -335,7 +335,7 @@ export function registerAnimationKeyframeTools(): void {
         });
   
         try {
-          keyframes.forEach((kf: _Keyframe, index: number) => {
+          keyframes.forEach((kf: BBKeyframe, index: number) => {
             switch (action) {
               case "linear":
                 kf.interpolation = "linear";

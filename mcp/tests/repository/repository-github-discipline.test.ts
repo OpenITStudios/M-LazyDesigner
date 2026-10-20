@@ -106,7 +106,7 @@ describe("repository GitHub discipline", () => {
       source("../docs/05-operations/local-acceptance-runbook.md"),
       source("../docs/05-operations/current-validation.md"),
       source("../docs/05-operations/next-action.md"),
-      source("../.github/workflows/repository-verify.yml"),
+      source("../.github/disabled-workflows/repository-verify.yml"),
     ]);
 
     expect(runbook).toContain("Owner: `LIVE_BLOCKBENCH` formal acceptance procedure");
@@ -129,10 +129,10 @@ describe("repository GitHub discipline", () => {
 
   test("canonical verification contracts remain available", async () => {
     const [repo, authoring, mcp, release, pkg] = await Promise.all([
-      source("../.github/workflows/repository-verify.yml"),
-      source("../.github/workflows/authoring-policy-verify.yml"),
-      source("../.github/workflows/mcp-verify.yml"),
-      source("../.github/workflows/release-verify.yml"),
+      source("../.github/disabled-workflows/repository-verify.yml"),
+      source("../.github/disabled-workflows/authoring-policy-verify.yml"),
+      source("../.github/disabled-workflows/mcp-verify.yml"),
+      source("../.github/disabled-workflows/release-verify.yml"),
       source("package.json"),
     ]);
     const s = JSON.parse(pkg).scripts as Record<string, string>;
@@ -153,7 +153,7 @@ describe("repository GitHub discipline", () => {
   });
 
   test("MCP Verify retains exact-SHA scoped push and manual full source proof", async () => {
-    const mcp = await source("../.github/workflows/mcp-verify.yml");
+    const mcp = await source("../.github/disabled-workflows/mcp-verify.yml");
     expect(mcp).toMatch(/^on:\n  push:\n    branches:\n      - Local\n    paths:\n(?:      - .+\n)+  workflow_dispatch:/m);
     expect(mcp).not.toMatch(/^  pull_request:|^  schedule:/m);
     expect(mcp).toContain('EXPECTED_SHA: ${{ github.sha }}');
@@ -166,7 +166,7 @@ describe("repository GitHub discipline", () => {
   });
 
   test("Release Verify remains manual, Local-only and ancestry guarded", async () => {
-    const release = await source("../.github/workflows/release-verify.yml");
+    const release = await source("../.github/disabled-workflows/release-verify.yml");
     expect(release).toMatch(/^on:\n  workflow_dispatch:/m);
     expect(release).not.toMatch(/^  push:|^  pull_request:/m);
     expect(release).toContain('test "$REF_NAME" = "Local"');

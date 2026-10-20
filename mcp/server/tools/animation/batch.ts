@@ -77,7 +77,7 @@ export function registerAnimationBatchTools(): void {
         const targetTimelineKeyframes = Object.values(animation.animators).flatMap(animator => animator.keyframes).filter(
           (kf) => keyframeBelongsToAnimation(kf, animation)
         );
-        const targetSelectedKeyframes = (Timeline.selected as _Keyframe[]).filter(
+        const targetSelectedKeyframes = (Timeline.selected as BBKeyframe[]).filter(
           (kf) => keyframeBelongsToAnimation(kf, animation)
         );
   
@@ -98,7 +98,7 @@ export function registerAnimationBatchTools(): void {
         if (operation === "offset" || operation === "mirror") {
           const movesTime =
             operation === "offset" && (parameters.offset_time ?? 0) !== 0;
-          const replacedKeyframes: _Keyframe[] = [];
+          const replacedKeyframes: BBKeyframe[] = [];
           const mirrorKeyframes =
             operation === "mirror"
               ? planMirroredBatchKeyframes(keyframes)
@@ -106,7 +106,7 @@ export function registerAnimationBatchTools(): void {
           if (operation === "offset" && parameters.offset_time !== undefined) {
             requireValidPlannedKeyframeTimes(
               keyframes.map(
-                (keyframe: _Keyframe) => keyframe.time + parameters.offset_time!
+                (keyframe: BBKeyframe) => keyframe.time + parameters.offset_time!
               ),
               "Batch keyframe offset"
             );
@@ -118,7 +118,7 @@ export function registerAnimationBatchTools(): void {
   
           try {
             if (operation === "offset") {
-              keyframes.forEach((kf: _Keyframe) => {
+              keyframes.forEach((kf: BBKeyframe) => {
                 if (parameters.offset_time !== undefined) {
                   kf.time += parameters.offset_time;
                 }
@@ -142,7 +142,7 @@ export function registerAnimationBatchTools(): void {
               });
   
               if (movesTime) {
-                keyframes.forEach((kf: _Keyframe) => {
+                keyframes.forEach((kf: BBKeyframe) => {
                   kf.replaceOthers(replacedKeyframes);
                 });
                 Undo.addKeyframeCasualties(replacedKeyframes);
@@ -152,7 +152,7 @@ export function registerAnimationBatchTools(): void {
               const mirrorAxis = parameters.mirror_axis!;
               const mirrorAxisIndex =
                 mirrorAxis === "x" ? 0 : mirrorAxis === "y" ? 1 : 2;
-              mirrorKeyframes.forEach((kf: _Keyframe) => {
+              mirrorKeyframes.forEach((kf: BBKeyframe) => {
                 // blockbench-types@5.1.0 declares axisLetter, while the runtime Keyframe.flip contract uses numeric indexes.
                 // @ts-expect-error Runtime Blockbench expects 0|1|2 here.
                 kf.flip(mirrorAxisIndex);
@@ -215,14 +215,14 @@ export function registerAnimationBatchTools(): void {
                 const selectedKfs = keyframes.filter((kf) => kf.animator === animator && kf.channel === channel);
                 if (!channelKfs || selectedKfs.length < 2) return;
   
-                const startTime = Math.min(...selectedKfs.map((kf: _Keyframe) => kf.time));
-                const endTime = Math.max(...selectedKfs.map((kf: _Keyframe) => kf.time));
+                const startTime = Math.min(...selectedKfs.map((kf: BBKeyframe) => kf.time));
+                const endTime = Math.max(...selectedKfs.map((kf: BBKeyframe) => kf.time));
   
                 for (let time = startTime; time <= endTime; time += interval) {
                   const targetTime = Timeline.snapTime(time, animation);
                   if (targetTime < startTime || targetTime > endTime) continue;
                   const alreadyExists = channelKfs.some(
-                    (kf: _Keyframe) => Math.abs(kf.time - targetTime) < 0.001
+                    (kf: BBKeyframe) => Math.abs(kf.time - targetTime) < 0.001
                   );
                   const alreadyPlanned = bakeSamples.some(
                     (sample) =>
@@ -320,7 +320,7 @@ export function registerAnimationBatchTools(): void {
             throw new Error("Scale factor must be a finite number.");
           }
   
-          const stretchStates = keyframes.map((keyframe: _Keyframe) => ({
+          const stretchStates = keyframes.map((keyframe: BBKeyframe) => ({
             keyframe,
             time: keyframe.time,
             bezierLeftTime:
@@ -345,7 +345,7 @@ export function registerAnimationBatchTools(): void {
           const expectedOverwrites = planBatchScaleOverwriteTargets(
             keyframes, targetTimelineKeyframes, plannedTimes
           );
-          const replacedKeyframes: _Keyframe[] = [];
+          const replacedKeyframes: BBKeyframe[] = [];
   
           Undo.initEdit({
             animations: [animation],
@@ -411,14 +411,14 @@ export function registerAnimationBatchTools(): void {
   
         if (operation === "reverse") {
           const { start: startTime, end: endTime } =
-            reverseBatchTimeBounds(keyframes.map((kf: _Keyframe) => kf.time));
+            reverseBatchTimeBounds(keyframes.map((kf: BBKeyframe) => kf.time));
   
           Undo.initEdit({
             keyframes,
           });
   
           try {
-            keyframes.forEach((kf: _Keyframe) => {
+            keyframes.forEach((kf: BBKeyframe) => {
               kf.time = endTime + startTime - kf.time;
   
               if (kf.transform && kf.data_points.length > 1) {
@@ -463,7 +463,7 @@ export function registerAnimationBatchTools(): void {
           });
   
           try {
-            transformKeyframes.forEach((kf: _Keyframe) => {
+            transformKeyframes.forEach((kf: BBKeyframe) => {
               kf.interpolation = "catmullrom";
             });
             Undo.finishEdit("Batch keyframe operation: smooth");
@@ -520,17 +520,17 @@ export function registerAnimationBatchTools(): void {
             source.channels.forEach((channel) => {
               if (!animator[channel]) return;
   
-              let keyframes = animator[channel] as _Keyframe[];
+              let keyframes = animator[channel] as BBKeyframe[];
               const timeRange = source.time_range;
               if (timeRange) {
                 keyframes = keyframes.filter(
-                  (kf: _Keyframe) =>
+                  (kf: BBKeyframe) =>
                     kf.time >= timeRange.start &&
                     kf.time <= timeRange.end
                 );
               }
   
-              copiedData.channels[channel] = keyframes.map((kf: _Keyframe) => ({
+              copiedData.channels[channel] = keyframes.map((kf: BBKeyframe) => ({
                 time: kf.time,
                 data_points: kf.data_points.map((_, dataPointIndex) => {
                   const [x, y, z] = kf.getArray(dataPointIndex);
@@ -626,7 +626,7 @@ export function registerAnimationBatchTools(): void {
               ])
             ) as Record<string, number[]>;
             requireValidPlannedPasteChannelTimes(plannedPasteTimesByChannel);
-            const replacedKeyframes: _Keyframe[] = [];
+            const replacedKeyframes: BBKeyframe[] = [];
   
             Undo.initEdit({
               animations: [tgtAnimation],

@@ -1,4 +1,4 @@
-import ts from "typescript";
+import ts from "typescript-compat";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { resolveDevelopmentIntent } from "../../gateway/development/intent";

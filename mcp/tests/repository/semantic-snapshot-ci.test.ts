@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 describe("semantic snapshot affected-execution ownership", () => {
   test("affected planner remains available on demand without an automatic GitHub worktree", async () => {
     const [workflow, pkg, planner, snapshot] = await Promise.all([
-      Bun.file("../.github/workflows/mcp-verify.yml").text(),
+      Bun.file("../.github/disabled-workflows/mcp-verify.yml").text(),
       Bun.file("package.json").text(),
       Bun.file("scripts/development/plan-affected-execution.ts").text(),
       Bun.file("scripts/development/snapshot-semantic-registry.ts").text(),

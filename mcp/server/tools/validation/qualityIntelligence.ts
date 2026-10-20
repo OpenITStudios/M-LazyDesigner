@@ -404,7 +404,7 @@ function isAnimationControllerRuntime(item: unknown): boolean {
 
 function resolveAuthoredAnimationRuntime(
   structuredContent: Record<string, unknown>
-): _Animation | null {
+): BBAnimation | null {
   if (
     structuredContent.authored_space !== "blockbench_animation" ||
     typeof AnimationItem === "undefined"
@@ -419,7 +419,7 @@ function resolveAuthoredAnimationRuntime(
     (candidate) => objectRecord(candidate)?.uuid === animationUuid
   );
   if (!item || isAnimationControllerRuntime(item)) return null;
-  return item as _Animation;
+  return item as BBAnimation;
 }
 
 function rootMotionRuntime(structuredContent: Record<string, unknown>) {
@@ -449,7 +449,7 @@ function rootMotionRuntime(structuredContent: Record<string, unknown>) {
   for (const group of rootGroups) {
     const animator = animation.animators[group.uuid];
     if (!(animator instanceof BoneAnimator)) continue;
-    const keyframes = ((animator.position as _Keyframe[] | undefined) ?? [])
+    const keyframes = ((animator.position as BBKeyframe[] | undefined) ?? [])
       .slice()
       .sort((left, right) => left.time - right.time)
       .map((keyframe) => ({
@@ -488,7 +488,7 @@ function animationQualityRuntime(structuredContent: Record<string, unknown>) {
     );
 
     for (const channel of ["position", "rotation", "scale"] as const satisfies readonly AnimationQualityChannel[]) {
-      const keyframes = ((animator[channel] as _Keyframe[] | undefined) ?? []).map(
+      const keyframes = ((animator[channel] as BBKeyframe[] | undefined) ?? []).map(
         (keyframe) => ({
           time: keyframe.time,
           value: keyframe.getArray(0) as unknown[],
@@ -536,7 +536,7 @@ function animationCraftRuntime(structuredContent: Record<string, unknown>) {
     );
 
     for (const channel of ["position", "rotation", "scale"] as const) {
-      const keyframes = ((animator[channel] as _Keyframe[] | undefined) ?? [])
+      const keyframes = ((animator[channel] as BBKeyframe[] | undefined) ?? [])
         .slice()
         .sort((left, right) => left.time - right.time)
         .map((keyframe) => ({

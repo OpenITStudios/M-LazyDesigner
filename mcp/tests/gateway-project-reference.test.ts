@@ -30,7 +30,7 @@ describe("Gateway TypeScript project reference", () => {
 
   test("CI and canonical MCP verification execute the composite graph", async () => {
     const pkg = JSON.parse(await Bun.file("package.json").text());
-    const workflow = await Bun.file("../.github/workflows/mcp-verify.yml").text();
+    const workflow = await Bun.file("../.github/disabled-workflows/mcp-verify.yml").text();
 
     expect(pkg.scripts["verify:project-graph"]).toContain(
       "tsc -b tsconfig.project-graph.json"

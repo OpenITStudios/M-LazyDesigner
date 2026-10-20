@@ -175,7 +175,7 @@ export function registerAnimationEffectTools() {
         const realPoints = new Map<string, KeyframeDataPoint>();
 
         channels.forEach((channel) => {
-          const keyframes = existingEffects ? ((existingEffects[channel] as _Keyframe[] | undefined) ?? []) : [];
+          const keyframes = existingEffects ? ((existingEffects[channel] as BBKeyframe[] | undefined) ?? []) : [];
           sim[channel] = keyframes.map((keyframe) => ({
             id: keyframe.uuid,
             uuid: keyframe.uuid,
@@ -301,12 +301,12 @@ export function registerAnimationEffectTools() {
             return effectAnimator;
           };
           const findRuntimeKeyframe = (channel: AnimationEffectChannel, uuid: string) => {
-            const found = ((ensureEffects()[channel] as _Keyframe[] | undefined) ?? []).find((keyframe) => keyframe.uuid === uuid);
+            const found = ((ensureEffects()[channel] as BBKeyframe[] | undefined) ?? []).find((keyframe) => keyframe.uuid === uuid);
             if (!found) throw new Error(`Preflight/runtime mismatch: ${channel} keyframe "${uuid}" disappeared.`);
             return found;
           };
           const findRuntimeAtTime = (channel: AnimationEffectChannel, time: number) =>
-            (((ensureEffects()[channel] as _Keyframe[] | undefined) ?? []).filter((keyframe) => animationEffectSameTime(keyframe.time, time)));
+            (((ensureEffects()[channel] as BBKeyframe[] | undefined) ?? []).filter((keyframe) => animationEffectSameTime(keyframe.time, time)));
           const writeSnapshot = (point: KeyframeDataPoint, channel: AnimationEffectChannel, snapshot: EffectPointSnapshot) => {
             point.extend(effectPointData(channel, snapshot));
           };

@@ -48,7 +48,7 @@ export function registerAnimationTimelineTool(): void {
             throw new Error(`Could not select animation "${animation.name}".`);
           }
         }
-        const animationMolang = animation as _Animation & {
+        const animationMolang = animation as BBAnimation & {
           anim_time_update?: string;
           blend_weight?: string;
         };
@@ -247,7 +247,7 @@ export function registerAnimationTimelineTool(): void {
                 "Range parameter required for select_range action."
               );
             }
-            (Timeline.keyframes as _Keyframe[])
+            (Timeline.keyframes as BBKeyframe[])
               .filter((kf) => keyframeBelongsToAnimation(kf, animation))
               .forEach((kf) => {
                 if (kf.time >= range.start && kf.time <= range.end) {

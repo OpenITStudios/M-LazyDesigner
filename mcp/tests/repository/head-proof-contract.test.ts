@@ -7,7 +7,7 @@ async function read(path: string): Promise<string> {
 
 describe("exact-head proof contract", () => {
   test("manual Head Proof classifies source equivalence without executable verification", async () => {
-    const workflow = await read(".github/workflows/head-proof.yml");
+    const workflow = await read(".github/disabled-workflows/head-proof.yml");
 
     expect(workflow).toMatch(/^on:\n  workflow_dispatch:/m);
     expect(workflow).not.toMatch(/^  push:/m);

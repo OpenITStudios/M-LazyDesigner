@@ -34,7 +34,7 @@ function requireBedrockControllerProject(): void {
 }
 
 function isAnimationControllerItem(
-  item: _Animation | AnimationController
+  item: BBAnimation | AnimationController
 ): item is AnimationController {
   return (
     typeof AnimationController !== "undefined" &&
@@ -43,7 +43,7 @@ function isAnimationControllerItem(
 }
 
 function currentControllers(): AnimationController[] {
-  return ((AnimationItem.all ?? []) as Array<_Animation | AnimationController>).filter(
+  return ((AnimationItem.all ?? []) as Array<BBAnimation | AnimationController>).filter(
     isAnimationControllerItem
   );
 }
@@ -56,10 +56,10 @@ function resolveController(reference: string): AnimationController {
   });
 }
 
-function resolveAuthoredAnimation(reference: string): _Animation {
-  const items = (AnimationItem.all ?? []) as Array<_Animation | AnimationController>;
+function resolveAuthoredAnimation(reference: string): BBAnimation {
+  const items = (AnimationItem.all ?? []) as Array<BBAnimation | AnimationController>;
   const animations = items.filter(
-    (item): item is _Animation => !isAnimationControllerItem(item)
+    (item): item is BBAnimation => !isAnimationControllerItem(item)
   );
   return resolveUuidOrUniqueName(animations, reference, {
     kind: "Animation",

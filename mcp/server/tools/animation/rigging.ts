@@ -291,7 +291,7 @@ export function registerBoneRiggingTool(): void {
         let childElements: OutlinerElement[] = [];
         let deleteElements: OutlinerElement[] = [];
         let deleteGroups: Group[] = [];
-        let deleteAnimations: _Animation[] = [];
+        let deleteAnimations: BBAnimation[] = [];
         let ikTarget: Group | undefined;
         let ikController: NullObject | undefined;
         let controllerTarget: OutlinerElement | null | undefined;

@@ -1,10 +1,4 @@
-// The pinned blockbench-types baseline intentionally trails the live-validated
-// Blockbench runtime. Keep narrowly verified type-only augmentations here
-// instead of adding runtime fallbacks or compiler suppressions.
-interface _Animation {
-  getShortName(): string;
-}
-
+// Narrow runtime declarations not yet included in the pinned upstream typings.
 interface BlockbenchNativeModulePermissionOptions {
   message?: string;
   detail?: string;

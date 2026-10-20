@@ -55,3 +55,6 @@ apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/icons/
 
 apps/desktop/src-tauri/resources/managed/
+
+# Native Svelte checker generated workspace
+apps/desktop/.svelte-check/

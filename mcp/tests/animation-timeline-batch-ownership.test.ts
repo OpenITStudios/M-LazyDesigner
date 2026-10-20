@@ -31,7 +31,7 @@ describe("animation timeline and batch ownership", () => {
       "Object.values(animation.animators).flatMap(animator => animator.keyframes)"
     );
     expect(source).toContain(
-      "const targetSelectedKeyframes = (Timeline.selected as _Keyframe[]).filter("
+      "const targetSelectedKeyframes = (Timeline.selected as BBKeyframe[]).filter("
     );
     expect(source).not.toContain("const animation = AnimationItem.selected;");
     expect(source).not.toContain("AnimationItem.selected!.setLength()");

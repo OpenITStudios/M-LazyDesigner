@@ -292,7 +292,7 @@ describe("animation mutation contract", () => {
     const source = await Bun.file("server/tools/animation/keyframes.ts").text();
     const block = source;
 
-    expect(source).toContain("function keyframeContinuationState(keyframe: _Keyframe)");
+    expect(source).toContain("function keyframeContinuationState(keyframe: BBKeyframe)");
     expect(source).toContain("uuid: keyframe.uuid");
     expect(source).toContain("time: keyframe.time");
     expect(source).toContain("interpolation: keyframe.interpolation");
@@ -334,7 +334,7 @@ describe("animation mutation contract", () => {
     const offsetBlock = block.slice(offsetStart, offsetEnd);
 
     expect(offsetBlock).toContain('operation === "offset" && (parameters.offset_time ?? 0) !== 0');
-    expect(offsetBlock).toContain("const replacedKeyframes: _Keyframe[] = [];");
+    expect(offsetBlock).toContain("const replacedKeyframes: BBKeyframe[] = [];");
     expect(offsetBlock).toContain("if (movesTime) {");
     expect(offsetBlock).toContain("kf.replaceOthers(replacedKeyframes);");
     expect(offsetBlock).toContain("Undo.addKeyframeCasualties(replacedKeyframes);");
@@ -383,8 +383,8 @@ describe("animation mutation contract", () => {
     const scaleEnd = block.indexOf('if (operation === "reverse")', scaleStart);
     const scaleBlock = block.slice(scaleStart, scaleEnd);
 
-    expect(scaleBlock).toContain("const replacedKeyframes: _Keyframe[] = [];");
-    expect(scaleBlock.indexOf("const replacedKeyframes: _Keyframe[] = [];")).toBeLessThan(
+    expect(scaleBlock).toContain("const replacedKeyframes: BBKeyframe[] = [];");
+    expect(scaleBlock.indexOf("const replacedKeyframes: BBKeyframe[] = [];")).toBeLessThan(
       scaleBlock.indexOf("Undo.initEdit")
     );
     expect(scaleBlock).toContain("keyframe.replaceOthers(replacedKeyframes);");
@@ -437,7 +437,7 @@ describe("animation mutation contract", () => {
     const block = source;
 
     expect(block).toContain("const pastedKeyframeCount = countAnimationClipboardKeyframes(");
-    expect(block).toContain("const replacedKeyframes: _Keyframe[] = [];");
+    expect(block).toContain("const replacedKeyframes: BBKeyframe[] = [];");
     expect(block).toContain("keyframe.replaceOthers(replacedKeyframes);");
     expect(block).toContain("pasted_keyframes: pastedKeyframeCount");
     expect(block).toContain("overwritten_keyframes: replacedKeyframes.length");

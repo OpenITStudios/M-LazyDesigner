@@ -91,16 +91,16 @@ function animationCraftRuntime(structuredContent: JsonRecord) {
   if (!animationUuid) {
     return { state: "unavailable" as const, reason: "authored_animation_identity_unavailable" as const };
   }
-  const item = (AnimationItem.all as unknown[]).find((candidate) => objectRecord(candidate)?.uuid === animationUuid) as _Animation | AnimationController | undefined;
+  const item = (AnimationItem.all as unknown[]).find((candidate) => objectRecord(candidate)?.uuid === animationUuid) as BBAnimation | AnimationController | undefined;
   if (!item || (typeof AnimationController !== "undefined" && item instanceof AnimationController)) {
     return { state: "unavailable" as const, reason: "authored_animation_not_resolved" as const };
   }
-  const animation = item as _Animation;
+  const animation = item as BBAnimation;
   const tracks: AnimationCraftTrackInput[] = [];
   for (const animator of Object.values(animation.animators)) {
     if (!(animator instanceof BoneAnimator)) continue;
     for (const channel of ["position", "rotation", "scale"] as const) {
-      const keys = (animator[channel] as _Keyframe[] | undefined) ?? [];
+      const keys = (animator[channel] as BBKeyframe[] | undefined) ?? [];
       if (!keys.length) continue;
       tracks.push({
         group_uuid: animator.uuid,

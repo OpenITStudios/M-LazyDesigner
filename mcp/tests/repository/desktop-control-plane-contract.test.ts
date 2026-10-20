@@ -16,7 +16,7 @@ describe("Desktop control-plane ownership", () => {
       source("../distribution/status.ts"),
       source("plugin/runtimeHost.ts"),
       source("plugin/runtimeSessionLease.ts"),
-      source("../.github/workflows/desktop-verify.yml"),
+      source("../.github/disabled-workflows/desktop-verify.yml"),
     ]);
 
     expect(blockbench).toContain('../../../../mcp/compatibility/blockbench.json');
@@ -61,7 +61,7 @@ describe("Desktop control-plane ownership", () => {
   });
 
   test("Desktop audit remains a mandatory failure gate without blocking independent smoke diagnostics", async () => {
-    const workflow = await source("../.github/workflows/desktop-verify.yml");
+    const workflow = await source("../.github/disabled-workflows/desktop-verify.yml");
     expect(workflow).toContain("id: desktop_security_audit");
     expect(workflow).toContain("continue-on-error: true");
     expect(workflow).toContain("run: npm audit --audit-level=high");
@@ -91,7 +91,7 @@ describe("Desktop control-plane ownership", () => {
     expect(pkgText).toContain('"license": "GPL-3.0-only"');
     expect(cargoText).toContain('license = "GPL-3.0-only"');
     expect(tauriText).toContain('"licenseFile": "../../../LICENSE"');
-    expect(toolchain).toContain('channel = "1.98.1"');
+    expect(toolchain).toContain('channel = "1.99.1"');
   });
 
   test("Desktop generated Rust and icon outputs stay untracked", async () => {
@@ -119,7 +119,7 @@ describe("Desktop control-plane ownership", () => {
   });
 
   test("Desktop verification includes source proof and a Windows installer smoke build", async () => {
-    const workflow = await source("../.github/workflows/desktop-verify.yml");
+    const workflow = await source("../.github/disabled-workflows/desktop-verify.yml");
     expect(workflow).toContain("Parse Desktop PowerShell scripts");
     expect(workflow).toContain("System.Management.Automation.Language.Parser");
     expect(workflow).toContain("npm run verify:source");

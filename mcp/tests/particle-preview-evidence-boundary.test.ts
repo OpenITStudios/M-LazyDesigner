@@ -13,7 +13,7 @@ describe("R01 particle preview proof boundaries", () => {
     expect(effectPointSnapshot(point).file).toBe("/tmp/spark.particle.json");
     const keyframe = {
       uuid: "keyframe-1", time: 1, data_points: [point],
-    } as unknown as _Keyframe;
+    } as unknown as BBKeyframe;
     const continued = animationEffectContinuationState("particle", keyframe, 0);
     expect(continued).toMatchObject({
       channel: "particle", preview_file: "/tmp/spark.particle.json",

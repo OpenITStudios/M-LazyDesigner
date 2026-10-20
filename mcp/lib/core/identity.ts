@@ -137,7 +137,7 @@ export function resolveCoreTexture(
 }
 
 function isCoreAnimationControllerItem(
-  item: _Animation | AnimationController
+  item: BBAnimation | AnimationController
 ): item is AnimationController {
   return (
     typeof AnimationController !== "undefined" &&
@@ -145,9 +145,9 @@ function isCoreAnimationControllerItem(
   );
 }
 
-function currentCoreAuthoredAnimations(): _Animation[] {
-  return ((AnimationItem.all ?? []) as unknown as Array<_Animation | AnimationController>).filter(
-    (item): item is _Animation => !isCoreAnimationControllerItem(item)
+function currentCoreAuthoredAnimations(): BBAnimation[] {
+  return ((AnimationItem.all ?? []) as unknown as Array<BBAnimation | AnimationController>).filter(
+    (item): item is BBAnimation => !isCoreAnimationControllerItem(item)
   );
 }
 
@@ -161,7 +161,7 @@ export function resolveCoreAnimation(
   const animations = currentCoreAuthoredAnimations();
   if (reference === undefined) {
     const selected = AnimationItem.selected as unknown as
-      | _Animation
+      | BBAnimation
       | AnimationController
       | null;
     if (

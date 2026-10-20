@@ -117,7 +117,7 @@ export function registerRemoveElementTool(): void {
             ...deleteGroups.map((group) => group.uuid),
             ...deleteElements.map((deletedElement) => deletedElement.uuid),
           ]);
-          const deleteAnimations: _Animation[] = AnimationItem.all.filter(
+          const deleteAnimations: BBAnimation[] = AnimationItem.all.filter(
             (animation) =>
               Object.keys(animation.animators ?? {}).some((animatorUuid) =>
                 deletedNodeUuids.has(animatorUuid)
@@ -241,7 +241,7 @@ export function registerElementMutationTools(): void {
                 affected_animations: plan.references.length,
               }),
             };
-            Undo.initEdit({groups: plan.rows.map(row => row.group) as Group[], animations: plan.references.map(ref => ref.animation) as unknown as _Animation[], outliner: true});
+            Undo.initEdit({groups: plan.rows.map(row => row.group) as Group[], animations: plan.references.map(ref => ref.animation) as unknown as BBAnimation[], outliner: true});
             try {
               applyGroupRename(plan);
               Undo.finishEdit("Batch rename Groups");

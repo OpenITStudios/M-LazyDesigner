@@ -21,7 +21,7 @@ import {
 } from "@/lib/animation/motionDynamics";
 
 type JsonRecord = Record<string, unknown>;
-type RuntimeAnimationItem = _Animation | AnimationController;
+type RuntimeAnimationItem = BBAnimation | AnimationController;
 
 const authoredMolangValueSchema = z.union([
   z.number().finite(),
@@ -116,7 +116,7 @@ function normalizeMolangStorage(
 }
 
 function resolveRotationSpaces(
-  animation: _Animation,
+  animation: BBAnimation,
   updates: readonly z.infer<typeof rotationSpaceSchema>[]
 ) {
   const seen = new Set<string>();
@@ -148,7 +148,7 @@ async function executeNativeProperties(
     allowSelected: true,
     notFoundHint: "Pass an exact Animation UUID or unique exact Animation name.",
   });
-  const native = animation as _Animation & {
+  const native = animation as BBAnimation & {
     anim_time_update?: string | number;
     blend_weight?: string | number;
     start_delay?: string | number;
@@ -330,7 +330,7 @@ function collectAnimationExpressions(
     return expressions;
   }
 
-  const native = item as _Animation & {
+  const native = item as BBAnimation & {
     anim_time_update?: string | number;
     blend_weight?: string | number;
     start_delay?: string | number;
@@ -348,7 +348,7 @@ function collectAnimationExpressions(
   for (const animator of Object.values(item.animators ?? {})) {
     if (animator instanceof BoneAnimator) {
       for (const channel of ["rotation", "position", "scale"] as const) {
-        for (const keyframe of ((animator[channel] as _Keyframe[] | undefined) ?? [])) {
+        for (const keyframe of ((animator[channel] as BBKeyframe[] | undefined) ?? [])) {
           keyframe.data_points.forEach((_, pointIndex) => {
             for (const value of keyframe.getArray(pointIndex)) {
               pushExpression(
@@ -369,7 +369,7 @@ function collectAnimationExpressions(
       animator instanceof EffectAnimator
     ) {
       for (const channel of ["particle", "timeline"] as const) {
-        for (const keyframe of ((animator[channel] as _Keyframe[] | undefined) ?? [])) {
+        for (const keyframe of ((animator[channel] as BBKeyframe[] | undefined) ?? [])) {
           for (const point of keyframe.data_points) {
             pushExpression(
               expressions,
@@ -409,7 +409,7 @@ function nativePropertySummary(item: RuntimeAnimationItem) {
     };
   }
 
-  const native = item as _Animation & {
+  const native = item as BBAnimation & {
     anim_time_update?: string | number;
     blend_weight?: string | number;
     start_delay?: string | number;
@@ -471,7 +471,7 @@ function motionDynamicsRuntime(item: RuntimeAnimationItem) {
       (candidate: Group) => candidate.uuid === animator.uuid
     );
     for (const channel of ["position", "rotation", "scale"] as const) {
-      const keyframes = ((animator[channel] as _Keyframe[] | undefined) ?? []).map(
+      const keyframes = ((animator[channel] as BBKeyframe[] | undefined) ?? []).map(
         (keyframe) => ({
           time: keyframe.time,
           value: keyframe.getArray(0) as unknown[],

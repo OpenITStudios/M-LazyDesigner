@@ -84,9 +84,9 @@ describe("MCP dependency closure", () => {
 
   test("on-demand static and authoring checks retain the existing canonical owners", async () => {
     const [repositoryFlow, authoringFlow, mcpFlow, docs, pkg] = await Promise.all([
-      text("../.github/workflows/repository-verify.yml"),
-      text("../.github/workflows/authoring-policy-verify.yml"),
-      text("../.github/workflows/mcp-verify.yml"),
+      text("../.github/disabled-workflows/repository-verify.yml"),
+      text("../.github/disabled-workflows/authoring-policy-verify.yml"),
+      text("../.github/disabled-workflows/mcp-verify.yml"),
       text("../docs/README.md"),
       text("package.json"),
     ]);
@@ -111,7 +111,7 @@ describe("MCP dependency closure", () => {
   test("on-demand full source verification excludes installed or live Blockbench execution", async () => {
     const packageText = await Bun.file("package.json").text();
     const scripts = JSON.parse(packageText).scripts as Record<string, string>;
-    const workflow = await text("../.github/workflows/mcp-verify.yml");
+    const workflow = await text("../.github/disabled-workflows/mcp-verify.yml");
     expect(scripts["verify:full"]).toBe("bun run verify:repository && bun run verify:mcp");
     expect(scripts["verify:full"]).not.toContain(":live");
     expect(workflow).toContain("bun run verify:full");

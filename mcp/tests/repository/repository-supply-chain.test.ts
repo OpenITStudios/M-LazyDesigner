@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readdir } from "node:fs/promises";
 
 type ActionRef = {
   action: string;
@@ -31,12 +32,26 @@ function expectImmutableActions(workflow: string, expectedActions: string[]): vo
 }
 
 describe("repository workflow supply chain", () => {
-  test("active verification and distribution workflows pin trusted Actions to immutable revisions", async () => {
+  test("verification stays outside Actions discovery while CI is disabled", async () => {
+    const active = (await readdir("../.github/workflows")).sort();
+    expect(active).toEqual(["desktop-draft-release.yml", "managed-distribution.yml"]);
+    const disabled = await readdir("../.github/disabled-workflows");
+    expect(disabled.filter(name => name.endsWith(".yml"))).toHaveLength(9);
+    for (const name of disabled) {
+      expect(await Bun.file(`../.github/workflows/${name}`).exists()).toBe(false);
+    }
+    for (const name of active) {
+      const workflow = await source(`../.github/workflows/${name}`);
+      expect(workflow).toMatch(/^on:\r?\n  workflow_dispatch:/m);
+      expect(workflow).not.toMatch(/^  (push|pull_request|schedule|workflow_run):/m);
+    }
+  });
+  test("preserved verification and active distribution definitions pin trusted Actions to immutable revisions", async () => {
     const [repository, authoring, mcp, release, distribution] = await Promise.all([
-      source("../.github/workflows/repository-verify.yml"),
-      source("../.github/workflows/authoring-policy-verify.yml"),
-      source("../.github/workflows/mcp-verify.yml"),
-      source("../.github/workflows/release-verify.yml"),
+      source("../.github/disabled-workflows/repository-verify.yml"),
+      source("../.github/disabled-workflows/authoring-policy-verify.yml"),
+      source("../.github/disabled-workflows/mcp-verify.yml"),
+      source("../.github/disabled-workflows/release-verify.yml"),
       source("../.github/workflows/managed-distribution.yml"),
     ]);
 
@@ -58,10 +73,10 @@ describe("repository workflow supply chain", () => {
 
   test("verification workflows install only the dependency surface they execute", async () => {
     const [mcpWorkflow, repositoryWorkflow, authoringWorkflow, releaseWorkflow, bunVersion] = await Promise.all([
-      source("../.github/workflows/mcp-verify.yml"),
-      source("../.github/workflows/repository-verify.yml"),
-      source("../.github/workflows/authoring-policy-verify.yml"),
-      source("../.github/workflows/release-verify.yml"),
+      source("../.github/disabled-workflows/mcp-verify.yml"),
+      source("../.github/disabled-workflows/repository-verify.yml"),
+      source("../.github/disabled-workflows/authoring-policy-verify.yml"),
+      source("../.github/disabled-workflows/release-verify.yml"),
       source("../.bun-version"),
     ]);
 
@@ -91,7 +106,7 @@ describe("repository workflow supply chain", () => {
   });
 
   test("MCP verification publishes only a read-only exact-SHA verified compatibility artifact", async () => {
-    const workflow = await source("../.github/workflows/mcp-verify.yml");
+    const workflow = await source("../.github/disabled-workflows/mcp-verify.yml");
     expect(workflow).toContain("bun run ./scripts/operations/verified-build-artifact.ts write-ci");
     expect(workflow).toContain("bun run verify:full");
     expect(workflow).toContain("name: lazydesigner-mcp-verified");
@@ -104,8 +119,8 @@ describe("repository workflow supply chain", () => {
 
   test("static and executable verifiers remain available on demand", async () => {
     const [repo, mcp, json] = await Promise.all([
-      source("../.github/workflows/repository-verify.yml"),
-      source("../.github/workflows/mcp-verify.yml"),
+      source("../.github/disabled-workflows/repository-verify.yml"),
+      source("../.github/disabled-workflows/mcp-verify.yml"),
       source("package.json"),
     ]);
     const scripts = JSON.parse(json).scripts as Record<string, string>;
@@ -120,7 +135,7 @@ describe("repository workflow supply chain", () => {
   });
 
   test("repository hygiene retains canonical static verification", async () => {
-    const workflow = await source("../.github/workflows/repository-verify.yml");
+    const workflow = await source("../.github/disabled-workflows/repository-verify.yml");
     const scripts = JSON.parse(await source("package.json")).scripts as Record<string, string>;
     expect(workflow).toContain("bun run verify:repository");
     expect(scripts["verify:repository"]).toBe("bun test tests/repository/*.test.ts");
@@ -130,8 +145,8 @@ describe("repository workflow supply chain", () => {
 
   test("Bash workflow summaries do not use unsafe command-substitution backticks", async () => {
     const workflows = [
-      await source("../.github/workflows/mcp-verify.yml"),
-      await source("../.github/workflows/head-proof.yml"),
+      await source("../.github/disabled-workflows/mcp-verify.yml"),
+      await source("../.github/disabled-workflows/head-proof.yml"),
     ];
 
     for (const workflow of workflows) {

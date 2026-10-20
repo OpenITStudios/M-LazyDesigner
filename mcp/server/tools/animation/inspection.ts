@@ -30,7 +30,7 @@ type EffectDataPoint = KeyframeDataPoint & {
   script?: string;
   file?: string;
 };
-type InspectableAnimationItem = _Animation | AnimationController;
+type InspectableAnimationItem = BBAnimation | AnimationController;
 type ControllerStateView = AnimationControllerState & {
   animations: Array<{
     uuid: string;
@@ -244,7 +244,7 @@ function inspectAnimationController(
   };
 }
 
-function inspectKeyframe(keyframe: _Keyframe) {
+function inspectKeyframe(keyframe: BBKeyframe) {
   return {
     uuid: keyframe.uuid,
     time: keyframe.time,
@@ -265,7 +265,7 @@ function inspectKeyframe(keyframe: _Keyframe) {
 }
 
 function inspectChannel(animator: BoneAnimator, channel: TransformChannel) {
-  const keyframes = ((animator[channel] as _Keyframe[] | undefined) ?? [])
+  const keyframes = ((animator[channel] as BBKeyframe[] | undefined) ?? [])
     .slice()
     .sort((a, b) => a.time - b.time || a.uuid.localeCompare(b.uuid));
   return {
@@ -298,7 +298,7 @@ export function countEffectiveTimelineScriptLines(
     .filter((line) => Boolean(line.replace(/[\s;]/g, ""))).length;
 }
 
-function inspectParticleEffects(animation: _Animation, includeKeyframes: boolean) {
+function inspectParticleEffects(animation: BBAnimation, includeKeyframes: boolean) {
   const existingEffects = animation.animators.effects;
   if (!existingEffects) {
     return {
@@ -327,7 +327,7 @@ function inspectParticleEffects(animation: _Animation, includeKeyframes: boolean
     );
   }
 
-  const particleKeyframes = ((existingEffects.particle as _Keyframe[] | undefined) ?? [])
+  const particleKeyframes = ((existingEffects.particle as BBKeyframe[] | undefined) ?? [])
     .slice()
     .sort((a, b) => a.time - b.time || a.uuid.localeCompare(b.uuid));
   const inspectedKeyframes = particleKeyframes.map((keyframe) => ({
@@ -349,7 +349,7 @@ function inspectParticleEffects(animation: _Animation, includeKeyframes: boolean
     }),
   }));
 
-  const soundKeyframes = ((existingEffects.sound as _Keyframe[] | undefined) ?? [])
+  const soundKeyframes = ((existingEffects.sound as BBKeyframe[] | undefined) ?? [])
     .slice()
     .sort((a, b) => a.time - b.time || a.uuid.localeCompare(b.uuid));
   const inspectedSoundKeyframes = soundKeyframes.map((keyframe) => ({
@@ -365,7 +365,7 @@ function inspectParticleEffects(animation: _Animation, includeKeyframes: boolean
     }),
   }));
 
-  const timelineKeyframes = ((existingEffects.timeline as _Keyframe[] | undefined) ?? [])
+  const timelineKeyframes = ((existingEffects.timeline as BBKeyframe[] | undefined) ?? [])
     .slice()
     .sort((a, b) => a.time - b.time || a.uuid.localeCompare(b.uuid));
   const inspectedTimelineKeyframes = timelineKeyframes.map((keyframe) => ({
@@ -413,7 +413,7 @@ function inspectParticleEffects(animation: _Animation, includeKeyframes: boolean
   };
 }
 
-function summarizeBoneAnimators(animation: _Animation) {
+function summarizeBoneAnimators(animation: BBAnimation) {
   return Object.values(animation.animators)
     .filter((animator): animator is BoneAnimator => animator instanceof BoneAnimator)
     .map((animator) => {
@@ -424,9 +424,9 @@ function summarizeBoneAnimators(animation: _Animation) {
         animator: { uuid: animator.uuid, name: animator.name },
         group: group ? { uuid: group.uuid, name: group.name } : null,
         channels: {
-          rotation: ((animator.rotation as _Keyframe[] | undefined) ?? []).length,
-          position: ((animator.position as _Keyframe[] | undefined) ?? []).length,
-          scale: ((animator.scale as _Keyframe[] | undefined) ?? []).length,
+          rotation: ((animator.rotation as BBKeyframe[] | undefined) ?? []).length,
+          position: ((animator.position as BBKeyframe[] | undefined) ?? []).length,
+          scale: ((animator.scale as BBKeyframe[] | undefined) ?? []).length,
         },
       };
     })
