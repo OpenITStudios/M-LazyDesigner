@@ -10,8 +10,46 @@ import {
   type VerificationDiscrepancy,
 } from "@/lib/orchestration/compactEvidence";
 import type { VerificationTask } from "@/lib/orchestration/verificationPlan";
+import { compileDeltaVerificationPlan } from "@/lib/orchestration/deltaVerification";
 
 describe("verification evidence compaction", () => {
+  test.each([false, true])("UV full_replan=%s stays unavailable and cannot compact to CLEAR", (fullReplan) => {
+    const islandIds = fullReplan ? [] : ["arm:0:north"];
+    const [request] = compileVerificationEvidenceRequests([
+      { domain: "UV", kind: "UV_ISLAND_SCOPE", island_ids: islandIds, full_replan: fullReplan },
+    ], "HIGH");
+    expect(request).toEqual({
+      domain: "UV",
+      source: null,
+      availability: "UNAVAILABLE",
+      reason: "UV_CAPABILITY_UNREGISTERED",
+      island_ids: islandIds,
+      full_replan: fullReplan,
+    });
+    expect(compactVerificationEvidence(request, "verificationevidence:uv-unavailable", []))
+      .toMatchObject({ domain: "UV", source: null, state: "BLOCKED", discrepancy_count: 0 });
+  });
+
+  test("mixed delta plan retains mandatory UV and executable evidence for all other domains", () => {
+    const plan = compileDeltaVerificationPlan({
+      geometry: { upsert_instance_ids: ["arm:0"], remove_instance_ids: [], metadata_only_instance_ids: [], preserved_instance_ids: [] },
+      uv: { stale: true, affected_island_ids: ["arm:0:north"], scope: "AFFECTED_ONLY" },
+      rig: { stale: true, affected_instance_ids: ["arm:0"], scope: "AFFECTED_ONLY" },
+      animation: { stale: true, affected_instance_ids: ["arm:0"], scope: "AFFECTED_ONLY" },
+      texture: { stale: true, reason: "UV_CHANGED", scope: "AFFECTED_SURFACES" },
+      symmetry_changed_relation_ids: [],
+    });
+    expect(plan.required_task_count).toBe(5);
+    expect(plan.tasks.map((task) => task.domain)).toEqual(["GEOMETRY", "UV", "RIG", "ANIMATION", "TEXTURE"]);
+    expect(plan.evidence_requests.map((request) => request.source)).toEqual([
+      "capture_model_views", null, "inspect_elements", "inspect_animation", "get_texture",
+    ]);
+    expect(plan.evidence_requests[1]).toMatchObject({ availability: "UNAVAILABLE", reason: "UV_CAPABILITY_UNREGISTERED" });
+    for (const request of plan.evidence_requests.filter((request) => request.source !== null)) {
+      expect(compactVerificationEvidence(request, "verificationevidence:available", []).state).toBe("CLEAR");
+    }
+  });
+
   test("low-risk geometry verification requests one focused 256 view", () => {
     const tasks: VerificationTask[] = [
       { domain: "GEOMETRY", kind: "CUBE_SCOPE", instance_ids: ["arm:0"] },

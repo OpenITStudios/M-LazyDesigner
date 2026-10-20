@@ -308,6 +308,11 @@ export class CorrectionLoopRegistry {
       | "evidence_recovery_reason"
     >
   ): CorrectionLoopHandle {
+    if (input.verification_request.source === null) {
+      throw new Error(
+        "VERIFICATION_SOURCE_UNAVAILABLE: " + input.verification_request.reason
+      );
+    }
     assertUniqueDiscrepancyCodes(input.discrepancies);
     const viewEvidenceHandles: Partial<
       Record<ModelView, VerificationEvidenceHandle>

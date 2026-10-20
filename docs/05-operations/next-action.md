@@ -4,9 +4,13 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Dependency completion is executing locally against remote `OpenITStudios/M-LazyDesigner` / `Local`, efficiency baseline `ce5299aa`. CI DISABLED: nine verification definitions live only in `.github/disabled-workflows/`; manual distribution/release definitions are not authorization to release. Do not enable or dispatch Actions, modify main, or publish packages.
+UV evidence-contract repair starts from `96537e54` on `OpenITStudios/M-LazyDesigner` / `Local`, in an isolated checkout. Required UV tasks retain scope but report `source: null`, `availability: UNAVAILABLE`, `reason: UV_CAPABILITY_UNREGISTERED`. Empty discrepancy lists cannot clear unavailable evidence; correction-loop start rejects it before storing state. Geometry/Rig/Texture/Animation evidence remains available. No new UV capability or template fallback is registered.
 
-The user requested measured efficiency improvements and a repository report. From ce5299aa, ten Desktop process-inventory call sites now share a fresh identity-only scan; unused sysinfo features are disabled. Two local benchmarks show 83.7–85.5% lower median scan time on former double-scan paths; this is not end-to-end UI or token proof. Desktop verify:source (81 Rust tests), repository checks and Rust 1.95 minimum compilation PASS. Clean bcdb2399 exact-source Desktop verification, integrated managed Windows NSIS and disposable compiled-CLI install/status smoke PASS. The measured report is complete in current-validation.md. Fast-forward delivery to Local with CI OFF closes this task; STOP. No unrelated authoring/live work is implied.
+Source proof: Bun 1.4.3, 73 targeted tests across evidence compaction, correction reuse/convergence, delta execution, UV non-registration and Gateway recovery PASS; MCP and Gateway typechecks PASS. Native UV quality is NOT_EXECUTED. The existing [Batch 0 audit](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) records the repaired F0-01 contract and remaining quality/cost gaps.
+
+Next: prepare one real authoring benchmark using the existing quality benchmark and native acceptance runbook, with fixed approved reference, matching installed build, accepted-result evidence and save/reopen. Source preparation is independent of live execution; native mutation requires the selected disposable asset context. Do not begin Desktop refactoring or governance cleanup as part of this repair.
+
+Prior dependency/process-scan efficiency work is complete; its measured report and proof boundaries remain in current-validation.md. CI DISABLED: nine verification definitions live only in `.github/disabled-workflows/`; manual distribution/release definitions are not authorization to release. Do not enable or dispatch Actions, modify main, or publish packages.
 
 ## Compatibility and security residue
 

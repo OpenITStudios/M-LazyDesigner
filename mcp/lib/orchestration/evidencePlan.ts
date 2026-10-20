@@ -15,7 +15,9 @@ export type VerificationEvidenceRequest =
     }
   | {
       domain: "UV";
-      source: "manage_uv_layout";
+      source: null;
+      availability: "UNAVAILABLE";
+      reason: "UV_CAPABILITY_UNREGISTERED";
       island_ids: string[];
       full_replan: boolean;
     }
@@ -64,7 +66,9 @@ export function compileVerificationEvidenceRequests(
       case "UV":
         return {
           domain: "UV",
-          source: "manage_uv_layout",
+          source: null,
+          availability: "UNAVAILABLE",
+          reason: "UV_CAPABILITY_UNREGISTERED",
           island_ids: [...task.island_ids],
           full_replan: task.full_replan,
         };

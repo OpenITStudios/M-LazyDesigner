@@ -291,7 +291,7 @@ export function compactVerificationEvidence(
 ): CompactVerificationEvidence {
   const prioritized = prioritizeMinecraftDiscrepancies(discrepancies);
   const bounded = prioritized.slice(0, MAX_DISCREPANCIES);
-  const state = discrepancies.some((item) => item.severity === "BLOCKING")
+  const state = request.source === null || discrepancies.some((item) => item.severity === "BLOCKING")
     ? "BLOCKED"
     : discrepancies.some((item) => item.severity === "REVIEW")
       ? "REVIEW_REQUIRED"

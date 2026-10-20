@@ -1,6 +1,6 @@
 # Flow MCP — Batch 0: Quality / Token-Efficiency Audit
 
-Status: INITIAL SOURCE AUDIT; NOT LIVE VALIDATED
+Status: UV EVIDENCE CONTRACT REPAIRED; NOT LIVE VALIDATED
 Date: 2026-10-20
 Branch: Local
 Baseline commit: 9c95bd842e310139a71db6b2d2ef25c81e14eb87
@@ -13,7 +13,7 @@ Improve the existing three-domain workflow; do not create a second quality engin
 - Canonical sequence: docs/03-authoring/workflow.md; Geometry -> Geometry Verify -> authorized approval/verification -> UV -> Texturing -> Texture Verify -> Animation readiness -> Animation -> Finalization. Geometry owns UV mapping; Texture owns mapped pixels; Animation owns motion, not structural rig mutation.
 - Gateway capability discovery and branch semantics: mcp/gateway/capabilities/catalog.ts and manifest.ts. Tool exposure must be proven against the generated Runtime catalog, not inferred from library existence.
 - Capability source owners: mcp/gateway/development/sourceOwners/geometry.ts and animation.ts. Geometry manage_cubes uses mcp/server/tools/geometry/cubes.ts; bone_rigging uses mcp/server/tools/animation/rigging.ts; animation manage_keyframes/inspection/controllers use tools/animation. Source-owner mapping is a guide, not a live registration proof.
-- Important known gap: manage_uv_layout is explicitly FUTURE/UNREGISTERED in geometry source owners; mcp/lib/orchestration/evidencePlan.ts currently requests this name for UV evidence. Reconcile planner outputs with available native tool set before shipping UV-flow claims. Existing create_texture(type=template) native generator is not equivalent to UV PASS.
+- UV source contract repaired: manage_uv_layout remains FUTURE/UNREGISTERED. mcp/lib/orchestration/evidencePlan.ts retains required UV scope with source=null, availability=UNAVAILABLE and reason=UV_CAPABILITY_UNREGISTERED. Evidence compaction returns BLOCKED even without discrepancies; correction-loop start rejects the unavailable source before storing state. Other domains remain executable. Existing create_texture(type=template) native generator is not equivalent to UV PASS.
 - mcp/lib/authoring/ owns authored state; authoringRecipe/ owns recipes/compilation; orchestration/ owns sequencing/evidence plans. Keep dependencies one-way.
 - mcp/lib/orchestration/verificationPlan.ts scopes changed Geometry, UV, Rig, Animation, Texture; evidencePlan.ts already maps scope + risk to focused evidence. Expand/repair those contracts rather than adding a competing planner.
 - mcp/gateway/control/contextProjection.ts already projects domain-specific context; mcp/lib/authoringRecipe/efficiency.ts measures bytes/static operation proxies, explicitly NOT AI-token use or wall-clock.
@@ -22,7 +22,7 @@ Improve the existing three-domain workflow; do not create a second quality engin
 ## Gap register (source audit, pending runtime verification)
 | ID | Priority | Domain | Observed evidence | Next bounded verification |
 |---|---|---|---|---|
-| F0-01 | P0 | UV capability | manage_uv_layout source owner explicitly says unregistered; evidencePlan requests it | Compare generated runtime catalog and verification executor; ensure fallback uses registered native operations and never invents UV PASS |
+| F0-01 | P0 | UV capability | SOURCE CONTRACT REPAIRED: required UV evidence explicitly unavailable; no request to unregistered manage_uv_layout, no empty-evidence CLEAR or correction loop | Native UV capability and accepted UV evidence remain unavailable; do not substitute template generation or claim UV PASS |
 | F0-02 | P0 | All | Quality benchmark fixtures are synthetic only | Execute six fixed-source approved-asset benchmarks with actual matched references; retain captured view/atlas/playback and verdicts |
 | F0-03 | P0 | Token efficiency | Existing recipe metrics are serialized bytes/static calls only | Add opt-in client/provider usage collection outside core quality verdict; record actual input/output/cache tokens and model/version, otherwise UNKNOWN |
 | F0-04 | P1 | Geometry | Geometry quality and contact modules exist; native aesthetic performance unverified | Test silhouette, proportions, attachments, negative spaces, curves in cross-view comparison |

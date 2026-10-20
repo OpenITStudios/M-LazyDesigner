@@ -22,6 +22,34 @@ function recipe(): AuthoringRecipe {
 }
 
 describe("zero-waste correction loop reuse", () => {
+  test("unavailable UV evidence cannot create a correction loop or disturb an existing continuation", () => {
+    const registry = new CorrectionLoopRegistry();
+    const input: Parameters<CorrectionLoopRegistry["start"]>[0] = {
+      recipe_id: "uv-unavailable",
+      base_recipe: recipe(),
+      verification_request: {
+        domain: "UV", source: null, availability: "UNAVAILABLE",
+        reason: "UV_CAPABILITY_UNREGISTERED", island_ids: ["arms:0:north"], full_replan: false,
+      },
+      verification_evidence_handle: "verificationevidence:uv-unavailable",
+      discrepancies: [],
+    };
+    expect(() => registry.start(input)).toThrow("VERIFICATION_SOURCE_UNAVAILABLE: UV_CAPABILITY_UNREGISTERED");
+    expect(registry.size()).toBe(0);
+    const handle = registry.start({
+      ...input,
+      verification_request: {
+        domain: "GEOMETRY", source: "capture_model_views", verification_risk: "LOW",
+        views: ["front"], views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS", scope_instance_ids: ["arms:0"],
+      },
+    });
+    const before = registry.projectContinuation(handle);
+    expect(() => registry.start(input)).toThrow("VERIFICATION_SOURCE_UNAVAILABLE");
+    expect(registry.size()).toBe(1);
+    expect(registry.projectContinuation(handle)).toEqual(before);
+  });
+
   test("raw correction entrypoints reject duplicate identity without changing continuation", () => {
     const registry = new CorrectionLoopRegistry();
     const input: Parameters<CorrectionLoopRegistry["start"]>[0] = {
