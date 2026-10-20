@@ -1,5 +1,10 @@
 # LazyDesigner Next Action
 
+## Svelte-check patch upgrade — 2026-10-20
+
+Desktop `svelte-check` is updated **4.7.6 → 4.7.7**, released 2026-10-16. The upstream direct dependencies and TypeScript 6 peer contract are unchanged; the exact published tarball checksum matches two independently generated npm locks. Desktop `package.json` and `package-lock.json` are updated together. **Source static PASS only:** current environment still cannot download registry tarballs or execute `npm ci`; actual `svelte-check --tsgo`, TypeScript 6 compatibility check and frontend build are **NOT EXECUTED**. CI remains OFF.
+
+
 ## Transitive dependency compatibility correction — 2026-10-20
 
 The existing `blockbench-types@5.2.0` package requires Electron `^40.8.0`. An audited lockfile had wrongly resolved this transitive **dev-only typings dependency** to Electron `41.10.7`, which is out of range. `mcp/bun.lock` now locks **electron 40.10.6**, the latest compatible 40.x patch. Its exact manifest/integrity match an independent Bun-generated lock record and Electron's upstream `v40.10.6` tag; all unrelated lock records remain byte-equivalent. This does **not** switch the LazyDesigner Desktop Tauri runtime to Electron.
