@@ -1,5 +1,12 @@
 # LazyDesigner Next Action
 
+## Vite 8 + Svelte plugin 7 source migration — 2026-10-20
+
+**Versions in source:** `vite 8.3.4`, `@sveltejs/vite-plugin-svelte 7.3.1`. The dependency graph was reconciled against published npm lock metadata, verified Vite/plugin source manifests and SHA512 fingerprints. The old Rollup/esbuild path and orphaned inspector were pruned. Rolldown 1.2.12 with native platform bindings is present. Because `@tailwindcss/node 4.3.3` pins Lightning CSS 1.32.0 while Vite 8 requires 1.33.0, both compatible versions are explicitly resolved at their distinct dependency paths. Svelte plugin 7 uses nested `magic-string 1.4.3`, preserving the root `0.30.x` needed by Svelte and Tailwind. All reachable hard/optional dependencies and their version ranges were checked structurally.
+
+**Proof ceiling:** This is a **reconstructed source lock**, not a package-manager-generated or installed/frozen lock proof. Registry/network restrictions prevented npm install, typecheck and `build:frontend`; these remain **NOT EXECUTED**. CI remains OFF. Do not label the new Vite pipeline production-accepted until npm independently regenerates the lockfile and the Desktop build/tests pass.
+
+
 ## Pending package upgrade execution evidence — 2026-10-20
 
 **Source target selected:** MCP client/core/server 2.3.1, `@types/bun` and `bun-types` 1.4.3, Blockbench typings 5.2.0. The manifest and Bun lock graph have been assembled from upstream package manifests and independently published package-manager lock checksums. Redundant nested MCP Core 2.0.0 was removed when both SDK entrypoints converged on 2.3.1. No unrelated packages changed.
