@@ -14,6 +14,8 @@
 
 **2026-10-20 Svelte patch upgrade:** Desktop `svelte` updated from locked **5.57.0** to **5.57.2**, with coherent `apps/desktop/package.json` and `apps/desktop/package-lock.json`. Published package metadata was reconciled with Svelte's upstream `svelte@5.57.2` source and the integrity fingerprint in an independent Bun lock. An offline npm `install --package-lock-only` on the extracted Desktop lock graph completed using a locally seeded, provenance-checked package metadata record. Only the Svelte root constraint and Svelte lock entry were applied to GitHub, preserving the unchanged dependency lock graph. Offline package-resolution proof is **NOT** an installed typecheck/build/Windows/Blockbench PASS; those checks remain **NOT EXECUTED**. CI remains disabled.
 
+**2026-10-20 Node 24 type definitions upgrade:** `@types/node` locked **24.13.4 → 24.19.2** together with its required `undici-types` **7.18.2 → 7.24.6**. Desktop `package.json` and npm lock root+two resolved entries are synchronized. Offline npm `install --package-lock-only` completed successfully on the Desktop graph with provenance-checked metadata/integrity from public published lock records. Other dependency versions remain unchanged. Runtime typecheck, `npm ci`, and packaging on the new SHA are **NOT EXECUTED**; CI remains disabled.
+
 **Remaining bounded upgrades — do not modify unrelated source or add new frameworks:**
 
 1. MCP runtime: compare locked client/core 2.2.0 and server/nested core 2.0.0 with upstream stable 2.3.1. Generate `mcp/bun.lock` with Bun 1.4.3 and verify client/server/transport APIs before accepting updates.
