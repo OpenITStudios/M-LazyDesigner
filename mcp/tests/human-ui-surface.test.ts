@@ -49,8 +49,9 @@ describe("human-facing Blockbench UI", () => {
     expect(support).not.toContain("<strong>0.1.0</strong>");
     expect(app).toContain("async function showPluginFile()");
     expect(app).toContain("'show_plugin_file'");
-    expect(app).toContain("onclick={showPluginFile}");
-    expect(app).toContain("Show approval file");
+    const workspace = await Bun.file(new URL("../../apps/desktop/src/WorkspacePage.svelte", import.meta.url)).text();
+    expect(workspace).toContain("onclick={showPluginFile}");
+    expect(workspace).toContain("Show approval file");
     expect(app).not.toContain('aria-label="Blockbench actions"');
   });
 

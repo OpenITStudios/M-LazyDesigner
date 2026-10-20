@@ -6,9 +6,34 @@ import { createEditorOperations } from "../../../apps/desktop/src/editorOperatio
 import type { DesktopInvoke } from "../../../apps/desktop/src/desktopTypes";
 import { createSetupOperations } from "../../../apps/desktop/src/setupOperations";
 
+const workspaceSource = Bun.file("../apps/desktop/src/WorkspacePage.svelte").text();
+const deleteDialogSource = Bun.file("../apps/desktop/src/ProjectDeleteDialog.svelte").text();
+
 async function source(path: string): Promise<string> {
   return Bun.file(path).text();
 }
+
+describe("Desktop page and deletion-dialog ownership", () => {
+  test("views consume callbacks while App keeps deletion token authority", async () => {
+    const [app, workspace, dialog] = await Promise.all([
+      source("../apps/desktop/src/App.svelte"), workspaceSource, deleteDialogSource,
+    ]);
+    expect(app).toContain("<WorkspacePage");
+    expect(app).toContain("<ProjectDeleteDialog");
+    expect(app).toContain("if (event.defaultPrevented || deleteReview) return;");
+    expect(app).toContain("'prepare_delete_project', { id }");
+    expect(app).toContain("'confirm_delete_project', { token: review.token }");
+    expect(app).toContain("'cancel_delete_project', { token: review.token }");
+    expect(workspace).not.toContain("invoke<");
+    expect(dialog).not.toContain("invoke<");
+    expect(dialog).toContain("onMount(() => { cancelButton?.focus(); });");
+    expect(dialog).toContain("<svelte:window onkeydown={handleKeyDown} />");
+    expect(dialog).toContain("event.key === 'Escape' && !busy");
+    expect(dialog).toContain("event.key === 'Tab' && dialog");
+    expect(dialog).toContain("button:not([disabled])");
+    expect(dialog).toContain("onclick={onConfirm} disabled={busy}");
+  });
+});
 
 describe("Desktop setup ordering", () => {
   test.each(["STAGED", "INSTALLED"])("bootstrap %s preserves intermediate state and readiness order", async (status) => {
@@ -146,7 +171,7 @@ describe("Desktop control-plane ownership", () => {
     expect(app).toContain("setupOperations.connect(");
     expect(app).toContain("show_plugin_file");
     expect(app).toContain("setup-tls");
-    expect(app).toContain("runManagedAction('update')");
+    expect(await workspaceSource).toContain("runManagedAction('update')");
     expect(app).toContain("tls_ready");
     expect(app).toContain("'update' | 'rollback' | 'recover' | 'repair'");
     for (const command of ["update", "rollback", "recover", "repair", "status", "mcp"]) {
@@ -384,11 +409,11 @@ describe("Desktop control-plane ownership", () => {
     expect(navigator).toContain("<h2>Current Model</h2>");
     expect(navigator).toContain("Projects &amp; Models");
     expect(navigator).toContain("Show models");
-    expect(app).toContain("navigation={current.project_navigation}");
+    expect(await workspaceSource).toContain("navigation={current.project_navigation}");
     expect(app).toContain("connectionChanged(candidate, status)");
     expect(connectionWatch).toContain("candidate.project_session_live");
     expect(connectionWatch).toContain("current.project_navigation.session_live");
-    expect(app).toContain("navigation={current.project_navigation}");
+    expect(await workspaceSource).toContain("navigation={current.project_navigation}");
     expect(navigator).toContain("visibleProjects(navigation, projectSearch, showAllProjects)");
     expect(navigator).toContain("project.model_count");
     expect(navigator).toContain("Search projects or models");
@@ -430,11 +455,11 @@ describe("Desktop control-plane ownership", () => {
     expect(rust).toContain("fs::symlink_metadata(&retired)");
     expect(rust).toContain("pub fn show_retired_plugin_file()");
     expect(app).toContain("migrationConflict = true");
-    expect(app).toContain("Existing Blockbench plugin requires review");
+    expect(await workspaceSource).toContain("Existing Blockbench plugin requires review");
     expect(app).toContain("showRetiredPluginFile");
     expect(main).toContain("LEGACY_CLIENT_MIGRATION_REQUIRED");
-    expect(app).toContain("migrationConflictKind === 'plugin'");
-    expect(app).toContain("Existing AI client configuration requires review");
+    expect(await workspaceSource).toContain("migrationConflictKind === 'plugin'");
+    expect(await workspaceSource).toContain("Existing AI client configuration requires review");
   });
 
   test("manager failure retains verified read-only model selection rather than blanking Workspace", async () => {
@@ -447,9 +472,9 @@ describe("Desktop control-plane ownership", () => {
     expect(rust).toContain('PathBuf::from(env::var_os("APPDATA")?).join("Blockbench")');
     expect(rust).toContain("project_navigation::probe(false, Some(&profile)).0");
     expect(rust).toContain("blockbench.running && manager_available");
-    expect(app).toContain("Models and folders stay accessible.");
-    expect(app).toContain("canOpenModel={true}");
-    expect(app).toContain("canEditProjectPrefs={true}");
+    expect(await workspaceSource).toContain("Models and folders stay accessible.");
+    expect(await workspaceSource).toContain("canOpenModel={true}");
+    expect(await workspaceSource).toContain("canEditProjectPrefs={true}");
     expect(nav).toContain("!canOpenModel");
     expect(nav).toContain("!canEditProjectPrefs");
   });
@@ -501,8 +526,8 @@ describe("Desktop control-plane ownership", () => {
     expect(main).toContain("async fn browse_model()");
     expect(main).toContain("async fn open_blockbench_editor()");
     expect(main).toContain("tauri::async_runtime::spawn_blocking(blockbench::browse_model)");
-    expect(app).toContain("onFocusEditor={focusCurrentEditor}");
-    expect(app).toContain("canOpenModel={true}");
+    expect(await workspaceSource).toContain("onFocusEditor={focusCurrentEditor}");
+    expect(await workspaceSource).toContain("canOpenModel={true}");
   });
 
   test("added folder shortcuts stay local, bounded and independent of AI", async () => {
@@ -526,7 +551,7 @@ describe("Desktop control-plane ownership", () => {
     expect(rust).toContain("async fn add_project_folder()");
     expect(rust).toContain("spawn_blocking(project_navigation::add_project_folder)");
     expect(app).toContain("invoke<ProjectNavigationActionResult>('add_project_folder')");
-    expect(app).toContain("onAddProjectFolder={addProjectFolder}");
+    expect(await workspaceSource).toContain("onAddProjectFolder={addProjectFolder}");
     expect(navigator).toContain('aria-label="Search projects or models"');
     expect(navigator).toContain("<h2>Projects &amp; Models</h2>");
     expect(navigator).toContain("Remove from Workspace");
@@ -573,9 +598,9 @@ describe("Desktop control-plane ownership", () => {
     expect(app).toContain("invoke<ProjectDeletePreview>('prepare_delete_project', { id })");
     expect(app).toContain("invoke<ProjectDeleteResult>('confirm_delete_project', { token: review.token })");
     expect(app).toContain("invoke('cancel_delete_project', { token: review.token })");
-    expect(app).toContain('role="alertdialog" aria-modal="true"');
-    expect(app).toContain("Move to Recycle Bin");
-    expect(app).toContain("onDeleteProject={beginDeleteProject}");
+    expect(await deleteDialogSource).toContain('role="alertdialog" aria-modal="true"');
+    expect(await deleteDialogSource).toContain("Move to Recycle Bin");
+    expect(await workspaceSource).toContain("onDeleteProject={beginDeleteProject}");
     expect(types).toContain("expires_in_seconds: number");
     expect(types).toContain("RECYCLED_SHORTCUT_RETAINED");
     expect(presentation).toContain("PROJECT_RECYCLE_FAILED");
@@ -598,10 +623,10 @@ describe("Desktop control-plane ownership", () => {
       source("../apps/desktop/src/ProjectNavigator.svelte"),
     ]);
 
-    expect(app).toContain("<ProjectNavigator");
-    expect(app).toContain("onOpenModel={openModel}");
-    expect(app).toContain("onFocusEditor={focusCurrentEditor}");
-    expect(app).toContain("onProjectAction={runProjectAction}");
+    expect(await workspaceSource).toContain("<ProjectNavigator");
+    expect(await workspaceSource).toContain("onOpenModel={openModel}");
+    expect(await workspaceSource).toContain("onFocusEditor={focusCurrentEditor}");
+    expect(await workspaceSource).toContain("onProjectAction={runProjectAction}");
     expect(navigator).toContain("<h2>Current Model</h2>");
     expect(navigator).toContain("Projects &amp; Models");
     expect(navigator).toContain("Recent Models");
@@ -747,7 +772,8 @@ describe("Desktop Workspace First navigation contract", () => {
       Bun.file("../apps/desktop/README.md").text(),
     ]);
     expect(app).toContain("<span>Workspace</span>");
-    expect(app).toContain("bind:this={workspaceMain}");
+    expect(app).toContain("bind:workspaceMain");
+    expect(await workspaceSource).toContain("bind:this={workspaceMain}");
     expect(app).toContain("workspaceMain.scrollTop = workspaceScrollTop");
     for (const field of ["expandedProjectId", "showAllProjects", "projectSearch"]) {
       expect(app).toContain(`bind:${field}`);
@@ -760,8 +786,8 @@ describe("Desktop Workspace First navigation contract", () => {
 
 describe("Desktop stale connection action admission", () => {
   test("AI preparation remains managed while editor launch is independent", async () => {
-    const app = await Bun.file("../apps/desktop/src/App.svelte").text();
-    const launchButtons = app.split("\n").filter(line => line.includes("<button") && line.includes("onclick={connectBlockbench}"));
+    const workspace = await workspaceSource;
+    const launchButtons = workspace.split("\n").filter(line => line.includes("<button") && line.includes("onclick={connectBlockbench}"));
     expect(launchButtons.length).toBeGreaterThan(0);
     for (const button of launchButtons) expect(button).toContain("disabled={!status.manager_available ||");
   });
@@ -771,8 +797,8 @@ describe("Desktop stale connection action admission", () => {
     const monitor = await source("../apps/desktop/src/connectionMonitor.ts");
     expect(monitor).toContain("setFailures(Math.min(failures + 1, 2))");
     expect(app).toContain("AI status needs verification · Files remain accessible");
-    expect(app).toContain("busy={busyAction !== null}");
-    expect(app).toContain("canEditProjectPrefs={true}");
+    expect(await workspaceSource).toContain("busy={busyAction !== null}");
+    expect(await workspaceSource).toContain("canEditProjectPrefs={true}");
     for (const action of ["connectBlockbench", "installLazyDesigner", "runManagedAction"]) {
       const start = app.indexOf(`async function ${action}`);
       expect(start).toBeGreaterThan(0);
@@ -838,7 +864,7 @@ describe("Desktop calm connection summary", () => {
     expect(app).toContain("<SupportPage");
     expect(support).toContain("<h2>Last unsuccessful action</h2>");
     expect(support).toContain("<code>{errorDetail}</code>");
-    expect(app).toContain("<h2>AI connection and updates</h2>");
+    expect(await workspaceSource).toContain("<h2>AI connection and updates</h2>");
     expect(support).toContain("<strong>Installed Blockbench plugin</strong>");
   });
 
@@ -867,13 +893,15 @@ describe("Desktop calm connection summary", () => {
 
   test("preserves setup and error guidance and makes healthy project view primary", async () => {
     const ui = await Bun.file("../apps/desktop/src/App.svelte").text();
-    expect(ui).toContain('class="workspace-connection"');
-    expect(ui).toContain("statusProbeFailures >= 2 ? 'AI status unverified'");
-    expect(ui).toContain("status.project_navigation.projects.length > 0");
-    expect(ui).toContain("productMode(status) === 'ready' || productMode(status) === 'client-wait'");
-    expect(ui.indexOf("<ProjectNavigator")).toBeLessThan(ui.indexOf("<h2>AI connection and updates</h2>"));
-    expect(ui).toContain("runManagedAction('setup-tls')");
-    expect(ui).toContain("Update components");
+    const workspace = await workspaceSource;
+    expect(ui).toContain("<WorkspacePage");
+    expect(workspace).toContain('class="workspace-connection"');
+    expect(workspace).toContain("statusProbeFailures >= 2 ? 'AI status unverified'");
+    expect(workspace).toContain("status.project_navigation.projects.length > 0");
+    expect(workspace).toContain("productMode(status) === 'ready' || productMode(status) === 'client-wait'");
+    expect(workspace.indexOf("<ProjectNavigator")).toBeLessThan(workspace.indexOf("<h2>AI connection and updates</h2>"));
+    expect(workspace).toContain("runManagedAction('setup-tls')");
+    expect(workspace).toContain("Update components");
   });
 });
 
@@ -974,8 +1002,8 @@ describe("Desktop full-status freshness and nullable project revision", () => {
     expect(watcher).toContain("if (disposed || failures >= 2) return;");
     expect(watcher.indexOf("if (disposed || failures >= 2) return;"))
       .toBeLessThan(watcher.indexOf("else setFailures(0);"));
-    expect(ui).toContain("busy={busyAction !== null}");
-    expect(ui).toContain("canEditProjectPrefs={true}");
+    expect(await workspaceSource).toContain("busy={busyAction !== null}");
+    expect(await workspaceSource).toContain("canEditProjectPrefs={true}");
   });
 });
 
@@ -1047,8 +1075,8 @@ describe("Desktop pure status presentation", () => {
     expect(bootstrap).toContain("setupStaged = !feedback.verifyRuntime");
     expect(setup).toContain("bootstrapInstallPresentation(result.receipt)");
     expect(setup.indexOf("if (!feedback.verifyRuntime)")).toBeLessThan(setup.indexOf("readiness: await ensureReady(hooks)"));
-    expect(app).toContain("Setup waiting for Blockbench");
-    expect(app).toContain("setupStaged ? 'Finish setup'");
+    expect(await workspaceSource).toContain("Setup waiting for Blockbench");
+    expect(await workspaceSource).toContain("setupStaged ? 'Finish setup'");
     expect(rust).toContain("bootstrap returned an unverified installation receipt.");
   });
 
@@ -1080,7 +1108,7 @@ describe("Desktop pure status presentation", () => {
     expect(svelte).toContain("from './desktopPresentation'");
     expect(svelte).not.toContain("type SystemStatus =");
     expect(svelte).not.toContain("function productHeadline(");
-    expect(svelte).toContain("productGuidance(status, pluginApprovalNeeded)");
+    expect(await workspaceSource).toContain("productGuidance(status, pluginApprovalNeeded)");
     expect(dto).toContain("project_navigation: ProjectNavigation");
     expect(presentation).not.toContain("invoke(");
     expect(presentation).not.toContain("ensure_ready");
@@ -1115,7 +1143,7 @@ describe("Desktop Workspace and Support feedback integrity", () => {
 
   test("describes managed updates consistently without promising a Desktop binary update", async () => {
     const ui = await Bun.file("../apps/desktop/src/App.svelte").text();
-    expect(ui).toContain("Updating managed components");
+    expect(await workspaceSource).toContain("Updating managed components");
     const presentation = await source("../apps/desktop/src/desktopPresentation.ts");
     expect(presentation).toContain("Update managed components");
     expect(ui).toContain("managedActionLabel(action)");

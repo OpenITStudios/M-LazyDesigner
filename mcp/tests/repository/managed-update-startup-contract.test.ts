@@ -140,9 +140,11 @@ describe("managed startup update contract", () => {
     expect(action).toContain("maintenanceOperations.resetUpdateCheck()");
     expect(action).toContain("await checkManagedUpdateOnce()");
     expect(app).toContain("async function verifyPendingUpdate()");
-    expect(app).toContain("onclick={verifyPendingUpdate}");
-    expect(app).toContain("updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED'");
-    expect(app).toContain("updateCheck?.status !== 'UPDATE_STAGED'");
+    const workspace = await source("../apps/desktop/src/WorkspacePage.svelte");
+    expect(app).toContain("<WorkspacePage");
+    expect(workspace).toContain("onclick={verifyPendingUpdate}");
+    expect(workspace).toContain("updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED'");
+    expect(workspace).toContain("updateCheck?.status !== 'UPDATE_STAGED'");
   });
 
   test("managed Gateway receives the exact installed Runtime build identity", async () => {

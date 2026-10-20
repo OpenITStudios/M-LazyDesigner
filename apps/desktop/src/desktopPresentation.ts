@@ -228,3 +228,5 @@ export function installationReadinessError(ready: EnsureReadyResult): string {
       return 'Setup completed, but Blockbench could not become ready automatically.';
   }
 }
+
+export const progressLabel = (stage: string) => stage.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
