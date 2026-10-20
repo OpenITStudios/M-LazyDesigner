@@ -5,17 +5,19 @@
   import ProjectNavigator from './ProjectNavigator.svelte';
   import { version as desktopVersion } from '../package.json';
   import { createConnectionMonitor } from './connectionMonitor';
+  import { createEditorOperations } from './editorOperations';
+  import { createMaintenanceOperations, planManagedAction } from './maintenanceOperations';
   import { subscribeManagedProgress } from './managedProgress';
   import { applyDevFixture, devFixtureFromLocation, type DevFixture } from './desktopFixtures';
   import { observeStatus } from './statusObservation';
   import type { ProjectAction, ProjectDeletePreview, ProjectDeleteResult } from './projectNavigationTypes';
   import type {
     SystemStatus, ConnectionStatus, PluginFileActionResult, BootstrapActionResult,
-    ManagedActionResult, ManagedUpdateCheck, BlockbenchFocusResult, EnsureReadyResult,
+    ManagedUpdateCheck, EnsureReadyResult,
     DesktopCommandError, DiagnosticExportResult, ProjectNavigationActionResult,
-    ProjectPathResult, ManagedProgress, ModelBrowseResult, BlockbenchEditorResult, BlockbenchSelectionResult,
+    ProjectPathResult, ManagedProgress, BlockbenchSelectionResult,
   } from './desktopTypes';
-  import { compatibilityLabel, productMode, productHeadline, productMessage, productGuidance, managedActionPresentation, bootstrapInstallPresentation, desktopErrorNotice } from './desktopPresentation';
+  import { compatibilityLabel, productMode, productHeadline, productMessage, productGuidance, managedActionLabel, bootstrapInstallPresentation, desktopErrorNotice } from './desktopPresentation';
 
   let status: SystemStatus | null = null;
   let loading = true;
@@ -42,7 +44,8 @@
     onFailures: failures => { statusProbeFailures = failures; },
   });
   let updateCheck: ManagedUpdateCheck | null = null;
-  let updateCheckStarted = false;
+  const editorOperations = createEditorOperations(invoke);
+  const maintenanceOperations = createMaintenanceOperations(invoke);
   type Page = 'Overview' | 'Support';
   let page: Page = 'Overview';
   // Ephemeral view preferences survive Workspace/Support navigation only.
@@ -244,36 +247,18 @@
     }
   }
 
-  async function focusBlockbenchAfterOpen(): Promise<boolean> {
-    // Windows may deny foreground activation. The editor launch is still valid.
-    try {
-      const result = await invoke<BlockbenchFocusResult>('focus_blockbench_window');
-      return result.status === 'FOCUSED';
-    } catch {
-      return false;
-    }
-  }
-
-  async function openProjectModel(id: string) {
+  async function openModel(id?: string) {
     if (devFixture || busyAction) return;
-    busyAction = 'project-action';
+    busyAction = id === undefined ? 'browse-model' : 'project-action';
     error = '';
     errorDetail = null;
     clearSuccessToast();
     try {
-      // Only the profile-bound snapshot and native editor file are needed.
-      // AI/Gateway setup is not a prerequisite for ordinary model editing.
-      const launch = await invoke<ProjectNavigationActionResult>('project_navigation_action', { action: 'open-model', id });
-      if (launch.status !== 'CONFIRMED_ACTIVE' && launch.status !== 'LAUNCHED_UNVERIFIED') {
-        throw new Error('Blockbench did not acknowledge the model launch request.');
+      const message = await editorOperations.openModel(id);
+      if (message !== null) {
+        await refresh();
+        showSuccessToast(message);
       }
-      const focused = await focusBlockbenchAfterOpen();
-      await refresh();
-      showSuccessToast(launch.status === 'CONFIRMED_ACTIVE'
-        ? 'Confirmed: the requested model is active in the matching Blockbench session.'
-        : focused
-          ? 'Editor launch confirmed; model tab not verified. Check Blockbench.'
-          : 'Model launch sent; active tab not verified. Select Blockbench and check its model tab.');
     } catch (cause) {
       reportError(cause);
     } finally {
@@ -283,32 +268,8 @@
 
   async function focusCurrentEditor() {
     if (devFixture || busyAction) return;
-    const focused = await focusBlockbenchAfterOpen();
+    const focused = await editorOperations.focus();
     if (!focused) showSuccessToast('Select your Blockbench window from the taskbar.');
-  }
-
-  async function browseModel() {
-    if (devFixture || busyAction) return;
-    busyAction = 'browse-model';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
-    try {
-      const result = await invoke<ModelBrowseResult>('browse_model');
-      if (result.status === 'CONFIRMED_ACTIVE' || result.status === 'LAUNCHED_UNVERIFIED') {
-        const focused = await focusBlockbenchAfterOpen();
-        await refresh();
-        showSuccessToast(result.status === 'CONFIRMED_ACTIVE'
-          ? 'Confirmed: the requested model is active in the matching Blockbench session.'
-          : focused
-            ? 'Editor launch confirmed; model tab not verified. Check Blockbench.'
-            : 'Model launch sent; active tab not verified. Select Blockbench and check its model tab.');
-      }
-    } catch (cause) {
-      reportError(cause);
-    } finally {
-      busyAction = null;
-    }
   }
 
   async function chooseBlockbenchExecutable() {
@@ -337,12 +298,9 @@
     errorDetail = null;
     clearSuccessToast();
     try {
-      await invoke<BlockbenchEditorResult>('open_blockbench_editor');
-      const focused = await focusBlockbenchAfterOpen();
+      const message = await editorOperations.openEditor();
       await refresh();
-      showSuccessToast(focused
-        ? 'Blockbench is open.'
-        : 'Blockbench launched. Select its window from the taskbar if needed.');
+      showSuccessToast(message);
     } catch (cause) {
       reportError(cause);
     } finally {
@@ -376,7 +334,7 @@
       readinessReason = result.reason;
       await refresh();
       if (result.status === 'READY' || result.status === 'RUNTIME_READY') {
-        const focused = await focusBlockbenchAfterOpen();
+        const focused = await editorOperations.focus();
         const connection = result.status === 'READY' ? 'AI connection is ready.' : 'AI client can connect when needed.';
         showSuccessToast(focused
           ? `Blockbench window focus confirmed. ${connection}`
@@ -502,33 +460,22 @@
   }
 
   async function checkManagedUpdateOnce() {
-    if (devFixture || updateCheckStarted || !status?.manager_available) return;
-    updateCheckStarted = true;
-    try {
-      updateCheck = await invoke<ManagedUpdateCheck>('check_managed_update');
-    } catch {
-      // Advisory only: offline/restricted networks never block local use.
-      updateCheck = null;
-    }
+    const result = await maintenanceOperations.checkUpdate(!devFixture && !!status?.manager_available);
+    if (result !== undefined) updateCheck = result;
   }
 
   async function verifyPendingUpdate() {
     if (devFixture || busyAction || !status?.manager_available || !status.managed?.pending) return;
-    updateCheckStarted = false;
+    maintenanceOperations.resetUpdateCheck();
     await checkManagedUpdateOnce();
   }
 
   async function runManagedAction(action: 'update' | 'rollback' | 'recover' | 'repair' | 'setup-tls') {
     if (devFixture) return;
     if (!status?.manager_available || busyAction || statusProbeFailures >= 2) return;
-    // Bind the button to exactly the source SHA verified for this screen.
-    // Never silently install whichever release happens to be latest later.
-    const expectedSourceSha = action === 'update' &&
-      (updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED')
-        ? updateCheck.available_source_sha
-        : null;
-    if (action === 'update' && (!expectedSourceSha ||
-        (status.managed?.pending && updateCheck?.status !== 'UPDATE_STAGED'))) return;
+    const request = planManagedAction(action, status, updateCheck);
+    if (!request) return;
+    const actionLabel = managedActionLabel(action);
     closeUtilityMenu();
     busyAction = action;
     progressStage = 'preflight';
@@ -536,12 +483,7 @@
     errorDetail = null;
     clearSuccessToast();
     try {
-      const result = await invoke<ManagedActionResult>('managed_action', {
-        action,
-        ...(action === 'update' ? { expectedSourceSha } : {}),
-      });
-      const feedback = managedActionPresentation(action, result.receipt);
-      const actionLabel = action === 'update' ? 'Update managed components' : action === 'rollback' ? 'Restore previous version' : action === 'repair' ? 'Repair LazyDesigner' : action === 'setup-tls' ? 'Finish secure setup' : 'Finish incomplete setup';
+      const feedback = await maintenanceOperations.execute(request);
       showSuccessToast(feedback.message, feedback.kind);
       recordOperation(actionLabel, feedback.kind, feedback.status);
       await refresh();
@@ -551,12 +493,11 @@
         // restarting Desktop or relying on an old startup-only result.
         updateCheck = null;
         if (feedback.status === 'STAGED') {
-          updateCheckStarted = false;
+          maintenanceOperations.resetUpdateCheck();
           await checkManagedUpdateOnce();
         }
       }
     } catch (cause) {
-      const actionLabel = action === 'update' ? 'Update managed components' : action === 'rollback' ? 'Restore previous version' : action === 'repair' ? 'Repair LazyDesigner' : action === 'setup-tls' ? 'Finish secure setup' : 'Finish incomplete setup';
       recordOperation(actionLabel, 'failed', errorCode(cause));
       reportError(cause);
     } finally {
@@ -656,7 +597,7 @@
     busy={busyAction !== null}
     canOpenModel={true}
     canEditProjectPrefs={true}
-    onOpenModel={openProjectModel}
+    onOpenModel={openModel}
     onAddProjectFolder={addProjectFolder}
     onDeleteProject={beginDeleteProject}
     onFocusEditor={focusCurrentEditor}
@@ -721,7 +662,7 @@
               <p>Desktop could not read the local LazyDesigner state.</p>
             </div>
             <button class="primary-button" onclick={refresh} disabled={loading}>Try again</button>
-            <button class="secondary-button" onclick={browseModel} disabled={busyAction !== null}>Open Model…</button>
+            <button class="secondary-button" onclick={() => openModel()} disabled={busyAction !== null}>Open Model…</button>
           </section>
         </main>
 
@@ -738,7 +679,7 @@
           <section class="content-section">
             <div class="section-heading">
               <div><h2>Open a model</h2><p>Choose an existing .bbmodel file. AI connection is optional.</p></div>
-              <button class="primary-button" onclick={browseModel} disabled={busyAction !== null}>
+              <button class="primary-button" onclick={() => openModel()} disabled={busyAction !== null}>
                 {busyAction === 'browse-model' ? 'Opening…' : 'Open Model…'}
               </button>
             </div>

@@ -21,7 +21,9 @@ describe("human-facing Blockbench UI", () => {
     expect(() => managedActionPresentation("update", {})).toThrow("no verified status");
 
     const app = await Bun.file(new URL("../../apps/desktop/src/App.svelte", import.meta.url)).text();
-    expect(app).toContain("managedActionPresentation(action, result.receipt)");
+    const operations = await Bun.file(new URL("../../apps/desktop/src/maintenanceOperations.ts", import.meta.url)).text();
+    expect(operations).toContain("managedActionPresentation(request.action, result.receipt)");
+    expect(app).toContain("maintenanceOperations.execute(request)");
     expect(app).toContain("actionMessageKind === 'pending' ? 'Next step'");
     expect(app).toContain("operation.outcome === 'unchanged' ? 'No change'");
   });

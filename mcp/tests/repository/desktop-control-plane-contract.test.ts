@@ -2,10 +2,37 @@ import { describe, expect, test } from "bun:test";
 import { connectionChanged, type ConnectionBaseline, type ConnectionObservation } from "../../../apps/desktop/src/connectionWatch";
 import type { ProjectNavigation } from "../../../apps/desktop/src/projectNavigationTypes";
 import { createConnectionMonitor } from "../../../apps/desktop/src/connectionMonitor";
+import { createEditorOperations } from "../../../apps/desktop/src/editorOperations";
+import type { DesktopInvoke } from "../../../apps/desktop/src/desktopTypes";
 
 async function source(path: string): Promise<string> {
   return Bun.file(path).text();
 }
+
+describe("Desktop native editor operations", () => {
+  test.each([undefined, "recent-model"])("model launch %s shares focus and truthful acknowledgement", async (id) => {
+    const calls: string[] = [];
+    const invoke: DesktopInvoke = async (command) => {
+      calls.push(command);
+      return { status: command === "focus_blockbench_window" ? "DENIED" : "LAUNCHED_UNVERIFIED" } as never;
+    };
+    const message = await createEditorOperations(invoke).openModel(id);
+    expect(calls).toEqual([id === undefined ? "browse_model" : "project_navigation_action", "focus_blockbench_window"]);
+    expect(message).toContain("active tab not verified");
+  });
+
+  test("cancelled browsing never focuses the editor; invalid recent launch is rejected", async () => {
+    const calls: string[] = [];
+    const invoke: DesktopInvoke = async command => {
+      calls.push(command);
+      return { status: "CANCELLED" } as never;
+    };
+    const operations = createEditorOperations(invoke);
+    expect(await operations.openModel()).toBeNull();
+    await expect(operations.openModel("recent-model")).rejects.toThrow("did not acknowledge");
+    expect(calls).toEqual(["browse_model", "project_navigation_action"]);
+  });
+});
 
 describe("Desktop passive connection lifecycle", () => {
   test.each(["full-status-failure", "dispose"])("late probe cannot recover authority after %s", async (boundary) => {
@@ -419,11 +446,12 @@ describe("Desktop control-plane ownership", () => {
       source("../apps/desktop/src/ProjectNavigator.svelte"),
       source("../apps/desktop/src/projectNavigationTypes.ts"),
     ]);
-    const browse = app.slice(app.indexOf("async function browseModel()"), app.indexOf("async function openBlockbenchEditor()"));
-    const recent = app.slice(app.indexOf("async function openProjectModel("), app.indexOf("async function focusCurrentEditor()"));
-    expect(browse).toContain("invoke<ModelBrowseResult>('browse_model')");
-    expect(browse).not.toContain("ensure_ready");
-    expect(recent).not.toContain("ensure_ready");
+    const operations = await source("../apps/desktop/src/editorOperations.ts");
+    const model = app.slice(app.indexOf("async function openModel("), app.indexOf("async function focusCurrentEditor()"));
+    expect(operations).toContain("invoke<ModelBrowseResult>('browse_model')");
+    expect(operations).not.toContain("ensure_ready");
+    expect(model).toContain("editorOperations.openModel(id)");
+    expect(model).not.toContain("ensure_ready");
     expect(editor).toContain('add_filter("Blockbench model", &["bbmodel"])');
     expect(editor).toContain("if !is_bbmodel_file(path)");
     expect(editor).toContain('return Err("Choose an existing .bbmodel file."');
@@ -535,7 +563,7 @@ describe("Desktop control-plane ownership", () => {
     ]);
 
     expect(app).toContain("<ProjectNavigator");
-    expect(app).toContain("onOpenModel={openProjectModel}");
+    expect(app).toContain("onOpenModel={openModel}");
     expect(app).toContain("onFocusEditor={focusCurrentEditor}");
     expect(app).toContain("onProjectAction={runProjectAction}");
     expect(navigator).toContain("<h2>Current Model</h2>");
@@ -711,15 +739,15 @@ describe("Desktop stale connection action admission", () => {
       expect(start).toBeGreaterThan(0);
       expect(app.slice(start, start + 300)).toContain("statusProbeFailures >= 2");
     }
-    const model = app.slice(app.indexOf("async function openProjectModel("), app.indexOf("async function focusCurrentEditor()"));
+    const model = app.slice(app.indexOf("async function openModel("), app.indexOf("async function focusCurrentEditor()"));
     expect(model).not.toContain("statusProbeFailures >= 2");
     expect(model).not.toContain("ensure_ready");
     expect(model).not.toContain("manager_available");
-    expect(model).toContain("'project_navigation_action'");
-    const readOnly = app.slice(app.indexOf("async function runProjectAction("), app.indexOf("async function focusBlockbenchAfterOpen()"));
+    expect(model).toContain("editorOperations.openModel(id)");
+    const readOnly = app.slice(app.indexOf("async function runProjectAction("), app.indexOf("async function openModel("));
     expect(readOnly).toContain("'project_navigation_action'");
     expect(readOnly).not.toContain("statusProbeFailures >= 2");
-    expect(app).toContain("onclick={browseModel}");
+    expect(app).toContain("onclick={() => openModel()}");
     expect(app).toContain("disabled={loading || busyAction !== null} onclick={refresh}");
     expect(app).toContain("connectionMonitor.fullStatusSucceeded()");
   });
@@ -826,8 +854,10 @@ describe("Desktop explicit Blockbench window focus", () => {
     expect(blockbench).toContain("if GetForegroundWindow() == target");
     expect(main).toContain("fn focus_blockbench_window()");
     expect(main).toContain("focus_blockbench_window,");
-    expect(app).toContain("async function focusBlockbenchAfterOpen()");
-    expect(app).toContain("result.status === 'FOCUSED'");
+    const operations = await source("../apps/desktop/src/editorOperations.ts");
+    expect(operations).toContain("async function focusBlockbenchAfterOpen()");
+    expect(operations).toContain("result.status === 'FOCUSED'");
+    expect(app).toContain("editorOperations.focus()");
     expect(app).toContain("Select your Blockbench window from the taskbar.");
     expect(app).toContain("Blockbench is ready. Select it from the taskbar if needed.");
     const watcher = await source("../apps/desktop/src/connectionMonitor.ts");
@@ -1042,7 +1072,9 @@ describe("Desktop Workspace and Support feedback integrity", () => {
   test("describes managed updates consistently without promising a Desktop binary update", async () => {
     const ui = await Bun.file("../apps/desktop/src/App.svelte").text();
     expect(ui).toContain("Updating managed components");
-    expect(ui).toContain("Update managed components");
+    const presentation = await source("../apps/desktop/src/desktopPresentation.ts");
+    expect(presentation).toContain("Update managed components");
+    expect(ui).toContain("managedActionLabel(action)");
     expect(ui).not.toContain("Update LazyDesigner' : action === 'rollback'");
   });
 });

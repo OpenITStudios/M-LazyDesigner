@@ -77,6 +77,15 @@ export function bootstrapInstallPresentation(receipt: Record<string, unknown>): 
 }
 
 export type ManagedAction = 'update' | 'rollback' | 'recover' | 'repair' | 'setup-tls';
+export function managedActionLabel(action: ManagedAction): string {
+  return {
+    update: 'Update managed components',
+    rollback: 'Restore previous version',
+    recover: 'Finish incomplete setup',
+    repair: 'Repair LazyDesigner',
+    'setup-tls': 'Finish secure setup',
+  }[action];
+}
 export type ManagedActionFeedback = {
   status: string;
   kind: 'success' | 'pending' | 'unchanged';

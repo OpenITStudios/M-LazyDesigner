@@ -28,6 +28,8 @@ Those remain owned by the existing Runtime/Gateway/Managed Distribution layers.
 
 These modules do not own project contents, Gateway lifecycle or managed-distribution transactions. Frontend refactoring proof is separate from native installed acceptance.
 
+`src/editorOperations.ts` owns the shared native model-open acknowledgement and focus sequence for browsing/recent models, plus explicit editor launch. `src/maintenanceOperations.ts` owns one-shot update discovery, source-bound request planning and manager-receipt validation. Both accept the existing Tauri invoke function; App retains action admission, UI state, refresh ordering and user feedback. Project bookmark/deletion review and bootstrap/readiness UI orchestration remain in App because their intermediate states drive the current screen. Managed action labels have one display-only owner in `desktopPresentation.ts`.
+
 Desktop does not poll releases in the background and never kills Blockbench/Gateway processes. Safe self-healing is limited to restoring owned managed files while Blockbench/Runtime/Gateway are idle.
 
 

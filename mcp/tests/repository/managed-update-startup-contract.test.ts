@@ -1,8 +1,47 @@
 import { describe, expect, test } from "bun:test";
+import { createMaintenanceOperations, planManagedAction } from "../../../apps/desktop/src/maintenanceOperations";
+import type { DesktopInvoke, ManagedUpdateCheck, SystemStatus } from "../../../apps/desktop/src/desktopTypes";
 
 async function source(path: string): Promise<string> {
   return Bun.file(path).text();
 }
+
+describe("Desktop maintenance operations", () => {
+  test("only the verified staged source is sent for a pending update", async () => {
+    const status = { managed: { pending: true } } as SystemStatus;
+    const check: ManagedUpdateCheck = {
+      status: "UPDATE_AVAILABLE", installed_source_sha: "a".repeat(40),
+      available_source_sha: "b".repeat(40), tag: null, published_at: null,
+    };
+    expect(planManagedAction("update", status, check)).toBeNull();
+    expect(planManagedAction("update", status, null)).toBeNull();
+    const request = planManagedAction("update", status, { ...check, status: "UPDATE_STAGED" });
+    expect(request).toEqual({ action: "update", expectedSourceSha: check.available_source_sha });
+    const calls: unknown[] = [];
+    const invoke: DesktopInvoke = async (command, args) => {
+      calls.push({ command, args });
+      return { action: "update", receipt: { status: "STAGED" } } as never;
+    };
+    if (!request) throw new Error("Expected a verified request");
+    const feedback = await createMaintenanceOperations(invoke).execute(request);
+    expect(feedback.kind).toBe("pending");
+    expect(calls).toEqual([{ command: "managed_action", args: { action: "update", expectedSourceSha: check.available_source_sha } }]);
+  });
+
+  test("startup discovery is one-shot and only explicit reset allows another attempt", async () => {
+    let attempts = 0;
+    const invoke: DesktopInvoke = async () => { attempts += 1; throw new Error("Offline"); };
+    const operations = createMaintenanceOperations(invoke);
+    expect(await operations.checkUpdate(false)).toBeUndefined();
+    expect(attempts).toBe(0);
+    expect(await operations.checkUpdate(true)).toBeNull();
+    expect(await operations.checkUpdate(true)).toBeUndefined();
+    expect(attempts).toBe(1);
+    operations.resetUpdateCheck();
+    expect(await operations.checkUpdate(true)).toBeNull();
+    expect(attempts).toBe(2);
+  });
+});
 
 describe("managed startup update contract", () => {
   test("managed releases publish a lightweight digest-verifiable manifest beside the full package", async () => {
@@ -55,8 +94,10 @@ describe("managed startup update contract", () => {
   test("Desktop invokes update discovery once after local status and never from heartbeat/focus handlers", async () => {
     const app = await source("../apps/desktop/src/App.svelte");
     expect(app).toContain("async function checkManagedUpdateOnce()");
-    expect(app).toContain("updateCheckStarted");
-    expect(app).toContain("await invoke<ManagedUpdateCheck>('check_managed_update')");
+    const operations = await source("../apps/desktop/src/maintenanceOperations.ts");
+    expect(operations).toContain("updateCheckStarted");
+    expect(operations).toContain("await invoke<ManagedUpdateCheck>('check_managed_update')");
+    expect(app).toContain("maintenanceOperations.checkUpdate(!devFixture && !!status?.manager_available)");
     expect(app).toContain("void checkManagedUpdateOnce();");
 
     const monitor = await source("../apps/desktop/src/connectionMonitor.ts");
@@ -77,8 +118,11 @@ describe("managed startup update contract", () => {
       source("../apps/desktop/src-tauri/src/main.rs"),
       source("../distribution/cli.ts"),
     ]);
-    expect(app).toContain("updateCheck.available_source_sha");
-    expect(app).toContain("{ expectedSourceSha }");
+    const operations = await source("../apps/desktop/src/maintenanceOperations.ts");
+    expect(operations).toContain("updateCheck.available_source_sha");
+    expect(operations).toContain("expectedSourceSha: request.expectedSourceSha");
+    expect(app).toContain("planManagedAction(action, status, updateCheck)");
+    expect(app).toContain("maintenanceOperations.execute(request)");
     expect(main).toContain("expected_source_sha: Option<String>");
     expect(rust).toContain('command.arg("--expected-source-sha").arg(sha)');
     expect(rust).toContain('A verified selected update source is required.');
@@ -93,7 +137,7 @@ describe("managed startup update contract", () => {
       app.indexOf("onMount(() =>")
     );
     expect(action).toContain("if (feedback.status === 'STAGED')");
-    expect(action).toContain("updateCheckStarted = false;");
+    expect(action).toContain("maintenanceOperations.resetUpdateCheck()");
     expect(action).toContain("await checkManagedUpdateOnce()");
     expect(app).toContain("async function verifyPendingUpdate()");
     expect(app).toContain("onclick={verifyPendingUpdate}");

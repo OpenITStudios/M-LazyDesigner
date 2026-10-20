@@ -1,5 +1,7 @@
 import type { ProjectNavigation } from './projectNavigationTypes';
 
+export type DesktopInvoke = typeof import('@tauri-apps/api/core').invoke;
+
 // Serialized Desktop IPC types shared by the UI; readiness is owned by Rust.
 export type Compatibility = {
     status: 'validated' | 'compatible-unverified' | 'review-required' | 'unsupported' | 'invalid';
