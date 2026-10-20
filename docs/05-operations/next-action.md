@@ -1,5 +1,12 @@
 # LazyDesigner Next Action
 
+## MCP Node 24 typings alignment — 2026-10-20
+
+MCP now explicitly pins `@types/node 24.19.2` as a **development-only** dependency, matching the supported Desktop Node 24 type line. The prior implicit root Node 20 types and nested Electron Node 24.13.3 are deduplicated into a single Node 24.19.2 entry compatible with Electron 40's `^24.9.0` declaration and Bun's `*` range. `undici-types 7.24.6` is paired with the Node typings' `>=7.24.0 <7.24.7` constraint. All SHA512 fingerprints were reused from existing published npm metadata already in Desktop's lockfile. One obsolete Electron-specific Undici 7.18.2 entry is also removed.
+
+**Verification:** Root manifest/Bun lock match and statically resolved dependency closure checked; no additional dependency is missing. **NOT EXECUTED:** a Bun-generated lock, frozen install, actual TS7 typecheck, Gateway/runtime tests, or Windows-native checks. CI remains OFF.
+
+
 ## Svelte-check patch upgrade — 2026-10-20
 
 Desktop `svelte-check` is updated **4.7.6 → 4.7.7**, released 2026-10-16. The upstream direct dependencies and TypeScript 6 peer contract are unchanged; the exact published tarball checksum matches two independently generated npm locks. Desktop `package.json` and `package-lock.json` are updated together. **Source static PASS only:** current environment still cannot download registry tarballs or execute `npm ci`; actual `svelte-check --tsgo`, TypeScript 6 compatibility check and frontend build are **NOT EXECUTED**. CI remains OFF.
