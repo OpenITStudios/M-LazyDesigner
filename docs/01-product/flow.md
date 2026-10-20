@@ -1,6 +1,6 @@
 # LazyDesigner End-to-End Flow
 
-Updated: 2026-10-10
+Updated: 2026-10-20
 
 This file owns only the **product-level sequence**. It must not duplicate detailed Reference, Authoring, Control, or Operations contracts.
 
@@ -156,19 +156,21 @@ REFERENCE / REQUIREMENTS
 → GEOMETRY
 → GEOMETRY VERIFY
 → UV READINESS PREFLIGHT
-→ USER GEOMETRY APPROVAL
+→ USER GEOMETRY APPROVAL or authorized autonomous verification
 → PRODUCTION UV LAYOUT (GEOMETRY / MODELLING OWNER)
 → UV LAYOUT PASS
 → TEXTURING (ATLAS / PIXEL / MATERIAL OWNER)
 → TEXTURE VERIFY
-→ USER TEXTURE APPROVAL
+→ USER TEXTURE APPROVAL or authorized autonomous verification
 → ANIMATION READINESS when required
 → ANIMATION when required
 → FINALIZATION
 → COMPLETE
 ```
 
-Exact authoring rules: `../03-authoring/README.md`.
+Approval/authorized-verification requirements and current-revision evidence are owned by
+the [Authoring Workflow Policy](../03-authoring/workflow.md). Domain navigation remains
+in [Asset Authoring](../03-authoring/README.md).
 
 ## 5. Semantic Ownership
 

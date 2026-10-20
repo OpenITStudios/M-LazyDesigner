@@ -6,6 +6,10 @@ Branch: Local
 Baseline commit: 9c95bd842e310139a71db6b2d2ef25c81e14eb87
 Scope: Geometry, UV/Texturing, Animation, cross-domain correction and cost-to-accepted-result.
 
+This audit owns findings and dependency rationale. Active work and ordering are owned
+by [next-action.md](../../docs/05-operations/next-action.md); the batch list below is not
+a separate task queue.
+
 ## Decision
 Improve the existing three-domain workflow; do not create a second quality engine, registry, routing layer, score or Gateway API. Source contracts and synthetic fixture PASS do not prove native Blockbench quality. Do not run Actions, publish releases, or modify main.
 

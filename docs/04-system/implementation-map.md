@@ -1,6 +1,6 @@
 # LazyDesigner Implementation Map
 
-Updated: 2026-10-10
+Updated: 2026-10-20
 
 This file maps **current source ownership only**. Product workflow belongs in `docs/01-product/flow.md`; AI context loading in `docs/04-system/ai-context-loading.md`; continuation/proof in `docs/05-operations/`.
 
@@ -442,7 +442,13 @@ Visual/reference PASS remains evidence-based and separate from technical success
 
 ## Zero-Waste Token Efficiency
 
-Remaining bounded source work is owned by `docs/04-system/zero-waste-token-efficiency-plan.md`. It may add a deterministic Gateway-facing Context Headroom projection and narrow non-repetition of superseded server-owned evidence. It must not add AI summarizers/planners, persistent observation state, or capability loss.
+Current source owners are `mcp/gateway/control/contextHeadroom.ts` for deterministic
+headroom projection and `mcp/gateway/control/packet.ts` plus `delta/` for compact
+context/continuation delivery. The [Zero-Waste design snapshot](zero-waste-token-efficiency-plan.md)
+is historical rationale, not an active implementation queue. Current continuation is
+owned by [next-action.md](../05-operations/next-action.md); matching source/proof determines
+what is actually implemented and accepted. Do not add AI summarizers/planners,
+persistent observation state or capability loss as an efficiency shortcut.
 
 ## Context / Knowledge
 
@@ -601,7 +607,7 @@ Ownership:
 
 ```text
 apps/desktop/src/App.svelte
-→ status / compatibility / maintenance presentation
+→ page/dialog composition, action admission and ephemeral UI state
 → explicit user actions only
 
 apps/desktop/src-tauri/src/system_status.rs
@@ -640,4 +646,8 @@ repair  → same active immutable source SHA; no upgrade
 recover → interrupted transaction recovery
 ```
 
-Desktop verification is owned by `.github/workflows/desktop-verify.yml`; cross-owner repository invariants are guarded by `mcp/tests/repository/desktop-control-plane-contract.test.ts`.
+Frontend page, dialog, observation and operation owners are documented in the
+[Desktop README](../../apps/desktop/README.md#frontend-module-ownership).
+The Desktop verifier definition is retained in `.github/disabled-workflows/desktop-verify.yml`
+while CI is disabled; no automatic or manual dispatch is implied. Cross-owner repository
+invariants are guarded by `mcp/tests/repository/desktop-control-plane-contract.test.ts`.

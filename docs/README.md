@@ -120,11 +120,6 @@ One concern must have one canonical semantic owner. Link to that owner instead o
 
 ## Authority Order
 
-```text
-explicit current user requirement
-→ repository execution rules (AGENTS.md / GITHUB_RULES.md)
-→ domain canonical documentation under docs/
-→ matching execution Skill when applicable
-→ active operation state under 05-operations/ when material
-→ implementation/source evidence for implementation questions
-```
+Authority precedence is owned by [AGENTS.md — Source Precedence](../AGENTS.md#source-precedence).
+Branch, delivery and proof rules are owned by [GITHUB_RULES.md](../GITHUB_RULES.md).
+This index provides navigation only.

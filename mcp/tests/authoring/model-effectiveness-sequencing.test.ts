@@ -19,7 +19,9 @@ describe("model creation effectiveness — texture/animation sequencing", () => 
       expect(text).toContain("Geometry APPROVED");
       expect(text).toContain("UV Layout PASS");
     }
-    expect(flow).toContain("USER GEOMETRY APPROVAL");
+    expect(flow).toContain("USER GEOMETRY APPROVAL or authorized autonomous verification");
+    expect(flow).toContain("USER TEXTURE APPROVAL or authorized autonomous verification");
+    expect(flow).toContain("../03-authoring/workflow.md");
     expect(flow).toContain("PRODUCTION UV LAYOUT");
     expect(flow).toContain("TEXTURING");
     expect(workspace).toContain("Texturing cannot enter `IN_PROGRESS` until `UV Layout: PASS`");
