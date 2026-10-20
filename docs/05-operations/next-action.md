@@ -1,5 +1,10 @@
 # LazyDesigner Next Action
 
+## Zod runtime patch 4.6.7 — 2026-10-20
+
+`mcp/package.json` and `mcp/bun.lock` now pin Zod **4.6.7** instead of locked 4.6.5. The upstream package has no additional runtime dependencies; the published SHA512 integrity was cross-checked against independently published Nix/npm metadata. MCP Client/Server/Core 2.3.1 depend on compatible Zod `^4.2.0`, so the source graph remains satisfiable. This is **source/lockfile metadata validation**, not an executed Bun frozen install or MCP conformance proof. CI stays disabled.
+
+
 ## TypeScript 7 / MCP Node typings compatibility — 2026-10-20
 
 The official MCP Server SDK v2 notes that TypeScript 6 and newer no longer implicitly includes `@types/node` when an explicit `compilerOptions.types` list is set. The MCP shared tsconfig and three overrides (`gateway/tsconfig.json`, `tsconfig.gateway-shared.json`, `tsconfig.semantic-core.json`) now explicitly add `node` while retaining their existing `bun` and Blockbench type entries. `@types/node 20.19.4` is already present in the existing MCP Bun lock, so this is a configuration compatibility correction and **does not require a dependency resolution change**.
