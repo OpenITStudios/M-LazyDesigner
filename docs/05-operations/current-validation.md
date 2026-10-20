@@ -8,6 +8,26 @@
 - Other dependency/kit upgrades are not yet complete. Refer to `next-action.md` for the only permitted remaining scope. Older CI/Tauri statements below record historical states and must not override this section.
 
 
+## Dependency-version upgrade status (2026-10-20)
+
+**Requested version targets are now represented consistently in the `Local` source manifests and lock graphs** through [MCP/types commit `571fe69`](https://github.com/OpenITStudios/M-LazyDesigner/commit/571fe697a9d0ecbff4b2aac6e0093ed485b9e412) and [Vite migration commit `274c371`](https://github.com/OpenITStudios/M-LazyDesigner/commit/274c37122c1085680f189cc30073a0763e7fb5a7):
+
+| Package | Source-locked version |
+| --- | --- |
+| MCP client / server / core | 2.3.1 each |
+| `@types/bun` / `bun-types` | 1.4.3 each |
+| `blockbench-types` / source type baseline | 5.2.0 |
+| `vite` / `@sveltejs/vite-plugin-svelte` | 8.3.4 / 7.3.1 |
+| `rolldown` | 1.2.12 |
+| Svelte | 5.57.2 |
+| Rust toolchain | 1.99.1 |
+| Node.js desktop toolchain | 24.22.0 |
+| Bun runtime pin | 1.4.3 |
+
+**Validation boundary:** Static structural manifest/lock consistency and dependency/semver closure were checked, including Windows/Linux Rolldown bindings, dual Lightning CSS 1.32 (Tailwind) and 1.33 (Vite), and MCP Core unification. The new Bun and npm locks were **reconstructed from published manifests and npm/Bun lock integrity data** due to restricted package-registry and Bun execution access. There is **no verified frozen install, package-manager lock regeneration, typecheck, build, audit, Windows installer, or native Blockbench acceptance** for this new exact SHA. All those remain **NOT EXECUTED**; version-target *source integration* is not equivalent to acceptance.
+
+**CI DISABLED:** nine verification workflows are archived outside GitHub Actions and two release/distribution workflows remain manual-only. No current-HEAD CI runs occurred. No release or promotion to `main` is authorized. Earlier successful runs described below are historic and must not be reported as PASS for this version-upgraded source.
+
 This file owns **current proof interpretation only**. Flow: `docs/01-product/flow.md`; canonical source: `docs/04-system/implementation-map.md`; continuation: `next-action.md`; native acceptance: `local-acceptance-runbook.md`. Historical detail remains in Git and linked reports.
 
 ## Current authority
