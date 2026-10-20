@@ -1,5 +1,12 @@
 # LazyDesigner Next Action
 
+## Desktop TypeScript 7 native integration — 2026-10-20
+
+Desktop now declares **TypeScript 7.0.2** as the native compiler alias `@typescript/native` and uses it for the primary `svelte-check --tsgo` typecheck. **TypeScript 6.0.3** remains under the canonical `typescript` name for `svelte-check`'s classic JavaScript compiler API and is verified independently via `typecheck:compat`. The existing `verify:source` chain executes both TypeScript 6 and 7 checks before Vite/Rust verification.
+
+Both `apps/desktop/package.json` and `package-lock.json` were updated together. The reconstructed npm lock includes 20 original upstream integrity-verified TypeScript native platform binaries. No runtime/build acceptance is asserted: `npm ci`, both Svelte checks, frontend build, Cargo, and Windows packaging remain **NOT EXECUTED** because the registry and development runtime are inaccessible here. Canonical npm lockfile regeneration and actual source checks are still required. CI is still OFF.
+
+
 ## TypeScript 7 MCP compiler migration — 2026-10-20
 
 The MCP declared TypeScript compiler is now **7.0.2** with TypeScript's native platform-specific binaries. The shared `mcp/tsconfig.json` changes `moduleResolution: node` to `bundler` because TypeScript 7 rejects the former. The already-declared `module: ESNext` is compatible. `blockbench-types` still requests TypeScript ^5.8.3, so a nested TypeScript 5.9.3 lock entry is retained for that package rather than silently violating its dependency constraint.

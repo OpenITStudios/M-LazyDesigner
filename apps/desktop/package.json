@@ -16,9 +16,10 @@
     "build:app:shell": "npm run prepare:icons && tauri build",
     "build:app": "npm run prepare:icons && npm run prepare:managed-resource && tauri build --config src-tauri/tauri.bundle.conf.json",
     "build:app:trusted": "npm run prepare:icons && npm run prepare:managed-resource && tauri build --config src-tauri/tauri.release.conf.json",
-    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "typecheck": "svelte-check --tsgo --tsconfig ./tsconfig.json",
     "check:rust": "npm run prepare:icons && cargo check --locked --manifest-path src-tauri/Cargo.toml",
-    "verify:source": "npm run typecheck && npm run build:frontend && npm run prepare:icons && cargo check --locked --manifest-path src-tauri/Cargo.toml && cargo test --locked --manifest-path src-tauri/Cargo.toml"
+    "verify:source": "npm run typecheck:compat && npm run typecheck && npm run build:frontend && npm run prepare:icons && cargo check --locked --manifest-path src-tauri/Cargo.toml && cargo test --locked --manifest-path src-tauri/Cargo.toml",
+    "typecheck:compat": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.3"
@@ -31,7 +32,8 @@
     "svelte": "^5.57.2",
     "svelte-check": "^4.7.6",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.3",
-    "vite": "8.3.4"
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "@typescript/native": "npm:typescript@7.0.2"
   }
 }
