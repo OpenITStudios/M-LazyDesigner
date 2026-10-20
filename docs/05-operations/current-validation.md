@@ -1,79 +1,97 @@
 # LazyDesigner Current Validation
 
-This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Complete historical evidence remains in Git at `b9b4756ee18497d2cedc9ff475672ddfea81a2aa` (first dependency completion) and `48329d013222c841dfe60477b4a3f59030befbaf` (earlier continuity).
+This file owns current proof interpretation only and the requested dependency-efficiency report. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Historical reports remain in Git at ce5299aa06b5c54c81544d65291dac95bbe90547 and b9b4756ee18497d2cedc9ff475672ddfea81a2aa; no second progress ledger is introduced.
 
 ## Current authority
 
-2026-10-20 dependency follow-up continues in the isolated Windows x64 checkout from remote OpenITStudios/M-LazyDesigner / Local, baseline b9b4756e. Executable delivery: [51324f6da133cb728d0cda27f6b1a3358452161d](https://github.com/OpenITStudios/M-LazyDesigner/commit/51324f6da133cb728d0cda27f6b1a3358452161d); clean exact-SHA MCP verify:full, Desktop verify:source and integrated managed Windows build all PASS. The original dirty checkout and assets remain untouched. CI DISABLED: nine verifier definitions remain outside Actions discovery. No Actions dispatch, main change, release or publication.
+2026-10-20: isolated Windows x64 checkout, OpenITStudios/M-LazyDesigner / Local, efficiency baseline ce5299aa. The original dirty checkout and authored assets remain untouched. CI DISABLED: nine verification definitions stay outside Actions discovery. No Actions dispatch, main change, release or publication.
 
-Toolchains: Bun 1.4.3, Node 24.22.0 LTS, npm 11.16.0, pinned Rust/Cargo 1.99.1. The updated manifest minimum Rust 1.95 is independently tested using Rust/Cargo 1.95.0. These are real installed tools, not source-only version declarations.
+Toolchains: Bun 1.4.3, Node 24.22.0 LTS, npm 11.16.0, pinned Rust/Cargo 1.99.1; minimum Rust 1.95.0 is independently compiled successfully.
 
-## Dependency comparison and decisions
+## Dependency efficiency report - 2026-10-20
 
-| Dependency | Before follow-up | Current |
+### Problem and implemented correction
+
+Desktop consumes only process PID, name and executable for editor selection, focus, deletion safety, Runtime lease checks and model-open proof. Five production paths created System::new_all() and immediately refreshed processes again. Other paths also collected unused per-process CPU, memory and disk statistics. All ten production snapshot call sites now use the existing process.rs owner's process_snapshot helper: one fresh native process scan, explicit executable retrieval, dead-process removal, no global cache. Exact Blockbench-name/executable checks remain at their existing semantic owners.
+
+sysinfo retains only its required system feature. Unused component/disk/network/user feature activation is removed. This does not remove product functionality or weaken Runtime build/profile/PID guards. A controlled hidden child-process regression verifies live executable discovery and confirms the next snapshot excludes the exited PID; the existing self-process identity test now exercises the production helper.
+
+### Measured local results
+
+| Native scan path | Run 1 median / p95 | Run 2 median / p95 |
 | --- | --- | --- |
-| rand | 0.8.8 | 0.10.3 |
-| rfd | 0.15.4 | 0.17.2 |
-| sha2 direct | 0.10.9 | 0.11.1 |
-| sysinfo | 0.30.13 | 0.39.6 |
-| Rust minimum | 1.90 | 1.95 (sysinfo requirement) |
-| PostCSS MCP | 8.5.28 override | 8.5.31, normal upstream range |
-| Nano ID MCP | 3.3.19 override | 3.3.20, normal upstream range |
-| RustSec informational findings | 5 | 2, neither in Windows graph |
+| Previous new_all + second process refresh | 50.373 / 64.267 ms | 68.188 / 77.296 ms |
+| Previous new + default process refresh | 11.437 / 14.894 ms | 19.068 / 25.780 ms |
+| New production identity snapshot | 8.222 / 8.964 ms | 9.909 / 11.384 ms |
 
-Already completed and retained: MCP client/server/core 2.3.1, Zod 4.6.7, native TypeScript 7.0.2, TS6 compatibility API 6.0.3, Bun typings 1.4.3, Node typings 24.19.2, Blockbench typings 5.2.1, Tauri Rust/API 2.12.4 and CLI 2.12.3, Vite 8.3.4, Svelte plugin 7.3.1, Svelte 5.57.2, svelte-check 4.7.7, Tailwind 4.3.3, Rolldown 1.2.14. Registry checks and package-manager updates show no newer direct compatible release left outstanding.
+Median scan time fell 83.7–85.5% versus the double-scan paths, and 28.1–48.0% versus the old single-scan path. These are two local measurements, not a full-application latency, startup-time, token-cost or guaranteed cross-machine speedup claim.
 
-Rust source adopts rand::rng/Rng and fallible SysRng/TryRng. Security-sensitive deletion tokens continue to use system entropy; entropy failure returns an error before publishing a deletion review. sysinfo process refresh explicitly updates all processes and removes dead entries; OsStr process names are converted for exact Blockbench-name matching. sha2 0.11 output uses explicit two-digit lowercase byte formatting, preserving existing identity lengths and persisted hashes. New regressions assert known navigation/project/profile hashes and actual Windows process name/executable discovery.
+Method: Windows x64, Rust 1.99.1 release-mode harness, sysinfo exactly 0.39.6 with system feature; include the actual production process.rs helper. Compare the two exact old scan sequences above against that helper. Each run uses three warmups per case and twenty samples per case, alternating forward/reverse case order. Time native System construction/refresh using Instant; validate each returned inventory includes the current PID and exact executable. Sort samples, select rounded indices (n-1)*0.5 and (n-1)*0.95. Background development workloads differed between runs, which is why both observations are disclosed.
 
-The rfd upgrade removes obsolete ashpd/zbus/zvariant dependencies and their three unmaintained advisories. No features were removed to hide scanner findings. Cargo regenerated its lockfile. Redundant PostCSS/Nano ID overrides were removed; Bun then resolved the latest compatible patches and regenerated bun.lock. npm update/ci confirm the Desktop lock remains current and consistent.
+Commands: cargo +1.99.1 run --release --manifest-path .cache/process-scan-bench/Cargo.toml (twice). The disposable harness/raw JSON are ignored local evidence, not a new repository benchmark framework. To reproduce, use the three scan sequences and sampling method above; only the new case calls production::process_snapshot().
 
-Required compatibility constraints remain explicit: Node types stay on supported Node 24; TypeScript 6 is retained for svelte-check and compiler API tooling while tsc is verified 7.0.2. Blockbench owns nested TypeScript 5.9, Vue 2.7.14 and Electron ^43.4.0 (resolved 43.8.1); they are typing dependencies, not a second Desktop runtime. Tauri retains its own sha2 0.10 dependency; forcing it to direct sha2 0.11 would violate upstream requirements. Distinct compatible Undici versions similarly retain their actual consumers.
+### Dependency footprint and limits
+
+| Metric | Before | After |
+| --- | --- | --- |
+| sysinfo resolved feature set | component, default, disk, network, system, user | system |
+| Cargo.lock packages | 437 | 436 |
+| Resolved Windows dependency nodes | 258 | 258 |
+| Full-lock RustSec informational warnings | 2 | 2, both absent from Windows |
+
+The removed lock entry is macOS-only objc2-open-directory. Windows package-node count is unchanged; reduced feature activation is not claimed as a package-count or installer-size reduction. No dependency downgrade, new dependency, speculative cache, alternate process engine or security suppression.
+
+## Dependency readiness
+
+All compatible stable direct upgrades are complete. Earlier dependency work reduced Cargo.lock from 490 to 437 packages and RustSec warnings from five to two; this focused efficiency change takes the lock to 436.
+
+| Component | Current accepted source |
+| --- | --- |
+| MCP client/server/core; Zod | 2.3.1; 4.6.7 |
+| Native TS; compatibility compiler API | 7.0.2; 6.0.3 |
+| Bun; Bun typings; Node typings | 1.4.3; 1.4.3; 24.19.2 |
+| Blockbench typings; Electron typing-only | 5.2.1; 43.8.1 satisfying ^43.4.0 |
+| Tauri Rust/API; CLI | 2.12.4; 2.12.3 |
+| Vite; Svelte plugin; Rolldown | 8.3.4; 7.3.1; 1.2.14 |
+| Svelte; svelte-check; Tailwind | 5.57.2; 4.7.7; 4.3.3 |
+| rand; rfd; sha2 direct; sysinfo | 0.10.3; 0.17.2; 0.11.1; 0.39.6 |
+| MCP PostCSS; Nano ID | 8.5.31; 3.3.20, obsolete overrides removed |
+
+Keep Node typings on supported Node 24. TS6 remains necessary for Svelte/compiler API tooling while tsc is verified native 7.0.2. Blockbench owns nested TypeScript 5.9 and Vue 2.7.14; Tauri owns its separate sha2 0.10 requirement. These upstream constraints are preserved without forcing incompatible versions. The prior rand/sysinfo/sha2 API migration preserves system-entropy deletion tokens and exact persisted SHA256 identity bytes; fixed-hash regressions remain active.
 
 ## Current proof matrix
 
-| Check | Evidence/result |
+| Check | Current evidence |
 | --- | --- |
-| Cargo update and locked dependency resolution | PASS |
-| Rust 1.99.1 tests | PASS: 80, including 2 added regression tests |
-| Rust minimum 1.95.0 cargo check --locked | PASS, separate target directory |
-| Desktop verify:source on Node 24.22.0 | PASS: TS6/TS7 Svelte checks, Vite, Cargo check and 80 Rust tests |
-| npm update, npm ci, npm audit | PASS: consistent lock and 0 vulnerabilities |
-| Bun update, frozen install, security:audit | PASS; full audit retains one low upstream Vue finding |
-| TS7 version/root/project graph/Gateway/unused checks | PASS |
-| Repository verifier | PASS: 282 tests; rerun for final evidence documents |
-| MCP verify:full | PASS: repository, TS7, runtime, authoring, Gateway, benchmark, surface and bundle stages |
-| Full RustSec cargo-audit 0.22.2 | 0 classified vulnerabilities; 2 informational warnings |
-| Windows package | PASS: integrated managed NSIS on clean 51324f6d; disposable compiled-CLI install/status smoke |
-| Native Blockbench, visual acceptance, installed NSIS UI | NOT EXECUTED on upgraded source |
+| Cargo canonical lock regeneration | PASS |
+| Rust 1.99.1 regression tests | PASS: 81, including process identity and exited-PID tests |
+| Desktop verify:source | PASS: both TS6/TS7 Svelte checks, Vite, locked Cargo check and 81 tests |
+| Rust minimum 1.95.0 cargo check --locked | PASS with separate target directory |
+| Repository verifier | PASS: 282 tests; delegated fast-path guard updated without removing its no-new_all rule |
+| RustSec full-lock audit | 0 classified vulnerabilities; 2 disclosed non-Windows warnings |
+| Local process benchmark | PASS: two runs with process/executable assertions; results above |
+| Integrated managed Windows NSIS | Pending clean committed efficiency build; prior 51324f6d packaging PASS retained separately |
+| Executable MCP source | Unchanged by this Desktop-only batch; reuse clean 51324f6d full PASS, no unnecessary full MCP rerun |
+| Installed native/visual acceptance | NOT EXECUTED on this source |
 
-Current local logs are ignored .cache outputs, not another durable ledger. Existing Svelte unused-CSS/alertdialog warnings (12) and Rust dead-field/helper warnings (3) remain disclosed; no suppression was added.
+Earlier install reproducibility remains proven: npm ci/audit clean; Bun forced frozen reinstall (60 packages), native TS7 types and real Gateway/compiler API smoke PASS. Existing Svelte unused-CSS/alertdialog warnings (12) and Rust dead fields/helper warnings (3) remain visible. No verifier or warning is suppressed. Local logs live in ignored .cache; this document is the durable report.
 
 ## Security and license boundaries
 
-Vue 2.7.14 is an exact upstream Blockbench typing dependency affected by low [GHSA-5j4c-8p2g-v4jx](https://github.com/advisories/GHSA-5j4c-8p2g-v4jx). The advisory spans Vue 2; neither upgrading to another Vue 2 patch nor forcing Vue 3 proves remediation. No compatible upstream package release resolves it today. This is an open development-dependency finding, not a claim of zero advisories.
+Bun full audit retains low [GHSA-5j4c-8p2g-v4jx](https://github.com/advisories/GHSA-5j4c-8p2g-v4jx) through Blockbench's exact Vue 2.7.14 typing dependency. No compatible upstream release fixes this advisory; another Vue 2 patch or an incompatible Vue 3 override would not prove remediation. Bun high-severity gate PASS; npm audit reports zero vulnerabilities.
 
-Full-lock RustSec retains proc-macro-error 1.0.4 (RUSTSEC-2024-0370, unmaintained) and glib 0.18.5 (RUSTSEC-2024-0429, unsound), owned by Tauri's GTK stack. The locked x86_64-pc-windows-msvc graph excludes both. No advisory ignore, category suppression or dependency downgrade. Linux native safety is not claimed; Windows x64 remains the supported Desktop target.
+Full Cargo audit retains proc-macro-error 1.0.4 (RUSTSEC-2024-0370, unmaintained) and glib 0.18.5 (RUSTSEC-2024-0429, unsound) through Tauri's GTK stack. Both remain absent from the locked x86_64-pc-windows-msvc graph. No advisory ignores; Linux native safety is not claimed. Windows x64 is the supported Desktop target.
 
-Cargo metadata declares maximum Windows dependency MSRV 1.95. The upgraded direct crates retain MIT/Apache-compatible license expressions. Blockbench typings still publishes no license field; its existing upstream licensing uncertainty remains explicit. No new framework or production abstraction was introduced.
+No new license surface: direct crates keep MIT/Apache-compatible expressions. Blockbench typings still has no published license field; that pre-existing upstream uncertainty remains disclosed. See upstream [ProcessRefreshKind contract](https://docs.rs/sysinfo/0.39.6/sysinfo/struct.ProcessRefreshKind.html) for automatic PID/name retrieval and explicit executable selection.
 
 ## Current source contracts
 
-Control is under mcp/gateway/control/; development planning under mcp/gateway/development/. The retired Navigator source remains removed. The persistent Gateway retains status, search_capabilities, describe_capability and invoke_capability. Unknown mutations are not replayed. Geometry/Texturing share AUTHORING; Animation has explicit handoff. Generated API/schema/prompt files remain generator-owned. No liveValidatedBuilds entry is promoted by compiler/build evidence.
+Control is under mcp/gateway/control/; development planning under mcp/gateway/development/. The retired Navigator source remains removed. The persistent Gateway retains status, search_capabilities, describe_capability and invoke_capability. Unknown mutations are not replayed. Geometry/Texturing share AUTHORING; Animation has explicit handoff. Generated API/schema/prompt files stay generator-owned. No liveValidatedBuilds entry is promoted by compilation or benchmarking.
 
 ## Last reusable proven source baseline
 
-Source 06d74d7080e5e4fffebbafdd2bdb1b83f4039b31 passed clean exact-SHA MCP full verification, Windows Desktop checks, integrated managed packaging and disposable compiled-CLI install/status smoke. Its installer hash and prior command-level evidence remain in Git at b9b4756e. [Windows native report](native-acceptance.md#consolidated-windows-local-test-report--2026-10-14) scopes older installed evidence to e9b3bca5 and prior fcf66179/4cd2fd06. These do not validate the newly upgraded runtime. LD-Q01–Q04, particle visibility, Golden F and real cost telemetry remain open.
+Clean 51324f6da133cb728d0cda27f6b1a3358452161d passed full MCP verification, Desktop checks (80 Rust tests), integrated managed NSIS and disposable compiled-CLI install/status smoke. Its package/provenance hashes and the independent Rust 1.95 proof are recorded in the ce5299aa version of this file. [Windows native report](native-acceptance.md#consolidated-windows-local-test-report--2026-10-14) scopes older installed evidence to its exact historical builds. LD-Q01–Q04, particle visibility, Golden F and real cost telemetry remain open.
 
 ## Proof boundary
 
-Do not strengthen source/static claims into local/live/visual claims without matching evidence from the exact current source SHA. A docs-only head may use Head Proof to show executable source did not change; that is not executable verification. Source-impacting heads continue to require matching source checks. Builds do not prove native Undo/Redo, save/reopen, playback, reconnect, installed update/rollback or visual quality.
-
-Executed follow-up commands: cargo update; cargo test --locked (80 PASS); cargo +1.95.0 check --locked --target-dir ../../.cache/msrv-target (PASS); npm update, npm ci, npm audit, npm run verify:source (PASS); bun update, bun install --frozen-lockfile, bun x tsc --version (7.0.2), bun run verify:types and bun run verify:full (PASS); cargo-audit --json and locked Windows metadata/tree classification. npm audit reports 0 vulnerabilities. Full Bun audit reports the disclosed Vue low advisory; high-severity gate PASS.
-
-Upstream migration references: [Rand 0.10](https://rust-random.github.io/book/update-0.10.html), [sysinfo migration](https://docs.rs/crate/sysinfo/0.39.6/source/migration_guide.md), [sha2 0.11](https://docs.rs/sha2/0.11.1/sha2/), [rfd 0.17](https://docs.rs/rfd/0.17.2/rfd/).
-
-## Final packaging and reproducibility evidence
-
-Clean source 51324f6d passed npm run build:app (integrated bootstrap, managed package checksum/provenance verification, disposable compiled-CLI install/status smoke and NSIS bundle). Installer SHA256: CEC3E3564533BE52A27F3CF0AC0F2FE1D371665B6826F188188F50359CC830AB; size 35.36 MiB. Embedded managed source_sha matches 51324f6da133cb728d0cda27f6b1a3358452161d. Full MCP verification and Desktop source verification were independently repeated successfully on that clean commit. Cargo.lock has 437 packages, down from 490; three RustSec warnings disappeared without ignores.
-
-Bun install --force --frozen-lockfile reinstalled all 60 packages; TS7 version check, verify:types and real Gateway/compiler-API smoke tests (3 PASS) succeeded. A proposed manual node_modules removal was rejected by automatic policy before execution; no deletion or alternative deletion method was attempted. Canonical package-manager reinstall supplied the reproducibility check. The final evidence commit changes only operations documents. Native Blockbench/visual, installed NSIS UI and installed update/rollback remain NOT EXECUTED; source/build readiness does not close those acceptance boundaries.
+Do not strengthen source/static claims into local/live/visual claims without matching evidence from the exact current source SHA. A docs-only head may use Head Proof to show executable source did not change; that is not executable verification. Source-impacting heads continue to require matching relevant checks. Build/benchmark success does not prove native Undo/Redo, save/reopen, playback, reconnect, installed NSIS UI/update/rollback or visual fidelity.

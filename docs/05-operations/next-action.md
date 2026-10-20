@@ -4,9 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Dependency completion is executing locally against remote `OpenITStudios/M-LazyDesigner` / `Local`, follow-up baseline `b9b4756e`. CI DISABLED: nine verification definitions live only in `.github/disabled-workflows/`; manual distribution/release definitions are not authorization to release. Do not enable or dispatch Actions, modify main, or publish packages.
+Dependency completion is executing locally against remote `OpenITStudios/M-LazyDesigner` / `Local`, efficiency baseline `ce5299aa`. CI DISABLED: nine verification definitions live only in `.github/disabled-workflows/`; manual distribution/release definitions are not authorization to release. Do not enable or dispatch Actions, modify main, or publish packages.
 
-The user reactivated dependency completion on 2026-10-20. Four Rust dependencies are now on latest stable releases; the obsolete PostCSS/Nano ID overrides are removed. Desktop verify:source passes 80 Rust tests and both Svelte compiler modes. Minimum Rust 1.95.0 locked compilation PASS. Clean source 51324f6d passes MCP verify:full, Desktop verify:source, Rust 1.95.0 minimum-version compile, frozen Bun reinstall and integrated managed NSIS build. Final evidence is recorded in current-validation.md; deliver to remote Local and STOP. No compatible direct dependency upgrade remains pending. The upstream Vue/GTK findings below remain disclosed, not waived.
+The user requested measured efficiency improvements and a repository report. From ce5299aa, ten Desktop process-inventory call sites now share a fresh identity-only scan; unused sysinfo features are disabled. Two local benchmarks show 83.7–85.5% lower median scan time on former double-scan paths; this is not end-to-end UI or token proof. Desktop verify:source (81 Rust tests), repository checks and Rust 1.95 minimum compilation PASS. Finish clean committed integrated Windows packaging, record its exact result in current-validation.md, fast-forward Local with CI OFF, then STOP. No unrelated authoring/live work is implied.
 
 ## Compatibility and security residue
 

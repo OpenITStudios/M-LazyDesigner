@@ -247,8 +247,7 @@ fn select_bound_editor_profile(
 
 pub(crate) fn editor_profile_for_model(expected_snapshot_profile: Option<&str>) -> Result<PathBuf, String> {
     let discovered = blockbench_user_data_dir()?;
-    let mut system = System::new_all();
-    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let system = crate::process::process_snapshot();
     let editor_running = system.processes().values().any(|process| {
         let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
@@ -631,8 +630,7 @@ fn compose_status(
         .as_deref()
         .map(managed_plugin_integrity)
         .unwrap_or("unknown");
-    let mut process_system = System::new();
-    process_system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let process_system = crate::process::process_snapshot();
     let runtime_lease_path = runtime_session_lease_path();
     let runtime_profile_id = managed_navigation_profile_id();
     let runtime_session = runtime_health::probe(
@@ -738,8 +736,7 @@ fn gateway_active_fast(root: &Path, system: &System) -> Option<bool> {
 pub fn collect_connection_status() -> ConnectionStatus {
     // Only process identity is needed by the passive status watcher;
     // avoid populating every system table on each observation.
-    let mut system = System::new();
-    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let system = crate::process::process_snapshot();
     let blockbench_running = system.processes().values().any(|process| {
         let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"

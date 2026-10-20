@@ -1,5 +1,17 @@
 use std::{io::{BufRead, BufReader, Read}, process::{Command, ExitStatus, Output, Stdio}, sync::mpsc, thread, time::{Duration, Instant}};
 
+/// Fresh identity inventory for editor/Runtime guards; no telemetry or cached PID state.
+pub(crate) fn process_snapshot() -> sysinfo::System {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
+    );
+    system
+}
+
 pub fn run_output(command: &mut Command, timeout: Duration, label: &str) -> Result<Output, String> {
     run_output_with_stderr_lines(command, timeout, label, |_| {})
 }
@@ -47,6 +59,29 @@ where F: FnMut(&str) {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn process_snapshot_observes_exit_without_reusing_stale_pid_state() {
+        use std::os::windows::process::CommandExt;
+        struct OwnedChild(std::process::Child);
+        impl Drop for OwnedChild {
+            fn drop(&mut self) { let _ = self.0.kill(); let _ = self.0.wait(); }
+        }
+        let mut child = OwnedChild(Command::new("powershell.exe")
+            .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 30"])
+            .creation_flags(0x08000000)
+            .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
+            .spawn().expect("owned background fixture must start"));
+        let pid = sysinfo::Pid::from_u32(child.0.id());
+        let live = process_snapshot();
+        let process = live.process(pid).expect("fresh inventory must see the live fixture");
+        assert!(process.name().eq_ignore_ascii_case("powershell.exe"));
+        assert!(process.exe().is_some());
+        child.0.kill().expect("fixture must stop");
+        child.0.wait().expect("fixture exit must be observed");
+        assert!(process_snapshot().process(pid).is_none());
+    }
+
 
     #[test]
     fn background_powershell_has_no_console_and_keeps_captured_output() {

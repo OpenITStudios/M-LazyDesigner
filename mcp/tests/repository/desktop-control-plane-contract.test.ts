@@ -733,7 +733,7 @@ describe("Desktop calm connection summary", () => {
     expect(ui).toContain("watchDisposed = true");
     expect(ui).not.toContain("window.setInterval(() => { void watchSystemStatus(); }, 3000)");
     const fast = native.slice(native.indexOf("pub fn collect_connection_status()"), native.indexOf("pub fn collect() -> SystemStatus"));
-    expect(fast).toContain("let mut system = System::new();");
+    expect(fast).toContain("crate::process::process_snapshot()");
     expect(fast).not.toContain("System::new_all()");
     expect(ui).toContain("if (statusProbeFailures >= 2) return;");
     expect(ui).toContain("disabled={!status.maintenance.repair");

@@ -157,8 +157,7 @@ pub(crate) fn observe_active_model(
                 && snapshot.producer_pid.is_some()
             {
                 // Do not infer a running editor from a stale file alone.
-                let mut system = System::new();
-                system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+                let system = crate::process::process_snapshot();
                 if snapshot_confirms_active(
                     &snapshot, &profile_id, model, request_at_ms, now,
                     verified_native_producer(&system, snapshot.producer_pid.unwrap_or(0), selected_executable),

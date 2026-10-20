@@ -12,7 +12,6 @@ use std::{
     sync::{Mutex, OnceLock},
     time::{Duration, Instant, UNIX_EPOCH},
 };
-use sysinfo::System;
 
 const REVIEW_TTL: Duration = Duration::from_secs(90);
 const MAX_TREE_ENTRIES: usize = 10_000;
@@ -222,8 +221,7 @@ fn fingerprint_tree(root: &Path) -> Result<String, String> {
 }
 
 fn blockbench_closed() -> Result<(), String> {
-    let mut system = System::new();
-    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let system = crate::process::process_snapshot();
     if system.processes().values().any(|process| {
         let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"

@@ -108,8 +108,7 @@ fn selected_executable() -> Result<Option<PathBuf>, String> {
 /// User-controlled recovery for portable, moved, or multiple Blockbench installations.
 /// Does not change a Blockbench profile, managed package or any model file.
 pub(crate) fn choose_executable() -> Result<BlockbenchActionResult, String> {
-    let mut system = System::new();
-    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let system = crate::process::process_snapshot();
     if system.processes().values().any(|process| {
         let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
@@ -370,8 +369,7 @@ if ($info.ProductName -ne 'Blockbench') { exit 2 }
 }
 
 pub(crate) fn detect() -> BlockbenchState {
-    let mut system = System::new_all();
-    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let system = crate::process::process_snapshot();
     let running = system.processes().values().any(|process| {
         let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
@@ -453,8 +451,7 @@ pub(crate) fn open_model(path: &Path, user_data: &Path) -> Result<&'static str, 
     if !is_bbmodel_file(path) {
         return Err("Choose an existing .bbmodel file.".to_string());
     }
-    let mut system = System::new_all();
-    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let system = crate::process::process_snapshot();
     let executable = discover_executable(&system)?
         .ok_or_else(|| "Blockbench desktop installation was not found.".to_string())?;
     version(&executable)?;
@@ -487,8 +484,7 @@ pub(crate) fn browse_model() -> Result<ModelBrowseResult, String> {
 
 pub(crate) fn open_editor() -> Result<BlockbenchActionResult, String> {
     let user_data = crate::system_status::editor_profile_for_model(None)?;
-    let mut system = System::new_all();
-    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+    let system = crate::process::process_snapshot();
     let already_running = system.processes().values().any(|process| {
         let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
@@ -605,8 +601,7 @@ pub(crate) fn focus_window() -> BlockbenchFocusResult {
     #[cfg(windows)]
     {
         use std::collections::HashSet;
-        let mut system = System::new_all();
-        system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        let system = crate::process::process_snapshot();
         let allowed: HashSet<u32> = system.processes().iter()
             .filter(|(_, process)| {
                 let name = process.name().to_string_lossy().to_ascii_lowercase();
@@ -631,8 +626,7 @@ mod tests {
 
     #[test]
     fn process_refresh_retains_current_native_process_identity() {
-        let mut system = System::new();
-        system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        let system = crate::process::process_snapshot();
         let process = system.process(sysinfo::Pid::from_u32(std::process::id()))
             .expect("current process must be discoverable");
         let executable = std::env::current_exe().unwrap();
