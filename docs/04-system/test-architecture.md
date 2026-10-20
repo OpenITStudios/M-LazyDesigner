@@ -50,6 +50,17 @@ Distribution, security and native acceptance keep their separate existing owners
 Two human-UI source checks are replaced by callable connection/lifecycle scenarios.
 No new router, universal suite or fixture framework is introduced.
 
+Plugin architecture guards now have one owner:
+`mcp/tests/plugin-layer-ownership.test.ts`. The separate native-boundary and
+Blockbench-integration-boundary files are consolidated there, retaining network
+permission delegation, HTTPS-only acquisition, listener teardown, development-only
+reload and integration/UI ownership checks. These remain T0 source evidence.
+Callback cleanup is instead exercised during the existing settings reload scenario
+in `plugin-settings-reload.test.ts`: the active callback works, teardown/reload
+cannot invoke it, and a new callback can take over. No production seam or global
+module mocking framework is added. Runtime lifecycle and native safety suites
+remain separate. This batch also awaits grouped execution.
+
 The read-only inventory before consolidation counted 560 files and 241 possible
 source-assertion review candidates (2026-10-20). This is not a deletion list.
 Review one source-owner cluster at a time. Under the current user instruction,
