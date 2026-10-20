@@ -1,12 +1,12 @@
 # Test Architecture Modernization — Bun / LazyDesigner
 
-**Status:** staged source implementation; no test retirement authorized yet
-**Date:** 2026-10-18
+**Status:** owner-based consolidation prepared; grouped execution deferred by user
+**Date:** 2026-10-20
 **Branch:** `Local` (source authority); keep `main` unchanged without explicit approval.
 
 ## Decision
 
-Modernize the **existing** `bun:test`, affected-work planner, temporarily automatic Local Full CI and
+Modernize the **existing** `bun:test`, affected-work planner, explicitly selected verification and
 native-acceptance boundaries. Do not build a second test framework, autonomous
 test router, result database, scheduler, or parallel source of truth. Use the
 single execution selector `mcp/gateway/development/affectedExecution.ts`;
@@ -33,6 +33,30 @@ not accepted-quality scores.
    executions and false-negative selection on equivalent workload/commit.
    Do not weaken tests to reach a numerical speed target.
 
+## Test granularity
+
+Organize tests around an owning behavior or boundary, not one new file per fix
+or function. Preserve distinct failure cases. Use tables when setup and contract
+are shared. Prefer callable behavior over assertions about private variable names
+or copied implementation text. Keep source checks for static ownership, security
+and cross-layer wiring that callable tests do not establish.
+
+Desktop lifecycle behavior now belongs to
+`mcp/tests/repository/desktop-lifecycle-behavior.test.ts`: setup sequencing,
+editor acknowledgements, connection observation, progress disposal and timeouts.
+Progress-listener and status-observation files are consolidated there; read-only
+deadline wiring remains in `desktop-control-plane-contract.test.ts`.
+Distribution, security and native acceptance keep their separate existing owners.
+Two human-UI source checks are replaced by callable connection/lifecycle scenarios.
+No new router, universal suite or fixture framework is introduced.
+
+The read-only inventory before consolidation counted 560 files and 241 possible
+source-assertion review candidates (2026-10-20). This is not a deletion list.
+Review one source-owner cluster at a time. Under the current user instruction,
+prepare consolidation first and run grouped verification later. Source changes
+are not accepted retirement, coverage parity or measured runtime savings until
+that verification passes on the resulting SHA.
+
 ## Existing machinery to preserve
 
 | Existing owner | Responsibility |
@@ -43,8 +67,8 @@ not accepted-quality scores.
 | `mcp/scripts/development/plan-affected-execution.ts` | On-demand inspection of planned work |
 | `mcp/scripts/development/run-affected-execution.ts` | Sequential execution with fail-on-error |
 | `mcp/tests/**/*.test.ts` and co-located tests | Bun test evidence |
-| `.github/workflows/mcp-verify.yml` | Full exact-SHA on Local push, focused/full manual source verification |
-| `.github/workflows/desktop-verify.yml` and `managed-distribution.yml` | Separate Windows packaging and desktop proof |
+| `.github/disabled-workflows/mcp-verify.yml` | Inactive definition; no execution on push |
+| `.github/disabled-workflows/desktop-verify.yml` and managed-distribution workflow | Separate platform/distribution definitions; no implied execution authorization |
 | `docs/05-operations/current-validation.md` | Actual executed proof, not aspirations |
 
 Do not infer new routes from shared names alone. Unknown changes,
@@ -156,11 +180,9 @@ without reducing acceptance breadth or native fidelity standards.
 - Add a targeted selection replay corpus to the **existing planner tests**,
   covering positive match, negative unrelated change, changed test,
   toolchain change, public schema/identity and mixed-owner change.
-- During temporary user-authorized Full CI, push to `Local` automatically
-  runs the existing non-publishing full MCP, dependency security, MCP
-  conformance, Windows Desktop and source-only readiness workflows.
-  Focused runs and release checks remain manual; no automatic publishing,
-  `main`, PR, tag, schedule, workflow chaining or write permission.
+- Verification CI is currently disabled under `.github/disabled-workflows/`.
+  Do not enable or dispatch Actions during consolidation. When execution is
+  authorized, record exact scope and SHA. Publishing and `main` remain separate.
 - Evidence artifacts record exact SHA, selected scope and required steps;
   skipped required steps cannot produce PASS.
 

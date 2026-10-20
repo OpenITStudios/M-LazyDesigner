@@ -25,7 +25,8 @@ describe("human-facing Blockbench UI", () => {
     expect(operations).toContain("managedActionPresentation(request.action, result.receipt)");
     expect(app).toContain("maintenanceOperations.execute(request)");
     expect(app).toContain("actionMessageKind === 'pending' ? 'Next step'");
-    expect(app).toContain("operation.outcome === 'unchanged' ? 'No change'");
+    const support = await Bun.file(new URL("../../apps/desktop/src/SupportPage.svelte", import.meta.url)).text();
+    expect(support).toContain("operation.outcome === 'unchanged' ? 'No change'");
   });
 
   test("late-mounted plugin panels never default to false Runtime-ready status", async () => {
@@ -180,21 +181,5 @@ describe("human-facing Blockbench UI", () => {
     expect(status).toContain('state: "starting"');
     expect(css).not.toContain("nth-last-child");
     expect(panel).not.toContain("pluginBrowserSetup");
-  });
-
-  test("Desktop connection comparison preserves unknown Gateway observations", async () => {
-    // MCP compilation is rootDir=mcp; do not import Desktop TypeScript into this package.
-    const comparison = await Bun.file(new URL("../../apps/desktop/src/connectionWatch.ts", import.meta.url)).text();
-    expect(comparison).toContain("candidate.gateway_active !== null && current.managed !== null");
-    expect(comparison).toContain("candidate.project_revision !== current.project_navigation.revision");
-    expect(comparison).toContain("candidate.runtime_listener_live !== current.runtime_listener_live");
-  });
-
-  test("Desktop guards overlapping probes and signals stale state", async () => {
-    const app = await Bun.file(new URL("../../apps/desktop/src/App.svelte", import.meta.url)).text();
-    const monitor = await Bun.file(new URL("../../apps/desktop/src/connectionMonitor.ts", import.meta.url)).text();
-    expect(monitor).toContain("inFlight");
-    expect(app).toContain("statusProbeFailures >= 2");
-    expect(monitor).toContain("connectionChanged(candidate, current)");
   });
 });
