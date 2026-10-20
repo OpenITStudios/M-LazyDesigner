@@ -1,5 +1,12 @@
 # LazyDesigner Next Action
 
+## TypeScript 7 MCP compiler migration — 2026-10-20
+
+The MCP declared TypeScript compiler is now **7.0.2** with TypeScript's native platform-specific binaries. The shared `mcp/tsconfig.json` changes `moduleResolution: node` to `bundler` because TypeScript 7 rejects the former. The already-declared `module: ESNext` is compatible. `blockbench-types` still requests TypeScript ^5.8.3, so a nested TypeScript 5.9.3 lock entry is retained for that package rather than silently violating its dependency constraint.
+
+The Bun lock resolution uses original, immutable package SHA-512 integrity records from a published npm-generated TypeScript 7.0.2 lock for all 20 optional native binaries. **Source static verification only**: Bun 1.4.3 frozen install, TypeScript 7 typecheck, generated project references, MCP runtime tests, and Windows executable build are **NOT EXECUTED**, because registry/executable access is unavailable. The lock still requires canonical Bun regeneration/verification before acceptance or release. CI stays disabled.
+
+
 ## Vite 8 + Svelte plugin 7 source migration — 2026-10-20
 
 **Versions in source:** `vite 8.3.4`, `@sveltejs/vite-plugin-svelte 7.3.1`. The dependency graph was reconciled against published npm lock metadata, verified Vite/plugin source manifests and SHA512 fingerprints. The old Rollup/esbuild path and orphaned inspector were pruned. Rolldown 1.2.12 with native platform bindings is present. Because `@tailwindcss/node 4.3.3` pins Lightning CSS 1.32.0 while Vite 8 requires 1.33.0, both compatible versions are explicitly resolved at their distinct dependency paths. Svelte plugin 7 uses nested `magic-string 1.4.3`, preserving the root `0.30.x` needed by Svelte and Tailwind. All reachable hard/optional dependencies and their version ranges were checked structurally.

@@ -130,7 +130,7 @@
     "@types/bun": "1.4.3",
     "blockbench-types": "5.2.0",
     "tinycolor2": "^1.6.0",
-    "typescript": "^5.9.3"
+    "typescript": "7.0.2"
   },
   "overrides": {
     "electron": "41.10.7",
