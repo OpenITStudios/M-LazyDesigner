@@ -109,9 +109,9 @@ fn selected_executable() -> Result<Option<PathBuf>, String> {
 /// Does not change a Blockbench profile, managed package or any model file.
 pub(crate) fn choose_executable() -> Result<BlockbenchActionResult, String> {
     let mut system = System::new();
-    system.refresh_processes();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     if system.processes().values().any(|process| {
-        let name = process.name().to_ascii_lowercase();
+        let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
     }) {
         return Err("Save your models and close Blockbench before choosing another editor installation.".to_string());
@@ -227,7 +227,7 @@ fn select_running_executable(paths: &[PathBuf]) -> Result<Option<PathBuf>, Strin
 
 fn discover_executable(system: &System) -> Result<Option<PathBuf>, String> {
     let running: Vec<_> = system.processes().values().filter(|process| {
-        let name = process.name().to_ascii_lowercase();
+        let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
     }).collect();
     if !running.is_empty() {
@@ -371,9 +371,9 @@ if ($info.ProductName -ne 'Blockbench') { exit 2 }
 
 pub(crate) fn detect() -> BlockbenchState {
     let mut system = System::new_all();
-    system.refresh_processes();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     let running = system.processes().values().any(|process| {
-        let name = process.name().to_ascii_lowercase();
+        let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
     });
 
@@ -454,7 +454,7 @@ pub(crate) fn open_model(path: &Path, user_data: &Path) -> Result<&'static str, 
         return Err("Choose an existing .bbmodel file.".to_string());
     }
     let mut system = System::new_all();
-    system.refresh_processes();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     let executable = discover_executable(&system)?
         .ok_or_else(|| "Blockbench desktop installation was not found.".to_string())?;
     version(&executable)?;
@@ -488,9 +488,9 @@ pub(crate) fn browse_model() -> Result<ModelBrowseResult, String> {
 pub(crate) fn open_editor() -> Result<BlockbenchActionResult, String> {
     let user_data = crate::system_status::editor_profile_for_model(None)?;
     let mut system = System::new_all();
-    system.refresh_processes();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     let already_running = system.processes().values().any(|process| {
-        let name = process.name().to_ascii_lowercase();
+        let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
     });
     let executable = discover_executable(&system)?
@@ -606,10 +606,10 @@ pub(crate) fn focus_window() -> BlockbenchFocusResult {
     {
         use std::collections::HashSet;
         let mut system = System::new_all();
-        system.refresh_processes();
+        system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
         let allowed: HashSet<u32> = system.processes().iter()
             .filter(|(_, process)| {
-                let name = process.name().to_ascii_lowercase();
+                let name = process.name().to_string_lossy().to_ascii_lowercase();
                 (name == "blockbench.exe" || name == "blockbench")
                     && process.exe().is_some_and(|path| path.is_file() && is_executable_name(path))
             })
@@ -628,6 +628,18 @@ pub(crate) fn focus_window() -> BlockbenchFocusResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn process_refresh_retains_current_native_process_identity() {
+        let mut system = System::new();
+        system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        let process = system.process(sysinfo::Pid::from_u32(std::process::id()))
+            .expect("current process must be discoverable");
+        let executable = std::env::current_exe().unwrap();
+        assert_eq!(process.name(), executable.file_name().unwrap());
+        assert_eq!(process.exe(), Some(executable.as_path()));
+    }
+
 
     #[test]
     fn editor_file_open_accepts_only_existing_bbmodel_files() {

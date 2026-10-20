@@ -1,5 +1,5 @@
 //! Small Desktop-owned JSON only; never call for Blockbench/user assets.
-use rand::RngCore;
+use rand::Rng;
 use std::{fs::{self, OpenOptions}, io::{self, Write}, path::Path};
 
 pub(crate) fn replace_metadata(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -16,7 +16,7 @@ pub(crate) fn replace_metadata(path: &Path, bytes: &[u8]) -> io::Result<()> {
     }
     for _ in 0..8 {
         let mut nonce = [0u8; 8];
-        rand::thread_rng().fill_bytes(&mut nonce);
+        rand::rng().fill_bytes(&mut nonce);
         let temp = parent.join(format!(".{}.{}.tmp", name.to_string_lossy(), u64::from_le_bytes(nonce)));
         let mut file = match OpenOptions::new().write(true).create_new(true).open(&temp) {
             Ok(file) => file,
@@ -95,7 +95,7 @@ pub(crate) fn preserve_damaged_metadata(path: &Path, original: &[u8]) -> io::Res
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Metadata filename unavailable."))?;
     for _ in 0..8 {
         let mut nonce = [0u8; 8];
-        rand::thread_rng().fill_bytes(&mut nonce);
+        rand::rng().fill_bytes(&mut nonce);
         let saved = parent.join(format!("{}.corrupt-{:016x}.bak", name.to_string_lossy(), u64::from_le_bytes(nonce)));
         let mut file = match OpenOptions::new().write(true).create_new(true).open(&saved) {
             Ok(file) => file,

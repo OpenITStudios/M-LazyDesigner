@@ -109,7 +109,7 @@ fn verified_native_producer(system: &System, pid: u32, selected_executable: &Pat
     let Some(process) = system.process(Pid::from_u32(pid)) else {
         return false;
     };
-    let name = process.name().to_ascii_lowercase();
+    let name = process.name().to_string_lossy().to_ascii_lowercase();
     (name == "blockbench.exe" || name == "blockbench")
         && process.exe().is_some_and(|path|
             path.is_file()
@@ -158,7 +158,7 @@ pub(crate) fn observe_active_model(
             {
                 // Do not infer a running editor from a stale file alone.
                 let mut system = System::new();
-                system.refresh_processes();
+                system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
                 if snapshot_confirms_active(
                     &snapshot, &profile_id, model, request_at_ms, now,
                     verified_native_producer(&system, snapshot.producer_pid.unwrap_or(0), selected_executable),

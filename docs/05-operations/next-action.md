@@ -6,13 +6,13 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 Dependency completion is executing locally against remote `OpenITStudios/M-LazyDesigner` / `Local`, baseline `48329d0`. CI DISABLED: nine verification definitions live only in `.github/disabled-workflows/`; manual distribution/release definitions are not authorization to release. Do not enable or dispatch Actions, modify main, or publish packages.
 
-Final `bun run verify:full`, Desktop `npm run verify:source`, Windows NSIS shell packaging and real Gateway initialization/discovery PASS. Source commit 06d74d70 and its clean exact-SHA verify:full PASS; integrated managed packaging, disposable compiled-CLI install/status smoke and NSIS build PASS. Final evidence is recorded in current-validation.md. Dependency source work is complete; STOP after fast-forward delivery to remote Local. Further installed/native validation follows the existing runbook as a separate bounded task. Do not incorporate the unrelated dirty original checkout.
+The user reactivated dependency completion on 2026-10-20. Four Rust dependencies are now on latest stable releases; the obsolete PostCSS/Nano ID overrides are removed. Desktop verify:source passes 80 Rust tests and both Svelte compiler modes. Minimum Rust 1.95.0 locked compilation PASS. Complete final MCP verify:full, commit the coherent source, rebuild the integrated managed Windows package from the clean commit, record exact proof and fast-forward remote Local without CI.
 
 ## Compatibility and security residue
 
 TypeScript 7.0.2 checks source; TypeScript 6.0.3 remains for Svelte diagnostics and the development symbol-map compiler API. Blockbench typings 5.2.1 use BBAnimation/BBKeyframe; Electron is typing-only and must satisfy upstream's range. Nested TypeScript 5.9 remains upstream-owned. Node types stay on supported Node 24.
 
-Bun audit reports one low Vue 2 advisory through exact upstream typings dependency. Do not override Vue to an incompatible major. Cargo audit reports no classified vulnerabilities, four unmaintained warnings and one glib unsound warning; all five are absent from the locked Windows graph, without advisory ignores. Rust rand/rfd/sha2/sysinfo newer major APIs need separate native behavior review; current supported lines receive compatible updates.
+Bun audit reports one low Vue 2 advisory through exact upstream typings dependency. Do not override Vue to an incompatible major. Cargo audit reports no classified vulnerabilities, one unmaintained warning and one glib unsound warning; both are absent from the locked Windows graph, without advisory ignores. rand 0.10.3, rfd 0.17.2, sha2 0.11.1 and sysinfo 0.39.6 are migrated and tested. Rust minimum is now 1.95; the pinned toolchain stays 1.99.1. Native UI behavior still requires matching installed acceptance.
 
 ## System boundaries
 

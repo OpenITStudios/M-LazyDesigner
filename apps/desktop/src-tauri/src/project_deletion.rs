@@ -2,7 +2,7 @@
 //! Never mutate arbitrary paths received from the frontend. Only an exact,
 //! already-registered project ID may enter this flow.
 use crate::{process::run_output, project_navigation, system_status};
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::SysRng, TryRng};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -218,14 +218,14 @@ fn fingerprint_tree(root: &Path) -> Result<String, String> {
         }
     }
     hasher.update(count.to_le_bytes());
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect::<String>())
 }
 
 fn blockbench_closed() -> Result<(), String> {
     let mut system = System::new();
-    system.refresh_processes();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     if system.processes().values().any(|process| {
-        let name = process.name().to_ascii_lowercase();
+        let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
     }) {
         return Err("Save your models and close all Blockbench windows before deleting a project.".to_string());
@@ -269,7 +269,8 @@ fn verify_candidate(id: &str) -> Result<(PathBuf, String, String), String> {
 pub(crate) fn prepare(id: String) -> Result<ProjectDeletePreview, String> {
     let (folder, name, fingerprint) = verify_candidate(&id)?;
     let mut random = [0u8; 24];
-    OsRng.fill_bytes(&mut random);
+    SysRng.try_fill_bytes(&mut random)
+        .map_err(|_| "Secure deletion review entropy is unavailable.".to_string())?;
     let token = random.iter().map(|v| format!("{v:02x}")).collect::<String>();
     let mut guard = pending().lock().map_err(|_| "Deletion review is unavailable.".to_string())?;
     *guard = Some(PendingDelete {
@@ -367,7 +368,7 @@ mod tests {
     use super::*;
 
     fn temp_root(name: &str) -> PathBuf {
-        let mut b = [0u8; 8]; OsRng.fill_bytes(&mut b);
+        let mut b = [0u8; 8]; SysRng.try_fill_bytes(&mut b).expect("test entropy");
         let p = env::temp_dir().join(format!("lazydesigner-pm06-{name}-{}-{:x}", std::process::id(), u64::from_ne_bytes(b)));
         fs::create_dir_all(&p).unwrap();
         p

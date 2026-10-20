@@ -150,7 +150,7 @@ fn normalize_navigation_profile_path(path: &Path) -> String {
 
 pub(crate) fn navigation_profile_id(path: &Path) -> String {
     use sha2::{Digest, Sha256};
-    let digest = format!("{:x}", Sha256::digest(normalize_navigation_profile_path(path).as_bytes()));
+    let digest = Sha256::digest(normalize_navigation_profile_path(path).as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect::<String>();
     digest[..32].to_string()
 }
 
@@ -248,9 +248,9 @@ fn select_bound_editor_profile(
 pub(crate) fn editor_profile_for_model(expected_snapshot_profile: Option<&str>) -> Result<PathBuf, String> {
     let discovered = blockbench_user_data_dir()?;
     let mut system = System::new_all();
-    system.refresh_processes();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     let editor_running = system.processes().values().any(|process| {
-        let name = process.name().to_ascii_lowercase();
+        let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
     });
     let managed = managed_blockbench_user_data_dir();
@@ -390,7 +390,7 @@ fn managed_plugin_integrity(root: &Path) -> &'static str {
         Err(_) => return "unknown",
     };
     use sha2::{Digest, Sha256};
-    let actual = format!("{:x}", Sha256::digest(bytes));
+    let actual = Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect::<String>();
     if &actual == expected { "ready" } else { "modified" }
 }
 
@@ -632,7 +632,7 @@ fn compose_status(
         .map(managed_plugin_integrity)
         .unwrap_or("unknown");
     let mut process_system = System::new();
-    process_system.refresh_processes();
+    process_system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     let runtime_lease_path = runtime_session_lease_path();
     let runtime_profile_id = managed_navigation_profile_id();
     let runtime_session = runtime_health::probe(
@@ -739,9 +739,9 @@ pub fn collect_connection_status() -> ConnectionStatus {
     // Only process identity is needed by the passive status watcher;
     // avoid populating every system table on each observation.
     let mut system = System::new();
-    system.refresh_processes();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
     let blockbench_running = system.processes().values().any(|process| {
-        let name = process.name().to_ascii_lowercase();
+        let name = process.name().to_string_lossy().to_ascii_lowercase();
         name == "blockbench.exe" || name == "blockbench"
     });
 
@@ -1149,6 +1149,7 @@ mod tests {
         let first = navigation_profile_id(Path::new("C:/Users/Test/AppData/Roaming/Blockbench/"));
         let second = navigation_profile_id(Path::new("c:\\users\\test\\appdata\\roaming\\blockbench"));
         assert_eq!(first, second);
+        assert_eq!(first, "5ecb3feef302a6c3ea316f341c2c9d0c");
         assert!(valid_navigation_profile_id(&first));
     }
 

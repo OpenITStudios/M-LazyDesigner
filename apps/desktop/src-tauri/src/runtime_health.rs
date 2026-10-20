@@ -134,7 +134,7 @@ pub(crate) fn probe(
     let Some(process) = system.process(Pid::from_u32(lease.producer_pid)) else {
         return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None };
     };
-    let name = process.name().to_ascii_lowercase();
+    let name = process.name().to_string_lossy().to_ascii_lowercase();
     if name != "blockbench.exe" && name != "blockbench" {
         return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None };
     }

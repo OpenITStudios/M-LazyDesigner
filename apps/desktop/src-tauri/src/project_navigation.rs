@@ -1,6 +1,6 @@
 use crate::blockbench;
 #[cfg(test)]
-use rand::RngCore;
+use rand::Rng;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -459,7 +459,7 @@ fn is_bbmodel_path(path: &Path) -> bool {
 fn navigation_id(prefix: &str, path: &Path) -> String {
     use sha2::{Digest, Sha256};
     let normalized = path.to_string_lossy().replace('/', "\\").to_lowercase();
-    let digest = format!("{:x}", Sha256::digest(normalized.as_bytes()));
+    let digest = Sha256::digest(normalized.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect::<String>();
     format!("{prefix}-{}", &digest[..20])
 }
 
@@ -505,7 +505,7 @@ fn read_project_manifest_state(root: &Path) -> ProjectManifestState {
 
 fn stable_project_id(manifest: &ProjectManifest) -> String {
     use sha2::{Digest, Sha256};
-    let digest = format!("{:x}", Sha256::digest(manifest.project_uuid.as_bytes()));
+    let digest = Sha256::digest(manifest.project_uuid.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect::<String>();
     format!("project-{}", &digest[..20])
 }
 
@@ -565,7 +565,7 @@ fn project_identity_map(snapshot: Option<&NavigationSnapshot>, registered: &[Pat
 #[cfg(test)]
 fn generate_project_uuid() -> String {
     let mut bytes = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    rand::rng().fill_bytes(&mut bytes);
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     let hex = format!("{:032x}", u128::from_be_bytes(bytes));
@@ -1075,6 +1075,15 @@ pub(crate) fn path(id: &str, profile_id: Option<&str>) -> Result<ProjectPathResu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn persisted_navigation_hashes_preserve_sha256_bytes() {
+        assert_eq!(navigation_id("model", Path::new("C:/Models/Desk.bbmodel")),
+            "model-953663ce07c8b925c48b");
+        assert_eq!(stable_project_id(&fixed_manifest("Desk")),
+            "project-cf4c4732fd3b8f8a55b6");
+    }
+
 
     fn temp_project(label: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!("lazydesigner-{label}-{}-{}", std::process::id(), generate_project_uuid()));
