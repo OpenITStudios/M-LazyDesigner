@@ -10,6 +10,8 @@
 
 **2026-10-20 Node.js runtime kit upgrade:** Desktop now pins the released Node.js **24.22.0 LTS** in `apps/desktop/.node-version`, and the manually dispatched desktop-release workflow reads this same canonical version file. Existing `package.json` Node 24.x engine accepts it; npm dependency versions and `package-lock.json` are unchanged. No CI was restarted. Fresh Node 24.22.0 install/typecheck/NSIS proof: **NOT EXECUTED**.
 
+**2026-10-20 Desktop dependency floor alignment:** Seven direct frontend/type package constraints were raised to the **already resolved locked versions**: @tailwindcss/vite 4.3.3, @types/node 24.13.4, Svelte 5.57.0, svelte-check 4.7.6, Tailwind CSS 4.3.3, TypeScript 5.9.3 and Vite 7.3.6. **This does not upgrade installed dependencies to new releases.** Offline `npm install --package-lock-only --offline --ignore-scripts --no-audit` on an equivalent lockfile graph succeeded and generated only these seven root-declaration changes; source `package.json` and `package-lock.json` updated together. An online registry is still required for later latest-version updates (MCP 2.3.1, Bun types 1.4.3, Svelte 5.57.2, Vite 8 + plugin 7, Blockbench types 5.2.0). CI remains disabled; current-source runtime and build proof **NOT EXECUTED**.
+
 **Remaining bounded upgrades — do not modify unrelated source or add new frameworks:**
 
 1. MCP runtime: compare locked client/core 2.2.0 and server/nested core 2.0.0 with upstream stable 2.3.1. Generate `mcp/bun.lock` with Bun 1.4.3 and verify client/server/transport APIs before accepting updates.
