@@ -6,7 +6,11 @@
 
 **2026-10-20 Rust/Tauri version declaration update:** `Cargo.toml` requires Rust **1.90** (Tauri 2.12 minimum) and declares `tauri = 2.12.3`, `tauri-build = 2.7.3`. Both match the existing locked resolved versions; no Cargo.lock regeneration or new dependency resolution is required. Static manifest/lock alignment verified; `cargo check --locked`, installer and native Blockbench execution are **NOT EXECUTED** after disabling CI. Remaining new Bun/npm versions still require package-manager-generated lockfiles.
 
-**2026-10-20 Rust compiler pin upgrade:** The Desktop toolchain and dormant-by-default manual Desktop Draft Release toolchain selection are aligned from **Rust 1.98.1 → 1.99.1** (stable 2026-10-15). Existing Cargo.lock and Rust dependencies remain unchanged. No GitHub CI is reenabled or dispatched, and no actual Rust compile/build on 1.99.1 is claimed; **NOT EXECUTED**.\n\n**Remaining bounded upgrades — do not modify unrelated source or add new frameworks:**
+**2026-10-20 Rust compiler pin upgrade:** The Desktop toolchain and dormant-by-default manual Desktop Draft Release toolchain selection are aligned from **Rust 1.98.1 → 1.99.1** (stable 2026-10-15). Existing Cargo.lock and Rust dependencies remain unchanged. No GitHub CI is reenabled or dispatched, and no actual Rust compile/build on 1.99.1 is claimed; **NOT EXECUTED**.
+
+**2026-10-20 Node.js runtime kit upgrade:** Desktop now pins the released Node.js **24.22.0 LTS** in `apps/desktop/.node-version`, and the manually dispatched desktop-release workflow reads this same canonical version file. Existing `package.json` Node 24.x engine accepts it; npm dependency versions and `package-lock.json` are unchanged. No CI was restarted. Fresh Node 24.22.0 install/typecheck/NSIS proof: **NOT EXECUTED**.
+
+**Remaining bounded upgrades — do not modify unrelated source or add new frameworks:**
 
 1. MCP runtime: compare locked client/core 2.2.0 and server/nested core 2.0.0 with upstream stable 2.3.1. Generate `mcp/bun.lock` with Bun 1.4.3 and verify client/server/transport APIs before accepting updates.
 2. Bun type declarations: compare locked `@types/bun` 1.3.8 to upstream 1.4.3, while preserving the Bun runtime 1.4.3 pin and verifying TypeScript compatibility.
