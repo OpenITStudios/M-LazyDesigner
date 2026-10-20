@@ -4,6 +4,8 @@
 
 **Accepted source change:** `Local` [`d14aa2d`](https://github.com/OpenITStudios/M-LazyDesigner/commit/d14aa2d6ed9a32f20a6d853d4ea90dc24625345d) atomically upgraded Tauri Rust and npm to 2.12.3 from generated artifact `12196594517`, with exact Git blob hashes and intact lockfiles. CI remains fully disabled; nine verification workflows are archived, while two release/distribution workflows are manual-only. No source check on the new SHA has been executed; **NOT EXECUTED** must not be reported as PASS.
 
+**2026-10-20 Rust/Tauri version declaration update:** `Cargo.toml` requires Rust **1.90** (Tauri 2.12 minimum) and declares `tauri = 2.12.3`, `tauri-build = 2.7.3`. Both match the existing locked resolved versions; no Cargo.lock regeneration or new dependency resolution is required. Static manifest/lock alignment verified; `cargo check --locked`, installer and native Blockbench execution are **NOT EXECUTED** after disabling CI. Remaining new Bun/npm versions still require package-manager-generated lockfiles.
+
 **Remaining bounded upgrades — do not modify unrelated source or add new frameworks:**
 
 1. MCP runtime: compare locked client/core 2.2.0 and server/nested core 2.0.0 with upstream stable 2.3.1. Generate `mcp/bun.lock` with Bun 1.4.3 and verify client/server/transport APIs before accepting updates.

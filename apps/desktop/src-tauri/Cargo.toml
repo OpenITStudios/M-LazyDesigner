@@ -6,10 +6,10 @@ authors = ["Halo Karya Media"]
 license = "GPL-3.0-only"
 repository = "https://github.com/MIVUBI-STD/M-LazyDesigner"
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.90"
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.7.3", features = [] }
 
 [dependencies]
 rand = "0.8"
@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 sysinfo = "0.30"
-tauri = { version = "2", features = [] }
+tauri = { version = "2.12.3", features = [] }
 
 [features]
 default = ["custom-protocol"]
