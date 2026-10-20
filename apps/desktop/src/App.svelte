@@ -3,7 +3,8 @@
   import { listen } from '@tauri-apps/api/event';
   import { onMount, tick } from 'svelte';
   import ProjectNavigator from './ProjectNavigator.svelte';
-  import { version as desktopVersion } from '../package.json';
+  import SupportPage from './SupportPage.svelte';
+  import { createSetupOperations } from './setupOperations';
   import { createConnectionMonitor } from './connectionMonitor';
   import { createEditorOperations } from './editorOperations';
   import { createMaintenanceOperations, planManagedAction } from './maintenanceOperations';
@@ -12,19 +13,19 @@
   import { observeStatus } from './statusObservation';
   import type { ProjectAction, ProjectDeletePreview, ProjectDeleteResult } from './projectNavigationTypes';
   import type {
-    SystemStatus, ConnectionStatus, PluginFileActionResult, BootstrapActionResult,
+    SystemStatus, ConnectionStatus, PluginFileActionResult, DesktopBusyAction, DesktopOperationRecord,
     ManagedUpdateCheck, EnsureReadyResult,
     DesktopCommandError, DiagnosticExportResult, ProjectNavigationActionResult,
     ProjectPathResult, ManagedProgress, BlockbenchSelectionResult,
   } from './desktopTypes';
-  import { compatibilityLabel, productMode, productHeadline, productMessage, productGuidance, managedActionLabel, bootstrapInstallPresentation, desktopErrorNotice } from './desktopPresentation';
+  import { productMode, productHeadline, productGuidance, managedActionLabel, connectionReadinessError, installationReadinessError, desktopErrorNotice } from './desktopPresentation';
 
   let status: SystemStatus | null = null;
   let loading = true;
   let error = '';
   let errorTitle = 'Action could not be completed';
   let errorDetail: string | null = null;
-  let busyAction: 'install' | 'connect-blockbench' | 'update' | 'rollback' | 'recover' | 'repair' | 'setup-tls' | 'show-plugin' | 'export-diagnostics' | 'project-action' | 'open-editor' | 'browse-model' | 'choose-editor' | null = null;
+  let busyAction: DesktopBusyAction | null = null;
   let pluginApprovalNeeded = false;
   let migrationConflict = false;
   let migrationConflictKind: 'plugin' | 'client' = 'plugin';
@@ -45,6 +46,7 @@
   });
   let updateCheck: ManagedUpdateCheck | null = null;
   const editorOperations = createEditorOperations(invoke);
+  const setupOperations = createSetupOperations(invoke);
   const maintenanceOperations = createMaintenanceOperations(invoke);
   type Page = 'Overview' | 'Support';
   let page: Page = 'Overview';
@@ -60,13 +62,7 @@
 
   const progressLabel = (stage: string) => stage.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 
-  type OperationRecord = {
-    action: string;
-    outcome: 'success' | 'pending' | 'unchanged' | 'failed';
-    status: string;
-    at: string;
-  };
-  let operations: OperationRecord[] = [];
+  let operations: DesktopOperationRecord[] = [];
 
   function recordOperation(action: string, outcome: 'success' | 'pending' | 'unchanged' | 'failed', status: string) {
     operations = [
@@ -320,6 +316,11 @@
     }
   }
 
+  function applyReadiness(result: EnsureReadyResult) {
+    pluginApprovalNeeded = result.manual_plugin_approval_recommended;
+    readinessReason = result.reason;
+  }
+
   async function connectBlockbench() {
     if (devFixture) return;
     if (!status?.manager_available || busyAction || statusProbeFailures >= 2) return;
@@ -329,10 +330,7 @@
     errorDetail = null;
     clearSuccessToast();
     try {
-      const result = await invoke<EnsureReadyResult>('ensure_ready');
-      pluginApprovalNeeded = result.manual_plugin_approval_recommended;
-      readinessReason = result.reason;
-      await refresh();
+      const result = await setupOperations.connect({ refresh, onReadiness: applyReadiness });
       if (result.status === 'READY' || result.status === 'RUNTIME_READY') {
         const focused = await editorOperations.focus();
         const connection = result.status === 'READY' ? 'AI connection is ready.' : 'AI client can connect when needed.';
@@ -340,19 +338,7 @@
           ? `Blockbench window focus confirmed. ${connection}`
           : `Blockbench is ready. Select it from the taskbar if needed. ${connection}`);
       } else if (result.status === 'NEEDS_ATTENTION' && result.reason !== 'PLUGIN_MISSING_WHILE_BLOCKBENCH_RUNNING') {
-        error = result.reason === 'BLOCKBENCH_PROFILE_MISMATCH'
-          ? 'Blockbench is running with a different profile or its profile cannot be verified. Save your models, close that editor, and open Blockbench from LazyDesigner.'
-          : result.reason === 'PLUGIN_INTEGRITY'
-            ? 'The managed Blockbench plugin was modified and needs review.'
-          : result.reason === 'BLOCKBENCH_EXITED'
-            ? 'Blockbench closed before LazyDesigner could become ready.'
-            : result.reason === 'RUNTIME_ENDPOINT_MISMATCH'
-              ? 'Blockbench and the MCP client are using different local connection settings. Restore matching connection settings or open Support.'
-              : result.reason === 'RUNTIME_START_FAILED'
-                ? 'LazyDesigner loaded in Blockbench, but its local Runtime could not start. Open Support.'
-                : result.reason === 'CONNECTION_PROBE_UNKNOWN'
-                  ? 'LazyDesigner could not verify the local Runtime connection. Try again or open Support.'
-                  : 'LazyDesigner could not prepare Blockbench automatically.';
+        error = connectionReadinessError(result);
       }
     } catch (cause) {
       reportError(cause);
@@ -381,30 +367,23 @@
     errorDetail = null;
     clearSuccessToast();
     try {
-      const result = await invoke<BootstrapActionResult>('bootstrap_install');
-      const feedback = bootstrapInstallPresentation(result.receipt);
-      recordOperation('Install LazyDesigner', feedback.kind, feedback.status);
-      if (!feedback.verifyRuntime) {
-        setupStaged = true;
-        await refresh();
-        showSuccessToast(feedback.message, feedback.kind);
+      const outcome = await setupOperations.install({
+        refresh,
+        onReadiness: applyReadiness,
+        onBootstrap: feedback => {
+          recordOperation('Install LazyDesigner', feedback.kind, feedback.status);
+          setupStaged = !feedback.verifyRuntime;
+        },
+      });
+      const ready = outcome.readiness;
+      if (!ready) {
+        showSuccessToast(outcome.feedback.message, outcome.feedback.kind);
         return;
       }
-      await refresh();
-      const ready = await invoke<EnsureReadyResult>('ensure_ready');
-      pluginApprovalNeeded = ready.manual_plugin_approval_recommended;
-      readinessReason = ready.reason;
-      await refresh();
       if (ready.status === 'READY') showSuccessToast('Setup complete. LazyDesigner is ready.');
       else if (ready.status === 'RUNTIME_READY') showSuccessToast('Setup complete. Blockbench is ready.');
       else if (ready.status === 'NEEDS_ATTENTION') {
-        error = ready.reason === 'PLUGIN_INTEGRITY'
-          ? 'Setup completed, but the managed Blockbench plugin needs review.'
-          : ready.reason === 'RUNTIME_ENDPOINT_MISMATCH'
-            ? 'Setup completed, but Blockbench and the MCP client use different local connection settings.'
-            : ready.reason === 'RUNTIME_START_FAILED'
-              ? 'Setup completed, but the local Runtime could not start in Blockbench.'
-              : 'Setup completed, but Blockbench could not become ready automatically.';
+        error = installationReadinessError(ready);
       }
     } catch (cause) {
       recordOperation('Install LazyDesigner', 'failed', errorCode(cause));
@@ -887,100 +866,12 @@
         </main>
 
       {:else}
-        <main class="page-content settings-content">
-          {#if statusProbeFailures >= 2}
-            <section class="support-banner" role="status">
-              <span class="support-banner-dot" aria-hidden="true"></span>
-              <div><strong>AI status needs verification</strong><span>These are the last known connection details. You can still open model files; Refresh before changing AI or installed components.</span></div>
-              <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
-            </section>
-          {:else if productMode(status) !== 'ready'}
-            <div class="support-banner">
-              <span class="support-banner-dot"></span>
-              <div><strong>{productHeadline(status)}</strong><span>{productMessage(status)}</span></div>
-            </div>
-          {/if}
-
-          {#if migrationConflict}
-            <section class="settings-section">
-              <h2>Review previous {migrationConflictKind === 'plugin' ? 'plugin' : 'AI client'}</h2>
-              {#if migrationConflictKind === 'plugin'}
-                <p>Save your models and close Blockbench. Review the existing plugin and keep a backup before using Blockbench's own plugin controls. LazyDesigner will not delete or adopt that file automatically. After the conflict is safely resolved, return to Workspace and choose Check again.</p>
-                <button class="secondary-button" onclick={showRetiredPluginFile}>Show existing plugin</button>
-              {:else}
-                <p>Back up your Codex configuration and review the older BlockIT MCP entry. LazyDesigner will not modify that entry or start another server automatically. Once a verified migration has resolved the conflict, return to Workspace and choose Check again.</p>
-              {/if}
-            </section>
-          {/if}
-          {#if error && errorDetail}
-            <section class="settings-section">
-              <h2>Last unsuccessful action</h2>
-              <p>{error}</p>
-              <details class="advanced-recovery">
-                <summary><span><strong>Technical details</strong><small>For troubleshooting only. No information is uploaded.</small></span><span>Show</span></summary>
-                <div class="recovery-list"><code>{errorDetail}</code></div>
-              </details>
-            </section>
-          {/if}
-          <section class="settings-section">
-            <h2>About</h2>
-            <div class="definition-rows">
-              <div class="definition-row"><span>LazyDesigner Desktop version</span><strong>{desktopVersion}</strong></div>
-              <div class="definition-row"><span>Blockbench version</span><strong>{status.blockbench.version ?? 'Unavailable'}</strong></div>
-              {#if status.managed?.installed?.source_sha}<div class="definition-row"><span>Managed build</span><code>{status.managed.installed.source_sha.slice(0,12)}</code></div>{/if}
-              {#if status.plugin_integrity !== 'ready'}<div class="definition-row"><span>Blockbench plugin</span><strong class="status-warning">{status.plugin_integrity === 'missing' ? 'Repairing / missing' : status.plugin_integrity === 'modified' ? 'Modified' : 'Needs attention'}</strong></div>{/if}
-            </div>
-          </section>
-
-          <section class="settings-section">
-            <h2>Troubleshooting</h2>
-            <div class="settings-row">
-              <div><strong>Blockbench installation</strong><span>Choose the real installed Blockbench.exe if it moved or multiple installations were detected. Self-extracting *_portable.exe launchers are not supported yet. Close Blockbench before changing this. Your project files and managed plugin stay untouched.</span></div>
-              <button class="secondary-button" onclick={chooseBlockbenchExecutable} disabled={busyAction !== null}>{busyAction === 'choose-editor' ? 'Selecting…' : 'Choose…'}</button>
-            </div>
-            {#if status.manager_available}
-              <div class="settings-row">
-                <div><strong>Installed Blockbench plugin</strong><span>Show the managed plugin file only when reviewing setup or trust.</span></div>
-                <button class="secondary-button" onclick={showPluginFile} disabled={busyAction !== null || statusProbeFailures >= 2}>Show file</button>
-              </div>
-            {/if}
-            <div class="settings-row">
-              <div><strong>Export diagnostics</strong><span>Create a local troubleshooting snapshot. Nothing is uploaded automatically.</span></div>
-              <button class="secondary-button" onclick={exportDiagnostics} disabled={busyAction !== null}>{busyAction === 'export-diagnostics' ? 'Exporting…' : 'Export'}</button>
-            </div>
-
-            {#if status.blockbench.compatibility?.status === 'unsupported' || status.blockbench.compatibility?.status === 'invalid'}
-              <div class="settings-row compact"><div><strong>Blockbench support</strong><span>{compatibilityLabel(status.blockbench.compatibility?.status)}</span></div></div>
-            {/if}
-            {#if status.manager_available && status.managed?.tls_ready === false}
-              <div class="settings-row compact"><div><strong>Local security</strong><span>Needs setup</span></div></div>
-            {/if}
-
-            {#if status.manager_available}
-              <details class="advanced-recovery">
-                <summary><span><strong>Advanced recovery</strong><small>Use only if normal setup or updates cannot finish.</small></span><span>Show</span></summary>
-                <div class="recovery-list">
-                  <div><span><strong>Restore previous version</strong><small>{status.maintenance.rollback ? 'Return to the last verified version.' : 'No previous version is available.'}</small></span><button class="secondary-button small-button" onclick={() => runManagedAction('rollback')} disabled={!status.maintenance.rollback || busyAction !== null || statusProbeFailures >= 2}>Restore</button></div>
-                  <div><span><strong>Repair LazyDesigner</strong><small>{status.maintenance.repair ? 'Restore missing files from the current installation.' : 'Repair is not available right now.'}</small></span><button class="secondary-button small-button" onclick={() => runManagedAction('repair')} disabled={!status.maintenance.repair || busyAction !== null || statusProbeFailures >= 2}>Repair</button></div>
-                  <div><span><strong>Finish incomplete setup</strong><small>{status.maintenance.recover ? 'Recover an interrupted installation.' : 'No interrupted setup was found.'}</small></span><button class="secondary-button small-button" onclick={() => runManagedAction('recover')} disabled={!status.maintenance.recover || busyAction !== null || statusProbeFailures >= 2}>Recover</button></div>
-                </div>
-              </details>
-            {/if}
-          </section>
-
-          {#if operations.length > 0}
-            <section class="settings-section">
-              <details class="recent-activity">
-                <summary><span><strong>Recent activity</strong><small>Current Desktop session</small></span><span>Show</span></summary>
-                <div class="recent-list">
-                  {#each operations as operation}
-                    <div><span>{operation.action}</span><strong class:failed={operation.outcome === 'failed'} class:pending={operation.outcome === 'pending'} class:unchanged={operation.outcome === 'unchanged'}>{operation.outcome === 'success' ? 'Completed' : operation.outcome === 'pending' ? 'Next step' : operation.outcome === 'unchanged' ? 'No change' : 'Failed'}</strong></div>
-                  {/each}
-                </div>
-              </details>
-            </section>
-          {/if}
-        </main>
+        <SupportPage
+          {status} {loading} {busyAction} {statusProbeFailures}
+          {migrationConflict} {migrationConflictKind} {error} {errorDetail} {operations}
+          {refresh} {showRetiredPluginFile} {chooseBlockbenchExecutable}
+          {showPluginFile} {exportDiagnostics} {runManagedAction}
+        />
       {/if}
     </section>
   </div>
@@ -1039,21 +930,17 @@
   .skip-link{position:fixed;z-index:1000;top:8px;left:8px;transform:translateY(-150%);padding:8px 10px;border:1px solid var(--accent);border-radius:7px;background:var(--surface);color:var(--text);font-weight:700;text-decoration:none}.skip-link:focus{transform:translateY(0)}
   .desktop-shell{display:grid;grid-template-columns:168px minmax(0,1fr);width:100%;height:100vh;background:var(--bg)}
   .navigation{display:flex;flex-direction:column;padding:12px 9px;border-right:1px solid var(--border-soft);background:#0f1113}.navigation-brand{display:flex;align-items:center;gap:9px;padding:7px 8px 18px}.navigation-brand strong{font-size:var(--font-title);font-weight:700;letter-spacing:-.01em}.brand-mark{width:10px;height:10px;border-radius:3px;background:var(--accent)}.global-nav{display:grid;gap:2px}.global-nav button,.support-nav{min-height:36px;display:flex;align-items:center;gap:9px;padding:0 9px;border-radius:7px;background:transparent;color:var(--muted);font-size:var(--font-ui);font-weight:600;text-align:left;cursor:pointer}.global-nav button:hover,.support-nav:hover{background:var(--surface);color:var(--text-soft)}.global-nav button.active,.support-nav.active{background:var(--surface);color:var(--text)}.nav-icon{width:17px;height:17px;display:grid;place-items:center}.nav-icon :global(svg){width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.navigation-spacer{flex:1}
-  .main-view{min-width:0;height:100vh;display:flex;flex-direction:column;overflow:hidden}.page-toolbar{min-height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--border-soft);background:var(--bg)}.page-toolbar h1{margin:0;font-size:16px;font-weight:680;letter-spacing:-.015em}.toolbar-actions{display:flex;align-items:center;gap:6px}.fixture-badge{padding:3px 6px;border:1px solid var(--border);border-radius:5px;color:var(--muted-2);font-size:var(--font-xs)}.page-content{flex:1;min-height:0;overflow:auto;padding:24px 28px 44px}.settings-content{max-width:980px}
+  .main-view{min-width:0;height:100vh;display:flex;flex-direction:column;overflow:hidden}.page-toolbar{min-height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--border-soft);background:var(--bg)}.page-toolbar h1{margin:0;font-size:16px;font-weight:680;letter-spacing:-.015em}.toolbar-actions{display:flex;align-items:center;gap:6px}.fixture-badge{padding:3px 6px;border:1px solid var(--border);border-radius:5px;color:var(--muted-2);font-size:var(--font-xs)}
   .status-probe-warning{font-size:var(--font-sm);color:var(--warning)}
   .more-menu{position:relative}.more-menu summary{width:30px;height:30px;display:grid;place-items:center;list-style:none;border-radius:6px;color:var(--muted);cursor:pointer}.more-menu summary:hover,.more-menu[open] summary{background:var(--surface-2);color:var(--text)}.more-menu summary::-webkit-details-marker{display:none}.menu-popover{position:absolute;z-index:20;right:0;top:34px;width:168px;display:grid;padding:5px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);box-shadow:var(--shadow-popover)}.menu-popover button{width:100%;padding:7px 8px;border-radius:5px;background:transparent;color:var(--text-soft);text-align:left;cursor:pointer;font-size:var(--font-sm)}.menu-popover button:hover:not(:disabled){background:var(--surface-3)}
-  .primary-button,.secondary-button,.icon-button{min-height:32px;border-radius:6px;font-size:var(--font-sm);font-weight:700;cursor:pointer}.primary-button,.secondary-button{padding:6px 11px}.primary-button{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink)}.primary-button:hover:not(:disabled){background:var(--accent-hover)}.secondary-button{border:1px solid var(--border);background:var(--surface-2);color:var(--text-soft)}.secondary-button:hover:not(:disabled){background:var(--surface-3);color:var(--text)}.icon-button{width:32px;border:1px solid transparent;background:transparent;color:var(--muted)}.icon-button:hover:not(:disabled){background:var(--surface-2);color:var(--text)}.small-button{min-height:32px;padding:4px 9px;font-size:var(--font-sm)}
-  .content-section{margin-bottom:34px}.section-heading{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:10px}.section-heading h2{margin:0;font-size:var(--font-title);font-weight:700}.section-heading p{margin:2px 0 0;color:var(--muted-2);font-size:var(--font-sm)}.resource-list{border:1px solid var(--border-soft);border-radius:8px;overflow:hidden;background:var(--bg-elevated)}.resource-row{min-height:74px;display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 12px 12px 14px}.app-icon{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text-soft)}.app-icon :global(svg){width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.resource-main{min-width:0}.resource-title{font-size:var(--font-ui);font-weight:700}.resource-meta{display:flex;align-items:center;gap:5px;margin-top:3px;color:var(--muted);font-size:var(--font-sm)}.meta-separator{color:var(--muted-2)}.status-good{color:#9ee8b9!important}.status-warning{color:#f6d97c!important}.resource-actions{display:flex;align-items:center;gap:5px}
-  .definition-rows{border-top:1px solid var(--border-soft)}.definition-row{min-height:42px;display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--border-soft)}.definition-row>span{color:var(--muted);font-size:var(--font-sm)}.definition-row>strong,.definition-row code{font-size:var(--font-sm);font-weight:650;color:var(--text-soft)}.definition-row code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.inline-action{display:flex;align-items:center;gap:10px}
+  .content-section{margin-bottom:34px}.section-heading{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:10px}.section-heading h2{margin:0;font-size:var(--font-title);font-weight:700}.section-heading p{margin:2px 0 0;color:var(--muted-2);font-size:var(--font-sm)}.resource-list{border:1px solid var(--border-soft);border-radius:8px;overflow:hidden;background:var(--bg-elevated)}.resource-row{min-height:74px;display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 12px 12px 14px}.app-icon{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text-soft)}.app-icon :global(svg){width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.resource-main{min-width:0}.resource-title{font-size:var(--font-ui);font-weight:700}.resource-meta{display:flex;align-items:center;gap:5px;margin-top:3px;color:var(--muted);font-size:var(--font-sm)}.meta-separator{color:var(--muted-2)}.status-good{color:#9ee8b9!important}.resource-actions{display:flex;align-items:center;gap:5px}.inline-action{display:flex;align-items:center;gap:10px}
   .inline-guidance{margin-top:10px;padding:14px 14px 13px;border:1px solid #5b4a22;border-radius:8px;background:var(--warning-bg)}.inline-guidance>div{display:grid;gap:2px}.inline-guidance strong{font-size:var(--font-sm)}.inline-guidance span{color:var(--muted);font-size:var(--font-sm)}.inline-guidance ol{margin:11px 0 12px;padding-left:18px;color:var(--text-soft);font-size:var(--font-sm);line-height:1.75}.inline-note{display:flex;gap:8px;margin-top:10px;padding:9px 0;color:var(--muted);font-size:var(--font-sm)}.inline-note strong{color:var(--text-soft);font-size:var(--font-sm)}.inline-alert{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:10px;padding:10px 12px;border:1px solid #5b4a22;border-radius:7px;background:var(--warning-bg)}.inline-alert>div{display:grid;gap:2px}.inline-alert strong{font-size:var(--font-sm)}.inline-alert span{color:var(--muted);font-size:var(--font-sm)}.danger-alert{display:grid;gap:2px;border-color:#693437;background:var(--danger-bg)}
   .setup-panel{max-width:760px;padding-top:10px}.setup-copy h2{margin:0;font-size:20px;letter-spacing:-.02em}.setup-copy p{margin:6px 0 0;color:var(--muted);font-size:var(--font-sm)}.setup-steps{margin-top:24px;border-top:1px solid var(--border-soft)}.setup-step{display:grid;grid-template-columns:26px minmax(0,1fr);gap:11px;padding:14px 0;border-bottom:1px solid var(--border-soft)}.step-number{width:23px;height:23px;display:grid;place-items:center;border-radius:50%;background:var(--surface-2);color:var(--muted);font-size:var(--font-sm);font-weight:700}.setup-step.active .step-number{background:rgba(99,168,255,.12);color:var(--info)}.setup-step>div{display:grid;gap:2px}.setup-step strong{font-size:var(--font-sm)}.setup-step span{color:var(--muted);font-size:var(--font-sm)}.setup-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:18px}.setup-warning{max-width:520px;color:var(--warning);font-size:var(--font-sm)}
   .message-state{max-width:760px;display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:start;gap:12px;padding-top:12px}.message-icon{width:26px;height:26px;display:grid;place-items:center;border-radius:6px;background:var(--surface-2);font-size:var(--font-ui);font-weight:800}.message-icon.danger{background:var(--danger-bg);color:var(--danger)}.message-copy h2{margin:0;font-size:16px}.message-copy p{margin:5px 0 0;color:var(--muted);font-size:var(--font-sm)}
   .task-strip{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:8px 10px;border:1px solid var(--border-soft);border-radius:7px;background:var(--bg-elevated);font-size:var(--font-sm)}.task-spinner{width:9px;height:9px;border:2px solid var(--surface-4);border-top-color:var(--info);border-radius:50%;animation:spin .8s linear infinite}.task-strip small{margin-left:auto;color:var(--muted-2);font-size:var(--font-xs)}
-  .support-banner{display:flex;align-items:flex-start;gap:9px;margin-bottom:24px;padding:10px 0 18px;border-bottom:1px solid var(--border-soft)}.support-banner-dot{width:7px;height:7px;margin-top:4px;border-radius:50%;background:var(--warning)}.support-banner>div{display:grid;gap:2px}.support-banner strong{font-size:var(--font-sm)}.support-banner span{color:var(--muted);font-size:var(--font-sm)}.settings-section{max-width:780px;margin-bottom:30px}.settings-section h2{margin:0 0 9px;font-size:var(--font-title)}.settings-row{min-height:54px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-top:1px solid var(--border-soft)}.settings-row.compact{min-height:42px}.settings-row>div{display:grid;gap:2px}.settings-row strong{font-size:var(--font-sm)}.settings-row span{color:var(--muted);font-size:var(--font-sm);line-height:1.4}
-  .advanced-recovery,.recent-activity{margin-top:8px;border-top:1px solid var(--border-soft)}.advanced-recovery summary,.recent-activity summary{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:12px 0;list-style:none;cursor:pointer}.advanced-recovery summary::-webkit-details-marker,.recent-activity summary::-webkit-details-marker{display:none}.advanced-recovery summary>span:first-child,.recent-activity summary>span:first-child{display:grid;gap:2px}.advanced-recovery summary strong,.recent-activity summary strong{font-size:var(--font-sm)}.advanced-recovery summary small,.recent-activity summary small{color:var(--muted);font-size:var(--font-xs)}.advanced-recovery summary>span:last-child,.recent-activity summary>span:last-child{color:var(--muted);font-size:var(--font-sm)}.recovery-list,.recent-list{border-top:1px solid var(--border-soft)}.recovery-list>div,.recent-list>div{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--border-soft)}.recovery-list>div>span{display:grid;gap:2px}.recovery-list strong{font-size:var(--font-sm)}.recovery-list small{color:var(--muted);font-size:var(--font-xs)}.recent-list span{font-size:var(--font-sm)}.recent-list strong{font-size:var(--font-xs);color:#9ee8b9}.recent-list strong.failed{color:#ff9aa2}.recent-list strong.pending{color:var(--warning)}.recent-list strong.unchanged{color:var(--muted)}
   .operation-attention{position:fixed;z-index:220;right:16px;bottom:16px;width:min(360px,calc(100vw - 32px));display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:start;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);box-shadow:var(--shadow-popover)}.operation-attention.success{border-color:var(--accent-border)}.operation-attention.notice{border-color:var(--border-strong)}.operation-attention.error{border-color:#705c26}.attention-icon{width:23px;height:23px;display:grid;place-items:center;border-radius:6px;background:var(--surface-3);font-size:var(--font-sm);font-weight:800}.success .attention-icon{background:var(--accent-soft);color:#9ee8b9}.error .attention-icon{background:var(--warning-bg);color:#fde68a}.attention-copy{display:grid;gap:2px}.attention-copy strong{font-size:var(--font-sm)}.attention-copy span{color:var(--muted);font-size:var(--font-xs);line-height:1.4}.attention-actions{display:flex;gap:4px}.attention-actions button{min-height:24px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface-3);font-size:var(--font-xs);font-weight:700}.attention-actions .dismiss{width:24px;padding:0;border:0;background:transparent;color:var(--muted);font-size:15px}
   @keyframes spin{to{transform:rotate(360deg)}}
-  @media(max-width:760px){.desktop-shell{grid-template-columns:62px minmax(0,1fr)}.navigation{padding-inline:7px}.navigation-brand strong,.global-nav button>span:not(.nav-icon),.support-nav>span:not(.nav-icon){display:none}.navigation-brand{justify-content:center;padding-inline:0}.global-nav button,.support-nav{justify-content:center;padding:0}.page-toolbar{padding:0 16px}.page-content{padding:20px 16px 36px}.resource-row{grid-template-columns:36px minmax(0,1fr)}.resource-actions{grid-column:1/-1;justify-content:flex-end;padding-top:2px}.setup-footer,.settings-row,.recovery-list>div{align-items:flex-start;flex-direction:column}.operation-attention{right:10px;bottom:10px;width:calc(100vw - 20px);grid-template-columns:auto minmax(0,1fr)}.attention-actions{grid-column:2}}
+  @media(max-width:760px){.desktop-shell{grid-template-columns:62px minmax(0,1fr)}.navigation{padding-inline:7px}.navigation-brand strong,.global-nav button>span:not(.nav-icon),.support-nav>span:not(.nav-icon){display:none}.navigation-brand{justify-content:center;padding-inline:0}.global-nav button,.support-nav{justify-content:center;padding:0}.page-toolbar{padding:0 16px}.resource-row{grid-template-columns:36px minmax(0,1fr)}.resource-actions{grid-column:1/-1;justify-content:flex-end;padding-top:2px}.setup-footer{align-items:flex-start;flex-direction:column}.operation-attention{right:10px;bottom:10px;width:calc(100vw - 20px);grid-template-columns:auto minmax(0,1fr)}.attention-actions{grid-column:2}}
   /* Workspace First: preserve content width with two top-level destinations. */
   .desktop-shell{display:flex;flex-direction:column}
   .navigation{min-height:56px;flex-direction:row;align-items:center;gap:20px;padding:0 24px;border-right:0;border-bottom:1px solid var(--border-soft)}

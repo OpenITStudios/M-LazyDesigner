@@ -2,6 +2,15 @@ import type { ProjectNavigation } from './projectNavigationTypes';
 
 export type DesktopInvoke = typeof import('@tauri-apps/api/core').invoke;
 
+export type DesktopBusyAction = ManagedActionResult['action'] | 'install' | 'connect-blockbench' | 'show-plugin' | 'export-diagnostics' | 'project-action' | 'open-editor' | 'browse-model' | 'choose-editor';
+
+export type DesktopOperationRecord = {
+  action: string;
+  outcome: 'success' | 'pending' | 'unchanged' | 'failed';
+  status: string;
+  at: string;
+};
+
 // Serialized Desktop IPC types shared by the UI; readiness is owned by Rust.
 export type Compatibility = {
     status: 'validated' | 'compatible-unverified' | 'review-required' | 'unsupported' | 'invalid';

@@ -41,10 +41,12 @@ describe("human-facing Blockbench UI", () => {
 
   test("Desktop UI labels versions and actions without presenting a fake menu", async () => {
     const app = await Bun.file(new URL("../../apps/desktop/src/App.svelte", import.meta.url)).text();
-    expect(app).toContain("import { version as desktopVersion } from '../package.json'");
-    expect(app).toContain("<strong>{desktopVersion}</strong>");
-    expect(app).toContain("LazyDesigner Desktop version");
-    expect(app).not.toContain("<strong>0.1.0</strong>");
+    const support = await Bun.file(new URL("../../apps/desktop/src/SupportPage.svelte", import.meta.url)).text();
+    expect(app).toContain("<SupportPage");
+    expect(support).toContain("import { version as desktopVersion } from '../package.json'");
+    expect(support).toContain("<strong>{desktopVersion}</strong>");
+    expect(support).toContain("LazyDesigner Desktop version");
+    expect(support).not.toContain("<strong>0.1.0</strong>");
     expect(app).toContain("async function showPluginFile()");
     expect(app).toContain("'show_plugin_file'");
     expect(app).toContain("onclick={showPluginFile}");

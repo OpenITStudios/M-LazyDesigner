@@ -1,4 +1,4 @@
-import type { Compatibility, ProductMode, SystemStatus } from './desktopTypes';
+import type { Compatibility, ProductMode, SystemStatus, EnsureReadyResult } from './desktopTypes';
 
 // Presentation only: no process lifecycle, IPC, or readiness inference.
 export const compatibilityLabel = (value: Compatibility['status'] | undefined) => {
@@ -195,4 +195,36 @@ export function desktopErrorNotice(cause: unknown): DesktopErrorNotice {
   }
   return known('Action could not be completed',
     'The requested action was not confirmed. Open Support for the technical details before trying again.');
+}
+
+export function connectionReadinessError(result: EnsureReadyResult): string {
+  switch (result.reason) {
+    case 'BLOCKBENCH_PROFILE_MISMATCH':
+      return 'Blockbench is running with a different profile or its profile cannot be verified. Save your models, close that editor, and open Blockbench from LazyDesigner.';
+    case 'PLUGIN_INTEGRITY':
+      return 'The managed Blockbench plugin was modified and needs review.';
+    case 'BLOCKBENCH_EXITED':
+      return 'Blockbench closed before LazyDesigner could become ready.';
+    case 'RUNTIME_ENDPOINT_MISMATCH':
+      return 'Blockbench and the MCP client are using different local connection settings. Restore matching connection settings or open Support.';
+    case 'RUNTIME_START_FAILED':
+      return 'LazyDesigner loaded in Blockbench, but its local Runtime could not start. Open Support.';
+    case 'CONNECTION_PROBE_UNKNOWN':
+      return 'LazyDesigner could not verify the local Runtime connection. Try again or open Support.';
+    default:
+      return 'LazyDesigner could not prepare Blockbench automatically.';
+  }
+}
+
+export function installationReadinessError(ready: EnsureReadyResult): string {
+  switch (ready.reason) {
+    case 'PLUGIN_INTEGRITY':
+      return 'Setup completed, but the managed Blockbench plugin needs review.';
+    case 'RUNTIME_ENDPOINT_MISMATCH':
+      return 'Setup completed, but Blockbench and the MCP client use different local connection settings.';
+    case 'RUNTIME_START_FAILED':
+      return 'Setup completed, but the local Runtime could not start in Blockbench.';
+    default:
+      return 'Setup completed, but Blockbench could not become ready automatically.';
+  }
 }

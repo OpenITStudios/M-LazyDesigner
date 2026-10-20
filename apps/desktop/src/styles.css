@@ -69,3 +69,10 @@ h2 { letter-spacing: -.015em; }
     color: GrayText !important;
   }
 }
+
+/* Shared Desktop page and control styles; page-specific rules stay with their view. */
+:where(.desktop-shell) .page-content{flex:1;min-height:0;overflow:auto;padding:24px 28px 44px}
+  :where(.desktop-shell) .primary-button,:where(.desktop-shell) .secondary-button,:where(.desktop-shell) .icon-button{min-height:32px;border-radius:6px;font-size:var(--font-sm);font-weight:700;cursor:pointer}:where(.desktop-shell) .primary-button,:where(.desktop-shell) .secondary-button{padding:6px 11px}:where(.desktop-shell) .primary-button{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink)}:where(.desktop-shell) .primary-button:hover:not(:disabled){background:var(--accent-hover)}:where(.desktop-shell) .secondary-button{border:1px solid var(--border);background:var(--surface-2);color:var(--text-soft)}:where(.desktop-shell) .secondary-button:hover:not(:disabled){background:var(--surface-3);color:var(--text)}:where(.desktop-shell) .icon-button{width:32px;border:1px solid transparent;background:transparent;color:var(--muted)}:where(.desktop-shell) .icon-button:hover:not(:disabled){background:var(--surface-2);color:var(--text)}:where(.desktop-shell) .small-button{min-height:32px;padding:4px 9px;font-size:var(--font-sm)}:where(.desktop-shell) .status-warning{color:#f6d97c!important}
+  @media(max-width:760px){:where(.desktop-shell) .page-content{padding:20px 16px 36px}}
+
+  :where(.desktop-shell) .definition-rows{border-top:1px solid var(--border-soft)}:where(.desktop-shell) .definition-row{min-height:42px;display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--border-soft)}:where(.desktop-shell) .definition-row>span{color:var(--muted);font-size:var(--font-sm)}:where(.desktop-shell) .definition-row>strong,:where(.desktop-shell) .definition-row code{font-size:var(--font-sm);font-weight:650;color:var(--text-soft)}:where(.desktop-shell) .definition-row code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}

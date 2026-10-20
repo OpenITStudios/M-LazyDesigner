@@ -4,10 +4,44 @@ import type { ProjectNavigation } from "../../../apps/desktop/src/projectNavigat
 import { createConnectionMonitor } from "../../../apps/desktop/src/connectionMonitor";
 import { createEditorOperations } from "../../../apps/desktop/src/editorOperations";
 import type { DesktopInvoke } from "../../../apps/desktop/src/desktopTypes";
+import { createSetupOperations } from "../../../apps/desktop/src/setupOperations";
 
 async function source(path: string): Promise<string> {
   return Bun.file(path).text();
 }
+
+describe("Desktop setup ordering", () => {
+  test.each(["STAGED", "INSTALLED"])("bootstrap %s preserves intermediate state and readiness order", async (status) => {
+    const events: string[] = [];
+    const invoke: DesktopInvoke = async command => {
+      events.push(`native:${command}`);
+      return command === "bootstrap_install"
+        ? { receipt: { status, source_sha: "a".repeat(40) } } as never
+        : { status: "APPROVAL_REQUIRED", reason: "TRUST_REQUIRED", manual_plugin_approval_recommended: true } as never;
+    };
+    const outcome = await createSetupOperations(invoke).install({
+      onBootstrap: feedback => { events.push(`bootstrap:${feedback.status}`); },
+      onReadiness: result => { events.push(`readiness:${result.status}`); },
+      refresh: async () => { events.push("refresh"); },
+    });
+    const expected = ["native:bootstrap_install", `bootstrap:${status}`, "refresh"];
+    if (status === "INSTALLED") expected.push("native:ensure_ready", "readiness:APPROVAL_REQUIRED", "refresh");
+    expect(events).toEqual(expected);
+    expect(outcome.readiness?.status ?? null).toBe(status === "STAGED" ? null : "APPROVAL_REQUIRED");
+  });
+
+  test("unverified bootstrap cannot start readiness or publish installation feedback", async () => {
+    const calls: string[] = [];
+    const invoke: DesktopInvoke = async command => { calls.push(command); return { receipt: { status: "INSTALLED" } } as never; };
+    const hooks = {
+      onBootstrap: () => { throw new Error("Feedback must not be published"); },
+      onReadiness: () => { throw new Error("Readiness must not be published"); },
+      refresh: async () => { throw new Error("Refresh must not start"); },
+    };
+    await expect(createSetupOperations(invoke).install(hooks)).rejects.toThrow("unverified installation result");
+    expect(calls).toEqual(["bootstrap_install"]);
+  });
+});
 
 describe("Desktop native editor operations", () => {
   test.each([undefined, "recent-model"])("model launch %s shares focus and truthful acknowledgement", async (id) => {
@@ -107,7 +141,9 @@ describe("Desktop control-plane ownership", () => {
     expect(rust).toContain('"resources/managed/lazydesigner.exe"');
     expect(rust).toContain('"--plugin-path"');
     expect(rust).toContain('join("plugins").join("lazydesigner_mcp.js")');
-    expect(app).toContain("ensure_ready");
+    const setup = await source("../apps/desktop/src/setupOperations.ts");
+    expect(setup).toContain("ensure_ready");
+    expect(app).toContain("setupOperations.connect(");
     expect(app).toContain("show_plugin_file");
     expect(app).toContain("setup-tls");
     expect(app).toContain("runManagedAction('update')");
@@ -619,17 +655,20 @@ describe("Desktop control-plane ownership", () => {
       source("../apps/desktop/src/connectionWatch.ts"),
     ]);
 
-    expect(app).toContain("invoke<EnsureReadyResult>('ensure_ready')");
+    const setup = await source("../apps/desktop/src/setupOperations.ts");
+    expect(setup).toContain("invoke<EnsureReadyResult>('ensure_ready')");
+    expect(app).toContain("setupOperations.connect(");
     expect(app).not.toContain("invoke<BlockbenchActionResult>('open_blockbench')");
     expect(main).not.toContain("fn open_blockbench()");
     expect(rust).toContain("blockbench::open()?");
     expect(presentation).toContain("value.plugin_integrity === 'modified'");
-    expect(app).toContain("next.managed = fixture === 'fresh-install' ? null :");
+    const fixtures = await source("../apps/desktop/src/desktopFixtures.ts");
+    expect(fixtures).toContain("next.managed = fixture === 'fresh-install' ? null :");
     expect(app).toContain("invoke<ConnectionStatus>('connection_status')");
     expect(connectionWatch).toContain("candidate.runtime_listener_live");
     expect(app).not.toContain("candidate.runtime_online");
-    expect(app).toContain("RUNTIME_ENDPOINT_MISMATCH");
-    expect(app).toContain("RUNTIME_START_FAILED");
+    expect(presentation).toContain("RUNTIME_ENDPOINT_MISMATCH");
+    expect(presentation).toContain("RUNTIME_START_FAILED");
     expect(presentation).toContain("value.product_state");
     expect(app).toContain("from './desktopPresentation'");
     expect(rust).toContain("readiness::product_state(");
@@ -795,10 +834,12 @@ describe("Desktop calm connection summary", () => {
     const app = await Bun.file("../apps/desktop/src/App.svelte").text();
     expect(app).toContain("desktopErrorNotice(cause)");
     expect(app).toContain("error ? errorTitle");
-    expect(app).toContain("<h2>Last unsuccessful action</h2>");
-    expect(app).toContain("<code>{errorDetail}</code>");
+    const support = await source("../apps/desktop/src/SupportPage.svelte");
+    expect(app).toContain("<SupportPage");
+    expect(support).toContain("<h2>Last unsuccessful action</h2>");
+    expect(support).toContain("<code>{errorDetail}</code>");
     expect(app).toContain("<h2>AI connection and updates</h2>");
-    expect(app).toContain("<strong>Installed Blockbench plugin</strong>");
+    expect(support).toContain("<strong>Installed Blockbench plugin</strong>");
   });
 
   test("passive connection polling pauses when hidden and uses a slower idle cadence", async () => {
@@ -820,7 +861,8 @@ describe("Desktop calm connection summary", () => {
     expect(fast).toContain("crate::process::process_snapshot()");
     expect(fast).not.toContain("System::new_all()");
     expect(monitor).toContain("if (disposed || failures >= 2) return;");
-    expect(ui).toContain("disabled={!status.maintenance.repair");
+    const support = await source("../apps/desktop/src/SupportPage.svelte");
+    expect(support).toContain("disabled={!status.maintenance.repair");
   });
 
   test("preserves setup and error guidance and makes healthy project view primary", async () => {
@@ -1000,9 +1042,11 @@ describe("Desktop pure status presentation", () => {
       Bun.file("../apps/desktop/src-tauri/src/system_status.rs").text(),
     ]);
     const bootstrap = app.slice(app.indexOf("async function installLazyDesigner()"), app.indexOf("async function showPluginFile()"));
-    expect(bootstrap).toContain("bootstrapInstallPresentation(result.receipt)");
-    expect(bootstrap).toContain("if (!feedback.verifyRuntime)");
-    expect(bootstrap.indexOf("if (!feedback.verifyRuntime)")).toBeLessThan(bootstrap.indexOf("invoke<EnsureReadyResult>('ensure_ready')"));
+    const setup = await source("../apps/desktop/src/setupOperations.ts");
+    expect(bootstrap).toContain("setupOperations.install(");
+    expect(bootstrap).toContain("setupStaged = !feedback.verifyRuntime");
+    expect(setup).toContain("bootstrapInstallPresentation(result.receipt)");
+    expect(setup.indexOf("if (!feedback.verifyRuntime)")).toBeLessThan(setup.indexOf("readiness: await ensureReady(hooks)"));
     expect(app).toContain("Setup waiting for Blockbench");
     expect(app).toContain("setupStaged ? 'Finish setup'");
     expect(rust).toContain("bootstrap returned an unverified installation receipt.");
@@ -1040,7 +1084,7 @@ describe("Desktop pure status presentation", () => {
     expect(dto).toContain("project_navigation: ProjectNavigation");
     expect(presentation).not.toContain("invoke(");
     expect(presentation).not.toContain("ensure_ready");
-    expect(presentation).toContain("import type { Compatibility, ProductMode, SystemStatus }");
+    expect(presentation).toContain("import type { Compatibility, ProductMode, SystemStatus, EnsureReadyResult }");
     expect(presentation).not.toContain("type ProductMode =");
   });
 });
@@ -1048,9 +1092,9 @@ describe("Desktop pure status presentation", () => {
 describe("Desktop Workspace and Support feedback integrity", () => {
   test("keeps stale Support observations clearly unverified and recoverable", async () => {
     const ui = await Bun.file("../apps/desktop/src/App.svelte").text();
-    const start = ui.indexOf('<main class="page-content settings-content">');
-    const support = ui.slice(start, ui.indexOf("</main>", start));
-    expect(start).toBeGreaterThan(0);
+    const support = await source("../apps/desktop/src/SupportPage.svelte");
+    expect(ui).toContain("<SupportPage");
+    expect(support).toContain('<main class="page-content settings-content">');
     expect(support).toContain("{#if statusProbeFailures >= 2}");
     expect(support).toContain("These are the last known connection details.");
     expect(support).toContain('onclick={refresh}');
