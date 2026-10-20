@@ -1,5 +1,19 @@
 # LazyDesigner Next Action
 
+## Version upgrade compatibility checkpoint — 2026-10-20
+
+**Goal:** Dependency and development-kit version increases only, on `Local`; **CI DISABLED** remains in effect. This checkpoint is version research and readiness evidence, **not** an installed upgrade or a current-head build PASS.
+
+- **MCP SDK:** locked client/core `2.2.0`, server/nested core `2.0.0`; target coordinated `@modelcontextprotocol/client`, `@modelcontextprotocol/server`, and resolved `@modelcontextprotocol/core` `2.3.1`. Upstream `v2.3.1` requires Node >=20 and retains the root server API and `./stdio` export currently used by `mcp/gateway/index.ts`; runtime/session behavior still needs actual tests.
+- **Bun typings:** `@types/bun` / `bun-types` locked `1.3.8`; target `1.4.3` matching pinned Bun `1.4.3`. Upstream `bun-types` introduces direct `undici-types: "*"` alongside `@types/node: "*"`; regenerate the full `mcp/bun.lock` using pinned Bun rather than copying just two entries.
+- **Blockbench typings:** `blockbench-types` locked `5.1.0`; target `5.2.0`. Upstream direct dependency names/ranges are unchanged. This is a **source-typing** update only: do not promote `mcp/compatibility/blockbench.json` host versions to native-validated or silently change `sourceTypeBaseline` until relevant typings/source review and tests justify it.
+- **Vite migration:** locked Vite `7.3.7` and `@sveltejs/vite-plugin-svelte` `6.2.4`; target coordinated Vite `8.3.4` + plugin `7.3.1`. Plugin 7.3.1 peers with Vite 8 and Svelte >=5.46.4; locked Svelte `5.57.2` meets the stated Svelte peer range. Vite 8 swaps Rollup-based build internals for Rolldown. Desktop's `vite.config.ts` uses `svelte()` and `tailwindcss()` without the plugin options removed in v7; **source shape only**, not build proof.
+
+**Exact blocker:** Current execution environment has npm/Node but no Bun executable and cannot resolve npm registry DNS. An isolated `npm install --package-lock-only --offline --ignore-scripts --no-audit --no-fund --save-dev vite@8.3.4 @sveltejs/vite-plugin-svelte@7.3.1` failed `ENOTCACHED` on the Svelte plugin package metadata. No new lockfile was produced, no CI was started, and no manifest was committed without a generator-valid matching lockfile.
+
+**Next implementation:** In an actually connected executable checkout, regenerate `mcp/bun.lock` with the pinned Bun for the three scoped MCP/typings upgrades, validate `bun install --frozen-lockfile`, `bun run typecheck`, `bun run typecheck:gateway` and affected tests; separately resolve Vite 8/plugin 7 with npm, `npm ci`, `npm run typecheck` and `npm run build:frontend`. Commit each coherent manifest + generated lockfile only after verification. Keep release jobs manual and all verification CI disabled. No user-PC action is assumed.
+
+
 ## CI DISABLED — dependency/kit upgrades only (2026-10-20)
 
 **Accepted source change:** `Local` [`d14aa2d`](https://github.com/OpenITStudios/M-LazyDesigner/commit/d14aa2d6ed9a32f20a6d853d4ea90dc24625345d) atomically upgraded Tauri Rust and npm to 2.12.3 from generated artifact `12196594517`, with exact Git blob hashes and intact lockfiles. CI remains fully disabled; nine verification workflows are archived, while two release/distribution workflows are manual-only. No source check on the new SHA has been executed; **NOT EXECUTED** must not be reported as PASS.
