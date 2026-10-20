@@ -6,7 +6,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 Dependency completion is executing locally against remote `OpenITStudios/M-LazyDesigner` / `Local`, baseline `48329d0`. CI DISABLED: nine verification definitions live only in `.github/disabled-workflows/`; manual distribution/release definitions are not authorization to release. Do not enable or dispatch Actions, modify main, or publish packages.
 
-Final `bun run verify:full`, Desktop `npm run verify:source`, Windows NSIS shell packaging and real Gateway initialization/discovery PASS. Review and commit the source batch, then run integrated managed packaging from the required clean committed checkout. Record that bounded packaging result and fast-forward remote Local without force. Do not incorporate the unrelated dirty original checkout.
+Final `bun run verify:full`, Desktop `npm run verify:source`, Windows NSIS shell packaging and real Gateway initialization/discovery PASS. Source commit 06d74d70 and its clean exact-SHA verify:full PASS; integrated managed packaging, disposable compiled-CLI install/status smoke and NSIS build PASS. Final evidence is recorded in current-validation.md. Dependency source work is complete; STOP after fast-forward delivery to remote Local. Further installed/native validation follows the existing runbook as a separate bounded task. Do not incorporate the unrelated dirty original checkout.
 
 ## Compatibility and security residue
 

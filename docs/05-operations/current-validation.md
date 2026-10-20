@@ -4,6 +4,8 @@ This file owns current proof interpretation only. Continuation: [next-action.md]
 
 ## Current authority
 
+Executable source commit: [06d74d7080e5e4fffebbafdd2bdb1b83f4039b31](https://github.com/OpenITStudios/M-LazyDesigner/commit/06d74d7080e5e4fffebbafdd2bdb1b83f4039b31). Full MCP verification was repeated successfully on this clean exact commit; the final evidence-only commit changes these two operations documents.
+
 2026-10-20 dependency completion uses an isolated checkout of OpenITStudios/M-LazyDesigner, Local, baseline `48329d0`. The original dirty checkout is preserved. Execution context: LOCAL_CODE, Windows x64. CI DISABLED; no workflow was enabled/dispatched, main changed, release created or package published.
 
 Toolchains: Bun 1.4.3 (repo-local verified npm distribution), Node 24.22.0 LTS (repo-local official npm distribution), npm 11.16.0, Rust/Cargo 1.99.1 (rustup). Earlier initial Desktop runs used installed Node 24.14.1; final Desktop checks and package build used 24.22.0.
@@ -47,7 +49,7 @@ Registry license metadata remains MIT/Apache-compatible for upgraded npm package
 | Bun security audit | High gate PASS; full audit reports 1 low Vue 2 advisory |
 | npm audit | PASS: 0 vulnerabilities |
 | cargo-audit 0.22.2, full lock | 0 vulnerabilities; 4 unmaintained + 1 unsound warning; all five absent from locked Windows graph |
-| Windows NSIS shell package / Gateway protocol smoke | PASS: build:app:shell and real stdio initialization/discovery (4 public tools) |
+| Windows package / Gateway protocol smoke | PASS: shell and integrated managed NSIS builds; disposable compiled-CLI install/status smoke; real stdio initialization/discovery (4 public tools) |
 | Installed/native Blockbench | NOT_EXECUTED on this source |
 
 Logs are local ignored .cache outputs, not a second durable ledger. Svelte warnings concern existing unused CSS and alertdialog semantics; Rust warns about existing dead fields/helper. No warning suppression was added.
@@ -74,4 +76,8 @@ A docs-only head may use Head Proof to show executable source did not change; th
 
 From mcp: bun install; bun update; bun install --frozen-lockfile; bun x tsc --version; bun run verify:types; targeted animation/symbol-map tests (34 PASS); Gateway/affected tests (29 PASS); bun run verify:full (PASS); bun audit (1 low); bun run security:audit (PASS). From Desktop: npm install --package-lock-only --ignore-scripts; npm update; npm ci; npm audit --json; npm ls --all --json; npm run verify:source (PASS); npm run build:app:shell (PASS). Rust: cargo update, cargo check --locked, cargo metadata --locked --filter-platform x86_64-pc-windows-msvc, cargo tree --locked --target x86_64-pc-windows-msvc, cargo-audit 0.22.2 --json. Build logs and audit JSON are ignored local .cache outputs.
 
-Root review found no tracked scattered artifacts requiring moves/deletions. Ignore native Svelte generated workspace; root-layout test permits the already-ignored .cache tooling directory. Preserve instructions and historical knowledge through canonical owners and Git history, replacing obsolete repeated continuation entries. No source boundary, build target, installed app or authored asset was changed. NSIS build is shell-only so far; integrated managed package requires the clean committed checkout. Installer execution, update/rollback, MSRV 1.90 execution and live native/visual acceptance remain NOT EXECUTED.
+Root review found no tracked scattered artifacts requiring moves/deletions. Ignore native Svelte generated workspace; root-layout test permits the already-ignored .cache tooling directory. Preserve instructions and historical knowledge through canonical owners and Git history, replacing obsolete repeated continuation entries. No source boundary, build target, installed app or authored asset was changed. Integrated npm run build:app PASS on clean source 06d74d70, including canonical managed package verification and compiled CLI install/status smoke against disposable paths. The NSIS installer was built but not executed. Installer UI/silent-install, installed update/rollback, Rust 1.90 execution and live native/visual acceptance remain NOT EXECUTED.
+
+Exact-commit verify:full counts: 282 repository, 2,140 runtime, 26 managed-installer, 166 authoring, 229 Gateway and 41 capability-manifest tests, all PASS; benchmark, surface and bundle stages also PASS. Installer SHA256: EA53BED044797352E66A659EC00853BEE1E948EF0C50FAF7802DE388F6C3A457 (35.39 MiB). Managed package source_sha: 06d74d7080e5e4fffebbafdd2bdb1b83f4039b31; native_blockbench: NOT_RUN. No user installation was changed.
+
+Rust retained compatible resolutions: rand 0.8.8 (latest major 0.10.3), rfd 0.15.4 (0.17.2), sha2 0.10.9 (0.11.1), sysinfo 0.30.13 (0.39.6); Tauri 2.12.4 and serde_json 1.0.154. Windows Cargo metadata declares no dependency MSRV above 1.90. Reviewed license expressions include existing permissive licenses and MPL-2.0; no unspecified license in the resolved Windows graph. Official upstream references: [TS7 API boundary](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/), [Blockbench animation aliases](https://github.com/JannisX11/blockbench/blob/master/types/custom/animation.d.ts).
