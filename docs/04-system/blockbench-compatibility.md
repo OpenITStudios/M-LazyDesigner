@@ -44,7 +44,7 @@ The review boundary is not a claim that a future Blockbench version is incompati
 
 ## Current policy
 
-The source type baseline remains Blockbench types 5.1.0. Historical repository
+The declared source typing baseline is now Blockbench types 5.2.0 (2026-10-20). This changes TypeScript declarations only, not native validated host builds. Historical repository
 records mention native tests on Blockbench 5.2.0, but they are not validation
 for the current plugin build. `liveValidatedBuilds` starts empty: 5.2.0,
 5.2.1 and 5.2.2 are allowed with `compatible-unverified`, not `validated`.

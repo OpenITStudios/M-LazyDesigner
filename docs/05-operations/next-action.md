@@ -1,5 +1,12 @@
 # LazyDesigner Next Action
 
+## Pending package upgrade execution evidence — 2026-10-20
+
+**Source target selected:** MCP client/core/server 2.3.1, `@types/bun` and `bun-types` 1.4.3, Blockbench typings 5.2.0. The manifest and Bun lock graph have been assembled from upstream package manifests and independently published package-manager lock checksums. Redundant nested MCP Core 2.0.0 was removed when both SDK entrypoints converged on 2.3.1. No unrelated packages changed.
+
+**Proof ceiling:** No Bun executable or registry tarball access is available in this session. This is a **source-level, externally validated lockfile reconstruction**, not a Bun-generated frozen install, installed TypeScript check, MCP conformance, or native Blockbench proof. These are **NOT EXECUTED**; run the canonical Bun 1.4.3 frozen install and focused checks before calling this upgrade accepted. CI remains OFF as requested. `liveValidatedBuilds` stays empty.
+
+
 ## Version upgrade compatibility checkpoint — 2026-10-20
 
 **Goal:** Dependency and development-kit version increases only, on `Local`; **CI DISABLED** remains in effect. This checkpoint is version research and readiness evidence, **not** an installed upgrade or a current-head build PASS.
