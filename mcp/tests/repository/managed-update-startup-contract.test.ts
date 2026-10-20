@@ -59,12 +59,12 @@ describe("managed startup update contract", () => {
     expect(app).toContain("await invoke<ManagedUpdateCheck>('check_managed_update')");
     expect(app).toContain("void checkManagedUpdateOnce();");
 
-    const watcherStart = app.indexOf("async function watchSystemStatus()");
-    const watcherEnd = app.indexOf("async function connectBlockbench()", watcherStart);
-    expect(app.slice(watcherStart, watcherEnd)).not.toContain("checkManagedUpdateOnce");
+    const monitor = await source("../apps/desktop/src/connectionMonitor.ts");
+    expect(monitor).not.toContain("checkManagedUpdateOnce");
+    expect(monitor).not.toContain("check_managed_update");
 
     const mountStart = app.indexOf("onMount(() =>");
-    const destroyStart = app.indexOf("onDestroy(() =>", mountStart);
+    const destroyStart = app.indexOf("</script>", mountStart);
     const mount = app.slice(mountStart, destroyStart);
     expect(mount.match(/checkManagedUpdateOnce\(\)/g)?.length).toBe(1);
     expect(mount).not.toMatch(/setInterval\([^\n]*checkManagedUpdateOnce/);

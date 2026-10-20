@@ -187,8 +187,9 @@ describe("human-facing Blockbench UI", () => {
 
   test("Desktop guards overlapping probes and signals stale state", async () => {
     const app = await Bun.file(new URL("../../apps/desktop/src/App.svelte", import.meta.url)).text();
-    expect(app).toContain("statusProbeInFlight");
+    const monitor = await Bun.file(new URL("../../apps/desktop/src/connectionMonitor.ts", import.meta.url)).text();
+    expect(monitor).toContain("inFlight");
     expect(app).toContain("statusProbeFailures >= 2");
-    expect(app).toContain("connectionChanged(candidate, status)");
+    expect(monitor).toContain("connectionChanged(candidate, current)");
   });
 });

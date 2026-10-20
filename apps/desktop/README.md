@@ -22,6 +22,12 @@ Desktop does **not** own:
 
 Those remain owned by the existing Runtime/Gateway/Managed Distribution layers.
 
+## Frontend module ownership
+
+`src/App.svelte` composes views, explicit user actions and the existing Rust IPC contracts. `src/connectionMonitor.ts` owns passive probe scheduling, overlap prevention, stale authority and disposal; it reuses the pure comparison/cadence rules in `connectionWatch.ts` and never discovers updates or repairs installations. `src/managedProgress.ts` owns asynchronous progress subscription cleanup. `src/desktopFixtures.ts` owns development-only presentation fixtures; App enables them only in Vite development mode. IPC types remain in `desktopTypes.ts`; display mappings remain in `desktopPresentation.ts`.
+
+These modules do not own project contents, Gateway lifecycle or managed-distribution transactions. Frontend refactoring proof is separate from native installed acceptance.
+
 Desktop does not poll releases in the background and never kills Blockbench/Gateway processes. Safe self-healing is limited to restoring owned managed files while Blockbench/Runtime/Gateway are idle.
 
 

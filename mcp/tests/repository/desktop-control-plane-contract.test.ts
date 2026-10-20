@@ -1,10 +1,65 @@
 import { describe, expect, test } from "bun:test";
 import { connectionChanged, type ConnectionBaseline, type ConnectionObservation } from "../../../apps/desktop/src/connectionWatch";
 import type { ProjectNavigation } from "../../../apps/desktop/src/projectNavigationTypes";
+import { createConnectionMonitor } from "../../../apps/desktop/src/connectionMonitor";
 
 async function source(path: string): Promise<string> {
   return Bun.file(path).text();
 }
+
+describe("Desktop passive connection lifecycle", () => {
+  test.each(["full-status-failure", "dispose"])("late probe cannot recover authority after %s", async (boundary) => {
+    const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+    Object.defineProperty(globalThis, "document", { configurable: true, value: { hidden: false } });
+    let complete!: (value: ConnectionObservation) => void;
+    let probes = 0;
+    let refreshes = 0;
+    const failures: number[] = [];
+    const baseline: ConnectionBaseline = {
+      blockbench: { running: true }, runtime_listener_live: true, plugin_integrity: "ready",
+      managed: { gateway_active: true }, project_navigation: { revision: "1", session_live: true },
+    };
+    const monitor = createConnectionMonitor({
+      current: () => ({ status: baseline, busy: false, fixture: false }),
+      observe: () => { probes += 1; return new Promise(resolve => { complete = resolve; }); },
+      refresh: async () => { refreshes += 1; },
+      onFailures: count => { failures.push(count); },
+    });
+    try {
+      monitor.request();
+      monitor.request();
+      expect(probes).toBe(1);
+      if (boundary === "dispose") monitor.dispose();
+      else monitor.fullStatusFailed();
+      complete({
+        blockbench_running: false, runtime_listener_live: false, gateway_active: false,
+        plugin_integrity: "missing", project_revision: "2", project_session_live: false,
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      monitor.request();
+      expect(probes).toBe(1);
+      expect(refreshes).toBe(0);
+      expect(failures).toEqual(boundary === "dispose" ? [] : [2]);
+      if (boundary === "full-status-failure") {
+        monitor.fullStatusSucceeded();
+        monitor.request();
+        expect(probes).toBe(2);
+        expect(failures).toEqual([2, 0]);
+        monitor.dispose();
+        complete({
+          blockbench_running: true, runtime_listener_live: true, gateway_active: true,
+          plugin_integrity: "ready", project_revision: "1", project_session_live: true,
+        });
+        await Promise.resolve();
+      }
+    } finally {
+      monitor.dispose();
+      if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+      else Reflect.deleteProperty(globalThis, "document");
+    }
+  });
+});
 
 describe("Desktop control-plane ownership", () => {
   test("Desktop depends on canonical compatibility and managed distribution owners", async () => {
@@ -646,7 +701,8 @@ describe("Desktop stale connection action admission", () => {
 
   test("keeps stale status visible but guards project, launch and managed mutation", async () => {
     const app = await Bun.file("../apps/desktop/src/App.svelte").text();
-    expect(app).toContain("statusProbeFailures = Math.min(statusProbeFailures + 1, 2)");
+    const monitor = await source("../apps/desktop/src/connectionMonitor.ts");
+    expect(monitor).toContain("setFailures(Math.min(failures + 1, 2))");
     expect(app).toContain("AI status needs verification · Files remain accessible");
     expect(app).toContain("busy={busyAction !== null}");
     expect(app).toContain("canEditProjectPrefs={true}");
@@ -665,7 +721,7 @@ describe("Desktop stale connection action admission", () => {
     expect(readOnly).not.toContain("statusProbeFailures >= 2");
     expect(app).toContain("onclick={browseModel}");
     expect(app).toContain("disabled={loading || busyAction !== null} onclick={refresh}");
-    expect(app).toContain("statusProbeFailures = 0;");
+    expect(app).toContain("connectionMonitor.fullStatusSucceeded()");
   });
 });
 
@@ -725,17 +781,17 @@ describe("Desktop calm connection summary", () => {
       Bun.file("../apps/desktop/src/App.svelte").text(),
       Bun.file("../apps/desktop/src-tauri/src/system_status.rs").text(),
     ]);
-    expect(ui).toContain("window.clearTimeout(statusWatcherTimer)");
-    expect(ui).toContain("window.setTimeout(() => {");
-    expect(ui).toContain("connectionCheckDelayMs(status.blockbench.running)");
-    expect(ui).toContain("if (document.hidden) stopConnectionWatch()");
-    expect(ui).toContain("requestConnectionRefresh()");
-    expect(ui).toContain("watchDisposed = true");
+    const monitor = await source("../apps/desktop/src/connectionMonitor.ts");
+    expect(monitor).toContain("clearTimeout(timer)");
+    expect(monitor).toContain("connectionCheckDelayMs(status.blockbench.running)");
+    expect(ui).toContain("if (document.hidden) connectionMonitor.stop()");
+    expect(ui).toContain("connectionMonitor.request()");
+    expect(ui).toContain("connectionMonitor.dispose()");
     expect(ui).not.toContain("window.setInterval(() => { void watchSystemStatus(); }, 3000)");
     const fast = native.slice(native.indexOf("pub fn collect_connection_status()"), native.indexOf("pub fn collect() -> SystemStatus"));
     expect(fast).toContain("crate::process::process_snapshot()");
     expect(fast).not.toContain("System::new_all()");
-    expect(ui).toContain("if (statusProbeFailures >= 2) return;");
+    expect(monitor).toContain("if (disposed || failures >= 2) return;");
     expect(ui).toContain("disabled={!status.maintenance.repair");
   });
 
@@ -774,7 +830,7 @@ describe("Desktop explicit Blockbench window focus", () => {
     expect(app).toContain("result.status === 'FOCUSED'");
     expect(app).toContain("Select your Blockbench window from the taskbar.");
     expect(app).toContain("Blockbench is ready. Select it from the taskbar if needed.");
-    const watcher = app.slice(app.indexOf("async function watchSystemStatus()"), app.indexOf("async function connectBlockbench()"));
+    const watcher = await source("../apps/desktop/src/connectionMonitor.ts");
     expect(watcher).not.toContain("focusBlockbenchAfterOpen");
   });
 });
@@ -840,12 +896,12 @@ describe("Desktop full-status freshness and nullable project revision", () => {
   test("does not reenable actions from a lightweight probe after full-status failure", async () => {
     const ui = await Bun.file("../apps/desktop/src/App.svelte").text();
     const refresh = ui.slice(ui.indexOf("async function refresh()"), ui.indexOf("async function runProjectAction"));
-    const watcher = ui.slice(ui.indexOf("async function watchSystemStatus()"), ui.indexOf("async function connectBlockbench()"));
-    expect(refresh).toContain("if (status) statusProbeFailures = 2;");
-    expect(refresh).toContain("statusProbeFailures = 0;");
-    expect(watcher).toContain("if (statusProbeFailures >= 2) return;");
-    expect(watcher.indexOf("if (statusProbeFailures >= 2) return;"))
-      .toBeLessThan(watcher.indexOf("else statusProbeFailures = 0;"));
+    const watcher = await source("../apps/desktop/src/connectionMonitor.ts");
+    expect(refresh).toContain("connectionMonitor.fullStatusFailed()");
+    expect(refresh).toContain("connectionMonitor.fullStatusSucceeded()");
+    expect(watcher).toContain("if (disposed || failures >= 2) return;");
+    expect(watcher.indexOf("if (disposed || failures >= 2) return;"))
+      .toBeLessThan(watcher.indexOf("else setFailures(0);"));
     expect(ui).toContain("busy={busyAction !== null}");
     expect(ui).toContain("canEditProjectPrefs={true}");
   });
@@ -969,7 +1025,7 @@ describe("Desktop Workspace and Support feedback integrity", () => {
     expect(support).toContain("These are the last known connection details.");
     expect(support).toContain('onclick={refresh}');
     expect(support).toContain("{:else if productMode(status) !== 'ready'}");
-    const copy = ui.slice(ui.indexOf("async function copyNavigationPath("), ui.indexOf("async function watchSystemStatus()"));
+    const copy = ui.slice(ui.indexOf("async function copyNavigationPath("), ui.indexOf("async function connectBlockbench()"));
     expect(copy).not.toContain("statusProbeFailures >= 2");
     expect(copy).toContain("project_navigation_path");
   });
