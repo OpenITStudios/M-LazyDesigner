@@ -1,5 +1,12 @@
 # LazyDesigner Next Action
 
+## TypeScript 7 / MCP Node typings compatibility — 2026-10-20
+
+The official MCP Server SDK v2 notes that TypeScript 6 and newer no longer implicitly includes `@types/node` when an explicit `compilerOptions.types` list is set. The MCP shared tsconfig and three overrides (`gateway/tsconfig.json`, `tsconfig.gateway-shared.json`, `tsconfig.semantic-core.json`) now explicitly add `node` while retaining their existing `bun` and Blockbench type entries. `@types/node 20.19.4` is already present in the existing MCP Bun lock, so this is a configuration compatibility correction and **does not require a dependency resolution change**.
+
+**Verification:** four tsconfig documents parsed, inherited/overridden types checked, matching Bun lock Node types found. Actual TS7 `typecheck` / gateway source checks remain **NOT EXECUTED** until the new source can be installed and executed. No CI workflow enabled or started.
+
+
 ## Desktop TypeScript 7 native integration — 2026-10-20
 
 Desktop now declares **TypeScript 7.0.2** as the native compiler alias `@typescript/native` and uses it for the primary `svelte-check --tsgo` typecheck. **TypeScript 6.0.3** remains under the canonical `typescript` name for `svelte-check`'s classic JavaScript compiler API and is verified independently via `typecheck:compat`. The existing `verify:source` chain executes both TypeScript 6 and 7 checks before Vite/Rust verification.

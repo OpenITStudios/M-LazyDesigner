@@ -20,7 +20,7 @@
     "tsBuildInfoFile": ".cache/tsconfig.tsbuildinfo",
     "types": [
       "blockbench-types",
-      "bun"
+      "bun", "node"
     ],
     "paths": {
       "@/*": [

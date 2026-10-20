@@ -9,7 +9,7 @@
     "declarationMap": true,
     "emitDeclarationOnly": true,
     "types": [
-      "bun"
+      "bun", "node"
     ],
     "noUnusedLocals": true,
     "noUnusedParameters": true

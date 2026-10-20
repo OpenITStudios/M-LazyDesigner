@@ -4,7 +4,7 @@
     "rootDir": "..",
     "outDir": "./dist",
     "tsBuildInfoFile": "../.cache/gateway.tsbuildinfo",
-    "types": ["bun"]
+    "types": ["bun", "node"]
   },
   "include": ["./**/*.ts", "../lib/capabilities/metadata.ts", "../lib/capabilities/authoringPhase.ts", "../lib/capabilities/authoringStage.ts", "../lib/runtime/authorization.ts", "../lib/capabilities/registrationProfile.ts"],
   "exclude": ["./dist"]
