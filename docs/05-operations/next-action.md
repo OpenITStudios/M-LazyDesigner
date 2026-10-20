@@ -1,5 +1,12 @@
 # LazyDesigner Next Action
 
+## Transitive dependency compatibility correction — 2026-10-20
+
+The existing `blockbench-types@5.2.0` package requires Electron `^40.8.0`. An audited lockfile had wrongly resolved this transitive **dev-only typings dependency** to Electron `41.10.7`, which is out of range. `mcp/bun.lock` now locks **electron 40.10.6**, the latest compatible 40.x patch. Its exact manifest/integrity match an independent Bun-generated lock record and Electron's upstream `v40.10.6` tag; all unrelated lock records remain byte-equivalent. This does **not** switch the LazyDesigner Desktop Tauri runtime to Electron.
+
+Electron 40 has reached upstream end-of-life; upgrading it to a supported major requires an upstream `blockbench-types` release that changes its dependency constraint. This scoped alignment is a static source fix only. Bun frozen installation, compiler/runtime/build and Blockbench acceptance still remain **NOT EXECUTED**; CI remains disabled.
+
+
 ## Zod runtime patch 4.6.7 — 2026-10-20
 
 `mcp/package.json` and `mcp/bun.lock` now pin Zod **4.6.7** instead of locked 4.6.5. The upstream package has no additional runtime dependencies; the published SHA512 integrity was cross-checked against independently published Nix/npm metadata. MCP Client/Server/Core 2.3.1 depend on compatible Zod `^4.2.0`, so the source graph remains satisfiable. This is **source/lockfile metadata validation**, not an executed Bun frozen install or MCP conformance proof. CI stays disabled.
