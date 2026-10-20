@@ -4,9 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Dependency completion is executing locally against remote `OpenITStudios/M-LazyDesigner` / `Local`, baseline `48329d0`. CI DISABLED: nine verification definitions live only in `.github/disabled-workflows/`; manual distribution/release definitions are not authorization to release. Do not enable or dispatch Actions, modify main, or publish packages.
+Dependency completion is executing locally against remote `OpenITStudios/M-LazyDesigner` / `Local`, follow-up baseline `b9b4756e`. CI DISABLED: nine verification definitions live only in `.github/disabled-workflows/`; manual distribution/release definitions are not authorization to release. Do not enable or dispatch Actions, modify main, or publish packages.
 
-The user reactivated dependency completion on 2026-10-20. Four Rust dependencies are now on latest stable releases; the obsolete PostCSS/Nano ID overrides are removed. Desktop verify:source passes 80 Rust tests and both Svelte compiler modes. Minimum Rust 1.95.0 locked compilation PASS. Complete final MCP verify:full, commit the coherent source, rebuild the integrated managed Windows package from the clean commit, record exact proof and fast-forward remote Local without CI.
+The user reactivated dependency completion on 2026-10-20. Four Rust dependencies are now on latest stable releases; the obsolete PostCSS/Nano ID overrides are removed. Desktop verify:source passes 80 Rust tests and both Svelte compiler modes. Minimum Rust 1.95.0 locked compilation PASS. Clean source 51324f6d passes MCP verify:full, Desktop verify:source, Rust 1.95.0 minimum-version compile, frozen Bun reinstall and integrated managed NSIS build. Final evidence is recorded in current-validation.md; deliver to remote Local and STOP. No compatible direct dependency upgrade remains pending. The upstream Vue/GTK findings below remain disclosed, not waived.
 
 ## Compatibility and security residue
 

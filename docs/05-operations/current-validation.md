@@ -4,7 +4,7 @@ This file owns current proof interpretation only. Continuation: [next-action.md]
 
 ## Current authority
 
-2026-10-20 dependency follow-up continues in the isolated Windows x64 checkout from remote OpenITStudios/M-LazyDesigner / Local, baseline b9b4756e. The original dirty checkout and assets remain untouched. CI DISABLED: nine verifier definitions remain outside Actions discovery. No Actions dispatch, main change, release or publication.
+2026-10-20 dependency follow-up continues in the isolated Windows x64 checkout from remote OpenITStudios/M-LazyDesigner / Local, baseline b9b4756e. Executable delivery: [51324f6da133cb728d0cda27f6b1a3358452161d](https://github.com/OpenITStudios/M-LazyDesigner/commit/51324f6da133cb728d0cda27f6b1a3358452161d); clean exact-SHA MCP verify:full, Desktop verify:source and integrated managed Windows build all PASS. The original dirty checkout and assets remain untouched. CI DISABLED: nine verifier definitions remain outside Actions discovery. No Actions dispatch, main change, release or publication.
 
 Toolchains: Bun 1.4.3, Node 24.22.0 LTS, npm 11.16.0, pinned Rust/Cargo 1.99.1. The updated manifest minimum Rust 1.95 is independently tested using Rust/Cargo 1.95.0. These are real installed tools, not source-only version declarations.
 
@@ -40,10 +40,10 @@ Required compatibility constraints remain explicit: Node types stay on supported
 | npm update, npm ci, npm audit | PASS: consistent lock and 0 vulnerabilities |
 | Bun update, frozen install, security:audit | PASS; full audit retains one low upstream Vue finding |
 | TS7 version/root/project graph/Gateway/unused checks | PASS |
-| Repository verifier | PASS: 282 tests before final evidence update |
+| Repository verifier | PASS: 282 tests; rerun for final evidence documents |
 | MCP verify:full | PASS: repository, TS7, runtime, authoring, Gateway, benchmark, surface and bundle stages |
 | Full RustSec cargo-audit 0.22.2 | 0 classified vulnerabilities; 2 informational warnings |
-| Windows package | Previous source 06d74d70 integrated NSIS PASS; rebuilt follow-up pending clean source commit |
+| Windows package | PASS: integrated managed NSIS on clean 51324f6d; disposable compiled-CLI install/status smoke |
 | Native Blockbench, visual acceptance, installed NSIS UI | NOT EXECUTED on upgraded source |
 
 Current local logs are ignored .cache outputs, not another durable ledger. Existing Svelte unused-CSS/alertdialog warnings (12) and Rust dead-field/helper warnings (3) remain disclosed; no suppression was added.
@@ -71,3 +71,9 @@ Do not strengthen source/static claims into local/live/visual claims without mat
 Executed follow-up commands: cargo update; cargo test --locked (80 PASS); cargo +1.95.0 check --locked --target-dir ../../.cache/msrv-target (PASS); npm update, npm ci, npm audit, npm run verify:source (PASS); bun update, bun install --frozen-lockfile, bun x tsc --version (7.0.2), bun run verify:types and bun run verify:full (PASS); cargo-audit --json and locked Windows metadata/tree classification. npm audit reports 0 vulnerabilities. Full Bun audit reports the disclosed Vue low advisory; high-severity gate PASS.
 
 Upstream migration references: [Rand 0.10](https://rust-random.github.io/book/update-0.10.html), [sysinfo migration](https://docs.rs/crate/sysinfo/0.39.6/source/migration_guide.md), [sha2 0.11](https://docs.rs/sha2/0.11.1/sha2/), [rfd 0.17](https://docs.rs/rfd/0.17.2/rfd/).
+
+## Final packaging and reproducibility evidence
+
+Clean source 51324f6d passed npm run build:app (integrated bootstrap, managed package checksum/provenance verification, disposable compiled-CLI install/status smoke and NSIS bundle). Installer SHA256: CEC3E3564533BE52A27F3CF0AC0F2FE1D371665B6826F188188F50359CC830AB; size 35.36 MiB. Embedded managed source_sha matches 51324f6da133cb728d0cda27f6b1a3358452161d. Full MCP verification and Desktop source verification were independently repeated successfully on that clean commit. Cargo.lock has 437 packages, down from 490; three RustSec warnings disappeared without ignores.
+
+Bun install --force --frozen-lockfile reinstalled all 60 packages; TS7 version check, verify:types and real Gateway/compiler-API smoke tests (3 PASS) succeeded. A proposed manual node_modules removal was rejected by automatic policy before execution; no deletion or alternative deletion method was attempted. Canonical package-manager reinstall supplied the reproducibility check. The final evidence commit changes only operations documents. Native Blockbench/visual, installed NSIS UI and installed update/rollback remain NOT EXECUTED; source/build readiness does not close those acceptance boundaries.
