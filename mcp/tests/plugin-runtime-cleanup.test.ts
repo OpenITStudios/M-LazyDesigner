@@ -1,10 +1,139 @@
 import { describe, expect, test } from "bun:test";
+import { setupLocalDevAutoReload, stopLocalDevAutoReload } from "@/plugin/devSync";
+import { beginRuntimeGenerationTeardown, claimRuntimeGeneration } from "@/lib/runtime/lifecycle";
+import {
+  registerAuthoringRecipeOwnershipProperties,
+  unregisterAuthoringRecipeOwnershipProperties,
+} from "@/server/runtime/recipes/authoring/ownership";
 
 async function source(path: string): Promise<string> {
   return Bun.file(path).text();
 }
 
 describe("pre-local plugin runtime cleanup", () => {
+  test("a throwing native dev watcher is detached and cannot block reload setup", async () => {
+    const previousEnvironment = process.env.NODE_ENV;
+    const originalPlugins = Object.getOwnPropertyDescriptor(globalThis, "Plugins");
+    const originalRequire = Object.getOwnPropertyDescriptor(globalThis, "requireNativeModule");
+    const buildIdentity = `sha256:${"a".repeat(64)}`;
+    let created = 0;
+    let closed = 0;
+    const nativeFs = {
+      readFileSync: () => "",
+      watch: () => {
+        created += 1;
+        return {
+          close: () => {
+            closed += 1;
+            if (closed === 1) throw new Error("native watcher was already invalidated");
+          },
+        };
+      },
+    };
+    const { generation } = claimRuntimeGeneration(buildIdentity);
+    try {
+      process.env.NODE_ENV = "development";
+      Object.defineProperty(globalThis, "Plugins", {
+        configurable: true,
+        value: { registered: { lazydesigner_mcp: {
+          source: "file",
+          path: "C:\\fixture\\lazydesigner_mcp.js",
+          reload: () => undefined,
+        } } },
+      });
+      Object.defineProperty(globalThis, "requireNativeModule", {
+        configurable: true,
+        value: (name: string) => {
+          expect(name).toBe("fs");
+          return nativeFs;
+        },
+      });
+      setupLocalDevAutoReload(generation, buildIdentity);
+      expect(created).toBe(1);
+      expect(() => stopLocalDevAutoReload()).not.toThrow();
+      expect(closed).toBe(1);
+      setupLocalDevAutoReload(generation, buildIdentity);
+      expect(created).toBe(2);
+      stopLocalDevAutoReload();
+      expect(closed).toBe(2);
+    } finally {
+      stopLocalDevAutoReload();
+      if (previousEnvironment === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousEnvironment;
+      if (originalPlugins) Object.defineProperty(globalThis, "Plugins", originalPlugins);
+      else Reflect.deleteProperty(globalThis, "Plugins");
+      if (originalRequire) Object.defineProperty(globalThis, "requireNativeModule", originalRequire);
+      else Reflect.deleteProperty(globalThis, "requireNativeModule");
+      await beginRuntimeGenerationTeardown(generation, async () => {});
+    }
+  });
+
+
+  test("one invalid native recipe property cannot prevent the others from releasing", () => {
+    const prior = new Map(
+      ["Cube", "ModelProject", "Property"].map(name => [
+        name, Object.getOwnPropertyDescriptor(globalThis, name),
+      ])
+    );
+    const deleted: string[] = [];
+    try {
+      Object.defineProperty(globalThis, "Cube", {
+        configurable: true, value: { properties: {} },
+      });
+      Object.defineProperty(globalThis, "ModelProject", {
+        configurable: true, value: { properties: {} },
+      });
+      Object.defineProperty(globalThis, "Property", {
+        configurable: true,
+        value: class {
+          constructor(_target: unknown, _type: string, readonly name: string) {}
+          delete() {
+            deleted.push(this.name);
+            if (this.name === "lazydesigner_authoring_recipe_store") {
+              throw new Error("property already removed by Blockbench");
+            }
+          }
+        },
+      });
+      registerAuthoringRecipeOwnershipProperties();
+      expect(() => unregisterAuthoringRecipeOwnershipProperties()).not.toThrow();
+      expect(deleted).toEqual([
+        "lazydesigner_authoring_recipe_store",
+        "lazydesigner_recipe_instance_id",
+        "lazydesigner_recipe_id",
+      ]);
+      // Idempotent unload must not attempt deletion against old generations.
+      unregisterAuthoringRecipeOwnershipProperties();
+      expect(deleted).toHaveLength(3);
+    } finally {
+      unregisterAuthoringRecipeOwnershipProperties();
+      for (const [name, descriptor] of prior) {
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+        else Reflect.deleteProperty(globalThis, name);
+      }
+    }
+  });
+
+  test("plugin unload releases independent owners before the required Runtime listener barrier", async () => {
+    const sourceCode = await source("index.ts");
+    const begin = sourceCode.indexOf("function beginBlockItRuntimeTeardown");
+    const end = sourceCode.indexOf("async function initializeBlockItRuntime", begin);
+    const teardown = sourceCode.slice(begin, end);
+    for (const [owner, warning] of [
+      ["stopLocalDevAutoReload();", "Development watcher cleanup failed"],
+      ["unregisterAuthoringRecipeOwnershipProperties();", "Recipe ownership cleanup failed"],
+      ["setMcpPhaseSwitchHandler(undefined);", "Stage handler cleanup failed"],
+      ["blockbenchIntegration.teardown();", "Blockbench integration cleanup failed"],
+    ]) {
+      expect(teardown).toContain(owner);
+      expect(teardown).toContain(warning);
+    }
+    expect(teardown).toContain("runtimeHost.teardown(generation);");
+    expect(teardown.indexOf("runtimeHost.teardown(generation);"))
+      .toBeGreaterThan(teardown.indexOf("blockbenchIntegration.teardown();"));
+  });
+
+
   test("MCP ownership is request-only with LazyDesigner identity", async () => {
     const server = await source("server/server.ts");
     const factories = await source("lib/factories.ts");
@@ -51,8 +180,9 @@ describe("pre-local plugin runtime cleanup", () => {
     expect(phaseControl).toMatch(/if \(!stageSwitchHandler\).*throw/s);
     expect(phaseControl).toContain("requestMcpPhaseSwitch");
     expect(phaseControl).toContain("stageSwitchHandler(stage)");
-    expect(net).toContain("requestedAuthoringPhase === null");
-    expect(net).toContain("requestMcpPhaseSwitch(envelope.targetAuthoringPhase)");
+    expect(net).toContain("requestedAuthoringPhase !== null");
+    expect(net).toContain("runWithMcpStageRequest(");
+    expect(net).not.toContain("requestMcpPhaseSwitch(envelope.targetAuthoringPhase)");
     expect(tools).not.toContain("surface_changed: true");
     expect(phaseControl).toContain("reload_required: false");
   });

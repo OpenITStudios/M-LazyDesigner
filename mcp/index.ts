@@ -65,10 +65,17 @@ function beginBlockItRuntimeTeardown(
   // Blockbench does not await plugin onunload(). Detach integration callbacks
   // synchronously, then let RuntimeHost + the lifecycle coordinator drain native
   // work and listener shutdown before a new generation binds.
-  stopLocalDevAutoReload();
-  unregisterAuthoringRecipeOwnershipProperties();
-  setMcpPhaseSwitchHandler(() => undefined);
-  blockbenchIntegration.teardown();
+  // A changed Blockbench native API can throw while releasing optional UI,
+  // recipe, or dev-watcher ownership. None may prevent the listener teardown
+  // barrier that the next bundle generation must await.
+  try { stopLocalDevAutoReload(); }
+  catch (error) { console.warn("[MCP] Development watcher cleanup failed", error); }
+  try { unregisterAuthoringRecipeOwnershipProperties(); }
+  catch (error) { console.warn("[MCP] Recipe ownership cleanup failed", error); }
+  try { setMcpPhaseSwitchHandler(undefined); }
+  catch (error) { console.warn("[MCP] Stage handler cleanup failed", error); }
+  try { blockbenchIntegration.teardown(); }
+  catch (error) { console.warn("[MCP] Blockbench integration cleanup failed", error); }
   runtimeHost.teardown(generation);
 }
 

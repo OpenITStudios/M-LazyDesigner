@@ -78,12 +78,23 @@ export function registerAuthoringRecipeOwnershipProperties(): void {
 }
 
 export function unregisterAuthoringRecipeOwnershipProperties(): void {
-  projectRecipeStoreProperty?.delete();
-  recipeInstanceProperty?.delete();
-  recipeIdProperty?.delete();
+  // Native Property.delete() can fail after Blockbench upgrades. Clear our
+  // local ownership first and attempt every release, not only the first one.
+  const owned = [
+    projectRecipeStoreProperty,
+    recipeInstanceProperty,
+    recipeIdProperty,
+  ];
   projectRecipeStoreProperty = null;
   recipeInstanceProperty = null;
   recipeIdProperty = null;
+  for (const property of owned) {
+    try {
+      property?.delete();
+    } catch (error) {
+      console.warn("[LazyDesigner] Recipe ownership property cleanup failed", error);
+    }
+  }
 }
 
 export function readAuthoringRecipeCubeOwnership(

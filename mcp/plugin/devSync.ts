@@ -35,8 +35,15 @@ export function stopLocalDevAutoReload(): void {
     clearTimeout(localDevReloadTimer);
     localDevReloadTimer = null;
   }
-  localDevFileWatcher?.close();
+  // Drop ownership before invoking the native watcher: close() can throw
+  // after a Blockbench update. Never leave a stale watcher blocking reload.
+  const watcher = localDevFileWatcher;
   localDevFileWatcher = null;
+  try {
+    watcher?.close();
+  } catch (error) {
+    console.warn("[MCP] dev:sync watcher cleanup failed", error);
+  }
 }
 
 export function setupLocalDevAutoReload(
