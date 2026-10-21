@@ -217,7 +217,7 @@
   .content-section{margin-bottom:34px}
   .section-heading{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:10px}
   .section-heading h2{margin:0;font-size:var(--font-title);font-weight:700}
-  .project-list{border:1px solid var(--border-soft);border-radius:8px;overflow:hidden;background:var(--bg-elevated)}
+  .project-list{border:1px solid var(--border-soft);border-radius:8px;background:var(--bg-elevated)}
   .project-row{min-height:62px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:10px 12px;border-bottom:1px solid var(--border-soft)}
   .project-row:last-child{border-bottom:0}
   .project-main{min-width:0;display:grid;gap:3px}

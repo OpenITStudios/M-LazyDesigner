@@ -9,7 +9,11 @@
   let dialog: HTMLElement | undefined;
   let cancelButton: HTMLButtonElement | undefined;
 
-  onMount(() => { cancelButton?.focus(); });
+  onMount(() => {
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    cancelButton?.focus();
+    return () => { if (returnFocus?.isConnected) returnFocus.focus(); };
+  });
 
   function handleKeyDown(event: KeyboardEvent) {
     if (event.key === 'Escape' && !busy) {
@@ -19,9 +23,14 @@
     }
     if (event.key === 'Tab' && dialog) {
       const controls = Array.from(dialog.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
-      if (controls.length > 0) {
+      if (controls.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+      } else {
         const first = controls[0], last = controls[controls.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
+        if (!dialog.contains(document.activeElement)) {
+          event.preventDefault(); (event.shiftKey ? last : first).focus();
+        } else if (event.shiftKey && document.activeElement === first) {
           event.preventDefault(); last.focus();
         } else if (!event.shiftKey && document.activeElement === last) {
           event.preventDefault(); first.focus();
@@ -34,7 +43,7 @@
 <svelte:window onkeydown={handleKeyDown} />
 
 <div class="project-delete-overlay">
-  <div class="project-delete-dialog" role="alertdialog" aria-modal="true"
+  <div class="project-delete-dialog" role="alertdialog" aria-modal="true" aria-busy={busy}
     aria-labelledby="project-delete-title" aria-describedby="project-delete-explanation"
     tabindex="-1" bind:this={dialog}>
     <h2 id="project-delete-title">Move project to Recycle Bin?</h2>

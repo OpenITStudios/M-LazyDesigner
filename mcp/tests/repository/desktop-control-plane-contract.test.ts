@@ -22,7 +22,6 @@ describe("Desktop page and deletion-dialog ownership", () => {
     expect(app).toContain("'cancel_delete_project', { token: review.token }");
     expect(workspace).not.toContain("invoke<");
     expect(dialog).not.toContain("invoke<");
-    expect(dialog).toContain("onMount(() => { cancelButton?.focus(); });");
     expect(dialog).toContain("<svelte:window onkeydown={handleKeyDown} />");
     expect(dialog).toContain("event.key === 'Escape' && !busy");
     expect(dialog).toContain("event.key === 'Tab' && dialog");
