@@ -192,6 +192,14 @@ export function createUvLayoutService(
         );
       }
 
+      // A computed layout with no moved islands is inspection evidence,
+      // not an authored mutation. Refuse it before touching native Undo.
+      if (stored.plan.moved_island_ids.length === 0) {
+        throw new Error(
+          "UV_NO_OP_PLAN: the plan contains no UV changes; inspect its report instead of applying."
+        );
+      }
+
       const receipt = await applyUvLayoutPlanAtomic(
         stored.plan,
         stored.source_fingerprint,

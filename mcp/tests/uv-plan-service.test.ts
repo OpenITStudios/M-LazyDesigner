@@ -84,6 +84,29 @@ describe("UV plan registry and service", () => {
     expect(() => registry.get(first.plan_id)).toThrow(/UV_PLAN_NOT_FOUND/);
   });
 
+  test("no-op UV plan rejects before constructing a native mutation adapter", async () => {
+    const registry = new UvPlanRegistry();
+    const fingerprint = "sha256:" + "a".repeat(64);
+    const stored = registry.put(
+      { moved_island_ids: [] } as unknown as UvLayoutPlan,
+      fingerprint,
+      { apply_allowed: true } as UvDryRunReport
+    );
+    let nativeAdapterCreated = 0;
+    const service = createUvLayoutService({
+      readSource: () => { throw new Error("native source must not be read for no-op apply"); },
+      createApplyAdapter: () => {
+        nativeAdapterCreated++;
+        throw new Error("no-op plan must not reach the native adapter");
+      },
+    }, registry);
+    await expect(service.apply({
+      plan_id: stored.plan_id,
+      expected_source_fingerprint: fingerprint,
+    })).rejects.toThrow(/UV_NO_OP_PLAN/);
+    expect(nativeAdapterCreated).toBe(0);
+  });
+
   test("service keeps AI payload compact by applying through plan handle", async () => {
     let native = nativeFixture();
     const service = createUvLayoutService({

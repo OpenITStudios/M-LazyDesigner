@@ -42,12 +42,27 @@ describe("UV plan/apply branch semantics", () => {
         schema: 1,
         source_fingerprint_before: request.expected_source_fingerprint,
         source_fingerprint_after: "sha256:" + "c".repeat(64),
-        changed_island_ids: [],
-        changed_cube_ids: [],
-        moved: [],
+        changed_island_ids: ["face:cube-a:north"],
+        changed_cube_ids: ["cube-a"],
+        moved: [{ island_id: "face:cube-a:north" }],
       },
     };
     expect(isUvAppliedPlanReceipt(candidate, request)).toBe(true);
+    expect(isUvAppliedPlanReceipt({
+      receipt: { ...candidate.receipt, changed_island_ids: [] },
+    }, request)).toBe(false);
+    expect(isUvAppliedPlanReceipt({
+      receipt: { ...candidate.receipt, changed_cube_ids: [] },
+    }, request)).toBe(false);
+    expect(isUvAppliedPlanReceipt({
+      receipt: { ...candidate.receipt, moved: [] },
+    }, request)).toBe(false);
+    expect(isUvAppliedPlanReceipt({
+      receipt: {
+        ...candidate.receipt,
+        source_fingerprint_after: candidate.receipt.source_fingerprint_before,
+      },
+    }, request)).toBe(false);
     expect(isUvAppliedPlanReceipt(candidate, {
       ...request, expected_source_fingerprint: "sha256:" + "d".repeat(64),
     })).toBe(false);

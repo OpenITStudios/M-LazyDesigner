@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV no-op and receipt integrity: the existing UV service refuses an apply with zero moved islands before creating the native adapter or Undo; the receipt validator rejects empty changed islands/cubes/moves and unchanged source fingerprints, preventing false `uv_layout_current` readiness. Focused contract cases were added to existing `uv-plan-service.test.ts` and `uv-plan-branch-semantics.test.ts`. GitHub source/static only; no Bun/TypeScript/native execution and no active Runtime registration or generated API changes.
+
+
 2026-10-22 UV planner source-integrity: `lib/uv/service.ts` now revalidates the native project/UV fingerprint immediately before storing a plan, preventing publication after asynchronous atlas reads switch tabs or mutate UV. Complete explicit bitmap dimensions bypass native atlas discovery; partial overrides fail before any atlas lookup. Existing `uv-plan-service.test.ts` has three focused regressions. GitHub source/static only; Bun/typecheck/native Blockbench NOT EXECUTED. Runtime capability activation and generated API remain a separate pending integration.
 
 
