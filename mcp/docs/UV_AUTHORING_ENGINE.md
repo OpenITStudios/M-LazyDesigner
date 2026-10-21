@@ -299,7 +299,10 @@ Implemented source contracts now include:
 10. bounded content-addressed plan registry;
 11. compact dry-run report;
 12. Blockbench read/apply/restore/Undo adapter;
-13. plan/apply request schemas for future manage_uv_layout registration.
+13. plan/apply request schemas for future manage_uv_layout registration;
+14. project UUID-scoped native UV fingerprints and native transaction
+    ownership checks, so matching Cube/UV bytes in a different Blockbench
+    project cannot reuse a stale plan or receive its rollback.
 
 The source-ready integration intentionally does NOT register a new Runtime capability yet. Registration changes generated MCP API documentation, and repository policy forbids hand-editing generated outputs. LOCAL_CODE must run the canonical docs generator when `manage_uv_layout` is wired to the Geometry/Modelling owner on the shared AUTHORING Runtime surface. Source presence alone is not native acceptance or UV Layout PASS.
 

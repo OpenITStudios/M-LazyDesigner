@@ -196,6 +196,42 @@ describe("UV plan registry and service", () => {
     ).rejects.toThrow(/UV_BITMAP_SCALE_REQUIRED/);
   });
 
+  test("plan cannot mutate a different project with byte-identical geometry and UV", async () => {
+    let native = {
+      ...nativeFixture(),
+      project_uuid: "project-A",
+    };
+    let beganUndo = false;
+    let mutated = false;
+    const service = createUvLayoutService({
+      readSource: () => native,
+      createApplyAdapter: () => ({
+        readSource: () => native,
+        beginUndo: () => { beganUndo = true; },
+        apply: () => { mutated = true; },
+        restore: () => {},
+      }),
+    });
+    const planned = await service.plan({
+      bitmap_width: 32,
+      bitmap_height: 32,
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:b:north"],
+      constraints: [{
+        id: "no-padding",
+        selector: { cube_uuids: ["b"] },
+        constraints: { padding_pixels: 0 },
+      }],
+    });
+    native = { ...native, project_uuid: "project-B" };
+    await expect(service.apply({
+      plan_id: planned.plan_id,
+      expected_source_fingerprint: planned.source_fingerprint,
+    })).rejects.toThrow(/STALE_UV_PLAN/);
+    expect(beganUndo).toBe(false);
+    expect(mutated).toBe(false);
+  });
+
   test("geometry bounds participate in stale source fingerprint", async () => {
     const initial = nativeFixture();
     let native = initial;

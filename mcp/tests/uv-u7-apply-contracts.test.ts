@@ -69,6 +69,17 @@ describe("UV U7 apply contracts", () => {
     ).not.toBe(fingerprintUvNativeSource(first));
   });
 
+  test("identical UV bytes from different Blockbench projects have distinct source fingerprints", () => {
+    const a = buildUvNativeSourceSnapshot(cubes(), 32, 32, "project-A");
+    const b = buildUvNativeSourceSnapshot(cubes(), 32, 32, "project-B");
+    expect(fingerprintUvNativeSource(a)).not.toBe(fingerprintUvNativeSource(b));
+    expect(fingerprintUvNativeSource(
+      buildUvNativeSourceSnapshot([...cubes()].reverse(), 32, 32, "project-A")
+    )).toBe(fingerprintUvNativeSource(a));
+    expect(() => buildUvNativeSourceSnapshot(cubes(), 32, 32, ""))
+      .toThrow("non-empty project UUID");
+  });
+
   test("planner never rotates Box-UV islands because native offset cannot represent it", () => {
     const snapshot = buildUvLayoutSnapshot(
       [{

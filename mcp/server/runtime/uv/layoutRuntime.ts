@@ -78,12 +78,17 @@ function blockbenchCubeSnapshot(cube: Cube): UvCubeSnapshot {
 export function readBlockbenchUvNativeSource(): UvNativeSourceSnapshot {
   const [logicalWidth, logicalHeight] =
     requireProjectUvDimensions();
+  const projectUuid = Project?.uuid;
+  if (typeof projectUuid !== "string" || !projectUuid.trim()) {
+    throw new Error("UV_PROJECT_ID_REQUIRED: active Blockbench project has no stable UUID.");
+  }
   return buildUvNativeSourceSnapshot(
     (Cube.all ?? []).map((cube: Cube) =>
       blockbenchCubeSnapshot(cube)
     ),
     logicalWidth,
-    logicalHeight
+    logicalHeight,
+    projectUuid
   );
 }
 
@@ -126,6 +131,11 @@ export function applyBlockbenchUvInstructions(
 export function restoreBlockbenchUvNativeSource(
   snapshot: UvNativeSourceSnapshot
 ): void {
+  if (!snapshot.project_uuid || Project?.uuid !== snapshot.project_uuid) {
+    throw new Error(
+      "UV_PROJECT_AFFINITY_LOST: cannot restore UV state into another Blockbench project."
+    );
+  }
   const [width, height] = requireProjectUvDimensions();
   if (
     width !== snapshot.logical_width ||
@@ -173,11 +183,30 @@ function cubesForInstructions(
 }
 
 export function createBlockbenchUvApplyAdapter(): UvApplyAdapter {
+  const boundProjectUuid = Project?.uuid;
+  if (typeof boundProjectUuid !== "string" || !boundProjectUuid.trim()) {
+    throw new Error("UV_PROJECT_ID_REQUIRED: cannot bind a UV transaction without a project UUID.");
+  }
+  const requireBoundProject = () => {
+    if (Project?.uuid !== boundProjectUuid) {
+      throw new Error("UV_PROJECT_AFFINITY_LOST: active project changed during UV transaction.");
+    }
+  };
   return {
-    readSource: readBlockbenchUvNativeSource,
-    apply: applyBlockbenchUvInstructions,
-    restore: restoreBlockbenchUvNativeSource,
+    readSource: () => {
+      requireBoundProject();
+      return readBlockbenchUvNativeSource();
+    },
+    apply: (instructions) => {
+      requireBoundProject();
+      applyBlockbenchUvInstructions(instructions);
+    },
+    restore: (snapshot) => {
+      requireBoundProject();
+      restoreBlockbenchUvNativeSource(snapshot);
+    },
     beginUndo: (instructions) => {
+      requireBoundProject();
       if (Undo.current_save) {
         throw new Error(
           "Finish the current Blockbench edit before applying a UV layout plan."
@@ -190,10 +219,12 @@ export function createBlockbenchUvApplyAdapter(): UvApplyAdapter {
       });
     },
     commitUndo: () => {
+      requireBoundProject();
       Undo.finishEdit("LazyDesigner UV layout");
       Canvas.updateAll();
     },
     cancelUndo: () => {
+      requireBoundProject();
       if (Undo.current_save) {
         Undo.cancelEdit(false);
       }

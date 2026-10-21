@@ -11,6 +11,8 @@ import type {
 
 export type UvNativeSourceSnapshot = {
   schema: 1;
+  /** Native Blockbench project identity, when available; scopes stale-plan guards. */
+  project_uuid?: string;
   logical_width: number;
   logical_height: number;
   cubes: Array<{
@@ -75,8 +77,12 @@ function requireFaceUv(
 export function buildUvNativeSourceSnapshot(
   cubes: readonly UvCubeSnapshot[],
   logicalWidth: number,
-  logicalHeight: number
+  logicalHeight: number,
+  projectUuid?: string
 ): UvNativeSourceSnapshot {
+  if (projectUuid !== undefined && !projectUuid.trim()) {
+    throw new Error("UV native snapshot requires a non-empty project UUID.");
+  }
   if (
     !Number.isFinite(logicalWidth) ||
     !Number.isFinite(logicalHeight) ||
@@ -88,6 +94,7 @@ export function buildUvNativeSourceSnapshot(
 
   return {
     schema: 1,
+    ...(projectUuid !== undefined ? { project_uuid: projectUuid } : {}),
     logical_width: logicalWidth,
     logical_height: logicalHeight,
     cubes: [...cubes]

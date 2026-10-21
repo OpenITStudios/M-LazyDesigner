@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV U7 project-affinity hardening (REMOTE_GITHUB): native UV snapshots now include verified Blockbench project UUID in their fingerprints; a plan for project A cannot be replayed against byte-identical project B. The existing Blockbench adapter binds one project UUID for read/apply/restore/Undo lifecycle and rejects drift before mutation or foreign rollback. Existing UV contract/service/native-adapter regression owners expanded; no second registry, Gateway tool, planner or transport. Generator-backed `manage_uv_layout` registration remains UNAVAILABLE and was not enabled without the required generator/executable proof. Source review only; Bun/typechecks/Blockbench NOT EXECUTED.
+
+
 2026-10-22 Golden Correction saved-model provenance source patch: benchmark-only finalization rechecks immutable seed and validates the saved .bbmodel working copy before recording output_asset_sha256, without promoting UNVERIFIED drafts to PASS. Accepted corrections and baseline/candidate comparisons reject missing, malformed or unchanged output digests. Existing test/fixture owners updated. REMOTE_GITHUB source-only; exact-SHA Bun/typechecks, full gate and live save/reopen/visual/human acceptance NOT EXECUTED; CI intentionally disabled.
 
 
