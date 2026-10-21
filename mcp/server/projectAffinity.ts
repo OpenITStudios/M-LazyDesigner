@@ -36,15 +36,20 @@ export function getRuntimeProjectHealth (
       ? leasedPreviousProject
       : null
     : currentProject;
-  const requestedProject = requestedProjectUuid
-    ? projects.find((project) => project.uuid === requestedProjectUuid) ?? null
-    : null;
+  const requestedMatches = requestedProjectUuid
+    ? projects.filter((project) => project.uuid === requestedProjectUuid)
+    : [];
 
   return {
     active_project_uuid: activeProject?.uuid ?? null,
     requested_project_uuid: requestedProjectUuid,
+    // true = exactly one; false = missing; null = absent header or ambiguous.
+    // An ambiguous UUID must not be treated as missing: project creation may
+    // discard a binding only when the requested UUID is proven absent.
     requested_project_available: requestedProjectUuid
-      ? requestedProject !== null
+      ? requestedMatches.length === 1
+        ? true
+        : requestedMatches.length === 0 ? false : null
       : null,
     open_project_count: projects.length,
   };
@@ -58,14 +63,17 @@ export async function runWithRuntimeProjectAffinity<T> (
   if (!requestedProjectUuid) return await operation();
 
   const projects = runtimeProjects();
-  const target = projects.find(
+  const matches = projects.filter(
     (project) => project.uuid === requestedProjectUuid
   );
-  if (!target) {
+  if (matches.length !== 1) {
     throw new RuntimeProjectContextError(
-      `Gateway-bound Blockbench project ${requestedProjectUuid} is no longer open.`
+      matches.length === 0
+        ? `Gateway-bound Blockbench project ${requestedProjectUuid} is no longer open.`
+        : `Gateway-bound Blockbench project UUID ${requestedProjectUuid} matches multiple open tabs; select a unique project before continuing.`
     );
   }
+  const target = matches[0]!;
 
   const previousProject = currentRuntimeProject();
   let switched = false;

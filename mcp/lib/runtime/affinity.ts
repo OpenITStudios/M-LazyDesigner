@@ -17,6 +17,7 @@ export type BlockitAuthoringPhaseAffinity =
 export type RuntimeProjectHealth = {
   active_project_uuid: string | null;
   requested_project_uuid: string | null;
+  /** true = unique tab, false = absent UUID, null = unbound or ambiguous. */
   requested_project_available: boolean | null;
   open_project_count: number;
 };

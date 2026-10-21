@@ -91,6 +91,20 @@ describe("Gateway affinity policy", () => {
     }
   });
 
+  test("ambiguous requested UUID cannot be cleared as missing during project creation", () => {
+    expect(() => resolveProjectAffinity(
+      "project-a",
+      health({
+        active: "project-b",
+        requested: "project-a",
+        available: null,
+        count: 3,
+      }),
+      false,
+      true,
+    )).toThrow(GatewayBackendError);
+  });
+
   test("project creation refuses to clear an unverified old project", () => {
     expect(() =>
       resolveProjectAffinity(

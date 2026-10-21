@@ -88,6 +88,36 @@ describe("Blockbench project affinity runtime", () => {
     expect(b.selected).toBe(true);
   });
 
+
+  test("duplicated project UUID is ambiguous rather than missing and cannot select the first tab", async () => {
+    const { a, b, makeProject } = installProjects("project-b");
+    const duplicate = makeProject("project-a");
+    expect(duplicate).not.toBe(a);
+    expect(getRuntimeProjectHealth("project-a")).toEqual({
+      active_project_uuid: "project-b",
+      requested_project_uuid: "project-a",
+      requested_project_available: null,
+      open_project_count: 3,
+    });
+    for (const allowProjectTransition of [false, true]) {
+      let executed = false;
+      let error: unknown;
+      try {
+        await runWithRuntimeProjectAffinity("project-a", allowProjectTransition, async () => {
+          executed = true;
+        });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(executed).toBe(false);
+      expect(error).toBeInstanceOf(RuntimeProjectContextError);
+      expect((error as RuntimeProjectContextError).outcomeUnknown).toBe(false);
+      expect((error as Error).message).toContain("matches multiple open tabs");
+      expect((globalThis as any).Project).toBe(b);
+      expect(a.locked).toBe(false);
+    }
+  });
+
   test("missing bound project fails before executing the tool", async () => {
     installProjects("project-b");
     let executed = false;
