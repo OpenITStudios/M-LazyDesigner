@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV Runtime activation prewiring: the existing UV layout service now owns import-safe `manage_uv_layout` plan/apply tool documentation plus an uncalled registration function that preserves one service/plan registry across requests. Existing UV registration-readiness test validates both branch schemas and still requires that the current Runtime catalog not expose the capability. No change to `server/runtime/registration.ts`, registered tool count or generator-owned API files. Activation remains blocked until the canonical Bun generator, exact-source tests and native Blockbench checks can run. REMOTE_GITHUB source/static only, no CI/main/release changes.
+
+
 2026-10-22 UV native beginUndo partial-open recovery: the existing Blockbench adapter now cancels only an Undo edit partially opened by its own failed `Undo.initEdit()`; it never cancels a pre-existing native edit, and reports `UV_OUTCOME_UNKNOWN` if cleanup cannot be established. One focused mock-native regression was added to the existing UV adapter test owner. Source contract only; Bun, TypeScript and real installed Blockbench tests NOT EXECUTED.
 
 

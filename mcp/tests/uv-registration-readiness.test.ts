@@ -10,6 +10,7 @@ import {
 } from "@/gateway/schemaProjection";
 import { GATEWAY_TOOL_NAMES } from "@/gateway/contract";
 import { tools } from "@/lib/factories";
+import { uvLayoutToolDocs } from "@/server/runtime/uv/layoutService";
 import "@/server/tools";
 
 describe("UV Runtime registration readiness", () => {
@@ -108,6 +109,30 @@ describe("UV Runtime registration readiness", () => {
     expect(receipt).toContain("backend: plan.backend");
     expect(document).toContain("constraint-schema version field is **not currently recorded**");
     expect(document).toContain("matching-SHA Bun and native apply/Undo/reopen verification");
+  });
+
+  test("UV plan/apply declarative tool spec matches the existing branch schemas", () => {
+    expect(uvLayoutToolDocs.name).toBe("manage_uv_layout");
+    expect(uvLayoutToolDocs.status).toBe("stable");
+    expect(uvLayoutToolDocs.branches.discriminator).toBe("operation");
+    expect(Object.keys(uvLayoutToolDocs.branches.schemas).sort()).toEqual(["apply", "plan"]);
+    expect(uvLayoutToolDocs.parameters.safeParse({
+      operation: "plan",
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:cube-1:north"],
+      bitmap_width: 32,
+      bitmap_height: 32,
+    }).success).toBe(true);
+    expect(uvLayoutToolDocs.parameters.safeParse({
+      operation: "apply",
+      plan_id: "uvplan:" + "a".repeat(64),
+      expected_source_fingerprint: "sha256:" + "b".repeat(64),
+    }).success).toBe(true);
+    expect(uvLayoutToolDocs.parameters.safeParse({
+      operation: "apply",
+      plan_id: "missing",
+      expected_source_fingerprint: "sha256:" + "b".repeat(64),
+    }).success).toBe(false);
   });
 
   test("remote prewiring does not register manage_uv_layout before generated docs can be refreshed", () => {
