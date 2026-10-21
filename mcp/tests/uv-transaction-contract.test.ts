@@ -6,7 +6,10 @@ import {
   fingerprintUvNativeSource,
   type UvNativeMutationInstruction,
 } from "@/lib/uv/adapters/blockbenchCubeUv";
-import { applyUvLayoutPlanAtomic } from "@/lib/uv/transaction";
+import {
+  applyUvLayoutPlanAtomic,
+  UvTransactionOutcomeUnknownError,
+} from "@/lib/uv/transaction";
 import { invalidationForUvReceipt } from "@/lib/uv/invalidation";
 
 function sourceCubes() {
@@ -147,6 +150,129 @@ describe("UV atomic transaction contracts", () => {
 
     expect(cancelled).toBe(true);
     expect(native).toEqual(original);
+  });
+
+  test("beginUndo rejection cannot trigger foreign restore, cancel or native mutation", async () => {
+    const { cubes, plan } = planned();
+    const snapshot = buildUvNativeSourceSnapshot(cubes, 32, 32);
+    let calls: string[] = [];
+    await expect(applyUvLayoutPlanAtomic(plan, fingerprintUvNativeSource(snapshot), {
+      readSource: () => snapshot,
+      beginUndo: () => { calls.push("begin"); throw new Error("Undo already active"); },
+      apply: () => { calls.push("mutate"); },
+      restore: () => { calls.push("restore"); },
+      cancelUndo: () => { calls.push("cancel"); },
+    })).rejects.toThrow("Undo already active");
+    expect(calls).toEqual(["begin"]);
+  });
+
+  test("failed apply with verified rollback retains the original fault", async () => {
+    const { cubes, plan } = planned();
+    let native = buildUvNativeSourceSnapshot(cubes, 32, 32);
+    const original = structuredClone(native);
+    const calls: string[] = [];
+    const failure = new Error("native update failed");
+    try {
+      await applyUvLayoutPlanAtomic(plan, fingerprintUvNativeSource(native), {
+        readSource: () => native,
+        beginUndo: () => { calls.push("begin"); },
+        apply: () => {
+          calls.push("apply");
+          native = structuredClone(native);
+          native.cubes[1].faces[0].uv = [7,7,9,9];
+          throw failure;
+        },
+        restore: snapshot => { calls.push("restore"); native = structuredClone(snapshot); },
+        cancelUndo: () => { calls.push("cancel"); },
+      });
+      throw new Error("expected source mutation failure");
+    } catch (error) {
+      expect(error).toBe(failure);
+    }
+    expect(native).toEqual(original);
+    expect(calls).toEqual(["begin", "apply", "restore", "cancel"]);
+  });
+
+  test("rollback mismatch reports outcome unknown and preserves original cause", async () => {
+    const { cubes, plan } = planned();
+    let native = buildUvNativeSourceSnapshot(cubes, 32, 32);
+    const initial = fingerprintUvNativeSource(native);
+    const failure = new Error("native partial write");
+    let cancelled = false;
+    try {
+      await applyUvLayoutPlanAtomic(plan, initial, {
+        readSource: () => native,
+        apply: () => {
+          native = structuredClone(native);
+          native.cubes[1].faces[0].uv = [2,2,5,5];
+          throw failure;
+        },
+        restore: () => {}, // lies: failed to restore despite returning
+        cancelUndo: () => { cancelled = true; },
+      });
+      throw new Error("expected outcome unknown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(UvTransactionOutcomeUnknownError);
+      const unknown = error as UvTransactionOutcomeUnknownError;
+      expect(unknown.outcomeUnknown).toBe(true);
+      expect(unknown.cause).toBe(failure);
+      expect(unknown.recoveryFailures).toHaveLength(1);
+      expect(String(unknown.recoveryFailures[0])).toContain("UV_ROLLBACK_MISMATCH");
+    }
+    expect(cancelled).toBe(true);
+  });
+
+  test("recovery failures cannot conceal original mutation fault", async () => {
+    const { cubes, plan } = planned();
+    const native = buildUvNativeSourceSnapshot(cubes, 32, 32);
+    const failure = new Error("original fault");
+    const restorationFailure = new Error("rollback fault");
+    const cancellationFailure = new Error("cancel fault");
+    try {
+      await applyUvLayoutPlanAtomic(plan, fingerprintUvNativeSource(native), {
+        readSource: () => native,
+        apply: () => { throw failure; },
+        restore: () => { throw restorationFailure; },
+        cancelUndo: () => { throw cancellationFailure; },
+      });
+      throw new Error("expected outcome unknown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(UvTransactionOutcomeUnknownError);
+      const unknown = error as UvTransactionOutcomeUnknownError;
+      expect(unknown.cause).toBe(failure);
+      expect(unknown.recoveryFailures).toContain(restorationFailure);
+      expect(unknown.recoveryFailures).toContain(cancellationFailure);
+    }
+  });
+
+  test("uncertain Undo commit refuses automatic rollback or cancellation", async () => {
+    const { cubes, plan } = planned();
+    let native = buildUvNativeSourceSnapshot(cubes, 32, 32);
+    const failure = new Error("finishEdit failed after commit");
+    const calls: string[] = [];
+    try {
+      await applyUvLayoutPlanAtomic(plan, fingerprintUvNativeSource(native), {
+        readSource: () => native,
+        apply: instructions => {
+          native = structuredClone(native);
+          for (const instruction of instructions) {
+            if (instruction.kind !== "FACE_UV") continue;
+            const target = native.cubes.find(cube => cube.uuid === instruction.cube_uuid)!;
+            const face = target.faces.find(face => face.face === instruction.face)!;
+            face.uv = [...instruction.uv];
+            face.rotation = instruction.rotation;
+          }
+        },
+        restore: () => { calls.push("restore"); },
+        commitUndo: () => { calls.push("commit"); throw failure; },
+        cancelUndo: () => { calls.push("cancel"); },
+      });
+      throw new Error("expected outcome unknown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(UvTransactionOutcomeUnknownError);
+      expect((error as UvTransactionOutcomeUnknownError).cause).toBe(failure);
+    }
+    expect(calls).toEqual(["commit"]);
   });
 
   test("stale source rejects before beginUndo/apply", async () => {

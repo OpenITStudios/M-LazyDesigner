@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV atomic transaction hardening: the canonical `lib/uv/transaction.ts` now guards beginUndo failures without touching an unrelated native edit, checks rollback against the original source fingerprint, retains the original failure when recovery succeeds, and marks failed restoration/cancellation or uncertain native Undo commit as `UV_OUTCOME_UNKNOWN` (no automatic replay). One existing `uv-transaction-contract.test.ts` suite owns targeted regressions for these failures. GitHub source/static authoring only; exact-SHA Bun/TypeScript/native Blockbench tests NOT EXECUTED. Runtime registration/generator remain separate blockers.
+
+
 2026-10-22 UV native duplicate-tab fail-closed follow-up: source adapter now validates the active Blockbench project is the sole open tab matching its UUID, not just a string identity; one apply transaction also retains the actual project object. Ambiguous duplicated UUIDs refuse UV plan, apply, and restore before mutating an unrelated tab. Reuses the existing native `ModelProject.all` authority and UV adapter; no new global registry or public tools. Source/contract only; Bun/live Blockbench checks NOT EXECUTED.
 
 

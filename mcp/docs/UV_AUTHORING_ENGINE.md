@@ -298,7 +298,9 @@ Implemented source contracts now include:
 9. precise downstream mapping/seam/texture/PBR invalidation model;
 10. bounded content-addressed plan registry;
 11. compact dry-run report;
-12. Blockbench read/apply/restore/Undo adapter;
+12. Blockbench read/apply/restore/Undo adapter with rollback fingerprint
+    verification, uncertain native Undo commit isolation, and preserved failure
+    provenance;
 13. plan/apply request schemas for future manage_uv_layout registration;
 14. project UUID-scoped native UV fingerprints and native transaction
     ownership checks, so matching Cube/UV bytes in a different Blockbench
