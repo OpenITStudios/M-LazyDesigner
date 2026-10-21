@@ -1,6 +1,6 @@
 # Test Architecture Modernization — Bun / LazyDesigner
 
-**Status:** owner-based consolidation prepared; grouped execution deferred by user
+**Status:** named consolidation batches passed grouped source validation; native/UI acceptance remains pending
 **Date:** 2026-10-21
 **Branch:** `Local` (source authority); keep `main` unchanged without explicit approval.
 
@@ -32,6 +32,11 @@ not accepted-quality scores.
 5. **Performance**: measure elapsed time, CPU/memory, repeated cold/warm
    executions and false-negative selection on equivalent workload/commit.
    Do not weaken tests to reach a numerical speed target.
+
+Grouped execution is recorded against source `ba4ed7f3` in
+[the current proof matrix](../05-operations/current-validation.md#current-proof-matrix).
+Earlier preparation notes below describe the source changes; their pending-execution
+statements are superseded by that scoped proof, not by a full/native acceptance claim.
 
 ## Test granularity
 

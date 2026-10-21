@@ -1,12 +1,10 @@
 # LazyDesigner Current Validation
 
-This file owns current proof interpretation only and the requested dependency-efficiency report. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Historical reports remain in Git at ce5299aa06b5c54c81544d65291dac95bbe90547 and b9b4756ee18497d2cedc9ff475672ddfea81a2aa; no second progress ledger is introduced.
+This file owns current proof interpretation only and the requested dependency-efficiency report. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Historical reports remain in Git at ce5299aa and b9b4756e.
 
 ## Current authority
 
-2026-10-20: isolated Windows x64 checkout, OpenITStudios/M-LazyDesigner / Local, efficiency baseline ce5299aa. Executable delivery: [bcdb2399](https://github.com/OpenITStudios/M-LazyDesigner/commit/bcdb23995bcfee5ad9eec55aec5f84289f3f8ef2). The original dirty checkout and authored assets remain untouched. CI DISABLED: nine verification definitions stay outside Actions discovery. No Actions dispatch, main change, release or publication.
-
-Toolchains: Bun 1.4.3, Node 24.22.0 LTS, npm 11.16.0, pinned Rust/Cargo 1.99.1; minimum Rust 1.95.0 is independently compiled successfully.
+2026-10-21: LOCAL_CODE, isolated Windows x64 checkout, OpenITStudios/M-LazyDesigner / Local. Grouped cleanup source: `ba4ed7f376f44d3cd7092bec8016ba26b0cd9f00` (repairs after `30a0c52c`). Original dirty checkout/assets untouched. Bun 1.4.3; existing dependencies reused, Desktop lockfile hashes matched. CI DISABLED; no Actions, main change, release or native mutation.
 
 ## Dependency efficiency report - 2026-10-20
 
@@ -61,20 +59,28 @@ Keep Node typings on supported Node 24. TS6 remains necessary for Svelte/compile
 
 ## Current proof matrix
 
-| Check | Current evidence |
-| --- | --- |
-| Cargo canonical lock regeneration | PASS |
-| Rust 1.99.1 regression tests | PASS: 81, including process identity and exited-PID tests |
-| Desktop verify:source | PASS: both TS6/TS7 Svelte checks, Vite, locked Cargo check and 81 tests |
-| Rust minimum 1.95.0 cargo check --locked | PASS with separate target directory |
-| Repository verifier | PASS: 282 tests; delegated fast-path guard updated without removing its no-new_all rule |
-| RustSec full-lock audit | 0 classified vulnerabilities; 2 disclosed non-Windows warnings |
-| Local process benchmark | PASS: two runs with process/executable assertions; results above |
-| Integrated managed Windows NSIS | PASS: clean bcdb2399 integrated managed NSIS; disposable compiled-CLI install/status smoke |
-| Executable MCP source | Unchanged by this Desktop-only batch; reuse clean 51324f6d full PASS, no unnecessary full MCP rerun |
-| Installed native/visual acceptance | NOT EXECUTED on this source |
+Grouped local cleanup acceptance, 2026-10-21, source `ba4ed7f3`:
 
-Install reproducibility is retained in ce5299aa. Existing Svelte warnings (12) and Rust warnings (3) remain visible; no suppressions. Raw logs are ignored .cache outputs; this document is the durable report.
+| Check | Executed result |
+| --- | --- |
+| Repository suite | PASS: 296 tests / 61 files |
+| Focused orchestration/correction, authoringImpact/evidence, plugin/settings, Runtime/facade, selector/source-owner, human UI and synthetic workflow contracts | PASS: 163 tests / 18 files |
+| MCP and Gateway TypeScript | PASS, both canonical checks |
+| Desktop TS6 compatibility and TS7 Svelte checks | PASS: 0 errors, 0 warnings |
+| Vite frontend and MCP plugin build | PASS |
+| Generated artifact freshness | PASS |
+| Full MCP verify:full, new Rust/NSIS packaging, visual/keyboard/browser/native acceptance | NOT EXECUTED in this batch |
+
+Repaired overlong continuation, stale TLS ownership, nullable SHA fixture and
+nine Svelte warnings. No test gate was relaxed. Raw logs: ignored
+`.cache/cleanup-validation/`. This is grouped source acceptance, not full-suite,
+UI behavior, native save/reopen or measured efficiency proof. Synthetic benchmark
+contracts establish only modeled properties, not real authoring savings.
+
+Historical dependency/Windows packaging proof belongs to `bcdb2399`: 81 Rust
+tests, locked Rust 1.95/1.99 checks, integrated NSIS and disposable CLI install/status
+smoke. It does not certify the current frontend or installed native behavior.
+The process benchmark report above remains scoped to its historical source.
 
 ## Security and license boundaries
 
@@ -96,4 +102,4 @@ Clean 51324f6da133cb728d0cda27f6b1a3358452161d passed full MCP verification, Des
 
 Do not strengthen source/static claims into local/live/visual claims without matching evidence from the exact current source SHA. A docs-only head may use Head Proof to show executable source did not change; that is not executable verification. Source-impacting heads continue to require matching relevant checks. Build/benchmark success does not prove native Undo/Redo, save/reopen, playback, reconnect, installed NSIS UI/update/rollback or visual fidelity.
 
-Final exact-source Desktop verification and integrated npm run build:app PASS on bcdb2399. Installer: 35.36 MiB; SHA256 5D27257F580639DA08546B023916A894B93829C763974E484EB5A8291861E9AD. The final report-only commit changes operations documents; its repository verifier passes independently.
+Historical exact-source Desktop verification and integrated npm run build:app PASS on bcdb2399. Installer: 35.36 MiB; SHA256 5D27257F580639DA08546B023916A894B93829C763974E484EB5A8291861E9AD. The final report-only commit changes operations documents; its repository verifier passes independently.
