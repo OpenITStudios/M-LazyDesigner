@@ -4,7 +4,7 @@ import { realpathSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { applyTransaction, configureCodex, installPackage, installedState, parseManifest, readOptional, recoverInstallation, repairInstallation, rollbackStatus, REPOSITORY, requireMatchingReleaseManifest, requireExpectedUpdateSource, preflightManagedInstallTargets, requirePlainPath, sameInstalledPath, sha256, SKILLS, PACKAGE_SOURCE_PATHS, withInstallLock, type InstallOptions, type Manifest } from "../../distribution/managed-install";
+import { applyTransaction, configureCodex, installPackage, installedState, parseManifest, parsePublishedReleaseManifest, LEGACY_REPOSITORY, readOptional, recoverInstallation, repairInstallation, rollbackStatus, REPOSITORY, requireMatchingReleaseManifest, requireExpectedUpdateSource, preflightManagedInstallTargets, requirePlainPath, sameInstalledPath, sha256, SKILLS, PACKAGE_SOURCE_PATHS, withInstallLock, type InstallOptions, type Manifest } from "../../distribution/managed-install";
 import { MODELLING_PATH, TEXTURING_PATH, ANIMATION_PATH, PROFILE_PATHS } from "../gateway/control/contexts";
 const parse = (s: string): any => Bun.TOML.parse(s);
 
@@ -48,6 +48,25 @@ test("package paths and complete required files are fail-closed", async () => sa
   assert.throws(() => parseManifest({ ...manifest, files: manifest.files.slice(1) }));
   assert.throws(() => parseManifest({ ...manifest, files: [...manifest.files, manifest.files[0]] }));
 }));
+
+
+test("current remote releases and legacy local packages keep separate trust boundaries", async () => {
+  await sandbox(async directory => {
+    const fresh = await fixture(join(directory, "current"));
+    assert.equal(REPOSITORY, "OpenITStudios/M-LazyDesigner");
+    assert.equal(fresh.repository, REPOSITORY);
+    assert.equal(parsePublishedReleaseManifest(fresh).repository, REPOSITORY);
+
+    // Old on-disk manifests must remain verifiable for existing installations
+    // and rollback; they are never accepted as a newly published update.
+    const previous = { ...fresh, repository: LEGACY_REPOSITORY };
+    assert.equal(parseManifest(previous).repository, LEGACY_REPOSITORY);
+    assert.throws(() => parsePublishedReleaseManifest(previous), /unexpected repository identity/);
+    assert.throws(() => parseManifest({ ...fresh, repository: "other-owner/M-LazyDesigner" }), /Invalid LazyDesigner package manifest/);
+    assert.throws(() => parsePublishedReleaseManifest({ ...fresh, repository: "other-owner/M-LazyDesigner" }));
+    assert.throws(() => requireMatchingReleaseManifest(previous, fresh), /does not match the published release manifest/);
+  });
+});
 
 test("selected update source SHA rejects a changed candidate before writing", async () => {
   await sandbox(async directory => {

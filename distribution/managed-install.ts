@@ -8,7 +8,10 @@ import {
   MCP_BUNDLE_FILENAME,
 } from "../mcp/compatibility/build-artifact";
 
-export const REPOSITORY = "MIVUBI-STD/M-LazyDesigner";
+/** New managed releases must originate from the current repository. */
+export const REPOSITORY = "OpenITStudios/M-LazyDesigner";
+/** Only for verifying existing on-disk packages from before the repository transfer. */
+export const LEGACY_REPOSITORY = "MIVUBI-STD/M-LazyDesigner";
 // MSIX can expose one installation through logical and physical Windows paths.
 export const sameInstalledPath = (a: string, b: string): boolean =>
   realpathSync.native(a).toLowerCase() === realpathSync.native(b).toLowerCase();
@@ -40,7 +43,7 @@ export function allowedPackagePath(path: string): boolean {
 
 export function parseManifest(value: unknown): Manifest {
   const m = value as Manifest;
-  if (!m || m.schema !== 1 || m.repository !== REPOSITORY || m.platform !== "windows-x64"
+  if (!m || m.schema !== 1 || !(m.repository === REPOSITORY || m.repository === LEGACY_REPOSITORY) || m.platform !== "windows-x64"
       || !/^[a-f0-9]{40}$/.test(m.source_sha) || !/^sha256:[a-f0-9]{64}$/.test(m.build_identity)
       || !Array.isArray(m.files) || m.files.length > 80) throw new Error("Invalid LazyDesigner package manifest.");
   const paths = new Set<string>();
@@ -56,6 +59,15 @@ export function parseManifest(value: unknown): Manifest {
     if (!paths.has(required.toLowerCase())) throw new Error(`Incomplete package: ${required}`);
   }
   return m;
+}
+
+/** Remote update manifests may not use the legacy on-disk compatibility identity. */
+export function parsePublishedReleaseManifest(value: unknown): Manifest {
+  const manifest = parseManifest(value);
+  if (manifest.repository !== REPOSITORY) {
+    throw new Error("Published LazyDesigner manifest has an unexpected repository identity.");
+  }
+  return manifest;
 }
 
 /** A valid ZIP by itself is not proof it contains the release we selected.
