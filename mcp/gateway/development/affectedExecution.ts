@@ -156,6 +156,120 @@ export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly 
   ],
 };
 
+/**
+ * Explicit UV source-to-behavior ownership. Local helpers are not guaranteed
+ * to resolve through capability-level semantic impact, so project-graph only
+ * would otherwise miss their real regression contracts. Keep each key scoped
+ * to its existing executor/test owner. Unknown UV modules fail to full verify.
+ */
+export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly string[]>> = {
+  "mcp/lib/uv/adapters/blockbenchCubeUv.ts": [
+    "mcp/tests/uv-u7-apply-contracts.test.ts",
+    "mcp/tests/uv-transaction-contract.test.ts",
+  ],
+  "mcp/lib/uv/authoringRecipeUv.ts": [
+    "mcp/tests/uv-authoring-recipe-bridge.test.ts",
+  ],
+  "mcp/lib/uv/boxLayout.ts": [
+    "mcp/tests/uv-core-islands.test.ts",
+    "mcp/tests/uv-box-policy.test.ts",
+  ],
+  "mcp/lib/uv/boxUvPolicy.ts": [
+    "mcp/tests/uv-box-policy.test.ts",
+  ],
+  "mcp/lib/uv/constraints.ts": [
+    "mcp/tests/uv-constraints.test.ts",
+  ],
+  "mcp/lib/uv/contracts.ts": [
+    "mcp/tests/uv-core-islands.test.ts",
+    "mcp/tests/uv-u7-apply-contracts.test.ts",
+    "mcp/tests/uv-tool-contract.test.ts",
+  ],
+  "mcp/lib/uv/density.ts": [
+    "mcp/tests/uv-density-planner.test.ts",
+  ],
+  "mcp/lib/uv/dryRun.ts": [
+    "mcp/tests/uv-dry-run-legacy.test.ts",
+  ],
+  "mcp/lib/uv/invalidation.ts": [
+    "mcp/tests/uv-transaction-contract.test.ts",
+    "mcp/tests/uv-downstream-recheck-targets.test.ts",
+  ],
+  "mcp/lib/uv/islands.ts": [
+    "mcp/tests/uv-core-islands.test.ts",
+    "mcp/tests/uv-stable-packing.test.ts",
+  ],
+  "mcp/lib/uv/legacyBridge.ts": [
+    "mcp/tests/uv-dry-run-legacy.test.ts",
+  ],
+  "mcp/lib/uv/maxRectsPlanner.ts": [
+    "mcp/tests/uv-maxrects-planner.test.ts",
+  ],
+  "mcp/lib/uv/nativeApplyPlan.ts": [
+    "mcp/tests/uv-native-apply-plan.test.ts",
+  ],
+  "mcp/lib/uv/nativeState.ts": [
+    "mcp/tests/uv-native-state.test.ts",
+  ],
+  "mcp/lib/uv/nativeTransaction.ts": [
+    "mcp/tests/uv-native-transaction.test.ts",
+  ],
+  "mcp/lib/uv/packing/maxRects.ts": [
+    "mcp/tests/uv-maxrects-packing.test.ts",
+  ],
+  "mcp/lib/uv/packing/planner.ts": [
+    "mcp/tests/uv-maxrects-packing.test.ts",
+    "mcp/tests/uv-stable-packing.test.ts",
+  ],
+  "mcp/lib/uv/packing/scorer.ts": [
+    "mcp/tests/uv-maxrects-packing.test.ts",
+  ],
+  "mcp/lib/uv/packing/types.ts": [
+    "mcp/tests/uv-maxrects-packing.test.ts",
+  ],
+  "mcp/lib/uv/physicalEvidence.ts": [
+    "mcp/tests/uv-physical-evidence.test.ts",
+  ],
+  "mcp/lib/uv/planRegistry.ts": [
+    "mcp/tests/uv-plan-service.test.ts",
+  ],
+  "mcp/lib/uv/receipt.ts": [
+    "mcp/tests/uv-plan-branch-semantics.test.ts",
+    "mcp/tests/uv-transaction-contract.test.ts",
+  ],
+  "mcp/lib/uv/semanticDiff.ts": [
+    "mcp/tests/uv-semantic-planner.test.ts",
+  ],
+  "mcp/lib/uv/semanticPlanner.ts": [
+    "mcp/tests/uv-semantic-planner.test.ts",
+    "mcp/tests/uv-share-validation.test.ts",
+  ],
+  "mcp/lib/uv/service.ts": [
+    "mcp/tests/uv-plan-service.test.ts",
+    "mcp/tests/uv-plan-branch-semantics.test.ts",
+  ],
+  "mcp/lib/uv/stacking.ts": [
+    "mcp/tests/uv-stacking-proposals.test.ts",
+  ],
+  "mcp/lib/uv/toolContract.ts": [
+    "mcp/tests/uv-tool-contract.test.ts",
+    "mcp/tests/uv-registration-readiness.test.ts",
+  ],
+  "mcp/lib/uv/transaction.ts": [
+    "mcp/tests/uv-transaction-contract.test.ts",
+  ],
+  "mcp/lib/uv/validatePlan.ts": [
+    "mcp/tests/uv-u7-apply-contracts.test.ts",
+  ],
+  "mcp/server/runtime/uv/layoutRuntime.ts": [
+    "mcp/tests/uv-blockbench-runtime-adapter.test.ts",
+  ],
+  "mcp/server/runtime/uv/layoutService.ts": [
+    "mcp/tests/uv-registration-readiness.test.ts",
+    "mcp/tests/uv-plan-service.test.ts",
+  ],
+};
+
 const GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH: Readonly<
   Record<string, readonly string[]>
 > = {
@@ -227,6 +341,8 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 function sharedContractTestsForPath(path: string): readonly string[] {
   const textureTests = TEXTURE_REGRESSION_TESTS_BY_PATH[path];
   if (textureTests) return textureTests;
+  const uvTests = UV_REGRESSION_TESTS_BY_PATH[path];
+  if (uvTests) return uvTests;
   const recoveryContracts = GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH[path];
   if (recoveryContracts) return recoveryContracts;
   if (path.startsWith("mcp/lib/receipts/")) {
@@ -441,6 +557,13 @@ export function planAffectedExecution(input: {
     input.semanticImpact.truncated ||
     changedPaths.length === 0 ||
     changedPaths.some(requiresFullVerify) ||
+    // New or previously unowned UV source cannot pass on a typecheck alone.
+    changedPaths.some((path) =>
+      (path.startsWith("mcp/lib/uv/") ||
+        path.startsWith("mcp/server/runtime/uv/")) &&
+      path.endsWith(".ts") &&
+      !UV_REGRESSION_TESTS_BY_PATH[path]
+    ) ||
     changedPaths.some((path) => !clearlyMappedPath(path))
   ) {
     checks.add("FULL_VERIFY");
@@ -451,7 +574,14 @@ export function planAffectedExecution(input: {
           ? "no change set was provided"
           : changedPaths.some(requiresFullVerify)
             ? "change set contains build or dependency infrastructure"
-            : "change set contains an unmapped path"
+            : changedPaths.some((path) =>
+                (path.startsWith("mcp/lib/uv/") ||
+                  path.startsWith("mcp/server/runtime/uv/")) &&
+                path.endsWith(".ts") &&
+                !UV_REGRESSION_TESTS_BY_PATH[path]
+              )
+              ? "UV source has no explicit behavior regression owner"
+              : "change set contains an unmapped path"
     );
   }
 

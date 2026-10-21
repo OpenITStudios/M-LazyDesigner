@@ -104,6 +104,22 @@ prepare consolidation first and run grouped verification later. Source changes
 are not accepted retirement, coverage parity or measured runtime savings until
 that verification passes on the resulting SHA.
 
+### UV domain affected-verification closure (source level)
+
+The existing `mcp/gateway/development/affectedExecution.ts` now maps
+individual UV Core and native-adapter source owners to their existing
+behavior tests. Prior to this mapping, a UV helper not represented by a
+capability-level semantic source owner could receive only a compiler check
+even when its actual native or plan/rollback contract had changed.
+
+The mapping is exact-source, not a blanket `uv*.test.ts` sweep:
+`planRegistry.ts` uses the plan-service contract,
+`transaction.ts` uses the transaction contract, and native adapters
+use their owned native boundary contracts. Mixed path changes deduplicate
+the selected files. New/unmapped UV implementation paths use the existing
+full-verification fallback, rather than assuming source typing is behavior
+proof. Neither mapped status nor authored regression implies the tests ran.
+
 ## Existing machinery to preserve
 
 | Existing owner | Responsibility |

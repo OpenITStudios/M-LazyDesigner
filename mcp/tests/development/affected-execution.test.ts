@@ -3,6 +3,7 @@ import { readdir } from "node:fs/promises";
 import {
   planAffectedExecution,
   RECEIPT_CONTRACT_TESTS_BY_PATH,
+  UV_REGRESSION_TESTS_BY_PATH,
 } from "../../gateway/development/affectedExecution";
 import { buildAffectedExecutionPlan } from "../../scripts/development/plan-affected-execution";
 import type { SemanticImpactReport } from "../../gateway/development/impact";
@@ -184,6 +185,69 @@ describe("affected execution planner", () => {
     );
     expect(plan.targeted_tests).not.toContain(
       "mcp/tests/contracts/particle-receipt-contract.test.ts"
+    );
+  });
+
+  test("UV implementation changes select only their existing behavior owners", async () => {
+    expect(Object.keys(UV_REGRESSION_TESTS_BY_PATH).length).toBeGreaterThanOrEqual(25);
+    for (const [path, owners] of Object.entries(UV_REGRESSION_TESTS_BY_PATH)) {
+      expect(owners.length, path).toBeGreaterThan(0);
+      expect(await Bun.file(path.slice(4)).exists(), path).toBe(true);
+      for (const owner of owners) {
+        expect(await Bun.file(owner.slice(4)).exists(), owner).toBe(true);
+      }
+      const plan = planAffectedExecution({
+        changedPaths: [path],
+        semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.checks, path).toContain("TARGETED_TESTS");
+      expect(plan.checks, path).toContain("PROJECT_GRAPH");
+      expect(plan.targeted_tests, path).toEqual([...owners].sort());
+      expect(plan.commands, path).toContain(
+        `bun test ${[...owners].sort().map(owner => owner.slice(4)).join(" ")}`
+      );
+      expect(plan.commands, path).not.toContain("bun run verify:full");
+      expect(plan.targeted_tests, path).not.toContain(
+        "mcp/tests/texture-seam-continuity.test.ts"
+      );
+    }
+  });
+
+  test("new unowned UV sources retain full verification rather than typecheck-only green", () => {
+    for (const path of [
+      "mcp/lib/uv/futureAuthoringHelper.ts",
+      "mcp/server/runtime/uv/newNativeAdapter.ts",
+      "mcp/lib/uv/workflow.ts",
+    ]) {
+      const plan = planAffectedExecution({
+        changedPaths: [path],
+        semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(true);
+      expect(plan.commands, path).toEqual(["bun run verify:full"]);
+      expect(plan.reasons, path).toContain(
+        "UV source has no explicit behavior regression owner"
+      );
+    }
+  });
+
+  test("UV source checks stay scoped on mixed changes without omitting required contracts", () => {
+    const plan = planAffectedExecution({
+      changedPaths: [
+        "mcp/lib/uv/planRegistry.ts",
+        "mcp/lib/uv/transaction.ts",
+        "mcp/lib/uv/planRegistry.ts",
+      ],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/uv-plan-service.test.ts",
+      "mcp/tests/uv-transaction-contract.test.ts",
+    ]);
+    expect(plan.commands).toContain(
+      "bun test tests/uv-plan-service.test.ts tests/uv-transaction-contract.test.ts"
     );
   });
 

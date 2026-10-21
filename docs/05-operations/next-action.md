@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP test-selection efficiency and safety: the existing `gateway/development/affectedExecution.ts` now explicitly maps 31 UV Core/native source owners to their current focused behavior regressions instead of relying on semantic capability ownership alone. Unknown UV modules fall back to full verification; mixed changes deduplicate owning tests and retain compiler/source-contract checks. Extended the existing affected-execution tests with owner completeness, unrelated-suite exclusion, conservative fallback and mixed-path deduplication. This is REMOTE_GITHUB source/static work, not executed Bun/typecheck/CI or measured test-duration reduction. No CI, `main`, release, or test-framework change.
+
+
 2026-10-22 MCP Control headroom source optimization: eliminated whole-context JSON serialization on every optional fact in `gateway/control/contextHeadroom.ts` by maintaining the exact incremental UTF-8 JSON byte count (field key, brackets, commas and string escaping included). Retained the canonical final byte diagnostic/hash, skip-long-item behavior and required-evidence precedence. Extended `gateway-control-context-headroom.test.ts` to compare against full serialization across Unicode/escaped items and budgets. No new cache, data model or Gateway tool. Static/source only; Bun/types/benchmarks NOT EXECUTED.
 
 
