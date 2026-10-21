@@ -179,7 +179,7 @@ const GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH: Readonly<
   ],
   "mcp/lib/orchestration/correctionContinuation.ts": [
     "mcp/tests/correction-loop-reuse.test.ts",
-    "mcp/tests/zero-waste-consolidation-contract.test.ts",
+    "mcp/tests/orchestration-public-surface.test.ts",
   ],
   "mcp/lib/orchestration/evidenceRegistry.ts": [
     "mcp/tests/verification-evidence-compaction.test.ts",

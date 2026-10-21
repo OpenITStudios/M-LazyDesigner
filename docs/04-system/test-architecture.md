@@ -76,6 +76,22 @@ Texture development anchors point to the replacement suite. These remain T0
 source guards; native mutation and domain behavior suites are unchanged. No new
 router, production dependency injection or test framework is added.
 
+Zero-Waste consolidation guards now live with the contracts they protect:
+`orchestration-public-surface.test.ts` owns continuation delegation/result-shape
+source guards; `correction-loop-reuse.test.ts` exercises deterministic identity
+and an empty semantic delta when object property order changes, replacing the
+private `canonicalEqual` function-name assertion. Existing workflow benchmark
+scenarios check actual returned workflow names and retired-name exclusions rather
+than scanning benchmark source. Synthetic benchmark evidence remains synthetic.
+
+`tool-call-efficiency-contract.test.ts` retains all existing documentation policy
+claims in one scenario per owner, reading each source once. Continuation-heading
+uniqueness moved here from the removed Zero-Waste consolidation file. These tests
+still constrain policy wording; they do not measure tool calls or accepted quality.
+The continuation affected-execution mapping points to the surviving contracts,
+and its existing selector scenario covers both loop and transport paths. Grouped
+execution remains pending; no Skill, prompt or production policy is changed.
+
 The read-only inventory before consolidation counted 560 files and 241 possible
 source-assertion review candidates (2026-10-20). This is not a deletion list.
 Review one source-owner cluster at a time. Under the current user instruction,

@@ -306,9 +306,12 @@ describe("affected execution planner", () => {
     )).toBe(true);
   });
 
-  test("correction recovery source changes select correction and public-surface contracts", () => {
+  test.each([
+    "mcp/lib/orchestration/correctionLoop.ts",
+    "mcp/lib/orchestration/correctionContinuation.ts",
+  ])("correction source %s selects correction and public-surface contracts", (path) => {
     const plan = planAffectedExecution({
-      changedPaths: ["mcp/lib/orchestration/correctionLoop.ts"],
+      changedPaths: [path],
       semanticImpact: impact(),
     });
 

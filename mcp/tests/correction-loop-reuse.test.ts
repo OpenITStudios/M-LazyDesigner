@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import { correctionContinuationDelta, correctionContinuationId } from "@/lib/orchestration/correctionContinuation";
 import { CorrectionLoopRegistry } from "@/lib/orchestration/correctionLoop";
 
 function recipe(): AuthoringRecipe {
@@ -640,6 +641,17 @@ describe("zero-waste correction loop reuse", () => {
     expect(first.group).toBeNull();
     expect(first.payload?.continuation_id).toBe(first.continuation_id);
     expect(first.delta).toBeNull();
+    const payload = first.payload!;
+    const equivalent = {
+      ...payload,
+      verification: Object.fromEntries(Object.entries(payload.verification).reverse()) as typeof payload.verification,
+    };
+    expect(correctionContinuationId(equivalent)).toBe(correctionContinuationId(payload));
+    expect(correctionContinuationDelta(payload, equivalent)).toEqual({
+      protocol: "lazydesigner-correction-continuation-delta-v1",
+      from_continuation_id: payload.continuation_id,
+      to_continuation_id: payload.continuation_id,
+    });
 
     const second = registry.projectContinuationDelivery(handle, [
       first.continuation_id,

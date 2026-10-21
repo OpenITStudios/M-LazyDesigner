@@ -31,4 +31,27 @@ describe("cross-domain orchestration preserves public surface", () => {
     expect(source).not.toContain("export type CorrectionContinuationDelivery");
     expect(source).not.toContain("  get(handle: CorrectionLoopHandle)");
   });
+
+  test("correction lifecycle has one continuation transport owner", async () => {
+    const loop = await repoFile("mcp/lib/orchestration/correctionLoop.ts");
+    const transport = await repoFile(
+      "mcp/lib/orchestration/correctionContinuation.ts"
+    );
+
+    expect(loop).toContain(
+      'from "@/lib/orchestration/correctionContinuation"'
+    );
+    expect(loop).not.toContain("function correctionContinuationDelta");
+    expect(loop).not.toContain("function correctionContinuationId");
+    expect(loop).not.toContain("canonicalJson(");
+
+    expect(transport).toContain("export function correctionContinuationDelta");
+    expect(transport).toContain("export function correctionContinuationId");
+    expect(loop).not.toContain("cached:");
+    expect(transport).not.toContain("cached:");
+    expect(loop).not.toMatch(/\n\s*selected_candidate_id\?:/);
+    expect(loop).toContain("decision_summary?:");
+    expect(loop).toContain("selected_candidate_id: string;");
+  });
+
 });

@@ -6,6 +6,14 @@ describe("Zero-Waste workflow benchmark", () => {
     const workflows = runZeroWasteWorkflowBenchmark();
 
     expect(workflows).toHaveLength(11);
+    const workflowNames = workflows.map(item => item.workflow);
+    for (const required of ["correction_continuation_transport", "correction_semantic_delta_grouping"]) {
+      expect(workflowNames.filter(name => name === required), required).toHaveLength(1);
+    }
+    for (const retired of [
+      "correction_continuation_pruning", "correction_continuation_mode_selection",
+      "correction_continuation_identity_dedup", "correction_continuation_delta_delivery",
+    ]) expect(workflowNames).not.toContain(retired);
     for (const workflow of workflows) {
       expect(workflow.quality_evidence, workflow.workflow).toBe("SYNTHETIC_SEMANTIC_CHECKS_ONLY");
       expect(workflow.quality_preserved, workflow.workflow).toBe(true);
