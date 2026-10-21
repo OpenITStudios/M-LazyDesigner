@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { searchCapabilityCatalog } from "./catalog";
-import { semanticMatchesForTool } from "./intelligence";
+import {
+  bestSemanticMatchForTool,
+  bm25CapabilityScores,
+  capabilityQueryTokens,
+  semanticMatchesForTool,
+} from "./intelligence";
 import type { BackendTool } from "../contracts/protocol";
 
 const tool = (name: string, description = ""): BackendTool => ({
@@ -35,6 +40,33 @@ describe("capability intelligence routing", () => {
     expect(active.map((match) => match.branch)).toEqual(
       foreign.map((match) => match.branch)
     );
+  });
+
+  test("prepared query tokens preserve direct semantic and BM25 results", () => {
+    const query = "move this cube under another bone";
+    const prepared = capabilityQueryTokens(query);
+    for (const candidate of tools) {
+      const direct = semanticMatchesForTool(candidate, query, {
+        authoringPhase: "geometry",
+      });
+      const shared = semanticMatchesForTool(candidate, query, {
+        authoringPhase: "geometry",
+      }, prepared);
+      expect(shared).toEqual(direct);
+      expect(bestSemanticMatchForTool(candidate, query, {
+        authoringPhase: "geometry",
+      }, prepared)).toEqual(bestSemanticMatchForTool(candidate, query, {
+        authoringPhase: "geometry",
+      }));
+    }
+    expect([...bm25CapabilityScores(tools, query, prepared)])
+      .toEqual([...bm25CapabilityScores(tools, query)]);
+    expect(semanticMatchesForTool(
+      tool("foreign_unsupported_tool", "no authoring intents"), query,
+      undefined, prepared
+    )).toEqual(semanticMatchesForTool(
+      tool("foreign_unsupported_tool", "no authoring intents"), query
+    ));
   });
 
   test("selects semantic operation branches without loading schemas", () => {

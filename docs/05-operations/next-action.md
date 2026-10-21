@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP architecture audit / capability discovery source optimization: reviewed repository inventory, Gateway catalog, semantic intelligence, Control headroom, runtime queue, native inspector/texture diagnostics and verification routing. One per-request token expansion is shared across semantic and BM25 ranking; fixed manifest branch semantics are indexed and tokenized once. Existing intelligence regression owner checks direct/prepared ranking equivalence. No new tools, transport, authored-state cache or changed capability semantics. REMOTE_GITHUB source/static only; Bun/TypeScript and performance measurements NOT EXECUTED; CI remains intentionally disabled.
+
+
+
 2026-10-22 UV native snapshot numeric validation: the shared source builder now rejects non-finite Cube bounds, auto-UV modes and face rotations before serializing/hashing the content-addressed native snapshot. Existing U7 contract tests cover NaN and Infinity inputs. This is source/static GitHub work only: Bun/TypeScript and live Blockbench NOT EXECUTED. No Runtime registration, generated API, CI, main or release mutation.
 
 

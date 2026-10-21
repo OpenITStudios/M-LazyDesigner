@@ -33,14 +33,22 @@ export type CapabilitySemanticMatch = {
   reason: string;
 };
 
-function semanticEntriesForTool(name: string): CapabilitySemanticEntry[] {
-  return CAPABILITY_BRANCH_MANIFEST
-    .filter((entry) => entry.capability === name && entry.semantic)
-    .map((entry) => ({
-      capability: entry.capability,
-      ...(entry.branch ? { branch: entry.branch } : {}),
-      ...(entry.semantic as CapabilitySemanticSpec),
-    }));
+// The branch manifest is static. Index its semantic entries once instead of
+// scanning and allocating new entry objects for every catalog search/tool.
+const semanticEntriesByTool = new Map<string, CapabilitySemanticEntry[]>();
+for (const entry of CAPABILITY_BRANCH_MANIFEST) {
+  if (!entry.semantic) continue;
+  const entries = semanticEntriesByTool.get(entry.capability) ?? [];
+  entries.push({
+    capability: entry.capability,
+    ...(entry.branch ? { branch: entry.branch } : {}),
+    ...(entry.semantic as CapabilitySemanticSpec),
+  });
+  semanticEntriesByTool.set(entry.capability, entries);
+}
+
+function semanticEntriesForTool(name: string): readonly CapabilitySemanticEntry[] {
+  return semanticEntriesByTool.get(name) ?? [];
 }
 
 const SYNONYMS: Readonly<Record<string, readonly string[]>> = {
@@ -97,7 +105,24 @@ function entryText(entry: CapabilitySemanticEntry): {
   };
 }
 
-function overlap(tokens: Set<string>, field: Set<string>, weight: number): number {
+const semanticEntryTextCache = new WeakMap<
+  CapabilitySemanticEntry,
+  ReturnType<typeof entryText>
+>();
+
+function cachedEntryText(entry: CapabilitySemanticEntry): ReturnType<typeof entryText> {
+  const existing = semanticEntryTextCache.get(entry);
+  if (existing) return existing;
+  const compiled = entryText(entry);
+  semanticEntryTextCache.set(entry, compiled);
+  return compiled;
+}
+
+export function capabilityQueryTokens(query: string): ReadonlySet<string> {
+  return expandedTokens(query);
+}
+
+function overlap(tokens: ReadonlySet<string>, field: ReadonlySet<string>, weight: number): number {
   let value = 0;
   for (const token of tokens) if (field.has(token)) value += weight;
   return value;
@@ -113,7 +138,7 @@ function phaseBoost(capability: string, context?: CapabilityRoutingContext): num
 
 function genericCapabilityScore(
   tool: BackendTool,
-  tokens: Set<string>
+  tokens: ReadonlySet<string>
 ): number {
   const metadata = getCapabilityMetadata(tool.name);
   const name = new Set(normalize(tool.name.replace(/[_.\/-]+/g, " ")));
@@ -133,7 +158,8 @@ function bm25Tokens(text: string): string[] {
 
 export function bm25CapabilityScores(
   tools: readonly BackendTool[],
-  query: string
+  query: string,
+  preparedQueryTokens?: ReadonlySet<string>
 ): ReadonlyMap<string, number> {
   const documents = tools.map((tool) => {
     const metadata = getCapabilityMetadata(tool.name);
@@ -144,7 +170,7 @@ export function bm25CapabilityScores(
       metadata.searchAliases.join(" "),
     ].join(" "));
   });
-  const queryTokens = [...expandedTokens(query)];
+  const queryTokens = [...(preparedQueryTokens ?? expandedTokens(query))];
   if (queryTokens.length === 0 || documents.length === 0) return new Map();
 
   const documentFrequencies = new Map<string, number>();
@@ -194,9 +220,10 @@ export function bm25CapabilityScores(
 export function semanticMatchesForTool(
   tool: BackendTool,
   query: string,
-  context?: CapabilityRoutingContext
+  context?: CapabilityRoutingContext,
+  preparedQueryTokens?: ReadonlySet<string>
 ): CapabilitySemanticMatch[] {
-  const queryTokens = expandedTokens(query);
+  const queryTokens = preparedQueryTokens ?? expandedTokens(query);
   const entries = semanticEntriesForTool(tool.name);
   // These inputs belong to the tool/query, not to each operation branch.
   const genericEvidence = genericCapabilityScore(tool, queryTokens);
@@ -212,7 +239,7 @@ export function semanticMatchesForTool(
   }
 
   return entries.map((entry) => {
-    const text = entryText(entry);
+    const text = cachedEntryText(entry);
     const intentEvidence = overlap(queryTokens, text.intent, 12);
     const verbEvidence = overlap(queryTokens, text.verb, 9);
     const nounEvidence = overlap(queryTokens, text.noun, 7);
@@ -248,9 +275,10 @@ export function semanticMatchesForTool(
 export function bestSemanticMatchForTool(
   tool: BackendTool,
   query: string,
-  context?: CapabilityRoutingContext
+  context?: CapabilityRoutingContext,
+  preparedQueryTokens?: ReadonlySet<string>
 ): CapabilitySemanticMatch {
-  return semanticMatchesForTool(tool, query, context)
+  return semanticMatchesForTool(tool, query, context, preparedQueryTokens)
     .sort((a, b) => b.score - a.score)[0]!;
 }
 

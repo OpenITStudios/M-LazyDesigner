@@ -7,6 +7,7 @@ import {
 import {
   bestSemanticMatchForTool,
   bm25CapabilityScores,
+  capabilityQueryTokens,
 } from "./intelligence";
 import { evaluateCapabilityPreconditions } from "./graph";
 import type {
@@ -126,9 +127,12 @@ export function searchCapabilityCatalog(
   // A generic-only discovery query has no actionable intent and should not
   // traverse the catalog or compute ranking weights.
   if (hasQuery && effectiveQuery.length === 0) return [];
+  // Query expansion is shared across both ranking strategies and all tools.
+  // No persistent query cache: a Runtime catalog or Stage may change at any time.
+  const queryTokens = capabilityQueryTokens(effectiveQuery);
   // Empty discovery lists non-maintenance capabilities without a BM25 query.
   const bm25Scores = effectiveQuery.length > 0
-    ? bm25CapabilityScores(tools, effectiveQuery)
+    ? bm25CapabilityScores(tools, effectiveQuery, queryTokens)
     : new Map<string, number>();
   // Lexical relevance is a bounded secondary signal, not an intent override.
   const maxBm25 = Math.max(1, ...bm25Scores.values());
@@ -140,7 +144,8 @@ export function searchCapabilityCatalog(
       const semantic = bestSemanticMatchForTool(
         tool,
         effectiveQuery,
-        context
+        context,
+        queryTokens
       );
       const bm25 = bm25Scores.get(tool.name) ?? 0;
       const nearName = nearCapabilityNameScore(tool.name, query);

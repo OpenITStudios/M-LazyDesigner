@@ -206,6 +206,20 @@ Current compute primitives include:
 
 The public MCP surface exposes only compact operation names plus bounded args; detailed validation stays Runtime-owned. Compute runs inside `paint_texture_transaction`, so revision protection, one Undo, dirty-region write, postcondition proof, evidence, and optional PNG output remain owned by the existing transaction instead of a second mutation path.
 
+## Capability Discovery CPU Reuse — SOURCE OPTIMIZATION
+
+The Gateway capability ranking retains its previous semantic, BM25, Stage
+and eligibility scoring contracts. One request now expands its query tokens
+once for both rankers and all candidate tools. Static branch-manifest semantics
+are indexed and their token sets compiled once rather than rebuilt for each
+search. This is in-process derived metadata, not another registry, background
+worker, authored-state cache, or new Gateway capability.
+
+The existing `gateway/capabilities/intelligence.test.ts` checks equivalent
+ranking/branch results with and without a pre-expanded query. No measured
+runtime acceleration or accepted-result token reduction is claimed until an
+exact-SHA executable benchmark supplies evidence.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.
