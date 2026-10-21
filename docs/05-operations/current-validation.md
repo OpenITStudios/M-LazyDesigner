@@ -6,6 +6,21 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 2026-10-21: LOCAL_CODE, isolated Windows x64 checkout, OpenITStudios/M-LazyDesigner / Local. Grouped cleanup source: `ba4ed7f376f44d3cd7092bec8016ba26b0cd9f00` (repairs after `30a0c52c`). Original dirty checkout/assets untouched. Bun 1.4.3; existing dependencies reused, Desktop lockfile hashes matched. CI DISABLED; no Actions, main change, release or native mutation.
 
+## Frontend interaction evidence - 2026-10-21
+
+Source `d334106e`, actual Svelte UI at 1280x720 in the in-app browser with
+Tauri's official mockIPC and 24 synthetic projects; no native filesystem calls.
+Fixed clipped project menus, lost opener focus on dialog close, and Tab escape
+while buttons are busy. Observed: filter and expanded list persist across
+Workspace/Support; scroll restored to 1235px; initial Cancel focus; Tab/Shift+Tab
+wrap; Escape restores opener; busy Tab stays inside and Escape cannot dismiss;
+mocked failure shows error and restores focus. 296 repository tests PASS;
+Desktop TS6/TS7 checks zero errors/warnings; frontend build PASS. No new test file.
+Temporary harness used existing App and fixtures with mocked status/delete IPC.
+Narrow viewport, real Windows Recycle Bin, installed Tauri and native authoring
+save/reopen are NOT EXECUTED. Prior grouped MCP proof below remains scoped to
+`ba4ed7f3`; this batch changes frontend and its structural test only.
+
 ## Dependency efficiency report - 2026-10-20
 
 ### Problem and implemented correction
@@ -41,21 +56,12 @@ The removed lock entry is macOS-only objc2-open-directory. Windows package-node 
 
 ## Dependency readiness
 
-All compatible stable direct upgrades are complete. Earlier dependency work reduced Cargo.lock from 490 to 437 packages and RustSec warnings from five to two; this focused efficiency change takes the lock to 436.
-
-| Component | Current accepted source |
-| --- | --- |
-| MCP client/server/core; Zod | 2.3.1; 4.6.7 |
-| Native TS; compatibility compiler API | 7.0.2; 6.0.3 |
-| Bun; Bun typings; Node typings | 1.4.3; 1.4.3; 24.19.2 |
-| Blockbench typings; Electron typing-only | 5.2.1; 43.8.1 satisfying ^43.4.0 |
-| Tauri Rust/API; CLI | 2.12.4; 2.12.3 |
-| Vite; Svelte plugin; Rolldown | 8.3.4; 7.3.1; 1.2.14 |
-| Svelte; svelte-check; Tailwind | 5.57.2; 4.7.7; 4.3.3 |
-| rand; rfd; sha2 direct; sysinfo | 0.10.3; 0.17.2; 0.11.1; 0.39.6 |
-| MCP PostCSS; Nano ID | 8.5.31; 3.3.20, obsolete overrides removed |
-
-Keep Node typings on supported Node 24. TS6 remains necessary for Svelte/compiler API tooling while tsc is verified native 7.0.2. Blockbench owns nested TypeScript 5.9 and Vue 2.7.14; Tauri owns its separate sha2 0.10 requirement. These upstream constraints are preserved without forcing incompatible versions. The prior rand/sysinfo/sha2 API migration preserves system-entropy deletion tokens and exact persisted SHA256 identity bytes; fixed-hash regressions remain active.
+Compatible direct upgrades and dependency migration evidence remain at
+`bcdb2399`/`ce5299aa`. Bun 1.4.3; native TypeScript 7.0.2 with TS6.0.3 for
+Svelte/compiler API; Node typings 24.19.2; Blockbench typings 5.2.1 with
+Electron typing-only 43.8.1. Upstream Vue 2/TS5.9 and Tauri sha2 constraints
+remain unchanged. Cargo.lock holds 436 packages; current frontend work does
+not repeat dependency/security or Rust/package acceptance.
 
 ## Current proof matrix
 
