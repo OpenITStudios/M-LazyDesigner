@@ -101,6 +101,12 @@
     actionMessageKind = 'success';
   }
 
+  function clearActionFeedback() {
+    error = '';
+    errorDetail = null;
+    clearSuccessToast();
+  }
+
   function showSuccessToast(
     message: string,
     kind: 'success' | 'pending' | 'unchanged' = 'success'
@@ -158,9 +164,7 @@
         !window.confirm('Restore the last saved project pins? The damaged settings file will be retained.')) return;
     closeActionDisclosures(true);
     busyAction = 'project-action';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       await invoke<ProjectNavigationActionResult>('project_navigation_action', { action, id });
       if (action === 'pin-project' || action === 'unpin-project' ||
@@ -176,9 +180,7 @@
     if (devFixture || busyAction) return;
     closeActionDisclosures(true);
     busyAction = 'project-action';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       const result = await invoke<ProjectNavigationActionResult>('add_project_folder');
       if (result.status === 'ADDED' || result.status === 'ALREADY_ADDED') {
@@ -198,9 +200,7 @@
     if (devFixture || busyAction || deleteReview) return;
     closeActionDisclosures(true);
     busyAction = 'project-action';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       deleteReview = await invoke<ProjectDeletePreview>('prepare_delete_project', { id });
     } catch (cause) {
@@ -220,9 +220,7 @@
     if (devFixture || busyAction || !deleteReview) return;
     const review = deleteReview;
     busyAction = 'project-action';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       const result = await invoke<ProjectDeleteResult>('confirm_delete_project', { token: review.token });
       deleteReview = null;
@@ -242,9 +240,7 @@
   async function openModel(id?: string) {
     if (devFixture || busyAction) return;
     busyAction = id === undefined ? 'browse-model' : 'project-action';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       const message = await editorOperations.openModel(id);
       if (message !== null) {
@@ -267,9 +263,7 @@
   async function chooseBlockbenchExecutable() {
     if (devFixture || busyAction) return;
     busyAction = 'choose-editor';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       const result = await invoke<BlockbenchSelectionResult>('choose_blockbench_executable');
       if (result.status === 'SELECTED') {
@@ -286,9 +280,7 @@
   async function openBlockbenchEditor() {
     if (devFixture || busyAction) return;
     busyAction = 'open-editor';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       const message = await editorOperations.openEditor();
       await refresh();
@@ -322,9 +314,7 @@
     if (!status?.manager_available || busyAction || statusProbeFailures >= 2) return;
     closeUtilityMenu();
     busyAction = 'connect-blockbench';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       const result = await setupOperations.connect({ refresh, onReadiness: applyReadiness });
       if (result.status === 'READY' || result.status === 'RUNTIME_READY') {
@@ -359,9 +349,7 @@
     busyAction = 'install';
     migrationConflict = false;
     setupStaged = false;
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       const outcome = await setupOperations.install({
         refresh,
@@ -420,9 +408,7 @@
     if (busyAction) return;
     closeUtilityMenu();
     busyAction = 'export-diagnostics';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       const result = await invoke<DiagnosticExportResult>('export_diagnostics');
       if (result.status === 'EXPORTED') showSuccessToast('Diagnostics exported successfully.');
@@ -454,9 +440,7 @@
     closeUtilityMenu();
     busyAction = action;
     progressStage = 'preflight';
-    error = '';
-    errorDetail = null;
-    clearSuccessToast();
+    clearActionFeedback();
     try {
       const feedback = await maintenanceOperations.execute(request);
       showSuccessToast(feedback.message, feedback.kind);
