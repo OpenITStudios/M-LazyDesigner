@@ -20,7 +20,7 @@ import { BenchmarkTraceRecorder } from "./execution/benchmarkTrace";
 const session = new GatewaySessionState();
 
 const backend = new BlockitRuntimeBackend(undefined, undefined, {
-  onRuntimeGenerationChange: () => session.onRuntimeGenerationChange(),
+  onRuntimeGenerationChange: (event) => session.onRuntimeGenerationChange(event.project_uuid),
 });
 const localCapabilities = new LocalCapabilityRegistry();
 const benchmarkTrace = BenchmarkTraceRecorder.fromEnvironment();

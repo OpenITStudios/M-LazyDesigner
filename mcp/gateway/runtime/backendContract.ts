@@ -92,6 +92,8 @@ export type GatewayRuntimeInvocation = {
 export type RuntimeGenerationChangeEvent = {
   previous_signature: string | null;
   next_signature: string;
+  /** Project affinity was verified against the new Runtime's health. */
+  project_uuid: string | null;
   connection_generation: number;
   reconnect_count: number;
 };

@@ -403,6 +403,7 @@ export class BlockitRuntimeBackend {
         this.onRuntimeGenerationChange?.({
           previous_signature: previousSignature,
           next_signature: signature,
+          project_uuid: this.projectUuid,
           connection_generation: snapshot.generation,
           reconnect_count: snapshot.reconnect_count,
         });

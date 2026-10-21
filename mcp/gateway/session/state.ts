@@ -26,12 +26,18 @@ export class GatewaySessionState {
     this.executionState = value;
   }
 
-  onRuntimeGenerationChange(): void {
+  onRuntimeGenerationChange(verifiedProjectUuid: string | null): void {
+    // The replacement Runtime already proved its project affinity before
+    // this callback. Do not keep an outdated Control UUID if that binding
+    // was retired, and do not assume a previously unbound project was adopted.
+    this.synchronizeProject(verifiedProjectUuid);
     gatewayOrchestrationRecoveryState.invalidateRuntimeGeneration();
     this.executionState = null;
-    // Runtime restart invalidates observed facts until the next bound status
-    // refresh. Keep the requested project UUID for safe backend rebind checks.
-    this.capabilityFacts = seedCapabilityFacts({});
+    // Only the exact verified binding survives. Geometry, Texture, UV,
+    // Animation and visual evidence must be established again in this Runtime.
+    this.capabilityFacts = seedCapabilityFacts({
+      projectBound: verifiedProjectUuid === null ? null : true,
+    });
   }
 
   synchronizeProject(projectUuid: string | null): void {
