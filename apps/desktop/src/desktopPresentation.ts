@@ -35,7 +35,7 @@ export function productMessage(value: SystemStatus) {
   if (mode === 'client-wait') return value.gateway?.state === 'gateway-detected'
     ? 'Blockbench Runtime and Gateway process detected; confirm the MCP handshake and available capabilities from your AI client.'
     : 'LazyDesigner is active in Blockbench and will connect when an MCP client starts a session.';
-  if (mode === 'ready') return 'Everything is working. Continue in Blockbench.';
+  if (mode === 'ready') return 'A recent MCP request verified the Gateway connection and matching Blockbench Runtime catalog. Continue in Blockbench.';
   return value.readiness.summary;
 }
 

@@ -12,6 +12,7 @@ import {
 } from "./surface/profile";
 import { registerCoreGatewayTools } from "./handlers/registerCoreTools";
 import { GatewaySessionState } from "./session/state";
+import { publishManagedGatewayLeaseEvidence } from "./session/leaseEvidence";
 import type { GatewayToolContext } from "./execution/gatewayErrors";
 import { GatewayCapabilityExecutor } from "./execution/capabilityExecutor";
 import { BenchmarkTraceRecorder } from "./execution/benchmarkTrace";
@@ -66,6 +67,9 @@ function buildGatewayServer(
     surfaceProfile,
     experimentalTools: () => registeredExperimentalTools,
     trace: benchmarkTrace,
+    onGatewayToolRequest: () => {
+      publishManagedGatewayLeaseEvidence(backend.observedManagedCatalogEvidence());
+    },
     invoke: (capability, args, context, controlOptions) =>
       executor.invoke(capability, args, context, controlOptions),
   });

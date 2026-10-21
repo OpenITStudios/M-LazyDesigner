@@ -3,6 +3,7 @@ export type ConnectionObservation = {
   blockbench_running: boolean;
   runtime_listener_live: boolean;
   gateway_active: boolean | null;
+  gateway_mcp_ready?: boolean;
   plugin_integrity: string;
   project_revision: string | null;
   project_session_live: boolean;
@@ -13,6 +14,7 @@ export type ConnectionBaseline = {
   runtime_listener_live: boolean;
   plugin_integrity: string;
   managed: { gateway_active: boolean } | null;
+  gateway?: { state: string };
   project_navigation: { revision: string | null; session_live: boolean };
 };
 
@@ -22,6 +24,8 @@ export function connectionChanged(candidate: ConnectionObservation, current: Con
     || candidate.runtime_listener_live !== current.runtime_listener_live
     || (candidate.gateway_active !== null && current.managed !== null
       && candidate.gateway_active !== current.managed.gateway_active)
+    || (typeof candidate.gateway_mcp_ready === "boolean" && current.gateway !== undefined
+      && candidate.gateway_mcp_ready !== (current.gateway.state === "healthy"))
     || candidate.project_revision !== current.project_navigation.revision
     || candidate.project_session_live !== current.project_navigation.session_live;
 }

@@ -17,7 +17,6 @@ struct RuntimeSessionLease {
     producer_pid: u32,
     instance_id: String,
     runtime_url: String,
-    #[allow(dead_code)]
     started_at_unix_ms: u64,
 }
 
@@ -26,11 +25,12 @@ pub(crate) struct RuntimeSessionProbe {
     pub(crate) live: bool,
     pub(crate) runtime_url: Option<String>,
     pub(crate) build_identity: Option<String>,
+    pub(crate) started_at_unix_ms: Option<u64>,
 }
 
 impl RuntimeSessionProbe {
     fn absent() -> Self {
-        Self { live: false, runtime_url: None, build_identity: None }
+        Self { live: false, runtime_url: None, build_identity: None, started_at_unix_ms: None }
     }
 }
 
@@ -132,22 +132,23 @@ pub(crate) fn probe(
         return RuntimeSessionProbe::absent();
     }
     let Some(process) = system.process(Pid::from_u32(lease.producer_pid)) else {
-        return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None };
+        return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None, started_at_unix_ms: None };
     };
     let name = process.name().to_string_lossy().to_ascii_lowercase();
     if name != "blockbench.exe" && name != "blockbench" {
-        return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None };
+        return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None, started_at_unix_ms: None };
     }
     let Ok(modified) = metadata.modified() else {
-        return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None };
+        return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None, started_at_unix_ms: None };
     };
     let Ok(age) = SystemTime::now().duration_since(modified) else {
-        return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None };
+        return RuntimeSessionProbe { live: false, runtime_url: Some(lease.runtime_url), build_identity: None, started_at_unix_ms: None };
     };
     RuntimeSessionProbe {
         live: age.as_millis() <= RUNTIME_SESSION_LEASE_TTL_MS as u128,
         runtime_url: Some(lease.runtime_url),
         build_identity: Some(lease.build_identity),
+        started_at_unix_ms: Some(lease.started_at_unix_ms),
     }
 }
 
@@ -203,11 +204,13 @@ mod tests {
             live: true,
             runtime_url: Some("https://127.0.0.1:3000/bb-mcp".to_string()),
             build_identity: Some(build.clone()),
+            started_at_unix_ms: Some(100),
         };
         let mismatched = RuntimeSessionProbe {
             live: true,
             runtime_url: Some("https://127.0.0.1:3100/bb-mcp".to_string()),
             build_identity: Some(build.clone()),
+            started_at_unix_ms: Some(100),
         };
         assert_eq!(
             endpoint_match(Some("https://localhost:3000/bb-mcp"), &matching),
@@ -230,6 +233,7 @@ mod tests {
             live: true,
             runtime_url: Some("https://127.0.0.1:3000/bb-mcp".to_string()),
             build_identity: Some(build.clone()),
+            started_at_unix_ms: Some(100),
         };
         let url = Some("https://127.0.0.1:3000/bb-mcp");
         assert_eq!(matching_build_identity(Some(&build), &probe), Some(true));

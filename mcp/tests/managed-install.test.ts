@@ -309,6 +309,34 @@ test("availability probe rejects non-local targets and invalid deadlines", async
 });
 
 
+test("managed Gateway lease reflects real core tool requests without granting foreign PID ownership", async () => {
+  const { publishManagedGatewayLeaseEvidence } = await import("../gateway/session/leaseEvidence");
+  await sandbox(async directory => {
+    const filename = join(directory, `${process.pid}.json`);
+    const sha = "a".repeat(40);
+    const build = `sha256:${"b".repeat(64)}`;
+    await writeFile(filename, JSON.stringify({ source_sha: sha, producer_pid: process.pid }));
+    assert.equal(publishManagedGatewayLeaseEvidence({
+      catalog_ready: true, runtime_build_identity: build,
+    }, filename, 123456), true);
+    const ready = JSON.parse(await readFile(filename, "utf8"));
+    assert.equal(ready.catalog_ready, true);
+    assert.equal(ready.observed_at_unix_ms, 123456);
+    assert.equal(ready.runtime_build_identity, build);
+    assert.equal(ready.producer_pid, process.pid);
+    assert.equal(publishManagedGatewayLeaseEvidence({
+      catalog_ready: false, runtime_build_identity: build,
+    }, filename, 123457), true);
+    const invalidated = JSON.parse(await readFile(filename, "utf8"));
+    assert.equal(invalidated.catalog_ready, false);
+    assert.equal(invalidated.runtime_build_identity, null);
+    await writeFile(filename, JSON.stringify({ source_sha: sha, producer_pid: process.pid + 1 }));
+    assert.equal(publishManagedGatewayLeaseEvidence({
+      catalog_ready: true, runtime_build_identity: build,
+    }, filename, 123458), false);
+  });
+});
+
 test("managed status exposes one desktop-ready machine health contract", async () => sandbox(async (_d, o) => {
   const { buildManagedStatus } = await import("../../distribution/status");
   let observedConfig: string | undefined;

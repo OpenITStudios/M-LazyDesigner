@@ -40,33 +40,37 @@ pub(crate) fn gateway(
     managed: Option<&ManagedStatus>,
     blockbench_running: bool,
     runtime_ready: bool,
+    verified_mcp_catalog: bool,
 ) -> GatewaySupervision {
     let active = managed.map(|value| value.gateway_active).unwrap_or(false);
 
-    match (active, runtime_ready, blockbench_running) {
-        (true, true, _) => GatewaySupervision {
+    match (active, runtime_ready, blockbench_running, verified_mcp_catalog) {
+        (true, true, _, true) => GatewaySupervision {
             ownership: "client-owned",
-            // A process lease + Runtime readiness does not prove an MCP
-            // handshake or a fresh Gateway capability catalog.
-            state: "gateway-detected",
-            action: Some("Gateway process and Blockbench Runtime detected. Confirm the MCP handshake and capability catalog in the active AI client."),
+            state: "healthy",
+            action: None,
         },
-        (true, false, _) => GatewaySupervision {
+        (true, true, _, false) => GatewaySupervision {
+            ownership: "client-owned",
+            state: "gateway-detected",
+            action: Some("Gateway and Runtime detected; MCP handshake/catalog proof is absent or expired. Confirm the session in the AI client."),
+        },
+        (true, false, _, _) => GatewaySupervision {
             ownership: "client-owned",
             state: "waiting-runtime",
             action: Some("Keep the current client Gateway session and restore/reload the Blockbench Runtime. Do not start a second Gateway."),
         },
-        (false, true, _) => GatewaySupervision {
+        (false, true, _, _) => GatewaySupervision {
             ownership: "client-owned",
             state: "client-disconnected",
             action: Some("Reconnect LazyDesigner MCP in Codex or the active MCP client; that client owns Gateway startup."),
         },
-        (false, false, true) => GatewaySupervision {
+        (false, false, true, _) => GatewaySupervision {
             ownership: "client-owned",
             state: "runtime-offline",
             action: Some("Restore or reload the LazyDesigner Runtime in Blockbench, then reconnect LazyDesigner MCP in the client if needed."),
         },
-        (false, false, false) => GatewaySupervision {
+        (false, false, false, _) => GatewaySupervision {
             ownership: "client-owned",
             state: "idle",
             action: Some("Start Blockbench, then reconnect LazyDesigner MCP in Codex or the active MCP client."),
@@ -109,6 +113,7 @@ pub(crate) fn product_state(
     if !runtime_ready {
         return "plugin-setup";
     }
+    if gateway.state == "healthy" { return "ready"; }
     if gateway.state == "gateway-detected" || gateway.state == "client-disconnected" {
         return "client-wait";
     }
@@ -158,8 +163,14 @@ pub(crate) fn readiness(
             ready: false,
         };
     }
-    // No MCP session handshake proof is available in the Desktop control
-    // plane. Never upgrade native process/lease observations to AI connected.
+    // Process presence alone cannot prove a client MCP session.
+    if gateway.state == "healthy" && runtime_ready {
+        return ReadinessProjection {
+            state: "ready",
+            summary: "Recent MCP request and matching Blockbench Runtime catalog verified.",
+            ready: true,
+        };
+    }
     ReadinessProjection {
         state: "needs-connection",
         summary: gateway.action.unwrap_or("Restore Runtime/Gateway connectivity."),
@@ -240,7 +251,7 @@ mod tests {
             compatibility: Some(blockbench::evaluate_compatibility("5.2.0").unwrap()),
             diagnostic: None,
         };
-        let gateway = gateway(Some(&managed), false, false);
+        let gateway = gateway(Some(&managed), false, false, false);
         assert_eq!(
             product_state(true, Some(&managed), &blockbench, false, &gateway, "modified"),
             "attention"
@@ -250,7 +261,7 @@ mod tests {
     #[test]
     fn gateway_supervision_preserves_client_ownership() {
         let managed = managed(false, true, true);
-        let result = gateway(Some(&managed), true, true);
+        let result = gateway(Some(&managed), true, true, false);
         assert_eq!(result.ownership, "client-owned");
         assert_eq!(result.state, "client-disconnected");
         assert!(result.action.unwrap().contains("Reconnect LazyDesigner MCP"));
@@ -259,7 +270,12 @@ mod tests {
     #[test]
     fn readiness_projection_covers_workstation_states() {
         let healthy = managed(true, true, true);
-        let observed_gateway = gateway(Some(&healthy), true, true);
+        let observed_gateway = gateway(Some(&healthy), true, true, false);
+        let proven_gateway = gateway(Some(&healthy), true, true, true);
+        assert_eq!(proven_gateway.state, "healthy");
+        let proven = readiness(true, Some(&healthy), true, true, &proven_gateway, "ready");
+        assert_eq!(proven.state, "ready");
+        assert!(proven.ready);
         assert_eq!(observed_gateway.state, "gateway-detected");
         assert_eq!(observed_gateway.ownership, "client-owned");
         assert!(observed_gateway.action.unwrap().contains("MCP handshake"));
@@ -274,13 +290,13 @@ mod tests {
             "client-wait"
         );
 
-        let closed_gateway = gateway(Some(&healthy), false, false);
+        let closed_gateway = gateway(Some(&healthy), false, false, false);
         let start = readiness(true, Some(&healthy), false, false, &closed_gateway, "ready");
         assert_eq!(start.state, "ready-to-start");
         assert!(!start.ready);
 
         let disconnected = managed(false, true, true);
-        let disconnected_gateway = gateway(Some(&disconnected), true, true);
+        let disconnected_gateway = gateway(Some(&disconnected), true, true, false);
         let connection = readiness(
             true,
             Some(&disconnected),

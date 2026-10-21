@@ -329,7 +329,8 @@ async function main(): Promise<void> {
       if (!sameInstalledPath(executable, process.execPath)) return;
       await mkdir(join(root, "leases"), { recursive: true });
       const lease = join(root, "leases", `${process.pid}.json`);
-      await writeFile(lease, JSON.stringify({ source_sha: state.source_sha }), { flag: "wx" });
+      await writeFile(lease, JSON.stringify({ source_sha: state.source_sha, producer_pid: process.pid }), { flag: "wx" });
+       process.env.LAZYDESIGNER_GATEWAY_LEASE_PATH = lease;
       process.once("exit", () => { try { unlinkSync(lease); } catch {} });
     });
     if (!sameInstalledPath(executable, process.execPath)) process.exit(await child(executable, ["mcp", "--root", root]));

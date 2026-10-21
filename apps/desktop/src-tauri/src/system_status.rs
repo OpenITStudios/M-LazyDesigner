@@ -92,6 +92,7 @@ pub struct ManagedProgressEvent { pub schema: u8, pub kind: String, pub action: 
 #[derive(Debug, Serialize)]
 pub struct ConnectionStatus {
     pub schema: u8,
+    pub gateway_mcp_ready: bool,
     pub observed_at_unix_ms: u64,
     pub blockbench_running: bool,
     pub runtime_listener_live: bool,
@@ -552,8 +553,8 @@ pub fn ensure_ready(app: &AppHandle) -> Result<EnsureReadyResult, String> {
                 return Ok(EnsureReadyResult {
                     // A Gateway PID lease is not proof of its MCP client
                     // handshake. Only the Runtime readiness is verified here.
-                    status: "RUNTIME_READY",
-                    reason: if gateway_active { "MCP_SESSION_UNVERIFIED" } else { "WAITING_FOR_MCP_CLIENT" },
+                    status: if verified.readiness.ready { "READY" } else { "RUNTIME_READY" },
+                    reason: if verified.readiness.ready { "CONNECTED" } else if gateway_active { "MCP_SESSION_UNVERIFIED" } else { "WAITING_FOR_MCP_CLIENT" },
                     runtime_online: true,
                     gateway_active,
                     blockbench_running: current.blockbench_running,
@@ -657,10 +658,17 @@ fn compose_status(
         expected_build.as_deref(),
         &runtime_session,
     );
+    let verified_gateway_catalog = runtime_ready && managed_root().as_deref().is_some_and(|root| {
+        gateway_mcp_catalog_verified(
+            root, &process_system,
+            managed.as_ref().and_then(|m| m.installed.as_ref()).map(|i| i.source_sha.as_str()),
+            expected_build.as_deref(), runtime_session.started_at_unix_ms,
+        )
+    });
     let gateway = if installation_present && managed.is_none() {
         readiness::unknown_gateway()
     } else {
-        readiness::gateway(managed.as_ref(), blockbench.running, runtime_ready)
+        readiness::gateway(managed.as_ref(), blockbench.running, runtime_ready, verified_gateway_catalog)
     };
     let readiness = readiness::readiness(
         installation_present,
@@ -710,6 +718,43 @@ fn compose_status(
         project_navigation,
         diagnostic,
     }
+}
+
+// A real client tool request is proof only within this freshness window.
+const GATEWAY_MCP_PROOF_TTL_MS: u64 = 30_000;
+
+fn verified_gateway_observation(data: &Value, pid: u32, source: &str, build: &str, runtime_start: u64, now: u64) -> bool {
+    let Some(seen) = data.get("observed_at_unix_ms").and_then(Value::as_u64) else { return false };
+    data.get("producer_pid").and_then(Value::as_u64) == Some(u64::from(pid))
+        && data.get("source_sha").and_then(Value::as_str) == Some(source)
+        && data.get("runtime_build_identity").and_then(Value::as_str) == Some(build)
+        && data.get("catalog_ready").and_then(Value::as_bool) == Some(true)
+        && seen >= runtime_start && now >= seen
+        && now - seen <= GATEWAY_MCP_PROOF_TTL_MS
+}
+
+fn gateway_mcp_catalog_verified(root: &Path, system: &System, source: Option<&str>, build: Option<&str>, runtime_start: Option<u64>) -> bool {
+    let (Some(source), Some(build), Some(runtime_start)) = (source, build, runtime_start) else { return false };
+    if source.len() != 40 || !source.bytes().all(|b| b.is_ascii_hexdigit())
+        || !runtime_health::valid_build_identity(build) { return false }
+    let Ok(entries) = fs::read_dir(root.join("leases")) else { return false };
+    let now = observed_at_unix_ms();
+    for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else { continue };
+        if !kind.is_file() { continue }
+        let filename = entry.file_name();
+        let Some(pid) = filename.to_str().and_then(|n| n.strip_suffix(".json"))
+            .and_then(|n| n.parse::<u32>().ok()) else { continue };
+        let Some(process) = system.process(Pid::from_u32(pid)) else { continue };
+        let name = process.name().to_string_lossy().to_ascii_lowercase();
+        if name != "lazydesigner.exe" && name != "lazydesigner" { continue }
+        let Ok(meta) = entry.metadata() else { continue };
+        if meta.len() == 0 || meta.len() > 2048 { continue }
+        let Ok(bytes) = fs::read(entry.path()) else { continue };
+        let Ok(record) = serde_json::from_slice::<Value>(&bytes) else { continue };
+        if verified_gateway_observation(&record, pid, source, build, runtime_start, now) { return true }
+    }
+    false
 }
 
 fn gateway_active_fast(root: &Path, system: &System) -> Option<bool> {
@@ -771,6 +816,7 @@ pub fn collect_connection_status() -> ConnectionStatus {
     let Some(root) = managed_root() else {
         return ConnectionStatus {
             schema: 1,
+            gateway_mcp_ready: false,
             observed_at_unix_ms: observed_at_unix_ms(),
             blockbench_running,
             runtime_listener_live: trusted_listener,
@@ -785,6 +831,7 @@ pub fn collect_connection_status() -> ConnectionStatus {
     if manager_executable(&root).is_err() {
         return ConnectionStatus {
             schema: 1,
+            gateway_mcp_ready: false,
             observed_at_unix_ms: observed_at_unix_ms(),
             blockbench_running,
             runtime_listener_live: trusted_listener,
@@ -795,8 +842,18 @@ pub fn collect_connection_status() -> ConnectionStatus {
         };
     }
 
+    let verified_catalog = trusted_listener && gateway_mcp_catalog_verified(
+        &root, &system,
+        fs::read(root.join("installed.json")).ok()
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            .and_then(|v| v.get("source_sha")?.as_str().map(str::to_owned))
+            .as_deref(),
+        expected_build.as_deref(),
+        runtime_session.started_at_unix_ms,
+    );
     ConnectionStatus {
         schema: 1,
+        gateway_mcp_ready: verified_catalog,
         observed_at_unix_ms: observed_at_unix_ms(),
         blockbench_running,
         runtime_listener_live: trusted_listener,
@@ -1061,6 +1118,22 @@ pub fn run_managed_action(app: &AppHandle, action: &str, expected_source_sha: Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gateway_proof_rejects_stale_wrong_pid_and_runtime_generation() {
+        let source = "a".repeat(40);
+        let build = format!("sha256:{}", "b".repeat(64));
+        let data = serde_json::json!({
+            "source_sha": source, "producer_pid": 42,
+            "runtime_build_identity": build, "observed_at_unix_ms": 1000,
+            "catalog_ready": true
+        });
+        assert!(verified_gateway_observation(&data, 42, &source, &build, 900, 1005));
+        assert!(!verified_gateway_observation(&data, 43, &source, &build, 900, 1005));
+        assert!(!verified_gateway_observation(&data, 42, &source, &build, 1001, 1005));
+        assert!(!verified_gateway_observation(&data, 42, &source, &build, 900, 31001));
+        assert!(!verified_gateway_observation(&data, 42, &source, &build, 900, 999));
+    }
 
     #[test]
     fn damaged_installation_is_attention_instead_of_first_run() {

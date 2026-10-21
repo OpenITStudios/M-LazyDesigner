@@ -66,6 +66,7 @@ export type ConnectionStatus = {
     blockbench_running: boolean;
     runtime_listener_live: boolean;
     gateway_active: boolean | null;
+    gateway_mcp_ready: boolean;
     plugin_integrity: 'ready' | 'missing' | 'modified' | 'invalid' | 'unknown';
     project_revision: string | null;
     project_session_live: boolean;

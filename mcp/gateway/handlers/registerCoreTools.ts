@@ -72,6 +72,7 @@ export type CoreGatewayRegistrationDeps = {
   surfaceProfile: GatewaySurfaceProfile;
   experimentalTools: () => readonly string[];
   trace?: BenchmarkTraceRecorder | null;
+  onGatewayToolRequest?: () => void;
   invoke: (
     capability: string,
     args: JsonRecord,
@@ -147,11 +148,26 @@ export function registerCoreGatewayTools(
     trace,
     invoke,
   } = deps;
-  const registerGatewayTool = server.registerTool.bind(server) as unknown as (
+  const registerNativeGatewayTool = server.registerTool.bind(server) as unknown as (
     name: string,
     definition: GatewayToolDefinition,
     handler: GatewayToolHandler
   ) => void;
+  const registerGatewayTool = (
+    name: string,
+    definition: GatewayToolDefinition,
+    handler: GatewayToolHandler
+  ): void => {
+    registerNativeGatewayTool(name, definition, async (args, context) => {
+      try {
+        return await handler(args, context);
+      } finally {
+        // Only real client tool requests reach this observer. Evidence must
+        // never change an MCP response or interrupt a native mutation.
+        try { deps.onGatewayToolRequest?.(); } catch { /* advisory */ }
+      }
+    });
+  };
 
   registerGatewayTool(
     GATEWAY_TOOLS.status,

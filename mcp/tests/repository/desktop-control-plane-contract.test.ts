@@ -917,6 +917,51 @@ describe("Desktop small-text contrast", () => {
 });
 
 describe("Desktop pure status presentation", () => {
+  test("managed MCP proof requires a real client tool and matching current Runtime generation", async () => {
+    const [writer, index, cli, backend, handlers, native, health, watcher, ready] = await Promise.all([
+      source("gateway/session/leaseEvidence.ts"),
+      source("gateway/index.ts"),
+      source("../distribution/cli.ts"),
+      source("gateway/runtime/backend.ts"),
+      source("gateway/handlers/registerCoreTools.ts"),
+      source("../apps/desktop/src-tauri/src/system_status.rs"),
+      source("../apps/desktop/src-tauri/src/runtime_health.rs"),
+      source("../apps/desktop/src/connectionWatch.ts"),
+      source("../apps/desktop/src-tauri/src/readiness.rs"),
+    ]);
+    expect(cli).toContain("LAZYDESIGNER_GATEWAY_LEASE_PATH");
+    expect(index).toContain("publishManagedGatewayLeaseEvidence(backend.observedManagedCatalogEvidence())");
+    expect(handlers).toContain("onGatewayToolRequest");
+    expect(backend).toContain("this.lastVerifiedHealthSignature = probe.signature");
+    expect(writer).toContain("observed_at_unix_ms");
+    expect(writer).toContain("catalog_ready: ready");
+    expect(native).toContain("GATEWAY_MCP_PROOF_TTL_MS");
+    expect(native).toContain("seen >= runtime_start");
+    expect(health).toContain("started_at_unix_ms: Some(lease.started_at_unix_ms)");
+    expect(watcher).toContain("candidate.gateway_mcp_ready");
+    expect(ready).toContain('state: "gateway-detected"');
+    expect(ready).toContain('state: "healthy"');
+  });
+
+  test("passive observation refreshes only when verified MCP evidence changes", () => {
+    const baseline = {
+      blockbench: { running: true }, runtime_listener_live: true,
+      managed: { gateway_active: true }, gateway: { state: "gateway-detected" },
+      plugin_integrity: "ready",
+      project_navigation: { revision: null, session_live: false },
+    };
+    const observation = {
+      blockbench_running: true, runtime_listener_live: true, gateway_active: true,
+      gateway_mcp_ready: false, plugin_integrity: "ready",
+      project_revision: null, project_session_live: false,
+    };
+    expect(connectionChanged(observation, baseline)).toBe(false);
+    expect(connectionChanged({ ...observation, gateway_mcp_ready: true }, baseline)).toBe(true);
+    expect(connectionChanged(observation, { ...baseline, gateway: { state: "healthy" } })).toBe(true);
+    expect(connectionChanged({ ...observation, gateway_mcp_ready: true }, { ...baseline, gateway: { state: "healthy" } })).toBe(false);
+  });
+
+
 
   test("Desktop does not equate a Gateway PID and Runtime lease with an MCP handshake", async () => {
     const [readiness, system, app, workspace, types] = await Promise.all([
@@ -927,10 +972,10 @@ describe("Desktop pure status presentation", () => {
       source("../apps/desktop/src/desktopTypes.ts"),
     ]);
     expect(readiness).toContain('state: "gateway-detected"');
-    expect(readiness).not.toContain('state: "healthy"');
+    expect(readiness).toContain('state: "healthy"');
     expect(readiness).toContain('ready: false');
     expect(readiness).toContain('gateway.state == "gateway-detected"');
-    expect(system).toContain('status: "RUNTIME_READY"');
+    expect(system).toContain('status: if verified.readiness.ready { "READY" } else { "RUNTIME_READY" }');
     expect(system).toContain('"MCP_SESSION_UNVERIFIED"');
     expect(app).toContain("result.reason === 'MCP_SESSION_UNVERIFIED'");
     expect(workspace).toContain('MCP handshake unverified');

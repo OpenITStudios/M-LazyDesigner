@@ -133,8 +133,8 @@
       <section class="workspace-connection" aria-label="Connection status">
         <span class="connection-dot" class:waiting={productMode(status) === 'client-wait'} class:unknown={statusProbeFailures >= 2} aria-hidden="true"></span>
         <div class="connection-copy">
-          <strong>{statusProbeFailures >= 2 ? 'AI status unverified' : productMode(status) === 'ready' ? 'AI connected' : status.gateway.state === 'gateway-detected' ? 'Gateway detected · MCP unverified' : 'Blockbench ready'}</strong>
-          <span>{statusProbeFailures >= 2 ? 'AI status is unverified. You can still open models; Refresh before AI or maintenance actions.' : productMode(status) === 'ready' ? 'Blockbench and LazyDesigner are ready.' : status.gateway.state === 'gateway-detected' ? 'Blockbench and Gateway are running; verify MCP connection and tools in your AI client.' : 'Editing is available. Connect the AI client when needed.'}</span>
+          <strong>{statusProbeFailures >= 2 ? 'AI status unverified' : productMode(status) === 'ready' ? 'MCP recently verified' : status.gateway.state === 'gateway-detected' ? 'Gateway detected · MCP unverified' : 'Blockbench ready'}</strong>
+          <span>{statusProbeFailures >= 2 ? 'AI status is unverified. You can still open models; Refresh before AI or maintenance actions.' : productMode(status) === 'ready' ? 'A recent MCP request confirmed a matching Runtime catalog. Idle connections may become unverified until the next request.' : status.gateway.state === 'gateway-detected' ? 'Blockbench and Gateway are running; verify MCP connection and tools in your AI client.' : 'Editing is available. Connect the AI client when needed.'}</span>
         </div>
         {#if statusProbeFailures >= 2}
           <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>

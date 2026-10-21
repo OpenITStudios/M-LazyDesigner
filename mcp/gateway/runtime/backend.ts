@@ -85,6 +85,8 @@ export class BlockitRuntimeBackend {
   private projectUuid: string | null = null;
   private authoringPhase: BlockitAuthoringPhaseAffinity | null = null;
   private lastError: string | null = null;
+  private lastVerifiedHealthSignature: string | null = null;
+  private lastVerifiedHealthAt = 0;
 
   constructor(
     runtimeUrl?: string,
@@ -173,11 +175,29 @@ export class BlockitRuntimeBackend {
     });
   }
 
+  /** Cached evidence from the last Runtime health probe; no confirmation call. */
+  observedManagedCatalogEvidence(): { catalog_ready: boolean; runtime_build_identity: string | null } {
+    const freshHealth = this.lastVerifiedHealthSignature !== null
+      && Date.now() - this.lastVerifiedHealthAt <= this.catalogLeaseMs + 500;
+    return {
+      catalog_ready: this.expectedRuntimeBuildIdentity !== null
+        && freshHealth
+        && this.client !== null
+        && this.connectedSignature === this.lastVerifiedHealthSignature
+        && this.catalog.size > 0
+        && !this.connection.needsMcpRevalidation()
+        && this.connection.snapshot().state === "ready",
+      runtime_build_identity: this.expectedRuntimeBuildIdentity,
+    };
+  }
+
   private runtimeRequestHeaders(): Headers {
     return buildRuntimeAffinityHeaders(this.projectUuid, this.authoringPhase);
   }
 
   private async probeHealth(): Promise<HealthProbe> {
+    this.lastVerifiedHealthSignature = null;
+    this.lastVerifiedHealthAt = 0;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.healthTimeoutMs);
 
@@ -203,11 +223,14 @@ export class BlockitRuntimeBackend {
       if (identityIssue) {
         return { online: false, error: identityIssue };
       }
+      const signature = createRuntimeSignature(body);
+      this.lastVerifiedHealthSignature = signature;
+      this.lastVerifiedHealthAt = Date.now();
       this.connection.markAvailable();
       return {
         online: true,
         health: body,
-        signature: createRuntimeSignature(body),
+        signature,
       };
     } catch (error) {
       return { online: false, error: errorMessage(error) };
@@ -260,6 +283,8 @@ export class BlockitRuntimeBackend {
     this.connectedSignature = null;
     this.catalog.clear();
     this.catalogValidatedAt = 0;
+    this.lastVerifiedHealthSignature = null;
+    this.lastVerifiedHealthAt = 0;
 
     if (client) {
       await this.closeClientBestEffort(client);
@@ -409,6 +434,10 @@ export class BlockitRuntimeBackend {
     }
 
     await this.connectFreshUnsafe(probe.signature);
+    // A successful first MCP handshake also establishes a fresh catalog.
+    // closeConnectionUnsafe() retired the old health cache before connect.
+    this.lastVerifiedHealthSignature = probe.signature;
+    this.lastVerifiedHealthAt = Date.now();
   }
 
   private buildStatus(probe: HealthProbe): GatewayRuntimeStatus {
