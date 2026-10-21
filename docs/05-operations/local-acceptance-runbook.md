@@ -577,6 +577,40 @@ Never mutate the approved fixture source for system testing. Use a disposable co
 
 Visual/reference `PASS` still requires the approved reference plus fresh comparable model evidence. Static metrics or automatic similarity scores cannot create visual PASS.
 
+### 8A. Saved-model Golden Correction acceptance
+
+For `golden-existing-model-correction`, use one immutable original
+`.bbmodel` seed and one disposable saved working copy with byte-identical
+starting content. Pin the exact `Local` source/build. Verify that the
+**effective client MCP command** starts the benchmark-wrapped Gateway; an
+independent Gateway process with an empty/irrelevant trace is not evidence.
+
+After the benchmark session, inspect `golden-run-draft.json` and its trace:
+`pipeline_provenance.input_asset_sha256` must match the unchanged seed;
+`output_asset_sha256` must represent valid saved working-copy bytes and
+differ from the input digest. Missing/empty/corrupt output, modified seed,
+or an unchanged output must not be promoted to an accepted correction.
+Machine-local paths remain outside the portable report.
+
+Reopen the saved result in installed Blockbench. Confirm the same project,
+relevant geometry/UV/texture/animation state and unaffected model parts.
+Compare fresh model evidence against the approved reference and obtain
+explicit human review. Keep `quality_verdict=UNVERIFIED` and
+`accepted_result=null` until these independent gates pass. A hash difference,
+synthetic fixture PASS or successful tool call is not visual approval.
+
+On the exact-source checkout, the focused benchmark gate is:
+
+```bash
+cd mcp
+bun test tests/benchmark/golden-benchmark-session-runner.test.ts tests/benchmark/golden-authoring-run-contract.test.ts tests/benchmark/golden-session-comparison.test.ts
+bun run verify:full
+```
+
+These commands are instructions, **not** proof that the current HEAD was
+executed. CI remains intentionally disabled; run them only in an authorized
+`LOCAL_CODE` context or an independently authorized verification environment.
+
 ## 9. Gateway Stability
 
 Only when lifecycle proof is requested: use one continuous client task and prove offline→online recovery, AUTHORING↔Animation catalog handoff, plugin reload recovery, and close/open recovery without a new chat. Geometry↔Texturing remains shared AUTHORING. After `OUTCOME_UNKNOWN`, inspect state before retry.

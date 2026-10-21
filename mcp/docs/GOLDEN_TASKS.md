@@ -45,16 +45,27 @@ with identical initial bytes. It reuses the existing read-only live preflight
 and `get_project_info` capability before Gateway starts, recording
 `input_asset_sha256`, `input_project_uuid` and matching Runtime build identity
 in the usual `golden-run-draft.json`. It does not copy, mutate or save a model.
+After the benchmark Gateway child exits, the runner checks that the immutable
+seed still matches the original digest and reads the separate saved `.bbmodel`
+working copy. Only valid JSON containing Blockbench document metadata receives
+an `output_asset_sha256` in the draft. Missing, empty, corrupt or unreadable
+output retains a null output digest and a diagnostic; the trace remains available.
+Absolute local paths do not enter the portable run report.
 
-An accepted correction requires the captured live project identity; a later
-comparison rejects missing or different starting model SHA-256. This is a
+An accepted correction requires the captured live project identity and a valid
+saved `output_asset_sha256` distinct from `input_asset_sha256`. A later
+comparison rejects missing or different starting model SHA-256 and rejects
+a correction whose output digest is missing, invalid or input-identical.
+Baseline and candidate outputs need not hash identically. This is a
 benchmark-only preflight (including one read-only `get_project_info` call)
 with **zero extra MCP calls or model-context loading during normal authoring**.
 Preserve the immutable seed and open a distinct saved working copy in Blockbench
 before the benchmark; editing the seed or starting from an already-modified
 working copy is rejected. The preflight proves only the starting moment, not
 ongoing project identity, visual improvement, or unaffected-state preservation;
-those still require fresh evidence and human review.
+those still require fresh evidence and human review. A changed saved-file
+digest does not establish native reopen success, UV quality, visual/reference
+fidelity, preservation of unaffected parts, or human acceptance.
 
 ## Required Run Record
 
