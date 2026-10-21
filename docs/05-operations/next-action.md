@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV native duplicate-tab fail-closed follow-up: source adapter now validates the active Blockbench project is the sole open tab matching its UUID, not just a string identity; one apply transaction also retains the actual project object. Ambiguous duplicated UUIDs refuse UV plan, apply, and restore before mutating an unrelated tab. Reuses the existing native `ModelProject.all` authority and UV adapter; no new global registry or public tools. Source/contract only; Bun/live Blockbench checks NOT EXECUTED.
+
+
 2026-10-22 UV U7 project-affinity hardening (REMOTE_GITHUB): native UV snapshots now include verified Blockbench project UUID in their fingerprints; a plan for project A cannot be replayed against byte-identical project B. The existing Blockbench adapter binds one project UUID for read/apply/restore/Undo lifecycle and rejects drift before mutation or foreign rollback. Existing UV contract/service/native-adapter regression owners expanded; no second registry, Gateway tool, planner or transport. Generator-backed `manage_uv_layout` registration remains UNAVAILABLE and was not enabled without the required generator/executable proof. Source review only; Bun/typechecks/Blockbench NOT EXECUTED.
 
 

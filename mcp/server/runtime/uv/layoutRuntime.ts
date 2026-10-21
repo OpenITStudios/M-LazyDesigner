@@ -18,6 +18,24 @@ const UV_FACE_KEYS: readonly UvFaceKey[] = [
   "down",
 ];
 
+/**
+ * Native project identity is stronger than UUID alone: copied Blockbench tabs
+ * can retain duplicate UUIDs. The active project must be the one unique match.
+ */
+function requireUniqueCurrentUvProject(): ModelProject {
+  const current = typeof Project !== "undefined" ? Project : null;
+  if (!current || typeof current.uuid !== "string" || !current.uuid.trim()) {
+    throw new Error("UV_PROJECT_ID_REQUIRED: active Blockbench project has no stable UUID.");
+  }
+  const projects = typeof ModelProject !== "undefined" && Array.isArray(ModelProject.all)
+    ? ModelProject.all : [];
+  const matching = projects.filter(candidate => candidate.uuid === current.uuid);
+  if (matching.length !== 1 || matching[0] !== current) {
+    throw new Error("UV_PROJECT_AFFINITY_AMBIGUOUS: expected one unique active project tab.");
+  }
+  return current;
+}
+
 function requireProjectUvDimensions(): [number, number] {
   if (!Project) {
     throw new Error(
@@ -78,10 +96,7 @@ function blockbenchCubeSnapshot(cube: Cube): UvCubeSnapshot {
 export function readBlockbenchUvNativeSource(): UvNativeSourceSnapshot {
   const [logicalWidth, logicalHeight] =
     requireProjectUvDimensions();
-  const projectUuid = Project?.uuid;
-  if (typeof projectUuid !== "string" || !projectUuid.trim()) {
-    throw new Error("UV_PROJECT_ID_REQUIRED: active Blockbench project has no stable UUID.");
-  }
+  const projectUuid = requireUniqueCurrentUvProject().uuid;
   return buildUvNativeSourceSnapshot(
     (Cube.all ?? []).map((cube: Cube) =>
       blockbenchCubeSnapshot(cube)
@@ -95,6 +110,7 @@ export function readBlockbenchUvNativeSource(): UvNativeSourceSnapshot {
 export function applyBlockbenchUvInstructions(
   instructions: readonly UvNativeMutationInstruction[]
 ): void {
+  requireUniqueCurrentUvProject();
   for (const instruction of instructions) {
     const cube = resolveCubeUuid(instruction.cube_uuid);
     if (instruction.kind === "BOX_UV_OFFSET") {
@@ -131,7 +147,8 @@ export function applyBlockbenchUvInstructions(
 export function restoreBlockbenchUvNativeSource(
   snapshot: UvNativeSourceSnapshot
 ): void {
-  if (!snapshot.project_uuid || Project?.uuid !== snapshot.project_uuid) {
+  if (!snapshot.project_uuid ||
+      requireUniqueCurrentUvProject().uuid !== snapshot.project_uuid) {
     throw new Error(
       "UV_PROJECT_AFFINITY_LOST: cannot restore UV state into another Blockbench project."
     );
@@ -183,12 +200,11 @@ function cubesForInstructions(
 }
 
 export function createBlockbenchUvApplyAdapter(): UvApplyAdapter {
-  const boundProjectUuid = Project?.uuid;
-  if (typeof boundProjectUuid !== "string" || !boundProjectUuid.trim()) {
-    throw new Error("UV_PROJECT_ID_REQUIRED: cannot bind a UV transaction without a project UUID.");
-  }
+  const boundProject = requireUniqueCurrentUvProject();
+  const boundProjectUuid = boundProject.uuid;
   const requireBoundProject = () => {
-    if (Project?.uuid !== boundProjectUuid) {
+    if (requireUniqueCurrentUvProject() !== boundProject ||
+        Project?.uuid !== boundProjectUuid) {
       throw new Error("UV_PROJECT_AFFINITY_LOST: active project changed during UV transaction.");
     }
   };
