@@ -296,7 +296,10 @@ Implemented source contracts now include:
 7. atomic apply harness with rollback;
 8. scoped UV receipt;
 9. precise downstream mapping/seam/texture/PBR invalidation model;
-10. bounded content-addressed plan registry;
+10. bounded content-addressed, one-shot plan registry: a validated apply
+    consumes its handle synchronously before any native operation. An
+    interrupted or outcome-unknown write cannot replay the old plan; a fresh
+    plan is required against the current Blockbench source;
 11. compact dry-run report;
 12. Blockbench read/apply/restore/Undo adapter with rollback fingerprint
     verification, uncertain native Undo commit isolation, and preserved failure

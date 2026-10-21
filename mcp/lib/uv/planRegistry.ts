@@ -61,6 +61,17 @@ export class UvPlanRegistry {
     return stored;
   }
 
+  /**
+   * Claim a handle once before any native apply. The same plan cannot be
+   * replayed after interruption, a failed Undo commit or a successful write.
+   * Source/receipt checks remain in the caller before this destructive claim.
+   */
+  consume(planId: string): UvStoredPlan {
+    const stored = this.get(planId);
+    this.entries.delete(planId);
+    return stored;
+  }
+
   size(): number {
     return this.entries.size;
   }

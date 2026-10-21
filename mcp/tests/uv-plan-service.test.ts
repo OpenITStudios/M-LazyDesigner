@@ -82,6 +82,9 @@ describe("UV plan registry and service", () => {
     registry.put(fakePlan, "sha256:c", fakeReport);
     expect(registry.size()).toBe(2);
     expect(() => registry.get(first.plan_id)).toThrow(/UV_PLAN_NOT_FOUND/);
+    const claimed = registry.put(fakePlan, "sha256:one-shot", fakeReport);
+    expect(registry.consume(claimed.plan_id)).toBe(claimed);
+    expect(() => registry.consume(claimed.plan_id)).toThrow(/UV_PLAN_NOT_FOUND/);
   });
 
   test("no-op UV plan rejects before constructing a native mutation adapter", async () => {
@@ -156,6 +159,48 @@ describe("UV plan registry and service", () => {
     });
     expect(applied.receipt.changed_cube_ids).toEqual(["b"]);
     expect(applied.invalidation.geometry_structure.stale).toBe(false);
+    await expect(service.apply({
+      plan_id: planned.plan_id,
+      expected_source_fingerprint: planned.source_fingerprint,
+    })).rejects.toThrow(/UV_PLAN_NOT_FOUND/);
+  });
+
+  test("unknown mutation outcome permanently consumes its plan handle", async () => {
+    let native = nativeFixture();
+    let nativeCalls = 0;
+    const service = createUvLayoutService({
+      readSource: () => native,
+      createApplyAdapter: () => ({
+        readSource: () => native,
+        apply: () => {
+          nativeCalls++;
+          native = structuredClone(native);
+          native.cubes[1].faces[0].uv = [2, 2, 4, 4];
+          throw new Error("native write interrupted");
+        },
+        restore: () => { throw new Error("native restore failed"); },
+        cancelUndo: () => {},
+      }),
+    });
+    const planned = await service.plan({
+      bitmap_width: 32,
+      bitmap_height: 32,
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:b:north"],
+      constraints: [{
+        id: "no-padding",
+        selector: { cube_uuids: ["b"] },
+        constraints: { padding_pixels: 0 },
+      }],
+    });
+    const apply = {
+      plan_id: planned.plan_id,
+      expected_source_fingerprint: planned.source_fingerprint,
+    };
+    await expect(service.apply(apply)).rejects.toThrow(/UV_OUTCOME_UNKNOWN/);
+    expect(nativeCalls).toBe(1);
+    await expect(service.apply(apply)).rejects.toThrow(/UV_PLAN_NOT_FOUND/);
+    expect(nativeCalls).toBe(1);
   });
 
   test("service automatically derives bitmap dimensions when the runtime provides one base atlas", async () => {

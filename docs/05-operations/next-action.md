@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV one-shot apply handles: the existing bounded `UvPlanRegistry` now provides `consume()`, and `createUvLayoutService.apply` claims each validated actionable plan before creating a native adapter. This prevents duplicate/concurrent apply and repeat execution of a plan after `UV_OUTCOME_UNKNOWN`, while retaining existing source-check, blocked-plan and no-op preflights. The existing `uv-plan-service.test.ts` owns reuse and interrupted-mutation regressions. This is REMOTE_GITHUB source/static authoring; Bun and native Blockbench NOT EXECUTED. Default UV Runtime registration and generator-owned documentation remain unchanged pending a toolchain-capable coordinated activation.
+
+
 2026-10-22 UV no-op and receipt integrity: the existing UV service refuses an apply with zero moved islands before creating the native adapter or Undo; the receipt validator rejects empty changed islands/cubes/moves and unchanged source fingerprints, preventing false `uv_layout_current` readiness. Focused contract cases were added to existing `uv-plan-service.test.ts` and `uv-plan-branch-semantics.test.ts`. GitHub source/static only; no Bun/TypeScript/native execution and no active Runtime registration or generated API changes.
 
 

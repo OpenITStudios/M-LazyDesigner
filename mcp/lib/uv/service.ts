@@ -200,9 +200,13 @@ export function createUvLayoutService(
         );
       }
 
+      // Claim synchronously before creating the adapter or awaiting native
+      // work. A second apply, including a retry after OUTCOME_UNKNOWN, must
+      // replan and revalidate the currently authored UV source.
+      const claimed = registry.consume(input.plan_id);
       const receipt = await applyUvLayoutPlanAtomic(
-        stored.plan,
-        stored.source_fingerprint,
+        claimed.plan,
+        claimed.source_fingerprint,
         dependencies.createApplyAdapter()
       );
       return {
