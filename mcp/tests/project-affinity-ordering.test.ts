@@ -17,6 +17,20 @@ describe("Runtime project-affinity dispatch ordering", () => {
     expect(phase).toContain("requestStage = prior");
   });
 
+  test("queued direct tool calls read current Stage and profile after earlier handoffs", async () => {
+    const source = await Bun.file("server/net.ts").text();
+    const queue = source.indexOf("runRuntimeOperationExclusive(generation, async () => {");
+    const stageRead = source.indexOf("requestedAuthoringPhase ?? getActiveMcpAuthoringStage()", queue);
+    const profileRead = source.indexOf("const executionProfile = getActiveMcpRegistrationProfile()", queue);
+    const execution = source.indexOf("() => dispatch(executionPhase, executionProfile)", queue);
+    const done = source.indexOf("}, { signal: nativeRequestAbort.signal })", execution);
+    expect(stageRead).toBeGreaterThan(queue);
+    expect(profileRead).toBeGreaterThan(stageRead);
+    expect(execution).toBeGreaterThan(profileRead);
+    expect(done).toBeGreaterThan(execution);
+    expect(source).toContain("dispatch(effectiveAuthoringPhase, activeProfile)");
+  });
+
   test("queued tool calls re-check socket liveness before entering native project dispatch", async () => {
     const source = await Bun.file("server/net.ts").text();
     const queue = source.indexOf("runRuntimeOperationExclusive(generation, async () => {");

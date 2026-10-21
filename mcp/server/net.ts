@@ -427,19 +427,24 @@ export default function createNetServer (
           }
         }
         try {
-          const execute = async () => await handleStatelessMcpRequest(
-            webRequest,
-            effectiveAuthoringPhase,
-            activeProfile,
-            requestedAuthoringPhase !== null
-          )
-          const dispatch = async () => needsProjectContext
-            ? await runWithRuntimeProjectAffinity(
-                requestedProjectUuid,
-                allowProjectTransition,
-                execute
-              )
-            : await execute()
+          const dispatch = async (
+            executionPhase: McpAuthoringStage,
+            executionProfile: ReturnType<typeof getActiveMcpRegistrationProfile>
+          ) => {
+            const execute = async () => await handleStatelessMcpRequest(
+              webRequest,
+              executionPhase,
+              executionProfile,
+              requestedAuthoringPhase !== null
+            )
+            return needsProjectContext
+              ? await runWithRuntimeProjectAffinity(
+                  requestedProjectUuid,
+                  allowProjectTransition,
+                  execute
+                )
+              : await execute()
+          }
           const result = routedMethod === 'tools/call'
             ? await runRuntimeOperationExclusive(generation, async () => {
                 if (
@@ -449,13 +454,19 @@ export default function createNetServer (
                 ) {
                   throw new RuntimeRequestAbandonedError()
                 }
+                // A direct request can wait while a prior call switches the
+                // Blockbench-global Stage/profile. Snapshot at execution,
+                // never when the HTTP request first entered the queue.
+                const executionPhase =
+                  requestedAuthoringPhase ?? getActiveMcpAuthoringStage()
+                const executionProfile = getActiveMcpRegistrationProfile()
                 return await runWithMcpStageRequest(
-                  effectiveAuthoringPhase,
+                  executionPhase,
                   requestedAuthoringPhase !== null,
-                  dispatch
+                  () => dispatch(executionPhase, executionProfile)
                 )
               }, { signal: nativeRequestAbort.signal })
-            : await dispatch()
+            : await dispatch(effectiveAuthoringPhase, activeProfile)
 
           // Finite JSON/JSON-RPC responses have Content-Length and may reuse
           // the client socket. Preserve explicit Connection: close, while
