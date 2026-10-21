@@ -220,6 +220,19 @@ ranking/branch results with and without a pre-expanded query. No measured
 runtime acceleration or accepted-result token reduction is claimed until an
 exact-SHA executable benchmark supplies evidence.
 
+## Control Context Headroom CPU Reuse — SOURCE OPTIMIZATION
+
+Optional non-blocking facts previously caused repeated full context JSON/UTF-8
+serialization, once per attempted item. The existing Control headroom projector
+now retains an exact UTF-8 JSON byte accumulator, including field/array/comma
+overhead, and measures only each new string. The actual final projection and
+its diagnostics still undergo the canonical complete serialization and hash.
+
+A focused regression compares the incremental decisions against full JSON
+serialization across quote/escape/non-ASCII strings, rejected oversized items
+and different budgets. This changes no decision evidence, byte limits, tools,
+network calls or policy; executable performance measurements remain pending.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

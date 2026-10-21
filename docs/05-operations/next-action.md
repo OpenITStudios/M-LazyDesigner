@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP Control headroom source optimization: eliminated whole-context JSON serialization on every optional fact in `gateway/control/contextHeadroom.ts` by maintaining the exact incremental UTF-8 JSON byte count (field key, brackets, commas and string escaping included). Retained the canonical final byte diagnostic/hash, skip-long-item behavior and required-evidence precedence. Extended `gateway-control-context-headroom.test.ts` to compare against full serialization across Unicode/escaped items and budgets. No new cache, data model or Gateway tool. Static/source only; Bun/types/benchmarks NOT EXECUTED.
+
+
+
 2026-10-22 MCP architecture audit / capability discovery source optimization: reviewed repository inventory, Gateway catalog, semantic intelligence, Control headroom, runtime queue, native inspector/texture diagnostics and verification routing. One per-request token expansion is shared across semantic and BM25 ranking; fixed manifest branch semantics are indexed and tokenized once. Existing intelligence regression owner checks direct/prepared ranking equivalence. No new tools, transport, authored-state cache or changed capability semantics. REMOTE_GITHUB source/static only; Bun/TypeScript and performance measurements NOT EXECUTED; CI remains intentionally disabled.
 
 

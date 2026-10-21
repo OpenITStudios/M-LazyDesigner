@@ -156,6 +156,50 @@ describe("Control stage-context headroom", () => {
     expect(result.diagnostics.after_bytes).toBeLessThanOrEqual(requiredBytes + 120);
   });
 
+  test("incremental UTF-8 budget matches full JSON serialization for mixed optional strings", () => {
+    const values = [
+      "first", "🚀🌍", "quote \" & newline\\n",
+      "large".repeat(500), "backslash \\\\ path",
+      "短い情報", "another short item",
+    ];
+    const input = fixture({
+      non_blocking_unknowns_relevant_to_stage: values,
+      reference_document: null,
+      workspace: { ...fixture().workspace, next_step: null },
+    });
+    const withoutOptions = fixture({
+      non_blocking_unknowns_relevant_to_stage: [],
+      reference_document: null,
+      workspace: { ...fixture().workspace, next_step: null },
+    });
+    const base = projectControlStageContextWithHeadroom(
+      withoutOptions, 10_000
+    ).context;
+    const bytes = (value: unknown) =>
+      new TextEncoder().encode(JSON.stringify(value)).byteLength;
+    const requiredBytes = bytes(base);
+
+    for (let extra = 0; extra <= 170; extra += 5) {
+      const budget = requiredBytes + extra;
+      const expected: string[] = [];
+      for (const value of values) {
+        const candidate = {
+          ...base,
+          non_blocking_unknowns_relevant_to_stage: [...expected, value],
+        };
+        if (bytes(candidate) <= budget) expected.push(value);
+      }
+      const result = projectControlStageContextWithHeadroom(input, budget);
+      expect(result.context.non_blocking_unknowns_relevant_to_stage ?? [])
+        .toEqual(expected);
+      expect(result.diagnostics.after_bytes).toBe(bytes(result.context));
+      expect(result.diagnostics.after_bytes).toBeLessThanOrEqual(budget);
+      expect(result.diagnostics.dropped_useful_items).toBe(
+        values.length - expected.length
+      );
+    }
+  });
+
   test("reference recovery provenance is REQUIRED even when the proxy budget is exceeded", () => {
     const recovery = {
       source_path: "/pkg/REFERENCE.json",

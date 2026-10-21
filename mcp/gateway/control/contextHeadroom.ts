@@ -132,18 +132,27 @@ function addStringItemsWithinBudget(
   budgetBytes: number
 ): { context: ProjectedControlStageContext; dropped: number } {
   if (values.length === 0) return { context: base, dropped: 0 };
-  let projected = base;
-  let accepted = 0;
+  // This field is absent from requiredProjection. JSON adds a single field
+  // before the closing object brace; measure its exact UTF-8 JSON overhead
+  // once instead of serializing the growing entire context for every item.
+  const fieldOverhead = new TextEncoder().encode(
+    `,${JSON.stringify(field)}:[]`
+  ).byteLength;
+  let currentBytes = serializedUtf8Bytes(base);
+  const accepted: string[] = [];
   for (const value of values) {
-    const current = projected[field] ?? [];
-    const candidate = { ...projected, [field]: [...current, value] };
+    const itemBytes = serializedUtf8Bytes(value);
+    const addedBytes = itemBytes + (accepted.length === 0 ? fieldOverhead : 1);
     // A long optional item must not prevent later, shorter useful items from
     // fitting. Preserve original order among accepted items.
-    if (!fitsBudget(candidate, budgetBytes)) continue;
-    projected = candidate;
-    accepted += 1;
+    if (currentBytes + addedBytes > budgetBytes) continue;
+    currentBytes += addedBytes;
+    accepted.push(value);
   }
-  return { context: projected, dropped: values.length - accepted };
+  return {
+    context: accepted.length > 0 ? { ...base, [field]: accepted } : base,
+    dropped: values.length - accepted.length,
+  };
 }
 
 export function normalizeControlHeadroomPolicy(
