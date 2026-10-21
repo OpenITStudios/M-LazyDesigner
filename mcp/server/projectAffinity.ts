@@ -76,8 +76,18 @@ export async function runWithRuntimeProjectAffinity<T> (
         `Blockbench cannot activate Gateway-bound project ${requestedProjectUuid} because the current or target project tab is locked.`
       );
     }
-    const selected = target.select();
-    if (selected !== true || currentRuntimeProject() !== target) {
+    let selected = false;
+    try {
+      selected = target.select() === true;
+    } catch {
+      // No authoring operation has started. Restore a partial native tab
+      // selection before refusing the request.
+    }
+    if (!selected || currentRuntimeProject() !== target) {
+      if (currentRuntimeProject() === target && previousProject &&
+          runtimeProjects().includes(previousProject)) {
+        try { previousProject.select(); } catch { /* no mutation was dispatched */ }
+      }
       throw new RuntimeProjectContextError(
         `Blockbench could not activate Gateway-bound project ${requestedProjectUuid}.`
       );
@@ -91,7 +101,20 @@ export async function runWithRuntimeProjectAffinity<T> (
   if (!allowProjectTransition) target.locked = true;
 
   try {
-    const result = await operation();
+    let result: T;
+    try {
+      result = await operation();
+    } catch (cause) {
+      // A failed tool can already have mutated a model. If the active tab
+      // drifted as well, do not let its ordinary error imply a safe retry.
+      if (!allowProjectTransition && currentRuntimeProject() !== target) {
+        throw new RuntimeProjectContextError(
+          `Blockbench project context changed after a failed operation on Gateway-bound project ${requestedProjectUuid}; mutation outcome is unknown.`,
+          true
+        );
+      }
+      throw cause;
+    }
     if (!allowProjectTransition && currentRuntimeProject() !== target) {
       throw new RuntimeProjectContextError(
         `Blockbench project context changed while Gateway-bound project ${requestedProjectUuid} was executing.`,
@@ -116,7 +139,22 @@ export async function runWithRuntimeProjectAffinity<T> (
       runtimeProjects().includes(previousProject) &&
       currentRuntimeProject() !== previousProject
     ) {
-      previousProject.select();
+      // Failure to restore the user's prior tab must never accompany a
+      // successful result. The native operation may already have completed.
+      let restored = false;
+      try {
+        restored = previousProject.select() === true &&
+          currentRuntimeProject() === previousProject;
+      } catch {
+        // Convert a native editor selection failure to an explicit
+        // outcome-unknown error; do not retry a possibly completed mutation.
+      }
+      if (!restored) {
+        throw new RuntimeProjectContextError(
+          `Blockbench could not restore the previous project tab after Gateway-bound project ${requestedProjectUuid}; operation outcome requires inspection.`,
+          true
+        );
+      }
     }
   }
 }

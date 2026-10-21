@@ -144,6 +144,72 @@ describe("Blockbench project affinity runtime", () => {
     expect((globalThis as any).Project).toBe(b);
   });
 
+
+  test("failed native operation plus project drift remains outcome-unknown and never looks retry-safe", async () => {
+    const { a, b, makeProject } = installProjects("project-b");
+    const foreign = makeProject("project-c");
+    let error: unknown;
+    try {
+      await runWithRuntimeProjectAffinity("project-a", false, async () => {
+        expect((globalThis as any).Project).toBe(a);
+        (globalThis as any).Project = foreign;
+        throw new Error("tool validation failure after a possible mutation");
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(RuntimeProjectContextError);
+    expect((error as RuntimeProjectContextError).outcomeUnknown).toBe(true);
+    expect((error as Error).message).toContain("outcome is unknown");
+    expect(a.locked).toBe(false);
+    expect((globalThis as any).Project).toBe(b);
+  });
+
+  test("restoration failure cannot return success after model operation completed", async () => {
+    const { a, b } = installProjects("project-b");
+    b.select = () => false;
+    let executed = false;
+    let error: unknown;
+    try {
+      await runWithRuntimeProjectAffinity("project-a", false, async () => {
+        executed = true;
+        return "operation succeeded";
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(executed).toBe(true);
+    expect(error).toBeInstanceOf(RuntimeProjectContextError);
+    expect((error as RuntimeProjectContextError).outcomeUnknown).toBe(true);
+    expect((globalThis as any).Project).toBe(a);
+    expect(a.locked).toBe(false);
+    // No stale affinity lease may disguise the actual active tab after failure.
+    expect(getRuntimeProjectHealth(null).active_project_uuid).toBe("project-a");
+  });
+
+  test("failed project select with a partial tab change restores prior tab before any tool runs", async () => {
+    const { a, b } = installProjects("project-b");
+    const originalSelect = a.select;
+    a.select = () => {
+      originalSelect.call(a);
+      return false;
+    };
+    let executed = false;
+    let error: unknown;
+    try {
+      await runWithRuntimeProjectAffinity("project-a", false, async () => {
+        executed = true;
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(executed).toBe(false);
+    expect(error).toBeInstanceOf(RuntimeProjectContextError);
+    expect((error as RuntimeProjectContextError).outcomeUnknown).toBe(false);
+    expect((globalThis as any).Project).toBe(b);
+    expect(b.selected).toBe(true);
+  });
+
   test("project creation may intentionally transition affinity without restoring the old tab", async () => {
     const { projects, a, makeProject } = installProjects("project-b");
 
