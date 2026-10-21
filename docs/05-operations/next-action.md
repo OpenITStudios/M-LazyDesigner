@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV native Cube identity and batch-preflight: `server/runtime/uv/layoutRuntime.ts` now rejects blank/duplicate Cube UUIDs, validates all Cube modes/faces before beginning a native UV apply batch, and preflights all rollback Cube targets before restoring any. The existing `uv-blockbench-runtime-adapter.test.ts` owns three focused regressions; no new engine, registry, Runtime capability or Gateway API was added. GitHub source/static only; Bun, typechecks and LIVE_BLOCKBENCH NOT EXECUTED. Generator-coupled UV Runtime registration remains pending.
+
+
 2026-10-22 UV one-shot apply handles: the existing bounded `UvPlanRegistry` now provides `consume()`, and `createUvLayoutService.apply` claims each validated actionable plan before creating a native adapter. This prevents duplicate/concurrent apply and repeat execution of a plan after `UV_OUTCOME_UNKNOWN`, while retaining existing source-check, blocked-plan and no-op preflights. The existing `uv-plan-service.test.ts` owns reuse and interrupted-mutation regressions. This is REMOTE_GITHUB source/static authoring; Bun and native Blockbench NOT EXECUTED. Default UV Runtime registration and generator-owned documentation remain unchanged pending a toolchain-capable coordinated activation.
 
 

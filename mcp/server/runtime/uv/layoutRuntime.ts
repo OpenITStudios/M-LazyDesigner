@@ -62,10 +62,24 @@ function requireProjectUvDimensions(): [number, number] {
   return [width, height];
 }
 
-function resolveCubeUuid(uuid: string): Cube {
-  const cube = (Cube.all ?? []).find(
-    (candidate: Cube) => candidate.uuid === uuid
-  );
+function currentUvCubesByUuid(): Map<string, Cube> {
+  const byUuid = new Map<string, Cube>();
+  for (const cube of Cube.all ?? []) {
+    if (typeof cube.uuid !== "string" || !cube.uuid.trim()) {
+      throw new Error("UV_CUBE_ID_REQUIRED: every Cube must have a stable non-empty UUID.");
+    }
+    if (byUuid.has(cube.uuid)) {
+      throw new Error(
+        `UV_CUBE_ID_AMBIGUOUS: Cube UUID "${cube.uuid}" belongs to multiple elements.`
+      );
+    }
+    byUuid.set(cube.uuid, cube);
+  }
+  return byUuid;
+}
+
+function resolveCubeUuid(uuid: string, cubes: ReadonlyMap<string, Cube>): Cube {
+  const cube = cubes.get(uuid);
   if (!cube) {
     throw new Error(
       `UV native adapter could not find Cube UUID "${uuid}".`
@@ -101,7 +115,7 @@ export function readBlockbenchUvNativeSource(): UvNativeSourceSnapshot {
     requireProjectUvDimensions();
   const projectUuid = requireUniqueCurrentUvProject().uuid;
   return buildUvNativeSourceSnapshot(
-    (Cube.all ?? []).map((cube: Cube) =>
+    [...currentUvCubesByUuid().values()].map((cube) =>
       blockbenchCubeSnapshot(cube)
     ),
     logicalWidth,
@@ -114,32 +128,39 @@ export function applyBlockbenchUvInstructions(
   instructions: readonly UvNativeMutationInstruction[]
 ): void {
   requireUniqueCurrentUvProject();
-  for (const instruction of instructions) {
-    const cube = resolveCubeUuid(instruction.cube_uuid);
+  const cubes = currentUvCubesByUuid();
+  // Validate the entire batch before the first native extend(). A missing or
+  // incompatible later target must never leave an earlier Cube half-edited.
+  const prepared = instructions.map((instruction) => {
+    const cube = resolveCubeUuid(instruction.cube_uuid, cubes);
     if (instruction.kind === "BOX_UV_OFFSET") {
       if (cube.box_uv !== true) {
         throw new Error(
           `UV native adapter expected Box UV for Cube ${cube.uuid}.`
         );
       }
+    } else {
+      if (cube.box_uv === true) {
+        throw new Error(
+          `UV native adapter expected per-face UV for Cube ${cube.uuid}.`
+        );
+      }
+      if (!cube.faces[instruction.face]) {
+        throw new Error(
+          `UV native adapter could not find face ${instruction.face} on Cube ${cube.uuid}.`
+        );
+      }
+    }
+    return { instruction, cube };
+  });
+  for (const { instruction, cube } of prepared) {
+    if (instruction.kind === "BOX_UV_OFFSET") {
       cube.extend({
         uv_offset: [...instruction.uv_offset] as [number, number],
       });
       continue;
     }
-
-    if (cube.box_uv === true) {
-      throw new Error(
-        `UV native adapter expected per-face UV for Cube ${cube.uuid}.`
-      );
-    }
-    const face = cube.faces[instruction.face];
-    if (!face) {
-      throw new Error(
-        `UV native adapter could not find face ${instruction.face} on Cube ${cube.uuid}.`
-      );
-    }
-    face.extend({
+    cube.faces[instruction.face].extend({
       uv: [...instruction.uv] as [number, number, number, number],
       rotation: instruction.rotation,
     });
@@ -166,8 +187,24 @@ export function restoreBlockbenchUvNativeSource(
     );
   }
 
-  for (const saved of snapshot.cubes) {
-    const cube = resolveCubeUuid(saved.uuid);
+  const cubes = currentUvCubesByUuid();
+  if (cubes.size !== snapshot.cubes.length) {
+    throw new Error("UV_ROLLBACK_TARGET_CHANGED: Cube count changed before UV restoration.");
+  }
+  // Validate every Cube/face before restoring any of them. A missing later
+  // target must not partially rewrite an earlier Cube during rollback.
+  const prepared = snapshot.cubes.map((saved) => {
+    const cube = resolveCubeUuid(saved.uuid, cubes);
+    for (const face of saved.faces) {
+      if (!cube.faces[face.face]) {
+        throw new Error(
+          `UV rollback could not find face ${face.face} on Cube ${saved.uuid}.`
+        );
+      }
+    }
+    return { saved, cube };
+  });
+  for (const { saved, cube } of prepared) {
     cube.extend({
       box_uv: saved.box_uv,
       autouv: saved.autouv as 0 | 1 | 2,
@@ -199,7 +236,8 @@ function cubesForInstructions(
   const ids = [...new Set(
     instructions.map((instruction) => instruction.cube_uuid)
   )];
-  return ids.map(resolveCubeUuid);
+  const cubes = currentUvCubesByUuid();
+  return ids.map((id) => resolveCubeUuid(id, cubes));
 }
 
 export function createBlockbenchUvApplyAdapter(): UvApplyAdapter {
