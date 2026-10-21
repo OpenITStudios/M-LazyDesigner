@@ -74,6 +74,19 @@ function requireFaceUv(
   return [value[0], value[1], value[2], value[3]];
 }
 
+function requireFiniteCubeBounds(
+  value: readonly number[],
+  label: string
+): [number, number, number] {
+  if (
+    value.length !== 3 ||
+    value.some((coordinate) => !Number.isFinite(coordinate))
+  ) {
+    throw new Error(`UV_NATIVE_INVALID_GEOMETRY: ${label} requires three finite coordinates.`);
+  }
+  return [value[0], value[1], value[2]];
+}
+
 export function buildUvNativeSourceSnapshot(
   cubes: readonly UvCubeSnapshot[],
   logicalWidth: number,
@@ -105,8 +118,18 @@ export function buildUvNativeSourceSnapshot(
       );
     }
     cubeUuids.add(cube.uuid);
+    requireFiniteCubeBounds(cube.from, `Cube ${cube.uuid} from`);
+    requireFiniteCubeBounds(cube.to, `Cube ${cube.uuid} to`);
+    if (!Number.isFinite(cube.autouv)) {
+      throw new Error(`UV_NATIVE_INVALID_AUTOUV: Cube "${cube.uuid}" has a non-finite auto-UV mode.`);
+    }
     const faces = new Set<string>();
     for (const face of cube.faces) {
+      if (face.rotation !== undefined && !Number.isFinite(face.rotation)) {
+        throw new Error(
+          `UV_NATIVE_INVALID_ROTATION: Cube "${cube.uuid}" face "${face.face}" has a non-finite rotation.`
+        );
+      }
       if (faces.has(face.face)) {
         throw new Error(
           `UV_NATIVE_DUPLICATE_FACE: Cube "${cube.uuid}" repeats face "${face.face}".`
@@ -125,16 +148,8 @@ export function buildUvNativeSourceSnapshot(
       .map((cube) => ({
         uuid: cube.uuid,
         name: cube.name,
-        from: [
-          cube.from[0],
-          cube.from[1],
-          cube.from[2],
-        ] as [number, number, number],
-        to: [
-          cube.to[0],
-          cube.to[1],
-          cube.to[2],
-        ] as [number, number, number],
+        from: requireFiniteCubeBounds(cube.from, `Cube ${cube.uuid} from`),
+        to: requireFiniteCubeBounds(cube.to, `Cube ${cube.uuid} to`),
         box_uv: cube.box_uv,
         uv_offset: requireVec2(cube.uv_offset),
         autouv: cube.autouv,

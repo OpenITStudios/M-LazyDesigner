@@ -96,6 +96,28 @@ describe("UV U7 apply contracts", () => {
       .toThrow(/UV_NATIVE_DUPLICATE_FACE/);
   });
 
+  test("native snapshots reject non-finite geometry, auto UV and face rotation before hashing", () => {
+    const invalidFrom = cubes();
+    invalidFrom[0].from[0] = Number.NaN;
+    expect(() => buildUvNativeSourceSnapshot(invalidFrom, 32, 32))
+      .toThrow(/UV_NATIVE_INVALID_GEOMETRY/);
+
+    const invalidTo = cubes();
+    invalidTo[0].to[1] = Number.POSITIVE_INFINITY;
+    expect(() => buildUvNativeSourceSnapshot(invalidTo, 32, 32))
+      .toThrow(/UV_NATIVE_INVALID_GEOMETRY/);
+
+    const invalidAutoUv = cubes();
+    invalidAutoUv[0].autouv = Number.NaN;
+    expect(() => buildUvNativeSourceSnapshot(invalidAutoUv, 32, 32))
+      .toThrow(/UV_NATIVE_INVALID_AUTOUV/);
+
+    const invalidRotation = cubes();
+    invalidRotation[0].faces[0].rotation = Number.NaN;
+    expect(() => buildUvNativeSourceSnapshot(invalidRotation, 32, 32))
+      .toThrow(/UV_NATIVE_INVALID_ROTATION/);
+  });
+
   test("planner never rotates Box-UV islands because native offset cannot represent it", () => {
     const snapshot = buildUvLayoutSnapshot(
       [{

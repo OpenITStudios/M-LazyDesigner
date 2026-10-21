@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV native snapshot numeric validation: the shared source builder now rejects non-finite Cube bounds, auto-UV modes and face rotations before serializing/hashing the content-addressed native snapshot. Existing U7 contract tests cover NaN and Infinity inputs. This is source/static GitHub work only: Bun/TypeScript and live Blockbench NOT EXECUTED. No Runtime registration, generated API, CI, main or release mutation.
+
+
 2026-10-22 UV competing-plan replay guard (source-only): `UvPlanRegistry.consume` now invalidates **all** plan handles sharing the claimed source fingerprint, while retaining unrelated source revisions. This closes the bypass where a second valid plan handle could retry the same source after an uncertain native UV mutation, despite the first handle being consumed. Extended the existing `uv-plan-service.test.ts` with registry-scope, accepted-apply and `UV_OUTCOME_UNKNOWN` competing-plan regressions. Exact-SHA Bun/types/native proof NOT EXECUTED; generator-coupled `manage_uv_layout` Runtime registration and generated API remain deferred together. CI intentionally disabled.
 
 
