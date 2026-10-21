@@ -32,6 +32,90 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(result.map((item) => item.capability_id)).toContain("manage_cubes");
   });
 
+  test("search waits for an in-flight Stage/catalog update instead of returning the old tool surface", async () => {
+    const backend = new BlockitRuntimeBackend(undefined, undefined, { catalogLeaseMs: 5_000 });
+    const before: BackendTool = {
+      name: "manage_cubes", description: "Legacy Geometry surface",
+      annotations: { readOnlyHint: false },
+    };
+    const after: BackendTool = {
+      name: "create_animation", description: "Updated Animation surface",
+      annotations: { readOnlyHint: false },
+    };
+    primeCatalog(backend, [before]);
+    let started!: () => void;
+    let release!: () => void;
+    const entering = new Promise<void>(resolve => { started = resolve; });
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const queue = (backend as any).operationQueue as {
+      run<T>(task: () => Promise<T>): Promise<T>;
+    };
+    const mutation = queue.run(async () => {
+      started();
+      await blocked;
+      primeCatalog(backend, [after]);
+      (backend as any).authoringPhase = "animation";
+    });
+    await entering;
+    const pending = backend.searchCapabilities("create_animation", 4);
+    let settled = false;
+    void pending.then(() => { settled = true; }, () => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    try {
+      release();
+      await mutation;
+      const capabilities = await pending;
+      expect(capabilities.map(item => item.capability_id)).toContain("create_animation");
+      expect(capabilities.map(item => item.capability_id)).not.toContain("manage_cubes");
+    } finally {
+      release();
+    }
+  });
+
+  test("describe cannot return a definition retired by an in-flight Runtime reconnect", async () => {
+    const backend = new BlockitRuntimeBackend(undefined, undefined, { catalogLeaseMs: 5_000 });
+    const before: BackendTool = {
+      name: "inspect_elements", description: "Old version",
+      annotations: { readOnlyHint: true },
+    };
+    const after: BackendTool = {
+      name: "manage_cubes", description: "Current version",
+      annotations: { readOnlyHint: false },
+    };
+    primeCatalog(backend, [before]);
+    let started!: () => void;
+    let release!: () => void;
+    const entering = new Promise<void>(resolve => { started = resolve; });
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const queue = (backend as any).operationQueue as {
+      run<T>(task: () => Promise<T>): Promise<T>;
+    };
+    const reconnect = queue.run(async () => {
+      started();
+      await blocked;
+      primeCatalog(backend, [after]);
+    });
+    await entering;
+    const pending = backend.describeCapability("inspect_elements");
+    let settled = false;
+    void pending.then(() => { settled = true; }, () => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    try {
+      release();
+      await reconnect;
+      await expect(pending).rejects.toMatchObject({
+        code: "CAPABILITY_NOT_FOUND",
+      });
+      await expect(backend.describeCapability("manage_cubes")).resolves.toMatchObject({
+        name: "manage_cubes",
+      });
+    } finally {
+      release();
+    }
+  });
+
   test("describe uses a fresh local catalog without probing Runtime", async () => {
     const backend = new BlockitRuntimeBackend(undefined, undefined, {
       catalogLeaseMs: 5_000,

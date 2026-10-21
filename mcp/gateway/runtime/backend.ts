@@ -161,6 +161,12 @@ export class BlockitRuntimeBackend {
     return this.operationQueue.snapshot();
   }
 
+  /** Do not return an old Stage/project catalog while queued work may change it. */
+  private hasUncontendedFreshCatalog(): boolean {
+    const { active, queued } = this.operationStatus();
+    return active === 0 && queued === 0 && this.hasFreshCatalog();
+  }
+
   private hasFreshCatalog(now: number = Date.now()): boolean {
     // Do not reuse a seemingly fresh local catalog after any unverified
     // transport failure, even when Runtime health returns the same signature.
@@ -591,7 +597,7 @@ export class BlockitRuntimeBackend {
     limit: number = 4,
     context: CapabilitySearchContext = {}
   ): Promise<CapabilitySummary[]> {
-    if (this.hasFreshCatalog()) {
+    if (this.hasUncontendedFreshCatalog()) {
       return searchCapabilityCatalog([...this.catalog.values()], query, limit, {
         ...context,
         authoringPhase: this.authoringPhase,
@@ -610,24 +616,26 @@ export class BlockitRuntimeBackend {
   }
 
   async describeCapability(capability: string): Promise<BackendTool> {
-    if (!this.hasFreshCatalog()) {
-      await this.runExclusive(async () => {
-        if (!this.hasFreshCatalog()) {
-          await this.ensureCatalogUnsafe();
-        }
-      });
-    }
+    const readTool = (): BackendTool => {
+      const tool = this.catalog.get(capability);
+      if (!tool) {
+        throw new GatewayBackendError(
+          "CAPABILITY_NOT_FOUND",
+          `Runtime capability "${capability}" is not exposed by the current LazyDesigner surface.`,
+          true,
+          { capability }
+        );
+      }
+      return tool;
+    };
+    if (this.hasUncontendedFreshCatalog()) return readTool();
 
-    const tool = this.catalog.get(capability);
-    if (!tool) {
-      throw new GatewayBackendError(
-        "CAPABILITY_NOT_FOUND",
-        `Runtime capability "${capability}" is not exposed by the current LazyDesigner surface.`,
-        true,
-        { capability }
-      );
-    }
-    return tool;
+    // Read the definition under the same queue ownership used to revalidate
+    // the catalog. Never release the lock between refreshing and reading.
+    return this.runExclusive(async () => {
+      if (!this.hasFreshCatalog()) await this.ensureCatalogUnsafe();
+      return readTool();
+    });
   }
 
   async invokeCapability(
