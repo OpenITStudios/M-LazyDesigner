@@ -7,6 +7,7 @@ import goldenCorpus from "../fixtures/golden-task-cases.json";
 import {
   buildGoldenRunDraft,
   fingerprintGoldenInputModel,
+  fingerprintGoldenSavedOutputModel,
   verifyGoldenStartingLiveProject,
   goldenSessionPaths,
 } from "../../scripts/reporting/run-golden-benchmark-session";
@@ -79,6 +80,39 @@ describe("golden benchmark session runner", () => {
       await writeFile(copy, original.replace("chair", "table"));
       await expect(verifyGoldenStartingLiveProject(seed, snapshot(copy)))
         .rejects.toThrow("differs from the starting seed bytes");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("captures persisted changes and refuses invalid output or modified seed", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lazydesigner-output-proof-"));
+    const seed = join(dir, "seed.bbmodel");
+    const saved = join(dir, "working.bbmodel");
+    const original = '{"meta":{"format_version":"4.10"},"elements":[{"name":"chair"}]}';
+    try {
+      await writeFile(seed, original);
+      await writeFile(saved, original);
+      const input = await fingerprintGoldenInputModel(seed);
+      expect(await fingerprintGoldenSavedOutputModel(seed, saved, input)).toBe(input);
+      await writeFile(saved, original.replace("chair", "table"));
+      const output = await fingerprintGoldenSavedOutputModel(seed, saved, input);
+      expect(output).not.toBe(input);
+      const draft = buildGoldenRunDraft({
+        task, sourceSha: "a".repeat(40), traceEvents: [], wallTimeMs: 5,
+        inputAssetSha256: input, outputAssetSha256: output,
+      });
+      expect(draft.runs[0]!.pipeline_provenance.output_asset_sha256).toBe(output);
+      expect(draft.runs[0]!.quality_verdict).toBe("UNVERIFIED");
+      await writeFile(saved, "broken JSON");
+      await expect(fingerprintGoldenSavedOutputModel(seed, saved, input))
+        .rejects.toThrow("not valid JSON");
+      await writeFile(saved, '{"meta":{}}');
+      await expect(fingerprintGoldenSavedOutputModel(seed, saved, input))
+        .rejects.toThrow("lacks Blockbench document metadata");
+      await writeFile(seed, original.replace("chair", "table"));
+      await expect(fingerprintGoldenSavedOutputModel(seed, saved, input))
+        .rejects.toThrow("immutable seed was modified");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

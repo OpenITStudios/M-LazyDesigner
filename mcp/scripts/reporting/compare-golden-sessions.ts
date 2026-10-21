@@ -26,6 +26,7 @@ export type FinalGoldenSessionReport = {
   accepted_result: boolean | null;
   pipeline_provenance: {
     input_asset_sha256?: string | null;
+    output_asset_sha256?: string | null;
     reference_package_fingerprint: string | null;
     control_task_context_id: string | null;
     runtime_build_identity: string | null;
@@ -126,6 +127,17 @@ export function compareAcceptedGoldenSessions(input: {
     );
   }
 
+  if (input.baseline.task_id === "golden-existing-model-correction") {
+    for (const [label, report] of [
+      ["baseline", input.baseline], ["candidate", input.candidate],
+    ] as const) {
+      const output = report.pipeline_provenance.output_asset_sha256;
+      if (!output || !/^[0-9a-f]{64}$/.test(output) ||
+          output === report.pipeline_provenance.input_asset_sha256) {
+        throw new Error(`${label} accepted correction requires a valid changed output_asset_sha256.`);
+      }
+    }
+  }
   const baselineModel = input.baseline.usage?.model?.trim() || null;
   const candidateModel = input.candidate.usage?.model?.trim() || null;
   const modelPairState = !baselineModel || !candidateModel

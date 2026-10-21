@@ -16,6 +16,7 @@ function acceptedRun(): GoldenAuthoringDocument {
         model: "gpt-5.6-sol",
         pipeline_provenance: {
           input_asset_sha256: "c".repeat(64),
+          output_asset_sha256: "d".repeat(64),
           input_project_uuid: "blockbench-project-correction",
           reference_package_fingerprint: "a".repeat(64),
           control_task_context_id: "task:1234567890abcdef1234",
@@ -175,6 +176,21 @@ describe("golden authoring accepted-result benchmark", () => {
     malformed.runs[0]!.pipeline_provenance.input_asset_sha256 = "not-a-hash";
     expect(() => validateGoldenAuthoringDocument(malformed))
       .toThrow("must be a 64-character lowercase hex SHA-256");
+  });
+
+  test("accepted corrections require distinct persisted output bytes", () => {
+    const missing = acceptedRun();
+    missing.runs[0]!.pipeline_provenance.output_asset_sha256 = null;
+    expect(() => validateGoldenAuthoringDocument(missing))
+      .toThrow("accepted correction requires output_asset_sha256");
+    const invalid = acceptedRun();
+    invalid.runs[0]!.pipeline_provenance.output_asset_sha256 = "not-a-hash";
+    expect(() => validateGoldenAuthoringDocument(invalid))
+      .toThrow("output_asset_sha256 must be a 64-character lowercase hex SHA-256");
+    const unchanged = acceptedRun();
+    unchanged.runs[0]!.pipeline_provenance.output_asset_sha256 = "c".repeat(64);
+    expect(() => validateGoldenAuthoringDocument(unchanged))
+      .toThrow("must differ from input_asset_sha256");
   });
 
   test("rejects accepted corrections without live active-project identity", () => {

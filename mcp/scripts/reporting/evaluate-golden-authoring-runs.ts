@@ -29,6 +29,8 @@ export type GoldenAcceptanceEvidence = {
 export type GoldenPipelineProvenance = {
   /** Exact initial .bbmodel bytes; required for comparable accepted Golden Tasks. */
   input_asset_sha256?: string | null;
+  /** SHA-256 of the persisted final .bbmodel; not visual acceptance. */
+  output_asset_sha256?: string | null;
   /** From the read-only live get_project_info preflight, not from filenames. */
   input_project_uuid?: string | null;
   reference_package_fingerprint: string | null;
@@ -113,9 +115,11 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
       provenance.input_project_uuid.trim().length === 0)) {
     throw new Error(`${prefix}.pipeline_provenance.input_project_uuid must be a non-empty string.`);
   }
-  if (provenance.input_asset_sha256 != null &&
-    !/^[0-9a-f]{64}$/.test(provenance.input_asset_sha256)) {
-    throw new Error(`${prefix}.pipeline_provenance.input_asset_sha256 must be a 64-character lowercase hex SHA-256.`);
+  for (const field of ["input_asset_sha256", "output_asset_sha256"] as const) {
+    const hash = provenance[field];
+    if (hash != null && (typeof hash !== "string" || !/^[0-9a-f]{64}$/.test(hash))) {
+      throw new Error(`${prefix}.pipeline_provenance.${field} must be a 64-character lowercase hex SHA-256.`);
+    }
   }
   if (
     provenance.reference_package_fingerprint !== null &&
@@ -202,6 +206,12 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
       }
       if (!provenance.input_project_uuid) {
         throw new Error(`${prefix} accepted correction requires a live input_project_uuid from Blockbench.`);
+      }
+      if (!provenance.output_asset_sha256) {
+        throw new Error(`${prefix} accepted correction requires output_asset_sha256 from a saved .bbmodel.`);
+      }
+      if (provenance.output_asset_sha256 === provenance.input_asset_sha256) {
+        throw new Error(`${prefix} accepted correction output_asset_sha256 must differ from input_asset_sha256.`);
       }
     }
     // Require verified seed identity for every accepted task, not just

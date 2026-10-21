@@ -90,6 +90,8 @@ type LiveStartingModelBaseline = {
   inputAssetSha256: string;
   projectUuid: string;
   runtimeBuildIdentity: string;
+  seedPath: string;
+  workingPath: string;
 };
 
 /**
@@ -138,6 +140,41 @@ export async function verifyGoldenStartingLiveProject(
   return { inputAssetSha256, projectUuid: project.uuid.trim() };
 }
 
+/** Benchmark-only saved-file evidence. A changed hash does not establish native/visual PASS. */
+export async function fingerprintGoldenSavedOutputModel(
+  seedPath: string,
+  workingPath: string,
+  expectedInputSha256: string
+): Promise<string> {
+  if (!/^[0-9a-f]{64}$/.test(expectedInputSha256)) {
+    throw new Error("Golden saved output requires the initial SHA-256.");
+  }
+  if (!isAbsolute(seedPath) || !isAbsolute(workingPath) ||
+      extname(seedPath).toLowerCase() !== ".bbmodel" ||
+      extname(workingPath).toLowerCase() !== ".bbmodel") {
+    throw new Error("Golden saved output requires absolute .bbmodel paths.");
+  }
+  const [seedReal, workingReal] = await Promise.all([realpath(seedPath), realpath(workingPath)]);
+  const canonical = (p: string) => process.platform === "win32" ? p.toLowerCase() : p;
+  if (canonical(seedReal) === canonical(workingReal)) {
+    throw new Error("Golden output cannot overwrite the immutable seed.");
+  }
+  if (await fingerprintGoldenInputModel(seedReal) !== expectedInputSha256) {
+    throw new Error("Golden immutable seed was modified during the session.");
+  }
+  const bytes = await readFile(workingReal);
+  if (!bytes.byteLength) throw new Error("Golden saved .bbmodel is empty.");
+  let model: unknown;
+  try { model = JSON.parse(bytes.toString("utf8")); }
+  catch { throw new Error("Golden saved .bbmodel is not valid JSON."); }
+  if (!model || typeof model !== "object" || Array.isArray(model) ||
+      !("meta" in model) || !model.meta || typeof model.meta !== "object" ||
+      !("format_version" in model.meta) || typeof model.meta.format_version !== "string") {
+    throw new Error("Golden saved .bbmodel lacks Blockbench document metadata.");
+  }
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
 async function preflightGoldenStartingModel(seedPath: string): Promise<LiveStartingModelBaseline> {
   const client = new LiveMcpClient({
     expectedPhase: "geometry",
@@ -149,7 +186,9 @@ async function preflightGoldenStartingModel(seedPath: string): Promise<LiveStart
     "get_project_info"
   );
   const baseline = await verifyGoldenStartingLiveProject(seedPath, projectInfo);
-  return { ...baseline, runtimeBuildIdentity: buildIdentity };
+  // The saved path was validated in verifyGoldenStartingLiveProject.
+  const workingPath = (projectInfo.project as { save_path: string }).save_path;
+  return { ...baseline, runtimeBuildIdentity: buildIdentity, seedPath, workingPath };
 }
 
 export function buildGoldenRunDraft(input: {
@@ -158,6 +197,7 @@ export function buildGoldenRunDraft(input: {
   traceEvents: readonly BenchmarkTraceEvent[];
   wallTimeMs: number;
   inputAssetSha256?: string | null;
+  outputAssetSha256?: string | null;
   inputProjectUuid?: string | null;
   runtimeBuildIdentity?: string | null;
 }): GoldenAuthoringDocument {
@@ -167,6 +207,9 @@ export function buildGoldenRunDraft(input: {
   if (input.inputAssetSha256 != null &&
     !/^[0-9a-f]{64}$/.test(input.inputAssetSha256)) {
     throw new Error("Golden session inputAssetSha256 must be a lowercase SHA-256.");
+  }
+  if (input.outputAssetSha256 != null && !/^[0-9a-f]{64}$/.test(input.outputAssetSha256)) {
+    throw new Error("Golden outputAssetSha256 must be a lowercase SHA-256.");
   }
   // Never borrow events from another task or source revision.
   for (const event of input.traceEvents) {
@@ -194,6 +237,7 @@ export function buildGoldenRunDraft(input: {
         model: null,
         pipeline_provenance: {
           input_asset_sha256: input.inputAssetSha256 ?? null,
+          output_asset_sha256: input.outputAssetSha256 ?? null,
           input_project_uuid: input.inputProjectUuid ?? null,
           reference_package_fingerprint: null,
           control_task_context_id: null,
@@ -242,12 +286,26 @@ async function finalizeSession(input: {
   const traceText = await traceFile.text();
   const report = summarizeGatewayBenchmarkTrace(traceText);
   const wallTimeMs = Math.max(0, Date.now() - input.startedAtMs);
+  let outputAssetSha256: string | null = null;
+  if (input.startingBaseline) {
+    try {
+      outputAssetSha256 = await fingerprintGoldenSavedOutputModel(
+        input.startingBaseline.seedPath, input.startingBaseline.workingPath,
+        input.startingBaseline.inputAssetSha256
+      );
+    } catch (error) {
+      // Keep the draft UNVERIFIED and retain the trace when the output fails.
+      console.error("[LazyDesigner Benchmark] Saved output unverified:",
+        error instanceof Error ? error.message : String(error));
+    }
+  }
   const draft = buildGoldenRunDraft({
     task: input.task,
     sourceSha: input.sourceSha,
     traceEvents: report.events,
     wallTimeMs,
     inputAssetSha256: input.startingBaseline?.inputAssetSha256,
+    outputAssetSha256,
     inputProjectUuid: input.startingBaseline?.projectUuid,
     runtimeBuildIdentity: input.startingBaseline?.runtimeBuildIdentity,
   });

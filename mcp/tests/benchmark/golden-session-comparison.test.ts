@@ -15,6 +15,7 @@ function accepted(sha: string, calls: number): FinalGoldenSessionReport {
     accepted_result: true,
     pipeline_provenance: {
       input_asset_sha256: "a".repeat(64),
+      output_asset_sha256: "c".repeat(64),
       reference_package_fingerprint: "b".repeat(64),
       control_task_context_id: "task:abcdef1234567890abcd",
       runtime_build_identity: "runtime-" + sha.slice(0, 8),
@@ -103,6 +104,20 @@ describe("accepted golden session comparison", () => {
     candidate.pipeline_provenance.input_asset_sha256 = baseline.pipeline_provenance.input_asset_sha256;
     expect(compareAcceptedGoldenSessions({ baseline, candidate }).quality_gate)
       .toBe("BOTH_ACCEPTED_PASS_SAME_REFERENCE");
+  });
+
+  test("comparison rejects absent or input-identical correction output", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+    baseline.pipeline_provenance.output_asset_sha256 = null;
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("baseline accepted correction requires a valid changed output_asset_sha256");
+    baseline.pipeline_provenance.output_asset_sha256 = "c".repeat(64);
+    candidate.pipeline_provenance.output_asset_sha256 = "a".repeat(64);
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("candidate accepted correction requires a valid changed output_asset_sha256");
+    candidate.pipeline_provenance.output_asset_sha256 = "d".repeat(64);
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate })).not.toThrow();
   });
 
   test("rejects incomplete or cross-task comparisons", () => {
