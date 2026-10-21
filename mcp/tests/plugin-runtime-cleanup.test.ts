@@ -219,6 +219,18 @@ describe("pre-local plugin runtime cleanup", () => {
     expect(lifecycle).toContain("beginRuntimeGenerationTeardown");
   });
 
+
+  test("retired failed binds cannot invalidate a replacement Runtime lease or listener", async () => {
+    const host = await source("plugin/runtimeHost.ts");
+    const start = host.slice(host.indexOf("async start(generation"), host.indexOf("teardown(generation"));
+    expect(start).toContain("this.httpServer === candidate && isRuntimeGenerationCurrent(generation)");
+    expect(start).toContain("stopRuntimeSessionLease();");
+    expect(start).toContain("await candidate.closeAndWait();");
+    expect(start).toContain("if (this.httpServer === candidate) this.httpServer = null;");
+    expect(start.indexOf("stopRuntimeSessionLease();")).toBeLessThan(start.indexOf("await candidate.closeAndWait();"));
+    expect(start).toContain("finally {");
+  });
+
   test("plugin unload detaches integration synchronously and drains listener ownership asynchronously", async () => {
     const [index, runtimeHost, integration, net, ui, status, settings] = await Promise.all([
       source("index.ts"),

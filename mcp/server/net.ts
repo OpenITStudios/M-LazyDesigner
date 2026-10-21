@@ -581,17 +581,26 @@ export default function createNetServer (
     if (closePromise) return closePromise
     shuttingDown = true
 
-    closePromise = new Promise<void>((resolve, reject) => {
+    const listenerClosed = new Promise<void>((resolve, reject) => {
       httpServer.close((error?: Error) => {
         const code = (error as (Error & { code?: string }) | undefined)?.code
         if (error && code !== 'ERR_SERVER_NOT_RUNNING') reject(error)
         else resolve()
       })
     })
-
-    void waitForRuntimeOperationDrain().finally(() => {
+    // Node's server.close callback can complete before native work has
+    // drained (e.g. when no socket remains for an already-started operation).
+    // A new Runtime generation must not bind until BOTH boundaries finish.
+    const nativeDrained = waitForRuntimeOperationDrain().finally(() => {
       httpServer.closeActiveSockets()
     })
+    closePromise = Promise.allSettled([listenerClosed, nativeDrained]).then(
+      (outcomes) => {
+        for (const outcome of outcomes) {
+          if (outcome.status === 'rejected') throw outcome.reason
+        }
+      }
+    )
 
     return closePromise
   }

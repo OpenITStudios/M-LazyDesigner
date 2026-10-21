@@ -150,11 +150,19 @@ export class RuntimeHost {
     try {
       await this.waitForListening(candidate);
     } catch (error) {
-      stopRuntimeSessionLease();
+      // An older bind may fail after onunload has retired it. Its failure
+      // handler must never remove a lease owned by a replacement generation.
+      if (this.httpServer === candidate && isRuntimeGenerationCurrent(generation)) {
+        stopRuntimeSessionLease();
+      }
       const reason = error instanceof Error ? error.message : String(error);
-      candidate.closeActiveSockets();
-      await candidate.closeAndWait();
-      if (this.httpServer === candidate) this.httpServer = null;
+      try {
+        candidate.closeActiveSockets();
+        await candidate.closeAndWait();
+      } finally {
+        // Cleanup is candidate-owned; do not erase a newer listener reference.
+        if (this.httpServer === candidate) this.httpServer = null;
+      }
       if (isRuntimeGenerationCurrent(generation)) {
         markRuntimeGenerationState(generation, "failed");
         setStatusBarState("failed", reason);
