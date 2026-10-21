@@ -1,7 +1,7 @@
 # Test Architecture Modernization — Bun / LazyDesigner
 
 **Status:** owner-based consolidation prepared; grouped execution deferred by user
-**Date:** 2026-10-20
+**Date:** 2026-10-21
 **Branch:** `Local` (source authority); keep `main` unchanged without explicit approval.
 
 ## Decision
@@ -60,6 +60,21 @@ in `plugin-settings-reload.test.ts`: the active callback works, teardown/reload
 cannot invoke it, and a new callback can take over. No production seam or global
 module mocking framework is added. Runtime lifecycle and native safety suites
 remain separate. This batch also awaits grouped execution.
+
+Runtime registration/bootstrap ownership now shares
+`mcp/tests/runtime-tools-ownership.test.ts`; compiler and transport boundaries
+remain in `runtime-core-boundary.test.ts`. Bootstrap's private initialization
+flag assertions are replaced by repeated initialization of the real registry in
+the existing isolated import-safety probe, comparing tool definitions before/after.
+This prepares behavioral evidence; it has not been executed in this cleanup batch.
+
+Texture/Paint/Element facade ownership and registration order share one table in
+`mcp/tests/capability-module-ownership.test.ts`. Each domain retains its own
+scenario, owner declarations, mutation prohibitions and required registrar order.
+Presence and order use the same read instead of duplicated per-domain tests.
+Texture development anchors point to the replacement suite. These remain T0
+source guards; native mutation and domain behavior suites are unchanged. No new
+router, production dependency injection or test framework is added.
 
 The read-only inventory before consolidation counted 560 files and 241 possible
 source-assertion review candidates (2026-10-20). This is not a deletion list.

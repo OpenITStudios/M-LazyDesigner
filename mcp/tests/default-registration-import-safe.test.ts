@@ -6,8 +6,21 @@ describe("default MCP registration is runtime-lazy", () => {
   test("default product registry reconstructs outside Blockbench with a bounded description surface", async () => {
     // Prove the registry import succeeds because runtime globals stay execution-owned,
     // not because this test environment accidentally provides Blockbench's Painter.
-    const probe = Bun.spawnSync([process.execPath, "-e", 'if ("Painter" in globalThis) throw Error("unexpected runtime"); await import("./server/tools.ts");'], {cwd:process.cwd()});
-    expect(probe.exitCode).toBe(0);
+    const probeSource = [
+      'import assert from "node:assert/strict";',
+      'if ("Painter" in globalThis) throw Error("unexpected runtime");',
+      'const { tools } = await import("./server/tools.ts");',
+      'const { initializeRuntimeCapabilityWiring } = await import("./server/runtime/bootstrap.ts");',
+      'initializeRuntimeCapabilityWiring();',
+      'assert.ok(Object.keys(tools).length > 0);',
+      'const snapshot = () => Object.entries(tools).map(([name, tool]) => [name, { ...tool }]);',
+      'const before = snapshot();',
+      'initializeRuntimeCapabilityWiring();',
+      'initializeRuntimeCapabilityWiring();',
+      'assert.deepStrictEqual(snapshot(), before);',
+    ].join("\n");
+    const probe = Bun.spawnSync([process.execPath, "-e", probeSource], { cwd: process.cwd() });
+    expect(probe.exitCode, probe.stderr.toString()).toBe(0);
 
     const module = await import("../server/tools");
     const extendedToolNames = new Set([

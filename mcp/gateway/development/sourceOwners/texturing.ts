@@ -15,12 +15,12 @@ export const TEXTURING_SOURCE_OWNERS: Record<string, DevelopmentSourceOwner> = {
   activate_texture: {
     source: "mcp/server/tools/texture/assignment.ts",
     specialist: TEXTURING_PATH,
-    anchor_test: "mcp/tests/texture-module-ownership.test.ts",
+    anchor_test: "mcp/tests/capability-module-ownership.test.ts",
   },
   apply_texture: {
     source: "mcp/server/tools/texture/assignment.ts",
     specialist: TEXTURING_PATH,
-    anchor_test: "mcp/tests/texture-module-ownership.test.ts",
+    anchor_test: "mcp/tests/capability-module-ownership.test.ts",
   },
   add_texture_group: {
     source: "mcp/server/tools/texture/assignment.ts",
