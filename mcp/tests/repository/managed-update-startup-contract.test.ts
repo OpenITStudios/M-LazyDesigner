@@ -16,7 +16,7 @@ describe("Desktop maintenance operations", () => {
     expect(planManagedAction("update", status, check)).toBeNull();
     expect(planManagedAction("update", status, null)).toBeNull();
     const request = planManagedAction("update", status, { ...check, status: "UPDATE_STAGED" });
-    expect(request).toEqual({ action: "update", expectedSourceSha: check.available_source_sha });
+    expect(request).toEqual({ action: "update", expectedSourceSha: "b".repeat(40) });
     const calls: unknown[] = [];
     const invoke: DesktopInvoke = async (command, args) => {
       calls.push({ command, args });

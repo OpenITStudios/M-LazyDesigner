@@ -56,7 +56,7 @@ describe("Desktop control-plane ownership", () => {
     expect(app).toContain("show_plugin_file");
     expect(app).toContain("setup-tls");
     expect(await workspaceSource).toContain("runManagedAction('update')");
-    expect(app).toContain("tls_ready");
+    expect(await source("../apps/desktop/src/SupportPage.svelte")).toContain("status.managed?.tls_ready === false");
     expect(app).toContain("'update' | 'rollback' | 'recover' | 'repair'");
     for (const command of ["update", "rollback", "recover", "repair", "status", "mcp"]) {
       expect(cli).toContain(command);

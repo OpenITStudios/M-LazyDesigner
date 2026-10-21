@@ -244,8 +244,6 @@
   .folder-shortcuts{display:flex;flex-wrap:wrap;gap:6px;padding:3px 0 6px}
   .folder-shortcut{min-height:28px;padding:4px 9px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-soft);font-size:var(--font-sm);font-weight:650}
   .folder-shortcut:hover:not(:disabled){background:var(--surface-3);color:var(--text)}
-  .project-detail-actions{display:flex;justify-content:flex-end;padding:6px 0 2px}
-  .pinned-label{color:var(--text-soft)}
   .more-menu{position:relative}
   .more-menu summary{width:30px;height:30px;display:grid;place-items:center;list-style:none;border-radius:6px;color:var(--muted);cursor:pointer}
   .more-menu summary:hover,.more-menu[open] summary{background:var(--surface-2);color:var(--text)}

@@ -34,7 +34,7 @@
 <svelte:window onkeydown={handleKeyDown} />
 
 <div class="project-delete-overlay">
-  <section class="project-delete-dialog" role="alertdialog" aria-modal="true"
+  <div class="project-delete-dialog" role="alertdialog" aria-modal="true"
     aria-labelledby="project-delete-title" aria-describedby="project-delete-explanation"
     tabindex="-1" bind:this={dialog}>
     <h2 id="project-delete-title">Move project to Recycle Bin?</h2>
@@ -54,7 +54,7 @@
         {busy ? 'Moving…' : 'Move to Recycle Bin'}
       </button>
     </div>
-  </section>
+  </div>
 </div>
 
 <style>
