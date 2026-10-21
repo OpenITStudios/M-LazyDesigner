@@ -28,6 +28,20 @@ afterEach(async () => {
 });
 
 describe("native Runtime operation queue", () => {
+  test("a retired generation is refused at admission without using a native queue slot", async () => {
+    const old = claimRuntimeGeneration("old");
+    const replacement = claimRuntimeGeneration("replacement");
+    let executed = false;
+    const before = waitForRuntimeOperationDrain();
+    await expect(runRuntimeOperationExclusive(old.generation, async () => {
+      executed = true;
+    })).rejects.toBeInstanceOf(RuntimeGenerationRetiredError);
+    expect(executed).toBe(false);
+    expect(waitForRuntimeOperationDrain()).toBe(before);
+    expect(await runRuntimeOperationExclusive(replacement.generation, async () => "new")).toBe("new");
+  });
+
+
   test("serializes native work in FIFO order and drains after the last operation", async () => {
     const { generation } = claimRuntimeGeneration("fixture");
     const order: string[] = [];

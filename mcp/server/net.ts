@@ -367,6 +367,24 @@ export default function createNetServer (
           throw error
         }
 
+        // readNodeRequestBody awaits network I/O. Shutdown or plugin reload
+        // may retire this listener while that body is still arriving.
+        // Refuse dispatch before constructing an MCP server or registering
+        // a native operation against a retired generation.
+        if (shuttingDown ||
+            (generation !== null && !isRuntimeGenerationCurrent(generation))) {
+          if (!response.destroyed && !response.writableEnded) {
+            sendNodeResponse(
+              response,
+              503,
+              { 'content-type': 'application/json' },
+              jsonErrorBody('Runtime listener is shutting down; reconnect after reload'),
+              true
+            )
+          }
+          return
+        }
+
         const requestUrl = new URL(
           rawPath,
           `${(request.socket as Socket & { encrypted?: boolean }).encrypted ? 'https' : 'http'}://${hostHeader ?? `${host}:${port}`}`
@@ -467,6 +485,13 @@ export default function createNetServer (
                 )
               }, { signal: nativeRequestAbort.signal })
             : await dispatch(effectiveAuthoringPhase, activeProfile)
+
+          // Even read-only MCP requests may finish after shutdown begins.
+          // Do not publish a stale tools/list/initialize result from a retired
+          // Runtime generation. Mutations already have the native generation
+          // completion guard; no mutation is retried or replayed.
+          if (shuttingDown ||
+              (generation !== null && !isRuntimeGenerationCurrent(generation))) return
 
           // Finite JSON/JSON-RPC responses have Content-Length and may reuse
           // the client socket. Preserve explicit Connection: close, while

@@ -224,6 +224,12 @@ export function runRuntimeOperationExclusive<T>(
 ): Promise<T> {
   const coordinator = getCoordinator();
   const signal = options.signal;
+  // A retired listener must not occupy a native queue slot while the next
+  // plugin generation is waiting for the previous drain. This is preflight:
+  // nothing has been executed and an already-started operation is unaffected.
+  if (generation !== null && coordinator.ownerGeneration !== generation) {
+    return Promise.reject(new RuntimeGenerationRetiredError(generation));
+  }
   if (signal?.aborted) {
     return Promise.reject(new RuntimeQueuedOperationAbandonedError());
   }

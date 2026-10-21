@@ -4,6 +4,25 @@ import createNetServer from "@/server/net";
 import { runRuntimeOperationExclusive } from "@/lib/runtime/lifecycle";
 
 describe("BlockIT pending listener shutdown", () => {
+  test("MCP admission is rechecked after asynchronous request-body reading", async () => {
+    const source = await Bun.file("server/net.ts").text();
+    const parseStart = source.indexOf("body = await readNodeRequestBody(request)");
+    const shutdownGuard = source.indexOf("if (shuttingDown ||", parseStart);
+    const transport = source.indexOf("const webRequest = new Request(requestUrl", shutdownGuard);
+    const nativeDispatch = source.indexOf("runRuntimeOperationExclusive(generation", transport);
+    expect(parseStart).toBeGreaterThan(-1);
+    expect(shutdownGuard).toBeGreaterThan(parseStart);
+    expect(transport).toBeGreaterThan(shutdownGuard);
+    expect(nativeDispatch).toBeGreaterThan(transport);
+    expect(source.slice(shutdownGuard, transport)).toContain("!isRuntimeGenerationCurrent(generation)");
+    expect(source.slice(shutdownGuard, transport)).toContain("503");
+    const resultFence = source.indexOf("// Even read-only MCP requests may finish after shutdown begins.");
+    const send = source.indexOf("await sendSerializedWebResponse(", resultFence);
+    expect(resultFence).toBeGreaterThan(nativeDispatch);
+    expect(send).toBeGreaterThan(resultFence);
+  });
+
+
   test("closeAndWait preserves the old listener barrier until an active native operation drains", async () => {
     const server = createNetServer(
       { createServer: (options, callback) => createHttpServer(options, callback) },
