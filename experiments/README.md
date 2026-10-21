@@ -6,6 +6,8 @@ Isolated workspace for bounded research and historical proposals that are **not*
 
 There is no active production authority under `experiments/`.
 
+[Asset motion](asset-motion/README.md) retains recovered simulation inputs/outputs and GIF references for the 2026-10-21 handoff. These historical experiments were not executed or promoted during transfer.
+
 - Historical Navigator design context is retained in Git history only; there is no Navigator working-tree owner.
 - Particle Reference Authoring has been fully promoted out of `experiments/` and now lives under `docs/02-reference/particle/` with its ChatGPT-side specialist at `.agents/skills/lazydesigner-particle-reference-authoring/`.
 - Historical particle research remains available through Git history rather than a parallel working-tree owner.

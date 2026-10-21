@@ -1,0 +1,48 @@
+{
+  "schema": "lazydesigner-reference-v1",
+  "asset": {
+    "name": "voidtide_drake",
+    "kind": "MODEL",
+    "profile": "CREATURE",
+    "task": "NEW_ASSET",
+    "intent": "Compact wingless crystal drake from user reference"
+  },
+  "requirements": {
+    "dimensions_blocks": {
+      "width": 2,
+      "height": 2.5,
+      "length": 2
+    },
+    "animation_required": true
+  },
+  "images": [
+    {
+      "id": "drake_target",
+      "file": "reference.png",
+      "role": "PRIMARY_GEOMETRY",
+      "used_by": [
+        "GEOMETRY",
+        "TEXTURE",
+        "ANIMATION"
+      ],
+      "status": "APPROVED"
+    }
+  ],
+  "constraints": [
+    "New separate project; preserve previous golems.",
+    "Height40units, footprint approximately32x32 including compact curved tail.",
+    "No wings in reference. Four clawed legs, horns, neck armor, dorsal crystals and tail crystal fan.",
+    "Efficient geometry, reserve scales, stone seams and crystal facets for texture.",
+    "Geometry review before UV/texturing. Same approved map pixel style. No GIF."
+  ],
+  "readiness": {
+    "overall": "READY",
+    "geometry": "READY"
+  },
+  "unknowns": {
+    "blocking": [],
+    "non_blocking": [
+      "Animation inventory deferred."
+    ]
+  }
+}

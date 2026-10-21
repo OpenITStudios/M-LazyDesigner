@@ -1,0 +1,17 @@
+{
+  "cubes": 85,
+  "bones": 21,
+  "stage": "GEOMETRY_CORRECTION_READY_FOR_USER_REVIEW",
+  "bounds": {
+    "height": 39.4065739863875,
+    "width": 31.163475552690453,
+    "length": 32.88827274878852
+  },
+  "geometryApproved": false,
+  "zFighting": 0,
+  "groundMinY": 0,
+  "uv": "PROVISIONAL",
+  "texturing": "NOT_STARTED",
+  "animation": "NOT_STARTED",
+  "minecraftRuntimeTested": false
+}
