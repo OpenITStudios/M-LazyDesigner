@@ -4,6 +4,53 @@ const source = (relative: string) =>
   Bun.file(new URL(`../${relative}`, import.meta.url)).text();
 
 describe("human-facing Blockbench UI", () => {
+
+  test("project-list selectors retain search, first-match, continue and recent order semantics", async () => {
+    const { visibleProjects, visibleProjectModels, recentModelTargets, continueTarget } =
+      await import("../../apps/desktop/src/desktopPresentation");
+    const makeModel = (id: string, name: string, exists = true, active = false) =>
+      ({ id, name, exists, active, open: false, dirty: false });
+    const makeProject = (id: string, name: string, models: ReturnType<typeof makeModel>[]) =>
+      ({ id, name, models, active: false, pinned: false, registered: true,
+        available: true, model_count: models.length, folders: [] });
+    const alpha = makeProject("alpha", "Alpha", [
+      makeModel("shared", "Old copy", false),
+      makeModel("draft", "Draft", true, true),
+      makeModel("continue", "Continue"),
+      makeModel("stay", "Stone"),
+    ]);
+    const studio = makeProject("studio", "Studio", [
+      makeModel("shared", "Shared"),
+      makeModel("needle", "Needle model"),
+    ]);
+    const state = {
+      revision: null, session_live: false, continue_model_id: "continue",
+      recent_model_ids: ["shared", "draft", "continue", "needle", "stay", "missing"],
+      preferences_issue: null, active: null, projects: [alpha, studio],
+    } satisfies import("../../apps/desktop/src/projectNavigationTypes").ProjectNavigation;
+
+    expect(visibleProjects(state, "STUDIO", false).map(p => p.id)).toEqual(["studio"]);
+    expect(visibleProjects(state, "NEEDLE", false).map(p => p.id)).toEqual(["studio"]);
+    expect(visibleProjectModels(studio, "studio").map(m => m.id)).toEqual(["shared", "needle"]);
+    expect(visibleProjectModels(studio, "needle").map(m => m.id)).toEqual(["needle"]);
+    expect(visibleProjectModels(studio, "missing")).toEqual([]);
+
+    const seven = Array.from({ length: 7 }, (_, n) => makeProject(String(n), `Item ${n}`, []));
+    expect(visibleProjects({ ...state, projects: seven }, "", false)).toHaveLength(6);
+    expect(visibleProjects({ ...state, projects: seven }, "", true)).toHaveLength(7);
+    expect(visibleProjects({ ...state, projects: seven }, "ITEM 6", false).map(p => p.id)).toEqual(["6"]);
+
+    expect(recentModelTargets(state).map(t => [t.project.id, t.model.id])).toEqual([
+      ["studio", "shared"], ["studio", "needle"], ["alpha", "stay"],
+    ]);
+    expect(recentModelTargets({ ...state, recent_model_ids: [] })).toEqual([]);
+    expect(continueTarget(state)?.model.id).toBe("continue");
+    expect(continueTarget({ ...state, active: {
+      project_id: "alpha", project_name: "Alpha", model_id: "continue",
+      model_name: "Continue", saved: true, dirty: false,
+    } })).toBeNull();
+  });
+
   test("managed update notice distinguishes staged, applied, missing, and invalid receipts", async () => {
     const { managedActionPresentation } = await import("../../apps/desktop/src/desktopPresentation");
     const staged = managedActionPresentation("update", { status: "STAGED" });

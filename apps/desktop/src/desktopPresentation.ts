@@ -1,4 +1,5 @@
 import type { Compatibility, ProductMode, SystemStatus, EnsureReadyResult } from './desktopTypes';
+import type { ProjectNavigation, ProjectNavigationModel, ProjectNavigationProject } from './projectNavigationTypes';
 
 // Presentation only: no process lifecycle, IPC, or readiness inference.
 export const compatibilityLabel = (value: Compatibility['status'] | undefined) => {
@@ -230,3 +231,51 @@ export function installationReadinessError(ready: EnsureReadyResult): string {
 }
 
 export const progressLabel = (stage: string) => stage.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+
+/** Pure project-list projections; native ownership and file actions stay in App. */
+export type ProjectModelTarget = { project: ProjectNavigationProject; model: ProjectNavigationModel };
+
+export function visibleProjects(state: ProjectNavigation, search: string, showAll: boolean): ProjectNavigationProject[] {
+  const query = search.trim().toLowerCase();
+  const matches = state.projects.filter(project =>
+    !query || project.name.toLowerCase().includes(query)
+      || project.models.some(model => model.name.toLowerCase().includes(query))
+  );
+  return query || showAll ? matches : matches.slice(0, 6);
+}
+
+export function visibleProjectModels(project: ProjectNavigationProject, search: string): ProjectNavigationModel[] {
+  const query = search.trim().toLowerCase();
+  if (!query || project.name.toLowerCase().includes(query)) return project.models;
+  return project.models.filter(model => model.name.toLowerCase().includes(query));
+}
+
+/** Resolve recent IDs in their source order with a single pass over model inventory. */
+export function recentModelTargets(state: ProjectNavigation): ProjectModelTarget[] {
+  const recentIds = state.recent_model_ids ?? [];
+  if (recentIds.length === 0) return [];
+  const relevant = new Set(recentIds);
+  const targets = new Map<string, ProjectModelTarget>();
+  for (const project of state.projects) {
+    for (const model of project.models) {
+      if (relevant.has(model.id) && !targets.has(model.id) &&
+          model.exists && !model.active && model.id !== state.continue_model_id) {
+        targets.set(model.id, { project, model });
+      }
+    }
+  }
+  return recentIds.flatMap(id => {
+    const target = targets.get(id);
+    return target ? [target] : [];
+  });
+}
+
+export function continueTarget(state: ProjectNavigation): ProjectModelTarget | null {
+  if (state.active || !state.continue_model_id) return null;
+  for (const project of state.projects) {
+    const model = project.models.find(candidate => candidate.id === state.continue_model_id && candidate.exists);
+    if (model) return { project, model };
+  }
+  return null;
+}
+

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { ProjectAction, ProjectNavigation, ProjectNavigationProject } from './projectNavigationTypes';
+  import type { ProjectAction, ProjectNavigation } from './projectNavigationTypes';
+  import { visibleProjects, visibleProjectModels, recentModelTargets, continueTarget } from './desktopPresentation';
 
   export let navigation: ProjectNavigation;
   export let busy = false;
@@ -17,38 +18,9 @@
   export let showAllProjects = false;
   export let projectSearch = '';
 
-  const visibleProjects = (state: ProjectNavigation, search: string, showAll: boolean) => {
-    const query = search.trim().toLowerCase();
-    const matches = state.projects.filter(project =>
-      !query || project.name.toLowerCase().includes(query)
-        || project.models.some(model => model.name.toLowerCase().includes(query))
-    );
-    return query || showAll ? matches : matches.slice(0, 6);
-  };
-
-  const visibleProjectModels = (project: ProjectNavigationProject, search: string) => {
-    const query = search.trim().toLowerCase();
-    if (!query || project.name.toLowerCase().includes(query)) return project.models;
-    return project.models.filter(model => model.name.toLowerCase().includes(query));
-  };
-
-  const recentModelTargets = (state: ProjectNavigation) =>
-    (state.recent_model_ids ?? []).flatMap(id =>
-      state.projects.flatMap(project =>
-        project.models
-          .filter(model => model.id === id && model.exists && !model.active && model.id !== state.continue_model_id)
-          .map(model => ({ project, model }))
-      ).slice(0, 1)
-    );
-
-  const continueTarget = (state: ProjectNavigation) => {
-    if (state.active || !state.continue_model_id) return null;
-    for (const project of state.projects) {
-      const model = project.models.find(candidate => candidate.id === state.continue_model_id && candidate.exists);
-      if (model) return { project, model };
-    }
-    return null;
-  };
+  $: matchingProjects = visibleProjects(navigation, projectSearch, showAllProjects);
+  $: recentTargets = recentModelTargets(navigation);
+  $: targetToContinue = continueTarget(navigation);
 
   function toggleProject(id: string) {
     expandedProjectId = expandedProjectId === id ? null : id;
@@ -85,8 +57,8 @@
       </div>
     </div>
   </section>
-{:else if continueTarget(navigation)}
-  {@const target = continueTarget(navigation)}
+{:else if targetToContinue}
+  {@const target = targetToContinue}
   {#if target}
     <section class="content-section">
       <div class="section-heading"><div><h2>Continue working</h2></div></div>
@@ -114,7 +86,7 @@
     <input class="compact-search project-search" type="search" placeholder="Search projects or models…" aria-label="Search projects or models" bind:value={projectSearch} />
   </div>
   <div class="project-list">
-    {#each visibleProjects(navigation, projectSearch, showAllProjects) as project (project.id)}
+    {#each matchingProjects as project (project.id)}
       <div class="project-row">
         <div class="project-main">
           <div class="project-title" title={project.name}>{project.name}</div>
@@ -144,7 +116,8 @@
           {#if !project.available}
             <div class="project-empty">The folder has moved or is unavailable. The shortcut was preserved.</div>
           {:else}
-            {#each visibleProjectModels(project, projectSearch) as model (model.id)}
+            {@const matchingModels = visibleProjectModels(project, projectSearch)}
+            {#each matchingModels as model (model.id)}
               <div class="model-row">
                 <div class="model-main">
                   <strong>{model.name}</strong>
@@ -166,7 +139,7 @@
                 </div>
               </div>
             {/each}
-            {#if visibleProjectModels(project, projectSearch).length === 0}
+            {#if matchingModels.length === 0}
               <div class="project-empty">{projectSearch.trim() ? 'No matching models in this folder.' : 'No .bbmodel files in the visible folder locations.'}</div>
             {/if}
             {#if project.folders.length > 0}
@@ -181,7 +154,7 @@
         </div>
       {/if}
     {/each}
-    {#if visibleProjects(navigation, projectSearch, showAllProjects).length === 0}
+    {#if matchingProjects.length === 0}
       <div class="project-empty project-empty-list">
         {#if projectSearch.trim()}No matching projects or models.{:else}Add an existing project folder to see its models here. Your files stay where they are.{/if}
       </div>
@@ -192,11 +165,11 @@
   {/if}
 </section>
 
-{#if !projectSearch.trim() && recentModelTargets(navigation).length > 0}
+{#if !projectSearch.trim() && recentTargets.length > 0}
   <section class="content-section">
     <div class="section-heading"><div><h2>Recent Models</h2></div></div>
     <div class="project-list">
-      {#each recentModelTargets(navigation) as target (target.model.id)}
+      {#each recentTargets as target (target.model.id)}
         <div class="project-row">
           <div class="project-main">
             <div class="project-title">{target.model.name}</div>
