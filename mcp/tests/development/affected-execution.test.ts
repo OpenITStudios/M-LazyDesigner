@@ -251,6 +251,38 @@ describe("affected execution planner", () => {
     );
   });
 
+  test("Gateway hot-path source edits select direct behavior regressions", () => {
+    const cases: Array<[string, string[]]> = [
+      ["mcp/gateway/capabilities/catalog.ts", [
+        "mcp/gateway/capabilities/intelligence.test.ts",
+        "mcp/tests/capability-discovery-efficiency.test.ts",
+      ]],
+      ["mcp/gateway/capabilities/intelligence.ts", [
+        "mcp/gateway/capabilities/intelligence.test.ts",
+      ]],
+      ["mcp/gateway/control/contextHeadroom.ts", [
+        "mcp/tests/gateway-control-context-headroom.test.ts",
+      ]],
+      ["mcp/gateway/runtime/operationQueue.ts", [
+        "mcp/gateway/runtime/operationQueue.test.ts",
+      ]],
+      ["mcp/lib/texture/diagnosticReadContext.ts", [
+        "mcp/tests/texture-diagnostic-read-context.test.ts",
+      ]],
+    ];
+    for (const [source, expected] of cases) {
+      const plan = planAffectedExecution({
+        changedPaths: [source], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, source).toBe(false);
+      expect(plan.checks, source).toContain("PROJECT_GRAPH");
+      expect(plan.targeted_tests, source).toEqual([...expected].sort());
+      expect(plan.targeted_tests, source).not.toContain(
+        "mcp/tests/uv-plan-service.test.ts"
+      );
+    }
+  });
+
   test("recent Texture source changes route directly to their owning regressions", () => {
     const cases: Array<[string, string]> = [
       ["mcp/lib/texture/seamContinuity.ts", "mcp/tests/texture-seam-continuity.test.ts"],

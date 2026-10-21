@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP Gateway hot-path affected regression closure: the existing affected-execution selector directly maps capability catalog/intelligence, Control headroom, Runtime operation queue and Texture diagnostic context to current owning behavior suites. This closes the source-only regression gap where an implementation helper may have no single semantic capability owner. One focused selection contract verifies mapped tests without pulling unrelated UV suites; no new test framework or workflow. Static GitHub source review only, Bun/typechecks/CI/runtime NOT EXECUTED.
+
+
 2026-10-22 MCP test-selection efficiency and safety: the existing `gateway/development/affectedExecution.ts` now explicitly maps 31 UV Core/native source owners to their current focused behavior regressions instead of relying on semantic capability ownership alone. Unknown UV modules fall back to full verification; mixed changes deduplicate owning tests and retain compiler/source-contract checks. Extended the existing affected-execution tests with owner completeness, unrelated-suite exclusion, conservative fallback and mixed-path deduplication. This is REMOTE_GITHUB source/static work, not executed Bun/typecheck/CI or measured test-duration reduction. No CI, `main`, release, or test-framework change.
 
 

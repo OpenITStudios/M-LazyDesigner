@@ -120,6 +120,15 @@ the selected files. New/unmapped UV implementation paths use the existing
 full-verification fallback, rather than assuming source typing is behavior
 proof. Neither mapped status nor authored regression implies the tests ran.
 
+### Gateway hot-path regression selection
+
+Repeated-use MCP infrastructure has direct regression owners in the same
+affected-execution planner: capability search/ranking, Control stage-context
+headroom, Runtime operation queue, and request-local texture diagnostic
+reads. These are narrow owner tests, not automatically all Gateway or all
+Texture suites. Existing source/semantic impact and project-graph checks
+remain additive; no replacement routing framework is introduced.
+
 ## Existing machinery to preserve
 
 | Existing owner | Responsibility |

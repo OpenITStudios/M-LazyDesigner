@@ -270,6 +270,27 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
   ],
 };
 
+// These hot paths affect repeated MCP discovery/Control calls but may not
+// map to a single capability source owner. Reuse their existing focused tests.
+const GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH: Readonly<Record<string, readonly string[]>> = {
+  "mcp/gateway/capabilities/catalog.ts": [
+    "mcp/gateway/capabilities/intelligence.test.ts",
+    "mcp/tests/capability-discovery-efficiency.test.ts",
+  ],
+  "mcp/gateway/capabilities/intelligence.ts": [
+    "mcp/gateway/capabilities/intelligence.test.ts",
+  ],
+  "mcp/gateway/control/contextHeadroom.ts": [
+    "mcp/tests/gateway-control-context-headroom.test.ts",
+  ],
+  "mcp/gateway/runtime/operationQueue.ts": [
+    "mcp/gateway/runtime/operationQueue.test.ts",
+  ],
+  "mcp/lib/texture/diagnosticReadContext.ts": [
+    "mcp/tests/texture-diagnostic-read-context.test.ts",
+  ],
+};
+
 const GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH: Readonly<
   Record<string, readonly string[]>
 > = {
@@ -339,6 +360,8 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  const hotPathTests = GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH[path];
+  if (hotPathTests) return hotPathTests;
   const textureTests = TEXTURE_REGRESSION_TESTS_BY_PATH[path];
   if (textureTests) return textureTests;
   const uvTests = UV_REGRESSION_TESTS_BY_PATH[path];
