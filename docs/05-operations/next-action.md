@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV competing-plan replay guard (source-only): `UvPlanRegistry.consume` now invalidates **all** plan handles sharing the claimed source fingerprint, while retaining unrelated source revisions. This closes the bypass where a second valid plan handle could retry the same source after an uncertain native UV mutation, despite the first handle being consumed. Extended the existing `uv-plan-service.test.ts` with registry-scope, accepted-apply and `UV_OUTCOME_UNKNOWN` competing-plan regressions. Exact-SHA Bun/types/native proof NOT EXECUTED; generator-coupled `manage_uv_layout` Runtime registration and generated API remain deferred together. CI intentionally disabled.
+
+
 2026-10-22 UV core identity and zero-delta safeguards: the source snapshot builder now rejects missing/duplicate Cube IDs and repeated faces even outside the Blockbench adapter; the canonical atomic transaction rejects zero-movement plans before a native read or Undo. Two focused regressions extend existing UV U7 and transaction test owners. GitHub/static source only, Bun/TS/live Blockbench NOT EXECUTED. UV Runtime registration and generated API remain unmodified until generator-coupled integration is possible.
 
 

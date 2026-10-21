@@ -87,6 +87,29 @@ describe("UV plan registry and service", () => {
     expect(() => registry.consume(claimed.plan_id)).toThrow(/UV_PLAN_NOT_FOUND/);
   });
 
+  test("consuming one UV plan revokes competing plans from the same source only", () => {
+    const registry = new UvPlanRegistry();
+    const sourceA = "sha256:" + "a".repeat(64);
+    const sourceB = "sha256:" + "b".repeat(64);
+    const base = {
+      backend: "maxrects_v1",
+      mode: "REPACK_SELECTED",
+      moved_island_ids: ["face:a:north"],
+    } as unknown as UvLayoutPlan;
+    const report = { apply_allowed: true } as UvDryRunReport;
+    const chosen = registry.put(base, sourceA, report);
+    const competing = registry.put({ ...base, mode: "REPACK_ALL" }, sourceA, report);
+    const otherProject = registry.put(base, sourceB, report);
+    expect(chosen.plan_id).not.toBe(competing.plan_id);
+    expect(registry.size()).toBe(3);
+
+    expect(registry.consume(chosen.plan_id)).toBe(chosen);
+    expect(() => registry.get(chosen.plan_id)).toThrow(/UV_PLAN_NOT_FOUND/);
+    expect(() => registry.get(competing.plan_id)).toThrow(/UV_PLAN_NOT_FOUND/);
+    expect(registry.get(otherProject.plan_id)).toBe(otherProject);
+    expect(registry.size()).toBe(1);
+  });
+
   test("no-op UV plan rejects before constructing a native mutation adapter", async () => {
     const registry = new UvPlanRegistry();
     const fingerprint = "sha256:" + "a".repeat(64);
@@ -152,6 +175,16 @@ describe("UV plan registry and service", () => {
     expect(planned.report.execution).toBe("planned");
     expect(planned).not.toHaveProperty("plan");
 
+    // A second plan from the same snapshot must be invalidated when any one
+    // plan enters native mutation, even if a different handle was chosen.
+    const competing = await service.plan({
+      bitmap_width: 32,
+      bitmap_height: 32,
+      mode: "REPACK_ALL",
+    });
+    expect(competing.plan_id).not.toBe(planned.plan_id);
+    expect(service.registrySize()).toBe(2);
+
     const applied = await service.apply({
       plan_id: planned.plan_id,
       expected_source_fingerprint:
@@ -159,6 +192,10 @@ describe("UV plan registry and service", () => {
     });
     expect(applied.receipt.changed_cube_ids).toEqual(["b"]);
     expect(applied.invalidation.geometry_structure.stale).toBe(false);
+    await expect(service.apply({
+      plan_id: competing.plan_id,
+      expected_source_fingerprint: competing.source_fingerprint,
+    })).rejects.toThrow(/UV_PLAN_NOT_FOUND/);
     await expect(service.apply({
       plan_id: planned.plan_id,
       expected_source_fingerprint: planned.source_fingerprint,
@@ -193,6 +230,11 @@ describe("UV plan registry and service", () => {
         constraints: { padding_pixels: 0 },
       }],
     });
+    const competing = await service.plan({
+      bitmap_width: 32,
+      bitmap_height: 32,
+      mode: "REPACK_ALL",
+    });
     const apply = {
       plan_id: planned.plan_id,
       expected_source_fingerprint: planned.source_fingerprint,
@@ -200,6 +242,10 @@ describe("UV plan registry and service", () => {
     await expect(service.apply(apply)).rejects.toThrow(/UV_OUTCOME_UNKNOWN/);
     expect(nativeCalls).toBe(1);
     await expect(service.apply(apply)).rejects.toThrow(/UV_PLAN_NOT_FOUND/);
+    await expect(service.apply({
+      plan_id: competing.plan_id,
+      expected_source_fingerprint: competing.source_fingerprint,
+    })).rejects.toThrow(/UV_PLAN_NOT_FOUND/);
     expect(nativeCalls).toBe(1);
   });
 

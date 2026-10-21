@@ -62,13 +62,19 @@ export class UvPlanRegistry {
   }
 
   /**
-   * Claim a handle once before any native apply. The same plan cannot be
-   * replayed after interruption, a failed Undo commit or a successful write.
-   * Source/receipt checks remain in the caller before this destructive claim.
+   * Claim a source revision once before native apply. Every competing plan
+   * built from the same UV snapshot is invalidated, not only this plan ID:
+   * another operation or a failed Undo must not be replayable using a
+   * different plan from the old source. Different source revisions survive.
+   * The caller must validate the chosen plan before claiming it.
    */
   consume(planId: string): UvStoredPlan {
     const stored = this.get(planId);
-    this.entries.delete(planId);
+    for (const [candidateId, candidate] of this.entries) {
+      if (candidate.source_fingerprint === stored.source_fingerprint) {
+        this.entries.delete(candidateId);
+      }
+    }
     return stored;
   }
 
