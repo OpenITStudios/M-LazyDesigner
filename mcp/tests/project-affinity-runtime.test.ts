@@ -240,6 +240,40 @@ describe("Blockbench project affinity runtime", () => {
     expect(b.selected).toBe(true);
   });
 
+
+  test("failed native select that drifts to another tab restores original selection", async () => {
+    const { a, b, makeProject } = installProjects("project-b");
+    const other = makeProject("project-c");
+    a.select = () => {
+      (globalThis as any).Project = other;
+      return false;
+    };
+    let executed = false;
+    await expect(runWithRuntimeProjectAffinity("project-a", false, async () => {
+      executed = true;
+    })).rejects.toMatchObject({ outcomeUnknown: false });
+    expect(executed).toBe(false);
+    expect((globalThis as any).Project).toBe(b);
+    expect(b.selected).toBe(true);
+  });
+
+  test("failed preflight restoration leaves explicit unknown editor context", async () => {
+    const { a, b, makeProject } = installProjects("project-b");
+    const other = makeProject("project-c");
+    a.select = () => {
+      (globalThis as any).Project = other;
+      return false;
+    };
+    b.select = () => false;
+    let executed = false;
+    await expect(runWithRuntimeProjectAffinity("project-a", false, async () => {
+      executed = true;
+    })).rejects.toMatchObject({ outcomeUnknown: true });
+    expect(executed).toBe(false);
+    expect((globalThis as any).Project).toBe(other);
+    expect(getRuntimeProjectHealth(null).active_project_uuid).toBe("project-c");
+  });
+
   test("project creation may intentionally transition affinity without restoring the old tab", async () => {
     const { projects, a, makeProject } = installProjects("project-b");
 

@@ -92,12 +92,22 @@ export async function runWithRuntimeProjectAffinity<T> (
       // selection before refusing the request.
     }
     if (!selected || currentRuntimeProject() !== target) {
-      if (currentRuntimeProject() === target && previousProject &&
-          runtimeProjects().includes(previousProject)) {
-        try { previousProject.select(); } catch { /* no mutation was dispatched */ }
+      // A failing native select() can partially move to the target OR a
+      // different tab. Restore any changed context, not only the target.
+      // If restoration fails, subsequent operations must not assume that the
+      // original editor selection survived the rejected request.
+      let restored = currentRuntimeProject() === previousProject;
+      if (!restored && previousProject && runtimeProjects().includes(previousProject)) {
+        try {
+          restored = previousProject.select() === true &&
+            currentRuntimeProject() === previousProject;
+        } catch { /* uncertain native selection state */ }
       }
       throw new RuntimeProjectContextError(
-        `Blockbench could not activate Gateway-bound project ${requestedProjectUuid}.`
+        restored
+          ? `Blockbench could not activate Gateway-bound project ${requestedProjectUuid}.`
+          : `Blockbench project selection changed during failed preflight for ${requestedProjectUuid}; inspect the active tab before retrying.`,
+        !restored
       );
     }
     switched = true;
