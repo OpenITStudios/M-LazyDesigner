@@ -173,6 +173,109 @@ describe("Gateway affinity policy", () => {
   });
 
 
+
+  test("post-handshake verification accepts the same Runtime and bound project", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    state.authoringPhase = "animation";
+    state.projectUuid = "project-a";
+    const observed: string[] = [];
+    state.probeHealth = async (_project?: string, passive?: boolean) => {
+      observed.push(passive ? "passive" : "active");
+      return {
+        online: true,
+        signature: "runtime-instance-A",
+        health: health({
+          phase: "animation",
+          active: "project-b",
+          requested: "project-a",
+          available: true,
+          count: 2,
+        }),
+      };
+    };
+    await state.verifyPostHandshakeRuntimeUnsafe("runtime-instance-A");
+    expect(observed).toEqual(["passive"]);
+    expect(state.projectUuid).toBe("project-a");
+    expect(state.authoringPhase).toBe("animation");
+  });
+
+  test("post-handshake verification rejects a Runtime generation changed during tools/list", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    state.authoringPhase = "geometry";
+    state.probeHealth = async () => ({
+      online: true,
+      signature: "runtime-reloaded-B",
+      health: health({ phase: "geometry" }),
+    });
+    await expect(state.verifyPostHandshakeRuntimeUnsafe("runtime-old-A"))
+      .rejects.toMatchObject({
+        code: "BACKEND_UNAVAILABLE",
+        safeToRetry: true,
+      });
+    expect(state.authoringPhase).toBe("geometry");
+    expect(state.projectUuid).toBeNull();
+  });
+
+  test("post-handshake verification rejects lost or ambiguous bound project despite same Runtime signature", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    state.authoringPhase = "texturing";
+    state.projectUuid = "project-a";
+    for (const available of [false, null] as const) {
+      state.probeHealth = async () => ({
+        online: true,
+        signature: "runtime-instance-A",
+        health: health({
+          phase: "texturing",
+          requested: "project-a",
+          available,
+          count: 2,
+        }),
+      });
+      await expect(state.verifyPostHandshakeRuntimeUnsafe("runtime-instance-A"))
+        .rejects.toMatchObject({ code: "PROJECT_CONTEXT_LOST", safeToRetry: false });
+      expect(state.projectUuid).toBe("project-a");
+    }
+  });
+
+  test("post-handshake Stage drift fails closed without adopting a different Stage", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    state.authoringPhase = "geometry";
+    state.probeHealth = async () => ({
+      online: true,
+      signature: "runtime-instance-A",
+      health: health({ phase: "animation" }),
+    });
+    await expect(state.verifyPostHandshakeRuntimeUnsafe("runtime-instance-A"))
+      .rejects.toMatchObject({ code: "BACKEND_UNAVAILABLE", safeToRetry: false });
+    expect(state.authoringPhase).toBe("geometry");
+  });
+
+  test("handshake failure retains the non-retryable affinity error contract", async () => {
+    const code = await Bun.file("gateway/runtime/backend.ts").text();
+    const start = code.indexOf("private async connectFreshUnsafe(");
+    const end = code.indexOf("private async ensureCatalogUnsafe(", start);
+    const handshake = code.slice(start, end);
+    expect(handshake).toContain("await this.verifyPostHandshakeRuntimeUnsafe(signature);");
+    expect(handshake).toContain("if (error instanceof GatewayBackendError && !error.safeToRetry)");
+    expect(handshake).toContain("throw error;");
+    expect(handshake.indexOf("await this.verifyPostHandshakeRuntimeUnsafe(signature);"))
+      .toBeLessThan(handshake.indexOf("this.client = client;"));
+  });
+
+  test("post-handshake verification rejects an offline confirmation without catalog acceptance", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    state.probeHealth = async () => ({ online: false, error: "listener retired" });
+    await expect(state.verifyPostHandshakeRuntimeUnsafe("runtime-old-A"))
+      .rejects.toMatchObject({ code: "BACKEND_UNAVAILABLE", safeToRetry: true });
+    expect(state.client).toBeNull();
+    expect(state.catalog.size).toBe(0);
+  });
+
   test("explicit rebind refuses duplicate tab UUID without changing its prior affinity", async () => {
     const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
     const internal = backend as unknown as {

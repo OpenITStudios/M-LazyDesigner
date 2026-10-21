@@ -338,6 +338,35 @@ export class BlockitRuntimeBackend {
     return tools;
   }
 
+  /**
+   * A Runtime can reload between the initial /health probe and the MCP
+   * initialize/tools/list exchange. Confirm the same generation and bound
+   * project/Stage before advertising that tool catalog to the Gateway.
+   * This is read-only and runs inside the existing Gateway operation queue.
+   */
+  private async verifyPostHandshakeRuntimeUnsafe(signature: string): Promise<void> {
+    const confirmed = await this.probeHealth(undefined, true);
+    if (!confirmed.online) {
+      throw new GatewayBackendError(
+        "BACKEND_UNAVAILABLE",
+        `LazyDesigner Runtime disappeared during MCP handshake: ${confirmed.error}`,
+        true
+      );
+    }
+    if (confirmed.signature !== signature) {
+      throw new GatewayBackendError(
+        "BACKEND_UNAVAILABLE",
+        "LazyDesigner Runtime generation or exposed tool surface changed during MCP handshake. Reconnect before using the catalog.",
+        true,
+        { initial_signature: signature, confirmed_signature: confirmed.signature }
+      );
+    }
+    // Both affinity verifiers are pure: failed confirmation must not silently
+    // adopt a different Blockbench tab or Stage after Runtime replacement.
+    resolveAuthoringPhaseAffinity(this.authoringPhase, confirmed.health);
+    resolveProjectAffinity(this.projectUuid, confirmed.health, false);
+  }
+
   private async connectFreshUnsafe(signature: string): Promise<void> {
     const previousSignature = this.connectedSignature;
     const hadReadyRuntime = this.connection.session.hasBeenReady();
@@ -359,6 +388,9 @@ export class BlockitRuntimeBackend {
     try {
       await client.connect(transport, { timeout: this.connectTimeoutMs });
       const tools = await this.listAllTools(client);
+      await this.verifyPostHandshakeRuntimeUnsafe(signature);
+      // Publishing is synchronous after the second identity/affinity check:
+      // no changed Runtime generation may be paired with the old catalog.
       this.client = client;
       this.connectedProtocolEra = client.getProtocolEra() ?? null;
       this.connectedSignature = signature;
@@ -376,11 +408,20 @@ export class BlockitRuntimeBackend {
         });
       }
     } catch (error) {
-      await this.closeClientBestEffort(client);
+      // A Control generation-change observer may itself throw after the
+      // client was published. Always withdraw the catalog as well as the
+      // connection before recording a failed handshake.
+      if (this.client === client) await this.closeConnectionUnsafe();
+      else await this.closeClientBestEffort(client);
       const message = errorMessage(error);
       const timedOut = isRequestTimeoutError(error);
       const retryAfterMs = this.connection.markDegraded();
       this.lastError = message;
+      // Affinity drift is not an ordinary transport retry: preserve the
+      // explicit rebind requirement and non-retryable error classification.
+      if (error instanceof GatewayBackendError && !error.safeToRetry) {
+        throw error;
+      }
       throw new GatewayBackendError(
         "BACKEND_UNAVAILABLE",
         `LazyDesigner Runtime MCP connection failed: ${message}`,
