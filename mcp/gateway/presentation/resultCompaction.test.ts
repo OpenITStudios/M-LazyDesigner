@@ -26,6 +26,50 @@ describe("Gateway result-compaction information preservation", () => {
     )).toEqual(warning);
   });
 
+  test("read-only results preserve unique human explanations beyond structured fields", () => {
+    const structured = { uuid: "cube-a", faces: 6 };
+    const guidance = [{
+      type: "text",
+      text: "Upper faces share a small section of the atlas.",
+    }];
+    expect(compactGatewayCapabilityContent(
+      "inspect_elements", structured, guidance, "focused_read", true
+    )).toEqual(guidance);
+    const ordinary = [{
+      type: "text",
+      text: "The source image corresponds to the underside only.",
+    }];
+    expect(compactGatewayCapabilityContent(
+      "inspect_element", structured, ordinary, "focused_read", true
+    )).toEqual(ordinary);
+    expect(compactGatewayCapabilityContent(
+      "inspect_element", structured,
+      [{ type: "text", text: "Read complete." }], "focused_read", true
+    )).toEqual([{ type: "text", text: "Read complete." }]);
+  });
+
+  test("inspect_elements compacts only its exact generated identity summary", () => {
+    const structured = { uuid: "u-1", type: "cube", name: "body" };
+    for (const text of [
+      'Inspected cube "body" (u-1).',
+      'Inspected cube "body" (u-1) with UV mapping detail.',
+    ]) {
+      expect(compactGatewayCapabilityContent(
+        "inspect_elements", structured, [{ type: "text", text }],
+        "focused_read"
+      )).toEqual([{ type: "text", text: "Inspection ready." }]);
+    }
+    for (const text of [
+      'Inspected cube "body" (u-1). Top face needs a different UV offset.',
+      'Inspected cube "body" (wrong-uuid).',
+    ]) {
+      const content = [{ type: "text", text }];
+      expect(compactGatewayCapabilityContent(
+        "inspect_elements", structured, content, "focused_read"
+      )).toEqual(content);
+    }
+  });
+
   test("manage_cubes preserves warnings and multi-item image evidence", () => {
     expect(compactGatewayCapabilityContent(
       "manage_cubes", { execution: "applied", modified: 1 },

@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP Gateway read-only result information-loss guard: `gateway/presentation/resultCompaction.ts` now refuses to replace arbitrary narrative merely because a read-only result has structured fields. Only exact generated `inspect_elements` identity summaries and true generic `Read complete.` boilerplate are redundant. Unique UV/visual observations remain visible. Existing Gateway result-compaction regressions gain two behavior cases. This is GitHub source/static authoring; Bun/TypeScript/native and empirical accepted-result cost NOT EXECUTED; no CI/main/release change.
+
+
+
 2026-10-22 MCP response-payload source optimization: `lib/factories.ts` now skips costly whole-object JSON serialization when the tool supplies ordinary human summary text alongside `structuredContent`. For JSON-like text it checks semantic equality to compact pretty-printed/key-reordered duplicate mirrors, while preserving non-equivalent text and mixed image evidence. The existing structured-result suite gains three focused behavior cases. The canonical affected planner explicitly selects structured-result and public-surface regression owners for future factory changes, plus the Gateway compaction owner. REMOTE_GITHUB source/static review only; exact-SHA Bun/TypeScript/performance/native NOT EXECUTED; CI remains disabled.
 
 

@@ -161,14 +161,30 @@ function readOnlyTextIsRedundant(
   structuredContent: unknown,
   content: unknown
 ): boolean {
-  const text = singleTextContent(content);
+  const text = singleTextContent(content)?.trim();
+  // Structured data existing is not evidence that arbitrary prose is
+  // redundant. Retain unique conclusions and guidance that are not present
+  // in machine fields, even when they contain no warning keywords.
   return (
-    text !== null &&
+    text === "Read complete." &&
     isRecord(structuredContent) &&
-    Object.keys(structuredContent).length > 0 &&
-    !textCarriesExternalLocator(text) &&
-    !textCarriesDecisionSignal(text)
+    Object.keys(structuredContent).length > 0
   );
+}
+
+function matchesElementInspectionSummary(
+  structuredContent: JsonRecord,
+  text: string
+): boolean {
+  if (
+    typeof structuredContent.uuid !== "string" ||
+    typeof structuredContent.name !== "string" ||
+    typeof structuredContent.type !== "string"
+  ) return false;
+  const identity =
+    `Inspected ${structuredContent.type} "${structuredContent.name}" (${structuredContent.uuid})`;
+  return text === `${identity}.` ||
+    text === `${identity} with UV mapping detail.`;
 }
 
 function hasAuthoritativeReceiptState(
@@ -249,13 +265,7 @@ export function compactGatewayCapabilityContent(
   if (
     capability === "inspect_elements" &&
     isRecord(structuredContent) &&
-    typeof structuredContent.uuid === "string" &&
-    typeof structuredContent.name === "string" &&
-    typeof structuredContent.type === "string" &&
-    Array.isArray(content) &&
-    content.length === 1 &&
-    isRecord(content[0]) &&
-    content[0].type === "text"
+    matchesElementInspectionSummary(structuredContent, text)
   ) {
     return [{ type: "text", text: "Inspection ready." }];
   }

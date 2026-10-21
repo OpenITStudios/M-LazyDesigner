@@ -249,6 +249,21 @@ This is output normalization only: no new public capability or weaker
 quality/acceptance evidence. Source-only change; no measured token or CPU
 improvement is claimed without executable validation.
 
+## Gateway Inspection Narrative Preservation — SOURCE HARDENING
+
+The Gateway previously replaced any read-only plain text with `Read complete.`
+when a nonempty `structuredContent` record existed. This could erase
+decision-useful prose that was not actually mirrored in machine fields.
+Read-only compaction now requires an explicitly redundant boilerplate string,
+and the `inspect_elements` shortcut requires exact identity text matching
+the structured UUID/name/type. Added focused positive and negative regressions
+to the existing Gateway result-compaction owner.
+
+This is a quality-preserving efficiency correction: it may retain additional
+small text, but prevents extra inspections prompted by missing human guidance.
+Warnings, links and mixed images remain preserved. No measured cost-to-result
+improvement is claimed without matched-run evidence.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.
