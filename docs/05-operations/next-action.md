@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV planner source-integrity: `lib/uv/service.ts` now revalidates the native project/UV fingerprint immediately before storing a plan, preventing publication after asynchronous atlas reads switch tabs or mutate UV. Complete explicit bitmap dimensions bypass native atlas discovery; partial overrides fail before any atlas lookup. Existing `uv-plan-service.test.ts` has three focused regressions. GitHub source/static only; Bun/typecheck/native Blockbench NOT EXECUTED. Runtime capability activation and generated API remain a separate pending integration.
+
+
 2026-10-22 UV rollback terminal state guard: final source fingerprint is now checked only after both `restore()` and `cancelUndo()` have returned or failed; successful restore cannot hide UV drift introduced by native Undo cancellation. Added one focused case to the existing UV transaction suite. GitHub source/static only, targeted Bun/native tests NOT EXECUTED.
 
 

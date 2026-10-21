@@ -232,6 +232,82 @@ describe("UV plan registry and service", () => {
     expect(mutated).toBe(false);
   });
 
+  test("explicit bitmap dimensions bypass optional atlas discovery", async () => {
+    const native = nativeFixture();
+    let lookups = 0;
+    const service = createUvLayoutService({
+      readSource: () => native,
+      readBitmapDimensions: () => {
+        lookups++;
+        throw new Error("UV_AUTO_BITMAP_AMBIGUOUS");
+      },
+      createApplyAdapter: () => ({
+        readSource: () => native,
+        apply: () => {},
+        restore: () => {},
+      }),
+    });
+    const plan = await service.plan({
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:b:north"],
+      bitmap_width: 32,
+      bitmap_height: 32,
+    });
+    expect(plan.plan_id).toMatch(/^uvplan:[0-9a-f]{64}$/);
+    expect(lookups).toBe(0);
+    await expect(service.plan({
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:b:north"],
+      bitmap_width: 32,
+    })).rejects.toThrow("bitmap_width and bitmap_height together");
+    expect(lookups).toBe(0);
+  });
+
+  test("asynchronous atlas read cannot publish a plan for a different project", async () => {
+    let native = { ...nativeFixture(), project_uuid: "project-A" };
+    const registry = new UvPlanRegistry();
+    const service = createUvLayoutService({
+      readSource: () => native,
+      readBitmapDimensions: async () => {
+        native = { ...native, project_uuid: "project-B" };
+        return { width: 32, height: 32 };
+      },
+      createApplyAdapter: () => ({
+        readSource: () => native,
+        apply: () => {},
+        restore: () => {},
+      }),
+    }, registry);
+    await expect(service.plan({
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:b:north"],
+    })).rejects.toThrow(/STALE_UV_PLAN/);
+    expect(registry.size()).toBe(0);
+  });
+
+  test("asynchronous atlas read cannot publish a plan for modified UV state", async () => {
+    let native = nativeFixture();
+    const registry = new UvPlanRegistry();
+    const service = createUvLayoutService({
+      readSource: () => native,
+      readBitmapDimensions: async () => {
+        native = structuredClone(native);
+        native.cubes[1].faces[0].uv = [13, 0, 15, 2];
+        return { width: 32, height: 32 };
+      },
+      createApplyAdapter: () => ({
+        readSource: () => native,
+        apply: () => {},
+        restore: () => {},
+      }),
+    }, registry);
+    await expect(service.plan({
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:b:north"],
+    })).rejects.toThrow(/STALE_UV_PLAN/);
+    expect(registry.size()).toBe(0);
+  });
+
   test("geometry bounds participate in stale source fingerprint", async () => {
     const initial = nativeFixture();
     let native = initial;

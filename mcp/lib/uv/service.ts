@@ -74,27 +74,28 @@ export function createUvLayoutService(
     async plan(input: UvLayoutPlanningInput) {
       const native = await dependencies.readSource();
       const sourceFingerprint = fingerprintUvNativeSource(native);
-
-      const automaticBitmap =
-        await dependencies.readBitmapDimensions?.();
-      const bitmapWidth =
-        input.bitmap_width ?? automaticBitmap?.width;
-      const bitmapHeight =
-        input.bitmap_height ?? automaticBitmap?.height;
-      if (
-        bitmapWidth === undefined ||
-        bitmapHeight === undefined
-      ) {
-        throw new Error(
-          "UV_BITMAP_SCALE_REQUIRED: no established base-color atlas was found. Provide bitmap_width and bitmap_height for this pre-atlas plan, or create/resolve the base atlas first."
-        );
-      }
       if (
         (input.bitmap_width === undefined) !==
         (input.bitmap_height === undefined)
       ) {
         throw new Error(
           "UV bitmap override requires bitmap_width and bitmap_height together."
+        );
+      }
+
+      // Explicit atlas dimensions are authoritative; bypass unrelated
+      // native atlas discovery when both overrides are present.
+      const automaticBitmap = input.bitmap_width === undefined
+        ? await dependencies.readBitmapDimensions?.()
+        : undefined;
+      const bitmapWidth = input.bitmap_width ?? automaticBitmap?.width;
+      const bitmapHeight = input.bitmap_height ?? automaticBitmap?.height;
+      if (
+        bitmapWidth === undefined ||
+        bitmapHeight === undefined
+      ) {
+        throw new Error(
+          "UV_BITMAP_SCALE_REQUIRED: no established base-color atlas was found. Provide bitmap_width and bitmap_height for this pre-atlas plan, or create/resolve the base atlas first."
         );
       }
 
@@ -146,6 +147,16 @@ export function createUvLayoutService(
         density_plan: density,
         stack_proposals: stackProposals,
       });
+      // Atlas resolution can await native code: do not publish a plan if
+      // the active project, Geometry or UV changed in the meantime.
+      const confirmedFingerprint = fingerprintUvNativeSource(
+        await dependencies.readSource()
+      );
+      if (confirmedFingerprint !== sourceFingerprint) {
+        throw new Error(
+          "STALE_UV_PLAN: project or UV state changed during planning. Replan from the current source."
+        );
+      }
       const stored = registry.put(
         plan,
         sourceFingerprint,
