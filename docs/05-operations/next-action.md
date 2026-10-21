@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+User handoff (2026-10-21): pause further implementation, UI/native testing and authoring benchmarks; continue discussion from ChatGPT using GitHub Local. Session results are pushed through `5fce24e2`; source frontend repair is `d334106e`, grouped source proof is `ba4ed7f3`. Start with this file, current-validation.md and GITHUB_RULES.md. Read the exact current Local SHA; do not reuse an old checkout as authority. Resume remaining work only on a new user instruction.
+
+The original PC checkout at `44b03b52` contains separate pre-existing source/asset edits and deletions. Those are not part of the clean session worktree or this handoff; uploading them requires scope confirmation and reconciliation against current Local, not an overwrite. Local caches, dependencies, build outputs and raw temporary harness data are not repository handoff artifacts.
+
 Grouped source validation is complete on `ba4ed7f3` for the prepared cleanup batches: repository 296 PASS; focused regressions 163 PASS; MCP/Gateway typechecks, Desktop TS6/TS7 checks (zero warnings), generated freshness and frontend/plugin builds PASS. See current-validation.md for exact scope and exclusions. Initial validation defects were repaired without weakening gates. This is not verify:full or native/UI acceptance.
 
 Frontend interaction pass on `d334106e` used the actual Svelte UI with official Tauri mockIPC and synthetic projects at 1280x720. Fixed clipped project actions, missing modal focus restoration and busy Tab escape. Browser verified filter/list/scroll persistence (1235px), initial Cancel, keyboard wrapping, Escape restoration, busy containment and failure feedback. Repository 296 PASS, both Desktop checks zero warnings, frontend build PASS. This is browser frontend proof, not native Windows deletion or installed Tauri proof. Remaining UI work: narrow viewport/responsive layout and animation checks.
