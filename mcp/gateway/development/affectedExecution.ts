@@ -273,6 +273,13 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
 // These hot paths affect repeated MCP discovery/Control calls but may not
 // map to a single capability source owner. Reuse their existing focused tests.
 const GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH: Readonly<Record<string, readonly string[]>> = {
+  "mcp/lib/factories.ts": [
+    "mcp/tests/structured-result-compaction.test.ts",
+    "mcp/tests/mcp-surface-closure.test.ts",
+  ],
+  "mcp/gateway/presentation/resultCompaction.ts": [
+    "mcp/gateway/presentation/resultCompaction.test.ts",
+  ],
   "mcp/gateway/capabilities/catalog.ts": [
     "mcp/gateway/capabilities/intelligence.test.ts",
     "mcp/tests/capability-discovery-efficiency.test.ts",

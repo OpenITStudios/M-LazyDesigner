@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP response-payload source optimization: `lib/factories.ts` now skips costly whole-object JSON serialization when the tool supplies ordinary human summary text alongside `structuredContent`. For JSON-like text it checks semantic equality to compact pretty-printed/key-reordered duplicate mirrors, while preserving non-equivalent text and mixed image evidence. The existing structured-result suite gains three focused behavior cases. The canonical affected planner explicitly selects structured-result and public-surface regression owners for future factory changes, plus the Gateway compaction owner. REMOTE_GITHUB source/static review only; exact-SHA Bun/TypeScript/performance/native NOT EXECUTED; CI remains disabled.
+
+
+
 2026-10-22 MCP Gateway hot-path affected regression closure: the existing affected-execution selector directly maps capability catalog/intelligence, Control headroom, Runtime operation queue and Texture diagnostic context to current owning behavior suites. This closes the source-only regression gap where an implementation helper may have no single semantic capability owner. One focused selection contract verifies mapped tests without pulling unrelated UV suites; no new test framework or workflow. Static GitHub source review only, Bun/typechecks/CI/runtime NOT EXECUTED.
 
 

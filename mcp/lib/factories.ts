@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { IMCPTool, IMCPPrompt, IMCPResource, StatusType } from "@/types";
+import { isDeepStrictEqual } from "node:util";
 import { ResourceTemplate } from "@modelcontextprotocol/server";
 import type { McpServer, GetPromptResult, PromptArgument, ToolAnnotations } from "@modelcontextprotocol/server";
 
@@ -321,14 +322,22 @@ function compactMirroredStructuredContent(
     return result;
   }
 
-  let structuredJson: string | undefined;
-  try {
-    structuredJson = JSON.stringify(result.structuredContent);
-  } catch {
-    return result;
-  }
+  const text = contentItem.text.trim();
+  // Human summaries dominate the normal response path; never serialize the
+  // (possibly large) structured receipt just to compare ordinary prose.
+  if (!(
+    (text.startsWith("{") && text.endsWith("}")) ||
+    (text.startsWith("[") && text.endsWith("]"))
+  )) return result;
 
-  if (structuredJson === undefined || contentItem.text !== structuredJson) {
+  // Compare JSON values, not whitespace/key ordering. Pretty-printed Runtime
+  // mirrors are still duplicate machine-readable evidence, but different
+  // text, warnings, external locators and media must remain untouched.
+  try {
+    if (!isDeepStrictEqual(JSON.parse(text), result.structuredContent)) {
+      return result;
+    }
+  } catch {
     return result;
   }
 

@@ -233,6 +233,22 @@ serialization across quote/escape/non-ASCII strings, rejected oversized items
 and different budgets. This changes no decision evidence, byte limits, tools,
 network calls or policy; executable performance measurements remain pending.
 
+## Runtime Structured Result Mirror Compaction — SOURCE OPTIMIZATION
+
+The existing `lib/factories.ts` result normalizer no longer serializes every
+`structuredContent` payload merely to compare it with an ordinary one-line
+summary. It first checks whether the companion text is a complete JSON object
+or array. Only plausible JSON mirrors are parsed and compared semantically,
+so whitespace/key-order variations do not return duplicate JSON copies.
+
+Distinct human text, non-equivalent JSON, mixed image/tool content and
+warnings not already present in the structured payload remain unchanged.
+The existing structured-result test owner covers pretty/ordered mirrors,
+nested safety/locator values, large ordinary summaries and mixed media.
+This is output normalization only: no new public capability or weaker
+quality/acceptance evidence. Source-only change; no measured token or CPU
+improvement is claimed without executable validation.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

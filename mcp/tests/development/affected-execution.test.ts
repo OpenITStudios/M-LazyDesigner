@@ -253,6 +253,13 @@ describe("affected execution planner", () => {
 
   test("Gateway hot-path source edits select direct behavior regressions", () => {
     const cases: Array<[string, string[]]> = [
+      ["mcp/lib/factories.ts", [
+        "mcp/tests/structured-result-compaction.test.ts",
+        "mcp/tests/mcp-surface-closure.test.ts",
+      ]],
+      ["mcp/gateway/presentation/resultCompaction.ts", [
+        "mcp/gateway/presentation/resultCompaction.test.ts",
+      ]],
       ["mcp/gateway/capabilities/catalog.ts", [
         "mcp/gateway/capabilities/intelligence.test.ts",
         "mcp/tests/capability-discovery-efficiency.test.ts",
