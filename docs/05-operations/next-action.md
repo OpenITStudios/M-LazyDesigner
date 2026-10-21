@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV rollback terminal state guard: final source fingerprint is now checked only after both `restore()` and `cancelUndo()` have returned or failed; successful restore cannot hide UV drift introduced by native Undo cancellation. Added one focused case to the existing UV transaction suite. GitHub source/static only, targeted Bun/native tests NOT EXECUTED.
+
+
 2026-10-22 UV Runtime activation prewiring: the existing UV layout service now owns import-safe `manage_uv_layout` plan/apply tool documentation plus an uncalled registration function that preserves one service/plan registry across requests. Existing UV registration-readiness test validates both branch schemas and still requires that the current Runtime catalog not expose the capability. No change to `server/runtime/registration.ts`, registered tool count or generator-owned API files. Activation remains blocked until the canonical Bun generator, exact-source tests and native Blockbench checks can run. REMOTE_GITHUB source/static only, no CI/main/release changes.
 
 

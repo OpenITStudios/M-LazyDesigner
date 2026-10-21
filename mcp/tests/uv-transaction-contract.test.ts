@@ -222,6 +222,31 @@ describe("UV atomic transaction contracts", () => {
     expect(cancelled).toBe(true);
   });
 
+  test("Undo cancellation drift after successful restore still reports outcome unknown", async () => {
+    const { cubes, plan } = planned();
+    let native = buildUvNativeSourceSnapshot(cubes, 32, 32);
+    const original = structuredClone(native);
+    const failure = new Error("native apply fault");
+    try {
+      await applyUvLayoutPlanAtomic(plan, fingerprintUvNativeSource(native), {
+        readSource: () => native,
+        apply: () => { throw failure; },
+        restore: snapshot => { native = structuredClone(snapshot); },
+        cancelUndo: () => {
+          // A native cancellation can itself alter already-restored UV bytes.
+          native = structuredClone(original);
+          native.cubes[1].faces[0].uv = [1, 1, 3, 3];
+        },
+      });
+      throw new Error("expected outcome unknown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(UvTransactionOutcomeUnknownError);
+      const unknown = error as UvTransactionOutcomeUnknownError;
+      expect(unknown.cause).toBe(failure);
+      expect(String(unknown.recoveryFailures[0])).toContain("UV_ROLLBACK_MISMATCH");
+    }
+  });
+
   test("recovery failures cannot conceal original mutation fault", async () => {
     const { cubes, plan } = planned();
     const native = buildUvNativeSourceSnapshot(cubes, 32, 32);

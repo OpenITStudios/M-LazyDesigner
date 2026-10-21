@@ -106,7 +106,15 @@ export async function applyUvLayoutPlanAtomic(
       } catch (restoreError) {
         recoveryFailures.push(restoreError);
       }
-      // Successful restore() return alone is not proof of recovered UV bytes.
+    }
+    try {
+      await adapter.cancelUndo?.();
+    } catch (cancelError) {
+      recoveryFailures.push(cancelError);
+    }
+    if (mutationStarted) {
+      // Both native restore and cancelEdit may affect UV bytes. Confirm the
+      // fingerprint only after the full cleanup sequence is complete.
       try {
         const restored = await adapter.readSource();
         if (fingerprintUvNativeSource(restored) !== expectedSourceFingerprint) {
@@ -115,11 +123,6 @@ export async function applyUvLayoutPlanAtomic(
       } catch (verificationError) {
         recoveryFailures.push(verificationError);
       }
-    }
-    try {
-      await adapter.cancelUndo?.();
-    } catch (cancelError) {
-      recoveryFailures.push(cancelError);
     }
 
     if (recoveryFailures.length > 0) {
