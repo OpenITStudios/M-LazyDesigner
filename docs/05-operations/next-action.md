@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV core identity and zero-delta safeguards: the source snapshot builder now rejects missing/duplicate Cube IDs and repeated faces even outside the Blockbench adapter; the canonical atomic transaction rejects zero-movement plans before a native read or Undo. Two focused regressions extend existing UV U7 and transaction test owners. GitHub/static source only, Bun/TS/live Blockbench NOT EXECUTED. UV Runtime registration and generated API remain unmodified until generator-coupled integration is possible.
+
+
 2026-10-22 UV native Cube identity and batch-preflight: `server/runtime/uv/layoutRuntime.ts` now rejects blank/duplicate Cube UUIDs, validates all Cube modes/faces before beginning a native UV apply batch, and preflights all rollback Cube targets before restoring any. The existing `uv-blockbench-runtime-adapter.test.ts` owns three focused regressions; no new engine, registry, Runtime capability or Gateway API was added. GitHub source/static only; Bun, typechecks and LIVE_BLOCKBENCH NOT EXECUTED. Generator-coupled UV Runtime registration remains pending.
 
 

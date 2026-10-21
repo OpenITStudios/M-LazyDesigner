@@ -59,6 +59,11 @@ export async function applyUvLayoutPlanAtomic(
   adapter: UvApplyAdapter
 ): Promise<UvLayoutReceipt> {
   requireValidUvLayoutPlan(plan);
+  if (plan.moved_island_ids.length === 0) {
+    throw new Error(
+      "UV_NO_OP_PLAN: a native UV transaction requires at least one changed island."
+    );
+  }
   const before = await adapter.readSource();
   assertUvPlanSourceFresh(expectedSourceFingerprint, before);
   const instructions = translateUvPlanToNativeInstructions(plan);

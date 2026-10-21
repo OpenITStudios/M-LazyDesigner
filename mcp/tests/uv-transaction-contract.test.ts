@@ -68,6 +68,26 @@ function planned() {
 }
 
 describe("UV atomic transaction contracts", () => {
+  test("direct transaction refuses zero-delta plans before reading native state", async () => {
+    const { plan } = planned();
+    const noOp = { ...plan, moved_island_ids: [] };
+    let reads = 0;
+    let undoCalls = 0;
+    await expect(applyUvLayoutPlanAtomic(
+      noOp,
+      "sha256:" + "a".repeat(64),
+      {
+        readSource: () => { reads++; throw new Error("unexpected native read"); },
+        beginUndo: () => { undoCalls++; },
+        apply: () => { throw new Error("unexpected native write"); },
+        restore: () => {},
+      }
+    )).rejects.toThrow(/UV_NO_OP_PLAN/);
+    expect(reads).toBe(0);
+    expect(undoCalls).toBe(0);
+  });
+
+
   test("successful apply produces continuation-ready receipt and precise invalidation", async () => {
     const { cubes, plan } = planned();
     let native = buildUvNativeSourceSnapshot(cubes, 32, 32);

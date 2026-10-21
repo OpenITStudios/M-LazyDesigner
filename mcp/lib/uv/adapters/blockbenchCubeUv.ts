@@ -92,6 +92,30 @@ export function buildUvNativeSourceSnapshot(
     throw new Error("UV native snapshot requires positive logical dimensions.");
   }
 
+  // Core callers can supply snapshots without passing through the native
+  // adapter. Fail closed on ambiguous Cube/face identity here as well.
+  const cubeUuids = new Set<string>();
+  for (const cube of cubes) {
+    if (typeof cube.uuid !== "string" || !cube.uuid.trim()) {
+      throw new Error("UV_NATIVE_CUBE_ID_REQUIRED: Cube UUID must be non-empty.");
+    }
+    if (cubeUuids.has(cube.uuid)) {
+      throw new Error(
+        `UV_NATIVE_DUPLICATE_CUBE_UUID: Cube UUID "${cube.uuid}" occurs more than once.`
+      );
+    }
+    cubeUuids.add(cube.uuid);
+    const faces = new Set<string>();
+    for (const face of cube.faces) {
+      if (faces.has(face.face)) {
+        throw new Error(
+          `UV_NATIVE_DUPLICATE_FACE: Cube "${cube.uuid}" repeats face "${face.face}".`
+        );
+      }
+      faces.add(face.face);
+    }
+  }
+
   return {
     schema: 1,
     ...(projectUuid !== undefined ? { project_uuid: projectUuid } : {}),

@@ -80,6 +80,22 @@ describe("UV U7 apply contracts", () => {
       .toThrow("non-empty project UUID");
   });
 
+  test("core native snapshot builder refuses ambiguous Cube and face identities", () => {
+    const duplicated = [...cubes(), { ...cubes()[0] }];
+    expect(() => buildUvNativeSourceSnapshot(duplicated, 32, 32))
+      .toThrow(/UV_NATIVE_DUPLICATE_CUBE_UUID/);
+
+    const unnamed = cubes();
+    unnamed[0].uuid = "";
+    expect(() => buildUvNativeSourceSnapshot(unnamed, 32, 32))
+      .toThrow(/UV_NATIVE_CUBE_ID_REQUIRED/);
+
+    const duplicateFace = cubes();
+    duplicateFace[0].faces.push({ ...duplicateFace[0].faces[0] });
+    expect(() => buildUvNativeSourceSnapshot(duplicateFace, 32, 32))
+      .toThrow(/UV_NATIVE_DUPLICATE_FACE/);
+  });
+
   test("planner never rotates Box-UV islands because native offset cannot represent it", () => {
     const snapshot = buildUvLayoutSnapshot(
       [{

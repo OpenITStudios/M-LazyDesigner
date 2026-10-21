@@ -313,7 +313,11 @@ Implemented source contracts now include:
     rejecting duplicate copied UUIDs before plan or apply;
 15. native Cube UUID uniqueness and all-target preflight for UV apply and
     restore, so duplicate/blank identities and invalid later Cube faces or
-    modes cannot partially modify earlier Cubes.
+    modes cannot partially modify earlier Cubes;
+16. the shared native snapshot builder rejects blank/duplicate Cube UUIDs and
+    repeated face identities even for non-Blockbench source callers;
+17. the atomic transaction rejects a zero-delta plan before reading native
+    state or beginning Undo (defense in depth with the service preflight).
 
 The source-ready integration intentionally does NOT register a new Runtime capability yet. The existing `server/runtime/uv/layoutService.ts` now exports its declarative tool specification and an uncalled registration function, so the future activation can reuse one persistent plan/apply service instance without a new engine or Gateway API. Registration changes generated MCP API documentation, and repository policy forbids hand-editing generated outputs. LOCAL_CODE must run the canonical docs generator when `manage_uv_layout` is wired to the Geometry/Modelling owner on the shared AUTHORING Runtime surface. Source presence alone is not native acceptance or UV Layout PASS.
 
