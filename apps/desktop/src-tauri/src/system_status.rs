@@ -550,8 +550,10 @@ pub fn ensure_ready(app: &AppHandle) -> Result<EnsureReadyResult, String> {
             if verified.runtime_ready {
                 let gateway_active = verified.managed.as_ref().map(|value| value.gateway_active).unwrap_or(false);
                 return Ok(EnsureReadyResult {
-                    status: if gateway_active { "READY" } else { "RUNTIME_READY" },
-                    reason: if gateway_active { "CONNECTED" } else { "WAITING_FOR_MCP_CLIENT" },
+                    // A Gateway PID lease is not proof of its MCP client
+                    // handshake. Only the Runtime readiness is verified here.
+                    status: "RUNTIME_READY",
+                    reason: if gateway_active { "MCP_SESSION_UNVERIFIED" } else { "WAITING_FOR_MCP_CLIENT" },
                     runtime_online: true,
                     gateway_active,
                     blockbench_running: current.blockbench_running,

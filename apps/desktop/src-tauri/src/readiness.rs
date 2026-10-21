@@ -46,8 +46,10 @@ pub(crate) fn gateway(
     match (active, runtime_ready, blockbench_running) {
         (true, true, _) => GatewaySupervision {
             ownership: "client-owned",
-            state: "healthy",
-            action: None,
+            // A process lease + Runtime readiness does not prove an MCP
+            // handshake or a fresh Gateway capability catalog.
+            state: "gateway-detected",
+            action: Some("Gateway process and Blockbench Runtime detected. Confirm the MCP handshake and capability catalog in the active AI client."),
         },
         (true, false, _) => GatewaySupervision {
             ownership: "client-owned",
@@ -107,10 +109,7 @@ pub(crate) fn product_state(
     if !runtime_ready {
         return "plugin-setup";
     }
-    if gateway.state == "healthy" {
-        return "ready";
-    }
-    if gateway.state == "client-disconnected" {
+    if gateway.state == "gateway-detected" || gateway.state == "client-disconnected" {
         return "client-wait";
     }
     "attention"
@@ -159,13 +158,8 @@ pub(crate) fn readiness(
             ready: false,
         };
     }
-    if gateway.state == "healthy" && runtime_ready {
-        return ReadinessProjection {
-            state: "ready",
-            summary: "Blockbench Runtime and client-owned Gateway are connected.",
-            ready: true,
-        };
-    }
+    // No MCP session handshake proof is available in the Desktop control
+    // plane. Never upgrade native process/lease observations to AI connected.
     ReadinessProjection {
         state: "needs-connection",
         summary: gateway.action.unwrap_or("Restore Runtime/Gateway connectivity."),
@@ -265,10 +259,20 @@ mod tests {
     #[test]
     fn readiness_projection_covers_workstation_states() {
         let healthy = managed(true, true, true);
-        let healthy_gateway = gateway(Some(&healthy), true, true);
-        let ready = readiness(true, Some(&healthy), true, true, &healthy_gateway, "ready");
-        assert_eq!(ready.state, "ready");
-        assert!(ready.ready);
+        let observed_gateway = gateway(Some(&healthy), true, true);
+        assert_eq!(observed_gateway.state, "gateway-detected");
+        assert_eq!(observed_gateway.ownership, "client-owned");
+        assert!(observed_gateway.action.unwrap().contains("MCP handshake"));
+        let unverified = readiness(true, Some(&healthy), true, true, &observed_gateway, "ready");
+        assert_eq!(unverified.state, "needs-connection");
+        assert!(!unverified.ready);
+        let running_editor = BlockbenchState {
+            running: true, version: None, compatibility: None, diagnostic: None,
+        };
+        assert_eq!(
+            product_state(true, Some(&healthy), &running_editor, true, &observed_gateway, "ready"),
+            "client-wait"
+        );
 
         let closed_gateway = gateway(Some(&healthy), false, false);
         let start = readiness(true, Some(&healthy), false, false, &closed_gateway, "ready");

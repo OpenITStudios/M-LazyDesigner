@@ -50,7 +50,7 @@ export type MaintenanceAvailability = {
 
 export type GatewaySupervision = {
     ownership: 'client-owned';
-    state: 'healthy' | 'waiting-runtime' | 'client-disconnected' | 'runtime-offline' | 'idle' | 'unknown';
+    state: 'healthy' | 'gateway-detected' | 'waiting-runtime' | 'client-disconnected' | 'runtime-offline' | 'idle' | 'unknown';
     action: string | null;
   };
 

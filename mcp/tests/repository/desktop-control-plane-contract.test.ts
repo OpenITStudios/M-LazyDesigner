@@ -917,6 +917,28 @@ describe("Desktop small-text contrast", () => {
 });
 
 describe("Desktop pure status presentation", () => {
+
+  test("Desktop does not equate a Gateway PID and Runtime lease with an MCP handshake", async () => {
+    const [readiness, system, app, workspace, types] = await Promise.all([
+      source("../apps/desktop/src-tauri/src/readiness.rs"),
+      source("../apps/desktop/src-tauri/src/system_status.rs"),
+      source("../apps/desktop/src/App.svelte"),
+      workspaceSource,
+      source("../apps/desktop/src/desktopTypes.ts"),
+    ]);
+    expect(readiness).toContain('state: "gateway-detected"');
+    expect(readiness).not.toContain('state: "healthy"');
+    expect(readiness).toContain('ready: false');
+    expect(readiness).toContain('gateway.state == "gateway-detected"');
+    expect(system).toContain('status: "RUNTIME_READY"');
+    expect(system).toContain('"MCP_SESSION_UNVERIFIED"');
+    expect(app).toContain("result.reason === 'MCP_SESSION_UNVERIFIED'");
+    expect(workspace).toContain('MCP handshake unverified');
+    expect(types).toContain("'gateway-detected'");
+    expect(readiness).toContain("fn readiness_projection_covers_workstation_states()");
+  });
+
+
   test("preserves all canonical product headlines and compatibility labels", async () => {
     const { productHeadline, productMessage, compatibilityLabel } = await import("../../../apps/desktop/src/desktopPresentation");
     for (const [mode, headline] of [

@@ -319,7 +319,9 @@
       const result = await setupOperations.connect({ refresh, onReadiness: applyReadiness });
       if (result.status === 'READY' || result.status === 'RUNTIME_READY') {
         const focused = await editorOperations.focus();
-        const connection = result.status === 'READY' ? 'AI connection is ready.' : 'AI client can connect when needed.';
+        const connection = result.reason === 'MCP_SESSION_UNVERIFIED'
+          ? 'Gateway process detected; verify the MCP session in your AI client.'
+          : result.status === 'READY' ? 'AI connection is ready.' : 'AI client can connect when needed.';
         showSuccessToast(focused
           ? `Blockbench window focus confirmed. ${connection}`
           : `Blockbench is ready. Select it from the taskbar if needed. ${connection}`);

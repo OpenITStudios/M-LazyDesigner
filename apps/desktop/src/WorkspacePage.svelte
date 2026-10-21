@@ -133,8 +133,8 @@
       <section class="workspace-connection" aria-label="Connection status">
         <span class="connection-dot" class:waiting={productMode(status) === 'client-wait'} class:unknown={statusProbeFailures >= 2} aria-hidden="true"></span>
         <div class="connection-copy">
-          <strong>{statusProbeFailures >= 2 ? 'AI status unverified' : productMode(status) === 'ready' ? 'AI connected' : 'Blockbench ready'}</strong>
-          <span>{statusProbeFailures >= 2 ? 'AI status is unverified. You can still open models; Refresh before AI or maintenance actions.' : productMode(status) === 'ready' ? 'Blockbench and LazyDesigner are ready.' : 'Editing is available. Connect the AI client when needed.'}</span>
+          <strong>{statusProbeFailures >= 2 ? 'AI status unverified' : productMode(status) === 'ready' ? 'AI connected' : status.gateway.state === 'gateway-detected' ? 'Gateway detected · MCP unverified' : 'Blockbench ready'}</strong>
+          <span>{statusProbeFailures >= 2 ? 'AI status is unverified. You can still open models; Refresh before AI or maintenance actions.' : productMode(status) === 'ready' ? 'Blockbench and LazyDesigner are ready.' : status.gateway.state === 'gateway-detected' ? 'Blockbench and Gateway are running; verify MCP connection and tools in your AI client.' : 'Editing is available. Connect the AI client when needed.'}</span>
         </div>
         {#if statusProbeFailures >= 2}
           <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
@@ -228,7 +228,7 @@
 
     {@render projectNavigator(status)}
 
-    {#if productMode(status) !== 'ready' && productMode(status) !== 'client-wait' || status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED'}
+    {#if (productMode(status) !== 'ready' && productMode(status) !== 'client-wait') || status.gateway.state === 'gateway-detected' || status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED'}
     <section class="content-section">
       <div class="section-heading">
         <div><h2>AI connection and updates</h2><p>Editing remains available independently of AI connectivity.</p></div>
@@ -238,7 +238,7 @@
         <div class="definition-row">
           <span>AI status</span>
           <strong class:status-good={productMode(status) === 'ready'} class:status-warning={statusProbeFailures >= 2}>
-            {statusProbeFailures >= 2 ? 'Check required' : productMode(status) === 'ready' ? 'Connected' : productMode(status) === 'client-wait' ? 'Not connected yet' : productHeadline(status)}
+            {statusProbeFailures >= 2 ? 'Check required' : productMode(status) === 'ready' ? 'Connected' : productMode(status) === 'client-wait' ? (status.gateway.state === 'gateway-detected' ? 'MCP handshake unverified' : 'Not connected yet') : productHeadline(status)}
           </strong>
         </div>
         {#if status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED' || updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED'}
@@ -269,7 +269,7 @@
       {#if productMode(status) === 'security-setup'}
         <div class="inline-alert"><div><strong>Finish setup</strong><span>Complete the secure local connection before using LazyDesigner.</span></div><button class="primary-button small-button" onclick={() => runManagedAction('setup-tls')} disabled={!status.maintenance.setup_tls || busyAction !== null || statusProbeFailures >= 2}>Finish setup</button></div>
       {:else if productMode(status) === 'client-wait'}
-        <div class="inline-note"><strong>Blockbench is ready.</strong><span>Connect AI when you need it. You can continue editing without a connection.</span></div>
+        <div class="inline-note"><strong>Blockbench is ready.</strong><span>{status.gateway.state === 'gateway-detected' ? 'Gateway process detected, but Desktop cannot verify the MCP handshake. Confirm the connection from your AI client.' : 'Connect AI when you need it. You can continue editing without a connection.'}</span></div>
       {:else if productMode(status) === 'attention'}
         <div class="inline-alert"><div><strong>Action required</strong><span>{productGuidance(status, pluginApprovalNeeded) ?? status.readiness.summary}</span></div><button class="secondary-button small-button" onclick={() => navigate('Support')}>Open Support</button></div>
       {/if}

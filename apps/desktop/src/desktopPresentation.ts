@@ -32,7 +32,9 @@ export function productMessage(value: SystemStatus) {
   if (mode === 'unsupported') return 'This Blockbench version cannot be used safely with the current LazyDesigner build.';
   if (mode === 'ready-start') return 'Everything is installed. Open Blockbench when you are ready to work.';
   if (mode === 'plugin-setup') return 'LazyDesigner will try to connect to Blockbench automatically.';
-  if (mode === 'client-wait') return 'LazyDesigner is active in Blockbench and will connect when an MCP client starts a session.';
+  if (mode === 'client-wait') return value.gateway?.state === 'gateway-detected'
+    ? 'Blockbench Runtime and Gateway process detected; confirm the MCP handshake and available capabilities from your AI client.'
+    : 'LazyDesigner is active in Blockbench and will connect when an MCP client starts a session.';
   if (mode === 'ready') return 'Everything is working. Continue in Blockbench.';
   return value.readiness.summary;
 }
