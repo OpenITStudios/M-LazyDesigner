@@ -116,6 +116,49 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     }
   });
 
+
+  test("passive status never renews a stale capability catalog lease", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp", undefined, {
+      catalogLeaseMs: 5_000,
+    });
+    primeCatalog(backend, [{
+      name: "manage_cubes",
+      description: "Authoring capability",
+      annotations: { readOnlyHint: false },
+    }]);
+    const internal = backend as any;
+    internal.connection.markReady({ catalogRefreshed: true });
+    const oldValidation = Date.now() - 10_000;
+    internal.catalogValidatedAt = oldValidation;
+    const probe = {
+      online: true as const,
+      signature: "runtime-test",
+      health: { product: { authoring_phase: "geometry" } },
+    };
+    const first = internal.buildStatus(probe);
+    const second = internal.buildStatus(probe);
+    expect(first.runtime.mcp_client_ready).toBe(true);
+    expect(first.runtime.catalog_stale).toBe(true);
+    expect(second.runtime.catalog_stale).toBe(true);
+    expect(internal.catalogValidatedAt).toBe(oldValidation);
+    expect(internal.hasFreshCatalog()).toBe(false);
+  });
+
+  test("status does not claim a ready MCP catalog when the transport lists no tools", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    primeCatalog(backend, []);
+    const internal = backend as any;
+    internal.connection.markReady();
+    const status = internal.buildStatus({
+      online: true,
+      signature: "runtime-test",
+      health: { product: { authoring_phase: "geometry" } },
+    });
+    expect(status.runtime.mcp_client_ready).toBe(false);
+    expect(status.runtime.catalog_count).toBe(0);
+    expect(status.runtime.catalog_stale).toBe(false);
+  });
+
   test("describe uses a fresh local catalog without probing Runtime", async () => {
     const backend = new BlockitRuntimeBackend(undefined, undefined, {
       catalogLeaseMs: 5_000,

@@ -191,7 +191,7 @@ export class BlockitRuntimeBackend {
         && this.client !== null
         && this.connectedSignature === this.lastVerifiedHealthSignature
         && this.catalog.size > 0
-        && !this.connection.needsMcpRevalidation()
+        && this.hasFreshCatalog()
         && this.connection.snapshot().state === "ready",
       runtime_build_identity: this.expectedRuntimeBuildIdentity,
     };
@@ -476,8 +476,12 @@ export class BlockitRuntimeBackend {
 
     const ready =
       Boolean(this.client) &&
+      this.catalog.size > 0 &&
       this.connectedSignature === probe.signature &&
       !this.connection.needsMcpRevalidation();
+    const catalogStale =
+      this.catalog.size > 0 &&
+      (!this.hasFreshCatalog() || this.connectedSignature !== probe.signature);
     // A health-only status read can precede the first intentional lazy MCP
     // connection. Reflect this first healthy probe as "probing" rather than
     // reporting an offline client, but never erase failed reconnect evidence.
@@ -493,7 +497,8 @@ export class BlockitRuntimeBackend {
       this.connection.beginProbe();
     }
     if (ready) {
-      this.catalogValidatedAt = Date.now();
+      // /health verifies Runtime identity, not tools/list or the catalog.
+      // Only a real catalog validation may renew catalogValidatedAt.
       this.connection.markHealthy();
     }
     return {
@@ -508,8 +513,7 @@ export class BlockitRuntimeBackend {
         endpoint: this.runtimeUrl,
         mcp_client_ready: ready,
         protocol_era: ready ? this.connectedProtocolEra : null,
-        catalog_stale:
-          this.connectedSignature !== null && this.connectedSignature !== probe.signature,
+        catalog_stale: catalogStale,
         runtime_signature: probe.signature,
         connected_signature: this.connectedSignature,
         catalog_count: this.catalog.size,
