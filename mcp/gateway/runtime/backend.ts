@@ -87,6 +87,10 @@ export class BlockitRuntimeBackend {
   private lastError: string | null = null;
   private lastVerifiedHealthSignature: string | null = null;
   private lastVerifiedHealthAt = 0;
+  // All backend-changing operations use the existing serialized Gateway queue.
+  // A passive /health reply cannot commit across one of these boundaries.
+  private backendRevision = 0;
+  private passiveStatusSequence = 0;
 
   constructor(
     runtimeUrl?: string,
@@ -154,7 +158,14 @@ export class BlockitRuntimeBackend {
     operation: () => Promise<T>,
     signal?: AbortSignal
   ): Promise<T> {
-    return this.operationQueue.run(operation, { signal });
+    return this.operationQueue.run(async () => {
+      this.backendRevision += 1;
+      try {
+        return await operation();
+      } finally {
+        this.backendRevision += 1;
+      }
+    }, { signal });
   }
 
   private operationStatus(): GatewayRuntimeStatus["operations"] {
@@ -201,9 +212,14 @@ export class BlockitRuntimeBackend {
     return buildRuntimeAffinityHeaders(this.projectUuid, this.authoringPhase);
   }
 
-  private async probeHealth(requestedProjectUuid?: string): Promise<HealthProbe> {
-    this.lastVerifiedHealthSignature = null;
-    this.lastVerifiedHealthAt = 0;
+  private async probeHealth(
+    requestedProjectUuid?: string,
+    passive: boolean = false
+  ): Promise<HealthProbe> {
+    if (!passive) {
+      this.lastVerifiedHealthSignature = null;
+      this.lastVerifiedHealthAt = 0;
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.healthTimeoutMs);
 
@@ -232,9 +248,11 @@ export class BlockitRuntimeBackend {
         return { online: false, error: identityIssue };
       }
       const signature = createRuntimeSignature(body);
-      this.lastVerifiedHealthSignature = signature;
-      this.lastVerifiedHealthAt = Date.now();
-      this.connection.markAvailable();
+      if (!passive) {
+        this.lastVerifiedHealthSignature = signature;
+        this.lastVerifiedHealthAt = Date.now();
+        this.connection.markAvailable();
+      }
       return {
         online: true,
         health: body,
@@ -526,7 +544,35 @@ export class BlockitRuntimeBackend {
   }
 
   async getStatus(): Promise<GatewayRuntimeStatus> {
-    return this.buildStatus(await this.probeHealth());
+    // Status reads stay outside the native operation queue. If a read spans a
+    // reconnect/affinity operation or a newer status probe, discard its result
+    // before it can mark the MCP connection ready/offline or alter health proof.
+    // One bounded retry is safe for status; never retry native mutations.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const revision = this.backendRevision;
+      const sequence = ++this.passiveStatusSequence;
+      const operationWasActive = this.operationStatus().active > 0;
+      const probe = await this.probeHealth(undefined, true);
+      if (operationWasActive ||
+          this.operationStatus().active > 0 ||
+          revision !== this.backendRevision ||
+          sequence !== this.passiveStatusSequence) continue;
+      if (probe.online) {
+        this.lastVerifiedHealthSignature = probe.signature;
+        this.lastVerifiedHealthAt = Date.now();
+        this.connection.markAvailable();
+      } else {
+        this.lastVerifiedHealthSignature = null;
+        this.lastVerifiedHealthAt = 0;
+      }
+      return this.buildStatus(probe);
+    }
+    throw new GatewayBackendError(
+      "BACKEND_UNAVAILABLE",
+      "Gateway Runtime status changed during observation; retry read-only status.",
+      true,
+      { reason: "SUPERSEDED_STATUS_PROBE", executed: false }
+    );
   }
 
   async adoptActiveProject(): Promise<GatewayRuntimeStatus> {

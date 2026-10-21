@@ -117,6 +117,126 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
   });
 
 
+
+
+  test("status observations during an active Runtime transition do not claim readiness", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    const responses: Array<(value: unknown) => void> = [];
+    state.probeHealth = () => new Promise(resolve => { responses.push(resolve); });
+    state.connection.markReady();
+    let begin!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>(resolve => { begin = resolve; });
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const transition = state.runExclusive(async () => {
+      begin();
+      await blocked;
+    });
+    await entered;
+    try {
+      const status = backend.getStatus();
+      responses[0]!({
+        online: true,
+        signature: "old-runtime",
+        health: { product: { authoring_phase: "geometry" } },
+      });
+      await Promise.resolve();
+      expect(responses).toHaveLength(2);
+      responses[1]!({
+        online: true,
+        signature: "old-runtime",
+        health: { product: { authoring_phase: "geometry" } },
+      });
+      await expect(status).rejects.toMatchObject({
+        details: { reason: "SUPERSEDED_STATUS_PROBE", executed: false },
+      });
+      expect(state.connection.snapshot().state).toBe("ready");
+      expect(state.lastVerifiedHealthSignature).toBeNull();
+    } finally {
+      release();
+      await transition;
+    }
+  });
+
+  test("late offline status cannot revoke a newer Gateway reconnect", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    const responses: Array<(value: unknown) => void> = [];
+    state.probeHealth = () => new Promise(resolve => { responses.push(resolve); });
+    state.connection.markReady({ catalogRefreshed: true });
+
+    const pending = backend.getStatus();
+    expect(responses).toHaveLength(1);
+    // Native reconnect or phase/catalog swap completes while passive health
+    // is pending; the older /health result must not mark the session offline.
+    await state.runExclusive(async () => undefined);
+    responses[0]!({ online: false, error: "old transport failed" });
+    await Promise.resolve();
+    expect(responses).toHaveLength(2); // One bounded retry.
+    const connected = state.connection.snapshot();
+    responses[1]!({
+      online: true,
+      signature: "fresh-runtime",
+      health: { product: { authoring_phase: "geometry" } },
+    });
+    const result = await pending;
+    expect(result.runtime.online).toBe(true);
+    expect(result.runtime.runtime_signature).toBe("fresh-runtime");
+    expect(state.connection.needsMcpRevalidation()).toBe(false);
+    expect(connected.state).toBe("ready");
+  });
+
+  test("older passive status reply cannot overwrite newer health proof", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    const responses: Array<(value: unknown) => void> = [];
+    state.probeHealth = () => new Promise(resolve => { responses.push(resolve); });
+    const first = backend.getStatus();
+    const second = backend.getStatus();
+    expect(responses).toHaveLength(2);
+    responses[1]!({
+      online: true,
+      signature: "runtime-new",
+      health: { product: { authoring_phase: "geometry" } },
+    });
+    const latest = await second;
+    expect(latest.runtime.runtime_signature).toBe("runtime-new");
+    responses[0]!({ online: false, error: "outdated failure" });
+    await Promise.resolve();
+    expect(responses).toHaveLength(3);
+    responses[2]!({
+      online: true,
+      signature: "runtime-new",
+      health: { product: { authoring_phase: "geometry" } },
+    });
+    const recovered = await first;
+    expect(recovered.runtime.online).toBe(true);
+    expect(state.connection.needsMcpRevalidation()).toBe(false);
+    expect(state.lastVerifiedHealthSignature).toBe("runtime-new");
+  });
+
+  test("repeated superseded observations fail without changing connection authority", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    const responses: Array<(value: unknown) => void> = [];
+    state.probeHealth = () => new Promise(resolve => { responses.push(resolve); });
+    state.connection.markReady();
+    const pending = backend.getStatus();
+    await state.runExclusive(async () => undefined);
+    responses[0]!({ online: false, error: "old failure" });
+    await Promise.resolve();
+    await state.runExclusive(async () => undefined);
+    responses[1]!({ online: false, error: "also old" });
+    await expect(pending).rejects.toMatchObject({
+      code: "BACKEND_UNAVAILABLE",
+      safeToRetry: true,
+      details: { reason: "SUPERSEDED_STATUS_PROBE", executed: false },
+    });
+    expect(state.connection.snapshot().state).toBe("ready");
+    expect(state.connection.needsMcpRevalidation()).toBe(false);
+  });
+
   test("passive status never renews a stale capability catalog lease", async () => {
     const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp", undefined, {
       catalogLeaseMs: 5_000,
