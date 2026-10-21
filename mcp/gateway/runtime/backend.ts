@@ -195,7 +195,7 @@ export class BlockitRuntimeBackend {
     return buildRuntimeAffinityHeaders(this.projectUuid, this.authoringPhase);
   }
 
-  private async probeHealth(): Promise<HealthProbe> {
+  private async probeHealth(requestedProjectUuid?: string): Promise<HealthProbe> {
     this.lastVerifiedHealthSignature = null;
     this.lastVerifiedHealthAt = 0;
     const controller = new AbortController();
@@ -204,7 +204,9 @@ export class BlockitRuntimeBackend {
     try {
       const response = await runtimeFetch(`${this.runtimeUrl}/health`, {
         method: "GET",
-        headers: this.runtimeRequestHeaders(),
+        headers: requestedProjectUuid === undefined
+          ? this.runtimeRequestHeaders()
+          : buildRuntimeAffinityHeaders(requestedProjectUuid, this.authoringPhase),
         signal: controller.signal,
       });
       if (response.status !== 200) {
@@ -541,9 +543,39 @@ export class BlockitRuntimeBackend {
         );
       }
 
-      let affinityChanged = this.syncAuthoringPhaseFromHealth(initial.health);
-      if (this.projectUuid !== projectHealth.active_project_uuid) {
-        this.projectUuid = projectHealth.active_project_uuid;
+      // An explicit rebind may select any visible tab, but the Runtime must
+      // prove the exact UUID is unique. The first passive probe cannot detect
+      // duplicate UUIDs when no requested-project header is supplied.
+      const selectedUuid = projectHealth.active_project_uuid;
+      const confirmed = await this.probeHealth(selectedUuid);
+      if (!confirmed.online) {
+        this.lastError = confirmed.error;
+        throw new GatewayBackendError(
+          "BACKEND_UNAVAILABLE",
+          `Could not verify the selected Blockbench project: ${confirmed.error}`,
+          false
+        );
+      }
+      const verifiedProject = readRuntimeProjectHealth(confirmed.health);
+      if (
+        confirmed.signature !== initial.signature ||
+        !verifiedProject ||
+        verifiedProject.active_project_uuid !== selectedUuid ||
+        verifiedProject.requested_project_uuid !== selectedUuid ||
+        verifiedProject.requested_project_available !== true
+      ) {
+        throw new GatewayBackendError(
+          "PROJECT_CONTEXT_LOST",
+          "Selected Blockbench tab changed, is ambiguous, or Runtime restarted during rebind. Choose one unique tab and explicitly rebind again.",
+          false,
+          { project_uuid: selectedUuid }
+        );
+      }
+
+      // Commit neither affinity until both project and Stage are validated.
+      let affinityChanged = this.syncAuthoringPhaseFromHealth(confirmed.health);
+      if (this.projectUuid !== selectedUuid) {
+        this.projectUuid = selectedUuid;
         affinityChanged = true;
       }
       if (affinityChanged) {

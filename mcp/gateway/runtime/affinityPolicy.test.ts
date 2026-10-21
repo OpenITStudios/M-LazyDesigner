@@ -172,6 +172,89 @@ describe("Gateway affinity policy", () => {
     expect(connects).toBe(1);
   });
 
+
+  test("explicit rebind refuses duplicate tab UUID without changing its prior affinity", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const internal = backend as unknown as {
+      projectUuid: string | null;
+      authoringPhase: "geometry" | "texturing" | "animation" | null;
+      probeHealth: (requested?: string) => Promise<HealthProbe>;
+    };
+    internal.projectUuid = "previous-uuid";
+    const probes: Array<string | undefined> = [];
+    internal.probeHealth = async requested => {
+      probes.push(requested);
+      return {
+        online: true,
+        signature: "same-runtime",
+        health: health({
+          active: "duplicate-id",
+          requested: requested ?? "previous-uuid",
+          available: requested ? null : true,
+          count: 3,
+        }),
+      };
+    };
+
+    await expect(backend.adoptActiveProject()).rejects.toMatchObject({
+      code: "PROJECT_CONTEXT_LOST",
+      safeToRetry: false,
+    });
+    expect(probes).toEqual([undefined, "duplicate-id"]);
+    expect(internal.projectUuid).toBe("previous-uuid");
+    expect(internal.authoringPhase).toBeNull();
+  });
+
+  test("explicit rebind rejects Runtime replacement between passive and unique-project probes", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const internal = backend as unknown as {
+      projectUuid: string | null;
+      probeHealth: (requested?: string) => Promise<HealthProbe>;
+    };
+    internal.projectUuid = "previous-uuid";
+    internal.probeHealth = async requested => ({
+      online: true,
+      signature: requested ? "new-runtime" : "previous-runtime",
+      health: health({
+        active: "project-new",
+        requested: requested ?? "previous-uuid",
+        available: true,
+        count: 2,
+      }),
+    });
+    await expect(backend.adoptActiveProject()).rejects.toMatchObject({
+      code: "PROJECT_CONTEXT_LOST",
+    });
+    expect(internal.projectUuid).toBe("previous-uuid");
+  });
+
+  test("explicit rebind adopts a unique selected tab after two matching-generation probes", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const internal = backend as unknown as {
+      projectUuid: string | null;
+      probeHealth: (requested?: string) => Promise<HealthProbe>;
+    };
+    internal.projectUuid = "previous-uuid";
+    const probes: Array<string | undefined> = [];
+    internal.probeHealth = async requested => {
+      probes.push(requested);
+      return {
+        online: true,
+        signature: "same-runtime",
+        health: health({
+          active: "project-new",
+          requested: requested ?? "previous-uuid",
+          available: true,
+          count: 2,
+        }),
+      };
+    };
+    const status = await backend.adoptActiveProject();
+    expect(status.affinity.project_uuid).toBe("project-new");
+    expect(internal.projectUuid).toBe("project-new");
+    expect(probes).toEqual([undefined, "project-new", undefined]);
+  });
+
   test("can clear a missing bound project only for explicit transition flows", () => {
     expect(
       resolveProjectAffinity(
