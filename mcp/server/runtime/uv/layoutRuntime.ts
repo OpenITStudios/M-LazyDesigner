@@ -7,7 +7,10 @@ import {
   type UvNativeMutationInstruction,
   type UvNativeSourceSnapshot,
 } from "@/lib/uv/adapters/blockbenchCubeUv";
-import type { UvApplyAdapter } from "@/lib/uv/transaction";
+import {
+  UvTransactionOutcomeUnknownError,
+  type UvApplyAdapter,
+} from "@/lib/uv/transaction";
 
 const UV_FACE_KEYS: readonly UvFaceKey[] = [
   "north",
@@ -229,10 +232,27 @@ export function createBlockbenchUvApplyAdapter(): UvApplyAdapter {
         );
       }
       const cubes = cubesForInstructions(instructions);
-      Undo.initEdit({
-        elements: cubes,
-        uv_only: true,
-      });
+      try {
+        Undo.initEdit({
+          elements: cubes,
+          uv_only: true,
+        });
+      } catch (failure) {
+        // There was no edit before initEdit. If native initEdit partially
+        // opened one, only this adapter owns its best-effort cancellation.
+        if (Undo.current_save) {
+          try {
+            requireBoundProject();
+            Undo.cancelEdit(false);
+            if (Undo.current_save) {
+              throw new Error("UV_UNDO_INIT_INCOMPLETE: native Undo edit remains open.");
+            }
+          } catch (recoveryFailure) {
+            throw new UvTransactionOutcomeUnknownError(failure, [recoveryFailure]);
+          }
+        }
+        throw failure;
+      }
     },
     commitUndo: () => {
       requireBoundProject();

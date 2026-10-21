@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 UV native beginUndo partial-open recovery: the existing Blockbench adapter now cancels only an Undo edit partially opened by its own failed `Undo.initEdit()`; it never cancels a pre-existing native edit, and reports `UV_OUTCOME_UNKNOWN` if cleanup cannot be established. One focused mock-native regression was added to the existing UV adapter test owner. Source contract only; Bun, TypeScript and real installed Blockbench tests NOT EXECUTED.
+
+
 2026-10-22 UV atomic transaction hardening: the canonical `lib/uv/transaction.ts` now guards beginUndo failures without touching an unrelated native edit, checks rollback against the original source fingerprint, retains the original failure when recovery succeeds, and marks failed restoration/cancellation or uncertain native Undo commit as `UV_OUTCOME_UNKNOWN` (no automatic replay). One existing `uv-transaction-contract.test.ts` suite owns targeted regressions for these failures. GitHub source/static authoring only; exact-SHA Bun/TypeScript/native Blockbench tests NOT EXECUTED. Runtime registration/generator remain separate blockers.
 
 
