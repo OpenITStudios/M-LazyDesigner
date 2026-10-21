@@ -20,8 +20,28 @@ let stageSwitchHandler:
   | ((stage: McpAuthoringStage) => void)
   | undefined;
 
+// Tool calls are serialized by Runtime's native operation queue. Only a
+// Gateway affinity header scopes the current call; direct Runtime clients
+// continue using the Blockbench-global Stage. No second Stage registry.
+let requestStage: { stage: McpAuthoringStage; scoped: boolean } | null = null;
+
+/** Must be called INSIDE runRuntimeOperationExclusive, never on /health or tools/list. */
+export async function runWithMcpStageRequest<T>(
+  stage: McpAuthoringStage,
+  scoped: boolean,
+  operation: () => Promise<T>
+): Promise<T> {
+  const prior = requestStage;
+  requestStage = { stage, scoped };
+  try {
+    return await operation();
+  } finally {
+    requestStage = prior;
+  }
+}
+
 export function setMcpStageSwitchHandler(
-  handler: (stage: McpAuthoringStage) => void
+  handler: ((stage: McpAuthoringStage) => void) | undefined
 ): void {
   stageSwitchHandler = handler;
 }
@@ -62,7 +82,9 @@ export function registerPhaseControlTool(): void {
         if (!stageSwitchHandler) {
           throw new Error("Runtime Stage/Surface switching is unavailable; reload LazyDesigner.");
         }
-        const previousStage = getActiveMcpAuthoringStage();
+        const previousStage = requestStage?.scoped
+          ? requestStage.stage
+          : getActiveMcpAuthoringStage();
         const previousSurface = getMcpRuntimeSurface(previousStage);
         const targetSurface = getMcpRuntimeSurface(target_phase);
         const surfaceChanged = previousSurface !== targetSurface;
@@ -90,18 +112,19 @@ export function registerPhaseControlTool(): void {
           nativeCheckpointChecked = true;
         }
 
-        // Apply the canonical Runtime surface/focus before returning the handoff
-        // receipt. Gateway affinity follows this result; it does not own Runtime
-        // tool exposure itself.
-        requestMcpStageSwitch(target_phase);
+        // An affinity-scoped Gateway owns its own Stage and will adopt this
+        // receipt before its next request. Changing the Blockbench-global
+        // Stage here would silently change direct clients and other Gateways.
+        // Direct Runtime requests retain the existing native Stage mutation.
+        if (!requestStage?.scoped) requestMcpStageSwitch(target_phase);
 
         return {
           content: [
             {
               type: "text" as const,
               text: nativeCheckpointChecked
-                ? `MCP Authoring Stage switched to ${target_phase}; Runtime Surface is ${targetSurface}. Saved-project path and file metadata checked; approval and authorization are caller-declared, not independently verified. Continue through Gateway.`
-                : `MCP Authoring Stage switched to ${target_phase}; Runtime Surface is ${targetSurface}. Continue this task through Gateway.`,
+                ? `Authoring Stage switched to ${target_phase}; Runtime Surface is ${targetSurface}. Saved-project path and file metadata checked; approval and authorization are caller-declared, not independently verified. Continue through Gateway.`
+                : `Authoring Stage switched to ${target_phase}; Runtime Surface is ${targetSurface}. Continue this task through Gateway.`,
             },
           ],
           structuredContent: phaseTransitionReceipt({

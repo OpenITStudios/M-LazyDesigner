@@ -9,7 +9,9 @@ import {
   getMcpPhaseReadinessSummary,
   resolveMcpAuthoringStage,
 } from "@/lib/authoringPhase";
-import { getEnabledToolDefinitions } from "@/lib/factories";
+import { getAllToolDefinitions, getEnabledToolDefinitions } from "@/lib/factories";
+import { getActiveMcpAuthoringStage, setActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
+import { runWithMcpStageRequest, setMcpStageSwitchHandler } from "@/server/runtime/phaseControl";
 import { buildMcpServerInstructions } from "@/server/server";
 import { selectMcpPhaseWorkflowBody } from "@/server/prompts";
 import {
@@ -33,6 +35,57 @@ async function source(path: string): Promise<string> {
 }
 
 describe("authoring stage MCP surface", () => {
+  test("Gateway Stage handoff stays scoped while direct Runtime handoff retains global ownership", async () => {
+    const globalBefore = getActiveMcpAuthoringStage();
+    const switched: string[] = [];
+    setMcpStageSwitchHandler(stage => {
+      switched.push(stage);
+      setActiveMcpAuthoringStage(stage);
+    });
+    const executor = getAllToolDefinitions().switch_authoring_phase?.execute;
+    expect(executor).toBeDefined();
+    const args = (target_phase: "geometry" | "texturing") => ({
+      target_phase, reason: "scoped stage regression",
+      resume_from: "same Gateway session",
+    });
+
+    try {
+      applyMcpToolSurface("bedrock_entity", "geometry");
+      const animationToAuthoring = await runWithMcpStageRequest(
+        "animation", true, async () => executor!(args("texturing"))
+      );
+      expect(animationToAuthoring).toMatchObject({ structuredContent: {
+        phase: "texturing", runtime_surface: "AUTHORING", surface_changed: true,
+      } });
+      expect(switched).toEqual([]);
+      expect(getActiveMcpAuthoringStage()).toBe("geometry");
+
+      const geometryToTexturing = await runWithMcpStageRequest(
+        "geometry", true, async () => executor!(args("texturing"))
+      );
+      expect(geometryToTexturing).toMatchObject({ structuredContent: {
+        phase: "texturing", runtime_surface: "AUTHORING", surface_changed: false,
+      } });
+      expect(switched).toEqual([]);
+      expect(getActiveMcpAuthoringStage()).toBe("geometry");
+
+      await expect(runWithMcpStageRequest("animation", true, async () => {
+        throw new Error("scoped failure");
+      })).rejects.toThrow("scoped failure");
+      const direct = await runWithMcpStageRequest(
+        "geometry", false, async () => executor!(args("texturing"))
+      );
+      expect(direct).toMatchObject({ structuredContent: {
+        phase: "texturing", runtime_surface: "AUTHORING", surface_changed: false,
+      } });
+      expect(switched).toEqual(["texturing"]);
+      expect(getActiveMcpAuthoringStage()).toBe("texturing");
+    } finally {
+      setMcpStageSwitchHandler(undefined);
+      applyMcpToolSurface("bedrock_entity", globalBefore);
+    }
+  });
+
   test("stage setting remains backward compatible and defaults to Geometry focus", () => {
     expect(DEFAULT_MCP_AUTHORING_PHASE).toBe("geometry");
     expect(resolveMcpAuthoringStage(undefined)).toBe("geometry");

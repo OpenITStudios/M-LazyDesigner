@@ -26,8 +26,7 @@ import {
 } from '@/lib/capabilities/authoringStage'
 import {
   getActiveMcpRegistrationProfile,
-  getMcpSurfaceToolNames,
-  requestMcpPhaseSwitch
+  getMcpSurfaceToolNames
 } from '@/server/tools'
 import {
   BLOCKIT_AUTHORING_PHASE_AFFINITY_HEADER,
@@ -47,8 +46,8 @@ import {
   getRuntimeProjectHealth,
   runWithRuntimeProjectAffinity
 } from '@/server/projectAffinity'
+import { runWithMcpStageRequest } from '@/server/runtime/phaseControl'
 import {
-  isSuccessfulToolCallResponse,
   projectContextErrorBody,
   readRequestEnvelope,
   validateMcpRoutingHeaders
@@ -450,18 +449,13 @@ export default function createNetServer (
                 ) {
                   throw new RuntimeRequestAbandonedError()
                 }
-                return await dispatch()
+                return await runWithMcpStageRequest(
+                  effectiveAuthoringPhase,
+                  requestedAuthoringPhase !== null,
+                  dispatch
+                )
               }, { signal: nativeRequestAbort.signal })
             : await dispatch()
-
-          if (
-            requestedAuthoringPhase === null &&
-            capabilityEffects?.phaseAffinity === 'update_from_result' &&
-            envelope.targetAuthoringPhase !== null &&
-            isSuccessfulToolCallResponse(result)
-          ) {
-            requestMcpPhaseSwitch(envelope.targetAuthoringPhase)
-          }
 
           // Finite JSON/JSON-RPC responses have Content-Length and may reuse
           // the client socket. Preserve explicit Connection: close, while
