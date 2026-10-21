@@ -237,6 +237,109 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(state.connection.needsMcpRevalidation()).toBe(false);
   });
 
+
+  test("passive offline health fails closed and invokes the existing session invalidation callback", () => {
+    let invalidations = 0;
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp", undefined, {
+      onRuntimeUnavailable: () => { invalidations += 1; },
+    });
+    primeCatalog(backend, [{
+      name: "manage_cubes", description: "Native geometry", annotations: { readOnlyHint: false },
+    }]);
+    const internal = backend as any;
+    internal.projectUuid = "project-bound";
+    internal.connection.markReady({ catalogRefreshed: true });
+
+    const result = internal.buildStatus({ online: false, error: "Runtime listener stopped" });
+    expect(result.runtime.online).toBe(false);
+    expect(result.runtime.mcp_client_ready).toBe(false);
+    expect(result.runtime.catalog_stale).toBe(true);
+    expect(result.connection.state).toBe("offline");
+    expect(internal.projectUuid).toBe("project-bound");
+    expect(invalidations).toBe(1);
+  });
+
+  test("closed or ambiguous bound tab cannot project a ready MCP connection", () => {
+    for (const available of [false, null] as const) {
+      let invalidations = 0;
+      const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp", undefined, {
+        onRuntimeUnavailable: () => { invalidations += 1; },
+        catalogLeaseMs: 5_000,
+      });
+      primeCatalog(backend, [{
+        name: "inspect_elements", description: "Read native model", annotations: { readOnlyHint: true },
+      }]);
+      const state = backend as any;
+      state.connection.markReady();
+      state.projectUuid = "project-a";
+      const result = state.buildStatus({
+        online: true,
+        signature: "runtime-test",
+        health: {
+          product: { authoring_phase: "geometry" },
+          project_context: {
+            active_project_uuid: "project-b",
+            requested_project_uuid: "project-a",
+            requested_project_available: available,
+            open_project_count: 2,
+          },
+        },
+      });
+      expect(result.runtime.online).toBe(true);
+      expect(result.runtime.mcp_client_ready).toBe(false);
+      expect(result.runtime.catalog_stale).toBe(true);
+      expect(result.connection.state).toBe("degraded");
+      expect(state.hasFreshCatalog()).toBe(false);
+      expect(state.projectUuid).toBe("project-a");
+      expect(invalidations).toBe(1);
+    }
+  });
+
+  test("passive health detects a Runtime generation signature change before reconnect", () => {
+    let invalidations = 0;
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp", undefined, {
+      onRuntimeUnavailable: () => { invalidations += 1; },
+    });
+    primeCatalog(backend, [{
+      name: "inspect_elements", description: "Read model", annotations: { readOnlyHint: true },
+    }]);
+    (backend as any).connection.markReady();
+    const result = (backend as any).buildStatus({
+      online: true,
+      signature: "replacement-instance",
+      health: { product: { authoring_phase: "geometry" } },
+    });
+    expect(result.runtime.mcp_client_ready).toBe(false);
+    expect(result.runtime.catalog_stale).toBe(true);
+    expect(result.connection.state).toBe("degraded");
+    expect((backend as any).hasFreshCatalog()).toBe(false);
+    expect(invalidations).toBe(1);
+  });
+
+  test("failed Runtime health during recovery invalidates session facts", async () => {
+    let invalidations = 0;
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp", undefined, {
+      onRuntimeUnavailable: () => { invalidations += 1; },
+    });
+    const state = backend as any;
+    state.probeHealth = async () => ({ online: false, error: "listener retired" });
+    await expect(state.ensureCatalogUnsafe()).rejects.toMatchObject({
+      code: "BACKEND_UNAVAILABLE",
+    });
+    expect(invalidations).toBe(1);
+  });
+
+  test("gateway status handler does not reassert stale project affinity on offline health", async () => {
+    const source = await Bun.file("gateway/handlers/registerCoreTools.ts").text();
+    const start = source.indexOf("const status = adopt_active_project");
+    const end = source.indexOf("const control = await buildControlPacket", start);
+    const projection = source.slice(start, end);
+    expect(projection).toContain("if (status.runtime.mcp_client_ready)");
+    expect(projection).toContain("session.onVerifiedRuntimeStatus(status.affinity.project_uuid)");
+    expect(projection).toContain("session.onRuntimeUnavailable()");
+    expect(projection).not.toContain("session.synchronizeProject(status.affinity.project_uuid)");
+  });
+
   test("passive status never renews a stale capability catalog lease", async () => {
     const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp", undefined, {
       catalogLeaseMs: 5_000,

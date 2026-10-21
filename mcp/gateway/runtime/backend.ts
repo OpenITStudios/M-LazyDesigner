@@ -75,6 +75,7 @@ export class BlockitRuntimeBackend {
   private readonly onRuntimeGenerationChange:
     | ((event: RuntimeGenerationChangeEvent) => void)
     | undefined;
+  private readonly onRuntimeUnavailable: (() => void) | undefined;
   private readonly connection = new GatewayConnectionManager();
   private readonly operationQueue: GatewayOperationQueue;
   private client: Client | null = null;
@@ -152,6 +153,7 @@ export class BlockitRuntimeBackend {
       100
     );
     this.onRuntimeGenerationChange = options.onRuntimeGenerationChange;
+    this.onRuntimeUnavailable = options.onRuntimeUnavailable;
   }
 
   private runExclusive<T>(
@@ -418,6 +420,7 @@ export class BlockitRuntimeBackend {
       const timedOut = isRequestTimeoutError(error);
       const retryAfterMs = this.connection.markDegraded();
       this.lastError = message;
+      this.onRuntimeUnavailable?.();
       // Affinity drift is not an ordinary transport retry: preserve the
       // explicit rebind requirement and non-retryable error classification.
       if (error instanceof GatewayBackendError && !error.safeToRetry) {
@@ -455,6 +458,7 @@ export class BlockitRuntimeBackend {
       await this.closeConnectionUnsafe();
       const retryAfterMs = this.connection.markOffline();
       this.lastError = probe.error;
+      this.onRuntimeUnavailable?.();
       throw new GatewayBackendError(
         "BACKEND_UNAVAILABLE",
         `LazyDesigner Runtime is unavailable: ${probe.error}`,
@@ -479,6 +483,7 @@ export class BlockitRuntimeBackend {
     } catch (error) {
       await this.closeConnectionUnsafe();
       this.lastError = errorMessage(error);
+      this.onRuntimeUnavailable?.();
       throw error;
     }
 
@@ -511,6 +516,7 @@ export class BlockitRuntimeBackend {
   private buildStatus(probe: HealthProbe): GatewayRuntimeStatus {
     if (!probe.online) {
       this.connection.markOffline();
+      this.onRuntimeUnavailable?.();
       return {
         gateway: "ready",
         affinity: {
@@ -534,14 +540,35 @@ export class BlockitRuntimeBackend {
       };
     }
 
+    const projectHealth = readRuntimeProjectHealth(probe.health);
+    const boundProjectUnverified = this.projectUuid !== null &&
+      (!projectHealth ||
+       projectHealth.requested_project_uuid !== this.projectUuid ||
+       projectHealth.requested_project_available !== true);
     const ready =
       Boolean(this.client) &&
       this.catalog.size > 0 &&
       this.connectedSignature === probe.signature &&
-      !this.connection.needsMcpRevalidation();
+      !this.connection.needsMcpRevalidation() &&
+      !boundProjectUnverified;
     const catalogStale =
       this.catalog.size > 0 &&
-      (!this.hasFreshCatalog() || this.connectedSignature !== probe.signature);
+      (!this.hasFreshCatalog() || this.connectedSignature !== probe.signature ||
+       boundProjectUnverified);
+    // Passive health is not proof that the old Runtime's Control facts still
+    // apply after instance replacement, transport failure or tab loss.
+    const runtimeAuthorityChanged = boundProjectUnverified ||
+      (this.connectedSignature !== null &&
+       this.connectedSignature !== probe.signature);
+    if (runtimeAuthorityChanged) {
+      // An observed new Runtime generation or missing bound project retires
+      // the old MCP authority, even if a catalog lease has time remaining.
+      // Degraded state closes the cached discovery fast path immediately.
+      this.connection.markDegraded();
+    }
+    if (runtimeAuthorityChanged || this.connection.needsMcpRevalidation()) {
+      this.onRuntimeUnavailable?.();
+    }
     // A health-only status read can precede the first intentional lazy MCP
     // connection. Reflect this first healthy probe as "probing" rather than
     // reporting an offline client, but never erase failed reconnect evidence.
@@ -786,6 +813,7 @@ export class BlockitRuntimeBackend {
         if (receiptIssue) {
           await this.closeConnectionUnsafe();
           this.connection.markDegraded();
+          this.onRuntimeUnavailable?.();
           throw new GatewayBackendError(
             "BACKEND_UNAVAILABLE",
             receiptIssue.message,
@@ -811,6 +839,7 @@ export class BlockitRuntimeBackend {
             if (!application.authoringPhase) {
               await this.closeConnectionUnsafe();
               this.connection.markDegraded();
+              this.onRuntimeUnavailable?.();
               throw new GatewayBackendError(
                 "BACKEND_UNAVAILABLE",
                 "LazyDesigner Runtime returned an invalid authoring phase handoff receipt.",
@@ -851,6 +880,7 @@ export class BlockitRuntimeBackend {
         if (isRuntimeProjectContextError(error)) {
           await this.closeConnectionUnsafe();
           this.lastError = message;
+          this.onRuntimeUnavailable?.();
           throw new GatewayBackendError(
             "PROJECT_CONTEXT_LOST",
             `LazyDesigner refused "${capability}" because this Gateway's bound project tab is no longer safely available. Select the intended open tab and explicitly rebind before continuing.`,
@@ -873,6 +903,7 @@ export class BlockitRuntimeBackend {
         await this.closeConnectionUnsafe();
         const retryAfterMs = this.connection.markDegraded();
         this.lastError = message;
+        this.onRuntimeUnavailable?.();
         throw new GatewayBackendError(
           classification.code,
           classification.code === "OUTCOME_UNKNOWN"

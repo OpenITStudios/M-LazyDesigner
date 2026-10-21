@@ -9,6 +9,7 @@ export class GatewaySessionState {
   private executionState: ControlExecutionState | null = null;
   private capabilityFacts: CapabilityFactState = seedCapabilityFacts({});
   private capabilityFactsProjectUuid: string | null = null;
+  private runtimeUnavailable = false;
 
   get facts(): CapabilityFactState {
     return this.capabilityFacts;
@@ -26,7 +27,29 @@ export class GatewaySessionState {
     this.executionState = value;
   }
 
+  onRuntimeUnavailable(): void {
+    // The first handshake can succeed after an unverified status without a
+    // generation-change event. New facts may then be written while this flag
+    // is still set; a later outage must invalidate those facts again.
+    if (this.runtimeUnavailable &&
+        this.executionState === null &&
+        Object.keys(this.capabilityFacts).length === 1 &&
+        this.capabilityFacts.project_bound === "unknown") return;
+    this.runtimeUnavailable = true;
+    this.executionState = null;
+    // Keep the old UUID only as an untrusted reconnect target. Neither that
+    // UUID nor prior authoring results count as readiness while Runtime is lost.
+    this.capabilityFacts = seedCapabilityFacts({});
+    gatewayOrchestrationRecoveryState.invalidateRuntimeGeneration();
+  }
+
+  onVerifiedRuntimeStatus(projectUuid: string | null): void {
+    this.runtimeUnavailable = false;
+    this.synchronizeProject(projectUuid);
+  }
+
   onRuntimeGenerationChange(verifiedProjectUuid: string | null): void {
+    this.runtimeUnavailable = false;
     // The replacement Runtime already proved its project affinity before
     // this callback. Do not keep an outdated Control UUID if that binding
     // was retired, and do not assume a previously unbound project was adopted.

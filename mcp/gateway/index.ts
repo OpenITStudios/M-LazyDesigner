@@ -21,6 +21,7 @@ const session = new GatewaySessionState();
 
 const backend = new BlockitRuntimeBackend(undefined, undefined, {
   onRuntimeGenerationChange: (event) => session.onRuntimeGenerationChange(event.project_uuid),
+  onRuntimeUnavailable: () => session.onRuntimeUnavailable(),
 });
 const localCapabilities = new LocalCapabilityRegistry();
 const benchmarkTrace = BenchmarkTraceRecorder.fromEnvironment();

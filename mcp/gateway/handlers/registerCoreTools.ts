@@ -202,7 +202,13 @@ export function registerCoreGatewayTools(
         const status = adopt_active_project
           ? await backend.adoptActiveProject()
           : await backend.getStatus();
-        session.synchronizeProject(status.affinity.project_uuid);
+        // The requested UUID persists across Runtime downtime for safe
+        // explicit rebind, but is not proof of an active project.
+        if (status.runtime.mcp_client_ready) {
+          session.onVerifiedRuntimeStatus(status.affinity.project_uuid);
+        } else {
+          session.onRuntimeUnavailable();
+        }
         const control = await buildControlPacket(status, {
           knownContextIds: known_context_ids,
           workspacePath: workspace_path,

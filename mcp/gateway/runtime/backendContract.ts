@@ -106,6 +106,8 @@ export type BlockitRuntimeBackendOptions = {
   maxQueueWaitMs?: number;
   catalogLeaseMs?: number;
   onRuntimeGenerationChange?: (event: RuntimeGenerationChangeEvent) => void;
+  /** Current Runtime loss invalidates Control facts without ending the Gateway. */
+  onRuntimeUnavailable?: () => void;
 };
 
 export function errorMessage(error: unknown): string {
