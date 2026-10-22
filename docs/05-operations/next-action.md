@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 4 paint transaction: synchronously recheck the full decoded RGBA bitmap immediately before native Undo, rejecting edits made during asynchronous planning. PNG rollback now restores any original backup before cleaning a leftover temporary file, even when temp cleanup fails. Added existing-owner source/behavior regression cases and focused test selection; Bun/TypeScript/native NOT EXECUTED. No public MCP schema or UV activation changes. Next inspect a distinct evidenced transaction defect or proceed to Texture production safety.
+Batch 4 PNG output safety: paint persistence now uses exclusive temp creation and atomic no-replace destination publication; overwrite=true rechecks exact original bytes before backup replacement, with full PNG byte readback. Rollback refuses to delete a concurrently changed output, keeps the original backup safe, and cleans only owned temp files. Existing texture-transaction tests cover collision and rollback scenarios; Bun/TypeScript/live Windows fs NOT EXECUTED. Hard-link publication requires filesystem support; do not claim universal OS atomicity. Next inspect another concrete persistence or texture quality defect.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

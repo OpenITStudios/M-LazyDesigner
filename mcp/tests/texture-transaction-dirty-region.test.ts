@@ -3,7 +3,11 @@ import {
   cropRgbaRect,
   requireUnchangedTextureBitmap,
 } from "@/lib/textureBitmapRuntime";
-import { rollbackTexturePngWrite } from "@/server/tools/paint/textureTransaction";
+import {
+  commitTexturePngWrite,
+  prepareTexturePngWrite,
+  rollbackTexturePngWrite,
+} from "@/server/tools/paint/textureTransaction";
 
 async function source(path: string): Promise<string> {
   return Bun.file(path).text();
@@ -94,11 +98,16 @@ describe("texture transaction dirty-region path", () => {
         committed,
         backup_moved: true,
         byte_length: 123,
+        original_bytes: Buffer.from("original authored PNG"),
+        temp_created: true,
+        published_bytes: committed ? Buffer.from("new authored PNG") : null,
       };
       const fs = {
         existsSync: (path: string) => files.has(path),
+        readFileSync: (path: string) => Buffer.from(files.get(path) ?? "", "utf8"),
         writeFileSync: (_path: string, _bytes: Uint8Array) => {},
-        statSync: (_path: string) => ({ isFile: () => true, size: 123 }),
+        lstatSync: (_path: string) => ({ isFile: () => true, size: 123 }),
+        linkSync: (_from: string, _to: string) => {},
         renameSync: (from: string, to: string) => {
           const data = files.get(from);
           if (data === undefined) throw new Error("Missing source PNG");
@@ -119,6 +128,144 @@ describe("texture transaction dirty-region path", () => {
       expect(files.has(temp)).toBe(true); // Cleanup issue remains observable.
       expect(state.backup_moved).toBe(false);
     }
+  });
+
+
+  function fakePngFilesystem(initial: Record<string, Uint8Array> = {}) {
+    const files = new Map<string, Uint8Array>(
+      Object.entries(initial).map(([path, bytes]) => [path, bytes.slice()])
+    );
+    const fs = {
+      existsSync: (path: string) => files.has(path),
+      readFileSync: (path: string) => {
+        const data = files.get(path);
+        if (!data) throw new Error("ENOENT: " + path);
+        return data.slice();
+      },
+      writeFileSync: (path: string, bytes: Uint8Array, options?: { flag: "wx" }) => {
+        if (options?.flag === "wx" && files.has(path)) {
+          throw new Error("EEXIST: exclusive write refused");
+        }
+        files.set(path, bytes.slice());
+      },
+      lstatSync: (path: string) => {
+        const data = files.get(path);
+        if (!data) throw new Error("ENOENT: " + path);
+        return { isFile: () => true, size: data.byteLength };
+      },
+      linkSync: (from: string, to: string) => {
+        if (files.has(to)) throw new Error("EEXIST: exclusive link refused");
+        const data = files.get(from);
+        if (!data) throw new Error("ENOENT: " + from);
+        files.set(to, data);
+      },
+      renameSync: (from: string, to: string) => {
+        const data = files.get(from);
+        if (!data) throw new Error("ENOENT: " + from);
+        files.delete(from);
+        files.set(to, data);
+      },
+      unlinkSync: (path: string) => {
+        if (!files.delete(path)) throw new Error("ENOENT: " + path);
+      },
+    };
+    return { files, fs };
+  }
+
+  test("new PNG output never replaces a concurrent creator or someone else's temp", () => {
+    const path = "/fixtures/new.png";
+    const bytes = new Uint8Array([137, 80, 78, 71, 10]);
+    const foreign = new Uint8Array([1, 2, 3, 4, 5]);
+    const { fs, files } = fakePngFilesystem();
+    const { state } = prepareTexturePngWrite(path, false, bytes.length, fs);
+    files.set(path, foreign);
+    expect(() => commitTexturePngWrite(fs, state, bytes))
+      .toThrow("EEXIST");
+    rollbackTexturePngWrite(fs, state);
+    expect(files.get(path)).toEqual(foreign);
+    expect(files.has(state.temp_path)).toBe(false);
+    expect(state.committed).toBe(false);
+
+    const clean = fakePngFilesystem();
+    const fresh = prepareTexturePngWrite(path, false, bytes.length, clean.fs);
+    const foreignTemp = new Uint8Array([40, 41, 42]);
+    clean.files.set(fresh.state.temp_path, foreignTemp);
+    expect(() => commitTexturePngWrite(clean.fs, fresh.state, bytes))
+      .toThrow("EEXIST");
+    rollbackTexturePngWrite(clean.fs, fresh.state);
+    expect(clean.files.get(fresh.state.temp_path)).toEqual(foreignTemp);
+    expect(clean.files.has(path)).toBe(false);
+
+    const success = fakePngFilesystem();
+    const newOutput = prepareTexturePngWrite(path, false, bytes.length, success.fs);
+    commitTexturePngWrite(success.fs, newOutput.state, bytes);
+    expect(success.files.get(path)).toEqual(bytes);
+    expect(success.files.has(newOutput.state.temp_path)).toBe(false);
+    expect(newOutput.state.committed).toBe(true);
+  });
+
+  test("overwrite revalidates original file bytes and restores only its own published PNG", () => {
+    const path = "/fixtures/existing.png";
+    const original = new Uint8Array([1, 2, 3, 4, 5]);
+    const changed = new Uint8Array([1, 2, 3, 4, 6]);
+    const output = new Uint8Array([137, 80, 78, 71, 10]);
+    const before = fakePngFilesystem({ [path]: original });
+    expect(() => prepareTexturePngWrite(path, false, output.length, before.fs))
+      .toThrow("without overwrite=true");
+    const { state } = prepareTexturePngWrite(path, true, output.length, before.fs);
+    before.files.set(path, changed);
+    expect(() => commitTexturePngWrite(before.fs, state, output))
+      .toThrow("changed since output preflight");
+    rollbackTexturePngWrite(before.fs, state);
+    expect(before.files.get(path)).toEqual(changed);
+    expect(before.files.has(state.temp_path)).toBe(false);
+
+    const good = fakePngFilesystem({ [path]: original });
+    const prepared = prepareTexturePngWrite(path, true, output.length, good.fs);
+    commitTexturePngWrite(good.fs, prepared.state, output);
+    expect(good.files.get(path)).toEqual(output);
+    expect(prepared.state.backup_moved).toBe(true);
+    rollbackTexturePngWrite(good.fs, prepared.state);
+    expect(good.files.get(path)).toEqual(original);
+    expect(good.files.has(prepared.state.backup_path!)).toBe(false);
+  });
+
+  test("a new writer after backup move cannot be overwritten even during rollback", () => {
+    const path = "/fixtures/replace.png";
+    const original = new Uint8Array([1, 2, 3, 4]);
+    const foreign = new Uint8Array([7, 8, 9, 0]);
+    const output = new Uint8Array([137, 80, 78, 71]);
+    const { fs, files } = fakePngFilesystem({ [path]: original });
+    const { state } = prepareTexturePngWrite(path, true, output.length, fs);
+    const rename = fs.renameSync;
+    fs.renameSync = (from: string, to: string) => {
+      rename(from, to);
+      if (from === path && to === state.backup_path) {
+        files.set(path, foreign);
+      }
+    };
+    expect(() => commitTexturePngWrite(fs, state, output))
+      .toThrow("EEXIST");
+    expect(() => rollbackTexturePngWrite(fs, state))
+      .toThrow("destination was recreated concurrently");
+    expect(files.get(path)).toEqual(foreign);
+    expect(files.get(state.backup_path!)).toEqual(original);
+    expect(state.committed).toBe(false);
+  });
+
+  test("rollback refuses to delete a published PNG modified by another writer", () => {
+    const path = "/fixtures/published.png";
+    const original = new Uint8Array([1, 2, 3]);
+    const output = new Uint8Array([4, 5, 6]);
+    const newer = new Uint8Array([9, 8, 7]);
+    const { fs, files } = fakePngFilesystem({ [path]: original });
+    const { state } = prepareTexturePngWrite(path, true, output.length, fs);
+    commitTexturePngWrite(fs, state, output);
+    files.set(path, newer);
+    expect(() => rollbackTexturePngWrite(fs, state))
+      .toThrow("destination changed after publication");
+    expect(files.get(path)).toEqual(newer);
+    expect(files.get(state.backup_path!)).toEqual(original);
   });
 
   test("deterministic transaction remains selection-neutral", async () => {

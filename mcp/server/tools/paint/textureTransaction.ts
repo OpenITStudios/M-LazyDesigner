@@ -38,8 +38,10 @@ export const paintTextureTransactionToolDocs: ToolSpec = {
 
 type TexturePngFilesystem = {
   existsSync(path: string): boolean;
-  writeFileSync(path: string, data: Uint8Array): void;
-  statSync(path: string): { isFile(): boolean; size: number };
+  readFileSync(path: string): Uint8Array;
+  writeFileSync(path: string, data: Uint8Array, options?: { flag: "wx" }): void;
+  lstatSync(path: string): { isFile(): boolean; size: number };
+  linkSync(existingPath: string, newPath: string): void;
   renameSync(oldPath: string, newPath: string): void;
   unlinkSync(path: string): void;
 };
@@ -53,6 +55,12 @@ type PreparedTexturePngWrite = {
   committed: boolean;
   backup_moved: boolean;
   byte_length: number;
+  /** The exact file content accepted at preflight, if one existed. */
+  original_bytes: Uint8Array | null;
+  /** Do not delete a temp sidecar that another writer created. */
+  temp_created: boolean;
+  /** Exact published content; protects concurrent changes during rollback. */
+  published_bytes: Uint8Array | null;
 };
 
 function requireTexturePngFilesystem(path: string): TexturePngFilesystem {
@@ -86,15 +94,57 @@ function uniqueTextureSiblingPath(
   throw new Error(`Could not allocate a bounded texture ${label} path beside ${targetPath}.`);
 }
 
-function prepareTexturePngWrite(
+function sameTexturePngBytes(
+  actual: Uint8Array,
+  expected: Uint8Array | null
+): boolean {
+  return expected !== null &&
+    actual.byteLength === expected.byteLength &&
+    actual.every((value, index) => value === expected[index]);
+}
+
+function assertUnchangedPngDestination(
+  fs: TexturePngFilesystem,
+  state: PreparedTexturePngWrite
+): void {
+  if (!state.existed) return; // Exclusive publication protects a new path.
+  if (!fs.existsSync(state.path)) {
+    throw new Error(
+      `Texture PNG ${state.path} disappeared since output preflight. Refusing overwrite.`
+    );
+  }
+  const stat = fs.lstatSync(state.path);
+  if (
+    !stat.isFile() ||
+    !sameTexturePngBytes(fs.readFileSync(state.path), state.original_bytes)
+  ) {
+    throw new Error(
+      `Texture PNG ${state.path} changed since output preflight. Refusing overwrite; refresh the destination before retrying.`
+    );
+  }
+}
+
+export function prepareTexturePngWrite(
   path: string,
   overwrite: boolean,
-  byteLength: number
+  byteLength: number,
+  filesystem?: TexturePngFilesystem
 ): { fs: TexturePngFilesystem; state: PreparedTexturePngWrite } {
-  const fs = requireTexturePngFilesystem(path);
+  const fs = filesystem ?? requireTexturePngFilesystem(path);
   const existed = fs.existsSync(path);
   if (existed && !overwrite) {
     throw new Error(`Refusing to replace existing texture PNG ${path} without overwrite=true.`);
+  }
+  let originalBytes: Uint8Array | null = null;
+  if (existed) {
+    const stat = fs.lstatSync(path);
+    if (!stat.isFile()) {
+      throw new Error(`Refusing texture PNG output to a non-regular existing file: ${path}.`);
+    }
+    originalBytes = fs.readFileSync(path);
+    if (originalBytes.byteLength !== stat.size) {
+      throw new Error(`Texture PNG ${path} changed while reading the original file.`);
+    }
   }
   return {
     fs,
@@ -107,48 +157,108 @@ function prepareTexturePngWrite(
       committed: false,
       backup_moved: false,
       byte_length: byteLength,
+      original_bytes: originalBytes,
+      temp_created: false,
+      published_bytes: null,
     },
   };
 }
 
-function commitTexturePngWrite(
+export function commitTexturePngWrite(
   fs: TexturePngFilesystem,
   state: PreparedTexturePngWrite,
   bytes: Uint8Array
 ): void {
-  fs.writeFileSync(state.temp_path, bytes);
-  const tempStat = fs.statSync(state.temp_path);
-  if (!tempStat.isFile() || tempStat.size !== state.byte_length) {
+  // Reserve the temporary filename exclusively, even if another process
+  // creates it after the bounded candidate selection.
+  fs.writeFileSync(state.temp_path, bytes, { flag: "wx" });
+  state.temp_created = true;
+  const tempStat = fs.lstatSync(state.temp_path);
+  if (
+    !tempStat.isFile() ||
+    tempStat.size !== state.byte_length ||
+    !sameTexturePngBytes(fs.readFileSync(state.temp_path), bytes)
+  ) {
     throw new Error(
-      `Temporary texture PNG verification failed for ${state.path}: expected ${state.byte_length} bytes, got ${tempStat.isFile() ? tempStat.size : "a non-file target"}.`
+      `Temporary texture PNG verification failed for ${state.path}.`
     );
   }
+
+  assertUnchangedPngDestination(fs, state);
   if (state.existed && state.backup_path) {
+    if (fs.existsSync(state.backup_path)) {
+      throw new Error(
+        `Texture PNG backup path ${state.backup_path} became occupied. Refusing overwrite.`
+      );
+    }
     fs.renameSync(state.path, state.backup_path);
     state.backup_moved = true;
+    // Detect an external edit between the content check and backup move.
+    // On failure rollback restores the moved file, never the stale snapshot.
+    if (!sameTexturePngBytes(
+      fs.readFileSync(state.backup_path), state.original_bytes
+    )) {
+      throw new Error(
+        `Texture PNG ${state.path} changed during backup. Refusing overwrite.`
+      );
+    }
   }
-  fs.renameSync(state.temp_path, state.path);
+
+  // Atomically create only when absent, for both new and replacement paths.
+  // A concurrent creator after backup move must not be overwritten.
+  // Temp and target are siblings, so hard-linking is same-filesystem.
+  fs.linkSync(state.temp_path, state.path);
   state.committed = true;
-  const finalStat = fs.statSync(state.path);
-  if (!finalStat.isFile() || finalStat.size !== state.byte_length) {
+  state.published_bytes = bytes;
+  const finalStat = fs.lstatSync(state.path);
+  if (
+    !finalStat.isFile() ||
+    finalStat.size !== state.byte_length ||
+    !sameTexturePngBytes(fs.readFileSync(state.path), bytes)
+  ) {
     throw new Error(
-      `Committed texture PNG verification failed for ${state.path}: expected ${state.byte_length} bytes, got ${finalStat.isFile() ? finalStat.size : "a non-file target"}.`
+      `Committed texture PNG verification failed for ${state.path}.`
     );
   }
+  fs.unlinkSync(state.temp_path);
+  state.temp_created = false;
 }
 
 export function rollbackTexturePngWrite(
   fs: TexturePngFilesystem,
   state: PreparedTexturePngWrite
 ): void {
-  // Restore the user's original file before optional temporary cleanup.
-  // A locked leftover temp must not prevent backup restoration on Windows.
-  if (state.committed && fs.existsSync(state.path)) fs.unlinkSync(state.path);
-  if (state.backup_moved && state.backup_path && fs.existsSync(state.backup_path)) {
+  // A newer destination is not owned by this transaction, even on rollback.
+  // Preserve the original backup rather than deleting somebody else's file.
+  if (state.committed && fs.existsSync(state.path)) {
+    if (!sameTexturePngBytes(
+      fs.readFileSync(state.path), state.published_bytes
+    )) {
+      throw new Error(
+        `Texture PNG destination changed after publication; preserving the original backup at ${state.backup_path ?? "none"}.`
+      );
+    }
+    fs.unlinkSync(state.path);
+  }
+  if (state.backup_moved) {
+    if (!state.backup_path || !fs.existsSync(state.backup_path)) {
+      throw new Error(
+        `Original texture PNG backup is missing for ${state.path}; refusing uncertain rollback.`
+      );
+    }
+    if (fs.existsSync(state.path)) {
+      throw new Error(
+        `Texture PNG destination was recreated concurrently. Refusing to overwrite it; original retained at ${state.backup_path}.`
+      );
+    }
     fs.renameSync(state.backup_path, state.path);
     state.backup_moved = false;
   }
-  if (fs.existsSync(state.temp_path)) fs.unlinkSync(state.temp_path);
+  // Only clean up a file this transaction successfully created with wx.
+  if (state.temp_created && fs.existsSync(state.temp_path)) {
+    fs.unlinkSync(state.temp_path);
+    state.temp_created = false;
+  }
 }
 
 function finalizeTexturePngWrite(
