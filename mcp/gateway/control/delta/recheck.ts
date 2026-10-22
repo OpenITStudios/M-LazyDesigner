@@ -6,6 +6,7 @@ import {
 import type {
   ControlAuthoringDomain,
   ControlFreshnessScope,
+  ControlVerificationScope,
 } from "../types";
 import { record, resultCandidates } from "./receipts";
 
@@ -224,10 +225,39 @@ function animationControllerTargetFromCandidates(
   return undefined;
 }
 
+/**
+ * Verification has already inspected the same authoritative Runtime receipt
+ * when it produces a bounded visual scope. Reuse that evidence for matching
+ * downstream targets instead of re-reading keyframe times / texture region.
+ * This is internal call-local reuse, not an alternative receipt authority.
+ */
+function targetFromVerificationScope(
+  scope: ControlVerificationScope | null | undefined
+): ControlDownstreamRecheck["target"] | undefined {
+  if (scope?.kind === "TEXTURE_REGION") {
+    return {
+      texture_uuid: scope.texture_uuid,
+      affected_rect: scope.affected_rect,
+      revision: scope.revision,
+    };
+  }
+  if (scope?.kind === "ANIMATION_RANGE") {
+    return {
+      animation_uuid: scope.animation_uuid,
+      bone_ids: [scope.bone_uuid],
+      channel: scope.channel,
+      time_range: scope.time_range,
+    };
+  }
+  return undefined;
+}
+
 export function downstreamRechecksForFreshness(input: {
   stale: readonly ControlFreshnessScope[];
   currentDomain: ControlAuthoringDomain;
   result?: unknown;
+  /** Optional verified scope from the same Control Delta invocation. */
+  verificationScope?: ControlVerificationScope | null;
 }): {
   required: ControlDownstreamRecheck[];
   preserved_domains: ControlAuthoringDomain[];
@@ -257,11 +287,15 @@ export function downstreamRechecksForFreshness(input: {
           ? sharedUvTarget()
           : scope === "TEXTURE_APPEARANCE"
             ? sharedUvTarget() ??
-              textureRegionTargetFromCandidates(currentCandidates())
+              (input.verificationScope?.kind === "TEXTURE_REGION"
+                ? targetFromVerificationScope(input.verificationScope)
+                : textureRegionTargetFromCandidates(currentCandidates()))
             : scope === "MATERIAL_RENDER"
               ? materialRenderTargetFromCandidates(currentCandidates())
               : scope === "ANIMATION_MOTION"
-                ? animationMotionTargetFromCandidates(currentCandidates())
+                ? (input.verificationScope?.kind === "ANIMATION_RANGE"
+                    ? targetFromVerificationScope(input.verificationScope)
+                    : animationMotionTargetFromCandidates(currentCandidates()))
                 : scope === "ANIMATION_CONTROLLER"
                   ? animationControllerTargetFromCandidates(currentCandidates())
                   : scope === "ANIMATION_EFFECTS"

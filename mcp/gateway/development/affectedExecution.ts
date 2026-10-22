@@ -417,8 +417,16 @@ function sharedContractTestsForPath(path: string): readonly string[] {
       "mcp/tests/contracts/receipt-continuation-contract.test.ts",
     ];
   }
+  if (path === "mcp/gateway/control/delta/engine.ts") {
+    // Engine is the integration point between verification scopes and
+    // downstream target projection, in addition to freshness/invalidation.
+    return [
+      ...CONTROL_DELTA_CONTRACT_TESTS,
+      "mcp/tests/control-downstream-recheck.test.ts",
+      "mcp/tests/visual-verification-scope-contract.test.ts",
+    ];
+  }
   if (
-    path === "mcp/gateway/control/delta/engine.ts" ||
     path === "mcp/gateway/control/delta/freshness.ts" ||
     path === "mcp/gateway/control/delta/verification.ts"
   ) {

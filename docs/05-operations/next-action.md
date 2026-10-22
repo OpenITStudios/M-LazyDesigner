@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP verification-to-downstream receipt economy: `gateway/control/delta/engine.ts` now passes its per-call bounded visual verification scope into the existing downstream recheck owner. The recheck owner reuses matching texture-region revision or animation-range target data and retains existing receipt parsing for missing or incompatible scopes; UV target precedence still wins for mapped Texture. Added three direct vs shared behavior regressions and engine integration affected-test owners. Source/static REMOTE_GITHUB only, Bun/typecheck/native/latency NOT EXECUTED; public MCP API, CI, main and release unchanged.
+
+
+
 2026-10-22 MCP downstream recheck target economy: canonical `gateway/control/delta/recheck.ts` now resolves receipt candidates lazily at most once across stale UV/Texture/Material/Animation targets and memoizes a shared UV target within the single call. Preserves UV-over-texture precedence, texture-region fallback, all existing recheck/preserved domain outputs, and fail-closed authority against contradictory outer MCP envelope fields. Adds three existing-owner behavior regressions and direct mapping to five domain recheck tests in `affectedExecution.ts`. REMOTE_GITHUB source/static only; Bun/TypeScript/native and measured performance NOT EXECUTED. No main/CI/public API change.
 
 

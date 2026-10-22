@@ -418,6 +418,26 @@ changes. No public tool, receipt schema, freshness rule, image proof or
 Control Delta field was removed. No CPU/latency reduction is claimed as
 measured until Bun and exact-SHA Runtime tests can run.
 
+## Reuse Verified Texture and Animation Scope — SOURCE OPTIMIZATION
+
+Within a single `buildControlDelta`, the visual verification step can
+already derive a bounded `TEXTURE_REGION` or `ANIMATION_RANGE` from the
+authoritative Runtime result. Downstream recheck formerly rebuilt the
+identical region, revision or keyframe time range by scanning the receipt
+again.
+
+The Control engine now optionally passes its already-derived verification
+scope to `downstreamRechecksForFreshness`. That existing recheck owner uses
+matching scope kinds as read-only target evidence while preserving UV-over-
+texture precedence, all other target extractors and the previous fallback
+when a matching scope is absent. No visual approval is inferred from the
+scope and no evidence is shared between distinct calls.
+
+Focused regression cases compare the new and old target outputs and count
+repeated texture-region/keyframe reads. Engine source changes now route
+through the existing visual-verification and downstream target contracts.
+Bun, Runtime and performance measurements remain NOT EXECUTED.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

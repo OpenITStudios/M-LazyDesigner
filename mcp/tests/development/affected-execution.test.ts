@@ -412,6 +412,23 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("Control Delta engine selects verification-to-recheck integration contracts", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/gateway/control/delta/engine.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toContain(
+      "mcp/tests/control-downstream-recheck.test.ts"
+    );
+    expect(plan.targeted_tests).toContain(
+      "mcp/tests/visual-verification-scope-contract.test.ts"
+    );
+    expect(plan.targeted_tests).toContain(
+      "mcp/tests/gateway-control-invalidation.test.ts"
+    );
+  });
+
   test("Control downstream recheck owner selects its five existing targeted contracts", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/gateway/control/delta/recheck.ts"],

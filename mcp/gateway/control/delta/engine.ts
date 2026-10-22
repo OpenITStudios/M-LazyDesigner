@@ -91,6 +91,7 @@ export function buildControlDelta(input: {
         : freshness.stale,
     currentDomain: authoringDomain,
     result: input.result,
+    verificationScope,
   });
   const particleTextureHandoff = mutationAnalysis.particleTextureHandoff === true;
   const nextIntent = !input.succeeded
