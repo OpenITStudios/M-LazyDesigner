@@ -320,6 +320,7 @@ describe("affected execution planner", () => {
         "mcp/gateway/index-boundary.test.ts",
         "mcp/gateway/capabilities/effects.test.ts",
         "mcp/gateway/runtime/recovery.test.ts",
+        "mcp/gateway/runtime/backend-cache.test.ts",
       ]],
       ["mcp/gateway/runtime/recovery.ts", [
         "mcp/gateway/runtime/recovery.test.ts",

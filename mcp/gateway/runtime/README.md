@@ -26,6 +26,16 @@ Refresh status and inspect the actual project/Stage before any deliberate rebind
 or new mutation. Ordinary offline health and pre-execution queue cancellation
 retain their separate retry semantics.
 
+## Runtime catalog handshake integrity
+
+The canonical `tools/list` snapshot must contain at least one capability
+and unique, nonblank names across all pages. A repeated pagination cursor or
+more than 100 unfinished pages fails the same handshake instead of silently
+replacing a capability or publishing an unusable catalog. The existing
+`connectFreshUnsafe` catch withdraws the client and catalog and marks the
+connection degraded. Only a complete matching-generation catalog may become
+`ready`. No secondary catalog or retry loop is introduced.
+
 ## Runtime generation signal
 
 Runtime detects replacement/reconnect boundaries and reports generation changes upward. Verification evidence, correction-loop recovery, project epochs, and continuation invalidation are owned by `../session/orchestrationRecoveryState.ts`, not by Runtime transport.

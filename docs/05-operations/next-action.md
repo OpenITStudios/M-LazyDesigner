@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 2 source repair: missing affinity receipts after a successful project/Stage mutation now project uncertain, non-retryable recovery. Existing Gateway recovery tests and affected-owner selection were extended, not executed. Resume only another evidence-backed recovery defect; no speculative refactor.
+Batch 2 catalog recovery: the Gateway `tools/list` handshake now rejects empty/duplicate/blank capability names and repeated cursors before publishing `ready`; existing Backend cache regressions cover valid pagination and invalid snapshots. The prior project/Stage incomplete-receipt recovery remains fail-closed. Source/static checks only; Bun/native and client reconnect evidence NOT EXECUTED. Investigate only subsequent source-supported failure paths.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

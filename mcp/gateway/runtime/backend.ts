@@ -321,6 +321,8 @@ export class BlockitRuntimeBackend {
 
   private async listAllTools(client: Client): Promise<BackendTool[]> {
     const tools: BackendTool[] = [];
+    const seenNames = new Set<string>();
+    const seenCursors = new Set<string>();
     let cursor: string | undefined;
     let pages = 0;
 
@@ -329,14 +331,37 @@ export class BlockitRuntimeBackend {
         cursor ? { cursor } : undefined,
         { timeout: this.connectTimeoutMs }
       );
-      tools.push(...(listed.tools as BackendTool[]));
-      cursor = typeof listed.nextCursor === "string" ? listed.nextCursor : undefined;
+      // MCP tools are addressed by name. A duplicate from another page would
+      // silently overwrite an earlier entry when published as a Map.
+      for (const tool of listed.tools as BackendTool[]) {
+        if (typeof tool.name !== "string" || !tool.name.trim() ||
+            seenNames.has(tool.name)) {
+          throw new Error(
+            `Runtime tools/list returned an invalid or duplicate capability name: "${String(tool.name)}".`
+          );
+        }
+        seenNames.add(tool.name);
+        tools.push(tool);
+      }
+
+      const nextCursor = typeof listed.nextCursor === "string" &&
+        listed.nextCursor.length > 0 ? listed.nextCursor : undefined;
       pages += 1;
-      if (pages > 100) {
+      if (nextCursor && seenCursors.has(nextCursor)) {
+        throw new Error("Runtime tools/list repeated a pagination cursor.");
+      }
+      if (nextCursor && pages >= 100) {
         throw new Error("Runtime tools/list exceeded the 100-page safety bound.");
       }
+      if (nextCursor) seenCursors.add(nextCursor);
+      cursor = nextCursor;
     } while (cursor);
 
+    // No installed Stage has a valid zero-tool Gateway Runtime surface.
+    // Never mark a handshake ready with an unusable empty catalog.
+    if (tools.length === 0) {
+      throw new Error("Runtime tools/list returned an empty capability catalog.");
+    }
     return tools;
   }
 

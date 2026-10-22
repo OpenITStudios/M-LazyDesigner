@@ -382,6 +382,64 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(status.runtime.catalog_stale).toBe(false);
   });
 
+  test("accepts a distinct paginated Runtime tool catalog", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const first: BackendTool = {
+      name: "inspect_elements", description: "Inspect model",
+      annotations: { readOnlyHint: true },
+    };
+    const second: BackendTool = {
+      name: "manage_cubes", description: "Edit geometry",
+      annotations: { readOnlyHint: false },
+    };
+    let calls = 0;
+    const listed = await (backend as any).listAllTools({
+      listTools: async (input?: { cursor?: string }) => {
+        calls += 1;
+        if (input?.cursor === "second-page") return { tools: [second] };
+        expect(input).toBeUndefined();
+        return { tools: [first], nextCursor: "second-page" };
+      },
+    });
+    expect(listed).toEqual([first, second]);
+    expect(calls).toBe(2);
+  });
+
+  test("rejects duplicate, blank and empty Runtime tool catalogs before readiness", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const tool: BackendTool = {
+      name: "inspect_elements", description: "Inspect model",
+    };
+    await expect((backend as any).listAllTools({
+      listTools: async () => ({ tools: [] }),
+    })).rejects.toThrow("empty capability catalog");
+
+    for (const name of ["", "  "]) {
+      await expect((backend as any).listAllTools({
+        listTools: async () => ({ tools: [{ ...tool, name }] }),
+      })).rejects.toThrow("invalid or duplicate capability name");
+    }
+
+    await expect((backend as any).listAllTools({
+      listTools: async (input?: { cursor?: string }) =>
+        input?.cursor === "next"
+          ? { tools: [{ ...tool, description: "Conflicting duplicate" }] }
+          : { tools: [tool], nextCursor: "next" },
+    })).rejects.toThrow("invalid or duplicate capability name");
+  });
+
+  test("stops repeating Runtime tool-list cursors without a hundred remote requests", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    let calls = 0;
+    await expect((backend as any).listAllTools({
+      listTools: async () => ({
+        tools: [{ name: `tool-${++calls}`, description: "Fixture" }],
+        nextCursor: "same-page",
+      }),
+    })).rejects.toThrow("repeated a pagination cursor");
+    expect(calls).toBe(2);
+  });
+
   test("describe uses a fresh local catalog without probing Runtime", async () => {
     const backend = new BlockitRuntimeBackend(undefined, undefined, {
       catalogLeaseMs: 5_000,
