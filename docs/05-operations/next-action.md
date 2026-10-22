@@ -12,6 +12,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+B0-A seven-capability source audit now resides in [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md): six source-registered routes, and `manage_uv_layout` SOURCE_ONLY/UNREGISTERED. The existing default-registry import-safe Bun test has added Stage, family, and UV-nonexposure checks but has not executed on the current SHA. Use that trace for the next **concrete** source defect; do not restart a parallel capability audit or present authored tests as passed. UV generator/Runtime activation and all native acceptance remain deferred.
+
+
 1. On a concrete user-requested MCP improvement, inspect the smallest current canonical owner and its direct tests. Prefer an evidenced defect or measurable client-context bottleneck over additional speculative micro-optimizations.
 2. Existing production Gateway: `status`, `search_capabilities`, `describe_capability`, `invoke_capability`. Keep direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative `OUTCOME_UNKNOWN` recovery. Do not promote `hybrid_4_experimental` from static replay alone.
 3. The recent discovery and describe efficiency edits, safe Control receipt reuse and texture operations are already in Git history. Do not resume old `Next` statements or duplicate their changes. Any new source modification must pass its own scoped review and state its actual proof ceiling.

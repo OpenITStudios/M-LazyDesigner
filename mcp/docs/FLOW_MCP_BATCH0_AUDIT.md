@@ -23,6 +23,26 @@ Improve the existing three-domain workflow; do not create a second quality engin
 - mcp/gateway/control/contextProjection.ts already projects domain-specific context; mcp/lib/authoringRecipe/efficiency.ts measures bytes/static operation proxies, explicitly NOT AI-token use or wall-clock.
 - mcp/docs/QUALITY_BENCHMARK.md and mcp/tests/fixtures/quality-benchmark-cases.json define six synthetic profiles, categorical PASS/FAIL/UNVERIFIED, no aggregate score, and quality-first cost-to-accepted-result.
 
+## B0-A representative capability trace — source-verified 2026-10-22
+
+**Scope:** the exact `Local` source at commit `780cc4a9ec60`; registration/executor references and existing contract tests were inspected through authenticated GitHub. This is **not** a live MCP tools/list handshake, Bun execution, installed Blockbench acceptance, or demonstration of valid native output. `REGISTERED_SOURCE` means the normal default registration path creates/exposes the capability in source; `SOURCE_ONLY` means the implementation exists but is not called by the canonical registrar.
+
+| Capability | Registration and Stage evidence | Executor / receipt / test owner | Verdict |
+| --- | --- | --- | --- |
+| `create_project` | `registration.ts` family `project` → `project/project.ts`; CORE on AUTHORING, deliberately excluded from Animation | Native project creation with `createProjectReceiptSchema`; `gateway/capabilities/effects.ts` verifies authority adoption; `affinity-receipt-contract.test.ts` | **REGISTERED_SOURCE**; native UNVERIFIED |
+| `manage_cubes` | `registration.ts` family `cubes` → `geometry/cubes.ts`; AUTHORING | Create/update/batch/simplify executor, Cube effect receipts and Control invalidation; `manage-cubes-zero-loss.test.ts` | **REGISTERED_SOURCE**; native UNVERIFIED |
+| `inspect_elements` | `registerConsolidatedTools` → `consolidatedRoutes.ts`, `element_inspection` family; CORE | `outline/search/detail` route to retained element executors; structured read-only result; `consolidated-zero-loss.test.ts` and `geometry-inspection-completeness.test.ts` | **REGISTERED_SOURCE**; native UNVERIFIED |
+| `paint_texture_transaction` | `registration.ts` family `paint` → `paint/textureTransaction.ts`; AUTHORING | Strict `paintTransactionParameters`, revision guard/Undo/dirty region and bounded visual receipt; `texture-transaction-dirty-region.test.ts` | **REGISTERED_SOURCE**; native UNVERIFIED |
+| `manage_animation_timeline` | `registerConsolidatedTools` → `consolidatedRoutes.ts`, `animation` family; Animation only | Retained keyframe/graph/timeline/batch/copy-paste executors; Control effect/freshness; `animation-timeline-batch-ownership.test.ts` | **REGISTERED_SOURCE**; playback UNVERIFIED |
+| `export_model` | `registration.ts` family `export` → `io/export.ts`; CORE | Native codec compile/write, project lifecycle and write-failure handling; `export-lifecycle-control-delta.test.ts`; tool status is experimental although catalog tier is primary | **REGISTERED_SOURCE**; native filesystem UNVERIFIED |
+| `manage_uv_layout` | `uv/layoutService.ts` defines `registerUvLayoutTool`, but `registration.ts` does not call it; no public Runtime catalog exposure | `lib/uv/service.ts` and `uv/layoutRuntime.ts` implement plan/apply/rollback; `uv-plan-service.test.ts` and `uv-blockbench-runtime-adapter.test.ts` are source-only contracts | **SOURCE_ONLY / UNREGISTERED** |
+
+**Cross-layer boundary:** `gateway/handlers/registerCoreTools.ts` publishes four stable Gateway tools; `gateway/runtime/backend.ts` uses the live Runtime catalog for search/describe/invoke; `gateway/execution/capabilityExecutor.ts` validates preconditions and derives Control receipt/continuation. A manifest entry, tool documentation or executor source does **not** make an unregistered capability available. The default Runtime registry is constructed by `server/runtime/bootstrap.ts` → `registerMcpProfile` and narrowed by `getMcpSurfaceToolNames`.
+
+**Regression reinforcement:** the existing `default-registration-import-safe.test.ts` isolated Bun probe now checks the six real catalog owners against expected AUTHORING/ANIMATION exposure and asserts `manage_uv_layout` remains absent. This is an authored test; it has **not** executed on this exact source SHA because verification CI is disabled. Existing domain behavior and negative/recovery tests remain unchanged.
+
+**Disposition:** B0-A *source trace* complete for these seven; no newly confirmed native defect. UV registration and generated API must be integrated together only in a generator-capable context; do not hand-register it here or report UV evidence PASS. Keep quality benchmark B0-B and all native acceptance deferred until an actual executable/live environment is available.
+
 ## Gap register (source audit, pending runtime verification)
 | ID | Priority | Domain | Observed evidence | Next bounded verification |
 |---|---|---|---|---|
