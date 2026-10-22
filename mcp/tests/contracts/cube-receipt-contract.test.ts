@@ -41,6 +41,42 @@ describe("shared Cube mutation receipt contract", () => {
     expect(cubeVisualScopeFromResult({ visual_scope: scope })).toEqual(scope);
   });
 
+  test("bounded Cube visual scope uses one parse and one source-property read", () => {
+    let reads = 0;
+    const scope = {
+      cube_uuids: ["cube-a", "cube-b"],
+      framing: {
+        min: [-2, 0, -2],
+        max: [2, 8, 2],
+      },
+    };
+    const result = {
+      get visual_scope() {
+        reads++;
+        if (reads > 1) throw new Error("Visual receipt was read twice");
+        return scope;
+      },
+    };
+    expect(cubeVisualScopeFromResult(result)).toEqual(scope);
+    expect(reads).toBe(1);
+  });
+
+  test("malformed visual scope never claims bounded acceptance evidence", () => {
+    const valid = {
+      cube_uuids: ["cube-a"],
+      framing: { min: [-1, 0, -1], max: [1, 3, 1] },
+    };
+    for (const invalid of [
+      null,
+      { ...valid, cube_uuids: [] },
+      { ...valid, framing: { min: [0, 0, 0], max: [Infinity, 1, 1] } },
+      { ...valid, framing: { min: [0, 0], max: [1, 1, 1] } },
+    ]) {
+      expect(cubeVisualScopeFromResult({ visual_scope: invalid })).toBeNull();
+    }
+    expect(cubeVisualScopeFromResult({})).toBeNull();
+  });
+
   test("rejects malformed geometry vectors and empty visual target identity", () => {
     expect(
       cubeGeometryEffectSchema.safeParse({

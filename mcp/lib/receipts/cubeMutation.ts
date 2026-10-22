@@ -137,9 +137,10 @@ export function cubeChangedFieldsFromResult(value: unknown): string[] {
 export function cubeVisualScopeFromResult(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const root = value as Record<string, unknown>;
-  return cubeVisualScopeSchema.safeParse(root.visual_scope).success
-    ? cubeVisualScopeSchema.parse(root.visual_scope)
-    : null;
+  // A single Zod parse both verifies and projects the bounded visual scope.
+  // Re-parsing the same receipt wastes work and can re-read mutable getters.
+  const parsed = cubeVisualScopeSchema.safeParse(root.visual_scope);
+  return parsed.success ? parsed.data : null;
 }
 
 export type CubeSemanticScope =

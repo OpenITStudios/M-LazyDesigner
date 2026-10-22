@@ -461,6 +461,26 @@ receipt-continuation, Control invalidation and recovery tests. This is
 allocation reduction by source inspection, not a measured CPU/token benefit;
 Bun and native Runtime checks remain NOT EXECUTED.
 
+## Single-pass Cube Visual Scope Schema Validation — SOURCE OPTIMIZATION
+
+The shared Cube visual verification receipt helper in
+`lib/receipts/cubeMutation.ts` previously called Zod `safeParse` to
+determine validity and then `parse` again on the identical
+`visual_scope`. For a complex bounded set of Cube identities and framing
+vectors, this validated the same input twice and could re-read live
+properties a second time.
+
+The helper now returns `parsed.data` from its single successful
+`safeParse`. Invalid or missing scope evidence still yields `null`,
+so Control cannot fabricate a verified visual target. The existing
+Cube receipt contract now guards one source-property read and malformed,
+infinite and underspecified visual geometry. No new tool or schema,
+persistent cache, state mutation, or visual acceptance shortcut.
+
+This is a source-grounded reduction in redundant Zod parsing; exact-SHA
+Bun/TypeScript and native verification remain NOT EXECUTED and no measured
+CPU/latency/token gain is claimed.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

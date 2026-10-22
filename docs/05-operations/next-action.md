@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 Cube visual scope Zod parse reuse: the canonical `lib/receipts/cubeMutation.ts` now uses the `data` of one successful `cubeVisualScopeSchema.safeParse` instead of validating once and parsing again. The existing Cube receipt contract adds counted source-property reads and fail-closed invalid/missing/infinite scope checks; no new test framework or route. The affected planner already maps this source to its owning Cube and continuation contracts. REMOTE_GITHUB static/source work only; Bun/typecheck/native/real CPU and token measurements NOT EXECUTED. Branch main, CI and release unchanged.
+
+
+
 2026-10-22 Control scalar receipt selection: the canonical `gateway/control/delta/receipts.ts` now uses one scalar authoritative MCP receipt selector internally for its typed validators, eliminating transient zero/one-element arrays created by `resultCandidates(...).some(...)` for each individual check. Existing `resultCandidates` array semantics remain supported elsewhere. Malformed/contradictory inner `structuredContent` continues to supersede outer labels, failing closed. Extended the existing receipt-continuation contract with three grouped cases (single reads, direct/envelope equivalence and incomplete-inner authority); existing affected owner already includes its targeted contract. Source/static GitHub inspection only: Bun/typecheck, native Blockbench, real latency/CPU and token savings NOT EXECUTED. No public API, new tool, global cache, CI/main or release change.
 
 
