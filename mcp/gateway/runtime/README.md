@@ -16,6 +16,16 @@ This folder owns the long-lived Gateway -> Blockbench Runtime connection boundar
 The same-named files at `gateway/` are compatibility re-exports only. Keep the Gateway↔Runtime backend adapter in `gateway/runtime/backend.ts`; capability search, Control, and execution orchestration belong above this layer.
 
 
+## Incomplete native affinity receipts
+
+A successful Runtime mutation without a valid project-creation or Stage-handoff
+receipt might already have changed native state. The Backend withdraws its
+catalog and returns `BACKEND_UNAVAILABLE` with `receipt_issue`; recovery
+must preserve `safe_to_retry=false` and `state_uncertain=true`.
+Refresh status and inspect the actual project/Stage before any deliberate rebind
+or new mutation. Ordinary offline health and pre-execution queue cancellation
+retain their separate retry semantics.
+
 ## Runtime generation signal
 
 Runtime detects replacement/reconnect boundaries and reports generation changes upward. Verification evidence, correction-loop recovery, project epochs, and continuation invalidation are owned by `../session/orchestrationRecoveryState.ts`, not by Runtime transport.

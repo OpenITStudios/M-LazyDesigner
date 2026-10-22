@@ -843,7 +843,11 @@ export class BlockitRuntimeBackend {
               throw new GatewayBackendError(
                 "BACKEND_UNAVAILABLE",
                 "LazyDesigner Runtime returned an invalid authoring phase handoff receipt.",
-                false
+                false,
+                {
+                  capability,
+                  receipt_issue: "MISSING_AUTHORING_PHASE",
+                }
               );
             }
 

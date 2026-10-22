@@ -59,6 +59,24 @@ export function recoveryForGatewayError(
     };
   }
 
+  if (
+    code === "BACKEND_UNAVAILABLE" &&
+    (details.receipt_issue === "MISSING_PROJECT_UUID" ||
+      details.receipt_issue === "MISSING_AUTHORING_PHASE")
+  ) {
+    // Native mutation reported success but lacked an authoritative affinity
+    // receipt. Never imply that the project/Stage definitely stayed unchanged.
+    return {
+      category: "AFFINITY",
+      safe_to_retry: false,
+      state_uncertain: true,
+      requires_status_refresh: true,
+      requires_user_action: false,
+      action:
+        "refresh Gateway status, inspect the actual Blockbench project/Stage and explicitly rebind if needed; never replay the mutation without state evidence",
+    };
+  }
+
   if (code === "BACKEND_UNAVAILABLE") {
     return {
       category: "AVAILABILITY",

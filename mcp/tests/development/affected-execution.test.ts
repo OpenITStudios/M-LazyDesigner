@@ -319,6 +319,11 @@ describe("affected execution planner", () => {
         "mcp/gateway/backend-effects-boundary.test.ts",
         "mcp/gateway/index-boundary.test.ts",
         "mcp/gateway/capabilities/effects.test.ts",
+        "mcp/gateway/runtime/recovery.test.ts",
+      ]],
+      ["mcp/gateway/runtime/recovery.ts", [
+        "mcp/gateway/runtime/recovery.test.ts",
+        "mcp/gateway/runtime/faultInjection.contract.test.ts",
       ]],
       ["mcp/gateway/runtime/backendContract.ts", [
         "mcp/gateway/backend-effects-boundary.test.ts",
