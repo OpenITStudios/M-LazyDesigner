@@ -8,6 +8,34 @@ import {
   textureFrameRect,
 } from "@/lib/texture/frameMapping";
 
+export type TextureEvidenceSourceIdentity = {
+  uuid: string;
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  display_height: number;
+  uv_width: number;
+  uv_height: number;
+};
+
+/** An async revision digest must not pair an old PNG with a new UV/frame layout. */
+export function requireStableTextureEvidenceIdentity(
+  expected: TextureEvidenceSourceIdentity,
+  current: TextureEvidenceSourceIdentity
+): void {
+  for (const key of [
+    "uuid", "id", "name", "width", "height", "display_height",
+    "uv_width", "uv_height",
+  ] as const) {
+    if (expected[key] !== current[key]) {
+      throw new Error(
+        "get_texture texture identity or frame/UV layout changed during evidence readback. Refresh texture state and retry."
+      );
+    }
+  }
+}
+
 export type TextureEvidenceDeliveryInput = {
   inspection: "full_atlas" | "region";
   revision: string;

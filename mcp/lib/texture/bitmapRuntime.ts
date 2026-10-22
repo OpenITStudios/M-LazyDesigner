@@ -35,7 +35,8 @@ export function fullTextureRgba(texture: Texture): {
  */
 export function requireUnchangedTextureBitmap(
   expected: { pixels: Uint8ClampedArray; width: number; height: number },
-  actual: { pixels: Uint8ClampedArray; width: number; height: number }
+  actual: { pixels: Uint8ClampedArray; width: number; height: number },
+  mismatchMessage = "Texture bitmap changed during paint transaction planning. Refresh the texture revision before applying a new transaction; no native mutation was applied."
 ): void {
   if (
     expected.width !== actual.width ||
@@ -43,9 +44,7 @@ export function requireUnchangedTextureBitmap(
     expected.pixels.byteLength !== actual.pixels.byteLength ||
     expected.pixels.some((value, index) => value !== actual.pixels[index])
   ) {
-    throw new Error(
-      "Texture bitmap changed during paint transaction planning. Refresh the texture revision before applying a new transaction; no native mutation was applied."
-    );
+    throw new Error(mismatchMessage);
   }
 }
 

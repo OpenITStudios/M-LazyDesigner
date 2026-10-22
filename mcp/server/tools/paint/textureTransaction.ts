@@ -423,6 +423,15 @@ export function registerPaintTextureTransactionTool(): void {
             );
           }
 
+          // The postcondition digest above is asynchronous. Recheck the
+          // verified full bitmap immediately before filesystem publication
+          // and Undo.finishEdit; a newer native frame edit must not inherit
+          // this transaction's old receipt or output PNG.
+          requireUnchangedTextureBitmap(
+            actualAfter,
+            fullTextureRgba(texture),
+            "Paint transaction bitmap changed after postcondition verification. Refusing stale PNG publication and Undo completion."
+          );
           if (preparedOutput && outputBytes) {
             commitTexturePngWrite(preparedOutput.fs, preparedOutput.state, outputBytes);
           }

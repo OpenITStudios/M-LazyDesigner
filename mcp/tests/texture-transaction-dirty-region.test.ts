@@ -79,6 +79,35 @@ describe("texture transaction dirty-region path", () => {
     expect(write).toBeGreaterThan(undo);
   });
 
+  test("async mutation postcondition must be rechecked before output PNG and Undo commit", async () => {
+    const reference = {
+      pixels: new Uint8ClampedArray([
+        10, 20, 30, 255, 40, 50, 60, 255,
+        70, 80, 90, 255, 100, 110, 120, 255,
+      ]),
+      width: 2, height: 2,
+    };
+    const later = { ...reference, pixels: reference.pixels.slice() };
+    later.pixels[0] += 1; // Changed after async revision digest.
+    expect(() => requireUnchangedTextureBitmap(reference, later,
+      "Paint transaction bitmap changed after postcondition verification."
+    )).toThrow("changed after postcondition verification");
+    expect(() => requireUnchangedTextureBitmap(reference,
+      { ...reference, pixels: reference.pixels.slice() },
+      "Paint transaction bitmap changed after postcondition verification."
+    )).not.toThrow();
+
+    const src = await source("server/tools/paint/textureTransaction.ts");
+    const verifiedHash = src.indexOf("const actualAfterRevision = await computeTextureRevision(");
+    const guard = src.indexOf("requireUnchangedTextureBitmap(\n            actualAfter,");
+    const fileCommit = src.indexOf("commitTexturePngWrite(preparedOutput.fs");
+    const undoFinish = src.indexOf('Undo.finishEdit("Paint texture transaction")');
+    expect(verifiedHash).toBeGreaterThanOrEqual(0);
+    expect(guard).toBeGreaterThan(verifiedHash);
+    expect(fileCommit).toBeGreaterThan(guard);
+    expect(undoFinish).toBeGreaterThan(fileCommit);
+  });
+
   test("PNG rollback restores original backup before failed temporary cleanup", () => {
     const output = "/fixtures/atlas.png";
     const temp = output + ".tmp";

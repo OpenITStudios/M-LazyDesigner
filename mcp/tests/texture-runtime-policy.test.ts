@@ -224,6 +224,57 @@ describe("texture runtime wiring policy", () => {
     expect(source.slice(end)).toContain("snapshot.region.height");
   });
 
+  test("get_texture readback refuses bitmap changes in other animated frames and layout drift", async () => {
+    const { requireUnchangedTextureBitmap } = await import("@/lib/textureBitmapRuntime");
+    const { requireStableTextureEvidenceIdentity } =
+      await import("@/lib/textureEvidenceDelivery");
+    const first = {
+      uuid: "animated", id: "animated", name: "animated",
+      width: 2, height: 6, display_height: 2, uv_width: 128, uv_height: 128,
+    };
+    expect(() => requireStableTextureEvidenceIdentity(first, { ...first })).not.toThrow();
+    for (const field of [
+      "uuid", "id", "name", "width", "height", "display_height",
+      "uv_width", "uv_height",
+    ] as const) {
+      const drift = { ...first, [field]: field === "id" || field === "name" ||
+        field === "uuid" ? "changed" : first[field] + 1 };
+      expect(() => requireStableTextureEvidenceIdentity(first, drift))
+        .toThrow("get_texture texture identity or frame/UV layout changed");
+    }
+
+    const pixels = new Uint8ClampedArray(2 * 6 * 4);
+    const captured = { pixels, width: 2, height: 6 };
+    const later = { ...captured, pixels: pixels.slice() };
+    later.pixels[0] = 255; // Frame zero changed; requested crop may be frame one.
+    expect(() => requireUnchangedTextureBitmap(captured, later,
+      "get_texture decoded bitmap changed during evidence readback"
+    )).toThrow("get_texture decoded bitmap changed");
+    expect(() => requireUnchangedTextureBitmap(captured,
+      { ...captured, pixels: pixels.slice() },
+      "get_texture decoded bitmap changed during evidence readback"
+    )).not.toThrow();
+
+    const source = await Bun.file("server/runtime/contracts/texture.ts").text();
+    const start = source.indexOf("async function getFocusedTextureEvidence(");
+    const end = source.indexOf("export function wireTextureRuntimeContracts", start);
+    const block = source.slice(start, end);
+    const capture = block.indexOf("const sourceIdentity = textureEvidenceSourceIdentity(texture)");
+    const asyncDigest = block.indexOf("await buildTextureEvidenceSnapshot(");
+    const identityGuard = block.indexOf("requireStableTextureEvidenceIdentity(");
+    const bitmapGuard = block.indexOf("requireUnchangedTextureBitmap(");
+    const metadata = block.indexOf("const metadata = buildTextureEvidenceDeliveryMetadata({");
+    const png = block.indexOf("const png = rgbaToPngDataUrl(");
+    expect(capture).toBeGreaterThanOrEqual(0);
+    expect(asyncDigest).toBeGreaterThan(capture);
+    expect(identityGuard).toBeGreaterThan(asyncDigest);
+    expect(bitmapGuard).toBeGreaterThan(identityGuard);
+    expect(metadata).toBeGreaterThan(bitmapGuard);
+    expect(png).toBeGreaterThan(metadata);
+    expect(block).toContain("display_height: sourceIdentity.display_height");
+    expect(block).toContain("texture: sourceIdentity");
+  });
+
   test("Bedrock geometry v1 writes only new or explicitly owned single-geometry files", () => {
     expect(
       requireDirectBedrockGeometryWriteV1(

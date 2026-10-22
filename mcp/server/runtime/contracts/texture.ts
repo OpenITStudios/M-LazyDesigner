@@ -11,7 +11,11 @@ import {
   buildTextureEvidenceSnapshot,
   focusedGetTextureParameters,
 } from "@/lib/texture/evidence";
-import { buildTextureEvidenceDeliveryMetadata } from "@/lib/texture/evidenceDelivery";
+import {
+  buildTextureEvidenceDeliveryMetadata,
+  requireStableTextureEvidenceIdentity,
+  type TextureEvidenceSourceIdentity,
+} from "@/lib/texture/evidenceDelivery";
 import {
   createTextureVariantParameters,
   planTextureVariantFromBase,
@@ -20,6 +24,7 @@ import {
 import { textureIdSchema } from "@/lib/schemas/ids";
 import {
   fullTextureRgba,
+  requireUnchangedTextureBitmap,
   rgbaToPngDataUrl,
 } from "@/lib/texture/bitmapRuntime";
 import { createTextureParameters } from "../../tools/texture/createSchema";
@@ -171,6 +176,21 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
   };
 }
 
+function textureEvidenceSourceIdentity(
+  texture: Texture
+): TextureEvidenceSourceIdentity {
+  return {
+    uuid: texture.uuid,
+    id: texture.id,
+    name: texture.name,
+    width: texture.width,
+    height: texture.height,
+    display_height: texture.display_height,
+    uv_width: texture.getUVWidth(),
+    uv_height: texture.getUVHeight(),
+  };
+}
+
 async function getFocusedTextureEvidence(request: z.infer<typeof focusedGetTextureParameters>) {
   const available = Project?.textures ?? Texture.all;
   if (!request.texture && available.length > 1) {
@@ -189,6 +209,7 @@ async function getFocusedTextureEvidence(request: z.infer<typeof focusedGetTextu
   }
 
   const bitmap = fullTextureRgba(texture);
+  const sourceIdentity = textureEvidenceSourceIdentity(texture);
   const snapshot = await buildTextureEvidenceSnapshot(
     bitmap.pixels,
     bitmap.width,
@@ -198,15 +219,27 @@ async function getFocusedTextureEvidence(request: z.infer<typeof focusedGetTextu
       expected_revision: request.expected_revision,
     }
   );
+  // Revision hashing above is asynchronous. Ensure the bitmap and frame/UV
+  // metadata still belong to that exact decoded source before the PNG/result
+  // can be presented as current evidence. Both checks are synchronous.
+  requireStableTextureEvidenceIdentity(
+    sourceIdentity,
+    textureEvidenceSourceIdentity(texture)
+  );
+  requireUnchangedTextureBitmap(
+    bitmap,
+    fullTextureRgba(texture),
+    "get_texture decoded bitmap changed during evidence readback. Refresh the full-bitmap revision and retry."
+  );
   const metadata = buildTextureEvidenceDeliveryMetadata({
     inspection: snapshot.inspection,
     revision: snapshot.revision,
     bitmap: snapshot.bitmap,
     region: snapshot.region,
-    display_height: texture.display_height,
+    display_height: sourceIdentity.display_height,
     source_byte_length: snapshot.byte_length,
-    uv_width: texture.getUVWidth(),
-    uv_height: texture.getUVHeight(),
+    uv_width: sourceIdentity.uv_width,
+    uv_height: sourceIdentity.uv_height,
   });
   const png = rgbaToPngDataUrl(
     snapshot.rgba,
@@ -219,16 +252,7 @@ async function getFocusedTextureEvidence(request: z.infer<typeof focusedGetTextu
     ...image,
     structuredContent: {
       ...metadata,
-      texture: {
-        uuid: texture.uuid,
-        id: texture.id,
-        name: texture.name,
-        width: texture.width,
-        height: texture.height,
-        display_height: texture.display_height,
-        uv_width: texture.getUVWidth(),
-        uv_height: texture.getUVHeight(),
-      },
+      texture: sourceIdentity,
     },
   };
 }

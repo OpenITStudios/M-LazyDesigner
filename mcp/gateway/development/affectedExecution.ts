@@ -155,6 +155,7 @@ export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly 
   "mcp/lib/texture/bitmapRuntime.ts": [
     "mcp/tests/texture-bitmap-runtime.test.ts",
     "mcp/tests/texture-transaction-dirty-region.test.ts",
+    "mcp/tests/texture-runtime-policy.test.ts",
   ],
   "mcp/server/tools/paint/textureTransaction.ts": [
     "mcp/tests/texture-transaction-dirty-region.test.ts",
