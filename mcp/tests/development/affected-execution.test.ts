@@ -313,6 +313,27 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("session state changes select fact and evidence generation recovery contracts", () => {
+    const cases = [
+      ["mcp/gateway/session/state.ts", [
+        "mcp/gateway/session/state.test.ts",
+        "mcp/gateway/session/orchestrationRecoveryState.test.ts",
+      ]],
+      ["mcp/gateway/session/orchestrationRecoveryState.ts", [
+        "mcp/gateway/session/orchestrationRecoveryState.test.ts",
+        "mcp/gateway/session/state.test.ts",
+        "mcp/gateway/index-boundary.test.ts",
+      ]],
+    ] as const;
+    for (const [path, expected] of cases) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.targeted_tests, path).toEqual([...expected].sort());
+    }
+  });
+
   test("Runtime affinity and receipt producers share their existing effect contract", () => {
     const cases: Array<[string, string[]]> = [
       ["mcp/gateway/runtime/connectionManager.ts", [

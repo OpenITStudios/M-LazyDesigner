@@ -44,6 +44,44 @@ describe("Gateway Runtime-generation session recovery", () => {
       .toBe(initialCount + 1);
   });
 
+  test("a later outage retires new visual evidence even when capability facts stay unknown", () => {
+    const session = new GatewaySessionState();
+    session.synchronizeProject("project-outage-evidence");
+    session.onRuntimeUnavailable();
+    const initialCount =
+      gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
+
+    // Control/visual evidence can be produced independently of the graph
+    // facts. Repeating the outage must not return early with stale handles.
+    const handle = gatewayOrchestrationRecoveryState.evidence.put({
+      request: {
+        domain: "GEOMETRY",
+        source: "capture_model_views",
+        verification_risk: "LOW",
+        views: ["front"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256,
+        size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["outage:test"],
+      },
+      result: { revision: 1 },
+    });
+    expect(session.facts).toEqual({ project_bound: "unknown" });
+    expect(session.controlExecutionState).toBeNull();
+
+    session.onRuntimeUnavailable();
+    expect(gatewayOrchestrationRecoveryState.snapshot()).toMatchObject({
+      invalidation_count: initialCount + 1,
+      evidence_entries: 0,
+    });
+    expect(() => gatewayOrchestrationRecoveryState.evidence.get(handle))
+      .toThrow("VERIFICATION_EVIDENCE_NOT_FOUND");
+
+    session.onRuntimeUnavailable();
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(initialCount + 1);
+  });
+
   test("verified status re-establishes binding but not old geometry or texture evidence", () => {
     const session = new GatewaySessionState();
     session.synchronizeProject("project-a");

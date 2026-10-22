@@ -97,6 +97,56 @@ describe("Gateway orchestration recovery state", () => {
       "VERIFICATION_EVIDENCE_NOT_FOUND"
     );
   });
+  test("identical visual evidence gets a new handle after every Runtime generation", () => {
+    const state = new GatewayOrchestrationRecoveryState("runtime-evidence-handle-test");
+    state.synchronizeProjectAffinity("project-a");
+    const record = {
+      request: geometryRequest(),
+      result: { revision: 1 },
+    };
+    const originalEvidence = state.evidence.put(record);
+    const correctionInput = {
+      recipe_id: "recovery-asset",
+      base_recipe: recipe(),
+      verification_request: record.request,
+      verification_evidence_handle: originalEvidence,
+      discrepancies: [{
+        code: "WIDTH_LOW",
+        severity: "REVIEW" as const,
+        summary: "Width needs review.",
+        views: ["front"] as Array<"front">,
+        evidence_targets: ["width"],
+      }],
+    };
+    const originalCorrection = state.corrections.start(correctionInput);
+
+    state.invalidateRuntimeGeneration();
+    expect(() => state.evidence.get(originalEvidence))
+      .toThrow("VERIFICATION_EVIDENCE_NOT_FOUND");
+    const recoveredEvidence = state.evidence.put(record);
+    expect(recoveredEvidence).not.toBe(originalEvidence);
+    expect(() => state.evidence.get(originalEvidence))
+      .toThrow("VERIFICATION_EVIDENCE_NOT_FOUND");
+    expect(state.evidence.get(recoveredEvidence)).toEqual(record);
+    expect(state.corrections.projectContinuation(originalCorrection).verification)
+      .toMatchObject({
+        recovery_required: true,
+        recovery_reason: "RUNTIME_GENERATION_CHANGED",
+      });
+    const newCorrection = state.corrections.start({
+      ...correctionInput,
+      verification_evidence_handle: recoveredEvidence,
+    });
+    expect(newCorrection).not.toBe(originalCorrection);
+
+    state.invalidateRuntimeGeneration();
+    expect(() => state.evidence.get(recoveredEvidence))
+      .toThrow("VERIFICATION_EVIDENCE_NOT_FOUND");
+    const nextEvidence = state.evidence.put(record);
+    expect(nextEvidence).not.toBe(recoveredEvidence);
+    expect(nextEvidence).not.toBe(originalEvidence);
+  });
+
   test("same project affinity does not reset active orchestration state", () => {
     const state = new GatewayOrchestrationRecoveryState();
     expect(state.synchronizeProjectAffinity("project-a")).toBe(false);

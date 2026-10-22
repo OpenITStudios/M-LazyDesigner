@@ -54,9 +54,17 @@ export class GatewayOrchestrationRecoveryState {
   }
 
   invalidateRuntimeGeneration(): void {
-    this.evidence.clear();
+    // Keep active correction loops, but require their evidence to be
+    // recovered. Fresh evidence with identical contents must not reproduce
+    // a handle from a retired Runtime generation.
     this.corrections.invalidateRuntimeGeneration();
     this.invalidationCount += 1;
+    this.evidence.setScopeIdentity(
+      "process:" + this.processSessionIdentity +
+      ":project:" + (this.projectUuid ?? "unbound") +
+      ":epoch:" + this.projectEpoch +
+      ":runtime:" + this.invalidationCount
+    );
   }
 
   snapshot(): {

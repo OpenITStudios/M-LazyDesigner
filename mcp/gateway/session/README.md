@@ -45,7 +45,7 @@ Project A → Project B / unbound
 
 Evidence and correction handles are scoped by process identity plus project-affinity epoch. Returning to a previously used project creates a new epoch; handles from the earlier visit do not become valid again.
 
-Runtime-generation reconnect within the same project enters recovery and requires fresh evidence. Project-affinity change hard-resets project-scoped session state instead of transferring it between projects.
+Runtime-generation reconnect within the same project enters recovery and requires fresh evidence. Each generation invalidation also rotates the **evidence handle namespace**, so an identical capture in a new Runtime cannot resurrect a retired handle. Existing correction loops stay available as recovery-required history, but cannot reuse old visual evidence implicitly. Repeated offline notifications may be skipped only while graph facts, pending execution **and** the evidence registry remain empty/unknown. Project-affinity change hard-resets project-scoped session state instead of transferring it between projects.
 
 ## Gateway process restart
 

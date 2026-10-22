@@ -34,7 +34,10 @@ export class GatewaySessionState {
     if (this.runtimeUnavailable &&
         this.executionState === null &&
         Object.keys(this.capabilityFacts).length === 1 &&
-        this.capabilityFacts.project_bound === "unknown") return;
+        this.capabilityFacts.project_bound === "unknown" &&
+        // Runtime facts can stay UNKNOWN while fresh visual evidence was
+        // captured. A later outage must still retire those new handles.
+        gatewayOrchestrationRecoveryState.evidence.size() === 0) return;
     this.runtimeUnavailable = true;
     this.executionState = null;
     // Keep the old UUID only as an untrusted reconnect target. Neither that

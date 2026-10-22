@@ -347,8 +347,13 @@ const GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH: Readonly<
     "mcp/gateway/backend-effects-boundary.test.ts",
     "mcp/gateway/capabilities/effects.test.ts",
   ],
+  "mcp/gateway/session/state.ts": [
+    "mcp/gateway/session/state.test.ts",
+    "mcp/gateway/session/orchestrationRecoveryState.test.ts",
+  ],
   "mcp/gateway/session/orchestrationRecoveryState.ts": [
     "mcp/gateway/session/orchestrationRecoveryState.test.ts",
+    "mcp/gateway/session/state.test.ts",
     "mcp/gateway/index-boundary.test.ts",
   ],
   "mcp/gateway/index.ts": [
