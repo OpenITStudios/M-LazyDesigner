@@ -1,3 +1,5 @@
+import { boxUvSubunitAxes } from "./cubeSpan";
+
 export const GEOMETRY_QUALITY_EPSILON = 1e-6;
 export const GEOMETRY_QUALITY_EXAMPLE_LIMIT = 6;
 
@@ -9,6 +11,7 @@ export type GeometryCubeQualityInput = {
   origin?: readonly number[];
   rotation?: readonly number[];
   inflate?: number;
+  box_uv?: boolean;
 };
 
 export type GeometryGroupQualityInput = {
@@ -157,6 +160,12 @@ export function analyzeGeometryHygiene(
 
   const degenerateExamples: DegenerateExample[] = [];
   const planeLikeExamples: PlaneLikeExample[] = [];
+  const subunitBoxUvExamples: Array<{
+    cube_uuid: string;
+    cube_name: string;
+    size: [number, number, number];
+    axes: GeometryAxis[];
+  }> = [];
   for (const cube of cubes) {
     if (cube.from.length < 3 || cube.to.length < 3) continue;
     const size = vectorSize(cube.from, cube.to);
@@ -180,6 +189,17 @@ export function analyzeGeometryHygiene(
       continue;
     }
 
+    if (cube.box_uv === true) {
+      const riskyAxes = boxUvSubunitAxes(cube.from, cube.to);
+      if (riskyAxes.length > 0) {
+        subunitBoxUvExamples.push({
+          cube_uuid: cube.uuid,
+          cube_name: cube.name,
+          size,
+          axes: riskyAxes,
+        });
+      }
+    }
     if (zeroAxes.length === 1) {
       planeLikeExamples.push({
         cube_uuid: cube.uuid,
@@ -217,10 +237,12 @@ export function analyzeGeometryHygiene(
   const precisionBounded = bounded(precisionExamples, exampleLimit);
   const degenerateBounded = bounded(degenerateExamples, exampleLimit);
   const planeLikeBounded = bounded(planeLikeExamples, exampleLimit);
+  const subunitBoxUvBounded = bounded(subunitBoxUvExamples, exampleLimit);
   const duplicateBounded = bounded(duplicateNames, exampleLimit);
   const reviewRequired =
     precisionExamples.length > 0 ||
     degenerateExamples.length > 0 ||
+    subunitBoxUvExamples.length > 0 ||
     duplicateNames.length > 0;
 
   return {
@@ -238,6 +260,11 @@ export function analyzeGeometryHygiene(
     degenerate_cubes: {
       count: degenerateExamples.length,
       ...degenerateBounded,
+    },
+    box_uv_subunit: {
+      count: subunitBoxUvExamples.length,
+      ...subunitBoxUvBounded,
+      note: "Positive Cube axes under one model unit are under-resolved by native Box UV. Plane-like zero axes and per-face UV are not classified. This is a UV representation risk, not proof that small 3D geometry is visually unnecessary.",
     },
     duplicate_bone_names: {
       name_count: duplicateNames.length,

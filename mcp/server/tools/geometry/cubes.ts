@@ -19,6 +19,7 @@ import { requireOpenProject } from "@/lib/core/project";
 import {
   hasFiniteCubeSpan,
   requireFiniteCubeSpan,
+  requireBoxUvRepresentableSpan,
   validateCubeGeometrySpan,
 } from "@/lib/geometry/cubeSpan";
 export { validateCubeGeometrySpan } from "@/lib/geometry/cubeSpan";
@@ -676,6 +677,10 @@ export function registerCubesTools() {
       let deferredBoxUvTemplate = false;
 
       if (autoPackBoxUv) {
+        // Inherited Box UV must not realize under-resolved fractional details.
+        for (const { element } of placements) {
+          requireBoxUvRepresentableSpan(element.from, element.to, `Cube ${element.name} creation`);
+        }
         const textureWidth = Project?.texture_width;
         const textureHeight = Project?.texture_height;
         if (
@@ -817,6 +822,15 @@ export function registerCubesTools() {
           `Cube ${cubes[0].name} (${cubes[0].uuid}) update`
         );
       }
+      if ((from !== undefined || to !== undefined) && faces === undefined &&
+          (cubes[0].box_uv === true ||
+            (cubes[0].box_uv !== false && Project?.box_uv === true))) {
+        requireBoxUvRepresentableSpan(
+          from ?? cubes[0].from,
+          to ?? cubes[0].to,
+          `Cube ${cubes[0].name} (${cubes[0].uuid}) update`
+        );
+      }
       if (!modifyCubeRequestWouldChange(cubes[0], {
         id, name, origin, from, to, rotation, uv_offset, autouv, mirror_uv, inflate, faces, visibility,
       })) {
@@ -932,6 +946,16 @@ export function registerCubesTools() {
             update.from ?? cube.from,
             update.to ?? cube.to,
             cube.inflate ?? 0,
+            `Cube ${cube.name} (${cube.uuid}) batch update`
+          );
+        }
+        if ((update.from !== undefined || update.to !== undefined) &&
+            update.faces === undefined &&
+            (cube.box_uv === true ||
+              (cube.box_uv !== false && Project?.box_uv === true))) {
+          requireBoxUvRepresentableSpan(
+            update.from ?? cube.from,
+            update.to ?? cube.to,
             `Cube ${cube.name} (${cube.uuid}) batch update`
           );
         }

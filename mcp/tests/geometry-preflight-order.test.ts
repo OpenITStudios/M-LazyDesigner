@@ -1,7 +1,40 @@
 import { describe, expect, test } from "bun:test";
 import { validateCubeGeometrySpan } from "@/server/tools/cubes";
+import {
+  boxUvSubunitAxes,
+  requireBoxUvRepresentableSpan,
+} from "@/lib/geometry/cubeSpan";
 
 describe("Geometry mutation preflight ordering", () => {
+  test("Box UV sub-unit guard preserves true planes and explicit per-face option", () => {
+    expect(boxUvSubunitAxes([0, 0, 0], [0.25, 8, 8])).toEqual(["x"]);
+    expect(boxUvSubunitAxes([0, 0, 0], [0, 8, 8])).toEqual([]);
+    expect(boxUvSubunitAxes([0, 0, 0], [1, 8, 8])).toEqual([]);
+    expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [0.25, 8, 8], "wing"))
+      .toThrow("sub-unit Box UV size on x");
+    expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [0, 8, 8], "plane")).not.toThrow();
+    expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [1, 8, 8], "solid")).not.toThrow();
+  });
+
+  test("inherited Box UV mutation paths check sub-unit dimensions before Undo", async () => {
+    const source = await Bun.file("server/tools/geometry/cubes.ts").text();
+    for (const [startMarker, endMarker] of [
+      ["const executeCreateCubes", "const executeUpdateCube"],
+      ["const executeUpdateCube", "const executeBatchUpdateCubes"],
+      ["const executeBatchUpdateCubes", "createTool(cubeToolDocs[0].name"],
+    ]) {
+      const start = source.indexOf(startMarker);
+      const end = source.indexOf(endMarker, start);
+      const block = source.slice(start, end);
+      expect(start).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThan(start);
+      expect(block.indexOf("requireBoxUvRepresentableSpan(")).toBeGreaterThanOrEqual(0);
+      expect(block.indexOf("Undo.initEdit")).toBeGreaterThan(block.indexOf("requireBoxUvRepresentableSpan("));
+    }
+    expect(source).toContain("const autoPackBoxUv = !customFaceUvs && Project?.box_uv === true");
+    expect(source).toContain("update.faces === undefined");
+    expect(source).toContain("faces === undefined");
+  });
   test("Cube span preflight permits solid/plane-like geometry and rejects invalid spans", () => {
     expect(
       validateCubeGeometrySpan([0, 0, 0], [4, 8, 4], 0, "solid")

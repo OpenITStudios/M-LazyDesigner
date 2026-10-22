@@ -56,6 +56,21 @@ describe("bounded authoring quality intelligence", () => {
     expect(result.duplicate_bone_names.examples[0].count).toBe(2);
   });
 
+  test("Box UV sub-unit review stays scoped to inherited Box UV", () => {
+    const result = analyzeGeometryHygiene([
+      { uuid: "thin-box", name: "tiny_detail", from: [0, 0, 0], to: [0.25, 2, 2], box_uv: true },
+      { uuid: "plane", name: "leaf", from: [0, 0, 0], to: [0, 4, 4], box_uv: true },
+      { uuid: "face", name: "precision_part", from: [0, 0, 0], to: [0.25, 2, 2], box_uv: false },
+    ], []);
+    expect(result.state).toBe("review_required");
+    expect(result.box_uv_subunit.count).toBe(1);
+    expect(result.box_uv_subunit.examples[0]).toMatchObject({
+      cube_uuid: "thin-box", size: [0.25, 2, 2], axes: ["x"],
+    });
+    expect(result.plane_like_cubes.count).toBe(1);
+    expect(result.degenerate_cubes.count).toBe(0);
+  });
+
   test("an intentional plane-like Cube is clean when it has no other hygiene issue", () => {
     const result = analyzeGeometryHygiene(
       [

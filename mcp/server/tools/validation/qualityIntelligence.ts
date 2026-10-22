@@ -61,6 +61,8 @@ function geometryHygieneRuntime() {
       origin: [...cube.origin],
       rotation: [...cube.rotation],
       inflate: cube.inflate ?? 0,
+      box_uv: cube.box_uv === true ||
+        (cube.box_uv !== false && Project?.box_uv === true),
     })),
     (Group.all ?? []).map((group: Group) => ({
       uuid: group.uuid,

@@ -1,5 +1,37 @@
 const CUBE_AXIS_NAMES = ["x", "y", "z"] as const;
 
+/** A positive fractional span cannot preserve native Bedrock Box UV texel scale.
+ * A true zero span is an intentional plane-like carrier, not sub-unit detail.
+ */
+export function boxUvSubunitAxes(
+  from: readonly number[],
+  to: readonly number[]
+): Array<(typeof CUBE_AXIS_NAMES)[number]> {
+  requireFiniteCubeSpan(from, to, "Box UV");
+  return CUBE_AXIS_NAMES.filter((_, axis) => {
+    const span = to[axis] - from[axis];
+    return span > 0 && span < 1;
+  });
+}
+
+/** Guard new/reshaped inherited Box UV, without rewriting existing native assets. */
+export function requireBoxUvRepresentableSpan(
+  from: readonly number[],
+  to: readonly number[],
+  context: string
+): void {
+  const axes = boxUvSubunitAxes(from, to);
+  if (axes.length > 0) {
+    throw new Error(
+      `${context} has sub-unit Box UV size on ${axes.join(", ")}. ` +
+      "Native Bedrock Box UV rounds fractional-size detail to a logical unit. " +
+      "Prefer Texture for surface-only detail, make meaningful 3D geometry at " +
+      "least one model unit wide on positive axes, or explicitly author per-face " +
+      "UV when small 3D geometry is truly required."
+    );
+  }
+}
+
 export function hasFiniteCubeSpan(
   from: readonly number[],
   to: readonly number[]

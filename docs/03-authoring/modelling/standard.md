@@ -213,6 +213,8 @@ Before adding a secondary Cube, ask whether the feature needs 3D silhouette, rea
 
 Detail-only span/thickness `<= 4 Blockbench units` is an **anti-overcube guardrail, not a classifier**. It triggers a stronger representation challenge; it does not forbid Geometry when the small feature genuinely carries required 3D form.
 
+For inherited **Bedrock Box UV**, a positive authored axis smaller than **one model unit** is rejected by Cube create/reshape preflight: native logical UV rounding cannot preserve fractional-size detail. A true zero-span plane-like carrier is different and remains valid; intentionally small, functional 3D geometry can use explicit per-face UV instead. Existing legacy Cubes remain inspectable and report `box_uv_subunit` quality risks rather than being silently rewritten. This is a resolution/representation guard, not a universal minimum 3D-feature size.
+
 Prefer fewer meaningful Cuboids over dense approximations. Split a mass only for demonstrated different silhouette/orientation, separate transform/pivot/motion, genuinely separate visible volume, or verified technical constraint. Adding another Cube is not the default correction.
 
 ### Adaptive Cuboid Budget
