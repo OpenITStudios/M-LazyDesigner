@@ -73,6 +73,8 @@ describe("texture frame mapping", () => {
     let selectedOffset: [number, number] = [0, 16];
     let editOffset: [number, number] = [0, 16];
     const written: Array<[number, number]> = [];
+    const bitmap = new Uint8ClampedArray(16 * 48 * 4);
+    let writeBehavior: "normal" | "ignored" | "wrong" = "normal";
     const history = { started: 0, finished: 0, cancelled: 0 };
     const texture = {
       uuid: "animated", name: "animated", id: "animated",
@@ -88,9 +90,21 @@ describe("texture frame mapping", () => {
         const offset = editOffset;
         const ctx = {
           save() {}, restore() {},
+          getImageData(x: number, y: number, w: number, h: number) {
+            const pixels = new Uint8ClampedArray(w * h * 4);
+            for (let row = 0; row < h; row++) {
+              const from = ((y + offset[1] + row) * 16 + (x + offset[0])) * 4;
+              pixels.set(bitmap.subarray(from, from + w * 4), row * w * 4);
+            }
+            return { data: pixels };
+          },
           clearRect(_x: number, _y: number, _w: number, _h: number) {},
           fillRect(x: number, y: number) {
-            written.push([x + offset[0], y + offset[1]]);
+            if (writeBehavior === "ignored") return;
+            const realX = x + offset[0] + (writeBehavior === "wrong" ? 1 : 0);
+            const realY = y + offset[1];
+            bitmap.set([255, 0, 0, 255], (realY * 16 + realX) * 4);
+            written.push([realX, realY]);
           },
           globalAlpha: 0, globalCompositeOperation: "", fillStyle: "",
         };
@@ -142,6 +156,17 @@ describe("texture frame mapping", () => {
         .rejects.toThrow("outside the active texture canvas/layer");
       expect(written).toEqual([[0, 16], [5, 31]]);
       expect(history).toEqual({ started: 2, finished: 1, cancelled: 1 });
+
+      editOffset = [0, 16];
+      writeBehavior = "ignored";
+      await expect(run([{ x: 1, y: 16 }]))
+        .rejects.toThrow("did not apply the requested RGBA");
+      expect(history).toEqual({ started: 3, finished: 1, cancelled: 2 });
+
+      writeBehavior = "wrong";
+      await expect(run([{ x: 1, y: 16 }]))
+        .rejects.toThrow("did not apply the requested RGBA");
+      expect(history).toEqual({ started: 4, finished: 1, cancelled: 3 });
     } finally {
       for (const key of keys) {
         if (prior[key] === undefined) delete g[key];

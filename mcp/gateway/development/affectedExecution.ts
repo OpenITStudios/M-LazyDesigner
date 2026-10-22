@@ -151,6 +151,7 @@ export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly 
   "mcp/server/tools/paint/brush.ts": [
     "mcp/tests/texture-frame-mapping.test.ts",
     "mcp/tests/brush-blend-default.test.ts",
+    "mcp/tests/texture-authoring-contract.test.ts",
   ],
   "mcp/lib/texture/bitmapRuntime.ts": [
     "mcp/tests/texture-bitmap-runtime.test.ts",
@@ -164,6 +165,8 @@ export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly 
   "mcp/lib/texture/paintTransaction.ts": [
     "mcp/tests/texture-region-copy.test.ts",
     "mcp/tests/texture-transaction-dirty-region.test.ts",
+    "mcp/tests/texture-frame-mapping.test.ts",
+    "mcp/tests/texture-authoring-contract.test.ts",
   ],
   "mcp/lib/texture/seamContinuity.ts": [
     "mcp/tests/texture-seam-continuity.test.ts",

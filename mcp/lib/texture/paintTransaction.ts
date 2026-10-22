@@ -145,6 +145,78 @@ function parseHexRgba(value: string): Rgba {
   ];
 }
 
+/**
+ * Exact brush writes must be attested by native pixel readback, not inferred
+ * from successful ctx.fillRect calls. Preserve byte-for-byte off-target pixels.
+ * Semi-transparent RGB is compared in premultiplied space (1-byte tolerance)
+ * because Canvas getImageData unpremultiplication can round low-alpha colors.
+ */
+export function requireExactBrushPostcondition(
+  before: Uint8ClampedArray,
+  after: Uint8ClampedArray,
+  width: number,
+  height: number,
+  coordinates: readonly { x: number; y: number }[],
+  color: string
+): number {
+  requireBitmapDimensions(width, height);
+  const byteLength = width * height * 4;
+  if (!Number.isSafeInteger(byteLength) ||
+      before.byteLength !== byteLength || after.byteLength !== byteLength ||
+      coordinates.length === 0) {
+    throw new Error("Exact brush pixel readback requires a valid bounded RGBA region.");
+  }
+  const expected = parseHexRgba(color);
+  const targets = new Set<number>();
+  for (const { x, y } of coordinates) {
+    if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y) ||
+        x < 0 || y < 0 || x >= width || y >= height) {
+      throw new Error("Exact brush postcondition target lies outside readback region.");
+    }
+    targets.add(y * width + x);
+  }
+
+  const visiblePixelMatches = (buffer: Uint8ClampedArray, offset: number,
+    desired: readonly number[]): boolean => {
+    const alpha = buffer[offset + 3];
+    if (alpha !== desired[3]) return false;
+    for (let channel = 0; channel < 3; channel += 1) {
+      const actualPremultiplied = Math.round(buffer[offset + channel] * alpha / 255);
+      const expectedPremultiplied = Math.round(desired[channel] * alpha / 255);
+      if (Math.abs(actualPremultiplied - expectedPremultiplied) > 1) return false;
+    }
+    return true;
+  };
+
+  let changedPixels = 0;
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const offset = pixel * 4;
+    if (targets.has(pixel)) {
+      if (!visiblePixelMatches(after, offset, expected)) {
+        throw new Error(
+          `Exact brush postcondition mismatch at requested pixel (${pixel % width}, ${Math.floor(pixel / width)}). Native painting did not apply the requested RGBA.`
+        );
+      }
+      if (!visiblePixelMatches(before, offset, [
+        after[offset], after[offset + 1], after[offset + 2], after[offset + 3]
+      ])) changedPixels += 1;
+    } else if (
+      before[offset] !== after[offset] ||
+      before[offset + 1] !== after[offset + 1] ||
+      before[offset + 2] !== after[offset + 2] ||
+      before[offset + 3] !== after[offset + 3]
+    ) {
+      throw new Error(
+        `Exact brush postcondition changed an unrequested pixel (${pixel % width}, ${Math.floor(pixel / width)}).`
+      );
+    }
+  }
+  if (changedPixels === 0) {
+    throw new Error("Exact brush postcondition found no authored pixel change.");
+  }
+  return changedPixels;
+}
+
 function requireBitmapDimensions(width: number, height: number): void {
   if (
     !Number.isSafeInteger(width) ||

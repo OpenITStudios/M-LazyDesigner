@@ -1,5 +1,5 @@
 import {describe,expect,test} from "bun:test";
-import {applyPaintTransactionRgba,planPaintTransaction,paintTransactionOperationSchema,paintTransactionParameters} from "@/lib/paintTransaction";
+import {applyPaintTransactionRgba,planPaintTransaction,paintTransactionOperationSchema,paintTransactionParameters,requireExactBrushPostcondition} from "@/lib/paintTransaction";
 const source=new Uint8ClampedArray([10,20,30,255,40,50,60,0,70,80,90,128,100,110,120,255]);
 const copy=(extra={})=>paintTransactionOperationSchema.parse({operation:"copy_region",source:{x:0,y:0,width:2,height:1},target:{x:2,y:0},flip_x:true,...extra});
 describe("entity atlas region copy",()=>{
@@ -62,6 +62,59 @@ describe("entity atlas region copy",()=>{
       17,34,51,68,170,187,204,255,
     ]);
     expect(result.pixels.slice(8)).toEqual(source.slice(8));
+  });
+
+
+  test("exact brush native readback verifies requested RGBA and protects nearby pixels", () => {
+    const original = new Uint8ClampedArray(3 * 2 * 4);
+    const modified = original.slice();
+    modified.set([17, 34, 51, 128], (1 * 3 + 1) * 4);
+    expect(requireExactBrushPostcondition(
+      original, modified, 3, 2, [{ x: 1, y: 1 }], "#11223380"
+    )).toBe(1);
+
+    const roundedAlpha = original.slice();
+    roundedAlpha.set([18, 34, 52, 128], (1 * 3 + 1) * 4);
+    expect(requireExactBrushPostcondition(
+      original, roundedAlpha, 3, 2, [{ x: 1, y: 1 }], "#11223380"
+    )).toBe(1);
+
+    // A missed draw, even when the callback reports success, cannot commit.
+    expect(() => requireExactBrushPostcondition(
+      original, original.slice(), 3, 2, [{ x: 1, y: 1 }], "#11223380"
+    )).toThrow("did not apply the requested RGBA");
+
+    // Correct color at the target is not enough when the native brush also
+    // changes a neighboring pixel in the same bounded rectangle.
+    const spill = modified.slice();
+    spill.set([255, 0, 0, 255], 0);
+    expect(() => requireExactBrushPostcondition(
+      original, spill, 3, 2,
+      [{ x: 0, y: 1 }, { x: 1, y: 1 }], "#11223380"
+    )).toThrow("postcondition mismatch");
+    const spillBetween = original.slice();
+    spillBetween.set([17, 34, 51, 128], (1 * 3) * 4);
+    spillBetween.set([17, 34, 51, 128], (1 * 3 + 2) * 4);
+    spillBetween.set([17, 34, 51, 128], (1 * 3 + 1) * 4);
+    expect(() => requireExactBrushPostcondition(
+      original, spillBetween, 3, 2,
+      [{ x: 0, y: 1 }, { x: 2, y: 1 }], "#11223380"
+    )).toThrow("changed an unrequested pixel");
+
+    // A byte-wise RGB drift under zero alpha is not a visible authored edit.
+    const transparent = original.slice();
+    transparent.set([200, 99, 77, 0], 0);
+    expect(() => requireExactBrushPostcondition(
+      original, transparent, 3, 2, [{ x: 0, y: 0 }], "#11223300"
+    )).toThrow("no authored pixel change");
+
+    const duplicateTargets = [{ x: 1, y: 1 }, { x: 1, y: 1 }];
+    expect(requireExactBrushPostcondition(
+      original, modified, 3, 2, duplicateTargets, "#11223380"
+    )).toBe(1);
+    expect(() => requireExactBrushPostcondition(
+      original, modified, 3, 2, [{ x: 3, y: 1 }], "#11223380"
+    )).toThrow("outside readback region");
   });
 
   test("flips vertically and rejects out-of-bounds destination",()=>{

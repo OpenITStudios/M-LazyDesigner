@@ -409,7 +409,16 @@ describe("texturing authoring contract", () => {
       blend_mode: {value:"default"},
       brush_tool: { select: () => nativeCalls.push(["select"]) },
     };
+    const rgba = new Uint8ClampedArray(16 * 16 * 4);
     const ctx = {
+      getImageData(x: number, y: number, width: number, height: number) {
+        const data = new Uint8ClampedArray(width * height * 4);
+        for (let row = 0; row < height; row++) {
+          const offset = ((y + row) * 16 + x) * 4;
+          data.set(rgba.subarray(offset, offset + width * 4), row * width * 4);
+        }
+        return { data };
+      },
       save() {},
       restore() {},
       globalAlpha: 1,
@@ -417,10 +426,12 @@ describe("texturing authoring contract", () => {
       fillStyle: "",
       clearRect: (x: number, y: number, width: number, height: number) => {
         cleared.push([x, y, width, height]);
+        rgba.fill(0, (y * 16 + x) * 4, (y * 16 + x + 1) * 4);
       },
       fillRect: (x: number, y: number, width: number, height: number) => {
         expect(cleared.at(-1)).toEqual([x, y, width, height]);
         writes.push([x, y, width, height]);
+        rgba.set([17, 34, 51, 128], (y * 16 + x) * 4);
       },
     };
     const active = {

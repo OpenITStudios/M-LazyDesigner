@@ -69,6 +69,20 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("paint RGBA postconditions select their pure and native authoring owners", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/lib/texture/paintTransaction.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/texture-authoring-contract.test.ts",
+      "mcp/tests/texture-frame-mapping.test.ts",
+      "mcp/tests/texture-region-copy.test.ts",
+      "mcp/tests/texture-transaction-dirty-region.test.ts",
+    ]);
+  });
+
   test("Face UV pixel mapping changes route to exact-pixel and inspection density regressions", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/uv/facePixelMapping.ts"],
@@ -108,6 +122,7 @@ describe("affected execution planner", () => {
       ["mcp/server/tools/paint/brush.ts", [
         "mcp/tests/texture-frame-mapping.test.ts",
         "mcp/tests/brush-blend-default.test.ts",
+        "mcp/tests/texture-authoring-contract.test.ts",
       ]],
     ] as const;
     for (const [path, expected] of cases) {
@@ -506,6 +521,8 @@ describe("affected execution planner", () => {
     const owners = [
       "mcp/tests/texture-region-copy.test.ts",
       "mcp/tests/texture-transaction-dirty-region.test.ts",
+      "mcp/tests/texture-frame-mapping.test.ts",
+      "mcp/tests/texture-authoring-contract.test.ts",
     ];
     expect(plan.fallback_full_verify).toBe(false);
     expect(plan.checks).toContain("PROJECT_GRAPH");

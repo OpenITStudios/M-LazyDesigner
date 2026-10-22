@@ -8,6 +8,7 @@ import {
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_EXPERIMENTAL } from "@/lib/constants";
 import { runPaintStroke } from "@/lib/texture/paintStroke";
+import { requireExactBrushPostcondition } from "@/lib/texture/paintTransaction";
 import {
   requireSingleFrameBitmapPixels,
   resolveTextureFrameLayout,
@@ -309,6 +310,14 @@ export function registerPaintBrushTools(): void {
                 "paint_with_brush"
               );
     
+              // Read back the whole bounded footprint, so a nearby native
+              // paint spill is also detectable before Undo is committed.
+              const bounds = exactPixelBounds(coordinates);
+              const localTargets = coordinates.map((coordinate) => ({
+                x: coordinate.x - bounds.rect[0],
+                y: coordinate.y - bounds.rect[1],
+              }));
+
               const undoAspects: UndoAspects = { bitmap: true };
               if (texture.layers_enabled && texture.layers[0]) {
                 const activeLayer = texture.getActiveLayer();
@@ -343,6 +352,14 @@ export function registerPaintBrushTools(): void {
                         "paint_with_brush exact pixel active frame/layer offset changed during native edit."
                       );
                     }
+                    const localLeft = bounds.rect[0] - env.offset[0];
+                    const localTop = bounds.rect[1] - env.offset[1];
+                    const [regionWidth, regionHeight] = bounds.size;
+                    const beforePixels = new Uint8ClampedArray(
+                      env.ctx.getImageData(
+                        localLeft, localTop, regionWidth, regionHeight
+                      ).data
+                    );
                     env.ctx.save();
                     try {
                       env.ctx.globalAlpha = 1;
@@ -366,6 +383,17 @@ export function registerPaintBrushTools(): void {
                     } finally {
                       env.ctx.restore();
                     }
+                    const afterPixels = env.ctx.getImageData(
+                      localLeft, localTop, regionWidth, regionHeight
+                    ).data;
+                    requireExactBrushPostcondition(
+                      beforePixels,
+                      afterPixels,
+                      regionWidth,
+                      regionHeight,
+                      localTargets,
+                      colorHex
+                    );
                   },
                   { no_undo: true }
                 );
@@ -377,7 +405,6 @@ export function registerPaintBrushTools(): void {
               }
               Canvas.updateAll();
     
-              const bounds = exactPixelBounds(coordinates);
               const result = {
                 operation: "paint_with_brush",
                 mode: "exact_pixels",
