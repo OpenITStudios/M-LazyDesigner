@@ -176,6 +176,127 @@ describe("texture frame mapping", () => {
   });
 
 
+
+  test("layered exact brush rejects empty stacks and native layer switches even with identical canvas offsets", async () => {
+    const g = globalThis as Record<string, any>;
+    const keys = ["Project", "Texture", "Painter", "Undo", "Canvas"];
+    const previous = Object.fromEntries(keys.map(k => [k, g[k]]));
+    const layerA = { uuid: "ink", name: "Ink", type: "pixel_layer" };
+    const layerB = { uuid: "shade", name: "Shade", type: "pixel_layer" };
+    const pixels = new Uint8ClampedArray(4 * 4 * 4);
+    let activeLayer: typeof layerA = layerA;
+    let switchPoint: "none" | "before_callback" | "after_callback" = "none";
+    const undo: Array<{ action: string; scope?: any }> = [];
+    let saved = pixels.slice();
+    const canvas = { width: 4, height: 4 };
+    const offset = [0, 0];
+    const ctx = {
+      save() {}, restore() {}, clearRect() {},
+      globalAlpha: 1, globalCompositeOperation: "", fillStyle: "",
+      fillRect(x: number, y: number) {
+        pixels.set([255, 0, 0, 255], (y * 4 + x) * 4);
+      },
+      getImageData(x: number, y: number, w: number, h: number) {
+        const data = new Uint8ClampedArray(w * h * 4);
+        for (let row = 0; row < h; row++) {
+          const from = ((y + row) * 4 + x) * 4;
+          data.set(pixels.subarray(from, from + w * 4), row * w * 4);
+        }
+        return { data };
+      },
+    };
+    const texture = {
+      name: "layered", uuid: "layered", id: "layered",
+      width: 4, height: 4, display_height: 4,
+      layers_enabled: true, layers: [layerA, layerB], selected_layer: layerA,
+      getActiveLayer: () => activeLayer,
+      getActiveCanvas: () => ({ canvas, offset }),
+      edit(callback: (canvas: typeof canvas, env: { ctx: typeof ctx; offset: number[] }) => void) {
+        if (switchPoint === "before_callback") {
+          activeLayer = layerB;
+          this.selected_layer = layerB;
+        }
+        callback(canvas, { ctx, offset });
+        if (switchPoint === "after_callback") {
+          activeLayer = layerB;
+          this.selected_layer = layerB;
+        }
+      },
+    };
+    g.Project = { textures: [texture] };
+    g.Texture = { all: [texture], selected: texture, getDefault: () => texture };
+    g.Painter = { mirror_painting: false, lock_alpha: false, erase_mode: false };
+    g.Canvas = { updateAll() {} };
+    g.Undo = {
+      initEdit(scope: any) {
+        saved = pixels.slice();
+        undo.push({ action: "init", scope });
+      },
+      finishEdit() { undo.push({ action: "finish" }); },
+      cancelEdit() {
+        pixels.set(saved);
+        undo.push({ action: "cancel" });
+      },
+    };
+
+    try {
+      if (!getAllToolDefinitions().paint_with_brush) registerPaintBrushTools();
+      const tool = getAllToolDefinitions().paint_with_brush;
+      const run = async (x: number) =>
+        tool.execute(await tool.parameterSchema.parseAsync({
+          texture_id: "layered",
+          coordinates: [{ x, y: 1 }],
+          connect_strokes: false,
+          brush_settings: {
+            color: "#ff0000", size: 1, opacity: 255, softness: 0,
+            shape: "square", blend_mode: "default",
+          },
+        }));
+
+      const good = await run(0);
+      expect(good.structuredContent).toMatchObject({
+        mode: "exact_pixels",
+        write_target: { kind: "active_layer", layer_uuid: "ink" },
+        verification_scope: "native_edit_canvas_rgba",
+      });
+      expect(undo).toHaveLength(2);
+      expect(undo[0].scope).toMatchObject({ bitmap: true, layers: [layerA] });
+      expect(undo[0].scope.textures).toBeUndefined();
+      expect(pixels.slice((4 + 0) * 4, (4 + 1) * 4))
+        .toEqual(new Uint8ClampedArray([255, 0, 0, 255]));
+
+      texture.layers = [];
+      await expect(run(1)).rejects.toThrow("no pixel layers");
+      expect(undo).toHaveLength(2);
+      texture.layers = [layerA, layerB];
+
+      switchPoint = "before_callback";
+      await expect(run(1)).rejects.toThrow("active layer changed during native painting");
+      expect(undo.map(item => item.action)).toEqual([
+        "init", "finish", "init", "cancel",
+      ]);
+      expect(pixels.slice((4 + 1) * 4, (4 + 2) * 4)).toEqual(
+        new Uint8ClampedArray([0, 0, 0, 0])
+      );
+
+      activeLayer = layerA;
+      texture.selected_layer = layerA;
+      switchPoint = "after_callback";
+      await expect(run(2)).rejects.toThrow("active layer changed during native painting");
+      expect(undo.map(item => item.action)).toEqual([
+        "init", "finish", "init", "cancel", "init", "cancel",
+      ]);
+      expect(pixels.slice((4 + 2) * 4, (4 + 3) * 4)).toEqual(
+        new Uint8ClampedArray([0, 0, 0, 0])
+      );
+    } finally {
+      for (const key of keys) {
+        if (previous[key] === undefined) delete g[key];
+        else g[key] = previous[key];
+      }
+    }
+  });
+
   test("animated frame-local UV metadata never uses stacked bitmap height", () => {
     const revision = "sha256:2x6:" + "a".repeat(64);
     const data = {

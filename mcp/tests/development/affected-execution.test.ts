@@ -123,6 +123,7 @@ describe("affected execution planner", () => {
         "mcp/tests/texture-frame-mapping.test.ts",
         "mcp/tests/brush-blend-default.test.ts",
         "mcp/tests/texture-authoring-contract.test.ts",
+        "mcp/tests/texture-layer-management-contract.test.ts",
       ]],
     ] as const;
     for (const [path, expected] of cases) {
@@ -133,6 +134,19 @@ describe("affected execution planner", () => {
       expect(plan.checks).toContain("PROJECT_GRAPH");
       expect(plan.targeted_tests).toEqual([...expected].sort());
     }
+  });
+
+  test("active layer identity source selects layer and exact brush regression owners", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/server/tools/paint/layerState.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.checks).toContain("PROJECT_GRAPH");
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/texture-frame-mapping.test.ts",
+      "mcp/tests/texture-layer-management-contract.test.ts",
+    ]);
   });
 
   test("UV inspection changes select physical texel mapping and project density owners", () => {

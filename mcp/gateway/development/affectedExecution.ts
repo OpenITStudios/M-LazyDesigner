@@ -152,6 +152,11 @@ export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly 
     "mcp/tests/texture-frame-mapping.test.ts",
     "mcp/tests/brush-blend-default.test.ts",
     "mcp/tests/texture-authoring-contract.test.ts",
+    "mcp/tests/texture-layer-management-contract.test.ts",
+  ],
+  "mcp/server/tools/paint/layerState.ts": [
+    "mcp/tests/texture-layer-management-contract.test.ts",
+    "mcp/tests/texture-frame-mapping.test.ts",
   ],
   "mcp/lib/texture/bitmapRuntime.ts": [
     "mcp/tests/texture-bitmap-runtime.test.ts",

@@ -5,6 +5,8 @@ import {
 import {
   preflightLayerMetadataBatch,
   requireFlatLayerStructure,
+  resolveExactBrushLayerTarget,
+  requireExactBrushLayerUnchanged,
 } from "@/server/tools/paint/layerState";
 
 async function source(path: string): Promise<string> {
@@ -72,6 +74,83 @@ describe("texture layer management hardening", () => {
         action: "batch_metadata",
       }).success
     ).toBe(false);
+  });
+
+
+  test("exact brush uses active native pixel layer identity, never implicit bitmap fallback", () => {
+    const a = { uuid: "layer-a", name: "Ink", type: "pixel_layer" };
+    const b = { uuid: "layer-b", name: "Shade", type: "pixel_layer" };
+    let active: unknown = a;
+    const texture = {
+      name: "Atlas",
+      layers_enabled: true,
+      layers: [a, b],
+      selected_layer: a,
+      getActiveLayer: () => active,
+    } as unknown as Texture;
+
+    const target = resolveExactBrushLayerTarget(texture);
+    expect(target).toMatchObject({
+      mode: "active_layer", layer: a, layer_uuid: "layer-a",
+    });
+    expect(() => requireExactBrushLayerUnchanged(texture, target)).not.toThrow();
+
+    active = b;
+    expect(() => requireExactBrushLayerUnchanged(texture, target))
+      .toThrow("differs from the selected texture layer");
+    (texture as any).selected_layer = b;
+    expect(() => requireExactBrushLayerUnchanged(texture, target))
+      .toThrow("active layer changed during native painting");
+
+    (texture as any).layers = [];
+    expect(() => resolveExactBrushLayerTarget(texture))
+      .toThrow("no pixel layers");
+    (texture as any).layers = [a, b];
+    active = { uuid: "foreign", name: "Foreign", type: "pixel_layer" };
+    expect(() => resolveExactBrushLayerTarget(texture))
+      .toThrow("not owned by the target texture");
+
+    active = a;
+    (texture as any).selected_layer = a;
+    (texture as any).layers = [a, { ...b, uuid: "layer-a" }];
+    expect(() => resolveExactBrushLayerTarget(texture))
+      .toThrow("UUID is missing or ambiguous");
+
+    (texture as any).layers = [a, b];
+    (a as any).type = "layer_group";
+    expect(() => resolveExactBrushLayerTarget(texture))
+      .toThrow("not a layer group or unsupported layer kind");
+
+    const plain = { ...texture, layers_enabled: false, getActiveLayer: undefined } as unknown as Texture;
+    expect(resolveExactBrushLayerTarget(plain)).toEqual({
+      mode: "base_texture", layer: null, layer_uuid: null,
+    });
+    const baseTarget = resolveExactBrushLayerTarget(plain);
+    expect(() => requireExactBrushLayerUnchanged(plain, baseTarget)).not.toThrow();
+    (plain as any).layers_enabled = true;
+    expect(() => requireExactBrushLayerUnchanged(plain, baseTarget)).toThrow();
+  });
+
+  test("layer binding is resolved before Undo and rechecked around Texture.edit", async () => {
+    const source = await Bun.file("server/tools/paint/brush.ts").text();
+    const start = source.indexOf("if (exactPixelMode) {");
+    const end = source.indexOf('Undo.finishEdit("Paint exact texture pixels")', start);
+    const block = source.slice(start, end);
+    const capture = block.indexOf("const layerTarget = resolveExactBrushLayerTarget(texture)");
+    const undo = block.indexOf("Undo.initEdit(undoAspects)");
+    const callback = block.indexOf("texture.edit(");
+    const beforeWrite = block.indexOf("requireExactBrushLayerUnchanged(texture, layerTarget)", callback);
+    const nativeWrite = block.indexOf("env.ctx.fillRect(");
+    const afterWrite = block.lastIndexOf("requireExactBrushLayerUnchanged(texture, layerTarget)");
+    expect(capture).toBeGreaterThanOrEqual(0);
+    expect(undo).toBeGreaterThan(capture);
+    expect(callback).toBeGreaterThan(undo);
+    expect(beforeWrite).toBeGreaterThan(callback);
+    expect(nativeWrite).toBeGreaterThan(beforeWrite);
+    expect(afterWrite).toBeGreaterThan(nativeWrite);
+    expect(block).toContain("undoAspects.layers = [layerTarget.layer]");
+    expect(block).toContain("undoAspects.textures = [texture]");
+    expect(source).toContain('verification_scope: "native_edit_canvas_rgba"');
   });
 
   test("runtime resolves layers inside the requested texture instead of global selection", async () => {

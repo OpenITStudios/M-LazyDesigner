@@ -5,6 +5,74 @@ export type ManagedTextureLayer = TextureLayer & {
   parent_uuid?: string;
 };
 
+/**
+ * Direct exact-pixel painting must bind one authoritative native pixel-layer
+ * identity. A layered texture with no active layer is NOT an unlayered bitmap
+ * and may not fall back to the texture-only Undo path.
+ */
+export type ExactBrushLayerTarget =
+  | { mode: "base_texture"; layer: null; layer_uuid: null }
+  | { mode: "active_layer"; layer: TextureLayer; layer_uuid: string };
+
+export function resolveExactBrushLayerTarget(
+  texture: Texture
+): ExactBrushLayerTarget {
+  if (texture.layers_enabled !== true) {
+    return { mode: "base_texture", layer: null, layer_uuid: null };
+  }
+  const layers = texture.layers;
+  if (!Array.isArray(layers) || layers.length === 0) {
+    throw new Error(
+      "Exact brush layered texture has no pixel layers; refusing texture-only Undo fallback."
+    );
+  }
+  if (typeof texture.getActiveLayer !== "function") {
+    throw new Error("Exact brush requires native active pixel-layer resolution.");
+  }
+  const layer = texture.getActiveLayer();
+  if (!layer || !layers.includes(layer)) {
+    throw new Error(
+      "Exact brush active layer is missing or not owned by the target texture."
+    );
+  }
+  if (texture.selected_layer && texture.selected_layer !== layer) {
+    throw new Error(
+      "Exact brush native active layer differs from the selected texture layer."
+    );
+  }
+  const type = (layer as TextureLayer & { type?: string }).type;
+  if (type !== undefined && type !== "pixel_layer") {
+    throw new Error(
+      "Exact brush requires a native pixel layer, not a layer group or unsupported layer kind."
+    );
+  }
+  const uuid = layer.uuid;
+  if (typeof uuid !== "string" || uuid.length === 0 ||
+      layers.filter((item) => item.uuid === uuid).length !== 1) {
+    throw new Error(
+      "Exact brush active layer UUID is missing or ambiguous within the texture."
+    );
+  }
+  return { mode: "active_layer", layer, layer_uuid: uuid };
+}
+
+/** Compare native object identity, not only UUID or the canvas offset/size. */
+export function requireExactBrushLayerUnchanged(
+  texture: Texture,
+  expected: ExactBrushLayerTarget
+): void {
+  const current = resolveExactBrushLayerTarget(texture);
+  if (
+    current.mode !== expected.mode ||
+    current.layer !== expected.layer ||
+    current.layer_uuid !== expected.layer_uuid
+  ) {
+    throw new Error(
+      "Exact brush active layer changed during native painting; refusing Undo completion."
+    );
+  }
+}
+
 export type LayerMetadataBatchUpdate = {
   layer_id: string;
   name?: string;

@@ -8,6 +8,10 @@ import {
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_EXPERIMENTAL } from "@/lib/constants";
 import { runPaintStroke } from "@/lib/texture/paintStroke";
+import {
+  resolveExactBrushLayerTarget,
+  requireExactBrushLayerUnchanged,
+} from "./layerState";
 import { requireExactBrushPostcondition } from "@/lib/texture/paintTransaction";
 import {
   requireSingleFrameBitmapPixels,
@@ -304,7 +308,9 @@ export function registerPaintBrushTools(): void {
                 texture.height,
                 "paint_with_brush exact pixel"
               );
+              const layerTarget = resolveExactBrushLayerTarget(texture);
               const active = texture.getActiveCanvas();
+              requireExactBrushLayerUnchanged(texture, layerTarget);
               requireExactPixelsInActiveCanvas(
                 coordinates, active.canvas, active.offset,
                 "paint_with_brush"
@@ -319,12 +325,8 @@ export function registerPaintBrushTools(): void {
               }));
 
               const undoAspects: UndoAspects = { bitmap: true };
-              if (texture.layers_enabled && texture.layers[0]) {
-                const activeLayer = texture.getActiveLayer();
-                if (!activeLayer) {
-                  throw new Error("paint_with_brush exact pixel authoring requires an active texture layer.");
-                }
-                undoAspects.layers = [activeLayer];
+              if (layerTarget.mode === "active_layer") {
+                undoAspects.layers = [layerTarget.layer];
               } else {
                 undoAspects.textures = [texture];
               }
@@ -336,6 +338,7 @@ export function registerPaintBrushTools(): void {
                     _canvas: HTMLCanvasElement,
                     env: BlockbenchRuntimeTextureEditEnvironment
                   ) => {
+                    requireExactBrushLayerUnchanged(texture, layerTarget);
                     // Revalidate the actual callback canvas BEFORE any pixel
                     // write. Native layer/frame offset may change after the
                     // preflight; otherwise we could commit a silent no-op or
@@ -394,9 +397,13 @@ export function registerPaintBrushTools(): void {
                       localTargets,
                       colorHex
                     );
+                    requireExactBrushLayerUnchanged(texture, layerTarget);
                   },
                   { no_undo: true }
                 );
+                // Native Texture.edit can return after moving the selection
+                // even when its canvas dimensions and offsets are unchanged.
+                requireExactBrushLayerUnchanged(texture, layerTarget);
                 Undo.finishEdit("Paint exact texture pixels");
                 recordCurrentCapabilitySemanticHistoryEffect("paint_with_brush");
               } catch (error) {
@@ -412,6 +419,11 @@ export function registerPaintBrushTools(): void {
                 pixels_requested: coordinates.length,
                 affected_rect: bounds.rect,
                 affected_size: bounds.size,
+                write_target: {
+                  kind: layerTarget.mode,
+                  layer_uuid: layerTarget.layer_uuid,
+                },
+                verification_scope: "native_edit_canvas_rgba" as const,
               };
               return {
                 content: [
