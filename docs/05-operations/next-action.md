@@ -12,7 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 5 Texture integration consolidation: existing verify:texture-runtime-live verifier now covers canonical exact brush on a static base texture and on one selected pixel layer in a disposable variant, including PNG/full-RGBA revision, target UUID, Undo/Redo, layered transaction refusal and variant isolation. Exact brush now fails if native Texture.edit omits its callback; existing frame regression models the missing callback. Existing live contract/test-selection and local-acceptance runbook extended; no new verifier, tool, test file, CI workflow or public schema. REMOTE_GITHUB source/static only: Bun/TypeScript/Blockbench NOT EXECUTED. Next: prioritize actually connected native acceptance before more speculative Texture source work.
+2026-10-23 user quality feedback — source-only:
+- `2aae5af`: pre-Undo Box UV sub-unit guards for create/update/batch, scoped legacy hygiene.
+- `ad0d772`: directional face coverage for small undersides; conservative O(n) linear numeric keyframe reduction candidates; existing quality, Skill and test owners reused.
+- UV: forbid aliases to a `UNIQUE` source while retaining valid sharing.
+- **No Bun/TypeScript/native/visual PASS:** CI disabled. Next requires connected `LOCAL_CODE` for exact-head tests and canonical UV generator/registration, then existing `LIVE_BLOCKBENCH` acceptance on disposable assets. Do not duplicate engines.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

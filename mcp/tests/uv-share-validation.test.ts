@@ -11,6 +11,20 @@ describe("semantic UV share validation",()=>{
     })).toThrow("identical pixel extents");
   });
 
+  test("a UNIQUE source cannot be aliased, while reusable sources can", () => {
+    expect(() => planSemanticUv([
+      { id: "emblem", world_size: [2, 2], cohort: "identity", reuse_policy: "UNIQUE" },
+      { id: "arm", world_size: [2, 2], cohort: "identity", share_with: "emblem" },
+    ], {
+      atlas_width: 16, atlas_height: 16, default_texel_density: 1,
+    })).toThrow("identity-unique source");
+    const shared = planSemanticUv([
+      { id: "pattern", world_size: [2, 2], cohort: "cloth" },
+      { id: "arm", world_size: [2, 2], cohort: "cloth", share_with: "pattern" },
+    ], { atlas_width: 16, atlas_height: 16, default_texel_density: 1 });
+    expect(shared.placements.find((item) => item.id === "arm")?.shared_with).toBe("pattern");
+  });
+
   test("rejects duplicate previous placement identities",()=>{
     expect(()=>planSemanticUv([
       {id:"a",world_size:[2,2],cohort:"base"},

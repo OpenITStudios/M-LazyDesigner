@@ -79,6 +79,12 @@ function validateShareGraph(islands: readonly SemanticUvIsland[]): Map<string, S
     const source = byId.get(island.share_with);
     if (!source) throw new Error("Semantic UV island " + island.id + " shares with missing island " + island.share_with + ".");
     if (source.share_with) throw new Error("Semantic UV sharing must point directly at an owning island, not another alias.");
+    if (source.reuse_policy === "UNIQUE") {
+      throw new Error(
+        "Semantic UV island " + island.id + " cannot share identity-unique source " +
+          source.id + ". A UNIQUE owner may not be aliased by other islands."
+      );
+    }
     if (island.locked) throw new Error("Shared semantic UV island " + island.id + " cannot also own a locked region.");
   }
   return byId;
