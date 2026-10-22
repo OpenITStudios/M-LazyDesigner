@@ -27,6 +27,7 @@ describe("face pixel mapping ownership", () => {
       size: [4, 4],
       flip_u: false,
       flip_v: false,
+      in_bounds: true,
     });
   });
 
@@ -64,7 +65,75 @@ describe("face pixel mapping ownership", () => {
       size: [4, 4],
       flip_u: false,
       flip_v: false,
+      in_bounds: true,
     });
+  });
+
+  test("90/270 face rotation and flipped UV remain bijective at 2x pixel resolution", () => {
+    const metrics = { width: 256, displayHeight: 256, uvWidth: 128, uvHeight: 128 };
+    const expectedPixels = Array.from({ length: 12 }, (_, index) =>
+      `${4 + index % 4},${6 + Math.floor(index / 4)}`
+    ).sort();
+    for (const flipU of [false, true]) {
+      for (const flipV of [false, true]) {
+        const uv = [
+          flipU ? 4 : 2, flipV ? 4.5 : 3,
+          flipU ? 2 : 4, flipV ? 3 : 4.5,
+        ];
+        const mapping = mapFaceUvToTexturePixels(uv, metrics, "2x");
+        expect(mapping).toMatchObject({
+          rect: [4, 6, 8, 9], size: [4, 3],
+          in_bounds: true, flip_u: flipU, flip_v: flipV,
+        });
+        for (const rotation of [0, 90, 180, 270]) {
+          const [w, h] = faceLocalPixelSize(mapping, rotation, "2x");
+          expect([w, h]).toEqual(rotation === 90 || rotation === 270 ? [3, 4] : [4, 3]);
+          const visited: string[] = [];
+          for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+            const p = mapFaceLocalPixelToAtlasPixel(mapping, rotation, x, y, "2x");
+            visited.push(`${p.x},${p.y}`);
+          }
+          // Exhaustive cardinality and coverage proves no swapped, repeated,
+          // skipped, or out-of-bounds face-local texel for either orientation.
+          expect(visited.sort()).toEqual(expectedPixels);
+        }
+        const at90 = mapFaceLocalPixelToAtlasPixel(mapping, 90, 0, 0, "2x");
+        const at270 = mapFaceLocalPixelToAtlasPixel(mapping, 270, 0, 0, "2x");
+        expect(at90).toEqual({ x: flipU ? 7 : 4, y: flipV ? 6 : 8 });
+        expect(at270).toEqual({ x: flipU ? 4 : 7, y: flipV ? 8 : 6 });
+      }
+    }
+  });
+
+  test("out-of-atlas UV stays observable but cannot authorize exact pixel painting", () => {
+    const metrics = { width: 256, displayHeight: 256, uvWidth: 128, uvHeight: 128 };
+    const outside = mapFaceUvToTexturePixels([127, 0, 129, 2], metrics, "outside");
+    expect(outside).toMatchObject({
+      rect: [254, 0, 258, 4], in_bounds: false,
+    });
+    expect(() => requireExactFacePixelGrid(outside, "outside"))
+      .toThrow("outside the active texture frame");
+    expect(() => mapFaceLocalPixelToAtlasPixel(outside, 90, 0, 0, "outside"))
+      .toThrow("outside the active texture frame");
+
+    const subpixelOutside = mapFaceUvToTexturePixels(
+      [-0.001, 0, 1, 1], metrics, "outside"
+    );
+    // Native Painter display rounding is allowed in the diagnostic rect,
+    // but cannot turn an authored negative corner into safe exact painting.
+    expect(subpixelOutside.in_bounds).toBe(false);
+    expect(() => requireExactFacePixelGrid(subpixelOutside, "outside"))
+      .toThrow("outside the active texture frame");
+
+    const exactEdge = mapFaceUvToTexturePixels([126, 0, 128, 2], metrics, "edge");
+    expect(exactEdge.in_bounds).toBe(true);
+    expect(() => requireExactFacePixelGrid(exactEdge, "edge")).not.toThrow();
+    expect(mapFaceLocalPixelToAtlasPixel(exactEdge, 270, 0, 0, "edge"))
+      .toEqual({ x: 255, y: 0 });
+
+    expect(() => mapFaceUvToTexturePixels([0, 0, 1, 1], {
+      ...metrics, displayHeight: 255.5,
+    }, "invalid")).toThrow("safe integers");
   });
 
   test("maps face-local pixels through Blockbench 0/90/180/270 rotation semantics", () => {

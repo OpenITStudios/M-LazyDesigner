@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 4 physical texel density: inspect_element(detail=uv) resolves each Cube face's actual texture for UV-to-physical-pixel mapping rather than borrowing default atlas dimensions. Explicitly untextured faces cannot report paintability or skew density. Model-wide density review uses physical pixels/model unit only when all included faces have physical metrics; otherwise the fallback is labeled logical-only. Existing project-density/mapping tests and affected routing extended, NOT EXECUTED. Remains a review hint, not visual PASS. Next inspect a grounded mapping or UV painting defect; manage_uv_layout activation deferred.
+Batch 4 UV-to-pixel boundary safety: the canonical mapping now reports in_bounds from unrounded physical pixel corners. Exact face-local pixels reject out-of-frame UV; inspect_element(detail=uv) retains mapped diagnostic rectangles but marks such faces not paintable and excludes them from project density evidence. Existing face mapping suite covers all 0/90/180/270 rotations, U/V flips and 2x pixel scaling; project-density regression extended. Tests authored, Bun/TypeScript/native NOT EXECUTED. No new Gateway/Runtime tools or UV planner activation. Next inspect only a concrete pixel-painting or frame-index source defect.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

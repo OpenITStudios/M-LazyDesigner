@@ -657,6 +657,15 @@ function inspectProjectTexelDensity() {
         excludedInvalidFaces += 1;
         continue;
       }
+      // A valid UV rectangle must still lie inside the face's actual bitmap
+      // before it can contribute evidence of painted texel density.
+      if (faceTextureSpace.state === "mapped" && !mapFaceUvToTexturePixels(
+        uv, faceTextureSpace.metrics,
+        `Cube ${cube.name} (${cube.uuid}) face ${faceKey}`
+      ).in_bounds) {
+        excludedInvalidFaces += 1;
+        continue;
+      }
       const geometrySize = cubeFaceGeometrySize(size, faceKey);
       const quality = summarizeFaceUvQuality(
         geometrySize,
@@ -751,7 +760,9 @@ function inspectCubeUv(cube: Cube) {
         logicalUvUnitsPerModelUnit = Math.sqrt(
           quality.logical_uv_area_per_model_area
         );
-        densityValues.push(logicalUvUnitsPerModelUnit);
+        if (pixelMapping === null || pixelMapping.in_bounds) {
+          densityValues.push(logicalUvUnitsPerModelUnit);
+        }
         if (quality.aspect_state === "review_required") {
           aspectReviewFaceCount += 1;
         }
@@ -774,7 +785,7 @@ function inspectCubeUv(cube: Cube) {
           uv,
           rotation: face.rotation,
           enabled,
-          paintable: enabled && pixelMapping !== null,
+          paintable: enabled && pixelMapping !== null && pixelMapping.in_bounds,
           mapping_state: enabled
             ? faceTextureSpace!.state
             : ("disabled_face" as const),
@@ -826,7 +837,7 @@ function inspectCubeUv(cube: Cube) {
       project_texel_density: inspectProjectTexelDensity(),
       verdict: "review_hint_only" as const,
       note:
-        "Face mapping and physical density use the actual resolved face texture. Untextured faces do not establish paintability. The top-level texture_space names only the default atlas. Seam quality and visual acceptance remain unverified.",
+        "Face mapping and physical density use the resolved face texture. Untextured or out-of-bounds UV faces are not paintable; their authored UV remains available for repair. Project density omits out-of-bounds mapped faces. The top-level texture_space names only the default atlas. Seam quality and visual acceptance remain unverified.",
     },
     faces,
   };

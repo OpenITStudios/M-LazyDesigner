@@ -14,6 +14,8 @@ export type FaceTexturePixelMapping = {
   size: [number, number];
   flip_u: boolean;
   flip_v: boolean;
+  /** Exact authored UV lies wholly within the current texture frame. */
+  in_bounds: boolean;
 };
 
 export function requireFiniteFaceUv(
@@ -69,6 +71,11 @@ export function mapFaceUvToTexturePixels(
   );
   const uvWidth = requirePositiveTextureMetric(metrics.uvWidth, `${context} UV width`);
   const uvHeight = requirePositiveTextureMetric(metrics.uvHeight, `${context} UV height`);
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(displayHeight)) {
+    throw new Error(
+      `${context} texture frame pixel dimensions must be positive safe integers.`
+    );
+  }
 
   const factorX = width / uvWidth;
   const factorY = displayHeight / uvHeight;
@@ -104,6 +111,13 @@ export function mapFaceUvToTexturePixels(
     size: [right - left, bottom - top],
     flip_u: corners[2] < corners[0],
     flip_v: corners[3] < corners[1],
+    // Compare unrounded corners: rounding to Painter display precision
+    // must never conceal an actual subpixel excursion beyond the bitmap.
+    in_bounds:
+      Math.min(corners[0], corners[2]) >= 0 &&
+      Math.min(corners[1], corners[3]) >= 0 &&
+      Math.max(corners[0], corners[2]) <= width &&
+      Math.max(corners[1], corners[3]) <= displayHeight,
   };
 }
 
@@ -111,6 +125,11 @@ export function requireExactFacePixelGrid(
   mapping: FaceTexturePixelMapping,
   context: string
 ): [number, number] {
+  if (!mapping.in_bounds) {
+    throw new Error(
+      `${context} face UV lies outside the active texture frame. Exact-pixel painting cannot address pixels beyond bitmap bounds.`
+    );
+  }
   if (!mapping.corners.every(Number.isInteger)) {
     throw new Error(
       `${context} does not map to exact physical pixel boundaries. Face-local exact painting requires integral texture-pixel UV boundaries.`

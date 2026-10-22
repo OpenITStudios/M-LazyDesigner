@@ -150,6 +150,10 @@ describe("model-wide texel density diagnostics", () => {
       texture: null, enabled: true, rotation: 0,
       uv: [0, 0, 0.1, 0.1], getTexture: () => base,
     };
+    cube.faces.west = {
+      texture: "base", enabled: true, rotation: 0,
+      uv: [127, 0, 129, 2], getTexture: () => base,
+    };
 
     globals.Project = {};
     globals.Texture = { getDefault: () => base };
@@ -181,6 +185,10 @@ describe("model-wide texel density diagnostics", () => {
         quality: { physical_pixels_per_model_unit: 2 },
       });
       expect(uv.faces.east.texture_pixels.size).toEqual([8, 8]);
+      expect(uv.faces.west).toMatchObject({
+        enabled: true, paintable: false, mapping_state: "mapped",
+        texture_pixels: { in_bounds: false, rect: [127, 0, 129, 2] },
+      });
       expect(uv.faces.south).toMatchObject({
         enabled: true, paintable: false, mapping_state: "no_texture",
         texture_space: { state: "no_texture", effective_texture: null },
@@ -189,7 +197,7 @@ describe("model-wide texel density diagnostics", () => {
       expect(uv.quality_summary.project_texel_density).toMatchObject({
         measured_faces: 2, comparison_basis: "physical_pixels",
         physical_density_complete: true, state: "review_required",
-        outlier_faces: 1,
+        outlier_faces: 1, excluded_invalid_faces: 1,
       });
     } finally {
       for (const key of keys) {

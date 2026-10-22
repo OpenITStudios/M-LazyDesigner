@@ -68,6 +68,19 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("Face UV pixel mapping changes route to exact-pixel and inspection density regressions", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/lib/uv/facePixelMapping.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.checks).toContain("PROJECT_GRAPH");
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/face-pixel-mapping.test.ts",
+      "mcp/tests/project-texel-density.test.ts",
+    ]);
+  });
+
   test("UV inspection changes select physical texel mapping and project density owners", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/server/tools/element/inspection.ts"],
