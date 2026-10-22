@@ -265,6 +265,9 @@ describe("affected execution planner", () => {
         "mcp/gateway/presentation/resultCompaction.test.ts",
         "mcp/tests/gateway-contract.test.ts",
       ]],
+      ["mcp/gateway/control/orchestration.ts", [
+        "mcp/tests/gateway-control-orchestration.test.ts",
+      ]],
       ["mcp/gateway/capabilities/catalog.ts", [
         "mcp/gateway/capabilities/intelligence.test.ts",
         "mcp/tests/capability-discovery-efficiency.test.ts",
