@@ -156,7 +156,8 @@ export class GatewayCapabilityExecutor {
         capability,
         result.structuredContent,
         succeeded,
-        phaseBefore
+        phaseBefore,
+        runtimeInvocation?.effectApplication
       );
 
       if (

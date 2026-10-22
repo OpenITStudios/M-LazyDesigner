@@ -4,6 +4,7 @@ import {
   SdkHttpError,
 } from "@modelcontextprotocol/client";
 import type { GatewayConnectionManager } from "./connectionManager";
+import type { GatewayEffectApplication } from "../capabilities/effects";
 import type { BlockitAuthoringPhaseAffinity } from "../../lib/runtime/affinity";
 import type { JsonRecord } from "../contracts/protocol";
 
@@ -87,6 +88,8 @@ export type GatewayRuntimeCallResult = JsonRecord & {
 export type GatewayRuntimeInvocation = {
   result: GatewayRuntimeCallResult;
   readOnly: boolean;
+  /** Backend-validated once; reused by Control instead of re-parsing affinity receipts. */
+  effectApplication?: GatewayEffectApplication;
 };
 
 export type RuntimeGenerationChangeEvent = {

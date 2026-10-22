@@ -264,6 +264,13 @@ describe("affected execution planner", () => {
       ["mcp/gateway/execution/capabilityExecutor.ts", [
         "mcp/gateway/presentation/resultCompaction.test.ts",
         "mcp/tests/gateway-contract.test.ts",
+        "mcp/gateway/capabilities/effects.test.ts",
+      ]],
+      ["mcp/gateway/control/receipt.ts", [
+        "mcp/gateway/capabilities/effects.test.ts",
+      ]],
+      ["mcp/gateway/capabilities/effects.ts", [
+        "mcp/gateway/capabilities/effects.test.ts",
       ]],
       ["mcp/gateway/control/orchestration.ts", [
         "mcp/tests/gateway-control-orchestration.test.ts",
@@ -295,6 +302,28 @@ describe("affected execution planner", () => {
       expect(plan.targeted_tests, source).not.toContain(
         "mcp/tests/uv-plan-service.test.ts"
       );
+    }
+  });
+
+  test("Runtime affinity and receipt producers share their existing effect contract", () => {
+    const cases: Array<[string, string[]]> = [
+      ["mcp/gateway/runtime/backend.ts", [
+        "mcp/gateway/backend-effects-boundary.test.ts",
+        "mcp/gateway/index-boundary.test.ts",
+        "mcp/gateway/capabilities/effects.test.ts",
+      ]],
+      ["mcp/gateway/runtime/backendContract.ts", [
+        "mcp/gateway/backend-effects-boundary.test.ts",
+        "mcp/gateway/capabilities/effects.test.ts",
+      ]],
+    ];
+    for (const [path, expected] of cases) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.targeted_tests, path).toEqual([...expected].sort());
+      expect(plan.checks, path).toContain("PROJECT_GRAPH");
     }
   });
 

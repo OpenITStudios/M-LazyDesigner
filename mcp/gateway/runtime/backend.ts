@@ -868,12 +868,14 @@ export class BlockitRuntimeBackend {
           return {
             result: normalizeGatewayManagedResult(phaseAffinityUpdated, managed),
             readOnly: tool.annotations?.readOnlyHint === true,
+            effectApplication: application,
           };
         }
 
         return {
           result: managed,
           readOnly: tool.annotations?.readOnlyHint === true,
+          effectApplication: application,
         };
       } catch (error) {
         const message = errorMessage(error);

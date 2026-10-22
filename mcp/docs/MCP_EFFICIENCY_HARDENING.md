@@ -365,6 +365,35 @@ for malformed, no-change, native and envelope-conflict receipts, plus a
 single-call Undo history-read count. Bun/typecheck, native and performance
 proof are still required for execution and any speedup claim.
 
+## Runtime Project Authority Receipt Reuse — SOURCE OPTIMIZATION
+
+The Gateway Runtime Backend already validates project-create and authoring-phase
+handoff receipts using `resolveGatewayCapabilityEffects` and refuses unsafe
+success results before publishing new affinity. The subsequent
+`GatewayCapabilityExecutor` previously called `deriveControlReceipt`,
+which parsed that same authority receipt a second time. This is repeated Zod
+receipt validation within one invocation.
+
+The Backend now carries its **already-validated internal effect application**
+through `GatewayRuntimeInvocation` (not a public MCP response field).
+`deriveControlReceipt` accepts it when supplied, retaining its historical
+independent validation path for local capabilities and direct consumers.
+The effect object is per invocation, never cached across requests, stages or
+projects. The Backend remains the only affinity adoption/receipt rejection
+authority. Failed mutations still return no adopted Control UUID or phase.
+
+The existing Gateway effects test owner covers duplicate-read avoidance,
+phase transition equality, and malformed local fallback. The canonical
+affected-work selector includes the same contract for changed Backend,
+executor, effect metadata and Control receipt source. Animation-effects
+receipts already have one typed continuation validation at the focused
+verification boundary; no unproved shortcut is introduced there. Material
+persistence no-op classification uses the earlier call-local reuse path and
+keeps its independent authoritative continuation rules.
+
+The change is source-only: executable Bun/TypeScript checks, actual Runtime
+affinity behavior and performance measurements are NOT EXECUTED.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

@@ -285,6 +285,13 @@ const GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH: Readonly<Record<string, readonly str
   "mcp/gateway/execution/capabilityExecutor.ts": [
     "mcp/gateway/presentation/resultCompaction.test.ts",
     "mcp/tests/gateway-contract.test.ts",
+    "mcp/gateway/capabilities/effects.test.ts",
+  ],
+  "mcp/gateway/control/receipt.ts": [
+    "mcp/gateway/capabilities/effects.test.ts",
+  ],
+  "mcp/gateway/capabilities/effects.ts": [
+    "mcp/gateway/capabilities/effects.test.ts",
   ],
   "mcp/gateway/control/orchestration.ts": [
     "mcp/tests/gateway-control-orchestration.test.ts",
@@ -313,9 +320,11 @@ const GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH: Readonly<
   "mcp/gateway/runtime/backend.ts": [
     "mcp/gateway/backend-effects-boundary.test.ts",
     "mcp/gateway/index-boundary.test.ts",
+    "mcp/gateway/capabilities/effects.test.ts",
   ],
   "mcp/gateway/runtime/backendContract.ts": [
     "mcp/gateway/backend-effects-boundary.test.ts",
+    "mcp/gateway/capabilities/effects.test.ts",
   ],
   "mcp/gateway/session/orchestrationRecoveryState.ts": [
     "mcp/gateway/session/orchestrationRecoveryState.test.ts",

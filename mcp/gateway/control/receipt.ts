@@ -1,5 +1,8 @@
 import { getCapabilityMetadata } from "../../lib/capabilities/metadata";
-import { resolveGatewayCapabilityEffects } from "../capabilities/effects";
+import {
+  resolveGatewayCapabilityEffects,
+  type GatewayEffectApplication,
+} from "../capabilities/effects";
 import type { BlockitAuthoringPhaseAffinity } from "../../lib/runtime/affinity";
 
 export function capabilityNeedsPhaseSnapshot(capability: string): boolean {
@@ -10,9 +13,12 @@ export function deriveControlReceipt(
   capability: string,
   structuredContent: unknown,
   succeeded: boolean,
-  phaseBefore: BlockitAuthoringPhaseAffinity | null
+  phaseBefore: BlockitAuthoringPhaseAffinity | null,
+  validatedApplication?: GatewayEffectApplication
 ) {
-  const application = resolveGatewayCapabilityEffects(
+  // Remote Runtime calls have already validated this receipt at the Backend
+  // affinity boundary. Local capability callers use the original path.
+  const application = validatedApplication ?? resolveGatewayCapabilityEffects(
     capability,
     structuredContent,
     phaseBefore

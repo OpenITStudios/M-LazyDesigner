@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 Runtime/Control affinity receipt CPU reuse: `gateway/runtime/backend.ts` already schema-validates create-project/phase-handoff effect receipt and rejects missing authority. Its internal `GatewayRuntimeInvocation.effectApplication` now supplies that validated object to `gateway/control/receipt.ts` through the canonical executor instead of re-parsing it. Local/standalone Control calls still independently validate receipt as before. No extra field is exposed in public MCP content, no new registry or persistent cache, and failure retains null adopted authority. Existing `gateway/capabilities/effects.test.ts` adds three contract cases including a counted duplicate receipt read; affected-test routing now selects this owner for Backend/effects/executor/receipt changes. Reviewed Animation Effects and Material Persistence: the existing typed continuation check remains necessary; no unproved optimization made there. REMOTE_GITHUB static/source only; Bun, TypeScript, native or performance measurement NOT EXECUTED. Main and CI remain untouched.
+
+
+
 2026-10-22 Animation/Undo/Bone Control receipt economy: `delta/freshness.ts` now reuses one typed Undo/Redo semantic-history effect for mutation status, invalidation and freshness; the branch-bound Animation Controller compile-only decision is request-local and reused. `delta/receipts.ts` evaluates Bone Rigging receipt variants from one canonical MCP candidate instead of collecting that same candidate repeatedly. Added focused semantic history, controller-resource, malformed/envelope conflict and Bone receipt regressions; the existing affected selector now includes direct receipt-continuation tests when `delta/receipts.ts` changes. All edits REMOTE_GITHUB source/static only; no Bun/typecheck/Blockbench performance execution. CI and main unchanged.
 
 

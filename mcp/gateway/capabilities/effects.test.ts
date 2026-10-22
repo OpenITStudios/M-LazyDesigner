@@ -3,6 +3,7 @@ import {
   resolveGatewayCapabilityEffects,
   validateGatewayCapabilityEffectReceipt,
 } from "./effects";
+import { deriveControlReceipt } from "../control/receipt";
 
 describe("resolveGatewayCapabilityEffects", () => {
   test("adopts created project through metadata", () => {
@@ -110,6 +111,86 @@ describe("resolveGatewayCapabilityEffects", () => {
       code: "MISSING_AUTHORING_PHASE",
       message: expect.stringContaining("authoring-phase"),
     });
+  });
+
+  test("Backend-validated Project Authority is reused by Control without another receipt parse", () => {
+    let reads = 0;
+    const project = {
+      get project() {
+        reads++;
+        return {
+          uuid: "project-123",
+          name: "asset",
+          save_path: null,
+          export_path: null,
+          export_codec: null,
+          saved: false,
+        };
+      },
+      format: { id: "bedrock" },
+      resolution: { texture_width: 32, texture_height: 32 },
+    };
+    const validated = resolveGatewayCapabilityEffects("create_project", project, null);
+    const afterBackend = reads;
+    expect(afterBackend).toBeGreaterThan(0);
+    const reused = deriveControlReceipt(
+      "create_project", project, true, null, validated
+    );
+    expect(reused.projectUuid).toBe("project-123");
+    expect(reused.phaseAfter).toBeNull();
+    expect(reads).toBe(afterBackend);
+    expect(deriveControlReceipt("create_project", project, true, null))
+      .toEqual(reused);
+    expect(reads).toBeGreaterThan(afterBackend);
+  });
+
+  test("validated phase-transition metadata preserves original Control receipt contract", () => {
+    const phase = {
+      phase: "animation",
+      runtime_surface: "ANIMATION",
+      reason: "handoff",
+      resume_from: "geometry-ready",
+      readiness_summary: null,
+      surface_changed: true,
+      reload_required: false,
+      action: "continue",
+    };
+    const validated = resolveGatewayCapabilityEffects(
+      "switch_authoring_phase", phase, "geometry"
+    );
+    const expected = deriveControlReceipt(
+      "switch_authoring_phase", phase, true, "geometry"
+    );
+    const shared = deriveControlReceipt(
+      "switch_authoring_phase", phase, true, "geometry", validated
+    );
+    expect(shared).toEqual(expected);
+    expect(shared.phaseBefore).toBe("geometry");
+    expect(shared.phaseAfter).toBe("animation");
+    expect(shared.projectUuid).toBeNull();
+    expect(deriveControlReceipt(
+      "switch_authoring_phase", phase, false, "geometry", validated
+    )).toEqual({
+      phaseBefore: "geometry",
+      phaseAfter: "geometry",
+      projectUuid: null,
+    });
+  });
+
+  test("malformed direct/local affinity receipts continue to fail closed", () => {
+    for (const [capability, payload] of [
+      ["create_project", { project: { name: "missing UUID" } }],
+      ["switch_authoring_phase", { phase: "unknown" }],
+    ] as const) {
+      const application = resolveGatewayCapabilityEffects(capability, payload, null);
+      expect(validateGatewayCapabilityEffectReceipt(application, true)).not.toBeNull();
+      expect(deriveControlReceipt(capability, payload, true, null))
+        .toEqual({
+          phaseBefore: null,
+          phaseAfter: null,
+          projectUuid: null,
+        });
+    }
   });
 
   test("accepts complete affinity receipts", () => {
