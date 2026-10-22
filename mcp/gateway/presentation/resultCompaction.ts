@@ -172,7 +172,7 @@ function textCarriesExternalLocator(text: string): boolean {
 }
 
 function textCarriesDecisionSignal(text: string): boolean {
-  return /\b(warn(?:ing)?|error|failed?|blocked|unavailable|missing|stale|conflict|unsafe|unsupported|deprecated|unverified|incomplete|partial|pending|uncertain)\b|\bnot\s+(?:verified|saved|applied|executed|supported|available|evaluated|reviewed|approved|tested|confirmed|checked|assessed)\b/i.test(
+  return /\b(warn(?:ing)?|error|failed?|blocked|unavailable|missing|stale|conflict|unsafe|unsupported|deprecated|unverified|incomplete|partial|pending|uncertain)\b|\bnot\s+(?:(?:yet|been|fully)\s+){0,2}(?:verified|saved|applied|executed|supported|available|evaluated|reviewed|approved|tested|confirmed|checked|assessed)\b/i.test(
     text
   );
 }

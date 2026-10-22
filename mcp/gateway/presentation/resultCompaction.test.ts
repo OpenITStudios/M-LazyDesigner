@@ -95,6 +95,8 @@ describe("Gateway result-compaction information preservation", () => {
       "Geometry correction was not reviewed.",
       "Model has not been approved by the artist.",
       "Surface has not been tested against the reference.",
+      "UV corrections have not yet been reviewed.",
+      "Geometry reference has not fully been evaluated.",
     ]) {
       const content = [{ type: "text", text }];
       expect(compactGatewayCapabilityContent(
