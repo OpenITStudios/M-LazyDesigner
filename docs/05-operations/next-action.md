@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 4 Texture production: intra-Cube seams now use the existing tolerance-aware physical world-edge matcher, restricted to the same Cube, preventing false rounded-key pairing and missed true seams across quantization boundaries. Weighted UV exposure masks rasterize local footprints directly rather than allocating/scanning a full atlas per face. Existing seam/geometry-signal tests expanded; Bun/TypeScript and native NOT EXECUTED. Diagnostics remain advisory, not visual PASS. Next inspect another source-backed density/UV painting issue; manage_uv_layout activation remains deferred.
+Batch 4 physical texel density: inspect_element(detail=uv) resolves each Cube face's actual texture for UV-to-physical-pixel mapping rather than borrowing default atlas dimensions. Explicitly untextured faces cannot report paintability or skew density. Model-wide density review uses physical pixels/model unit only when all included faces have physical metrics; otherwise the fallback is labeled logical-only. Existing project-density/mapping tests and affected routing extended, NOT EXECUTED. Remains a review hint, not visual PASS. Next inspect a grounded mapping or UV painting defect; manage_uv_layout activation deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

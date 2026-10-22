@@ -166,8 +166,9 @@ type EffectiveTextureSpace =
       metrics: null;
     };
 
-function inspectEffectiveTextureSpace(): EffectiveTextureSpace {
-  const texture = Texture.getDefault();
+function inspectEffectiveTextureSpace(
+  texture: Texture | null = Texture.getDefault()
+): EffectiveTextureSpace {
   if (!texture) {
     return { state: "no_texture", texture: null, metrics: null };
   }
@@ -219,6 +220,14 @@ function inspectEffectiveTextureSpace(): EffectiveTextureSpace {
     texture: textureInfo,
     metrics,
   };
+}
+
+/** Bind exact painted-face metrics, never borrow those of another atlas. */
+function inspectFaceTextureSpace(face: CubeFace): EffectiveTextureSpace {
+  if (face.texture === null) {
+    return { state: "no_texture", texture: null, metrics: null };
+  }
+  return inspectEffectiveTextureSpace(face.getTexture() ?? null);
 }
 
 const CUBE_FACE_KEYS = [
@@ -416,8 +425,12 @@ function densityRatio(value: number, reference: number): number {
 
 function projectDensityExample(
   sample: ProjectTexelDensitySample,
-  reference: number
+  reference: number,
+  basis: "logical_uv" | "physical_pixels"
 ) {
+  const value = basis === "physical_pixels"
+    ? sample.physical_pixels_per_model_unit!
+    : sample.logical_uv_units_per_model_unit;
   return {
     cube_uuid: sample.cube_uuid,
     cube_name: sample.cube_name,
@@ -432,13 +445,11 @@ function projectDensityExample(
         ? 1 / sample.physical_pixels_per_model_unit
         : null,
     relative_to_reference:
-      sample.logical_uv_units_per_model_unit < reference
+      value < reference
         ? ("lower_density" as const)
         : ("higher_density" as const),
-    ratio_to_reference: densityRatio(
-      sample.logical_uv_units_per_model_unit,
-      reference
-    ),
+    ratio_to_reference: densityRatio(value, reference),
+    comparison_basis: basis,
   };
 }
 
@@ -469,6 +480,10 @@ export function summarizeProjectTexelDensity(
       min_logical_uv_units_per_model_unit: null,
       max_logical_uv_units_per_model_unit: null,
       spread_factor: null,
+      comparison_basis: "unavailable" as const,
+      physical_density_complete: false,
+      comparison_reference: null,
+      comparison_spread_factor: null,
       outlier_faces: 0,
       outlier_model_area_fraction: null,
       examples: [],
@@ -495,19 +510,30 @@ export function summarizeProjectTexelDensity(
     (sample) => sample.physical_pixels_per_model_unit as number
   );
 
+  // Real pixel density varies by atlas dimensions even with identical UV
+  // coordinates. Only claim physical comparison when all sampled faces have
+  // known bitmap metrics; otherwise retain explicitly logical evidence.
+  const physicalComplete = physicalSamples.length === valid.length;
+  const comparisonBasis = physicalComplete
+    ? ("physical_pixels" as const)
+    : ("logical_uv" as const);
+  const comparisonReference = physicalComplete ? physicalReference! : reference;
+  const comparedDensity = (sample: ProjectTexelDensitySample) =>
+    physicalComplete
+      ? sample.physical_pixels_per_model_unit!
+      : sample.logical_uv_units_per_model_unit;
+
   const totalArea = valid.reduce((sum, sample) => sum + sample.model_area, 0);
   const outliers = valid
     .filter(
       (sample) =>
-        densityRatio(
-          sample.logical_uv_units_per_model_unit,
-          reference
-        ) >= UV_MODEL_TEXEL_DENSITY_REVIEW_FACTOR
+        densityRatio(comparedDensity(sample), comparisonReference) >=
+        UV_MODEL_TEXEL_DENSITY_REVIEW_FACTOR
     )
     .sort(
       (a, b) =>
-        densityRatio(b.logical_uv_units_per_model_unit, reference) -
-          densityRatio(a.logical_uv_units_per_model_unit, reference) ||
+        densityRatio(comparedDensity(b), comparisonReference) -
+          densityRatio(comparedDensity(a), comparisonReference) ||
         b.model_area - a.model_area
     );
   const outlierArea = outliers.reduce(
@@ -530,7 +556,9 @@ export function summarizeProjectTexelDensity(
         : ("localized_variance" as const);
   const examples = outliers
     .slice(0, exampleLimit)
-    .map((sample) => projectDensityExample(sample, reference));
+    .map((sample) =>
+      projectDensityExample(sample, comparisonReference, comparisonBasis)
+    );
 
   return {
     state,
@@ -545,6 +573,12 @@ export function summarizeProjectTexelDensity(
     min_logical_uv_units_per_model_unit: min,
     max_logical_uv_units_per_model_unit: max,
     spread_factor: min > 0 ? max / min : null,
+    comparison_basis: comparisonBasis,
+    physical_density_complete: physicalComplete,
+    comparison_reference: comparisonReference,
+    comparison_spread_factor:
+      Math.max(...valid.map(comparedDensity)) /
+      Math.min(...valid.map(comparedDensity)),
     outlier_faces: outliers.length,
     outlier_model_area_fraction: outlierAreaFraction,
     examples,
@@ -598,8 +632,7 @@ function physicalPixelsPerUvAxes(
   return [x, y];
 }
 
-function inspectProjectTexelDensity(textureSpace: EffectiveTextureSpace) {
-  const physicalScale = physicalPixelsPerUvAxes(textureSpace);
+function inspectProjectTexelDensity() {
   const samples: ProjectTexelDensitySample[] = [];
   let excludedDegenerateFaces = 0;
   let excludedAspectReviewFaces = 0;
@@ -615,7 +648,10 @@ function inspectProjectTexelDensity(textureSpace: EffectiveTextureSpace) {
 
     for (const faceKey of CUBE_FACE_KEYS) {
       const face = cube.faces[faceKey];
-      if (!face || face.enabled === false) continue;
+      if (!face || face.enabled === false || face.texture === null) continue;
+      const faceTextureSpace = inspectFaceTextureSpace(face);
+      if (faceTextureSpace.state === "no_texture") continue;
+      const physicalScale = physicalPixelsPerUvAxes(faceTextureSpace);
       const uv = [...face.uv];
       if (uv.length !== 4 || uv.some((value) => !Number.isFinite(value))) {
         excludedInvalidFaces += 1;
@@ -662,13 +698,12 @@ function inspectProjectTexelDensity(textureSpace: EffectiveTextureSpace) {
     excluded_invalid_faces: excludedInvalidFaces,
     verdict: "review_hint_only" as const,
     note:
-      "This compares model-space size per texel across aspect-matched exported faces. review_required means materially large density drift must be resolved or explicitly justified before detailed painting; localized_variance may be intentional small-detail allocation.",
+      "Physical pixels/model-unit are compared only when every included face has mapped texture metrics; otherwise comparison_basis identifies a logical-UV-only fallback. Untextured faces cannot prove painted detail. Findings remain review hints, never visual PASS.",
   };
 }
 
 function inspectCubeUv(cube: Cube) {
   const textureSpace = inspectEffectiveTextureSpace();
-  const pixelAxes = physicalPixelsPerUvAxes(textureSpace);
   const size = cubeSize(cube);
   const densityValues: number[] = [];
   let enabledFaceCount = 0;
@@ -679,20 +714,29 @@ function inspectCubeUv(cube: Cube) {
     CUBE_FACE_KEYS.map((faceKey) => {
       const face = cube.faces[faceKey];
       const enabled = face.enabled !== false;
+      const faceTextureSpace = enabled
+        ? inspectFaceTextureSpace(face)
+        : null;
       const uv = requireFiniteInspectableFaceUv(
         face.uv,
         `Cube ${cube.name} (${cube.uuid}) face ${faceKey}`
       );
       const pixelMapping =
-        enabled && textureSpace.state === "mapped"
+        faceTextureSpace?.state === "mapped"
           ? mapFaceUvToTexturePixels(
               uv,
-              textureSpace.metrics,
+              faceTextureSpace.metrics,
               `Cube ${cube.name} (${cube.uuid}) face ${faceKey}`
             )
           : null;
-      const quality = enabled
-        ? summarizeFaceUvQuality(cubeFaceGeometrySize(size, faceKey), uv, face.rotation, pixelAxes)
+      const quality = faceTextureSpace !== null &&
+        faceTextureSpace.state !== "no_texture"
+        ? summarizeFaceUvQuality(
+            cubeFaceGeometrySize(size, faceKey),
+            uv,
+            face.rotation,
+            physicalPixelsPerUvAxes(faceTextureSpace)
+          )
         : null;
 
       let physicalPixelAreaPerModelArea: number | null = null;
@@ -731,7 +775,15 @@ function inspectCubeUv(cube: Cube) {
           rotation: face.rotation,
           enabled,
           paintable: enabled && pixelMapping !== null,
-          mapping_state: enabled ? textureSpace.state : ("disabled_face" as const),
+          mapping_state: enabled
+            ? faceTextureSpace!.state
+            : ("disabled_face" as const),
+          texture_space: faceTextureSpace === null
+            ? { state: "disabled_face" as const, effective_texture: null }
+            : {
+                state: faceTextureSpace.state,
+                effective_texture: faceTextureSpace.texture,
+              },
           texture_pixels: pixelMapping,
           quality:
             quality === null
@@ -764,16 +816,17 @@ function inspectCubeUv(cube: Cube) {
     texture_space: {
       state: textureSpace.state,
       effective_texture: textureSpace.texture,
+      scope: "default_texture" as const,
     },
     quality_summary: {
       enabled_faces: enabledFaceCount,
       degenerate_faces: degenerateFaceCount,
       aspect_review_faces: aspectReviewFaceCount,
       texel_density: summarizeUvDensity(densityValues),
-      project_texel_density: inspectProjectTexelDensity(textureSpace),
+      project_texel_density: inspectProjectTexelDensity(),
       verdict: "review_hint_only" as const,
       note:
-        "Aspect uses actual face rotation and physical pixel axes when mapped; density is linear. Orientation, seams, semantic reuse, and visual acceptance still require authored context and current model-view evidence.",
+        "Face mapping and physical density use the actual resolved face texture. Untextured faces do not establish paintability. The top-level texture_space names only the default atlas. Seam quality and visual acceptance remain unverified.",
     },
     faces,
   };

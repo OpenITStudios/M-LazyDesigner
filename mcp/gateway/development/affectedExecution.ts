@@ -419,6 +419,13 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  if (path === "mcp/server/tools/element/inspection.ts") {
+    return [
+      "mcp/tests/project-texel-density.test.ts",
+      "mcp/tests/face-pixel-mapping.test.ts",
+      "mcp/tests/geometry-inspection-completeness.test.ts",
+    ];
+  }
   if (path === "mcp/server/tools/texture/atlas.ts") {
     return [
       "mcp/tests/texture-atlas-integrity.test.ts",

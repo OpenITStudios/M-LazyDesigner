@@ -68,6 +68,20 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("UV inspection changes select physical texel mapping and project density owners", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/server/tools/element/inspection.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.checks).toContain("PROJECT_GRAPH");
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/face-pixel-mapping.test.ts",
+      "mcp/tests/geometry-inspection-completeness.test.ts",
+      "mcp/tests/project-texel-density.test.ts",
+    ]);
+  });
+
   test("UV atlas diagnostic changes select existing atlas and texture alignment owners", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/server/tools/texture/atlas.ts"],
