@@ -4,6 +4,7 @@ import type { JsonRecord } from "../contracts/protocol";
 import {
   compactGatewayCapabilityContent,
   compactGatewayCapabilityStructuredContent,
+  composeGatewayStructuredContent,
   shouldAttachGatewayControlDelta,
 } from "../presentation/resultCompaction";
 import { buildControlDelta } from "../control/delta/engine";
@@ -203,17 +204,22 @@ export class GatewayCapabilityExecutor {
         this.session.controlExecutionState = orchestration.state;
       }
 
-      const gatewayControlDelta = {
-        ...projectControlDeltaForGateway(controlDelta),
-        ...(orchestration
-          ? { continuation: orchestration.continuation }
-          : {}),
-      };
+      // Read-only success results do not expose a Control Delta. Avoid
+      // projecting/allocating one for the common inspection path; the full
+      // internal delta still drives correctness and benchmark classification.
+      const gatewayControlDelta = attachControlDelta
+        ? {
+            ...projectControlDeltaForGateway(controlDelta),
+            ...(orchestration
+              ? { continuation: orchestration.continuation }
+              : {}),
+          }
+        : null;
 
       if (result.structuredContent === undefined) {
         const response = {
           ...result,
-          ...(attachControlDelta
+          ...(gatewayControlDelta
             ? { structuredContent: { control_delta: gatewayControlDelta } }
             : {}),
         };
@@ -249,25 +255,16 @@ export class GatewayCapabilityExecutor {
         succeeded
       );
 
+      // Read-only success reuses the Runtime structured object without a
+      // second allocation; mutations retain their authoritative Control Delta.
+      const structuredContent = composeGatewayStructuredContent(
+        compacted,
+        gatewayControlDelta
+      );
       const response = {
         ...result,
         content: compactedContent as typeof result.content,
-        structuredContent:
-          compacted &&
-          typeof compacted === "object" &&
-          !Array.isArray(compacted)
-            ? {
-                ...(compacted as JsonRecord),
-                ...(attachControlDelta
-                  ? { control_delta: gatewayControlDelta }
-                  : {}),
-              }
-            : {
-                runtime_result: compacted,
-                ...(attachControlDelta
-                  ? { control_delta: gatewayControlDelta }
-                  : {}),
-              },
+        structuredContent,
       };
       this.trace?.record({
         startedAt,

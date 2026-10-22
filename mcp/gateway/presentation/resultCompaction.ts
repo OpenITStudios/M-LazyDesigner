@@ -259,6 +259,27 @@ export function shouldAttachGatewayControlDelta(
   return !readOnly;
 }
 
+/**
+ * One response composition boundary: preserve the exact Runtime payload on
+ * read-only success (no delta), but attach authoritative Control state to
+ * mutations and failures. Never duplicate an already-structured Runtime object
+ * only to omit the same control_delta field.
+ */
+export function composeGatewayStructuredContent(
+  compacted: unknown,
+  gatewayControlDelta: JsonRecord | null
+): JsonRecord {
+  if (isRecord(compacted)) {
+    return gatewayControlDelta
+      ? { ...compacted, control_delta: gatewayControlDelta }
+      : compacted;
+  }
+  return {
+    runtime_result: compacted,
+    ...(gatewayControlDelta ? { control_delta: gatewayControlDelta } : {}),
+  };
+}
+
 export function compactGatewayCapabilityContent(
   capability: string,
   structuredContent: unknown,

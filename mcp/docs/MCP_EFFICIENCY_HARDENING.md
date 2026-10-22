@@ -282,6 +282,27 @@ regressions, and the canonical affected planner includes the executor/receipt
 consumers. This is source/static work; no measured token/call/runtime
 improvement or live Blockbench acceptance is claimed.
 
+## Read-only Control Delta Allocation — SOURCE OPTIMIZATION
+
+The Gateway already omits `control_delta` for successful read-only calls
+and authoring CONTROL branches. Previously, `GatewayCapabilityExecutor`
+still allocated its full public Control Delta projection for those calls,
+then dropped it. Projection now occurs only for attached mutation/failure
+results. Internal Control Delta, capability graph effects and authoritative
+recovery classification remain unchanged.
+
+The shared Gateway result-composition owner also preserves the same
+structured-object identity on read-only success instead of spreading it into
+a second object, while keeping scalar/array wrapping and mutation
+`control_delta` precedence unchanged. The existing presentation tests cover
+all three cases. This avoids internal compute/allocation repetition, but does
+not remove public duplicate fields shared by Control Delta and continuation:
+those are compatibility/recovery contracts, not redundant evidence safe to
+delete without a versioned protocol change.
+
+No performance or token savings claimed until measured on an executable
+matching-SHA Gateway.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

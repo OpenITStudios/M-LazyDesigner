@@ -2,9 +2,60 @@ import { describe, expect, test } from "bun:test";
 import {
   compactGatewayCapabilityContent,
   compactGatewayCapabilityStructuredContent,
+  composeGatewayStructuredContent,
 } from "./resultCompaction";
 
 describe("Gateway result-compaction information preservation", () => {
+  test("read-only response reuses original structured evidence with no extra wrapper", () => {
+    const original = {
+      uuid: "cube-a",
+      faces: [{ uv: [0, 0, 2, 2] }],
+      nested: { project_uuid: "project-a", freshness: "UNVERIFIED" },
+    };
+    expect(composeGatewayStructuredContent(original, null)).toBe(original);
+    expect(composeGatewayStructuredContent({ control_delta: { legacy: true } }, null))
+      .toEqual({ control_delta: { legacy: true } });
+  });
+
+  test("Control Delta remains authoritative while Runtime receipt stays intact", () => {
+    const receipt = {
+      execution: "applied",
+      after: { uuid: "cube-a" },
+      control_delta: { source: "runtime-untrusted" },
+      recovery: { safe_to_retry: false },
+    };
+    const delta = {
+      project_uuid: "project-a",
+      freshness: { basis: "PRECISE_EFFECT", stale: ["UV_MAPPING"] },
+      continuation: {
+        project_uuid: "project-a",
+        freshness: { basis: "PRECISE_EFFECT", stale: ["UV_MAPPING"], unknown: [] },
+      },
+    };
+    const result = composeGatewayStructuredContent(receipt, delta);
+    expect(result).toEqual({
+      execution: "applied",
+      after: receipt.after,
+      control_delta: delta,
+      recovery: receipt.recovery,
+    });
+    expect(receipt.control_delta).toEqual({ source: "runtime-untrusted" });
+    expect(result).not.toBe(receipt);
+  });
+
+  test("non-object structured values use the original runtime_result wrapper", () => {
+    const delta = { requires_status_refresh: true };
+    for (const value of [null, 0, false, "hello", [1, 2]]) {
+      expect(composeGatewayStructuredContent(value, null)).toEqual({
+        runtime_result: value,
+      });
+      expect(composeGatewayStructuredContent(value, delta)).toEqual({
+        runtime_result: value,
+        control_delta: delta,
+      });
+    }
+  });
+
   const warning = [
     { type: "text", text: "WARNING: UV seam is UNVERIFIED. Do not finalize." },
   ];

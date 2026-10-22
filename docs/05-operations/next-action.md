@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP Control Delta/continuation response allocation: source audit found repeated project UUID, owner and freshness across receipt Control Delta/continuation, but deleting them would change a recovery contract. Instead `gateway/execution/capabilityExecutor.ts` now projects public Control Delta only when it will be attached; successful read-only results retain their Runtime structured object without a redundant spread. The existing `gateway/presentation/resultCompaction.ts` owns the pure composition boundary and focused tests for read-only identity, authoritative mutation delta, and scalar/array compatibility. REMOTE_GITHUB source/static only, Bun/typecheck/performance/native NOT EXECUTED. No new API, CI, main or release change.
+
+
+
 2026-10-22 MCP mutation receipt compaction safety: `gateway/presentation/resultCompaction.ts` now preserves every failed tool response before/after, recovery and rollback evidence; only complete successful Cube geometry effects permit redundant prestate compaction. Mutation texts stating visual/reference fidelity was not evaluated/reviewed/tested remain visible rather than becoming generic success. The executor passes explicit success to both compaction boundaries; existing presentation tests and affected-execution mappings were extended. GitHub source/static checks only; Bun/types/native and token/latency measurements NOT EXECUTED. `main`, CI, release and Gateway public surface unchanged.
 
 
