@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 3 hierarchy integrity: reparent verifies native parent and Group child membership before committing Undo or reporting applied. Existing ancestry helper rejects cyclic parent chains instead of hanging. Group/Geometry test owners and affected selection extended; stale Group source-test anchor repaired. GitHub/static checks only, Bun/TypeScript and native Blockbench NOT EXECUTED. Pivot transfer remains native-owned; next inspect evidenced Geometry or UV defects.
+Batch 3 rig/Animation reference integrity: legacy bone_rigging(rename) now uses the existing preflighted Group rename plan rather than changing only Group.name. UUID and legacy Animation bindings update with affected animations in the same Undo; conflicting maps reject before any native edit. Existing rename test and affected selector extended, NOT EXECUTED. Do not infer live pivot, IK, native Undo or playback acceptance. Next inspect one evidenced remaining rig or UV authoring issue, without adding a new route or engine.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

@@ -431,6 +431,13 @@ function sharedContractTestsForPath(path: string): readonly string[] {
       "mcp/tests/group-translation.test.ts",
     ];
   }
+  if (path === "mcp/server/tools/animation/rigging.ts") {
+    return [
+      "mcp/tests/batch-group-rename.test.ts",
+      "mcp/tests/rig-ik-controller-plan.test.ts",
+      "mcp/tests/semantic-rig-public-surface.test.ts",
+    ];
+  }
   const hotPathTests = GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH[path];
   if (hotPathTests) return hotPathTests;
   const textureTests = TEXTURE_REGRESSION_TESTS_BY_PATH[path];

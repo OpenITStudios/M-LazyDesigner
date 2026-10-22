@@ -2,6 +2,7 @@ import {describe, expect, test} from "bun:test";
 import {planGroupRename, applyGroupRename} from "@/lib/batchGroupRename";
 import {registerElementTools} from "@/server/tools/element";
 import {getAllToolDefinitions} from "@/lib/factories";
+import {registerBoneRiggingTool} from "@/server/tools/animation/rigging";
 describe("Group batch rename",()=>{
   test("registered executor previews without Undo and applies one atomic edit",async()=>{
     const g=globalThis as any;
@@ -24,6 +25,99 @@ describe("Group batch rename",()=>{
       expect(edits[0].groups).toEqual([group]);expect(edits[0].animations).toEqual([animation]);
       expect(animator.name).toBe("after");expect(animation.animators.bone).toBe(animator);
     } finally {keys.forEach((key,index)=>g[key]=previous[index])}
+  });
+
+  test("compatibility bone_rigging rename preserves UUID and legacy Animation bindings in one Undo", async () => {
+    const g = globalThis as Record<string, any>;
+    const keys = ["Group", "AnimationItem", "Undo", "Canvas"];
+    const previous = Object.fromEntries(keys.map(key => [key, g[key]]));
+
+    class FakeGroup {
+      static all: FakeGroup[] = [];
+      parent = "root";
+      origin: [number, number, number] = [0, 0, 0];
+      rotation: [number, number, number] = [0, 0, 0];
+      ik_enabled = false;
+      constructor(public uuid: string, public name: string) {
+        FakeGroup.all.push(this);
+      }
+    }
+    const bone = new FakeGroup("bone-uuid", "old_bone");
+    const uuidAnimator = { uuid: "bone-uuid", name: "old_bone" };
+    const legacyAnimator = { name: "old_bone" };
+    const uuidClip = { animators: { "bone-uuid": uuidAnimator }, saved: true };
+    const legacyClip = {
+      animators: { old_bone: legacyAnimator },
+      groups: { old_bone: { tag: "legacy" } },
+      saved: true,
+    };
+    const edits: Array<Record<string, unknown>> = [];
+    let completed = 0;
+    let cancelled = 0;
+    g.Group = FakeGroup;
+    g.AnimationItem = { all: [uuidClip, legacyClip] };
+    g.Undo = {
+      initEdit(edit: Record<string, unknown>) { edits.push(edit); },
+      finishEdit() { completed += 1; },
+      cancelEdit() { cancelled += 1; },
+    };
+    g.Canvas = { updateAll() {} };
+
+    try {
+      if (!getAllToolDefinitions().bone_rigging) registerBoneRiggingTool();
+      const tool = getAllToolDefinitions().bone_rigging;
+      const run = async () => tool.execute(
+        await tool.parameterSchema.parseAsync({
+          action: "rename",
+          bone_data: { name: "bone-uuid", new_name: "new_bone" },
+        })
+      );
+
+      const result = await run();
+      expect(result.structuredContent).toMatchObject({
+        action: "rename",
+        bone: { uuid: "bone-uuid", name: "new_bone", parent: "root" },
+      });
+      expect(bone.name).toBe("new_bone");
+      expect(uuidAnimator.name).toBe("new_bone");
+      expect(uuidClip.animators["bone-uuid"]).toBe(uuidAnimator);
+      expect(legacyClip.animators).toHaveProperty("new_bone", legacyAnimator);
+      expect(legacyClip.animators).not.toHaveProperty("old_bone");
+      expect(legacyClip.groups).toHaveProperty("new_bone");
+      expect(legacyClip.groups).not.toHaveProperty("old_bone");
+      expect(uuidClip.saved).toBe(false);
+      expect(legacyClip.saved).toBe(false);
+      expect(edits).toHaveLength(1);
+      expect(edits[0].groups).toEqual([bone]);
+      expect(edits[0].animations).toEqual([uuidClip, legacyClip]);
+      expect(completed).toBe(1);
+      expect(cancelled).toBe(0);
+
+      // Reconstruct a legacy name-key collision. The canonical planner must
+      // refuse this before native Undo or any Group/Animation write.
+      bone.name = "old_bone";
+      const oldTrack = { name: "old_bone" };
+      const collidingClip = {
+        animators: {
+          old_bone: oldTrack,
+          new_bone: { name: "foreign" },
+        },
+        saved: true,
+      };
+      g.AnimationItem.all = [collidingClip];
+      await expect(run()).rejects.toThrow('Animation map collision at "new_bone"');
+      expect(bone.name).toBe("old_bone");
+      expect(collidingClip.animators.old_bone).toBe(oldTrack);
+      expect(collidingClip.saved).toBe(true);
+      expect(edits).toHaveLength(1);
+      expect(completed).toBe(1);
+      expect(cancelled).toBe(0);
+    } finally {
+      for (const key of keys) {
+        if (previous[key] === undefined) delete g[key];
+        else g[key] = previous[key];
+      }
+    }
   });
   test("preview is pure and application preserves UUID animation binding",()=>{
     const group={uuid:"u1",name:"leg"}, animator={uuid:"u1",name:"leg"};

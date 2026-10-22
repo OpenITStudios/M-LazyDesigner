@@ -12,6 +12,11 @@ export {
   wouldCreateRigHierarchyCycle,
 } from "@/lib/rig/planning";
 import { recordCurrentCapabilitySemanticHistoryEffect } from "@/lib/authoring/semanticHistory";
+import {
+  applyGroupRename,
+  planGroupRename,
+  type RenameAnimation,
+} from "@/lib/geometry/batchGroupRename";
 import { supportsNativeIkControllerLinks } from "@/lib/blockbench/nativeFeatureGates";
 import { boneRiggingReceipt } from "@/lib/receipts/boneRigging";
 import { createTool, type ToolSpec } from "@/lib/factories";
@@ -298,6 +303,7 @@ export function registerBoneRiggingTool(): void {
         let controllerSource: OutlinerElement | null | undefined;
         let controllerPole: OutlinerElement | null | undefined;
         let mirroredBoneName: string | undefined;
+        let renamePlan: ReturnType<typeof planGroupRename> | undefined;
         const boneIdentity = (group: Group) => ({
           uuid: group.uuid,
           name: group.name,
@@ -439,6 +445,15 @@ export function registerBoneRiggingTool(): void {
                 `Bone name "${bone_data.new_name}" collides case-insensitively with another Group. Bedrock animation matching is case-insensitive; choose a distinct name.`
               );
             }
+            // The legacy bone_rigging rename must obey the same complete
+            // animation-reference and name-collision contract as rename_element.
+            // Plan before opening native Undo; no partial edits on collision.
+            renamePlan = planGroupRename(
+              Group.all,
+              [{ id: targetBone.uuid, new_name: bone_data.new_name }],
+              (typeof AnimationItem === "undefined" ? [] : AnimationItem.all)
+                as unknown as RenameAnimation[]
+            );
             break;
   
           case "set_pivot":
@@ -533,7 +548,11 @@ export function registerBoneRiggingTool(): void {
           groups: undoGroups,
           ...(action === "delete"
             ? { selection: true, animations: deleteAnimations }
-            : {}),
+            : action === "rename" && renamePlan
+              ? { animations: renamePlan.references.map(
+                  (reference) => reference.animation
+                ) as BBAnimation[] }
+              : {}),
         });
   
         let resultText = "";
@@ -587,7 +606,7 @@ export function registerBoneRiggingTool(): void {
             }
   
             case "rename": {
-              targetBone!.name = bone_data.new_name!;
+              applyGroupRename(renamePlan!);
               affectedBone = targetBone!;
               resultText = `Renamed bone to "${bone_data.new_name}"`;
               break;

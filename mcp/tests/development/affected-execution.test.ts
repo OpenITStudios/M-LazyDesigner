@@ -62,6 +62,11 @@ describe("affected execution planner", () => {
         "mcp/tests/geometry-preflight-order.test.ts",
         "mcp/tests/group-translation.test.ts",
       ]],
+      ["mcp/server/tools/animation/rigging.ts", [
+        "mcp/tests/batch-group-rename.test.ts",
+        "mcp/tests/rig-ik-controller-plan.test.ts",
+        "mcp/tests/semantic-rig-public-surface.test.ts",
+      ]],
     ] as const) {
       const plan = planAffectedExecution({
         changedPaths: [path],
