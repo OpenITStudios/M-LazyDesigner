@@ -191,10 +191,34 @@ export function effectChangedFields(value: unknown): string[] {
   return authoritative ? cubeChangedFieldsFromResult(authoritative) : [];
 }
 
+export type MutationEvidenceAnalysis = Readonly<{
+  mutates: boolean;
+  geometryScopes?: ReturnType<typeof geometryFreshnessScopes>;
+}>;
+
 export function geometryInvalidation(
   capability: string,
-  result: unknown
+  result: unknown,
+  geometryScopes?: ReturnType<typeof geometryFreshnessScopes>
 ): ControlAuthoringDomain[] {
+  // The request-local analysis already derived this scope for freshness.
+  // Preserve the historical default invalidation on incomplete Cube receipts.
+  if (geometryScopes) {
+    if (capability === "manage_cubes") {
+      return assetDomainsForScopes(
+        geometryScopes.precise
+          ? geometryScopes.stale
+          : capabilityDefaultStaleScopes(capability)
+      );
+    }
+    if (
+      capability === "modify_group" ||
+      capability === "remove_element" ||
+      capability === "rename_element"
+    ) {
+      return assetDomainsForScopes(geometryScopes.stale);
+    }
+  }
   if (capability === "manage_cubes") {
     const changedFields = effectChangedFields(result);
     const scopes =
@@ -244,7 +268,8 @@ export function mutationInvalidation(
   domain: ControlAuthoringDomain,
   succeeded: boolean,
   result: unknown,
-  branch?: CapabilityBranchHint
+  branch?: CapabilityBranchHint,
+  analysis?: MutationEvidenceAnalysis
 ): ControlDelta["invalidates"] {
   if (succeeded && (capability === "undo" || capability === "redo")) {
     const historyInvalidation = semanticHistoryInvalidation(result);
@@ -274,14 +299,19 @@ export function mutationInvalidation(
     };
   }
 
-  const mutates = capabilityMutatesState(capability, succeeded, result, branch);
+  const mutates = analysis?.mutates ??
+    capabilityMutatesState(capability, succeeded, result, branch);
   let affectedDomains: ControlAuthoringDomain[] = [];
   if (mutates) {
     if (capability === "create_project") {
       affectedDomains = ["GEOMETRY", "TEXTURING", "ANIMATION"];
     } else if (capability === "undo" || capability === "redo") {
       affectedDomains = ["GEOMETRY", "TEXTURING", "ANIMATION"];
-    } else if (domain === "GEOMETRY") affectedDomains = geometryInvalidation(capability, result);
+    } else if (domain === "GEOMETRY") {
+      affectedDomains = geometryInvalidation(
+        capability, result, analysis?.geometryScopes
+      );
+    }
     else if (domain === "TEXTURING") affectedDomains = ["TEXTURING"];
     else if (domain === "ANIMATION") affectedDomains = ["ANIMATION"];
     else affectedDomains = ["CORE"];
@@ -389,12 +419,36 @@ export function geometryFreshnessScopes(
   };
 }
 
+/**
+ * One call-local receipt interpretation feeds invalidation and freshness.
+ * Never cache across MCP calls: Undo, manual edits and project changes can
+ * invalidate even byte-identical input objects.
+ */
+export function analyzeMutationEvidence(
+  capability: string,
+  domain: ControlAuthoringDomain,
+  succeeded: boolean,
+  result: unknown,
+  branch?: CapabilityBranchHint
+): MutationEvidenceAnalysis {
+  const mutates = capabilityMutatesState(capability, succeeded, result, branch);
+  return {
+    mutates,
+    ...(mutates && domain === "GEOMETRY"
+      ? { geometryScopes: geometryFreshnessScopes(capability, result) }
+      : {}),
+  };
+}
+
 export function staleScopesForMutation(
   capability: string,
   domain: ControlAuthoringDomain,
-  result: unknown
+  result: unknown,
+  geometryScopes?: ReturnType<typeof geometryFreshnessScopes>
 ): { stale: ControlFreshnessScope[]; precise: boolean } {
-  if (domain === "GEOMETRY") return geometryFreshnessScopes(capability, result);
+  if (domain === "GEOMETRY") {
+    return geometryScopes ?? geometryFreshnessScopes(capability, result);
+  }
 
   if (domain === "TEXTURING") {
     const defaults = capabilityDefaultStaleScopes(capability);
@@ -469,7 +523,8 @@ export function mutationFreshness(
   domain: ControlAuthoringDomain,
   succeeded: boolean,
   result: unknown,
-  branch?: CapabilityBranchHint
+  branch?: CapabilityBranchHint,
+  analysis?: MutationEvidenceAnalysis
 ): ControlDelta["freshness"] {
   if (!succeeded) {
     return {
@@ -480,7 +535,8 @@ export function mutationFreshness(
     };
   }
 
-  const mutates = capabilityMutatesState(capability, true, result, branch);
+  const mutates = analysis?.mutates ??
+    capabilityMutatesState(capability, true, result, branch);
   if (!mutates) {
     return {
       basis: "NO_CHANGE",
@@ -490,7 +546,9 @@ export function mutationFreshness(
     };
   }
 
-  const { stale, precise } = staleScopesForMutation(capability, domain, result);
+  const { stale, precise } = staleScopesForMutation(
+    capability, domain, result, analysis?.geometryScopes
+  );
   const staleSet = new Set(stale);
   return {
     basis: precise ? "PRECISE_EFFECT" : "CONSERVATIVE_EFFECT",

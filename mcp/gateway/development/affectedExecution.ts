@@ -129,6 +129,7 @@ const SEMANTIC_HISTORY_CONTRACT_TESTS = [
 
 const CONTROL_DELTA_CONTRACT_TESTS = [
   "mcp/tests/gateway-control-continuation-hardening.test.ts",
+  "mcp/tests/gateway-control-invalidation.test.ts",
   "mcp/tests/control-texture-mutation-precision.test.ts",
 ] as const;
 
@@ -390,6 +391,7 @@ function sharedContractTestsForPath(path: string): readonly string[] {
     return SEMANTIC_HISTORY_CONTRACT_TESTS;
   }
   if (
+    path === "mcp/gateway/control/delta/engine.ts" ||
     path === "mcp/gateway/control/delta/receipts.ts" ||
     path === "mcp/gateway/control/delta/freshness.ts" ||
     path === "mcp/gateway/control/delta/verification.ts"

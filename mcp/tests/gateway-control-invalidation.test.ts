@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { buildControlDelta } from "@/gateway/control";
+import { authoringDomainForCapability } from "@/gateway/development/sourceOwners";
+import {
+  analyzeMutationEvidence,
+  mutationFreshness,
+  mutationInvalidation,
+} from "@/gateway/control/delta/freshness";
+import type { CapabilityBranchHint } from "@/gateway/capabilities/types";
 
 function cubeEffect(changedFields: string[]) {
   return {
@@ -18,6 +25,117 @@ function cubeEffect(changedFields: string[]) {
 }
 
 describe("LazyDesigner Control minimum invalidation", () => {
+  test("call-local receipt analysis matches direct invalidation and freshness for all branch outcomes", () => {
+    const cases: Array<{
+      capability: string;
+      succeeded: boolean;
+      result?: unknown;
+      branch?: CapabilityBranchHint;
+    }> = [
+      {
+        capability: "manage_cubes", succeeded: true,
+        result: { geometry_effect: cubeEffect(["from", "to"]) },
+      },
+      {
+        capability: "manage_cubes", succeeded: true,
+        result: { execution: "planned", updates: [] },
+        branch: { field: "operation", value: "simplify" },
+      },
+      {
+        capability: "manage_cubes", succeeded: false,
+        result: { execution: "applied" },
+      },
+      {
+        capability: "modify_group", succeeded: true,
+        result: {
+          execution: "applied", id: "group-a", name: "arm",
+          changed_fields: ["rotation"],
+          group: {
+            uuid: "group-a", name: "arm", origin: [0, 0, 0],
+            rotation: [0, 10, 0], visibility: true, parent: "root",
+          },
+        },
+      },
+      {
+        capability: "remove_element", succeeded: true,
+        result: {
+          removed_root: { uuid: "arm", name: "arm", type: "group", parent: "root" },
+          removed_counts: { groups: 1, elements: 2, total_nodes: 3 },
+          affected_animations: 1,
+        },
+      },
+      {
+        capability: "rename_element", succeeded: true,
+        result: {
+          execution: "unchanged", changes: [], affected_animations: 0,
+        },
+      },
+      {
+        capability: "rename_element", succeeded: true,
+        result: { execution: "planned", changes: [{ id: "arm" }] },
+      },
+      {
+        capability: "save_material_config", succeeded: true,
+        result: {
+          operation: "save", scope: "material_persistence_only",
+          material: { uuid: "m1", name: "material" },
+          saved: true, file_exists: true,
+          file_path: "/tmp/asset.texture_set.json",
+        },
+      },
+      {
+        capability: "manage_particle", succeeded: true,
+        result: { wrote_to_path: null, preview_path: null, artifact_ready: true },
+      },
+      {
+        capability: "undo", succeeded: true,
+        result: { semantic_effect: { stale: ["UV_MAPPING"], workspace_projection: true, acceptance_gates: true } },
+      },
+    ];
+    for (const { capability, succeeded, result, branch } of cases) {
+      const domain = authoringDomainForCapability(capability);
+      const prepared = analyzeMutationEvidence(
+        capability, domain, succeeded, result, branch
+      );
+      expect(
+        mutationInvalidation(capability, domain, succeeded, result, branch, prepared),
+        capability
+      ).toEqual(
+        mutationInvalidation(capability, domain, succeeded, result, branch)
+      );
+      expect(
+        mutationFreshness(capability, domain, succeeded, result, branch, prepared),
+        capability
+      ).toEqual(
+        mutationFreshness(capability, domain, succeeded, result, branch)
+      );
+      const actual = buildControlDelta({
+        capability, branch, phaseBefore: null, phaseAfter: null,
+        projectUuid: "project-a", succeeded, result,
+      });
+      expect(actual.invalidates, capability).toEqual(
+        mutationInvalidation(capability, domain, succeeded, result, branch)
+      );
+      expect(actual.freshness, capability).toEqual(
+        mutationFreshness(capability, domain, succeeded, result, branch)
+      );
+    }
+  });
+
+  test("cached geometry scope stays call-local and never reuses a prior changed receipt", () => {
+    const domain = authoringDomainForCapability("manage_cubes");
+    const first = { geometry_effect: cubeEffect(["rotation"]) };
+    const second = { geometry_effect: cubeEffect(["faces"]) };
+    const rotation = analyzeMutationEvidence("manage_cubes", domain, true, first);
+    const uv = analyzeMutationEvidence("manage_cubes", domain, true, second);
+    expect(rotation.geometryScopes?.stale).toEqual([
+      "GEOMETRY_STRUCTURE", "ANIMATION_MOTION",
+    ]);
+    expect(uv.geometryScopes?.stale).toContain("UV_MAPPING");
+    expect(uv.geometryScopes?.stale).toContain("TEXTURE_APPEARANCE");
+    expect(rotation.geometryScopes?.stale).not.toContain("TEXTURE_APPEARANCE");
+  });
+
   test("local cube transform does not reset unrelated Texture or Animation", () => {
     const delta = buildControlDelta({
       capability: "manage_cubes",

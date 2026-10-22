@@ -6,6 +6,7 @@ import type { ControlDelta } from "../types";
 import type { BlockitAuthoringPhaseAffinity } from "../../../lib/runtime/affinity";
 import type { CapabilityBranchHint } from "../../capabilities/types";
 import {
+  analyzeMutationEvidence,
   authoritativeRevisionEvidence,
   mutationFreshness,
   mutationInvalidation,
@@ -43,19 +44,30 @@ export function buildControlDelta(input: {
   }
 
   const authoringDomain = authoringDomainForCapability(input.capability);
-  const invalidates = mutationInvalidation(
+  // Interpret mutation/no-op and geometry receipt scope once for this single
+  // Control Delta. Other direct API callers remain backward-compatible.
+  const mutationAnalysis = analyzeMutationEvidence(
     input.capability,
     authoringDomain,
     input.succeeded,
     input.result,
     input.branch
   );
+  const invalidates = mutationInvalidation(
+    input.capability,
+    authoringDomain,
+    input.succeeded,
+    input.result,
+    input.branch,
+    mutationAnalysis
+  );
   const freshness = mutationFreshness(
     input.capability,
     authoringDomain,
     input.succeeded,
     input.result,
-    input.branch
+    input.branch,
+    mutationAnalysis
   );
   const revisionEvidence = input.succeeded
     ? authoritativeRevisionEvidence(input.capability, input.result)

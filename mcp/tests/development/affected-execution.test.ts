@@ -383,6 +383,26 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("Control Delta engine and freshness changes select the exact invalidation owner", () => {
+    for (const source of [
+      "mcp/gateway/control/delta/engine.ts",
+      "mcp/gateway/control/delta/freshness.ts",
+      "mcp/gateway/control/delta/verification.ts",
+    ]) {
+      const plan = planAffectedExecution({
+        changedPaths: [source],
+        semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, source).toBe(false);
+      expect(plan.targeted_tests, source).toContain(
+        "mcp/tests/gateway-control-invalidation.test.ts"
+      );
+      expect(plan.targeted_tests, source).toContain(
+        "mcp/tests/gateway-control-continuation-hardening.test.ts"
+      );
+    }
+  });
+
   test("Control delta contract changes run continuation regressions", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/gateway/control/delta/freshness.ts"],

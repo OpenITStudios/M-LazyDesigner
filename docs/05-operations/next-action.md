@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 Control freshness/invalidation receipt-analysis reuse: `gateway/control/delta/engine.ts` now derives mutation/no-op and precise geometry scope once through the existing `delta/freshness.ts` owner, then shares the call-local analysis with invalidation and freshness projection. Standalone calls retain default existing behavior; no persistent cache or second registry. `gateway-control-invalidation.test.ts` adds direct-vs-shared equivalence and successive-UV-change isolation, and the existing affected-execution owner selects it for engine/freshness edits. Source/static GitHub only; executable Bun/typecheck and any measured CPU improvement NOT EXECUTED. CI/main/release unaffected.
+
+
+
 2026-10-22 MCP Control Delta/continuation response allocation: source audit found repeated project UUID, owner and freshness across receipt Control Delta/continuation, but deleting them would change a recovery contract. Instead `gateway/execution/capabilityExecutor.ts` now projects public Control Delta only when it will be attached; successful read-only results retain their Runtime structured object without a redundant spread. The existing `gateway/presentation/resultCompaction.ts` owns the pure composition boundary and focused tests for read-only identity, authoritative mutation delta, and scalar/array compatibility. REMOTE_GITHUB source/static only, Bun/typecheck/performance/native NOT EXECUTED. No new API, CI, main or release change.
 
 

@@ -303,6 +303,24 @@ delete without a versioned protocol change.
 No performance or token savings claimed until measured on an executable
 matching-SHA Gateway.
 
+## Control Freshness and Invalidation Analysis Reuse — SOURCE OPTIMIZATION
+
+`buildControlDelta` previously interpreted mutation/no-op status separately
+for `mutationInvalidation` and `mutationFreshness`, and re-parsed several
+Cube/Group/remove/rename geometry receipts to derive dependent scopes.
+The existing `gateway/control/delta/freshness.ts` now provides
+`analyzeMutationEvidence` as a **call-local** shared result for those two
+projections. Direct callers of the prior functions still use their original
+signatures and semantics; nothing is cached between MCP requests.
+
+The existing invalidation suite compares direct versus shared analysis for
+Cube, Group, removal, rename, material-persistence, particle, Undo and failed
+calls, and checks two sequential Cube effects do not reuse stale scopes.
+The affected-work selector includes the existing invalidation owner for
+Control Delta engine and freshness edits. This optimization avoids repeated
+receipt interpretation, but requires an executable matching-SHA benchmark
+before any CPU/latency savings are claimed.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.
