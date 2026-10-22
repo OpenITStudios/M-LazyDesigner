@@ -6,7 +6,7 @@ export type TextureFrameLayout = {
 };
 
 function requirePositiveInteger(value: number, context: string): number {
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${context} must be a positive integer.`);
   }
   return value;
@@ -93,4 +93,38 @@ export function mapFrameLocalPixelToBitmapPixel(
     x: localX,
     y: frame * layout.display_height + localY,
   };
+}
+
+/**
+ * Absolute bitmap-space pixels may address any frame in an animated texture,
+ * but one direct exact-pixel stroke must not accidentally span two frames.
+ * No native current-frame selection is inferred: the caller still checks the
+ * Blockbench active canvas and its offset before and during the edit.
+ */
+export function requireSingleFrameBitmapPixels(
+  layout: TextureFrameLayout,
+  coordinates: readonly { x: number; y: number }[],
+  context: string
+): number {
+  if (coordinates.length === 0) {
+    throw new Error(`${context} requires at least one bitmap pixel.`);
+  }
+  let selectedFrame: number | null = null;
+  for (const { x, y } of coordinates) {
+    if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) {
+      throw new Error(`${context} requires safe integer bitmap coordinates.`);
+    }
+    const frame = Math.floor(y / layout.display_height);
+    requireTextureFrameIndex(layout, frame, context);
+    mapFrameLocalPixelToBitmapPixel(
+      layout, frame, x, y - frame * layout.display_height, context
+    );
+    if (selectedFrame !== null && frame !== selectedFrame) {
+      throw new Error(
+        `${context} crosses animated texture frame boundaries. Submit one exact-pixel transaction per frame.`
+      );
+    }
+    selectedFrame = frame;
+  }
+  return selectedFrame!;
 }

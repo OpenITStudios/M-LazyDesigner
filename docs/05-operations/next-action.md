@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 4 UV-to-pixel boundary safety: the canonical mapping now reports in_bounds from unrounded physical pixel corners. Exact face-local pixels reject out-of-frame UV; inspect_element(detail=uv) retains mapped diagnostic rectangles but marks such faces not paintable and excludes them from project density evidence. Existing face mapping suite covers all 0/90/180/270 rotations, U/V flips and 2x pixel scaling; project-density regression extended. Tests authored, Bun/TypeScript/native NOT EXECUTED. No new Gateway/Runtime tools or UV planner activation. Next inspect only a concrete pixel-painting or frame-index source defect.
+Batch 4 animated-frame painting: exact paint_with_brush now treats requested pixels as absolute bitmap coordinates across a valid vertically stacked frame layout, but requires a single frame per edit. Preflight and actual Texture.edit canvas/offset are checked before pixel writes so an active-frame drift cannot silently commit a no-op or another frame. Existing texture-frame tests now cover later frames, cross-frame rejection and offset-switch rollback; brush blend regression remains routed. Authored only, Bun/TS/native NOT EXECUTED. No new MCP tools/parameter changes or UV planner activation. Next inspect grounded animated-frame readback or visual acceptance issues.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

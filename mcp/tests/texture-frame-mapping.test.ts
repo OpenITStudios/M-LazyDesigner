@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   mapFrameLocalPixelToBitmapPixel,
+  requireSingleFrameBitmapPixels,
   requireTextureFrameIndex,
   resolveTextureFrameLayout,
   textureFrameRect,
 } from "@/lib/textureFrameMapping";
+import { registerPaintBrushTools } from "@/server/tools/paint/brush";
+import { getAllToolDefinitions } from "@/lib/factories";
 
 describe("texture frame mapping", () => {
   test("resolves one static frame without special casing", () => {
@@ -31,6 +34,119 @@ describe("texture frame mapping", () => {
     expect(
       mapFrameLocalPixelToBitmapPixel(layout, 2, 15, 15, "Animated texture")
     ).toEqual({ x: 15, y: 47 });
+  });
+
+
+  test("absolute bitmap pixel requests resolve to exactly one animated frame", () => {
+    const layout = resolveTextureFrameLayout(16, 48, 16, "Animated");
+    expect(requireSingleFrameBitmapPixels(layout, [
+      { x: 0, y: 16 }, { x: 15, y: 31 },
+    ], "Animated")).toBe(1);
+    expect(requireSingleFrameBitmapPixels(layout, [
+      { x: 0, y: 32 }, { x: 15, y: 47 },
+    ], "Animated")).toBe(2);
+    expect(requireSingleFrameBitmapPixels(
+      resolveTextureFrameLayout(16, 16, 16, "Static"),
+      [{ x: 15, y: 15 }], "Static"
+    )).toBe(0);
+    expect(() => requireSingleFrameBitmapPixels(layout, [
+      { x: 0, y: 15 }, { x: 0, y: 16 },
+    ], "Animated")).toThrow("crosses animated texture frame boundaries");
+    for (const point of [
+      { x: 16, y: 16 }, { x: 0, y: 48 }, { x: 0, y: -1 },
+      { x: 0.5, y: 16 }, { x: 0, y: Number.MAX_SAFE_INTEGER + 1 },
+    ]) {
+      expect(() => requireSingleFrameBitmapPixels(layout, [point], "Animated"))
+        .toThrow();
+    }
+    expect(() => requireSingleFrameBitmapPixels(layout, [], "Animated"))
+      .toThrow("at least one bitmap pixel");
+    expect(() => resolveTextureFrameLayout(16, 2 ** 53, 16, "Animated"))
+      .toThrow("positive integer");
+  });
+
+  test("exact brush paints only requested animated frame and refuses native frame drift", async () => {
+    const g = globalThis as Record<string, any>;
+    const keys = ["Project", "Texture", "Painter", "Undo", "Canvas"];
+    const prior = Object.fromEntries(keys.map(k => [k, g[k]]));
+    let selectedOffset: [number, number] = [0, 16];
+    let editOffset: [number, number] = [0, 16];
+    const written: Array<[number, number]> = [];
+    const history = { started: 0, finished: 0, cancelled: 0 };
+    const texture = {
+      uuid: "animated", name: "animated", id: "animated",
+      width: 16, height: 48, display_height: 16,
+      layers_enabled: false,
+      getActiveCanvas: () => ({
+        canvas: { width: 16, height: 16 }, offset: selectedOffset,
+      }),
+      edit(callback: (
+        canvas: { width: number; height: number },
+        env: Record<string, any>
+      )) {
+        const offset = editOffset;
+        const ctx = {
+          save() {}, restore() {},
+          clearRect(_x: number, _y: number, _w: number, _h: number) {},
+          fillRect(x: number, y: number) {
+            written.push([x + offset[0], y + offset[1]]);
+          },
+          globalAlpha: 0, globalCompositeOperation: "", fillStyle: "",
+        };
+        callback({ width: 16, height: 16 }, { ctx, offset });
+      },
+    };
+    g.Project = { textures: [texture] };
+    g.Texture = { all: [texture], selected: texture, getDefault: () => texture };
+    g.Painter = { mirror_painting: false, lock_alpha: false, erase_mode: false };
+    g.Canvas = { updateAll() {} };
+    g.Undo = {
+      initEdit() { history.started++; },
+      finishEdit() { history.finished++; },
+      cancelEdit() { history.cancelled++; },
+    };
+    try {
+      if (!getAllToolDefinitions().paint_with_brush) registerPaintBrushTools();
+      const tool = getAllToolDefinitions().paint_with_brush;
+      const run = async (coordinates: Array<{ x: number; y: number }>) =>
+        tool.execute(await tool.parameterSchema.parseAsync({
+          texture_id: "animated",
+          coordinates,
+          connect_strokes: false,
+          brush_settings: { color: "#ff0000", size: 1, opacity: 255,
+            softness: 0, shape: "square", blend_mode: "default" },
+        }));
+
+      const result = await run([{ x: 0, y: 16 }, { x: 5, y: 31 }]);
+      expect(result.structuredContent).toMatchObject({
+        mode: "exact_pixels",
+        affected_rect: [0, 16, 6, 32],
+        pixels_requested: 2,
+      });
+      expect(written).toEqual([[0, 16], [5, 31]]);
+      expect(history).toEqual({ started: 1, finished: 1, cancelled: 0 });
+
+      await expect(run([{ x: 0, y: 15 }, { x: 0, y: 16 }]))
+        .rejects.toThrow("crosses animated texture frame boundaries");
+      expect(history.started).toBe(1);
+
+      selectedOffset = [0, 0];
+      await expect(run([{ x: 1, y: 16 }]))
+        .rejects.toThrow("outside the active texture canvas/layer");
+      expect(history.started).toBe(1);
+
+      selectedOffset = [0, 16];
+      editOffset = [0, 0];
+      await expect(run([{ x: 1, y: 16 }]))
+        .rejects.toThrow("outside the active texture canvas/layer");
+      expect(written).toEqual([[0, 16], [5, 31]]);
+      expect(history).toEqual({ started: 2, finished: 1, cancelled: 1 });
+    } finally {
+      for (const key of keys) {
+        if (prior[key] === undefined) delete g[key];
+        else g[key] = prior[key];
+      }
+    }
   });
 
   test("rejects non-integral frame stacks", () => {

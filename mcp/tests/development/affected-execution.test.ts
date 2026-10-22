@@ -81,6 +81,26 @@ describe("affected execution planner", () => {
     ]);
   });
 
+  test("animated texture frame mapping and exact brush edits select retained owners", () => {
+    const cases = [
+      ["mcp/lib/texture/frameMapping.ts", [
+        "mcp/tests/texture-frame-mapping.test.ts",
+      ]],
+      ["mcp/server/tools/paint/brush.ts", [
+        "mcp/tests/texture-frame-mapping.test.ts",
+        "mcp/tests/brush-blend-default.test.ts",
+      ]],
+    ] as const;
+    for (const [path, expected] of cases) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.checks).toContain("PROJECT_GRAPH");
+      expect(plan.targeted_tests).toEqual([...expected].sort());
+    }
+  });
+
   test("UV inspection changes select physical texel mapping and project density owners", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/server/tools/element/inspection.ts"],

@@ -8,6 +8,10 @@ import {
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_EXPERIMENTAL } from "@/lib/constants";
 import { runPaintStroke } from "@/lib/texture/paintStroke";
+import {
+  requireSingleFrameBitmapPixels,
+  resolveTextureFrameLayout,
+} from "@/lib/texture/frameMapping";
 import { setBarItemValues } from "@/lib/blockbench/barItems";
 import {
   getAndActivateTexture,
@@ -31,6 +35,34 @@ import {
   requirePixelsWithinTexture,
   requireTextureCoordinatesWithinBounds,
 } from "./shared";
+
+function requireExactPixelsInActiveCanvas(
+  coordinates: readonly { x: number; y: number }[],
+  canvas: { width: number; height: number },
+  offset: readonly number[],
+  context: string
+): void {
+  if (
+    !canvas ||
+    !Number.isSafeInteger(canvas.width) || canvas.width <= 0 ||
+    !Number.isSafeInteger(canvas.height) || canvas.height <= 0 ||
+    !Array.isArray(offset) || offset.length !== 2 ||
+    !offset.every(Number.isSafeInteger)
+  ) {
+    throw new Error(
+      `${context} requires a valid native canvas and integer frame/layer offset.`
+    );
+  }
+  for (const coordinate of coordinates) {
+    const x = coordinate.x - offset[0];
+    const y = coordinate.y - offset[1];
+    if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) {
+      throw new Error(
+        `${context} exact pixel (${coordinate.x}, ${coordinate.y}) falls outside the active texture canvas/layer.`
+      );
+    }
+  }
+}
 
 function runSemanticNativePaintStroke(
   capability: "eraser_tool" | "paint_with_brush",
@@ -253,27 +285,29 @@ export function registerPaintBrushTools(): void {
             });
     
             if (exactPixelMode) {
-              requireTextureCoordinatesWithinBounds(
-                coordinates,
+              // Coordinates are absolute bitmap pixels, not frame-local Y.
+              // The selected frame can be addressed beyond display_height,
+              // but this edit cannot mix frames in one Undo transaction.
+              const frameLayout = resolveTextureFrameLayout(
                 texture.width,
+                texture.height,
                 texture.display_height,
                 "paint_with_brush exact pixel"
               );
+              requireSingleFrameBitmapPixels(
+                frameLayout, coordinates, "paint_with_brush exact pixel"
+              );
+              requireTextureCoordinatesWithinBounds(
+                coordinates,
+                texture.width,
+                texture.height,
+                "paint_with_brush exact pixel"
+              );
               const active = texture.getActiveCanvas();
-              for (const coordinate of coordinates) {
-                const localX = coordinate.x - active.offset[0];
-                const localY = coordinate.y - active.offset[1];
-                if (
-                  localX < 0 ||
-                  localY < 0 ||
-                  localX >= active.canvas.width ||
-                  localY >= active.canvas.height
-                ) {
-                  throw new Error(
-                    `paint_with_brush exact pixel (${coordinate.x}, ${coordinate.y}) falls outside the active texture canvas/layer.`
-                  );
-                }
-              }
+              requireExactPixelsInActiveCanvas(
+                coordinates, active.canvas, active.offset,
+                "paint_with_brush"
+              );
     
               const undoAspects: UndoAspects = { bitmap: true };
               if (texture.layers_enabled && texture.layers[0]) {
@@ -293,26 +327,45 @@ export function registerPaintBrushTools(): void {
                     _canvas: HTMLCanvasElement,
                     env: BlockbenchRuntimeTextureEditEnvironment
                   ) => {
-                    env.ctx.save();
-                    env.ctx.globalAlpha = 1;
-                    env.ctx.globalCompositeOperation = "source-over";
-                    env.ctx.fillStyle = colorHex;
-                    for (const coordinate of coordinates) {
-                      // Exact RGBA replaces the destination, including its alpha.
-                      env.ctx.clearRect(
-                        coordinate.x - env.offset[0],
-                        coordinate.y - env.offset[1],
-                        1,
-                        1
-                      );
-                      env.ctx.fillRect(
-                        coordinate.x - env.offset[0],
-                        coordinate.y - env.offset[1],
-                        1,
-                        1
+                    // Revalidate the actual callback canvas BEFORE any pixel
+                    // write. Native layer/frame offset may change after the
+                    // preflight; otherwise we could commit a silent no-op or
+                    // paint a different frame than the requested bitmap Y.
+                    requireExactPixelsInActiveCanvas(
+                      coordinates, _canvas, env.offset,
+                      "paint_with_brush"
+                    );
+                    if (
+                      env.offset[0] !== active.offset[0] ||
+                      env.offset[1] !== active.offset[1]
+                    ) {
+                      throw new Error(
+                        "paint_with_brush exact pixel active frame/layer offset changed during native edit."
                       );
                     }
-                    env.ctx.restore();
+                    env.ctx.save();
+                    try {
+                      env.ctx.globalAlpha = 1;
+                      env.ctx.globalCompositeOperation = "source-over";
+                      env.ctx.fillStyle = colorHex;
+                      for (const coordinate of coordinates) {
+                        // Exact RGBA replaces the destination, including alpha.
+                        env.ctx.clearRect(
+                          coordinate.x - env.offset[0],
+                          coordinate.y - env.offset[1],
+                          1,
+                          1
+                        );
+                        env.ctx.fillRect(
+                          coordinate.x - env.offset[0],
+                          coordinate.y - env.offset[1],
+                          1,
+                          1
+                        );
+                      }
+                    } finally {
+                      env.ctx.restore();
+                    }
                   },
                   { no_undo: true }
                 );
