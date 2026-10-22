@@ -133,7 +133,7 @@ describe("GatewayConnectionManager", () => {
     manager.markAvailable();
 
     expect(manager.snapshot().reconnect.failures).toBe(0);
-    expect(manager.snapshot().state).toBe("degraded");
+    expect(manager.snapshot().state).toBe("probing");
     expect(manager.needsMcpRevalidation()).toBe(true);
   });
 
