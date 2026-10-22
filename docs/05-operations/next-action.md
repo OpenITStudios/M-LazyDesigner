@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 Model-neutral Gateway context economy: shrunk the stable AI-client instructions with a size/safety regression in the existing Gateway owner, preserved direct-first discovery, Control receipts, visual approval and non-retry rules, and clarified host-owned model/tool capabilities and CI-disabled GitHub-only completion. Stable Four production/Hybrid-4 opt-in unchanged; no schema, native, CI, main or release changes. GitHub source/static preflight only; Bun, real AI usage and native Blockbench proof NOT EXECUTED.
+
+
 2026-10-22 Follow-up paint transaction validator economy: after unifying the operation-list Zod schema, removed redundant per-color `parseHexRgba` validations from `planPaintTransaction`. Color formats still pass the same strict operation schema, while actual RGBA application still performs the original conversion. Added existing-owner malformed color and exact RGBA output regressions; source-only static review, not executed Bun/typecheck/native/CPU proof. Public MCP tools, CI and main remain untouched.
 
 

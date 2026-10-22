@@ -16,6 +16,34 @@ const executorSource = await readFile(
 );
 
 describe("Gateway index boundary", () => {
+  test("compact client instructions preserve the direct-first and recovery contract", () => {
+    const match = source.match(/const GATEWAY_INSTRUCTIONS =\\s*\\n\\s*"([^"]+)";/);
+    expect(match).not.toBeNull();
+    const instructions = match![1]!;
+    // UTF-8 bytes are a static context proxy, not real model tokens.
+    expect(Buffer.byteLength(instructions, "utf8")).toBeLessThan(900);
+    for (const expected of [
+      "status only for missing/stale orientation",
+      "reference_package_path",
+      "content survives compaction",
+      "AUTHORING; Animation handoff",
+      "invoke directly",
+      "Unknown: search",
+      "describe required branch",
+      "READY=usable; UNKNOWN=Runtime-check; BLOCKED=prerequisites",
+      "task_context_id",
+      "cohort_boundary=CONTINUE then COMPLETE",
+      "receipt_only=no reread",
+      "focused_read=missing evidence only",
+      "visual=decision-changing evidence",
+      "mutation success is not visual approval",
+      "Never auto-retry interrupted mutations",
+      "task_mode=SYSTEM_DEVELOPMENT",
+      "reference_fact_request",
+    ]) expect(instructions).toContain(expected);
+    expect(source).toContain("instructions: GATEWAY_INSTRUCTIONS");
+  });
+
   test("does not hardcode transition capability names", () => {
     expect(source).not.toContain('capability === "create_project"');
     expect(source).not.toContain('capability === "switch_authoring_phase"');

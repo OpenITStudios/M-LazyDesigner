@@ -105,6 +105,8 @@ Use the strongest actually available route: authenticated current-ref GitHub sou
 
 Higher-context handoff means a bounded claim for an actually available future cloud/native runtime, not a user-PC to-do.
 
+**CI-disabled remote completion:** Finish all coherent GitHub source, consumer and regression work at the available proof ceiling. Record unavailable Bun/native/model-usage proof once as NOT EXECUTED and close that bounded source unit; do not repeatedly demand user-local checks, invent CI workflows or add implementation commits solely to revisit the same unavailable evidence. Reopen only when a capable environment or new relevant evidence exists.
+
 ### ChatGPT Project bootstrap and cross-chat recovery
 
 ChatGPT Project Instructions should be a short pointer to this repository and branch `Local`. Load current `AGENTS.md` and `GITHUB_RULES.md` completely when bootstrapping a fresh repository chat; follow one canonical owner thereafter. Do not impose chat naming/retention requirements; chats and remembered context are orientation, not repository work-state authority.

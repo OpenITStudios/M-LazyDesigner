@@ -213,41 +213,27 @@ Safety rules:
 
 A future client/controller that actually owns model invocation may map these decisions to provider-native cache, compaction, reasoning, and output controls. Until then, the evaluator is the tested handoff contract and must not be represented as active upstream execution.
 
-### GPT-6 Astra in Codex
+### Model-neutral client adaptation
 
-The intended deployment is **Codex using GPT-6 Astra as the main model**, not a custom paid API loop. Preserve one model across the task and
-change reasoning effort **per decision** rather than swapping models or rewriting the
-stable prefix:
+LazyDesigner does not invoke, identify, select, or configure the AI model. A model supporting native tool search, programmatic tools, provider caching, or adjustable reasoning does **not** mean the connected host exposes these controls. The host/client that owns model invocation must activate them; the MCP Gateway cannot infer them from a model name.
 
-```text
-DETERMINISTIC_EXECUTION → ECONOMY_WHEN_SUPPORTED → low
-BOUNDED_INTERPRETATION → BALANCED               → medium
-VISUAL_JUDGMENT        → QUALITY_FIRST          → high
-routing/recovery ambiguity or pending material visual verdict → high
-```
-
-`xhigh` / `max` are not normal authoring defaults. Use them only when an explicit
-benchmark or unresolved high-value decision proves that `high` is insufficient.
-
-The provider-owning client should prefer its native mid-conversation reasoning update
-mechanism when available so reasoning effort can change without rewriting the reusable
-prompt prefix. LazyDesigner does not call that provider API itself.
-
-When the Codex client/runtime benefits from reusable prompt prefixes, map the existing LazyDesigner structure rather than adding another cache/router layer. Cache behavior is an efficiency opportunity, not a billing assumption:
+Preferred client behavior when actually supported:
 
 ```text
-stable common prefix
-  → repository/Gateway instructions + four Gateway tool definitions
-optional stage-stable breakpoint
-  → exactly one active specialist
-uncached dynamic tail
-  → task delta + Control projection + selected evidence + fresh results
+known capability and loaded schema → direct invoke
+unknown capability               → bounded search; describe only required schema branch
+host-native tool search          → client-owned, no second Gateway discovery engine
+deterministic work               → economical reasoning when available
+ambiguous/visual decisions       → sufficient reasoning and current visual evidence
+complete authoritative receipt   → continue without reassurance reread
+uncertain native mutation        → recover state, never blindly retry
 ```
 
-Do not defer-load the four Gateway tools merely to imitate provider tool search. The
-Gateway already keeps the AI-facing tool surface fixed and performs bounded capability
-discovery behind it; provider-specific tool-search integration is justified only by
-measured usage evidence that this four-tool boundary is itself a bottleneck.
+Production retains `stable_four`. The opt-in `hybrid_4_experimental` exposes selected direct tools through the same executor but adds static schemas. Do not promote a profile or alter client model/reasoning settings merely because a newer model exists. Compare **accepted-result cost**, not only static schema bytes or modeled saved calls: include selection accuracy, runtime calls, correction loops, visual quality, latency and recovery. Shadow replay and string lengths are proxies, not measured model tokens or native acceptance.
+
+Keep the stable common prefix and one active specialist; place dynamic reference facts, project revisions, Runtime receipts and visual evidence in the task tail. After compaction, a handle does not prove its Skill/profile content remains loaded. Reuse only retained content; reload missing active content rather than all domains.
+
+Use existing client-owned session-policy outputs as optional per-decision hints if the host supports them. Do not introduce a second AI planner, provider-specific token accounting, automatic model switching, or token-budget controls inside MCP. Preserve native validation, project/phase authority, Undo and visual-approval boundaries.
 
 ## Measurement Layers
 
