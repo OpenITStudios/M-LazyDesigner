@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { buildTextureEvidenceDeliveryMetadata } from "@/lib/textureEvidenceDelivery";
 import {
   mapFrameLocalPixelToBitmapPixel,
   requireSingleFrameBitmapPixels,
@@ -147,6 +148,41 @@ describe("texture frame mapping", () => {
         else g[key] = prior[key];
       }
     }
+  });
+
+
+  test("animated frame-local UV metadata never uses stacked bitmap height", () => {
+    const revision = "sha256:2x6:" + "a".repeat(64);
+    const data = {
+      inspection: "region" as const,
+      revision,
+      bitmap: { width: 2, height: 6 },
+      display_height: 2,
+      source_byte_length: 8,
+      uv_width: 128,
+      uv_height: 128,
+    };
+    for (let frame = 0; frame < 3; frame++) {
+      const result = buildTextureEvidenceDeliveryMetadata({
+        ...data,
+        region: { x: 0, y: frame * 2, width: 1, height: 2 },
+      });
+      expect(result.logical_uv).toEqual([0, 0, 64, 128]);
+      expect(result.frame).toMatchObject({
+        state: "single_frame",
+        frame_index: frame,
+        frame_range: [frame, frame],
+        frame_bitmap_rect: [0, frame * 2, 2, frame * 2 + 2],
+        region_in_frame: { x: 0, y: 0, width: 1, height: 2 },
+      });
+    }
+    // Legacy static callers remain single-image/UV without a frame envelope.
+    const staticMetadata = buildTextureEvidenceDeliveryMetadata({
+      ...data, bitmap: { width: 2, height: 2 },
+      region: { x: 0, y: 0, width: 1, height: 2 },
+    });
+    expect(staticMetadata.logical_uv).toEqual([0, 0, 64, 128]);
+    expect("frame" in staticMetadata).toBe(false);
   });
 
   test("rejects non-integral frame stacks", () => {

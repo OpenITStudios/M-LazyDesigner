@@ -137,6 +137,14 @@ const CONTROL_DELTA_CONTRACT_TESTS = [
 // in the existing affected-work planner; do not introduce a test router or
 // infer a false all-clear from an absent filename match.
 export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly string[]>> = {
+  "mcp/lib/texture/evidenceDelivery.ts": [
+    "mcp/tests/texture-frame-mapping.test.ts",
+    "mcp/tests/texture-runtime-policy.test.ts",
+  ],
+  "mcp/server/runtime/contracts/texture.ts": [
+    "mcp/tests/texture-frame-mapping.test.ts",
+    "mcp/tests/texture-runtime-policy.test.ts",
+  ],
   "mcp/lib/texture/frameMapping.ts": [
     "mcp/tests/texture-frame-mapping.test.ts",
   ],

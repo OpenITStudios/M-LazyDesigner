@@ -81,6 +81,24 @@ describe("affected execution planner", () => {
     ]);
   });
 
+  test("animated texture evidence metadata and get_texture wiring select existing regressions", () => {
+    for (const path of [
+      "mcp/lib/texture/evidenceDelivery.ts",
+      "mcp/server/runtime/contracts/texture.ts",
+    ]) {
+      const plan = planAffectedExecution({
+        changedPaths: [path],
+        semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.checks).toContain("PROJECT_GRAPH");
+      expect(plan.targeted_tests, path).toEqual([
+        "mcp/tests/texture-frame-mapping.test.ts",
+        "mcp/tests/texture-runtime-policy.test.ts",
+      ]);
+    }
+  });
+
   test("animated texture frame mapping and exact brush edits select retained owners", () => {
     const cases = [
       ["mcp/lib/texture/frameMapping.ts", [

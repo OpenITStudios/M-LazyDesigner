@@ -83,6 +83,147 @@ describe("texture runtime wiring policy", () => {
     expect(JSON.stringify(metadata)).not.toContain("rgba");
   });
 
+
+  test("focused animated PNG readback binds absolute bitmap region to one frame-local UV map", async () => {
+    const pixels = new Uint8ClampedArray(2 * 6 * 4);
+    for (let y = 0; y < 6; y++) for (let x = 0; x < 2; x++) {
+      pixels.set([10 * (Math.floor(y / 2) + 1) + x, y, 0, 255], (y * 2 + x) * 4);
+    }
+    const region = { x: 1, y: 2, width: 1, height: 2 };
+    const cropped = await buildTextureEvidenceSnapshot(pixels, 2, 6, { region });
+    const build = (snapshot: typeof cropped) => buildTextureEvidenceDeliveryMetadata({
+      inspection: snapshot.inspection,
+      revision: snapshot.revision,
+      bitmap: snapshot.bitmap,
+      region: snapshot.region,
+      display_height: 2,
+      source_byte_length: snapshot.byte_length,
+      uv_width: 128,
+      uv_height: 128,
+    });
+    const metadata = build(cropped);
+    expect(Array.from(cropped.rgba)).toEqual([
+      21, 2, 0, 255,
+      21, 3, 0, 255,
+    ]);
+    expect(metadata).toMatchObject({
+      inspection: "region",
+      bitmap: { width: 2, height: 6 },
+      region: { x: 1, y: 2, width: 1, height: 2 },
+      logical_uv: [64, 0, 128, 128],
+      frame: {
+        state: "single_frame",
+        frame_count: 3,
+        frame_index: 1,
+        frame_range: [1, 1],
+        frame_bitmap_rect: [0, 2, 2, 4],
+        region_in_frame: { x: 1, y: 0, width: 1, height: 2 },
+        uv_coordinate_space: "frame_local",
+      },
+      image: { width: 1, height: 2, source_byte_length: 8 },
+    });
+    expect("rgba" in metadata).toBe(false);
+
+    // Optimistic revision remains the full bitmap, not just this one frame.
+    const changedFrameZero = pixels.slice();
+    changedFrameZero[0] += 1;
+    await expect(buildTextureEvidenceSnapshot(changedFrameZero, 2, 6, {
+      region,
+      expected_revision: cropped.revision,
+    })).rejects.toThrow("Texture evidence source changed since");
+  });
+
+  test("cross-frame crops retain bitmap evidence without inventing one UV region", async () => {
+    const pixels = new Uint8ClampedArray(2 * 6 * 4);
+    const spanning = await buildTextureEvidenceSnapshot(pixels, 2, 6, {
+      region: { x: 0, y: 3, width: 1, height: 2 },
+    });
+    const crossFrameMetadata = buildTextureEvidenceDeliveryMetadata({
+      inspection: spanning.inspection,
+      revision: spanning.revision,
+      bitmap: spanning.bitmap,
+      region: spanning.region,
+      display_height: 2,
+      source_byte_length: spanning.byte_length,
+      uv_width: 128,
+      uv_height: 128,
+    });
+    expect(crossFrameMetadata).toMatchObject({
+      region: { x: 0, y: 3, width: 1, height: 2 },
+      logical_uv: null,
+      frame: {
+        state: "spans_frames",
+        frame_count: 3,
+        frame_index: null,
+        frame_range: [1, 2],
+        frame_bitmap_rect: null,
+        region_in_frame: null,
+        uv_coordinate_space: "not_applicable",
+      },
+      image: { width: 1, height: 2 },
+    });
+
+    const all = await buildTextureEvidenceSnapshot(pixels, 2, 6);
+    const full = buildTextureEvidenceDeliveryMetadata({
+      inspection: all.inspection,
+      revision: all.revision,
+      bitmap: all.bitmap,
+      region: all.region,
+      display_height: 2,
+      source_byte_length: all.byte_length,
+      uv_width: 128,
+      uv_height: 128,
+    });
+    expect(full.inspection).toBe("full_atlas");
+    expect(full.logical_uv).toBeNull();
+    expect(full.frame).toMatchObject({
+      state: "spans_frames", frame_range: [0, 2], frame_count: 3,
+    });
+
+    expect(() => buildTextureEvidenceDeliveryMetadata({
+      inspection: spanning.inspection,
+      revision: spanning.revision,
+      bitmap: spanning.bitmap,
+      region: spanning.region,
+      display_height: 4,
+      source_byte_length: spanning.byte_length,
+      uv_width: 128,
+      uv_height: 128,
+    })).toThrow("not an exact stack");
+    expect(() => buildTextureEvidenceDeliveryMetadata({
+      inspection: spanning.inspection,
+      revision: spanning.revision,
+      bitmap: spanning.bitmap,
+      region: spanning.region,
+      display_height: 2,
+      source_byte_length: 3,
+      uv_width: 128,
+      uv_height: 128,
+    })).toThrow("must match the exact cropped RGBA region");
+    expect(() => buildTextureEvidenceDeliveryMetadata({
+      inspection: spanning.inspection,
+      revision: spanning.revision,
+      bitmap: spanning.bitmap,
+      region: { ...spanning.region, y: 6 },
+      display_height: 2,
+      source_byte_length: spanning.byte_length,
+      uv_width: 128,
+      uv_height: 128,
+    })).toThrow("exceeds bitmap bounds");
+  });
+
+  test("focused get_texture passes displayed frame height to receipt metadata", async () => {
+    const source = await Bun.file("server/runtime/contracts/texture.ts").text();
+    const start = source.indexOf("const metadata = buildTextureEvidenceDeliveryMetadata({");
+    const end = source.indexOf("const png = rgbaToPngDataUrl(", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(source.slice(start, end)).toContain("display_height: texture.display_height");
+    expect(source.slice(end)).toContain("snapshot.rgba");
+    expect(source.slice(end)).toContain("snapshot.region.width");
+    expect(source.slice(end)).toContain("snapshot.region.height");
+  });
+
   test("Bedrock geometry v1 writes only new or explicitly owned single-geometry files", () => {
     expect(
       requireDirectBedrockGeometryWriteV1(
