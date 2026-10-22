@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP Control scalar receipt consumers: no remaining `safeParse` + `parse` of the same value found across the 16 canonical `lib/receipts` modules. Rather than rewrite already-correct validators, export the existing `authoritativeReceipt` selector for direct use in `delta/verification.ts`, `delta/freshness.ts` and `delta/engine.ts` while retaining `resultCandidates` compatibility for other readers. The change removes repeated zero/one array allocations in individual Control helper reads, makes Undo semantic-history getter validation single-read, and reuses one animation keyframe array. Existing invalidation and visual verification tests gain conservative envelope, malformed and counted-read cases. The affected selector includes the visual verification owner for verification changes. REMOTE_GITHUB source/static only; Bun/typecheck/native/CPU benchmarks NOT EXECUTED. `main`, CI and public MCP surface untouched.
+
+
+
 2026-10-22 Cube visual scope Zod parse reuse: the canonical `lib/receipts/cubeMutation.ts` now uses the `data` of one successful `cubeVisualScopeSchema.safeParse` instead of validating once and parsing again. The existing Cube receipt contract adds counted source-property reads and fail-closed invalid/missing/infinite scope checks; no new test framework or route. The affected planner already maps this source to its owning Cube and continuation contracts. REMOTE_GITHUB static/source work only; Bun/typecheck/native/real CPU and token measurements NOT EXECUTED. Branch main, CI and release unchanged.
 
 

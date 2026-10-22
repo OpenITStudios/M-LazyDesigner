@@ -15,7 +15,7 @@ import {
   verificationClassForResult,
   verificationScopeForResult,
 } from "./verification";
-import { resultCandidates } from "./receipts";
+import { authoritativeReceipt } from "./receipts";
 import { downstreamRechecksForFreshness } from "./recheck";
 
 export function buildControlDelta(input: {
@@ -31,7 +31,7 @@ export function buildControlDelta(input: {
   if (input.succeeded && input.phaseBefore !== input.phaseAfter) changed.push("authoring_phase");
   if (input.capability === "create_project" && input.succeeded) changed.push("project_affinity");
   if (input.capability === "export_model" && input.succeeded) {
-    const receipt = resultCandidates(input.result)[0];
+    const receipt = authoritativeReceipt(input.result);
     const metadataKeys = new Set(["name", "uuid", "save_path", "export_path", "export_codec", "saved"]);
     const reported = receipt?.project_lifecycle_changes;
     if (Array.isArray(reported)) {

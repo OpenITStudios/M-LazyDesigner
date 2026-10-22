@@ -48,7 +48,7 @@ export function record(value: unknown): Record<string, unknown> | null {
  * the scalar directly inside validators; preserve the original array API
  * for consumers that need the candidate list.
  */
-function authoritativeReceipt(value: unknown): Record<string, unknown> | null {
+export function authoritativeReceipt(value: unknown): Record<string, unknown> | null {
   const root = record(value);
   if (!root) return null;
   if (Object.prototype.hasOwnProperty.call(root, "structuredContent")) {

@@ -426,10 +426,13 @@ function sharedContractTestsForPath(path: string): readonly string[] {
       "mcp/tests/visual-verification-scope-contract.test.ts",
     ];
   }
-  if (
-    path === "mcp/gateway/control/delta/freshness.ts" ||
-    path === "mcp/gateway/control/delta/verification.ts"
-  ) {
+  if (path === "mcp/gateway/control/delta/verification.ts") {
+    return [
+      ...CONTROL_DELTA_CONTRACT_TESTS,
+      "mcp/tests/visual-verification-scope-contract.test.ts",
+    ];
+  }
+  if (path === "mcp/gateway/control/delta/freshness.ts") {
     return CONTROL_DELTA_CONTRACT_TESTS;
   }
 

@@ -6,88 +6,82 @@ import type { ControlDelta, ControlVerificationScope } from "../types";
 import { STATE_MUTATIONS } from "./policy";
 import {
   record,
-  resultCandidates,
+  authoritativeReceipt,
   receiptSupportsContinuation,
-
 } from "./receipts";
 
 export function cubeVerificationScope(value: unknown): ControlVerificationScope | null {
-  for (const candidate of resultCandidates(value)) {
-    const scope = cubeVisualScopeFromResult(candidate);
-    if (!scope) continue;
-    return {
-      kind: "CUBE_TARGETS",
-      cube_uuids: [...scope.cube_uuids],
-      framing: {
-        min: [...scope.framing.min] as [number, number, number],
-        max: [...scope.framing.max] as [number, number, number],
-      },
-    };
-  }
-  return null;
+  const candidate = authoritativeReceipt(value);
+  if (!candidate) return null;
+  const scope = cubeVisualScopeFromResult(candidate);
+  if (!scope) return null;
+  return {
+    kind: "CUBE_TARGETS",
+    cube_uuids: [...scope.cube_uuids],
+    framing: {
+      min: [...scope.framing.min] as [number, number, number],
+      max: [...scope.framing.max] as [number, number, number],
+    },
+  };
 }
 
 export function animationVerificationScope(value: unknown): ControlVerificationScope | null {
-  for (const candidate of resultCandidates(value)) {
-    const animation = record(candidate.animation);
-    const bone = record(candidate.bone);
-    if (
-      typeof animation?.uuid !== "string" ||
-      typeof bone?.uuid !== "string" ||
-      !Array.isArray(candidate.affected_keyframes)
-    ) {
-      continue;
-    }
-    const times = candidate.affected_keyframes
-      .map((entry) => record(entry)?.time)
-      .filter((time): time is number => typeof time === "number" && Number.isFinite(time));
-    if (times.length === 0) continue;
-    const start = Math.min(...times);
-    const end = Math.max(...times);
-    const midpoint = start + (end - start) / 2;
-    return {
-      kind: "ANIMATION_RANGE",
-      animation_uuid: animation.uuid,
-      bone_uuid: bone.uuid,
-      channel: typeof candidate.channel === "string" ? candidate.channel : null,
-      time_range: [start, end],
-      review: {
-        bone_ids: [bone.uuid],
-        range: { start, end },
-        sample_times: [...new Set([start, midpoint, end])],
-      },
-    };
-  }
-  return null;
+  const candidate = authoritativeReceipt(value);
+  if (!candidate) return null;
+  const animation = record(candidate.animation);
+  const bone = record(candidate.bone);
+  const keyframes = candidate.affected_keyframes;
+  if (
+    typeof animation?.uuid !== "string" ||
+    typeof bone?.uuid !== "string" ||
+    !Array.isArray(keyframes)
+  ) return null;
+
+  const times = keyframes
+    .map((entry) => record(entry)?.time)
+    .filter((time): time is number => typeof time === "number" && Number.isFinite(time));
+  if (times.length === 0) return null;
+  const start = Math.min(...times);
+  const end = Math.max(...times);
+  const midpoint = start + (end - start) / 2;
+  return {
+    kind: "ANIMATION_RANGE",
+    animation_uuid: animation.uuid,
+    bone_uuid: bone.uuid,
+    channel: typeof candidate.channel === "string" ? candidate.channel : null,
+    time_range: [start, end],
+    review: {
+      bone_ids: [bone.uuid],
+      range: { start, end },
+      sample_times: [...new Set([start, midpoint, end])],
+    },
+  };
 }
 
 export function textureVerificationScope(value: unknown): ControlVerificationScope | null {
-  for (const candidate of resultCandidates(value)) {
-    const texture = record(candidate.texture);
-    const revision = record(candidate.revision);
-    const rect = candidate.affected_rect;
-    if (
-      typeof texture?.uuid !== "string" ||
-      typeof revision?.after !== "string" ||
-      !Array.isArray(rect) ||
-      rect.length !== 4 ||
-      !rect.every((entry) => typeof entry === "number" && Number.isSafeInteger(entry))
-    ) {
-      continue;
-    }
-    const visualEvidence = record(candidate.visual_evidence);
-    return {
-      kind: "TEXTURE_REGION",
-      texture_uuid: texture.uuid,
-      affected_rect: rect as [number, number, number, number],
-      revision: revision.after,
-      evidence_source:
-        visualEvidence?.kind === "affected_region_png"
-          ? "mutation_response"
-          : "follow_up_read",
-    };
-  }
-  return null;
+  const candidate = authoritativeReceipt(value);
+  if (!candidate) return null;
+  const texture = record(candidate.texture);
+  const revision = record(candidate.revision);
+  const rect = candidate.affected_rect;
+  if (
+    typeof texture?.uuid !== "string" ||
+    typeof revision?.after !== "string" ||
+    !Array.isArray(rect) ||
+    rect.length !== 4 ||
+    !rect.every((entry) => typeof entry === "number" && Number.isSafeInteger(entry))
+  ) return null;
+  const visualEvidence = record(candidate.visual_evidence);
+  return {
+    kind: "TEXTURE_REGION",
+    texture_uuid: texture.uuid,
+    affected_rect: rect as [number, number, number, number],
+    revision: revision.after,
+    evidence_source:
+      visualEvidence?.kind === "affected_region_png"
+        ? "mutation_response"
+        : "follow_up_read",
+  };
 }
 
 type VisualScopeResolver = (

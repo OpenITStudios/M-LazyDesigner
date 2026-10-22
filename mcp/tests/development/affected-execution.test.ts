@@ -412,6 +412,24 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("verification helpers select their direct visual and invalidation regression owners", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/gateway/control/delta/verification.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toContain(
+      "mcp/tests/visual-verification-scope-contract.test.ts"
+    );
+    expect(plan.targeted_tests).toContain(
+      "mcp/tests/gateway-control-invalidation.test.ts"
+    );
+    expect(plan.targeted_tests).toContain(
+      "mcp/tests/gateway-control-continuation-hardening.test.ts"
+    );
+    expect(plan.commands).not.toContain("bun run verify:full");
+  });
+
   test("Control Delta engine selects verification-to-recheck integration contracts", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/gateway/control/delta/engine.ts"],

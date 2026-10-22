@@ -3,8 +3,11 @@ import { buildControlDelta } from "@/gateway/control";
 import { authoringDomainForCapability } from "@/gateway/development/sourceOwners";
 import {
   analyzeMutationEvidence,
+  authoritativeRevisionEvidence,
+  geometryFreshnessScopes,
   mutationFreshness,
   mutationInvalidation,
+  particleHasAuthoredEffect,
 } from "@/gateway/control/delta/freshness";
 import type { CapabilityBranchHint } from "@/gateway/capabilities/types";
 
@@ -394,6 +397,90 @@ describe("LazyDesigner Control minimum invalidation", () => {
     expect(uv.geometryScopes?.stale).toContain("UV_MAPPING");
     expect(uv.geometryScopes?.stale).toContain("TEXTURE_APPEARANCE");
     expect(rotation.geometryScopes?.stale).not.toContain("TEXTURE_APPEARANCE");
+  });
+
+  test("freshness receipt readers use the authoritative inner candidate once", () => {
+    let reads = 0;
+    const result = {
+      // A contradictory outer execution label cannot supply mutation truth.
+      execution: "unchanged",
+      get structuredContent() {
+        reads++;
+        return { geometry_effect: cubeEffect(["from", "to"]) };
+      },
+    };
+    const actual = geometryFreshnessScopes("manage_cubes", result);
+    expect(actual).toEqual({
+      stale: [
+        "GEOMETRY_STRUCTURE", "UV_MAPPING",
+        "TEXTURE_APPEARANCE", "ANIMATION_MOTION",
+      ],
+      precise: true,
+    });
+    expect(reads).toBe(1);
+
+    const malformed = geometryFreshnessScopes("manage_cubes", {
+      ...result, structuredContent: null,
+    });
+    expect(malformed.precise).toBe(false);
+    expect(malformed.stale).toContain("UV_MAPPING");
+  });
+
+  test("particle and texture revision source readers preserve conservative fallback", () => {
+    let reads = 0;
+    const receipt = {
+      execution: "unchanged",
+      get structuredContent() {
+        reads++;
+        return {
+          wrote_to_path: "/rp/particles/leaf.json",
+          preview_path: null,
+        };
+      },
+    };
+    expect(particleHasAuthoredEffect(receipt)).toBe(true);
+    expect(reads).toBe(1);
+    expect(particleHasAuthoredEffect({
+      wrote_to_path: "/rp/particles/leaf.json",
+      preview_path: null,
+      structuredContent: null,
+    })).toBe(true);
+    expect(particleHasAuthoredEffect({
+      wrote_to_path: null,
+      preview_path: null,
+    })).toBe(false);
+    expect(authoritativeRevisionEvidence("paint_texture_transaction", {
+      revision: { after: "untrusted-outer" },
+      structuredContent: { revision: { after: "authoritative-2" } },
+    })).toEqual({ TEXTURE_APPEARANCE: "authoritative-2" });
+    expect(authoritativeRevisionEvidence("paint_texture_transaction", {
+      revision: { after: "untrusted-outer" }, structuredContent: null,
+    })).toEqual({});
+  });
+
+  test("export lifecycle changes consult only the canonical structured receipt", () => {
+    let reads = 0;
+    const result = {
+      project_lifecycle_changes: ["saved", "export_path"],
+      get structuredContent() {
+        reads++;
+        return { project_lifecycle_changes: ["name"] };
+      },
+    };
+    const delta = buildControlDelta({
+      capability: "export_model",
+      phaseBefore: null, phaseAfter: null,
+      projectUuid: "project-a", succeeded: true, result,
+    });
+    expect(delta.changed).toEqual(["project.name"]);
+    expect(reads).toBeGreaterThanOrEqual(1);
+    const noInner = buildControlDelta({
+      capability: "export_model",
+      phaseBefore: null, phaseAfter: null,
+      projectUuid: "project-a", succeeded: true,
+      result: { project_lifecycle_changes: ["saved"], structuredContent: null },
+    });
+    expect(noInner.changed).toEqual([]);
   });
 
   test("local cube transform does not reset unrelated Texture or Animation", () => {

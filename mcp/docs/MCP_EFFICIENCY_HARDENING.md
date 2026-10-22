@@ -481,6 +481,35 @@ This is a source-grounded reduction in redundant Zod parsing; exact-SHA
 Bun/TypeScript and native verification remain NOT EXECUTED and no measured
 CPU/latency/token gain is claimed.
 
+## Scalar Receipt Reuse in Control Consumers — SOURCE OPTIMIZATION
+
+Audit of all 16 canonical `mcp/lib/receipts/*.ts` modules found no
+remaining instance of a single reader performing `safeParse` followed by
+`parse` on the same value after the prior Cube visual-scope change. The
+major remaining source-level cost was elsewhere: Control verification,
+freshness, and export-lifecycle readers repeatedly obtained a temporary
+zero/one-element array from `resultCandidates`.
+
+The canonical `delta/receipts.ts` scalar `authoritativeReceipt` selector
+is now shared by `delta/verification.ts`, `delta/freshness.ts`, and
+`delta/engine.ts`. They retain typed Zod checks, missing/malformed-inner
+fail-closed behavior and exact MCP envelope precedence. The
+`resultCandidates` array API remains available for other consumers,
+including the already call-local downstream recheck planner.
+
+The semantic Undo/Redo reader also reads `semantic_effect` exactly once
+and returns precisely the value it validated. Animation keyframe collection
+reads the original array only once rather than checking and fetching a
+potentially mutable getter twice. No new cache or registry is introduced.
+
+Regression cases cover complete Cube, Animation and Texture visual scopes;
+malformed inner data; nonvisual bypass; geometry and revision freshness;
+and authoritative export lifecycle metadata. The existing affected selector
+now selects the visual-verification scope contract for edits of its source.
+
+This is source/static work, not proof of executable TypeScript/Bun tests,
+native Blockbench acceptance, or measured CPU/token savings.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

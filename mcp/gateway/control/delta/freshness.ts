@@ -28,7 +28,7 @@ import type { CapabilityBranchHint } from "../../capabilities/types";
 import { isRenderProfileNoWriteReceipt } from "../../../lib/receipts/renderProfile";
 import {
   record,
-  resultCandidates,
+  authoritativeReceipt,
   cubeStateNeutral,
   particleTextureHandoffRequired,
   animationTimelineStateNeutral,
@@ -38,18 +38,14 @@ import {
 } from "./receipts";
 
 export function particleHasAuthoredEffect(value: unknown): boolean {
-  const candidates = resultCandidates(value);
-  if (candidates.length === 0) return true;
+  const candidate = authoritativeReceipt(value);
+  // Missing/partial native write evidence must never establish a no-op.
+  if (!candidate ||
+      !Object.prototype.hasOwnProperty.call(candidate, "wrote_to_path") ||
+      !Object.prototype.hasOwnProperty.call(candidate, "preview_path")) return true;
 
-  const explicitEffectReceipt = candidates.find(
-    (candidate) =>
-      Object.prototype.hasOwnProperty.call(candidate, "wrote_to_path") &&
-      Object.prototype.hasOwnProperty.call(candidate, "preview_path")
-  );
-  if (!explicitEffectReceipt) return true;
-
-  const wroteToPath = explicitEffectReceipt.wrote_to_path;
-  const previewPath = explicitEffectReceipt.preview_path;
+  const wroteToPath = candidate.wrote_to_path;
+  const previewPath = candidate.preview_path;
   return (
     (typeof wroteToPath === "string" && wroteToPath.length > 0) ||
     (typeof previewPath === "string" && previewPath.length > 0)
@@ -60,33 +56,29 @@ export function renderProfileStateNeutral(
   value: unknown,
   branch?: CapabilityBranchHint
 ): boolean {
-  // Inspect is a query in the branch manifest; it does not reach this mutation
-  // path. A mutation result saying "read" or omitting its operation cannot
-  // contradict the caller's requested bind/assignment and silently win.
-  return branch?.field === "operation" &&
-    resultCandidates(value).some(
-      (candidate) =>
-        candidate.operation === branch.value &&
-        isRenderProfileNoWriteReceipt(candidate)
-    );
+  // The requested operation, not the receipt label alone, owns no-write.
+  if (branch?.field !== "operation") return false;
+  const candidate = authoritativeReceipt(value);
+  return candidate !== null &&
+    candidate.operation === branch.value &&
+    isRenderProfileNoWriteReceipt(candidate);
 }
 
 export function textureLayerMetadataOnly(value: unknown): boolean {
-  return resultCandidates(value).some(
-    (candidate) =>
-      candidate.operation === "rename_layer" ||
+  const candidate = authoritativeReceipt(value);
+  return candidate !== null &&
+    (candidate.operation === "rename_layer" ||
       (candidate.operation === "batch_metadata" &&
-        candidate.recomposed === false)
-  );
+        candidate.recomposed === false));
 }
 
 export function renameElementStateNeutral(value: unknown): boolean {
-  return resultCandidates(value).some((candidate) => {
-    const parsed = renameElementReceiptSchema.safeParse(candidate);
-    return parsed.success &&
-      (parsed.data.execution === "planned" ||
-        parsed.data.execution === "unchanged");
-  });
+  const candidate = authoritativeReceipt(value);
+  if (!candidate) return false;
+  const parsed = renameElementReceiptSchema.safeParse(candidate);
+  return parsed.success &&
+    (parsed.data.execution === "planned" ||
+      parsed.data.execution === "unchanged");
 }
 
 function semanticHistoryEffectFromResult(result: unknown): {
@@ -94,12 +86,11 @@ function semanticHistoryEffectFromResult(result: unknown): {
   workspace_projection: boolean;
   acceptance_gates: boolean;
 } | null {
-  for (const candidate of resultCandidates(result)) {
-    if (isSemanticHistoryEffect(candidate.semantic_effect)) {
-      return candidate.semantic_effect;
-    }
-  }
-  return null;
+  const candidate = authoritativeReceipt(result);
+  if (!candidate) return null;
+  // Read only once: return the same history value that passed validation.
+  const semanticEffect = candidate.semantic_effect;
+  return isSemanticHistoryEffect(semanticEffect) ? semanticEffect : null;
 }
 
 /**
@@ -198,7 +189,7 @@ export function capabilityMutatesState(
 }
 
 export function effectChangedFields(value: unknown): string[] {
-  const authoritative = resultCandidates(value)[0];
+  const authoritative = authoritativeReceipt(value);
   return authoritative ? cubeChangedFieldsFromResult(authoritative) : [];
 }
 
@@ -371,9 +362,9 @@ export function geometryFreshnessScopes(
   }
 
   if (capability === "modify_group") {
-    for (const candidate of resultCandidates(result)) {
-      const parsed = modifyGroupReceiptSchema.safeParse(candidate);
-      if (!parsed.success) continue;
+    const candidate = authoritativeReceipt(result);
+    const parsed = candidate ? modifyGroupReceiptSchema.safeParse(candidate) : null;
+    if (parsed?.success) {
       const stale: ControlFreshnessScope[] = ["GEOMETRY_STRUCTURE"];
       if (parsed.data.changed_fields.some(
         field => field === "origin" || field === "rotation"
@@ -388,9 +379,9 @@ export function geometryFreshnessScopes(
   }
 
   if (capability === "remove_element") {
-    for (const candidate of resultCandidates(result)) {
-      const parsed = removeElementReceiptSchema.safeParse(candidate);
-      if (!parsed.success) continue;
+    const candidate = authoritativeReceipt(result);
+    const parsed = candidate ? removeElementReceiptSchema.safeParse(candidate) : null;
+    if (parsed?.success) {
       const { removed_root: removedRoot, removed_counts: removedCounts,
         affected_animations: affectedAnimations } = parsed.data;
       if (removedRoot.type === "group") {
@@ -412,9 +403,9 @@ export function geometryFreshnessScopes(
   }
 
   if (capability === "rename_element") {
-    for (const candidate of resultCandidates(result)) {
-      const parsed = renameElementReceiptSchema.safeParse(candidate);
-      if (!parsed.success || parsed.data.execution !== "applied") continue;
+    const candidate = authoritativeReceipt(result);
+    const parsed = candidate ? renameElementReceiptSchema.safeParse(candidate) : null;
+    if (parsed?.success && parsed.data.execution === "applied") {
       if ("changes" in parsed.data) {
         // Batch Group renames report exact animation-reference impact.
         return {
@@ -562,15 +553,11 @@ export function authoritativeRevisionEvidence(
   result: unknown
 ): ControlDelta["revision_evidence"] {
   if (capability !== "paint_texture_transaction") return {};
-
-  for (const candidate of resultCandidates(result)) {
-    const revision = record(candidate.revision);
-    if (typeof revision?.after === "string" && revision.after.length > 0) {
-      return { TEXTURE_APPEARANCE: revision.after };
-    }
-  }
-
-  return {};
+  const candidate = authoritativeReceipt(result);
+  const revision = candidate ? record(candidate.revision) : null;
+  return typeof revision?.after === "string" && revision.after.length > 0
+    ? { TEXTURE_APPEARANCE: revision.after }
+    : {};
 }
 
 export function mutationFreshness(
