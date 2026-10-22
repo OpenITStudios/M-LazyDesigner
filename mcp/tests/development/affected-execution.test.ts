@@ -46,6 +46,19 @@ describe("affected execution planner", () => {
   });
 
 
+  test("UV atlas diagnostic changes select existing atlas and texture alignment owners", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/server/tools/texture/atlas.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.checks).toContain("PROJECT_GRAPH");
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/texture-atlas-integrity.test.ts",
+      "mcp/tests/texture-production-alignment.test.ts",
+    ]);
+  });
+
   test("shared Geometry identity changes select UUID and destructive-target regressions", () => {
     for (const [path, expected] of [
       ["mcp/lib/core/identity.ts", [

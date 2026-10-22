@@ -3,7 +3,9 @@ import { textureOptimizationRuntime } from "@/server/tools/quality-intelligence"
 import {
   buildUvAtlasAudit,
   classifyTextureProductionRole,
+  collectUvAtlasUsages,
   isAiProductionColorCanvas,
+  type UvAtlasUsage,
 } from "@/server/tools/texture";
 
 async function source(path: string): Promise<string> {
@@ -116,6 +118,116 @@ describe("texture atlas integrity", () => {
       expect(invalid.production_gate.state).toBe("review_required");
     }
   });
+
+  test("overlap and exact texel reuse are scoped to the same texture UUID", () => {
+    const usage = (
+      cube_uuid: string,
+      texture_uuid: string,
+      uv: readonly number[]
+    ): UvAtlasUsage => ({
+      cube_uuid,
+      cube_name: cube_uuid,
+      texture_uuid,
+      face: "north",
+      uv,
+      box_uv: false,
+      autouv: 0,
+      mirror_uv: false,
+      face_rotation: 0,
+      pixel_scale: [1, 1],
+    });
+
+    const left = usage("left", "atlas-a", [0, 0, 8, 8]);
+    const right = usage("right", "atlas-b", [4, 4, 12, 12]);
+    const separate = buildUvAtlasAudit([left, right], 128, 128);
+    if (separate.state !== "available") throw new Error("audit unavailable");
+    expect(separate.partial_overlap.pair_count).toBe(0);
+    expect(separate.production_gate.state).toBe("ready");
+
+    const sameAtlas = buildUvAtlasAudit([
+      left, { ...right, texture_uuid: "atlas-a" },
+    ], 128, 128);
+    if (sameAtlas.state !== "available") throw new Error("audit unavailable");
+    expect(sameAtlas.partial_overlap.pair_count).toBe(1);
+    expect(sameAtlas.production_gate.reasons).toContain("PARTIAL_OVERLAP");
+
+    const independentReuse = buildUvAtlasAudit([
+      left, { ...right, uv: left.uv },
+    ], 128, 128);
+    if (independentReuse.state !== "available") throw new Error("audit unavailable");
+    expect(independentReuse.exact_reuse.region_count).toBe(0);
+
+    const sameBitmapReuse = buildUvAtlasAudit([
+      left, { ...right, texture_uuid: "atlas-a", uv: left.uv },
+    ], 128, 128);
+    if (sameBitmapReuse.state !== "available") throw new Error("audit unavailable");
+    expect(sameBitmapReuse.exact_reuse.region_count).toBe(1);
+    expect(sameBitmapReuse.partial_overlap.pair_count).toBe(0);
+
+    // Missing source bitmap identity must never conceal a possible collision.
+    const unknown = buildUvAtlasAudit([
+      left, { ...right, texture_uuid: null },
+    ], 128, 128);
+    if (unknown.state !== "available") throw new Error("audit unavailable");
+    expect(unknown.partial_overlap.pair_count).toBe(1);
+  });
+
+  test("animated UV audit computes V scale from one frame, not the stacked bitmap", () => {
+    const g = globalThis as unknown as Record<string, unknown>;
+    const previous = { Project: g.Project, Cube: g.Cube };
+    const texture = {
+      uuid: "animated-atlas",
+      width: 256,
+      height: 512,
+      display_height: 256,
+      getUVWidth: () => 128,
+      getUVHeight: () => 128,
+    };
+    const face = {
+      texture: "animated-atlas",
+      enabled: true,
+      uv: [0, 0.25, 2, 2.25],
+      rotation: 0,
+      getTexture: () => texture,
+    };
+    g.Project = { texture_width: 128, texture_height: 128 };
+    g.Cube = { all: [{
+      uuid: "animated-cube", name: "animated-cube",
+      box_uv: false, autouv: 0, mirror_uv: false,
+      size: () => [2, 2, 2],
+      faces: { north: face },
+    }] };
+
+    try {
+      const usages = collectUvAtlasUsages();
+      expect(usages).toHaveLength(1);
+      expect(usages[0]).toMatchObject({
+        cube_uuid: "animated-cube",
+        texture_uuid: "animated-atlas",
+        pixel_scale: [2, 2],
+      });
+      // 0.25 logical V is half a physical pixel in a displayed frame.
+      // The old 512/128 scale incorrectly accepted it as one full pixel.
+      const invalid = buildUvAtlasAudit(usages, 128, 128);
+      if (invalid.state !== "available") throw new Error("audit unavailable");
+      expect(invalid.non_integral_pixel_mapping.count).toBe(1);
+      expect(invalid.production_gate.reasons).toContain(
+        "NON_INTEGRAL_PIXEL_MAPPING"
+      );
+
+      face.uv = [0, 0.5, 2, 2.5];
+      const corrected = buildUvAtlasAudit(collectUvAtlasUsages(), 128, 128);
+      if (corrected.state !== "available") throw new Error("audit unavailable");
+      expect(corrected.non_integral_pixel_mapping.count).toBe(0);
+      expect(corrected.production_gate.state).toBe("ready");
+    } finally {
+      for (const key of ["Project", "Cube"]) {
+        if (previous[key as keyof typeof previous] === undefined) delete g[key];
+        else g[key] = previous[key as keyof typeof previous];
+      }
+    }
+  });
+
   test("AI color canvas standard is square and 128-based", () => {
     for (const size of [128, 256, 384, 512, 1024]) {
       expect(isAiProductionColorCanvas(size, size)).toBe(true);

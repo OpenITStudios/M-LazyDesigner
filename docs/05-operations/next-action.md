@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 3 legacy rig safety: bone_rigging parent/unparent rejects no-op moves and verifies native parent/children before Undo finish; set_pivot preflights no-op, mesh availability and checks transferOrigin readback; child/IK lookup uses canonical collision-safe UUID resolver. Existing group behavior tests and affected selector extended, NOT EXECUTED. Native visual pivot/Undo and Animation acceptance remain deferred. Next address another concrete rig, UV or Texturing source defect.
+Batch 4 UV atlas diagnostics: distinct known texture UUIDs no longer create false partial-overlap or exact-reuse evidence in list_textures(diagnostics=true); unknown texture identity remains conservatively compared. Animated texture V pixel scale uses display_height (one frame), not stacked height. Existing atlas/alignment test owners and affected-run routing updated, NOT EXECUTED; public Gateway/Runtime tool set unchanged. Next inspect only evidence-backed UV/paint atomicity issues; do not activate manage_uv_layout without generator-coupled Runtime proof.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

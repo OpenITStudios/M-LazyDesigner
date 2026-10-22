@@ -60,6 +60,9 @@ export type UvAtlasUsage = {
   cube_name: string;
   face: string;
   uv: readonly number[];
+  // Distinct texture bitmaps are separate UV overlap ownership domains.
+  // Optional for imported/legacy diagnostic fixtures with unknown identity.
+  texture_uuid?: string | null;
   box_uv: boolean;
   autouv: number;
   mirror_uv: boolean;
@@ -91,6 +94,7 @@ function uvUsageExample(usage: UvAtlasUsage) {
     cube_uuid: usage.cube_uuid,
     cube_name: usage.cube_name,
     face: usage.face,
+    ...(usage.texture_uuid ? { texture_uuid: usage.texture_uuid } : {}),
     uv: [...usage.uv],
     box_uv: usage.box_uv,
     autouv: usage.autouv,
@@ -192,7 +196,9 @@ export function buildUvAtlasAudit(
   const reusable = valid.filter(({ rect }) => uvRectArea(rect) > 0);
   const exactReuseMap = new Map<string, NormalizedUvUsage[]>();
   for (const usage of reusable) {
-    const key = usage.rect.join(",");
+    // Equal logical rectangles on different bitmap UUIDs are not reused
+    // physical texels. Preserve legacy one-atlas behavior when UUID is absent.
+    const key = JSON.stringify([usage.texture_uuid ?? null, ...usage.rect]);
     const group = exactReuseMap.get(key) ?? [];
     group.push(usage);
     exactReuseMap.set(key, group);
@@ -227,6 +233,11 @@ export function buildUvAtlasAudit(
     for (let j = i + 1; j < sorted.length; j += 1) {
       const b = sorted[j];
       if (b.rect[0] >= a.rect[2]) break;
+      // Different known bitmap owners cannot collide physically even when
+      // their logical UV coordinates overlap. Unknown identity stays
+      // conservative instead of suppressing a possible same-atlas conflict.
+      if (a.texture_uuid && b.texture_uuid &&
+          a.texture_uuid !== b.texture_uuid) continue;
       if (uvRectsEqual(a.rect, b.rect)) continue;
       const intersection = uvRectIntersection(a.rect, b.rect);
       if (!intersection) continue;
@@ -379,6 +390,7 @@ export function collectUvAtlasUsages(): UvAtlasUsage[] {
         cube_uuid: cube.uuid,
         cube_name: cube.name,
         face: faceKey,
+        texture_uuid: texture?.uuid ?? null,
         uv: [...face.uv],
         box_uv: cube.box_uv === true,
         autouv: cube.autouv,
@@ -387,7 +399,9 @@ export function collectUvAtlasUsages(): UvAtlasUsage[] {
         surface_area: Math.abs(size[axes[0]] * size[axes[1]]),
         pixel_scale: texture ? [
           texture.width / texture.getUVWidth(),
-          texture.height / texture.getUVHeight(),
+          // Animated bitmap height stacks all frames vertically. Logical UV
+          // V maps into one displayed frame, not the entire PNG frame stack.
+          texture.display_height / texture.getUVHeight(),
         ] : undefined,
       });
     }
