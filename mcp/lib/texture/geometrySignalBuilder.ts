@@ -30,9 +30,22 @@ function rectMask(width:number,height:number,regions:readonly TextureRect[]):Sca
 function weightedRectMask(width:number,height:number,regions:readonly WeightedTextureRect[]):ScalarMask{
   const values=new Float32Array(width*height);
   for(const rect of regions){
-    if(!Number.isFinite(rect.weight)||rect.weight<0||rect.weight>1) throw new Error("Geometry signal weighted region weight must be within 0..1.");
-    const mask=rectMask(width,height,[rect]);
-    for(let i=0;i<values.length;i+=1) if(mask.values[i]>0) values[i]=Math.max(values[i],rect.weight);
+    if(!Number.isFinite(rect.weight)||rect.weight<0||rect.weight>1) {
+      throw new Error("Geometry signal weighted region weight must be within 0..1.");
+    }
+    if(![rect.x,rect.y,rect.width,rect.height].every(Number.isFinite)||
+       rect.width<=0||rect.height<=0) {
+      throw new Error("Geometry signal region must contain finite positive bounds.");
+    }
+    // Preserve rectMask's floor/ceil coverage but touch only this UV footprint.
+    // The old path allocated and scanned a full-atlas mask for every face.
+    const minX=Math.max(0,Math.floor(rect.x)),minY=Math.max(0,Math.floor(rect.y));
+    const maxX=Math.min(width,Math.ceil(rect.x+rect.width));
+    const maxY=Math.min(height,Math.ceil(rect.y+rect.height));
+    for(let y=minY;y<maxY;y+=1) for(let x=minX;x<maxX;x+=1){
+      const index=y*width+x;
+      values[index]=Math.max(values[index],rect.weight);
+    }
   }
   return {width,height,values};
 }

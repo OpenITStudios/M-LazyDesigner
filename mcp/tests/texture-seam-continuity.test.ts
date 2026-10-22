@@ -63,6 +63,56 @@ describe("texture seam continuity", () => {
     ]);
   });
 
+  test("nearby noncoincident intra-Cube edges stay unpaired, not false seam review", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge(),
+      edge({
+        face: "east", edge: "left",
+        // 2e-6 previously rounded into the same 1e-5 edge key.
+        start: [1.000002, 1, 0], end: [1.000002, 0, 0],
+        samples: Array.from({ length: 4 },
+          () => [255, 255, 255, 255] as [number, number, number, number]),
+      }),
+    ]);
+    expect(result.paired_seam_count).toBe(0);
+    expect(result.unpaired_edge_count).toBe(2);
+    expect(result.review.candidate_count).toBe(0);
+    expect(result.gate.reasons).not.toContain("SEAM_CONTINUITY_REVIEW");
+  });
+
+  test("intra-Cube edges match across a rounded-key boundary when physically coincident", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ start: [1.0000049, 0, 0], end: [1.0000049, 1, 0] }),
+      edge({
+        face: "east", edge: "left",
+        start: [1.0000051, 1, 0], end: [1.0000051, 0, 0],
+        samples: Array.from({ length: 4 },
+          () => [255, 255, 255, 255] as [number, number, number, number]),
+      }),
+    ]);
+    expect(result.paired_seam_count).toBe(1);
+    expect(result.unpaired_edge_count).toBe(0);
+    expect(result.review.candidate_count).toBe(1);
+  });
+
+  test("nontransitive three-edge intra-Cube matches stay ambiguous", () => {
+    const result = analyzeTextureSeamContinuity([
+      edge({ start: [1.0000044, 0, 0], end: [1.0000044, 1, 0] }),
+      edge({
+        face: "east", edge: "left",
+        start: [1.0000050, 1, 0], end: [1.0000050, 0, 0],
+      }),
+      edge({
+        face: "south", edge: "right",
+        start: [1.0000056, 1, 0], end: [1.0000056, 0, 0],
+      }),
+    ]);
+    expect(result.ambiguous_edge_count).toBe(1);
+    expect(result.paired_seam_count).toBe(0);
+    expect(result.review.candidate_count).toBe(0);
+    expect(result.gate.reasons).toContain("SEAM_EVIDENCE_AMBIGUOUS");
+  });
+
   test("matching edge pixels do not create a seam review candidate", () => {
     const result = analyzeTextureSeamContinuity([
       edge(),

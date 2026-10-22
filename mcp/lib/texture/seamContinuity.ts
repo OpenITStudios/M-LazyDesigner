@@ -25,8 +25,6 @@ function requireAlphaSemantics(value: TextureSeamAlphaSemantics): void {
     throw new Error("Texture seam alpha semantics must be OPACITY or NON_OPACITY.");
   }
 }
-const POSITION_QUANTIZATION = 100_000;
-
 function ratio(value: number, total: number): number {
   return total === 0 ? 0 : Number((value / total).toFixed(4));
 }
@@ -51,20 +49,6 @@ function requireEdge(edge: TextureSeamEdgeInput): void {
   if ([...edge.start, ...edge.end].some((value) => !Number.isFinite(value))) {
     throw new Error("Texture seam edge endpoints must be finite 3D coordinates.");
   }
-}
-
-function pointKey(point: readonly number[]): string {
-  return point
-    .map((value) => Math.round(value * POSITION_QUANTIZATION))
-    .join(",");
-}
-
-function canonicalEdgeKey(edge: TextureSeamEdgeInput): string {
-  const start = pointKey(edge.start);
-  const end = pointKey(edge.end);
-  return start < end
-    ? `${edge.cube_uuid}|${start}|${end}`
-    : `${edge.cube_uuid}|${end}|${start}`;
 }
 
 function squaredDistance(a: readonly number[], b: readonly number[]): number {
@@ -183,15 +167,10 @@ export function analyzeTextureSeamContinuity(
   }
   for (const edge of edges) requireEdge(edge);
 
-  const groups = new Map<string, TextureSeamEdgeInput[]>();
-  for (const edge of edges) {
-    const key = canonicalEdgeKey(edge);
-    const group = groups.get(key) ?? [];
-    group.push(edge);
-    groups.set(key, group);
-  }
-
-  const grouped = [...groups.values()];
+  // Rounding can merge physically separated edges or miss coincident edges
+  // across a quantization boundary. Reuse the epsilon-based world matcher,
+  // scoped to the same Cube for intra-Cube seam diagnostics.
+  const grouped = groupWorldEdges(edges, true);
   // A pair from the same face is duplicate/conflicting evidence, not a
   // meaningful face-to-face seam. Never let such a group disappear from counts.
   const ambiguous = grouped.filter((group) =>
@@ -310,12 +289,14 @@ const CROSS_CUBE_NORMAL_DOT = 0.9999;
  * Match physical edges by actual endpoint distance, not a rounded string key:
  * neighboring coordinates can fall on opposite sides of a quantization bin.
  * Index both endpoints into adjacent epsilon-sized spatial cells, then check
- * both complete segments before merging any connected matches. A nontransitive
- * chain remains an ambiguous group (>2), never a fabricated clean pair.
+ * both complete segments before merging any connected matches. An intra-Cube
+ * caller can require equal Cube identity without a second matching algorithm.
+ * A nontransitive chain remains an ambiguous group (>2), never a clean pair.
  */
-function groupCrossCubeEdges(
-  edges: readonly CrossCubeSeamEdgeInput[]
-): CrossCubeSeamEdgeInput[][] {
+function groupWorldEdges<T extends TextureSeamEdgeInput>(
+  edges: readonly T[],
+  sameCubeOnly = false
+): T[][] {
   const parents = edges.map((_, index) => index);
   const find = (index: number): number => {
     let root = index;
@@ -336,7 +317,7 @@ function groupCrossCubeEdges(
   const index = new Map<string, number[]>();
   const eps = CROSS_CUBE_ENDPOINT_EPSILON;
   const epsSquared = eps * eps;
-  const sameEdge = (a: CrossCubeSeamEdgeInput, b: CrossCubeSeamEdgeInput): boolean =>
+  const sameEdge = (a: TextureSeamEdgeInput, b: TextureSeamEdgeInput): boolean =>
     (squaredDistance(a.start, b.start) <= epsSquared &&
       squaredDistance(a.end, b.end) <= epsSquared) ||
     (squaredDistance(a.start, b.end) <= epsSquared &&
@@ -354,7 +335,10 @@ function groupCrossCubeEdges(
           }
     }
     for (const candidate of candidates) {
-      if (sameEdge(edge, edges[candidate])) unite(edgeIndex, candidate);
+      if ((!sameCubeOnly || edge.cube_uuid === edges[candidate].cube_uuid) &&
+          sameEdge(edge, edges[candidate])) {
+        unite(edgeIndex, candidate);
+      }
     }
     for (const point of [edge.start, edge.end]) {
       const key = cellKey(
@@ -368,7 +352,7 @@ function groupCrossCubeEdges(
     }
   });
 
-  const groups = new Map<number, CrossCubeSeamEdgeInput[]>();
+  const groups = new Map<number, T[]>();
   edges.forEach((edge, i) => {
     const root = find(i);
     const group = groups.get(root) ?? [];
@@ -447,7 +431,7 @@ export function analyzeCrossCubeSeamContinuity(
     throw new Error("Cross-Cube seam input/example budget exceeded.");
   }
   for (const edge of edges) requireCrossCubeEdge(edge);
-  const groups = groupCrossCubeEdges(edges);
+  const groups = groupWorldEdges(edges);
 
   const paired: Array<ReturnType<typeof seamSummary> & {
     cubes: [{ uuid: string; name: string }, { uuid: string; name: string }];
