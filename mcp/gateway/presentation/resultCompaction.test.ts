@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { compactGatewayCapabilityContent } from "./resultCompaction";
+import {
+  compactGatewayCapabilityContent,
+  compactGatewayCapabilityStructuredContent,
+} from "./resultCompaction";
 
 describe("Gateway result-compaction information preservation", () => {
   const warning = [
@@ -83,6 +86,82 @@ describe("Gateway result-compaction information preservation", () => {
       "manage_cubes", { execution: "applied", modified: 1 },
       mixed, "visual"
     )).toEqual(mixed);
+  });
+
+  test("unverified mutation quality and incomplete approval text are never compacted", () => {
+    const receipt = { execution: "applied", modified: 1 };
+    for (const text of [
+      "Applied authored update to Cube body. Structural effects recorded; reference fidelity was not evaluated.",
+      "Geometry correction was not reviewed.",
+      "Model has not been approved by the artist.",
+      "Surface has not been tested against the reference.",
+    ]) {
+      const content = [{ type: "text", text }];
+      expect(compactGatewayCapabilityContent(
+        "manage_cubes", receipt, content, "visual"
+      )).toEqual(content);
+    }
+  });
+
+  test("failed mutations retain all text and prestate even with an authoritative-looking after", () => {
+    const failure = {
+      execution: "applied",
+      before: { uuid: "a", face_uvs: { north: [0, 0, 4, 4] } },
+      after: { uuid: "a", face_uvs: { north: [4, 4, 8, 8] } },
+      geometry_effect: { changed_fields: ["faces"] },
+      recovery: { state_uncertain: true, rollback: "inspect current project" },
+    };
+    const text = [{ type: "text", text: "Please inspect the current authored UV state." }];
+    expect(compactGatewayCapabilityStructuredContent(
+      "manage_cubes", failure, "visual", false
+    )).toBe(failure);
+    expect(compactGatewayCapabilityStructuredContent(
+      "modify_group", failure, "receipt_only", false
+    )).toBe(failure);
+    expect(compactGatewayCapabilityContent(
+      "manage_cubes", failure, text, "visual", false, false
+    )).toEqual(text);
+    expect(compactGatewayCapabilityContent(
+      "modify_group", failure, text, "receipt_only", false, false
+    )).toEqual(text);
+  });
+
+  test("complete Cube receipt drops redundant prestate, but incomplete evidence is retained", () => {
+    const complete = {
+      before: { uuid: "arm", face_uvs: { north: [0, 0, 4, 4] } },
+      after: {
+        uuid: "arm", name: "arm", rotation: [0, 10, 0],
+        face_uvs: { north: [0, 0, 4, 4] },
+      },
+      geometry_effect: { changed_fields: ["rotation"] },
+    };
+    const incomplete = {
+      before: { uuid: "tail", face_uvs: { north: [0, 0, 1, 1] } },
+      after: { uuid: "tail", face_uvs: { north: [4, 0, 5, 1] } },
+      geometry_effect: { description: "could not resolve changed fields" },
+    };
+    const batch = { execution: "applied", effects: [complete, incomplete] };
+    const result = compactGatewayCapabilityStructuredContent(
+      "manage_cubes", batch, "visual"
+    ) as { effects: unknown[] };
+    expect(result.effects[0]).toEqual({
+      after: { uuid: "arm", name: "arm", rotation: [0, 10, 0] },
+      geometry_effect: complete.geometry_effect,
+    });
+    expect(result.effects[1]).toEqual(incomplete);
+    expect(compactGatewayCapabilityStructuredContent(
+      "manage_cubes", incomplete, "visual"
+    )).toEqual(incomplete);
+    expect(compactGatewayCapabilityStructuredContent(
+      "manage_cubes", { execution: "applied", effects: [{ before: complete.before }] },
+      "visual"
+    )).toEqual({
+      execution: "applied", effects: [{ before: complete.before }],
+    });
+    const group = { before: { uuid: "bone", rotation: 0 }, after: { uuid: "bone", rotation: 90 } };
+    expect(compactGatewayCapabilityStructuredContent(
+      "modify_group", group, "receipt_only"
+    )).toEqual({ after: group.after });
   });
 
   test("normal successful result is still compact", () => {

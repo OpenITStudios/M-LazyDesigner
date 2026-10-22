@@ -264,6 +264,24 @@ small text, but prevents extra inspections prompted by missing human guidance.
 Warnings, links and mixed images remain preserved. No measured cost-to-result
 improvement is claimed without matched-run evidence.
 
+## Mutation Receipt Compaction Safety — SOURCE HARDENING
+
+Gateway receipt output is compacted **after** Control computes mutation and
+verification facts from the unmodified Runtime response. Source hardening
+makes the success boundary explicit: failed tool results keep their original
+text and structured before/after, recovery and rollback evidence. Successful
+`manage_cubes` receipts remove redundant `before`/UV snapshots only when
+a complete before/after and typed `geometry_effect.changed_fields` exists.
+Malformed or partial effects are retained unchanged.
+
+Text stating that visual/reference fidelity was **not evaluated**, reviewed,
+approved or tested is a decision signal, even when a mutation succeeded; it
+must never be replaced with a generic success caption. The existing Gateway
+compaction owner carries executable positive, negative and partial-receipt
+regressions, and the canonical affected planner includes the executor/receipt
+consumers. This is source/static work; no measured token/call/runtime
+improvement or live Blockbench acceptance is claimed.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

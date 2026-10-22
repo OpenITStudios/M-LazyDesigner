@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP mutation receipt compaction safety: `gateway/presentation/resultCompaction.ts` now preserves every failed tool response before/after, recovery and rollback evidence; only complete successful Cube geometry effects permit redundant prestate compaction. Mutation texts stating visual/reference fidelity was not evaluated/reviewed/tested remain visible rather than becoming generic success. The executor passes explicit success to both compaction boundaries; existing presentation tests and affected-execution mappings were extended. GitHub source/static checks only; Bun/types/native and token/latency measurements NOT EXECUTED. `main`, CI, release and Gateway public surface unchanged.
+
+
+
 2026-10-22 MCP Gateway read-only result information-loss guard: `gateway/presentation/resultCompaction.ts` now refuses to replace arbitrary narrative merely because a read-only result has structured fields. Only exact generated `inspect_elements` identity summaries and true generic `Read complete.` boilerplate are redundant. Unique UV/visual observations remain visible. Existing Gateway result-compaction regressions gain two behavior cases. This is GitHub source/static authoring; Bun/TypeScript/native and empirical accepted-result cost NOT EXECUTED; no CI/main/release change.
 
 

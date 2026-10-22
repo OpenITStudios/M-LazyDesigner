@@ -13,6 +13,14 @@ function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function hasCompleteCubeGeometryEffect(value: unknown): value is JsonRecord {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.changed_fields) &&
+    value.changed_fields.every((field: unknown) => typeof field === "string")
+  );
+}
+
 function changedFieldsFromEffect(value: unknown): string[] {
   if (!isRecord(value) || !Array.isArray(value.changed_fields)) return [];
   return value.changed_fields.filter(
@@ -86,7 +94,15 @@ function compactManageCubesStructuredContent(value: unknown): unknown {
     return {
       ...value,
       effects: value.effects.map((rawEffect) => {
-        if (!isRecord(rawEffect)) return rawEffect;
+        // A complete before/after + geometry-effect pair is required before
+        // removing redundant pre-state. Malformed/partial evidence is
+        // diagnostic and must remain inspectable by the AI.
+        if (
+          !isRecord(rawEffect) ||
+          !isRecord(rawEffect.before) ||
+          !isRecord(rawEffect.after) ||
+          !hasCompleteCubeGeometryEffect(rawEffect.geometry_effect)
+        ) return rawEffect;
         const {
           before: _before,
           after,
@@ -111,7 +127,11 @@ function compactManageCubesStructuredContent(value: unknown): unknown {
     };
   }
 
-  if (value.before !== undefined && value.after !== undefined) {
+  if (
+    isRecord(value.before) &&
+    isRecord(value.after) &&
+    hasCompleteCubeGeometryEffect(value.geometry_effect)
+  ) {
     const {
       before: _before,
       after,
@@ -152,7 +172,7 @@ function textCarriesExternalLocator(text: string): boolean {
 }
 
 function textCarriesDecisionSignal(text: string): boolean {
-  return /\b(warn(?:ing)?|error|failed?|blocked|unavailable|missing|stale|conflict|unsafe|unsupported|deprecated|unverified|incomplete|partial|pending|uncertain)\b|\bnot\s+(?:verified|saved|applied|executed|supported|available)\b/i.test(
+  return /\b(warn(?:ing)?|error|failed?|blocked|unavailable|missing|stale|conflict|unsafe|unsupported|deprecated|unverified|incomplete|partial|pending|uncertain)\b|\bnot\s+(?:verified|saved|applied|executed|supported|available|evaluated|reviewed|approved|tested|confirmed|checked|assessed)\b/i.test(
     text
   );
 }
@@ -244,8 +264,12 @@ export function compactGatewayCapabilityContent(
   structuredContent: unknown,
   content: unknown,
   verificationClass?: CapabilityVerificationClass,
-  readOnly = false
+  readOnly = false,
+  succeeded = true
 ): unknown {
+  // Failed results, including partial receipts after interrupted native
+  // mutations, are never evidence-safe to compact.
+  if (!succeeded) return content;
   // Shortcut summaries must not erase warnings, external locators, images
   // or mixed content. Only one plain, non-decision text item is compactable.
   const text = singleTextContent(content);
@@ -323,8 +347,12 @@ function compactReceiptOnlyStructuredContent(value: unknown): unknown {
 export function compactGatewayCapabilityStructuredContent(
   capability: string,
   value: unknown,
-  verificationClass?: CapabilityVerificationClass
+  verificationClass?: CapabilityVerificationClass,
+  succeeded = true
 ): unknown {
+  // A failed native mutation can carry before/after and recovery diagnostics
+  // which must not be stripped, regardless of its normal verification class.
+  if (!succeeded) return value;
   if (capability === "manage_cubes") {
     return compactManageCubesStructuredContent(value);
   }

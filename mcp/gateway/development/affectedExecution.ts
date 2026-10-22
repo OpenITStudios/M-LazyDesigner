@@ -279,6 +279,11 @@ const GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH: Readonly<Record<string, readonly str
   ],
   "mcp/gateway/presentation/resultCompaction.ts": [
     "mcp/gateway/presentation/resultCompaction.test.ts",
+    "mcp/tests/gateway-contract.test.ts",
+  ],
+  "mcp/gateway/execution/capabilityExecutor.ts": [
+    "mcp/gateway/presentation/resultCompaction.test.ts",
+    "mcp/tests/gateway-contract.test.ts",
   ],
   "mcp/gateway/capabilities/catalog.ts": [
     "mcp/gateway/capabilities/intelligence.test.ts",

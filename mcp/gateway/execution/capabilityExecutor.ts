@@ -237,14 +237,16 @@ export class GatewayCapabilityExecutor {
       const compacted = compactGatewayCapabilityStructuredContent(
         capability,
         result.structuredContent,
-        controlDelta.verification_class
+        controlDelta.verification_class,
+        succeeded
       );
       const compactedContent = compactGatewayCapabilityContent(
         capability,
         result.structuredContent,
         result.content,
         controlDelta.verification_class,
-        effectiveReadOnly
+        effectiveReadOnly,
+        succeeded
       );
 
       const response = {
