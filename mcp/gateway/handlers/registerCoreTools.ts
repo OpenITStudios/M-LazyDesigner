@@ -442,43 +442,45 @@ export function registerCoreGatewayTools(
           tool.inputSchema ?? {},
           branch
         );
-        const metadata = getCapabilityMetadata(capability);
         const semanticRecord = semanticRecordForCapabilityBranch(
           capability,
           branch
         );
         const semanticId =
           semanticRecord?.id ?? capabilitySemanticId(capability, branch);
-        const capabilityPayload =
-          detail === "full"
-            ? {
-                description: tool.description ?? "",
-                inputSchema: projection.inputSchema,
-                ...(tool.outputSchema !== undefined
-                  ? { outputSchema: tool.outputSchema }
-                  : {}),
-                ...(tool.annotations &&
-                Object.keys(tool.annotations).length > 0
-                  ? { annotations: tool.annotations }
-                  : {}),
-                lifecycle: metadata.lifecycle,
-                operation_class:
-                  semanticRecord?.operationClass ?? metadata.operationClass,
-                ...(metadata.stateClass !== null
-                  ? { state_class: metadata.stateClass }
-                  : {}),
-                execution_class:
-                  semanticRecord?.executionClass ?? metadata.executionClass,
-                verification_class:
-                  semanticRecord?.verificationClass ?? metadata.verificationClass,
-                control: {
-                  authoring_domain: authoringDomainForCapability(capability),
-                  source_owner: sourceOwnerForCapability(capability),
-                },
-              }
-            : {
-                inputSchema: projection.inputSchema,
-              };
+        // The default input-only path needs no lifecycle/tier metadata.
+        // Defer that lookup to detail=full without changing the wire payload.
+        let capabilityPayload: Record<string, unknown>;
+        if (detail === "full") {
+          const metadata = getCapabilityMetadata(capability);
+          capabilityPayload = {
+            description: tool.description ?? "",
+            inputSchema: projection.inputSchema,
+            ...(tool.outputSchema !== undefined
+              ? { outputSchema: tool.outputSchema }
+              : {}),
+            ...(tool.annotations &&
+            Object.keys(tool.annotations).length > 0
+              ? { annotations: tool.annotations }
+              : {}),
+            lifecycle: metadata.lifecycle,
+            operation_class:
+              semanticRecord?.operationClass ?? metadata.operationClass,
+            ...(metadata.stateClass !== null
+              ? { state_class: metadata.stateClass }
+              : {}),
+            execution_class:
+              semanticRecord?.executionClass ?? metadata.executionClass,
+            verification_class:
+              semanticRecord?.verificationClass ?? metadata.verificationClass,
+            control: {
+              authoring_domain: authoringDomainForCapability(capability),
+              source_owner: sourceOwnerForCapability(capability),
+            },
+          };
+        } else {
+          capabilityPayload = { inputSchema: projection.inputSchema };
+        }
         const semanticRevision = capabilityDescriptionRevision({
           semantic_id: semanticId,
           detail,

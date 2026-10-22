@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 Describe schema-only hot-path: `gateway/handlers/registerCoreTools.ts` now looks up capability lifecycle/execution metadata exclusively in the `detail=full` branch. Default `detail=input` still projects the same Runtime-authoritative schema, branch identity, semantic revision/stamp, and public response shape. The existing Gateway contract owner asserts lazy full-only lookup. Control Delta/continuation overlap was reviewed but deliberately not trimmed because it is a versioned recovery contract; token reduction must not remove authoritative state. REMOTE_GITHUB exact-source static inspection only; Bun/TypeScript, runtime/native and measured token/CPU/latency benefit NOT EXECUTED. Stable Four, Hybrid-4, main, CI, release unchanged.
+
+
 2026-10-22 MCP discovery hot-path optimization: relevance/exact-only filtering in `gateway/capabilities/catalog.ts` now precedes graph-readiness scoring, without changing matching or final ranking. `registerCoreTools.ts` projects bounded raw search summaries directly, no longer building unused Control source-owner decoration; `control/capabilities.ts` accepts raw and decorated summaries with the same AI-visible result. Existing regression owners cover readiness, branches, exact-only semantics, projection parity, and affected-test routing. Source/static REMOTE_GITHUB only; Bun/types/native/performance and actual AI token measurements NOT EXECUTED. Four-tool public Gateway, Hybrid-4 experimental, CI, main, and release unchanged.
 
 

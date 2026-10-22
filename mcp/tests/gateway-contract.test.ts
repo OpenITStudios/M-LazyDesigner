@@ -42,6 +42,18 @@ describe("BlockIT Gateway contract", () => {
     expect(describeBlock).not.toContain("schema_projection:");
     expect(describeBlock).toContain("inputSchema: projection.inputSchema");
     expect(describeBlock).toContain("semantic_revision:");
+    // Only full detail should load metadata, while input-only retains
+    // content-addressed branch identity and the same schema payload.
+    const fullBranch = describeBlock.indexOf('if (detail === "full")');
+    const metadataLookup = describeBlock.indexOf(
+      "const metadata = getCapabilityMetadata(capability)"
+    );
+    const inputOnlyBranch = describeBlock.indexOf(
+      "capabilityPayload = { inputSchema: projection.inputSchema }"
+    );
+    expect(fullBranch).toBeGreaterThanOrEqual(0);
+    expect(metadataLookup).toBeGreaterThan(fullBranch);
+    expect(inputOnlyBranch).toBeGreaterThan(metadataLookup);
     expect(describeBlock).toContain("semantic_id:");
     expect(describeBlock).toMatch(/verification_class:\s*semanticRecord\?\.verificationClass \?\? metadata.verificationClass/);
     expect(describeBlock).toMatch(/source_owner:\s*sourceOwnerForCapability\(capability\)/);
