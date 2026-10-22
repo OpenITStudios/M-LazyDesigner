@@ -321,6 +321,25 @@ Control Delta engine and freshness edits. This optimization avoids repeated
 receipt interpretation, but requires an executable matching-SHA benchmark
 before any CPU/latency savings are claimed.
 
+## Material, Texture-Layer and Particle Receipt Reuse — SOURCE OPTIMIZATION
+
+The same Control invocation formerly re-read material persistence, texture
+layer metadata-only and particle texturing-handoff receipts across mutation
+classification, invalidation and next-intent selection. The canonical
+`gateway/control/delta/freshness.ts` request-local analysis now derives only
+the relevant family decision once and shares it with those existing consumers.
+The `gateway/control/delta/engine.ts` uses that same particle handoff decision
+when producing next intent. No persistent receipt cache, new Control registry
+or MCP surface change is introduced.
+
+This does not weaken typed receipt validators or permit a save-shaped receipt
+to mask `manage_material` configure/assign operations. Malformed material
+saves, metadata-only vs recomposed texture layers, particle preparation,
+actual writes, handoffs and failed calls retain their prior classifications.
+Two focused regressions extend `gateway-control-invalidation.test.ts` to
+compare prepared/direct decisions and sequential call isolation. Executable
+Bun/type checks and cost measurements remain outstanding.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

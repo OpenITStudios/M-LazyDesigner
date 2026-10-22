@@ -122,6 +122,133 @@ describe("LazyDesigner Control minimum invalidation", () => {
     }
   });
 
+  test("material, layer and particle receipt decisions agree across both Control projections", () => {
+    const persisted = {
+      operation: "save", scope: "material_persistence_only",
+      material: { uuid: "material-a", name: "metal" },
+      file_path: "/tmp/metal.texture_set.json",
+      saved: true, file_exists: true,
+    };
+    const cases: Array<{
+      capability: string;
+      result: unknown;
+      succeeded: boolean;
+      branch?: CapabilityBranchHint;
+      expected: {
+        mutates: boolean;
+        materialPersistenceOnly?: boolean;
+        textureLayerMetadataOnly?: boolean;
+        particleTextureHandoff?: boolean;
+      };
+    }> = [
+      {
+        capability: "save_material_config", result: persisted, succeeded: true,
+        expected: { mutates: false, materialPersistenceOnly: true },
+      },
+      {
+        capability: "save_material_config",
+        result: { ...persisted, file_exists: false }, succeeded: true,
+        expected: { mutates: true, materialPersistenceOnly: false },
+      },
+      {
+        capability: "manage_material", result: persisted, succeeded: true,
+        branch: { field: "operation", value: "save" },
+        expected: { mutates: false, materialPersistenceOnly: true },
+      },
+      {
+        capability: "manage_material", result: persisted, succeeded: true,
+        branch: { field: "operation", value: "configure" },
+        expected: { mutates: true },
+      },
+      {
+        capability: "texture_layer_management",
+        result: { operation: "rename_layer" }, succeeded: true,
+        expected: { mutates: false, textureLayerMetadataOnly: true },
+      },
+      {
+        capability: "texture_layer_management",
+        result: { operation: "batch_metadata", recomposed: false }, succeeded: true,
+        expected: { mutates: false, textureLayerMetadataOnly: true },
+      },
+      {
+        capability: "texture_layer_management",
+        result: { operation: "batch_metadata", recomposed: true }, succeeded: true,
+        expected: { mutates: true, textureLayerMetadataOnly: false },
+      },
+      {
+        capability: "manage_particle",
+        result: {
+          texture_dependency: { status: "REQUIRES_TEXTURING" },
+          wrote_to_path: null, preview_path: null,
+        },
+        succeeded: true,
+        expected: { mutates: false, particleTextureHandoff: true },
+      },
+      {
+        capability: "manage_particle",
+        result: { wrote_to_path: null, preview_path: null },
+        succeeded: true,
+        expected: { mutates: false, particleTextureHandoff: false },
+      },
+      {
+        capability: "manage_particle",
+        result: { wrote_to_path: "/resource/particle.json", preview_path: null },
+        succeeded: true,
+        expected: { mutates: true, particleTextureHandoff: false },
+      },
+      {
+        capability: "manage_particle",
+        result: { texture_dependency: { status: "REQUIRES_TEXTURING" } },
+        succeeded: false,
+        expected: { mutates: false },
+      },
+    ];
+    for (const { capability, result, succeeded, branch, expected } of cases) {
+      const domain = authoringDomainForCapability(capability);
+      const prepared = analyzeMutationEvidence(capability, domain, succeeded, result, branch);
+      expect(prepared, capability).toMatchObject(expected);
+      const invalidates = mutationInvalidation(
+        capability, domain, succeeded, result, branch, prepared
+      );
+      const freshness = mutationFreshness(
+        capability, domain, succeeded, result, branch, prepared
+      );
+      expect(invalidates, capability).toEqual(
+        mutationInvalidation(capability, domain, succeeded, result, branch)
+      );
+      expect(freshness, capability).toEqual(
+        mutationFreshness(capability, domain, succeeded, result, branch)
+      );
+      const delta = buildControlDelta({
+        capability, branch, phaseBefore: null, phaseAfter: null,
+        projectUuid: "project-a", succeeded, result,
+      });
+      expect(delta.invalidates, capability).toEqual(invalidates);
+      expect(delta.freshness, capability).toEqual(freshness);
+      if (expected.particleTextureHandoff) {
+        expect(delta.next_intent).toBe("AUTHOR_PARTICLE_TEXTURE_THEN_RESUME");
+      } else if (capability === "manage_particle" && succeeded) {
+        expect(delta.next_intent).toBe("VERIFY_OR_CONTINUE_ANIMATION");
+      }
+    }
+  });
+
+  test("request-local receipt classifications do not persist across successive operations", () => {
+    const domain = authoringDomainForCapability("manage_particle");
+    const handoff = analyzeMutationEvidence(
+      "manage_particle", domain, true,
+      { texture_dependency: { status: "REQUIRES_TEXTURING" } }
+    );
+    const write = analyzeMutationEvidence(
+      "manage_particle", domain, true,
+      { wrote_to_path: "/resource/particle.json", preview_path: null }
+    );
+    expect(handoff.particleTextureHandoff).toBe(true);
+    expect(handoff.mutates).toBe(false);
+    expect(write.particleTextureHandoff).toBe(false);
+    expect(write.mutates).toBe(true);
+  });
+
   test("cached geometry scope stays call-local and never reuses a prior changed receipt", () => {
     const domain = authoringDomainForCapability("manage_cubes");
     const first = { geometry_effect: cubeEffect(["rotation"]) };

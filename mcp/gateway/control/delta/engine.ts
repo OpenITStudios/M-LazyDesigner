@@ -15,7 +15,7 @@ import {
   verificationClassForResult,
   verificationScopeForResult,
 } from "./verification";
-import { particleTextureHandoffRequired, resultCandidates } from "./receipts";
+import { resultCandidates } from "./receipts";
 import { downstreamRechecksForFreshness } from "./recheck";
 
 export function buildControlDelta(input: {
@@ -92,10 +92,7 @@ export function buildControlDelta(input: {
     currentDomain: authoringDomain,
     result: input.result,
   });
-  const particleTextureHandoff =
-    input.succeeded &&
-    input.capability === "manage_particle" &&
-    particleTextureHandoffRequired(input.result);
+  const particleTextureHandoff = mutationAnalysis.particleTextureHandoff === true;
   const nextIntent = !input.succeeded
     ? "RECOVER_CURRENT_OPERATION"
     : particleTextureHandoff

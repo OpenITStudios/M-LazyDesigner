@@ -126,7 +126,11 @@ export function capabilityMutatesState(
   capability: string,
   succeeded: boolean,
   result: unknown,
-  branch?: CapabilityBranchHint
+  branch?: CapabilityBranchHint,
+  receiptFacts?: Pick<
+    MutationEvidenceAnalysis,
+    "materialPersistenceOnly" | "textureLayerMetadataOnly" | "particleTextureHandoff"
+  >
 ): boolean {
   if (!succeeded || !STATE_MUTATIONS.has(capability)) return false;
   const branchOperationClass =
@@ -152,12 +156,13 @@ export function capabilityMutatesState(
   if (capability === "rename_element" && renameElementStateNeutral(result)) return false;
   if (
     capability === "texture_layer_management" &&
-    textureLayerMetadataOnly(result)
+    (receiptFacts?.textureLayerMetadataOnly ?? textureLayerMetadataOnly(result))
   ) {
     return false;
   }
   if (capability === "manage_particle") {
-    if (particleTextureHandoffRequired(result)) return false;
+    if (receiptFacts?.particleTextureHandoff ??
+      particleTextureHandoffRequired(result)) return false;
     return particleHasAuthoredEffect(result);
   }
   if (
@@ -179,7 +184,8 @@ export function capabilityMutatesState(
   ) {
     return false;
   }
-  if (isMaterialPersistenceOnly(capability, result, branch)) return false;
+  if (receiptFacts?.materialPersistenceOnly ??
+    isMaterialPersistenceOnly(capability, result, branch)) return false;
   if (capability === "manage_render_profile") {
     return !renderProfileStateNeutral(result, branch);
   }
@@ -194,6 +200,10 @@ export function effectChangedFields(value: unknown): string[] {
 export type MutationEvidenceAnalysis = Readonly<{
   mutates: boolean;
   geometryScopes?: ReturnType<typeof geometryFreshnessScopes>;
+  /** Receipt classifications derived once per invocation (not a cross-call cache). */
+  materialPersistenceOnly?: boolean;
+  textureLayerMetadataOnly?: boolean;
+  particleTextureHandoff?: boolean;
 }>;
 
 export function geometryInvalidation(
@@ -278,7 +288,8 @@ export function mutationInvalidation(
 
   if (
     succeeded &&
-    isMaterialPersistenceOnly(capability, result, branch)
+    (analysis?.materialPersistenceOnly ??
+      isMaterialPersistenceOnly(capability, result, branch))
   ) {
     return {
       authoring_domains: [],
@@ -290,7 +301,7 @@ export function mutationInvalidation(
   if (
     succeeded &&
     capability === "texture_layer_management" &&
-    textureLayerMetadataOnly(result)
+    (analysis?.textureLayerMetadataOnly ?? textureLayerMetadataOnly(result))
   ) {
     return {
       authoring_domains: [],
@@ -431,8 +442,27 @@ export function analyzeMutationEvidence(
   result: unknown,
   branch?: CapabilityBranchHint
 ): MutationEvidenceAnalysis {
-  const mutates = capabilityMutatesState(capability, succeeded, result, branch);
+  // Only classify relevant receipt families, then share those decisions
+  // across mutation, invalidation and next-intent selection in this call.
+  const receiptFacts = {
+    ...(succeeded &&
+    (capability === "save_material_config" ||
+      capability === "manage_material" &&
+        branch?.field === "operation" && branch.value === "save")
+      ? { materialPersistenceOnly: isMaterialPersistenceOnly(capability, result, branch) }
+      : {}),
+    ...(succeeded && capability === "texture_layer_management"
+      ? { textureLayerMetadataOnly: textureLayerMetadataOnly(result) }
+      : {}),
+    ...(succeeded && capability === "manage_particle"
+      ? { particleTextureHandoff: particleTextureHandoffRequired(result) }
+      : {}),
+  };
+  const mutates = capabilityMutatesState(
+    capability, succeeded, result, branch, receiptFacts
+  );
   return {
+    ...receiptFacts,
     mutates,
     ...(mutates && domain === "GEOMETRY"
       ? { geometryScopes: geometryFreshnessScopes(capability, result) }

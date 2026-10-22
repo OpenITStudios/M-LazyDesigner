@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 Material/Texture Layer/Particle Control receipt reuse: `gateway/control/delta/freshness.ts` now computes material-save, layer-metadata and particle-texture-handoff classifications once per relevant successful invocation, reusing them across mutation/no-op and invalidation. `delta/engine.ts` also reuses particle handoff for next intent. Existing exported direct APIs fall back to native receipt checks; no persistent cache or public contract change. Two added source regressions cover valid/invalid saves, requested-branch mismatch, metadata vs recomposition, particle preparation/write/handoff, failed calls and successive requests. GitHub source/static only; Bun/TypeScript, performance and native Blockbench NOT EXECUTED. CI, main and release unchanged.
+
+
+
 2026-10-22 Control freshness/invalidation receipt-analysis reuse: `gateway/control/delta/engine.ts` now derives mutation/no-op and precise geometry scope once through the existing `delta/freshness.ts` owner, then shares the call-local analysis with invalidation and freshness projection. Standalone calls retain default existing behavior; no persistent cache or second registry. `gateway-control-invalidation.test.ts` adds direct-vs-shared equivalence and successive-UV-change isolation, and the existing affected-execution owner selects it for engine/freshness edits. Source/static GitHub only; executable Bun/typecheck and any measured CPU improvement NOT EXECUTED. CI/main/release unaffected.
 
 
