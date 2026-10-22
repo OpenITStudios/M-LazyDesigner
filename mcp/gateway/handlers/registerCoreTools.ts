@@ -10,7 +10,6 @@ import {
   buildControlPacket,
   projectControlPacketForGateway,
   CONTROL_ROUTING_POLICY,
-  decorateCapabilities,
   projectCapabilitiesForSearch,
 } from "../control";
 import {
@@ -377,9 +376,8 @@ export function registerCoreGatewayTools(
           runtimeCapabilities,
           limit
         );
-        const capabilities = projectCapabilitiesForSearch(
-          decorateCapabilities(rawCapabilities)
-        );
+        // Avoid engineering source-owner enrichment on the model-facing hot path.
+        const capabilities = projectCapabilitiesForSearch(rawCapabilities);
         const response = {
           content: [
             {

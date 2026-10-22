@@ -282,6 +282,14 @@ describe("affected execution planner", () => {
       ["mcp/gateway/capabilities/intelligence.ts", [
         "mcp/gateway/capabilities/intelligence.test.ts",
       ]],
+      ["mcp/gateway/control/capabilities.ts", [
+        "mcp/tests/gateway-contract.test.ts",
+      ]],
+      ["mcp/gateway/handlers/registerCoreTools.ts", [
+        "mcp/tests/gateway-contract.test.ts",
+        "mcp/gateway/index-boundary.test.ts",
+        "mcp/tests/gateway-output-schema.test.ts",
+      ]],
       ["mcp/gateway/control/contextHeadroom.ts", [
         "mcp/tests/gateway-control-context-headroom.test.ts",
       ]],

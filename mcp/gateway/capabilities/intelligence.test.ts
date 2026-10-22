@@ -116,6 +116,31 @@ describe("capability intelligence routing", () => {
     expect(results[0]?.capability_id).toBe("manage_animation_timeline");
   });
 
+  test("relevance-first ranking preserves READY, UNKNOWN and BLOCKED evidence", () => {
+    const probe = (geometry_available: true | false | "unknown") =>
+      searchCapabilityCatalog(
+        [...tools, tool("emulate_clicks", "make the chair leg taller")],
+        "make the chair leg taller",
+        4,
+        { authoringPhase: "geometry", facts: { project_bound: true, geometry_available } }
+      );
+    const ready = probe(true);
+    const unknown = probe("unknown");
+    const blocked = probe(false);
+    for (const results of [ready, unknown, blocked]) {
+      expect(results[0]?.capability_id).toBe("manage_cubes");
+      expect(results[0]?.branch).toEqual({ field: "operation", value: "update" });
+      expect(results.map((result) => result.capability_id)).not.toContain("emulate_clicks");
+    }
+    expect(ready[0]?.eligibility).toBeUndefined();
+    expect(unknown[0]).toMatchObject({
+      eligibility: "UNKNOWN", requires: ["geometry_available"],
+    });
+    expect(blocked[0]).toMatchObject({
+      eligibility: "BLOCKED", requires: ["geometry_available"],
+    });
+  });
+
   test("keeps exact capability lookup branch-free and deterministic", () => {
     const [result] = searchCapabilityCatalog(
       tools,

@@ -137,39 +137,36 @@ export function searchCapabilityCatalog(
   // Lexical relevance is a bounded secondary signal, not an intent override.
   const maxBm25 = Math.max(1, ...bm25Scores.values());
 
+  // Only relevant, discoverable candidates need readiness/graph scoring.
+  // Keep every ranked candidate's original score and safety semantics.
   return tools
     .map((tool) => {
       const metadata = getCapabilityMetadata(tool.name);
       const tier = metadata.tier;
       const semantic = bestSemanticMatchForTool(
-        tool,
-        effectiveQuery,
-        context,
-        queryTokens
+        tool, effectiveQuery, context, queryTokens
       );
       const bm25 = bm25Scores.get(tool.name) ?? 0;
       const nearName = nearCapabilityNameScore(tool.name, query);
+      return { tool, metadata, tier, semantic, bm25, nearName };
+    })
+    .filter(({ metadata, tier, semantic, bm25, nearName }) => {
+      if (metadata.discoveryMode === "exact_only") return false;
+      if (!hasQuery) return tier !== "maintenance";
+      if (effectiveQuery.length === 0) return false;
+      return semantic.matched || bm25 > 0 || nearName > 0;
+    })
+    .map(({ tool, metadata, tier, semantic, bm25, nearName }) => {
       const preconditions = evaluateCapabilityPreconditions(
-        tool.name,
-        semantic.branch,
-        context?.facts
+        tool.name, semantic.branch, context?.facts
       );
-      // Readiness is a secondary decision signal, not an intent override.
-      // A blocked exact branch must remain ahead of a semantically weaker
-      // predecessor so the client can see BLOCKED + predecessor explicitly.
+      // BLOCKED/UNKNOWN are ranking signals, never silent exclusions.
       const eligibilityAdjustment =
-        preconditions.eligibility === "READY"
-          ? 4
-          : preconditions.eligibility === "BLOCKED"
-            ? -6
-            : -2;
-
+        preconditions.eligibility === "READY" ? 4 :
+        preconditions.eligibility === "BLOCKED" ? -6 : -2;
       return {
         tool,
-        tier,
         semantic,
-        bm25,
-        nearName,
         preconditions,
         score:
           semantic.score +
@@ -177,19 +174,8 @@ export function searchCapabilityCatalog(
           nearName +
           eligibilityAdjustment +
           CAPABILITY_TIER_BOOST[tier] +
-          CAPABILITY_LIFECYCLE_SEARCH_PENALTY[
-            metadata.lifecycle.stage
-          ],
+          CAPABILITY_LIFECYCLE_SEARCH_PENALTY[metadata.lifecycle.stage],
       };
-    })
-    .filter(({ tool, tier, semantic, bm25, nearName }) => {
-      const metadata = getCapabilityMetadata(tool.name);
-      if (metadata.discoveryMode === "exact_only") return false;
-      if (!hasQuery) return tier !== "maintenance";
-      if (effectiveQuery.length === 0) return false;
-      // Keep the original semantic/example/lexical discovery contract.
-      // No-result is appropriate only where meaningful query evidence is absent.
-      return semantic.matched || bm25 > 0 || nearName > 0;
     })
     .sort(
       (left, right) =>

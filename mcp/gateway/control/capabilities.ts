@@ -58,8 +58,10 @@ function compactCapabilityHint(description: string): string | undefined {
     : `${firstSentence.slice(0, maxChars - 1).trimEnd()}…`;
 }
 
+/** AI-facing search only needs the canonical domain, not source-owner
+ * enrichment discarded by the transport. Decorated callers remain supported. */
 export function projectCapabilitiesForSearch(
-  capabilities: readonly ControlCapabilitySummary[]
+  capabilities: readonly CapabilitySummary[]
 ) {
   return capabilities.map((capability) => {
     const metadata = getCapabilityMetadata(capability.capability_id);
@@ -94,7 +96,7 @@ export function projectCapabilitiesForSearch(
         ? { predecessor: capability.predecessor }
         : {}),
       tier: capability.tier,
-      authoring_domain: capability.control.authoring_domain,
+      authoring_domain: authoringDomainForCapability(capability.capability_id),
       operation_class: operationClass,
       ...(verificationClass !== "not_applicable"
         ? { verification_class: verificationClass }

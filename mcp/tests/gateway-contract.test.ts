@@ -17,7 +17,7 @@ import {
   createRuntimeSignature,
   normalizeRuntimeUrl,
 } from "@/gateway/runtime/identity";
-import { projectCapabilitiesForSearch } from "@/gateway/control/capabilities";
+import { decorateCapabilities, projectCapabilitiesForSearch } from "@/gateway/control/capabilities";
 import {
   getCapabilityBranchFields,
   projectCapabilityInputSchema,
@@ -201,6 +201,26 @@ describe("BlockIT Gateway contract", () => {
     expect(projected).not.toHaveProperty("read_only");
     expect(projected).not.toHaveProperty("destructive");
     expect(projected).not.toHaveProperty("idempotent");
+  });
+
+  test("raw search projection matches enriched Control search without owner bytes", () => {
+    const raw = [{
+      capability_id: "manage_cubes",
+      description: "Create or update cubes.",
+      tier: "primary" as const,
+      read_only: false,
+      destructive: true,
+      idempotent: false,
+    }];
+    const projected = projectCapabilitiesForSearch(raw);
+    expect(projected).toEqual(projectCapabilitiesForSearch(decorateCapabilities(raw)));
+    expect(projected[0]).toMatchObject({
+      capability_id: "manage_cubes",
+      authoring_domain: "GEOMETRY",
+      flags: ["destructive"],
+    });
+    expect(projected[0]).not.toHaveProperty("source_owner");
+    expect(projected[0]).not.toHaveProperty("control");
   });
 
   test("describe capability exposes lifecycle semantics only on demand", async () => {

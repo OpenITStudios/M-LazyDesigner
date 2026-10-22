@@ -4,6 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP discovery hot-path optimization: relevance/exact-only filtering in `gateway/capabilities/catalog.ts` now precedes graph-readiness scoring, without changing matching or final ranking. `registerCoreTools.ts` projects bounded raw search summaries directly, no longer building unused Control source-owner decoration; `control/capabilities.ts` accepts raw and decorated summaries with the same AI-visible result. Existing regression owners cover readiness, branches, exact-only semantics, projection parity, and affected-test routing. Source/static REMOTE_GITHUB only; Bun/types/native/performance and actual AI token measurements NOT EXECUTED. Four-tool public Gateway, Hybrid-4 experimental, CI, main, and release unchanged.
+
+
 2026-10-22 Model-neutral Gateway context economy: shrunk the stable AI-client instructions with a size/safety regression in the existing Gateway owner, preserved direct-first discovery, Control receipts, visual approval and non-retry rules, and clarified host-owned model/tool capabilities and CI-disabled GitHub-only completion. Stable Four production/Hybrid-4 opt-in unchanged; no schema, native, CI, main or release changes. GitHub source/static preflight only; Bun, real AI usage and native Blockbench proof NOT EXECUTED.
 
 
