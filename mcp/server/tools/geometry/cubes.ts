@@ -14,7 +14,7 @@ import { createTool, type ToolSpec } from "@/lib/factories";
 import { autoUvEnum, cubeSchema, faceEnum } from "@/lib/schemas/geometry";
 import { readRenderedCubeBounds } from "@/lib/geometry/renderedModelBounds";
 import { STATUS_STABLE } from "@/lib/constants";
-import { resolveCoreCube, resolveCoreGroup } from "@/lib/core/identity";
+import { resolveCoreCube, resolveCoreGroup, resolveUniqueUuid } from "@/lib/core/identity";
 import { requireOpenProject } from "@/lib/core/project";
 import {
   hasFiniteCubeSpan,
@@ -285,8 +285,10 @@ export function planCubeSimplification(cubes: Array<Pick<Cube, "uuid" | "name" |
     return Object.is(result, -0) ? 0 : result;
   }) as [number, number, number];
   return request.ids.flatMap(id => {
-    const cube = cubes.find(candidate => candidate.uuid === id);
-    if (!cube) throw new Error(`Cube UUID "${id}" not found.`);
+    const cube = resolveUniqueUuid(cubes, id, {
+      kind: "Cube",
+      notFoundHint: "Inspect current Cube UUIDs before retrying simplification.",
+    });
     const update: BatchUpdate = { id };
     if (request.fields.includes("bounds")) {
       const from = round(cube.from), to = round(cube.to);
@@ -914,14 +916,11 @@ export function registerCubesTools() {
         pivotOnly: boolean;
         before: CubeAuthoredState;
       }> = updates.map((update: BatchUpdate) => {
-        const cube = (Cube.all ?? []).find(
-          (candidate: Cube) => candidate.uuid === update.id
-        );
-        if (!cube) {
-          throw new Error(
-            `Cube UUID "${update.id}" not found. Use inspect_elements with mode=outline/search, then mode=detail to confirm the exact target UUID before retrying the correction.`
-          );
-        }
+        const cube = resolveUniqueUuid(Cube.all ?? [], update.id, {
+          kind: "Cube",
+          notFoundHint:
+            "Use inspect_elements with mode=outline/search, then mode=detail to confirm the exact target UUID before retrying the correction.",
+        });
 
         requireIntentionalRotationActivation(
           cube,

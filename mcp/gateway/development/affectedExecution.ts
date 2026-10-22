@@ -411,6 +411,19 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  if (path === "mcp/lib/core/identity.ts") {
+    return [
+      "mcp/tests/geometry-identity-duplication.test.ts",
+      "mcp/tests/animation-core-identity.test.ts",
+      "mcp/tests/cube-simplify.test.ts",
+    ];
+  }
+  if (path === "mcp/server/tools/element/shared.ts") {
+    return [
+      "mcp/tests/geometry-identity-duplication.test.ts",
+      "mcp/tests/geometry-preflight-order.test.ts",
+    ];
+  }
   const hotPathTests = GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH[path];
   if (hotPathTests) return hotPathTests;
   const textureTests = TEXTURE_REGRESSION_TESTS_BY_PATH[path];

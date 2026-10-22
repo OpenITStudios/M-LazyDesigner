@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 2 session evidence isolation: each Runtime-generation invalidation now changes the visual-evidence handle namespace; old handles cannot resolve after an identical fresh capture. A repeated outage cannot skip newly written evidence merely because capability facts remain UNKNOWN. Correction history remains recoverable but unverified. Existing session/affected-work regressions were extended, not executed. Revisit only concrete post-reconnect failures, not source-size optimization.
+Batch 3 Geometry identity: shared UUID resolution and destructive element routing now reject distinct objects with colliding UUIDs (including name fallback); duplicate registry references to the same object remain valid. Cube batch/simplify use strict UUID preflight before mutation. Existing Geometry/Animation regressions and affected-test routing extended, NOT EXECUTED. Inspect remaining Geometry pivot/hierarchy risks only with concrete source evidence; keep native visual/Undo acceptance deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

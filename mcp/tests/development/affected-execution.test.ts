@@ -46,6 +46,27 @@ describe("affected execution planner", () => {
   });
 
 
+  test("shared Geometry identity changes select UUID and destructive-target regressions", () => {
+    for (const [path, expected] of [
+      ["mcp/lib/core/identity.ts", [
+        "mcp/tests/geometry-identity-duplication.test.ts",
+        "mcp/tests/animation-core-identity.test.ts",
+        "mcp/tests/cube-simplify.test.ts",
+      ]],
+      ["mcp/server/tools/element/shared.ts", [
+        "mcp/tests/geometry-identity-duplication.test.ts",
+        "mcp/tests/geometry-preflight-order.test.ts",
+      ]],
+    ] as const) {
+      const plan = planAffectedExecution({
+        changedPaths: [path],
+        semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.targeted_tests, path).toEqual([...expected].sort());
+    }
+  });
+
   test("selects runtime checks and exact owner tests for a bounded tool change", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/server/tools/geometry/cubes.ts"],

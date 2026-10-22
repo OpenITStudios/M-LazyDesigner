@@ -1,7 +1,11 @@
 /// <reference types="blockbench-types" />
 
 import { z } from "zod";
-import { resolveCoreGroup, resolveCoreTexture } from "@/lib/core/identity";
+import {
+  resolveCoreGroup,
+  resolveCoreTexture,
+  resolveUuidOrUniqueName,
+} from "@/lib/core/identity";
 
 export const finiteElementVector3Schema = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
 
@@ -70,37 +74,20 @@ export function elementContinuationState(element: ResolvedElement) {
 }
 
 export function resolveUniqueDestructiveElement(reference: string): ResolvedElement {
-  const candidates = new Map<string, ResolvedElement>();
+  // A Group may appear in both collections. Deduplicate only by object
+  // identity; distinct objects sharing a UUID must fail closed.
+  const candidates = [...new Set<ResolvedElement>([
+    ...(Outliner.elements ?? []),
+    ...(Group.all ?? []),
+  ])];
 
-  for (const element of Outliner.elements ?? []) {
-    candidates.set(element.uuid, element);
-  }
-  for (const group of Group.all ?? []) {
-    candidates.set(group.uuid, group);
-  }
-
-  const uuidMatch = candidates.get(reference);
-  if (uuidMatch) return uuidMatch;
-
-  const nameMatches = [...candidates.values()].filter(
-    (element) => element.name === reference
-  );
-  if (nameMatches.length === 1) return nameMatches[0];
-
-  if (nameMatches.length > 1) {
-    throw new Error(
-      `Element name "${reference}" is ambiguous. Use an exact UUID. Candidates: ${nameMatches
-        .map((element) => {
-          const type = getElementType(element) ?? "element";
-          return `${type} ${element.name} (${element.uuid})`;
-        })
-        .join(", ")}`
-    );
-  }
-
-  throw new Error(
-    `Element "${reference}" not found. Use inspect_elements(mode=outline|search) to confirm the intended UUID before retrying the destructive operation.`
-  );
+  return resolveUuidOrUniqueName(candidates, reference, {
+    kind: "Element",
+    notFoundHint:
+      "Use inspect_elements(mode=outline|search) to confirm the intended UUID before retrying the destructive operation.",
+    describeCandidate: (element) =>
+      `${getElementType(element) ?? "element"} ${element.name} (${element.uuid})`,
+  });
 }
 
 export function resolveUniqueTextureForDiscovery(reference: string): Texture {

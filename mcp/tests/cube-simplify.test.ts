@@ -27,6 +27,15 @@ describe("bounded Cube simplification",()=>{
   test("rejects collapsing even one positive axis",()=>{
     expect(()=>planCubeSimplification([{...cube,to:[.1,2,2]}],request())).toThrow("collapse");
   });
+  test("rejects distinct Cubes sharing a requested UUID before planning edits", () => {
+    const collision = { ...cube, name: "another-body" };
+    expect(() => planCubeSimplification([cube, collision], request()))
+      .toThrow('Cube UUID "a" is ambiguous');
+    // A repeated reference to one native object is not a second target.
+    expect(planCubeSimplification([cube, cube], request()))
+      .toEqual(planCubeSimplification([cube], request()));
+  });
+
   test("preflights every UUID and rejects numeric overflow",()=>{
     expect(()=>planCubeSimplification([cube],request({ids:["a","missing"]}))).toThrow("not found");
     expect(()=>planCubeSimplification([cube],request({increment:Number.MIN_VALUE}))).toThrow("non-finite");

@@ -20,6 +20,43 @@ function describeIdentity(item: CoreIdentityRecord): string {
 }
 
 /**
+ * Do not let a malformed model with duplicate UUIDs silently choose the first
+ * authored object. Identical object references may appear in two registries
+ * and are not distinct targets.
+ */
+function uniqueUuidMatch<T extends CoreIdentityRecord>(
+  items: readonly T[],
+  reference: string,
+  options: CoreIdentityResolveOptions<T>
+): T | null {
+  let match: T | null = null;
+  for (const item of items) {
+    if (item.uuid !== reference) continue;
+    if (match !== null && match !== item) {
+      const describe = options.describeCandidate ?? describeIdentity;
+      throw new Error(
+        `${options.kind} UUID "${reference}" is ambiguous across distinct authored objects. ` +
+        `Repair duplicate UUIDs before mutation. Candidates: ${describe(match)}, ${describe(item)}`
+      );
+    }
+    match = item;
+  }
+  return match;
+}
+
+export function resolveUniqueUuid<T extends CoreIdentityRecord>(
+  items: readonly T[],
+  reference: string,
+  options: CoreIdentityResolveOptions<T>
+): T {
+  const match = uniqueUuidMatch(items, reference, options);
+  if (match !== null) return match;
+  throw new Error(
+    `${options.kind} UUID "${reference}" not found. ${options.notFoundHint}`
+  );
+}
+
+/**
  * Shared deterministic identity contract for the retained Bedrock Entity core.
  * Explicit references resolve exact UUID first, then exact name only when unique.
  * No prefix matching, selection fallback, or silent default target is performed.
@@ -29,11 +66,17 @@ export function resolveUuidOrUniqueName<T extends CoreIdentityRecord>(
   reference: string,
   options: CoreIdentityResolveOptions<T>
 ): T {
-  const uuidMatch = items.find((item) => item.uuid === reference);
-  if (uuidMatch) return uuidMatch;
+  const uuidMatch = uniqueUuidMatch(items, reference, options);
+  if (uuidMatch !== null) return uuidMatch;
 
-  const nameMatches = items.filter((item) => item.name === reference);
-  if (nameMatches.length === 1) return nameMatches[0];
+  // The same Group object can occur in Outliner and Group registries. The
+  // repeated reference does not make a unique name ambiguous.
+  const nameMatches = [...new Set(items.filter((item) => item.name === reference))];
+  if (nameMatches.length === 1) {
+    // A unique name is not safe when another object shares its UUID: native
+    // Undo and animation references may still address that colliding ID.
+    return resolveUniqueUuid(items, nameMatches[0].uuid, options);
+  }
 
   const describe = options.describeCandidate ?? describeIdentity;
   if (nameMatches.length > 1) {

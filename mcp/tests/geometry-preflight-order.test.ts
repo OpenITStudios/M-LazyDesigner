@@ -100,6 +100,20 @@ describe("Geometry mutation preflight ordering", () => {
     expect(mutation).toBeGreaterThan(undo);
   });
 
+  test("batch Cube UUID collisions fail before native Undo starts", async () => {
+    const source = await Bun.file("server/tools/geometry/cubes.ts").text();
+    const start = source.indexOf("const executeBatchUpdateCubes");
+    const end = source.indexOf("createTool(cubeToolDocs[0].name", start);
+    const block = source.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const lookup = block.indexOf("resolveUniqueUuid(Cube.all ?? [], update.id");
+    const undo = block.indexOf("Undo.initEdit");
+    expect(lookup).toBeGreaterThanOrEqual(0);
+    expect(undo).toBeGreaterThan(lookup);
+    expect(block).not.toContain("(Cube.all ?? []).find(");
+  });
+
   test("Group pivot transfer fails closed before Undo when mesh is unavailable", async () => {
     const source = await Bun.file("server/tools/element/hierarchy.ts").text();
     const start = source.indexOf('createTool("modify_group"');
