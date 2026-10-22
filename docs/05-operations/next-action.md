@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 2 catalog recovery: the Gateway `tools/list` handshake now rejects empty/duplicate/blank capability names and repeated cursors before publishing `ready`; existing Backend cache regressions cover valid pagination and invalid snapshots. The prior project/Stage incomplete-receipt recovery remains fail-closed. Source/static checks only; Bun/native and client reconnect evidence NOT EXECUTED. Investigate only subsequent source-supported failure paths.
+Batch 2 reconnect backoff: preserve `degraded` during HTTP health probes following an MCP handshake failure so failed initialize/tools/list attempts retain their cumulative backoff until `markReady`. Keep offline health recovery distinct; targeted connection tests are authored, NOT EXECUTED. Previous catalog/affinity recovery fixes remain in Git history. Next: prioritize concrete remaining session failures over speculative optimizations.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

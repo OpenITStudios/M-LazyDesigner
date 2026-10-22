@@ -329,6 +329,9 @@ const GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH: Readonly<Record<string, readonly str
 const GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH: Readonly<
   Record<string, readonly string[]>
 > = {
+  "mcp/gateway/runtime/connectionManager.ts": [
+    "mcp/gateway/runtime/connectionManager.test.ts",
+  ],
   "mcp/gateway/runtime/backend.ts": [
     "mcp/gateway/backend-effects-boundary.test.ts",
     "mcp/gateway/index-boundary.test.ts",

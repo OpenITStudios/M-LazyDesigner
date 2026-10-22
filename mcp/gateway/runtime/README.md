@@ -36,6 +36,17 @@ replacing a capability or publishing an unusable catalog. The existing
 connection degraded. Only a complete matching-generation catalog may become
 `ready`. No secondary catalog or retry loop is introduced.
 
+## MCP reconnect backoff after health recovery
+
+The nonpassive Backend catalog path probes HTTP /health before attempting MCP
+initialize/tools/list. When an earlier handshake failed, keep the existing
+`degraded` state throughout that health probe: HTTP reachability must not
+clear MCP retry failures or falsely count a successful reconnect. Repeated
+failed handshakes retain bounded exponential backoff; only a completed
+`markReady` handshake clears it. A prior HTTP health outage remains distinct:
+`offline` may transition to `probing` and clear its *health* cooldown
+without advertising MCP readiness. No extra polling or retry mechanism is added.
+
 ## Runtime generation signal
 
 Runtime detects replacement/reconnect boundaries and reports generation changes upward. Verification evidence, correction-loop recovery, project epochs, and continuation invalidation are owned by `../session/orchestrationRecoveryState.ts`, not by Runtime transport.

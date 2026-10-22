@@ -315,6 +315,9 @@ describe("affected execution planner", () => {
 
   test("Runtime affinity and receipt producers share their existing effect contract", () => {
     const cases: Array<[string, string[]]> = [
+      ["mcp/gateway/runtime/connectionManager.ts", [
+        "mcp/gateway/runtime/connectionManager.test.ts",
+      ]],
       ["mcp/gateway/runtime/backend.ts", [
         "mcp/gateway/backend-effects-boundary.test.ts",
         "mcp/gateway/index-boundary.test.ts",

@@ -90,6 +90,53 @@ describe("GatewayConnectionManager", () => {
     expect(manager.snapshot().state).toBe("ready");
   });
 
+  test("health probes cannot reset backoff for repeated failed MCP handshakes", () => {
+    const manager = new GatewayConnectionManager();
+
+    manager.beginConnect();
+    manager.markDegraded();
+    expect(manager.snapshot().reconnect.failures).toBe(1);
+
+    // ensureCatalogUnsafe calls beginProbe then health/markAvailable on every
+    // permitted reconnect attempt; health alone must not erase MCP failures.
+    manager.beginProbe();
+    expect(manager.snapshot().state).toBe("degraded");
+    manager.markAvailable();
+    expect(manager.snapshot().state).toBe("degraded");
+    expect(manager.snapshot().reconnect.failures).toBe(1);
+    expect(manager.needsMcpRevalidation()).toBe(true);
+
+    manager.beginConnect();
+    manager.markDegraded();
+    expect(manager.snapshot().reconnect.failures).toBe(2);
+
+    manager.beginProbe();
+    manager.markAvailable();
+    expect(manager.snapshot().reconnect.failures).toBe(2);
+    manager.beginConnect();
+    manager.markReady({ catalogRefreshed: true });
+
+    expect(manager.snapshot().state).toBe("ready");
+    expect(manager.snapshot().reconnect.failures).toBe(0);
+    expect(manager.snapshot().reconnect.retry_after_ms).toBe(0);
+    expect(manager.needsMcpRevalidation()).toBe(false);
+  });
+
+  test("offline health recovery still clears its cooldown without MCP-ready proof", () => {
+    const manager = new GatewayConnectionManager();
+
+    manager.beginProbe();
+    manager.markOffline();
+    expect(manager.snapshot().reconnect.failures).toBe(1);
+    manager.beginProbe();
+    expect(manager.snapshot().state).toBe("probing");
+    manager.markAvailable();
+
+    expect(manager.snapshot().reconnect.failures).toBe(0);
+    expect(manager.snapshot().state).toBe("degraded");
+    expect(manager.needsMcpRevalidation()).toBe(true);
+  });
+
   test("successful connection resets reconnect cooldown", () => {
     const manager = new GatewayConnectionManager();
 

@@ -24,7 +24,12 @@ export class GatewayConnectionManager {
   }
 
   beginProbe(): void {
-    if (this.session.snapshot().state !== "ready") {
+    const state = this.session.snapshot().state;
+    // Preserve degraded MCP-handshake evidence across the subsequent health
+    // probe. If we switched to "probing", markAvailable() could reset the
+    // retry backoff even though MCP initialize/tools/list still failed.
+    // An actual health outage (offline) may probe and clear its cooldown.
+    if (state !== "ready" && state !== "degraded") {
       this.session.transition("probing");
     }
   }
