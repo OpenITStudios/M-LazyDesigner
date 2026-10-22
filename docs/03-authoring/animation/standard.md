@@ -111,7 +111,9 @@ Batch related properties through one `manage_animation_timeline(operation="prope
 
 ## Timing / Snapping
 
-Choose snapping because it fits the motion, then keep authored numeric key times coherent with that grid. A subtle idle, rapid attack, mechanical cycle, and first-person action may legitimately use different timing density.
+Choose snapping because it fits the motion, then keep authored numeric key times coherent with that grid.
+
+Before a dense transform track, prefer sparse semantic poses plus interpolation. `inspect_animation(diagnostics=true).animation_quality.keyframe_efficiency` reports read-only strict-linear numeric reduction candidates, requiring native-known interpolation and a single numeric data point. It does not delete keys or validate contact, end-effectors or playback. Only use the existing targeted keyframe delete operation after protecting event/contact/impact/loop times and confirming equivalent reference-aligned motion. Do not simplify Catmull-Rom, Bezier, step, Molang, pre/post, or rotation wraps from a numeric shortcut. A subtle idle, rapid attack, mechanical cycle, and first-person action may legitimately use different timing density.
 
 Interpolation is a means, not a quality target. Prefer the simplest interpolation that preserves intent. Do not add Bezier complexity merely to appear sophisticated. Bedrock-native delivery uses linear/Catmull-Rom or pre/post discontinuity; editor-only Bezier curves must be baked when direct Bedrock transform output requires it.
 

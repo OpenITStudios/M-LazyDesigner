@@ -137,6 +137,10 @@ const CONTROL_DELTA_CONTRACT_TESTS = [
 // in the existing affected-work planner; do not introduce a test router or
 // infer a false all-clear from an absent filename match.
 export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly string[]>> = {
+  "mcp/lib/texture/optimization.ts": [
+    "mcp/tests/quality-efficiency-intelligence.test.ts",
+    "mcp/tests/texture-atlas-integrity.test.ts",
+  ],
   "mcp/lib/texture/evidenceDelivery.ts": [
     "mcp/tests/texture-frame-mapping.test.ts",
     "mcp/tests/texture-runtime-policy.test.ts",
@@ -448,6 +452,14 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  if (path === "mcp/lib/animation/quality.ts") {
+    return ["mcp/tests/quality-efficiency-intelligence.test.ts"];
+  }
+  if (path === "mcp/lib/geometry/cubeSpan.ts" ||
+      path === "mcp/lib/geometry/quality.ts") {
+    return ["mcp/tests/geometry-preflight-order.test.ts",
+      "mcp/tests/quality-intelligence.test.ts"];
+  }
   if (path === "mcp/scripts/verify/verify-texture-runtime-live.ts") {
     return ["mcp/tests/live/texture-runtime-live-contract.test.ts"];
   }

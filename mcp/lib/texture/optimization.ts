@@ -275,6 +275,53 @@ function buildTextureCoverage(
   const budgetOmissions = omissions.filter(({ kind }) => kind === "budget");
   const counts = omissionCounts(omissions);
 
+  // Cube-local face directions remain visible even if their smaller patches
+  // lose the area-ranked example selection (e.g. an underside or sole).
+  const directional = new Map<string, {
+    local_face: string;
+    scanned: number;
+    omitted: number;
+    detail_capable_flat: number;
+    transparent: number;
+    varied: number;
+    review_example: { cube_uuid: string; cube_name: string; face: string; reason: string } | null;
+  }>();
+  const faceRow = (face: string) => {
+    let row = directional.get(face);
+    if (!row) {
+      row = { local_face: face, scanned: 0, omitted: 0,
+        detail_capable_flat: 0, transparent: 0, varied: 0, review_example: null };
+      directional.set(face, row);
+    }
+    return row;
+  };
+  for (const { patch, analysis } of analyzed) {
+    const row = faceRow(patch.face);
+    row.scanned += 1;
+    if (analysis.state === "varied") row.varied += 1;
+    if (analysis.state === "transparent") row.transparent += 1;
+    const flat = analysis.detail_capacity === "detail_capable" &&
+      (analysis.state === "solid_color" || analysis.state === "low_variation");
+    if (flat) row.detail_capable_flat += 1;
+    if ((flat || analysis.state === "transparent") && !row.review_example) {
+      row.review_example = { cube_uuid: patch.cube_uuid, cube_name: patch.cube_name,
+        face: patch.face, reason: flat ? "FLAT_FACE_REVIEW" : "TRANSPARENT_FACE_REVIEW" };
+    }
+  }
+  for (const omission of omissions) {
+    const row = faceRow(omission.face);
+    row.omitted += 1;
+    row.review_example = { cube_uuid: omission.cube_uuid, cube_name: omission.cube_name,
+      face: omission.face, reason: "SCAN_OMISSION:" + omission.kind };
+  }
+  const faceOrder = ["down", "up", "north", "south", "west", "east"];
+  const directionalCoverage = [...directional.values()].sort((a, b) => {
+    const ai = faceOrder.indexOf(a.local_face);
+    const bi = faceOrder.indexOf(b.local_face);
+    return (ai < 0 ? faceOrder.length : ai) - (bi < 0 ? faceOrder.length : bi) ||
+      a.local_face.localeCompare(b.local_face);
+  });
+
   const reviewKeys = new Set<string>();
   for (const { patch } of [...transparent, ...detailCapableFlat, ...intermediateAlpha]) {
     reviewKeys.add(`${patch.cube_uuid}:${patch.face}`);
@@ -337,6 +384,10 @@ function buildTextureCoverage(
         examples: byLargestPatch(intermediateAlpha),
         examples_truncated: intermediateAlpha.length > exampleLimit,
       },
+    },
+    cube_local_face_coverage: {
+      directions: directionalCoverage,
+      note: "Counts are per Cube-local face orientation, not world-space visibility. Small underside patches are retained even when omitted from area-ranked examples. Varied pixels do not prove styling, and omitted faces do not prove completion.",
     },
     omissions: {
       count: omissions.length,

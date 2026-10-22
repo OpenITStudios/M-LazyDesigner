@@ -123,7 +123,7 @@ Do not invent gameplay queries/events for unresolved activation. Archetypes are 
 
 Use authored poses for identity-critical action/contact/silhouette. Molang owns continuous/cyclic/reactive motion only when math is the real cause: `q.anim_time` for time-driven cycles, `q.modified_distance_moved` for travel phase, and `driver → delayed followers` for causal chains.
 
-For action/weight when applicable: `anticipation → action/impact → follow-through → recovery`. Before follower keys, reconcile latest user correction's event order, primary poses and attachment/contact; test a small cohort. Dense keys do not prove motion.
+For action/weight when applicable: `anticipation → action/impact → follow-through → recovery`. Before follower keys, reconcile latest user correction's event order, primary poses and attachment/contact; test a small cohort. Dense keys do not prove motion. When current track keys are already known and too dense, reuse `inspect_animation(diagnostics=true).animation_quality.keyframe_efficiency` as a **candidate-only** linear numeric review; protect key timing with semantic contact/events first. Use existing `manage_animation_timeline(operation="keyframes", action="delete")` only for verified redundant times and recapture affected playback/attachment evidence. No wholesale decimation for Bezier, Molang, pre/post, step or unknown interpolation.
 
 ## Fidelity / Correction / Evidence Deep Reference
 

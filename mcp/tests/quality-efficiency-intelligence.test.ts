@@ -3,7 +3,7 @@ import {
   analyzeTextureCoverage,
   analyzeTextureOptimizationOpportunities,
 } from "@/lib/textureOptimization";
-import { analyzeAnimationQuality } from "@/lib/animationQuality";
+import { analyzeAnimationQuality, planLinearKeyframeReduction } from "@/lib/animationQuality";
 
 function rgba(values: number[]): Uint8ClampedArray {
   return new Uint8ClampedArray(values.flatMap((value) => [value, 0, 0, 255]));
@@ -268,6 +268,76 @@ describe("usage-efficient authoring intelligence", () => {
         expect.objectContaining({ group_uuid: "arm", classification: "seam_review" }),
       ])
     );
+  });
+
+  test("strict linear numeric key reduction is read-only and protects authored times", () => {
+    const keys = [0, 0.25, 0.5, 0.75, 1].map((time) => ({
+      time, value: [10 * time, 0, 0],
+      interpolation: "linear", has_multiple_data_points: false,
+    }));
+    const plan = planLinearKeyframeReduction("position", keys);
+    expect(plan.state).toBe("candidate");
+    expect(plan.candidate_times).toEqual([0.25, 0.5, 0.75]);
+    expect(plan.candidate_count).toBe(3);
+    expect(plan.max_error).toBeLessThanOrEqual(1e-8);
+    expect(keys).toHaveLength(5);
+    expect(planLinearKeyframeReduction("position", keys, { protected_times: [0.5] }).candidate_times)
+      .toEqual([0.25, 0.75]);
+  });
+
+  test("nonlinear, Bezier, Molang, pre/post and duplicated times are never reduced", () => {
+    const key = (time: number, value: readonly unknown[], interpolation = "linear",
+      has_multiple_data_points = false) =>
+      ({ time, value, interpolation, has_multiple_data_points });
+    expect(planLinearKeyframeReduction("position", [
+      key(0, [0, 0, 0]), key(0.5, [2, 0, 0]), key(1, [0, 0, 0]),
+    ]).candidate_count).toBe(0);
+    for (const unsafe of [
+      [key(0, [0, 0, 0]), key(0.5, [1, 0, 0], "bezier"), key(1, [2, 0, 0])],
+      [key(0, [0, 0, 0]), key(0.5, ["query.anim_time", 0, 0]), key(1, [2, 0, 0])],
+      [key(0, [0, 0, 0]), key(0.5, [1, 0, 0], "linear", true), key(1, [2, 0, 0])],
+      [key(0, [0, 0, 0]), key(0.5, [1, 0, 0]), key(0.5, [2, 0, 0])],
+    ]) expect(planLinearKeyframeReduction("position", unsafe).state).toBe("unverified");
+    expect(planLinearKeyframeReduction("rotation", [
+      key(0, [0, -179, 0]), key(0.5, [0, 0, 0]), key(1, [0, 179, 0]),
+    ]).candidate_count).toBe(0);
+  });
+
+  test("animation quality reports bounded savings candidates, not native PASS", () => {
+    const keys = [0, 0.25, 0.5, 0.75, 1].map((time) => ({
+      time, value: [time * 8, 0, 0],
+      interpolation: "linear", has_multiple_data_points: false,
+    }));
+    const result = analyzeAnimationQuality({ loop_mode: "once", length: 1, tracks: [
+      { group_uuid: "arm", group_name: "arm", is_root: false,
+        channel: "position", keyframes: keys },
+    ] });
+    if (result.state !== "available") throw Error("expected diagnostics");
+    expect(result.keyframe_efficiency.candidate_keyframe_count).toBe(3);
+    expect(result.keyframe_efficiency.examples[0].candidate_times).toEqual([0.25, 0.5, 0.75]);
+    expect(result.visual_verdict).toBe("not_evaluated");
+  });
+
+  test("directional texture coverage retains small underside defects", () => {
+    const make = (face: string, size: number, flat: boolean) => ({
+      cube_uuid: face, cube_name: face, face,
+      texture_uuid: "atlas", texture_name: "atlas", uv: [0, 0, size, size],
+      width: size, height: size,
+      pixels: rgba(Array.from({ length: size * size }, (_, i) => flat ? 64 : (i % 240))),
+    });
+    const result = analyzeTextureCoverage([
+      make("north", 16, false), make("down", 4, true),
+    ], [{ kind: "blank", cube_uuid: "upper", cube_name: "upper", face: "up" }]);
+    expect(result.gate.state).toBe("incomplete");
+    const directions = result.cube_local_face_coverage.directions;
+    expect(directions.map((entry) => entry.local_face)).toEqual(["down", "up", "north"]);
+    expect(directions[0]).toMatchObject({
+      scanned: 1, detail_capable_flat: 1,
+      review_example: { cube_uuid: "down", reason: "FLAT_FACE_REVIEW" },
+    });
+    expect(directions[1]).toMatchObject({
+      omitted: 1, review_example: { cube_uuid: "upper", reason: "SCAN_OMISSION:blank" },
+    });
   });
 
   test("cadence diagnostics remain advisory and do not invent a failure", () => {

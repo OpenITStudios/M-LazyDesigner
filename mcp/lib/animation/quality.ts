@@ -5,7 +5,14 @@ export type AnimationQualityTrackInput = {
   group_name: string;
   is_root: boolean;
   channel: AnimationQualityChannel;
-  keyframes: Array<{ time: number; value: readonly unknown[] }>;
+  keyframes: AnimationQualityKeyframe[];
+};
+
+export type AnimationQualityKeyframe = {
+  time: number;
+  value: readonly unknown[];
+  interpolation?: string;
+  has_multiple_data_points?: boolean;
 };
 
 export const ANIMATION_QUALITY_EXAMPLE_LIMIT = 8;
@@ -67,6 +74,82 @@ function cadence(keyframes: Array<{ time: number }>) {
   };
 }
 
+/**
+ * Conservative O(n) read-only candidate planner. Only numeric, native-known
+ * linear tracks with one datapoint qualify; no automatic key mutation.
+ */
+export function planLinearKeyframeReduction(
+  channel: AnimationQualityChannel,
+  keyframes: readonly AnimationQualityKeyframe[],
+  options: { max_error?: number; protected_times?: readonly number[] } = {}
+) {
+  const tolerance = options.max_error ?? 1e-8;
+  if (!Number.isFinite(tolerance) || tolerance < 0) {
+    throw new Error("Linear keyframe reduction max_error must be finite and nonnegative.");
+  }
+  if (keyframes.length < 3) {
+    return { state: "none" as const, candidate_times: [] as number[],
+      candidate_count: 0, max_error: 0 };
+  }
+  const frames = keyframes.slice().sort((a, b) => a.time - b.time);
+  if (frames.some((key, index) =>
+    !Number.isFinite(key.time) || key.time < 0 ||
+    (index > 0 && key.time <= frames[index - 1].time) ||
+    key.interpolation !== "linear" || key.has_multiple_data_points !== false ||
+    finiteVec3(key.value) === null
+  )) {
+    return { state: "unverified" as const, reason: "NONLINEAR_OR_UNRESOLVED_NATIVE_KEYS",
+      candidate_times: [] as number[], candidate_count: 0, max_error: null };
+  }
+  const numeric = frames.map((key) => finiteVec3(key.value)!);
+  const protectedTimes = new Set(options.protected_times ?? []);
+  const candidates = new Set<number>();
+  let anchor = 0;
+  let maxError = 0;
+  const difference = (a: number, b: number) =>
+    Math.max(...[0, 1, 2].map((axis) => Math.abs(numeric[a][axis] - numeric[b][axis])));
+  const projectedError = (start: number, middle: number, end: number) => {
+    // Euler wrap is unsafe without native-specific shortest-path evaluation.
+    if (channel === "rotation" && difference(start, end) > 180) return Infinity;
+    const fraction = (frames[middle].time - frames[start].time) /
+      (frames[end].time - frames[start].time);
+    return Math.max(...[0, 1, 2].map((axis) => Math.abs(
+      numeric[middle][axis] -
+      (numeric[start][axis] + (numeric[end][axis] - numeric[start][axis]) * fraction)
+    )));
+  };
+  for (let index = 1; index < frames.length - 1; index += 1) {
+    if (protectedTimes.has(frames[index].time)) {
+      anchor = index;
+      continue;
+    }
+    const error = projectedError(anchor, index, index + 1);
+    if (error <= tolerance) candidates.add(index);
+    else anchor = index;
+  }
+  // Check all original values against final retained spans; no local-only PASS.
+  const retained = frames.map((_, index) => index).filter((index) => !candidates.has(index));
+  for (let segment = 1; segment < retained.length; segment += 1) {
+    const start = retained[segment - 1], end = retained[segment];
+    for (let index = start + 1; index < end; index += 1) {
+      const error = projectedError(start, index, end);
+      if (!Number.isFinite(error) || error > tolerance) {
+        return { state: "unverified" as const, reason: "RECONSTRUCTION_ERROR_EXCEEDED",
+          candidate_times: [] as number[], candidate_count: 0,
+          max_error: Number.isFinite(error) ? error : null };
+      }
+      maxError = Math.max(maxError, error);
+    }
+  }
+  const candidateTimes = [...candidates].map((index) => frames[index].time);
+  return {
+    state: candidateTimes.length > 0 ? ("candidate" as const) : ("none" as const),
+    candidate_times: candidateTimes,
+    candidate_count: candidateTimes.length,
+    max_error: maxError,
+  };
+}
+
 function seamThreshold(channel: AnimationQualityChannel): number {
   if (channel === "rotation") return 0.5;
   if (channel === "scale") return 0.002;
@@ -86,6 +169,10 @@ export function analyzeAnimationQuality(input: {
 
   const loopTrackDiagnostics: Array<Record<string, unknown>> = [];
   const cadenceDiagnostics: Array<Record<string, unknown>> = [];
+  const reductionDiagnostics: Array<Record<string, unknown>> = [];
+  let candidateKeyCount = 0;
+  let candidateTrackCount = 0;
+  let reductionUnverifiedCount = 0;
   let boundaryMissingCount = 0;
   let nonNumericBoundaryCount = 0;
   let reviewSeamCount = 0;
@@ -97,6 +184,19 @@ export function analyzeAnimationQuality(input: {
       .filter((keyframe) => Number.isFinite(keyframe.time) && keyframe.time >= 0)
       .slice()
       .sort((a, b) => a.time - b.time);
+    const reduction = planLinearKeyframeReduction(track.channel, track.keyframes);
+    if (reduction.state === "unverified") reductionUnverifiedCount += 1;
+    else if (reduction.candidate_count > 0) {
+      candidateKeyCount += reduction.candidate_count;
+      candidateTrackCount += 1;
+      reductionDiagnostics.push({
+        group_uuid: track.group_uuid, group_name: track.group_name, channel: track.channel,
+        keyframe_count: track.keyframes.length, candidate_count: reduction.candidate_count,
+        candidate_times: reduction.candidate_times.slice(0, exampleLimit),
+        candidate_times_truncated: reduction.candidate_count > exampleLimit,
+        max_numeric_error: reduction.max_error,
+      });
+    }
     const cadenceSummary = cadence(keyframes);
     if (cadenceSummary && cadenceSummary.coefficient_of_variation >= 0.75) {
       cadenceDiagnostics.push({
@@ -169,6 +269,14 @@ export function analyzeAnimationQuality(input: {
       examples: loopTrackDiagnostics.slice(0, exampleLimit),
       examples_truncated: loopTrackDiagnostics.length > exampleLimit,
       note: "Numeric endpoint comparison only, not interpolation, playback, contact, foot sliding or weight evaluation. Expressions and insufficient keys remain unevaluated, not passing. Root position displacement is locomotion evidence, not a seam defect.",
+    },
+    keyframe_efficiency: {
+      candidate_track_count: candidateTrackCount,
+      candidate_keyframe_count: candidateKeyCount,
+      unverified_track_count: reductionUnverifiedCount,
+      examples: reductionDiagnostics.slice(0, exampleLimit),
+      examples_truncated: reductionDiagnostics.length > exampleLimit,
+      note: "Read-only strict-linear numeric candidates only; contact, effects, protected poses, end-effectors, rig/world-space error and playback remain unverified. Never delete or change interpolation without semantic review and live proof.",
     },
     cadence: {
       high_variability_track_count: cadenceDiagnostics.length,

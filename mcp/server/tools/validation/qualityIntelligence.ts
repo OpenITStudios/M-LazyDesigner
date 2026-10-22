@@ -494,6 +494,8 @@ function animationQualityRuntime(structuredContent: Record<string, unknown>) {
         (keyframe) => ({
           time: keyframe.time,
           value: keyframe.getArray(0) as unknown[],
+          interpolation: keyframe.interpolation,
+          has_multiple_data_points: keyframe.data_points.length > 1,
         })
       );
       if (keyframes.length === 0) continue;

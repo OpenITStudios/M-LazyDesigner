@@ -414,6 +414,8 @@ unresolved, not suppressed by a single boundary flag. The declaration must
 be grounded in the approved reference/material plan; it is not native proof,
 permission to modify UV, or a visual PASS.
 
+**Directional coverage before visual PASS:** `optimization_opportunities.coverage.cube_local_face_coverage` reports scanned, omitted, transparent and detail-capable flat faces by Cube-local orientation, including `down` and `up` even when small examples are not selected by atlas area. This is not world-facing occlusion or an art-quality verdict. Every relevant face still needs an explicit mapped-view or intentional-flat/transparent/shared decision; vary camera/pose when previously hidden soles, underside joints or inner wings become visible.
+
 **Incomplete intra-Cube seam evidence:** Two edges from the *same face*
 are duplicate/ambiguous evidence, not a valid comparison pair. A pair of
 different faces with unequal sample counts is
