@@ -390,9 +390,14 @@ function sharedContractTestsForPath(path: string): readonly string[] {
   if (path === "mcp/lib/authoring/semanticHistory.ts") {
     return SEMANTIC_HISTORY_CONTRACT_TESTS;
   }
+  if (path === "mcp/gateway/control/delta/receipts.ts") {
+    return [
+      ...CONTROL_DELTA_CONTRACT_TESTS,
+      "mcp/tests/contracts/receipt-continuation-contract.test.ts",
+    ];
+  }
   if (
     path === "mcp/gateway/control/delta/engine.ts" ||
-    path === "mcp/gateway/control/delta/receipts.ts" ||
     path === "mcp/gateway/control/delta/freshness.ts" ||
     path === "mcp/gateway/control/delta/verification.ts"
   ) {

@@ -211,10 +211,16 @@ const CONTINUATION_RECEIPT_VALIDATORS: Readonly<
   rename_element: renameElementReceiptComplete,
   manage_locator: locatorReceiptComplete,
   manage_null_object: locatorReceiptComplete,
-  bone_rigging: (value) =>
-    nativeIkControllerReceiptComplete(value) ||
-    boneRiggingStateReceiptComplete(value) ||
-    boneRiggingDeletionReceiptComplete(value),
+  bone_rigging: (value) => {
+    // The MCP wrapper contributes exactly one authoritative candidate.
+    // Reuse it across the existing independent native/state/deletion guards.
+    const candidate = resultCandidates(value)[0];
+    return candidate !== undefined && (
+      isNativeIkControllerReceipt(candidate) ||
+      isBoneRiggingStateReceipt(candidate) ||
+      isBoneRiggingDeletionReceipt(candidate)
+    );
+  },
   add_group: (value) => groupReceiptComplete("add_group", value),
   modify_group: (value) => groupReceiptComplete("modify_group", value),
   reparent_element: (value) => groupReceiptComplete("reparent_element", value),

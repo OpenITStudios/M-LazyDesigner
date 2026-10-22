@@ -249,6 +249,139 @@ describe("LazyDesigner Control minimum invalidation", () => {
     expect(write.mutates).toBe(true);
   });
 
+  test("Undo/Redo shares one authoritative history interpretation across Control outputs", () => {
+    const cases = [
+      { semantic_effect: {
+        stale: ["UV_MAPPING", "TEXTURE_APPEARANCE"],
+        workspace_projection: true, acceptance_gates: true,
+      } },
+      { semantic_effect: {
+        stale: [], workspace_projection: true, acceptance_gates: false,
+      } },
+      { semantic_effect: null },
+      { structuredContent: null, semantic_effect: {
+        stale: [], workspace_projection: false, acceptance_gates: false,
+      } },
+      { structuredContent: { semantic_effect: {
+        stale: ["ANIMATION_MOTION"],
+        workspace_projection: true, acceptance_gates: true,
+      } }, semantic_effect: {
+        stale: [], workspace_projection: false, acceptance_gates: false,
+      } },
+    ];
+    for (const capability of ["undo", "redo"]) {
+      for (const result of cases) {
+        const domain = authoringDomainForCapability(capability);
+        const prepared = analyzeMutationEvidence(capability, domain, true, result);
+        expect(prepared).toHaveProperty("historyEffect");
+        expect(mutationInvalidation(
+          capability, domain, true, result, undefined, prepared
+        )).toEqual(mutationInvalidation(capability, domain, true, result));
+        expect(mutationFreshness(
+          capability, domain, true, result, undefined, prepared
+        )).toEqual(mutationFreshness(capability, domain, true, result));
+        const actual = buildControlDelta({
+          capability, phaseBefore: null, phaseAfter: null,
+          projectUuid: "project-a", succeeded: true, result,
+        });
+        expect(actual.invalidates).toEqual(
+          mutationInvalidation(capability, domain, true, result)
+        );
+        expect(actual.freshness).toEqual(
+          mutationFreshness(capability, domain, true, result)
+        );
+      }
+    }
+    const failed = analyzeMutationEvidence(
+      "undo", authoringDomainForCapability("undo"), false,
+      { semantic_effect: { stale: [], workspace_projection: false, acceptance_gates: false } }
+    );
+    expect(failed).not.toHaveProperty("historyEffect");
+    expect(failed.mutates).toBe(false);
+  });
+
+  test("one Undo Control Delta reads semantic history receipt only once", () => {
+    let historyReads = 0;
+    const result = {
+      get semantic_effect() {
+        historyReads += 1;
+        return {
+          stale: ["MATERIAL_RENDER"],
+          workspace_projection: true,
+          acceptance_gates: true,
+        };
+      },
+    };
+    const delta = buildControlDelta({
+      capability: "undo",
+      phaseBefore: "texturing", phaseAfter: "texturing",
+      projectUuid: "project-a", succeeded: true, result,
+    });
+    expect(historyReads).toBe(1);
+    expect(delta.freshness.basis).toBe("PRECISE_EFFECT");
+    expect(delta.freshness.stale).toEqual(["MATERIAL_RENDER"]);
+    expect(delta.invalidates.authoring_domains).toEqual(["TEXTURING"]);
+  });
+
+  test("Animation Controller compile-only source is branch-bound and request-local", () => {
+    const receipt = {
+      execution: "applied",
+      action: "runtime_resource",
+      resource_kind: "client_entity",
+      source_path: null,
+      write: null,
+    };
+    const cases = [
+      {
+        value: receipt,
+        branch: { field: "resource_kind", value: "client_entity" },
+        expected: true,
+      },
+      {
+        value: receipt,
+        branch: { field: "resource_kind", value: "animation_controller" },
+        expected: false,
+      },
+      {
+        value: receipt,
+        branch: { field: "operation", value: "runtime_resource" },
+        expected: undefined,
+      },
+      {
+        value: { ...receipt, write: "/unexpected/generated/file.json" },
+        branch: { field: "resource_kind", value: "client_entity" },
+        expected: false,
+      },
+    ] as const;
+    const capability = "manage_animation_controller";
+    const domain = authoringDomainForCapability(capability);
+    for (const { value, branch, expected } of cases) {
+      const prepared = analyzeMutationEvidence(
+        capability, domain, true, value, branch
+      );
+      expect(prepared.animationControllerResourceNeutral).toBe(expected);
+      expect(prepared.mutates).toBe(
+        mutationFreshness(capability, domain, true, value, branch)
+          .basis !== "NO_CHANGE"
+      );
+      expect(mutationInvalidation(
+        capability, domain, true, value, branch, prepared
+      )).toEqual(mutationInvalidation(
+        capability, domain, true, value, branch
+      ));
+      expect(mutationFreshness(
+        capability, domain, true, value, branch, prepared
+      )).toEqual(mutationFreshness(
+        capability, domain, true, value, branch
+      ));
+    }
+    const next = analyzeMutationEvidence(
+      capability, domain, true, { ...receipt, write: "/actual/write.json" },
+      { field: "resource_kind", value: "client_entity" }
+    );
+    expect(next.animationControllerResourceNeutral).toBe(false);
+  });
+
   test("cached geometry scope stays call-local and never reuses a prior changed receipt", () => {
     const domain = authoringDomainForCapability("manage_cubes");
     const first = { geometry_effect: cubeEffect(["rotation"]) };

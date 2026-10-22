@@ -340,6 +340,31 @@ Two focused regressions extend `gateway-control-invalidation.test.ts` to
 compare prepared/direct decisions and sequential call isolation. Executable
 Bun/type checks and cost measurements remain outstanding.
 
+## Animation Controller, Bone Rigging and Undo/Redo Receipt Reuse — SOURCE OPTIMIZATION
+
+The existing `buildControlDelta` uses one invocation-scoped
+`analyzeMutationEvidence`. It now also prepares the typed Undo/Redo semantic
+history effect once for mutation, domain invalidation and stale-scope
+projection. A missing/malformed history effect remains conservative, with
+no persistent cache across requests or Blockbench projects.
+
+The `manage_animation_controller` compile-only resource decision is
+derived once per relevant resource-kind branch and reused for mutation
+classification. The resource kind must still match the requested branch,
+and a native write cannot masquerade as a compile-only receipt. Independent
+controller state-receipt validation remains authoritative for receipt-only
+continuation (a different contract, not an interchangeable cache entry).
+
+For `bone_rigging`, the established continuation registry now selects its
+single authoritative MCP payload once before applying the same independent
+native IK, bone-state and deletion guards. No acceptance predicates or branch
+identities change.
+
+Existing Control/receipt owners include direct-versus-prepared regressions
+for malformed, no-change, native and envelope-conflict receipts, plus a
+single-call Undo history-read count. Bun/typecheck, native and performance
+proof are still required for execution and any speedup claim.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

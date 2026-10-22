@@ -5,6 +5,9 @@ import {
   receiptSupportsContinuation,
   resultCandidates,
   cubeStateNeutral,
+  boneRiggingDeletionReceiptComplete,
+  boneRiggingStateReceiptComplete,
+  nativeIkControllerReceiptComplete,
 } from "@/gateway/control/delta/receipts";
 
 describe("continuation receipt registry", () => {
@@ -41,6 +44,52 @@ describe("continuation receipt registry", () => {
       expect(entry?.stage, capability).toBeDefined();
       expect(entry?.verificationClass, capability).not.toBe("not_applicable");
     }
+  });
+
+  test("Bone Rigging one-candidate validator matches independent native/state/delete guards", () => {
+    const cases: unknown[] = [
+      {
+        action: "set_ik", bone: {
+          uuid: "bone-a", name: "leg", parent: "root",
+          origin: [0, 8, 0], rotation: [0, 0, 0],
+          ik_enabled: true, ik_target: "target-a",
+        },
+      },
+      {
+        action: "delete",
+        removed_root: { uuid: "bone-a", name: "leg", parent: "root" },
+        removed_counts: { groups: 2, elements: 1, total_nodes: 3 },
+        affected_animations: 1,
+      },
+      {
+        action: "set_ik_controller", controller: {
+          uuid: "null-a", name: "leg_ik", ik_target: "foot",
+          ik_source: "upper_leg", ik_pole: "knee",
+          lock_ik_target_rotation: false,
+        },
+      },
+      { action: "set_ik", bone: { uuid: "bone-a", name: "leg" } },
+      { action: "delete", removed_counts: { groups: 2, elements: 1, total_nodes: 99 } },
+      { action: "set_ik_controller", controller: { uuid: "null-a", name: "leg_ik" } },
+      null,
+      { structuredContent: null, action: "set_ik_controller" },
+    ];
+    for (const value of cases) {
+      const previous =
+        nativeIkControllerReceiptComplete(value) ||
+        boneRiggingStateReceiptComplete(value) ||
+        boneRiggingDeletionReceiptComplete(value);
+      expect(receiptSupportsContinuation("bone_rigging", value)).toBe(previous);
+    }
+    for (const valid of cases.slice(0, 3)) {
+      expect(receiptSupportsContinuation("bone_rigging", {
+        structuredContent: valid, action: "delete",
+        removed_counts: { groups: 1, elements: 999 },
+      })).toBe(true);
+    }
+    expect(receiptSupportsContinuation("bone_rigging", {
+      structuredContent: null, ...(cases[0] as Record<string, unknown>),
+    })).toBe(false);
   });
 
   test("unknown capabilities fail closed instead of inheriting a receipt validator", () => {

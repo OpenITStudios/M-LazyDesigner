@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 Animation/Undo/Bone Control receipt economy: `delta/freshness.ts` now reuses one typed Undo/Redo semantic-history effect for mutation status, invalidation and freshness; the branch-bound Animation Controller compile-only decision is request-local and reused. `delta/receipts.ts` evaluates Bone Rigging receipt variants from one canonical MCP candidate instead of collecting that same candidate repeatedly. Added focused semantic history, controller-resource, malformed/envelope conflict and Bone receipt regressions; the existing affected selector now includes direct receipt-continuation tests when `delta/receipts.ts` changes. All edits REMOTE_GITHUB source/static only; no Bun/typecheck/Blockbench performance execution. CI and main unchanged.
+
+
+
 2026-10-22 Material/Texture Layer/Particle Control receipt reuse: `gateway/control/delta/freshness.ts` now computes material-save, layer-metadata and particle-texture-handoff classifications once per relevant successful invocation, reusing them across mutation/no-op and invalidation. `delta/engine.ts` also reuses particle handoff for next intent. Existing exported direct APIs fall back to native receipt checks; no persistent cache or public contract change. Two added source regressions cover valid/invalid saves, requested-branch mismatch, metadata vs recomposition, particle preparation/write/handoff, failed calls and successive requests. GitHub source/static only; Bun/TypeScript, performance and native Blockbench NOT EXECUTED. CI, main and release unchanged.
 
 

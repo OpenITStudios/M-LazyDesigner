@@ -129,7 +129,9 @@ export function capabilityMutatesState(
   branch?: CapabilityBranchHint,
   receiptFacts?: Pick<
     MutationEvidenceAnalysis,
-    "materialPersistenceOnly" | "textureLayerMetadataOnly" | "particleTextureHandoff"
+    "materialPersistenceOnly" | "textureLayerMetadataOnly" |
+    "particleTextureHandoff" | "historyEffect" |
+    "animationControllerResourceNeutral"
   >
 ): boolean {
   if (!succeeded || !STATE_MUTATIONS.has(capability)) return false;
@@ -142,7 +144,9 @@ export function capabilityMutatesState(
     return false;
   }
   if (capability === "undo" || capability === "redo") {
-    const semanticEffect = semanticHistoryEffectFromResult(result);
+    const semanticEffect = receiptFacts?.historyEffect === undefined
+      ? semanticHistoryEffectFromResult(result)
+      : receiptFacts.historyEffect;
     if (semanticEffect && semanticEffect.stale.length === 0) return false;
   }
   // The native simplify branch alone produces planned/unchanged Cube previews.
@@ -173,7 +177,8 @@ export function capabilityMutatesState(
   }
   if (
     capability === "manage_animation_controller" &&
-    animationControllerResourceStateNeutral(result, branch)
+    (receiptFacts?.animationControllerResourceNeutral ??
+      animationControllerResourceStateNeutral(result, branch))
   ) {
     return false;
   }
@@ -204,6 +209,8 @@ export type MutationEvidenceAnalysis = Readonly<{
   materialPersistenceOnly?: boolean;
   textureLayerMetadataOnly?: boolean;
   particleTextureHandoff?: boolean;
+  historyEffect?: ReturnType<typeof semanticHistoryEffectFromResult>;
+  animationControllerResourceNeutral?: boolean;
 }>;
 
 export function geometryInvalidation(
@@ -257,13 +264,16 @@ export function geometryInvalidation(
 }
 
 function semanticHistoryInvalidation(
-  result: unknown
+  result: unknown,
+  preparedEffect?: ReturnType<typeof semanticHistoryEffectFromResult>
 ): {
   authoring_domains: ControlAuthoringDomain[];
   workspace_projection: boolean;
   acceptance_gates: boolean;
 } | null {
-  const effect = semanticHistoryEffectFromResult(result);
+  const effect = preparedEffect === undefined
+    ? semanticHistoryEffectFromResult(result)
+    : preparedEffect;
   if (!effect) return null;
 
   return {
@@ -282,7 +292,9 @@ export function mutationInvalidation(
   analysis?: MutationEvidenceAnalysis
 ): ControlDelta["invalidates"] {
   if (succeeded && (capability === "undo" || capability === "redo")) {
-    const historyInvalidation = semanticHistoryInvalidation(result);
+    const historyInvalidation = semanticHistoryInvalidation(
+      result, analysis?.historyEffect
+    );
     if (historyInvalidation) return historyInvalidation;
   }
 
@@ -457,6 +469,16 @@ export function analyzeMutationEvidence(
     ...(succeeded && capability === "manage_particle"
       ? { particleTextureHandoff: particleTextureHandoffRequired(result) }
       : {}),
+    ...(succeeded && (capability === "undo" || capability === "redo")
+      ? { historyEffect: semanticHistoryEffectFromResult(result) }
+      : {}),
+    ...(succeeded && capability === "manage_animation_controller" &&
+      branch?.field === "resource_kind"
+      ? {
+          animationControllerResourceNeutral:
+            animationControllerResourceStateNeutral(result, branch),
+        }
+      : {}),
   };
   const mutates = capabilityMutatesState(
     capability, succeeded, result, branch, receiptFacts
@@ -474,7 +496,8 @@ export function staleScopesForMutation(
   capability: string,
   domain: ControlAuthoringDomain,
   result: unknown,
-  geometryScopes?: ReturnType<typeof geometryFreshnessScopes>
+  geometryScopes?: ReturnType<typeof geometryFreshnessScopes>,
+  historyEffect?: ReturnType<typeof semanticHistoryEffectFromResult>
 ): { stale: ControlFreshnessScope[]; precise: boolean } {
   if (domain === "GEOMETRY") {
     return geometryScopes ?? geometryFreshnessScopes(capability, result);
@@ -499,7 +522,9 @@ export function staleScopesForMutation(
   }
 
   if (capability === "undo" || capability === "redo") {
-    const semanticEffect = semanticHistoryEffectFromResult(result);
+    const semanticEffect = historyEffect === undefined
+      ? semanticHistoryEffectFromResult(result)
+      : historyEffect;
     if (semanticEffect) {
       return {
         stale: semanticEffect.stale,
@@ -577,7 +602,8 @@ export function mutationFreshness(
   }
 
   const { stale, precise } = staleScopesForMutation(
-    capability, domain, result, analysis?.geometryScopes
+    capability, domain, result, analysis?.geometryScopes,
+    analysis?.historyEffect
   );
   const staleSet = new Set(stale);
   return {

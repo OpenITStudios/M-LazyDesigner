@@ -383,6 +383,24 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("Control receipt validation changes select native continuation proof without a full sweep", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/gateway/control/delta/receipts.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toContain(
+      "mcp/tests/contracts/receipt-continuation-contract.test.ts"
+    );
+    expect(plan.targeted_tests).toContain(
+      "mcp/tests/gateway-control-invalidation.test.ts"
+    );
+    expect(plan.targeted_tests).toContain(
+      "mcp/tests/gateway-control-continuation-hardening.test.ts"
+    );
+    expect(new Set(plan.targeted_tests).size).toBe(plan.targeted_tests.length);
+  });
+
   test("Control Delta engine and freshness changes select the exact invalidation owner", () => {
     for (const source of [
       "mcp/gateway/control/delta/engine.ts",
