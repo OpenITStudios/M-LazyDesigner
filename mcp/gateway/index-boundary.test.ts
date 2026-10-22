@@ -17,7 +17,7 @@ const executorSource = await readFile(
 
 describe("Gateway index boundary", () => {
   test("compact client instructions preserve the direct-first and recovery contract", () => {
-    const match = source.match(/const GATEWAY_INSTRUCTIONS =\\s*\\n\\s*"([^"]+)";/);
+    const match = source.match(/const GATEWAY_INSTRUCTIONS =\s*\n\s*"([^"]+)";/);
     expect(match).not.toBeNull();
     const instructions = match![1]!;
     // UTF-8 bytes are a static context proxy, not real model tokens.
@@ -68,7 +68,7 @@ describe("Gateway index boundary", () => {
   });
 
   test("wires runtime generation changes through the session owner", () => {
-    expect(source).toContain("onRuntimeGenerationChange: () => session.onRuntimeGenerationChange()");
+    expect(source).toContain("onRuntimeGenerationChange: (event) => session.onRuntimeGenerationChange(event.project_uuid)");
     expect(sessionSource).toContain("gatewayOrchestrationRecoveryState.invalidateRuntimeGeneration()");
     expect(sessionSource).toContain("this.executionState = null");
     expect(sessionSource).toContain("this.capabilityFacts = seedCapabilityFacts({");
@@ -83,7 +83,7 @@ describe("Gateway index boundary", () => {
       "gatewayOrchestrationRecoveryState.synchronizeProjectAffinity(projectUuid)"
     );
     expect(sessionSource).toContain("this.executionState = null");
-    expect(coreToolsSource).toContain("session.synchronizeProject(status.affinity.project_uuid)");
+    expect(coreToolsSource).toContain("session.onVerifiedRuntimeStatus(status.affinity.project_uuid)");
     expect(executorSource).toContain(
       "this.session.synchronizeProject(receipt.projectUuid)"
     );
