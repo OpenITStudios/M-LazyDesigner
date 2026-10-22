@@ -8,6 +8,12 @@ import {
   boneRiggingDeletionReceiptComplete,
   boneRiggingStateReceiptComplete,
   nativeIkControllerReceiptComplete,
+  particleTextureHandoffRequired,
+  animationTimelineStateNeutral,
+  directAnimationStateNeutral,
+  materialPersistenceReceiptComplete,
+  createProjectReceiptComplete,
+  phaseTransitionReceiptComplete,
 } from "@/gateway/control/delta/receipts";
 
 describe("continuation receipt registry", () => {
@@ -33,6 +39,95 @@ describe("continuation receipt registry", () => {
       .toBe(false);
     expect(resultCandidates({ execution: "unchanged" }))
       .toEqual([{ execution: "unchanged" }]);
+  });
+
+  test("direct scalar receipt selection matches the historical zero-or-one candidate contract", () => {
+    const authoritative = { execution: "applied", uuid: "real-a" };
+    const envelope = {
+      execution: "unchanged",
+      structuredContent: authoritative,
+    };
+    expect(resultCandidates(authoritative)).toEqual([authoritative]);
+    expect(resultCandidates(authoritative)[0]).toBe(authoritative);
+    expect(resultCandidates(envelope)).toEqual([authoritative]);
+    expect(resultCandidates(envelope)[0]).toBe(authoritative);
+    for (const value of [
+      null, [], "text", { structuredContent: null },
+      { structuredContent: [] }, { structuredContent: "not-object" },
+    ]) {
+      expect(resultCandidates(value)).toEqual([]);
+    }
+  });
+
+  test("each receipt validator reads its canonical MCP envelope once", () => {
+    const cases: Array<[string, (value: unknown) => boolean, object]> = [
+      ["cube-neutral", cubeStateNeutral, { execution: "unchanged", updates: [] }],
+      ["particle-handoff", particleTextureHandoffRequired,
+        { texture_dependency: { status: "REQUIRES_TEXTURING" } }],
+      ["timeline-view", animationTimelineStateNeutral,
+        { action: "set_time", scope: "timeline_view_only" }],
+      ["keyframe-select", value => directAnimationStateNeutral("manage_keyframes", value),
+        { action: "select" }],
+      ["material-persistence", materialPersistenceReceiptComplete, {
+        operation: "save", scope: "material_persistence_only",
+        material: { uuid: "m-a", name: "steel" },
+        file_path: "/tmp/steel.texture_set.json", saved: true, file_exists: true,
+      }],
+      ["create-project", createProjectReceiptComplete, {
+        project: {
+          uuid: "p-1", name: "test", save_path: null,
+          export_path: null, export_codec: null, saved: false,
+        },
+        format: { id: "bedrock" },
+        resolution: { texture_width: 16, texture_height: 16 },
+      }],
+      ["phase-transition", phaseTransitionReceiptComplete, {
+        phase: "animation", runtime_surface: "ANIMATION", reason: "handoff",
+        resume_from: "geometry", readiness_summary: null,
+        surface_changed: true, reload_required: false, action: "continue",
+      }],
+      ["bone-rigging", value => receiptSupportsContinuation("bone_rigging", value), {
+        action: "set_ik_controller",
+        controller: {
+          uuid: "controller-a", name: "leg_ik", ik_target: "foot",
+          ik_source: "leg", ik_pole: "knee",
+          lock_ik_target_rotation: false,
+        },
+      }],
+    ];
+    for (const [name, validate, authoritative] of cases) {
+      let reads = 0;
+      const envelope = {
+        // Contradictory display metadata must not count as authoritative.
+        execution: "unchanged",
+        get structuredContent() {
+          reads++;
+          return authoritative;
+        },
+      };
+      expect(validate(envelope), name).toBe(validate(authoritative));
+      expect(validate(authoritative), name).toBe(true);
+      expect(reads, name).toBe(1);
+    }
+  });
+
+  test("malformed inner receipts fail closed without using apparently valid outer fields", () => {
+    const project = {
+      project: { uuid: "p-1", name: "test", save_path: null,
+        export_path: null, export_codec: null, saved: false },
+      format: { id: "bedrock" },
+      resolution: { texture_width: 16, texture_height: 16 },
+    };
+    expect(createProjectReceiptComplete(project)).toBe(true);
+    expect(createProjectReceiptComplete({
+      ...project, structuredContent: null,
+    })).toBe(false);
+    expect(createProjectReceiptComplete({
+      ...project, structuredContent: { project: { uuid: "p-1" } },
+    })).toBe(false);
+    expect(receiptSupportsContinuation("future_unknown_tool", {
+      structuredContent: project,
+    })).toBe(false);
   });
 
   test("registry capabilities are canonical and verification-relevant", () => {

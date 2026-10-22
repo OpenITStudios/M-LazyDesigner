@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 Control scalar receipt selection: the canonical `gateway/control/delta/receipts.ts` now uses one scalar authoritative MCP receipt selector internally for its typed validators, eliminating transient zero/one-element arrays created by `resultCandidates(...).some(...)` for each individual check. Existing `resultCandidates` array semantics remain supported elsewhere. Malformed/contradictory inner `structuredContent` continues to supersede outer labels, failing closed. Extended the existing receipt-continuation contract with three grouped cases (single reads, direct/envelope equivalence and incomplete-inner authority); existing affected owner already includes its targeted contract. Source/static GitHub inspection only: Bun/typecheck, native Blockbench, real latency/CPU and token savings NOT EXECUTED. No public API, new tool, global cache, CI/main or release change.
+
+
+
 2026-10-22 MCP verification-to-downstream receipt economy: `gateway/control/delta/engine.ts` now passes its per-call bounded visual verification scope into the existing downstream recheck owner. The recheck owner reuses matching texture-region revision or animation-range target data and retains existing receipt parsing for missing or incompatible scopes; UV target precedence still wins for mapped Texture. Added three direct vs shared behavior regressions and engine integration affected-test owners. Source/static REMOTE_GITHUB only, Bun/typecheck/native/latency NOT EXECUTED; public MCP API, CI, main and release unchanged.
 
 

@@ -438,6 +438,29 @@ repeated texture-region/keyframe reads. Engine source changes now route
 through the existing visual-verification and downstream target contracts.
 Bun, Runtime and performance measurements remain NOT EXECUTED.
 
+## Scalar Control Receipt Selection — SOURCE OPTIMIZATION
+
+The Control continuation/receipt registry has one authoritative candidate
+at most: the flat Runtime structured result, or the inner
+`structuredContent` for an MCP envelope. Previously, the predicate paths
+used `resultCandidates(value).some(...)`, allocating a zero-or-one-element
+array for every individual typed receipt check.
+
+The existing `gateway/control/delta/receipts.ts` now selects that scalar
+internally and calls the same typed predicate directly. The public/internal
+compatibility `resultCandidates(value)` API still returns the original
+zero/one-element array for existing Control consumers. No schema, validator,
+capability registry, mutation decision, envelope priority, or recovery policy
+is changed. Invalid or missing inner structured content still fails closed,
+without falling back to contradictory outer display metadata.
+
+The existing receipt-continuation contract owner adds direct-versus-envelope,
+single envelope-read, branch and malformed-inner coverage, while the
+affected-execution owner already routes edits of this canonical source to
+receipt-continuation, Control invalidation and recovery tests. This is
+allocation reduction by source inspection, not a measured CPU/token benefit;
+Bun and native Runtime checks remain NOT EXECUTED.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

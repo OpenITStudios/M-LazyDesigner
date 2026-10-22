@@ -43,51 +43,68 @@ export function record(value: unknown): Record<string, unknown> | null {
  * one successful "planned" or "complete" candidate win over an applied/unknown
  * authoritative receipt. Missing or malformed inner payload fails closed.
  */
-export function resultCandidates(value: unknown): Record<string, unknown>[] {
+/**
+ * MCP envelopes select no more than one producer-owned receipt. Resolve
+ * the scalar directly inside validators; preserve the original array API
+ * for consumers that need the candidate list.
+ */
+function authoritativeReceipt(value: unknown): Record<string, unknown> | null {
   const root = record(value);
-  if (!root) return [];
+  if (!root) return null;
   if (Object.prototype.hasOwnProperty.call(root, "structuredContent")) {
-    const structured = record(root.structuredContent);
-    return structured ? [structured] : [];
+    return record(root.structuredContent);
   }
-  return [root];
+  return root;
+}
+
+export function resultCandidates(value: unknown): Record<string, unknown>[] {
+  const candidate = authoritativeReceipt(value);
+  return candidate === null ? [] : [candidate];
+}
+
+function receiptMatches(
+  value: unknown,
+  predicate: (candidate: Record<string, unknown>) => boolean
+): boolean {
+  const candidate = authoritativeReceipt(value);
+  return candidate !== null && predicate(candidate);
 }
 
 export function cubeStateNeutral(value: unknown): boolean {
-  return resultCandidates(value).some(isCubeNoChangeReceipt);
+  return receiptMatches(value, isCubeNoChangeReceipt);
 }
 
 export function locatorReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isLocatorMutationReceipt);
+  return receiptMatches(value, isLocatorMutationReceipt);
 }
 
 export function boneRiggingDeletionReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isBoneRiggingDeletionReceipt);
+  return receiptMatches(value, isBoneRiggingDeletionReceipt);
 }
 
 export function boneRiggingStateReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isBoneRiggingStateReceipt);
+  return receiptMatches(value, isBoneRiggingStateReceipt);
 }
 
 export function nativeIkControllerReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isNativeIkControllerReceipt);
+  return receiptMatches(value, isNativeIkControllerReceipt);
 }
 
 export function groupReceiptComplete(capability: string, value: unknown): boolean {
-  return resultCandidates(value).some((candidate) =>
+  return receiptMatches(value, (candidate) =>
     isGroupMutationReceipt(capability, candidate)
   );
 }
 
 export function particleTextureHandoffRequired(value: unknown): boolean {
-  return resultCandidates(value).some((candidate) => {
+  return receiptMatches(value, (candidate) => {
     const dependency = record(candidate.texture_dependency);
     return dependency?.status === "REQUIRES_TEXTURING";
   });
 }
 
 export function animationTimelineStateNeutral(value: unknown): boolean {
-  return resultCandidates(value).some((candidate) => {
+  return receiptMatches(value, (candidate) => {
     const action = typeof candidate.action === "string" ? candidate.action : null;
     const scope = typeof candidate.scope === "string" ? candidate.scope : null;
     const operationClass =
@@ -108,7 +125,7 @@ export function directAnimationStateNeutral(
   capability: string,
   value: unknown
 ): boolean {
-  return resultCandidates(value).some((candidate) => {
+  return receiptMatches(value, (candidate) => {
     if (capability === "manage_keyframes") {
       return candidate.action === "select";
     }
@@ -123,7 +140,7 @@ export function directAnimationStateNeutral(
 }
 
 export function materialPersistenceReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isMaterialPersistenceReceipt);
+  return receiptMatches(value, isMaterialPersistenceReceipt);
 }
 
 export function animationControllerResourceStateNeutral(
@@ -133,7 +150,7 @@ export function animationControllerResourceStateNeutral(
   // A write:null label must match the requested resource branch; a native
   // controller mutation cannot borrow a compile-only resource receipt.
   if (branch?.field !== "resource_kind") return false;
-  return resultCandidates(value).some(
+  return receiptMatches(value, 
     candidate =>
       candidate.resource_kind === branch.value &&
       isAnimationControllerCompileOnlyResourceReceipt(candidate)
@@ -141,48 +158,48 @@ export function animationControllerResourceStateNeutral(
 }
 
 export function animationControllerReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isAnimationControllerReceipt);
+  return receiptMatches(value, isAnimationControllerReceipt);
 }
 
 export function textureGroupReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isTextureGroupReceipt);
+  return receiptMatches(value, isTextureGroupReceipt);
 }
 
 export function materialMutationReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isMaterialMutationReceipt);
+  return receiptMatches(value, isMaterialMutationReceipt);
 }
 
 export function materialInstanceMutationReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isMaterialInstanceMutationReceipt);
+  return receiptMatches(value, isMaterialInstanceMutationReceipt);
 }
 
 export function particleMutationReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isVerifiedParticleWriteReceipt);
+  return receiptMatches(value, isVerifiedParticleWriteReceipt);
 }
 
 export function removeElementReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isRemoveElementReceipt);
+  return receiptMatches(value, isRemoveElementReceipt);
 }
 
 export function renderProfileMutationReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isRenderProfileMutationReceipt);
+  return receiptMatches(value, isRenderProfileMutationReceipt);
 }
 
 export function animationEffectsReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isAnimationEffectsReceipt);
+  return receiptMatches(value, isAnimationEffectsReceipt);
 }
 
 
 export function renameElementReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isAppliedRenameElementReceipt);
+  return receiptMatches(value, isAppliedRenameElementReceipt);
 }
 
 export function createProjectReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isCreateProjectReceipt);
+  return receiptMatches(value, isCreateProjectReceipt);
 }
 
 export function phaseTransitionReceiptComplete(value: unknown): boolean {
-  return resultCandidates(value).some(isPhaseTransitionReceipt);
+  return receiptMatches(value, isPhaseTransitionReceipt);
 }
 
 type ContinuationReceiptValidator = (value: unknown) => boolean;
@@ -214,7 +231,7 @@ const CONTINUATION_RECEIPT_VALIDATORS: Readonly<
   bone_rigging: (value) => {
     // The MCP wrapper contributes exactly one authoritative candidate.
     // Reuse it across the existing independent native/state/deletion guards.
-    const candidate = resultCandidates(value)[0];
+    const candidate = authoritativeReceipt(value);
     return candidate !== undefined && (
       isNativeIkControllerReceipt(candidate) ||
       isBoneRiggingStateReceipt(candidate) ||
