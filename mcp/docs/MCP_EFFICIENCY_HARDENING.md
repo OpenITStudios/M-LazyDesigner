@@ -510,6 +510,26 @@ now selects the visual-verification scope contract for edits of its source.
 This is source/static work, not proof of executable TypeScript/Bun tests,
 native Blockbench acceptance, or measured CPU/token savings.
 
+## Paint Transaction Operation Schema Reuse — SOURCE OPTIMIZATION
+
+The 16 canonical receipt-owner modules were audited for a direct Zod
+`safeParse` followed by `parse` of the same value; no additional duplicate
+pair was found beyond the previously fixed Cube visual scope helper.
+
+A separate real allocation duplication was found in
+`lib/texture/paintTransaction.ts`: the public transaction parameters
+declared an operation array schema, while `planPaintTransaction` rebuilt
+the identical `z.array(...).min(1).max(64)` schema on every invocation.
+Both now reference one immutable `paintTransactionOperationsSchema`.
+This preserves operation limits, strict per-operation schemas, bitmap bounds,
+Undo preflight and all public parameter semantics. Existing
+`texture-region-copy.test.ts` covers valid boundary sizes and invalid
+operations against both registration and the planner; affected verification
+routes source changes directly to that owner and the dirty-region contract.
+
+Static/source change only. No Bun/native verification or measured latency
+gain is implied.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.

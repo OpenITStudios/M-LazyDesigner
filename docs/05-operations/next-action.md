@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 MCP receipt Zod audit and paint schema reuse: scanned all 16 `mcp/lib/receipts/*.ts` canonical owners; no further immediate `safeParse`+same-value `parse` duplication was found. Removed a separate runtime allocation repetition in `mcp/lib/texture/paintTransaction.ts`: one shared Zod operation-list schema now serves both public parameters and `planPaintTransaction` instead of reconstructing the list schema per edit. Extended existing texture-region-copy tests for 0/1/64/65 limits and malformed copy operations; mapped paint source to the existing transaction and dirty-region suites in the canonical affected planner. Source/static REMOTE_GITHUB only; Bun/typecheck/native and latency not executed. Main, CI and release unchanged.
+
+
+
 2026-10-22 MCP Control scalar receipt consumers: no remaining `safeParse` + `parse` of the same value found across the 16 canonical `lib/receipts` modules. Rather than rewrite already-correct validators, export the existing `authoritativeReceipt` selector for direct use in `delta/verification.ts`, `delta/freshness.ts` and `delta/engine.ts` while retaining `resultCandidates` compatibility for other readers. The change removes repeated zero/one array allocations in individual Control helper reads, makes Undo semantic-history getter validation single-read, and reuses one animation keyframe array. Existing invalidation and visual verification tests gain conservative envelope, malformed and counted-read cases. The affected selector includes the visual verification owner for verification changes. REMOTE_GITHUB source/static only; Bun/typecheck/native/CPU benchmarks NOT EXECUTED. `main`, CI and public MCP surface untouched.
 
 

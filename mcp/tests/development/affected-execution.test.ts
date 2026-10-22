@@ -327,6 +327,24 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("paint transaction schema edits run the existing transaction behavior owners", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/lib/texture/paintTransaction.ts"],
+      semanticImpact: impact(),
+    });
+    const owners = [
+      "mcp/tests/texture-region-copy.test.ts",
+      "mcp/tests/texture-transaction-dirty-region.test.ts",
+    ];
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.checks).toContain("PROJECT_GRAPH");
+    expect(plan.targeted_tests).toEqual([...owners].sort());
+    expect(plan.commands).toContain(
+      `bun test ${owners.sort().map((path) => path.slice(4)).join(" ")}`
+    );
+    expect(plan.commands).not.toContain("bun run verify:full");
+  });
+
   test("recent Texture source changes route directly to their owning regressions", () => {
     const cases: Array<[string, string]> = [
       ["mcp/lib/texture/seamContinuity.ts", "mcp/tests/texture-seam-continuity.test.ts"],

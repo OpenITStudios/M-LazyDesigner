@@ -68,6 +68,14 @@ export const paintTransactionOperationSchema = z.union([
   }).strict(),
 ]);
 
+// Shared immutable Zod shape: parameter registration and the deterministic
+// transaction planner must enforce the same 1–64 operation bound without
+// rebuilding the array schema for every planned texture edit.
+const paintTransactionOperationsSchema = z
+  .array(paintTransactionOperationSchema)
+  .min(1)
+  .max(64);
+
 export const paintTransactionComputeStepSchema = z
   .object({
     operation: z.enum(textureComputeOperationNames),
@@ -94,7 +102,7 @@ export const paintTransactionParameters = z
   .object({
     texture_id: textureIdOptionalSchema,
     expected_revision: textureRevisionSchema,
-    operations: z.array(paintTransactionOperationSchema).min(1).max(64).optional(),
+    operations: paintTransactionOperationsSchema.optional(),
     compute: z.array(paintTransactionComputeStepSchema).min(1).max(12).optional(),
     ambient_occlusion: z.object({
       cube_ids:z.array(z.string().min(1)).min(1).max(64),
@@ -231,7 +239,7 @@ export function planPaintTransaction(
   height: number
 ) {
   requireBitmapDimensions(width, height);
-  const parsed = z.array(paintTransactionOperationSchema).min(1).max(64).parse(operations);
+  const parsed = paintTransactionOperationsSchema.parse(operations);
 
   let affectedRect: AffectedRect | null = null;
   let pixelWrites = 0;
