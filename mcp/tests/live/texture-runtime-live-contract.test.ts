@@ -3,7 +3,10 @@ import { getAllToolDefinitions, tools } from "@/lib/factories";
 import { PAINT_TEXTURE_TRANSACTION_TOOL_NAME } from "@/lib/paintTransactionPolicy";
 import { getToolRegistrationFamily } from "@/server/tools";
 import { createProjectParameters } from "@/server/tools/project";
-import { TEXTURE_RUNTIME_PROJECT_INPUT } from "../../scripts/verify/verify-texture-runtime-live";
+import {
+  TEXTURE_RUNTIME_EXACT_BRUSH_SETTINGS,
+  TEXTURE_RUNTIME_PROJECT_INPUT,
+} from "../../scripts/verify/verify-texture-runtime-live";
 
 async function source(path: string): Promise<string> {
   return Bun.file(path).text();
@@ -18,14 +21,43 @@ describe("texture runtime live acceptance contract", () => {
     const createTexture = definitions.create_texture;
     const getTexture = definitions.get_texture;
     const paintTransaction = definitions[PAINT_TEXTURE_TRANSACTION_TOOL_NAME];
+    const exactBrush = definitions.paint_with_brush;
+    const paintSettings = definitions.paint_settings;
+    const layerManagement = definitions.texture_layer_management;
 
     expect(createTexture).toBeDefined();
     expect(getTexture).toBeDefined();
     expect(paintTransaction).toBeDefined();
+    expect(exactBrush).toBeDefined();
+    expect(paintSettings).toBeDefined();
+    expect(layerManagement).toBeDefined();
     expect(tools[PAINT_TEXTURE_TRANSACTION_TOOL_NAME]?.enabled).toBe(true);
+    expect(tools.paint_with_brush?.enabled).toBe(true);
+    expect(tools.texture_layer_management?.enabled).toBe(true);
     expect(getToolRegistrationFamily(PAINT_TEXTURE_TRANSACTION_TOOL_NAME)).toBe("paint");
     expect(getToolRegistrationFamily("create_texture")).toBe("textures");
     expect(getToolRegistrationFamily("get_texture")).toBe("textures");
+    expect(getToolRegistrationFamily("paint_with_brush")).toBe("paint");
+    expect(getToolRegistrationFamily("texture_layer_management")).toBe("paint");
+    expect(exactBrush.parameterSchema.safeParse({
+      texture_id: "base-texture",
+      coordinates: [{ x: 1, y: 1 }],
+      connect_strokes: false,
+      brush_settings: {
+        ...TEXTURE_RUNTIME_EXACT_BRUSH_SETTINGS,
+        color: "#00CC66FF",
+      },
+    }).success).toBe(true);
+    expect(layerManagement.parameterSchema.safeParse({
+      action: "create_layer",
+      texture_id: "variant-texture",
+      layer_name: "acceptance_ink",
+    }).success).toBe(true);
+    expect(paintSettings.parameterSchema.safeParse({
+      mirror_painting: { enabled: false },
+      lock_alpha: false,
+      color_erase_mode: false,
+    }).success).toBe(true);
 
     const blank = createTexture.parameterSchema.safeParse({ name: "blank" });
     expect(blank.success).toBe(true);
@@ -166,6 +198,13 @@ describe("texture runtime live acceptance contract", () => {
       "variant_target_isolation",
       "focused_png_delivery",
       "stale_revision_rejected",
+      "exact_brush_base_revision",
+      "layered_brush_composite_revision",
+      "exact_brush_undo_redo",
+      "layer_target_receipt",
+      "layered_transaction_rejected",
+      "layered_composite_readback",
+      "layered_variant_isolation",
     ]) {
       expect(script).toContain(marker);
     }
@@ -174,5 +213,10 @@ describe("texture runtime live acceptance contract", () => {
     expect(script).toContain('region: { x: 0, y: 0, width: 4, height: 4 }');
     expect(script).toContain("JSON.stringify(baseBefore).includes(\"rgba\") === false");
     expect(script).not.toContain("custom JSON");
+    expect(script).toContain('mode === "exact_pixels"');
+    expect(script).toContain('verification_scope === "native_edit_canvas_rgba"');
+    expect(script).toContain('layeredTarget.layer_uuid === inkLayer.uuid');
+    expect(script).toContain('revisionOf(layeredUndo, "get_texture layered brush undo")');
+    expect(script).toContain('revisionOf(layeredRedo, "get_texture layered brush redo")');
   });
 });

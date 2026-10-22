@@ -124,6 +124,7 @@ describe("affected execution planner", () => {
         "mcp/tests/brush-blend-default.test.ts",
         "mcp/tests/texture-authoring-contract.test.ts",
         "mcp/tests/texture-layer-management-contract.test.ts",
+        "mcp/tests/live/texture-runtime-live-contract.test.ts",
       ]],
     ] as const;
     for (const [path, expected] of cases) {
@@ -134,6 +135,18 @@ describe("affected execution planner", () => {
       expect(plan.checks).toContain("PROJECT_GRAPH");
       expect(plan.targeted_tests).toEqual([...expected].sort());
     }
+  });
+
+  test("disposable texture verifier changes retain one existing native contract owner", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/scripts/verify/verify-texture-runtime-live.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.checks).toContain("PROJECT_GRAPH");
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/live/texture-runtime-live-contract.test.ts",
+    ]);
   });
 
   test("active layer identity source selects layer and exact brush regression owners", () => {

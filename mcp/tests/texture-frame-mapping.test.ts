@@ -74,7 +74,7 @@ describe("texture frame mapping", () => {
     let editOffset: [number, number] = [0, 16];
     const written: Array<[number, number]> = [];
     const bitmap = new Uint8ClampedArray(16 * 48 * 4);
-    let writeBehavior: "normal" | "ignored" | "wrong" = "normal";
+    let writeBehavior: "normal" | "ignored" | "wrong" | "skipped" = "normal";
     const history = { started: 0, finished: 0, cancelled: 0 };
     const texture = {
       uuid: "animated", name: "animated", id: "animated",
@@ -87,6 +87,7 @@ describe("texture frame mapping", () => {
         canvas: { width: number; height: number },
         env: Record<string, any>
       )) {
+        if (writeBehavior === "skipped") return;
         const offset = editOffset;
         const ctx = {
           save() {}, restore() {},
@@ -167,6 +168,11 @@ describe("texture frame mapping", () => {
       await expect(run([{ x: 1, y: 16 }]))
         .rejects.toThrow("did not apply the requested RGBA");
       expect(history).toEqual({ started: 4, finished: 1, cancelled: 3 });
+
+      writeBehavior = "skipped";
+      await expect(run([{ x: 2, y: 16 }]))
+        .rejects.toThrow("did not invoke its pixel callback");
+      expect(history).toEqual({ started: 5, finished: 1, cancelled: 4 });
     } finally {
       for (const key of keys) {
         if (prior[key] === undefined) delete g[key];

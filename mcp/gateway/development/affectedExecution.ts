@@ -153,6 +153,7 @@ export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly 
     "mcp/tests/brush-blend-default.test.ts",
     "mcp/tests/texture-authoring-contract.test.ts",
     "mcp/tests/texture-layer-management-contract.test.ts",
+    "mcp/tests/live/texture-runtime-live-contract.test.ts",
   ],
   "mcp/server/tools/paint/layerState.ts": [
     "mcp/tests/texture-layer-management-contract.test.ts",
@@ -447,6 +448,9 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  if (path === "mcp/scripts/verify/verify-texture-runtime-live.ts") {
+    return ["mcp/tests/live/texture-runtime-live-contract.test.ts"];
+  }
   if (path === "mcp/server/tools/element/inspection.ts") {
     return [
       "mcp/tests/project-texel-density.test.ts",

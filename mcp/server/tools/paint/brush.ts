@@ -333,11 +333,19 @@ export function registerPaintBrushTools(): void {
     
               Undo.initEdit(undoAspects);
               try {
+                // Native Texture.edit is expected to invoke this synchronously.
+                // A swallowed or skipped callback is not proof of a pixel write.
+                let nativeEditVerified = false;
                 texture.edit(
                   (
                     _canvas: HTMLCanvasElement,
                     env: BlockbenchRuntimeTextureEditEnvironment
                   ) => {
+                    if (nativeEditVerified) {
+                      throw new Error(
+                        "paint_with_brush exact pixel native Texture.edit invoked its pixel callback more than once."
+                      );
+                    }
                     requireExactBrushLayerUnchanged(texture, layerTarget);
                     // Revalidate the actual callback canvas BEFORE any pixel
                     // write. Native layer/frame offset may change after the
@@ -398,9 +406,15 @@ export function registerPaintBrushTools(): void {
                       colorHex
                     );
                     requireExactBrushLayerUnchanged(texture, layerTarget);
+                    nativeEditVerified = true;
                   },
                   { no_undo: true }
                 );
+                if (!nativeEditVerified) {
+                  throw new Error(
+                    "paint_with_brush exact pixel native Texture.edit did not invoke its pixel callback."
+                  );
+                }
                 // Native Texture.edit can return after moving the selection
                 // even when its canvas dimensions and offsets are unchanged.
                 requireExactBrushLayerUnchanged(texture, layerTarget);

@@ -516,6 +516,28 @@ For UV-density persistence, close/reopen its saved fixture and run:
 bun run verify:uv-density-live -- --verify-reopen --confirm-disposable
 ```
 
+### Focused Texture integration acceptance
+
+The existing `verify:texture-runtime-live -- --confirm-disposable` command
+now checks one continuous disposable project flow: revision-guarded bitmap
+transaction, PNG readback, independent variant, Undo/Redo, exact one-pixel
+brush on the base atlas, then exact painting on a newly created selected native
+pixel layer. It also verifies that `paint_texture_transaction` refuses the
+layered target, that both exact brush mutations produce new full-RGBA revisions
+and changed focused PNG crops, and that each brush has independent Undo/Redo.
+
+Before exact brushing, the verifier disables mirror painting, alpha locking
+and color erase mode through the existing `paint_settings` capability.
+Layer receipts must identify the actual selected layer UUID; composited
+`get_texture` evidence is examined separately from the native edit-canvas
+RGBA postcondition. Base and variant revision isolation is rechecked last.
+
+This is a **prepared live verifier, not an executed result**. It does not
+simulate a concurrent layer switch during `Texture.edit`, certify invisible
+sibling-layer bytes, or prove animated-frame visuals. Those require distinct
+native observation; keep any first failing assertion and the exact installed
+build identity, and do not label source-test success as native acceptance.
+
 ### Lifecycle / recovery proof
 
 Keep the same Gateway/client task active while exercising:

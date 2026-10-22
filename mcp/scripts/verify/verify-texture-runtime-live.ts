@@ -13,6 +13,13 @@ const PROJECT_NAME = "blockit_texture_runtime_e2e";
 const BASE_NAME = "wiring_base";
 const VARIANT_NAME = "wiring_variant";
 const VARIANT_GROUP = "wiring_variants";
+export const TEXTURE_RUNTIME_EXACT_BRUSH_SETTINGS = {
+  size: 1,
+  opacity: 255,
+  softness: 0,
+  shape: "square",
+  blend_mode: "default",
+} as const;
 export const TEXTURE_RUNTIME_PROJECT_INPUT = {
   name: PROJECT_NAME,
   discard_unsaved: true,
@@ -26,6 +33,9 @@ const REQUIRED_TOOLS = [
   "add_texture_group",
   "get_texture",
   PAINT_TEXTURE_TRANSACTION_TOOL_NAME,
+  "paint_settings",
+  "paint_with_brush",
+  "texture_layer_management",
   "undo",
   "redo",
 ] as const;
@@ -241,6 +251,235 @@ async function main(): Promise<void> {
     "One Redo did not restore the applied transaction revision."
   );
 
+
+  // This same disposable native fixture now covers the direct pixel painter:
+  // request -> active native edit canvas -> full-RGBA readback -> Undo/Redo.
+  // Normalize the Painter configuration before requesting exact pixels.
+  await client.callTool(
+    "paint_settings",
+    {
+      mirror_painting: { enabled: false },
+      lock_alpha: false,
+      color_erase_mode: false,
+    },
+    "mutation"
+  );
+
+  const exactBaseRegion = { x: 1, y: 1, width: 1, height: 1 };
+  const exactBaseBeforeResult = await client.callTool(
+    "get_texture",
+    {
+      texture: base.uuid,
+      region: exactBaseRegion,
+      expected_revision: afterRevision,
+    },
+    "evidence"
+  );
+  const exactBaseBeforeDigest = imageDigest(
+    firstImage(exactBaseBeforeResult, "get_texture exact base before")
+  );
+  const exactBase = structuredObject(
+    await client.callTool(
+      "paint_with_brush",
+      {
+        texture_id: base.uuid,
+        coordinates: [{ x: 1, y: 1 }],
+        connect_strokes: false,
+        brush_settings: {
+          ...TEXTURE_RUNTIME_EXACT_BRUSH_SETTINGS,
+          color: "#00CC66FF",
+        },
+      },
+      "mutation"
+    ),
+    "paint_with_brush exact base"
+  );
+  const exactBaseTarget = (exactBase.write_target ?? {}) as JsonObject;
+  expect(
+    exactBase.mode === "exact_pixels" &&
+      exactBase.verification_scope === "native_edit_canvas_rgba" &&
+      exactBaseTarget.kind === "base_texture" &&
+      exactBaseTarget.layer_uuid === null,
+    `Exact brush base receipt did not prove native edit-canvas scope: ${JSON.stringify(exactBase)}.`
+  );
+  const exactBaseAfterResult = await client.callTool(
+    "get_texture",
+    { texture: base.uuid, region: exactBaseRegion },
+    "evidence"
+  );
+  const exactBaseAfter = structuredObject(
+    exactBaseAfterResult, "get_texture exact base after"
+  );
+  const exactBrushBaseRevision = revisionOf(
+    exactBaseAfter, "get_texture exact base after"
+  );
+  expect(
+    exactBrushBaseRevision !== afterRevision &&
+      imageDigest(firstImage(exactBaseAfterResult, "get_texture exact base after")) !==
+      exactBaseBeforeDigest,
+    "Exact brush returned a receipt but the requested bitmap pixel did not change."
+  );
+
+  await client.callTool("undo", { steps: 1 }, "history");
+  const exactBaseUndo = structuredObject(
+    await client.callTool("get_texture", { texture: base.uuid }, "evidence"),
+    "get_texture exact base undo"
+  );
+  expect(
+    revisionOf(exactBaseUndo, "get_texture exact base undo") === afterRevision,
+    "Exact brush Undo did not restore the pre-brush full bitmap revision."
+  );
+  await client.callTool("redo", { steps: 1 }, "history");
+  const exactBaseRedo = structuredObject(
+    await client.callTool("get_texture", { texture: base.uuid }, "evidence"),
+    "get_texture exact base redo"
+  );
+  expect(
+    revisionOf(exactBaseRedo, "get_texture exact base redo") === exactBrushBaseRevision,
+    "Exact brush Redo did not restore the post-brush full bitmap revision."
+  );
+
+  // Bind one actual native pixel layer, then prove the returned target UUID
+  // matches the layer created within this disposable texture. Composite PNG
+  // readback is checked separately and never inferred from an edit-canvas receipt.
+  const createdLayer = structuredObject(
+    await client.callTool(
+      "texture_layer_management",
+      { action: "create_layer", texture_id: variant.uuid, layer_name: "acceptance_ink" },
+      "mutation"
+    ),
+    "texture_layer_management create_layer"
+  );
+  const inkLayer = (createdLayer.layer ?? {}) as JsonObject;
+  const layeredState = (createdLayer.texture ?? {}) as JsonObject;
+  expect(
+    typeof inkLayer.uuid === "string" &&
+      layeredState.layers_enabled === true &&
+      layeredState.selected_layer_uuid === inkLayer.uuid,
+    `The disposable variant did not select the newly created native pixel layer: ${JSON.stringify(createdLayer)}.`
+  );
+  const layeredRegion = { x: 2, y: 2, width: 1, height: 1 };
+  const layeredBeforeResult = await client.callTool(
+    "get_texture",
+    { texture: variant.uuid, region: layeredRegion },
+    "evidence"
+  );
+  const layeredBefore = structuredObject(
+    layeredBeforeResult, "get_texture layered before"
+  );
+  const layeredBeforeRevision = revisionOf(
+    layeredBefore, "get_texture layered before"
+  );
+  const layeredBeforeDigest = imageDigest(
+    firstImage(layeredBeforeResult, "get_texture layered before")
+  );
+  await expectToolFailure(
+    () => client.callTool(
+      PAINT_TEXTURE_TRANSACTION_TOOL_NAME,
+      {
+        texture_id: variant.uuid,
+        expected_revision: layeredBeforeRevision,
+        operations: [{
+          operation: "set_pixels",
+          color: "#33AABBFF",
+          coordinates: [{ x: 2, y: 2 }],
+        }],
+      },
+      "mutation"
+    ),
+    "native Painter tools"
+  );
+  const layeredAfterRefusal = structuredObject(
+    await client.callTool(
+      "get_texture",
+      { texture: variant.uuid, expected_revision: layeredBeforeRevision },
+      "evidence"
+    ),
+    "get_texture layered transaction refusal"
+  );
+  expect(
+    revisionOf(layeredAfterRefusal, "get_texture layered transaction refusal") ===
+      layeredBeforeRevision,
+    "Rejected layered paint transaction unexpectedly changed the bitmap."
+  );
+
+  const exactLayered = structuredObject(
+    await client.callTool(
+      "paint_with_brush",
+      {
+        texture_id: variant.uuid,
+        coordinates: [{ x: 2, y: 2 }],
+        connect_strokes: false,
+        brush_settings: {
+          ...TEXTURE_RUNTIME_EXACT_BRUSH_SETTINGS,
+          color: "#CC3399FF",
+        },
+      },
+      "mutation"
+    ),
+    "paint_with_brush exact native layer"
+  );
+  const layeredTarget = (exactLayered.write_target ?? {}) as JsonObject;
+  expect(
+    exactLayered.mode === "exact_pixels" &&
+      exactLayered.verification_scope === "native_edit_canvas_rgba" &&
+      layeredTarget.kind === "active_layer" &&
+      layeredTarget.layer_uuid === inkLayer.uuid,
+    `Exact brush did not bind the selected native pixel layer: ${JSON.stringify(exactLayered)}.`
+  );
+  const layeredAfterResult = await client.callTool(
+    "get_texture",
+    { texture: variant.uuid, region: layeredRegion },
+    "evidence"
+  );
+  const layeredAfter = structuredObject(
+    layeredAfterResult, "get_texture layered after"
+  );
+  const layeredAfterRevision = revisionOf(
+    layeredAfter, "get_texture layered after"
+  );
+  expect(
+    layeredAfterRevision !== layeredBeforeRevision &&
+      imageDigest(firstImage(layeredAfterResult, "get_texture layered after")) !==
+      layeredBeforeDigest,
+    "Layer-local brush receipt did not produce a distinct composited PNG readback."
+  );
+  await client.callTool("undo", { steps: 1 }, "history");
+  const layeredUndo = structuredObject(
+    await client.callTool(
+      "get_texture", { texture: variant.uuid }, "evidence"
+    ),
+    "get_texture layered brush undo"
+  );
+  expect(
+    revisionOf(layeredUndo, "get_texture layered brush undo") === layeredBeforeRevision,
+    "Layered exact brush Undo did not restore the composite revision."
+  );
+  await client.callTool("redo", { steps: 1 }, "history");
+  const layeredRedo = structuredObject(
+    await client.callTool(
+      "get_texture", { texture: variant.uuid }, "evidence"
+    ),
+    "get_texture layered brush redo"
+  );
+  expect(
+    revisionOf(layeredRedo, "get_texture layered brush redo") === layeredAfterRevision,
+    "Layered exact brush Redo did not restore the composite revision."
+  );
+  const baseAfterLayered = structuredObject(
+    await client.callTool(
+      "get_texture",
+      { texture: base.uuid, expected_revision: exactBrushBaseRevision },
+      "evidence"
+    ),
+    "get_texture base after layered variant painting"
+  );
+  expect(
+    revisionOf(baseAfterLayered, "get_texture base after layered variant painting") ===
+      exactBrushBaseRevision,
+    "Layer painting leaked from explicit variant into the base atlas."
+  );
+
   console.log(
     JSON.stringify(
       {
@@ -256,6 +495,13 @@ async function main(): Promise<void> {
         stale_revision_rejected: true,
         one_undo_redo_transaction: true,
         variant_target_isolation: true,
+        exact_brush_base_revision: exactBrushBaseRevision,
+        layered_brush_composite_revision: layeredAfterRevision,
+        exact_brush_undo_redo: true,
+        layer_target_receipt: true,
+        layered_transaction_rejected: true,
+        layered_composite_readback: true,
+        layered_variant_isolation: true,
         cost: client.snapshotMetrics(),
       },
       null,
