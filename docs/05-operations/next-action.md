@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 3 Geometry identity: shared UUID resolution and destructive element routing now reject distinct objects with colliding UUIDs (including name fallback); duplicate registry references to the same object remain valid. Cube batch/simplify use strict UUID preflight before mutation. Existing Geometry/Animation regressions and affected-test routing extended, NOT EXECUTED. Inspect remaining Geometry pivot/hierarchy risks only with concrete source evidence; keep native visual/Undo acceptance deferred.
+Batch 3 hierarchy integrity: reparent verifies native parent and Group child membership before committing Undo or reporting applied. Existing ancestry helper rejects cyclic parent chains instead of hanging. Group/Geometry test owners and affected selection extended; stale Group source-test anchor repaired. GitHub/static checks only, Bun/TypeScript and native Blockbench NOT EXECUTED. Pivot transfer remains native-owned; next inspect evidenced Geometry or UV defects.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

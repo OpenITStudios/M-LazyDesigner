@@ -56,6 +56,11 @@ describe("affected execution planner", () => {
       ["mcp/server/tools/element/shared.ts", [
         "mcp/tests/geometry-identity-duplication.test.ts",
         "mcp/tests/geometry-preflight-order.test.ts",
+        "mcp/tests/group-translation.test.ts",
+      ]],
+      ["mcp/server/tools/element/hierarchy.ts", [
+        "mcp/tests/geometry-preflight-order.test.ts",
+        "mcp/tests/group-translation.test.ts",
       ]],
     ] as const) {
       const plan = planAffectedExecution({

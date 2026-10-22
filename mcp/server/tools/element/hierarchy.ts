@@ -382,6 +382,19 @@ export function registerElementHierarchyTools(): void {
           });
           try {
             element.addTo(nextParent);
+            // Reject silent no-op or partial native outliner mutations before
+            // committing Undo or claiming an authoritative applied receipt.
+            const observedParent =
+              element.parent instanceof Group ? element.parent : "root";
+            if (
+              observedParent !== nextParent ||
+              (nextParent instanceof Group && !nextParent.children.includes(element)) ||
+              (previousParent instanceof Group && previousParent.children.includes(element))
+            ) {
+              throw new Error(
+                `Reparent postcondition mismatch for ${element.name} (${element.uuid}): native parent/children did not match requested destination.`
+              );
+            }
             Undo.finishEdit("Agent reparented element");
             recordCurrentCapabilitySemanticHistoryEffect("reparent_element");
           } catch (error) {

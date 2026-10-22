@@ -99,7 +99,15 @@ export function resolveUniqueTextureForDiscovery(reference: string): Texture {
 
 export function isDescendantOf(el: { parent?: unknown }, targetGroup: Group): boolean {
   let current: { parent?: unknown } | undefined = el;
+  const visited = new Set<object>();
   while (current && current.parent && typeof current.parent === "object") {
+    // A corrupted native parent chain must not hang the serialized Gateway.
+    if (visited.has(current)) {
+      throw new Error(
+        "Outliner hierarchy contains a cyclic parent chain. Repair the hierarchy before reparenting or searching descendants."
+      );
+    }
+    visited.add(current);
     if (current.parent === targetGroup) return true;
     current = current.parent as { parent?: unknown };
   }

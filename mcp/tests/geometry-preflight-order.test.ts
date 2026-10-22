@@ -72,7 +72,7 @@ describe("Geometry mutation preflight ordering", () => {
   test("add_group resolves all names and parent targets before opening Undo", async () => {
     const source = await Bun.file("server/tools/element/hierarchy.ts").text();
     const start = source.indexOf("createTool(elementHierarchyToolDocs[0].name");
-    const end = source.indexOf("createTool(elementHierarchyToolDocs[1].name", start);
+    const end = source.indexOf('createTool("modify_group"', start);
     const block = source.slice(start, end);
 
     const names = block.indexOf("assertBatchGroupNamesAvailable(batch)");
