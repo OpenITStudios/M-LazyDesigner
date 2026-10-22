@@ -255,8 +255,9 @@ export function planPaintTransaction(
     }
     if (operation.operation === "fill_rect" || operation.operation === "noise") {
       requireRect(operation.rect, width, height, `operations[${index}].rect`);
-      if (operation.operation === "fill_rect") parseHexRgba(operation.color);
-      else for (const point of operation.mask ?? []) {
+      // paintTransactionOperationsSchema has already validated the hex color
+      // for fill_rect. Only noise needs per-coordinate mask checks here.
+      if (operation.operation === "noise") for (const point of operation.mask ?? []) {
         requirePoint(point, width, height, "noise mask");
         if (point.x < operation.rect.x || point.y < operation.rect.y || point.x >= operation.rect.x + operation.rect.width || point.y >= operation.rect.y + operation.rect.height) throw new Error("Noise mask lies outside its rect.");
       }
@@ -265,9 +266,7 @@ export function planPaintTransaction(
       continue;
     }
 
-    if (operation.operation === "set_pixels") {
-      parseHexRgba(operation.color);
-    }
+    // set_pixels.color was validated during the same Zod operation parse.
     for (const [coordinateIndex, coordinate] of operation.coordinates.entries()) {
       requirePoint(
         coordinate,

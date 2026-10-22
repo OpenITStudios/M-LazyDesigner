@@ -4,6 +4,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
+2026-10-22 Follow-up paint transaction validator economy: after unifying the operation-list Zod schema, removed redundant per-color `parseHexRgba` validations from `planPaintTransaction`. Color formats still pass the same strict operation schema, while actual RGBA application still performs the original conversion. Added existing-owner malformed color and exact RGBA output regressions; source-only static review, not executed Bun/typecheck/native/CPU proof. Public MCP tools, CI and main remain untouched.
+
+
+
 2026-10-22 MCP receipt Zod audit and paint schema reuse: scanned all 16 `mcp/lib/receipts/*.ts` canonical owners; no further immediate `safeParse`+same-value `parse` duplication was found. Removed a separate runtime allocation repetition in `mcp/lib/texture/paintTransaction.ts`: one shared Zod operation-list schema now serves both public parameters and `planPaintTransaction` instead of reconstructing the list schema per edit. Extended existing texture-region-copy tests for 0/1/64/65 limits and malformed copy operations; mapped paint source to the existing transaction and dirty-region suites in the canonical affected planner. Source/static REMOTE_GITHUB only; Bun/typecheck/native and latency not executed. Main, CI and release unchanged.
 
 

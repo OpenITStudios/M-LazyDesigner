@@ -35,6 +35,35 @@ describe("entity atlas region copy",()=>{
     expect(paintTransactionParameters.safeParse({expected_revision:revision,operations:[invalid]}).success).toBe(false);
     expect(()=>planPaintTransaction([invalid] as any,4,1)).toThrow();
   });
+  test("color validation runs through the operation schema; apply still decodes precise RGBA",()=>{
+    const revision="sha256:4x1:"+"a".repeat(64);
+    for(const invalid of [
+      {operation:"fill_rect",color:"#1122GG",rect:{x:0,y:0,width:1,height:1}},
+      {operation:"set_pixels",color:"blue",coordinates:[{x:1,y:0}]},
+    ]){
+      expect(paintTransactionParameters.safeParse({
+        expected_revision:revision,operations:[invalid],
+      }).success).toBe(false);
+      expect(()=>planPaintTransaction([invalid] as any,4,1)).toThrow();
+      expect(()=>applyPaintTransactionRgba(source,4,1,[invalid] as any)).toThrow();
+    }
+    const operations=paintTransactionParameters.parse({
+      expected_revision:revision,
+      operations:[
+        {operation:"fill_rect",color:"#11223344",rect:{x:0,y:0,width:2,height:1}},
+        {operation:"set_pixels",color:"#AABBCC",coordinates:[{x:1,y:0}]},
+      ],
+    }).operations!;
+    const plan=planPaintTransaction(operations,4,1);
+    expect(plan.pixel_writes).toBe(3);
+    expect(plan.affected_rect).toEqual([0,0,2,1]);
+    const result=applyPaintTransactionRgba(source,4,1,operations);
+    expect(Array.from(result.pixels.slice(0,8))).toEqual([
+      17,34,51,68,170,187,204,255,
+    ]);
+    expect(result.pixels.slice(8)).toEqual(source.slice(8));
+  });
+
   test("flips vertically and rejects out-of-bounds destination",()=>{
     const result=applyPaintTransactionRgba(source,2,2,[copy({source:{x:0,y:0,width:2,height:2},target:{x:0,y:0},flip_x:false,flip_y:true})]);
     expect(result.pixels.slice(0,8)).toEqual(source.slice(8));
