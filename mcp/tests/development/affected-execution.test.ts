@@ -64,6 +64,7 @@ describe("affected execution planner", () => {
       ]],
       ["mcp/server/tools/animation/rigging.ts", [
         "mcp/tests/batch-group-rename.test.ts",
+        "mcp/tests/group-translation.test.ts",
         "mcp/tests/rig-ik-controller-plan.test.ts",
         "mcp/tests/semantic-rig-public-surface.test.ts",
       ]],

@@ -1,6 +1,7 @@
 /// <reference types="blockbench-types" />
 
 import { z } from "zod";
+import { resolveUuidOrUniqueName } from "@/lib/core/identity";
 import {
   deriveMirroredRigName,
   hasCaseInsensitiveRigNameCollision,
@@ -167,26 +168,29 @@ export const boneRiggingToolDoc: ToolSpec = {
 };
 
 function resolveRigElement(reference: string): OutlinerElement {
-  const uuidMatch = Outliner.elements.find(
-    (element: OutlinerElement) => element.uuid === reference
-  );
-  if (uuidMatch) return uuidMatch;
+  // The same collision-safe identity rule also owns child and IK targets.
+  return resolveUuidOrUniqueName(Outliner.elements ?? [], reference, {
+    kind: "Outliner element",
+    notFoundHint: "Use inspect_elements(mode=outline) to confirm the intended child UUID.",
+  });
+}
 
-  const nameMatches = Outliner.elements.filter(
-    (element: OutlinerElement) => element.name === reference
-  );
-  if (nameMatches.length === 1) return nameMatches[0];
-  if (nameMatches.length > 1) {
+function assertAppliedBoneParent(
+  bone: Group,
+  destination: Group | "root",
+  previousParent: Group | "root"
+): void {
+  const observed = bone.parent instanceof Group ? bone.parent : "root";
+  if (
+    observed !== destination ||
+    (destination instanceof Group && !destination.children.includes(bone)) ||
+    (previousParent instanceof Group && previousParent.children.includes(bone))
+  ) {
     throw new Error(
-      `Outliner element name "${reference}" is ambiguous. Use an exact UUID. Candidates: ${nameMatches
-        .map((element: OutlinerElement) => `${element.name} (${element.uuid})`)
-        .join(", ")}`
+      "Native bone parenting postcondition mismatch for " +
+      bone.name + " (" + bone.uuid + "): parent/children are inconsistent."
     );
   }
-
-  throw new Error(
-    `Outliner element "${reference}" not found. Use inspect_elements(mode=outline) to confirm the intended child UUID.`
-  );
 }
 
 type NativeIkControllerState = {
@@ -304,6 +308,7 @@ export function registerBoneRiggingTool(): void {
         let controllerPole: OutlinerElement | null | undefined;
         let mirroredBoneName: string | undefined;
         let renamePlan: ReturnType<typeof planGroupRename> | undefined;
+        let previousBoneParent: Group | "root" | undefined;
         const boneIdentity = (group: Group) => ({
           uuid: group.uuid,
           name: group.name,
@@ -378,6 +383,12 @@ export function registerBoneRiggingTool(): void {
               );
             }
             parentBone = resolveAnimationRigGroup(bone_data.parent);
+            previousBoneParent = targetBone.parent instanceof Group ? targetBone.parent : "root";
+            if (previousBoneParent === parentBone) {
+              throw new Error(
+                "Bone is already under the requested parent; no authored effect."
+              );
+            }
             const parentByUuid = new Map<string, string | null>(
               Group.all.map((group: Group) =>
                 [
@@ -401,6 +412,10 @@ export function registerBoneRiggingTool(): void {
   
           case "unparent":
             targetBone = resolveAnimationRigGroup(boneName);
+            previousBoneParent = targetBone.parent instanceof Group ? targetBone.parent : "root";
+            if (previousBoneParent === "root") {
+              throw new Error("Bone is already at root; no authored effect.");
+            }
             break;
   
           case "delete": {
@@ -461,6 +476,14 @@ export function registerBoneRiggingTool(): void {
             if (!bone_data.origin) {
               throw new Error(
                 "origin is required for set_pivot. Inspect the Group and provide the evidence-backed joint/attachment transform center explicitly."
+              );
+            }
+            if (bone_data.origin.every((value, axis) => value === targetBone!.origin[axis])) {
+              throw new Error("Bone pivot already matches requested origin; no authored effect.");
+            }
+            if (!targetBone.mesh) {
+              throw new Error(
+                "Bone has no preview mesh for safe native transferOrigin(). No mutation was applied."
               );
             }
             break;
@@ -583,6 +606,7 @@ export function registerBoneRiggingTool(): void {
   
             case "parent": {
               targetBone!.addTo(parentBone as Group);
+              assertAppliedBoneParent(targetBone!, parentBone as Group, previousBoneParent!);
               affectedBone = targetBone!;
               resultText = `Parented "${targetBone!.name}" to "${(parentBone as Group).name}"`;
               break;
@@ -590,6 +614,7 @@ export function registerBoneRiggingTool(): void {
   
             case "unparent": {
               targetBone!.addTo("root");
+              assertAppliedBoneParent(targetBone!, "root", previousBoneParent!);
               affectedBone = targetBone!;
               resultText = `Unparented "${targetBone!.name}"`;
               break;
@@ -613,7 +638,11 @@ export function registerBoneRiggingTool(): void {
             }
   
             case "set_pivot": {
-              targetBone!.transferOrigin(toArrayVector3(bone_data.origin!));
+              const requestedOrigin = toArrayVector3(bone_data.origin!);
+              targetBone!.transferOrigin(requestedOrigin);
+              if (requestedOrigin.some((value, axis) => targetBone!.origin[axis] !== value)) {
+                throw new Error("Native bone pivot postcondition mismatch after transferOrigin().");
+              }
               affectedBone = targetBone!;
               resultText = `Set pivot point for "${targetBone!.name}"`;
               break;

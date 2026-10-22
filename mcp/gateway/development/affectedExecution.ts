@@ -434,6 +434,7 @@ function sharedContractTestsForPath(path: string): readonly string[] {
   if (path === "mcp/server/tools/animation/rigging.ts") {
     return [
       "mcp/tests/batch-group-rename.test.ts",
+      "mcp/tests/group-translation.test.ts",
       "mcp/tests/rig-ik-controller-plan.test.ts",
       "mcp/tests/semantic-rig-public-surface.test.ts",
     ];
