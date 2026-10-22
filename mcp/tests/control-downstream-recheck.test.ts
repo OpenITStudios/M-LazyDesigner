@@ -2,6 +2,91 @@ import { describe, expect, test } from "bun:test";
 import { downstreamRechecksForFreshness } from "@/gateway/control/delta/recheck";
 
 describe("cross-domain regression recheck planning", () => {
+  test("UV and mapped Texture share one authoritative scoped receipt read", () => {
+    let envelopeReads = 0;
+    let uvReads = 0;
+    const payload = {
+      receipt: {
+        get changed_cube_ids() {
+          uvReads++;
+          return ["cube-a", "cube-a"];
+        },
+        changed_island_ids: ["island-a"],
+        changed_faces: [{ cube_uuid: "cube-a", face: "north" }],
+      },
+    };
+    const envelope = {
+      execution: "unchanged", // Must not override authoritative structured content.
+      get structuredContent() {
+        envelopeReads++;
+        return payload;
+      },
+    };
+    const result = downstreamRechecksForFreshness({
+      currentDomain: "TEXTURING",
+      stale: ["UV_MAPPING", "TEXTURE_APPEARANCE", "UV_MAPPING"],
+      result: envelope,
+    });
+    expect(envelopeReads).toBe(1);
+    expect(uvReads).toBe(1);
+    const uv = result.required.find(entry => entry.scope === "UV_MAPPING");
+    const texture = result.required.find(entry => entry.scope === "TEXTURE_APPEARANCE");
+    expect(uv?.target).toEqual({
+      cube_ids: ["cube-a"],
+      island_ids: ["island-a"],
+      faces: [{ cube_uuid: "cube-a", face: "north" }],
+    });
+    expect(texture?.target).toEqual(uv?.target);
+    expect(result.required).toHaveLength(2);
+  });
+
+  test("missing UV target preserves texture-region fallback without another envelope read", () => {
+    let reads = 0;
+    const result = downstreamRechecksForFreshness({
+      currentDomain: "TEXTURING",
+      stale: ["UV_MAPPING", "TEXTURE_APPEARANCE", "MATERIAL_RENDER"],
+      result: {
+        get structuredContent() {
+          reads++;
+          return {
+            texture: { uuid: "atlas-a" },
+            revision: { after: "revision-2" },
+            affected_rect: [8, 12, 16, 24],
+            changes: [{ cube_uuid: "cube-a", face: "north" }],
+          };
+        },
+      },
+    });
+    expect(reads).toBe(1);
+    expect(result.required.find(entry => entry.scope === "UV_MAPPING")?.target)
+      .toBeUndefined();
+    expect(result.required.find(entry => entry.scope === "TEXTURE_APPEARANCE")?.target)
+      .toEqual({
+        texture_uuid: "atlas-a",
+        affected_rect: [8, 12, 16, 24],
+        revision: "revision-2",
+      });
+    expect(result.required.find(entry => entry.scope === "MATERIAL_RENDER")?.target)
+      .toEqual({
+        cube_ids: ["cube-a"],
+        faces: [{ cube_uuid: "cube-a", face: "north" }],
+      });
+  });
+
+  test("untargeted scopes do not read or infer any Runtime receipt", () => {
+    const result = downstreamRechecksForFreshness({
+      currentDomain: "GEOMETRY",
+      stale: ["GEOMETRY_STRUCTURE", "PARTICLE_SYSTEM"],
+      result: {
+        get structuredContent(): never {
+          throw new Error("No targeted scope should consult Runtime receipt");
+        },
+      },
+    });
+    expect(result.required).toHaveLength(2);
+    expect(result.required.every(entry => entry.target === undefined)).toBe(true);
+  });
+
   test("translation-only geometry keeps UV/texture/animation preserved", () => {
     const result = downstreamRechecksForFreshness({
       currentDomain: "GEOMETRY",

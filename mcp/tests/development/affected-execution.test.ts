@@ -412,6 +412,27 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("Control downstream recheck owner selects its five existing targeted contracts", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/gateway/control/delta/recheck.ts"],
+      semanticImpact: impact(),
+    });
+    const expected = [
+      "mcp/tests/control-downstream-recheck.test.ts",
+      "mcp/tests/uv-downstream-recheck-targets.test.ts",
+      "mcp/tests/texture-region-recheck-targets.test.ts",
+      "mcp/tests/animation-downstream-recheck-targets.test.ts",
+      "mcp/tests/animation-controller-effects-recheck-targets.test.ts",
+    ];
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.checks).toContain("PROJECT_GRAPH");
+    expect(plan.targeted_tests).toEqual([...expected].sort());
+    expect(plan.commands).toContain(
+      `bun test ${[...expected].sort().map(path => path.slice(4)).join(" ")}`
+    );
+    expect(plan.commands).not.toContain("bun run verify:full");
+  });
+
   test("Control receipt validation changes select native continuation proof without a full sweep", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/gateway/control/delta/receipts.ts"],

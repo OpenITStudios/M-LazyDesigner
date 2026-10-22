@@ -33,8 +33,8 @@ export type ControlDownstreamRecheck = {
   };
 };
 
-function uvTargetFromResult(result: unknown): ControlDownstreamRecheck["target"] | undefined {
-  for (const candidate of resultCandidates(result)) {
+function uvTargetFromCandidates(candidates: readonly Record<string, unknown>[]): ControlDownstreamRecheck["target"] | undefined {
+  for (const candidate of candidates) {
     const receipt = record(candidate.receipt) ?? candidate;
     const cubeIds = Array.isArray(receipt.changed_cube_ids)
       ? receipt.changed_cube_ids.filter((value): value is string => typeof value === "string")
@@ -62,10 +62,10 @@ function uvTargetFromResult(result: unknown): ControlDownstreamRecheck["target"]
   return undefined;
 }
 
-function materialRenderTargetFromResult(
-  result: unknown
+function materialRenderTargetFromCandidates(
+  candidates: readonly Record<string, unknown>[]
 ): ControlDownstreamRecheck["target"] | undefined {
-  for (const candidate of resultCandidates(result)) {
+  for (const candidate of candidates) {
     const changes = Array.isArray(candidate.changes) ? candidate.changes : [];
     const faces = changes.flatMap((value) => {
       const change = record(value);
@@ -83,10 +83,10 @@ function materialRenderTargetFromResult(
   return undefined;
 }
 
-function textureRegionTargetFromResult(
-  result: unknown
+function textureRegionTargetFromCandidates(
+  candidates: readonly Record<string, unknown>[]
 ): ControlDownstreamRecheck["target"] | undefined {
-  for (const candidate of resultCandidates(result)) {
+  for (const candidate of candidates) {
     const texture = record(candidate.texture);
     const revision = record(candidate.revision);
     const rect = candidate.affected_rect;
@@ -110,10 +110,10 @@ function textureRegionTargetFromResult(
 }
 
 
-function animationMotionTargetFromResult(
-  result: unknown
+function animationMotionTargetFromCandidates(
+  candidates: readonly Record<string, unknown>[]
 ): ControlDownstreamRecheck["target"] | undefined {
-  for (const candidate of resultCandidates(result)) {
+  for (const candidate of candidates) {
     const animation = record(candidate.animation);
     const bone = record(candidate.bone);
     if (typeof animation?.uuid !== "string") continue;
@@ -154,10 +154,10 @@ function animationMotionTargetFromResult(
 }
 
 
-function animationEffectsTargetFromResult(
-  result: unknown
+function animationEffectsTargetFromCandidates(
+  candidates: readonly Record<string, unknown>[]
 ): ControlDownstreamRecheck["target"] | undefined {
-  for (const candidate of resultCandidates(result)) {
+  for (const candidate of candidates) {
     const animation = record(candidate.animation);
     const results = Array.isArray(candidate.results) ? candidate.results : [];
     if (typeof animation?.uuid !== "string" || results.length === 0) continue;
@@ -187,10 +187,10 @@ function animationEffectsTargetFromResult(
   return undefined;
 }
 
-function animationControllerTargetFromResult(
-  result: unknown
+function animationControllerTargetFromCandidates(
+  candidates: readonly Record<string, unknown>[]
 ): ControlDownstreamRecheck["target"] | undefined {
-  for (const candidate of resultCandidates(result)) {
+  for (const candidate of candidates) {
     const controller = record(candidate.controller);
     if (typeof controller?.uuid !== "string") continue;
 
@@ -232,23 +232,40 @@ export function downstreamRechecksForFreshness(input: {
   required: ControlDownstreamRecheck[];
   preserved_domains: ControlAuthoringDomain[];
 } {
+  // Candidate resolution is request-local and lazy. No receipt interpretation
+  // is needed for scopes that have no targeted recheck extractor.
+  let candidates: Record<string, unknown>[] | undefined;
+  const currentCandidates = (): readonly Record<string, unknown>[] =>
+    candidates ?? (candidates = resultCandidates(input.result));
+  // UV and mapped Texture commonly appear together: do not re-extract the
+  // same UV target twice or lose the texture-region fallback.
+  let uvTargetResolved = false;
+  let uvTarget: ControlDownstreamRecheck["target"] | undefined;
+  const sharedUvTarget = () => {
+    if (!uvTargetResolved) {
+      uvTargetResolved = true;
+      uvTarget = uvTargetFromCandidates(currentCandidates());
+    }
+    return uvTarget;
+  };
+
   const required = [...new Set(input.stale)]
     .map((scope) => {
       const dependency = assetDependencyForScope(scope);
       const target =
         scope === "UV_MAPPING"
-          ? uvTargetFromResult(input.result)
+          ? sharedUvTarget()
           : scope === "TEXTURE_APPEARANCE"
-            ? uvTargetFromResult(input.result) ??
-              textureRegionTargetFromResult(input.result)
+            ? sharedUvTarget() ??
+              textureRegionTargetFromCandidates(currentCandidates())
             : scope === "MATERIAL_RENDER"
-              ? materialRenderTargetFromResult(input.result)
+              ? materialRenderTargetFromCandidates(currentCandidates())
               : scope === "ANIMATION_MOTION"
-                ? animationMotionTargetFromResult(input.result)
+                ? animationMotionTargetFromCandidates(currentCandidates())
                 : scope === "ANIMATION_CONTROLLER"
-                  ? animationControllerTargetFromResult(input.result)
+                  ? animationControllerTargetFromCandidates(currentCandidates())
                   : scope === "ANIMATION_EFFECTS"
-                    ? animationEffectsTargetFromResult(input.result)
+                    ? animationEffectsTargetFromCandidates(currentCandidates())
                     : undefined;
       return {
         scope,

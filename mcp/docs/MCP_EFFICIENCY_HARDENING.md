@@ -394,6 +394,30 @@ keeps its independent authoritative continuation rules.
 The change is source-only: executable Bun/TypeScript checks, actual Runtime
 affinity behavior and performance measurements are NOT EXECUTED.
 
+## Downstream Recheck Receipt Resolution — SOURCE OPTIMIZATION
+
+Within `downstreamRechecksForFreshness`, one mutation can mark UV mapping,
+texture appearance, material rendering and animation scopes stale at once.
+Previously each target resolver called `resultCandidates` independently;
+UV target extraction also ran twice whenever UV and mapped Texture needed
+the same evidence. This caused repeated canonical MCP envelope reads,
+duplicate filtered arrays, and duplicate target derivation on the same result.
+
+The existing Control `delta/recheck.ts` owner now resolves the authoritative
+receipt candidates lazily **once per request** and shares the same UV target
+between UV_MAPPING and TEXTURE_APPEARANCE. If no valid UV evidence exists,
+TEXTURE_APPEARANCE still falls back to the exact texture-region revision.
+Other targets use the same candidate list without acquiring any persistent
+state. Unrelated or untargeted scopes never consult the receipt.
+
+Existing `control-downstream-recheck.test.ts` now guards single-read
+behavior (including contradictory MCP envelopes), UV precedence, texture
+fallback and source-read laziness. The existing affected-work planner selects
+the five already-owned downstream domain contracts when `recheck.ts`
+changes. No public tool, receipt schema, freshness rule, image proof or
+Control Delta field was removed. No CPU/latency reduction is claimed as
+measured until Bun and exact-SHA Runtime tests can run.
+
 ## Gateway AI-Context Progressive Disclosure
 
 The four-tool Gateway is the model-facing boundary. Token/context efficiency is therefore measured at the routed Gateway path, not inferred only from the internal Runtime catalog.
