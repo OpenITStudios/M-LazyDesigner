@@ -20,6 +20,7 @@ import { parseTextureComputeRequest } from "@/lib/texture/computeRequest";
 import {
   cropRgbaRect,
   fullTextureRgba,
+  requireUnchangedTextureBitmap,
   rgbaToPngDataUrl,
 } from "@/lib/texture/bitmapRuntime";
 
@@ -136,16 +137,18 @@ function commitTexturePngWrite(
   }
 }
 
-function rollbackTexturePngWrite(
+export function rollbackTexturePngWrite(
   fs: TexturePngFilesystem,
   state: PreparedTexturePngWrite
 ): void {
-  if (fs.existsSync(state.temp_path)) fs.unlinkSync(state.temp_path);
+  // Restore the user's original file before optional temporary cleanup.
+  // A locked leftover temp must not prevent backup restoration on Windows.
   if (state.committed && fs.existsSync(state.path)) fs.unlinkSync(state.path);
   if (state.backup_moved && state.backup_path && fs.existsSync(state.backup_path)) {
     fs.renameSync(state.backup_path, state.path);
     state.backup_moved = false;
   }
+  if (fs.existsSync(state.temp_path)) fs.unlinkSync(state.temp_path);
 }
 
 function finalizeTexturePngWrite(
@@ -246,6 +249,12 @@ export function registerPaintTextureTransactionTool(): void {
         const preparedOutput = output && outputBytes
           ? prepareTexturePngWrite(output.path, output.overwrite === true, outputBytes.byteLength)
           : null;
+
+        // Planning includes asynchronous revision hashing. Native edits may
+        // occur between the caller's initial revision check and this point.
+        // Recheck the entire RGBA source synchronously before opening Undo or
+        // overwriting the dirty region with a stale planned candidate.
+        requireUnchangedTextureBitmap(before, fullTextureRgba(texture));
 
         const undoAspects: UndoAspects = {
           bitmap: true,

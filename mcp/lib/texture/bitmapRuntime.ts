@@ -28,6 +28,27 @@ export function fullTextureRgba(texture: Texture): {
   };
 }
 
+/**
+ * A revision-checked paint plan can cross asynchronous digest/encoding steps.
+ * Compare the current decoded bitmap with its original snapshot immediately
+ * before starting Undo; no second hash or model-facing revision is required.
+ */
+export function requireUnchangedTextureBitmap(
+  expected: { pixels: Uint8ClampedArray; width: number; height: number },
+  actual: { pixels: Uint8ClampedArray; width: number; height: number }
+): void {
+  if (
+    expected.width !== actual.width ||
+    expected.height !== actual.height ||
+    expected.pixels.byteLength !== actual.pixels.byteLength ||
+    expected.pixels.some((value, index) => value !== actual.pixels[index])
+  ) {
+    throw new Error(
+      "Texture bitmap changed during paint transaction planning. Refresh the texture revision before applying a new transaction; no native mutation was applied."
+    );
+  }
+}
+
 export function rgbaToPngDataUrl(
   pixels: Uint8ClampedArray,
   width: number,

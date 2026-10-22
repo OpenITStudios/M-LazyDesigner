@@ -46,6 +46,28 @@ describe("affected execution planner", () => {
   });
 
 
+  test("paint transaction bitmap and filesystem changes select bounded existing owners", () => {
+    const cases = [
+      ["mcp/lib/texture/bitmapRuntime.ts", [
+        "mcp/tests/texture-bitmap-runtime.test.ts",
+        "mcp/tests/texture-transaction-dirty-region.test.ts",
+      ]],
+      ["mcp/server/tools/paint/textureTransaction.ts", [
+        "mcp/tests/texture-transaction-dirty-region.test.ts",
+        "mcp/tests/texture-runtime-policy.test.ts",
+      ]],
+    ] as const;
+    for (const [path, expected] of cases) {
+      const plan = planAffectedExecution({
+        changedPaths: [path],
+        semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.checks).toContain("PROJECT_GRAPH");
+      expect(plan.targeted_tests).toEqual([...expected].sort());
+    }
+  });
+
   test("UV atlas diagnostic changes select existing atlas and texture alignment owners", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/server/tools/texture/atlas.ts"],

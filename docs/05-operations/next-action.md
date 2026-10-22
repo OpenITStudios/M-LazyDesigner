@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-Batch 4 UV atlas diagnostics: distinct known texture UUIDs no longer create false partial-overlap or exact-reuse evidence in list_textures(diagnostics=true); unknown texture identity remains conservatively compared. Animated texture V pixel scale uses display_height (one frame), not stacked height. Existing atlas/alignment test owners and affected-run routing updated, NOT EXECUTED; public Gateway/Runtime tool set unchanged. Next inspect only evidence-backed UV/paint atomicity issues; do not activate manage_uv_layout without generator-coupled Runtime proof.
+Batch 4 paint transaction: synchronously recheck the full decoded RGBA bitmap immediately before native Undo, rejecting edits made during asynchronous planning. PNG rollback now restores any original backup before cleaning a leftover temporary file, even when temp cleanup fails. Added existing-owner source/behavior regression cases and focused test selection; Bun/TypeScript/native NOT EXECUTED. No public MCP schema or UV activation changes. Next inspect a distinct evidenced transaction defect or proceed to Texture production safety.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 
