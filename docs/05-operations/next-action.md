@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Native Recipe Bone/Group authored-state integrity:
-- Canonical nativeState.ts now reads one bounded root-to-parent Group state (UUID, name, origin/pivot, rotation, visibility, export, mirror UV, reset, Bedrock binding); Runtime supplies native Group predicate. Existing SHA-256/Undo guard rejects stale plans after these edits even if Cube local coordinates and Group UUIDs are unchanged.
-- Deterministic pure tests cover same-UUID pivot/rotation/visibility/export/name/binding drift, mutation-safe copies, cycles, invalid transforms, depth limit and stale-plan rejection before Undo. Old pure snapshots remain compatible; no automatic reparent or new registry/tool.
-- Source/static review only; exact-head Bun/TS, LIVE_BLOCKBENCH, Bedrock export and accepted reference fidelity/efficiency NOT EXECUTED (CI disabled). Next: run existing owner tests/native visual proof when capable; preserve UV registration and Golden acceptance as separate residue.
+2026-10-23 Native Bone-transform Geometry proof preparation:
+- Existing disposable verify-geometry-live now tests native modify_group 45-degree rotation and restoration using current-world inspect_model_bounds and fixed-frame PNG, while confirming child Cube coordinates are unchanged. It restores the Bone before the existing Cube edit/Undo/Redo and Texturing handoff. No new Runtime tool or test suite.
+- Existing live Geometry smoke test and affected-execution owner cover required tools, ordering and proof boundary. Previous pure native Recipe ancestor authored-state snapshot remains in c4d153e.
+- Exact-HEAD Bun/TS and LIVE_BLOCKBENCH NOT EXECUTED (CI disabled); script assertions are only a prepared acceptance contract, not an actual tested Bone. Next: execute in a capable disposable native run, compare exported Bedrock geometry and approved Golden references. Generator-coupled UV registration remains deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

@@ -14,7 +14,9 @@ const REQUIRED_TOOLS = [
   "create_project",
   "add_group",
   "manage_cubes",
+  "modify_group",
   "inspect_elements",
+  "inspect_model_bounds",
   "capture_model_views",
   "undo",
   "redo",
@@ -87,6 +89,22 @@ async function captureFront(client: LiveMcpClient) {
     ),
     "capture_model_views"
   );
+}
+
+/** Native rendered-world observation, not raw authored Cube extent. */
+async function renderedModelSize(client: LiveMcpClient): Promise<number[]> {
+  const observed = structuredObject(
+    await client.callTool("inspect_model_bounds", {}, "inspection"),
+    "inspect_model_bounds"
+  );
+  const bounds = (observed.bounds ?? null) as JsonObject | null;
+  const size = bounds?.size_xyz;
+  expect(
+    Array.isArray(size) && size.length === 3 &&
+      size.every((value) => typeof value === "number" && Number.isFinite(value)),
+    "Native geometry bounds did not provide three finite current-world dimensions."
+  );
+  return [...(size as number[])];
 }
 
 async function main(): Promise<void> {
@@ -188,6 +206,46 @@ async function main(): Promise<void> {
   );
   const beforeImage = await captureFront(client);
 
+  // In the disposable model, the rigid torso/appendage assembly is owned by
+  // one Group. Confirm a native Group rotation affects actual rendered world
+  // extents and front-view media without rewriting any child's Cube geometry.
+  const baseWorldSize = await renderedModelSize(client);
+  const rotateReceipt = structuredObject(
+    await client.callTool(
+      "modify_group",
+      { id: group.uuid, rotation: [0, 45, 0] },
+      "mutation"
+    ),
+    "modify_group"
+  );
+  const rotatedGroup = (rotateReceipt.group ?? {}) as JsonObject;
+  expect(sameVec3(rotatedGroup.rotation, [0, 45, 0]),
+    "Native Bone rotation receipt did not show the authored 45-degree turn.");
+  const rotatedWorldSize = await renderedModelSize(client);
+  expect(!sameVec3(rotatedWorldSize, baseWorldSize),
+    "Group rotation changed authored state but rendered-world bounds stayed unchanged.");
+  const rotatedFrontImage = await captureFront(client);
+  expect(beforeImage.data !== rotatedFrontImage.data,
+    "Group rotation did not change fixed-frame rendered front PNG.");
+
+  const restoreReceipt = structuredObject(
+    await client.callTool(
+      "modify_group",
+      { id: group.uuid, rotation: [0, 0, 0] },
+      "mutation"
+    ),
+    "modify_group"
+  );
+  const restoredGroup = (restoreReceipt.group ?? {}) as JsonObject;
+  expect(sameVec3(restoredGroup.rotation, [0, 0, 0]),
+    "Native Bone rotation was not restored to the original authored state.");
+  expect(sameVec3(await renderedModelSize(client), baseWorldSize),
+    "Restoring Bone rotation did not restore the initial world-space envelope.");
+  const unchangedCube = await inspectCube(client, cubeUuid);
+  expect(sameVec3(unchangedCube.from, before.from) &&
+    sameVec3(unchangedCube.to, before.to),
+    "Group rotation/restoration unexpectedly rewrote the child Cube geometry.");
+
   const modification = structuredObject(
     await client.callTool(
       "manage_cubes",
@@ -259,6 +317,10 @@ async function main(): Promise<void> {
         undo_restored_initial_geometry: true,
         redo_restored_modified_geometry: true,
         thin_per_face_without_geometry_thickening: true,
+        native_bone_rotation_changed_rendered_bounds: true,
+        native_bone_rotation_changed_front_capture: true,
+        restored_bone_rotation_and_world_bounds: true,
+        child_geometry_unchanged_during_group_rotation: true,
         modification_receipt_present: Object.keys(modification).length > 0,
         current_public_cube_surface: "manage_cubes",
         current_public_inspection_surface: "inspect_elements",

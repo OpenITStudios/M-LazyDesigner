@@ -30,6 +30,33 @@ describe("live Geometry E2E verifier source contract", () => {
     expect(script).not.toMatch(/set.*authoring.*phase/i);
   });
 
+  test("disposable native Geometry rig verification samples and restores Bone rotation before Cube corrections", async () => {
+    const script = await source("scripts/verify/verify-geometry-live.ts");
+    for (const marker of [
+      '"modify_group"',
+      '"inspect_model_bounds"',
+      "const baseWorldSize = await renderedModelSize(client);",
+      "const rotatedWorldSize = await renderedModelSize(client);",
+      "const rotatedFrontImage = await captureFront(client);",
+      "restored_bone_rotation_and_world_bounds: true",
+      "child_geometry_unchanged_during_group_rotation: true",
+    ]) expect(script).toContain(marker);
+    const create = script.indexOf('operation: "create"');
+    const rotate = script.indexOf('rotation: [0, 45, 0]', create);
+    const restore = script.indexOf('rotation: [0, 0, 0]', rotate);
+    const cubeEdit = script.indexOf('operation: "update"', restore);
+    expect(rotate).toBeGreaterThan(create);
+    expect(restore).toBeGreaterThan(rotate);
+    expect(cubeEdit).toBeGreaterThan(restore);
+    const block = script.slice(rotate, cubeEdit);
+    expect(block).toContain("beforeImage.data !== rotatedFrontImage.data");
+    expect(block).toContain("rendered-world bounds stayed unchanged");
+    expect(block).toContain("Restoring Bone rotation did not restore");
+    expect(block).not.toContain('operation: "create"');
+    expect(block).not.toContain("Undo.undo()");
+    expect(script).toContain("requireDisposableConsent();");
+  });
+
   test("runs a bounded create-readback-render-mutate-undo-redo sequence through current consolidated tools", async () => {
     const script = await source("scripts/verify/verify-geometry-live.ts");
 

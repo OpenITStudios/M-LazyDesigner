@@ -514,6 +514,9 @@ function sharedContractTestsForPath(path: string): readonly string[] {
     return ["mcp/tests/blockbench-cube-obb.test.ts",
       "mcp/tests/geometry-preflight-order.test.ts"];
   }
+  if (path === "mcp/scripts/verify/verify-geometry-live.ts") {
+    return ["mcp/tests/live/live-geometry-smoke-contract.test.ts"];
+  }
   if (path === "mcp/scripts/verify/verify-texture-runtime-live.ts") {
     return ["mcp/tests/live/texture-runtime-live-contract.test.ts"];
   }

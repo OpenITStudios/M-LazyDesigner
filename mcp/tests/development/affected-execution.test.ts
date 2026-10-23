@@ -318,6 +318,17 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("live Geometry verifier source maps to its existing bounded smoke contract", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/scripts/verify/verify-geometry-live.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/live/live-geometry-smoke-contract.test.ts",
+    ]);
+  });
+
   test("marginal projected Geometry evidence selects current owner regressions", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/geometry/surfaceEvidence.ts"],
