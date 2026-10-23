@@ -81,6 +81,8 @@ describe("texture treatment intelligence", () => {
     expect(plan.regions[1].surface_pattern?.pattern).toBe("clean_glass");
     expect(plan.regions[2].render_contract?.alpha_semantics).toBe("emissive_mask");
     expect(plan.rules.pattern_does_not_select_render_profile).toBe(true);
+    expect(plan.readiness.scope).toBe("regions_only");
+    expect(plan.face_coverage.visual_verdict).toBe("not_evaluated");
   });
 
   test("face-inventory treatment planning detects missing undersides before readiness", () => {

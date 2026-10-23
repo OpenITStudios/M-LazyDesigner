@@ -203,6 +203,7 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
       note: "Face coverage describes a proposed treatment for every named Cube face; it does not prove that paint was applied, that shared native UVs match, or that mapped appearance passes reference review.",
     } : {
       state: "not_evaluated" as const,
+      visual_verdict: "not_evaluated" as const,
       note: "Region-only material planning has no full face inventory and cannot certify model-wide surface completion.",
     },
     readiness: {
