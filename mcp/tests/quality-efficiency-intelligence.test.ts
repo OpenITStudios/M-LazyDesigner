@@ -391,6 +391,44 @@ describe("usage-efficient authoring intelligence", () => {
     });
   });
 
+  test("face review ledger keeps small underside and missing back-face targets", () => {
+    const rgbaFace = (face: string, cube: string, size: number, flat: boolean) => ({
+      cube_uuid: cube, cube_name: cube, face,
+      texture_uuid: "atlas", texture_name: "atlas", uv: [0,0,size,size],
+      width: size, height: size,
+      pixels: rgba(Array.from({ length: size * size }, (_, i) => flat ? 70 : (i % 240))),
+    });
+    const front = Array.from({ length: 24 }, (_, i) =>
+      rgbaFace("north", "front_" + i, 8, true)
+    );
+    const result = analyzeTextureCoverage([
+      ...front, rgbaFace("down", "sole", 4, true),
+      rgbaFace("south", "back", 4, false),
+    ], [{ kind: "blank", cube_uuid: "rear", cube_name: "rear", face: "west" }]);
+    expect(result.gate.state).toBe("incomplete");
+    const ledger = result.face_review_ledger;
+    expect(ledger.total_face_count).toBe(27);
+    expect(ledger.omitted_face_count).toBe(1);
+    expect(ledger.examples_truncated).toBe(true);
+    expect(ledger.examples).toEqual(expect.arrayContaining([
+      expect.objectContaining({ cube_uuid: "sole", face: "down", reason: "FLAT_FACE_REVIEW" }),
+      expect.objectContaining({ cube_uuid: "rear", face: "west", reason: "SCAN_OMISSION:blank" }),
+      expect.objectContaining({ cube_uuid: "back", face: "south", reason: "VISUAL_STYLING_UNVERIFIED" }),
+    ]));
+    expect(ledger.visibility_evidence).toBe("not_evaluated");
+  });
+
+  test("face review ledger stays deterministic when input scan order changes", () => {
+    const sample = ["north", "down", "south"].map((face) => ({
+      cube_uuid: face, cube_name: face, face,
+      texture_uuid: "atlas", texture_name: "atlas", uv: [0,0,4,4],
+      width: 4, height: 4, pixels: rgba(Array(16).fill(80)),
+    }));
+    const first = analyzeTextureCoverage(sample);
+    const reversed = analyzeTextureCoverage([...sample].reverse());
+    expect(first.face_review_ledger).toEqual(reversed.face_review_ledger);
+  });
+
   test("cadence diagnostics remain advisory and do not invent a failure", () => {
     const result = analyzeAnimationQuality({
       loop_mode: "once",

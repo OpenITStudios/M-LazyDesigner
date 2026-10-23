@@ -322,6 +322,65 @@ function buildTextureCoverage(
       a.local_face.localeCompare(b.local_face);
   });
 
+  // Surface Review Ledger: every scanned/missing Cube face remains accounted
+  // without pretending that pixel variation proves styling or visual PASS.
+  const prioritizedFaces = [
+    ...analyzed.map(({ patch, analysis }) => {
+      const flat = analysis.detail_capacity === "detail_capable" &&
+        (analysis.state === "solid_color" || analysis.state === "low_variation");
+      const reason = analysis.state === "transparent"
+        ? "TRANSPARENT_FACE_REVIEW"
+        : flat ? "FLAT_FACE_REVIEW"
+        : analysis.detail_capacity === "micro" ? "LIMITED_TEXEL_CAPACITY"
+        : "VISUAL_STYLING_UNVERIFIED";
+      const priority = reason === "TRANSPARENT_FACE_REVIEW" ? 3 :
+        reason === "FLAT_FACE_REVIEW" ? 2 :
+          reason === "LIMITED_TEXEL_CAPACITY" ? 1 : 0;
+      return {
+        ...faceSummary(patch),
+        scan_state: "scanned" as const,
+        pixel_state: analysis.state,
+        reason,
+        priority,
+        pixel_area: patch.width * patch.height,
+      };
+    }),
+    ...omissions.map((omission) => ({
+      cube_uuid: omission.cube_uuid,
+      cube_name: omission.cube_name,
+      face: omission.face,
+      scan_state: "omitted" as const,
+      reason: "SCAN_OMISSION:" + omission.kind,
+      priority: 4,
+      pixel_area: 0,
+    })),
+  ].sort((a, b) =>
+    b.priority - a.priority ||
+    b.pixel_area - a.pixel_area ||
+    a.cube_uuid.localeCompare(b.cube_uuid) ||
+    a.face.localeCompare(b.face)
+  );
+  const maxFaceExamples = Math.min(24, Math.max(6, exampleLimit * 2));
+  const selectedFaceExamples: typeof prioritizedFaces = [];
+  const faceOrientation = ["down", "up", "north", "south", "west", "east"];
+  const selectedIndices = new Set<number>();
+  // Take one highest-risk example per direction BEFORE filling remaining
+  // slots by severity; this prevents soles/undersides from disappearing.
+  for (const face of faceOrientation) {
+    if (selectedFaceExamples.length >= maxFaceExamples) break;
+    const index = prioritizedFaces.findIndex((entry, i) =>
+      !selectedIndices.has(i) && entry.face === face
+    );
+    if (index < 0) continue;
+    selectedFaceExamples.push(prioritizedFaces[index]);
+    selectedIndices.add(index);
+  }
+  for (let index = 0; index < prioritizedFaces.length &&
+      selectedFaceExamples.length < maxFaceExamples; index += 1) {
+    if (selectedIndices.has(index)) continue;
+    selectedFaceExamples.push(prioritizedFaces[index]);
+  }
+
   const reviewKeys = new Set<string>();
   for (const { patch } of [...transparent, ...detailCapableFlat, ...intermediateAlpha]) {
     reviewKeys.add(`${patch.cube_uuid}:${patch.face}`);
@@ -384,6 +443,18 @@ function buildTextureCoverage(
         examples: byLargestPatch(intermediateAlpha),
         examples_truncated: intermediateAlpha.length > exampleLimit,
       },
+    },
+    face_review_ledger: {
+      total_face_count: prioritizedFaces.length,
+      omitted_face_count: omissions.length,
+      review_candidate_count: prioritizedFaces.filter((entry) => entry.priority > 0).length,
+      unverified_styled_face_count: prioritizedFaces.filter((entry) =>
+        entry.reason === "VISUAL_STYLING_UNVERIFIED"
+      ).length,
+      examples: selectedFaceExamples.map(({ priority: _priority, pixel_area: _area, ...entry }) => entry),
+      examples_truncated: prioritizedFaces.length > selectedFaceExamples.length,
+      visibility_evidence: "not_evaluated" as const,
+      note: "Per-Cube UUID/face review targets, balanced across Cube-local orientations. Flat/transparent/micro states and varied pixels are candidates, not artistic verdicts. Only mapped reference views can confirm an intentional flat/shared/hidden surface.",
     },
     cube_local_face_coverage: {
       directions: directionalCoverage,

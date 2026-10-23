@@ -105,7 +105,7 @@ New production authoring normally targets the approved atlas/density contract; a
 
 ## Workplan / Coverage
 Latest user correction before broad paint: verify one mapped material/seam, then propagate its cohort; palette `BASE | SHADOW | HIGHLIGHT | ACCENT/IDENTITY`. Organize material cohorts by approved material and shading role; verify representative mapped faces before propagation.
-Face Coverage Ledger: `UNPAINTED | BASE_ONLY | STYLED | INTENTIONAL_FLAT | INTENTIONAL_TRANSPARENT | SHARED`.
+Face Coverage Ledger: `UNPAINTED | BASE_ONLY | STYLED | INTENTIONAL_FLAT | INTENTIONAL_TRANSPARENT | SHARED`. Use `optimization_opportunities.coverage.face_review_ledger.examples` for exact Cube UUID + face targets: fix scan omissions first, then reference-relevant flat/transparent faces, then mapped visual verification. Its bounded examples deliberately cover undersides/back-facing directions and report truncation; `varied` is NOT a styled verdict. Only mark `INTENTIONAL_FLAT`, `INTENTIONAL_TRANSPARENT` or `SHARED` after grounded material/reference/UV ownership evidence, never from a heuristic label.
 `list_textures.optimization_opportunities.coverage.gate`: `incomplete|partial` / `FACE_ACCOUNTING_INCOMPLETE` → no completion; one `list_textures`/pass; `ready` ≠ visual PASS.
 `states.varied` ≠ `STYLED`; `review.solid_color_faces` locates flat candidates, not failures.
 Variants: color-only changes reuse the same `.bbmodel` and UVs; `list_textures.production_alignment.gate=ready`; `seam_continuity` (intra-Cube only; inspect cross-Cube contacts visually); `pbr_content`.
