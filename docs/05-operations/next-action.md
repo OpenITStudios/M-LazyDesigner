@@ -12,11 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Constraint-respecting semantic correction closure:
-- A Recipe may recompile without realizing a requested TRANSLATE: an ANCHOR solver can overwrite a constrained child's pattern position. semanticRewrite now compares final selected-Cube geometry, pivot, rotation and inflate against the pure plan for every relation-bearing correction, not only resize. Independent non-resize edits retain the cheaper path.
-- Existing authoring-recipe tests cover constrained-child X refusal, unconstrained Y motion, target-seat X propagation, and previous MIN/CENTER/MAX and Bedrock UV parity invariants. No new API, planner, mutation, or test suite.
-- REMOTE_GITHUB source/static only: exact-SHA Bun/TS and LIVE_BLOCKBENCH NOT EXECUTED (CI disabled).
-- Next: exact-SHA focused Recipe/UV tests and disposable native Bedrock export acceptance when capable. Generator-coupled UV registration and Golden visual acceptance remain deferred.
+2026-10-23 UV atomic apply scope integrity:
+- Existing U7 transaction now checks that only intended Cube/face UVs changed before native Undo commit. Unselected Cubes/faces, project identity, geometry, modes, and face visibility/rotation remain protected; Box UV offset changes may rederive its own face rectangles.
+- Existing pure U7 and atomic transaction suites add positive and negative scope cases, including verified rollback without native commit. No new Runtime tool, planner, readback, framework or auto-retry.
+- REMOTE_GITHUB source/static only: exact-SHA Bun/TypeScript, LIVE_BLOCKBENCH, native UV/Bedrock export and accepted fidelity NOT EXECUTED (CI disabled).
+- Next: matching-SHA focused U7/transaction and Recipe tests, then disposable native Geometry/UV acceptance when capable. Generator-coupled manage_uv_layout registration and Golden visual quality remain deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

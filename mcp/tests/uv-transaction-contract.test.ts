@@ -183,6 +183,45 @@ describe("UV atomic transaction contracts", () => {
     expect(invalidation.animation_motion.stale).toBe(false);
   });
 
+  test("collateral native face mutation refuses Undo commit and verifies rollback", async () => {
+    const { cubes, plan } = planned();
+    let native = buildUvNativeSourceSnapshot(cubes, 32, 32);
+    const original = structuredClone(native);
+    const calls: string[] = [];
+
+    await expect(applyUvLayoutPlanAtomic(
+      plan,
+      fingerprintUvNativeSource(native),
+      {
+        readSource: () => native,
+        beginUndo: () => { calls.push("begin"); },
+        apply: (instructions) => {
+          calls.push("apply");
+          native = structuredClone(native);
+          for (const instruction of instructions) {
+            if (instruction.kind !== "FACE_UV") continue;
+            const face = native.cubes.find((cube) =>
+              cube.uuid === instruction.cube_uuid
+            )!.faces.find((entry) => entry.face === instruction.face)!;
+            face.uv = [...instruction.uv];
+            face.rotation = instruction.rotation;
+          }
+          // The requested face is correct; only an unrelated face is damaged.
+          native.cubes.find((cube) => cube.uuid === "fixed")!.faces[0].uv[0] += 1;
+        },
+        restore: (saved) => {
+          calls.push("restore");
+          native = structuredClone(saved);
+        },
+        cancelUndo: () => { calls.push("cancel"); },
+        commitUndo: () => { calls.push("commit"); },
+      }
+    )).rejects.toThrow("UV_APPLY_SCOPE_VIOLATION");
+
+    expect(calls).toEqual(["begin", "apply", "restore", "cancel"]);
+    expect(native).toEqual(original);
+  });
+
   test("failed apply restores exact pre-apply snapshot and cancels undo", async () => {
     const { cubes, plan } = planned();
     let native = buildUvNativeSourceSnapshot(cubes, 32, 32);

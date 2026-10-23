@@ -321,7 +321,14 @@ Implemented source contracts now include:
     state or beginning Undo (defense in depth with the service preflight);
 18. native snapshot input validates finite Cube coordinates, auto-UV state and
     face rotation before fingerprinting so JSON serialization cannot turn
-    NaN/Infinity into indistinguishable null fields.
+    NaN/Infinity into indistinguishable null fields;
+19. native post-apply scope integrity compares the existing before/after
+    source reads **before** Undo commit. It rejects damage to unselected
+    Cubes/faces, project identity, Cube metadata, UV modes, face enablement
+    and unexpected face rotations. Box UV may legitimately recompute only
+    its own face rectangles when its explicit offset changes. A scope
+    violation uses the existing verified restore/cancel/rollback path;
+    uncertain rollback remains OUTCOME_UNKNOWN, never visual PASS.
 
 The source-ready integration intentionally does NOT register a new Runtime capability yet. The existing `server/runtime/uv/layoutService.ts` now exports its declarative tool specification and an uncalled registration function, so the future activation can reuse one persistent plan/apply service instance without a new engine or Gateway API. Registration changes generated MCP API documentation, and repository policy forbids hand-editing generated outputs. LOCAL_CODE must run the canonical docs generator when `manage_uv_layout` is wired to the Geometry/Modelling owner on the shared AUTHORING Runtime surface. Source presence alone is not native acceptance or UV Layout PASS.
 

@@ -354,6 +354,105 @@ function sameNumbers(
   );
 }
 
+/**
+ * Exact instruction postconditions alone cannot detect accidental changes to
+ * other Cubes or faces. Compare the same two native source reads used by the
+ * atomic transaction before Undo.finishEdit; do not add inspection calls.
+ *
+ * Box UV offset edits can regenerate face UV rectangles on that same Cube.
+ * They may not change face enablement/rotation, authored geometry, UV mode,
+ * or another Cube's mapping. Per-face edits own only their named faces.
+ */
+export function assertUvNativeMutationScoped(
+  instructions: readonly UvNativeMutationInstruction[],
+  before: UvNativeSourceSnapshot,
+  after: UvNativeSourceSnapshot
+): void {
+  const fail = (reason: string): never => {
+    throw new Error("UV_APPLY_SCOPE_VIOLATION: " + reason);
+  };
+  if (
+    before.schema !== after.schema ||
+    before.project_uuid !== after.project_uuid ||
+    before.logical_width !== after.logical_width ||
+    before.logical_height !== after.logical_height ||
+    before.cubes.length !== after.cubes.length
+  ) {
+    fail("project identity, logical UV dimensions or Cube inventory changed.");
+  }
+
+  const afterById = new Map(after.cubes.map((cube) => [cube.uuid, cube]));
+  if (afterById.size !== before.cubes.length) {
+    fail("native Cube identities changed.");
+  }
+  const authorized = new Map<string, { box: boolean; faces: Set<UvFaceKey> }>();
+  for (const instruction of instructions) {
+    let grant = authorized.get(instruction.cube_uuid);
+    if (!grant) {
+      grant = { box: false, faces: new Set<UvFaceKey>() };
+      authorized.set(instruction.cube_uuid, grant);
+    }
+    if (instruction.kind === "BOX_UV_OFFSET") grant.box = true;
+    else grant.faces.add(instruction.face);
+  }
+
+  for (const previous of before.cubes) {
+    const observed = afterById.get(previous.uuid);
+    if (!observed) fail("Cube " + previous.uuid + " disappeared.");
+    const grant = authorized.get(previous.uuid);
+    if (!grant) {
+      if (JSON.stringify(previous) !== JSON.stringify(observed)) {
+        fail("unselected Cube " + previous.uuid + " was modified.");
+      }
+      continue;
+    }
+    if (
+      previous.name !== observed.name ||
+      !sameNumbers(previous.from, observed.from) ||
+      !sameNumbers(previous.to, observed.to) ||
+      previous.box_uv !== observed.box_uv ||
+      previous.autouv !== observed.autouv ||
+      previous.mirror_uv !== observed.mirror_uv
+    ) {
+      fail("Cube " + previous.uuid + " changed geometry, mode or authored metadata.");
+    }
+    if (grant.box && grant.faces.size !== 0) {
+      fail("Cube " + previous.uuid + " has conflicting Box and per-face targets.");
+    }
+    if (!grant.box && JSON.stringify(previous.uv_offset) !==
+        JSON.stringify(observed.uv_offset)) {
+      fail("Cube " + previous.uuid + " changed an unrequested Box UV offset.");
+    }
+    if (previous.faces.length !== observed.faces.length) {
+      fail("Cube " + previous.uuid + " changed its face inventory.");
+    }
+    const observedFaces = new Map(observed.faces.map((face) => [face.face, face]));
+    if (observedFaces.size !== previous.faces.length) {
+      fail("Cube " + previous.uuid + " changed its face identities.");
+    }
+    for (const previousFace of previous.faces) {
+      const currentFace = observedFaces.get(previousFace.face);
+      if (!currentFace) {
+        fail("Cube " + previous.uuid + " lost face " + previousFace.face + ".");
+      }
+      if (previousFace.enabled !== currentFace.enabled) {
+        fail("Cube " + previous.uuid + " changed face visibility " + previousFace.face + ".");
+      }
+      if (grant.box) {
+        if (previousFace.rotation !== currentFace.rotation) {
+          fail("Cube " + previous.uuid + " rotated Box UV face " + previousFace.face + ".");
+        }
+        // Blockbench can derive fresh face rectangles from its Box UV offset.
+        continue;
+      }
+      if (!grant.faces.has(previousFace.face) &&
+          JSON.stringify(previousFace) !== JSON.stringify(currentFace)) {
+        fail("Cube " + previous.uuid + " modified unselected face " + previousFace.face + ".");
+      }
+    }
+  }
+}
+
 export function assertUvNativeInstructionsApplied(
   instructions: readonly UvNativeMutationInstruction[],
   snapshot: UvNativeSourceSnapshot

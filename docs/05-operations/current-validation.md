@@ -4,6 +4,16 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 ## Current authority
 
+**2026-10-23 REMOTE_GITHUB source-only, U7 native UV scope:** Existing UV
+atomic transaction now verifies no out-of-scope Cube, geometry or face UV
+changes using its already-read before/after snapshots before Undo commit.
+Allows only requested per-face edits and the native Box UV offset's own
+derived face rectangles; rejects unrelated changes with the existing
+verified rollback/OUTCOME_UNKNOWN mechanism. Matching-source pure and
+atomic regression cases authored. Exact-SHA Bun/TypeScript, native
+Blockbench Undo/export/UV mapping and Golden visual proof remain NOT
+EXECUTED (verification CI disabled).
+
 **2026-10-23 REMOTE_GITHUB source-only, constrained correction parity:** A
 relation-controlled child translation could previously be overwritten by ANCHOR
 resolution while its Recipe still compiled. Existing semanticRewrite now

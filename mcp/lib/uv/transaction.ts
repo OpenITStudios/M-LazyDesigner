@@ -8,6 +8,7 @@ import type {
 } from "@/lib/uv/adapters/blockbenchCubeUv";
 import {
   assertUvNativeInstructionsApplied,
+  assertUvNativeMutationScoped,
   assertUvPlanSourceFresh,
   fingerprintUvNativeSource,
   translateUvPlanToNativeInstructions,
@@ -82,6 +83,7 @@ export async function applyUvLayoutPlanAtomic(
     await adapter.apply(instructions);
     const after = await adapter.readSource();
     assertUvNativeInstructionsApplied(instructions, after);
+    assertUvNativeMutationScoped(instructions, before, after);
     const afterFingerprint = fingerprintUvNativeSource(after);
     if (afterFingerprint === expectedSourceFingerprint && instructions.length > 0) {
       throw new Error(

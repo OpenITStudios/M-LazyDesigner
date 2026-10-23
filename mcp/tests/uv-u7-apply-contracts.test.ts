@@ -4,8 +4,11 @@ import { planUvPacking } from "@/lib/uv/packing/planner";
 import {
   assertUvPlanSnapshotCompatible,
   buildUvNativeSourceSnapshot,
+  assertUvNativeMutationScoped,
   fingerprintUvNativeSource,
   translateUvPlanToNativeInstructions,
+  type UvNativeMutationInstruction,
+  type UvNativeSourceSnapshot,
 } from "@/lib/uv/adapters/blockbenchCubeUv";
 import {
   requireValidUvLayoutPlan,
@@ -47,6 +50,62 @@ function cubes() {
 }
 
 describe("UV U7 apply contracts", () => {
+  test("post-apply UV scope permits requested faces and derived Box-UV rectangles only", () => {
+    const before = buildUvNativeSourceSnapshot([...cubes(), {
+      uuid: "box", name: "box",
+      from: [0, 0, 0], to: [2, 2, 2],
+      box_uv: true, uv_offset: [0, 0],
+      autouv: 1, mirror_uv: false,
+      faces: [{ face: "north" as const, uv: [0, 0, 2, 2], rotation: 0 }],
+    }], 32, 32, "scope-project");
+    before.cubes.find((cube) => cube.uuid === "move")!.faces.push({
+      face: "south", uv: [0, 8, 2, 12], rotation: 0, enabled: true,
+    });
+    const instructions: UvNativeMutationInstruction[] = [
+      { kind: "FACE_UV", island_id: "face:move:north",
+        cube_uuid: "move", face: "north", uv: [12, 8, 14, 12], rotation: 0 },
+      { kind: "BOX_UV_OFFSET", island_id: "box:box",
+        cube_uuid: "box", uv_offset: [4, 5] },
+    ];
+    const applied = structuredClone(before);
+    applied.cubes.find((cube) => cube.uuid === "move")!.faces[0].uv =
+      [12, 8, 14, 12];
+    const box = applied.cubes.find((cube) => cube.uuid === "box")!;
+    box.uv_offset = [4, 5];
+    box.faces[0].uv = [4, 5, 6, 7]; // derived Box UV face extent
+    expect(() => assertUvNativeMutationScoped(instructions, before, applied))
+      .not.toThrow();
+
+    const faults: Array<[string, (state: UvNativeSourceSnapshot) => void]> = [
+      ["unselected Cube", (state) => {
+        state.cubes.find((cube) => cube.uuid === "fixed")!.faces[0].uv[0] = 1;
+      }],
+      ["unselected face", (state) => {
+        state.cubes.find((cube) => cube.uuid === "move")!.faces[1].uv[0] = 1;
+      }],
+      ["authored geometry", (state) => {
+        state.cubes.find((cube) => cube.uuid === "move")!.from[0] = 1;
+      }],
+      ["face visibility", (state) => {
+        state.cubes.find((cube) => cube.uuid === "move")!.faces[0].enabled = false;
+      }],
+      ["Box UV rotation", (state) => {
+        state.cubes.find((cube) => cube.uuid === "box")!.faces[0].rotation = 90;
+      }],
+      ["Box UV mode", (state) => {
+        state.cubes.find((cube) => cube.uuid === "box")!.box_uv = false;
+      }],
+      ["project identity", (state) => { state.project_uuid = "different-project"; }],
+      ["Cube inventory", (state) => { state.cubes.pop(); }],
+    ];
+    for (const [label, corrupt] of faults) {
+      const altered = structuredClone(applied);
+      corrupt(altered);
+      expect(() => assertUvNativeMutationScoped(instructions, before, altered),
+        label).toThrow("UV_APPLY_SCOPE_VIOLATION");
+    }
+  });
+
   test("native source fingerprint is deterministic and sensitive to UV state", () => {
     const first = buildUvNativeSourceSnapshot(cubes(), 32, 32);
     const second = buildUvNativeSourceSnapshot(
