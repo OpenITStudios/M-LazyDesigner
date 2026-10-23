@@ -351,7 +351,7 @@ For a known non-layered target with a fresh texture revision, `paint_texture_tra
 
 Shared/mirrored UV regions are intentional only when surfaces should share pixels.
 
-Avoid shared regions for text/symbols, left/right-specific detail, directional marks, deliberate asymmetric wear, and unique identity features. Change UV Layout ownership before styling unique content.
+Avoid shared regions for text/symbols, left/right-specific detail, directional marks, deliberate asymmetric wear, and unique identity features. An explicit Authoring Recipe `uv_policy: SHARE` cannot coexist with `texture_policy: UNIQUE`: a single atlas region cannot carry independent pixel treatment, so semantic UV derivation rejects the conflicting relationship rather than making an unsafe shared alias. Change UV Layout ownership before styling unique content.
 
 ## PBR Boundary
 

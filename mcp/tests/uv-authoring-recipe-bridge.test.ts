@@ -28,6 +28,25 @@ describe("Authoring Recipe to semantic UV bridge", () => {
     expect(rightEast.texel_density).toBe(2);
   });
 
+  test("symmetry cannot share atlas pixels when texture ownership is UNIQUE", () => {
+    const conflicting = fixture();
+    conflicting.symmetry_relationships[0] = {
+      ...conflicting.symmetry_relationships[0],
+      uv_policy: "SHARE",
+      texture_policy: "UNIQUE",
+    };
+    expect(() => deriveAuthoringRecipeUvIslands(conflicting))
+      .toThrow("UV SHARE conflicts with UNIQUE texture ownership");
+    const safe = fixture();
+    safe.symmetry_relationships[0] = {
+      ...safe.symmetry_relationships[0],
+      uv_policy: "UNIQUE", texture_policy: "UNIQUE",
+    };
+    const islands = deriveAuthoringRecipeUvIslands(safe);
+    expect(islands.find((island) => island.id === "right:north")?.share_with)
+      .toBeUndefined();
+  });
+
   test("expands affected scope across shared symmetry", () => {
     const affected = expandAffectedUvIds(fixture(), ["left"]);
     expect(affected).toContain("left:north");

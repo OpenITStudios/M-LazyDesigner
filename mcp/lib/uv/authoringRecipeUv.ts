@@ -92,6 +92,13 @@ export function deriveAuthoringRecipeUvIslands(
       };
 
       if (symmetry?.uv_policy === "SHARE") {
+        if (symmetry.texture_policy !== "MIRROR") {
+          throw new Error(
+            "UV SHARE conflicts with UNIQUE texture ownership for symmetry " +
+              symmetry.id + ". Allocate independent UV islands for unique markings, " +
+              "wear or material treatment."
+          );
+        }
         const source = byInstance.get(symmetry.source_instance_id);
         if (!source) {
           throw new Error("UV symmetry source instance is missing: " + symmetry.source_instance_id + ".");
