@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import type { SemanticGeometryOperation } from "@/lib/authoringRecipe/semanticEdit";
 import { correctionContinuationDelta, correctionContinuationId } from "@/lib/orchestration/correctionContinuation";
 import { CorrectionLoopRegistry } from "@/lib/orchestration/correctionLoop";
 
@@ -23,6 +24,59 @@ function recipe(): AuthoringRecipe {
 }
 
 describe("zero-waste correction loop reuse", () => {
+  test("ineffective geometry correction never spends an attempt or makes evidence stale", () => {
+    const registry = new CorrectionLoopRegistry();
+    const handle = registry.start({
+      recipe_id: "asset",
+      base_recipe: recipe(),
+      verification_request: {
+        domain: "GEOMETRY", source: "capture_model_views",
+        verification_risk: "LOW", views: ["front"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["arms:0", "arms:1"],
+      },
+      verification_evidence_handle: "verificationevidence:unchanged",
+      discrepancies: [{
+        code: "WIDTH_LOW", severity: "REVIEW",
+        summary: "Upper arm width needs correction.",
+      }],
+    });
+    const original = registry.projectContinuation(handle);
+    const noOps: SemanticGeometryOperation[] = [
+      { kind: "RESIZE_AXIS", axis: "X", mode: "ADD", value: 0, anchor: "MIN" },
+      { kind: "TRANSLATE", delta: [0, 0, 0] },
+      { kind: "ROTATE_AXIS", axis: "Y", delta_degrees: 0 },
+      { kind: "INFLATE", mode: "ADD", value: 0 },
+    ];
+    for (const [index, operation] of noOps.entries()) {
+      const decision = registry.planGeometryCorrection(handle, [{
+        id: "ineffective-" + index, predicted_error: 0.1,
+        mutation_cost: 0.1, risk: 0.1,
+        patch: { intent: { target: { semantic_group: "upper_arm" }, operation } },
+      }]);
+      expect(decision).toMatchObject({
+        state: "BLOCKED", attempt: 0,
+        blocked_reason: "CORRECTION_NO_GEOMETRY_CHANGE",
+      });
+      expect(registry.projectContinuation(handle)).toEqual(original);
+    }
+
+    // Refusing repeated no-ops cannot consume the limited two valid
+    // correction attempts or poison the reference evidence for a real edit.
+    const effective = registry.planGeometryCorrection(handle, [{
+      id: "actual-resize", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: { intent: {
+        target: { semantic_group: "upper_arm" },
+        operation: { kind: "RESIZE_AXIS", axis: "X", mode: "ADD",
+          value: 1, anchor: "MIN" },
+      } },
+    }]);
+    expect(effective.state).toBe("CORRECTION_READY");
+    expect(effective.attempt).toBe(1);
+    expect(effective.rebuild?.metrics.native_affected_count).toBe(2);
+  });
+
   test("unavailable UV evidence cannot create a correction loop or disturb an existing continuation", () => {
     const registry = new CorrectionLoopRegistry();
     const input: Parameters<CorrectionLoopRegistry["start"]>[0] = {

@@ -12,11 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 UV automatic atlas freshness:
-- U7 plan source now binds actual auto-discovered atlas dimensions and optional native atlas UUID to the existing bounded plan registry; stale auto atlas is rejected after async planning or before native apply/Undo. Plan IDs distinguish atlas replacement without changing the public Gateway contract.
-- Explicit pre-atlas size overrides bypass native atlas reads; same-size/same-UUID pixel edits still require texture verification. Existing UV plan-service tests cover stable, resize, replacement, missing, in-plan change, and explicit cases.
-- REMOTE_GITHUB source/static only: exact-SHA Bun/TypeScript, LIVE_BLOCKBENCH and visual acceptance NOT EXECUTED (CI disabled).
-- Next: executable U7 and Control focused tests when a Bun-capable workspace exists. Generator-coupled UV registration, native acceptance, Geometry no-op and Golden quality remain open.
+2026-10-24 Correction no-op budget integrity:
+- Existing correctionLoop now rejects a selected Geometry candidate with zero native Cube additions/changes/removals before consuming an attempt, invalidating views or advancing its recipe baseline. This does not treat metadata-only JSON edits as model corrections.
+- Existing correction-loop reuse test covers zero resize/translate/rotate/inflate and confirms a real correction still gets attempt 1. No new manager, Gateway route or standalone test suite.
+- Source/static only: Bun/TypeScript and native/Golden tests NOT EXECUTED (CI disabled). Previous UV atlas freshness source is committed; same-UUID pixel repaint still needs native texture evidence.
+- Next: execute matching-SHA focused CorrectionLoop/U7/Control regressions when Bun is available. Generator-coupled UV registration, visual approval and actual accepted-result cost remain open.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

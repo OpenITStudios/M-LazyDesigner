@@ -4,6 +4,15 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 ## Current authority
 
+**2026-10-24 REMOTE_GITHUB source-only, correction no-op budget:** The
+existing correction loop now rejects a semantically selected candidate when
+the incremental rebuild contains no affected native Cube, before spending a
+bounded attempt or invalidating evidence. The existing correction-loop reuse
+suite covers zero resize/translate/rotate/inflate and a succeeding effective
+edit. Actual Bun/TypeScript and native/Golden checks are NOT EXECUTED
+(verification CI disabled). This is source-code protection, not a quality
+claim about an accepted model.
+
 **2026-10-24 REMOTE_GITHUB source-only, UV bitmap freshness:** Existing U7
 UV service/registry now pin auto-discovered base-atlas physical dimensions
 and optional native UUID across planning and read-only pre-Undo apply, and

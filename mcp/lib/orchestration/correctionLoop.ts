@@ -131,6 +131,7 @@ type CorrectionLoopDecision = {
     | "REPEATED_FAILURE_WITHOUT_NEW_EVIDENCE"
     | "CORRECTION_ATTEMPT_LIMIT"
     | "NO_ELIGIBLE_CORRECTION"
+    | "CORRECTION_NO_GEOMETRY_CHANGE"
     | "CANDIDATE_BUDGET_EXCEEDED"
     | "CORRECTION_FAMILY_MISMATCH"
     | "CAUSAL_REPAIR_MISMATCH"
@@ -1008,6 +1009,24 @@ export class CorrectionLoopRegistry {
       reverificationDiscrepancies = uniqueCodes.map((code) => byCode.get(code)!);
     }
 
+    // A selected candidate that cannot change a realized native Cube is not
+    // a correction. Reject before spending an attempt, invalidating evidence,
+    // or advancing the baseline recipe (even if its authored JSON differs).
+    const nextRecipe = rewriteAuthoringRecipeForSemanticEdit(
+      record.base_recipe,
+      decision.selected.patch.intent
+    );
+    const rebuild = planIncrementalRecipeRebuild(record.base_recipe, nextRecipe);
+    if (rebuild.metrics.native_affected_count === 0) {
+      return {
+        handle,
+        state: "BLOCKED",
+        attempt: record.attempt,
+        verification_request: structuredClone(record.verification_request),
+        blocked_reason: "CORRECTION_NO_GEOMETRY_CHANGE",
+      };
+    }
+
     const geometryRequest =
       record.verification_request.domain === "GEOMETRY"
         ? record.verification_request
@@ -1042,11 +1061,6 @@ export class CorrectionLoopRegistry {
       return evidenceHandle ? [{ view, handle: evidenceHandle }] : [];
     });
 
-    const nextRecipe = rewriteAuthoringRecipeForSemanticEdit(
-      record.base_recipe,
-      decision.selected.patch.intent
-    );
-    const rebuild = planIncrementalRecipeRebuild(record.base_recipe, nextRecipe);
     record.base_recipe = structuredClone(nextRecipe);
     record.attempt = (record.attempt + 1) as 1 | 2;
     record.last_attempt_evidence_fingerprint = record.evidence_fingerprint;
