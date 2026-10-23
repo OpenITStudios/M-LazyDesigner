@@ -2,11 +2,20 @@ import { createHash } from "node:crypto";
 import type { UvLayoutPlan } from "@/lib/uv/contracts";
 import type { UvDryRunReport } from "@/lib/uv/dryRun";
 
+/** Automatic native atlas dimensions/identity are plan inputs, not public UV state. */
+export type UvAutoBitmapSource = Readonly<{
+  width: number;
+  height: number;
+  atlas_uuid?: string;
+}>;
+
 export type UvStoredPlan = {
   plan_id: string;
   source_fingerprint: string;
   plan: UvLayoutPlan;
   report: UvDryRunReport;
+  /** Absent for explicit pre-atlas bitmap dimensions. */
+  auto_bitmap_source?: UvAutoBitmapSource;
 };
 
 export class UvPlanRegistry {
@@ -21,13 +30,15 @@ export class UvPlanRegistry {
   put(
     plan: UvLayoutPlan,
     sourceFingerprint: string,
-    report: UvDryRunReport
+    report: UvDryRunReport,
+    autoBitmapSource?: UvAutoBitmapSource
   ): UvStoredPlan {
     const digest = createHash("sha256")
       .update(
         JSON.stringify({
           source_fingerprint: sourceFingerprint,
           plan,
+          ...(autoBitmapSource ? { auto_bitmap_source: autoBitmapSource } : {}),
         })
       )
       .digest("hex");
@@ -37,6 +48,7 @@ export class UvPlanRegistry {
       source_fingerprint: sourceFingerprint,
       plan,
       report,
+      ...(autoBitmapSource ? { auto_bitmap_source: { ...autoBitmapSource } } : {}),
     };
 
     this.entries.delete(planId);

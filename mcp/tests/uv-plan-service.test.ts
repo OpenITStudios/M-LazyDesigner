@@ -85,6 +85,18 @@ describe("UV plan registry and service", () => {
     const claimed = registry.put(fakePlan, "sha256:one-shot", fakeReport);
     expect(registry.consume(claimed.plan_id)).toBe(claimed);
     expect(() => registry.consume(claimed.plan_id)).toThrow(/UV_PLAN_NOT_FOUND/);
+
+    const atlasA = registry.put(fakePlan, "sha256:atlas", fakeReport,
+      { width: 32, height: 32, atlas_uuid: "atlas-A" });
+    const repeated = registry.put(fakePlan, "sha256:atlas", fakeReport,
+      { width: 32, height: 32, atlas_uuid: "atlas-A" });
+    const atlasB = registry.put(fakePlan, "sha256:atlas", fakeReport,
+      { width: 32, height: 32, atlas_uuid: "atlas-B" });
+    expect(repeated.plan_id).toBe(atlasA.plan_id);
+    expect(atlasB.plan_id).not.toBe(atlasA.plan_id);
+    expect(repeated.auto_bitmap_source).toEqual(
+      { width: 32, height: 32, atlas_uuid: "atlas-A" }
+    );
   });
 
   test("consuming one UV plan revokes competing plans from the same source only", () => {
@@ -135,8 +147,13 @@ describe("UV plan registry and service", () => {
 
   test("service keeps AI payload compact by applying through plan handle", async () => {
     let native = nativeFixture();
+    let autoAtlasReads = 0;
     const service = createUvLayoutService({
       readSource: () => native,
+      readBitmapDimensions: () => {
+        autoAtlasReads++;
+        throw new Error("explicit bitmap planning must bypass native atlas discovery");
+      },
       createApplyAdapter: () => ({
         readSource: () => native,
         apply: (instructions) => {
@@ -192,6 +209,7 @@ describe("UV plan registry and service", () => {
     });
     expect(applied.receipt.changed_cube_ids).toEqual(["b"]);
     expect(applied.invalidation.geometry_structure.stale).toBe(false);
+    expect(autoAtlasReads).toBe(0);
     await expect(service.apply({
       plan_id: competing.plan_id,
       expected_source_fingerprint: competing.source_fingerprint,
@@ -249,14 +267,15 @@ describe("UV plan registry and service", () => {
     expect(nativeCalls).toBe(1);
   });
 
-  test("service automatically derives bitmap dimensions when the runtime provides one base atlas", async () => {
+  test("service automatically derives bitmap dimensions and accepts unchanged atlas at apply", async () => {
     let native = nativeFixture();
+    let atlasReads = 0;
     const service = createUvLayoutService({
       readSource: () => native,
-      readBitmapDimensions: () => ({
-        width: 64,
-        height: 64,
-      }),
+      readBitmapDimensions: () => {
+        atlasReads++;
+        return { width: 32, height: 32, atlas_uuid: "native-base-atlas" };
+      },
       createApplyAdapter: () => ({
         readSource: () => native,
         apply: (instructions) => {
@@ -289,6 +308,78 @@ describe("UV plan registry and service", () => {
       }],
     });
     expect(planned.report.execution).toBe("planned");
+    expect(planned.report.apply_allowed).toBe(true);
+    expect(atlasReads).toBe(2); // discovery + end-of-planning freshness
+    const applied = await service.apply({
+      plan_id: planned.plan_id,
+      expected_source_fingerprint: planned.source_fingerprint,
+    });
+    expect(applied.receipt.changed_cube_ids).toEqual(["b"]);
+    expect(atlasReads).toBe(3); // one pre-Undo apply preflight
+  });
+
+  test("auto atlas changes invalidate old UV plans before native mutation", async () => {
+    const initial = { width: 32, height: 32, atlas_uuid: "original-atlas" };
+    for (const changed of [
+      { width: 64, height: 64, atlas_uuid: "original-atlas" },
+      { width: 32, height: 32, atlas_uuid: "replacement-atlas" },
+      null,
+    ]) {
+      let atlas: typeof initial | null = initial;
+      let createdAdapters = 0;
+      const service = createUvLayoutService({
+        readSource: nativeFixture,
+        readBitmapDimensions: () => atlas,
+        createApplyAdapter: () => {
+          createdAdapters++;
+          throw new Error("stale atlas plan must not allocate a native adapter");
+        },
+      });
+      const planned = await service.plan({
+        mode: "REPACK_SELECTED",
+        island_ids: ["face:b:north"],
+        constraints: [{
+          id: "no-padding",
+          selector: { cube_uuids: ["b"] },
+          constraints: { padding_pixels: 0 },
+        }],
+      });
+      expect(planned.report.apply_allowed).toBe(true);
+      atlas = changed;
+      await expect(service.apply({
+        plan_id: planned.plan_id,
+        expected_source_fingerprint: planned.source_fingerprint,
+      })).rejects.toThrow("STALE_UV_PLAN");
+      expect(createdAdapters).toBe(0);
+    }
+  });
+
+  test("automatic atlas change during planning cannot publish a stale handle", async () => {
+    const registry = new UvPlanRegistry();
+    let atlasReads = 0;
+    const service = createUvLayoutService({
+      readSource: nativeFixture,
+      readBitmapDimensions: () => {
+        atlasReads++;
+        return atlasReads === 1
+          ? { width: 32, height: 32, atlas_uuid: "original-atlas" }
+          : { width: 64, height: 64, atlas_uuid: "original-atlas" };
+      },
+      createApplyAdapter: () => {
+        throw new Error("planning must never construct a mutation adapter");
+      },
+    }, registry);
+    await expect(service.plan({
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:b:north"],
+      constraints: [{
+        id: "no-padding",
+        selector: { cube_uuids: ["b"] },
+        constraints: { padding_pixels: 0 },
+      }],
+    })).rejects.toThrow("STALE_UV_PLAN");
+    expect(atlasReads).toBe(2);
+    expect(registry.size()).toBe(0);
   });
 
   test("service fails closed when neither base-atlas dimensions nor an explicit pre-atlas scale exists", async () => {

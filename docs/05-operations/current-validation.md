@@ -4,6 +4,16 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 ## Current authority
 
+**2026-10-24 REMOTE_GITHUB source-only, UV bitmap freshness:** Existing U7
+UV service/registry now pin auto-discovered base-atlas physical dimensions
+and optional native UUID across planning and read-only pre-Undo apply, and
+include them in content-addressed plan identity. Explicit pre-atlas
+overrides remain independent of atlas discovery. Same-size/same-UUID bitmap
+pixel changes and installed texture behavior remain outside this check.
+Existing UV plan-service regressions are authored but NOT EXECUTED; CI remains
+disabled, and Bun/TypeScript, Blockbench native, and visual/Golden acceptance
+have no matching-HEAD execution proof.
+
 **2026-10-24 REMOTE_GITHUB source-only, Workspace → Control lifecycle:**
 A legacy plural blocker label was ignored and free-text Current Stage fields
 could be mistaken for valid continuity. The existing parser now preserves

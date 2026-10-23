@@ -90,6 +90,9 @@ export function createBlockbenchUvLayoutService() {
       return {
         width: base[0].width,
         height: base[0].display_height,
+        ...(typeof base[0].uuid === "string" && base[0].uuid.trim()
+          ? { atlas_uuid: base[0].uuid }
+          : {}),
       };
     },
     createApplyAdapter: createBlockbenchUvApplyAdapter,

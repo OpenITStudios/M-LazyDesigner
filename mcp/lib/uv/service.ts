@@ -22,7 +22,10 @@ import {
   type UvNativeSourceSnapshot,
 } from "@/lib/uv/adapters/blockbenchCubeUv";
 import type { UvApplyAdapter } from "@/lib/uv/transaction";
-import { UvPlanRegistry } from "@/lib/uv/planRegistry";
+import {
+  UvPlanRegistry,
+  type UvAutoBitmapSource,
+} from "@/lib/uv/planRegistry";
 
 export type UvLayoutPlanningInput = {
   bitmap_width?: number;
@@ -60,11 +63,39 @@ function nativeCubesForCore(
 export type UvLayoutServiceDependencies = {
   readSource(): Promise<UvNativeSourceSnapshot> | UvNativeSourceSnapshot;
   readBitmapDimensions?():
-    | Promise<{ width: number; height: number } | null>
-    | { width: number; height: number }
+    | Promise<UvAutoBitmapSource | null>
+    | UvAutoBitmapSource
     | null;
   createApplyAdapter(): UvApplyAdapter;
 };
+
+function requireValidAutoBitmapSource(source: UvAutoBitmapSource): UvAutoBitmapSource {
+  if (
+    !Number.isSafeInteger(source.width) || source.width <= 0 ||
+    !Number.isSafeInteger(source.height) || source.height <= 0 ||
+    (source.atlas_uuid !== undefined && !source.atlas_uuid.trim())
+  ) {
+    throw new Error(
+      "UV_BITMAP_SOURCE_INVALID: automatic atlas dimensions must be positive " +
+      "safe integers and the optional UUID must be non-empty."
+    );
+  }
+  return {
+    width: source.width,
+    height: source.height,
+    ...(source.atlas_uuid !== undefined ? { atlas_uuid: source.atlas_uuid } : {}),
+  };
+}
+
+function sameAutoBitmapSource(
+  expected: UvAutoBitmapSource,
+  actual: UvAutoBitmapSource | null | undefined
+): boolean {
+  return actual !== null && actual !== undefined &&
+    expected.width === actual.width &&
+    expected.height === actual.height &&
+    (expected.atlas_uuid ?? null) === (actual.atlas_uuid ?? null);
+}
 
 export function createUvLayoutService(
   dependencies: UvLayoutServiceDependencies,
@@ -85,9 +116,11 @@ export function createUvLayoutService(
 
       // Explicit atlas dimensions are authoritative; bypass unrelated
       // native atlas discovery when both overrides are present.
-      const automaticBitmap = input.bitmap_width === undefined
+      const discoveredBitmap = input.bitmap_width === undefined
         ? await dependencies.readBitmapDimensions?.()
         : undefined;
+      const automaticBitmap = discoveredBitmap
+        ? requireValidAutoBitmapSource(discoveredBitmap) : undefined;
       const bitmapWidth = input.bitmap_width ?? automaticBitmap?.width;
       const bitmapHeight = input.bitmap_height ?? automaticBitmap?.height;
       if (
@@ -158,10 +191,21 @@ export function createUvLayoutService(
           "STALE_UV_PLAN: project or UV state changed during planning. Replan from the current source."
         );
       }
+      // Auto atlas discovery is an input to UV pixel density, not part of
+      // Cube geometry fingerprinting. An asynchronous atlas edit must not
+      // publish a stale handle, even when all Cube UV coordinates are intact.
+      if (automaticBitmap && !sameAutoBitmapSource(
+        automaticBitmap, await dependencies.readBitmapDimensions?.()
+      )) {
+        throw new Error(
+          "STALE_UV_PLAN: base-color atlas dimensions or identity changed during planning."
+        );
+      }
       const stored = registry.put(
         plan,
         sourceFingerprint,
-        report
+        report,
+        automaticBitmap
       );
 
       return {
@@ -200,9 +244,20 @@ export function createUvLayoutService(
         );
       }
 
-      // Claim synchronously before creating the adapter or awaiting native
-      // work. A second apply, including a retry after OUTCOME_UNKNOWN, must
-      // replan and revalidate the currently authored UV source.
+      // Automatic atlas dimensions/identity are required plan dependencies.
+      // This is a read-only preflight, before consuming the plan or opening
+      // native Undo. Explicit pre-atlas sizes bypass native atlas discovery.
+      if (stored.auto_bitmap_source && !sameAutoBitmapSource(
+        stored.auto_bitmap_source, await dependencies.readBitmapDimensions?.()
+      )) {
+        throw new Error(
+          "STALE_UV_PLAN: base-color atlas dimensions or identity changed after planning. Replan before applying."
+        );
+      }
+
+      // Claim synchronously after the last awaited atlas read and before
+      // creating the adapter. Concurrent applies still race on one handle;
+      // only the first claim may proceed, including after OUTCOME_UNKNOWN.
       const claimed = registry.consume(input.plan_id);
       const receipt = await applyUvLayoutPlanAtomic(
         claimed.plan,

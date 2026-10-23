@@ -12,11 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 Workspace-to-Control lifecycle integrity:
-- Control now reads inherited "Known blockers" as well as canonical "Known blocker(s)", keeps mixed/ambiguous blocker text visible, and flags missing, invalid or conflicting Stage/gate fields rather than treating them as approved.
-- Readiness does not report READY while lifecycle issues need review; existing suites cover legacy and negative cases. Unresolved status carries the canonical README recovery path; no asset rewrite or new state owner.
-- REMOTE_GITHUB source/static only; current-SHA Bun/TS, native Blockbench, visual/Golden acceptance NOT EXECUTED (CI disabled).
-- Next: exact-SHA focused Control tests when capable. UV generator-coupled registration, atlas freshness and native acceptance remain separate unresolved dependencies.
+2026-10-24 UV automatic atlas freshness:
+- U7 plan source now binds actual auto-discovered atlas dimensions and optional native atlas UUID to the existing bounded plan registry; stale auto atlas is rejected after async planning or before native apply/Undo. Plan IDs distinguish atlas replacement without changing the public Gateway contract.
+- Explicit pre-atlas size overrides bypass native atlas reads; same-size/same-UUID pixel edits still require texture verification. Existing UV plan-service tests cover stable, resize, replacement, missing, in-plan change, and explicit cases.
+- REMOTE_GITHUB source/static only: exact-SHA Bun/TypeScript, LIVE_BLOCKBENCH and visual acceptance NOT EXECUTED (CI disabled).
+- Next: executable U7 and Control focused tests when a Bun-capable workspace exists. Generator-coupled UV registration, native acceptance, Geometry no-op and Golden quality remain open.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 
