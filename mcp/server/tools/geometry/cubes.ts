@@ -828,7 +828,8 @@ export function registerCubesTools() {
         requireBoxUvRepresentableSpan(
           from ?? cubes[0].from,
           to ?? cubes[0].to,
-          `Cube ${cubes[0].name} (${cubes[0].uuid}) update`
+          `Cube ${cubes[0].name} (${cubes[0].uuid}) update`,
+          { from: cubes[0].from, to: cubes[0].to }
         );
       }
       if (!modifyCubeRequestWouldChange(cubes[0], {
@@ -956,7 +957,8 @@ export function registerCubesTools() {
           requireBoxUvRepresentableSpan(
             update.from ?? cube.from,
             update.to ?? cube.to,
-            `Cube ${cube.name} (${cube.uuid}) batch update`
+            `Cube ${cube.name} (${cube.uuid}) batch update`,
+            { from: cube.from, to: cube.to }
           );
         }
         if (!modifyCubeRequestWouldChange(cube, update)) {

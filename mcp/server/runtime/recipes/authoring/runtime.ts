@@ -7,6 +7,10 @@ import {
 import type { RecipeNativeUndoProvenance } from "@/lib/authoringRecipe/transaction";
 import type { CompiledCubePlacement } from "@/lib/authoringRecipe/contracts";
 import type { AuthoringRecipeApplyAdapter } from "@/lib/authoringRecipe/transaction";
+import {
+  requireBoxUvRepresentableSpan,
+  validateCubeGeometrySpan,
+} from "@/lib/geometry/cubeSpan";
 import type { AuthoringRecipeNativeSnapshot } from "@/lib/authoringRecipe/nativeState";
 import {
   authoringRecipeOwnershipPatch,
@@ -122,6 +126,28 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
     readOwned: (requestedRecipeId) => {
       if (requestedRecipeId !== recipeId) throw new Error("Parametric recipe adapter recipe identity mismatch.");
       return readBlockbenchAuthoringRecipeOwnedState(recipeId);
+    },
+    preflightUpserts: (placements, before) => {
+      const byInstance = new Map(before.cubes.map((cube) => [cube.instance_id, cube]));
+      for (const placement of placements) {
+        validateCubeGeometrySpan(
+          placement.from, placement.to, placement.inflate,
+          `Recipe Cube ${placement.name} (${placement.id})`
+        );
+        const old = byInstance.get(placement.id);
+        const existing = old
+          ? resolveOwnedCube(recipeId, placement.id, old.uuid)
+          : null;
+        const usesBoxUv = existing
+          ? existing.box_uv === true
+          : Project?.box_uv === true;
+        if (!usesBoxUv) continue;
+        requireBoxUvRepresentableSpan(
+          placement.from, placement.to,
+          `Recipe Cube ${placement.name} (${placement.id})`,
+          old ? { from: old.from, to: old.to } : undefined
+        );
+      }
     },
     beginUndo: (affectedInstanceIds) => {
       if (Undo.current_save) throw new Error("Finish the current Blockbench edit before applying a parametric recipe.");

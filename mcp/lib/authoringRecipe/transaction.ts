@@ -18,6 +18,11 @@ export type RecipeNativeUndoProvenance = {
 
 export type AuthoringRecipeApplyAdapter = {
   readOwned(recipeId: string): Promise<AuthoringRecipeNativeSnapshot> | AuthoringRecipeNativeSnapshot;
+  /** Read-only, all-upsert preflight; must complete before native Undo. */
+  preflightUpserts?(
+    placements: readonly CompiledCubePlacement[],
+    before: AuthoringRecipeNativeSnapshot
+  ): Promise<void> | void;
   beginUndo?(affectedInstanceIds: readonly string[]): Promise<void> | void;
   upsert(
     placement: CompiledCubePlacement,
@@ -125,6 +130,13 @@ export async function applyAuthoringRecipeIncrementalAtomic(
   ])].sort();
   const created: string[] = [];
   const updated: string[] = [];
+  if (adapter.preflightUpserts) {
+    await adapter.preflightUpserts(rebuild.upserts, structuredClone(before));
+    const checked = await adapter.readOwned(previousRecipe.id);
+    if (fingerprintAuthoringRecipeNativeSnapshot(checked) !== actualBeforeFingerprint) {
+      throw new Error("RECIPE_PREFLIGHT_STATE_CHANGED: geometry changed before Undo.");
+    }
+  }
   await adapter.beginUndo?.(affectedIds);
   try {
     for (const instanceId of rebuild.remove_instance_ids) {

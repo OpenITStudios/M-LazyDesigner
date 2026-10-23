@@ -18,9 +18,19 @@ export function boxUvSubunitAxes(
 export function requireBoxUvRepresentableSpan(
   from: readonly number[],
   to: readonly number[],
-  context: string
+  context: string,
+  previous?: { from: readonly number[]; to: readonly number[] }
 ): void {
-  const axes = boxUvSubunitAxes(from, to);
+  // Legacy thin axes can be moved or enlarged; only newly introduced or
+  // worsened under-one-unit dimensions are blocked for Box UV.
+  const oldRisk = previous
+    ? new Set(boxUvSubunitAxes(previous.from, previous.to))
+    : new Set<string>();
+  const axes = boxUvSubunitAxes(from, to).filter((axis) => {
+    if (!previous || !oldRisk.has(axis)) return true;
+    const index = CUBE_AXIS_NAMES.indexOf(axis);
+    return to[index] - from[index] < previous.to[index] - previous.from[index];
+  });
   if (axes.length > 0) {
     throw new Error(
       `${context} has sub-unit Box UV size on ${axes.join(", ")}. ` +

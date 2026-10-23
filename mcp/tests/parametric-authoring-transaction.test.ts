@@ -6,6 +6,7 @@ import {
   revertLastAuthoringRecipeApply,
 } from "@/lib/authoringRecipe/transaction";
 import { fingerprintAuthoringRecipeNativeSnapshot, type AuthoringRecipeNativeSnapshot } from "@/lib/authoringRecipe/nativeState";
+import { requireBoxUvRepresentableSpan } from "@/lib/geometry/cubeSpan";
 
 function recipe(spacing = 2, count = 4): AuthoringRecipe {
   return { schema: 1, compiler_version: 1, id: "fixture", name: "Fixture", prototypes: [{ id: "cube", name: "cube", size: [1,1,1] }], patterns: [{ kind: "LINEAR", id: "line", prototype_id: "cube", count, axis: "X", spacing }] };
@@ -53,6 +54,31 @@ describe("Parametric authoring atomic affected-only transaction", () => {
     expect(receipt.preserved_instance_ids).toEqual(["line:0"]);
     expect(fake.committed).toBe(true);
     expect(fake.state.cubes.find((cube) => cube.instance_id === "line:2")?.uuid).toContain("uuid-line:2");
+  });
+
+  test("recipe-owned Box UV micro Cubes are preflighted before Undo", async () => {
+    const before = recipe(2, 4);
+    const after = structuredClone(before);
+    after.prototypes[0].size = [0.25, 1, 1];
+    const baseline = snapshotFromRecipe(before);
+    const fake = fakeAdapter(baseline);
+    let beganUndo = false;
+    let preflighted = false;
+    await expect(applyAuthoringRecipeIncrementalAtomic(
+      before, after, fingerprintAuthoringRecipeNativeSnapshot(baseline), {
+        ...fake.adapter,
+        preflightUpserts(placements) {
+          preflighted = true;
+          for (const placement of placements) {
+            requireBoxUvRepresentableSpan(placement.from, placement.to, "recipe");
+          }
+        },
+        beginUndo() { beganUndo = true; },
+      }
+    )).rejects.toThrow("sub-unit Box UV size on x");
+    expect(preflighted).toBe(true);
+    expect(beganUndo).toBe(false);
+    expect(fake.state).toEqual(baseline);
   });
 
   test("read-only pre-commit gate vetoes mutation and restores exact native baseline", async () => {

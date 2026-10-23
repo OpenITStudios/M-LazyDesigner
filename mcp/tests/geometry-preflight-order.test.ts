@@ -16,6 +16,18 @@ describe("Geometry mutation preflight ordering", () => {
     expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [1, 8, 8], "solid")).not.toThrow();
   });
 
+  test("legacy fractional Box UV can be moved or improved but not worsened", () => {
+    const previous = { from: [0, 0, 0], to: [0.25, 4, 4] };
+    expect(() => requireBoxUvRepresentableSpan([2, 0, 0], [2.25, 4, 4],
+      "translation", previous)).not.toThrow();
+    expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [0.5, 4, 4],
+      "larger", previous)).not.toThrow();
+    expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [0.125, 4, 4],
+      "worse", previous)).toThrow("sub-unit Box UV size on x");
+    expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [4, 0.5, 4],
+      "new risk", previous)).toThrow("sub-unit Box UV size on y");
+  });
+
   test("inherited Box UV mutation paths check sub-unit dimensions before Undo", async () => {
     const source = await Bun.file("server/tools/geometry/cubes.ts").text();
     for (const [startMarker, endMarker] of [
