@@ -23,22 +23,23 @@ function addVec3(a:readonly number[],b:readonly number[]):RecipeVec3{
 }
 
 /**
- * Recompile changed relations and confirm resized instances keep the proposed
- * bounds and pivot. Reject an anchored/derived resize that cannot be
- * represented faithfully by the v1 pattern and constraint owners.
+ * A valid compiled Recipe is not sufficient evidence that a requested edit
+ * happened: constraints can overwrite a pattern translation. Compare the
+ * selected Cubes with their semantic plan whenever relations are involved.
+ * Independent resize also needs parity because it changes pattern anchors.
  */
 function validatedRewrite(
   recipe: AuthoringRecipe,
-  expectedResize?: readonly CompiledCubePlacement[]
+  expectedPlacements?: readonly CompiledCubePlacement[]
 ): AuthoringRecipe {
-  if (recipe.constraints?.length || recipe.symmetry?.length || expectedResize) {
+  if (recipe.constraints?.length || recipe.symmetry?.length || expectedPlacements) {
     const compiled = compileAuthoringRecipe(recipe);
-    if (expectedResize) {
+    if (expectedPlacements) {
       const byId = new Map(compiled.placements.map((item) => [item.id, item]));
       const same = (left: number, right: number) =>
         Number.isFinite(left) && Number.isFinite(right) &&
         Math.abs(left - right) <= 1e-9 * Math.max(1, Math.abs(left), Math.abs(right));
-      for (const expected of expectedResize) {
+      for (const expected of expectedPlacements) {
         const actual = byId.get(expected.id);
         if (!actual) {
           throw new Error("SEMANTIC_REWRITE_RESULT_MISMATCH: missing " + expected.id);
@@ -68,6 +69,7 @@ export function rewriteAuthoringRecipeForSemanticEdit(
   const affected=new Set(plan.affected_instance_ids);
   const affectedPlacements=compiled.placements.filter((placement)=>affected.has(placement.id));
   const next:AuthoringRecipe=structuredClone(recipe);
+  const hasRelations=Boolean(recipe.constraints?.length || recipe.symmetry?.length);
 
   if(intent.operation.kind==="TRANSLATE"){
     const patternIds=new Set(affectedPlacements.map((placement)=>placement.source_pattern_id));
@@ -84,7 +86,7 @@ export function rewriteAuthoringRecipeForSemanticEdit(
       if(pattern.kind==="RADIAL") pattern.center=addVec3(pattern.center ?? [0,0,0],intent.operation.delta);
       else pattern.start=addVec3(pattern.start ?? [0,0,0],intent.operation.delta);
     }
-    return validatedRewrite(next);
+    return validatedRewrite(next, hasRelations ? plan.upserts : undefined);
   }
 
   const prototypeIds=new Set(affectedPlacements.map((placement)=>placement.prototype_id));
@@ -143,5 +145,8 @@ export function rewriteAuthoringRecipeForSemanticEdit(
       prototype.inflate=nextScalar(prototype.inflate ?? 0,intent.operation.mode,intent.operation.value,"Semantic inflate");
     }
   }
-  return validatedRewrite(next, intent.operation.kind === "RESIZE_AXIS" ? plan.upserts : undefined);
+  return validatedRewrite(
+    next,
+    hasRelations || intent.operation.kind === "RESIZE_AXIS" ? plan.upserts : undefined
+  );
 }

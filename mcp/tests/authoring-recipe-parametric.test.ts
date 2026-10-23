@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
-import { compileSemanticGeometryEdit } from "@/lib/authoringRecipe/semanticEdit";
+import {
+  compileSemanticGeometryEdit,
+  type SemanticGeometryEditIntent,
+} from "@/lib/authoringRecipe/semanticEdit";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 import {
   deriveReferenceCorrectionVectors,
@@ -144,6 +147,44 @@ describe("lightweight parametric authoring relationships", () => {
       target: { instance_ids: ["leg:0"] },
       operation: { kind: "RESIZE_AXIS", axis: "X", mode: "ADD", value: 2, anchor: "CENTER" },
     })).toThrow("SEMANTIC_REWRITE_RESULT_MISMATCH");
+  });
+
+  test("constrained source translation cannot report an edit that the anchor solver overwrites", () => {
+    const recipe = chairRecipe();
+    const original = compileAuthoringRecipe(recipe);
+    const intent: SemanticGeometryEditIntent = {
+      target: { instance_ids: ["leg:0"] },
+      operation: { kind: "TRANSLATE", delta: [2, 0, 0] },
+    };
+    const predicted = compileSemanticGeometryEdit(original, intent);
+    expect(predicted.upserts[0]!.from[0]).toBe(8);
+    // The leg's X translation is owned by the seat-edge constraint. Changing
+    // its underlying pattern start alone would be silently overwritten.
+    expect(() => rewriteAuthoringRecipeForSemanticEdit(recipe, intent))
+      .toThrow("SEMANTIC_REWRITE_RESULT_MISMATCH");
+    expect(compileAuthoringRecipe(recipe)).toEqual(original);
+  });
+
+  test("translation stays valid along unconstrained axes and propagates from the owner", () => {
+    const base = chairRecipe();
+    const moveLegY = rewriteAuthoringRecipeForSemanticEdit(base, {
+      target: { instance_ids: ["leg:0"] },
+      operation: { kind: "TRANSLATE", delta: [0, 2, 0] },
+    });
+    const movedLeg = compileAuthoringRecipe(moveLegY).placements
+      .find((placement) => placement.id === "leg:0")!;
+    expect(movedLeg.from).toEqual([6, 2, 0]);
+    expect(movedLeg.origin).toEqual([7, 5, 1]);
+
+    const moveSeatX = rewriteAuthoringRecipeForSemanticEdit(base, {
+      target: { instance_ids: ["seat:0"] },
+      operation: { kind: "TRANSLATE", delta: [2, 0, 0] },
+    });
+    const after = compileAuthoringRecipe(moveSeatX);
+    expect(after.placements.find((placement) => placement.id === "seat:0")!.from[0])
+      .toBe(2);
+    expect(after.placements.find((placement) => placement.id === "leg:0")!.from[0])
+      .toBe(8);
   });
 
   test("semantic correction proposals refuse finite-but-collapsed and invalid Geometry", () => {

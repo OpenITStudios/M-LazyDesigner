@@ -57,11 +57,16 @@ Fractional 3D remains eligible for explicit Per-face UV.
 Reference BOUNDS intents use CENTER resize. The existing semantic rewrite now
 shifts directly owned LINEAR/GRID/RADIAL patterns for MIN/CENTER/MAX anchors,
 and preserves the original authored pivot rather than silently recentering it.
-The final compiled selected Cubes must match the proposed bounds, pivot and
-rotation, including constraint/symmetry effects; otherwise the rewrite refuses
-the edit before native Undo. Dependent but unselected geometry still follows
-its explicit constraints. This does not invent offsets or override constraint
-ownership to force an impossible per-instance change.
+On resize, the final compiled selected Cubes must match proposed bounds,
+pivot and rotation even without relations. For translations, rotations and
+inflate operations with constraints/symmetry, that same selected-Cube parity
+prevents a successfully compiled Recipe from silently ignoring a correction:
+an ANCHOR can overwrite a child pattern's proposed translation. Contradictory
+edits fail before native Undo; orthogonal free-axis edits and movements of the
+constraint-owning target remain valid. Independent non-resize rewrites do not
+pay for redundant recompilation. Dependent but unselected geometry still
+follows its explicit constraints. This does not invent offsets or override
+constraint ownership to force an impossible per-instance change.
 
 The compiler also reuses canonical Cube span checks for prototypes and realized pattern/constraint/symmetry instances. Nonfinite endpoints, invalid pivots, negative rendered spans and positive dimensions lost through numeric rounding fail before plan/apply. UV-mode-specific Box UV restrictions remain with the native adapter, where actual mode is known.
 

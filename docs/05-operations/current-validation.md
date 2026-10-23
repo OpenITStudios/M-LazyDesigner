@@ -4,6 +4,17 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 ## Current authority
 
+**2026-10-23 REMOTE_GITHUB source-only, constrained correction parity:** A
+relation-controlled child translation could previously be overwritten by ANCHOR
+resolution while its Recipe still compiled. Existing semanticRewrite now
+checks realized selected-Cube parity for all relation-bearing edit operations
+and preserves independent non-resize fast paths. Existing regression owner
+covers the refusal plus allowed orthogonal/parent movements. Current-HEAD Bun,
+TypeScript, native Blockbench and visual-quality checks remain NOT EXECUTED
+because verification CI is disabled and the GitHub environment has no Bun or
+live native workspace. Earlier source-only parity and Golden proof ceilings
+below remain unchanged.
+
 **2026-10-23 REMOTE_GITHUB source-only, correction/UV parity follow-up:** Existing
 semantic Recipe rewrite now supports reference BOUNDS CENTER and explicit
 MIN/CENTER/MAX resize anchors with pivot and post-compile selected-Cube parity.

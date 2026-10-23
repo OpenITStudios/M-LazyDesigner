@@ -12,11 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Reference resize and Bedrock UV parity:
-- semanticRewrite preserves MIN/CENTER/MAX resize anchors and pivots for owned patterns; recompiles and rejects selected-Cube mismatches from constraints/symmetry. BOUNDS intent remains CENTER; no automatic constraint rewrite or deletion.
-- Disposable Geometry verifier checks initial native Box UV offset and all six signed Per-face UV maps/rotations. Existing smoke tests add flip/offset/rotation negatives; no new public tool or native mutation.
-- REMOTE_GITHUB source/static only: exact-SHA Bun/TS, LIVE_BLOCKBENCH, native codec output and accepted visual quality NOT EXECUTED (CI disabled).
-- Next: exact-SHA focused tests and native disposable Bedrock export smoke when capable. Generator-coupled UV registration and Golden acceptance remain deferred.
+2026-10-23 Constraint-respecting semantic correction closure:
+- A Recipe may recompile without realizing a requested TRANSLATE: an ANCHOR solver can overwrite a constrained child's pattern position. semanticRewrite now compares final selected-Cube geometry, pivot, rotation and inflate against the pure plan for every relation-bearing correction, not only resize. Independent non-resize edits retain the cheaper path.
+- Existing authoring-recipe tests cover constrained-child X refusal, unconstrained Y motion, target-seat X propagation, and previous MIN/CENTER/MAX and Bedrock UV parity invariants. No new API, planner, mutation, or test suite.
+- REMOTE_GITHUB source/static only: exact-SHA Bun/TS and LIVE_BLOCKBENCH NOT EXECUTED (CI disabled).
+- Next: exact-SHA focused Recipe/UV tests and disposable native Bedrock export acceptance when capable. Generator-coupled UV registration and Golden visual acceptance remain deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 
