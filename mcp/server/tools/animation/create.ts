@@ -6,6 +6,7 @@ import { recordCurrentCapabilitySemanticHistoryEffect } from "@/lib/authoring/se
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_STABLE } from "@/lib/constants";
 import { finiteAnimationVector3Schema } from "./shared";
+import { compactLinearCreationKeyframes } from "@/lib/animation/quality";
 
 const bedrockParticleEffectSchema = z.object({
   effect: z
@@ -320,11 +321,28 @@ export function registerCreateAnimationTool(): void {
           }
         );
   
+        // Optimize the bytes that are actually serialized/imported, not
+        // merely the downstream diagnostic report. Explicit effect times
+        // remain protected even when transform samples are collinear.
+        const protectedEventTimes = [
+          ...Object.keys(particle_effects ?? {}),
+          ...Object.keys(sound_effects ?? {}),
+        ].map(Number);
+        const compactedBoneEntries = resolvedBoneEntries.map((entry) => ({
+          ...entry,
+          compaction: compactLinearCreationKeyframes(
+            entry.keyframes, protectedEventTimes
+          ),
+        }));
+        const removedChannelKeys = compactedBoneEntries.reduce(
+          (sum, entry) => sum + entry.compaction.removed_channel_key_count, 0
+        );
         const animationData = {
           loop,
           ...(animation_length !== undefined && { animation_length }),
           bones: Object.fromEntries(
-            resolvedBoneEntries.map(({ group, keyframes }) => {
+            compactedBoneEntries.map(({ group, compaction }) => {
+              const keyframes = compaction.frames;
               const boneData: Record<
                 string,
                 Record<string, number | number[]>
@@ -431,6 +449,12 @@ export function registerCreateAnimationTool(): void {
             },
             requested_name: requestedAnimationName,
             requested_bone_count: Object.keys(bones).length,
+            linear_key_compaction: {
+              removed_channel_key_count: removedChannelKeys,
+              protected_event_time_count: new Set(protectedEventTimes).size,
+              method: "strict_numeric_linear_equality",
+              visual_verdict: "not_evaluated" as const,
+            },
             requested_particle_effect_count: requestedParticleEffectCount,
             requested_sound_effect_count: requestedSoundEffectCount,
           };

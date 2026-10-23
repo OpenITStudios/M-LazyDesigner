@@ -150,6 +150,63 @@ export function planLinearKeyframeReduction(
   };
 }
 
+/**
+ * Source-only creation optimization: remove mathematically redundant numeric
+ * LINEAR channel keys without changing first/last values, user-authored
+ * sound/particle event times, or the shape of unrelated bone channels.
+ * No native Animator state is touched, and no non-linear interpolation is
+ * approximated. This is not permission to simplify arbitrary existing clips.
+ */
+export type LinearCreationKey = {
+  time: number;
+  position?: readonly number[];
+  rotation?: readonly number[];
+  scale?: number | readonly number[];
+};
+export function compactLinearCreationKeyframes<T extends LinearCreationKey>(
+  source: readonly T[],
+  protectedTimes: readonly number[] = []
+) {
+  const removed: Record<AnimationQualityChannel, number> = {
+    position: 0, rotation: 0, scale: 0,
+  };
+  const values: Array<T & LinearCreationKey> = source.map((frame) => ({
+    ...frame,
+  }));
+  for (const channel of ["position", "rotation", "scale"] as const) {
+    const entries = values.filter((frame) => frame[channel] !== undefined);
+    if (entries.length < 3) continue;
+    const scaleShapes = channel === "scale"
+      ? new Set(entries.map((frame) => Array.isArray(frame.scale) ? "vector" : "scalar"))
+      : null;
+    if (scaleShapes && scaleShapes.size > 1) continue;
+    const planned = planLinearKeyframeReduction(channel, entries.map((entry) => ({
+      time: entry.time,
+      value: typeof entry[channel] === "number"
+        ? [entry[channel], entry[channel], entry[channel]]
+        : entry[channel] as readonly number[],
+      interpolation: "linear",
+      has_multiple_data_points: false,
+    })), { max_error: 1e-8, protected_times: protectedTimes });
+    if (planned.state !== "candidate") continue;
+    const times = new Set(planned.candidate_times);
+    for (const frame of values) {
+      if (frame[channel] === undefined || !times.has(frame.time)) continue;
+      delete frame[channel];
+      removed[channel] += 1;
+    }
+  }
+  return {
+    frames: values.filter((frame) =>
+      frame.position !== undefined || frame.rotation !== undefined ||
+      frame.scale !== undefined
+    ),
+    removed_by_channel: removed,
+    removed_channel_key_count:
+      removed.position + removed.rotation + removed.scale,
+  };
+}
+
 function seamThreshold(channel: AnimationQualityChannel): number {
   if (channel === "rotation") return 0.5;
   if (channel === "scale") return 0.002;

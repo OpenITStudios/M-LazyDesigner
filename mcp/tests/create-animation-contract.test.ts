@@ -55,6 +55,18 @@ describe("create_animation contract", () => {
     expect(source).not.toContain("manage_sound_keyframes");
   });
 
+  test("real create_animation serializer consumes compacted linear keys before native codec load", async () => {
+    const source = await Bun.file("server/tools/animation/create.ts").text();
+    const plan = source.indexOf("const compactedBoneEntries =");
+    const write = source.indexOf("compactedBoneEntries.map(({ group, compaction })");
+    const undo = source.indexOf("Undo.initEdit({ animations: [] })");
+    expect(plan).toBeGreaterThanOrEqual(0);
+    expect(write).toBeGreaterThan(plan);
+    expect(undo).toBeGreaterThan(write);
+    expect(source).toContain("protectedEventTimes");
+    expect(source).toContain("linear_key_compaction");
+  });
+
   test("selects the created animation before completing the Undo edit", async () => {
     const source = await Bun.file(new URL("../server/tools/animation/create.ts", import.meta.url)).text();
     expect(source).toContain("createdAnimation.select()");

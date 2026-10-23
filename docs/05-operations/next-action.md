@@ -14,7 +14,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 2026-10-23 user quality feedback — source-only:
 - `2aae5af`: pre-Undo Box UV sub-unit guards for create/update/batch, scoped legacy hygiene.
-- `ad0d772`: directional face coverage for small undersides; conservative O(n) linear numeric keyframe reduction candidates; existing quality, Skill and test owners reused.
+- `ad0d772`: directional face coverage for small undersides and linear diagnostic candidates. Current focus: exact-linear key compaction now runs before `create_animation` serialization, protecting sound/particle timestamps; nonlinear motion remains authored.
 - UV: enforce `UNIQUE` alias, dry-run, flip and no-op guards; bound implicit UV stack pair suggestions with an explicit truncation signal.
 - **No Bun/TypeScript/native/visual PASS:** CI disabled. Next requires connected `LOCAL_CODE` for exact-head tests and canonical UV generator/registration, then existing `LIVE_BLOCKBENCH` acceptance on disposable assets. Do not duplicate engines.
 

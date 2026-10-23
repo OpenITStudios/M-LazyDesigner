@@ -3,7 +3,11 @@ import {
   analyzeTextureCoverage,
   analyzeTextureOptimizationOpportunities,
 } from "@/lib/textureOptimization";
-import { analyzeAnimationQuality, planLinearKeyframeReduction } from "@/lib/animationQuality";
+import {
+  analyzeAnimationQuality,
+  planLinearKeyframeReduction,
+  compactLinearCreationKeyframes,
+} from "@/lib/animationQuality";
 
 function rgba(values: number[]): Uint8ClampedArray {
   return new Uint8ClampedArray(values.flatMap((value) => [value, 0, 0, 255]));
@@ -268,6 +272,53 @@ describe("usage-efficient authoring intelligence", () => {
         expect.objectContaining({ group_uuid: "arm", classification: "seam_review" }),
       ])
     );
+  });
+
+  test("create-animation compaction removes exact collinear channel keys without changing other tracks", () => {
+    const original = [0, 0.25, 0.5, 0.75, 1].map((time) => ({
+      time,
+      position: [time * 8, 0, 0],
+      rotation: [0, time === 0.5 ? 30 : 0, 0],
+    }));
+    const copy = structuredClone(original);
+    const result = compactLinearCreationKeyframes(original, [0.25]);
+    expect(result.removed_by_channel).toEqual({ position: 2, rotation: 0, scale: 0 });
+    expect(result.frames.map((frame) => frame.time)).toEqual([0, 0.25, 0.5, 0.75, 1]);
+    expect(result.frames.find((frame) => frame.time === 0.25)?.position).toEqual([2, 0, 0]);
+    expect(result.frames.find((frame) => frame.time === 0.5)?.position).toBeUndefined();
+    expect(result.frames.find((frame) => frame.time === 0.5)?.rotation).toEqual([0, 30, 0]);
+    expect(original).toEqual(copy);
+  });
+
+  test("exact-linear compression reduces creation payload with no effect markers", () => {
+    const values = [0, 0.25, 0.5, 0.75, 1].map((time) => ({
+      time, position: [time * 4, 0, 0],
+    }));
+    const reduced = compactLinearCreationKeyframes(values);
+    expect(reduced.frames.map((f) => f.time)).toEqual([0, 1]);
+    expect(reduced.removed_channel_key_count).toBe(3);
+    const protectedResult = compactLinearCreationKeyframes(values, [0.5]);
+    expect(protectedResult.frames.map((f) => f.time)).toEqual([0, 0.5, 1]);
+  });
+
+  test("creation compaction keeps curved impact and scalar/vector scale semantics", () => {
+    const impact = [
+      { time: 0, position: [0, 0, 0] },
+      { time: 0.5, position: [5, 0, 0] },
+      { time: 1, position: [0, 0, 0] },
+    ];
+    expect(compactLinearCreationKeyframes(impact).removed_channel_key_count).toBe(0);
+    const scale = [
+      { time: 0, scale: 1 },
+      { time: 0.5, scale: [1.5, 1.5, 1.5] },
+      { time: 1, scale: 2 },
+    ];
+    expect(compactLinearCreationKeyframes(scale).removed_channel_key_count).toBe(0);
+    expect(compactLinearCreationKeyframes([
+      { time: 0, scale: 1 },
+      { time: 0.5, scale: 1.5 },
+      { time: 1, scale: 2 },
+    ]).frames.map((f) => f.time)).toEqual([0, 1]);
   });
 
   test("strict linear numeric key reduction is read-only and protects authored times", () => {
