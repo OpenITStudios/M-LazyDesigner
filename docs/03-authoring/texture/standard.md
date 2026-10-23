@@ -419,6 +419,8 @@ permission to modify UV, or a visual PASS.
 
 **Per-face correction ledger:** `optimization_opportunities.coverage.face_review_ledger` names bounded exact `cube_uuid + face` review targets across local directions, prioritizing missing pixels/UV, flat faces and undersides before area-only samples. Truncated examples never imply all surfaces are complete. The `STYLED` and `INTENTIONAL_FLAT` decisions remain reference- and mapped-view-owned, not inferred from pixel color counts. When one material cohort passes, propagate its treatment only to compatible faces; do not automatically repaint an occluded or visually unique surface.
 
+**Diagnostic scan fairness:** the bounded physical-pixel scanner schedules Cube-local `down` and `up` before the larger front/side passes across the model, so small soles/undersides are not systematically starved by early large regions. This is a sampling priority, **not** a guarantee that every face fits into the fixed budget; `SCAN_BUDGET_EXHAUSTED` still prevents scan-complete claims. No extra image pass or automatic texture painting is implied.
+
 **Directional coverage before visual PASS:** `optimization_opportunities.coverage.cube_local_face_coverage` reports scanned, omitted, transparent and detail-capable flat faces by Cube-local orientation, including `down` and `up` even when small examples are not selected by atlas area. This is not world-facing occlusion or an art-quality verdict. Every relevant face still needs an explicit mapped-view or intentional-flat/transparent/shared decision; vary camera/pose when previously hidden soles, underside joints or inner wings become visible.
 
 **Incomplete intra-Cube seam evidence:** Two edges from the *same face*

@@ -261,8 +261,16 @@ export function textureOptimizationRuntime(context?: unknown) {
     face: string
   ) => omissions.push({ kind, cube_uuid: cube.uuid, cube_name: cube.name, face });
 
-  for (const cube of Cube.all ?? []) {
-    for (const faceKey of CUBE_FACE_KEYS) {
+  // Scan each orientation across the model before proceeding to the next.
+  // Under a finite shared pixel budget, a cube-major north-first traversal
+  // could exhaust reads before ever visiting small soles/undersides. Prefer
+  // a fixed coverage-first order; omissions still mark incomplete evidence.
+  const faceScanOrder = ["down", "up", "south", "north", "west", "east"] as const;
+  const scanCubes = [...(Cube.all ?? [])].sort((a, b) =>
+    a.uuid.localeCompare(b.uuid)
+  );
+  for (const faceKey of faceScanOrder) {
+    for (const cube of scanCubes) {
       const face = cube.faces[faceKey];
       if (!face || face.enabled === false) continue;
 

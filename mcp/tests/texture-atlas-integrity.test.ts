@@ -77,6 +77,49 @@ describe("texture atlas integrity", () => {
       }
     }
   });
+  test("coverage-first scheduling reads small underside before large face patches exhaust budget", () => {
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const previous = { Cube: globals.Cube, Texture: globals.Texture };
+    const reads: number[][] = [];
+    const atlas = {
+      uuid: "atlas", name: "atlas",
+      getUVWidth: () => 256, getUVHeight: () => 256,
+      ctx: { canvas: { width: 256, height: 256 },
+        getImageData: (x: number, y: number, w: number, h: number) => {
+          reads.push([x, y, w, h]);
+          return { data: new Uint8ClampedArray(w * h * 4).fill(255) };
+        },
+      },
+    };
+    globals.Texture = {};
+    globals.Cube = { all: [{
+      uuid: "shoe", name: "shoe",
+      faces: {
+        north: { uv: [0, 0, 128, 128], getTexture: () => atlas },
+        south: { uv: [128, 0, 256, 128], getTexture: () => atlas },
+        down: { uv: [0, 128, 4, 132], getTexture: () => atlas },
+      },
+    }] };
+    try {
+      const result = textureOptimizationRuntime();
+      if (!("coverage" in result)) throw new Error("coverage unavailable");
+      expect(reads[0]).toEqual([0, 128, 4, 4]);
+      expect(result.coverage.scanned_faces).toBe(2);
+      expect(result.coverage.omissions.counts.budget).toBe(1);
+      expect(result.coverage.face_review_ledger.examples).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ cube_uuid: "shoe", face: "down", scan_state: "scanned" }),
+        ])
+      );
+      expect(result.coverage.gate.state).toBe("partial");
+      expect(result.pixel_budget_used).toBe(16 + 128 * 128);
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete globals[key]; else globals[key] = value;
+      }
+    }
+  });
+
   test("coverage scans fractional logical UV only when it maps to whole physical pixels", () => {
     const globals = globalThis as unknown as Record<string, unknown>;
     const previous = { Cube: globals.Cube, Texture: globals.Texture };
