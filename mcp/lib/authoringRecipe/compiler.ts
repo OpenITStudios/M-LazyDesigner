@@ -49,13 +49,9 @@ export function compileAuthoringRecipe(recipe: AuthoringRecipe): CompiledAuthori
   const featurePlan = recipe.feature_intents !== undefined
     ? planRecipeFeatureRepresentations(recipe.feature_intents)
     : null;
-  if (featurePlan?.state === "review_required") {
-    throw new Error(
-      "FEATURE_DECISION_REVIEW_REQUIRED: resolve evidence or representation " +
-      featurePlan.decisions.filter((entry) => entry.route === "REVIEW_REQUIRED")
-        .map((entry) => entry.id + ":" + entry.reason).join(", ")
-    );
-  }
+  // An unresolved, uninstantiated texture/optional feature must not block
+  // unrelated proven structural geometry. Only a Cube pattern depending on
+  // unresolved evidence is an authoring blocker.
   if (featurePlan) {
     const routeById = new Map(featurePlan.decisions.map((entry) => [entry.id, entry.route]));
     const referencedGeometryFeatures = new Set<string>();
@@ -70,6 +66,14 @@ export function compileAuthoringRecipe(recipe: AuthoringRecipe): CompiledAuthori
       if (!route) {
         throw new Error("FEATURE_PATTERN_OWNER_UNKNOWN: " + pattern.id +
           " references " + pattern.feature_id);
+      }
+      if (route === "REVIEW_REQUIRED") {
+        const decision = featurePlan.decisions.find((entry) => entry.id === pattern.feature_id);
+        throw new Error(
+          "FEATURE_DECISION_REVIEW_REQUIRED: Cube pattern " + pattern.id +
+          " relies on unverified feature " + pattern.feature_id +
+          " (" + decision?.reason + ")."
+        );
       }
       if (route !== "GEOMETRY") {
         throw new Error(

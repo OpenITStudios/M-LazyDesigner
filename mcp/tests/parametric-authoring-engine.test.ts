@@ -97,6 +97,31 @@ describe("Parametric Authoring Engine G0-G2", () => {
     })).toThrow("FEATURE_DECISION_REVIEW_REQUIRED");
   });
 
+  test("unresolved surface feature stays deferred without blocking supported silhouette geometry", () => {
+    const recipe: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "silhouette", name: "Silhouette",
+      prototypes: [{ id: "horn", name: "horn", size: [2, 4, 2] }],
+      feature_intents: [
+        { id: "horn", label: "visible horn", visual_role: "THREE_DIMENSIONAL",
+          evidence: "SUPPORTED", evidence_refs: ["fixture:horn_front"],
+          geometry_reasons: ["SILHOUETTE"] },
+        { id: "mark", label: "possibly painted mark", visual_role: "SURFACE_DETAIL",
+          evidence: "PROVISIONAL" },
+      ],
+      patterns: [{ kind: "LINEAR", id: "horns", prototype_id: "horn",
+        feature_id: "horn", count: 1, axis: "X", spacing: 0 }],
+    };
+    const compiled = compileAuthoringRecipe(recipe);
+    expect(compiled.placements).toHaveLength(1);
+    expect(compiled.feature_plan?.state).toBe("review_required");
+    expect(compiled.feature_plan?.unresolved.examples[0].id).toBe("mark");
+    expect(() => compileAuthoringRecipe({
+      ...recipe, patterns: [
+        { ...recipe.patterns[0], feature_id: "mark" },
+      ],
+    })).toThrow("FEATURE_DECISION_REVIEW_REQUIRED");
+  });
+
   test("conflicting or unsupported visual evidence cannot authorize arbitrary 3D features", () => {
     const plan = planRecipeFeatureRepresentations([
       { id: "graphic", label: "graphic", visual_role: "SURFACE_DETAIL",

@@ -33,7 +33,10 @@ before expanding native Cubes when the feature contract is present.
 - A supported horn/joint/part with silhouette, contact, transform or motion
   value remains Geometry. This does not choose its final Cube count or pivot.
 - Pattern ownership pointing at Texture/Omit is **rejected**, never silently
-  discarded. No painting, removal, or visual approval is implied.
+  discarded. An unresolved feature with no Cube pattern stays deferred rather
+  than blocking unrelated supported structural Geometry; a Cube depending on
+  that unresolved feature fails preflight. No painting, removal, or visual
+  approval is implied.
 - Component composition namespaces planned feature IDs and rejects mixed
   planned/unplanned components rather than dropping enforcement.
 - Existing recipe schema 1 without `feature_intents` compiles unchanged.
