@@ -15,7 +15,21 @@ function nextScalar(current:number,mode:"SET"|"ADD"|"MULTIPLY",value:number,labe
 }
 
 function addVec3(a:readonly number[],b:readonly number[]):RecipeVec3{
-  return [a[0]+b[0],a[1]+b[1],a[2]+b[2]];
+  const result:RecipeVec3=[a[0]+b[0],a[1]+b[1],a[2]+b[2]];
+  if (result.some((v)=>!Number.isFinite(v))) {
+    throw new Error("SEMANTIC_REWRITE_COORDINATE_NONFINITE: pattern translation overflowed.");
+  }
+  return result;
+}
+
+/** Ensures dependent constraints/symmetry compile safely before exposing a rewrite. */
+function validatedRewrite(recipe:AuthoringRecipe):AuthoringRecipe{
+  // Direct selected placements were already checked by semanticEdit.
+  // Recompile only when a dependency can move an unselected Cube.
+  if (recipe.constraints?.length || recipe.symmetry?.length) {
+    compileAuthoringRecipe(recipe);
+  }
+  return recipe;
 }
 
 export function rewriteAuthoringRecipeForSemanticEdit(
@@ -43,7 +57,7 @@ export function rewriteAuthoringRecipeForSemanticEdit(
       if(pattern.kind==="RADIAL") pattern.center=addVec3(pattern.center ?? [0,0,0],intent.operation.delta);
       else pattern.start=addVec3(pattern.start ?? [0,0,0],intent.operation.delta);
     }
-    return next;
+    return validatedRewrite(next);
   }
 
   const prototypeIds=new Set(affectedPlacements.map((placement)=>placement.prototype_id));
@@ -68,10 +82,13 @@ export function rewriteAuthoringRecipeForSemanticEdit(
       if(!Number.isFinite(intent.operation.delta_degrees)) throw new Error("Semantic rotation delta must be finite.");
       const rotation=[...(prototype.rotation ?? [0,0,0])] as RecipeVec3;
       rotation[AXIS_INDEX[intent.operation.axis]]+=intent.operation.delta_degrees;
+      if (!Number.isFinite(rotation[AXIS_INDEX[intent.operation.axis]])) {
+        throw new Error("SEMANTIC_REWRITE_ROTATION_NONFINITE: prototype rotation overflowed.");
+      }
       prototype.rotation=rotation;
     }else{
       prototype.inflate=nextScalar(prototype.inflate ?? 0,intent.operation.mode,intent.operation.value,"Semantic inflate");
     }
   }
-  return next;
+  return validatedRewrite(next);
 }

@@ -3,6 +3,29 @@ import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 
 describe("semantic authoring recipe rewrite", () => {
+  test("semantic rewrite rejects overflowing authored pattern and rotation changes", () => {
+    const base: AuthoringRecipe = {
+      schema: 1, compiler_version: 1,
+      id: "large", name: "Large",
+      prototypes: [{ id: "part", name: "part", size: [1e293, 2, 2] }],
+      patterns: [{
+        kind: "LINEAR", id: "a", prototype_id: "part",
+        count: 1, axis: "X", spacing: 0, start: [1e308, 0, 0],
+      }],
+    };
+    expect(() => rewriteAuthoringRecipeForSemanticEdit(base, {
+      target: { instance_ids: ["a:0"] },
+      operation: { kind: "TRANSLATE", delta: [1e308, 0, 0] },
+    })).toThrow("SEMANTIC_CORRECTION_NONFINITE");
+
+    const rotated = structuredClone(base);
+    rotated.prototypes[0]!.rotation = [1e308, 0, 0];
+    expect(() => rewriteAuthoringRecipeForSemanticEdit(rotated, {
+      target: { instance_ids: ["a:0"] },
+      operation: { kind: "ROTATE_AXIS", axis: "X", delta_degrees: 1e308 },
+    })).toThrow("SEMANTIC_CORRECTION_NONFINITE");
+  });
+
   test("translates RADIAL ownership through its center instead of a nonexistent start field", () => {
     const recipe: AuthoringRecipe = {
       schema: 1,

@@ -478,6 +478,19 @@ function sharedContractTestsForPath(path: string): readonly string[] {
       "mcp/tests/parametric-authoring-transaction.test.ts",
     ];
   }
+  if (path === "mcp/lib/authoringRecipe/semanticEdit.ts" ||
+      path === "mcp/lib/authoringRecipe/semanticRewrite.ts") {
+    return [
+      "mcp/tests/authoring-recipe-parametric.test.ts",
+      "mcp/tests/semantic-rewrite-runtime-contract.test.ts",
+    ];
+  }
+  if (path === "mcp/lib/reference/correction.ts") {
+    return [
+      "mcp/tests/authoring-recipe-parametric.test.ts",
+      "mcp/tests/correction-solver-safety.test.ts",
+    ];
+  }
   if (path === "mcp/lib/authoringRecipe/patterns.ts" ||
       path === "mcp/lib/authoringRecipe/constraints.ts" ||
       path === "mcp/lib/authoringRecipe/symmetry.ts" ||

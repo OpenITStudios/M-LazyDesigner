@@ -1,4 +1,5 @@
 import type { CompiledAuthoringRecipe, CompiledCubePlacement, RecipeVec3 } from "@/lib/authoringRecipe/contracts";
+import { validateCubeGeometrySpan } from "@/lib/geometry/cubeSpan";
 
 export type SemanticGeometryTarget = {
   instance_ids?: readonly string[];
@@ -143,13 +144,61 @@ function transformPlacement(
   return { ...placement, from, to };
 }
 
+/**
+ * Validate proposed semantic corrections using the canonical Cube span
+ * owner, without inferring whether valid small Geometry is artistically needed.
+ */
+function requireValidSemanticPlacement(
+  previous: CompiledCubePlacement,
+  proposed: CompiledCubePlacement,
+  operation: SemanticGeometryOperation
+): CompiledCubePlacement {
+  const label = "Semantic correction " + previous.id;
+  for (const field of ["from", "to", "origin", "rotation"] as const) {
+    const values = proposed[field];
+    if (values.length !== 3 || values.some((value) => !Number.isFinite(value))) {
+      throw new Error("SEMANTIC_CORRECTION_NONFINITE: " + label +
+        " produced invalid " + field + " coordinates.");
+    }
+  }
+  if (proposed.to.some((value, axis) =>
+      previous.to[axis] > previous.from[axis] &&
+      value <= proposed.from[axis])) {
+    throw new Error("SEMANTIC_CORRECTION_SPAN_COLLAPSED: " + label +
+      " lost a previously positive authored Cube axis.");
+  }
+  validateCubeGeometrySpan(proposed.from, proposed.to, proposed.inflate, label);
+  if (operation.kind === "TRANSLATE") {
+    // Translation must preserve size and pivot relative to the mass.
+    // Allow ordinary floating-point noise, not a material width/pivot drift.
+    for (let axis = 0; axis < 3; axis++) {
+      const originalSize = previous.to[axis] - previous.from[axis];
+      const nextSize = proposed.to[axis] - proposed.from[axis];
+      const originalPivot = previous.origin[axis] - previous.from[axis];
+      const nextPivot = proposed.origin[axis] - proposed.from[axis];
+      const tolerance = 1e-9 * Math.max(1, Math.abs(originalSize), Math.abs(originalPivot));
+      if (![originalSize, nextSize, originalPivot, nextPivot].every(Number.isFinite) ||
+          Math.abs(nextSize - originalSize) > tolerance ||
+          Math.abs(nextPivot - originalPivot) > tolerance) {
+        throw new Error("SEMANTIC_CORRECTION_RIGID_DISTORTION: " + label +
+          " changed authored size or pivot offset while translating.");
+      }
+    }
+  }
+  return proposed;
+}
+
 export function compileSemanticGeometryEdit(
   compiled: CompiledAuthoringRecipe,
   intent: SemanticGeometryEditIntent
 ): SemanticGeometryEditPlan {
   const { placements, selectedBy } = resolveTargets(compiled, intent.target);
   const affectedIds = new Set(placements.map((placement) => placement.id));
-  const upserts = placements.map((placement) => transformPlacement(placement, intent.operation));
+  const upserts = placements.map((placement) =>
+    requireValidSemanticPlacement(
+      placement, transformPlacement(placement, intent.operation),
+      intent.operation
+    ));
   return {
     upserts,
     affected_instance_ids: [...affectedIds].sort(),

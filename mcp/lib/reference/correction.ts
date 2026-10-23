@@ -42,6 +42,17 @@ function nonNegativeTolerance(value: number | undefined, label: string): number 
   return resolved;
 }
 
+/** Finite operands can overflow on subtraction; fail at the reference owner. */
+function finiteDifference(expected: number, actual: number, label: string): number {
+  const delta = finite(expected, "Expected " + label) -
+    finite(actual, "Actual " + label);
+  if (!Number.isFinite(delta)) {
+    throw new Error("REFERENCE_CORRECTION_DELTA_NONFINITE: " + label +
+      " exceeds the finite coordinate range.");
+  }
+  return delta;
+}
+
 export function deriveReferenceCorrectionVectors(
   deviations: readonly ReferenceDeviation[]
 ): ReferenceCorrectionVector[] {
@@ -49,7 +60,7 @@ export function deriveReferenceCorrectionVectors(
   for (const deviation of deviations) {
     if (!deviation.instance_id) throw new Error("Reference deviation requires an instance identity.");
     if (deviation.kind === "BOUNDS") {
-      const delta = finite(deviation.expected, "Expected bound") - finite(deviation.actual, "Actual bound");
+      const delta = finiteDifference(deviation.expected, deviation.actual, "bound");
       const tolerance = nonNegativeTolerance(deviation.tolerance, "Bounds tolerance");
       if (Math.abs(delta) > tolerance) {
         corrections.push({ instance_id: deviation.instance_id, operation: "RESIZE_AXIS", axis: deviation.axis, delta });
@@ -57,7 +68,7 @@ export function deriveReferenceCorrectionVectors(
       continue;
     }
     if (deviation.kind === "ROTATION") {
-      const delta = finite(deviation.expected_degrees, "Expected rotation") - finite(deviation.actual_degrees, "Actual rotation");
+      const delta = finiteDifference(deviation.expected_degrees, deviation.actual_degrees, "rotation");
       const tolerance = nonNegativeTolerance(deviation.tolerance_degrees, "Rotation tolerance");
       if (Math.abs(delta) > tolerance) {
         corrections.push({ instance_id: deviation.instance_id, operation: "ROTATE_AXIS", axis: deviation.axis, delta_degrees: delta });
@@ -65,12 +76,16 @@ export function deriveReferenceCorrectionVectors(
       continue;
     }
     const delta: RecipeVec3 = [
-      finite(deviation.expected_center[0], "Expected center X") - finite(deviation.actual_center[0], "Actual center X"),
-      finite(deviation.expected_center[1], "Expected center Y") - finite(deviation.actual_center[1], "Actual center Y"),
-      finite(deviation.expected_center[2], "Expected center Z") - finite(deviation.actual_center[2], "Actual center Z"),
+      finiteDifference(deviation.expected_center[0], deviation.actual_center[0], "center X"),
+      finiteDifference(deviation.expected_center[1], deviation.actual_center[1], "center Y"),
+      finiteDifference(deviation.expected_center[2], deviation.actual_center[2], "center Z"),
     ];
     const tolerance = nonNegativeTolerance(deviation.tolerance, "Center tolerance");
-    if (Math.hypot(...delta) > tolerance) {
+    const displacement = Math.hypot(...delta);
+    if (!Number.isFinite(displacement)) {
+      throw new Error("REFERENCE_CORRECTION_DISTANCE_NONFINITE: center offset magnitude is not finite.");
+    }
+    if (displacement > tolerance) {
       corrections.push({ instance_id: deviation.instance_id, operation: "TRANSLATE", delta });
     }
   }

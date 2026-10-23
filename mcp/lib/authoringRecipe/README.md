@@ -44,6 +44,16 @@ before expanding native Cubes when the feature contract is present.
   implicit native deletion; the replacement must be reviewed in the existing
   Texture/Geometry lifecycle.
 
+Reference-driven correction planning reuses the canonical Cube geometry
+contract: `reference/correction.ts` rejects overflowed numeric differences;
+`semanticEdit.ts` validates all proposed Cube endpoints/pivots/rotations and
+rendered spans before a correction plan is returned; and
+`semanticRewrite.ts` recompiles recipes with constraints/symmetry to catch
+invalid dependent Cubes, without recomputing independent-only changes. A correction cannot silently emit invalid
+Geometry after arithmetic rounding or deflation. These checks are pure and
+non-destructive, **not** a visual scorer or geometry auto-simplifier.
+Fractional 3D remains eligible for explicit Per-face UV.
+
 The compiler also reuses canonical Cube span checks for prototypes and realized pattern/constraint/symmetry instances. Nonfinite endpoints, invalid pivots, negative rendered spans and positive dimensions lost through numeric rounding fail before plan/apply. UV-mode-specific Box UV restrictions remain with the native adapter, where actual mode is known.
 
 ## Bounded pattern expansion

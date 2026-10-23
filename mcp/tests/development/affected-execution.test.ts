@@ -329,6 +329,31 @@ describe("affected execution planner", () => {
     ]);
   });
 
+  test("semantic and reference correction source changes select existing pure owner regressions", () => {
+    for (const path of [
+      "mcp/lib/authoringRecipe/semanticEdit.ts",
+      "mcp/lib/authoringRecipe/semanticRewrite.ts",
+    ]) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify).toBe(false);
+      expect(plan.targeted_tests).toEqual([
+        "mcp/tests/authoring-recipe-parametric.test.ts",
+        "mcp/tests/semantic-rewrite-runtime-contract.test.ts",
+      ]);
+    }
+    const reference = planAffectedExecution({
+      changedPaths: ["mcp/lib/reference/correction.ts"],
+      semanticImpact: impact(),
+    });
+    expect(reference.fallback_full_verify).toBe(false);
+    expect(reference.targeted_tests).toEqual([
+      "mcp/tests/authoring-recipe-parametric.test.ts",
+      "mcp/tests/correction-solver-safety.test.ts",
+    ]);
+  });
+
   test("marginal projected Geometry evidence selects current owner regressions", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/geometry/surfaceEvidence.ts"],

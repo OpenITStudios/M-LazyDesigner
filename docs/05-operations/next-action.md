@@ -12,10 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Bedrock Geometry compile parity acceptance:
-- Existing disposable verify-geometry-live now calls export_model(codec_id=bedrock) after Cube Undo/Redo, with complete content-only native JSON and no filesystem/Save As effects. It verifies one Bone pivot/name, exact compiled X-flipped Cube origins/sizes, body Box UV, and all six thin per-face UV rectangles. Fails on missing/extra Cube or UV change.
-- Same existing live Geometry contract has positive/negative synthetic JSON regression cases and native call-order assertions. Prior Group 45-degree render/restore and child geometry invariants are retained; no added Runtime tool or exporter.
-- Source/static only; exact-SHA Bun/TypeScript, native Blockbench export, JSON, visual fidelity and in-game result NOT EXECUTED (CI disabled). Next: run exact-source/native smoke and accept only observed proof; Golden asset benchmark and generated UV registration deferred.
+2026-10-23 Reference-driven Geometry correction safety:
+- Existing reference/correction owner now refuses nonfinite differences of finite bounds/angles/centers. SemanticEdit rejects nonfinite/collapsed proposals and reuses canonical Cube span/inflate safety; valid fractional 3D remains eligible with explicit Per-face UV.
+- Existing semanticRewrite recompiles the final recipe before returning, including constraint/symmetry-propagated Cubes. No new engine/tool/auto-deletion; corrections remain evidence-bound, not visual PASS.
+- Existing authoring-recipe, semantic-rewrite and correction-solver regressions expanded; affected-test routing uses those owners. Source/static only: exact-head Bun/TS, LIVE_BLOCKBENCH and accepted-asset fidelity/efficiency NOT EXECUTED (CI disabled).
+- Next: execute exact-SHA focused tests and Golden reference corrections with native model evidence when capable; Bedrock export and UV registration acceptance remain open.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

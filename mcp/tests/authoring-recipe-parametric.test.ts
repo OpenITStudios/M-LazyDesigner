@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
+import { compileSemanticGeometryEdit } from "@/lib/authoringRecipe/semanticEdit";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 
 function chairRecipe(): AuthoringRecipe {
@@ -85,6 +86,56 @@ describe("lightweight parametric authoring relationships", () => {
     expect(afterSeat.to[0]).toBe(12);
     expect(afterLeg.from[0]).toBe(10);
     expect(afterLeg.to[0]).toBe(12);
+  });
+
+  test("semantic correction proposals refuse finite-but-collapsed and invalid Geometry", () => {
+    const compiled = compileAuthoringRecipe(chairRecipe());
+    expect(() => compileSemanticGeometryEdit(compiled, {
+      target: { semantic_group: "seat" },
+      operation: { kind: "TRANSLATE", delta: [1e308, 0, 0] },
+    })).toThrow("SEMANTIC_CORRECTION_SPAN_COLLAPSED");
+
+    const imperfect = chairRecipe();
+    imperfect.prototypes[0]!.size = [3, 2, 8];
+    expect(() => compileSemanticGeometryEdit(compileAuthoringRecipe(imperfect), {
+      target: { semantic_group: "seat" },
+      operation: { kind: "TRANSLATE", delta: [1e16, 0, 0] },
+    })).toThrow("SEMANTIC_CORRECTION_RIGID_DISTORTION");
+
+    const rotated = chairRecipe();
+    rotated.prototypes[0]!.rotation = [1e308, 0, 0];
+    expect(() => compileSemanticGeometryEdit(compileAuthoringRecipe(rotated), {
+      target: { semantic_group: "seat" },
+      operation: { kind: "ROTATE_AXIS", axis: "X", delta_degrees: 1e308 },
+    })).toThrow("SEMANTIC_CORRECTION_NONFINITE");
+
+    expect(() => compileSemanticGeometryEdit(compiled, {
+      target: { semantic_group: "leg" },
+      operation: { kind: "INFLATE", mode: "SET", value: -1 },
+    })).toThrow(/collapses 2 rendered axes/);
+    expect(() => compileSemanticGeometryEdit(compiled, {
+      target: { semantic_group: "leg" },
+      operation: { kind: "INFLATE", mode: "SET", value: -2 },
+    })).toThrow(/negative rendered span/);
+
+    // A thin 3D part remains valid when explicit Per-face UV is intended.
+    const thin = compileSemanticGeometryEdit(compiled, {
+      target: { semantic_group: "leg" },
+      operation: { kind: "RESIZE_AXIS", axis: "X",
+        mode: "SET", value: 0.25, anchor: "MIN" },
+    });
+    expect(thin.upserts).toHaveLength(1);
+    expect(thin.upserts[0]!.to[0] - thin.upserts[0]!.from[0])
+      .toBeCloseTo(0.25);
+    expect(thin.application_boundary).toBe("RECIPE_REWRITE_REQUIRED");
+  });
+
+  test("recipe rewriting rejects collapsed constraint-dependent Cubes before returning", () => {
+    expect(() => rewriteAuthoringRecipeForSemanticEdit(chairRecipe(), {
+      target: { semantic_group: "seat" },
+      operation: { kind: "RESIZE_AXIS", axis: "X",
+        mode: "SET", value: 1e308, anchor: "MIN" },
+    })).toThrow("RECIPE_REALIZED_SPAN_COLLAPSED");
   });
 
   test("incremental rebuild distinguishes dependency propagation from directly authored geometry", () => {

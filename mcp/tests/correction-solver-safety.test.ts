@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { selectLowestCostCorrection } from "@/lib/reference/correctionSolver";
+import { deriveReferenceCorrectionVectors } from "@/lib/reference/correction";
 
 const candidates = [
   { id: "resize", predicted_error: 0.2, mutation_cost: 0.1, risk: 0.3, patch: "resize" },
@@ -27,6 +28,37 @@ describe("correction candidate ranking safety", () => {
     expect(() => selectLowestCostCorrection(candidates, {
       error_weight: 0, mutation_weight: 0, risk_weight: 0,
     })).toThrow("nonzero weight");
+  });
+
+  test("reference differences reject overflow before emitting correction vectors", () => {
+    const huge = Number.MAX_VALUE;
+    expect(() => deriveReferenceCorrectionVectors([{
+      kind: "BOUNDS", instance_id: "panel", axis: "X",
+      expected: huge, actual: -huge,
+    }])).toThrow("REFERENCE_CORRECTION_DELTA_NONFINITE");
+    expect(() => deriveReferenceCorrectionVectors([{
+      kind: "ROTATION", instance_id: "hinge", axis: "Y",
+      expected_degrees: huge, actual_degrees: -huge,
+    }])).toThrow("REFERENCE_CORRECTION_DELTA_NONFINITE");
+    expect(() => deriveReferenceCorrectionVectors([{
+      kind: "CENTER_OFFSET", instance_id: "seat",
+      expected_center: [huge, 0, 0], actual_center: [-huge, 0, 0],
+    }])).toThrow("REFERENCE_CORRECTION_DELTA_NONFINITE");
+    expect(() => deriveReferenceCorrectionVectors([{
+      kind: "CENTER_OFFSET", instance_id: "seat",
+      expected_center: [1e308, 1e308, 1e308], actual_center: [0, 0, 0],
+    }])).toThrow("REFERENCE_CORRECTION_DISTANCE_NONFINITE");
+
+    const valid = deriveReferenceCorrectionVectors([
+      { kind: "BOUNDS", instance_id: "seat", axis: "X",
+        expected: 12, actual: 8, tolerance: 1 },
+      { kind: "CENTER_OFFSET", instance_id: "seat",
+        expected_center: [2, 1, 0], actual_center: [0, 0, 0] },
+    ]);
+    expect(valid).toEqual([
+      { instance_id: "seat", operation: "RESIZE_AXIS", axis: "X", delta: 4 },
+      { instance_id: "seat", operation: "TRANSLATE", delta: [2, 1, 0] },
+    ]);
   });
 
   test("risk ceiling still excludes otherwise lower-error destructive candidates", () => {
