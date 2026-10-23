@@ -13,7 +13,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 ## Next REMOTE_GITHUB work
 
 2026-10-23 four issue source batch:
-- Geometry: `d2fb30b` prevents exact duplicates; optional source-grounded feature routing now blocks Texture/Omit patterns in the existing Authoring Recipe compiler and preserves Geometry reasons for horns/joints. Direct Cube authoring still requires modelling evidence.
+- Geometry: feature routing in recipe compiler and batch duplicate guards remain; direct Cube creation now returns bounded same-parent interior-Cube candidates for reference-based merge/Texture review, never automatic removal.
 - Texture: `43c54a4` prioritizes underside scans; `cd265e0` covers explicit Cube/face treatment intent.
 - UV: `984ce3a` preserves shared repack cohorts; `d5a75e4` selects lower-spread named semantic layouts without sacrificing fit.
 - Animation: `900c0c4` compacts exact linear creation keys; `4b632c3` recovers safe keys around impacts.

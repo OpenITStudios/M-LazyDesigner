@@ -36,6 +36,10 @@ function geometrySurfaceRuntime() {
         to: [...cube.to],
         inflate: cube.inflate ?? 0,
         rotation: [...cube.rotation],
+        parent_id:
+          typeof Group !== "undefined" && cube.parent instanceof Group
+            ? cube.parent.uuid
+            : cube.parent === "root" ? "root" : null,
       })),
     {
       unsupportedTransformCount: transformedGroups.length,

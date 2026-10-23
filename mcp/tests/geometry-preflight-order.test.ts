@@ -52,6 +52,18 @@ describe("Geometry mutation preflight ordering", () => {
     ])).not.toThrow();
   });
 
+  test("direct Cube create returns evidence for interior filler before opening native Undo", async () => {
+    const source = await Bun.file("server/tools/geometry/cubes.ts").text();
+    const block = source.slice(source.indexOf("const executeCreateCubes"),
+      source.indexOf("const executeUpdateCube"));
+    expect(block.indexOf("analyzeStaticCubeContainment(")).toBeGreaterThanOrEqual(0);
+    expect(block.indexOf("analyzeStaticCubeContainment("))
+      .toBeLessThan(block.indexOf("Undo.initEdit"));
+    expect(block).toContain("geometry_contribution_review");
+    expect(block).toContain("if (!customFaceUvs)");
+    expect(block).toContain("cube.parent instanceof Group");
+  });
+
   test("the exact batch duplicate guard executes before Undo but not for per-face layering", async () => {
     const source = await Bun.file("server/tools/geometry/cubes.ts").text();
     const create = source.slice(

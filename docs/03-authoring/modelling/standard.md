@@ -329,6 +329,16 @@ For each dense/repeated cohort:
 
 Only mutate when the answer is evidence-backed; this is not an automatic simplifier.
 
+`surface_integrity.rest_pose_containment_review` and direct
+`manage_cubes(create).geometry_contribution_review` expose bounded,
+**non-destructive** same-parent interior Cube candidates. Only an entirely
+enclosed, non-rotated positive-volume Cube whose enclosing Cube shares the
+same transform owner qualifies; touching boundaries, distinct bones, open
+planes and rotated features are not inferred as useless. Alpha/masked outer
+surfaces, visibility variants, material or independent motion can still make
+such geometry necessary. Review the mapped reference and affected views
+before removal or replacement; these findings never authorize auto-delete.
+
 The intended outcome is **minimum sufficient geometry**, not minimum node count.
 
 ### Complexity Escalation Gate

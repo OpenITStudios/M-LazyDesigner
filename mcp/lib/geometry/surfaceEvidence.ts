@@ -8,7 +8,130 @@ export type SurfaceEvidenceCube = {
   to: readonly number[];
   inflate?: number;
   rotation?: readonly number[];
+  /** Exact shared rigid transform owner; unknown parent means no inference. */
+  parent_id?: string | null;
 };
+
+export const GEOMETRY_CONTAINMENT_PAIR_BUDGET = 65_536;
+
+/**
+ * Read-only, pre-Undo safe, same-parent rest-pose review.
+ * Strict geometric enclosure cannot prove artistic redundancy or opacity.
+ * The caller must never auto-delete or skip a Cube from these candidates.
+ */
+export function analyzeStaticCubeContainment(
+  cubes: readonly SurfaceEvidenceCube[],
+  options: {
+    target_cube_ids?: readonly string[];
+    exampleLimit?: number;
+    pairBudget?: number;
+  } = {}
+) {
+  const exampleLimit = options.exampleLimit ?? GEOMETRY_SURFACE_EXAMPLE_LIMIT;
+  const pairBudget = options.pairBudget ?? GEOMETRY_CONTAINMENT_PAIR_BUDGET;
+  if (!Number.isInteger(exampleLimit) || exampleLimit < 1 || exampleLimit > 32 ||
+      !Number.isInteger(pairBudget) || pairBudget < 1 ||
+      pairBudget > GEOMETRY_CONTAINMENT_PAIR_BUDGET) {
+    throw new Error("Geometry containment diagnostic example/budget limits are invalid.");
+  }
+  const namedTargets = options.target_cube_ids
+    ? new Set(options.target_cube_ids)
+    : null;
+  const indexed = [...cubes].sort((a, b) => a.uuid.localeCompare(b.uuid));
+  const candidates = indexed.filter((cube) =>
+    namedTargets === null || namedTargets.has(cube.uuid)
+  );
+  const eligible = indexed.filter((cube) =>
+    typeof cube.parent_id === "string" && cube.parent_id.length > 0 &&
+    (cube.rotation === undefined ||
+      (finite3(cube.rotation) && !hasRotation(cube, GEOMETRY_SURFACE_EPSILON))) &&
+    cubeBounds(cube) !== null
+  );
+  const byParent = new Map<string, SurfaceEvidenceCube[]>();
+  for (const cube of eligible) {
+    const id = cube.parent_id!;
+    const cohort = byParent.get(id) ?? [];
+    cohort.push(cube);
+    byParent.set(id, cohort);
+  }
+  const examples: Array<{
+    cube_uuid: string;
+    cube_name: string;
+    containing_cube_uuid: string;
+    containing_cube_name: string;
+    parent_id: string;
+    reason: "STRICT_INTERIOR_REST_POSE";
+  }> = [];
+  let candidateCount = 0;
+  let checkedPairs = 0;
+  let unsupportedTargets = 0;
+  let visitedTargets = 0;
+  let truncated = false;
+  for (const cube of candidates) {
+    if (!cube.parent_id ||
+        (cube.rotation !== undefined &&
+          (!finite3(cube.rotation) || hasRotation(cube, GEOMETRY_SURFACE_EPSILON)))) {
+      unsupportedTargets += 1;
+      continue;
+    }
+    const inner = cubeBounds(cube);
+    if (!inner) {
+      unsupportedTargets += 1;
+      continue;
+    }
+    visitedTargets += 1;
+    let best: SurfaceEvidenceCube | null = null;
+    let bestVolume = Number.POSITIVE_INFINITY;
+    for (const other of byParent.get(cube.parent_id) ?? []) {
+      if (other.uuid === cube.uuid) continue;
+      if (checkedPairs >= pairBudget) {
+        truncated = true;
+        break;
+      }
+      checkedPairs += 1;
+      const outer = cubeBounds(other)!;
+      const interior = ([0, 1, 2] as const).every((axis) =>
+        outer.min[axis] + GEOMETRY_SURFACE_EPSILON < inner.min[axis] &&
+        inner.max[axis] < outer.max[axis] - GEOMETRY_SURFACE_EPSILON
+      );
+      if (!interior) continue;
+      const volume = [0, 1, 2].reduce((product, axis) =>
+        product * (outer.max[axis] - outer.min[axis]), 1
+      );
+      if (!best || volume < bestVolume ||
+          (volume === bestVolume && other.uuid < best.uuid)) {
+        best = other;
+        bestVolume = volume;
+      }
+    }
+    if (truncated) break;
+    if (best) {
+      candidateCount += 1;
+      if (examples.length < exampleLimit) {
+        examples.push({
+          cube_uuid: cube.uuid,
+          cube_name: cube.name,
+          containing_cube_uuid: best.uuid,
+          containing_cube_name: best.name,
+          parent_id: cube.parent_id,
+          reason: "STRICT_INTERIOR_REST_POSE",
+        });
+      }
+    }
+  }
+  return {
+    state: truncated || unsupportedTargets > 0
+      ? ("partial" as const) : ("available" as const),
+    checked_target_count: visitedTargets,
+    unsupported_target_count: unsupportedTargets,
+    unvisited_target_count: candidates.length - visitedTargets - unsupportedTargets,
+    checked_pair_count: checkedPairs,
+    contained_candidate_count: candidateCount,
+    examples,
+    examples_truncated: candidateCount > examples.length || truncated,
+    note: "Strictly contained Cube under the same parent has no independent exposed rest-pose envelope when the enclosing Cube is opaque. Alpha, hidden states, animated visibility, materials and artistic intent are NOT verified. This is review evidence only: do not automatically remove or merge Geometry.",
+  };
+}
 
 type Axis = 0 | 1 | 2;
 type FaceName = "west" | "east" | "down" | "up" | "north" | "south";
@@ -133,6 +256,10 @@ export function analyzeAxisAlignedSurfaceEvidence(
     }
   }
 
+  const containment = analyzeStaticCubeContainment(cubes, {
+    exampleLimit: Math.min(32, Math.max(1, exampleLimit)),
+  });
+
   const unsupportedTransformCount = options.unsupportedTransformCount ?? 0;
   const unsupportedMeshCount = options.unsupportedMeshCount ?? 0;
   const complete = invalid.length === 0 && rotated.length === 0 && unsupportedTransformCount === 0 && unsupportedMeshCount === 0;
@@ -152,6 +279,7 @@ export function analyzeAxisAlignedSurfaceEvidence(
     positive_volume_intersection_count: penetrations.length,
     positive_volume_examples: penetrations.slice(0, exampleLimit),
     positive_volume_examples_truncated: penetrations.length > exampleLimit,
+    rest_pose_containment_review: containment,
     note: complete
       ? "Same-facing coplanar overlap is a deterministic texture-surface blocker. Positive-volume overlap is structural evidence only, not automatically a texture defect."
       : "Evidence is intentionally partial because rotated/group-transformed/mesh or invalid geometry is outside this bounded axis-aligned scan. Partial evidence must not be promoted to a clean whole-model surface verdict.",

@@ -30,6 +30,10 @@ import {
   packBoxUvOffsets,
   type BoxUvRegion,
 } from "@/lib/uv/boxLayout";
+import {
+  analyzeStaticCubeContainment,
+  type SurfaceEvidenceCube,
+} from "@/lib/geometry/surfaceEvidence";
 
 const finiteVec3Schema = z.tuple([
   z.number().finite(),
@@ -673,6 +677,7 @@ export function registerCubesTools() {
         )
       );
       const customFaceUvs = Array.isArray(faces);
+      let contributionPreflight: ReturnType<typeof analyzeStaticCubeContainment> | null = null;
       if (!customFaceUvs) {
         // AI-generated duplicate masses add elements/UVs without shape value.
         // Keep explicit per-face layers and distinct bones/pivots available.
@@ -685,6 +690,36 @@ export function registerCubesTools() {
           rotation: element.rotation,
           inflate: element.inflate,
         })));
+        // Structural-only contribution evidence is computed before native
+        // Undo; no post-commit diagnostic work can turn success into failure.
+        const pending: SurfaceEvidenceCube[] = placements.map(
+          ({ element, outlinerGroup }, index) => ({
+            uuid: "pending-cube:" + index,
+            name: element.name,
+            from: element.from,
+            to: element.to,
+            rotation: element.rotation,
+            inflate: element.inflate ?? 0,
+            parent_id: outlinerGroup === "root" ? "root" : outlinerGroup.uuid,
+          })
+        );
+        const existing: SurfaceEvidenceCube[] = (Cube.all ?? [])
+          .filter((cube: Cube) => cube.visibility !== false)
+          .map((cube: Cube) => ({
+            uuid: cube.uuid,
+            name: cube.name,
+            from: cube.from,
+            to: cube.to,
+            rotation: cube.rotation,
+            inflate: cube.inflate ?? 0,
+            parent_id: typeof Group !== "undefined" && cube.parent instanceof Group
+              ? cube.parent.uuid
+              : cube.parent === "root" ? "root" : null,
+          }));
+        contributionPreflight = analyzeStaticCubeContainment(
+          [...existing, ...pending],
+          { target_cube_ids: pending.map((item) => item.uuid) }
+        );
       }
       const autoPackBoxUv = !customFaceUvs && Project?.box_uv === true;
       let plannedBoxUvOffsets: [number, number][] | null = null;
@@ -790,6 +825,21 @@ export function registerCubesTools() {
           return state;
         }),
         visual_scope: cubeVisualScope(cubes),
+        ...(contributionPreflight && (
+          contributionPreflight.contained_candidate_count > 0 ||
+          contributionPreflight.state === "partial"
+        ) ? {
+          geometry_contribution_review: {
+            ...contributionPreflight,
+            examples: contributionPreflight.examples.map((entry) => {
+              const pendingIndex = Number(entry.cube_uuid.slice("pending-cube:".length));
+              return {
+                ...entry,
+                cube_uuid: cubes[pendingIndex]?.uuid ?? entry.cube_uuid,
+              };
+            }),
+          },
+        } : {}),
       };
       const uvNote = plannedBoxUvOffsets
         ? " Box-UV offsets are provisional, not UV Layout PASS. After user Geometry approval, generate and verify the native production UV template before painting."
