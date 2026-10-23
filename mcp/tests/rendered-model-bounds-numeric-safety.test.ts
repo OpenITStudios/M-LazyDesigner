@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { summarizeFiniteBounds } from "@/lib/renderedModelBounds";
+import { summarizeFiniteBounds, surfaceSweepIntervalForOrientedBox } from "@/lib/renderedModelBounds";
 
 describe("rendered model bounds numeric safety", () => {
   test("derives a finite midpoint without summing large same-sign endpoints", () => {
@@ -17,4 +17,30 @@ describe("rendered model bounds numeric safety", () => {
       summarizeFiniteBounds([-1e308, 0, 0], [1e308, 16, 8])
     ).toThrow("Rendered model bounds span is non-finite");
   });
+  test("world OBB sweep retains nearby candidates but prunes distant ones", () => {
+    const box = {
+      center: [0, 0, 0] as [number, number, number],
+      halfSizes: [1, 1, 1] as [number, number, number],
+      axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] as
+        [[number, number, number], [number, number, number], [number, number, number]],
+    };
+    const first = surfaceSweepIntervalForOrientedBox(box);
+    expect(surfaceSweepIntervalForOrientedBox({
+      ...box, center: [4, 0, 0],
+    }).minX).toBeLessThanOrEqual(first.maxX);
+    expect(surfaceSweepIntervalForOrientedBox({
+      ...box, center: [40, 0, 0],
+    }).minX).toBeGreaterThan(first.maxX);
+  });
+
+  test("world-space interval overflow expands rather than dropping evidence", () => {
+    const extreme = surfaceSweepIntervalForOrientedBox({
+      center: [1e308, 0, 0],
+      halfSizes: [1e308, 1e308, 1e308],
+      axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+    });
+    expect(extreme.maxX).toBe(Number.POSITIVE_INFINITY);
+    expect(extreme.minX).toBeLessThan(1e308);
+  });
+
 });

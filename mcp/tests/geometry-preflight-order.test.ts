@@ -52,6 +52,14 @@ describe("Geometry mutation preflight ordering", () => {
     ])).not.toThrow();
   });
 
+  test("surface and bounds readers share native rendered visibility scope", async () => {
+    const bounds = await Bun.file("lib/geometry/renderedModelBounds.ts").text();
+    const runtime = await Bun.file("server/tools/validation/qualityEvidenceRuntime.ts").text();
+    expect(bounds).toContain("cube.visibility !== false && isEffectivelyVisible(cube.mesh)");
+    expect(runtime).toContain("cube.visibility !== false && isEffectivelyVisible(cube.mesh)");
+    expect(runtime).toContain('import { isEffectivelyVisible } from "@/lib/geometry/renderedModelBounds"');
+  });
+
   test("current preview OBB evidence reads native matrices without modifying animation time or Undo", async () => {
     const source = await Bun.file("server/tools/validation/qualityEvidenceRuntime.ts").text();
     const start = source.indexOf("function geometrySurfaceRuntime()");

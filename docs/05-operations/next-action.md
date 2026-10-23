@@ -12,12 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 four issue source batch:
-- Geometry: current-preview rotated OBB evidence is retained. Pure bounded multi-pose comparison now flags sampled hidden→exposed Cubes for retention and leaves always-contained ones review-only; internal temporary preview sequence reuses tested state restoration. No automatic native pose sampling, deletion or visual PASS.
-- Texture: `43c54a4` prioritizes underside scans; `cd265e0` covers explicit Cube/face treatment intent.
-- UV: `984ce3a` preserves shared repack cohorts; `d5a75e4` selects lower-spread named semantic layouts without sacrificing fit.
-- Animation: `900c0c4` compacts exact linear creation keys; `4b632c3` recovers safe keys around impacts.
-- Source/regressions committed; Bun, TypeScript, native Blockbench, visual and cost proof **NOT EXECUTED** (CI disabled). Next: fix only evidenced source defects; generator-coupled UV registration and live acceptance remain deferred, not user-PC tasks.
+2026-10-23 Geometry inspection source stabilization:
+- Bound same-parent authored-axis surface pairs; cross-Bone/unknown owner candidates remain partial, never false local blockers. Bound warning examples and exclude invalid rotations.
+- Native world-OBB surface warning scan uses conservative X sweep with candidate budget; surface augmentation filters ancestor-hidden Cubes like rendered bounds.
+- Owner tests authored, Bun/TypeScript/native and measured latency NOT EXECUTED (CI disabled). Existing pose/UV/Texture/Animation source changes preserved.
+- Next: when capable execution exists, verify exact HEAD and repair evidenced failures. UV generator registration, live pose observation and visual Golden acceptance remain deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

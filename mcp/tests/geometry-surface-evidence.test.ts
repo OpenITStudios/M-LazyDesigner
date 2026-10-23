@@ -448,3 +448,49 @@ test("unsupported transforms remain partial rather than false-clean", () => {
   expect(result.excluded_rotated_cube_count).toBe(1);
   expect(result.state).toBe("partial");
 });
+
+test("different Bone owners are never treated as the same local-space surface", () => {
+  const torso = { ...cube("torso", [0, 0, 0], [8, 8, 8]), parent_id: "torso" };
+  const arm = { ...cube("arm", [0, 0, 0], [8, 8, 8]), parent_id: "arm" };
+  const report = analyzeAxisAlignedSurfaceEvidence([torso, arm]);
+  expect(report.state).toBe("partial");
+  expect(report.coplanar_overlap_count).toBe(0);
+  expect(report.positive_volume_intersection_count).toBe(0);
+  expect(report.unverified_cross_owner_pair_count).toBe(1);
+  expect(report.checked_pair_count).toBe(0);
+  const same = analyzeAxisAlignedSurfaceEvidence([
+    torso, { ...arm, parent_id: "torso" },
+  ]);
+  expect(same.state).toBe("blocked");
+  expect(same.coplanar_overlap_count).toBeGreaterThan(0);
+});
+
+test("bounded surface pairs and examples are deterministic across input order", () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({
+    ...cube("layer_" + i, [0, 0, 0], [8, 8, 8]), parent_id: "torso",
+  }));
+  const options = { pairBudget: 3, exampleLimit: 1 };
+  const a = analyzeAxisAlignedSurfaceEvidence(many, options);
+  expect(a).toEqual(analyzeAxisAlignedSurfaceEvidence([...many].reverse(), options));
+  expect(a.checked_pair_count).toBe(3);
+  expect(a.unvisited_comparable_pair_count).toBe(63);
+  expect(a.pair_scan_truncated).toBe(true);
+  expect(a.complete).toBe(false);
+  expect(a.coplanar_overlap_examples).toHaveLength(1);
+  expect(a.coplanar_overlap_examples_truncated).toBe(true);
+  expect(a.positive_volume_intersection_count).toBe(3);
+  expect(a.positive_volume_examples).toHaveLength(1);
+  expect(a.positive_volume_examples_truncated).toBe(true);
+  expect(() => analyzeAxisAlignedSurfaceEvidence(many, { pairBudget: 4_097 }))
+    .toThrow("budget is invalid");
+});
+
+test("nonfinite Cube rotation cannot masquerade as unrotated surface evidence", () => {
+  const result = analyzeAxisAlignedSurfaceEvidence([
+    { ...cube("bad", [0, 0, 0], [8, 8, 8]), rotation: [NaN, 0, 0] },
+    cube("good", [0, 0, 0], [8, 8, 8]),
+  ]);
+  expect(result.state).toBe("partial");
+  expect(result.excluded_rotated_cube_count).toBe(1);
+  expect(result.coplanar_overlap_count).toBe(0);
+});

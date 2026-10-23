@@ -20,6 +20,7 @@ export type SurfaceEvidenceCube = {
 };
 
 export const GEOMETRY_CONTAINMENT_PAIR_BUDGET = 65_536;
+export const GEOMETRY_AXIS_ALIGNED_PAIR_BUDGET = 4_096;
 export const GEOMETRY_WORLD_OBB_SAMPLE_LIMIT = 256;
 export const GEOMETRY_WORLD_OBB_TARGET_LIMIT = 24;
 export const GEOMETRY_WORLD_OBB_PAIR_BUDGET = 4_096;
@@ -907,96 +908,142 @@ function facesFor(cube: SurfaceEvidenceCube): Face[] {
  * Rotated/group-transformed geometry must be treated as incomplete rather than
  * being promoted to a false clean verdict.
  */
+/**
+ * Bounded native-Cube authored-space review. Cross-Bone pairs require
+ * world-space OBB evidence: identical local coordinates do not imply contact.
+ */
 export function analyzeAxisAlignedSurfaceEvidence(
   cubes: readonly SurfaceEvidenceCube[],
   options: {
     epsilon?: number;
     exampleLimit?: number;
+    pairBudget?: number;
     unsupportedTransformCount?: number;
     unsupportedMeshCount?: number;
   } = {}
 ) {
   const epsilon = options.epsilon ?? GEOMETRY_SURFACE_EPSILON;
   const exampleLimit = options.exampleLimit ?? GEOMETRY_SURFACE_EXAMPLE_LIMIT;
+  const pairBudget = options.pairBudget ?? GEOMETRY_AXIS_ALIGNED_PAIR_BUDGET;
+  if (!Number.isFinite(epsilon) || epsilon < 0 ||
+      !Number.isInteger(exampleLimit) || exampleLimit < 1 || exampleLimit > 32 ||
+      !Number.isInteger(pairBudget) || pairBudget < 1 ||
+      pairBudget > GEOMETRY_AXIS_ALIGNED_PAIR_BUDGET) {
+    throw new Error("Axis-aligned surface diagnostic tolerance or budget is invalid.");
+  }
   const invalid = cubes.filter((cube) => !cubeBounds(cube));
-  const rotated = cubes.filter((cube) => hasRotation(cube, epsilon));
-  const eligible = cubes.filter((cube) => cubeBounds(cube) && !hasRotation(cube, epsilon));
-  const faces = eligible.flatMap(facesFor);
+  const rotated = cubes.filter((cube) => cube.rotation !== undefined &&
+    (!finite3(cube.rotation) || hasRotation(cube, epsilon)));
+  const eligible = cubes.filter((cube) => cubeBounds(cube) &&
+    (cube.rotation === undefined ||
+      (finite3(cube.rotation) && !hasRotation(cube, epsilon))));
+
+  type IndexedCube = {
+    cube: SurfaceEvidenceCube;
+    bounds: NonNullable<ReturnType<typeof cubeBounds>>;
+    faces: Face[];
+  };
+  const byParent = new Map<string, IndexedCube[]>();
+  let unknownParentCubeCount = 0;
+  for (const cube of eligible) {
+    // Omitted parents are a legacy pure-analysis shared-space input only;
+    // explicit null in native data means unknown ownership, never root.
+    const key = cube.parent_id === undefined ? "legacy_unspecified_space" :
+      typeof cube.parent_id === "string" && cube.parent_id.length > 0
+        ? "parent:" + cube.parent_id : null;
+    if (!key) { unknownParentCubeCount++; continue; }
+    const peers = byParent.get(key) ?? [];
+    peers.push({ cube, bounds: cubeBounds(cube)!, faces: facesFor(cube) });
+    byParent.set(key, peers);
+  }
+  const groups = [...byParent.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, members]) => members.sort((a, b) =>
+      a.cube.uuid.localeCompare(b.cube.uuid)));
+  const comparablePairCount = groups.reduce((sum, members) =>
+    sum + members.length * (members.length - 1) / 2, 0);
+  const allEligiblePairs = eligible.length * (eligible.length - 1) / 2;
+  const unverifiedCrossOwnerPairCount = allEligiblePairs - comparablePairCount;
+
   const conflicts: Array<Record<string, unknown>> = [];
   const penetrations: Array<Record<string, unknown>> = [];
-
-  for (let i = 0; i < eligible.length; i += 1) {
-    const a = cubeBounds(eligible[i]);
-    if (!a) continue;
-    for (let j = i + 1; j < eligible.length; j += 1) {
-      const b = cubeBounds(eligible[j]);
-      if (!b) continue;
-      const overlaps = ([0, 1, 2] as Axis[]).map((axis) => overlapAmount(a.min[axis], a.max[axis], b.min[axis], b.max[axis]));
-      if (overlaps.every((value) => value > epsilon)) {
-        penetrations.push({
-          code: "POSITIVE_VOLUME_INTERSECTION",
-          severity: "warning",
-          a: { uuid: eligible[i].uuid, name: eligible[i].name },
-          b: { uuid: eligible[j].uuid, name: eligible[j].name },
-          overlap: overlaps.map((value) => Number(value.toFixed(5))),
-        });
+  let conflictCount = 0, penetrationCount = 0, checkedPairs = 0, truncated = false;
+  pairScan: for (const members of groups) {
+    for (let i = 0; i < members.length; i++) {
+      for (let j = i + 1; j < members.length; j++) {
+        if (checkedPairs >= pairBudget) { truncated = true; break pairScan; }
+        checkedPairs++;
+        const first = members[i], second = members[j];
+        const a = first.bounds, b = second.bounds;
+        const overlaps = ([0, 1, 2] as const).map((axis) =>
+          overlapAmount(a.min[axis], a.max[axis], b.min[axis], b.max[axis]));
+        if (overlaps.every((amount) => amount > epsilon)) {
+          penetrationCount++;
+          if (penetrations.length < exampleLimit) {
+            penetrations.push({
+              code: "POSITIVE_VOLUME_INTERSECTION",
+              severity: "warning",
+              a: { uuid: first.cube.uuid, name: first.cube.name },
+              b: { uuid: second.cube.uuid, name: second.cube.name },
+              overlap: overlaps.map((amount) => Number(amount.toFixed(5))),
+            });
+          }
+        }
+        // Same-facing face patches need positive shared projected area.
+        if (overlaps.some((amount) => amount <= 0)) continue;
+        for (const faceA of first.faces) for (const faceB of second.faces) {
+          if (faceA.axis !== faceB.axis || faceA.sign !== faceB.sign) continue;
+          if (Math.abs(faceA.plane - faceB.plane) > epsilon) continue;
+          if (overlapAmount(faceA.minA, faceA.maxA, faceB.minA, faceB.maxA) <= epsilon ||
+              overlapAmount(faceA.minB, faceA.maxB, faceB.minB, faceB.maxB) <= epsilon) continue;
+          conflictCount++;
+          if (conflicts.length < exampleLimit) {
+            conflicts.push({
+              code: "COPLANAR_SURFACE_OVERLAP",
+              severity: "error",
+              texture_risk: "z_fighting",
+              a: { uuid: faceA.cube.uuid, name: faceA.cube.name, face: faceA.face },
+              b: { uuid: faceB.cube.uuid, name: faceB.cube.name, face: faceB.face },
+            });
+          }
+        }
       }
     }
   }
-
-  for (let i = 0; i < faces.length; i += 1) {
-    const a = faces[i];
-    for (let j = i + 1; j < faces.length; j += 1) {
-      const b = faces[j];
-      if (a.cube.uuid === b.cube.uuid || a.axis !== b.axis || a.sign !== b.sign) continue;
-      if (Math.abs(a.plane - b.plane) > epsilon) continue;
-      if (overlapAmount(a.minA, a.maxA, b.minA, b.maxA) <= epsilon) continue;
-      if (overlapAmount(a.minB, a.maxB, b.minB, b.maxB) <= epsilon) continue;
-      conflicts.push({
-        code: "COPLANAR_SURFACE_OVERLAP",
-        severity: "error",
-        texture_risk: "z_fighting",
-        a: { uuid: a.cube.uuid, name: a.cube.name, face: a.face },
-        b: { uuid: b.cube.uuid, name: b.cube.name, face: b.face },
-      });
-    }
-  }
-
-  const boundedExamples = Math.min(32, Math.max(1, exampleLimit));
-  const containment = analyzeStaticCubeContainment(cubes, {
-    exampleLimit: boundedExamples,
-  });
-  const marginalProjection = analyzeStaticMarginalProjection(cubes, {
-    exampleLimit: boundedExamples,
-  });
-  const mergeCandidates = analyzeStaticCubeMergeCandidates(cubes, {
-    exampleLimit: boundedExamples,
-  });
-
   const unsupportedTransformCount = options.unsupportedTransformCount ?? 0;
   const unsupportedMeshCount = options.unsupportedMeshCount ?? 0;
-  const complete = invalid.length === 0 && rotated.length === 0 && unsupportedTransformCount === 0 && unsupportedMeshCount === 0;
-
+  const complete = invalid.length === 0 && rotated.length === 0 &&
+    unsupportedTransformCount === 0 && unsupportedMeshCount === 0 &&
+    unknownParentCubeCount === 0 && unverifiedCrossOwnerPairCount === 0 &&
+    !truncated;
   return {
-    state: conflicts.length > 0 ? ("blocked" as const) : complete ? ("clean" as const) : ("partial" as const),
+    state: conflictCount > 0 ? ("blocked" as const) :
+      complete ? ("clean" as const) : ("partial" as const),
     scope: "axis_aligned_rest_pose" as const,
+    coordinate_scope: "same_parent_authored_axes" as const,
     complete,
-    checked_cube_count: eligible.length,
+    checked_cube_count: eligible.length - unknownParentCubeCount,
     excluded_rotated_cube_count: rotated.length,
     invalid_cube_count: invalid.length,
     unsupported_transform_count: unsupportedTransformCount,
     unsupported_mesh_count: unsupportedMeshCount,
-    coplanar_overlap_count: conflicts.length,
-    coplanar_overlap_examples: conflicts.slice(0, exampleLimit),
-    coplanar_overlap_examples_truncated: conflicts.length > exampleLimit,
-    positive_volume_intersection_count: penetrations.length,
-    positive_volume_examples: penetrations.slice(0, exampleLimit),
-    positive_volume_examples_truncated: penetrations.length > exampleLimit,
-    rest_pose_containment_review: containment,
-    rest_pose_marginal_projection_review: marginalProjection,
-    rest_pose_merge_candidates: mergeCandidates,
+    unknown_parent_cube_count: unknownParentCubeCount,
+    unverified_cross_owner_pair_count: unverifiedCrossOwnerPairCount,
+    checked_pair_count: checkedPairs,
+    unvisited_comparable_pair_count: comparablePairCount - checkedPairs,
+    pair_budget: pairBudget,
+    pair_scan_truncated: truncated,
+    coplanar_overlap_count: conflictCount,
+    coplanar_overlap_examples: conflicts,
+    coplanar_overlap_examples_truncated: conflictCount > conflicts.length || truncated,
+    positive_volume_intersection_count: penetrationCount,
+    positive_volume_examples: penetrations,
+    positive_volume_examples_truncated: penetrationCount > penetrations.length || truncated,
+    rest_pose_containment_review: analyzeStaticCubeContainment(cubes, { exampleLimit }),
+    rest_pose_marginal_projection_review: analyzeStaticMarginalProjection(cubes, { exampleLimit }),
+    rest_pose_merge_candidates: analyzeStaticCubeMergeCandidates(cubes, { exampleLimit }),
     note: complete
-      ? "Same-facing coplanar overlap is a deterministic texture-surface blocker. Positive-volume overlap is structural evidence only, not automatically a texture defect."
-      : "Evidence is intentionally partial because rotated/group-transformed/mesh or invalid geometry is outside this bounded axis-aligned scan. Partial evidence must not be promoted to a clean whole-model surface verdict.",
+      ? "Same-parent authored-axis surface evidence is complete within its scope. A clean local scan is not visual PASS."
+      : "Bounded local surface evidence is partial when transforms, owner identity, Mesh/rotated geometry or cross-Bone pairs are unresolved. Cross-Bone contact belongs to the current-preview world OBB scan; never infer whole-model visual PASS.",
   };
 }

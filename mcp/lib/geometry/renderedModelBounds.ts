@@ -43,6 +43,7 @@ const SURFACE_PARALLEL_EPSILON = 1e-6;
 const SURFACE_PLANE_EPSILON = 1e-4;
 const SURFACE_WARNING_LIMIT = 8;
 const SURFACE_PAIR_ANALYSIS_LIMIT = 20_000;
+const SURFACE_PAIR_CANDIDATE_LIMIT = 65_536;
 
 type BoxFace = {
   center: Vec3;
@@ -431,6 +432,20 @@ function formatSurfaceMetric(value: number): string {
   return Number.isFinite(value) ? value.toFixed(4) : String(value);
 }
 
+/**
+ * Conservative world-X OBB sweep interval. Expanded by the widest surface
+ * review tolerance; overflow widens, never silently prunes, evidence.
+ */
+export function surfaceSweepIntervalForOrientedBox(box: OrientedBox): { minX: number; maxX: number } {
+  const reach = Math.hypot(...box.halfSizes) + SURFACE_COPLANAR_EDGE_GAP_REVIEW_DISTANCE;
+  const minX = box.center[0] - reach;
+  const maxX = box.center[0] + reach;
+  return {
+    minX: Number.isNaN(minX) ? Number.NEGATIVE_INFINITY : minX,
+    maxX: Number.isNaN(maxX) ? Number.POSITIVE_INFINITY : maxX,
+  };
+}
+
 function readSurfaceQualityWarnings(cubes: readonly Cube[]): string[] {
   const measured: Array<{ cube: Cube; box: OrientedBox }> = [];
   const warnings: string[] = [];
@@ -453,28 +468,30 @@ function readSurfaceQualityWarnings(cubes: readonly Cube[]): string[] {
   }
 
   const coverageBoxes = measured.map(({ box }) => box);
-  let analyzedPairCount = 0;
-  let pairBudgetReached = false;
+  const sweep = measured.map((item) => ({
+    ...item,
+    interval: surfaceSweepIntervalForOrientedBox(item.box),
+  })).sort((a, b) => a.interval.minX < b.interval.minX ? -1 :
+    a.interval.minX > b.interval.minX ? 1 : a.cube.uuid.localeCompare(b.cube.uuid));
+  let candidatePairCount = 0, analyzedPairCount = 0;
+  let candidateBudgetReached = false, pairBudgetReached = false;
 
-  pairScan: for (
-    let firstIndex = 0;
-    firstIndex < measured.length;
-    firstIndex += 1
-  ) {
-    for (
-      let secondIndex = firstIndex + 1;
-      secondIndex < measured.length;
-      secondIndex += 1
-    ) {
-      const first = measured[firstIndex];
-      const second = measured[secondIndex];
+  pairScan: for (let i = 0; i < sweep.length; i++) {
+    const first = sweep[i];
+    for (let j = i + 1; j < sweep.length; j++) {
+      const second = sweep[j];
+      if (second.interval.minX > first.interval.maxX) break;
+      if (candidatePairCount >= SURFACE_PAIR_CANDIDATE_LIMIT) {
+        candidateBudgetReached = true;
+        break pairScan;
+      }
+      candidatePairCount++;
       if (!boxesMayHaveSurfaceRisk(first.box, second.box)) continue;
       if (analyzedPairCount >= SURFACE_PAIR_ANALYSIS_LIMIT) {
         pairBudgetReached = true;
         break pairScan;
       }
-      analyzedPairCount += 1;
-
+      analyzedPairCount++;
       let risks: SurfaceQualityRisk[];
       try {
         risks = analyzeOrientedBoxSurfaceQuality(first.box, second.box, coverageBoxes);
@@ -509,6 +526,12 @@ function readSurfaceQualityWarnings(cubes: readonly Cube[]): string[] {
     }
   }
 
+  if (candidateBudgetReached) {
+    warnings.push(
+      "Surface-quality diagnostics stopped after " + SURFACE_PAIR_CANDIDATE_LIMIT +
+      " broad-phase candidate Cube pair(s); absence of further warnings is not a clean-surface claim."
+    );
+  }
   if (pairBudgetReached) {
     // Scan completeness must never be hidden by the defect-warning cap.
     warnings.push(
@@ -567,7 +590,7 @@ function asFiniteVec3(value: unknown, cubeName: string): Vec3 {
   ];
 }
 
-function isEffectivelyVisible(object: THREE.Object3D | undefined): boolean {
+export function isEffectivelyVisible(object: THREE.Object3D | undefined): boolean {
   if (!object) return false;
 
   let current: THREE.Object3D | null = object;

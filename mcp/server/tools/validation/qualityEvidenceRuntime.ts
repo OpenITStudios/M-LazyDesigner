@@ -7,6 +7,7 @@ import {
   GEOMETRY_WORLD_OBB_SAMPLE_LIMIT,
 } from "@/lib/geometry/surfaceEvidence";
 import { orientedBoxFromCube } from "@/lib/geometry/blockbenchCubeObb";
+import { isEffectivelyVisible } from "@/lib/geometry/renderedModelBounds";
 import { analyzeUvPhysicalEvidence, type UvPhysicalFaceInput } from "@/lib/uv/physicalEvidence";
 import { analyzeAnimationCraftEvidence, type AnimationCraftTrackInput } from "@/lib/animation/craftEvidence";
 
@@ -31,7 +32,8 @@ function geometrySurfaceRuntime() {
   const groups = typeof Group === "undefined" ? [] : (Group.all ?? []);
   const transformedGroups = groups.filter((group: Group) => nonZeroRotation(group.rotation));
   const meshCount = typeof Mesh === "undefined" ? 0 : (Mesh.all ?? []).filter((mesh: Mesh) => mesh.visibility !== false).length;
-  const visibleCubes = (Cube.all ?? []).filter((cube: Cube) => cube.visibility !== false);
+  const visibleCubes = (Cube.all ?? []).filter((cube: Cube) =>
+    cube.visibility !== false && isEffectivelyVisible(cube.mesh));
   const base = analyzeAxisAlignedSurfaceEvidence(
     visibleCubes
       .map((cube: Cube) => ({
