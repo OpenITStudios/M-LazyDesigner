@@ -22,7 +22,7 @@ function nearlyEqual(left: number, right: number, epsilon = 1e-9): boolean {
   return Math.abs(left - right) <= epsilon;
 }
 
-function samePackingShape(a: UvIsland, b: UvIsland): boolean {
+export function samePackingShape(a: UvIsland, b: UvIsland): boolean {
   return (
     a.source.box_uv === b.source.box_uv &&
     a.source.faces.length === b.source.faces.length &&
@@ -33,7 +33,7 @@ function samePackingShape(a: UvIsland, b: UvIsland): boolean {
   );
 }
 
-function stackBlockers(island: UvIsland): string[] {
+export function stackBlockers(island: UvIsland): string[] {
   const blockers: string[] = [];
   if (island.constraints.unique_detail) {
     blockers.push(island.id + ":UNIQUE_DETAIL");

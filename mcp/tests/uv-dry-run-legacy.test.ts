@@ -78,6 +78,13 @@ describe("UV dry-run and legacy bridge", () => {
     expect(report.summary.density_changes).toBe(1);
     expect(report.apply_allowed).toBe(true);
     expect(snapshot).toEqual(original);
+
+    const untracked = structuredClone(plan);
+    untracked.moved_island_ids = [];
+    // The old dry-run accepted score.valid even with an undeclared rect delta.
+    const blocked = buildUvDryRunReport(untracked);
+    expect(blocked.apply_allowed).toBe(false);
+    expect(blocked.hard_violations).toContain("UNDECLARED_MOVEMENT:face:b:north");
   });
 
   test("blocked stack proposals stay advisory and do not block an otherwise valid packing plan", () => {

@@ -2,6 +2,7 @@ import type {
   UvLayoutPlan,
   UvRect,
 } from "@/lib/uv/contracts";
+import { samePackingShape, stackBlockers } from "@/lib/uv/stacking";
 
 function intersects(a: UvRect, b: UvRect): boolean {
   return (
@@ -10,6 +11,11 @@ function intersects(a: UvRect, b: UvRect): boolean {
     a.y < b.y + b.height &&
     a.y + a.height > b.y
   );
+}
+
+function sameRect(a: UvRect, b: UvRect): boolean {
+  return a.x === b.x && a.y === b.y &&
+    a.width === b.width && a.height === b.height;
 }
 
 export type UvPlanValidation = {
@@ -34,6 +40,18 @@ export function validateUvLayoutPlan(
   }
   if (!plan.score.valid || plan.score.hard_violations.length > 0) {
     errors.push("PACKING_SCORE_INVALID");
+  }
+  if (plan.before.logical_width !== plan.proposed.logical_width ||
+      plan.before.logical_height !== plan.proposed.logical_height) {
+    errors.push("LOGICAL_CANVAS_CHANGED");
+  }
+  const movedIds = new Set(plan.moved_island_ids);
+  if (movedIds.size !== plan.moved_island_ids.length) {
+    errors.push("DUPLICATE_MOVED_ISLAND_ID");
+  }
+  const fixedIds = new Set(plan.fixed_island_ids);
+  if (fixedIds.size !== plan.fixed_island_ids.length) {
+    errors.push("DUPLICATE_FIXED_ISLAND_ID");
   }
 
   const beforeById = new Map(
@@ -96,7 +114,7 @@ export function validateUvLayoutPlan(
       errors.push(`MISSING_FIXED_ISLAND:${id}`);
       continue;
     }
-    if (JSON.stringify(before.rect) !== JSON.stringify(proposed.rect)) {
+    if (!sameRect(before.rect, proposed.rect)) {
       errors.push(`FIXED_ISLAND_MOVED:${id}`);
     }
   }
@@ -107,6 +125,29 @@ export function validateUvLayoutPlan(
       entry,
     ])
   );
+  if (transforms.size !== plan.placement_transforms.length) {
+    errors.push("DUPLICATE_PLACEMENT_TRANSFORM");
+  }
+  // Do not trust a plan's self-reported moved/fixed lists. The proposed
+  // snapshot must be fully covered by native mutation instructions.
+  for (const [id, before] of beforeById) {
+    const after = proposedById.get(id);
+    if (!after) continue;
+    const rectChanged = !sameRect(before.rect, after.rect);
+    const rotated = transforms.get(id)?.rotated_90 === true;
+    if (before.constraints.locked && (rectChanged || rotated)) {
+      errors.push(`LOCKED_ISLAND_MOVED:${id}`);
+    }
+    if (rectChanged && !movedIds.has(id)) {
+      errors.push(`UNDECLARED_MOVEMENT:${id}`);
+    }
+    if (rotated && !movedIds.has(id)) {
+      errors.push(`UNDECLARED_ROTATION:${id}`);
+    }
+    if (!rectChanged && !rotated && movedIds.has(id)) {
+      errors.push(`FALSE_MOVEMENT_DECLARATION:${id}`);
+    }
+  }
   for (const id of plan.moved_island_ids) {
     const before = beforeById.get(id);
     if (!before) {
@@ -135,16 +176,30 @@ export function validateUvLayoutPlan(
       if (!intersects(proposed[i].rect, proposed[j].rect)) continue;
       // Exact reuse remains possible only when both islands intentionally share
       // one explicit stack_group. Otherwise overlap is unsafe at apply time.
-      const sameRect =
-        JSON.stringify(proposed[i].rect) ===
-        JSON.stringify(proposed[j].rect);
+      const exactReuse = sameRect(proposed[i].rect, proposed[j].rect);
       const sharedGroup =
         proposed[i].constraints.stack_group &&
         proposed[i].constraints.stack_group ===
           proposed[j].constraints.stack_group;
-      if (!(sameRect && sharedGroup)) {
+      if (!(exactReuse && sharedGroup)) {
         errors.push(
           `UNDECLARED_OVERLAP:${proposed[i].id}:${proposed[j].id}`
+        );
+        continue;
+      }
+      // An explicit stack_group authorizes an overlap only when both
+      // islands pass the same shape/uniqueness/mirroring checks used by
+      // discoverUvStackProposals. A score.valid packing flag is insufficient.
+      const blockers = [
+        ...stackBlockers(proposed[i]),
+        ...stackBlockers(proposed[j]),
+      ];
+      if (!samePackingShape(proposed[i], proposed[j])) {
+        blockers.push("INCOMPATIBLE_SHAPE");
+      }
+      if (blockers.length > 0) {
+        errors.push(
+          `UNSAFE_SHARED_UV:${proposed[i].id}:${proposed[j].id}:${blockers.join("|")}`
         );
       }
     }

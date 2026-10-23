@@ -11,6 +11,7 @@ import {
   requireValidUvLayoutPlan,
   validateUvLayoutPlan,
 } from "@/lib/uv/validatePlan";
+import { buildUvDryRunReport } from "@/lib/uv/dryRun";
 
 function cubes() {
   return [
@@ -212,6 +213,62 @@ describe("UV U7 apply contracts", () => {
         error.startsWith("UNDECLARED_OVERLAP:")
       )
     ).toBe(true);
+  });
+
+  test("shared UV overlap must honor real shape, uniqueness, and mirror policy", () => {
+    const matching = cubes();
+    matching[1].to = [4, 4, 1];
+    matching[1].faces[0].uv = [8, 0, 12, 4];
+    const proposedPlan = (constraints: { unique_detail?: boolean; mirror_policy?: "FORBID" } = {},
+      inputs = matching) => {
+      const snapshot = buildUvLayoutSnapshot(inputs, 32, 32, (island) => ({
+        stack_group: "pair",
+        padding_pixels: 0,
+        ...(island.source.cube_name === "fixed" ? constraints : {}),
+      }));
+      const plan = structuredClone(planUvPacking(snapshot, {
+        bitmap_width: 32, bitmap_height: 32,
+      }));
+      plan.proposed.islands[1].rect = { ...plan.proposed.islands[0].rect };
+      // The packer's original score was valid, but is not a semantic verdict.
+      expect(plan.score.valid).toBe(true);
+      return plan;
+    };
+
+    const legal = proposedPlan();
+    expect(validateUvLayoutPlan(legal).valid).toBe(true);
+    for (const unsafe of [
+      proposedPlan({ unique_detail: true }),
+      proposedPlan({ mirror_policy: "FORBID" }),
+      proposedPlan({}, cubes()), // original second Cube is physically narrower
+    ]) {
+      const validation = validateUvLayoutPlan(unsafe);
+      expect(validation.valid).toBe(false);
+      expect(validation.errors.some((reason) => reason.startsWith("UNSAFE_SHARED_UV:")))
+        .toBe(true);
+      const report = buildUvDryRunReport(unsafe);
+      expect(report.apply_allowed).toBe(false);
+      expect(report.hard_violations.some((reason) => reason.startsWith("UNSAFE_SHARED_UV:")))
+        .toBe(true);
+    }
+  });
+
+  test("locked movement cannot bypass validation by omitting fixed IDs", () => {
+    const snapshot = buildUvLayoutSnapshot(cubes(), 32, 32, (island) =>
+      island.source.cube_name === "fixed"
+        ? { locked: true, padding_pixels: 0 }
+        : { padding_pixels: 0 }
+    );
+    const plan = structuredClone(planUvPacking(snapshot, {
+      mode: "REPACK_SELECTED", island_ids: ["face:move:north"],
+      bitmap_width: 32, bitmap_height: 32,
+    }));
+    plan.fixed_island_ids = [];
+    plan.proposed.islands[0].rect.x += 1;
+    const verdict = validateUvLayoutPlan(plan);
+    expect(verdict.valid).toBe(false);
+    expect(verdict.errors).toContain("LOCKED_ISLAND_MOVED:face:fixed:north");
+    expect(verdict.errors).toContain("UNDECLARED_MOVEMENT:face:fixed:north");
   });
 
   test("stale snapshot compatibility rejects post-plan UV changes", () => {

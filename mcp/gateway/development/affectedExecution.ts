@@ -236,6 +236,7 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
   ],
   "mcp/lib/uv/dryRun.ts": [
     "mcp/tests/uv-dry-run-legacy.test.ts",
+    "mcp/tests/uv-u7-apply-contracts.test.ts",
   ],
   "mcp/lib/uv/invalidation.ts": [
     "mcp/tests/uv-transaction-contract.test.ts",
@@ -296,6 +297,7 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
   ],
   "mcp/lib/uv/stacking.ts": [
     "mcp/tests/uv-stacking-proposals.test.ts",
+    "mcp/tests/uv-u7-apply-contracts.test.ts",
   ],
   "mcp/lib/uv/toolContract.ts": [
     "mcp/tests/uv-tool-contract.test.ts",
@@ -306,6 +308,7 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
   ],
   "mcp/lib/uv/validatePlan.ts": [
     "mcp/tests/uv-u7-apply-contracts.test.ts",
+    "mcp/tests/uv-dry-run-legacy.test.ts",
   ],
   "mcp/server/runtime/uv/layoutRuntime.ts": [
     "mcp/tests/uv-blockbench-runtime-adapter.test.ts",

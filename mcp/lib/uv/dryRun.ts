@@ -1,6 +1,7 @@
 import type {
   UvLayoutPlan,
 } from "@/lib/uv/contracts";
+import { validateUvLayoutPlan } from "@/lib/uv/validatePlan";
 import type {
   UvDensityPlan,
 } from "@/lib/uv/density";
@@ -43,7 +44,14 @@ export function buildUvDryRunReport(
   const stacks = [...(options.stack_proposals ?? [])];
   const densityChanged =
     options.density_plan?.changed_island_ids ?? [];
-  const hardViolations = [...plan.score.hard_violations];
+  // The exact same validator owns both dry-run acceptance and native apply.
+  // Prevent "apply_allowed: true" when a semantic/locked/overlap constraint
+  // would be refused only after the user starts a transaction.
+  const validation = validateUvLayoutPlan(plan);
+  const hardViolations = [...new Set([
+    ...plan.score.hard_violations,
+    ...validation.errors,
+  ])];
 
   return {
     schema: 1,
