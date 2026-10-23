@@ -121,6 +121,47 @@ describe("Animation runtime efficiency contracts", () => {
     }, 2)).toThrow("ANIMATION_CAPTURE_INCOMPLETE");
   });
 
+  test("native animation image capture reuses its preview frame for bounded Geometry OBB evidence", async () => {
+    const source = await Bun.file("server/runtime/contracts/animation.ts").text();
+    const start = source.indexOf("function observeNativeAnimationGeometryPose(");
+    const capture = source.indexOf("async function captureAnimationSamples(", start);
+    const end = source.indexOf("function keyframesForChannel(", capture);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(capture).toBeGreaterThan(start);
+    expect(end).toBeGreaterThan(capture);
+    const reader = source.slice(start, capture);
+    const operation = source.slice(capture, end);
+    expect(reader).toContain("GEOMETRY_WORLD_OBB_SAMPLE_LIMIT");
+    expect(reader).toContain("omitted_cube_count: all.length - selected.length");
+    expect(reader).toContain("cube.visibility !== false && isEffectivelyVisible(cube.mesh)");
+    expect(reader).toContain("orientedBoxFromCube(cube)");
+    expect(reader).toContain('cube.parent === "root" ? "root" : null');
+    expect(reader).not.toContain("Undo.initEdit");
+    expect(reader).not.toContain("Timeline.setTime(");
+    expect(operation).toContain("const compareGeometry = preview.times.length >= 2");
+    expect(operation.indexOf("withTemporaryAnimationPreview("))
+      .toBeLessThan(operation.indexOf("observeNativeAnimationGeometryPose("));
+    expect(operation.indexOf("requireCompleteAnimationCaptureSample("))
+      .toBeLessThan(operation.indexOf("observeNativeAnimationGeometryPose("));
+    expect(operation).toContain("analyzeGeometryPoseSequence(geometrySnapshots)");
+    expect(operation).toContain("geometry_pose_review: geometryPoseReview");
+    expect(operation).toContain("native_world_obb_observation_incomplete");
+    expect(operation).toContain("geometry_pose_comparison_unavailable");
+    expect(operation).toContain("geometry_mutation_authorized: false");
+    expect(operation).not.toContain("Undo.initEdit");
+    expect(operation).not.toContain("Timeline.setTime(");
+
+    // Reuse the existing public schema. Extra request keys are stripped by
+    // its inherited Zod object; they must not create a new capability.
+    const parsed = animationAwareCaptureModelViewsParameters.parse({
+      views: ["front"], front_direction: "+z",
+      animation_preview: { animation_id: "walk", times: [0, 0.5] },
+      geometry_pose_review: true,
+    });
+    expect(parsed.animation_preview?.times).toEqual([0, 0.5]);
+    expect(parsed).not.toHaveProperty("geometry_pose_review");
+  });
+
   test("focused Animation inspection can narrow one bone by channel and time range", () => {
     const accepted = focusedInspectAnimationParameters.parse({
       animation_id: "anim-walk",

@@ -9,6 +9,13 @@ import {
 } from "@/lib/factories";
 import { resolveCoreAnimation } from "@/lib/core/identity";
 import { withTemporaryAnimationPreview } from "@/lib/animation/previewState";
+import {
+  analyzeGeometryPoseSequence,
+  GEOMETRY_WORLD_OBB_SAMPLE_LIMIT,
+  type GeometryPoseObbSnapshot,
+} from "@/lib/geometry/surfaceEvidence";
+import { orientedBoxFromCube } from "@/lib/geometry/blockbenchCubeObb";
+import { isEffectivelyVisible } from "@/lib/geometry/renderedModelBounds";
 import { animationChannelEnum } from "@/lib/schemas/animation";
 import { animationIdOptionalSchema } from "@/lib/schemas/ids";
 import {
@@ -296,6 +303,49 @@ export function requireCompleteAnimationCaptureSample(
   return result.structuredContent as JsonRecord & { captures: unknown[] };
 }
 
+/**
+ * Read geometry at the SAME native preview time already requested for the
+ * screenshot. This reader never advances Timeline, authors, or opens Undo.
+ * Hidden/unsupported Cubes keep stable UUID identity with a null OBB, so
+ * missing visibility evidence cannot certify unnecessary geometry.
+ */
+function observeNativeAnimationGeometryPose(
+  animationId: string,
+  timeSeconds: number
+): GeometryPoseObbSnapshot {
+  if (typeof Cube === "undefined" || !Project ||
+      typeof Project.uuid !== "string" || !Project.uuid.trim()) {
+    throw new Error("GEOMETRY_POSE_NATIVE_PROJECT_UNAVAILABLE");
+  }
+  const all = [...(Cube.all ?? [])].sort((a: Cube, b: Cube) =>
+    a.uuid.localeCompare(b.uuid));
+  const selected = all.slice(0, GEOMETRY_WORLD_OBB_SAMPLE_LIMIT);
+  return {
+    project_uuid: Project.uuid,
+    animation_uuid: animationId,
+    time_seconds: timeSeconds,
+    omitted_cube_count: all.length - selected.length,
+    cubes: selected.map((cube: Cube) => {
+      let obb: ReturnType<typeof orientedBoxFromCube> | null = null;
+      if (cube.visibility !== false && isEffectivelyVisible(cube.mesh)) {
+        try {
+          obb = orientedBoxFromCube(cube);
+        } catch {
+          // Missing or invalid native world matrix: no invented OBB.
+        }
+      }
+      return {
+        uuid: cube.uuid,
+        name: cube.name,
+        parent_id: typeof Group !== "undefined" && cube.parent instanceof Group
+          ? cube.parent.uuid
+          : cube.parent === "root" ? "root" : null,
+        obb,
+      };
+    }),
+  };
+}
+
 async function captureAnimationSamples(
   definition: RuntimeToolDefinition,
   request: z.infer<typeof animationAwareCaptureModelViewsParameters>,
@@ -328,27 +378,80 @@ async function captureAnimationSamples(
     captures: unknown[];
   }> = [];
   let commonStructured: JsonRecord = {};
+  const compareGeometry = preview.times.length >= 2;
+  const geometrySnapshots: GeometryPoseObbSnapshot[] = [];
+  const geometryReadFailures: string[] = [];
 
   for (const time of preview.times) {
     const observed = await withTemporaryAnimationPreview(
       animationPreviewPort() as never,
       animation as never,
       time,
-      () =>
-        definition.execute(
+      async () => {
+        const result = await definition.execute(
           baseRequest as unknown as Record<string, unknown>,
           context
-        )
+        );
+        // Confirm native screenshot evidence before reading optional OBBs.
+        const structured = requireCompleteAnimationCaptureSample(
+          result, expectedViewCount
+        );
+        let geometry: GeometryPoseObbSnapshot | null = null;
+        let geometryFailure: string | null = null;
+        if (compareGeometry) {
+          try {
+            geometry = observeNativeAnimationGeometryPose(animation.uuid, time);
+          } catch (error) {
+            geometryFailure = error instanceof Error ? error.message : String(error);
+          }
+        }
+        return { result, structured, geometry, geometryFailure };
+      }
     );
 
-    const structured = requireCompleteAnimationCaptureSample(observed, expectedViewCount);
     content.push({ type: "text" as const, text: `ANIMATION_TIME ${time}` });
-    content.push(...captureContinuationContent(observed));
-    const captures = structured.captures as unknown[];
+    content.push(...captureContinuationContent(observed.result));
+    const captures = observed.structured.captures as unknown[];
     samples.push({ time, captures });
+    if (observed.geometry) geometrySnapshots.push(observed.geometry);
+    if (observed.geometryFailure) geometryReadFailures.push(observed.geometryFailure);
     if (Object.keys(commonStructured).length === 0) {
-      const { captures: _captures, count: _count, ...rest } = structured;
+      const { captures: _captures, count: _count, ...rest } = observed.structured;
       commonStructured = rest;
+    }
+  }
+
+  // Secondary diagnostics MUST NOT turn an otherwise valid image batch
+  // into a tool failure. Partial/native-invalid evidence stays explicit.
+  let geometryPoseReview: Record<string, unknown> | null = null;
+  if (compareGeometry) {
+    if (geometryReadFailures.length > 0 ||
+        geometrySnapshots.length !== preview.times.length) {
+      geometryPoseReview = {
+        state: "unavailable",
+        reason: "native_world_obb_observation_incomplete",
+        requested_sample_count: preview.times.length,
+        observed_sample_count: geometrySnapshots.length,
+        failure_count: geometryReadFailures.length,
+        geometry_mutation_authorized: false,
+        note: "Screenshot capture succeeded, but optional world-OBB observations were incomplete. No negative Geometry conclusion is supported.",
+      };
+    } else {
+      try {
+        geometryPoseReview = {
+          ...analyzeGeometryPoseSequence(geometrySnapshots),
+          capture_observation_source: "native_animation_preview_world_obb",
+          note: "World OBBs were observed during existing screenshot preview callbacks. Unsampled animation frames, materials, opacity and visual fidelity remain unverified. Never auto-delete Geometry.",
+        };
+      } catch (error) {
+        geometryPoseReview = {
+          state: "unavailable",
+          reason: "geometry_pose_comparison_unavailable",
+          diagnostic: error instanceof Error ? error.message : String(error),
+          requested_sample_count: preview.times.length,
+          geometry_mutation_authorized: false,
+        };
+      }
     }
   }
 
@@ -369,6 +472,7 @@ async function captureAnimationSamples(
         persistent_timeline_state_restored: true,
       },
       samples,
+      ...(geometryPoseReview ? { geometry_pose_review: geometryPoseReview } : {}),
     },
   };
 }

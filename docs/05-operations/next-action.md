@@ -12,11 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Native Recipe hierarchy fingerprint hardening:
-- Native owned-Cube snapshot captures root-to-parent Group UUID path (bounded/cycle-checked), making Cube reparent and ancestor-Group reparent visible to existing recipe fingerprint and stale-plan/Undo guard. Pure legacy snapshots remain compatible.
-- No root-only duplicate enforcement, forced reparent, new manager or public MCP schema. Parent transform values, native visual fidelity and true runtime speed are NOT verified by hierarchy identity alone.
-- Existing atomic transaction/runtime adapter and affected-execution regression owners expanded. Bun/TypeScript, LIVE_BLOCKBENCH, Golden visual/cost NOT EXECUTED (CI disabled).
-- Next: exact-HEAD source tests if a capable cloud runner becomes available; otherwise fix only evidenced defects. Native animation pose sampling, UV generator-backed registration and accepted-asset Golden proof remain deferred.
+2026-10-23 Animation preview Geometry evidence:
+- Existing capture_model_views(animation_preview) now reuses each native screenshot pose to observe bounded current-world OBBs when 2+ times are explicitly requested. No extra timeline seek, image, Undo or Geometry mutation; one additive diagnostic result field, no new tool/input. Ordinary and single-frame captures unchanged.
+- Existing pure pose comparator reports sampled-time retention evidence; hidden/missing matrices or omitted Cubes stay partial. Failed optional OBB reads leave successful PNGs intact with unavailable diagnostics.
+- Existing Animation preview, runtime and Geometry regressions are selected by affected-work routing; source/static assertions authored. Exact-head Bun/TypeScript, LIVE_BLOCKBENCH pose restoration and visual/latency outcomes NOT EXECUTED (CI disabled).
+- Next: real native acceptance when available; generator-backed UV and accepted Golden quality proof remain deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

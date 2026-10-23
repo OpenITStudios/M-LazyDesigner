@@ -232,6 +232,19 @@ describe("affected execution planner", () => {
     ]);
   });
 
+  test("native animation pose capture routes to existing preview and Geometry test owners", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/server/runtime/contracts/animation.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/animation-preview-state.test.ts",
+      "mcp/tests/animation-runtime-optimization.test.ts",
+      "mcp/tests/geometry-surface-evidence.test.ts",
+    ]);
+  });
+
   test("rotated world OBB contribution uses focused existing geometry owner tests", () => {
     for (const [path, expectedTests] of [
       ["mcp/lib/geometry/orientedBoxContact.ts", [
