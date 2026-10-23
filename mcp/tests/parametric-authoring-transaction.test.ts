@@ -5,7 +5,12 @@ import {
   applyAuthoringRecipeIncrementalAtomic,
   revertLastAuthoringRecipeApply,
 } from "@/lib/authoringRecipe/transaction";
-import { fingerprintAuthoringRecipeNativeSnapshot, type AuthoringRecipeNativeSnapshot } from "@/lib/authoringRecipe/nativeState";
+import {
+  fingerprintAuthoringRecipeNativeSnapshot,
+  snapshotRecipeNativeParentHierarchy,
+  type AuthoringRecipeNativeSnapshot,
+  type RecipeNativeParentGroup,
+} from "@/lib/authoringRecipe/nativeState";
 import { requireBoxUvRepresentableSpan } from "@/lib/geometry/cubeSpan";
 
 function recipe(spacing = 2, count = 4): AuthoringRecipe {
@@ -354,6 +359,95 @@ describe("Parametric authoring atomic affected-only transaction", () => {
     // Legacy pure fixtures lacking native ancestry remain representable.
     expect(fingerprintAuthoringRecipeNativeSnapshot(baseline))
       .toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  test("authored ancestor state changes reject stale plans even with unchanged Cube transforms", async () => {
+    const isGroup = (value: unknown): value is RecipeNativeParentGroup =>
+      value !== null && typeof value === "object" && "uuid" in value;
+    const root: RecipeNativeParentGroup = {
+      uuid: "torso", name: "torso", parent: "root",
+      origin: [0, 8, 0], rotation: [0, 0, 0],
+      visibility: true, export: true,
+    };
+    const arm: RecipeNativeParentGroup = {
+      uuid: "arm", name: "arm", parent: root,
+      origin: [4, 7, 0], rotation: [0, 0, 0],
+    };
+    const owner = snapshotRecipeNativeParentHierarchy("cube", arm, isGroup);
+    expect(owner.parent_path).toEqual(["torso", "arm"]);
+    expect(owner.parent_authored_state.map((g) => g.name)).toEqual(["torso", "arm"]);
+    const baseline = snapshotFromRecipe(recipe());
+    const initial: AuthoringRecipeNativeSnapshot = {
+      ...baseline,
+      cubes: baseline.cubes.map((cube) => ({ ...cube, ...owner })),
+    };
+    const hash = fingerprintAuthoringRecipeNativeSnapshot(initial);
+    const modifiers: Array<(group: (typeof owner.parent_authored_state)[number]) => void> = [
+      (group) => { group.origin[0] += 1; },
+      (group) => { group.rotation[2] = 30; },
+      (group) => { group.name = "renamed_arm"; },
+      (group) => { group.visibility = false; },
+      (group) => { group.export = false; },
+      (group) => { group.bedrock_binding = "query.body_y_rotation"; },
+      (group) => { group.mirror_uv = true; },
+      (group) => { group.reset = true; },
+    ];
+    for (const modify of modifiers) {
+      const changed = structuredClone(initial);
+      modify(changed.cubes[1]!.parent_authored_state![1]!);
+      expect(changed.cubes[1]!.parent_path).toEqual(initial.cubes[1]!.parent_path);
+      expect(changed.cubes[1]!.from).toEqual(initial.cubes[1]!.from);
+      expect(fingerprintAuthoringRecipeNativeSnapshot(changed)).not.toBe(hash);
+    }
+    const changed = structuredClone(initial);
+    changed.cubes[1]!.parent_authored_state![0]!.rotation = [0, 45, 0];
+    const fake = fakeAdapter(changed);
+    let beganUndo = false;
+    await expect(applyAuthoringRecipeIncrementalAtomic(
+      recipe(), recipe(3), hash,
+      { ...fake.adapter, beginUndo() { beganUndo = true; } }
+    )).rejects.toThrow("STALE_RECIPE_PLAN");
+    expect(beganUndo).toBe(false);
+    expect(fake.committed).toBe(false);
+    expect(fake.state).toEqual(changed);
+  });
+
+  test("native parent authoring reader copies, bounds and validates hierarchy", () => {
+    const isGroup = (value: unknown): value is RecipeNativeParentGroup =>
+      value !== null && typeof value === "object" && "uuid" in value;
+    expect(snapshotRecipeNativeParentHierarchy("cube", "root", isGroup))
+      .toEqual({ parent_path: [], parent_authored_state: [] });
+    const group: RecipeNativeParentGroup = {
+      uuid: "a", name: "bone", origin: [0, 0, 0],
+      rotation: [0, 0, 0], parent: "root",
+    };
+    const state = snapshotRecipeNativeParentHierarchy("cube", group, isGroup);
+    group.rotation = [0, 90, 0];
+    expect(state.parent_authored_state[0]!.rotation).toEqual([0, 0, 0]);
+    expect(state.parent_authored_state[0]!.visibility).toBe(true);
+    expect(state.parent_authored_state[0]!.bedrock_binding).toBe(null);
+    group.parent = group;
+    expect(() => snapshotRecipeNativeParentHierarchy("cube", group, isGroup))
+      .toThrow("RECIPE_NATIVE_PARENT_UNKNOWN");
+    group.parent = "root";
+    group.origin = [NaN, 0, 0];
+    expect(() => snapshotRecipeNativeParentHierarchy("cube", group, isGroup))
+      .toThrow("RECIPE_NATIVE_PARENT_TRANSFORM_INVALID");
+    group.origin = [0, 0, 0];
+    group.rotation = [0, Infinity, 0];
+    expect(() => snapshotRecipeNativeParentHierarchy("cube", group, isGroup))
+      .toThrow("RECIPE_NATIVE_PARENT_TRANSFORM_INVALID");
+    group.rotation = [0, 0, 0];
+    expect(() => snapshotRecipeNativeParentHierarchy("cube",
+      { ...group, parent: group }, isGroup))
+      .toThrow("RECIPE_NATIVE_PARENT_UNKNOWN");
+    let deep: unknown = "root";
+    for (let i = 0; i < 65; i++) {
+      deep = { uuid: "g" + i, name: "group" + i,
+        origin: [0, 0, 0], rotation: [0, 0, 0], parent: deep };
+    }
+    expect(() => snapshotRecipeNativeParentHierarchy("cube", deep, isGroup))
+      .toThrow("RECIPE_NATIVE_PARENT_UNKNOWN");
   });
 
   test("stale or manually edited native state is rejected before Undo", async () => {

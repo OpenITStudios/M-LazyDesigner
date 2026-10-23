@@ -76,23 +76,21 @@ Recipe code must not depend on `orchestration/`. Orchestration may consume recip
 
 ## Native Group ancestry and stale-plan safety
 
-The Blockbench-owned recipe Cube snapshot now captures an ordered
-`parent_path` of Group UUIDs from root to immediate parent (empty for an
-actual root Cube). It becomes part of the existing source fingerprint,
-without introducing a new store or parent-authoring planner. A Cube
-reparented to another Bone, or its containing Group moved beneath a
-different ancestor, invalidates a previously prepared plan even when
-`from/to/origin/rotation` are unchanged. Missing, cyclic, ambiguous or
-excessively deep ancestry is refused rather than labelled root.
+The native Recipe Cube snapshot includes both a root-to-parent Group UUID
+`parent_path` and ordered `parent_authored_state`: origin/pivot, rotation,
+Bone name/Bedrock binding, visibility, export, mirror UV and reset flags.
+The original source fingerprint and stale-plan/Undo gate therefore detect
+reparenting **and changes within the same ancestor Bone**, even when the
+Cube's local coordinates remain unchanged. The pure, bounded/cycle-checked
+hierarchy reader lives in existing `nativeState.ts`; the native adapter
+supplies only the actual Blockbench Group identity predicate. There is no
+new state owner, engine, tool or automatic reparent operation.
 
-`parent_path` is optional in historical pure test/snapshot shapes for
-compatibility, but the native Blockbench adapter always supplies it.
-Pending fingerprints generated before this change may become stale;
-refuse and re-plan instead of silently reusing one. The recipe does not
-prescribe Group hierarchy, so a valid previously reparented Cube is not
-automatically forced back to root. This proves *hierarchy identity*
-freshness only; changes to ancestor transforms or visual quality still
-require separate native evidence.
+Both snapshot fields are optional for legacy pure callers and always
+supplied by the native adapter. Existing pending plans may become stale:
+re-plan rather than forcing a previous fingerprint. Authored Group
+properties are distinct from evaluated animation pose or world-matrix
+measurements, so native visual/motion fidelity still requires live proof.
 
 ## Native Undo and pre-commit boundary
 

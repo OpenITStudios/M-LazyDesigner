@@ -2,6 +2,93 @@ import { createHash } from "node:crypto";
 import type { AuthoringRecipe, CompiledCubePlacement, RecipeVec3 } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 
+/** Authored ancestor Group state, not a sampled animation pose or new registry. */
+export type RecipeParentAuthoredState = {
+  uuid: string;
+  name: string;
+  origin: RecipeVec3;
+  rotation: RecipeVec3;
+  visibility: boolean;
+  export: boolean;
+  mirror_uv: boolean;
+  reset: boolean;
+  bedrock_binding: string | null;
+};
+
+export type RecipeNativeParentGroup = {
+  uuid: string;
+  name: string;
+  origin: readonly number[];
+  rotation: readonly number[];
+  parent?: unknown;
+  visibility?: boolean;
+  export?: boolean;
+  mirror_uv?: boolean;
+  reset?: boolean;
+  bedrock_binding?: string | null;
+};
+
+function parentVec3(value: unknown, label: string): RecipeVec3 {
+  if (!Array.isArray(value) || value.length !== 3 ||
+      value.some((coordinate) => typeof coordinate !== "number" ||
+        !Number.isFinite(coordinate))) {
+    throw new Error("RECIPE_NATIVE_PARENT_TRANSFORM_INVALID: " + label +
+      " requires exactly three finite coordinates.");
+  }
+  return [value[0], value[1], value[2]];
+}
+
+/** Single bounded pure owner of parent identity AND authored transforms. */
+export function snapshotRecipeNativeParentHierarchy(
+  cubeUuid: string,
+  parent: unknown,
+  isNativeGroup: (value: unknown) => value is RecipeNativeParentGroup
+): { parent_path: string[]; parent_authored_state: RecipeParentAuthoredState[] } {
+  if (parent === "root") return { parent_path: [], parent_authored_state: [] };
+  const visited = new Set<object>();
+  const ids = new Set<string>();
+  const states: RecipeParentAuthoredState[] = [];
+  let current = parent;
+  for (let depth = 0; depth < 64; depth++) {
+    if (!isNativeGroup(current) || visited.has(current)) {
+      throw new Error("RECIPE_NATIVE_PARENT_UNKNOWN: Cube " + cubeUuid +
+        " has invalid or cyclic Group ancestry.");
+    }
+    const group = current;
+    if (typeof group.uuid !== "string" || !group.uuid.trim() ||
+        ids.has(group.uuid) || typeof group.name !== "string" ||
+        !group.name.trim()) {
+      throw new Error("RECIPE_NATIVE_PARENT_UNKNOWN: Cube " + cubeUuid +
+        " has a duplicate or invalid Group identity.");
+    }
+    visited.add(group);
+    ids.add(group.uuid);
+    states.push({
+      uuid: group.uuid,
+      name: group.name,
+      origin: parentVec3(group.origin, "Group " + group.uuid + " origin"),
+      rotation: parentVec3(group.rotation, "Group " + group.uuid + " rotation"),
+      visibility: group.visibility !== false,
+      export: group.export !== false,
+      mirror_uv: group.mirror_uv === true,
+      reset: group.reset === true,
+      bedrock_binding: typeof group.bedrock_binding === "string" &&
+        group.bedrock_binding !== "" ? group.bedrock_binding : null,
+    });
+    if (group.parent === "root" || group.parent === null ||
+        group.parent === undefined) {
+      const rootToLeaf = states.reverse();
+      return {
+        parent_path: rootToLeaf.map((entry) => entry.uuid),
+        parent_authored_state: rootToLeaf,
+      };
+    }
+    current = group.parent;
+  }
+  throw new Error("RECIPE_NATIVE_PARENT_UNKNOWN: Cube " + cubeUuid +
+    " exceeds the 64-Group traversal limit.");
+}
+
 export type AuthoringRecipeNativeCubeState = {
   uuid: string;
   recipe_id: string;
@@ -17,6 +104,8 @@ export type AuthoringRecipeNativeCubeState = {
    * The recipe's own Cube transforms cannot attest to parent hierarchy.
    */
   parent_path?: string[];
+  /** Native adapter emits this; optional only for legacy pure-state fixtures. */
+  parent_authored_state?: RecipeParentAuthoredState[];
 };
 
 export type AuthoringRecipeNativeSnapshot = {

@@ -44,30 +44,32 @@ describe("Blockbench parametric recipe adapter ownership", () => {
       .toBeLessThan(commit.indexOf('Undo.finishEdit("LazyDesigner parametric recipe"'));
   });
 
-  test("native owned Cube snapshot fingerprints bounded ancestor identity, not inferred root", async () => {
-    const source = await Bun.file("server/runtime/recipes/authoring/runtime.ts").text();
-    const start = source.indexOf("function readRecipeCubeParentPath(");
-    const end = source.indexOf("function cubeState(", start);
-    const reader = source.slice(start, end);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    expect(reader).toContain('cube.parent === "root"');
-    expect(reader).toContain("current instanceof Group");
-    expect(reader).toContain("ancestor === null");
-    expect(reader).toContain("seen.has(current)");
-    expect(reader).toContain("ids.reverse()");
-    expect(reader).toContain("RECIPE_NATIVE_PARENT_UNKNOWN");
-
-    const snapshot = source.slice(end, source.indexOf("function resolveOwnedCube", end));
-    expect(snapshot).toContain("parent_path: readRecipeCubeParentPath(cube)");
-    expect(snapshot).toContain("readBlockbenchAuthoringRecipeOwnedState(recipeId)");
-    const upsert = source.slice(source.indexOf("upsert: (placement, existingUuid"),
-      source.indexOf("remove: (instanceId", source.indexOf("upsert: (placement, existingUuid")));
-    const existing = upsert.slice(upsert.indexOf("if (existingUuid)"),
-      upsert.indexOf("const cube = new Cube({"));
-    expect(existing).not.toContain("addTo(");
+  test("native adapter uses one pure Group hierarchy owner without reparenting existing Cubes", async () => {
+    const [source, nativeState] = await Promise.all([
+      Bun.file("server/runtime/recipes/authoring/runtime.ts").text(),
+      Bun.file("lib/authoringRecipe/nativeState.ts").text(),
+    ]);
+    const first = source.indexOf("function cubeState(");
+    const last = source.indexOf("function resolveOwnedCube", first);
+    const snapshot = source.slice(first, last);
+    expect(snapshot).toContain("snapshotRecipeNativeParentHierarchy(");
+    expect(snapshot).toContain("cube.parent");
+    expect(snapshot).toContain("value instanceof Group");
+    expect(snapshot).toContain("...parentState");
+    expect(source).not.toContain("function readRecipeCubeParentPath(");
+    for (const key of [
+      "parent_path", "parent_authored_state", "group.origin",
+      "group.rotation", "group.name", "group.visibility", "group.export",
+      "group.mirror_uv", "group.reset", "group.bedrock_binding",
+      "RECIPE_NATIVE_PARENT_UNKNOWN", "RECIPE_NATIVE_PARENT_TRANSFORM_INVALID",
+      "depth < 64",
+    ]) expect(nativeState).toContain(key);
+    const begin = source.indexOf("upsert: (placement, existingUuid");
+    const upsert = source.slice(begin, source.indexOf("remove: (instanceId", begin));
+    expect(upsert.slice(upsert.indexOf("if (existingUuid)"),
+      upsert.indexOf("const cube = new Cube({"))).not.toContain("addTo(");
     expect(upsert).toContain('cube.addTo("root")');
-    expect(reader).toContain("depth < 64");
+    expect(snapshot).not.toContain("Undo.initEdit");
   });
 
   test("native Undo snapshots retain updated elements and encode deletions", async () => {

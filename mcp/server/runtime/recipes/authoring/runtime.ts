@@ -3,6 +3,8 @@
 import { randomUUID } from "node:crypto";
 import {
   fingerprintAuthoringRecipeNativeSnapshot,
+  snapshotRecipeNativeParentHierarchy,
+  type RecipeNativeParentGroup,
 } from "@/lib/authoringRecipe/nativeState";
 import type { RecipeNativeUndoProvenance } from "@/lib/authoringRecipe/transaction";
 import type { CompiledCubePlacement } from "@/lib/authoringRecipe/contracts";
@@ -57,53 +59,21 @@ function recipeOwnedCubes(recipeId: string): Cube[] {
   return owned;
 }
 
-/**
- * Native hierarchy fingerprint, not a new parent-authoring policy.
- * Capture all ancestor Group UUIDs to detect both Cube reparenting and a
- * parent Group moving beneath another Bone. Unknown or cyclic hierarchy
- * must fail closed instead of masquerading as "root".
- */
-function readRecipeCubeParentPath(cube: Cube): string[] {
-  if (cube.parent === "root") return [];
-  const seen = new Set<Group>();
-  const ids: string[] = [];
-  let current: unknown = cube.parent;
-  for (let depth = 0; depth < 64; depth++) {
-    if (typeof Group === "undefined" || !(current instanceof Group) ||
-        seen.has(current)) {
-      throw new Error("RECIPE_NATIVE_PARENT_UNKNOWN: Cube " + cube.uuid +
-        " has ambiguous, invalid or cyclic Group ancestry.");
-    }
-    const group = current;
-    if (typeof group.uuid !== "string" || !group.uuid.trim() ||
-        ids.includes(group.uuid)) {
-      throw new Error("RECIPE_NATIVE_PARENT_UNKNOWN: Cube " + cube.uuid +
-        " has invalid or duplicate parent Group UUID.");
-    }
-    seen.add(group);
-    ids.push(group.uuid);
-    const ancestor: unknown = group.parent;
-    if (ancestor === "root" || ancestor === null || ancestor === undefined) {
-      return ids.reverse();
-    }
-    current = ancestor;
-  }
-  throw new Error("RECIPE_NATIVE_PARENT_UNKNOWN: Cube " + cube.uuid +
-    " exceeds bounded Group nesting depth.");
-}
-
 function cubeState(cube: Cube, recipeId: string) {
   const ownership = readAuthoringRecipeCubeOwnership(cube);
   if (!ownership || ownership.recipe_id !== recipeId) {
     throw new Error("Cube " + cube.uuid + " is not owned by recipe " + recipeId + ".");
   }
+  const parentState = snapshotRecipeNativeParentHierarchy(
+    cube.uuid, cube.parent,
+    (value): value is RecipeNativeParentGroup =>
+      typeof Group !== "undefined" && value instanceof Group
+  );
   return {
     uuid: cube.uuid,
     recipe_id: ownership.recipe_id,
     instance_id: ownership.instance_id,
-    // Observation fingerprint must see native hierarchy changes that alter
-    // world-space structure without changing the Cube's local coordinates.
-    parent_path: readRecipeCubeParentPath(cube),
+    ...parentState,
     name: cube.name,
     from: [...cube.from] as [number,number,number],
     to: [...cube.to] as [number,number,number],

@@ -12,11 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Blockbench Box UV template preflight:
-- Cube span owner detects visible Box UV positive spans under 1 or invalid spans with bounded UUID/axes/size, even when the native popup misses them. Hidden, Per-face UV and true zero planes are exempt.
-- create_texture(type=template) checks native single-atlas/selected-element scope BEFORE TextureGenerator/Undo. Legacy bad Box UV is rejected without resizing, deleting or converting Geometry/UV. Bitmap resize unchanged.
-- Modelling standard requires reference-grounded Texture vs necessary 3D decisions before secondary Cube batches. Opt-in Recipe enforces feature_intents; direct manage_cubes cannot infer artistic need from size.
-- Existing Geometry, Texture and affected-execution regressions authored; no new public schema/tool. Bun/TS, LIVE_BLOCKBENCH popup/UV, visual fidelity and measured efficiency NOT EXECUTED (CI disabled). Next: exact-SHA native acceptance when available; UV registration and Golden proof deferred.
+2026-10-23 Native Recipe Bone/Group authored-state integrity:
+- Canonical nativeState.ts now reads one bounded root-to-parent Group state (UUID, name, origin/pivot, rotation, visibility, export, mirror UV, reset, Bedrock binding); Runtime supplies native Group predicate. Existing SHA-256/Undo guard rejects stale plans after these edits even if Cube local coordinates and Group UUIDs are unchanged.
+- Deterministic pure tests cover same-UUID pivot/rotation/visibility/export/name/binding drift, mutation-safe copies, cycles, invalid transforms, depth limit and stale-plan rejection before Undo. Old pure snapshots remain compatible; no automatic reparent or new registry/tool.
+- Source/static review only; exact-head Bun/TS, LIVE_BLOCKBENCH, Bedrock export and accepted reference fidelity/efficiency NOT EXECUTED (CI disabled). Next: run existing owner tests/native visual proof when capable; preserve UV registration and Golden acceptance as separate residue.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 
