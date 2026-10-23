@@ -13,6 +13,22 @@ async function source(path: string): Promise<string> {
 }
 
 describe("texture atlas integrity", () => {
+  test("physical texel audit permits harmless floating drift but rejects half-pixel UV", () => {
+    const face = (u: number) => ({
+      cube_uuid: "panel", cube_name: "panel", face: "north",
+      texture_uuid: "base", uv: [u, 0, u + 1, 1],
+      box_uv: false, autouv: 0, mirror_uv: false, face_rotation: 0,
+      surface_area: 1, pixel_scale: [2, 2] as const,
+    });
+    const aligned = buildUvAtlasAudit([face(0.5000000000000001)], 128, 128);
+    if (aligned.state !== "available") throw new Error("UV audit unavailable");
+    expect(aligned.non_integral_pixel_mapping.count).toBe(0);
+    const unaligned = buildUvAtlasAudit([face(0.25)], 128, 128);
+    if (unaligned.state !== "available") throw new Error("UV audit unavailable");
+    expect(unaligned.non_integral_pixel_mapping.count).toBe(1);
+    expect(unaligned.production_gate.reasons).toContain("NON_INTEGRAL_PIXEL_MAPPING");
+  });
+
   test("shared pixel regions are read once per invocation while every face stays accounted", () => {
     const globals = globalThis as unknown as Record<string, unknown>;
     const previous = { Cube: globals.Cube, Texture: globals.Texture };
@@ -132,10 +148,11 @@ describe("texture atlas integrity", () => {
     globals.Cube = { all: [{ uuid: "mixed", name: "mixed", faces: {
       north: { uv: [0.5, 0, 1, 2], getTexture: () => texture },
       south: { uv: [2.25, 0, 3, 2], getTexture: () => texture },
+      east: { uv: [0.5000000000000001, 2, 1, 4], getTexture: () => texture },
     } }] };
     try {
       const result = textureOptimizationRuntime();
-      expect(reads).toEqual([[1, 0, 1, 4]]);
+      expect(reads).toEqual([[1, 0, 1, 4], [1, 4, 1, 4]]);
       if (!("coverage" in result)) throw new Error("coverage unavailable");
       expect(result.coverage.omissions.counts.non_integral_pixel_mapping).toBe(1);
       expect(result.coverage.omissions.counts.fractional_uv).toBe(0);

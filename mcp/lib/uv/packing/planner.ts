@@ -5,6 +5,7 @@ import type {
   UvRect,
 } from "@/lib/uv/contracts";
 import { physicalPixelsPerUvUnit } from "@/lib/uv/density";
+import { requireUvPhysicalPixelGrid } from "@/lib/uv/facePixelMapping";
 import { packMaxRects } from "@/lib/uv/packing/maxRects";
 import { scoreUvPacking } from "@/lib/uv/packing/scorer";
 import { samePackingShape, stackBlockers } from "@/lib/uv/stacking";
@@ -114,6 +115,10 @@ export function planUvPacking(
     >;
   }
 ): UvLayoutPlan {
+  if (!Number.isSafeInteger(options.bitmap_width) || options.bitmap_width <= 0 ||
+      !Number.isSafeInteger(options.bitmap_height) || options.bitmap_height <= 0) {
+    throw new Error("UV_BITMAP_SIZE_INVALID: physical atlas dimensions must be positive integers.");
+  }
   const pixelScale = physicalPixelsPerUvUnit(
     snapshot.logical_width,
     snapshot.logical_height,
@@ -135,30 +140,59 @@ export function planUvPacking(
     (island) => !movableIds.has(island.id)
   );
 
+  // Fixed regions are authored authority; their physical texel boundaries
+  // must already be representable before they become packing obstacles.
+  for (const island of fixed) {
+    const r = island.rect;
+    requireUvPhysicalPixelGrid(
+      [r.x, r.y, r.x + r.width, r.y + r.height],
+      pixelScale, "fixed UV island " + island.id
+    );
+  }
+
   // Existing explicitly shared texels form one semantic editing unit.
   // Moving only one face would silently sever that reuse relationship.
   // A locked face also locks its shared cohort, not unrelated islands.
   const sharedByRegion = new Map<string, typeof snapshot.islands>();
   for (const island of snapshot.islands) {
     const group = island.constraints.stack_group;
-    if (!group || stackBlockers(island).length > 0) continue;
+    if (!group) continue;
     const key = JSON.stringify([group, island.rect]);
     const members = sharedByRegion.get(key) ?? [];
     members.push(island);
     sharedByRegion.set(key, members);
   }
   for (const members of sharedByRegion.values()) {
-    if (members.length < 2 ||
-        !members.slice(1).every((island) => samePackingShape(members[0], island))) {
-      continue;
-    }
+    if (members.length < 2) continue;
     const moving = members.filter((island) => movableIds.has(island.id));
-    if (moving.length > 0 && moving.length !== members.length) {
+    if (moving.length === 0) continue;
+    if (moving.length !== members.length) {
       throw new Error(
         "UV_SHARED_STACK_SCOPE_INCOMPLETE: selected repack would split explicitly " +
         "shared texels. Select the entire compatible stack or leave it fixed: " +
         members.map((island) => island.id).sort().join(", ")
       );
+    }
+    // Ownership is an invariant, not an ordering hint. A whole cohort that
+    // cannot move together must be refused before spending an Undo edit.
+    if (members.some((island) => stackBlockers(island).length > 0) ||
+        !members.slice(1).every((island) => samePackingShape(members[0], island))) {
+      throw new Error("UV_SHARED_STACK_UNSAFE_COHORT: incompatible explicit UV sharing must be resolved before repack.");
+    }
+    const sizeFor = (island: (typeof members)[number]) =>
+      options.size_overrides?.[island.id] ?? [island.rect.width, island.rect.height];
+    const firstSize = sizeFor(members[0]);
+    const firstPadding = members[0].constraints.padding_pixels;
+    const canRotate = (island: (typeof members)[number]) =>
+      !island.source.box_uv && island.constraints.rotation.allowed &&
+      island.constraints.rotation.step === 90;
+    if (members.slice(1).some((island) => {
+      const size = sizeFor(island);
+      return size[0] !== firstSize[0] || size[1] !== firstSize[1] ||
+        island.constraints.padding_pixels !== firstPadding ||
+        canRotate(island) !== canRotate(members[0]);
+    })) {
+      throw new Error("UV_SHARED_STACK_CONSTRAINT_CONFLICT: shared regions require matching size, padding and rotation constraints.");
     }
   }
 
@@ -191,6 +225,11 @@ export function planUvPacking(
     const width = override?.[0] ?? island.rect.width;
     const height = override?.[1] ?? island.rect.height;
     const paddingPixels = island.constraints.padding_pixels;
+    requireUvPhysicalPixelGrid([0, 0, width, height], pixelScale,
+      "planned UV island size " + island.id);
+    if (!Number.isSafeInteger(paddingPixels) || paddingPixels < 0) {
+      throw new Error("UV_PADDING_INVALID: island " + island.id + " needs whole nonnegative physical pixels.");
+    }
     const item: UvPackingItem = {
       id: island.id,
       width,
@@ -210,11 +249,16 @@ export function planUvPacking(
     const signature = eligible ? JSON.stringify([
       group, island.rect, island.source.box_uv,
       island.source.faces.length, island.physical.density_basis,
-      width, height, paddingPixels, item.allow_rotate_90, item.priority,
+      width, height, paddingPixels, item.allow_rotate_90,
     ]) : null;
     const existing = signature ? knownBySignature.get(signature) : undefined;
     const owner = existing ? owners.get(existing) : undefined;
     if (owner && samePackingShape(owner.island, island)) {
+      // Priority orders the shared cohort, not each face's physical pixels.
+      owner.item.priority = Math.max(owner.item.priority, item.priority);
+      if (owner.item.semantic_group !== item.semantic_group) {
+        owner.item.semantic_group = undefined;
+      }
       ownerByIsland.set(island.id, existing!);
       continue;
     }
@@ -259,6 +303,16 @@ export function planUvPacking(
           !error.message.startsWith("MaxRects could not fit UV island")) {
         throw error;
       }
+    }
+  }
+  for (const placement of candidate.placements) {
+    for (const [kind, rect] of [
+      ["island", placement.rect], ["gutter", placement.footprint],
+    ] as const) {
+      requireUvPhysicalPixelGrid(
+        [rect.x, rect.y, rect.x + rect.width, rect.y + rect.height],
+        pixelScale, "planned UV " + kind + " " + placement.id
+      );
     }
   }
   const representativePlacements = new Map(

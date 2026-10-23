@@ -104,6 +104,8 @@ Important visible surfaces must have usable finite UVs. For new AI production:
 Do not optimize atlas occupancy as a quality score.
 Named `semantic_group` cohorts now participate in the existing MaxRects layout: a complete repack may compare one area-first and one cohort-first candidate, adopting cohort order only when both are valid and measured normalized semantic spread decreases. Fit, padding, rotation and existing UV reuse remain hard constraints. Unnamed islands retain area-first behavior; semantic spread is an editability diagnostic, never a visual-quality score.
 
+Physical-pixel boundaries are the shared invariant across UV packing, semantic native apply and texture audits: a fractional logical UV is valid only when its mapped physical U/V coordinate lands on a whole texel. Quantize new density requests **upward** to whole physical pixel extents rather than silently reducing requested detail; then inspect mapped aspect, material, and visual fidelity. Explicitly shared UV regions must stay in one allocation even when member priorities differ. Incompatible member size, padding or rotation constraints block the repack instead of silently splitting one authored pixel owner.
+
 Native packing alone is not a production layout verdict. Organize exact native islands into named semantic zones (body, head, appendages) with stable order and gutters; translate islands without changing their native aspect or density. A scattered atlas that is hard to identify/edit fails this gate even when all UVs are valid.
 
 ## Box UV / UV Lock

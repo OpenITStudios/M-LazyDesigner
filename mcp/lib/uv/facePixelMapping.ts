@@ -54,6 +54,34 @@ export function requireSupportedFaceRotation(
   return value as SupportedFaceRotation;
 }
 
+/** A logical UV fraction is valid when it maps to a complete physical texel.
+ * Tolerate machine-level floating arithmetic, never an actual subpixel.
+ */
+export function isIntegralPhysicalPixelCoordinate(value: number): boolean {
+  return Number.isFinite(value) &&
+    Math.abs(value - Math.round(value)) <= 1e-9;
+}
+
+/** Accept signed U/V corners; bounds and rotation remain native-owned. */
+export function requireUvPhysicalPixelGrid(
+  coordinates: readonly number[],
+  physicalPixelsPerUvUnit: readonly [number, number],
+  context: string
+): void {
+  if (coordinates.length !== 4 ||
+      coordinates.some((value) => !Number.isFinite(value)) ||
+      physicalPixelsPerUvUnit.some((value) => !Number.isFinite(value) || value <= 0)) {
+    throw new Error("UV_PHYSICAL_GRID_INVALID: " + context +
+      " requires finite UV corners and positive pixel scales.");
+  }
+  if (coordinates.some((value, axis) =>
+    !isIntegralPhysicalPixelCoordinate(value * physicalPixelsPerUvUnit[axis % 2])
+  )) {
+    throw new Error("UV_NON_INTEGRAL_PIXEL_MAPPING: " + context +
+      " must lie on complete physical texels, not necessarily integer logical UV coordinates.");
+  }
+}
+
 function roundNativePainterCoordinate(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -130,14 +158,17 @@ export function requireExactFacePixelGrid(
       `${context} face UV lies outside the active texture frame. Exact-pixel painting cannot address pixels beyond bitmap bounds.`
     );
   }
-  if (!mapping.corners.every(Number.isInteger)) {
+  if (!mapping.corners.every(isIntegralPhysicalPixelCoordinate)) {
     throw new Error(
       `${context} does not map to exact physical pixel boundaries. Face-local exact painting requires integral texture-pixel UV boundaries.`
     );
   }
 
-  const uPixels = Math.abs(mapping.corners[2] - mapping.corners[0]);
-  const vPixels = Math.abs(mapping.corners[3] - mapping.corners[1]);
+  // Native Painter uses integer pixel addresses. Normalize insignificant
+  // floating drift after validating alignment, never a true fractional texel.
+  const pixelCorners = mapping.corners.map((value) => Math.round(value));
+  const uPixels = Math.abs(pixelCorners[2] - pixelCorners[0]);
+  const vPixels = Math.abs(pixelCorners[3] - pixelCorners[1]);
   if (
     !Number.isInteger(uPixels) ||
     !Number.isInteger(vPixels) ||

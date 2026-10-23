@@ -8,6 +8,7 @@ import {
 } from "@/lib/texture/diagnosticReadContext";
 
 import { getAllToolDefinitions } from "@/lib/factories";
+import { isIntegralPhysicalPixelCoordinate } from "@/lib/uv/facePixelMapping";
 import { analyzeGeometryHygiene } from "@/lib/geometry/quality";
 import { analyzeTextureColorProfile } from "@/lib/texture/colorProfile";
 import { analyzeTexturePixelCraft } from "@/lib/texture/pixelCraft";
@@ -313,15 +314,18 @@ export function textureOptimizationRuntime(context?: unknown) {
         uv[2] * ratioX,
         uv[3] * ratioY,
       ];
-      if (mapped.some((value) => !Number.isInteger(value))) {
+      if (mapped.some((value) => !isIntegralPhysicalPixelCoordinate(value))) {
         omit("non_integral_pixel_mapping", cube, faceKey);
         continue;
       }
 
-      const left = Math.min(mapped[0], mapped[2]);
-      const top = Math.min(mapped[1], mapped[3]);
-      const right = Math.max(mapped[0], mapped[2]);
-      const bottom = Math.max(mapped[1], mapped[3]);
+      // The grid predicate allows machine epsilon; pixel reads still require
+      // exact integer region coordinates and dimensions.
+      const texelCorners = mapped.map((value) => Math.round(value));
+      const left = Math.min(texelCorners[0], texelCorners[2]);
+      const top = Math.min(texelCorners[1], texelCorners[3]);
+      const right = Math.max(texelCorners[0], texelCorners[2]);
+      const bottom = Math.max(texelCorners[1], texelCorners[3]);
       const width = right - left;
       const height = bottom - top;
       if (width <= 0 || height <= 0) {

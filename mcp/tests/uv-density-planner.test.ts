@@ -1,12 +1,44 @@
 import { describe, expect, test } from "bun:test";
 import { buildUvLayoutSnapshot } from "@/lib/uv/islands";
 import {
+  mapFaceUvToTexturePixels,
+  requireExactFacePixelGrid,
+} from "@/lib/uv/facePixelMapping";
+import {
   measureUvIslandDensity,
   physicalPixelsPerUvUnit,
   planUvDensity,
 } from "@/lib/uv/density";
 
 describe("UV Core density planning", () => {
+  test("exact Painter addressing also snaps only machine-level UV pixel drift", () => {
+    const metrics = { width: 256, displayHeight: 256, uvWidth: 128, uvHeight: 128 };
+    const valid = mapFaceUvToTexturePixels(
+      [0.5000000000000001, 0, 1.5000000000000002, 1], metrics, "pixel test");
+    expect(requireExactFacePixelGrid(valid, "pixel test")).toEqual([2, 2]);
+    const halfPixel = mapFaceUvToTexturePixels(
+      [0.25, 0, 1.25, 1], metrics, "pixel test");
+    expect(() => requireExactFacePixelGrid(halfPixel, "pixel test"))
+      .toThrow("exact physical pixel boundaries");
+  });
+
+  test("density proposals round up to whole physical pixels without reducing requested detail", () => {
+    const snapshot = buildUvLayoutSnapshot([
+      { uuid: "panel", name: "panel", from: [0,0,0], to: [1.25,2.5,1],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [8,0,9.25,2.5] }] },
+    ], 128, 128, () => ({
+      density: { policy: "CUSTOM", target_pixels_per_model_unit: 1 },
+    }));
+    const plan = planUvDensity(snapshot, {
+      bitmap_width: 256, bitmap_height: 256,
+      default_target_pixels_per_model_unit: 1,
+    });
+    expect(plan.proposals[0].proposed_size).toEqual([1, 1.5]);
+    expect(plan.proposals[0].changed).toBe(true);
+    expect(snapshot.islands[0].rect.width).toBe(1.25);
+  });
+
   test("converts logical UV scale to physical pixels explicitly", () => {
     expect(physicalPixelsPerUvUnit(128, 128, 256, 512)).toEqual([2, 4]);
   });

@@ -4,6 +4,8 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 ## Current authority
 
+**2026-10-24 REMOTE_GITHUB source-only, UV physical grid and shared-cohort integrity:** Existing U7 UV packing preserves an explicitly shared atlas allocation across differing member priorities, refuses incompatible shared-cohort constraints before native mutation, and checks physical texel boundaries for fixed and newly planned UV regions. Density proposals now quantize upward to whole physical pixels. Semantic Runtime validates logical UV against an established single base-color atlas frame when available; Texture audit and coverage inspection share the same physical-grid tolerance. Existing UV and Texture regression suites now include priority split, constraint conflict, fractional logical coordinates, half-texel rejection and density quantization. Source/regression changes are prepared at this HEAD; matching-SHA Bun/TypeScript, native Blockbench apply/Undo/save-reopen/export, visual/Golden quality and measured accepted-result cost are NOT EXECUTED (verification CI is disabled and no connected Bun/Blockbench runtime exists). The existing generator-owned manage_uv_layout registration remains unactivated.
+
 **2026-10-24 REMOTE_GITHUB source-only, correction no-op budget:** The
 existing correction loop now rejects a semantically selected candidate when
 the incremental rebuild contains no affected native Cube, before spending a

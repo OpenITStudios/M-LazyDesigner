@@ -1,4 +1,6 @@
 /// <reference types="blockbench-types" />
+import { requireUvPhysicalPixelGrid } from "@/lib/uv/facePixelMapping";
+import { textureProductionRole } from "@/server/tools/texture/atlas";
 
 import type { CubeFaceKey } from "@/lib/uv/authoringRecipeUv";
 import type { NativeUvApplyOperation, NativeUvTarget } from "@/lib/uv/nativeApplyPlan";
@@ -115,9 +117,23 @@ function validateLogicalUvBounds(operation: NativeUvApplyOperation): void {
   ) {
     throw new Error("Semantic UV apply requires finite positive project logical UV dimensions.");
   }
-  if (operation.uv.some((value) => !Number.isInteger(value))) {
-    throw new Error("Semantic UV apply requires integer logical UV coordinates for pixel-grid stability: " + operation.island_id + ".");
+  // Fractional logical UV is valid when it lands on an exact pixel of the
+  // established base-color texture frame. Without an atlas, retain 1:1.
+  const bases = typeof Texture === "undefined" ? [] :
+    (Project?.textures ?? Texture.all ?? []).filter((texture) =>
+      textureProductionRole(texture) === "base_color_candidate");
+  if (bases.length > 1) {
+    throw new Error("UV_AUTO_BITMAP_AMBIGUOUS: semantic UV apply requires one base-color atlas.");
   }
+  const base = bases[0];
+  if (base && (base.getUVWidth() !== width || base.getUVHeight() !== height)) {
+    throw new Error("UV_BITMAP_LOGICAL_MISMATCH: base atlas and project logical UV dimensions disagree.");
+  }
+  const pixelsPerUvUnit: [number, number] = base
+    ? [base.width / base.getUVWidth(), base.display_height / base.getUVHeight()]
+    : [1, 1];
+  requireUvPhysicalPixelGrid(operation.uv, pixelsPerUvUnit,
+    "semantic UV island " + operation.island_id);
   const minU = Math.min(operation.uv[0], operation.uv[2]);
   const minV = Math.min(operation.uv[1], operation.uv[3]);
   const maxU = Math.max(operation.uv[0], operation.uv[2]);

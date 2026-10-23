@@ -236,6 +236,9 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
   "mcp/lib/uv/facePixelMapping.ts": [
     "mcp/tests/face-pixel-mapping.test.ts",
     "mcp/tests/project-texel-density.test.ts",
+    "mcp/tests/texture-atlas-integrity.test.ts",
+    "mcp/tests/uv-density-planner.test.ts",
+    "mcp/tests/uv-stable-packing.test.ts",
   ],
   "mcp/lib/uv/dryRun.ts": [
     "mcp/tests/uv-dry-run-legacy.test.ts",

@@ -83,7 +83,7 @@ describe("affected execution planner", () => {
     ]);
   });
 
-  test("Face UV pixel mapping changes route to exact-pixel and inspection density regressions", () => {
+  test("Face UV pixel mapping changes route to exact-pixel, atlas and UV grid regressions", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/uv/facePixelMapping.ts"],
       semanticImpact: impact(),
@@ -93,6 +93,9 @@ describe("affected execution planner", () => {
     expect(plan.targeted_tests).toEqual([
       "mcp/tests/face-pixel-mapping.test.ts",
       "mcp/tests/project-texel-density.test.ts",
+      "mcp/tests/texture-atlas-integrity.test.ts",
+      "mcp/tests/uv-density-planner.test.ts",
+      "mcp/tests/uv-stable-packing.test.ts",
     ]);
   });
 

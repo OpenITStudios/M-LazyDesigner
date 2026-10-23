@@ -112,6 +112,14 @@ export function measureUvIslandDensity(
   };
 }
 
+/** Never round a requested density down to less than one physical texel. */
+function ceilPositivePhysicalPixels(value: number): number {
+  if (!Number.isFinite(value) || value <= 0 || value > Number.MAX_SAFE_INTEGER) {
+    throw new Error("UV density target has an unrepresentable physical pixel extent.");
+  }
+  return Math.max(1, Math.ceil(value - 1e-9));
+}
+
 export function planUvDensity(
   snapshot: UvLayoutSnapshot,
   options: {
@@ -158,8 +166,9 @@ export function planUvDensity(
 
     const basisU = island.physical.density_basis.u_model_units;
     const basisV = island.physical.density_basis.v_model_units;
-    const proposedWidth = (basisU * desired) / pixelScale[0];
-    const proposedHeight = (basisV * desired) / pixelScale[1];
+    // Quantize in physical pixel space, then return to logical UV units.
+    const proposedWidth = ceilPositivePhysicalPixels(basisU * desired) / pixelScale[0];
+    const proposedHeight = ceilPositivePhysicalPixels(basisV * desired) / pixelScale[1];
     const scaleU =
       island.rect.width === 0 ? 1 : proposedWidth / island.rect.width;
     const scaleV =

@@ -12,11 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 Correction no-op budget integrity:
-- Existing correctionLoop now rejects a selected Geometry candidate with zero native Cube additions/changes/removals before consuming an attempt, invalidating views or advancing its recipe baseline. This does not treat metadata-only JSON edits as model corrections.
-- Existing correction-loop reuse test covers zero resize/translate/rotate/inflate and confirms a real correction still gets attempt 1. No new manager, Gateway route or standalone test suite.
-- Source/static only: Bun/TypeScript and native/Golden tests NOT EXECUTED (CI disabled). Previous UV atlas freshness source is committed; same-UUID pixel repaint still needs native texture evidence.
-- Next: execute matching-SHA focused CorrectionLoop/U7/Control regressions when Bun is available. Generator-coupled UV registration, visual approval and actual accepted-result cost remain open.
+2026-10-24 UV physical-grid and shared-cohort source improvement:
+- Existing U7 packing/density owners keep explicitly stacked UV regions together despite unequal priorities, reject incompatible shared constraints, quantize density requests to whole physical texels, and validate fixed/planned physical UV boundaries. Semantic Runtime, Texture atlas audit and face coverage use one physical-pixel predicate.
+- Existing UV and Texture regression suites cover priority-split, conflicting shared intent, fractional logical UV, half-pixel refusal and density quantization. REMOTE_GITHUB source only: exact-SHA Bun/TypeScript and LIVE_BLOCKBENCH/Golden verification NOT EXECUTED (verification CI disabled).
+- Next when execution is available: matching-SHA targeted UV/Texture regressions and native parity, followed by canonical-generator-coupled manage_uv_layout registration. Do not repeat this source implementation just because native proof is unavailable.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

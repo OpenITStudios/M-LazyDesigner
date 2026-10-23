@@ -1,6 +1,7 @@
 /// <reference types="blockbench-types" />
 
 import { z } from "zod";
+import { isIntegralPhysicalPixelCoordinate } from "@/lib/uv/facePixelMapping";
 import { DEFAULT_BEDROCK_UV_RESOLUTION } from "../project/project";
 import { pbrChannelEnum } from "@/lib/schemas/texture";
 
@@ -180,7 +181,7 @@ export function buildUvAtlasAudit(
   );
   const nonIntegralPixels = valid.filter(({ uv, pixel_scale = [1, 1] }) =>
     pixel_scale.some(value => !Number.isFinite(value) || value <= 0) ||
-    uv.some((value, axis) => !Number.isInteger(value * pixel_scale[axis % 2]))
+    uv.some((value, axis) => !isIntegralPhysicalPixelCoordinate(value * pixel_scale[axis % 2]))
   );
   const degenerateUv = valid.filter(({ rect }) => uvRectArea(rect) === 0);
   const collapsedSurfaceUv = degenerateUv.filter(({ surface_area }) => surface_area === undefined || surface_area > 0);

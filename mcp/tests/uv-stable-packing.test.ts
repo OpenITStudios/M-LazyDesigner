@@ -46,6 +46,56 @@ const snapshotFixture = () =>
   );
 
 describe("UV stable packing modes", () => {
+  test("existing shared UV cannot be forked by different packing priorities", () => {
+    const snapshot = buildUvLayoutSnapshot([
+      { uuid: "left", name: "left", from: [0,0,0], to: [4,4,2],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [12,0,16,4] }] },
+      { uuid: "right", name: "right", from: [0,0,0], to: [4,4,2],
+        box_uv: false, autouv: 0, mirror_uv: true,
+        faces: [{ face: "north", uv: [12,0,16,4] }] },
+    ], 32, 32, (island) => ({
+      padding_pixels: 0, stack_group: "arms",
+      priority: island.source.cube_uuid === "right" ? 5 : 0,
+    }));
+    const plan = planUvPacking(snapshot, { bitmap_width: 32, bitmap_height: 32 });
+    requireValidUvLayoutPlan(plan);
+    expect(plan.proposed.islands[0].rect).toEqual(plan.proposed.islands[1].rect);
+    expect(plan.score.occupancy_ratio).toBe(16 / (32 * 32));
+    expect(plan.moved_island_ids).toHaveLength(2);
+  });
+
+  test("conflicting constraints refuse to split existing shared UV ownership", () => {
+    const snapshot = buildUvLayoutSnapshot([
+      { uuid: "left", name: "left", from: [0,0,0], to: [4,4,1],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [8,0,12,4] }] },
+      { uuid: "right", name: "right", from: [0,0,0], to: [4,4,1],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [8,0,12,4] }] },
+    ], 32, 32, (island) => ({
+      stack_group: "arms", padding_pixels: island.source.cube_uuid === "left" ? 0 : 1,
+    }));
+    expect(() => planUvPacking(snapshot, { bitmap_width: 32, bitmap_height: 32 }))
+      .toThrow("UV_SHARED_STACK_CONSTRAINT_CONFLICT");
+  });
+
+  test("fractional logical UV is accepted on the physical pixel grid, not between texels", () => {
+    const snapshot = buildUvLayoutSnapshot([
+      { uuid: "panel", name: "panel", from: [0,0,0], to: [2,2,1],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [8,0,10,2] }] },
+    ], 32, 32, () => ({ padding_pixels: 1 }));
+    const plan = planUvPacking(snapshot, { bitmap_width: 64, bitmap_height: 64 });
+    requireValidUvLayoutPlan(plan);
+    expect(plan.proposed.islands[0].rect.x).toBe(0.5);
+    expect(plan.proposed.islands[0].rect.y).toBe(0.5);
+    expect(() => planUvPacking(snapshot, {
+      bitmap_width: 64, bitmap_height: 64,
+      size_overrides: { "face:panel:north": [1.25, 2] },
+    })).toThrow("UV_NON_INTEGRAL_PIXEL_MAPPING");
+  });
+
   test("ADD_ONLY keeps all existing islands fixed and places only declared additions", () => {
     const snapshot = snapshotFixture();
     const plan = planUvPacking(snapshot, {
