@@ -70,13 +70,15 @@ describe("UV dry-run and legacy bridge", () => {
     const stacks = discoverUvStackProposals(snapshot.islands);
     const report = buildUvDryRunReport(plan, {
       density_plan: density,
-      stack_proposals: stacks,
+      stack_proposals: stacks.proposals,
+      stack_proposals_truncated: stacks.implicit_examples_truncated,
     });
 
     expect(report.execution).toBe("planned");
     expect(report.summary.moved_islands).toBe(1);
     expect(report.summary.density_changes).toBe(1);
     expect(report.apply_allowed).toBe(true);
+    expect(report.summary.stack_proposals_truncated).toBe(false);
     expect(snapshot).toEqual(original);
 
     const untracked = structuredClone(plan);
@@ -127,10 +129,12 @@ describe("UV dry-run and legacy bridge", () => {
     });
     const stacks = discoverUvStackProposals(snapshot.islands);
     const report = buildUvDryRunReport(plan, {
-      stack_proposals: stacks,
+      stack_proposals: stacks.proposals,
+      stack_proposals_truncated: stacks.implicit_examples_truncated,
     });
-    expect(stacks[0].state).toBe("BLOCKED");
+    expect(stacks.proposals[0].state).toBe("BLOCKED");
     expect(report.summary.blocked_stack_proposals).toBe(1);
+    expect(report.stack_proposals_truncated).toBe(false);
     expect(report.apply_allowed).toBe(true);
     expect(report.hard_violations).toEqual([]);
   });

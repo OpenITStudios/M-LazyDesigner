@@ -279,7 +279,7 @@ Reject automatic stacking when:
 - identity/text/logo intent is unique;
 - directional artwork requires independent pixels.
 
-Output must be proposals with evidence, not automatic hidden overlap.
+Output must be proposals with evidence, not automatic hidden overlap. The implicit candidate scan returns at most 32 examples by default, with `implicit_examples_truncated` indicating additional matching pairs. The dry-run carries this as `stack_proposals_truncated`; review candidate counts describe returned examples rather than exhaustive totals when truncated. Matching dimensions never authorize automatic stacking.
 
 ## U7 — Native Apply
 

@@ -145,7 +145,8 @@ export function createUvLayoutService(
       );
       const report = buildUvDryRunReport(plan, {
         density_plan: density,
-        stack_proposals: stackProposals,
+        stack_proposals: stackProposals.proposals,
+        stack_proposals_truncated: stackProposals.implicit_examples_truncated,
       });
       // Atlas resolution can await native code: do not publish a plan if
       // the active project, Geometry or UV changed in the meantime.

@@ -15,7 +15,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 2026-10-23 user quality feedback — source-only:
 - `2aae5af`: pre-Undo Box UV sub-unit guards for create/update/batch, scoped legacy hygiene.
 - `ad0d772`: directional face coverage for small undersides; conservative O(n) linear numeric keyframe reduction candidates; existing quality, Skill and test owners reused.
-- UV: forbid aliases to `UNIQUE`; align dry-run/apply validation, preserve signed face UV flips in native realization and retain pre-Undo no-op refusal.
+- UV: enforce `UNIQUE` alias, dry-run, flip and no-op guards; bound implicit UV stack pair suggestions with an explicit truncation signal.
 - **No Bun/TypeScript/native/visual PASS:** CI disabled. Next requires connected `LOCAL_CODE` for exact-head tests and canonical UV generator/registration, then existing `LIVE_BLOCKBENCH` acceptance on disposable assets. Do not duplicate engines.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.

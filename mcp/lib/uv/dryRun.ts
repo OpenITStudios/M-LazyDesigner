@@ -25,11 +25,14 @@ export type UvDryRunReport = {
     ready_stack_groups: number;
     review_stack_candidates: number;
     blocked_stack_proposals: number;
+    stack_proposals_truncated: boolean;
   };
   moved_island_ids: string[];
   fixed_island_ids: string[];
   density_changed_island_ids: string[];
   stack_proposals: UvStackProposal[];
+  /** True when more implicit matching pairs exist than the bounded examples. */
+  stack_proposals_truncated: boolean;
   hard_violations: string[];
   apply_allowed: boolean;
 };
@@ -39,6 +42,7 @@ export function buildUvDryRunReport(
   options: {
     density_plan?: UvDensityPlan;
     stack_proposals?: readonly UvStackProposal[];
+    stack_proposals_truncated?: boolean;
   } = {}
 ): UvDryRunReport {
   const stacks = [...(options.stack_proposals ?? [])];
@@ -77,11 +81,13 @@ export function buildUvDryRunReport(
       blocked_stack_proposals: stacks.filter(
         (proposal) => proposal.state === "BLOCKED"
       ).length,
+      stack_proposals_truncated: options.stack_proposals_truncated === true,
     },
     moved_island_ids: [...plan.moved_island_ids],
     fixed_island_ids: [...plan.fixed_island_ids],
     density_changed_island_ids: [...densityChanged],
     stack_proposals: stacks,
+    stack_proposals_truncated: options.stack_proposals_truncated === true,
     hard_violations: hardViolations,
     apply_allowed:
       plan.score.valid &&

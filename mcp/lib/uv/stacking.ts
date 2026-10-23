@@ -18,6 +18,13 @@ export type UvStackProposal = {
   blockers: string[];
 };
 
+/** Bounded advisory discovery rather than an automatic native stacking order. */
+export type UvStackDiscovery = {
+  proposals: UvStackProposal[];
+  implicit_examples_truncated: boolean;
+};
+export const UV_IMPLICIT_STACK_EXAMPLE_LIMIT = 32;
+
 function nearlyEqual(left: number, right: number, epsilon = 1e-9): boolean {
   return Math.abs(left - right) <= epsilon;
 }
@@ -78,17 +85,23 @@ function explicitGroupProposals(islands: readonly UvIsland[]): UvStackProposal[]
 
 function implicitPairProposals(
   islands: readonly UvIsland[],
-  explicitIslandIds: ReadonlySet<string>
-): UvStackProposal[] {
+  explicitIslandIds: ReadonlySet<string>,
+  maxExamples: number
+): UvStackDiscovery {
   const eligible = [...islands]
     .filter((island) => !explicitIslandIds.has(island.id) && !island.constraints.unique_detail)
     .sort((a, b) => a.id.localeCompare(b.id));
   const proposals: UvStackProposal[] = [];
+  // Avoid publishing O(n^2) pairs for repeated/symmetric model cohorts.
+  // Stop at the first unseen match beyond the bounded evidence examples.
   for (let left = 0; left < eligible.length; left += 1) {
     for (let right = left + 1; right < eligible.length; right += 1) {
       const a = eligible[left];
       const b = eligible[right];
       if (!samePackingShape(a, b)) continue;
+      if (proposals.length >= maxExamples) {
+        return { proposals, implicit_examples_truncated: true };
+      }
       const blockers = [...stackBlockers(a), ...stackBlockers(b)];
       proposals.push({
         id: "candidate:" + a.id + ":" + b.id,
@@ -104,15 +117,29 @@ function implicitPairProposals(
       });
     }
   }
-  return proposals;
+  return { proposals, implicit_examples_truncated: false };
 }
 
 export function discoverUvStackProposals(
   islands: readonly UvIsland[],
-  options: { include_implicit_candidates?: boolean } = {}
-): UvStackProposal[] {
+  options: {
+    include_implicit_candidates?: boolean;
+    max_implicit_examples?: number;
+  } = {}
+): UvStackDiscovery {
+  const limit = options.max_implicit_examples ?? UV_IMPLICIT_STACK_EXAMPLE_LIMIT;
+  if (!Number.isInteger(limit) || limit < 0 ||
+      limit > UV_IMPLICIT_STACK_EXAMPLE_LIMIT) {
+    throw new Error("UV implicit stack example limit must be an integer within 0..32.");
+  }
   const explicit = explicitGroupProposals(islands);
-  if (options.include_implicit_candidates === false) return explicit;
+  if (options.include_implicit_candidates === false) {
+    return { proposals: explicit, implicit_examples_truncated: false };
+  }
   const explicitIds = new Set(explicit.flatMap((proposal) => proposal.island_ids));
-  return [...explicit, ...implicitPairProposals(islands, explicitIds)];
+  const implicit = implicitPairProposals(islands, explicitIds, limit);
+  return {
+    proposals: [...explicit, ...implicit.proposals],
+    implicit_examples_truncated: implicit.implicit_examples_truncated,
+  };
 }
