@@ -315,6 +315,47 @@ describe("Parametric authoring atomic affected-only transaction", () => {
     expect(shrink.updated_instance_ids).toEqual([]);
   });
 
+  test("native parent ancestry changes invalidate an otherwise identical recipe fingerprint", async () => {
+    const previous = recipe(2, 4);
+    const next = recipe(3, 4);
+    const baseline = snapshotFromRecipe(previous);
+    const rooted: AuthoringRecipeNativeSnapshot = {
+      ...baseline,
+      cubes: baseline.cubes.map((cube) => ({ ...cube, parent_path: [] })),
+    };
+    const changed: AuthoringRecipeNativeSnapshot = structuredClone(rooted);
+    changed.cubes[1]!.parent_path = ["torso", "arm"];
+
+    // The local Cube geometry and identity do not change.
+    expect(changed.cubes[1]!.from).toEqual(rooted.cubes[1]!.from);
+    expect(changed.cubes[1]!.rotation).toEqual(rooted.cubes[1]!.rotation);
+    expect(fingerprintAuthoringRecipeNativeSnapshot(changed))
+      .not.toBe(fingerprintAuthoringRecipeNativeSnapshot(rooted));
+
+    const reparentedGroup = structuredClone(changed);
+    reparentedGroup.cubes[1]!.parent_path = ["chest", "arm"];
+    // Moving the parent Bone changes ancestry even with the same immediate
+    // parent Group ("arm"), so root-to-leaf paths must be compared.
+    expect(fingerprintAuthoringRecipeNativeSnapshot(reparentedGroup))
+      .not.toBe(fingerprintAuthoringRecipeNativeSnapshot(changed));
+
+    const fake = fakeAdapter(changed);
+    let beganUndo = false;
+    await expect(applyAuthoringRecipeIncrementalAtomic(
+      previous, next, fingerprintAuthoringRecipeNativeSnapshot(rooted), {
+        ...fake.adapter,
+        beginUndo() { beganUndo = true; },
+      }
+    )).rejects.toThrow("STALE_RECIPE_PLAN");
+    expect(beganUndo).toBe(false);
+    expect(fake.committed).toBe(false);
+    expect(fake.state).toEqual(changed);
+
+    // Legacy pure fixtures lacking native ancestry remain representable.
+    expect(fingerprintAuthoringRecipeNativeSnapshot(baseline))
+      .toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
   test("stale or manually edited native state is rejected before Undo", async () => {
     const previous = recipe();
     const next = recipe(3);

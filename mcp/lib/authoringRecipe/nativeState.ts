@@ -12,6 +12,11 @@ export type AuthoringRecipeNativeCubeState = {
   origin: RecipeVec3;
   rotation: RecipeVec3;
   inflate: number;
+  /** Root-to-leaf Group UUID ancestry, [] for root; emitted by native adapter.
+   * Optional only for legacy pure-state fixtures and compatibility.
+   * The recipe's own Cube transforms cannot attest to parent hierarchy.
+   */
+  parent_path?: string[];
 };
 
 export type AuthoringRecipeNativeSnapshot = {

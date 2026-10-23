@@ -74,6 +74,26 @@ This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 Recipe code must not depend on `orchestration/`. Orchestration may consume recipe outputs.
 
+## Native Group ancestry and stale-plan safety
+
+The Blockbench-owned recipe Cube snapshot now captures an ordered
+`parent_path` of Group UUIDs from root to immediate parent (empty for an
+actual root Cube). It becomes part of the existing source fingerprint,
+without introducing a new store or parent-authoring planner. A Cube
+reparented to another Bone, or its containing Group moved beneath a
+different ancestor, invalidates a previously prepared plan even when
+`from/to/origin/rotation` are unchanged. Missing, cyclic, ambiguous or
+excessively deep ancestry is refused rather than labelled root.
+
+`parent_path` is optional in historical pure test/snapshot shapes for
+compatibility, but the native Blockbench adapter always supplies it.
+Pending fingerprints generated before this change may become stale;
+refuse and re-plan instead of silently reusing one. The recipe does not
+prescribe Group hierarchy, so a valid previously reparented Cube is not
+automatically forced back to root. This proves *hierarchy identity*
+freshness only; changes to ancestor transforms or visual quality still
+require separate native evidence.
+
 ## Native Undo and pre-commit boundary
 
 `transaction.ts` owns the parametric recipe's atomic apply contract.

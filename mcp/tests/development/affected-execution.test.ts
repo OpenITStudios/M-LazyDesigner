@@ -251,6 +251,22 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("recipe native ancestry changes target existing atomic and Runtime owner tests", () => {
+    for (const path of [
+      "mcp/lib/authoringRecipe/nativeState.ts",
+      "mcp/server/runtime/recipes/authoring/runtime.ts",
+    ]) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify).toBe(false);
+      expect(plan.targeted_tests).toEqual([
+        "mcp/tests/parametric-authoring-runtime-adapter.test.ts",
+        "mcp/tests/parametric-authoring-transaction.test.ts",
+      ]);
+    }
+  });
+
   test("parametric expansion safety routes to the existing compiler regression owner", () => {
     for (const path of [
       "mcp/lib/authoringRecipe/patterns.ts",

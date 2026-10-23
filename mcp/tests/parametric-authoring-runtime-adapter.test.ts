@@ -44,6 +44,32 @@ describe("Blockbench parametric recipe adapter ownership", () => {
       .toBeLessThan(commit.indexOf('Undo.finishEdit("LazyDesigner parametric recipe"'));
   });
 
+  test("native owned Cube snapshot fingerprints bounded ancestor identity, not inferred root", async () => {
+    const source = await Bun.file("server/runtime/recipes/authoring/runtime.ts").text();
+    const start = source.indexOf("function readRecipeCubeParentPath(");
+    const end = source.indexOf("function cubeState(", start);
+    const reader = source.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(reader).toContain('cube.parent === "root"');
+    expect(reader).toContain("current instanceof Group");
+    expect(reader).toContain("ancestor === null");
+    expect(reader).toContain("seen.has(current)");
+    expect(reader).toContain("ids.reverse()");
+    expect(reader).toContain("RECIPE_NATIVE_PARENT_UNKNOWN");
+
+    const snapshot = source.slice(end, source.indexOf("function resolveOwnedCube", end));
+    expect(snapshot).toContain("parent_path: readRecipeCubeParentPath(cube)");
+    expect(snapshot).toContain("readBlockbenchAuthoringRecipeOwnedState(recipeId)");
+    const upsert = source.slice(source.indexOf("upsert: (placement, existingUuid"),
+      source.indexOf("remove: (instanceId", source.indexOf("upsert: (placement, existingUuid")));
+    const existing = upsert.slice(upsert.indexOf("if (existingUuid)"),
+      upsert.indexOf("const cube = new Cube({"));
+    expect(existing).not.toContain("addTo(");
+    expect(upsert).toContain('cube.addTo("root")');
+    expect(reader).toContain("depth < 64");
+  });
+
   test("native Undo snapshots retain updated elements and encode deletions", async () => {
     const source = await Bun.file("server/runtime/recipes/authoring/runtime.ts").text();
     const before = source.indexOf("Undo.initEdit({");
