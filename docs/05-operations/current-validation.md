@@ -4,6 +4,16 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 ## Current authority
 
+**2026-10-24 REMOTE_GITHUB source-only, Workspace → Control lifecycle:**
+A legacy plural blocker label was ignored and free-text Current Stage fields
+could be mistaken for valid continuity. The existing parser now preserves
+known/ambiguous blockers, reports conflicting/missing/invalid lifecycle
+fields and Control readiness refuses false READY until status is clarified.
+Regression cases were authored in the existing Workspace, readiness and
+Control packet suites. No asset model/README was changed. Current-head Bun,
+TypeScript, installed Runtime and visual/Golden acceptance are NOT EXECUTED
+(CI disabled; no connected Bun/Blockbench environment).
+
 **2026-10-23 REMOTE_GITHUB source-only, U7 native UV scope:** Existing UV
 atomic transaction now verifies no out-of-scope Cube, geometry or face UV
 changes using its already-read before/after snapshots before Undo commit.

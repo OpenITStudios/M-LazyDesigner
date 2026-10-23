@@ -6,6 +6,7 @@ import {
 } from "./readiness";
 import { emptyReference, parseReferencePackage } from "./referenceParser";
 import { emptyWorkspace } from "./packetData";
+import { workspaceSemanticState } from "./workspace";
 import type { ControlSnapshot } from "./types";
 import type { ControlReferenceProjection } from "./referenceTypes";
 
@@ -73,6 +74,43 @@ describe("Control readiness policy", () => {
     expect(lifecycleForDomain("TEXTURING", workspace).reasons).toContain(
       "UV_LAYOUT_PASS_REQUIRED"
     );
+  });
+
+  test("workspace blockers and invalid lifecycle notes prevent false READY without losing Runtime", () => {
+    const reference = {
+      ...emptyReference("REFERENCE_PATH_UNAVAILABLE"), available: true,
+    };
+    for (const [text, reason] of [
+      ["# Turret\nCurrent Stage: TEXTURING\nKnown blockers: visual acceptance pending",
+       "WORKSPACE_BLOCKERS_REQUIRE_REVIEW"],
+      ["# Drake\nCurrent Stage: GEOMETRY CORRECTION READY_FOR_USER_REVIEW",
+       "WORKSPACE_CURRENT_STAGE_INVALID"],
+      ["# Sentinel\nCurrent authority: saved model\n",
+       "WORKSPACE_CURRENT_STAGE_MISSING"],
+      ["# Lift\nCurrent Stage: COMPLETE\nKnown blocker(s): None for the delivered asset. Native reopen unverified",
+       "WORKSPACE_BLOCKER_STATUS_AMBIGUOUS"],
+    ] as const) {
+      const workspace = {
+        ...emptyWorkspace(), ...workspaceSemanticState(text),
+        available: true, unavailable_reason: undefined,
+      };
+      const result = buildReadiness(
+        baseSnapshot(), workspace, reference, "ASSET_AUTHORING",
+        lifecycleForDomain("GEOMETRY", workspace), "READY"
+      );
+      expect(result.modelling_start, reason).toBe("NEEDS_ORIENTATION");
+      expect(result.reasons, reason).toContain(reason);
+      expect(result.runtime_ready).toBe(true);
+    }
+    const cleared = {
+      ...emptyWorkspace(),
+      ...workspaceSemanticState("# Clean\nCurrent Stage: GEOMETRY\nKnown blocker(s): none"),
+      available: true, unavailable_reason: undefined,
+    };
+    expect(buildReadiness(
+      baseSnapshot(), cleared, reference, "ASSET_AUTHORING",
+      lifecycleForDomain("GEOMETRY", cleared), "READY"
+    ).modelling_start).toBe("READY");
   });
 
   test("missing reference asks for orientation, never signals modelling READY", () => {

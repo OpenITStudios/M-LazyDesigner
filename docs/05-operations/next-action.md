@@ -12,11 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 UV atomic apply scope integrity:
-- Existing U7 transaction now checks that only intended Cube/face UVs changed before native Undo commit. Unselected Cubes/faces, project identity, geometry, modes, and face visibility/rotation remain protected; Box UV offset changes may rederive its own face rectangles.
-- Existing pure U7 and atomic transaction suites add positive and negative scope cases, including verified rollback without native commit. No new Runtime tool, planner, readback, framework or auto-retry.
-- REMOTE_GITHUB source/static only: exact-SHA Bun/TypeScript, LIVE_BLOCKBENCH, native UV/Bedrock export and accepted fidelity NOT EXECUTED (CI disabled).
-- Next: matching-SHA focused U7/transaction and Recipe tests, then disposable native Geometry/UV acceptance when capable. Generator-coupled manage_uv_layout registration and Golden visual quality remain deferred.
+2026-10-24 Workspace-to-Control lifecycle integrity:
+- Control now reads inherited "Known blockers" as well as canonical "Known blocker(s)", keeps mixed/ambiguous blocker text visible, and flags missing, invalid or conflicting Stage/gate fields rather than treating them as approved.
+- Readiness never reports READY while parsed blockers or lifecycle format issues need orientation; Runtime remains independently ready. Existing Workspace, Readiness and Control packet suites gain legacy/negative cases; no asset rewrite or new state owner.
+- REMOTE_GITHUB source/static only; current-SHA Bun/TS, native Blockbench, visual/Golden acceptance NOT EXECUTED (CI disabled).
+- Next: exact-SHA focused Control tests when capable. UV generator-coupled registration, atlas freshness and native acceptance remain separate unresolved dependencies.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

@@ -125,6 +125,8 @@ export async function buildControlPacket(
           (_, index) => `WORKSPACE_BLOCKER_${index + 1}`
         )
       : [];
+  const workspaceIssues =
+    mode === "ASSET_AUTHORING" ? (workspace.workspace_issues ?? []) : [];
   const referenceBlockers =
     stageContext?.stage_readiness === "BLOCKED"
       ? ["REFERENCE_STAGE_BLOCKED"]
@@ -138,6 +140,7 @@ export async function buildControlPacket(
       ? ["WORKSPACE_PROJECTION_INCOMPLETE"]
       : []),
     ...workspaceBlockers,
+    ...workspaceIssues,
     ...referenceBlockers,
     ...lifecycleBlockers.filter(
       (reason) => !snapshot.blockers.includes(reason)

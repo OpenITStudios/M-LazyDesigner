@@ -72,7 +72,64 @@ describe("workspace semantic fingerprint", () => {
     const mixed = workspaceSemanticState(
       "# Chair\nKnown blocker(s): none; critical rig misalignment"
     );
-    expect(mixed.blockers).toEqual(["none", "critical rig misalignment"]);
+    expect(mixed.blockers).toEqual(["critical rig misalignment"]);
+  });
+
+  test("inherited blocker labels are read instead of silently declaring no blockers", () => {
+    const legacy = workspaceSemanticState([
+      "# Crimson Guardian Turret",
+      "Current Stage: TEXTURING",
+      "Geometry: APPROVED",
+      "UV Layout: PASS",
+      "Known blockers: visual acceptance pending; in-game material/glow not verified",
+    ].join("\n"));
+    expect(legacy.blockers).toEqual([
+      "visual acceptance pending", "in-game material/glow not verified",
+    ]);
+    expect(legacy.workspace_issues).toBeUndefined();
+    const changed = workspaceSemanticFingerprint(
+      "# Asset\nCurrent Stage: TEXTURING\nKnown blockers: visual acceptance pending"
+    );
+    expect(changed).not.toBe(workspaceSemanticFingerprint(
+      "# Asset\nCurrent Stage: TEXTURING\nKnown blockers: none"
+    ));
+  });
+
+  test("unstructured or malformed stage data stays visible as an orientation issue", () => {
+    const missing = workspaceSemanticState(
+      "# Crimson Sentinel — saved asset\nCurrent authority: crimson_sentinel.bbmodel"
+    );
+    expect(missing.current_stage).toBeNull();
+    expect(missing.workspace_issues).toContain("WORKSPACE_CURRENT_STAGE_MISSING");
+    const malformed = workspaceSemanticState(
+      "# Voidtide Drake\nCurrent stage: GEOMETRY CORRECTION READY_FOR_USER_REVIEW."
+    );
+    expect(malformed.current_stage).toBe("GEOMETRY CORRECTION READY_FOR_USER_REVIEW.");
+    expect(malformed.workspace_issues).toContain("WORKSPACE_CURRENT_STAGE_INVALID");
+    // Descriptive "none for the delivered asset" is not silently promoted to
+    // canonical "none"; it needs status clarification, not runtime rejection.
+    const qualified = workspaceSemanticState(
+      "# Lift\nCurrent Stage: COMPLETE\n" +
+      "Known blocker(s): None for the delivered asset. Native reopen not verified; " +
+      "system proof belongs in current-validation.md"
+    );
+    expect(qualified.workspace_issues).toContain("WORKSPACE_BLOCKER_STATUS_AMBIGUOUS");
+    expect(qualified.blockers.length).toBeGreaterThan(0);
+  });
+
+  test("conflicting status declarations cannot hide a revoked gate or blocker", () => {
+    const conflicting = workspaceSemanticState([
+      "# Chair", "Current Stage: TEXTURING", "Current Stage: COMPLETE",
+      "Geometry: APPROVED", "Geometry: INVALIDATED",
+      "Known blocker(s): none", "Known blockers: pivot review required",
+    ].join("\n"));
+    expect(conflicting.workspace_issues).toEqual(expect.arrayContaining([
+      "WORKSPACE_LIFECYCLE_FIELD_CONFLICT", "WORKSPACE_BLOCKER_FIELD_CONFLICT",
+    ]));
+    expect(conflicting.blockers).toContain("pivot review required");
+    expect(conflicting.gates.geometry).toBe("APPROVED");
+    // Even with the first apparently approved field, the conflict must be
+    // available to readiness instead of being dropped by field() extraction.
   });
 
   test("same-size same-mtime README replacement invalidates cached approval gates", async () => {

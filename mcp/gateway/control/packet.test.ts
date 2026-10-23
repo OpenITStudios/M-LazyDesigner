@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { buildControlPacket } from "./packet";
 import { projectControlPacketForGateway } from "./gatewayProjection";
 import type { GatewayRuntimeStatus } from "../runtime/backend";
@@ -84,6 +87,34 @@ describe("Control packet missing context boundary", () => {
     expect(packet.system).toBe("OFFLINE");
     expect(packet.readiness.runtime_ready).toBe(false);
     expect(packet.readiness.context_ready).toBe(false);
+  });
+
+  test("malformed workspace Stage and real blockers degrade the Control packet", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lazydesigner-lifecycle-"));
+    try {
+      await writeFile(join(dir, "README.md"), [
+        "# Reference asset", "Current Stage: GEOMETRY CORRECTION READY_FOR_USER_REVIEW",
+        "Known blockers: visual review pending; broken attachment",
+      ].join("\n"));
+      const unboundStatus = {
+        ...status, affinity: { ...status.affinity, project_uuid: null },
+      } as GatewayRuntimeStatus;
+      const packet = await buildControlPacket(unboundStatus, {
+        workspacePath: dir,
+        contextResolver: async () => ({
+          required: [handle("modelling")], optional: [], unavailable: [],
+        }),
+      });
+      expect(packet.blockers).toContain("WORKSPACE_BLOCKER_1");
+      expect(packet.blockers).toContain("WORKSPACE_BLOCKER_2");
+      expect(packet.blockers).toContain("WORKSPACE_CURRENT_STAGE_INVALID");
+      expect(packet.readiness.reasons).toContain("WORKSPACE_BLOCKERS_REQUIRE_REVIEW");
+      expect(packet.readiness.reasons).toContain("WORKSPACE_CURRENT_STAGE_INVALID");
+      expect(packet.readiness.modelling_start).not.toBe("READY");
+      expect(packet.readiness.runtime_ready).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("system development routing ignores authoring context failures", async () => {
