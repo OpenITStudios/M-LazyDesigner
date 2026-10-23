@@ -153,6 +153,38 @@ describe("UV stable packing modes", () => {
     expect(plan.score.occupancy_ratio).toBe(20 / (32 * 32));
   });
 
+  test("partial repack refuses to split previously shared UV ownership", () => {
+    const fixture = (lockLeft = false) => buildUvLayoutSnapshot([
+      { uuid: "left", name: "left", from: [0,0,0], to: [4,4,2],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [12,0,16,4] }] },
+      { uuid: "right", name: "right", from: [0,0,0], to: [4,4,2],
+        box_uv: false, autouv: 0, mirror_uv: true,
+        faces: [{ face: "north", uv: [12,0,16,4] }] },
+    ], 32, 32, (island) => ({
+      stack_group: "arms", padding_pixels: 0,
+      locked: lockLeft && island.source.cube_uuid === "left",
+    }));
+
+    const snapshot = fixture();
+    expect(() => planUvPacking(snapshot, {
+      mode: "REPACK_SELECTED", island_ids: ["face:left:north"],
+      bitmap_width: 32, bitmap_height: 32,
+    })).toThrow("UV_SHARED_STACK_SCOPE_INCOMPLETE");
+
+    const together = planUvPacking(snapshot, {
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:left:north", "face:right:north"],
+      bitmap_width: 32, bitmap_height: 32,
+    });
+    requireValidUvLayoutPlan(together);
+    expect(together.proposed.islands[0].rect).toEqual(together.proposed.islands[1].rect);
+
+    expect(() => planUvPacking(fixture(true), {
+      mode: "REPACK_ALL", bitmap_width: 32, bitmap_height: 32,
+    })).toThrow("UV_SHARED_STACK_SCOPE_INCOMPLETE");
+  });
+
   test("equal dimensions alone never authorize newly stacked UVs", () => {
     const snapshot = buildUvLayoutSnapshot([
       { uuid: "a", name: "a", from: [0,0,0], to: [4,4,1],

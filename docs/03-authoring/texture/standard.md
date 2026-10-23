@@ -138,7 +138,7 @@ exact reused regions
 partial-overlap candidates
 ```
 
-Existing exact-reused UV regions with an explicit compatible `stack_group` remain one allocation during coherent full repacking, with separate native face identities preserved. Equal dimensions by themselves **never** create new sharing; independently painted parts need texture/evidence review before any new overlap.
+Existing exact-reused UV regions with an explicit compatible `stack_group` remain one allocation during coherent full repacking, with separate native face identities preserved. A selected/affected repack that would move only part of an existing shared region now fails before native mutation; an island lock applies to its actively shared cohort. Equal dimensions by themselves **never** create new sharing; independently painted parts need texture/evidence review before any new overlap.
 
 Exact reuse can be correct. Partial overlap is a review condition because it can silently corrupt unrelated styled regions. Degenerate/zero-area UV may occur on sheet/zero-thickness geometry and is not automatically a defect.
 

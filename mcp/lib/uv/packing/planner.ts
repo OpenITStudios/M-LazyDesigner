@@ -134,6 +134,34 @@ export function planUvPacking(
   const fixed = snapshot.islands.filter(
     (island) => !movableIds.has(island.id)
   );
+
+  // Existing explicitly shared texels form one semantic editing unit.
+  // Moving only one face would silently sever that reuse relationship.
+  // A locked face also locks its shared cohort, not unrelated islands.
+  const sharedByRegion = new Map<string, typeof snapshot.islands>();
+  for (const island of snapshot.islands) {
+    const group = island.constraints.stack_group;
+    if (!group || stackBlockers(island).length > 0) continue;
+    const key = JSON.stringify([group, island.rect]);
+    const members = sharedByRegion.get(key) ?? [];
+    members.push(island);
+    sharedByRegion.set(key, members);
+  }
+  for (const members of sharedByRegion.values()) {
+    if (members.length < 2 ||
+        !members.slice(1).every((island) => samePackingShape(members[0], island))) {
+      continue;
+    }
+    const moving = members.filter((island) => movableIds.has(island.id));
+    if (moving.length > 0 && moving.length !== members.length) {
+      throw new Error(
+        "UV_SHARED_STACK_SCOPE_INCOMPLETE: selected repack would split explicitly " +
+        "shared texels. Select the entire compatible stack or leave it fixed: " +
+        members.map((island) => island.id).sort().join(", ")
+      );
+    }
+  }
+
   const occupiedMap = new Map<string, UvPackingRect>();
   for (const island of fixed) {
     const rect = toPackingRect(island.rect);
