@@ -297,6 +297,27 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("native Box UV template closure selects existing Geometry and Texture regressions", () => {
+    for (const [path, expected] of [
+      ["mcp/lib/geometry/cubeSpan.ts", [
+        "mcp/tests/geometry-preflight-order.test.ts",
+        "mcp/tests/quality-intelligence.test.ts",
+        "mcp/tests/texture-atlas-integrity.test.ts",
+      ]],
+      ["mcp/server/tools/texture/create.ts", [
+        "mcp/tests/geometry-preflight-order.test.ts",
+        "mcp/tests/texture-atlas-integrity.test.ts",
+        "mcp/tests/texture-atlas-resize.test.ts",
+      ]],
+    ] as const) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify).toBe(false);
+      expect(plan.targeted_tests).toEqual([...expected]);
+    }
+  });
+
   test("marginal projected Geometry evidence selects current owner regressions", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/geometry/surfaceEvidence.ts"],

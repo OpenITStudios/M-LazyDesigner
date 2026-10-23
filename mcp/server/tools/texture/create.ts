@@ -5,6 +5,7 @@ import { recordCurrentCapabilitySemanticHistoryEffect } from "@/lib/authoring/se
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_EXPERIMENTAL } from "@/lib/constants";
 import { createTextureParameters } from "./createSchema";
+import { requireBoxUvTemplateReadiness } from "@/lib/geometry/cubeSpan";
 export { createTextureParameters, isDeterministicTextureSource } from "./createSchema";
 import { resolveCoreTexture } from "@/lib/core/identity";
 import {
@@ -196,13 +197,25 @@ export function registerCreateTextureTool(): void {
             );
           }
   
-          // The native callback route uses all visible elements for Bedrock's
-          // single atlas; changing the user's selection is unnecessary.
-          if (!Cube.all.some(cube => cube.visibility)) {
+          // Match TextureGenerator's actual visible Outliner scope when
+          // passed a callback: single_texture uses all elements, otherwise
+          // only selected elements. Never mutate selection to inspect them.
+          const templateCubes = (
+            Format.single_texture ? Outliner.elements : Outliner.selected
+          ).filter((element): element is Cube => element instanceof Cube);
+          if (!templateCubes.some((cube) => cube.visibility === true)) {
             throw new Error(
               "Template generation requires at least one visible Cube."
             );
           }
+          requireBoxUvTemplateReadiness(templateCubes.map((cube) => ({
+            uuid: cube.uuid,
+            name: cube.name,
+            from: cube.from,
+            to: cube.to,
+            box_uv: cube.box_uv === true,
+            visible: cube.visibility === true,
+          })));
   
           const nativeColor = fill_color
             ? (globalThis as typeof globalThis & { tinycolor?: (value: unknown) => unknown })

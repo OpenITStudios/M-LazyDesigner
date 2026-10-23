@@ -420,6 +420,24 @@ describe("texture atlas integrity", () => {
     }
   });
 
+  test("native template Box UV readiness is checked before generator and Undo", async () => {
+    const code = await source("server/tools/texture/create.ts");
+    const begin = code.indexOf('if (type === "template") {');
+    const native = code.slice(begin, code.indexOf("Undo.initEdit({\n          textures:", begin));
+    const preflight = native.indexOf("requireBoxUvTemplateReadiness(");
+    const transaction = native.indexOf("return await runNativeTemplateEdit(");
+    const generator = native.indexOf("await generator.generateTemplate(");
+    expect(begin).toBeGreaterThanOrEqual(0);
+    expect(preflight).toBeGreaterThanOrEqual(0);
+    expect(transaction).toBeGreaterThan(preflight);
+    expect(generator).toBeGreaterThan(transaction);
+    expect(native).toContain("Format.single_texture ? Outliner.elements : Outliner.selected");
+    expect(native).toContain("cube.box_uv === true");
+    expect(native).toContain("visible: cube.visibility === true");
+    expect(native).not.toContain("cube.box_uv = false");
+    expect(code.indexOf("return resizeMappedAtlas(")).toBeLessThan(begin);
+  });
+
   test("texture creation preflight runs before Undo and prevents atlas fragmentation", async () => {
     const [texture, atlas] = await Promise.all([
       source("server/tools/texture/create.ts"),

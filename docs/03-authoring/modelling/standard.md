@@ -213,7 +213,7 @@ Before adding a secondary Cube, ask whether the feature needs 3D silhouette, rea
 
 Detail-only span/thickness `<= 4 Blockbench units` is an **anti-overcube guardrail, not a classifier**. It triggers a stronger representation challenge; it does not forbid Geometry when the small feature genuinely carries required 3D form.
 
-For inherited **Bedrock Box UV**, a positive authored axis smaller than **one model unit** is rejected by Cube create/reshape preflight: native logical UV rounding cannot preserve fractional-size detail. A true zero-span plane-like carrier is different and remains valid; intentionally small, functional 3D geometry can use explicit per-face UV instead. Axis-aligned surface contact review also accepts exactly one zero-size rendered axis, detecting coincident sheet/sheet or sheet/solid faces under a shared parent; containment, marginal projection and merge review retain their strict positive-volume rules. A contact warning is not automatic deletion or visual rejection. Existing legacy Cubes remain inspectable and report `box_uv_subunit` quality risks rather than being silently rewritten. Legacy thin axes can be moved/enlarged without blocking unrelated repairs, but new or worsened sub-unit spans remain blocked. The same pre-Undo guard protects parametric recipe upserts, not only `manage_cubes`. This is a resolution/representation guard, not a universal minimum 3D-feature size.
+For inherited **Bedrock Box UV**, a positive authored axis smaller than **one model unit** is rejected by Cube create/reshape preflight: native logical UV rounding cannot preserve fractional-size detail. Existing visible Box UV Cubes are now checked before `create_texture(type="template")` invokes the native TextureGenerator/Undo. The error supplies exact Cube UUID and problem axes; no Geometry or UV is silently rewritten. Blockbench's "Incompatible Face Dimensions" popup checks roughly 0.001–0.999 unit *after* generation, but positive sub-unit spans outside that popup interval can still quantize to zero logical UV width. Increasing `pixel_density` cannot restore a zero-width logical face. A true zero-span plane-like carrier is different and remains valid; intentionally small, functional 3D geometry can use explicit per-face UV instead. Axis-aligned surface contact review also accepts exactly one zero-size rendered axis, detecting coincident sheet/sheet or sheet/solid faces under a shared parent; containment, marginal projection and merge review retain their strict positive-volume rules. A contact warning is not automatic deletion or visual rejection. Existing legacy Cubes remain inspectable and report `box_uv_subunit` quality risks rather than being silently rewritten. Legacy thin axes can be moved/enlarged without blocking unrelated repairs, but new or worsened sub-unit spans remain blocked. The same pre-Undo guard protects parametric recipe upserts, not only `manage_cubes`. This is a resolution/representation guard, not a universal minimum 3D-feature size.
 
 In a single `manage_cubes(create)` batch, identical untextured Cubes with the same resolved parent, coordinates, pivot, rotation and inflate are rejected **before native Undo** as redundant overlapping masses. This is an exact-duplicate guard, not a universal near-overlap or tiny-geometry ban; independent bones, different transforms and explicitly authored per-face layers remain possible.
 
@@ -241,7 +241,12 @@ not texture painting, visual quality PASS, or permission to delete existing
 Geometry. Legacy recipes retain their previous compilation behavior. Direct
 `manage_cubes` keeps its existing geometric safety preflight and must use
 the Modelling specialist's feature-level decision; it cannot infer artistic
-necessity from coordinates alone.
+necessity from coordinates alone. Before coordinates are created for a
+secondary feature, require a source-grounded `SURFACE_DETAIL → TEXTURE`
+or `THREE_DIMENSIONAL → GEOMETRY` decision. Small silhouette/contact/motion
+parts remain eligible for Per-face UV; size alone cannot prove redundancy.
+The opt-in Recipe enforces feature ownership, while direct `manage_cubes`
+still has no semantic input and cannot certify the representation decision.
 
 ### Adaptive Cuboid Budget
 

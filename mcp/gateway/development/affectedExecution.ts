@@ -484,8 +484,21 @@ function sharedContractTestsForPath(path: string): readonly string[] {
       path === "mcp/lib/authoringRecipe/compiler.ts") {
     return ["mcp/tests/parametric-authoring-engine.test.ts"];
   }
-  if (path === "mcp/lib/geometry/cubeSpan.ts" ||
-      path === "mcp/lib/geometry/quality.ts") {
+  if (path === "mcp/lib/geometry/cubeSpan.ts") {
+    return [
+      "mcp/tests/geometry-preflight-order.test.ts",
+      "mcp/tests/quality-intelligence.test.ts",
+      "mcp/tests/texture-atlas-integrity.test.ts",
+    ];
+  }
+  if (path === "mcp/server/tools/texture/create.ts") {
+    return [
+      "mcp/tests/geometry-preflight-order.test.ts",
+      "mcp/tests/texture-atlas-integrity.test.ts",
+      "mcp/tests/texture-atlas-resize.test.ts",
+    ];
+  }
+  if (path === "mcp/lib/geometry/quality.ts") {
     return ["mcp/tests/geometry-preflight-order.test.ts",
       "mcp/tests/quality-intelligence.test.ts"];
   }

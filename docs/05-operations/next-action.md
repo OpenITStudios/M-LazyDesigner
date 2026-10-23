@@ -12,11 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Animation preview Geometry evidence:
-- Existing capture_model_views(animation_preview) now reuses each native screenshot pose to observe bounded current-world OBBs when 2+ times are explicitly requested. No extra timeline seek, image, Undo or Geometry mutation; one additive diagnostic result field, no new tool/input. Ordinary and single-frame captures unchanged.
-- Existing pure pose comparator reports sampled-time retention evidence; hidden/missing matrices or omitted Cubes stay partial. Failed optional OBB reads leave successful PNGs intact with unavailable diagnostics.
-- Existing Animation preview, runtime and Geometry regressions are selected by affected-work routing; source/static assertions authored. Exact-head Bun/TypeScript, LIVE_BLOCKBENCH pose restoration and visual/latency outcomes NOT EXECUTED (CI disabled).
-- Next: real native acceptance when available; generator-backed UV and accepted Golden quality proof remain deferred.
+2026-10-23 Blockbench Box UV template preflight:
+- Cube span owner detects visible Box UV positive spans under 1 or invalid spans with bounded UUID/axes/size, even when the native popup misses them. Hidden, Per-face UV and true zero planes are exempt.
+- create_texture(type=template) checks native single-atlas/selected-element scope BEFORE TextureGenerator/Undo. Legacy bad Box UV is rejected without resizing, deleting or converting Geometry/UV. Bitmap resize unchanged.
+- Modelling standard requires reference-grounded Texture vs necessary 3D decisions before secondary Cube batches. Opt-in Recipe enforces feature_intents; direct manage_cubes cannot infer artistic need from size.
+- Existing Geometry, Texture and affected-execution regressions authored; no new public schema/tool. Bun/TS, LIVE_BLOCKBENCH popup/UV, visual fidelity and measured efficiency NOT EXECUTED (CI disabled). Next: exact-SHA native acceptance when available; UV registration and Golden proof deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

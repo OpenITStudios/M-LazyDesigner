@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { analyzeBoxUvTemplateReadiness, requireBoxUvTemplateReadiness } from "@/lib/geometry/cubeSpan";
 import { validateCubeGeometrySpan } from "@/server/tools/cubes";
 import {
   boxUvSubunitAxes,
@@ -15,6 +16,53 @@ describe("Geometry mutation preflight ordering", () => {
       .toThrow("sub-unit Box UV size on x");
     expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [0, 8, 8], "plane")).not.toThrow();
     expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [1, 8, 8], "solid")).not.toThrow();
+  });
+
+  test("template readiness catches floor-to-zero cases the native popup misses", () => {
+    const cubes = [
+      { uuid: "a", name: "popup", from: [0,0,0], to: [0.5,4,4], box_uv: true },
+      { uuid: "b", name: "tiny", from: [0,0,0], to: [0.0005,4,4], box_uv: true },
+      { uuid: "c", name: "almost_one", from: [0,0,0], to: [0.9995,4,4], box_uv: true },
+      { uuid: "d", name: "okay", from: [0,0,0], to: [1,4,4], box_uv: true },
+    ];
+    const review = analyzeBoxUvTemplateReadiness(cubes);
+    expect(review.state).toBe("blocked");
+    expect(review.subunit_cube_count).toBe(3);
+    expect(review.native_warning_cube_count).toBe(1);
+    expect(review.examples.map((e) => e.cube_uuid)).toEqual(["a", "b", "c"]);
+    expect(analyzeBoxUvTemplateReadiness([...cubes].reverse())).toEqual(review);
+    expect(() => requireBoxUvTemplateReadiness(cubes)).toThrow("BOX_UV_TEMPLATE_PREFLIGHT_BLOCKED");
+    expect(() => requireBoxUvTemplateReadiness(cubes)).toThrow("almost_one");
+    expect(() => requireBoxUvTemplateReadiness(cubes)).toThrow("Raising pixel_density cannot repair");
+  });
+
+  test("template preflight preserves per-face small Geometry, planes and hidden Cube states", () => {
+    const result = requireBoxUvTemplateReadiness([
+      { uuid: "face", name: "horn", from: [0,0,0], to: [0.25,4,4], box_uv: false },
+      { uuid: "plane", name: "leaf", from: [0,0,0], to: [0,4,4], box_uv: true },
+      { uuid: "hidden", name: "old", from: [0,0,0], to: [0.25,4,4], box_uv: true, visible: false },
+      { uuid: "normal", name: "body", from: [0,0,0], to: [2,4,4], box_uv: true },
+    ]);
+    expect(result.state).toBe("ready");
+    expect(result.checked_box_uv_cube_count).toBe(2);
+    expect(result.examples).toEqual([]);
+  });
+
+  test("invalid Box UV Cubes and many warnings report bounded actionable evidence", () => {
+    const errors = [
+      { uuid: "a", name: "reversed", from: [2,0,0], to: [1,4,4], box_uv: true },
+      { uuid: "b", name: "nonfinite", from: [NaN,0,0], to: [1,4,4], box_uv: true },
+    ];
+    expect(analyzeBoxUvTemplateReadiness(errors).invalid_span_cube_count).toBe(2);
+    expect(() => requireBoxUvTemplateReadiness(errors)).toThrow("invalid span(s)");
+    const many = Array.from({length: 16}, (_, i) => ({
+      uuid: String(i).padStart(2,"0"), name: "detail_" + i,
+      from: [0,0,0], to: [0.5,4,4], box_uv: true,
+    }));
+    const report = analyzeBoxUvTemplateReadiness(many);
+    expect(report.subunit_cube_count).toBe(16);
+    expect(report.examples).toHaveLength(8);
+    expect(report.examples_truncated).toBe(true);
   });
 
   test("legacy fractional Box UV can be moved or improved but not worsened", () => {
