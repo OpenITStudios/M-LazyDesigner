@@ -868,19 +868,32 @@ function overlapAmount(a0: number, a1: number, b0: number, b1: number): number {
   return Math.min(a1, b1) - Math.max(a0, b0);
 }
 
-function cubeBounds(cube: SurfaceEvidenceCube) {
+/**
+ * Strictly positive-volume bounds remain the default for containment, merge
+ * and outline contribution. Surface contact alone may accept exactly one
+ * zero-size rendered axis (a legitimate planar cutout carrier).
+ */
+function cubeBounds(cube: SurfaceEvidenceCube, allowPlaneLike = false) {
   if (!finite3(cube.from) || !finite3(cube.to)) return null;
   const inflate = Number(cube.inflate ?? 0);
   if (!Number.isFinite(inflate)) return null;
-  const min = [0, 1, 2].map((axis) => Math.min(Number(cube.from[axis]), Number(cube.to[axis])) - inflate);
-  const max = [0, 1, 2].map((axis) => Math.max(Number(cube.from[axis]), Number(cube.to[axis])) + inflate);
-  if (min.some((value, axis) => !Number.isFinite(value) || max[axis] - value <= 0)) return null;
+  const min = [0, 1, 2].map((axis) =>
+    Math.min(Number(cube.from[axis]), Number(cube.to[axis])) - inflate);
+  const max = [0, 1, 2].map((axis) =>
+    Math.max(Number(cube.from[axis]), Number(cube.to[axis])) + inflate);
+  const spans = min.map((value, axis) => max[axis] - value);
+  if (min.some((value) => !Number.isFinite(value)) ||
+      max.some((value) => !Number.isFinite(value)) ||
+      spans.some((value) => !Number.isFinite(value) || value < 0)) return null;
+  const collapsed = spans.filter((value) => value === 0).length;
+  if (allowPlaneLike ? collapsed > 1 : collapsed > 0) return null;
   return { min, max };
 }
 
-function facesFor(cube: SurfaceEvidenceCube): Face[] {
-  const bounds = cubeBounds(cube);
-  if (!bounds) return [];
+function facesFor(
+  cube: SurfaceEvidenceCube,
+  bounds: NonNullable<ReturnType<typeof cubeBounds>>
+): Face[] {
   const { min, max } = bounds;
   const definitions: Array<[FaceName, Axis, -1 | 1]> = [
     ["west", 0, -1], ["east", 0, 1],
@@ -931,10 +944,16 @@ export function analyzeAxisAlignedSurfaceEvidence(
       pairBudget > GEOMETRY_AXIS_ALIGNED_PAIR_BUDGET) {
     throw new Error("Axis-aligned surface diagnostic tolerance or budget is invalid.");
   }
-  const invalid = cubes.filter((cube) => !cubeBounds(cube));
+  // Collect once: strict-volume reviewers retain cubeBounds() defaults,
+  // while contact may inspect plane-like carriers without misclassifying them.
+  const observed = cubes.map((cube) => ({
+    cube,
+    bounds: cubeBounds(cube, true),
+  }));
+  const invalid = observed.filter(({ bounds }) => bounds === null);
   const rotated = cubes.filter((cube) => cube.rotation !== undefined &&
     (!finite3(cube.rotation) || hasRotation(cube, epsilon)));
-  const eligible = cubes.filter((cube) => cubeBounds(cube) &&
+  const eligible = observed.filter(({ cube, bounds }) => bounds !== null &&
     (cube.rotation === undefined ||
       (finite3(cube.rotation) && !hasRotation(cube, epsilon))));
 
@@ -945,7 +964,7 @@ export function analyzeAxisAlignedSurfaceEvidence(
   };
   const byParent = new Map<string, IndexedCube[]>();
   let unknownParentCubeCount = 0;
-  for (const cube of eligible) {
+  for (const { cube, bounds } of eligible) {
     // Omitted parents are a legacy pure-analysis shared-space input only;
     // explicit null in native data means unknown ownership, never root.
     const key = cube.parent_id === undefined ? "legacy_unspecified_space" :
@@ -953,7 +972,7 @@ export function analyzeAxisAlignedSurfaceEvidence(
         ? "parent:" + cube.parent_id : null;
     if (!key) { unknownParentCubeCount++; continue; }
     const peers = byParent.get(key) ?? [];
-    peers.push({ cube, bounds: cubeBounds(cube)!, faces: facesFor(cube) });
+    peers.push({ cube, bounds: bounds!, faces: facesFor(cube, bounds!) });
     byParent.set(key, peers);
   }
   const groups = [...byParent.entries()]
@@ -989,8 +1008,11 @@ export function analyzeAxisAlignedSurfaceEvidence(
             });
           }
         }
-        // Same-facing face patches need positive shared projected area.
-        if (overlaps.some((amount) => amount <= 0)) continue;
+        // Planar carriers may have zero overlap on their normal axis.
+        // Require area on two projected axes, and no separated third axis.
+        // Full-volume intersections are counted separately above.
+        if (overlaps.filter((amount) => amount > epsilon).length < 2 ||
+            overlaps.some((amount) => amount < -epsilon)) continue;
         for (const faceA of first.faces) for (const faceB of second.faces) {
           if (faceA.axis !== faceB.axis || faceA.sign !== faceB.sign) continue;
           if (Math.abs(faceA.plane - faceB.plane) > epsilon) continue;

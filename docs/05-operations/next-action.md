@@ -12,11 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Geometry authoring parity:
-- Direct manage_cubes(create) retains per-face UV duplicate exemption but always returns bounded non-destructive contribution evidence when relevant. Hidden ancestor meshes no longer count as rendered peers.
-- Authoring Recipe compiler reuses Cube span safety for prototypes and realized Cubes. Overflow, invalid pivots, negative rendered spans and lost positive sizes fail before planning; native UV-mode policy remains.
-- Existing owner regression tests authored. Earlier bounded/parent-aware surface inspection retained. Bun/TypeScript/native/quality/cost NOT EXECUTED (CI disabled).
-- Next: repair evidenced source failures only; native pose capture, generator-coupled UV registration and visual Golden acceptance remain deferred.
+2026-10-23 Geometry plane-like contact correction:
+- Surface contact now accepts a Cube with exactly one zero rendered axis and detects same-parent sheet/sheet and sheet/solid coplanar patches. Prior strict-positive-volume containment/projection/merge semantics remain unchanged; invalid line/point geometry and cross-Bone unverified pairs stay excluded/partial.
+- Axis-aligned contact uses one bounded bounds observation per Cube and preserves pair budget, example limits, deterministic ordering and safe non-destructive review. Regressions added to existing Geometry evidence test owner; modelling guidance updated.
+- Previous Geometry inspection/authoring changes remain in source. Source/static proof only; exact-HEAD Bun/TypeScript and LIVE_BLOCKBENCH NOT EXECUTED (CI disabled). Next: resume only evidence-backed defects or a capable cloud/native verifier; UV generator registration, pose sampling and visual Golden acceptance remain deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

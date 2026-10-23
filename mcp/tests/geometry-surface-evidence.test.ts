@@ -35,6 +35,58 @@ test("same-facing coplanar layers block while butt joints do not", () => {
   expect(butt.state).toBe("clean");
 });
 
+test("one-axis plane-like Cubes are valid surface carriers with coplanar overlap review", () => {
+  const front = { ...cube("front_cutout", [0, 0, 0], [4, 4, 0]), parent_id: "root" };
+  const layered = { ...cube("layer_cutout", [0, 0, 0], [4, 4, 0]), parent_id: "root" };
+  const result = analyzeAxisAlignedSurfaceEvidence([front, layered]);
+  expect(result.state).toBe("blocked");
+  expect(result.complete).toBe(true);
+  expect(result.invalid_cube_count).toBe(0);
+  expect(result.coplanar_overlap_count).toBeGreaterThan(0);
+  expect(result.coplanar_overlap_examples[0]).toMatchObject({
+    code: "COPLANAR_SURFACE_OVERLAP",
+    texture_risk: "z_fighting",
+  });
+  expect(result.positive_volume_intersection_count).toBe(0);
+  expect(result.checked_pair_count).toBe(1);
+  expect(result.coordinate_scope).toBe("same_parent_authored_axes");
+
+  // Other reviews still correctly refuse to infer solid redundancy.
+  expect(analyzeStaticCubeContainment([front, layered]).state).toBe("partial");
+  expect(analyzeStaticMarginalProjection([front, layered]).state).toBe("partial");
+});
+
+test("planar-to-solid coplanar contact is detected without inventing volume intersection", () => {
+  const sheet = { ...cube("sheet", [0, 0, 0], [4, 4, 0]), parent_id: "bone" };
+  const solid = { ...cube("solid", [0, 0, 0], [4, 4, 4]), parent_id: "bone" };
+  const report = analyzeAxisAlignedSurfaceEvidence([sheet, solid]);
+  expect(report.invalid_cube_count).toBe(0);
+  expect(report.coplanar_overlap_count).toBeGreaterThan(0);
+  expect(report.positive_volume_intersection_count).toBe(0);
+
+  const isolated = analyzeAxisAlignedSurfaceEvidence([
+    sheet, { ...solid, from: [0, 0, 5], to: [4, 4, 9] },
+  ]);
+  expect(isolated.state).toBe("clean");
+  expect(isolated.coplanar_overlap_count).toBe(0);
+});
+
+test("plane-like diagnostic preserves parent identity and invalid-line rejection", () => {
+  const a = { ...cube("plane_a", [0, 0, 0], [0, 4, 4]), parent_id: "bone_a" };
+  const b = { ...cube("plane_b", [0, 0, 0], [0, 4, 4]), parent_id: "bone_b" };
+  const foreign = analyzeAxisAlignedSurfaceEvidence([a, b]);
+  expect(foreign.state).toBe("partial");
+  expect(foreign.coplanar_overlap_count).toBe(0);
+  expect(foreign.unverified_cross_owner_pair_count).toBe(1);
+
+  const line = { ...cube("line", [0, 0, 0], [0, 4, 0]), parent_id: "bone_a" };
+  const invalid = analyzeAxisAlignedSurfaceEvidence([a, line]);
+  expect(invalid.state).toBe("partial");
+  expect(invalid.invalid_cube_count).toBe(1);
+  expect(invalid.coplanar_overlap_count).toBe(0);
+  expect(invalid.checked_pair_count).toBe(0);
+});
+
 test("positive volume overlap is evidence but not automatically a texture blocker", () => {
   const result = analyzeAxisAlignedSurfaceEvidence([
     cube("outer", [0, 0, 0], [6, 6, 6]),
