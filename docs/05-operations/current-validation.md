@@ -9,8 +9,10 @@ A legacy plural blocker label was ignored and free-text Current Stage fields
 could be mistaken for valid continuity. The existing parser now preserves
 known/ambiguous blockers, reports conflicting/missing/invalid lifecycle
 fields and Control readiness refuses false READY until status is clarified.
-Regression cases were authored in the existing Workspace, readiness and
-Control packet suites. No asset model/README was changed. Current-head Bun,
+The existing summary now exposes its canonical README recovery path only when
+blockers or parsing issues require review, without duplicating free-form text.
+Regression cases were authored in existing Workspace/readiness/packet suites.
+No asset model/README was changed. Current-head Bun,
 TypeScript, installed Runtime and visual/Golden acceptance are NOT EXECUTED
 (CI disabled; no connected Bun/Blockbench environment).
 

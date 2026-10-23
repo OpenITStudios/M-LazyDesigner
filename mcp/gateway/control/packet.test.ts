@@ -3,6 +3,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildControlPacket } from "./packet";
+import { emptyWorkspace, workspaceSummary } from "./packetData";
+import { workspaceSemanticState } from "./workspace";
 import { projectControlPacketForGateway } from "./gatewayProjection";
 import type { GatewayRuntimeStatus } from "../runtime/backend";
 import type { ControlContextHandle } from "./types";
@@ -112,9 +114,21 @@ describe("Control packet missing context boundary", () => {
       expect(packet.readiness.reasons).toContain("WORKSPACE_CURRENT_STAGE_INVALID");
       expect(packet.readiness.modelling_start).not.toBe("READY");
       expect(packet.readiness.runtime_ready).toBe(true);
+      expect(packet.workspace.blocker_recovery).toEqual({
+        source_path: join(dir, "README.md"), omitted_count: 0,
+      });
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  test("clean workspace summary has no unnecessary recovery path", () => {
+    const clean = {
+      ...emptyWorkspace(),
+      ...workspaceSemanticState("# Chair\nCurrent Stage: GEOMETRY\nKnown blocker(s): none"),
+      available: true, source_path: "/projects/chair/README.md",
+    };
+    expect(workspaceSummary(clean)).not.toHaveProperty("blocker_recovery");
   });
 
   test("system development routing ignores authoring context failures", async () => {

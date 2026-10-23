@@ -5,6 +5,7 @@ export type ControlWorkspaceSummary = Pick<
   ControlWorkspaceProjection,
   "available" | "fingerprint" | "asset" | "unavailable_reason"
 > & {
+  /** Canonical README pointer when lifecycle/proof blockers require review. */
   blocker_recovery?: { source_path: string | null; omitted_count: number };
 };
 
@@ -41,14 +42,21 @@ export function emptyWorkspace(): ControlWorkspaceProjection {
 export function workspaceSummary(
   workspace: ControlWorkspaceProjection
 ): ControlWorkspaceSummary {
+  // Only return a path when the agent needs the unresolved source facts.
+  // Avoid copying free-form blocker text into every status response.
+  const needsSourceReview = workspace.available && (
+    workspace.blockers.length > 0 ||
+    (workspace.workspace_issues?.length ?? 0) > 0 ||
+    (workspace.blockers_omitted_count ?? 0) > 0
+  );
   return {
     available: workspace.available,
     fingerprint: workspace.fingerprint,
     asset: workspace.asset,
-    ...((workspace.blockers_omitted_count ?? 0) > 0
+    ...(needsSourceReview
       ? { blocker_recovery: {
           source_path: workspace.source_path,
-          omitted_count: workspace.blockers_omitted_count!,
+          omitted_count: workspace.blockers_omitted_count ?? 0,
         } }
       : {}),
     ...(workspace.unavailable_reason

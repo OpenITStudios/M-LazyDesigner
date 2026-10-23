@@ -58,15 +58,15 @@ LazyDesigner uses one native Geometry authoring path; no modelling-strategy stat
 
 ### Exact machine-readable lifecycle fields
 
-Keep one field per label in the active asset README. Use \`Current Stage:\`
-with one of the canonical values below and \`Known blocker(s): none\` only
+Keep one field per label in the active asset README. Use `Current Stage:`
+with one of the canonical values below and `Known blocker(s): none` only
 when that declaration is literally true. Separate free-form explanations,
 deferred work, and native-proof limitations into prose outside those fields.
 
-Control accepts inherited \`Known blockers:\` for read compatibility but new
-authoring should use only \`Known blocker(s):\`. Conflicting declarations,
+Control accepts inherited `Known blockers:` for read compatibility but new
+authoring should use only `Known blocker(s):`. Conflicting declarations,
 an unrecognized or missing Current Stage, or qualified phrases such as
-\`None for the delivered asset. ...\` are **orientation issues** until the
+`None for the delivered asset. ...` are **orientation issues** until the
 README is clarified; they are not interpreted as approval, cleared blockers,
 or evidence of a failed Runtime. Known blockers require review before
 Control reports an authoring decision READY. No saved model is rewritten by

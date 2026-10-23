@@ -14,7 +14,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 2026-10-24 Workspace-to-Control lifecycle integrity:
 - Control now reads inherited "Known blockers" as well as canonical "Known blocker(s)", keeps mixed/ambiguous blocker text visible, and flags missing, invalid or conflicting Stage/gate fields rather than treating them as approved.
-- Readiness never reports READY while parsed blockers or lifecycle format issues need orientation; Runtime remains independently ready. Existing Workspace, Readiness and Control packet suites gain legacy/negative cases; no asset rewrite or new state owner.
+- Readiness does not report READY while lifecycle issues need review; existing suites cover legacy and negative cases. Unresolved status carries the canonical README recovery path; no asset rewrite or new state owner.
 - REMOTE_GITHUB source/static only; current-SHA Bun/TS, native Blockbench, visual/Golden acceptance NOT EXECUTED (CI disabled).
 - Next: exact-SHA focused Control tests when capable. UV generator-coupled registration, atlas freshness and native acceptance remain separate unresolved dependencies.
 
