@@ -12,11 +12,12 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 user quality feedback — source-only:
-- `2aae5af`: pre-Undo Box UV sub-unit guards for create/update/batch, scoped legacy hygiene.
-- `ad0d772`: directional face coverage for small undersides and linear diagnostic candidates. Current focus: exact-linear key compaction now runs before `create_animation` serialization, protecting sound/particle timestamps; nonlinear motion remains authored.
-- UV: enforce `UNIQUE` alias, dry-run, flip and no-op guards; bound implicit UV stack pair suggestions with an explicit truncation signal.
-- **No Bun/TypeScript/native/visual PASS:** CI disabled. Next requires connected `LOCAL_CODE` for exact-head tests and canonical UV generator/registration, then existing `LIVE_BLOCKBENCH` acceptance on disposable assets. Do not duplicate engines.
+2026-10-23 four issue source batch:
+- Geometry: `d2fb30b` prevents exact duplicate Cubes; prior Box UV micro guards cover recipe upserts.
+- Texture: `43c54a4` prioritizes underside scans; `cd265e0` covers explicit Cube/face treatment intent.
+- UV: `984ce3a` preserves shared repack cohorts; `d5a75e4` selects lower-spread named semantic layouts without sacrificing fit.
+- Animation: `900c0c4` compacts exact linear creation keys; `4b632c3` recovers safe keys around impacts.
+- Source/regressions committed; Bun, TypeScript, native Blockbench, visual and cost proof **NOT EXECUTED** (CI disabled). Next: fix only evidenced source defects; generator-coupled UV registration and live acceptance remain deferred, not user-PC tasks.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

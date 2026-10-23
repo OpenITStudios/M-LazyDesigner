@@ -560,6 +560,17 @@ describe("affected execution planner", () => {
     expect(plan.commands).not.toContain("bun run verify:full");
   });
 
+  test("Texture face-treatment changes select their existing owner test", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/lib/texture/treatmentPlan.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/texture-treatment-intelligence.test.ts",
+    ]);
+  });
+
   test("recent Texture source changes route directly to their owning regressions", () => {
     const cases: Array<[string, string]> = [
       ["mcp/lib/texture/seamContinuity.ts", "mcp/tests/texture-seam-continuity.test.ts"],
