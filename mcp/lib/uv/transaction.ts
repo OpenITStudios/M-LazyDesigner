@@ -58,15 +58,17 @@ export async function applyUvLayoutPlanAtomic(
   expectedSourceFingerprint: string,
   adapter: UvApplyAdapter
 ): Promise<UvLayoutReceipt> {
-  requireValidUvLayoutPlan(plan);
+  // Distinguish no-op requests before validation: callers need to know
+  // that no native read or Undo mutation is necessary.
   if (plan.moved_island_ids.length === 0) {
     throw new Error(
       "UV_NO_OP_PLAN: a native UV transaction requires at least one changed island."
     );
   }
+  requireValidUvLayoutPlan(plan);
   const before = await adapter.readSource();
   assertUvPlanSourceFresh(expectedSourceFingerprint, before);
-  const instructions = translateUvPlanToNativeInstructions(plan);
+  const instructions = translateUvPlanToNativeInstructions(plan, before);
 
   let undoStarted = false;
   let mutationStarted = false;

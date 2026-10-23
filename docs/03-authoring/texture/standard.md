@@ -98,6 +98,7 @@ Important visible surfaces must have usable finite UVs. For new AI production:
 - exact reuse is allowed when intentionally symmetric/repeated;
 - mirror use is deliberate;
 - directional/asymmetric markings have suitable orientation;
+- per-face UV repacking preserves native signed U/V corner order (including authored flips) and face rotation rather than normalizing mirrored UVs;
 - seam-critical relationships are known before Texture Styling.
 
 Do not optimize atlas occupancy as a quality score.

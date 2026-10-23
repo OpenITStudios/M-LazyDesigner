@@ -170,7 +170,7 @@ describe("UV U7 apply contracts", () => {
     requireValidUvLayoutPlan(plan);
     assertUvPlanSnapshotCompatible(plan, snapshot);
     const instructions =
-      translateUvPlanToNativeInstructions(plan);
+      translateUvPlanToNativeInstructions(plan, buildUvNativeSourceSnapshot(source, 32, 32));
     expect(instructions).toEqual([
       expect.objectContaining({
         kind: "FACE_UV",
@@ -179,6 +179,67 @@ describe("UV U7 apply contracts", () => {
         face: "north",
       }),
     ]);
+  });
+
+  test("native compiler preserves signed UV orientation through repacking", () => {
+    for (const [flipU, flipV] of [
+      [false, false], [true, false], [false, true], [true, true],
+    ]) {
+      const source = cubes();
+      source[1].faces[0].uv = [
+        flipU ? 12 : 10, flipV ? 4 : 0,
+        flipU ? 10 : 12, flipV ? 0 : 4,
+      ];
+      source[1].faces[0].rotation = 270;
+      const snapshot = buildUvLayoutSnapshot(source, 32, 32, (island) =>
+        island.source.cube_name === "fixed"
+          ? { locked: true, padding_pixels: 0 }
+          : { padding_pixels: 0, rotation: { allowed: false } }
+      );
+      const plan = planUvPacking(snapshot, {
+        mode: "REPACK_SELECTED", island_ids: ["face:move:north"],
+        bitmap_width: 32, bitmap_height: 32,
+      });
+      const original = buildUvNativeSourceSnapshot(source, 32, 32);
+      const instructions = translateUvPlanToNativeInstructions(plan, original);
+      expect(instructions).toHaveLength(1);
+      const instruction = instructions[0];
+      expect(instruction.kind).toBe("FACE_UV");
+      if (instruction.kind !== "FACE_UV") throw new Error("Expected FACE_UV");
+      expect(instruction.uv[0] > instruction.uv[2]).toBe(flipU);
+      expect(instruction.uv[1] > instruction.uv[3]).toBe(flipV);
+      expect(instruction.rotation).toBe(270);
+      const nextRect = plan.proposed.islands.find(
+        (entry) => entry.id === "face:move:north"
+      )!.rect;
+      expect(Math.min(instruction.uv[0], instruction.uv[2])).toBe(nextRect.x);
+      expect(Math.min(instruction.uv[1], instruction.uv[3])).toBe(nextRect.y);
+      expect(Math.abs(instruction.uv[2] - instruction.uv[0])).toBe(nextRect.width);
+      expect(Math.abs(instruction.uv[3] - instruction.uv[1])).toBe(nextRect.height);
+      expect(original.cubes[1].faces[0].uv).toEqual(source[1].faces[0].uv);
+    }
+  });
+
+  test("native UV orientation compiler fails before Undo for stale or collapsed face state", () => {
+    const source = cubes();
+    const snapshot = buildUvLayoutSnapshot(source, 32, 32, (island) =>
+      island.source.cube_name === "fixed"
+        ? { locked: true, padding_pixels: 0 }
+        : { padding_pixels: 0 }
+    );
+    const plan = planUvPacking(snapshot, {
+      mode: "REPACK_SELECTED", island_ids: ["face:move:north"],
+      bitmap_width: 32, bitmap_height: 32,
+    });
+    const native = buildUvNativeSourceSnapshot(source, 32, 32);
+    const stale = structuredClone(native);
+    stale.cubes[1].faces[0].uv = [13, 0, 15, 4];
+    expect(() => translateUvPlanToNativeInstructions(plan, stale))
+      .toThrow("STALE_UV_PLAN");
+    const collapsed = structuredClone(native);
+    collapsed.cubes[1].faces[0].uv = [10, 0, 10, 4];
+    expect(() => translateUvPlanToNativeInstructions(plan, collapsed))
+      .toThrow("STALE_UV_PLAN");
   });
 
   test("validator rejects fixed movement and undeclared overlap", () => {

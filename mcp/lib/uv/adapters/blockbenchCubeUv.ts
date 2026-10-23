@@ -175,12 +175,27 @@ export function fingerprintUvNativeSource(
     .digest("hex");
 }
 
-function rectToUv(rect: UvRect): [number, number, number, number] {
+function rectToUv(
+  rect: UvRect,
+  originalUv: readonly [number, number, number, number],
+  islandId: string
+): [number, number, number, number] {
+  // UV islands store only an axis-aligned rectangle. Native per-face UV
+  // preserves signed U/V corner order (flipped texture orientation). Moving a
+  // rectangle must not silently turn an authored mirror into an unflipped face.
+  const [u1, v1, u2, v2] = originalUv;
+  if (u1 === u2 || v1 === v2) {
+    throw new Error(
+      `UV_FACE_ORIENTATION_UNRESOLVED: ${islandId} has a collapsed source UV axis; use explicit per-face UV to resolve its orientation.`
+    );
+  }
+  const left = rect.x, right = rect.x + rect.width;
+  const top = rect.y, bottom = rect.y + rect.height;
   return [
-    rect.x,
-    rect.y,
-    rect.x + rect.width,
-    rect.y + rect.height,
+    u1 < u2 ? left : right,
+    v1 < v2 ? top : bottom,
+    u1 < u2 ? right : left,
+    v1 < v2 ? bottom : top,
   ];
 }
 
@@ -190,7 +205,8 @@ function rotationDelta90(current: number): number {
 }
 
 export function translateUvPlanToNativeInstructions(
-  plan: UvLayoutPlan
+  plan: UvLayoutPlan,
+  nativeBefore: UvNativeSourceSnapshot
 ): UvNativeMutationInstruction[] {
   const beforeById = new Map(
     plan.before.islands.map((island) => [island.id, island])
@@ -204,6 +220,7 @@ export function translateUvPlanToNativeInstructions(
       transform,
     ])
   );
+  const nativeCubeById = new Map(nativeBefore.cubes.map((cube) => [cube.uuid, cube]));
 
   const instructions: UvNativeMutationInstruction[] = [];
   for (const islandId of plan.moved_island_ids) {
@@ -238,15 +255,37 @@ export function translateUvPlanToNativeInstructions(
       );
     }
     const face = before.source.faces[0];
+    const nativeCube = nativeCubeById.get(before.source.cube_uuid);
+    const nativeFace = nativeCube?.faces.find((entry) => entry.face === face);
+    if (!nativeCube || nativeCube.box_uv || !nativeFace || !nativeFace.enabled) {
+      throw new Error(
+        `UV_FACE_ORIENTATION_UNRESOLVED: ${islandId} has no active native per-face UV source.`
+      );
+    }
+    const [u1, v1, u2, v2] = nativeFace.uv;
+    const nativeRect = {
+      x: Math.min(u1, u2),
+      y: Math.min(v1, v2),
+      width: Math.abs(u2 - u1),
+      height: Math.abs(v2 - v1),
+    };
+    if (
+      JSON.stringify(nativeRect) !== JSON.stringify(before.rect) ||
+      nativeFace.rotation !== (before.source.face_rotation ?? 0)
+    ) {
+      throw new Error(
+        `STALE_UV_PLAN: native source face ${islandId} differs from the planned UV rect or rotation.`
+      );
+    }
     instructions.push({
       kind: "FACE_UV",
       island_id: islandId,
       cube_uuid: before.source.cube_uuid,
       face,
-      uv: rectToUv(proposed.rect),
+      uv: rectToUv(proposed.rect, nativeFace.uv, islandId),
       rotation: rotated90
-        ? rotationDelta90(before.source.face_rotation ?? 0)
-        : before.source.face_rotation ?? 0,
+        ? rotationDelta90(nativeFace.rotation)
+        : nativeFace.rotation,
     });
   }
 

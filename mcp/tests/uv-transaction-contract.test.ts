@@ -88,6 +88,45 @@ describe("UV atomic transaction contracts", () => {
   });
 
 
+  test("native transaction retains mirrored face winding in committed UV instruction", async () => {
+    const cubes = sourceCubes();
+    cubes[1].faces[0].uv = [12, 4, 10, 0];
+    const snapshot = buildUvLayoutSnapshot(cubes, 32, 32, (island) =>
+      island.source.cube_name === "fixed"
+        ? { locked: true, padding_pixels: 0 }
+        : { padding_pixels: 0, rotation: { allowed: false } }
+    );
+    const plan = planUvPacking(snapshot, {
+      bitmap_width: 32, bitmap_height: 32,
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:move:north"],
+    });
+    let native = buildUvNativeSourceSnapshot(cubes, 32, 32);
+    const original = structuredClone(native);
+    let beganUndo = false;
+    let writtenUv: number[] | null = null;
+    await applyUvLayoutPlanAtomic(plan, fingerprintUvNativeSource(native), {
+      readSource: () => native,
+      beginUndo: () => { beganUndo = true; },
+      apply: (instructions) => {
+        const instruction = instructions[0];
+        if (!instruction || instruction.kind !== "FACE_UV") throw Error("expected face");
+        writtenUv = [...instruction.uv];
+        native = structuredClone(native);
+        const face = native.cubes[1].faces[0];
+        face.uv = [...instruction.uv];
+        face.rotation = instruction.rotation;
+      },
+      restore: (saved) => { native = structuredClone(saved); },
+    });
+    expect(beganUndo).toBe(true);
+    expect(writtenUv).not.toBeNull();
+    expect(writtenUv![0]).toBeGreaterThan(writtenUv![2]);
+    expect(writtenUv![1]).toBeGreaterThan(writtenUv![3]);
+    expect(native.cubes[1].faces[0].uv).toEqual(writtenUv);
+    expect(original.cubes[1].faces[0].uv).toEqual([12, 4, 10, 0]);
+  });
+
   test("successful apply produces continuation-ready receipt and precise invalidation", async () => {
     const { cubes, plan } = planned();
     let native = buildUvNativeSourceSnapshot(cubes, 32, 32);
