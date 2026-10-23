@@ -348,6 +348,17 @@ is **review evidence only**: it cannot prove redundant volume, opacity,
 animation suitability or semantic necessity. Rotated or unsupported siblings
 make that target `partial`, not falsely redundant.
 
+`surface_integrity.current_preview_world_obb_review` uses the existing
+`orientedBoxContact` and `blockbenchCubeObb` owners to review strictly
+enclosed, positive-volume Cubes after real Cube/Group transforms have been
+applied to their preview meshes. It requires the same parent/Bone identity,
+uses bounded candidate/pair sampling, and refuses missing preview matrices,
+degenerate volumes and invalid world transforms. This is one current preview
+transform snapshot only: `pose_sweep: not_evaluated` and
+`visual_verdict: not_evaluated`. Even a rotated contained Cube can become
+necessary during animation, alpha visibility changes or attachment events;
+only reference/pose evidence may justify a later edit.
+
 `rest_pose_merge_candidates` identifies exact same-parent, same-origin,
 unrotated, uninflated, face-adjacent rectangular unions. It does not mutate
 objects or assert equivalent UV, independent visibility or joint ownership;

@@ -221,6 +221,25 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("rotated world OBB contribution uses focused existing geometry owner tests", () => {
+    for (const [path, expectedTests] of [
+      ["mcp/lib/geometry/orientedBoxContact.ts", [
+        "mcp/tests/geometry-surface-evidence.test.ts",
+        "mcp/tests/oriented-box-contact.test.ts",
+      ]],
+      ["mcp/lib/geometry/blockbenchCubeObb.ts", [
+        "mcp/tests/blockbench-cube-obb.test.ts",
+        "mcp/tests/geometry-preflight-order.test.ts",
+      ]],
+    ] as const) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify).toBe(false);
+      expect(plan.targeted_tests).toEqual(expectedTests);
+    }
+  });
+
   test("marginal projected Geometry evidence selects current owner regressions", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/geometry/surfaceEvidence.ts"],

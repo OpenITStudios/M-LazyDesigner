@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { orientedBoxFromBlockbenchCubeState } from "@/lib/blockbenchCubeObb";
-import { analyzeOrientedBoxContact } from "@/lib/orientedBoxContact";
+import {
+  analyzeOrientedBoxContact,
+  analyzeOrientedBoxContainment,
+} from "@/lib/orientedBoxContact";
 
 const IDENTITY = [
   1, 0, 0, 0,
@@ -91,6 +94,27 @@ describe("Blockbench Cube OBB mapping", () => {
     expect(analyzeOrientedBoxContact(first, second).classification).toBe(
       "touching"
     );
+  });
+
+  test("Cube world-matrix mapping feeds rotated OBB containment at one pose", () => {
+    const c = Math.SQRT1_2;
+    const matrixWorld = [
+      c, c, 0, 0,
+      -c, c, 0, 0,
+      0, 0, 1, 0,
+      8, 3, 2, 1,
+    ];
+    const shell = orientedBoxFromBlockbenchCubeState({
+      from: [-5, -5, -5], to: [5, 5, 5], origin: [0, 0, 0],
+      matrixWorld,
+    });
+    const detail = orientedBoxFromBlockbenchCubeState({
+      from: [-1, -1, -1], to: [1, 1, 1], origin: [0, 0, 0],
+      matrixWorld,
+    });
+    const review = analyzeOrientedBoxContainment(shell, detail);
+    expect(review.contained).toBe(true);
+    expect(review.minimum_signed_clearance).toBeCloseTo(4);
   });
 
   test("invalid matrix and excessive negative inflate fail closed", () => {

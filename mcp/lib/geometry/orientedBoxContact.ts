@@ -112,6 +112,54 @@ function projectedRadius(box: OrientedBox, axis: Vec3): number {
 }
 
 /**
+ * Exact rigid OBB containment, including rotated Cube axes.
+ * The target's eight corners lie strictly inside the container iff
+ * |center offset along each outer axis| + target projected half-radius
+ * leaves a positive margin on each outer axis.
+ *
+ * This measures only one geometric snapshot, never opacity, rig intent,
+ * actual camera occlusion, or future animation pose states.
+ */
+export function analyzeOrientedBoxContainment(
+  outerInput: OrientedBox,
+  targetInput: OrientedBox,
+  tolerance = 1e-5
+): {
+  contained: boolean;
+  minimum_signed_clearance: number;
+  exactForOrientedBoxes: true;
+} {
+  if (!Number.isFinite(tolerance) || tolerance < 0) {
+    throw new Error("OBB containment tolerance must be finite and nonnegative.");
+  }
+  const outer = normalizeBox(outerInput, "Container oriented box");
+  const target = normalizeBox(targetInput, "Target oriented box");
+  if (outer.halfSizes.some((size) => size <= tolerance) ||
+      target.halfSizes.some((size) => size <= tolerance)) {
+    return {
+      contained: false,
+      minimum_signed_clearance: 0,
+      exactForOrientedBoxes: true,
+    };
+  }
+  const offset = subtract(target.center, outer.center);
+  const margins = outer.axes.map((axis, index) =>
+    outer.halfSizes[index] -
+    Math.abs(dot(offset, axis)) -
+    projectedRadius(target, axis)
+  );
+  if (margins.some((margin) => !Number.isFinite(margin))) {
+    throw new Error("OBB containment projection exceeded finite bounds.");
+  }
+  const clearance = Math.min(...margins);
+  return {
+    contained: clearance > tolerance,
+    minimum_signed_clearance: clearance,
+    exactForOrientedBoxes: true,
+  };
+}
+
+/**
  * Exact separating-axis test for two oriented rectangular boxes.
  *
  * `signedAxisDistance` is the decisive SAT-axis gap (>0 when separate) or the

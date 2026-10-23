@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import type { OrientedBox, Vec3 } from "@/lib/orientedBoxContact";
 import {
+  analyzeCurrentPreviewObbContainment,
   analyzeAxisAlignedSurfaceEvidence,
   analyzeStaticCubeContainment,
   analyzeStaticMarginalProjection,
@@ -216,6 +218,81 @@ test("exact same-parent adjacent Cubes produce review-only merge candidates", ()
     { ...right, from: [2.01, 0, 0] }]).merge_candidate_count).toBe(0);
   expect(analyzeStaticCubeMergeCandidates([left,
     { ...right, inflate: 0.1 }]).merge_candidate_count).toBe(0);
+});
+
+const ORTHO_AXES: [Vec3, Vec3, Vec3] = [
+  [1, 0, 0], [0, 1, 0], [0, 0, 1],
+];
+const DIAGONAL_AXES: [Vec3, Vec3, Vec3] = [
+  [Math.SQRT1_2, Math.SQRT1_2, 0],
+  [-Math.SQRT1_2, Math.SQRT1_2, 0],
+  [0, 0, 1],
+];
+function poseBox(
+  uuid: string, parent_id: string | null, center: Vec3,
+  halfSizes: Vec3, axes: [Vec3, Vec3, Vec3] = ORTHO_AXES
+) {
+  return { uuid, name: uuid, parent_id, obb: {
+    center, axes, halfSizes,
+  } satisfies OrientedBox };
+}
+
+test("current preview OBB identifies rotated enclosed geometry without claiming pose sweep", () => {
+  const outer = poseBox("shell", "bone", [0, 0, 0], [5, 5, 5], DIAGONAL_AXES);
+  const inside = poseBox("detail", "bone", [0, 0, 0], [1, 1, 1], DIAGONAL_AXES);
+  const result = analyzeCurrentPreviewObbContainment([inside, outer]);
+  expect(result.contained_candidate_count).toBe(1);
+  expect(result.examples).toContainEqual(expect.objectContaining({
+    cube_uuid: "detail", containing_cube_uuid: "shell",
+    world_rotation_involved: true,
+  }));
+  expect(result.scope).toBe("single_current_preview_world_obb");
+  expect(result.pose_sweep).toBe("not_evaluated");
+  expect(result.visual_verdict).toBe("not_evaluated");
+  expect(analyzeCurrentPreviewObbContainment([outer, inside])).toEqual(result);
+});
+
+test("a rotated protrusion or differently rigged child never becomes contained review", () => {
+  const shell = poseBox("shell", "body", [0, 0, 0], [5, 5, 5], DIAGONAL_AXES);
+  const horn = poseBox("horn", "body", [6, 0, 0], [1, 1, 1], DIAGONAL_AXES);
+  const arm = poseBox("arm", "arm_joint", [0, 0, 0], [1, 1, 1], DIAGONAL_AXES);
+  const report = analyzeCurrentPreviewObbContainment([shell, horn, arm]);
+  expect(report.contained_candidate_count).toBe(0);
+  expect(report.state).toBe("available");
+  const nextPose = poseBox("detail", "body", [6, 0, 0], [1, 1, 1], DIAGONAL_AXES);
+  expect(analyzeCurrentPreviewObbContainment([shell, nextPose])
+    .contained_candidate_count).toBe(0);
+});
+
+test("missing native world matrix or partial sample never yields false complete evidence", () => {
+  const shell = poseBox("shell", "body", [0, 0, 0], [5, 5, 5]);
+  const unknown = { uuid: "hidden", name: "hidden", parent_id: "body",
+    obb: null as OrientedBox | null };
+  const result = analyzeCurrentPreviewObbContainment([shell, unknown]);
+  expect(result.state).toBe("partial");
+  expect(result.unsupported_target_count).toBe(2);
+  expect(result.contained_candidate_count).toBe(0);
+  const truncated = analyzeCurrentPreviewObbContainment([
+    shell, poseBox("detail", "body", [0, 0, 0], [1, 1, 1]),
+  ], { targetLimit: 1 });
+  expect(truncated.state).toBe("partial");
+  expect(truncated.unvisited_target_count).toBe(1);
+  expect(truncated.examples_truncated).toBe(true);
+  expect(() => analyzeCurrentPreviewObbContainment([shell, shell]))
+    .toThrow("unique");
+});
+
+test("invalid native OBB and zero-thickness planes are unsupported even without peers", () => {
+  const malformed = poseBox("bad", "arm", [0, 0, 0], [1, 1, 1]);
+  malformed.obb.axes = [[1, 0, 0], [1, 0, 0], [0, 0, 1]];
+  const missing = analyzeCurrentPreviewObbContainment([malformed]);
+  expect(missing.state).toBe("partial");
+  expect(missing.unsupported_target_count).toBe(1);
+  expect(missing.checked_target_count).toBe(0);
+  const plane = poseBox("leaf", "arm", [0, 0, 0], [0, 1, 1]);
+  const review = analyzeCurrentPreviewObbContainment([plane]);
+  expect(review.state).toBe("partial");
+  expect(review.contained_candidate_count).toBe(0);
 });
 
 test("unsupported transforms remain partial rather than false-clean", () => {

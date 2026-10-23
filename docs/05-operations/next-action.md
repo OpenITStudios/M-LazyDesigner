@@ -13,7 +13,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 ## Next REMOTE_GITHUB work
 
 2026-10-23 four issue source batch:
-- Geometry: recipe feature decisions and duplicate guards remain; direct Cube/inspect surface evidence now includes bounded parent-local projected-union contribution plus exact adjacent-merge review, in addition to strict containment. Never auto-delete/merge; visual/UV/rig review remains required.
+- Geometry: recipe feature decisions and direct Cube source evidence remain. Inspecting geometry now includes bounded current-preview rotated OBB strict containment using native world matrices, never a multi-pose/visual PASS or automatic removal.
 - Texture: `43c54a4` prioritizes underside scans; `cd265e0` covers explicit Cube/face treatment intent.
 - UV: `984ce3a` preserves shared repack cohorts; `d5a75e4` selects lower-spread named semantic layouts without sacrificing fit.
 - Animation: `900c0c4` compacts exact linear creation keys; `4b632c3` recovers safe keys around impacts.

@@ -1,3 +1,8 @@
+import {
+  analyzeOrientedBoxContainment,
+  type OrientedBox,
+} from "@/lib/geometry/orientedBoxContact";
+
 export const GEOMETRY_SURFACE_EPSILON = 1e-5;
 export const GEOMETRY_SURFACE_EXAMPLE_LIMIT = 8;
 
@@ -15,6 +20,176 @@ export type SurfaceEvidenceCube = {
 };
 
 export const GEOMETRY_CONTAINMENT_PAIR_BUDGET = 65_536;
+export const GEOMETRY_WORLD_OBB_SAMPLE_LIMIT = 256;
+export const GEOMETRY_WORLD_OBB_TARGET_LIMIT = 24;
+export const GEOMETRY_WORLD_OBB_PAIR_BUDGET = 4_096;
+
+/**
+ * Native Cube world-space OBBs as seen at ONE current preview transform.
+ * Parent identity is required: boxes under unrelated Bones can overlap at
+ * this pose but separate later. No native state or animation is sampled here.
+ */
+export type GeometryWorldObbInput = {
+  uuid: string;
+  name: string;
+  parent_id: string | null;
+  obb: OrientedBox | null;
+};
+
+/** Advisory current-preview containment, sharing the canonical SAT/OBB math. */
+export function analyzeCurrentPreviewObbContainment(
+  cubes: readonly GeometryWorldObbInput[],
+  options: {
+    omitted_cube_count?: number;
+    exampleLimit?: number;
+    targetLimit?: number;
+    pairBudget?: number;
+  } = {}
+) {
+  const exampleLimit = options.exampleLimit ?? GEOMETRY_SURFACE_EXAMPLE_LIMIT;
+  const targetLimit = options.targetLimit ?? GEOMETRY_WORLD_OBB_TARGET_LIMIT;
+  const pairBudget = options.pairBudget ?? GEOMETRY_WORLD_OBB_PAIR_BUDGET;
+  const omitted = options.omitted_cube_count ?? 0;
+  if (!Number.isInteger(exampleLimit) || exampleLimit < 1 || exampleLimit > 32 ||
+      !Number.isInteger(targetLimit) || targetLimit < 1 ||
+      targetLimit > GEOMETRY_WORLD_OBB_TARGET_LIMIT ||
+      !Number.isInteger(pairBudget) || pairBudget < 1 ||
+      pairBudget > GEOMETRY_WORLD_OBB_PAIR_BUDGET ||
+      !Number.isInteger(omitted) || omitted < 0) {
+    throw new Error("World OBB geometry review budgets are invalid.");
+  }
+  const unique = new Set(cubes.map((cube) => cube.uuid));
+  if (unique.size !== cubes.length || cubes.some((cube) => !cube.uuid.trim())) {
+    throw new Error("World OBB review requires unique nonempty native Cube UUIDs.");
+  }
+  const rotated = (obb: OrientedBox | null) => Boolean(obb && obb.axes.some(
+    (axis) => Math.max(...axis.map(Math.abs)) < 1 - GEOMETRY_SURFACE_EPSILON
+  ));
+  const sorted = [...cubes].sort((a, b) =>
+    Number(rotated(b.obb)) - Number(rotated(a.obb)) ||
+    a.uuid.localeCompare(b.uuid)
+  );
+  const sampled = sorted.slice(0, GEOMETRY_WORLD_OBB_SAMPLE_LIMIT);
+  const byParent = new Map<string, GeometryWorldObbInput[]>();
+  for (const cube of sampled) {
+    if (!cube.parent_id) continue;
+    const peers = byParent.get(cube.parent_id) ?? [];
+    peers.push(cube);
+    byParent.set(cube.parent_id, peers);
+  }
+  const examples: Array<{
+    cube_uuid: string;
+    cube_name: string;
+    containing_cube_uuid: string;
+    containing_cube_name: string;
+    parent_id: string;
+    minimum_signed_clearance: number;
+    world_rotation_involved: boolean;
+  }> = [];
+  let checked = 0;
+  let unsupported = 0;
+  let checkedPairs = 0;
+  let candidateCount = 0;
+  let truncated = sampled.length < cubes.length || omitted > 0;
+  for (const target of sampled) {
+    if (checked + unsupported >= targetLimit) {
+      truncated = true;
+      break;
+    }
+    if (!target.parent_id || !target.obb) {
+      unsupported += 1;
+      continue;
+    }
+    // Validate even when the Cube has no same-parent peers: malformed
+    // preview axes or a plane cannot be reported as fully reviewed.
+    try {
+      analyzeOrientedBoxContainment(target.obb, target.obb);
+      if (target.obb.halfSizes.some((size) => size <= GEOMETRY_SURFACE_EPSILON)) {
+        unsupported += 1;
+        continue;
+      }
+    } catch {
+      unsupported += 1;
+      continue;
+    }
+    const peers = (byParent.get(target.parent_id) ?? [])
+      .filter((candidate) => candidate.uuid !== target.uuid);
+    // Unknown preview mesh/transform invalidates negative conclusions; it
+    // cannot be treated as absence of a containing sibling.
+    if (peers.some((peer) => !peer.obb)) {
+      unsupported += 1;
+      continue;
+    }
+    if (checkedPairs + peers.length > pairBudget) {
+      truncated = true;
+      break;
+    }
+    let best: GeometryWorldObbInput | null = null;
+    let bestVolume = Number.POSITIVE_INFINITY;
+    let bestMargin = 0;
+    let failed = false;
+    checkedPairs += peers.length;
+    for (const peer of peers) {
+      try {
+        const result = analyzeOrientedBoxContainment(
+          peer.obb!, target.obb
+        );
+        if (!result.contained) continue;
+        const size = peer.obb!.halfSizes;
+        const volume = 8 * size[0] * size[1] * size[2];
+        if (!Number.isFinite(volume)) {
+          failed = true;
+          break;
+        }
+        if (!best || volume < bestVolume ||
+            (volume === bestVolume && peer.uuid < best.uuid)) {
+          best = peer;
+          bestVolume = volume;
+          bestMargin = result.minimum_signed_clearance;
+        }
+      } catch {
+        failed = true;
+        break;
+      }
+    }
+    if (failed) {
+      unsupported += 1;
+      continue;
+    }
+    checked += 1;
+    if (best) {
+      candidateCount += 1;
+      if (examples.length < exampleLimit) {
+        examples.push({
+          cube_uuid: target.uuid,
+          cube_name: target.name,
+          containing_cube_uuid: best.uuid,
+          containing_cube_name: best.name,
+          parent_id: target.parent_id,
+          minimum_signed_clearance: Number(bestMargin.toPrecision(6)),
+          world_rotation_involved: rotated(target.obb) || rotated(best.obb),
+        });
+      }
+    }
+  }
+  return {
+    state: truncated || unsupported > 0
+      ? ("partial" as const) : ("available" as const),
+    scope: "single_current_preview_world_obb" as const,
+    pose_sweep: "not_evaluated" as const,
+    visual_verdict: "not_evaluated" as const,
+    sampled_cube_count: sampled.length,
+    omitted_cube_count: omitted + Math.max(0, cubes.length - sampled.length),
+    checked_target_count: checked,
+    unsupported_target_count: unsupported,
+    unvisited_target_count: sampled.length - checked - unsupported,
+    checked_pair_count: checkedPairs,
+    contained_candidate_count: candidateCount,
+    examples,
+    examples_truncated: candidateCount > examples.length || truncated,
+    note: "World OBB containment uses the current preview mesh matrices, including Cube and Group rotations. It does not sample animation time or prove silhouette, opacity, mapped texture, alpha, visibility states, motion clearance or semantic redundancy. Inspect relevant poses before changing Geometry. Never auto-delete.",
+  };
+}
 
 /**
  * Read-only, pre-Undo safe, same-parent rest-pose review.

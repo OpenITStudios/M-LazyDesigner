@@ -52,6 +52,18 @@ describe("Geometry mutation preflight ordering", () => {
     ])).not.toThrow();
   });
 
+  test("current preview OBB evidence reads native matrices without modifying animation time or Undo", async () => {
+    const source = await Bun.file("server/tools/validation/qualityEvidenceRuntime.ts").text();
+    const start = source.indexOf("function geometrySurfaceRuntime()");
+    const end = source.indexOf("function uvPhysicalRuntime()", start);
+    const body = source.slice(start, end);
+    expect(body).toContain("orientedBoxFromCube(cube)");
+    expect(body).toContain("current_preview_world_obb_review:");
+    expect(body).toContain("omitted_cube_count: visibleCubes.length - sampled.length");
+    expect(body).not.toContain("Undo.initEdit");
+    expect(body).not.toContain("Timeline.time =");
+  });
+
   test("geometry inspection projects Cube pivot and parent into merge evidence", async () => {
     const source = await Bun.file("server/tools/validation/qualityEvidenceRuntime.ts").text();
     const start = source.indexOf("function geometrySurfaceRuntime()");

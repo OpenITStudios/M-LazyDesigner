@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   analyzeOrientedBoxContact,
+  analyzeOrientedBoxContainment,
   type OrientedBox,
   type Vec3,
 } from "@/lib/orientedBoxContact";
@@ -85,6 +86,35 @@ describe("oriented box contact", () => {
     );
     expect(intersecting.classification).toBe("intersecting");
     expect(intersecting.penetrationDepth).toBeGreaterThan(0);
+  });
+
+  test("strict OBB containment supports independently rotated target and container", () => {
+    const rotatedAxes: [Vec3, Vec3, Vec3] = [
+      [Math.SQRT1_2, Math.SQRT1_2, 0],
+      [-Math.SQRT1_2, Math.SQRT1_2, 0],
+      [0, 0, 1],
+    ];
+    const outer = box([0, 0, 0], rotatedAxes, [5, 5, 5]);
+    const inner = box([0, 0, 0], rotatedAxes, [1, 1, 1]);
+    const result = analyzeOrientedBoxContainment(outer, inner);
+    expect(result.contained).toBe(true);
+    expect(result.minimum_signed_clearance).toBeCloseTo(4);
+    expect(result.exactForOrientedBoxes).toBe(true);
+    expect(analyzeOrientedBoxContainment(inner, outer).contained).toBe(false);
+    expect(analyzeOrientedBoxContainment(
+      outer, box([6, 0, 0], rotatedAxes, [1, 1, 1])
+    ).contained).toBe(false);
+  });
+
+  test("OBB containment does not treat touching faces or zero-thickness planes as hidden volumes", () => {
+    const outer = box([0, 0, 0], IDENTITY_AXES, [5, 5, 5]);
+    const touching = box([4, 0, 0], IDENTITY_AXES, [1, 1, 1]);
+    expect(analyzeOrientedBoxContainment(outer, touching).contained).toBe(false);
+    expect(analyzeOrientedBoxContainment(outer,
+      box([0, 0, 0], IDENTITY_AXES, [0, 1, 1])
+    ).contained).toBe(false);
+    expect(() => analyzeOrientedBoxContainment(outer, touching, Number.NaN))
+      .toThrow("tolerance");
   });
 
   test("rejects malformed axes, half sizes, and tolerance before analysis", () => {

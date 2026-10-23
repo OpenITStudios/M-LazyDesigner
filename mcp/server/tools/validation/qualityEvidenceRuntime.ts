@@ -1,7 +1,12 @@
 /// <reference types="blockbench-types" />
 
 import { getAllToolDefinitions } from "@/lib/factories";
-import { analyzeAxisAlignedSurfaceEvidence } from "@/lib/geometry/surfaceEvidence";
+import {
+  analyzeAxisAlignedSurfaceEvidence,
+  analyzeCurrentPreviewObbContainment,
+  GEOMETRY_WORLD_OBB_SAMPLE_LIMIT,
+} from "@/lib/geometry/surfaceEvidence";
+import { orientedBoxFromCube } from "@/lib/geometry/blockbenchCubeObb";
 import { analyzeUvPhysicalEvidence, type UvPhysicalFaceInput } from "@/lib/uv/physicalEvidence";
 import { analyzeAnimationCraftEvidence, type AnimationCraftTrackInput } from "@/lib/animation/craftEvidence";
 
@@ -26,9 +31,9 @@ function geometrySurfaceRuntime() {
   const groups = typeof Group === "undefined" ? [] : (Group.all ?? []);
   const transformedGroups = groups.filter((group: Group) => nonZeroRotation(group.rotation));
   const meshCount = typeof Mesh === "undefined" ? 0 : (Mesh.all ?? []).filter((mesh: Mesh) => mesh.visibility !== false).length;
-  return analyzeAxisAlignedSurfaceEvidence(
-    (Cube.all ?? [])
-      .filter((cube: Cube) => cube.visibility !== false)
+  const visibleCubes = (Cube.all ?? []).filter((cube: Cube) => cube.visibility !== false);
+  const base = analyzeAxisAlignedSurfaceEvidence(
+    visibleCubes
       .map((cube: Cube) => ({
         uuid: cube.uuid,
         name: cube.name,
@@ -47,6 +52,37 @@ function geometrySurfaceRuntime() {
       unsupportedMeshCount: meshCount,
     }
   );
+  // Only the current preview transform is measured; never advance an
+  // animation time cursor or mutate geometry/Undo for diagnostics.
+  const sampled = [...visibleCubes].sort((a: Cube, b: Cube) =>
+    Number(nonZeroRotation(b.rotation)) - Number(nonZeroRotation(a.rotation)) ||
+    a.uuid.localeCompare(b.uuid)
+  ).slice(0, GEOMETRY_WORLD_OBB_SAMPLE_LIMIT);
+  const poseInputs = sampled.map((cube: Cube) => {
+    let obb: ReturnType<typeof orientedBoxFromCube> | null = null;
+    try {
+      obb = orientedBoxFromCube(cube);
+    } catch {
+      // Missing mesh, unsupported world transform or invalid geometry cannot
+      // be silently promoted to a clean model diagnosis.
+    }
+    return {
+      uuid: cube.uuid,
+      name: cube.name,
+      parent_id: typeof Group !== "undefined" && cube.parent instanceof Group
+        ? cube.parent.uuid
+        : cube.parent === "root" ? "root" : null,
+      obb,
+    };
+  });
+  return {
+    ...base,
+    current_preview_world_obb_review: analyzeCurrentPreviewObbContainment(
+      poseInputs, {
+        omitted_cube_count: visibleCubes.length - sampled.length,
+      }
+    ),
+  };
 }
 
 function uvPhysicalRuntime() {
