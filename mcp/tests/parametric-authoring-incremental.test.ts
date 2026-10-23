@@ -30,6 +30,30 @@ describe("Parametric Authoring G5 compiled-diff incremental rebuild", () => {
     expect(plan.preserved_instance_ids).toContain("boards:0");
   });
 
+  test("incremental authoring cannot silently delete an existing Cube when switching to Texture", () => {
+    const previous: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "horn", name: "Horn",
+      prototypes: [{ id: "horn_proto", name: "horn", size: [2, 4, 2] }],
+      feature_intents: [{ id: "horn", label: "horn", visual_role: "THREE_DIMENSIONAL",
+        evidence: "SUPPORTED", evidence_refs: ["fixture:approved_reference_view"], geometry_reasons: ["SILHOUETTE"] }],
+      patterns: [{ kind: "LINEAR", id: "horns", prototype_id: "horn_proto",
+        feature_id: "horn", count: 1, axis: "X", spacing: 0 }],
+    };
+    const next = structuredClone(previous);
+    next.patterns = [];
+    next.feature_intents![0] = {
+      ...next.feature_intents![0],
+      visual_role: "SURFACE_DETAIL",
+      geometry_reasons: [],
+    };
+    expect(() => planIncrementalRecipeRebuild(previous, next))
+      .toThrow("RECIPE_REPRESENTATION_HANDOFF_REQUIRED");
+    const downgrade = structuredClone(previous);
+    delete downgrade.feature_intents;
+    expect(() => planIncrementalRecipeRebuild(previous, downgrade))
+      .toThrow("FEATURE_PLAN_DOWNGRADE_REFUSED");
+  });
+
   test("component-local parameter change preserves unrelated component output", () => {
     const wheel: RecipeComponentDefinition = {
       id: "wheel", name: "Wheel",

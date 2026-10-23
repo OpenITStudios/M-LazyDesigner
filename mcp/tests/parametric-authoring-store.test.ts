@@ -20,6 +20,25 @@ describe("Parametric recipe project store", () => {
     expect(findAuthoringRecipeInStore(store,"a")?.patterns[0]).toMatchObject({ count: 3 });
   });
 
+  test("feature-evidence opt-in persists without changing the legacy store schema", () => {
+    const planned = recipe("character", 1);
+    planned.feature_intents = [
+      { id: "body", label: "real body", visual_role: "THREE_DIMENSIONAL",
+        evidence: "SUPPORTED", evidence_refs: ["fixture:approved_reference_view"], geometry_reasons: ["VOLUME"] },
+      { id: "scratch", label: "painted scratch", visual_role: "SURFACE_DETAIL",
+        evidence: "SUPPORTED", evidence_refs: ["fixture:approved_reference_view"] },
+    ];
+    planned.patterns[0].feature_id = "body";
+    const store = upsertAuthoringRecipeStore(emptyAuthoringRecipeStore(), planned);
+    const loaded = parseAuthoringRecipeStore(serializeAuthoringRecipeStore(store));
+    expect(loaded.schema).toBe(1);
+    expect(findAuthoringRecipeInStore(loaded, "character")?.feature_intents)
+      .toEqual(planned.feature_intents);
+    expect(findAuthoringRecipeInStore(loaded, "character")?.patterns[0].feature_id)
+      .toBe("body");
+    expect(fingerprintAuthoringRecipeStore(loaded)).toBe(fingerprintAuthoringRecipeStore(store));
+  });
+
   test("upsert replaces one recipe without retaining revision history and removal is bounded", () => {
     let store = upsertAuthoringRecipeStore(emptyAuthoringRecipeStore(),recipe("asset",3));
     store = upsertAuthoringRecipeStore(store,recipe("asset",5));

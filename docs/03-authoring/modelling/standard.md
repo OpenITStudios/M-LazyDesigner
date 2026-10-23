@@ -219,6 +219,28 @@ In a single `manage_cubes(create)` batch, identical untextured Cubes with the sa
 
 Prefer fewer meaningful Cuboids over dense approximations. Split a mass only for demonstrated different silhouette/orientation, separate transform/pivot/motion, genuinely separate visible volume, or verified technical constraint. Adding another Cube is not the default correction.
 
+### Semantic Feature Preflight (before Cube creation)
+
+For a nontrivial feature, first record **one** reference-grounded decision
+(never one form per Cube): visual role `THREE_DIMENSIONAL | SURFACE_DETAIL |
+UNNECESSARY`, evidence `SUPPORTED | PROVISIONAL | CONFLICTING | UNAVAILABLE`,
+and the required 3D contribution(s) when applicable. `SUPPORTED`
+requires a non-empty source-view/claim ID in `evidence_refs`; this is
+provenance, not independently validated image evidence. Supported surface
+markings without a necessary 3D contribution route to **Texture**. Supported
+form with an evidenced contribution remains **Geometry**, even when small.
+Unsupported/contradictory requirements remain **REVIEW_REQUIRED**.
+
+The optional Authoring Recipe `feature_intents` and
+`patterns[].feature_id` make that decision a compiler preflight:
+a Texture/Omit feature cannot instantiate an accidental Cube. Recipe
+`feature_plan.texture_handoff` identifies follow-up material work; it is
+not texture painting, visual quality PASS, or permission to delete existing
+Geometry. Legacy recipes retain their previous compilation behavior. Direct
+`manage_cubes` keeps its existing geometric safety preflight and must use
+the Modelling specialist's feature-level decision; it cannot infer artistic
+necessity from coordinates alone.
+
 ### Adaptive Cuboid Budget
 
 There is **no universal Cube-count cap**. Complexity budget is earned by visible or functional need.

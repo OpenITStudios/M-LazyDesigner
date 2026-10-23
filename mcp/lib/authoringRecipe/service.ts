@@ -15,7 +15,11 @@ import { resolveSemanticIdentity } from "@/lib/authoringRecipe/semanticIdentity"
 import type { SemanticGeometryTarget } from "@/lib/authoringRecipe/semanticEdit";
 import { AuthoringEvidenceRegistry, type AuthoringEvidenceHandle } from "@/lib/authoringRecipe/evidenceRegistry";
 import { compactAuthoringApplyReceipt, compactSemanticIdentityResolution } from "@/lib/authoringRecipe/compactReceipt";
-import { selectRecipeRebuildExecutionStrategy, summarizeAuthoringRecipeRebuild } from "@/lib/authoringRecipe/planning";
+import {
+  planRecipeFeatureRepresentations,
+  selectRecipeRebuildExecutionStrategy,
+  summarizeAuthoringRecipeRebuild,
+} from "@/lib/authoringRecipe/planning";
 
 export {
   chooseBoundedGeometryCorrection,
@@ -23,6 +27,7 @@ export {
   evaluateSemanticGeometryStack,
   planReferenceGeometryCorrections,
   planSemanticGeometryEdit,
+  planRecipeFeatureRepresentations,
   rewriteSemanticGeometryRecipe,
   summarizeAuthoringRecipeRebuild,
 } from "@/lib/authoringRecipe/planning";
@@ -43,12 +48,16 @@ export function createAuthoringRecipeService(
     assertAuthoringRecipeNativeMatchesCompiled(native, previousRecipe);
     const nativeFingerprint = fingerprintAuthoringRecipeNativeSnapshot(native);
     const rebuild = planIncrementalRecipeRebuild(previousRecipe, nextRecipe);
+    const featurePlan = nextRecipe.feature_intents !== undefined
+      ? planRecipeFeatureRepresentations(nextRecipe.feature_intents).summary
+      : undefined;
     const stored = registry.put({ native_source_fingerprint: nativeFingerprint, previous_recipe: previousRecipe, next_recipe: nextRecipe, rebuild });
     return {
       plan_id: stored.plan_id,
       native_source_fingerprint: nativeFingerprint,
       execution_strategy: selectRecipeRebuildExecutionStrategy(rebuild),
       summary: summarizeAuthoringRecipeRebuild(rebuild),
+      ...(featurePlan ? { feature_plan: featurePlan } : {}),
     };
   };
   return {

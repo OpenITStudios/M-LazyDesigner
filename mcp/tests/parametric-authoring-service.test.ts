@@ -48,6 +48,34 @@ describe("Parametric authoring plan-handle service", () => {
     expect(responseBytes).toBeLessThan(explicitBytes * 0.2);
   });
 
+  test("plan response includes bounded texture handoff without inventing painting or visual PASS", async () => {
+    const previous = recipe(2, 1);
+    const next = structuredClone(previous);
+    next.feature_intents = [
+      { id: "frame", label: "support frame", visual_role: "THREE_DIMENSIONAL",
+        evidence: "SUPPORTED", evidence_refs: ["fixture:approved_reference_view"], geometry_reasons: ["CONTACT"] },
+      { id: "seam", label: "painted seam", visual_role: "SURFACE_DETAIL",
+        evidence: "SUPPORTED", evidence_refs: ["fixture:approved_reference_view"] },
+    ];
+    next.patterns[0].feature_id = "frame";
+    const native = snapshot(previous);
+    const service = createAuthoringRecipeService({
+      readOwned: () => native,
+      createApplyAdapter: () => ({
+        readOwned: () => native,
+        upsert: () => { throw Error("must not modify native state"); },
+        remove: () => { throw Error("must not remove native geometry"); },
+      }),
+    });
+    const plan = await service.plan(previous, next);
+    expect(plan.feature_plan?.geometry.count).toBe(1);
+    expect(plan.feature_plan?.texture_handoff.examples).toEqual([
+      expect.objectContaining({ id: "seam" }),
+    ]);
+    expect(plan.feature_plan?.visual_verdict).toBe("not_evaluated");
+    expect(plan.summary.native_affected_count).toBe(0);
+  });
+
   test("stored-source planning needs only the next recipe after save/reopen", async () => {
     const previous = recipe(2,40);
     const next = recipe(3,40);

@@ -1,5 +1,5 @@
 import type {
-  AuthoringRecipe, GridPattern, LinearPattern, RadialPattern, RecipeConstraint, RecipePattern, RecipeSymmetryRelation, RecipeVec3,
+  AuthoringRecipe, GridPattern, LinearPattern, RadialPattern, RecipeConstraint, RecipeFeatureIntent, RecipePattern, RecipeSymmetryRelation, RecipeVec3,
 } from "@/lib/authoringRecipe/contracts";
 
 export type RecipePatternOverride = {
@@ -70,6 +70,7 @@ function composePattern(pattern: RecipePattern, instance: RecipeComponentInstanc
     ...owned,
     id: namespace(owned.id, instance.id),
     prototype_id: prototypeMap.get(owned.prototype_id) ?? namespace(owned.prototype_id, instance.id),
+    ...(owned.feature_id ? { feature_id: namespace(owned.feature_id, instance.id) } : {}),
   };
   if (owned.kind === "RADIAL") {
     return { ...common, kind: "RADIAL", center: addVec3(owned.center, translated) } as RadialPattern;
@@ -120,12 +121,23 @@ export function composeAuthoringComponents(
   const patterns: AuthoringRecipe["patterns"] = [];
   const constraints: NonNullable<AuthoringRecipe["constraints"]> = [];
   const symmetry: NonNullable<AuthoringRecipe["symmetry"]> = [];
+  const featureIntents: RecipeFeatureIntent[] = [];
+  let withFeaturePlan = false;
+  let withoutFeaturePlan = false;
 
   for (const instance of instances) {
     const definition = definitionById.get(instance.component_id);
     if (!definition) throw new Error("Component instance " + instance.id + " references unknown component " + instance.component_id + ".");
     if (definition.recipe.schema !== root.schema || definition.recipe.compiler_version !== root.compiler_version) {
       throw new Error("Component " + definition.id + " recipe version does not match the root recipe.");
+    }
+    if (definition.recipe.feature_intents !== undefined) {
+      withFeaturePlan = true;
+      for (const feature of definition.recipe.feature_intents) {
+        featureIntents.push({ ...structuredClone(feature), id: namespace(feature.id, instance.id) });
+      }
+    } else {
+      withoutFeaturePlan = true;
     }
     const overrideByPattern = new Map((instance.pattern_overrides ?? []).map((override) => [override.pattern_id, override]));
     if (overrideByPattern.size !== (instance.pattern_overrides ?? []).length) throw new Error("Component instance " + instance.id + " has duplicate pattern overrides.");
@@ -147,9 +159,16 @@ export function composeAuthoringComponents(
     for (const relation of definition.recipe.symmetry ?? []) symmetry.push(composeSymmetry(relation, instance));
   }
 
+  if (withFeaturePlan && withoutFeaturePlan) {
+    throw new Error(
+      "FEATURE_COMPONENT_SCOPE_INCOMPLETE: cannot silently mix feature-planned " +
+      "and legacy components; declare feature intent for each component in this composition."
+    );
+  }
   return {
     schema: root.schema, compiler_version: root.compiler_version, id: root.id, name: root.name,
     prototypes, patterns,
+    ...(withFeaturePlan ? { feature_intents: featureIntents } : {}),
     ...(constraints.length > 0 ? { constraints } : {}),
     ...(symmetry.length > 0 ? { symmetry } : {}),
   };

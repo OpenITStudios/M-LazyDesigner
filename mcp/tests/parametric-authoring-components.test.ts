@@ -30,6 +30,42 @@ describe("Parametric Authoring G4 component composition", () => {
     expect(compiled.placements.some((item) => item.id === "front_right/spokes:0")).toBe(true);
   });
 
+  test("planned feature IDs survive reusable component namespacing", () => {
+    const planned: RecipeComponentDefinition = {
+      ...wheel, recipe: {
+        ...wheel.recipe,
+        feature_intents: [
+          { id: "spokes", label: "radial spokes",
+            visual_role: "THREE_DIMENSIONAL", evidence: "SUPPORTED", evidence_refs: ["fixture:approved_reference_view"],
+            geometry_reasons: ["SILHOUETTE"] },
+          { id: "paint", label: "painted wheel ring",
+            visual_role: "SURFACE_DETAIL", evidence: "SUPPORTED", evidence_refs: ["fixture:approved_reference_view"] },
+        ],
+        patterns: wheel.recipe.patterns.map((pattern) =>
+          ({ ...pattern, feature_id: "spokes" })),
+      },
+    };
+    const composed = composeAuthoringComponents(
+      { schema: 1, compiler_version: 1, id: "machine", name: "Machine" },
+      [planned], [{ id: "left", component_id: "wheel" },
+        { id: "right", component_id: "wheel" }]
+    );
+    expect(composed.patterns.map((entry) => entry.feature_id)).toEqual([
+      "left/spokes", "right/spokes",
+    ]);
+    expect(composed.feature_intents?.map((entry) => entry.id)).toEqual([
+      "left/spokes", "left/paint", "right/spokes", "right/paint",
+    ]);
+    expect(compileAuthoringRecipe(composed).placements).toHaveLength(16);
+    expect(compileAuthoringRecipe(composed).feature_plan?.texture_handoff.count).toBe(2);
+    expect(() => composeAuthoringComponents(
+      { schema: 1, compiler_version: 1, id: "mixed", name: "Mixed" },
+      [planned, { ...wheel, id: "legacy" }],
+      [{ id: "left", component_id: "wheel" },
+        { id: "old", component_id: "legacy" }]
+    )).toThrow("FEATURE_COMPONENT_SCOPE_INCOMPLETE");
+  });
+
   test("pattern override parameterizes a component without rewriting its local recipe", () => {
     const composed = composeAuthoringComponents(
       { schema: 1, compiler_version: 1, id: "vehicle", name: "Vehicle" },

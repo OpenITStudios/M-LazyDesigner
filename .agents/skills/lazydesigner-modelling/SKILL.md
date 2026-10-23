@@ -103,6 +103,21 @@ transform ownership + required attachment/contact target/invariant
 evidence state
 ```
 
+For identity-weighted/dense new features, perform one **feature-level**
+`GEOMETRY | TEXTURE | OMIT | REVIEW_REQUIRED` decision **before** selecting
+Cube coordinates. An observed seam/print with no needed silhouette, volume,
+negative-space, contact, layering, transform, motion or technical constraint
+is `TEXTURE`, not many tiny Cubes. A horn, joint, large fin or articulated
+part needs a grounded 3D reason and remains Geometry. Unavailable/conflicting
+reference evidence is `REVIEW_REQUIRED`, never a guessed geometry. Each
+`SUPPORTED` decision needs at least one actual current reference-view/claim
+`evidence_refs` pointer, not merely a feature label. One
+semantic feature may own several necessary Cubes: do not create a per-Cube
+planning loop. When using an opt-in Authoring Recipe, declare
+`feature_intents` and link only Geometry-owned `patterns[].feature_id`.
+The existing compiler gates invalid Cube patterns and returns bounded Texture
+handoff identities; it neither paints the texture nor deletes an older model.
+
 A semantic label never authorizes coordinates. No orphan/filler Cube; `PROVISIONAL` placement never verifies it. Material `UNRESOLVED` → `BLOCKED`.
 
 Canonical representation vocabulary is:

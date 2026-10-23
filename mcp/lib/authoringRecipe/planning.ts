@@ -26,6 +26,8 @@ import {
   type CorrectionSolverOptions,
 } from "@/lib/reference/correctionSolver";
 
+export { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
+
 const EXAMPLE_LIMIT = 12;
 
 function bounded(values: readonly string[]) {

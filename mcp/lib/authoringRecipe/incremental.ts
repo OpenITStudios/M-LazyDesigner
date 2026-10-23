@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AuthoringRecipe, CompiledCubePlacement } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
+import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
 
 export type IncrementalRecipeReason =
   | "ADDED"
@@ -205,8 +206,41 @@ export function planIncrementalRecipeRebuild(
   if (previousRecipe.id !== nextRecipe.id) {
     throw new Error("Incremental recipe rebuild requires stable recipe identity.");
   }
+  if (previousRecipe.feature_intents !== undefined &&
+      nextRecipe.feature_intents === undefined) {
+    throw new Error(
+      "FEATURE_PLAN_DOWNGRADE_REFUSED: once a recipe declares feature evidence, " +
+      "do not silently remove its representation guard during native reconciliation."
+    );
+  }
   const previous = compileAuthoringRecipe(previousRecipe);
   const next = compileAuthoringRecipe(nextRecipe);
+  // A source recipe must not silently remove an already-authored 3D feature
+  // merely by relabeling it Texture/Omit; painting or approval is not atomic
+  // with native Cube deletion in this authoring transaction.
+  if (previousRecipe.feature_intents && nextRecipe.feature_intents) {
+    const nextRoutes = new Map(
+      planRecipeFeatureRepresentations(nextRecipe.feature_intents).decisions
+        .map((entry) => [entry.id, entry.route])
+    );
+    const previousFeatureByPattern = new Map(
+      previousRecipe.patterns.map((pattern) => [pattern.id, pattern.feature_id])
+    );
+    const nextIds = new Set(next.placements.map((placement) => placement.id));
+    for (const placement of previous.placements) {
+      if (nextIds.has(placement.id)) continue;
+      const featureId = previousFeatureByPattern.get(placement.source_pattern_id);
+      if (!featureId) continue;
+      const nextRoute = nextRoutes.get(featureId);
+      if (nextRoute === "TEXTURE" || nextRoute === "OMIT") {
+        throw new Error(
+          "RECIPE_REPRESENTATION_HANDOFF_REQUIRED: " + featureId +
+          " still has authored Cube " + placement.id + ". Verify the replacement " +
+          "texture/visibility decision before separately removing Geometry."
+        );
+      }
+    }
+  }
   const previousById = new Map(previous.placements.map((placement) => [placement.id, placement]));
   const nextById = new Map(next.placements.map((placement) => [placement.id, placement]));
   const upserts: CompiledCubePlacement[] = [];

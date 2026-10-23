@@ -2,6 +2,7 @@ import type { AuthoringRecipe, CompiledAuthoringRecipe, CompiledCubePlacement, R
 import { expandRecipePattern } from "@/lib/authoringRecipe/patterns";
 import { solveRecipeConstraints } from "@/lib/authoringRecipe/constraints";
 import { applyRecipeSymmetry } from "@/lib/authoringRecipe/symmetry";
+import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
 
 function requireVec3(value: readonly number[], label: string): RecipeVec3 {
   if (value.length !== 3 || value.some((entry) => !Number.isFinite(entry))) throw new Error(label + " must contain three finite values.");
@@ -45,6 +46,50 @@ export function compileAuthoringRecipe(recipe: AuthoringRecipe): CompiledAuthori
   if (new Set(prototypeIds).size !== prototypeIds.length) throw new Error("Authoring Recipe prototype IDs must be unique.");
   recipe.prototypes.forEach(validatePrototype);
   const prototypeById = new Map(recipe.prototypes.map((prototype) => [prototype.id, prototype]));
+  const featurePlan = recipe.feature_intents !== undefined
+    ? planRecipeFeatureRepresentations(recipe.feature_intents)
+    : null;
+  if (featurePlan?.state === "review_required") {
+    throw new Error(
+      "FEATURE_DECISION_REVIEW_REQUIRED: resolve evidence or representation " +
+      featurePlan.decisions.filter((entry) => entry.route === "REVIEW_REQUIRED")
+        .map((entry) => entry.id + ":" + entry.reason).join(", ")
+    );
+  }
+  if (featurePlan) {
+    const routeById = new Map(featurePlan.decisions.map((entry) => [entry.id, entry.route]));
+    const referencedGeometryFeatures = new Set<string>();
+    for (const pattern of recipe.patterns) {
+      if (!pattern.feature_id) {
+        throw new Error(
+          "FEATURE_PATTERN_OWNER_REQUIRED: Cube pattern " + pattern.id +
+          " needs a semantic feature_id when the recipe declares feature_intents."
+        );
+      }
+      const route = routeById.get(pattern.feature_id);
+      if (!route) {
+        throw new Error("FEATURE_PATTERN_OWNER_UNKNOWN: " + pattern.id +
+          " references " + pattern.feature_id);
+      }
+      if (route !== "GEOMETRY") {
+        throw new Error(
+          "FEATURE_REPRESENTATION_MISMATCH: Cube pattern " + pattern.id +
+          " references " + route + " feature " + pattern.feature_id +
+          ". Surface detail belongs to Texture; OMIT does not create geometry."
+        );
+      }
+      referencedGeometryFeatures.add(pattern.feature_id);
+    }
+    for (const decision of featurePlan.decisions) {
+      if (decision.route === "GEOMETRY" &&
+          !referencedGeometryFeatures.has(decision.id)) {
+        throw new Error(
+          "FEATURE_GEOMETRY_UNREALIZED: required 3D feature " + decision.id +
+          " has no Cube pattern. Create necessary Geometry or return to reference review."
+        );
+      }
+    }
+  }
   const patternIds = recipe.patterns.map((pattern) => pattern.id);
   if (new Set(patternIds).size !== patternIds.length) throw new Error("Authoring Recipe pattern IDs must be unique.");
   const expanded = recipe.patterns.flatMap((pattern) => {
@@ -97,6 +142,7 @@ export function compileAuthoringRecipe(recipe: AuthoringRecipe): CompiledAuthori
   return {
     schema: 1, compiler_version: recipe.compiler_version, recipe_id: recipe.id, placements,
     symmetry_relationships: symmetry.relationships,
+    ...(featurePlan ? { feature_plan: featurePlan.summary } : {}),
     metrics: {
       prototype_count: recipe.prototypes.length, pattern_count: recipe.patterns.length,
       instance_count: placements.length, realized_cube_count: placements.length,

@@ -16,6 +16,33 @@ stateful recipe service
 
 This domain answers **what should be authored and how a recipe changes**.
 
+## Opt-in semantic feature representation
+
+`featureDecision.ts` supplies a compact, deterministic feature-level choice:
+`GEOMETRY | TEXTURE | OMIT | REVIEW_REQUIRED`. It uses **explicit**
+`feature_intents` (supported reference evidence, visual role and the
+Geometry Standard's material 3D contributions), never Cube names,
+dimensions, or automatic visual assumptions. A supported decision also needs
+non-empty `evidence_refs` source-view/claim handles; an unreferenced
+"SUPPORTED" is review-required, not a claim of proof. `planning.ts` exposes that
+pure decision API; `compiler.ts` enforces `pattern.feature_id` ownership
+before expanding native Cubes when the feature contract is present.
+
+- A supported surface marking with no 3D purpose routes to a **Texture
+  handoff**, not a Cube; an unreferenced or conflicting feature needs review.
+- A supported horn/joint/part with silhouette, contact, transform or motion
+  value remains Geometry. This does not choose its final Cube count or pivot.
+- Pattern ownership pointing at Texture/Omit is **rejected**, never silently
+  discarded. No painting, removal, or visual approval is implied.
+- Component composition namespaces planned feature IDs and rejects mixed
+  planned/unplanned components rather than dropping enforcement.
+- Existing recipe schema 1 without `feature_intents` compiles unchanged.
+  Incremental reclassification of an existing 3D part to Texture/Omit refuses
+  implicit native deletion; the replacement must be reviewed in the existing
+  Texture/Geometry lifecycle.
+
+This is not a fifth Gateway tool, a 3D inference model, or a new manager.
+
 `planning.ts` owns pure planning APIs. `service.ts` owns bounded stateful plan/apply/identity/evidence lifecycle and may compose recipe modules, but recipe source must not depend on Gateway or Runtime executors.
 
 Recipe code must not depend on `orchestration/`. Orchestration may consume recipe outputs.

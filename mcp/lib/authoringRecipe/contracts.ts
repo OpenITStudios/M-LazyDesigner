@@ -3,6 +3,42 @@ export const AUTHORING_RECIPE_COMPILER_VERSION = 1 as const;
 
 export type RecipeVec3 = [number, number, number];
 
+/** Explicit semantic feature evidence, not guesses from Cube names/size. */
+export type RecipeGeometryReason =
+  | "SILHOUETTE" | "VOLUME" | "NEGATIVE_SPACE" | "CONTACT"
+  | "LAYERING" | "TRANSFORM" | "MOTION" | "TECHNICAL";
+export type RecipeFeatureIntent = {
+  id: string;
+  label: string;
+  visual_role: "THREE_DIMENSIONAL" | "SURFACE_DETAIL" | "UNNECESSARY";
+  evidence: "SUPPORTED" | "PROVISIONAL" | "CONFLICTING" | "UNAVAILABLE";
+  /** Bounded caller-supplied reference/view claim IDs, not independent visual proof. */
+  evidence_refs?: string[];
+  geometry_reasons?: RecipeGeometryReason[];
+};
+export type RecipeFeatureRoute = "GEOMETRY" | "TEXTURE" | "OMIT" | "REVIEW_REQUIRED";
+export type RecipeFeatureDecision = {
+  id: string;
+  label: string;
+  route: RecipeFeatureRoute;
+  reason: string;
+  geometry_reasons: RecipeGeometryReason[];
+};
+type RecipeFeatureExamples = {
+  count: number;
+  examples: Array<{ id: string; label: string; reason: string }>;
+  examples_truncated: boolean;
+};
+export type RecipeFeaturePlanSummary = {
+  state: "ready" | "review_required";
+  geometry: RecipeFeatureExamples;
+  texture_handoff: RecipeFeatureExamples;
+  omitted: RecipeFeatureExamples;
+  unresolved: RecipeFeatureExamples;
+  visual_verdict: "not_evaluated";
+  note: string;
+};
+
 export type RecipeCubePrototype = {
   id: string;
   name: string;
@@ -23,6 +59,7 @@ export type RecipeInstance = {
 };
 
 export type LinearPattern = {
+  feature_id?: string;
   kind: "LINEAR";
   id: string;
   prototype_id: string;
@@ -34,6 +71,7 @@ export type LinearPattern = {
 };
 
 export type GridPattern = {
+  feature_id?: string;
   kind: "GRID";
   id: string;
   prototype_id: string;
@@ -45,6 +83,7 @@ export type GridPattern = {
 };
 
 export type RadialPattern = {
+  feature_id?: string;
   kind: "RADIAL";
   id: string;
   prototype_id: string;
@@ -116,6 +155,8 @@ export type AuthoringRecipe = {
   name: string;
   prototypes: RecipeCubePrototype[];
   patterns: RecipePattern[];
+  /** Optional all-feature routing; legacy recipes keep their original behavior. */
+  feature_intents?: RecipeFeatureIntent[];
   constraints?: RecipeConstraint[];
   symmetry?: RecipeSymmetryRelation[];
 };
@@ -150,5 +191,6 @@ export type CompiledAuthoringRecipe = {
   recipe_id: string;
   placements: CompiledCubePlacement[];
   symmetry_relationships: CompiledSymmetryRelationship[];
+  feature_plan?: RecipeFeaturePlanSummary;
   metrics: AuthoringRecipeMetrics;
 };
