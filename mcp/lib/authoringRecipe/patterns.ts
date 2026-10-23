@@ -57,11 +57,15 @@ function axisVector(axis: "X" | "Y" | "Z"): RecipeVec3 {
 }
 
 function addScaled(base: RecipeVec3, direction: RecipeVec3, scale: number): RecipeVec3 {
-  return [
+  const result: RecipeVec3 = [
     base[0] + direction[0] * scale,
     base[1] + direction[1] * scale,
     base[2] + direction[2] * scale,
   ];
+  if (result.some((value) => !Number.isFinite(value))) {
+    throw new Error("RECIPE_PATTERN_COORDINATE_NONFINITE: linear/grid translation overflow.");
+  }
+  return result;
 }
 
 function expandLinear(pattern: LinearPattern): RecipeInstance[] {
@@ -108,9 +112,15 @@ function expandGrid(pattern: GridPattern): RecipeInstance[] {
 function radialTranslation(axis: "X" | "Y" | "Z", radius: number, angle: number, center: RecipeVec3): RecipeVec3 {
   const cosine = Math.cos(angle) * radius;
   const sine = Math.sin(angle) * radius;
-  if (axis === "X") return [center[0], center[1] + cosine, center[2] + sine];
-  if (axis === "Y") return [center[0] + cosine, center[1], center[2] + sine];
-  return [center[0] + cosine, center[1] + sine, center[2]];
+  const result: RecipeVec3 = axis === "X"
+    ? [center[0], center[1] + cosine, center[2] + sine]
+    : axis === "Y"
+      ? [center[0] + cosine, center[1], center[2] + sine]
+      : [center[0] + cosine, center[1] + sine, center[2]];
+  if (result.some((value) => !Number.isFinite(value))) {
+    throw new Error("RECIPE_PATTERN_COORDINATE_NONFINITE: radial translation overflow.");
+  }
+  return result;
 }
 
 function radialRotation(axis: "X" | "Y" | "Z", angleDegrees: number, rotate: boolean): RecipeVec3 {

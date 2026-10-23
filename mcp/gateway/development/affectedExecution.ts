@@ -465,6 +465,8 @@ function sharedContractTestsForPath(path: string): readonly string[] {
     return ["mcp/tests/animation-preview-state.test.ts"];
   }
   if (path === "mcp/lib/authoringRecipe/patterns.ts" ||
+      path === "mcp/lib/authoringRecipe/constraints.ts" ||
+      path === "mcp/lib/authoringRecipe/symmetry.ts" ||
       path === "mcp/lib/authoringRecipe/compiler.ts") {
     return ["mcp/tests/parametric-authoring-engine.test.ts"];
   }

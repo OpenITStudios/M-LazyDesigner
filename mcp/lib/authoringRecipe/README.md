@@ -56,6 +56,18 @@ pattern and planned mirror before building temporary Cubes or evaluating
 constraints/Undo. Oversized requests fail explicitly, never truncate,
 sample, split or silently remove Geometry.
 
+The pure pattern, anchor constraint, and symmetry helpers now reject
+nonfinite derived coordinates at their calculation owners. Their output
+cannot silently carry NaN or Infinity into a caller. The existing compiler
+still owns final Cube-span validation and the bounded instance budget.
+
+**Exact-Cube duplicate enforcement is deliberately not added to the
+recipe compiler.** The compiler lacks native parent-group identity for
+already owned/reparented Cubes, so a hard-coded "root" comparison could
+mistake separately transformed Bones for coincident masses. Existing
+direct `manage_cubes` duplicate guards remain active; native-parent-aware
+Recipe review requires verified ownership evidence before integration.
+
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 `planning.ts` owns pure planning APIs. `service.ts` owns bounded stateful plan/apply/identity/evidence lifecycle and may compose recipe modules, but recipe source must not depend on Gateway or Runtime executors.

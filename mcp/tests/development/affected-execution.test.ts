@@ -254,6 +254,8 @@ describe("affected execution planner", () => {
   test("parametric expansion safety routes to the existing compiler regression owner", () => {
     for (const path of [
       "mcp/lib/authoringRecipe/patterns.ts",
+      "mcp/lib/authoringRecipe/constraints.ts",
+      "mcp/lib/authoringRecipe/symmetry.ts",
       "mcp/lib/authoringRecipe/compiler.ts",
     ]) {
       const plan = planAffectedExecution({

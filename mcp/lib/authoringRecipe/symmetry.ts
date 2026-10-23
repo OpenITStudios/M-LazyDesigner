@@ -5,6 +5,9 @@ import type {
 const AXIS_INDEX = { X: 0, Y: 1, Z: 2 } as const;
 
 function hasRotation(values: readonly number[]): boolean {
+  if (values.length !== 3 || values.some((value) => !Number.isFinite(value))) {
+    throw new Error("RECIPE_SYMMETRY_ROTATION_INVALID: rotation must contain three finite values.");
+  }
   return values.some((value) => Math.abs(value) > 1e-9);
 }
 
@@ -31,7 +34,19 @@ export function applyRecipeSymmetry(
   }
   const byId = new Map(solvedInstances.map((instance) => [instance.id, instance]));
   if (byId.size !== solvedInstances.length) throw new Error("Recipe symmetry requires unique source instance IDs.");
-  const output = solvedInstances.map((instance) => ({ ...instance, translation: [...instance.translation] as RecipeVec3, rotation: [...instance.rotation] as RecipeVec3 }));
+  const output = solvedInstances.map((instance) => {
+    if (instance.translation.length !== 3 ||
+        instance.translation.some((value) => !Number.isFinite(value))) {
+      throw new Error("RECIPE_SYMMETRY_INPUT_NONFINITE: " + instance.id +
+        " must have finite translation coordinates.");
+    }
+    hasRotation(instance.rotation); // validate numeric values even without mirror relations
+    return {
+      ...instance,
+      translation: [...instance.translation] as RecipeVec3,
+      rotation: [...instance.rotation] as RecipeVec3,
+    };
+  });
   const outputById = new Map(output.map((instance) => [instance.id, instance]));
   const relationships: CompiledSymmetryRelationship[] = [];
 
@@ -56,6 +71,10 @@ export function applyRecipeSymmetry(
     translation[axis] =
       relation.plane.position * 2 -
       (source.translation[axis] + size[axis]);
+    if (!Number.isFinite(translation[axis])) {
+      throw new Error("RECIPE_SYMMETRY_COORDINATE_NONFINITE: " +
+        relation.id + " reflected coordinate overflow.");
+    }
     const target: RecipeInstance = {
       ...source,
       id: relation.target_instance_id,

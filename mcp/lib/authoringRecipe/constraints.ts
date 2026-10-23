@@ -48,7 +48,16 @@ export function solveRecipeConstraints(
   prototypes: ReadonlyMap<string, RecipeCubePrototype>,
   constraints: readonly RecipeConstraint[]
 ): RecipeInstance[] {
-  const instanceById = new Map(instances.map((instance) => [instance.id, { ...instance, translation: [...instance.translation] as RecipeVec3 }]));
+  const instanceById = new Map(instances.map((instance) => {
+    if (instance.translation.length !== 3 ||
+        instance.translation.some((value) => !Number.isFinite(value))) {
+      throw new Error("RECIPE_CONSTRAINT_INPUT_NONFINITE: " + instance.id +
+        " must have finite translation coordinates.");
+    }
+    return [instance.id, {
+      ...instance, translation: [...instance.translation] as RecipeVec3,
+    }] as const;
+  }));
   if (instanceById.size !== instances.length) throw new Error("Recipe constraints require unique instance IDs.");
   const constraintsBySource = new Map<string, RecipeAnchorConstraint[]>();
   const constraintIds = constraints.map((constraint) => constraint.id);
@@ -87,6 +96,10 @@ export function solveRecipeConstraints(
         const targetCoordinate = anchorCoordinate(target.translation, targetSize, constraint.target_anchor[axis], axis);
         const sourceAnchorOffset = sourceSize[axis] * factor(constraint.source_anchor[axis]);
         const desired = targetCoordinate + offset[axis] - sourceAnchorOffset;
+        if (!Number.isFinite(desired)) {
+          throw new Error("RECIPE_CONSTRAINT_NONFINITE_COORDINATE: " +
+            constraint.id + " overflows " + instanceId + " axis " + axisName + ".");
+        }
         const existing = axisClaims.get(axis);
         if (existing && Math.abs(existing.value - desired) > 1e-9) {
           throw new Error("Recipe constraint conflict on " + instanceId + " axis " + axisName + ": " + existing.constraint + " and " + constraint.id + " disagree.");

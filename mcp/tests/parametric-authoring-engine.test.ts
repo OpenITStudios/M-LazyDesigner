@@ -8,6 +8,9 @@ import {
   expandRecipePattern,
 } from "@/lib/authoringRecipe/patterns";
 import { runParametricEfficiencyBenchmark } from "@/scripts/benchmark/benchmark-parametric-authoring";
+import { solveRecipeConstraints } from "@/lib/authoringRecipe/constraints";
+import { applyRecipeSymmetry } from "@/lib/authoringRecipe/symmetry";
+import type { RecipeCubePrototype } from "@/lib/authoringRecipe/contracts";
 
 describe("Parametric Authoring Engine G0-G2", () => {
   test("linear/grid/radial patterns expand deterministically", () => {
@@ -297,6 +300,73 @@ describe("Parametric Authoring Engine G0-G2", () => {
       patterns: linear([0, 0, 0]),
     });
     expect(thin.placements[0].to).toEqual([0.5, 2, 2]);
+  });
+
+  test("pure pattern expansion rejects overflow rather than returning nonfinite Cubes", () => {
+    expect(() => expandRecipePattern({
+      kind: "LINEAR", id: "overflow-line", prototype_id: "part",
+      count: 3, axis: "X", spacing: 1e308,
+    })).toThrow("RECIPE_PATTERN_COORDINATE_NONFINITE");
+    expect(() => expandRecipePattern({
+      kind: "GRID", id: "overflow-grid", prototype_id: "part",
+      counts: [2, 1], axes: ["X", "Y"], spacing: [1e308, 1],
+      start: [1e308, 0, 0],
+    })).toThrow("RECIPE_PATTERN_COORDINATE_NONFINITE");
+    expect(() => expandRecipePattern({
+      kind: "RADIAL", id: "overflow-radial", prototype_id: "part",
+      count: 2, axis: "Y", radius: 1e308, center: [1e308, 0, 0],
+    })).toThrow("RECIPE_PATTERN_COORDINATE_NONFINITE");
+  });
+
+  test("pure constraint and symmetry helpers reject invalid arithmetic at its source", () => {
+    const prototype: RecipeCubePrototype = {
+      id: "part", name: "Part", size: [2, 2, 2],
+    };
+    const prototypes = new Map<string, RecipeCubePrototype>([["part", prototype]]);
+    const source = expandRecipePattern({
+      kind: "LINEAR", id: "part", prototype_id: "part",
+      count: 1, axis: "X", spacing: 0,
+    })[0]!;
+    const target = {
+      ...source, id: "target",
+      translation: [1e308, 0, 0] as [number, number, number],
+    };
+    const constraint = {
+      kind: "ANCHOR" as const, id: "overrun",
+      source_instance_id: source.id, target_instance_id: target.id,
+      axes: ["X" as const],
+      source_anchor: ["MIN", "MIN", "MIN"] as ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"] as ["MIN", "MIN", "MIN"],
+      offset: [1e308, 0, 0] as [number, number, number],
+    };
+    expect(() => solveRecipeConstraints([source, target], prototypes, [constraint]))
+      .toThrow("RECIPE_CONSTRAINT_NONFINITE_COORDINATE");
+    expect(() => solveRecipeConstraints([
+      { ...source, translation: [Infinity, 0, 0] as [number, number, number] }, target,
+    ], prototypes, [])).toThrow("RECIPE_CONSTRAINT_INPUT_NONFINITE");
+    expect(() => applyRecipeSymmetry([target], prototypes, [{
+      id: "mirror", source_instance_id: target.id, target_instance_id: "mirrored",
+      plane: { axis: "X", position: 1e308 },
+      uv_policy: "UNIQUE", texture_policy: "UNIQUE", rig_policy: "INDEPENDENT",
+    }])).toThrow("RECIPE_SYMMETRY_COORDINATE_NONFINITE");
+    expect(() => applyRecipeSymmetry([
+      { ...source, rotation: [NaN, 0, 0] as [number, number, number] },
+    ], prototypes, [])).toThrow("RECIPE_SYMMETRY_ROTATION_INVALID");
+
+    const aligned = solveRecipeConstraints([
+      source, { ...source, id: "nearby",
+        translation: [4, 0, 0] as [number, number, number] },
+    ], prototypes, [{
+      ...constraint, target_instance_id: "nearby",
+      offset: [0, 0, 0], target_anchor: ["MAX", "MIN", "MIN"],
+    }]);
+    expect(aligned[0].translation[0]).toBe(6);
+    const mirrored = applyRecipeSymmetry([source], prototypes, [{
+      id: "mirror", source_instance_id: source.id, target_instance_id: "other",
+      plane: { axis: "X", position: 0 },
+      uv_policy: "UNIQUE", texture_policy: "UNIQUE", rig_policy: "INDEPENDENT",
+    }]);
+    expect(mirrored.instances[1].translation[0]).toBe(-2);
   });
 
   test("repeated-structure benchmark proves static savings without wall-clock claims", () => {
