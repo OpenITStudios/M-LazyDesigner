@@ -3,6 +3,7 @@ import { validateCubeGeometrySpan } from "@/server/tools/cubes";
 import {
   boxUvSubunitAxes,
   requireBoxUvRepresentableSpan,
+  requireDistinctCubeBatchPlacements,
 } from "@/lib/geometry/cubeSpan";
 
 describe("Geometry mutation preflight ordering", () => {
@@ -26,6 +27,42 @@ describe("Geometry mutation preflight ordering", () => {
       "worse", previous)).toThrow("sub-unit Box UV size on x");
     expect(() => requireBoxUvRepresentableSpan([0, 0, 0], [4, 0.5, 4],
       "new risk", previous)).toThrow("sub-unit Box UV size on y");
+  });
+
+  test("identical untextured batch Cubes do not create redundant geometry", () => {
+    const a = {
+      name: "body", parent_id: "bone:torso",
+      from: [0, 0, 0], to: [4, 6, 3],
+      origin: [0, 0, 0], rotation: [0, 0, 0], inflate: 0,
+    };
+    const b = { ...a, name: "body_duplicate" };
+    expect(() => requireDistinctCubeBatchPlacements([a, b]))
+      .toThrow("DUPLICATE_CUBE_PLACEMENT");
+    expect(() => requireDistinctCubeBatchPlacements([
+      a, { ...b, parent_id: "bone:arm" },
+    ])).not.toThrow();
+    expect(() => requireDistinctCubeBatchPlacements([
+      a, { ...b, rotation: [0, 15, 0] },
+    ])).not.toThrow();
+    expect(() => requireDistinctCubeBatchPlacements([
+      a, { ...b, inflate: 0.1 },
+    ])).not.toThrow();
+    expect(() => requireDistinctCubeBatchPlacements([
+      a, { ...b, from: [0, 0, 0.5], to: [4, 6, 3.5] },
+    ])).not.toThrow();
+  });
+
+  test("the exact batch duplicate guard executes before Undo but not for per-face layering", async () => {
+    const source = await Bun.file("server/tools/geometry/cubes.ts").text();
+    const create = source.slice(
+      source.indexOf("const executeCreateCubes"),
+      source.indexOf("const executeUpdateCube")
+    );
+    expect(create.indexOf("requireDistinctCubeBatchPlacements("))
+      .toBeGreaterThanOrEqual(0);
+    expect(create.indexOf("requireDistinctCubeBatchPlacements("))
+      .toBeLessThan(create.indexOf("Undo.initEdit"));
+    expect(create).toContain("if (!customFaceUvs)");
   });
 
   test("inherited Box UV mutation paths check sub-unit dimensions before Undo", async () => {

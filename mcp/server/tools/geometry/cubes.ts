@@ -20,6 +20,7 @@ import {
   hasFiniteCubeSpan,
   requireFiniteCubeSpan,
   requireBoxUvRepresentableSpan,
+  requireDistinctCubeBatchPlacements,
   validateCubeGeometrySpan,
 } from "@/lib/geometry/cubeSpan";
 export { validateCubeGeometrySpan } from "@/lib/geometry/cubeSpan";
@@ -672,6 +673,19 @@ export function registerCubesTools() {
         )
       );
       const customFaceUvs = Array.isArray(faces);
+      if (!customFaceUvs) {
+        // AI-generated duplicate masses add elements/UVs without shape value.
+        // Keep explicit per-face layers and distinct bones/pivots available.
+        requireDistinctCubeBatchPlacements(placements.map(({ element, outlinerGroup }) => ({
+          name: element.name,
+          parent_id: outlinerGroup === "root" ? "root" : outlinerGroup.uuid,
+          from: element.from,
+          to: element.to,
+          origin: element.origin,
+          rotation: element.rotation,
+          inflate: element.inflate,
+        })));
+      }
       const autoPackBoxUv = !customFaceUvs && Project?.box_uv === true;
       let plannedBoxUvOffsets: [number, number][] | null = null;
       let deferredBoxUvTemplate = false;

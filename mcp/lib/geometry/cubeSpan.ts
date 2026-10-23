@@ -42,6 +42,46 @@ export function requireBoxUvRepresentableSpan(
   }
 }
 
+/**
+ * A second identical untextured Cube in the same authoring batch cannot
+ * contribute new form or transform ownership. Scope this to exact geometry
+ * and the same resolved parent; don't guess at near-overlaps, separate
+ * articulation or custom per-face material/UV layering.
+ */
+export type CubeBatchPlacement = {
+  name: string;
+  parent_id: string;
+  from: readonly number[];
+  to: readonly number[];
+  origin?: readonly number[];
+  rotation?: readonly number[];
+  inflate?: number;
+};
+export function requireDistinctCubeBatchPlacements(
+  placements: readonly CubeBatchPlacement[]
+): void {
+  const byShape = new Map<string, string>();
+  for (const placement of placements) {
+    requireFiniteCubeSpan(placement.from, placement.to, placement.name);
+    const fingerprint = JSON.stringify([
+      placement.parent_id, placement.from, placement.to,
+      placement.origin ?? [0, 0, 0],
+      placement.rotation ?? [0, 0, 0],
+      placement.inflate ?? 0,
+    ]);
+    const previous = byShape.get(fingerprint);
+    if (previous !== undefined) {
+      throw new Error(
+        `DUPLICATE_CUBE_PLACEMENT: ${placement.name} duplicates ${previous} ` +
+        "in the same Group with exactly coincident geometry/pivot/inflate. " +
+        "Reuse one Cube for this visible mass or author an explicit per-face " +
+        "UV/material layer when a true separate layer is intentional."
+      );
+    }
+    byShape.set(fingerprint, placement.name);
+  }
+}
+
 export function hasFiniteCubeSpan(
   from: readonly number[],
   to: readonly number[]
