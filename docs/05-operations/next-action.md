@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Native Bone-transform Geometry proof preparation:
-- Existing disposable verify-geometry-live now tests native modify_group 45-degree rotation and restoration using current-world inspect_model_bounds and fixed-frame PNG, while confirming child Cube coordinates are unchanged. It restores the Bone before the existing Cube edit/Undo/Redo and Texturing handoff. No new Runtime tool or test suite.
-- Existing live Geometry smoke test and affected-execution owner cover required tools, ordering and proof boundary. Previous pure native Recipe ancestor authored-state snapshot remains in c4d153e.
-- Exact-HEAD Bun/TS and LIVE_BLOCKBENCH NOT EXECUTED (CI disabled); script assertions are only a prepared acceptance contract, not an actual tested Bone. Next: execute in a capable disposable native run, compare exported Bedrock geometry and approved Golden references. Generator-coupled UV registration remains deferred.
+2026-10-23 Bedrock Geometry compile parity acceptance:
+- Existing disposable verify-geometry-live now calls export_model(codec_id=bedrock) after Cube Undo/Redo, with complete content-only native JSON and no filesystem/Save As effects. It verifies one Bone pivot/name, exact compiled X-flipped Cube origins/sizes, body Box UV, and all six thin per-face UV rectangles. Fails on missing/extra Cube or UV change.
+- Same existing live Geometry contract has positive/negative synthetic JSON regression cases and native call-order assertions. Prior Group 45-degree render/restore and child geometry invariants are retained; no added Runtime tool or exporter.
+- Source/static only; exact-SHA Bun/TypeScript, native Blockbench export, JSON, visual fidelity and in-game result NOT EXECUTED (CI disabled). Next: run exact-source/native smoke and accept only observed proof; Golden asset benchmark and generated UV registration deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

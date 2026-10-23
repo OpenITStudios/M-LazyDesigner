@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { assertBedrockGeometryExport } from "@/scripts/verify/verify-geometry-live";
 
 async function source(path: string): Promise<string> {
   return Bun.file(path).text();
@@ -22,7 +23,7 @@ describe("live Geometry E2E verifier source contract", () => {
     expect(script).toContain("build_identity");
     expect(script).toContain('visual_quality: "not_evaluated"');
     expect(script).toContain(
-      "Runtime/readback/render/history proof is not reference-fidelity proof."
+      "do not prove reference or in-game visual fidelity."
     );
 
     expect(script).not.toContain("risky_eval");
@@ -55,6 +56,79 @@ describe("live Geometry E2E verifier source contract", () => {
     expect(block).not.toContain('operation: "create"');
     expect(block).not.toContain("Undo.undo()");
     expect(script).toContain("requireDisposableConsent();");
+  });
+
+  test("native Bedrock compile parity preserves Bone, Cube mass and six Per-face UV rectangles", () => {
+    const faces = {
+      north: { uv: [0, 0], uv_size: [1, 4] },
+      south: { uv: [2, 0], uv_size: [1, 4] },
+      east: { uv: [4, 0], uv_size: [0.5, 4] },
+      west: { uv: [5, 0], uv_size: [0.5, 4] },
+      up: { uv: [7, 0.5], uv_size: [-1, -0.5] },
+      down: { uv: [9, 0.5], uv_size: [-1, -0.5] },
+    };
+    const artifact = {
+      format_version: "1.12.0",
+      "minecraft:geometry": [{
+        description: {
+          identifier: "geometry.disposable", texture_width: 128, texture_height: 128,
+        },
+        bones: [{
+          name: "e2e_root", pivot: [0, 8, 0],
+          cubes: [
+            { origin: [-6, 0, -2], size: [10, 8, 4], uv: [0, 0] },
+            { origin: [-8, 0, -0.25], size: [1, 4, 0.5], uv: faces },
+          ],
+        }],
+      }],
+    };
+    const expected = {
+      boneName: "e2e_root", bonePivot: [0, 8, 0],
+      bodyFrom: [-4, 0, -2], bodyTo: [6, 8, 2],
+      thinFrom: [7, 0, -0.25], thinTo: [8, 4, 0.25],
+    };
+    const raw = JSON.stringify(artifact);
+    const evidence = assertBedrockGeometryExport(raw, expected);
+    expect(evidence.exported_cube_count).toBe(2);
+    expect(evidence.verified_thin_face_count).toBe(6);
+    expect(evidence.visual_quality).toBe("not_evaluated");
+
+    const wrongPivot = structuredClone(artifact);
+    wrongPivot["minecraft:geometry"][0].bones[0].pivot = [0, 0, 0];
+    expect(() => assertBedrockGeometryExport(JSON.stringify(wrongPivot), expected))
+      .toThrow("Bone pivot");
+    const wrongMass = structuredClone(artifact);
+    wrongMass["minecraft:geometry"][0].bones[0].cubes[0].size = [10, 8, 3];
+    expect(() => assertBedrockGeometryExport(JSON.stringify(wrongMass), expected))
+      .toThrow("body size/position");
+    const wrongUv = structuredClone(artifact);
+    (wrongUv["minecraft:geometry"][0].bones[0].cubes[1].uv as typeof faces)
+      .east.uv_size = [0, 4];
+    expect(() => assertBedrockGeometryExport(JSON.stringify(wrongUv), expected))
+      .toThrow("thin face east");
+    const missing = structuredClone(artifact);
+    missing["minecraft:geometry"][0].bones[0].cubes.pop();
+    expect(() => assertBedrockGeometryExport(JSON.stringify(missing), expected))
+      .toThrow("lost or invented a fixture Cube");
+    expect(() => assertBedrockGeometryExport("not-json", expected))
+      .toThrow("BEDROCK_EXPORT_INVALID_JSON");
+  });
+
+  test("live Bedrock geometry parity checks compile-only after native Undo/Redo", async () => {
+    const text = await source("scripts/verify/verify-geometry-live.ts");
+    const redo = text.indexOf('await client.callTool("redo"');
+    const compiled = text.indexOf('await client.callTool("export_model"', redo);
+    const parity = text.indexOf("assertBedrockGeometryExport(compiled.content", compiled);
+    const output = text.indexOf("bedrock_export_parity: bedrockParity", parity);
+    expect(redo).toBeGreaterThanOrEqual(0);
+    expect(compiled).toBeGreaterThan(redo);
+    expect(parity).toBeGreaterThan(compiled);
+    expect(output).toBeGreaterThan(parity);
+    expect(text).toContain('codec_id: "bedrock"');
+    expect(text).toContain("max_content_length: 2_000_000");
+    expect(text).toContain('compiled.save_behavior === "COMPILE_ONLY"');
+    expect(text).toContain("compiled.truncated === false");
+    expect(text).not.toContain('codec_id: "project"');
   });
 
   test("runs a bounded create-readback-render-mutate-undo-redo sequence through current consolidated tools", async () => {

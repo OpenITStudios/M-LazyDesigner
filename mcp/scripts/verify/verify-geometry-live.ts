@@ -18,6 +18,7 @@ const REQUIRED_TOOLS = [
   "inspect_elements",
   "inspect_model_bounds",
   "capture_model_views",
+  "export_model",
   "undo",
   "redo",
 ] as const;
@@ -105,6 +106,114 @@ async function renderedModelSize(client: LiveMcpClient): Promise<number[]> {
     "Native geometry bounds did not provide three finite current-world dimensions."
   );
   return [...(size as number[])];
+}
+
+/**
+ * Read native Bedrock codec output from the disposable Geometry fixture.
+ * This is a compile-parity acceptance assertion, not an exporter or a
+ * visual/in-game fidelity scorer.
+ */
+export function assertBedrockGeometryExport(
+  compiledJson: string,
+  expectation: {
+    boneName: string;
+    bonePivot: readonly number[];
+    bodyFrom: readonly number[];
+    bodyTo: readonly number[];
+    thinFrom: readonly number[];
+    thinTo: readonly number[];
+  }
+) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(compiledJson) as unknown;
+  } catch {
+    throw new Error("BEDROCK_EXPORT_INVALID_JSON: native codec did not return JSON.");
+  }
+  expect(parsed !== null && typeof parsed === "object" && !Array.isArray(parsed),
+    "Bedrock export must contain one JSON root object.");
+  const root = parsed as JsonObject;
+  expect(typeof root.format_version === "string" && root.format_version.length > 0,
+    "Bedrock export lost its format_version.");
+  const geometries = root["minecraft:geometry"];
+  expect(Array.isArray(geometries) && geometries.length === 1,
+    "Bedrock export must have exactly one minecraft:geometry model.");
+  const model = geometries[0] as JsonObject;
+  const description = model.description as JsonObject | undefined;
+  expect(description && typeof description.identifier === "string" &&
+    description.identifier.startsWith("geometry.") &&
+    description.texture_width === 128 && description.texture_height === 128,
+    "Bedrock export changed Geometry identifier or logical UV dimensions.");
+  const bones = model.bones;
+  expect(Array.isArray(bones) && bones.length === 1,
+    "Bedrock export lost/duplicated the authored root Bone.");
+  const bone = bones[0] as JsonObject;
+  expect(bone.name === expectation.boneName,
+    "Bedrock export changed the authored Bone name.");
+  expect(sameVec3(bone.pivot, [
+    -expectation.bonePivot[0], expectation.bonePivot[1], expectation.bonePivot[2],
+  ]), "Bedrock export changed Bone pivot.");
+  expect(bone.rotation === undefined || sameVec3(bone.rotation, [0, 0, 0]),
+    "Bedrock export retained an unexpected Bone rotation after restoration.");
+
+  const cubes = bone.cubes;
+  expect(Array.isArray(cubes) && cubes.length === 2,
+    "Bedrock export lost or invented a fixture Cube.");
+  const findCube = (name: string, from: readonly number[], to: readonly number[]) => {
+    expect(from.length === 3 && to.length === 3,
+      "Bedrock fixture requires 3D Cube coordinates.");
+    const size = from.map((start, axis) => to[axis] - start);
+    const nativeOrigin = [-to[0], from[1], from[2]];
+    const matches = cubes.filter((value) =>
+      value !== null && typeof value === "object" &&
+      sameVec3((value as JsonObject).size, size) &&
+      sameVec3((value as JsonObject).origin, nativeOrigin));
+    expect(matches.length === 1,
+      "Bedrock export changed or omitted " + name + " size/position.");
+    return matches[0] as JsonObject;
+  };
+  const body = findCube("body", expectation.bodyFrom, expectation.bodyTo);
+  const thin = findCube("thin per-face", expectation.thinFrom, expectation.thinTo);
+  expect(Array.isArray(body.uv) && body.uv.length === 2,
+    "Bedrock export changed the body from Box UV.");
+  const faceMap = thin.uv as JsonObject | undefined;
+  expect(faceMap && !Array.isArray(faceMap) && typeof faceMap === "object",
+    "Bedrock export changed the thin Cube from explicit Per-face UV.");
+  const faceNames = Object.keys(faceMap);
+  expect(faceNames.length === THIN_FACE_UV.length,
+    "Bedrock export dropped or invented a thin Cube UV face.");
+  for (const face of THIN_FACE_UV) {
+    const raw = faceMap[face.face] as JsonObject | undefined;
+    expect(raw && Array.isArray(raw.uv) && Array.isArray(raw.uv_size) &&
+      raw.uv.length === 2 && raw.uv_size.length === 2 &&
+      [...raw.uv, ...raw.uv_size].every(
+        (value) => typeof value === "number" && Number.isFinite(value)
+      ), "Bedrock export has missing/invalid UV on thin face " + face.face);
+    const uv = raw.uv as number[];
+    const size = raw.uv_size as number[];
+    const observed = [
+      Math.min(uv[0], uv[0] + size[0]),
+      Math.min(uv[1], uv[1] + size[1]),
+      Math.max(uv[0], uv[0] + size[0]),
+      Math.max(uv[1], uv[1] + size[1]),
+    ];
+    const expected = [
+      Math.min(face.uv[0], face.uv[2]),
+      Math.min(face.uv[1], face.uv[3]),
+      Math.max(face.uv[0], face.uv[2]),
+      Math.max(face.uv[1], face.uv[3]),
+    ];
+    expect(observed.every((value, axis) => Math.abs(value - expected[axis]) < 1e-6),
+      "Bedrock export changed the rectangle of thin face " + face.face);
+  }
+  return {
+    format_version: root.format_version as string,
+    bone_name: bone.name as string,
+    exported_cube_count: cubes.length,
+    verified_thin_face_count: faceNames.length,
+    scope: "compiled_native_bedrock_geometry_and_uv" as const,
+    visual_quality: "not_evaluated" as const,
+  };
 }
 
 async function main(): Promise<void> {
@@ -295,6 +404,29 @@ async function main(): Promise<void> {
     "Geometry body Undo/Redo"
   );
 
+  // Compile-only: no filesystem side effects or Save As identity changes.
+  // Keep the disposable shared AUTHORING project open for Texturing.
+  const compiled = structuredObject(
+    await client.callTool("export_model", {
+      codec_id: "bedrock",
+      max_content_length: 2_000_000,
+    }, "inspection"),
+    "export_model"
+  );
+  expect(compiled.save_behavior === "COMPILE_ONLY" &&
+    compiled.wrote_to_path === null &&
+    compiled.truncated === false && compiled.encoding === "utf-8" &&
+    typeof compiled.content === "string",
+    "Native Bedrock Geometry parity requires complete compile-only JSON.");
+  const bedrockParity = assertBedrockGeometryExport(compiled.content as string, {
+    boneName: AUTHORING_E2E_BONE_NAME,
+    bonePivot: [0, 8, 0],
+    bodyFrom: [-4, 0, -2],
+    bodyTo: [6, 8, 2],
+    thinFrom: [7, 0, -0.25],
+    thinTo: [8, 4, 0.25],
+  });
+
   console.log(
     JSON.stringify(
       {
@@ -321,12 +453,13 @@ async function main(): Promise<void> {
         native_bone_rotation_changed_front_capture: true,
         restored_bone_rotation_and_world_bounds: true,
         child_geometry_unchanged_during_group_rotation: true,
+        bedrock_export_parity: bedrockParity,
         modification_receipt_present: Object.keys(modification).length > 0,
         current_public_cube_surface: "manage_cubes",
         current_public_inspection_surface: "inspect_elements",
         cost: client.snapshotMetrics(),
         visual_quality: "not_evaluated",
-        note: "Leaves the disposable project open for Texturing in the same shared AUTHORING session. Thin-face proof checks representation/UV preflight without thickening geometry. Runtime/readback/render/history proof is not reference-fidelity proof.",
+        note: "Leaves the disposable project open for Texturing in the same shared AUTHORING session. Thin-face proof checks representation/UV preflight without thickening geometry. Runtime/readback/render/history and compiled Bedrock Geometry/UV parity do not prove reference or in-game visual fidelity.",
       },
       null,
       2
