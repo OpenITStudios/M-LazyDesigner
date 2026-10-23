@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import {
   analyzeAxisAlignedSurfaceEvidence,
   analyzeStaticCubeContainment,
+  analyzeStaticMarginalProjection,
+  analyzeStaticCubeMergeCandidates,
 } from "@/lib/geometrySurfaceEvidence";
 
 const cube = (uuid: string, from: number[], to: number[], rotation = [0, 0, 0]) => ({
@@ -96,6 +98,124 @@ test("bounded containment results are input-order invariant and show partial sca
   expect(capped.checked_target_count).toBe(1);
   expect(capped.unvisited_target_count).toBeGreaterThan(0);
   expect(capped.examples_truncated).toBe(true);
+});
+
+test("multi-Cube projected coverage detects zero marginal outline without a containing Cube", () => {
+  const target = { ...cube("panel", [0, 0, 0], [4, 4, 1]), parent_id: "root" };
+  const left = { ...cube("left", [0, 0, 0], [2, 4, 1]), parent_id: "root" };
+  const right = { ...cube("right", [2, 0, 0], [4, 4, 1]), parent_id: "root" };
+  const result = analyzeStaticMarginalProjection([right, target, left], {
+    target_cube_ids: ["panel"],
+  });
+  expect(result.state).toBe("available");
+  expect(result.no_new_projected_outline_count).toBe(1);
+  expect(result.examples[0]).toMatchObject({
+    cube_uuid: "panel", outcome: "NO_ADDITIONAL_PROJECTED_OUTLINE",
+    projected_added_ratio: { front: 0, side: 0, top: 0 },
+  });
+  expect(analyzeStaticCubeContainment([target, left, right], {
+    target_cube_ids: ["panel"],
+  }).contained_candidate_count).toBe(0);
+});
+
+test("protruding horns keep measurable marginal outlines in front and top", () => {
+  const body = { ...cube("body", [0, 0, 0], [8, 8, 8]), parent_id: "root" };
+  const horn = { ...cube("horn", [7, 5, 3], [10, 7, 5]), parent_id: "root" };
+  const result = analyzeStaticMarginalProjection([horn, body], {
+    target_cube_ids: ["horn"],
+  });
+  expect(result.adds_projected_outline_count).toBe(1);
+  expect(result.no_new_projected_outline_count).toBe(0);
+  expect(result.examples[0].outcome).toBe("ADDS_PROJECTED_OUTLINE");
+  expect(result.examples[0].projected_added_ratio.front).toBeGreaterThan(0);
+  expect(result.examples[0].projected_added_ratio.top).toBeGreaterThan(0);
+  expect(result.examples[0].projected_added_ratio.side).toBe(0);
+});
+
+test("different bones or rotation cannot erase a target outline review", () => {
+  const body = { ...cube("body", [0, 0, 0], [8, 8, 8]), parent_id: "torso" };
+  const arm = { ...cube("arm", [2, 2, 2], [4, 4, 4]), parent_id: "arm" };
+  const distinct = analyzeStaticMarginalProjection([body, arm], {
+    target_cube_ids: ["arm"],
+  });
+  expect(distinct.state).toBe("available");
+  expect(distinct.examples[0].projected_added_ratio.front).toBe(1);
+  const rotatedPeer = { ...cube("other", [0, 0, 0], [8, 8, 8], [0, 45, 0]),
+    parent_id: "arm" };
+  const partial = analyzeStaticMarginalProjection([arm, rotatedPeer], {
+    target_cube_ids: ["arm"],
+  });
+  expect(partial.state).toBe("partial");
+  expect(partial.checked_target_count).toBe(0);
+  expect(partial.no_new_projected_outline_count).toBe(0);
+});
+
+test("projection examples prioritize hidden contour review over many independent visible masses", () => {
+  const base = { ...cube("zz_hidden", [1, 1, 1], [2, 2, 2]), parent_id: "root" };
+  const outer = { ...cube("zz_shell", [0, 0, 0], [8, 8, 8]), parent_id: "root" };
+  const independent = Array.from({ length: 6 }, (_, index) => ({
+    ...cube("a_" + index, [20 + index * 2, 0, 0], [21 + index * 2, 1, 1]),
+    parent_id: "root",
+  }));
+  const result = analyzeStaticMarginalProjection([...independent, outer, base],
+    { exampleLimit: 1 });
+  expect(result.no_new_projected_outline_count).toBeGreaterThan(0);
+  expect(result.examples).toHaveLength(1);
+  expect(result.examples[0].cube_uuid).toBe("zz_hidden");
+  expect(result.examples_truncated).toBe(true);
+});
+
+test("extreme projected area remains partial rather than emitting nonfinite footprint metrics", () => {
+  const huge = { ...cube("huge", [0, 0, 0], [1e200, 1e200, 1e200]),
+    parent_id: "root" };
+  const result = analyzeStaticMarginalProjection([huge]);
+  expect(result.state).toBe("partial");
+  expect(result.unsupported_target_count).toBe(1);
+  expect(result.examples).toEqual([]);
+});
+
+test("projected union handles a hole, remains input-order stable and respects pair budget", () => {
+  const data = [
+    { ...cube("target", [0, 0, 0], [4, 4, 1]), parent_id: "root" },
+    { ...cube("bottom", [0, 0, 0], [4, 1, 1]), parent_id: "root" },
+    { ...cube("top", [0, 3, 0], [4, 4, 1]), parent_id: "root" },
+  ];
+  const full = analyzeStaticMarginalProjection(data, { target_cube_ids: ["target"] });
+  expect(full.adds_projected_outline_count).toBe(1);
+  expect(full.examples[0].projected_added_ratio.front).toBe(0.5);
+  expect(analyzeStaticMarginalProjection([...data].reverse(),
+    { target_cube_ids: ["target"] })).toEqual(full);
+  const capped = analyzeStaticMarginalProjection(data, {
+    target_cube_ids: ["target"], pairBudget: 1,
+  });
+  expect(capped.state).toBe("partial");
+  expect(capped.checked_target_count).toBe(0);
+  expect(capped.unvisited_target_count).toBe(1);
+});
+
+test("exact same-parent adjacent Cubes produce review-only merge candidates", () => {
+  const left = { ...cube("left", [0, 0, 0], [2, 2, 2]),
+    parent_id: "root", origin: [0, 0, 0] };
+  const right = { ...cube("right", [2, 0, 0], [4, 2, 2]),
+    parent_id: "root", origin: [0, 0, 0] };
+  const result = analyzeStaticCubeMergeCandidates([right, left]);
+  expect(result.merge_candidate_count).toBe(1);
+  expect(result.examples[0]).toMatchObject({
+    cube_uuids: ["left", "right"], axis: "x",
+    merged_from: [0, 0, 0], merged_to: [4, 2, 2],
+    requirement: "UV_TEXTURE_PIVOT_RIG_REVIEW",
+  });
+  expect(result.note).toContain("not permission to merge");
+  const inspection = analyzeAxisAlignedSurfaceEvidence([left, right]);
+  expect(inspection.rest_pose_merge_candidates.merge_candidate_count).toBe(1);
+  const wrongPivot = { ...right, origin: [1, 0, 0] };
+  expect(analyzeStaticCubeMergeCandidates([left, wrongPivot]).merge_candidate_count).toBe(0);
+  expect(analyzeStaticCubeMergeCandidates([left,
+    { ...right, parent_id: "different_bone" }]).merge_candidate_count).toBe(0);
+  expect(analyzeStaticCubeMergeCandidates([left,
+    { ...right, from: [2.01, 0, 0] }]).merge_candidate_count).toBe(0);
+  expect(analyzeStaticCubeMergeCandidates([left,
+    { ...right, inflate: 0.1 }]).merge_candidate_count).toBe(0);
 });
 
 test("unsupported transforms remain partial rather than false-clean", () => {

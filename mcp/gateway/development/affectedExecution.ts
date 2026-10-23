@@ -466,6 +466,10 @@ function sharedContractTestsForPath(path: string): readonly string[] {
     return ["mcp/tests/geometry-preflight-order.test.ts",
       "mcp/tests/quality-intelligence.test.ts"];
   }
+  if (path === "mcp/lib/geometry/surfaceEvidence.ts") {
+    return ["mcp/tests/geometry-preflight-order.test.ts",
+      "mcp/tests/geometry-surface-evidence.test.ts"];
+  }
   if (path === "mcp/scripts/verify/verify-texture-runtime-live.ts") {
     return ["mcp/tests/live/texture-runtime-live-contract.test.ts"];
   }

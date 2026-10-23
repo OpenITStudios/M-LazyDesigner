@@ -221,6 +221,18 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("marginal projected Geometry evidence selects current owner regressions", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/lib/geometry/surfaceEvidence.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/geometry-preflight-order.test.ts",
+      "mcp/tests/geometry-surface-evidence.test.ts",
+    ]);
+  });
+
   test("selects runtime checks and exact owner tests for a bounded tool change", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/server/tools/geometry/cubes.ts"],

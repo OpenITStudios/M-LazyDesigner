@@ -52,6 +52,31 @@ describe("Geometry mutation preflight ordering", () => {
     ])).not.toThrow();
   });
 
+  test("geometry inspection projects Cube pivot and parent into merge evidence", async () => {
+    const source = await Bun.file("server/tools/validation/qualityEvidenceRuntime.ts").text();
+    const start = source.indexOf("function geometrySurfaceRuntime()");
+    const end = source.indexOf("function uvPhysicalRuntime()", start);
+    const body = source.slice(start, end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(body).toContain("origin: [...cube.origin]");
+    expect(body).toContain("cube.parent instanceof Group");
+  });
+
+  test("direct Cube create plans marginal projection and merge before native Undo", async () => {
+    const source = await Bun.file("server/tools/geometry/cubes.ts").text();
+    const create = source.slice(source.indexOf("const executeCreateCubes"),
+      source.indexOf("const executeUpdateCube"));
+    for (const method of ["analyzeStaticMarginalProjection(", "analyzeStaticCubeMergeCandidates("]) {
+      expect(create.indexOf(method)).toBeGreaterThanOrEqual(0);
+      expect(create.indexOf(method)).toBeLessThan(create.indexOf("Undo.initEdit"));
+    }
+    expect(create).toContain("geometry_contribution_review");
+    expect(create).toContain("marginal_projection:");
+    expect(create).toContain("merge_candidates:");
+    expect(create).toContain("realId(entry.cube_uuid)");
+  });
+
   test("direct Cube create returns evidence for interior filler before opening native Undo", async () => {
     const source = await Bun.file("server/tools/geometry/cubes.ts").text();
     const block = source.slice(source.indexOf("const executeCreateCubes"),

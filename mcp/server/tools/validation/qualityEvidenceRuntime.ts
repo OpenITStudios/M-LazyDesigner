@@ -36,6 +36,7 @@ function geometrySurfaceRuntime() {
         to: [...cube.to],
         inflate: cube.inflate ?? 0,
         rotation: [...cube.rotation],
+        origin: [...cube.origin],
         parent_id:
           typeof Group !== "undefined" && cube.parent instanceof Group
             ? cube.parent.uuid

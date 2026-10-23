@@ -32,6 +32,8 @@ import {
 } from "@/lib/uv/boxLayout";
 import {
   analyzeStaticCubeContainment,
+  analyzeStaticMarginalProjection,
+  analyzeStaticCubeMergeCandidates,
   type SurfaceEvidenceCube,
 } from "@/lib/geometry/surfaceEvidence";
 
@@ -677,7 +679,11 @@ export function registerCubesTools() {
         )
       );
       const customFaceUvs = Array.isArray(faces);
-      let contributionPreflight: ReturnType<typeof analyzeStaticCubeContainment> | null = null;
+      let contributionPreflight: {
+        containment: ReturnType<typeof analyzeStaticCubeContainment>;
+        projection: ReturnType<typeof analyzeStaticMarginalProjection>;
+        merges: ReturnType<typeof analyzeStaticCubeMergeCandidates>;
+      } | null = null;
       if (!customFaceUvs) {
         // AI-generated duplicate masses add elements/UVs without shape value.
         // Keep explicit per-face layers and distinct bones/pivots available.
@@ -699,6 +705,7 @@ export function registerCubesTools() {
             from: element.from,
             to: element.to,
             rotation: element.rotation,
+            origin: element.origin ?? [0, 0, 0],
             inflate: element.inflate ?? 0,
             parent_id: outlinerGroup === "root" ? "root" : outlinerGroup.uuid,
           })
@@ -711,15 +718,19 @@ export function registerCubesTools() {
             from: cube.from,
             to: cube.to,
             rotation: cube.rotation,
+            origin: cube.origin,
             inflate: cube.inflate ?? 0,
             parent_id: typeof Group !== "undefined" && cube.parent instanceof Group
               ? cube.parent.uuid
               : cube.parent === "root" ? "root" : null,
           }));
-        contributionPreflight = analyzeStaticCubeContainment(
-          [...existing, ...pending],
-          { target_cube_ids: pending.map((item) => item.uuid) }
-        );
+        const source = [...existing, ...pending];
+        const scope = { target_cube_ids: pending.map((item) => item.uuid) };
+        contributionPreflight = {
+          containment: analyzeStaticCubeContainment(source, scope),
+          projection: analyzeStaticMarginalProjection(source, scope),
+          merges: analyzeStaticCubeMergeCandidates(source, scope),
+        };
       }
       const autoPackBoxUv = !customFaceUvs && Project?.box_uv === true;
       let plannedBoxUvOffsets: [number, number][] | null = null;
@@ -810,6 +821,7 @@ export function registerCubesTools() {
       }
 
       Canvas.updateAll();
+      const capturedContribution = contributionPreflight;
       const result = {
         execution: "applied" as const,
         visual_verdict: "not_evaluated" as const,
@@ -825,20 +837,41 @@ export function registerCubesTools() {
           return state;
         }),
         visual_scope: cubeVisualScope(cubes),
-        ...(contributionPreflight && (
-          contributionPreflight.contained_candidate_count > 0 ||
-          contributionPreflight.state === "partial"
+        ...(capturedContribution && (
+          capturedContribution.containment.contained_candidate_count > 0 ||
+          capturedContribution.projection.no_new_projected_outline_count > 0 ||
+          capturedContribution.merges.merge_candidate_count > 0 ||
+          capturedContribution.containment.state === "partial" ||
+          capturedContribution.projection.state === "partial" ||
+          capturedContribution.merges.state === "partial"
         ) ? {
-          geometry_contribution_review: {
-            ...contributionPreflight,
-            examples: contributionPreflight.examples.map((entry) => {
-              const pendingIndex = Number(entry.cube_uuid.slice("pending-cube:".length));
-              return {
-                ...entry,
-                cube_uuid: cubes[pendingIndex]?.uuid ?? entry.cube_uuid,
-              };
-            }),
-          },
+          geometry_contribution_review: (() => {
+            const realId = (id: string) => {
+              if (!id.startsWith("pending-cube:")) return id;
+              const index = Number(id.slice("pending-cube:".length));
+              return cubes[index]?.uuid ?? id;
+            };
+            return {
+              ...capturedContribution.containment,
+              examples: capturedContribution.containment.examples.map((entry) => ({
+                ...entry, cube_uuid: realId(entry.cube_uuid),
+                containing_cube_uuid: realId(entry.containing_cube_uuid),
+              })),
+              marginal_projection: {
+                ...capturedContribution.projection,
+                examples: capturedContribution.projection.examples.map((entry) => ({
+                  ...entry, cube_uuid: realId(entry.cube_uuid),
+                })),
+              },
+              merge_candidates: {
+                ...capturedContribution.merges,
+                examples: capturedContribution.merges.examples.map((entry) => ({
+                  ...entry,
+                  cube_uuids: entry.cube_uuids.map(realId) as [string, string],
+                })),
+              },
+            };
+          })(),
         } : {}),
       };
       const uvNote = plannedBoxUvOffsets

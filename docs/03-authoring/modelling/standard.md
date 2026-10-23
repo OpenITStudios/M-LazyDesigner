@@ -339,6 +339,20 @@ surfaces, visibility variants, material or independent motion can still make
 such geometry necessary. Review the mapped reference and affected views
 before removal or replacement; these findings never authorize auto-delete.
 
+The same existing `surface_integrity` and `manage_cubes(create)` receipt now
+include **parent-local three-view projected-union contribution**. Unlike an
+axis-aligned bounding envelope, this measures how much projected contour
+area a Cube adds beyond the union of compatible sibling Cubes, including
+holes between multiple masses. A zero-marginal projection from front/side/top
+is **review evidence only**: it cannot prove redundant volume, opacity,
+animation suitability or semantic necessity. Rotated or unsupported siblings
+make that target `partial`, not falsely redundant.
+
+`rest_pose_merge_candidates` identifies exact same-parent, same-origin,
+unrotated, uninflated, face-adjacent rectangular unions. It does not mutate
+objects or assert equivalent UV, independent visibility or joint ownership;
+only a separately reference-verified edit can replace two Cubes with one.
+
 The intended outcome is **minimum sufficient geometry**, not minimum node count.
 
 ### Complexity Escalation Gate
