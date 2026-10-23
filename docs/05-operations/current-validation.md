@@ -4,6 +4,15 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 ## Current authority
 
+**2026-10-23 REMOTE_GITHUB source-only, correction/UV parity follow-up:** Existing
+semantic Recipe rewrite now supports reference BOUNDS CENTER and explicit
+MIN/CENTER/MAX resize anchors with pivot and post-compile selected-Cube parity.
+Native Geometry export verifier now checks creation-receipt Box UV offsets,
+signed Per-face UV orientation and rotation, with negative regressions in the
+existing tests. Exact-HEAD Bun/TypeScript, native Blockbench codec output,
+visual fidelity and actual accepted-result cost are **NOT EXECUTED**
+(verification CI remains disabled). Existing Golden tasks are UNMEASURED.
+
 **2026-10-23 REMOTE_GITHUB source-only:** Four-issue owner changes: Box UV and exact Cube duplicate prevention (`8b14c2a`, `d2fb30b`); underside-first texture scanning and scoped face-treatment coverage (`43c54a4`, `cd265e0`); shared UV cohort safety and semantic locality selection (`984ce3a`, `d5a75e4`); strict keyframe creation compaction and piecewise numeric recovery (`900c0c4`, `4b632c3`). Matching-HEAD Bun/TypeScript, native Blockbench, exported JSON, visual fidelity, and measured model/token cost are **NOT EXECUTED** (verification CI disabled). Regression tests are authored, not run; older proof below remains SHA-scoped.
 
 2026-10-21: LOCAL_CODE, isolated Windows x64 checkout, OpenITStudios/M-LazyDesigner / Local. Grouped cleanup source: `ba4ed7f376f44d3cd7092bec8016ba26b0cd9f00` (repairs after `30a0c52c`). Original dirty checkout/assets untouched. Bun 1.4.3; existing dependencies reused, Desktop lockfile hashes matched. CI DISABLED; no Actions, main change, release or native mutation.

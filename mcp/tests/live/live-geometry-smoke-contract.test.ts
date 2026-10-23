@@ -83,7 +83,7 @@ describe("live Geometry E2E verifier source contract", () => {
       }],
     };
     const expected = {
-      boneName: "e2e_root", bonePivot: [0, 8, 0],
+      boneName: "e2e_root", bonePivot: [0, 8, 0], bodyUvOffset: [0, 0],
       bodyFrom: [-4, 0, -2], bodyTo: [6, 8, 2],
       thinFrom: [7, 0, -0.25], thinTo: [8, 4, 0.25],
     };
@@ -101,6 +101,25 @@ describe("live Geometry E2E verifier source contract", () => {
     wrongMass["minecraft:geometry"][0].bones[0].cubes[0].size = [10, 8, 3];
     expect(() => assertBedrockGeometryExport(JSON.stringify(wrongMass), expected))
       .toThrow("body size/position");
+    const wrongBoxUv = structuredClone(artifact);
+    wrongBoxUv["minecraft:geometry"][0].bones[0].cubes[0].uv = [1, 0];
+    expect(() => assertBedrockGeometryExport(JSON.stringify(wrongBoxUv), expected))
+      .toThrow("Box UV offset");
+    const mirroredNorth = structuredClone(artifact);
+    (mirroredNorth["minecraft:geometry"][0].bones[0].cubes[1].uv as typeof faces)
+      .north = { uv: [1, 4], uv_size: [-1, -4] };
+    expect(() => assertBedrockGeometryExport(JSON.stringify(mirroredNorth), expected))
+      .toThrow("thin face north");
+    const mirroredTop = structuredClone(artifact);
+    (mirroredTop["minecraft:geometry"][0].bones[0].cubes[1].uv as typeof faces)
+      .up = { uv: [6, 0], uv_size: [1, 0.5] };
+    expect(() => assertBedrockGeometryExport(JSON.stringify(mirroredTop), expected))
+      .toThrow("thin face up");
+    const rotatedFace = structuredClone(artifact);
+    Object.assign((rotatedFace["minecraft:geometry"][0].bones[0].cubes[1].uv as typeof faces).east,
+      { uv_rotation: 90 });
+    expect(() => assertBedrockGeometryExport(JSON.stringify(rotatedFace), expected))
+      .toThrow("thin face east");
     const wrongUv = structuredClone(artifact);
     (wrongUv["minecraft:geometry"][0].bones[0].cubes[1].uv as typeof faces)
       .east.uv_size = [0, 4];

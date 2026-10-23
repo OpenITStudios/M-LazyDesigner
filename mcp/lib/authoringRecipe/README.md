@@ -54,6 +54,15 @@ Geometry after arithmetic rounding or deflation. These checks are pure and
 non-destructive, **not** a visual scorer or geometry auto-simplifier.
 Fractional 3D remains eligible for explicit Per-face UV.
 
+Reference BOUNDS intents use CENTER resize. The existing semantic rewrite now
+shifts directly owned LINEAR/GRID/RADIAL patterns for MIN/CENTER/MAX anchors,
+and preserves the original authored pivot rather than silently recentering it.
+The final compiled selected Cubes must match the proposed bounds, pivot and
+rotation, including constraint/symmetry effects; otherwise the rewrite refuses
+the edit before native Undo. Dependent but unselected geometry still follows
+its explicit constraints. This does not invent offsets or override constraint
+ownership to force an impossible per-instance change.
+
 The compiler also reuses canonical Cube span checks for prototypes and realized pattern/constraint/symmetry instances. Nonfinite endpoints, invalid pivots, negative rendered spans and positive dimensions lost through numeric rounding fail before plan/apply. UV-mode-specific Box UV restrictions remain with the native adapter, where actual mode is known.
 
 ## Bounded pattern expansion

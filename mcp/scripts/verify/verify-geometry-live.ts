@@ -118,6 +118,7 @@ export function assertBedrockGeometryExport(
   expectation: {
     boneName: string;
     bonePivot: readonly number[];
+    bodyUvOffset: readonly number[];
     bodyFrom: readonly number[];
     bodyTo: readonly number[];
     thinFrom: readonly number[];
@@ -174,8 +175,13 @@ export function assertBedrockGeometryExport(
   };
   const body = findCube("body", expectation.bodyFrom, expectation.bodyTo);
   const thin = findCube("thin per-face", expectation.thinFrom, expectation.thinTo);
-  expect(Array.isArray(body.uv) && body.uv.length === 2,
-    "Bedrock export changed the body from Box UV.");
+  expect(Array.isArray(body.uv) && body.uv.length === 2 &&
+    expectation.bodyUvOffset.length === 2 &&
+    expectation.bodyUvOffset.every(Number.isFinite) &&
+    body.uv.every((value, index) =>
+      typeof value === "number" && Number.isFinite(value) &&
+      Math.abs(value - expectation.bodyUvOffset[index]) < 1e-6),
+    "Bedrock export changed the body Box UV offset.");
   const faceMap = thin.uv as JsonObject | undefined;
   expect(faceMap && !Array.isArray(faceMap) && typeof faceMap === "object",
     "Bedrock export changed the thin Cube from explicit Per-face UV.");
@@ -191,20 +197,18 @@ export function assertBedrockGeometryExport(
       ), "Bedrock export has missing/invalid UV on thin face " + face.face);
     const uv = raw.uv as number[];
     const size = raw.uv_size as number[];
-    const observed = [
-      Math.min(uv[0], uv[0] + size[0]),
-      Math.min(uv[1], uv[1] + size[1]),
-      Math.max(uv[0], uv[0] + size[0]),
-      Math.max(uv[1], uv[1] + size[1]),
-    ];
-    const expected = [
-      Math.min(face.uv[0], face.uv[2]),
-      Math.min(face.uv[1], face.uv[3]),
-      Math.max(face.uv[0], face.uv[2]),
-      Math.max(face.uv[1], face.uv[3]),
-    ];
-    expect(observed.every((value, axis) => Math.abs(value - expected[axis]) < 1e-6),
-      "Bedrock export changed the rectangle of thin face " + face.face);
+    // Native Bedrock uses reversed signed top/bottom UV spans for this fixture.
+    // Extents alone cannot detect mirrored paint or a swapped face orientation.
+    const reverse = face.face === "up" || face.face === "down";
+    const expectedUv = reverse
+      ? [face.uv[2], face.uv[3]] : [face.uv[0], face.uv[1]];
+    const expectedSize = reverse
+      ? [face.uv[0] - face.uv[2], face.uv[1] - face.uv[3]]
+      : [face.uv[2] - face.uv[0], face.uv[3] - face.uv[1]];
+    expect(uv.every((value, axis) => Math.abs(value - expectedUv[axis]) < 1e-6) &&
+      size.every((value, axis) => Math.abs(value - expectedSize[axis]) < 1e-6) &&
+      (raw.uv_rotation === undefined || raw.uv_rotation === 0),
+      "Bedrock export changed the signed UV mapping of thin face " + face.face);
   }
   return {
     format_version: root.format_version as string,
@@ -269,6 +273,13 @@ async function main(): Promise<void> {
   const cubes = placement.cubes as Array<JsonObject> | undefined;
   const cubeUuid = cubes?.[0]?.uuid;
   expect(typeof cubeUuid === "string", "manage_cubes create returned no Cube UUID.");
+  // Reuse the authoritative creation receipt as the Box UV baseline,
+  // without another native read or an assumed zero atlas offset.
+  const bodyUvOffset = cubes?.[0]?.uv_offset;
+  expect(cubes?.[0]?.box_uv === true &&
+    Array.isArray(bodyUvOffset) && bodyUvOffset.length === 2 &&
+    bodyUvOffset.every((value) => typeof value === "number" && Number.isFinite(value)),
+    "Geometry fixture requires a native Box UV body and finite initial offset.");
 
   const thinPlacement = structuredObject(
     await client.callTool(
@@ -421,6 +432,7 @@ async function main(): Promise<void> {
   const bedrockParity = assertBedrockGeometryExport(compiled.content as string, {
     boneName: AUTHORING_E2E_BONE_NAME,
     bonePivot: [0, 8, 0],
+    bodyUvOffset: bodyUvOffset as number[],
     bodyFrom: [-4, 0, -2],
     bodyTo: [6, 8, 2],
     thinFrom: [7, 0, -0.25],

@@ -4,6 +4,10 @@ import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 import { compileSemanticGeometryEdit } from "@/lib/authoringRecipe/semanticEdit";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
+import {
+  deriveReferenceCorrectionVectors,
+  compileReferenceCorrectionsToGeometryIntents,
+} from "@/lib/reference/correction";
 
 function chairRecipe(): AuthoringRecipe {
   return {
@@ -86,6 +90,60 @@ describe("lightweight parametric authoring relationships", () => {
     expect(afterSeat.to[0]).toBe(12);
     expect(afterLeg.from[0]).toBe(10);
     expect(afterLeg.to[0]).toBe(12);
+  });
+
+  test("reference BOUNDS correction preserves center and pivot while propagating dependent Geometry", () => {
+    const before = compileAuthoringRecipe(chairRecipe());
+    const intents = compileReferenceCorrectionsToGeometryIntents(
+      deriveReferenceCorrectionVectors([{
+        kind: "BOUNDS", instance_id: "seat:0", axis: "X",
+        expected: 12, actual: 8,
+      }])
+    );
+    expect(intents).toEqual([{
+      target: { instance_ids: ["seat:0"] },
+      operation: { kind: "RESIZE_AXIS", axis: "X", mode: "ADD", value: 4, anchor: "CENTER" },
+    }]);
+    const after = compileAuthoringRecipe(rewriteAuthoringRecipeForSemanticEdit(
+      chairRecipe(), intents[0]!
+    ));
+    const beforeSeat = before.placements.find((p) => p.id === "seat:0")!;
+    const afterSeat = after.placements.find((p) => p.id === "seat:0")!;
+    const afterLeg = after.placements.find((p) => p.id === "leg:0")!;
+    expect(afterSeat.from).toEqual([-2, 6, 0]);
+    expect(afterSeat.to).toEqual([10, 8, 8]);
+    expect(afterSeat.origin).toEqual(beforeSeat.origin);
+    expect(afterLeg.from[0]).toBe(8);
+  });
+
+  test("MIN/CENTER/MAX recipe resizes preserve the actual pivot of an independent part", () => {
+    const base = chairRecipe();
+    base.constraints = [];
+    base.prototypes[0]!.origin = [3, 1, 4];
+    const before = compileAuthoringRecipe(base);
+    for (const anchor of ["MIN", "CENTER", "MAX"] as const) {
+      const intent = {
+        target: { instance_ids: ["seat:0"] },
+        operation: { kind: "RESIZE_AXIS" as const, axis: "X" as const,
+          mode: "ADD" as const, value: 4, anchor },
+      };
+      const expected = compileSemanticGeometryEdit(before, intent).upserts[0]!;
+      const realized = compileAuthoringRecipe(rewriteAuthoringRecipeForSemanticEdit(base, intent));
+      const actual = realized.placements.find((p) => p.id === "seat:0")!;
+      expect(actual.from).toEqual(expected.from);
+      expect(actual.to).toEqual(expected.to);
+      expect(actual.origin).toEqual(expected.origin);
+      expect(actual.rotation).toEqual(expected.rotation);
+    }
+    expect(base.prototypes[0]!.size).toEqual([8, 2, 8]);
+    expect(base.patterns[0]!.kind).toBe("LINEAR");
+  });
+
+  test("resize cannot silently violate the anchor of a constrained child", () => {
+    expect(() => rewriteAuthoringRecipeForSemanticEdit(chairRecipe(), {
+      target: { instance_ids: ["leg:0"] },
+      operation: { kind: "RESIZE_AXIS", axis: "X", mode: "ADD", value: 2, anchor: "CENTER" },
+    })).toThrow("SEMANTIC_REWRITE_RESULT_MISMATCH");
   });
 
   test("semantic correction proposals refuse finite-but-collapsed and invalid Geometry", () => {

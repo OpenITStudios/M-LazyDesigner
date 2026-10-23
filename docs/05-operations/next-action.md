@@ -12,11 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Reference-driven Geometry correction safety:
-- Existing reference/correction owner now refuses nonfinite differences of finite bounds/angles/centers. SemanticEdit rejects nonfinite/collapsed proposals and reuses canonical Cube span/inflate safety; valid fractional 3D remains eligible with explicit Per-face UV.
-- Existing semanticRewrite recompiles the final recipe before returning, including constraint/symmetry-propagated Cubes. No new engine/tool/auto-deletion; corrections remain evidence-bound, not visual PASS.
-- Existing authoring-recipe, semantic-rewrite and correction-solver regressions expanded; affected-test routing uses those owners. Source/static only: exact-head Bun/TS, LIVE_BLOCKBENCH and accepted-asset fidelity/efficiency NOT EXECUTED (CI disabled).
-- Next: execute exact-SHA focused tests and Golden reference corrections with native model evidence when capable; Bedrock export and UV registration acceptance remain open.
+2026-10-23 Reference resize and Bedrock UV parity:
+- semanticRewrite preserves MIN/CENTER/MAX resize anchors and pivots for owned patterns; recompiles and rejects selected-Cube mismatches from constraints/symmetry. BOUNDS intent remains CENTER; no automatic constraint rewrite or deletion.
+- Disposable Geometry verifier checks initial native Box UV offset and all six signed Per-face UV maps/rotations. Existing smoke tests add flip/offset/rotation negatives; no new public tool or native mutation.
+- REMOTE_GITHUB source/static only: exact-SHA Bun/TS, LIVE_BLOCKBENCH, native codec output and accepted visual quality NOT EXECUTED (CI disabled).
+- Next: exact-SHA focused tests and native disposable Bedrock export smoke when capable. Generator-coupled UV registration and Golden acceptance remain deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 
