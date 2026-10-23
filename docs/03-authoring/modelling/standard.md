@@ -217,6 +217,8 @@ For inherited **Bedrock Box UV**, a positive authored axis smaller than **one mo
 
 In a single `manage_cubes(create)` batch, identical untextured Cubes with the same resolved parent, coordinates, pivot, rotation and inflate are rejected **before native Undo** as redundant overlapping masses. This is an exact-duplicate guard, not a universal near-overlap or tiny-geometry ban; independent bones, different transforms and explicitly authored per-face layers remain possible.
 
+Per-face UV creation remains exempt from the duplicate **rejection**, but now receives the same bounded read-only containment, projected contribution and merge-candidate analysis before Undo. Potential overlap is review-only: UV/alpha, animation, reference and material layering can justify retaining the geometry; never auto-delete or merge.
+
 Prefer fewer meaningful Cuboids over dense approximations. Split a mass only for demonstrated different silhouette/orientation, separate transform/pivot/motion, genuinely separate visible volume, or verified technical constraint. Adding another Cube is not the default correction.
 
 ### Semantic Feature Preflight (before Cube creation)

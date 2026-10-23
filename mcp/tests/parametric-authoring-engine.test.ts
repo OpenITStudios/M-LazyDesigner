@@ -159,6 +159,81 @@ describe("Parametric Authoring Engine G0-G2", () => {
     expect(() => expandRecipePattern({ kind: "GRID", id: "bad-grid", prototype_id: "cube", counts: [2,2], axes: ["X","X"], spacing: [1,1] })).toThrow(/axes must be distinct/);
   });
 
+  test("recipe compiler shares direct Cube span safety even for uninstantiated prototypes", () => {
+    const base: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "span", name: "span",
+      prototypes: [{ id: "part", name: "part", size: [2, 4, 2] }],
+      patterns: [{ kind: "LINEAR", id: "one", prototype_id: "part",
+        count: 1, axis: "X", spacing: 0 }],
+    };
+    expect(compileAuthoringRecipe(base).placements[0].to).toEqual([2, 4, 2]);
+    expect(() => compileAuthoringRecipe({
+      ...base, prototypes: [{ ...base.prototypes[0], inflate: -2 }],
+    })).toThrow(/negative rendered span/);
+    expect(() => compileAuthoringRecipe({
+      ...base, prototypes: [{ ...base.prototypes[0], inflate: -1 }],
+    })).toThrow(/collapses 2 rendered axes/);
+    expect(() => compileAuthoringRecipe({
+      ...base, prototypes: [{ ...base.prototypes[0], inflate: -2 }], patterns: [],
+    })).toThrow(/negative rendered span/);
+  });
+
+  test("recipe patterns, constraints and symmetry cannot silently overflow or lose positive solid axes", () => {
+    const linear = (start: [number, number, number]): AuthoringRecipe["patterns"] => [{
+      kind: "LINEAR", id: "one", prototype_id: "part", count: 1,
+      axis: "X", spacing: 0, start,
+    }];
+    const base: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "overflow", name: "overflow",
+      prototypes: [{ id: "part", name: "part", size: [1, 2, 2] }],
+      patterns: [{ kind: "LINEAR", id: "one", prototype_id: "part",
+        count: 1, axis: "X", spacing: 0, start: [1e18, 0, 0] }],
+    };
+    expect(() => compileAuthoringRecipe(base)).toThrow("RECIPE_REALIZED_SPAN_COLLAPSED");
+    expect(() => compileAuthoringRecipe({
+      ...base,
+      prototypes: [{ id: "part", name: "part", size: [1e308, 2, 2] }],
+      patterns: linear([1e308, 0, 0]),
+    })).toThrow(/three finite values/);
+    expect(() => compileAuthoringRecipe({
+      ...base, patterns: linear([0, 0, 0]),
+      symmetry: [{
+        id: "mirror", source_instance_id: "one:0", target_instance_id: "one:mirror",
+        plane: { axis: "X", position: 1e308 },
+        uv_policy: "UNIQUE", texture_policy: "UNIQUE", rig_policy: "INDEPENDENT",
+      }],
+    })).toThrow(/three finite values/);
+    expect(() => compileAuthoringRecipe({
+      schema: 1, compiler_version: 1, id: "constraint-overflow",
+      name: "constraint-overflow",
+      prototypes: [
+        { id: "source", name: "source", size: [2, 2, 2] },
+        { id: "target", name: "target", size: [1e293, 2, 2] },
+      ],
+      patterns: [
+        { kind: "LINEAR", id: "source", prototype_id: "source",
+          count: 1, axis: "X", spacing: 0 },
+        { kind: "LINEAR", id: "target", prototype_id: "target",
+          count: 1, axis: "X", spacing: 0, start: [1e308, 0, 0] },
+      ],
+      constraints: [{
+        kind: "ANCHOR", id: "source-to-target",
+        source_instance_id: "source:0", target_instance_id: "target:0",
+        axes: ["X"],
+        source_anchor: ["MIN", "MIN", "MIN"],
+        target_anchor: ["MIN", "MIN", "MIN"],
+        offset: [1e308, 0, 0],
+      }],
+    })).toThrow(/three finite values/);
+    // A sub-unit Cube can still be legitimate with per-face UV;
+    // the native adapter alone knows whether Box UV needs restriction.
+    const thin = compileAuthoringRecipe({
+      ...base, prototypes: [{ id: "part", name: "part", size: [0.5, 2, 2] }],
+      patterns: linear([0, 0, 0]),
+    });
+    expect(thin.placements[0].to).toEqual([0.5, 2, 2]);
+  });
+
   test("repeated-structure benchmark proves static savings without wall-clock claims", () => {
     const results = runParametricEfficiencyBenchmark();
     expect(results).toHaveLength(3);

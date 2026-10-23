@@ -12,11 +12,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Geometry inspection source stabilization:
-- Bound same-parent authored-axis surface pairs; cross-Bone/unknown owner candidates remain partial, never false local blockers. Bound warning examples and exclude invalid rotations.
-- Native world-OBB surface warning scan uses conservative X sweep with candidate budget; surface augmentation filters ancestor-hidden Cubes like rendered bounds.
-- Owner tests authored, Bun/TypeScript/native and measured latency NOT EXECUTED (CI disabled). Existing pose/UV/Texture/Animation source changes preserved.
-- Next: when capable execution exists, verify exact HEAD and repair evidenced failures. UV generator registration, live pose observation and visual Golden acceptance remain deferred.
+2026-10-23 Geometry authoring parity:
+- Direct manage_cubes(create) retains per-face UV duplicate exemption but always returns bounded non-destructive contribution evidence when relevant. Hidden ancestor meshes no longer count as rendered peers.
+- Authoring Recipe compiler reuses Cube span safety for prototypes and realized Cubes. Overflow, invalid pivots, negative rendered spans and lost positive sizes fail before planning; native UV-mode policy remains.
+- Existing owner regression tests authored. Earlier bounded/parent-aware surface inspection retained. Bun/TypeScript/native/quality/cost NOT EXECUTED (CI disabled).
+- Next: repair evidenced source failures only; native pose capture, generator-coupled UV registration and visual Golden acceptance remain deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

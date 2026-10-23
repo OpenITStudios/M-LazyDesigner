@@ -3,6 +3,7 @@ import { expandRecipePattern } from "@/lib/authoringRecipe/patterns";
 import { solveRecipeConstraints } from "@/lib/authoringRecipe/constraints";
 import { applyRecipeSymmetry } from "@/lib/authoringRecipe/symmetry";
 import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
+import { validateCubeGeometrySpan } from "@/lib/geometry/cubeSpan";
 
 function requireVec3(value: readonly number[], label: string): RecipeVec3 {
   if (value.length !== 3 || value.some((entry) => !Number.isFinite(entry))) throw new Error(label + " must contain three finite values.");
@@ -16,6 +17,8 @@ function validatePrototype(prototype: RecipeCubePrototype): void {
   if (prototype.inflate !== undefined && !Number.isFinite(prototype.inflate)) throw new Error("Prototype " + prototype.id + " inflate must be finite.");
   if (prototype.origin) requireVec3(prototype.origin, "Prototype " + prototype.id + " origin");
   if (prototype.rotation) requireVec3(prototype.rotation, "Prototype " + prototype.id + " rotation");
+  validateCubeGeometrySpan([0, 0, 0], size, prototype.inflate ?? 0,
+    "Prototype " + prototype.id);
 }
 
 function addVec3(a: RecipeVec3, b: RecipeVec3): RecipeVec3 {
@@ -25,12 +28,26 @@ function addVec3(a: RecipeVec3, b: RecipeVec3): RecipeVec3 {
 function realizeCube(prototype: RecipeCubePrototype, instance: RecipeInstance, patternId: string, index: number): CompiledCubePlacement {
   const size = requireVec3(prototype.size, "Prototype " + prototype.id + " size");
   if (instance.scale.some((entry) => entry !== 1)) throw new Error("Authoring Recipe v1 keeps instances lightweight and does not realize per-instance scale yet.");
-  const from = [...instance.translation] as RecipeVec3;
-  const to: RecipeVec3 = [from[0] + size[0], from[1] + size[1], from[2] + size[2]];
+  const context = "Recipe Cube " + prototype.id + " (" + instance.id + ")";
+  const from = requireVec3(instance.translation, context + " translation");
+  const to = requireVec3([
+    from[0] + size[0], from[1] + size[1], from[2] + size[2],
+  ], context + " endpoint");
+  // A positive prototype can round to a zero-size axis after large offsets.
+  if (to.some((value, axis) => value <= from[axis])) {
+    throw new Error("RECIPE_REALIZED_SPAN_COLLAPSED: " + context +
+      " lost an authored positive axis after pattern, constraint or symmetry.");
+  }
   const baseRotation = prototype.rotation ?? [0, 0, 0];
-  const rotation = addVec3(requireVec3(baseRotation, "Prototype " + prototype.id + " rotation"), instance.rotation);
+  const rotation = requireVec3(addVec3(
+    requireVec3(baseRotation, "Prototype " + prototype.id + " rotation"),
+    requireVec3(instance.rotation, context + " instance rotation"),
+  ), context + " rotation");
   const baseOrigin = prototype.origin ?? [size[0] / 2, size[1] / 2, size[2] / 2];
-  const origin = addVec3(requireVec3(baseOrigin, "Prototype " + prototype.id + " origin"), instance.translation);
+  const origin = requireVec3(addVec3(
+    requireVec3(baseOrigin, context + " base origin"), from,
+  ), context + " origin");
+  validateCubeGeometrySpan(from, to, prototype.inflate ?? 0, context);
   return {
     id: instance.id, name: prototype.name + "_" + (index + 1), prototype_id: prototype.id,
     from, to, origin, rotation, inflate: prototype.inflate ?? 0,

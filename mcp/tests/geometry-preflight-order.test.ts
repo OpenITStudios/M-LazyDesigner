@@ -109,6 +109,28 @@ describe("Geometry mutation preflight ordering", () => {
     expect(block).toContain("cube.parent instanceof Group");
   });
 
+  test("per-face UV stays exempt from duplicate rejection but receives pre-Undo contribution evidence", async () => {
+    const code = await Bun.file("server/tools/geometry/cubes.ts").text();
+    const create = code.slice(code.indexOf("const executeCreateCubes"), code.indexOf("const executeUpdateCube"));
+    const guard = create.indexOf("if (!customFaceUvs)");
+    const duplicate = create.indexOf("requireDistinctCubeBatchPlacements(", guard);
+    const pending = create.indexOf("const pending: SurfaceEvidenceCube[]", duplicate);
+    const undo = create.indexOf("Undo.initEdit", pending);
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(duplicate).toBeGreaterThan(guard);
+    expect(pending).toBeGreaterThan(duplicate);
+    expect(undo).toBeGreaterThan(pending);
+    expect(create.slice(duplicate, pending)).toContain("}");
+    for (const analyzer of [
+      "analyzeStaticCubeContainment(source, scope)",
+      "analyzeStaticMarginalProjection(source, scope)",
+      "analyzeStaticCubeMergeCandidates(source, scope)",
+    ]) expect(create.slice(pending, undo)).toContain(analyzer);
+    expect(create).toContain("isEffectivelyVisible(cube.mesh)");
+    expect(create).toContain("geometry_contribution_review");
+    expect(create).not.toContain("autoDelete");
+  });
+
   test("the exact batch duplicate guard executes before Undo but not for per-face layering", async () => {
     const source = await Bun.file("server/tools/geometry/cubes.ts").text();
     const create = source.slice(

@@ -12,7 +12,7 @@ import {
 } from "@/lib/authoring/semanticHistory";
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { autoUvEnum, cubeSchema, faceEnum } from "@/lib/schemas/geometry";
-import { readRenderedCubeBounds } from "@/lib/geometry/renderedModelBounds";
+import { readRenderedCubeBounds, isEffectivelyVisible } from "@/lib/geometry/renderedModelBounds";
 import { STATUS_STABLE } from "@/lib/constants";
 import { resolveCoreCube, resolveCoreGroup, resolveUniqueUuid } from "@/lib/core/identity";
 import { requireOpenProject } from "@/lib/core/project";
@@ -696,42 +696,44 @@ export function registerCubesTools() {
           rotation: element.rotation,
           inflate: element.inflate,
         })));
-        // Structural-only contribution evidence is computed before native
-        // Undo; no post-commit diagnostic work can turn success into failure.
-        const pending: SurfaceEvidenceCube[] = placements.map(
-          ({ element, outlinerGroup }, index) => ({
-            uuid: "pending-cube:" + index,
-            name: element.name,
-            from: element.from,
-            to: element.to,
-            rotation: element.rotation,
-            origin: element.origin ?? [0, 0, 0],
-            inflate: element.inflate ?? 0,
-            parent_id: outlinerGroup === "root" ? "root" : outlinerGroup.uuid,
-          })
-        );
-        const existing: SurfaceEvidenceCube[] = (Cube.all ?? [])
-          .filter((cube: Cube) => cube.visibility !== false)
-          .map((cube: Cube) => ({
-            uuid: cube.uuid,
-            name: cube.name,
-            from: cube.from,
-            to: cube.to,
-            rotation: cube.rotation,
-            origin: cube.origin,
-            inflate: cube.inflate ?? 0,
-            parent_id: typeof Group !== "undefined" && cube.parent instanceof Group
-              ? cube.parent.uuid
-              : cube.parent === "root" ? "root" : null,
-          }));
-        const source = [...existing, ...pending];
-        const scope = { target_cube_ids: pending.map((item) => item.uuid) };
-        contributionPreflight = {
-          containment: analyzeStaticCubeContainment(source, scope),
-          projection: analyzeStaticMarginalProjection(source, scope),
-          merges: analyzeStaticCubeMergeCandidates(source, scope),
-        };
       }
+      // Per-face UV may intentionally layer identical masses, so preserve
+      // the duplicate exception; still return non-destructive Geometry review.
+      // Structural-only contribution evidence is computed before native
+      // Undo; no post-commit diagnostic work can turn success into failure.
+      const pending: SurfaceEvidenceCube[] = placements.map(
+        ({ element, outlinerGroup }, index) => ({
+          uuid: "pending-cube:" + index,
+          name: element.name,
+          from: element.from,
+          to: element.to,
+          rotation: element.rotation,
+          origin: element.origin ?? [0, 0, 0],
+          inflate: element.inflate ?? 0,
+          parent_id: outlinerGroup === "root" ? "root" : outlinerGroup.uuid,
+        })
+      );
+      const existing: SurfaceEvidenceCube[] = (Cube.all ?? [])
+        .filter((cube: Cube) => cube.visibility !== false && isEffectivelyVisible(cube.mesh))
+        .map((cube: Cube) => ({
+          uuid: cube.uuid,
+          name: cube.name,
+          from: cube.from,
+          to: cube.to,
+          rotation: cube.rotation,
+          origin: cube.origin,
+          inflate: cube.inflate ?? 0,
+          parent_id: typeof Group !== "undefined" && cube.parent instanceof Group
+            ? cube.parent.uuid
+            : cube.parent === "root" ? "root" : null,
+        }));
+      const source = [...existing, ...pending];
+      const scope = { target_cube_ids: pending.map((item) => item.uuid) };
+      contributionPreflight = {
+        containment: analyzeStaticCubeContainment(source, scope),
+        projection: analyzeStaticMarginalProjection(source, scope),
+        merges: analyzeStaticCubeMergeCandidates(source, scope),
+      };
       const autoPackBoxUv = !customFaceUvs && Project?.box_uv === true;
       let plannedBoxUvOffsets: [number, number][] | null = null;
       let deferredBoxUvTemplate = false;
