@@ -221,6 +221,17 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("pose capture source selects its existing focused animation preview regressions", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/lib/animation/previewState.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/animation-preview-state.test.ts",
+    ]);
+  });
+
   test("rotated world OBB contribution uses focused existing geometry owner tests", () => {
     for (const [path, expectedTests] of [
       ["mcp/lib/geometry/orientedBoxContact.ts", [

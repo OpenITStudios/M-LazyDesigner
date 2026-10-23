@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { OrientedBox, Vec3 } from "@/lib/orientedBoxContact";
 import {
   analyzeCurrentPreviewObbContainment,
+  analyzeGeometryPoseSequence,
   analyzeAxisAlignedSurfaceEvidence,
   analyzeStaticCubeContainment,
   analyzeStaticMarginalProjection,
@@ -293,6 +294,150 @@ test("invalid native OBB and zero-thickness planes are unsupported even without 
   const review = analyzeCurrentPreviewObbContainment([plane]);
   expect(review.state).toBe("partial");
   expect(review.contained_candidate_count).toBe(0);
+});
+
+function animatedFrame(
+  time_seconds: number,
+  detailCenter: Vec3 = [0, 0, 0],
+  animation_uuid = "walk"
+) {
+  return {
+    project_uuid: "project",
+    animation_uuid,
+    time_seconds,
+    cubes: [
+      poseBox("body", "torso", [0, 0, 0], [5, 5, 5]),
+      poseBox("detail", "torso", detailCenter, [1, 1, 1]),
+    ],
+  };
+}
+
+test("pose-aware geometry retains a Cube that becomes uncovered during an animation", () => {
+  const samples = [
+    animatedFrame(0),
+    animatedFrame(0.5, [1, 0, 0]),
+    animatedFrame(1, [6, 0, 0]),
+  ];
+  const report = analyzeGeometryPoseSequence(samples, {
+    target_cube_ids: ["detail"],
+    sampling_window: { start: 0, end: 1, max_gap_seconds: 0.5 },
+  });
+  expect(report.state).toBe("sampled_times_only");
+  expect(report.pose_dependent_retain_count).toBe(1);
+  expect(report.contained_at_sampled_poses_review_count).toBe(0);
+  expect(report.geometry_mutation_authorized).toBe(false);
+  expect(report.sample_provenance).toBe("not_native_attested");
+  expect(report.visual_verdict).toBe("not_evaluated");
+  expect(report.examples).toEqual([expect.objectContaining({
+    cube_uuid: "detail",
+    outcome: "POSE_DEPENDENT_RETAIN",
+    time_observations: [
+      { time_seconds: 0, containing_cube_uuid: "body" },
+      { time_seconds: 0.5, containing_cube_uuid: "body" },
+      { time_seconds: 1, containing_cube_uuid: null },
+    ],
+  })]);
+  expect(analyzeGeometryPoseSequence([...samples].reverse(), {
+    target_cube_ids: ["detail"],
+    sampling_window: { start: 0, end: 1, max_gap_seconds: 0.5 },
+  })).toEqual(report);
+});
+
+test("geometry enclosed at every sampled time remains review-only, not deletion eligible", () => {
+  const report = analyzeGeometryPoseSequence([
+    animatedFrame(0), animatedFrame(1, [2, 0, 0]),
+  ], {
+    target_cube_ids: ["detail"],
+    sampling_window: { start: 0, end: 1, max_gap_seconds: 1 },
+  });
+  expect(report.state).toBe("sampled_times_only");
+  expect(report.contained_at_sampled_poses_review_count).toBe(1);
+  expect(report.examples[0].outcome).toBe("CONTAINED_AT_SAMPLED_POSES_REVIEW");
+  expect(report.geometry_mutation_authorized).toBe(false);
+  expect(report.note).toContain("Never auto-delete");
+  const onePose = analyzeGeometryPoseSequence([animatedFrame(0)], {
+    target_cube_ids: ["detail"],
+  });
+  expect(onePose.state).toBe("insufficient_pose_samples");
+  expect(onePose.examples[0].outcome).toBe("UNVERIFIED");
+  expect(onePose.examples[0].reason).toBe("ADDITIONAL_POSE_OBSERVATIONS_REQUIRED");
+});
+
+test("rotation can expose Geometry that was enclosed at another animated pose", () => {
+  const frame = (time_seconds: number,
+    axes: [Vec3, Vec3, Vec3]) => ({
+    project_uuid: "entity", animation_uuid: "wave", time_seconds,
+    cubes: [
+      poseBox("torso", "body", [0, 0, 0], [2, 4, 4]),
+      poseBox("wing", "body", [0, 0, 0], [3, 0.5, 0.5], axes),
+    ],
+  });
+  // Long axis points along world Z at rest (fits within body), then
+  // rotates into world X (protrudes outside the torso envelope).
+  const alongZ: [Vec3, Vec3, Vec3] = [
+    [0, 0, 1], [0, 1, 0], [-1, 0, 0],
+  ];
+  const result = analyzeGeometryPoseSequence([
+    frame(0, alongZ), frame(1, ORTHO_AXES),
+  ], {
+    target_cube_ids: ["wing"],
+    sampling_window: { start: 0, end: 1, max_gap_seconds: 1 },
+  });
+  expect(result.pose_dependent_retain_count).toBe(1);
+  expect(result.examples[0].time_observations).toEqual([
+    { time_seconds: 0, containing_cube_uuid: "torso" },
+    { time_seconds: 1, containing_cube_uuid: null },
+  ]);
+  expect(result.geometry_mutation_authorized).toBe(false);
+});
+
+test("geometry from different bones is never erased by another bone's envelope", () => {
+  const samples = [0, 1].map((time_seconds) => ({
+    project_uuid: "project", animation_uuid: "walk", time_seconds,
+    cubes: [
+      poseBox("body", "torso", [0, 0, 0], [5, 5, 5]),
+      poseBox("arm", "arm_bone", [0, 0, 0], [1, 1, 1]),
+    ],
+  }));
+  const report = analyzeGeometryPoseSequence(samples, {
+    target_cube_ids: ["arm"],
+    sampling_window: { start: 0, end: 1, max_gap_seconds: 1 },
+  });
+  expect(report.no_containment_observed_count).toBe(1);
+  expect(report.pose_dependent_retain_count).toBe(0);
+});
+
+test("pose sample identity, incomplete windows and invalid OBBs fail closed", () => {
+  const base = animatedFrame(0);
+  const next = animatedFrame(1);
+  expect(() => analyzeGeometryPoseSequence([base, { ...next, animation_uuid: "other" }]))
+    .toThrow("GEOMETRY_POSE_CROSS_PROJECT_OR_ANIMATION");
+  expect(() => analyzeGeometryPoseSequence([base, { ...next, time_seconds: 0 }]))
+    .toThrow("GEOMETRY_POSE_TIME_INVALID_OR_DUPLICATED");
+  const absent = analyzeGeometryPoseSequence([
+    base, { ...next, cubes: next.cubes.slice(0, 1) },
+  ], { target_cube_ids: ["detail"] });
+  expect(absent.state).toBe("partial");
+  expect(absent.unverified_target_count).toBe(1);
+  const invalid = analyzeGeometryPoseSequence([
+    base, { ...next, cubes: next.cubes.map((cube) =>
+      cube.uuid === "body" ? { ...cube, obb: null } : cube
+    ) },
+  ], { target_cube_ids: ["detail"] });
+  expect(invalid.state).toBe("partial");
+  expect(invalid.examples[0].outcome).toBe("UNVERIFIED");
+  const window = analyzeGeometryPoseSequence([base, next], {
+    target_cube_ids: ["detail"],
+    sampling_window: { start: 0, end: 1, max_gap_seconds: 0.25 },
+  });
+  expect(window.state).toBe("partial");
+  expect(window.sampling_window_coverage).toBe("incomplete");
+  const capped = analyzeGeometryPoseSequence([base, next], {
+    target_cube_ids: ["detail"], pairBudget: 1,
+  });
+  expect(capped.state).toBe("partial");
+  expect(capped.examples[0].outcome).toBe("UNVERIFIED");
+  expect(capped.examples_truncated).toBe(true);
 });
 
 test("unsupported transforms remain partial rather than false-clean", () => {

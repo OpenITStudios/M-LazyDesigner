@@ -191,6 +191,239 @@ export function analyzeCurrentPreviewObbContainment(
   };
 }
 
+
+export const GEOMETRY_POSE_OBSERVATION_LIMIT = 8;
+export const GEOMETRY_POSE_TARGET_LIMIT = 24;
+export const GEOMETRY_POSE_PAIR_BUDGET = 4_096;
+
+export type GeometryPoseObbSnapshot = {
+  project_uuid: string;
+  animation_uuid: string;
+  time_seconds: number;
+  /** One bounded preview-world OBB read per native Cube. */
+  cubes: readonly GeometryWorldObbInput[];
+  omitted_cube_count?: number;
+};
+export type GeometryPoseSamplingWindow = {
+  start: number;
+  end: number;
+  max_gap_seconds: number;
+};
+
+/**
+ * Aggregates already observed OBB frames without ever changing Timeline or
+ * authoring state. Numeric frames are caller-supplied, not native attested.
+ *
+ * An observed pose transition can protect important Geometry. Conversely,
+ * even 100% containment at sampled times is never permission to delete it:
+ * unknown visibility/alpha, rig semantics and in-between frames can matter.
+ */
+export function analyzeGeometryPoseSequence(
+  snapshots: readonly GeometryPoseObbSnapshot[],
+  options: {
+    target_cube_ids?: readonly string[];
+    sampling_window?: GeometryPoseSamplingWindow;
+    exampleLimit?: number;
+    pairBudget?: number;
+  } = {}
+) {
+  const exampleLimit = options.exampleLimit ?? GEOMETRY_SURFACE_EXAMPLE_LIMIT;
+  const pairBudget = options.pairBudget ?? GEOMETRY_POSE_PAIR_BUDGET;
+  if (!Array.isArray(snapshots) ||
+      snapshots.length < 1 ||
+      snapshots.length > GEOMETRY_POSE_OBSERVATION_LIMIT ||
+      !Number.isInteger(exampleLimit) || exampleLimit < 1 || exampleLimit > 32 ||
+      !Number.isInteger(pairBudget) || pairBudget < 1 ||
+      pairBudget > GEOMETRY_POSE_PAIR_BUDGET) {
+    throw new Error("GEOMETRY_POSE_SAMPLE_BUDGET_INVALID");
+  }
+  const base = snapshots[0];
+  if (!base.project_uuid.trim() || !base.animation_uuid.trim()) {
+    throw new Error("GEOMETRY_POSE_IDENTITY_REQUIRED");
+  }
+  const observed = [...snapshots].sort((a, b) => a.time_seconds - b.time_seconds);
+  const baseIds = new Set(observed[0].cubes.map((cube) => cube.uuid));
+  let omitted = 0;
+  for (let i = 0; i < observed.length; i++) {
+    const frame = observed[i];
+    if (frame.project_uuid !== base.project_uuid ||
+        frame.animation_uuid !== base.animation_uuid) {
+      throw new Error("GEOMETRY_POSE_CROSS_PROJECT_OR_ANIMATION");
+    }
+    if (!Number.isFinite(frame.time_seconds) || frame.time_seconds < 0 ||
+        (i > 0 && frame.time_seconds <= observed[i - 1].time_seconds)) {
+      throw new Error("GEOMETRY_POSE_TIME_INVALID_OR_DUPLICATED");
+    }
+    const count = frame.omitted_cube_count ?? 0;
+    if (!Number.isInteger(count) || count < 0 ||
+        frame.cubes.length > GEOMETRY_WORLD_OBB_SAMPLE_LIMIT) {
+      throw new Error("GEOMETRY_POSE_SNAPSHOT_BUDGET_INVALID");
+    }
+    const ids = frame.cubes.map((cube) => cube.uuid);
+    if (ids.some((id) => !id.trim()) || new Set(ids).size !== ids.length) {
+      throw new Error("GEOMETRY_POSE_DUPLICATE_CUBE_ID");
+    }
+    omitted += count;
+  }
+
+  const window = options.sampling_window;
+  if (window && (!Number.isFinite(window.start) || !Number.isFinite(window.end) ||
+      !Number.isFinite(window.max_gap_seconds) ||
+      window.start < 0 || window.end <= window.start ||
+      window.max_gap_seconds <= 0)) {
+    throw new Error("GEOMETRY_POSE_WINDOW_INVALID");
+  }
+  const times = observed.map((frame) => frame.time_seconds);
+  const interval = window && observed.length >= 2 &&
+    Math.abs(times[0] - window.start) <= GEOMETRY_SURFACE_EPSILON &&
+    Math.abs(times[times.length - 1] - window.end) <= GEOMETRY_SURFACE_EPSILON &&
+    times.every((time, index) => index === 0 ||
+      time - times[index - 1] <= window.max_gap_seconds + GEOMETRY_SURFACE_EPSILON);
+  const windowCoverage = window
+    ? (interval ? "bounded_sample_schedule_met" as const : "incomplete" as const)
+    : "unspecified" as const;
+  const requested = options.target_cube_ids
+    ? [...options.target_cube_ids].sort()
+    : [...baseIds].sort();
+  if (requested.length > GEOMETRY_WORLD_OBB_SAMPLE_LIMIT ||
+      new Set(requested).size !== requested.length ||
+      requested.some((id) => typeof id !== "string" || !id.trim())) {
+    throw new Error("GEOMETRY_POSE_TARGET_ID_INVALID_OR_EXCEEDS_BUDGET");
+  }
+  const targets = requested.slice(0, GEOMETRY_POSE_TARGET_LIMIT);
+  const multiPose = observed.length >= 2;
+  let truncated = targets.length < requested.length || omitted > 0;
+  let pairs = 0, unverified = 0, exposed = 0, alwaysContained = 0;
+  let notContained = 0;
+  const entries: Array<{
+    cube_uuid: string;
+    outcome:
+      "POSE_DEPENDENT_RETAIN" | "CONTAINED_AT_SAMPLED_POSES_REVIEW" |
+      "NO_CONTAINMENT_OBSERVED" | "UNVERIFIED";
+    reason: string;
+    time_observations: Array<{
+      time_seconds: number;
+      containing_cube_uuid: string | null;
+    }>;
+  }> = [];
+
+  for (const id of targets) {
+    const appearances: Array<{ time_seconds: number; containing_cube_uuid: string | null }> = [];
+    let reason: string | null = null;
+    let anchorParent: string | null = null;
+    for (const frame of observed) {
+      const frameById = new Map(frame.cubes.map((cube) => [cube.uuid, cube]));
+      if (frameById.size !== baseIds.size ||
+          [...baseIds].some((candidate) => !frameById.has(candidate))) {
+        reason = "POSE_CUBE_SET_CHANGED";
+        break;
+      }
+      const target = frameById.get(id);
+      if (!target || !target.parent_id || !target.obb) {
+        reason = "POSE_TARGET_UNAVAILABLE";
+        break;
+      }
+      if (anchorParent !== null && target.parent_id !== anchorParent) {
+        reason = "POSE_PARENT_CHANGED";
+        break;
+      }
+      anchorParent = target.parent_id;
+      const peers = frame.cubes.filter((peer) =>
+        peer.uuid !== id && peer.parent_id === target.parent_id
+      );
+      if (peers.length > GEOMETRY_WORLD_OBB_SAMPLE_LIMIT ||
+          pairs + peers.length > pairBudget) {
+        reason = "POSE_PAIR_BUDGET_EXCEEDED";
+        truncated = true;
+        break;
+      }
+      pairs += peers.length;
+      if (peers.some((peer) => !peer.obb)) {
+        reason = "POSE_PEER_WORLD_OBB_UNAVAILABLE";
+        break;
+      }
+      let nearest: { id: string; volume: number } | null = null;
+      try {
+        // Validate the target independently so malformed/planar OBBs never
+        // pass simply because no sibling exists.
+        analyzeOrientedBoxContainment(target.obb, target.obb);
+        if (target.obb.halfSizes.some((size) => size <= GEOMETRY_SURFACE_EPSILON)) {
+          reason = "POSE_DEGENERATE_GEOMETRY";
+          break;
+        }
+        for (const peer of peers) {
+          const geometry = analyzeOrientedBoxContainment(peer.obb!, target.obb);
+          if (!geometry.contained) continue;
+          const [x, y, z] = peer.obb!.halfSizes;
+          const volume = 8 * x * y * z;
+          if (!Number.isFinite(volume)) throw new Error("nonfinite volume");
+          if (!nearest || volume < nearest.volume ||
+              (volume === nearest.volume && peer.uuid < nearest.id)) {
+            nearest = { id: peer.uuid, volume };
+          }
+        }
+      } catch {
+        reason = "POSE_OBB_INVALID";
+        break;
+      }
+      appearances.push({ time_seconds: frame.time_seconds,
+        containing_cube_uuid: nearest?.id ?? null });
+    }
+    const containment = appearances.filter((entry) =>
+      entry.containing_cube_uuid !== null).length;
+    const complete = !reason && multiPose && appearances.length === observed.length;
+    const outcome = !complete ? "UNVERIFIED" as const :
+      containment === observed.length ? "CONTAINED_AT_SAMPLED_POSES_REVIEW" as const :
+      containment > 0 ? "POSE_DEPENDENT_RETAIN" as const :
+      "NO_CONTAINMENT_OBSERVED" as const;
+    if (outcome === "UNVERIFIED") unverified++;
+    else if (outcome === "POSE_DEPENDENT_RETAIN") exposed++;
+    else if (outcome === "CONTAINED_AT_SAMPLED_POSES_REVIEW") alwaysContained++;
+    else notContained++;
+    entries.push({
+      cube_uuid: id, outcome,
+      reason: (!multiPose ? "ADDITIONAL_POSE_OBSERVATIONS_REQUIRED" : reason) ??
+        (outcome === "POSE_DEPENDENT_RETAIN"
+        ? "CURRENT_POSE_CONTAINMENT_CHANGES"
+        : outcome === "CONTAINED_AT_SAMPLED_POSES_REVIEW"
+        ? "CONTAINED_AT_OBSERVED_TIMES_ONLY"
+        : "NO_STRICT_SAME_PARENT_CONTAINMENT"),
+      time_observations: appearances,
+    });
+  }
+  // Surface first the shapes that become exposed under articulation;
+  // review-only always-contained masses next, then unverified/marginal data.
+  const rank = (outcome: (typeof entries)[number]["outcome"]) =>
+    outcome === "POSE_DEPENDENT_RETAIN" ? 0 :
+    outcome === "CONTAINED_AT_SAMPLED_POSES_REVIEW" ? 1 :
+    outcome === "UNVERIFIED" ? 2 : 3;
+  entries.sort((a, b) => rank(a.outcome) - rank(b.outcome) ||
+    a.cube_uuid.localeCompare(b.cube_uuid));
+  return {
+    state: !multiPose ? "insufficient_pose_samples" as const :
+      truncated || unverified > 0 || windowCoverage !== "bounded_sample_schedule_met"
+        ? "partial" as const : "sampled_times_only" as const,
+    scope: "caller_supplied_world_obb_pose_samples" as const,
+    sample_provenance: "not_native_attested" as const,
+    visual_verdict: "not_evaluated" as const,
+    geometry_mutation_authorized: false as const,
+    project_uuid: base.project_uuid,
+    animation_uuid: base.animation_uuid,
+    observed_times_seconds: times,
+    sampling_window_coverage: windowCoverage,
+    compared_target_count: targets.length,
+    unverified_target_count: unverified,
+    pose_dependent_retain_count: exposed,
+    contained_at_sampled_poses_review_count: alwaysContained,
+    no_containment_observed_count: notContained,
+    checked_pair_count: pairs,
+    omitted_cube_count: omitted,
+    examples: entries.slice(0, exampleLimit),
+    examples_truncated: entries.length > exampleLimit || truncated,
+    note: "Per-pose world-OBB samples are caller-provided numeric observations, not independently native attested. Becoming uncontained in another sampled pose protects Geometry from removal. Always contained is only a review candidate: between-frame motion, alpha, visibility, UV, contact and mapped visual quality are not proved. Never auto-delete.",
+  };
+}
+
 /**
  * Read-only, pre-Undo safe, same-parent rest-pose review.
  * Strict geometric enclosure cannot prove artistic redundancy or opacity.

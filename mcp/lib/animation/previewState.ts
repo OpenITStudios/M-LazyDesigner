@@ -48,6 +48,44 @@ function restoreTimelinePlaying(
   }
 }
 
+
+export const TEMPORARY_ANIMATION_POSE_SAMPLE_LIMIT = 8;
+
+/**
+ * Sequential bounded preview observations, reusing the existing transactional
+ * save/restore helper for EVERY sample. This does not attest that Blockbench
+ * evaluated a specific animation frame; that needs a native callback.
+ * Only an explicitly invoked consumer runs preview or changes Timeline time.
+ */
+export async function captureTemporaryAnimationPoseSequence<
+  TAnimation extends AnimationPreviewFlags,
+  TResult,
+>(
+  port: AnimationPreviewPort<TAnimation>,
+  target: TAnimation,
+  durationSeconds: number,
+  timesSeconds: readonly number[],
+  observeAtTime: (timeSeconds: number) => TResult | Promise<TResult>
+): Promise<Array<{ time_seconds: number; value: TResult }>> {
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 ||
+      !Array.isArray(timesSeconds) || timesSeconds.length < 2 ||
+      timesSeconds.length > TEMPORARY_ANIMATION_POSE_SAMPLE_LIMIT ||
+      timesSeconds.some((time, index) =>
+        !Number.isFinite(time) || time < 0 || time > durationSeconds ||
+        (index > 0 && time <= timesSeconds[index - 1]))) {
+    throw new Error("Temporary pose sample times must be strictly ascending, in-duration and bounded to 2..8.");
+  }
+  const results: Array<{ time_seconds: number; value: TResult }> = [];
+  for (const time of timesSeconds) {
+    const value = await withTemporaryAnimationPreview(port, target, time,
+      () => observeAtTime(time));
+    // Never keep a mutable THREE mesh or time-varying source reference:
+    // later preview steps must not rewrite earlier observed evidence.
+    results.push({ time_seconds: time, value: structuredClone(value) });
+  }
+  return results;
+}
+
 export async function withTemporaryAnimationPreview<
   TAnimation extends AnimationPreviewFlags,
   TResult,

@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { analyzeGeometryPoseSequence } from "@/lib/geometrySurfaceEvidence";
 import {
   withTemporaryAnimationPreview,
+  captureTemporaryAnimationPoseSequence,
   type AnimationPreviewPort,
 } from "@/lib/animationPreviewState";
 
@@ -150,6 +152,86 @@ describe("temporary animation preview state", () => {
     expect(state.defaultPoseCalls()).toBe(1);
     expect(state.idle.playing).toBe(false);
     expect(state.walk.playing).toBe(false);
+  });
+
+  test("bounded geometry pose samples restore animation flags and timeline between reads", async () => {
+    const state = fixture(true);
+    const liveValue = { center: [0, 0, 0] };
+    const results = await captureTemporaryAnimationPoseSequence(
+      state.port, state.walk, 1, [0, 0.5, 1], (time) => {
+        liveValue.center[0] = time * 10;
+        expect(state.timeline.time).toBe(time);
+        expect(state.effectsSuspended()).toBe(true);
+        expect(state.selected()).toBe(state.walk);
+        return liveValue;
+      }
+    );
+    expect(results).toEqual([
+      { time_seconds: 0, value: { center: [0, 0, 0] } },
+      { time_seconds: 0.5, value: { center: [5, 0, 0] } },
+      { time_seconds: 1, value: { center: [10, 0, 0] } },
+    ]);
+    expect(state.timeline.time).toBe(4);
+    expect(state.selected()).toBe(state.idle);
+    expect(state.idle.playing).toBe(true);
+    expect(state.walk.playing).toBe(false);
+    expect(state.effectsSuspended()).toBe(false);
+  });
+
+  test("temporary pose observations feed the existing Geometry multi-pose comparator", async () => {
+    const state = fixture(true);
+    const cube = (uuid: string, center: [number, number, number],
+      halfSizes: [number, number, number]) => ({
+      uuid, name: uuid, parent_id: "body",
+      obb: {
+        center, halfSizes,
+        axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] as [
+          [number, number, number],
+          [number, number, number],
+          [number, number, number],
+        ],
+      },
+    });
+    const frames = await captureTemporaryAnimationPoseSequence(
+      state.port, state.walk, 1, [0, 1], (time) => ({
+        project_uuid: "sample", animation_uuid: "walk",
+        time_seconds: time,
+        cubes: [
+          cube("body", [0, 0, 0], [5, 5, 5]),
+          cube("detail", [time * 6, 0, 0], [1, 1, 1]),
+        ],
+      })
+    );
+    const report = analyzeGeometryPoseSequence(
+      frames.map((frame) => frame.value),
+      { target_cube_ids: ["detail"],
+        sampling_window: { start: 0, end: 1, max_gap_seconds: 1 } }
+    );
+    expect(report.pose_dependent_retain_count).toBe(1);
+    expect(report.geometry_mutation_authorized).toBe(false);
+    expect(state.timeline.time).toBe(4);
+    expect(state.selected()).toBe(state.idle);
+    expect(state.effectsSuspended()).toBe(false);
+  });
+
+  test("temporary pose sequence fails on mid-sample error and restores prior UI state", async () => {
+    const state = fixture(true);
+    await expect(captureTemporaryAnimationPoseSequence(
+      state.port, state.walk, 1, [0, 0.5, 1], (time) => {
+        if (time === 0.5) throw new Error("frame unavailable");
+        return { pose: time };
+      }
+    )).rejects.toThrow("frame unavailable");
+    expect(state.timeline.time).toBe(4);
+    expect(state.selected()).toBe(state.idle);
+    expect(state.effectsSuspended()).toBe(false);
+    const untouched = fixture(true);
+    await expect(captureTemporaryAnimationPoseSequence(
+      untouched.port, untouched.walk, 1, [0, 0.5, 0.5],
+      () => "never"
+    )).rejects.toThrow("strictly ascending");
+    expect(untouched.previewCalls()).toBe(0);
+    expect(untouched.timeline.time).toBe(4);
   });
 
   test("rejects invalid time or foreign target before changing state", async () => {

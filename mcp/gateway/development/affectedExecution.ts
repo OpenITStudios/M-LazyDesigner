@@ -461,6 +461,9 @@ function sharedContractTestsForPath(path: string): readonly string[] {
   if (path === "mcp/lib/animation/quality.ts") {
     return ["mcp/tests/quality-efficiency-intelligence.test.ts"];
   }
+  if (path === "mcp/lib/animation/previewState.ts") {
+    return ["mcp/tests/animation-preview-state.test.ts"];
+  }
   if (path === "mcp/lib/geometry/cubeSpan.ts" ||
       path === "mcp/lib/geometry/quality.ts") {
     return ["mcp/tests/geometry-preflight-order.test.ts",

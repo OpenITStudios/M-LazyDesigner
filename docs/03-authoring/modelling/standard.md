@@ -359,6 +359,26 @@ transform snapshot only: `pose_sweep: not_evaluated` and
 necessary during animation, alpha visibility changes or attachment events;
 only reference/pose evidence may justify a later edit.
 
+**Multi-pose safety gate:** the existing `geometry/surfaceEvidence.ts` now
+accepts bounded, complete, identity-consistent world-OBB frame observations
+via `analyzeGeometryPoseSequence` (project, animation UUID, times, native
+Cube UUIDs and parent owners). A target that is enclosed at one sampled
+time but not another is `POSE_DEPENDENT_RETAIN`. A Cube enclosed at all
+sampled times is only `CONTAINED_AT_SAMPLED_POSES_REVIEW`, never safe for
+automatic removal. Missing/stale frames, unknown OBBs, incomplete sampling
+windows and one-frame data fail closed. Frame values are caller supplied:
+the pure evaluator does not independently attest Blockbench rendering,
+visibility or native temporal synchronization.
+
+The existing `withTemporaryAnimationPreview` owner now offers a bounded
+`captureTemporaryAnimationPoseSequence` callback wrapper. It restores
+selected animation, effect suspension and timeline after every sample,
+including on failure. This provides a reusable internal capture seam for a
+future **explicitly invoked** native verifier, not a new public MCP tool or
+an automatic timeline sweep during `inspect_model_bounds`. Until native
+pose sampling has executed, the current one-frame OBB report remains
+`pose_sweep: not_evaluated`.
+
 `rest_pose_merge_candidates` identifies exact same-parent, same-origin,
 unrotated, uninflated, face-adjacent rectangular unions. It does not mutate
 objects or assert equivalent UV, independent visibility or joint ownership;
