@@ -336,6 +336,39 @@ describe("usage-efficient authoring intelligence", () => {
       .toEqual([0.25, 0.75]);
   });
 
+  test("piecewise linear high-density motion keeps impacts while thinning straight phases", () => {
+    const values = [0, 1, 2, 10, 11, 12];
+    const keys = values.map((value, time) => ({
+      time, value: [value, 0, 0], interpolation: "linear",
+      has_multiple_data_points: false,
+    }));
+    const plan = planLinearKeyframeReduction("position", keys);
+    expect(plan.state).toBe("candidate");
+    expect(plan.candidate_times).toEqual([1, 4]);
+    expect(plan.max_error).toBeLessThanOrEqual(1e-8);
+    const creation = compactLinearCreationKeyframes(values.map((value, time) => ({
+      time, position: [value, 0, 0],
+    })));
+    expect(creation.frames.map((frame) => frame.time)).toEqual([0, 2, 3, 5]);
+  });
+
+  test("bounded curve tolerance preserves only globally verified numeric candidates", () => {
+    const values = [0, 0.017890527142, 0.042190813889,
+      0.017817774839, 0.041633920847, 0.066529147955];
+    const keys = values.map((value, time) => ({
+      time, value: [value, 0, 0], interpolation: "linear",
+      has_multiple_data_points: false,
+    }));
+    const plan = planLinearKeyframeReduction("position", keys, { max_error: 0.03 });
+    expect(plan.state).toBe("candidate");
+    expect(plan.candidate_count).toBe(4);
+    expect(plan.max_error).toBeLessThanOrEqual(0.03);
+    // The creation path remains strict (1e-8), never importing a 0.03 error tolerance.
+    expect(compactLinearCreationKeyframes(values.map((value, time) => ({
+      time, position: [value, 0, 0],
+    }))).removed_channel_key_count).toBe(0);
+  });
+
   test("nonlinear, Bezier, Molang, pre/post and duplicated times are never reduced", () => {
     const key = (time: number, value: readonly unknown[], interpolation = "linear",
       has_multiple_data_points = false) =>

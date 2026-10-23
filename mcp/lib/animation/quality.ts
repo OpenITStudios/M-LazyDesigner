@@ -104,7 +104,6 @@ export function planLinearKeyframeReduction(
   const numeric = frames.map((key) => finiteVec3(key.value)!);
   const protectedTimes = new Set(options.protected_times ?? []);
   const candidates = new Set<number>();
-  let anchor = 0;
   let maxError = 0;
   const difference = (a: number, b: number) =>
     Math.max(...[0, 1, 2].map((axis) => Math.abs(numeric[a][axis] - numeric[b][axis])));
@@ -118,27 +117,42 @@ export function planLinearKeyframeReduction(
       (numeric[start][axis] + (numeric[end][axis] - numeric[start][axis]) * fraction)
     )));
   };
+  // Classify exact/near-linear *local* interior keys rather than using a
+  // far-away greedy anchor. A sharp impact must not prevent unrelated,
+  // perfectly straight sections of the same track from being simplified.
   for (let index = 1; index < frames.length - 1; index += 1) {
-    if (protectedTimes.has(frames[index].time)) {
-      anchor = index;
-      continue;
+    if (protectedTimes.has(frames[index].time)) continue;
+    if (projectedError(index - 1, index, index + 1) <= tolerance) {
+      candidates.add(index);
     }
-    const error = projectedError(anchor, index, index + 1);
-    if (error <= tolerance) candidates.add(index);
-    else anchor = index;
   }
-  // Check all original values against final retained spans; no local-only PASS.
+
+  // Local equivalence is only a proposal. Consecutive near-linear removals
+  // may accumulate error; restore any unsafe span rather than discarding
+  // savings from unrelated safe spans. The final pass proves every omitted
+  // sample against its actual retained endpoints.
   const retained = frames.map((_, index) => index).filter((index) => !candidates.has(index));
   for (let segment = 1; segment < retained.length; segment += 1) {
     const start = retained[segment - 1], end = retained[segment];
+    let invalid = false;
     for (let index = start + 1; index < end; index += 1) {
       const error = projectedError(start, index, end);
       if (!Number.isFinite(error) || error > tolerance) {
-        return { state: "unverified" as const, reason: "RECONSTRUCTION_ERROR_EXCEEDED",
-          candidate_times: [] as number[], candidate_count: 0,
-          max_error: Number.isFinite(error) ? error : null };
+        invalid = true;
+        break;
       }
-      maxError = Math.max(maxError, error);
+    }
+    if (invalid) {
+      for (let index = start + 1; index < end; index += 1) {
+        candidates.delete(index);
+      }
+    }
+  }
+  const finalRetained = frames.map((_, index) => index).filter((index) => !candidates.has(index));
+  for (let segment = 1; segment < finalRetained.length; segment += 1) {
+    const start = finalRetained[segment - 1], end = finalRetained[segment];
+    for (let index = start + 1; index < end; index += 1) {
+      maxError = Math.max(maxError, projectedError(start, index, end));
     }
   }
   const candidateTimes = [...candidates].map((index) => frames[index].time);
