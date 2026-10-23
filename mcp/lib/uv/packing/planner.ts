@@ -7,6 +7,7 @@ import type {
 import { physicalPixelsPerUvUnit } from "@/lib/uv/density";
 import { packMaxRects } from "@/lib/uv/packing/maxRects";
 import { scoreUvPacking } from "@/lib/uv/packing/scorer";
+import { samePackingShape, stackBlockers } from "@/lib/uv/stacking";
 import type {
   UvPackingItem,
   UvPackingRect,
@@ -148,12 +149,21 @@ export function planUvPacking(
   }
   const occupied = [...occupiedMap.values()];
 
-  const items: UvPackingItem[] = movable.map((island) => {
+  // Existing, *explicit* stacked islands already read the same texels.
+  // Preserve one atlas allocation when their full movable cohort agrees.
+  // Matching dimensions alone never create new shared UV ownership.
+  const owners = new Map<string, {
+    island: UvLayoutSnapshot["islands"][number];
+    item: UvPackingItem;
+  }>();
+  const knownBySignature = new Map<string, string>();
+  const ownerByIsland = new Map<string, string>();
+  for (const island of [...movable].sort((a, b) => a.id.localeCompare(b.id))) {
     const override = options.size_overrides?.[island.id];
     const width = override?.[0] ?? island.rect.width;
     const height = override?.[1] ?? island.rect.height;
     const paddingPixels = island.constraints.padding_pixels;
-    return {
+    const item: UvPackingItem = {
       id: island.id,
       width,
       height,
@@ -166,7 +176,24 @@ export function planUvPacking(
       priority: island.constraints.priority,
       original_rect: { ...island.rect },
     };
-  });
+    const group = island.constraints.stack_group;
+    const eligible = Boolean(group) && stackBlockers(island).length === 0;
+    const signature = eligible ? JSON.stringify([
+      group, island.rect, island.source.box_uv,
+      island.source.faces.length, island.physical.density_basis,
+      width, height, paddingPixels, item.allow_rotate_90, item.priority,
+    ]) : null;
+    const existing = signature ? knownBySignature.get(signature) : undefined;
+    const owner = existing ? owners.get(existing) : undefined;
+    if (owner && samePackingShape(owner.island, island)) {
+      ownerByIsland.set(island.id, existing!);
+      continue;
+    }
+    owners.set(island.id, { island, item });
+    ownerByIsland.set(island.id, island.id);
+    if (signature) knownBySignature.set(signature, island.id);
+  }
+  const items = [...owners.values()].map((entry) => entry.item);
 
   const candidate = packMaxRects(
     items,
@@ -175,18 +202,20 @@ export function planUvPacking(
     occupied
   );
   const score = scoreUvPacking(candidate, items, occupied);
+  const representativePlacements = new Map(
+    candidate.placements.map((placement) => [placement.id, placement])
+  );
   const placementById = new Map(
-    candidate.placements.map((placement) => [
-      placement.id,
-      placement,
+    movable.map((island) => [
+      island.id,
+      representativePlacements.get(ownerByIsland.get(island.id) ?? island.id),
     ])
   );
-
+  // The native apply contract still requires instructions for every face.
   const proposedRectById = new Map(
-    candidate.placements.map((placement) => [
-      placement.id,
-      placement.rect,
-    ])
+    [...placementById]
+      .filter((entry) => entry[1] !== undefined)
+      .map(([id, placement]) => [id, placement!.rect])
   );
   const proposed = measureProposedMetrics(
     snapshot,
@@ -222,11 +251,9 @@ export function planUvPacking(
     score,
     moved_island_ids: movedIslandIds,
     fixed_island_ids: fixed.map((island) => island.id),
-    placement_transforms: candidate.placements.map(
-      (placement) => ({
-        island_id: placement.id,
-        rotated_90: placement.rotated_90,
-      })
-    ),
+    placement_transforms: movable.map((island) => ({
+      island_id: island.id,
+      rotated_90: placementById.get(island.id)?.rotated_90 ?? false,
+    })),
   };
 }

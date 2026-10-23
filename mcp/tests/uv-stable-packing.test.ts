@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildUvLayoutSnapshot } from "@/lib/uv/islands";
 import { planUvPacking } from "@/lib/uv/packing/planner";
+import { requireValidUvLayoutPlan } from "@/lib/uv/validatePlan";
 
 const snapshotFixture = () =>
   buildUvLayoutSnapshot(
@@ -123,6 +124,48 @@ describe("UV stable packing modes", () => {
       "face:left:north",
       "face:right:north",
     ]);
+  });
+
+  test("REPACK_ALL preserves explicit existing UV reuse without double packing", () => {
+    const snapshot = buildUvLayoutSnapshot([
+      { uuid: "arm-left", name: "arm-left", from: [0,0,0], to: [4,4,2],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [12,0,16,4] }] },
+      { uuid: "arm-right", name: "arm-right", from: [0,0,0], to: [4,4,2],
+        box_uv: false, autouv: 0, mirror_uv: true,
+        faces: [{ face: "north", uv: [12,0,16,4] }] },
+      { uuid: "badge", name: "badge", from: [0,0,0], to: [2,2,1],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [20,0,22,2] }] },
+    ], 32, 32, (island) => ({
+      padding_pixels: 0,
+      ...(island.source.cube_name.startsWith("arm") ? { stack_group: "paired_arms" } : {}),
+    }));
+    const plan = planUvPacking(snapshot, { bitmap_width: 32, bitmap_height: 32 });
+    requireValidUvLayoutPlan(plan);
+    const a = plan.proposed.islands.find((v) => v.id === "face:arm-left:north")!;
+    const b = plan.proposed.islands.find((v) => v.id === "face:arm-right:north")!;
+    expect(b.rect).toEqual(a.rect);
+    expect(plan.moved_island_ids).toEqual(expect.arrayContaining([
+      "face:arm-left:north", "face:arm-right:north",
+    ]));
+    expect(plan.placement_transforms).toHaveLength(3);
+    expect(plan.score.occupancy_ratio).toBe(20 / (32 * 32));
+  });
+
+  test("equal dimensions alone never authorize newly stacked UVs", () => {
+    const snapshot = buildUvLayoutSnapshot([
+      { uuid: "a", name: "a", from: [0,0,0], to: [4,4,1],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [8,0,12,4] }] },
+      { uuid: "b", name: "b", from: [0,0,0], to: [4,4,1],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [16,0,20,4] }] },
+    ], 32, 32, () => ({ padding_pixels: 0, stack_group: "same_shape" }));
+    const plan = planUvPacking(snapshot, { bitmap_width: 32, bitmap_height: 32 });
+    requireValidUvLayoutPlan(plan);
+    expect(plan.proposed.islands[0].rect).not.toEqual(plan.proposed.islands[1].rect);
+    expect(plan.score.occupancy_ratio).toBe(32 / (32 * 32));
   });
 
   test("AFFECTED_ONLY repacks only explicit affected islands", () => {
