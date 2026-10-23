@@ -89,6 +89,27 @@ describe("UV dry-run and legacy bridge", () => {
     expect(blocked.hard_violations).toContain("UNDECLARED_MOVEMENT:face:b:north");
   });
 
+  test("unchanged UV layout cannot advertise native apply readiness", () => {
+    const snapshot = buildUvLayoutSnapshot(
+      [{
+        uuid: "still", name: "still",
+        from: [0, 0, 0], to: [4, 4, 1],
+        box_uv: false, autouv: 0, mirror_uv: false,
+        faces: [{ face: "north", uv: [0, 0, 4, 4] }],
+      }],
+      16, 16,
+      () => ({ padding_pixels: 0 })
+    );
+    const plan = planUvPacking(snapshot, {
+      bitmap_width: 16, bitmap_height: 16,
+    });
+    expect(plan.score.valid).toBe(true);
+    expect(plan.moved_island_ids).toEqual([]);
+    const report = buildUvDryRunReport(plan);
+    expect(report.apply_allowed).toBe(false);
+    expect(report.hard_violations).toEqual(["UV_NO_OP_PLAN"]);
+  });
+
   test("blocked stack proposals stay advisory and do not block an otherwise valid packing plan", () => {
     const snapshot = buildUvLayoutSnapshot(
       [

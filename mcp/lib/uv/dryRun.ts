@@ -55,6 +55,8 @@ export function buildUvDryRunReport(
   const hardViolations = [...new Set([
     ...plan.score.hard_violations,
     ...validation.errors,
+    // Unchanged UV layout is inspection evidence, not native apply work.
+    ...(plan.moved_island_ids.length === 0 ? ["UV_NO_OP_PLAN"] : []),
   ])];
 
   return {
