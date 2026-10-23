@@ -346,6 +346,34 @@ describe("UV plan registry and service", () => {
     expect(mutated).toBe(false);
   });
 
+  test("service recognizes non-actionable UV plans before adapter/Undo allocation", async () => {
+    const native = buildUvNativeSourceSnapshot([{
+      uuid: "still", name: "still", from: [0, 0, 0], to: [4, 4, 1],
+      box_uv: false, autouv: 0, mirror_uv: false,
+      faces: [{ face: "north", uv: [0, 0, 4, 4] }],
+    }], 16, 16);
+    let adapters = 0;
+    const service = createUvLayoutService({
+      readSource: () => native,
+      createApplyAdapter: () => { adapters++; throw new Error("unexpected adapter"); },
+    });
+    const planned = await service.plan({
+      mode: "REPACK_ALL", bitmap_width: 16, bitmap_height: 16,
+      constraints: [{
+        id: "no-padding", selector: { cube_uuids: ["still"] },
+        constraints: { padding_pixels: 0 },
+      }],
+    });
+    expect(planned.report.summary.moved_islands).toBe(0);
+    expect(planned.report.apply_allowed).toBe(false);
+    expect(planned.report.hard_violations).toContain("UV_NO_OP_PLAN");
+    await expect(service.apply({
+      plan_id: planned.plan_id,
+      expected_source_fingerprint: planned.source_fingerprint,
+    })).rejects.toThrow(/UV_NO_OP_PLAN/);
+    expect(adapters).toBe(0);
+  });
+
   test("explicit bitmap dimensions bypass optional atlas discovery", async () => {
     const native = nativeFixture();
     let lookups = 0;

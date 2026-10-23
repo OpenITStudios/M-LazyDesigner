@@ -187,17 +187,16 @@ export function createUvLayoutService(
           "STALE_UV_PLAN: supplied source fingerprint does not match the stored plan."
         );
       }
-      if (!stored.report.apply_allowed) {
-        throw new Error(
-          "UV_LAYOUT_PLAN_BLOCKED: dry-run report contains blocking violations."
-        );
-      }
-
-      // A computed layout with no moved islands is inspection evidence,
-      // not an authored mutation. Refuse it before touching native Undo.
+      // Both dry-run and apply treat an unchanged layout as inspection-only.
+      // Retain the precise no-op error before the generic blocked-report guard.
       if (stored.plan.moved_island_ids.length === 0) {
         throw new Error(
           "UV_NO_OP_PLAN: the plan contains no UV changes; inspect its report instead of applying."
+        );
+      }
+      if (!stored.report.apply_allowed) {
+        throw new Error(
+          "UV_LAYOUT_PLAN_BLOCKED: dry-run report contains blocking violations."
         );
       }
 
