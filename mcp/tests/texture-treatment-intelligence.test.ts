@@ -83,6 +83,78 @@ describe("texture treatment intelligence", () => {
     expect(plan.rules.pattern_does_not_select_render_profile).toBe(true);
   });
 
+  test("face-inventory treatment planning detects missing undersides before readiness", () => {
+    const planned = planTextureTreatment({
+      required_faces: [
+        { cube_uuid: "boot", face: "north" },
+        { cube_uuid: "boot", face: "down" },
+        { cube_uuid: "boot", face: "south" },
+      ],
+      regions: [{
+        region: "boots", evidence: "observed",
+        surface_pattern: "painted_metal", render_profile: "opaque",
+        face_targets: [{ cube_uuid: "boot", face: "north", treatment: "PAINT" }],
+      }],
+    });
+    expect(planned.readiness.state).toBe("review_required");
+    expect(planned.readiness.scope).toBe("explicit_face_inventory");
+    expect(planned.face_coverage.state).toBe("incomplete");
+    if (planned.face_coverage.state !== "incomplete") throw Error("expected missing");
+    expect(planned.face_coverage.missing_count).toBe(2);
+    expect(planned.face_coverage.missing_examples).toContain("boot:down");
+    expect(planned.readiness.unresolved).toContainEqual({
+      region: "*", reason: "FACE_ASSIGNMENT_INCOMPLETE",
+    });
+
+    const complete = planTextureTreatment({
+      required_faces: [
+        { cube_uuid: "boot", face: "north" },
+        { cube_uuid: "boot", face: "down" },
+      ],
+      regions: [{
+        region: "boots", evidence: "observed",
+        surface_pattern: "painted_metal", render_profile: "opaque",
+        face_targets: [
+          { cube_uuid: "boot", face: "north", treatment: "PAINT" },
+          { cube_uuid: "boot", face: "down", treatment: "INTENTIONAL_FLAT" },
+        ],
+      }],
+    });
+    expect(complete.readiness.state).toBe("ready");
+    expect(complete.face_coverage.state).toBe("assigned");
+    expect(complete.face_coverage.visual_verdict).toBe("not_evaluated");
+  });
+
+  test("treatment inventory refuses duplicate ownership and unresolved aliases", () => {
+    const base = { region: "cloth", evidence: "observed" as const,
+      surface_pattern: "painted_metal" as const, render_profile: "opaque" as const };
+    expect(() => planTextureTreatment({
+      regions: [base], required_faces: [
+        { cube_uuid: "boot", face: "down" },
+        { cube_uuid: "boot", face: "down" },
+      ],
+    })).toThrow("duplicate Cube/face");
+    expect(() => planTextureTreatment({
+      required_faces: [{ cube_uuid: "boot", face: "down" }],
+      regions: [{
+        ...base, face_targets: [
+          { cube_uuid: "boot", face: "down", treatment: "SHARED" },
+        ],
+      }],
+    }).readiness.unresolved).toContainEqual({
+      region: "cloth", reason: "SHARED_UV_SOURCE_REQUIRED",
+    });
+    expect(() => planTextureTreatment({
+      regions: [{
+        ...base, face_targets: [
+          { cube_uuid: "boot", face: "down", treatment: "PAINT" },
+        ],
+      }],
+    }).readiness.unresolved).toContainEqual({
+      region: "*", reason: "FACE_INVENTORY_REQUIRED",
+    });
+  });
+
   test("planner leaves unresolved reference decisions explicit instead of guessing", () => {
     const plan = planTextureTreatment({
       regions: [{ region: "unknown panel", evidence: "unknown" }],
