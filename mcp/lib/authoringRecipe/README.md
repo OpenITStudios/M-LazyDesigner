@@ -46,6 +46,16 @@ before expanding native Cubes when the feature contract is present.
 
 The compiler also reuses canonical Cube span checks for prototypes and realized pattern/constraint/symmetry instances. Nonfinite endpoints, invalid pivots, negative rendered spans and positive dimensions lost through numeric rounding fail before plan/apply. UV-mode-specific Box UV restrictions remain with the native adapter, where actual mode is known.
 
+## Bounded pattern expansion
+
+The single `patterns.ts` limit is **4,096 realized instances** per Authoring
+Recipe v1, including symmetry. It is a resource-safety ceiling, **not** a
+model-quality score or stylistic Cube target. Direct GRID expansion checks
+the product of both counts before allocation; `compiler.ts` counts every
+pattern and planned mirror before building temporary Cubes or evaluating
+constraints/Undo. Oversized requests fail explicitly, never truncate,
+sample, split or silently remove Geometry.
+
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 `planning.ts` owns pure planning APIs. `service.ts` owns bounded stateful plan/apply/identity/evidence lifecycle and may compose recipe modules, but recipe source must not depend on Gateway or Runtime executors.

@@ -1,5 +1,9 @@
 import type { AuthoringRecipe, CompiledAuthoringRecipe, CompiledCubePlacement, RecipeCubePrototype, RecipeInstance, RecipeVec3 } from "@/lib/authoringRecipe/contracts";
-import { expandRecipePattern } from "@/lib/authoringRecipe/patterns";
+import {
+  AUTHORING_RECIPE_MAX_INSTANCES,
+  countRecipePatternInstances,
+  expandRecipePattern,
+} from "@/lib/authoringRecipe/patterns";
 import { solveRecipeConstraints } from "@/lib/authoringRecipe/constraints";
 import { applyRecipeSymmetry } from "@/lib/authoringRecipe/symmetry";
 import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
@@ -113,6 +117,24 @@ export function compileAuthoringRecipe(recipe: AuthoringRecipe): CompiledAuthori
   }
   const patternIds = recipe.patterns.map((pattern) => pattern.id);
   if (new Set(patternIds).size !== patternIds.length) throw new Error("Authoring Recipe pattern IDs must be unique.");
+  // Count patterns and mirrored instances BEFORE transient Cube allocation,
+  // constraint recursion and any native Undo. This protects resources only.
+  let requestedInstances = recipe.symmetry?.length ?? 0;
+  if (requestedInstances > AUTHORING_RECIPE_MAX_INSTANCES) {
+    throw new Error("RECIPE_INSTANCE_BUDGET_EXCEEDED: symmetry exceeds " +
+      AUTHORING_RECIPE_MAX_INSTANCES + " total Cube instances.");
+  }
+  for (const pattern of recipe.patterns) {
+    if (!prototypeById.has(pattern.prototype_id)) {
+      throw new Error("Pattern " + pattern.id + " references unknown prototype " + pattern.prototype_id + ".");
+    }
+    const instances = countRecipePatternInstances(pattern);
+    if (instances > AUTHORING_RECIPE_MAX_INSTANCES - requestedInstances) {
+      throw new Error("RECIPE_INSTANCE_BUDGET_EXCEEDED: patterns plus symmetry exceed " +
+        AUTHORING_RECIPE_MAX_INSTANCES + " total Cube instances.");
+    }
+    requestedInstances += instances;
+  }
   const expanded = recipe.patterns.flatMap((pattern) => {
     const prototype = prototypeById.get(pattern.prototype_id);
     if (!prototype) throw new Error("Pattern " + pattern.id + " references unknown prototype " + pattern.prototype_id + ".");

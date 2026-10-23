@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/planning";
-import { expandRecipePattern } from "@/lib/authoringRecipe/patterns";
+import {
+  AUTHORING_RECIPE_MAX_INSTANCES,
+  countRecipePatternInstances,
+  expandRecipePattern,
+} from "@/lib/authoringRecipe/patterns";
 import { runParametricEfficiencyBenchmark } from "@/scripts/benchmark/benchmark-parametric-authoring";
 
 describe("Parametric Authoring Engine G0-G2", () => {
@@ -13,6 +17,67 @@ describe("Parametric Authoring Engine G0-G2", () => {
     expect(radial).toHaveLength(4);
     expect(radial[0].translation).toEqual([2,0,0]);
     expect(radial[1].rotation).toEqual([0,0,90]);
+  });
+
+  test("GRID product is bounded before multi-million-instance allocation", () => {
+    const huge: AuthoringRecipe["patterns"][number] = {
+      kind: "GRID", id: "huge", prototype_id: "part",
+      counts: [4096, 4096], axes: ["X", "Y"], spacing: [1, 1],
+    };
+    expect(AUTHORING_RECIPE_MAX_INSTANCES).toBe(4096);
+    expect(() => countRecipePatternInstances(huge))
+      .toThrow("RECIPE_INSTANCE_BUDGET_EXCEEDED");
+    expect(() => expandRecipePattern(huge))
+      .toThrow("RECIPE_INSTANCE_BUDGET_EXCEEDED");
+
+    // The technical ceiling is inclusive, not a style/quality judgment.
+    const valid: AuthoringRecipe["patterns"][number] = { ...huge, counts: [64, 64] };
+    expect(countRecipePatternInstances(valid)).toBe(4096);
+    expect(expandRecipePattern(valid)).toHaveLength(4096);
+  });
+
+  test("recipe preflight counts cumulative patterns and symmetry before expansion", () => {
+    const base: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "budget", name: "Budget",
+      prototypes: [{ id: "part", name: "part", size: [1, 1, 1] }],
+      patterns: [
+        { kind: "LINEAR", id: "left", prototype_id: "part",
+          axis: "X", count: 2500, spacing: 2 },
+        { kind: "LINEAR", id: "right", prototype_id: "part",
+          axis: "Y", count: 1700, spacing: 2 },
+      ],
+    };
+    expect(() => compileAuthoringRecipe(base))
+      .toThrow("RECIPE_INSTANCE_BUDGET_EXCEEDED");
+    expect(() => compileAuthoringRecipe({
+      ...base, patterns: [{
+        kind: "GRID", id: "huge", prototype_id: "part",
+        counts: [4096, 4096], axes: ["X", "Y"], spacing: [1, 1],
+      }],
+    })).toThrow("RECIPE_INSTANCE_BUDGET_EXCEEDED");
+
+    const symmetry: NonNullable<AuthoringRecipe["symmetry"]> = [{
+      id: "mirror", source_instance_id: "array:0",
+      target_instance_id: "array:mirrored",
+      plane: { axis: "X", position: 0 },
+      uv_policy: "UNIQUE", texture_policy: "UNIQUE",
+      rig_policy: "INDEPENDENT",
+    }];
+    expect(() => compileAuthoringRecipe({
+      ...base, patterns: [{
+        kind: "LINEAR", id: "array", prototype_id: "part",
+        axis: "X", count: 4096, spacing: 2,
+      }], symmetry,
+    })).toThrow("RECIPE_INSTANCE_BUDGET_EXCEEDED");
+
+    const normal = compileAuthoringRecipe({
+      ...base, patterns: [{
+        kind: "LINEAR", id: "array", prototype_id: "part",
+        axis: "X", count: 2, spacing: 3,
+      }], symmetry,
+    });
+    expect(normal.placements).toHaveLength(3);
+    expect(normal.metrics.symmetry_generated_count).toBe(1);
   });
 
   test("compiler realizes repeated recipe into exact bounded cube placements", () => {

@@ -7,11 +7,39 @@ function requireFinite(value: number, label: string): number {
   return value;
 }
 
+/** Technical expansion ceiling for one recipe, not an artistic Cube quota. */
+export const AUTHORING_RECIPE_MAX_INSTANCES = 4_096;
+
 function requireCount(value: number, label: string): number {
-  if (!Number.isInteger(value) || value < 1 || value > 4096) {
-    throw new Error(label + " must be an integer between 1 and 4096.");
+  if (!Number.isInteger(value) || value < 1 || value > AUTHORING_RECIPE_MAX_INSTANCES) {
+    throw new Error(label + " must be an integer between 1 and " +
+      AUTHORING_RECIPE_MAX_INSTANCES + ".");
   }
   return value;
+}
+
+/** A cheap cardinality check shared by direct pattern callers and the compiler. */
+export function countRecipePatternInstances(pattern: RecipePattern): number {
+  if (!pattern.id || !pattern.prototype_id) {
+    throw new Error("Recipe pattern requires non-empty id and prototype_id.");
+  }
+  if (pattern.kind === "LINEAR" || pattern.kind === "RADIAL") {
+    return requireCount(pattern.count, "Pattern " + pattern.id + " count");
+  }
+  if (pattern.kind === "GRID") {
+    const first = requireCount(pattern.counts[0], "Pattern " + pattern.id + " first count");
+    const second = requireCount(pattern.counts[1], "Pattern " + pattern.id + " second count");
+    const total = first * second;
+    if (total > AUTHORING_RECIPE_MAX_INSTANCES) {
+      throw new Error(
+        "RECIPE_INSTANCE_BUDGET_EXCEEDED: grid pattern " + pattern.id +
+        " expands to " + total + " Cubes; technical limit " +
+        AUTHORING_RECIPE_MAX_INSTANCES + ". Reduce unnecessary repetition."
+      );
+    }
+    return total;
+  }
+  throw new Error("Unsupported recipe pattern kind.");
 }
 
 function vec3(value: readonly number[] | undefined): RecipeVec3 {
@@ -37,7 +65,7 @@ function addScaled(base: RecipeVec3, direction: RecipeVec3, scale: number): Reci
 }
 
 function expandLinear(pattern: LinearPattern): RecipeInstance[] {
-  const count = requireCount(pattern.count, "Pattern " + pattern.id + " count");
+  const count = countRecipePatternInstances(pattern);
   const spacing = requireFinite(pattern.spacing, "Pattern " + pattern.id + " spacing");
   const start = vec3(pattern.start);
   const direction = axisVector(pattern.axis);
@@ -52,8 +80,9 @@ function expandLinear(pattern: LinearPattern): RecipeInstance[] {
 }
 
 function expandGrid(pattern: GridPattern): RecipeInstance[] {
-  const firstCount = requireCount(pattern.counts[0], "Pattern " + pattern.id + " first count");
-  const secondCount = requireCount(pattern.counts[1], "Pattern " + pattern.id + " second count");
+  // Grid size is checked before the first allocation (e.g., 4096x4096).
+  countRecipePatternInstances(pattern);
+  const [firstCount, secondCount] = pattern.counts;
   if (pattern.axes[0] === pattern.axes[1]) throw new Error("Pattern " + pattern.id + " grid axes must be distinct.");
   const firstSpacing = requireFinite(pattern.spacing[0], "Pattern " + pattern.id + " first spacing");
   const secondSpacing = requireFinite(pattern.spacing[1], "Pattern " + pattern.id + " second spacing");
@@ -92,7 +121,7 @@ function radialRotation(axis: "X" | "Y" | "Z", angleDegrees: number, rotate: boo
 }
 
 function expandRadial(pattern: RadialPattern): RecipeInstance[] {
-  const count = requireCount(pattern.count, "Pattern " + pattern.id + " count");
+  const count = countRecipePatternInstances(pattern);
   const radius = requireFinite(pattern.radius, "Pattern " + pattern.id + " radius");
   if (radius < 0) throw new Error("Pattern " + pattern.id + " radius must be non-negative.");
   const center = vec3(pattern.center);
@@ -112,8 +141,8 @@ function expandRadial(pattern: RadialPattern): RecipeInstance[] {
 }
 
 export function expandRecipePattern(pattern: RecipePattern): RecipeInstance[] {
-  if (!pattern.id || !pattern.prototype_id) throw new Error("Recipe pattern requires non-empty id and prototype_id.");
   if (pattern.kind === "LINEAR") return expandLinear(pattern);
   if (pattern.kind === "GRID") return expandGrid(pattern);
-  return expandRadial(pattern);
+  if (pattern.kind === "RADIAL") return expandRadial(pattern);
+  throw new Error("Unsupported recipe pattern kind.");
 }

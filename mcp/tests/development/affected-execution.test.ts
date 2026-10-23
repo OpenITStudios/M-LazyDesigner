@@ -251,6 +251,21 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("parametric expansion safety routes to the existing compiler regression owner", () => {
+    for (const path of [
+      "mcp/lib/authoringRecipe/patterns.ts",
+      "mcp/lib/authoringRecipe/compiler.ts",
+    ]) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify).toBe(false);
+      expect(plan.targeted_tests).toEqual([
+        "mcp/tests/parametric-authoring-engine.test.ts",
+      ]);
+    }
+  });
+
   test("marginal projected Geometry evidence selects current owner regressions", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/geometry/surfaceEvidence.ts"],

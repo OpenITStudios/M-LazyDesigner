@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-23 Geometry plane-like contact correction:
-- Surface contact now accepts a Cube with exactly one zero rendered axis and detects same-parent sheet/sheet and sheet/solid coplanar patches. Prior strict-positive-volume containment/projection/merge semantics remain unchanged; invalid line/point geometry and cross-Bone unverified pairs stay excluded/partial.
-- Axis-aligned contact uses one bounded bounds observation per Cube and preserves pair budget, example limits, deterministic ordering and safe non-destructive review. Regressions added to existing Geometry evidence test owner; modelling guidance updated.
-- Previous Geometry inspection/authoring changes remain in source. Source/static proof only; exact-HEAD Bun/TypeScript and LIVE_BLOCKBENCH NOT EXECUTED (CI disabled). Next: resume only evidence-backed defects or a capable cloud/native verifier; UV generator registration, pose sampling and visual Golden acceptance remain deferred.
+2026-10-23 Authoring Recipe expansion safety:
+- Fixed GRID cardinality: 4096x4096 previously attempted 16,777,216 instances. Canonical 4096-instance resource ceiling now checks per-GRID and all recipe patterns + symmetry BEFORE allocation, constraint evaluation or native Undo; no truncation or aesthetic Cube quota.
+- Existing parametric compiler regressions cover GRID overrun, inclusive boundary, cumulative patterns, mirrored targets and ordinary recipes. Development affected-execution maps source to this same test owner.
+- Previous geometry surface/direct authoring changes retained. Bun/TypeScript/native visual and cost NOT EXECUTED (verification CI disabled). Next: evidence-backed defects or available capable cloud/native verifier; UV generator registration, native pose sampling and Golden visual acceptance remain deferred.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 
