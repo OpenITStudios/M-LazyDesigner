@@ -221,7 +221,8 @@ export function packMaxRects(
   items: readonly UvPackingItem[],
   width: number,
   height: number,
-  occupied: readonly UvPackingRect[] = []
+  occupied: readonly UvPackingRect[] = [],
+  options: { ordering?: "area" | "semantic" } = {}
 ): UvPackingCandidate {
   const canvasWidth = requirePositiveFinite(width, "UV canvas width");
   const canvasHeight = requirePositiveFinite(height, "UV canvas height");
@@ -279,6 +280,12 @@ export function packMaxRects(
     .sort(
       (a, b) =>
         b.priority - a.priority ||
+        // The optional semantic pass packs actual named cohorts together.
+        // Preserve default area-first ordering when no locality pass runs.
+        (options.ordering === "semantic" &&
+        (a.semantic_group ?? "") !== (b.semantic_group ?? "")
+          ? (a.semantic_group ?? "") < (b.semantic_group ?? "") ? -1 : 1
+          : 0) ||
         (b.width + 2 * b.padding_x) *
             (b.height + 2 * b.padding_y) -
           (a.width + 2 * a.padding_x) *

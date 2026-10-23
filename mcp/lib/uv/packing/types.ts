@@ -13,6 +13,8 @@ export type UvPackingItem = {
   padding_y: number;
   allow_rotate_90: boolean;
   priority: number;
+  /** Optional authored grouping; equal dimensions alone never imply sharing. */
+  semantic_group?: string;
   original_rect?: UvPackingRect;
 };
 

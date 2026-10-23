@@ -202,6 +202,7 @@ export function planUvPacking(
         island.constraints.rotation.allowed &&
         island.constraints.rotation.step === 90,
       priority: island.constraints.priority,
+      semantic_group: island.constraints.semantic_group?.trim() || undefined,
       original_rect: { ...island.rect },
     };
     const group = island.constraints.stack_group;
@@ -223,13 +224,43 @@ export function planUvPacking(
   }
   const items = [...owners.values()].map((entry) => entry.item);
 
-  const candidate = packMaxRects(
-    items,
-    snapshot.logical_width,
-    snapshot.logical_height,
-    occupied
+  let candidate = packMaxRects(
+    items, snapshot.logical_width, snapshot.logical_height, occupied
   );
-  const score = scoreUvPacking(candidate, items, occupied);
+  let score = scoreUvPacking(candidate, items, occupied);
+
+  // Only a full repack with explicitly named cohorts can justify a second
+  // candidate. Prefer it iff it actually lowers editability spread; otherwise
+  // retain the exact proven area-first result. Never sacrifice fit or safety.
+  const groups = new Map<string, number>();
+  for (const item of items) {
+    if (item.semantic_group) {
+      groups.set(item.semantic_group, (groups.get(item.semantic_group) ?? 0) + 1);
+    }
+  }
+  if (mode === "REPACK_ALL" && groups.size > 1 &&
+      [...groups.values()].some((count) => count > 1)) {
+    try {
+      const cohortCandidate = packMaxRects(
+        items, snapshot.logical_width, snapshot.logical_height,
+        occupied, { ordering: "semantic" }
+      );
+      const cohortScore = scoreUvPacking(cohortCandidate, items, occupied);
+      if (cohortScore.valid && cohortScore.semantic_spread !== null &&
+          (score.semantic_spread === null ||
+            cohortScore.semantic_spread < score.semantic_spread)) {
+        candidate = cohortCandidate;
+        score = cohortScore;
+      }
+    } catch (error) {
+      // A locality-based order can fail in a tight atlas even when area-first
+      // fits. Preserve the valid original instead of failing production.
+      if (!(error instanceof Error) ||
+          !error.message.startsWith("MaxRects could not fit UV island")) {
+        throw error;
+      }
+    }
+  }
   const representativePlacements = new Map(
     candidate.placements.map((placement) => [placement.id, placement])
   );

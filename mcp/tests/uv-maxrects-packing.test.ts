@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { buildUvLayoutSnapshot } from "@/lib/uv/islands";
 import { planUvPacking } from "@/lib/uv/packing/planner";
 import { packMaxRects } from "@/lib/uv/packing/maxRects";
+import { scoreUvPacking } from "@/lib/uv/packing/scorer";
 
 describe("UV MaxRects packing", () => {
   test("packs deterministic rectangles with padding and optional 90-degree rotation", () => {
@@ -55,6 +56,42 @@ describe("UV MaxRects packing", () => {
     );
     expect(second).toEqual(first);
     expect(first.placements).toHaveLength(2);
+  });
+
+  test("semantic cohorts reduce measured atlas editability spread without changing occupancy", () => {
+    const dimensions = [[3,3],[3,3],[2,2],[4,4],[2,2],
+      [6,4],[2,4],[2,2],[6,4],[2,2]] as const;
+    const cohort = ["limb", "body", "head"] as const;
+    const items = dimensions.map(([width,height],index) => ({
+      id: "x" + String(index).padStart(2, "0"),
+      width, height, padding_x: 0, padding_y: 0,
+      allow_rotate_90: false, priority: 0,
+      semantic_group: cohort[index % 3],
+    }));
+    const area = packMaxRects(items, 16, 16);
+    const semantic = packMaxRects(items, 16, 16, [], { ordering: "semantic" });
+    const areaScore = scoreUvPacking(area, items);
+    const semanticScore = scoreUvPacking(semantic, items);
+    expect(areaScore.valid).toBe(true);
+    expect(semanticScore.valid).toBe(true);
+    expect(semanticScore.occupancy_ratio).toBe(areaScore.occupancy_ratio);
+    expect(semanticScore.semantic_spread).not.toBeNull();
+    expect(semanticScore.semantic_spread!).toBeLessThan(areaScore.semantic_spread!);
+
+    const snapshot = buildUvLayoutSnapshot(dimensions.map(([width,height], index) => ({
+      uuid: items[index].id, name: items[index].id,
+      from: [0,0,0], to: [width,height,1],
+      box_uv: false, autouv: 0, mirror_uv: false,
+      faces: [{ face: "north" as const, uv: [0,0,width,height] }],
+    })), 16, 16, (island) => ({
+      padding_pixels: 0,
+      semantic_group: items.find((item) => item.id === island.source.cube_uuid)!.semantic_group,
+    }));
+    const plan = planUvPacking(snapshot, {
+      bitmap_width: 16, bitmap_height: 16,
+    });
+    expect(plan.score.valid).toBe(true);
+    expect(plan.score.semantic_spread).toBe(semanticScore.semantic_spread);
   });
 
   test("respects fixed occupied rectangles and fails closed on overlap", () => {

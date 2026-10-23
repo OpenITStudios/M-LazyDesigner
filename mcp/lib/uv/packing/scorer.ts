@@ -76,6 +76,31 @@ export function scoreUvPacking(
       Math.abs(placement.rect.height - original.height);
   }
 
+  // Score actual editable atlas locality, not aesthetic fidelity.
+  // This is only compared across plans with identical authored islands.
+  const groupCenters = new Map<string, Array<[number, number]>>();
+  for (const placement of candidate.placements) {
+    const group = itemById.get(placement.id)?.semantic_group?.trim();
+    if (!group) continue;
+    const centers = groupCenters.get(group) ?? [];
+    centers.push([
+      placement.rect.x + placement.rect.width / 2,
+      placement.rect.y + placement.rect.height / 2,
+    ]);
+    groupCenters.set(group, centers);
+  }
+  let spread = 0;
+  let comparedGroups = 0;
+  for (const centers of groupCenters.values()) {
+    if (centers.length < 2) continue;
+    comparedGroups += 1;
+    const x = centers.reduce((sum, center) => sum + center[0], 0) / centers.length;
+    const y = centers.reduce((sum, center) => sum + center[1], 0) / centers.length;
+    spread += centers.reduce((sum, center) =>
+      sum + Math.abs(center[0] - x) / candidate.canvas.width +
+        Math.abs(center[1] - y) / candidate.canvas.height, 0);
+  }
+
   return {
     valid: violations.length === 0,
     hard_violations: violations,
@@ -84,6 +109,6 @@ export function scoreUvPacking(
     density_error: null,
     movement_cost: movementCost,
     fragmentation: candidate.free_rectangles.length,
-    semantic_spread: null,
+    semantic_spread: comparedGroups ? Number(spread.toFixed(6)) : null,
   };
 }
