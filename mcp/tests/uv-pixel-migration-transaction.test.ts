@@ -51,6 +51,9 @@ function fixture() {
       project_uuid: uv.project_uuid!,
       all_cube_uuids: ["panel"],
       all_texture_uuids: ["base", "mer"],
+      face_texture_bindings: [
+        { cube_uuid: "panel", face: "north", texture_uuid: "base" },
+      ],
       uv_owner_scope: "complete_cube_only",
       unsupported_uv_owner_count: 0,
     },
@@ -373,6 +376,33 @@ describe("atomic Texture + UV source transaction contract (adapter-only)", () =>
       .rejects.toBeInstanceOf(UvPixelMigrationOutcomeUnknownError);
     expect(f.harness.calls).not.toContain("restore");
     expect(f.harness.calls).not.toContain("cancel");
+  });
+
+  test("face-to-texture reassignment is refused before committing even when UV and RGBA match", async () => {
+    const f = fixture();
+    const read = f.harness.adapter.readState;
+    let reads = 0;
+    f.harness.adapter.readState = () => {
+      reads++;
+      if (reads === 2) {
+        f.harness.state.scope.face_texture_bindings[0].texture_uuid = "mer";
+      }
+      return read();
+    };
+    await expect(applyUvPixelMigrationAtomic(await request(f)))
+      .rejects.toThrow("UV_PIXEL_MIGRATION_SCENE_CHANGED");
+    expect(f.harness.calls).toEqual(["read", "read"]);
+  });
+
+  test("missing or unknown face texture ownership fails the preflight without Undo", async () => {
+    for (const mutation of ["missing", "unknown"] as const) {
+      const f = fixture();
+      if (mutation === "missing") f.harness.state.scope.face_texture_bindings = [];
+      else f.harness.state.scope.face_texture_bindings[0].texture_uuid = "foreign-texture";
+      await expect(applyUvPixelMigrationAtomic(await request(f)))
+        .rejects.toThrow("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE");
+      expect(f.harness.calls).toEqual(["read"]);
+    }
   });
 
   test("zero-delta plans refuse before native source reads or Undo", async () => {

@@ -34,6 +34,12 @@ export type UvPixelMigrationSceneScope = {
   project_uuid: string;
   all_cube_uuids: string[];
   all_texture_uuids: string[];
+  /** Every native Cube face, including disabled/untextured faces. */
+  face_texture_bindings: Array<{
+    cube_uuid: string;
+    face: string;
+    texture_uuid: string | null;
+  }>;
   uv_owner_scope: "complete_cube_only";
   unsupported_uv_owner_count: 0;
 };
@@ -95,6 +101,35 @@ function exactIds(a: readonly string[], b: readonly string[]): boolean {
     JSON.stringify(sortedUnique(b, "native owner IDs"));
 }
 
+function canonicalBindings(
+  bindings: UvPixelMigrationSceneScope["face_texture_bindings"],
+  state: UvPixelMigrationScopedState
+): string[] {
+  if (!Array.isArray(bindings)) {
+    throw new Error("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE: missing complete face texture bindings.");
+  }
+  const expected = state.uv.cubes.flatMap(cube =>
+    cube.faces.map(face => JSON.stringify([cube.uuid, face.face]))
+  ).sort();
+  const allowedTextures = new Set(state.scope.all_texture_uuids);
+  const listed = bindings.map(binding => {
+    if (!binding || typeof binding.cube_uuid !== "string" ||
+        typeof binding.face !== "string" ||
+        (binding.texture_uuid !== null &&
+         (typeof binding.texture_uuid !== "string" ||
+          !allowedTextures.has(binding.texture_uuid)))) {
+      throw new Error("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE: invalid face-to-texture owner.");
+    }
+    return JSON.stringify([binding.cube_uuid, binding.face]);
+  }).sort();
+  if (JSON.stringify(listed) !== JSON.stringify(expected)) {
+    throw new Error("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE: face texture binding inventory is missing, duplicated or extra.");
+  }
+  return bindings.map(binding => JSON.stringify([
+    binding.cube_uuid, binding.face, binding.texture_uuid,
+  ])).sort();
+}
+
 function validateCompleteScene(state: UvPixelMigrationScopedState): void {
   const { scope, uv, atlases } = state;
   if (!scope || scope.uv_owner_scope !== "complete_cube_only" ||
@@ -109,6 +144,7 @@ function validateCompleteScene(state: UvPixelMigrationScopedState): void {
     throw new Error("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE: all native Cube " +
       "and project Texture UUIDs must exactly match the scene inventory.");
   }
+  canonicalBindings(scope.face_texture_bindings, state);
 }
 
 function requireBoundedAtlasInventory(
@@ -145,6 +181,9 @@ function snapshot(state: UvPixelMigrationScopedState): UvPixelMigrationScopedSta
       ...state.scope,
       all_cube_uuids: [...state.scope.all_cube_uuids],
       all_texture_uuids: [...state.scope.all_texture_uuids],
+      face_texture_bindings: state.scope.face_texture_bindings.map(binding => ({
+        ...binding,
+      })),
     },
     atlases: state.atlases.map(atlas => ({
       ...atlas,
@@ -161,7 +200,9 @@ function requireSameScene(
   requireBoundedAtlasInventory(actual.atlases);
   if (expected.scope.project_uuid !== actual.scope.project_uuid ||
       !exactIds(expected.scope.all_cube_uuids, actual.scope.all_cube_uuids) ||
-      !exactIds(expected.scope.all_texture_uuids, actual.scope.all_texture_uuids)) {
+      !exactIds(expected.scope.all_texture_uuids, actual.scope.all_texture_uuids) ||
+      JSON.stringify(canonicalBindings(expected.scope.face_texture_bindings, expected)) !==
+        JSON.stringify(canonicalBindings(actual.scope.face_texture_bindings, actual))) {
     throw new Error("UV_PIXEL_MIGRATION_SCENE_CHANGED: project or owner " +
       "inventory changed during the transaction.");
   }

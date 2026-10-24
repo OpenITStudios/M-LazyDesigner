@@ -185,10 +185,15 @@ exact preflight SHA-256 RGBA revisions, a second whole-state read before
 a synchronous bitmap+UV Undo, exact post-apply UV/bitmap readback, and
 verified restoration of **both** on failure. Partial Undo ownership or
 uncertain finishEdit is `UV_PIXEL_MIGRATION_OUTCOME_UNKNOWN`, not permission
-for an automatic retry. Mock-adapter source tests cannot prove this works
-in an installed Blockbench session. The existing painted-atlas mutation
-block remains active until a real native adapter and visual/persistence
-acceptance are available.
+for an automatic retry. The unregistered native adapter source now exists beneath
+`mcp/server/runtime/uv/pixelMigrationRuntime.ts`: it enumerates all Cube
+and Texture objects, preserves face-to-texture UUID bindings, writes flattened
+atlas RGBA with native `Texture.edit`, reuses UV native instructions, and
+scopes one combined bitmap + UV Undo. Its simulated runtime tests are NOT
+installed Blockbench evidence. Actual Undo/codec/save-reopen/appearance,
+non-Cube scenes, layers, and animations are still outside accepted support.
+The existing painted-atlas mutation block remains active until native
+acceptance and authorized generator-coupled activation are available.
 
 A material UV change invalidates affected downstream assumptions:
 

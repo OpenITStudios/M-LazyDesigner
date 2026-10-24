@@ -256,7 +256,8 @@ U6 evidence-driven stack proposals             SOURCE IMPLEMENTED
 U7 native adapter / stale guard / atomic apply SOURCE IMPLEMENTED
 U7 lossless pixel-migration candidate           SOURCE IMPLEMENTED (READ-ONLY)
 U7 texture+UV atomic transaction contract      SOURCE IMPLEMENTED / ADAPTER ONLY
-U7 native migration adapter/activation          NOT IMPLEMENTED / LIVE PROOF PENDING
+U7 native migration adapter factory             SOURCE IMPLEMENTED / UNREGISTERED
+U7 production activation/native acceptance      LOCAL_CODE + LIVE_BLOCKBENCH PENDING
 U7 Runtime capability registration             LOCAL_CODE GENERATOR PENDING
 U8 native compatibility / save-reopen proof   LIVE_BLOCKBENCH AFTER U7 REGISTRATION
 U9 optional mesh/xatlas investigation         DEFERRED
@@ -396,11 +397,28 @@ and hashing. The adapter-harness success receipt is
 `native_runtime_attested=false`, `saved_model_attested=false`,
 `visual_verdict=not_evaluated`.
 
-This contract is NOT a native implementation. No Blockbench image+UV writer
-has been connected to it; its complete-scene evidence manifest remains a
-requirement for a future real native enumerator rather than proven installed
-coverage. The transaction tests use disposable mock adapters, not Blockbench
-or user assets.
+**Unregistered Blockbench adapter source:** `server/runtime/uv/pixelMigrationRuntime.ts`
+now implements the injected transaction port with native `Texture.edit`
+whole-atlas RGBA writes, the existing UV reader/apply/restore functions,
+and one combined native `Undo.initEdit` scope (all Cubes, all project
+Textures, bitmap + UV aspects). The read-only scene enumerator pins the
+unique active project tab; demands exact `Cube.all` and `Outliner.elements`
+identity (Mesh/non-Cube ownership is unsupported); matches `Project.textures`
+to `Texture.all`; and records every Cube-face resolved texture binding,
+including disabled/untextured faces. Only compatible flat single-frame,
+project-aligned Texture bitmaps are eligible. The native writer rejects
+wrong callback dimensions/frame offsets, missing/duplicated callbacks,
+incomplete candidate atlases and lost Undo/project affinity. It double-checks
+native UV, bindings and full RGBA synchronously immediately before
+`Undo.initEdit`, after the coordinator's asynchronous source digest.
+
+The adapter is **source-authored, not integrated into the registered
+production workflow**. Its test harness simulates Blockbench classes, native
+callbacks and Undo; this is not proof of installed Blockbench semantics,
+codec/save-reopen behavior, loaded layer handling or final visual fidelity.
+The established painted atlas pre-Undo guard and the generator gate remain
+unchanged. Never register or automatically invoke the adapter without
+native verification, complete scene support, and approved activation.
 
 **This does not authorize native painted-atlas repack.** No bitmap candidate
 is applied by the registered Texture tool, existing U7 native adapter or

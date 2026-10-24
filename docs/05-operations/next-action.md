@@ -12,9 +12,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 U7 atomic Texture+UV adapter contract:
-- `mcp/lib/uv/pixelMigrationTransaction.ts` now composes the read-only RGBA migration kernel with complete Cube/texture inventory, all-atlas revision checks, pre-Undo freshness, exact UV+bitmap postconditions, second post-hash read and verified joint rollback. Unsafe Undo ownership/commit or restoration => OUTCOME_UNKNOWN. Source-only tests and focused routing authored; Bun/typecheck/native/Golden NOT EXECUTED (CI disabled).
-- No live Blockbench texture+UV adapter wired. Existing painted-atlas native pre-Undo block stays active; `committed_by_adapter` is mock contract, NOT installed/native PASS. Next: real serialized native adapter with full project ownership and combined Undo, save/reopen/visual proof, generator-coupled U7 registration in a capable environment. Cross-Cube sampling and whole-scene visual evidence remain separate open P0 work.
+2026-10-24 U7 unregistered Blockbench Texture+UV adapter:
+- `mcp/server/runtime/uv/pixelMigrationRuntime.ts` now supplies native scene/Cube/Texture/face-binding enumeration, flattened RGBA Texture.edit, full bitmap+UV Undo, source recheck at beginUndo, all-atlas/UV restore, and project-affinity safety to the existing transaction port. Mock native tests and focused routing authored; matching-SHA Bun/types, installed Undo/codec/reopen/visual NOT EXECUTED (CI disabled).
+- DO NOT activate/register: painted atlas repack guard remains enforced. True Blockbench runtime and complete-ownership/face-binding tests must pass in capable environment before generator-coupled manage_uv_layout integration. Mesh/non-Cube elements, layers, animation and physical pixel resampling remain intentionally unsupported; native cross-Cube seam sampling and full-scene visual acceptance remain open.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

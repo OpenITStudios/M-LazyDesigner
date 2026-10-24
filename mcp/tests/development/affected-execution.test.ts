@@ -544,7 +544,11 @@ describe("affected execution planner", () => {
         "mcp/tests/uv-pixel-migration.test.ts",
       ]],
       ["mcp/lib/uv/pixelMigrationTransaction.ts", [
+        "mcp/tests/uv-blockbench-pixel-migration-runtime.test.ts",
         "mcp/tests/uv-pixel-migration-transaction.test.ts",
+      ]],
+      ["mcp/server/runtime/uv/pixelMigrationRuntime.ts", [
+        "mcp/tests/uv-blockbench-pixel-migration-runtime.test.ts",
       ]],
     ] as const) {
       const plan = planAffectedExecution({
