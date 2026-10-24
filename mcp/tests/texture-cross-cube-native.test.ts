@@ -48,6 +48,8 @@ function fakeCube(
     enabled: true,
     uv: [0, 0, 2, 2] as [number, number, number, number],
     rotation: 0,
+    material_name: "",
+    texture: uuid + "-texture",
     getTexture: () => texture,
     UVToLocal(uv: [number, number]) {
       // Same mesh-local semantics as CubeFace.UVToLocal. The matrixWorld
@@ -70,11 +72,14 @@ const left: DeclaredNativeCrossCubeSeamEdge = {
   continuity_intent: "REQUIRED",
   surface_id: "front_cohort",
   material_id: "stone",
+  expected_texture_uuid: "left-texture",
+  expected_native_material_name: "",
 };
 const right: DeclaredNativeCrossCubeSeamEdge = {
   ...left,
   cube_uuid: "right",
   edge: "left",
+  expected_texture_uuid: "right-texture",
 };
 
 function withMockNative<T>(
@@ -83,7 +88,7 @@ function withMockNative<T>(
     right: ReturnType<typeof fakeCube>;
   }) => T
 ): T {
-  const keys = ["Cube", "Texture"] as const;
+  const keys = ["Cube", "Texture", "Project"] as const;
   const saved = keys.map(key =>
     Object.getOwnPropertyDescriptor(globalThis, key)
   );
@@ -96,9 +101,17 @@ function withMockNative<T>(
       configurable: true,
       value: { all: [cubes.left, cubes.right] },
     });
+    const nativeAtlases = [
+      cubes.left.faces.north.getTexture(),
+      cubes.right.faces.north.getTexture(),
+    ];
     Object.defineProperty(globalThis, "Texture", {
       configurable: true,
-      value: { all: [] },
+      value: { all: nativeAtlases },
+    });
+    Object.defineProperty(globalThis, "Project", {
+      configurable: true,
+      value: { textures: nativeAtlases },
     });
     return invoke(cubes);
   } finally {
@@ -120,6 +133,10 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
       expect(result.compared_pair_count).toBe(1);
       expect(result.review.high_contrast_count).toBe(1);
       expect(result.gate.reasons).toContain("CROSS_CUBE_SEAM_REVIEW");
+      expect(result.comparison_state).toBe("advisory_only");
+      expect(result.binding_mismatch_count).toBe(0);
+      expect(result.texture_revision_attested).toBe(false);
+      expect(result.material_approval_attested).toBe(false);
       expect(result.native_sampling_attested).toBe(false);
       expect(result.scene_coverage_attested).toBe(false);
       expect(result.visual_verdict).toBe("not_evaluated");
@@ -192,6 +209,110 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
     });
   });
 
+  test("stale resolved Texture UUID is a bounded omission, never a compared seam", () => {
+    withMockNative(() => {
+      const result = inspectDeclaredNativeCrossCubeSeams([
+        left, { ...right, expected_texture_uuid: "older-atlas" },
+      ]);
+      expect(result.sampled_declared_edge_count).toBe(1);
+      expect(result.omitted_declared_edge_count).toBe(1);
+      expect(result.binding_mismatch_count).toBe(1);
+      expect(result.omission_examples[0].reason)
+        .toBe("native_texture_binding_changed");
+      expect(result.gate.reasons).toContain("CROSS_CUBE_NATIVE_BINDING_STALE");
+      expect(result.comparison_state).toBe("not_evaluated");
+      expect(result.compared_pair_count).toBe(0);
+    });
+  });
+
+  test("a foreign Texture object with a matching UUID is not accepted as native ownership", () => {
+    withMockNative(cubes => {
+      const face = cubes.right.faces.north;
+      face.getTexture = () => fakeTexture("right-texture", 245);
+      const result = inspectDeclaredNativeCrossCubeSeams([left, right]);
+      expect(result.omitted_declared_edge_count).toBe(1);
+      expect(result.binding_mismatch_count).toBe(1);
+      expect(result.omission_examples[0].reason)
+        .toBe("native_texture_inventory_unverified");
+      expect(result.comparison_state).toBe("not_evaluated");
+      expect(result.gate.reasons).toContain("CROSS_CUBE_NATIVE_BINDING_STALE");
+    });
+  });
+
+  test("native material reassignment invalidates the old seam declaration", () => {
+    withMockNative(cubes => {
+      cubes.right.faces.north.material_name = "custom_metal";
+      const result = inspectDeclaredNativeCrossCubeSeams([left, right]);
+      expect(result.omission_examples[0].reason)
+        .toBe("native_material_binding_changed");
+      expect(result.binding_mismatch_count).toBe(1);
+      expect(result.review.candidate_count).toBe(0);
+    });
+  });
+
+  test("a face binding changed during sampling cannot be laundered by earlier RGBA samples", () => {
+    withMockNative(cubes => {
+      const face = cubes.right.faces.north;
+      const original = face.getTexture;
+      let reads = 0;
+      face.getTexture = () => {
+        reads += 1;
+        return reads === 1 ? original() : fakeTexture("replacement", 20);
+      };
+      const result = inspectDeclaredNativeCrossCubeSeams([left, right]);
+      expect(result.omission_examples[0].reason)
+        .toBe("native_binding_changed_during_sampling");
+      expect(result.binding_mismatch_count).toBe(1);
+      expect(result.compared_pair_count).toBe(0);
+      expect(result.visual_verdict).toBe("not_evaluated");
+    });
+  });
+
+  test("face UV changing while the diagnostic reads texels does not produce a clean comparison", () => {
+    withMockNative(cubes => {
+      const face = cubes.right.faces.north;
+      const atlas = face.getTexture();
+      const originalRead = atlas.ctx.getImageData;
+      let altered = false;
+      atlas.ctx.getImageData = (x, y, width, height) => {
+        if (!altered) {
+          altered = true;
+          face.uv = [0, 0, 1, 2];
+        }
+        return originalRead(x, y, width, height);
+      };
+      const result = inspectDeclaredNativeCrossCubeSeams([left, right]);
+      expect(result.binding_mismatch_count).toBe(1);
+      expect(result.omission_examples[0].reason)
+        .toBe("native_binding_changed_during_sampling");
+      expect(result.compared_pair_count).toBe(0);
+    });
+  });
+
+  test("native getTexture failures become omissions rather than a false PASS", () => {
+    withMockNative(cubes => {
+      cubes.right.faces.north.getTexture = () => {
+        throw new Error("native texture not readable");
+      };
+      const result = inspectDeclaredNativeCrossCubeSeams([left, right]);
+      expect(result.sampled_declared_edge_count).toBe(1);
+      expect(result.omitted_declared_edge_count).toBe(1);
+      expect(result.omission_examples[0].reason).toBe("texture_unavailable");
+      expect(result.comparison_state).toBe("not_evaluated");
+      expect(result.gate.reasons).toContain("CROSS_CUBE_NATIVE_EVIDENCE_PARTIAL");
+    });
+  });
+
+  test("single-texture and group overrides use getTexture rather than raw face.texture", () => {
+    withMockNative(cubes => {
+      cubes.right.faces.north.texture = "authored-different-source";
+      const result = inspectDeclaredNativeCrossCubeSeams([left, right]);
+      expect(result.compared_pair_count).toBe(1);
+      expect(result.binding_mismatch_count).toBe(0);
+      expect(result.comparison_state).toBe("advisory_only");
+    });
+  });
+
   test("malformed, duplicated and over-budget declarations fail before native pixel reads", () => {
     const repeated = [left, left];
     expect(() => inspectDeclaredNativeCrossCubeSeams(repeated))
@@ -201,6 +322,12 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
     ])).toThrow("CROSS_CUBE_DECLARATION_INVALID");
     expect(() => inspectDeclaredNativeCrossCubeSeams([
       { ...left, continuity_intent: "INFERRED" as never },
+    ])).toThrow("CROSS_CUBE_DECLARATION_INVALID");
+    expect(() => inspectDeclaredNativeCrossCubeSeams([
+      { ...left, expected_texture_uuid: "" },
+    ])).toThrow("CROSS_CUBE_DECLARATION_INVALID");
+    expect(() => inspectDeclaredNativeCrossCubeSeams([
+      { ...left, expected_native_material_name: null as never },
     ])).toThrow("CROSS_CUBE_DECLARATION_INVALID");
     expect(() => inspectDeclaredNativeCrossCubeSeams(
       Array.from({ length: 65 }, () => left)

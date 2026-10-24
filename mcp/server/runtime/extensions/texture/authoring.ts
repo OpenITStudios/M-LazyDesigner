@@ -359,6 +359,10 @@ export type DeclaredNativeCrossCubeSeamEdge = {
   continuity_intent: TextureSeamContinuityIntent;
   surface_id: string | null;
   material_id: string | null;
+  /** UUID resolved by CubeFace.getTexture at approved declaration time. */
+  expected_texture_uuid: string;
+  /** Exact native CubeFace.material_name; "" is a valid default. */
+  expected_native_material_name: string;
 };
 
 export const DECLARED_CROSS_CUBE_NATIVE_EDGE_LIMIT = 64;
@@ -389,6 +393,9 @@ export function inspectDeclaredNativeCrossCubeSeams(
           (typeof declaration.surface_id !== "string" || !declaration.surface_id.trim())) ||
         (declaration.material_id !== null &&
           (typeof declaration.material_id !== "string" || !declaration.material_id.trim())) ||
+        typeof declaration.expected_texture_uuid !== "string" ||
+        !declaration.expected_texture_uuid.trim() ||
+        typeof declaration.expected_native_material_name !== "string" ||
         (declaration.continuity_intent === "REQUIRED" &&
           (!declaration.surface_id || !declaration.material_id))) {
       throw new Error(
@@ -411,6 +418,10 @@ export function inspectDeclaredNativeCrossCubeSeams(
       declaration_state: "missing" as const,
       sampled_declared_edge_count: 0,
       omitted_declared_edge_count: 0,
+      binding_mismatch_count: 0,
+      comparison_state: "not_evaluated" as const,
+      texture_revision_attested: false as const,
+      material_approval_attested: false as const,
       diagnostic_io: null,
       omission_examples: [],
       omission_examples_truncated: false,
@@ -426,6 +437,10 @@ export function inspectDeclaredNativeCrossCubeSeams(
       reason: "blockbench_cross_cube_runtime_unavailable" as const,
       sampled_declared_edge_count: 0,
       omitted_declared_edge_count: declarations.length,
+      binding_mismatch_count: 0,
+      comparison_state: "not_evaluated" as const,
+      texture_revision_attested: false as const,
+      material_approval_attested: false as const,
       diagnostic_io: null,
       omission_examples: declarations.slice(0, DECLARED_CROSS_CUBE_SKIP_EXAMPLE_LIMIT)
         .map(item => ({
@@ -462,8 +477,15 @@ export function inspectDeclaredNativeCrossCubeSeams(
     cube_uuid: string; face: string; edge: string; reason: string;
   }> = [];
   let omittedCount = 0;
+  let bindingMismatchCount = 0;
   const omit = (declaration: DeclaredNativeCrossCubeSeamEdge, reason: string) => {
     omittedCount += 1;
+    if (reason === "native_texture_binding_changed" ||
+        reason === "native_texture_inventory_unverified" ||
+        reason === "native_material_binding_changed" ||
+        reason === "native_binding_changed_during_sampling") {
+      bindingMismatchCount += 1;
+    }
     if (omissions.length < DECLARED_CROSS_CUBE_SKIP_EXAMPLE_LIMIT) {
       omissions.push({
         cube_uuid: declaration.cube_uuid,
@@ -481,7 +503,7 @@ export function inspectDeclaredNativeCrossCubeSeams(
       omit(declaration, "cube_or_face_unavailable");
       continue;
     }
-    let texture: Texture | null | undefined;
+    let texture: ReturnType<RuntimeCubeFace["getTexture"]>;
     try {
       texture = face.getTexture();
     } catch {
@@ -490,6 +512,26 @@ export function inspectDeclaredNativeCrossCubeSeams(
     }
     if (!texture) {
       omit(declaration, "texture_unavailable");
+      continue;
+    }
+    const nativeTextures = Array.isArray(Texture.all) ? Texture.all : [];
+    const projectTextures =
+      typeof Project !== "undefined" && Array.isArray(Project?.textures)
+        ? Project.textures
+        : null;
+    if (!nativeTextures.includes(texture) ||
+        (projectTextures && !projectTextures.includes(texture))) {
+      omit(declaration, "native_texture_inventory_unverified");
+      continue;
+    }
+    // Blockbench resolves single-texture, group and plugin face overrides in
+    // getTexture(); raw face.texture alone is not the rendered identity.
+    if (texture.uuid !== declaration.expected_texture_uuid) {
+      omit(declaration, "native_texture_binding_changed");
+      continue;
+    }
+    if (face.material_name !== declaration.expected_native_material_name) {
+      omit(declaration, "native_material_binding_changed");
       continue;
     }
     if (texture.height !== texture.display_height) {
@@ -506,6 +548,9 @@ export function inspectDeclaredNativeCrossCubeSeams(
       // CubeFace.UVToLocal emits mesh-local vectors (after subtracting Cube
       // origin); parent-group pivots and rotations live in matrixWorld.
       mesh.updateWorldMatrix(true, false);
+      const nativeUv = [...face.uv];
+      const nativeRotation = face.rotation;
+      const worldMatrix = [...mesh.matrixWorld.elements];
       const localStart = faceBoundaryPoint(face, ...boundary[declaration.edge][0]);
       const localEnd = faceBoundaryPoint(face, ...boundary[declaration.edge][1]);
       if (!localStart || !localEnd) {
@@ -545,6 +590,27 @@ export function inspectDeclaredNativeCrossCubeSeams(
         omit(declaration, "insufficient_exact_texel_samples");
         continue;
       }
+      let resolvedAfter: ReturnType<RuntimeCubeFace["getTexture"]>;
+      try {
+        resolvedAfter = face.getTexture();
+      } catch {
+        omit(declaration, "native_binding_changed_during_sampling");
+        continue;
+      }
+      if (!resolvedAfter ||
+          resolvedAfter.uuid !== declaration.expected_texture_uuid ||
+          !nativeTextures.includes(resolvedAfter) ||
+          (projectTextures && !projectTextures.includes(resolvedAfter)) ||
+          face.material_name !== declaration.expected_native_material_name ||
+          face.enabled === false ||
+          face.rotation !== nativeRotation ||
+          nativeUv.length !== face.uv.length ||
+          nativeUv.some((coordinate, index) => coordinate !== face.uv[index]) ||
+          worldMatrix.some((coordinate, index) =>
+            coordinate !== mesh.matrixWorld.elements[index])) {
+        omit(declaration, "native_binding_changed_during_sampling");
+        continue;
+      }
       sampled.push({
         cube_uuid: cube.uuid,
         cube_name: cube.name,
@@ -573,6 +639,16 @@ export function inspectDeclaredNativeCrossCubeSeams(
       reviewed.state,
     sampled_declared_edge_count: sampled.length,
     omitted_declared_edge_count: omittedCount,
+    binding_mismatch_count: bindingMismatchCount,
+    comparison_state: reviewed.compared_pair_count === 0
+      ? ("not_evaluated" as const)
+      : omittedCount > 0
+        ? ("partial" as const)
+        : ("advisory_only" as const),
+    // The declaration is caller-supplied, not an approval document.
+    // Bounded per-edge pixel reads are not a revision-pinned atlas snapshot.
+    texture_revision_attested: false as const,
+    material_approval_attested: false as const,
     omission_examples: omissions,
     omission_examples_truncated: omittedCount > omissions.length,
     // Source-backed sampling != matching-SHA installed Blockbench acceptance.
@@ -584,6 +660,7 @@ export function inspectDeclaredNativeCrossCubeSeams(
       reasons: [
         ...reviewed.gate.reasons,
         ...(omittedCount > 0 ? ["CROSS_CUBE_NATIVE_EVIDENCE_PARTIAL"] : []),
+        ...(bindingMismatchCount > 0 ? ["CROSS_CUBE_NATIVE_BINDING_STALE"] : []),
       ],
     },
     diagnostic_io: textureDiagnosticReadMetrics(nativeContext),

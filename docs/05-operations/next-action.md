@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 declared native cross-Cube seam source:
-- Unregistered read-only `inspectDeclaredNativeCrossCubeSeams` uses explicit per-edge intent/material/surface, Cube world-matrix projection and bounded exact RGBA samples; reports omissions and never invents continuity. Pure/native mock regressions + affected test routing authored. No new public schema or Runtime registration.
-- Bun/TypeScript, installed world/texel sampling, whole-scene/Golden visual NOT EXECUTED (CI disabled). `list_textures` still intra-Cube; native helper NOT activated.
-- Next: approved declaration delivery + generator if public contract changes, matching-SHA native/visual proof. Pixel migration native Undo/reopen remains unverified; retain painted-atlas repack guard.
+2026-10-24 cross-Cube native seam binding provenance:
+- Unregistered helper requires resolved Texture UUID, native Texture/project membership and exact face material_name alongside declared material/surface intent. Rechecks bindings, UV, rotation and world matrix after sampling; stale/foreign owners excluded (including single-texture overrides). Regression owner expanded. No new public schema.
+- `comparison_state` never treats zero comparable pairs as clean; full RGBA revision, semantic material approval, installed/native sampling and mapped visuals NOT ATTESTED. Bun/types/native/Golden NOT EXECUTED (CI disabled).
+- Next: genuine owner-backed treatment-plan handoff, native proof and generator only if public contract changes. Keep painted-UV repack block and current registration unchanged.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

@@ -491,13 +491,21 @@ correct according to the approved reference. The active `list_textures` seam wor
 its cross-Cube result is not evaluated. An **unregistered read-only**
 `inspectDeclaredNativeCrossCubeSeams` source helper is now available for
 future native material-intent workflow integration. It requires exact
-per-edge continuity/material/surface declarations and applies the current
-Cube mesh's **world matrix** to `CubeFace.UVToLocal` endpoints before
+per-edge continuity/material/surface declarations plus the expected resolved
+texture UUID and native face material name. The resolved `CubeFace.getTexture()` object must occur in
+`Texture.all` and the project texture inventory where present; a changed
+native face material, stale UUID or foreign Texture object is a bounded
+omission, never a seamless comparison. It applies the current Cube
+mesh's **world matrix** to `CubeFace.UVToLocal` endpoints before
 comparing physical 3D edges; it rejects reflection/shear, degenerate
 geometry, unsupported animation and insufficient texel evidence. It reuses
 the existing bounded RGBA sampler and the pure cross-Cube comparison
-owner. Source existence is NOT installed native proof or visual PASS.
-Verify only ranked material seam candidates on fresh model views.
+owner. Source existence is NOT installed native proof or visual PASS. A matching
+native texture UUID/material name does not validate the caller's asserted
+`material_id`, prove an approved surface declaration, or pin a full decoded
+RGBA revision. The helper reports `comparison_state` and still explicitly
+does **not** attest texture revision, material approval, full scene coverage
+or mapped visuals. Verify only ranked material seam candidates on fresh model views.
 
 **RGB seam evidence and alpha meaning:** Intra-Cube and cross-Cube seam
 diagnostics use one sample-comparison rule. In `OPACITY` mode, RGB is

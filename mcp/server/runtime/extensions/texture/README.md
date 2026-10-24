@@ -55,8 +55,17 @@ The existing `authoring.ts` now exports
 `inspectDeclaredNativeCrossCubeSeams(declarations, context?, alphaSemantics?)`
 for a **read-only, unregistered** bounded diagnostic. Each explicitly
 declared `cube_uuid + face + edge` carries
-`continuity_intent`, `surface_id` and `material_id`. `REQUIRED`
-needs non-empty, approved surface/material identity. Duplicate or malformed
+`continuity_intent`, `surface_id`, `material_id`,
+`expected_texture_uuid` (from the resolved native `getTexture()`), and
+`expected_native_material_name` (exact `CubeFace.material_name`, including
+the empty default). `REQUIRED` needs non-empty surface/material identity.
+The resolved texture object must also belong to the native
+`Texture.all` inventory (and `Project.textures` when present). The declared
+UUID and material name are compared with live native state both before and
+after bounded edge sampling; foreign, stale or changed bindings raise
+`CROSS_CUBE_NATIVE_BINDING_STALE` and are never analyzed as clean seams.
+A raw `face.texture` reference alone is insufficient in single-texture,
+per-group and override modes. Duplicate or malformed
 declarations fail before sampling; no continuity is inferred from coincident
 geometry, image color, Cube/Texture name or missing input.
 
@@ -70,6 +79,13 @@ and face pixel mapper; animated, untextured, one-texel or otherwise
 unreadable faces generate bounded omission examples. The canonical pure
 `analyzeCrossCubeSeamContinuity` then compares only physically coincident,
 aligned, declared same-material and same-surface edge pairs.
+
+The receipt exposes `binding_mismatch_count` and
+`comparison_state=not_evaluated|partial|advisory_only`.
+`texture_revision_attested=false` and
+`material_approval_attested=false`: matching the declared native binding
+is **not** proof that a human approved its semantic material identity or
+that all pixels belong to one pinned atlas revision.
 
 This source remains **unwired** from production `list_textures`: the
 latter keeps its stable intra-Cube response until a complete, generated
