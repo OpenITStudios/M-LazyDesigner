@@ -30,12 +30,24 @@ export type TextureTreatmentEdge = TextureTreatmentFace & {
  * Author-declared, exact edge pair within the owner-scoped face inventory.
  * Neither the treatment plan nor this declaration alone proves continuity.
  */
+export type TextureSeamReferenceObservation = {
+  /** Caller-supplied reference asset ID; not authenticated here. */
+  reference_id: string;
+  /** Explicit version of that reference asset; not a verified digest. */
+  reference_revision: string;
+  observation_id: string;
+  /** Exact two treated Cube-face edges this observation claims to show. */
+  observed_edges: readonly [TextureTreatmentEdge, TextureTreatmentEdge];
+};
+
 export type TextureTreatmentSeamPair = {
   left: TextureTreatmentEdge;
   right: TextureTreatmentEdge;
   continuity_intent: TextureSeamContinuityIntent;
   surface_id: string | null;
   material_id: string | null;
+  /** REQUIRED continuity cannot rely only on evidence: "observed". */
+  reference_observation?: TextureSeamReferenceObservation;
 };
 
 export type TextureTreatmentNativeFaceBinding = TextureTreatmentFace & {
@@ -224,6 +236,7 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
     throw new Error("TEXTURE_SEAM_PAIR_SCOPE_INVALID: at most 32 explicit cross-Cube pairs.");
   }
   const declaredEdges = new Set<string>();
+  const observationOwners = new Set<string>();
   const edgeKey = (face: TextureTreatmentEdge): string => {
     const id = faceId(face);
     if (!["left", "right", "top", "bottom"].includes(face.edge)) {
@@ -249,6 +262,32 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
     }
     declaredEdges.add(left);
     declaredEdges.add(right);
+    const observation = pair.reference_observation;
+    if (observation !== undefined) {
+      const token = (value: unknown): value is string =>
+        typeof value === "string" && value.trim().length > 0 && value.length <= 256;
+      if (!observation || !token(observation.reference_id) ||
+          !token(observation.reference_revision) ||
+          !token(observation.observation_id) ||
+          !Array.isArray(observation.observed_edges) ||
+          observation.observed_edges.length !== 2) {
+        throw new Error("TEXTURE_SEAM_REFERENCE_INVALID: require a bounded source ID, revision, observation ID and two explicit edges.");
+      }
+      const claimed = observation.observed_edges.map(edgeKey).sort();
+      if (claimed[0] !== [left, right].sort()[0] ||
+          claimed[1] !== [left, right].sort()[1]) {
+        throw new Error("TEXTURE_SEAM_REFERENCE_SCOPE_MISMATCH: observed reference edges differ from their declared seam pair.");
+      }
+      const key = JSON.stringify([
+        observation.reference_id,
+        observation.reference_revision,
+        observation.observation_id,
+      ]);
+      if (observationOwners.has(key)) {
+        throw new Error("TEXTURE_SEAM_REFERENCE_REUSED: one exact edge observation cannot authorize multiple seam pairs.");
+      }
+      observationOwners.add(key);
+    }
     const a = assigned.get(faceId(pair.left));
     const b = assigned.get(faceId(pair.right));
     if (!expected || !a || !b) {
@@ -256,6 +295,9 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
       continue;
     }
     if (pair.continuity_intent === "REQUIRED") {
+      if (!observation) {
+        unresolved.push({ region: "*", reason: "SEAM_REFERENCE_OBSERVATION_REQUIRED" });
+      }
       if (!pair.surface_id || !pair.material_id) {
         unresolved.push({ region: "*", reason: "SEAM_SURFACE_AND_MATERIAL_REQUIRED" });
       }
@@ -296,7 +338,20 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
       ...pair,
       left: { ...pair.left },
       right: { ...pair.right },
+      ...(pair.reference_observation ? {
+        reference_observation: {
+          ...pair.reference_observation,
+          observed_edges: [
+            { ...pair.reference_observation.observed_edges[0] },
+            { ...pair.reference_observation.observed_edges[1] },
+          ] as [TextureTreatmentEdge, TextureTreatmentEdge],
+        },
+      } : {}),
     })),
+    seam_reference_evidence_state: seamPairs.some(pair =>
+      pair.continuity_intent === "REQUIRED"
+    ) ? ("caller_observation_unverified" as const)
+      : ("not_requested" as const),
     face_coverage: expected ? {
       state: missing.length ? ("incomplete" as const) : ("assigned" as const),
       required_count: expected.size,
@@ -327,6 +382,59 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
 
 
 /**
+ * Revalidate the *current* plan representation before reading native
+ * textures. A plain plan result is mutable: post-planning edits to seam
+ * pairs, evidence, render/PBR intent, or face assignments must not inherit
+ * yesterday's ready flag.
+ *
+ * This checks structural source ownership, not trusted visual approval.
+ */
+export function requireTextureTreatmentSeamPlanReady(
+  plan: ReturnType<typeof planTextureTreatment>
+): void {
+  if (!plan || plan.domain !== "texture_treatment_plan" ||
+      plan.readiness.scope !== "explicit_face_inventory" ||
+      plan.readiness.state !== "ready" ||
+      plan.face_coverage.state !== "assigned" ||
+      plan.readiness.unresolved.length !== 0 ||
+      !Array.isArray(plan.regions) || !Array.isArray(plan.seam_pairs)) {
+    throw new Error("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY: require unblocked, complete treatment source ownership.");
+  }
+  const requiredFaces = plan.regions.flatMap(region =>
+    region.face_targets.map(face => ({
+      cube_uuid: face.cube_uuid, face: face.face,
+    }))
+  );
+  if (requiredFaces.length !== plan.face_coverage.required_count ||
+      plan.face_coverage.assigned_count !== requiredFaces.length ||
+      plan.face_coverage.missing_count !== 0) {
+    throw new Error("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY: the planned face inventory was modified.");
+  }
+  // Reuse the canonical authoring owner rather than adding another seam
+  // validator that would drift from the original REQUIRED intent policy.
+  const verified = planTextureTreatment({
+    identity_colors: plan.identity_colors,
+    required_faces: requiredFaces,
+    regions: plan.regions.map(region => ({
+      region: region.region,
+      evidence: region.evidence,
+      surface_pattern: region.surface_pattern?.pattern,
+      minecraft_material_code:
+        region.render_contract?.minecraft_material_code ?? undefined,
+      pbr_intent: region.pbr_intent,
+      face_targets: region.face_targets,
+    })),
+    seam_pairs: plan.seam_pairs,
+  });
+  if (verified.readiness.state !== "ready" ||
+      verified.readiness.scope !== "explicit_face_inventory" ||
+      verified.face_coverage.state !== "assigned" ||
+      verified.readiness.unresolved.length !== 0) {
+    throw new Error("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY: post-planning source or continuity intent became unresolved.");
+  }
+}
+
+/**
  * Source-owner handoff for the existing unregistered native seam sampler.
  * No new approval manager: this verifies explicit treatment-plan face and
  * seam-pair ownership against a caller-provided bounded native face inventory.
@@ -342,6 +450,14 @@ export function buildTextureTreatmentCrossCubeSeamHandoff(
   state: "review_required" | "not_evaluated";
   source: "texture_treatment_plan";
   declared_pair_count: number;
+  /** Caller-provided observation references, not authenticated approvals. */
+  reference_observations: Array<{
+    reference_id: string;
+    reference_revision: string;
+    observation_id: string;
+    observed_edges: [TextureTreatmentEdge, TextureTreatmentEdge];
+    assertion_provenance: "CALLER_DECLARATION_UNVERIFIED";
+  }>;
   declarations: TextureTreatmentCrossCubeSeamHandoffEdge[];
   scope: "explicit_face_inventory";
   native_binding_attested: false;
@@ -350,15 +466,7 @@ export function buildTextureTreatmentCrossCubeSeamHandoff(
   scene_coverage_attested: false;
   visual_verdict: "not_evaluated";
 } {
-  if (plan.domain !== "texture_treatment_plan" ||
-      plan.readiness.scope !== "explicit_face_inventory" ||
-      plan.readiness.state !== "ready" ||
-      plan.face_coverage.state !== "assigned" ||
-      plan.readiness.unresolved.length !== 0) {
-    throw new Error(
-      "TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY: requires complete, unblocked treatment face inventory."
-    );
-  }
+  requireTextureTreatmentSeamPlanReady(plan);
 
   // Exact alignment with the treatment owner's full bounded face inventory;
   // never accept just the two conveniently sampled seam faces.
@@ -440,6 +548,18 @@ export function buildTextureTreatmentCrossCubeSeamHandoff(
     state: declarations.length ? "review_required" : "not_evaluated",
     source: "texture_treatment_plan",
     declared_pair_count: plan.seam_pairs.length,
+    reference_observations: plan.seam_pairs.flatMap(pair =>
+      pair.reference_observation ? [{
+        reference_id: pair.reference_observation.reference_id,
+        reference_revision: pair.reference_observation.reference_revision,
+        observation_id: pair.reference_observation.observation_id,
+        observed_edges: [
+          { ...pair.reference_observation.observed_edges[0] },
+          { ...pair.reference_observation.observed_edges[1] },
+        ] as [TextureTreatmentEdge, TextureTreatmentEdge],
+        assertion_provenance: "CALLER_DECLARATION_UNVERIFIED" as const,
+      }] : []
+    ),
     declarations,
     scope: "explicit_face_inventory",
     native_binding_attested: false,

@@ -116,6 +116,23 @@ arrays, with the same affine and geometry checks.
 
 No automatic continuity is inferred from neighboring Cubes or matching
 colors. Readiness of a treatment plan is **not** user or visual approval.
+**REQUIRED cross-Cube seams now require edge-specific reference observations.**
+A pair must carry a `reference_observation` with bounded
+`reference_id`, `reference_revision`, `observation_id`, and the
+**exact two declared Cube/face/edge endpoints**. The observation is
+still a caller declaration, not independently authenticated evidence.
+A treatment region merely marked `evidence="observed"` without a
+corresponding edge observation is no longer enough to make
+`REQUIRED` continuity planning ready.
+
+The canonical owner revalidates the *current* treatment result before
+the native handoff reads any Cube/Texture data. This detects edited
+`seam_pairs`, changed render/PBR fields, reassigned face ownership or
+a removed observation after a prior `readiness.state="ready"`.
+The handoff preserves a bounded `reference_observations` manifest with
+`assertion_provenance="CALLER_DECLARATION_UNVERIFIED"`; it does not
+invent user approval or treat a source label/revision as authenticated.
+
 The handoff remains review-only with
 `native_binding_attested=false`,
 `material_approval_attested=false`,

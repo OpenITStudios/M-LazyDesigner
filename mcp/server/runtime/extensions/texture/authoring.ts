@@ -33,6 +33,7 @@ import {
 import { analyzeTextureMaterialStatus } from "@/lib/texture/materialStatus";
 import {
   buildTextureTreatmentCrossCubeSeamHandoff,
+  requireTextureTreatmentSeamPlanReady,
   type TextureTreatmentNativeFaceBinding,
   planTextureTreatment,
 } from "@/lib/texture/treatmentPlan";
@@ -687,15 +688,9 @@ export function inspectTreatmentBoundNativeCrossCubeSeams(
   context?: unknown,
   alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
 ) {
-  if (plan.domain !== "texture_treatment_plan" ||
-      plan.readiness.scope !== "explicit_face_inventory" ||
-      plan.readiness.state !== "ready" ||
-      plan.face_coverage.state !== "assigned" ||
-      plan.readiness.unresolved.length !== 0) {
-    throw new Error(
-      "TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY: full treatment face ownership must be ready before native reads."
-    );
-  }
+  // Reject post-planning seam/material/evidence mutations before reading
+  // Blockbench globals or any texture pixels.
+  requireTextureTreatmentSeamPlanReady(plan);
   if (typeof Cube === "undefined" || typeof Texture === "undefined" ||
       !Array.isArray(Cube.all) || !Array.isArray(Texture.all)) {
     throw new Error(
@@ -749,6 +744,14 @@ export function inspectTreatmentBoundNativeCrossCubeSeams(
       state: handoff.state,
       scope: handoff.scope,
       declared_pair_count: handoff.declared_pair_count,
+      reference_observations: handoff.reference_observations.map(record => ({
+        ...record,
+        observed_edges: [
+          { ...record.observed_edges[0] },
+          { ...record.observed_edges[1] },
+        ],
+      })),
+      assertion_provenance: "CALLER_DECLARATION_UNVERIFIED" as const,
       native_binding_attested: false as const,
       material_approval_attested: false as const,
       texture_revision_attested: false as const,

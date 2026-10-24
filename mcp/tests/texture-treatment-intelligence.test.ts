@@ -6,6 +6,7 @@ import {
 } from "@/lib/textureSurfacePattern";
 import {
   buildTextureTreatmentCrossCubeSeamHandoff,
+  requireTextureTreatmentSeamPlanReady,
   planTextureTreatment,
   type TextureTreatmentPlanInput,
   type TextureTreatmentNativeFaceBinding,
@@ -206,6 +207,15 @@ function explicitSeamTreatment(): TextureTreatmentPlanInput {
       continuity_intent: "REQUIRED",
       surface_id: "panel-front",
       material_id: "surface-metal",
+      reference_observation: {
+        reference_id: "ref:front-panel",
+        reference_revision: "source-v1",
+        observation_id: "observation:front-joint",
+        observed_edges: [
+          { ...left, edge: "right" },
+          { ...right, edge: "left" },
+        ],
+      },
     }],
   };
 }
@@ -245,6 +255,16 @@ describe("texture treatment-owned cross-Cube seam handoff", () => {
         expected_native_material_name: "",
       },
     ]);
+    expect(handoff.reference_observations).toEqual([{
+      reference_id: "ref:front-panel",
+      reference_revision: "source-v1",
+      observation_id: "observation:front-joint",
+      observed_edges: [
+        { cube_uuid: "panel-left", face: "north", edge: "right" },
+        { cube_uuid: "panel-right", face: "north", edge: "left" },
+      ],
+      assertion_provenance: "CALLER_DECLARATION_UNVERIFIED",
+    }]);
     expect(handoff.native_binding_attested).toBe(false);
     expect(handoff.texture_revision_attested).toBe(false);
     expect(handoff.material_approval_attested).toBe(false);
@@ -358,6 +378,101 @@ describe("texture treatment-owned cross-Cube seam handoff", () => {
     expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
       plan, mismatchedMaterial
     )).toThrow("TEXTURE_SEAM_HANDOFF_NATIVE_MATERIAL_MISMATCH");
+  });
+
+  test("REQUIRED seams must carry exact edge-scoped reference observations, not only observed=true", () => {
+    const missing = explicitSeamTreatment();
+    delete missing.seam_pairs![0].reference_observation;
+    const plan = planTextureTreatment(missing);
+    expect(plan.readiness.state).toBe("review_required");
+    expect(plan.readiness.unresolved).toContainEqual({
+      region: "*", reason: "SEAM_REFERENCE_OBSERVATION_REQUIRED",
+    });
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      plan, nativeSeamFaceBindings()
+    )).toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+
+    const wrong = explicitSeamTreatment();
+    wrong.seam_pairs![0].reference_observation!.observed_edges[0].edge = "top";
+    expect(() => planTextureTreatment(wrong))
+      .toThrow("TEXTURE_SEAM_REFERENCE_SCOPE_MISMATCH");
+  });
+
+  test("malformed source provenance and observation reuse cannot justify different edges", () => {
+    const bad = explicitSeamTreatment();
+    bad.seam_pairs![0].reference_observation!.observation_id = " ";
+    expect(() => planTextureTreatment(bad))
+      .toThrow("TEXTURE_SEAM_REFERENCE_INVALID");
+    const tooLong = explicitSeamTreatment();
+    tooLong.seam_pairs![0].reference_observation!.reference_id = "x".repeat(257);
+    expect(() => planTextureTreatment(tooLong))
+      .toThrow("TEXTURE_SEAM_REFERENCE_INVALID");
+  });
+
+  test("one observation cannot silently authorize two unrelated edge pairs", () => {
+    const input = explicitSeamTreatment();
+    const original = input.seam_pairs![0];
+    input.seam_pairs = [original, {
+      ...original,
+      left: { ...original.left, edge: "top" },
+      right: { ...original.right, edge: "bottom" },
+      reference_observation: {
+        ...original.reference_observation!,
+        observed_edges: [
+          { ...original.left, edge: "top" },
+          { ...original.right, edge: "bottom" },
+        ],
+      },
+    }];
+    expect(() => planTextureTreatment(input))
+      .toThrow("TEXTURE_SEAM_REFERENCE_REUSED");
+  });
+
+  test("post-plan changes to material and observed reference cannot inherit stale ready verdict", () => {
+    const changedMaterial = planTextureTreatment(explicitSeamTreatment());
+    changedMaterial.seam_pairs[0].material_id = null;
+    expect(() => requireTextureTreatmentSeamPlanReady(changedMaterial))
+      .toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      changedMaterial, nativeSeamFaceBindings()
+    )).toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+
+    const changedEvidence = planTextureTreatment(explicitSeamTreatment());
+    changedEvidence.regions[0].evidence = "inferred";
+    expect(() => requireTextureTreatmentSeamPlanReady(changedEvidence))
+      .toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+
+    const removedReference = planTextureTreatment(explicitSeamTreatment());
+    delete removedReference.seam_pairs[0].reference_observation;
+    expect(() => requireTextureTreatmentSeamPlanReady(removedReference))
+      .toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+
+    const removedFace = planTextureTreatment(explicitSeamTreatment());
+    removedFace.regions[0].face_targets.pop();
+    expect(() => requireTextureTreatmentSeamPlanReady(removedFace))
+      .toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+
+    const duplicateEdge = planTextureTreatment(explicitSeamTreatment());
+    duplicateEdge.seam_pairs.push({ ...duplicateEdge.seam_pairs[0] });
+    expect(() => requireTextureTreatmentSeamPlanReady(duplicateEdge))
+      .toThrow("TEXTURE_SEAM_PAIR_DUPLICATE");
+  });
+
+  test("the source observation is deep-copied and remains unverified even when the plan is ready", () => {
+    const input = explicitSeamTreatment();
+    const plan = planTextureTreatment(input);
+    expect(plan.seam_reference_evidence_state).toBe("caller_observation_unverified");
+    input.seam_pairs![0].reference_observation!.observed_edges[0].edge = "top";
+    input.seam_pairs![0].reference_observation!.reference_revision = "source-v2";
+    expect(plan.seam_pairs[0].reference_observation!.observed_edges[0].edge)
+      .toBe("right");
+    expect(plan.seam_pairs[0].reference_observation!.reference_revision)
+      .toBe("source-v1");
+    const handoff = buildTextureTreatmentCrossCubeSeamHandoff(plan, nativeSeamFaceBindings());
+    handoff.reference_observations[0].observed_edges[0].edge = "bottom";
+    expect(plan.seam_pairs[0].reference_observation!.observed_edges[0].edge)
+      .toBe("right");
+    expect(handoff.material_approval_attested).toBe(false);
   });
 
   test("planning retains independent copies of authored seam pair endpoints", () => {

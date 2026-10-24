@@ -146,6 +146,15 @@ function observedTreatmentWithCrossCubeSeam() {
       continuity_intent: "REQUIRED",
       surface_id: "front_cohort",
       material_id: "stone",
+      reference_observation: {
+        reference_id: "reference:front-cohort",
+        reference_revision: "revision:2026-10",
+        observation_id: "front-panel-joint",
+        observed_edges: [
+          { cube_uuid: "left", face: "north", edge: "right" },
+          { cube_uuid: "right", face: "north", edge: "left" },
+        ],
+      },
     }],
   });
 }
@@ -182,6 +191,7 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
         state: "review_required",
         scope: "explicit_face_inventory",
         declared_pair_count: 1,
+        assertion_provenance: "CALLER_DECLARATION_UNVERIFIED",
         native_binding_attested: false,
         material_approval_attested: false,
         texture_revision_attested: false,
@@ -191,6 +201,9 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
       expect(result.sampled_declared_edge_count).toBe(2);
       expect(result.compared_pair_count).toBe(1);
       expect(result.review.high_contrast_count).toBe(1);
+      expect(result.treatment_handoff.reference_observations).toHaveLength(1);
+      expect(result.treatment_handoff.reference_observations[0].reference_id)
+        .toBe("reference:front-cohort");
       expect(result.visual_verdict).toBe("not_evaluated");
     });
   });
@@ -232,6 +245,31 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
       });
       expect(() => inspectTreatmentBoundNativeCrossCubeSeams(incomplete))
         .toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+    });
+  });
+
+  test("tampered ready plan is refused before resolving any native Cube texture", () => {
+    withMockNative(cubes => {
+      const plan = observedTreatmentWithCrossCubeSeam();
+      plan.regions[0].evidence = "inferred";
+      let reads = 0;
+      const originalGetTexture = cubes.left.faces.north.getTexture;
+      cubes.left.faces.north.getTexture = () => {
+        reads += 1;
+        return originalGetTexture();
+      };
+      expect(() => inspectTreatmentBoundNativeCrossCubeSeams(plan))
+        .toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+      expect(reads).toBe(0);
+    });
+  });
+
+  test("a replaced seam reference cannot use the old technical-ready verdict", () => {
+    withMockNative(() => {
+      const plan = observedTreatmentWithCrossCubeSeam();
+      plan.seam_pairs[0].reference_observation!.observed_edges[0].edge = "top";
+      expect(() => inspectTreatmentBoundNativeCrossCubeSeams(plan))
+        .toThrow("TEXTURE_SEAM_REFERENCE_SCOPE_MISMATCH");
     });
   });
 

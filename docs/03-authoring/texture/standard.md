@@ -512,10 +512,14 @@ or mapped visuals. Verify only ranked material seam candidates on fresh model vi
 edge` targets as `seam_pairs`. Pairs must connect different Cubes and
 refer to the complete `required_faces` ownership of the same treatment
 plan; a target edge cannot be claimed twice. `REQUIRED` continuity needs
-an explicit surface/material identity, observed reference evidence,
-compatible render/PBR cohorts and no intentionally transparent face.
-Missing or incompatible evidence blocks planning readiness and can never
-be inferred from coincident geometry or matching colors.
+an explicit surface/material identity, compatible render/PBR cohorts,
+no intentionally transparent face, and a **pair-scoped reference
+observation**. That observation must name `reference_id`,
+`reference_revision`, `observation_id` and both exact
+`cube_uuid/face/edge` endpoints. A region marked
+`evidence="observed"` without this pair observation is insufficient;
+no seam is inferred from coincident geometry or matching colors.
+These are caller-declared provenance labels, **not authenticated approval**.
 
 `buildTextureTreatmentCrossCubeSeamHandoff` verifies all required face
 bindings, not just paired seam faces. The unregistered
@@ -523,8 +527,13 @@ bindings, not just paired seam faces. The unregistered
 Blockbench texture UUID and native material names and delegates to the
 existing conservative cross-Cube sampler. THREE `matrixWorld.elements`
 accepts native `Float32Array`/`Float64Array` and ordinary 16-value
-numeric arrays. Even when a plan is ready and an edge is sampled, the
-result is **review-required**: material approval, texture SHA revision,
+numeric arrays. Before touching native Cube/Texture objects, the handoff re-runs
+canonical treatment validation. Edits made after planning—such as
+changing material IDs, removing the observation or reassigning faces—cannot
+reuse an old `ready` flag. The returned
+`reference_observations` manifest explicitly uses
+`CALLER_DECLARATION_UNVERIFIED`. Even when a plan is ready and an edge
+is sampled, the result is **review-required**: material approval, texture SHA revision,
 full scene coverage, installed native validity and mapped visual PASS
 are not automatically attested. Production `list_textures` is unchanged.
 
