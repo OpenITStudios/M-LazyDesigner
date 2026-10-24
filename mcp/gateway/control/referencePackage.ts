@@ -5,7 +5,11 @@ import {
   parseReferencePackage,
 } from "./referenceParser";
 import type { ControlReferenceProjection } from "./referenceTypes";
-import { inspectReferenceImages, readReferenceImageEvidence } from "./referenceImageEvidence";
+import {
+  inspectReferenceImages,
+  readReferenceImageEvidence,
+  type DeliveredReferenceImage,
+} from "./referenceImageEvidence";
 import { requireTextureTreatmentSeamPlanReady } from "../../lib/texture/treatmentPlan";
 import { fileMetadataSignature } from "./fileSignature";
 
@@ -176,6 +180,66 @@ export async function readReferencePackageProjection(
 
 
 /**
+ * The source-image reader rechecks the actual image bytes, but an independent
+ * REFERENCE.json revision can still change while those awaited reads run.
+ * Validate the whole post-read package fingerprint and every selected
+ * image's stage/status/byte identity before accepting a source observation.
+ *
+ * This is an integrity guard for one bounded read window, not a lease on
+ * the source filesystem and not user/reviewer approval.
+ */
+export function requireStableSeamReferenceImageRead(input: {
+  initial: ControlReferenceProjection;
+  final: ControlReferenceProjection;
+  selected_ids: readonly string[];
+  delivered: readonly Pick<
+    DeliveredReferenceImage,
+    "id" | "sha256" | "status" | "mime_type" | "bytes"
+  >[];
+}): void {
+  const { initial, final, selected_ids, delivered } = input;
+  if (!initial.available || !final.available ||
+      !initial.fingerprint || initial.fingerprint !== final.fingerprint ||
+      selected_ids.length === 0 || selected_ids.length > 4 ||
+      new Set(selected_ids).size !== selected_ids.length ||
+      delivered.length !== selected_ids.length) {
+    throw new Error(
+      "TEXTURE_SEAM_REFERENCE_SOURCE_CHANGED: source package identity changed during image evidence readback."
+    );
+  }
+  const deliveredMap = new Map(delivered.map(item => [item.id, item]));
+  if (deliveredMap.size !== selected_ids.length) {
+    throw new Error(
+      "TEXTURE_SEAM_REFERENCE_SOURCE_CHANGED: selected image identity became ambiguous."
+    );
+  }
+  for (const id of selected_ids) {
+    const before = initial.images.find(image => image.id === id);
+    const after = final.images.find(image => image.id === id);
+    const read = deliveredMap.get(id);
+    if (!before || !after || !read ||
+        before.integrity !== "VERIFIED" ||
+        after.integrity !== "VERIFIED" ||
+        before.status !== "APPROVED" ||
+        after.status !== "APPROVED" ||
+        !before.used_by.includes("TEXTURE") ||
+        !after.used_by.includes("TEXTURE") ||
+        before.sha256 !== after.sha256 ||
+        before.sha256 !== read.sha256 ||
+        before.media_type !== after.media_type ||
+        before.media_type !== read.mime_type ||
+        before.bytes !== after.bytes ||
+        before.bytes !== read.bytes ||
+        before.file !== after.file ||
+        read.status !== "APPROVED") {
+      throw new Error(
+        "TEXTURE_SEAM_REFERENCE_SOURCE_CHANGED: selected source image identity, stage, byte evidence or declared review status changed."
+      );
+    }
+  }
+}
+
+/**
  * Read-only bridge to the canonical Reference Package image owner.
  *
  * This verifies actual on-disk source image SHA-256, current Reference Package
@@ -280,6 +344,18 @@ export async function inspectTextureSeamReferenceImageIdentity(input: {
       );
     }
   }
+
+  // The image-bytes reader alone cannot detect a concurrent rewrite of
+  // REFERENCE.json metadata after the first projection. Re-pin the complete
+  // manifest + image fingerprint and every selected source image after all
+  // asynchronous image reads have resolved.
+  const final = await readReferencePackageProjection(input.reference_package_path);
+  requireStableSeamReferenceImageRead({
+    initial: current,
+    final,
+    selected_ids: ids,
+    delivered: evidence,
+  });
 
   return {
     source: "reference_package_image_readback" as const,

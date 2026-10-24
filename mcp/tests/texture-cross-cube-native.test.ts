@@ -2,9 +2,12 @@ import { describe, expect, test } from "bun:test";
 import {
   inspectDeclaredNativeCrossCubeSeams,
   inspectTreatmentBoundNativeCrossCubeSeams,
+  inspectRevisionPinnedNativeCrossCubeSeams,
+  inspectRevisionPinnedTreatmentCrossCubeSeams,
   type DeclaredNativeCrossCubeSeamEdge,
 } from "@/server/runtime/extensions/texture/authoring";
 import { planTextureTreatment } from "@/lib/textureTreatmentPlan";
+import { computeTextureRevision } from "@/lib/texture/revision";
 
 const identity = [
   1, 0, 0, 0,
@@ -20,19 +23,24 @@ function translation(x: number, y: number, z: number) {
   return world;
 }
 function fakeTexture(uuid: string, shade: number) {
+  const mutable = { shade };
   return {
     uuid,
     name: uuid,
     width: 2,
     height: 2,
     display_height: 2,
+    canvas: { width: 2, height: 2 },
+    layers_enabled: false,
+    frameCount: 1,
+    setShade(value: number) { mutable.shade = value; },
     getUVWidth: () => 2,
     getUVHeight: () => 2,
     ctx: {
       getImageData(_x: number, _y: number, width: number, height: number) {
         const data = new Uint8ClampedArray(width * height * 4);
         for (let i = 0; i < data.length; i += 4) {
-          data.set([shade, shade, shade, 255], i);
+          data.set([mutable.shade, mutable.shade, mutable.shade, 255], i);
         }
         return { data };
       },
@@ -124,6 +132,59 @@ function withMockNative<T>(
       else Reflect.deleteProperty(globalThis, key);
     });
   }
+}
+
+async function withMockNativeAsync<T>(
+  invoke: (cubes: {
+    left: ReturnType<typeof fakeCube>;
+    right: ReturnType<typeof fakeCube>;
+  }) => Promise<T>
+): Promise<T> {
+  const keys = ["Cube", "Texture", "Project"] as const;
+  const originals = keys.map(key =>
+    Object.getOwnPropertyDescriptor(globalThis, key)
+  );
+  const cubes = {
+    left: fakeCube("left", "Left", 15, 0),
+    right: fakeCube("right", "Right", 245, 2),
+  };
+  const atlases = [
+    cubes.left.faces.north.getTexture(),
+    cubes.right.faces.north.getTexture(),
+  ];
+  try {
+    Object.defineProperty(globalThis, "Cube", {
+      configurable: true, value: { all: [cubes.left, cubes.right] },
+    });
+    Object.defineProperty(globalThis, "Texture", {
+      configurable: true, value: { all: atlases },
+    });
+    Object.defineProperty(globalThis, "Project", {
+      configurable: true, value: { textures: atlases },
+    });
+    // Unlike the synchronous helper, preserve global fixtures across the
+    // crypto.subtle.digest await and final decoded-image readback.
+    return await invoke(cubes);
+  } finally {
+    keys.forEach((key, index) => {
+      const previous = originals[index];
+      if (previous) Object.defineProperty(globalThis, key, previous);
+      else Reflect.deleteProperty(globalThis, key);
+    });
+  }
+}
+
+async function pinnedRevisions(cubes: {
+  left: ReturnType<typeof fakeCube>;
+  right: ReturnType<typeof fakeCube>;
+}) {
+  const result: Record<string, string> = {};
+  for (const cube of [cubes.left, cubes.right]) {
+    const texture = cube.faces.north.getTexture();
+    const bytes = texture.ctx.getImageData(0, 0, 2, 2).data;
+    result[texture.uuid] = await computeTextureRevision(bytes, 2, 2);
+  }
+  return result;
 }
 
 function observedTreatmentWithCrossCubeSeam() {
@@ -279,6 +340,164 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
       expect(() => inspectTreatmentBoundNativeCrossCubeSeams(
         observedTreatmentWithCrossCubeSeam()
       )).toThrow("TEXTURE_SEAM_HANDOFF_NATIVE_MATERIAL_MISMATCH");
+    });
+  });
+
+  test("read-window digest pins all referenced decoded RGBA without granting native/visual acceptance", async () => {
+    await withMockNativeAsync(async cubes => {
+      const expected = await pinnedRevisions(cubes);
+      const result = await inspectRevisionPinnedNativeCrossCubeSeams(
+        [left, right], expected
+      );
+      expect(result.compared_pair_count).toBe(1);
+      expect(result.review.high_contrast_count).toBe(1);
+      expect(result.bitmap_revision_evidence).toMatchObject({
+        state: "matched_during_read",
+        scope: "declared_edge_textures_only",
+        observed_atlas_count: 2,
+        source_bytes_matched_during_read: true,
+        whole_scene_revision_attested: false,
+      });
+      expect(result.bitmap_revision_evidence.atlases).toEqual([
+        { texture_uuid: "left-texture", decoded_rgba_revision: expected["left-texture"] },
+        { texture_uuid: "right-texture", decoded_rgba_revision: expected["right-texture"] },
+      ]);
+      expect(result.texture_revision_attested).toBe(false);
+      expect(result.native_sampling_attested).toBe(false);
+      expect(result.visual_verdict).toBe("not_evaluated");
+    });
+  });
+
+  test("same-UUID atlas repaint is stale even when dimensions and material remain unchanged", async () => {
+    await withMockNativeAsync(async cubes => {
+      const expected = await pinnedRevisions(cubes);
+      cubes.right.faces.north.getTexture().setShade(10);
+      await expect(inspectRevisionPinnedNativeCrossCubeSeams(
+        [left, right], expected
+      )).rejects.toThrow("CROSS_CUBE_REVISION_STALE");
+    });
+  });
+
+  test("repaint triggered during bounded native seam pixel reads invalidates the entire read-window receipt", async () => {
+    await withMockNativeAsync(async cubes => {
+      const expected = await pinnedRevisions(cubes);
+      const texture = cubes.right.faces.north.getTexture();
+      const originalRead = texture.ctx.getImageData;
+      let changed = false;
+      texture.ctx.getImageData = (x, y, width, height) => {
+        const data = originalRead(x, y, width, height);
+        if (width === 1 && height === 1 && !changed) {
+          changed = true;
+          texture.setShade(77);
+        }
+        return data;
+      };
+      await expect(inspectRevisionPinnedNativeCrossCubeSeams(
+        [left, right], expected
+      )).rejects.toThrow("CROSS_CUBE_REVISION_SOURCE_CHANGED");
+      expect(changed).toBe(true);
+    });
+  });
+
+  test("UV changes triggered during a correctly hashed seam read fail final geometry freshness", async () => {
+    await withMockNativeAsync(async cubes => {
+      const expected = await pinnedRevisions(cubes);
+      const face = cubes.right.faces.north;
+      const texture = face.getTexture();
+      const originalRead = texture.ctx.getImageData;
+      let adjusted = false;
+      texture.ctx.getImageData = (x, y, width, height) => {
+        const result = originalRead(x, y, width, height);
+        if (width === 1 && height === 1 && !adjusted) {
+          adjusted = true;
+          face.uv = [0, 0, 1, 2];
+        }
+        return result;
+      };
+      await expect(inspectRevisionPinnedNativeCrossCubeSeams(
+        [left, right], expected
+      )).rejects.toThrow("CROSS_CUBE_REVISION_SOURCE_CHANGED");
+      expect(adjusted).toBe(true);
+    });
+  });
+
+  test("revision scope rejects missing/extra/invalid hashes before reading native texture bytes", async () => {
+    await withMockNativeAsync(async cubes => {
+      const expected = await pinnedRevisions(cubes);
+      for (const invalid of [
+        {},
+        { ...expected, "foreign-texture": expected["left-texture"] },
+        { ...expected, "left-texture": "sha256:old" },
+      ]) {
+        await expect(inspectRevisionPinnedNativeCrossCubeSeams(
+          [left, right], invalid
+        )).rejects.toThrow();
+      }
+      await expect(inspectRevisionPinnedNativeCrossCubeSeams(
+        [], { "left-texture": expected["left-texture"] }
+      )).rejects.toThrow("CROSS_CUBE_REVISION_SCOPE_INVALID");
+      const none = await inspectRevisionPinnedNativeCrossCubeSeams([], {});
+      expect(none.bitmap_revision_evidence.state).toBe("not_evaluated");
+      expect(none.bitmap_revision_evidence.source_bytes_matched_during_read).toBe(false);
+    });
+  });
+
+  test("treatment-owned native seam reads pin exact edge bitmap revisions without approving the reference", async () => {
+    await withMockNativeAsync(async cubes => {
+      const expected = await pinnedRevisions(cubes);
+      const result = await inspectRevisionPinnedTreatmentCrossCubeSeams(
+        observedTreatmentWithCrossCubeSeam(), expected
+      );
+      expect(result.compared_pair_count).toBe(1);
+      expect(result.bitmap_revision_evidence.state).toBe("matched_during_read");
+      expect(result.treatment_handoff).toMatchObject({
+        source: "texture_treatment_plan",
+        state: "review_required",
+        material_approval_attested: false,
+        texture_revision_attested: false,
+        visual_verdict: "not_evaluated",
+      });
+      expect(result.treatment_handoff.reference_observations).toHaveLength(1);
+      expect(result.native_sampling_attested).toBe(false);
+    });
+  });
+
+  test("revision-pinned treatment path blocks stale bitmap without mutating Cube UV ownership", async () => {
+    await withMockNativeAsync(async cubes => {
+      const before = [...cubes.right.faces.north.uv];
+      const expected = await pinnedRevisions(cubes);
+      cubes.right.faces.north.getTexture().setShade(40);
+      await expect(inspectRevisionPinnedTreatmentCrossCubeSeams(
+        observedTreatmentWithCrossCubeSeam(), expected
+      )).rejects.toThrow("CROSS_CUBE_REVISION_STALE");
+      expect(cubes.right.faces.north.uv).toEqual(before);
+    });
+  });
+
+  test("post-ready treatment source tampering cannot enter revision digest or native seam read", async () => {
+    await withMockNativeAsync(async cubes => {
+      const expected = await pinnedRevisions(cubes);
+      const plan = observedTreatmentWithCrossCubeSeam();
+      plan.seam_pairs[0].reference_observation!.observed_edges[0].edge = "top";
+      await expect(inspectRevisionPinnedTreatmentCrossCubeSeams(
+        plan, expected
+      )).rejects.toThrow("TEXTURE_SEAM_REFERENCE_SCOPE_MISMATCH");
+    });
+  });
+
+  test("layered and animated textures reject full revision evidence before any edge sampling", async () => {
+    await withMockNativeAsync(async cubes => {
+      const expected = await pinnedRevisions(cubes);
+      const texture = cubes.right.faces.north.getTexture();
+      texture.layers_enabled = true;
+      await expect(inspectRevisionPinnedNativeCrossCubeSeams(
+        [left, right], expected
+      )).rejects.toThrow("CROSS_CUBE_REVISION_BITMAP_UNSUPPORTED");
+      texture.layers_enabled = false;
+      texture.frameCount = 2;
+      await expect(inspectRevisionPinnedNativeCrossCubeSeams(
+        [left, right], expected
+      )).rejects.toThrow("CROSS_CUBE_REVISION_BITMAP_UNSUPPORTED");
     });
   });
 

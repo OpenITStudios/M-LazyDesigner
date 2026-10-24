@@ -141,3 +141,24 @@ The handoff remains review-only with
 `visual_verdict=not_evaluated`. The existing registered
 `list_textures` continues to report intra-Cube seams only until a
 genuinely approved public declaration path and native evidence exist.
+
+## Revision-pinned native cross-Cube seam read (unregistered)
+
+`inspectRevisionPinnedNativeCrossCubeSeams(declarations, revisions)`
+requires a canonical full decoded-RGBA SHA-256 for each explicitly
+declared edge Texture. Reuses the existing native sampler and canonical
+bitmap revision logic, bounding full snapshots to eight textures,
+1,048,576 pixels per atlas and 2,097,152 pixels total. Face Texture,
+native material, UV, rotation, actual Cube/mesh identity and world
+matrix are checked around asynchronous hashes and sampling. Changes to
+pixels at unchanged UUID/dimensions, face assignment or geometry reject
+the read rather than presenting stale evidence.
+
+`inspectRevisionPinnedTreatmentCrossCubeSeams(plan, revisions)`
+uses exactly the existing treatment owner/native binding handoff with
+the revision-gated sampler. `bitmap_revision_evidence` describes only
+the `declared_edge_textures_only` read window; it is NOT whole-scene
+revision or all variant/PBR attestation. Source hashes do not verify
+reference-to-model semantic matches, reviewer approval or installed
+Blockbench visual accuracy. The helpers remain unregistered and do not
+change `list_textures`, Undo, or texture mutation.

@@ -256,7 +256,10 @@ SHA-256 and byte lengths but **never returns image bytes/base64**.
 No `seam_pairs` means `not_evaluated` and no reference file reads.
 Stale package fingerprints, changed image contents, invalid revisions,
 missing TEXTURE relevance or unapproved package-declared image status
-fail closed. There is no new Gateway tool or Runtime seam activation.
+fail closed. After image delivery, Control re-reads the full package and
+verifies fingerprint plus selected image byte/MIME/stage/status identity.
+This closes one asynchronous metadata TOCTOU window; it is not a lease
+against future filesystem changes. There is no new Gateway tool or Runtime seam activation.
 
 ## Scale / Resource Loading Rule
 

@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 source-byte verified Reference Package seam observations:
-- Existing Gateway Control referencePackage owner now compares seam observation IDs/revisions to real current package TEXTURE-stage image SHA-256 via the existing verified image reader, with pinned package fingerprint and APPROVED package metadata. Real byte identity only; user approval and whether the image depicts the requested seam remain NOT ATTESTED. Focused existing Control regression+affected routing authored. No public tool or native activation.
-- Bun/types, installed Blockbench native, full scene/Golden and cost NOT EXECUTED (CI disabled). Cross-Cube seam helper remains unregistered; painted-atlas UV repack stays guarded.
-- Next: trusted reviewer approval and semantic image-edge observation correspondence, only when real authority exists; exact-SHA source/native proof. Do not repeat source readback implementation.
+2026-10-24 bounded reference/native cross-Cube freshness:
+- Existing Control Reference Package rereads final image+metadata identity after awaited evidence. Unregistered native seam helpers pin full RGBA hashes of only declared edge textures and check native face UV/material/world owner across async sampling. Same-UUID repaints and metadata drift fail closed. Existing owner regressions authored.
+- Source ONLY; Bun/types, Blockbench native, Golden/cost NOT EXECUTED (CI disabled). No new tool/schema/registration, no Undo or painted-atlas mutation change. Revision match is not whole-scene PBR/variant or user approval.
+- Next: independent material reference approval, semantic image-to-seam check and actual native visual acceptance; preserve guards.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

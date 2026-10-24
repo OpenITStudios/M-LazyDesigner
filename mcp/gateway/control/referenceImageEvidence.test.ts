@@ -9,6 +9,7 @@ import { readReferenceImageEvidence, summarizeReferenceAlphaSilhouette } from ".
 import {
   inspectTextureSeamReferenceImageIdentity,
   readReferencePackageProjection,
+  requireStableSeamReferenceImageRead,
 } from "./referencePackage";
 import { planTextureTreatment } from "../../lib/texture/treatmentPlan";
 
@@ -402,6 +403,74 @@ describe("source-byte-backed treatment seam reference identity", () => {
       expected_reference_fingerprint: source.fingerprint!,
       treatment_plan: missing,
     })).rejects.toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+  });
+
+  test("manifest revision changing after image read is rejected by final source recheck", async () => {
+    const root = await packageRoot(textureImage());
+    const initial = await readReferencePackageProjection(root);
+    const delivered = await readReferenceImageEvidence(initial, ["IMG_FRONT"]);
+    const refreshed = {
+      ...initial,
+      fingerprint: "f".repeat(64),
+    };
+    expect(() => requireStableSeamReferenceImageRead({
+      initial, final: refreshed,
+      selected_ids: ["IMG_FRONT"], delivered,
+    })).toThrow("TEXTURE_SEAM_REFERENCE_SOURCE_CHANGED");
+    expect(() => requireStableSeamReferenceImageRead({
+      initial, final: initial,
+      selected_ids: ["IMG_FRONT"], delivered,
+    })).not.toThrow();
+
+    const source = await Bun.file("gateway/control/referencePackage.ts").text();
+    const start = source.indexOf("const evidence = await readReferenceImageEvidence(current, ids);");
+    const final = source.indexOf("const final = await readReferencePackageProjection(", start);
+    const recheck = source.indexOf("requireStableSeamReferenceImageRead({", final);
+    const receipt = source.indexOf('state: "source_image_bytes_matched" as const', recheck);
+    expect(start).toBeGreaterThan(0);
+    expect(final).toBeGreaterThan(start);
+    expect(recheck).toBeGreaterThan(final);
+    expect(receipt).toBeGreaterThan(recheck);
+  });
+
+  test("same-image SHA cannot mask changed source review status, TEXTURE stage or file path", async () => {
+    const root = await packageRoot(textureImage());
+    const initial = await readReferencePackageProjection(root);
+    const delivered = await readReferenceImageEvidence(initial, ["IMG_FRONT"]);
+    for (const revision of [
+      { status: "DRAFT" },
+      { used_by: ["GEOMETRY"] },
+      { file: "images/other.png" },
+      { sha256: "0".repeat(64) },
+      { integrity: "MISSING" },
+      { bytes: 0 },
+    ] as const) {
+      const final = {
+        ...initial,
+        images: [{
+          ...initial.images[0], ...revision,
+        }] as typeof initial.images,
+      };
+      expect(() => requireStableSeamReferenceImageRead({
+        initial, final, selected_ids: ["IMG_FRONT"], delivered,
+      })).toThrow("TEXTURE_SEAM_REFERENCE_SOURCE_CHANGED");
+    }
+  });
+
+  test("empty or duplicate source-image evidence cannot count as a complete inspected set", async () => {
+    const root = await packageRoot(textureImage());
+    const initial = await readReferencePackageProjection(root);
+    const delivered = await readReferenceImageEvidence(initial, ["IMG_FRONT"]);
+    for (const args of [
+      { selected_ids: [] as string[], delivered },
+      { selected_ids: ["IMG_FRONT", "IMG_FRONT"], delivered },
+      { selected_ids: ["IMG_FRONT"], delivered: [] },
+      { selected_ids: ["MISSING"], delivered },
+    ]) {
+      expect(() => requireStableSeamReferenceImageRead({
+        initial, final: initial, ...args,
+      })).toThrow("TEXTURE_SEAM_REFERENCE_SOURCE_CHANGED");
+    }
   });
 
   test("no explicit edge observation cannot be promoted into verified image evidence", async () => {

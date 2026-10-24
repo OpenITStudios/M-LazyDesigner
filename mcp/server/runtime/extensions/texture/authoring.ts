@@ -32,6 +32,15 @@ import {
 } from "@/lib/texture/pbrContent";
 import { analyzeTextureMaterialStatus } from "@/lib/texture/materialStatus";
 import {
+  fullTextureRgba,
+  requireUnchangedTextureBitmap,
+} from "@/lib/texture/bitmapRuntime";
+import {
+  computeTextureRevision,
+  requireTextureRevisionMatch,
+} from "@/lib/texture/revision";
+import { textureRevisionSchema } from "@/lib/texture/evidence";
+import {
   buildTextureTreatmentCrossCubeSeamHandoff,
   requireTextureTreatmentSeamPlanReady,
   type TextureTreatmentNativeFaceBinding,
@@ -676,6 +685,291 @@ export function inspectDeclaredNativeCrossCubeSeams(
 }
 
 /**
+ * Source-only, unregistered read-window revision gate for the *already
+ * declared* native cross-Cube sampler. This checks exactly the referenced
+ * flattened atlases, not all project variants/channels or every model face.
+ *
+ * A caller must pin canonical full decoded-RGBA revisions gathered from
+ * current Texture evidence. It never grants material/reference approval.
+ */
+export async function inspectRevisionPinnedNativeCrossCubeSeams(
+  declarations: readonly DeclaredNativeCrossCubeSeamEdge[],
+  expectedTextureRevisions: Readonly<Record<string, string>>,
+  alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
+) {
+  if (!Array.isArray(declarations) ||
+      declarations.length > DECLARED_CROSS_CUBE_NATIVE_EDGE_LIMIT) {
+    throw new Error(
+      "CROSS_CUBE_REVISION_SCOPE_INVALID: at most 64 explicitly declared face edges are supported."
+    );
+  }
+  if (declarations.length === 0) {
+    if (!expectedTextureRevisions ||
+        Object.keys(expectedTextureRevisions).length !== 0) {
+      throw new Error(
+        "CROSS_CUBE_REVISION_SCOPE_INVALID: an empty edge request cannot carry orphan atlas revisions."
+      );
+    }
+    return {
+      ...inspectDeclaredNativeCrossCubeSeams([]),
+      bitmap_revision_evidence: {
+        state: "not_evaluated" as const,
+        scope: "declared_edge_textures_only" as const,
+        observed_atlas_count: 0,
+        atlases: [],
+        source_bytes_matched_during_read: false as const,
+        whole_scene_revision_attested: false as const,
+      },
+    };
+  }
+  // Cheap declaration identity check before decoding a potentially large
+  // bitmap. Exact semantic validation remains in the canonical sampler.
+  const owners = new Set<string>();
+  for (const edge of declarations) {
+    if (!edge || typeof edge.cube_uuid !== "string" ||
+        !edge.cube_uuid.trim() ||
+        !FACE_KEYS.includes(edge.face) ||
+        !["left", "right", "top", "bottom"].includes(edge.edge) ||
+        typeof edge.expected_texture_uuid !== "string" ||
+        !edge.expected_texture_uuid.trim()) {
+      throw new Error(
+        "CROSS_CUBE_REVISION_SCOPE_INVALID: malformed declared Cube-face texture ownership."
+      );
+    }
+    const key = edge.cube_uuid + ":" + edge.face + ":" + edge.edge;
+    if (owners.has(key)) {
+      throw new Error(
+        "CROSS_CUBE_REVISION_SCOPE_INVALID: duplicated declared Cube-face edge."
+      );
+    }
+    owners.add(key);
+  }
+  const uuids = [...new Set(declarations.map(edge =>
+    edge.expected_texture_uuid
+  ))].sort();
+  if (!expectedTextureRevisions || uuids.length > 8 ||
+      uuids.some(uuid => !uuid || !uuid.trim()) ||
+      Object.keys(expectedTextureRevisions).sort().join("\u0000") !==
+        uuids.join("\u0000")) {
+    throw new Error(
+      "CROSS_CUBE_REVISION_SCOPE_INVALID: supply exact revision keys for 1..8 referenced texture UUIDs."
+    );
+  }
+  for (const uuid of uuids) {
+    textureRevisionSchema.parse(expectedTextureRevisions[uuid]);
+  }
+  if (typeof Project === "undefined" || !Project ||
+      typeof Texture === "undefined" || !Array.isArray(Texture.all) ||
+      typeof Cube === "undefined" || !Array.isArray(Cube.all) ||
+      !Array.isArray(Project.textures)) {
+    throw new Error(
+      "CROSS_CUBE_REVISION_NATIVE_UNAVAILABLE: require a current Blockbench project and complete Texture inventory."
+    );
+  }
+
+  const project = Project;
+  const nativeTextures = [...Texture.all];
+  const projectTextures = [...Project.textures];
+  const selected: Array<{
+    uuid: string;
+    texture: Texture;
+    original: ReturnType<typeof fullTextureRgba>;
+    revision: string;
+  }> = [];
+  let totalPixels = 0;
+  for (const uuid of uuids) {
+    const matches = nativeTextures.filter(texture => texture.uuid === uuid);
+    if (matches.length !== 1 || !projectTextures.includes(matches[0])) {
+      throw new Error(
+        "CROSS_CUBE_REVISION_NATIVE_SCOPE: each declared atlas must resolve unambiguously inside this project."
+      );
+    }
+    const texture = matches[0];
+    const width = texture.width, height = texture.height;
+    const pixels = width * height;
+    totalPixels += pixels;
+    if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+        width <= 0 || height <= 0 ||
+        !Number.isSafeInteger(pixels) || pixels > 1_048_576 ||
+        totalPixels > 2_097_152 ||
+        texture.layers_enabled === true ||
+        (texture.frameCount ?? 1) !== 1 ||
+        texture.height !== texture.display_height) {
+      throw new Error(
+        "CROSS_CUBE_REVISION_BITMAP_UNSUPPORTED: requires bounded flattened static decoded RGBA atlases."
+      );
+    }
+    const original = fullTextureRgba(texture);
+    if (original.width !== width || original.height !== height ||
+        original.pixels.length !== pixels * 4) {
+      throw new Error(
+        "CROSS_CUBE_REVISION_BITMAP_UNSUPPORTED: decoded bitmap disagrees with pinned atlas dimensions."
+      );
+    }
+    selected.push({
+      uuid, texture,
+      // Protect the pinned source even if a nonstandard native callback
+      // reuses its ImageData buffer across subsequent reads.
+      original: {
+        ...original,
+        pixels: new Uint8ClampedArray(original.pixels),
+      },
+      revision: "",
+    });
+  }
+
+  // Hash computation is asynchronous. Bind the *declared face state* as
+  // well as the bitmap bytes: a face can be moved/reassigned while crypto
+  // runs even if the atlas image is unchanged.
+  const readDeclaredFrame = () => {
+    return declarations.map(edge => {
+      if (!Array.isArray(Cube.all)) {
+        throw new Error(
+          "CROSS_CUBE_REVISION_SOURCE_CHANGED: native Cube owner inventory unavailable."
+        );
+      }
+      const matching = Cube.all.filter(cube => cube.uuid === edge.cube_uuid);
+      const cube = matching[0];
+      const face = cube?.faces[edge.face] as RuntimeCubeFace | undefined;
+      if (matching.length !== 1 || !face || face.enabled === false ||
+          typeof face.getTexture !== "function") {
+        throw new Error(
+          "CROSS_CUBE_REVISION_SOURCE_CHANGED: declared face owner disappeared or is not visible."
+        );
+      }
+      const texture = face.getTexture();
+      if (!texture || texture.uuid !== edge.expected_texture_uuid ||
+          !nativeTextures.includes(texture) ||
+          !projectTextures.includes(texture) ||
+          face.material_name !== edge.expected_native_material_name) {
+        throw new Error(
+          "CROSS_CUBE_REVISION_SOURCE_CHANGED: declared face material/texture binding is stale."
+        );
+      }
+      const mesh = cube.mesh;
+      if (!mesh || typeof mesh.updateWorldMatrix !== "function" ||
+          !mesh.matrixWorld || mesh.matrixWorld.elements?.length !== 16 ||
+          !Array.isArray(face.uv) || face.uv.length !== 4 ||
+          face.uv.some(value => !Number.isFinite(value))) {
+        throw new Error(
+          "CROSS_CUBE_REVISION_SOURCE_CHANGED: face UV or mesh world transform unavailable."
+        );
+      }
+      mesh.updateWorldMatrix(true, false);
+      const world = Array.from(mesh.matrixWorld.elements);
+      if (world.length !== 16 || world.some(value => !Number.isFinite(value))) {
+        throw new Error(
+          "CROSS_CUBE_REVISION_SOURCE_CHANGED: nonfinite face world transform."
+        );
+      }
+      return {
+        cube, face, texture, mesh,
+        uv: [...face.uv],
+        rotation: face.rotation,
+        material: face.material_name,
+        enabled: face.enabled,
+        matrix: world,
+      };
+    });
+  };
+  const declaredFrame = readDeclaredFrame();
+  const requireDeclaredFrameFresh = (phase: string) => {
+    const current = readDeclaredFrame();
+    const stale = current.some((edge, index) => {
+      const before = declaredFrame[index];
+      return edge.cube !== before.cube ||
+        edge.face !== before.face ||
+        edge.texture !== before.texture ||
+        edge.mesh !== before.mesh ||
+        edge.rotation !== before.rotation ||
+        edge.material !== before.material ||
+        edge.enabled !== before.enabled ||
+        edge.uv.some((value, i) => value !== before.uv[i]) ||
+        edge.matrix.some((value, i) => value !== before.matrix[i]);
+    });
+    if (stale) {
+      throw new Error(
+        "CROSS_CUBE_REVISION_SOURCE_CHANGED: declared geometry/UV/material binding changed " +
+          phase + "."
+      );
+    }
+  };
+
+  const ensureFresh = (phase: string) => {
+    requireDeclaredFrameFresh(phase);
+    if (typeof Project === "undefined" || Project !== project ||
+        typeof Texture === "undefined" ||
+        !Array.isArray(Texture.all) ||
+        !Array.isArray(Project.textures) ||
+        Texture.all.length !== nativeTextures.length ||
+        Project.textures.length !== projectTextures.length ||
+        nativeTextures.some(texture => !Texture.all.includes(texture)) ||
+        projectTextures.some(texture => !Project.textures.includes(texture))) {
+      throw new Error(
+        "CROSS_CUBE_REVISION_SOURCE_CHANGED: project/atlas inventory changed " + phase + "."
+      );
+    }
+    for (const { texture, uuid, original } of selected) {
+      if (texture.uuid !== uuid || texture.layers_enabled === true ||
+          (texture.frameCount ?? 1) !== 1 ||
+          texture.height !== texture.display_height ||
+          texture.width !== original.width ||
+          texture.height !== original.height) {
+        throw new Error(
+          "CROSS_CUBE_REVISION_SOURCE_CHANGED: atlas metadata changed " + phase + "."
+        );
+      }
+      requireUnchangedTextureBitmap(
+        original, fullTextureRgba(texture),
+        "CROSS_CUBE_REVISION_SOURCE_CHANGED: decoded pixels changed " +
+          phase + " for " + uuid + "."
+      );
+    }
+  };
+
+  for (const entry of selected) {
+    entry.revision = await computeTextureRevision(
+      entry.original.pixels, entry.original.width, entry.original.height
+    );
+    requireTextureRevisionMatch(
+      expectedTextureRevisions[entry.uuid], entry.revision,
+      "CROSS_CUBE_REVISION_STALE: " + entry.uuid
+    );
+  }
+  // Crypto.digest yields. Re-read all full source bitmaps after awaits
+  // before allowing the bounded edge sampler to consume cached pixels.
+  ensureFresh("before edge sampling");
+  const result = inspectDeclaredNativeCrossCubeSeams(
+    declarations,
+    ensureTextureDiagnosticInvocationContext(undefined),
+    alphaSemantics
+  );
+  // Never return a successful revision receipt if a paint operation changed
+  // a covered atlas during the edge sampling phase.
+  ensureFresh("after edge sampling");
+  return {
+    ...result,
+    bitmap_revision_evidence: {
+      state: "matched_during_read" as const,
+      scope: "declared_edge_textures_only" as const,
+      observed_atlas_count: selected.length,
+      atlases: selected.map(({ uuid, revision }) => ({
+        texture_uuid: uuid,
+        decoded_rgba_revision: revision,
+      })),
+      source_bytes_matched_during_read: true as const,
+      whole_scene_revision_attested: false as const,
+    },
+    // Source-level hash agreement is not installed Runtime/visual acceptance.
+    texture_revision_attested: false as const,
+    native_sampling_attested: false as const,
+    scene_coverage_attested: false as const,
+    material_approval_attested: false as const,
+    visual_verdict: "not_evaluated" as const,
+  };
+}
+
+/**
  * Pure Texture treatment plan -> current native binding handoff. Existing
  * FaceTreatment assignments and explicit seam_pairs own the semantic scope;
  * no matching-color/material guess or user approval is inferred. The live
@@ -683,10 +977,8 @@ export function inspectDeclaredNativeCrossCubeSeams(
  *
  * UNREGISTERED: the existing list_textures API remains intra-Cube only.
  */
-export function inspectTreatmentBoundNativeCrossCubeSeams(
-  plan: ReturnType<typeof planTextureTreatment>,
-  context?: unknown,
-  alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
+function buildNativeTreatmentCrossCubeHandoff(
+  plan: ReturnType<typeof planTextureTreatment>
 ) {
   // Reject post-planning seam/material/evidence mutations before reading
   // Blockbench globals or any texture pixels.
@@ -733,31 +1025,67 @@ export function inspectTreatmentBoundNativeCrossCubeSeams(
       });
     }
   }
-  const handoff = buildTextureTreatmentCrossCubeSeamHandoff(plan, bindings);
+  return buildTextureTreatmentCrossCubeSeamHandoff(plan, bindings);
+}
+
+function reviewOnlyTreatmentHandoffReceipt(
+  handoff: ReturnType<typeof buildTextureTreatmentCrossCubeSeamHandoff>
+) {
+  return {
+    source: handoff.source,
+    state: handoff.state,
+    scope: handoff.scope,
+    declared_pair_count: handoff.declared_pair_count,
+    reference_observations: handoff.reference_observations.map(record => ({
+      ...record,
+      observed_edges: [
+        { ...record.observed_edges[0] },
+        { ...record.observed_edges[1] },
+      ],
+    })),
+    assertion_provenance: "CALLER_DECLARATION_UNVERIFIED" as const,
+    native_binding_attested: false as const,
+    material_approval_attested: false as const,
+    texture_revision_attested: false as const,
+    scene_coverage_attested: false as const,
+    visual_verdict: "not_evaluated" as const,
+  };
+}
+
+/** Existing unregistered treatment-bound inspection; no public change. */
+export function inspectTreatmentBoundNativeCrossCubeSeams(
+  plan: ReturnType<typeof planTextureTreatment>,
+  context?: unknown,
+  alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
+) {
+  const handoff = buildNativeTreatmentCrossCubeHandoff(plan);
   const inspected = inspectDeclaredNativeCrossCubeSeams(
     handoff.declarations, context, alphaSemantics
   );
   return {
     ...inspected,
-    treatment_handoff: {
-      source: handoff.source,
-      state: handoff.state,
-      scope: handoff.scope,
-      declared_pair_count: handoff.declared_pair_count,
-      reference_observations: handoff.reference_observations.map(record => ({
-        ...record,
-        observed_edges: [
-          { ...record.observed_edges[0] },
-          { ...record.observed_edges[1] },
-        ],
-      })),
-      assertion_provenance: "CALLER_DECLARATION_UNVERIFIED" as const,
-      native_binding_attested: false as const,
-      material_approval_attested: false as const,
-      texture_revision_attested: false as const,
-      scene_coverage_attested: false as const,
-      visual_verdict: "not_evaluated" as const,
-    },
+    treatment_handoff: reviewOnlyTreatmentHandoffReceipt(handoff),
+  };
+}
+
+/**
+ * Revision-pinned treatment-owned read window. Keeps the *same* canonical
+ * plan/native ownership and read-only sampler, with an additional exact
+ * decoded RGBA freshness check for only the explicitly declared edge atlases.
+ * Does not attest independently authorized reference material.
+ */
+export async function inspectRevisionPinnedTreatmentCrossCubeSeams(
+  plan: ReturnType<typeof planTextureTreatment>,
+  expectedTextureRevisions: Readonly<Record<string, string>>,
+  alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
+) {
+  const handoff = buildNativeTreatmentCrossCubeHandoff(plan);
+  const inspected = await inspectRevisionPinnedNativeCrossCubeSeams(
+    handoff.declarations, expectedTextureRevisions, alphaSemantics
+  );
+  return {
+    ...inspected,
+    treatment_handoff: reviewOnlyTreatmentHandoffReceipt(handoff),
   };
 }
 

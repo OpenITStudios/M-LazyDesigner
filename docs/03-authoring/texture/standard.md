@@ -553,6 +553,19 @@ claimed Cube seam. The sampler is still unregistered and no visual
 acceptance, material approval, model-wide coverage or texture pixel
 revision is inferred.
 
+**Reference and native Texture freshness (unregistered source):**
+Reference Package observations are re-pinned after source-image delivery
+to detect changed metadata or content. Separately,
+`inspectRevisionPinnedTreatmentCrossCubeSeams` pins exact full
+decoded-RGBA SHA-256 for every *declared-edge Texture UUID* and checks
+that same bitmap plus face UV/material, assigned Texture and world matrix
+before and after seam sampling. Same-UUID repaints or moved Cube owners
+invalidate the result. These are two independent bounded read windows,
+not a global atomic proof or visual approval. Unrelated variant/PBR
+atlas pixels, nondeclared geometry, authorized material review and
+model-wide visual fidelity remain out of scope. Production tools,
+repack safety and native runtime registration are unchanged.
+
 **RGB seam evidence and alpha meaning:** Intra-Cube and cross-Cube seam
 diagnostics use one sample-comparison rule. In `OPACITY` mode, RGB is
 compared only when both corresponding texels have nonzero alpha; alpha holes
