@@ -4,6 +4,7 @@ import {
   inspectTreatmentBoundNativeCrossCubeSeams,
   inspectRevisionPinnedNativeCrossCubeSeams,
   inspectRevisionPinnedTreatmentCrossCubeSeams,
+  seamContinuityRuntime,
   type DeclaredNativeCrossCubeSeamEdge,
 } from "@/server/runtime/extensions/texture/authoring";
 import { planTextureTreatment } from "@/lib/textureTreatmentPlan";
@@ -100,7 +101,7 @@ function withMockNative<T>(
     right: ReturnType<typeof fakeCube>;
   }) => T
 ): T {
-  const keys = ["Cube", "Texture", "Project"] as const;
+  const keys = ["Cube", "Texture", "Project", "Outliner"] as const;
   const saved = keys.map(key =>
     Object.getOwnPropertyDescriptor(globalThis, key)
   );
@@ -124,6 +125,10 @@ function withMockNative<T>(
     Object.defineProperty(globalThis, "Project", {
       configurable: true,
       value: { textures: nativeAtlases },
+    });
+    Object.defineProperty(globalThis, "Outliner", {
+      configurable: true,
+      value: { elements: [cubes.left, cubes.right] },
     });
     return invoke(cubes);
   } finally {
@@ -498,6 +503,146 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
       await expect(inspectRevisionPinnedNativeCrossCubeSeams(
         [left, right], expected
       )).rejects.toThrow("CROSS_CUBE_REVISION_BITMAP_UNSUPPORTED");
+    });
+  });
+
+  test("production list_textures seam diagnostics enumerate missing Cube face slots instead of claiming all-model coverage", () => {
+    withMockNative(() => {
+      const result = seamContinuityRuntime();
+      if (!("model_face_inventory" in result)) {
+        throw Error("Expected model face inventory in native seam result.");
+      }
+      const inventory = result.model_face_inventory;
+      expect(result.scan.scanned_faces).toBe(2);
+      expect(inventory).toMatchObject({
+        cube_count: 2,
+        face_slot_count: 12,
+        enabled_face_count: 2,
+        missing_face_slot_count: 10,
+        eligible_textured_face_count: 2,
+        sampled_face_count: 2,
+        unexamined_enabled_face_count: 10,
+        texture_inventory_state: "verified",
+        inventory_state: "cube_face_slots_enumerated",
+        coverage_state: "partial",
+        whole_scene_visual_coverage_attested: false,
+        visual_verdict: "not_evaluated",
+        outliner: {
+          state: "enumerated", element_count: 2,
+          cube_entry_count: 2, non_cube_count: 0,
+        },
+      });
+      expect(result.gate.reasons).toContain(
+        "MODEL_FACE_OWNERSHIP_OR_SAMPLING_INCOMPLETE"
+      );
+      expect(result.gate.reasons).not.toContain("SEAM_SCAN_PARTIAL");
+      expect(inventory.omission_examples).toHaveLength(10);
+    });
+  });
+
+  test("foreign, untextured and throwing Cube faces are not silently absent from model coverage", () => {
+    withMockNative(cubes => {
+      const face = cubes.right.faces.north;
+      const source = face.getTexture;
+      face.getTexture = (() => null) as never;
+      const untextured = seamContinuityRuntime();
+      if (!("model_face_inventory" in untextured)) throw Error("No native model census");
+      expect(untextured.model_face_inventory.untextured_enabled_face_count).toBe(1);
+      expect(untextured.model_face_inventory.sampled_face_count).toBe(1);
+      expect(untextured.model_face_inventory.unexamined_enabled_face_count).toBe(11);
+
+      face.getTexture = (() => fakeTexture("outside-project", 30)) as never;
+      const foreign = seamContinuityRuntime();
+      if (!("model_face_inventory" in foreign)) throw Error("No native model census");
+      expect(foreign.model_face_inventory.foreign_texture_enabled_face_count).toBe(1);
+      expect(foreign.model_face_inventory.texture_inventory_state).toBe("verified");
+
+      face.getTexture = (() => { throw Error("native resolver refused"); }) as never;
+      const unresolved = seamContinuityRuntime();
+      if (!("model_face_inventory" in unresolved)) throw Error("No native model census");
+      expect(unresolved.model_face_inventory.resolver_error_enabled_face_count).toBe(1);
+      expect(unresolved.model_face_inventory.visual_verdict).toBe("not_evaluated");
+
+      face.getTexture = source;
+    });
+  });
+
+  test("non-Cube Outliner items and disabled faces never count as inspected model texture", () => {
+    withMockNative(cubes => {
+      const outliner = (
+        globalThis as unknown as { Outliner: { elements: unknown[] } }
+      ).Outliner;
+      outliner.elements.push({ uuid: "mesh-element" });
+      cubes.right.faces.north.enabled = false;
+      const result = seamContinuityRuntime();
+      if (!("model_face_inventory" in result)) throw Error("No native model census");
+      expect(result.model_face_inventory).toMatchObject({
+        disabled_face_count: 1,
+        sampled_face_count: 1,
+        inventory_state: "scene_scope_partial",
+        non_cube_texture_coverage_attested: false,
+        whole_scene_visual_coverage_attested: false,
+        outliner: { non_cube_count: 1, element_count: 3 },
+      });
+      expect(result.gate.reasons).toContain("MODEL_SCENE_INVENTORY_UNVERIFIED");
+      expect(result.model_face_inventory.limitations).toContain(
+        "NON_CUBE_ELEMENT_COVERAGE_UNEVALUATED"
+      );
+    });
+  });
+
+  test("Texture.all vs Project.textures mismatch is never an attested model inventory", () => {
+    withMockNative(() => {
+      const project = (
+        globalThis as unknown as { Project: { textures: unknown[] } }
+      ).Project;
+      project.textures.pop();
+      const result = seamContinuityRuntime();
+      if (!("model_face_inventory" in result)) throw Error("No native model census");
+      expect(result.model_face_inventory.texture_inventory_state).toBe("partial");
+      expect(result.model_face_inventory.foreign_texture_enabled_face_count).toBe(1);
+      expect(result.model_face_inventory.eligible_textured_face_count).toBe(1);
+      expect(result.model_face_inventory.inventory_state).toBe("scene_scope_partial");
+      expect(result.model_face_inventory.limitations).toContain(
+        "TEXTURE_INVENTORY_NOT_FULLY_ATTESTED"
+      );
+      expect(result.gate.reasons).toContain("MODEL_SCENE_INVENTORY_UNVERIFIED");
+    });
+  });
+
+  test("missing native Outliner cannot be mistaken for complete scene coverage", () => {
+    withMockNative(() => {
+      Reflect.deleteProperty(globalThis, "Outliner");
+      const result = seamContinuityRuntime();
+      if (!("model_face_inventory" in result)) throw Error("No native model census");
+      expect(result.model_face_inventory).toMatchObject({
+        inventory_state: "outliner_unknown",
+        coverage_state: "partial",
+        outliner: { state: "unavailable", element_count: null },
+        whole_scene_visual_coverage_attested: false,
+      });
+      expect(result.model_face_inventory.limitations).toContain(
+        "OUTLINER_SCENE_SCOPE_UNKNOWN"
+      );
+    });
+  });
+
+  test("duplicate Cube UUIDs cannot be sampled into fictitious same-Cube seam pairs", () => {
+    withMockNative(cubes => {
+      cubes.right.uuid = cubes.left.uuid;
+      const result = seamContinuityRuntime();
+      if (!("model_face_inventory" in result)) throw Error("No native model census");
+      expect(result.model_face_inventory.duplicate_cube_uuid_count).toBe(1);
+      expect(result.model_face_inventory.eligible_textured_face_count).toBe(2);
+      expect(result.model_face_inventory.sampled_face_count).toBe(0);
+      expect(result.model_face_inventory.sample_skipped_face_count).toBe(2);
+      expect(result.model_face_inventory.coverage_state).toBe("not_evaluated");
+      expect(result.model_face_inventory.inventory_state).toBe("scene_scope_partial");
+      expect(result.model_face_inventory.limitations).toContain(
+        "MODEL_ELEMENT_IDENTITY_INCONSISTENT"
+      );
+      expect(result.scan.unexamined_face_count).toBe(2);
+      expect(result.paired_seam_count).toBe(0);
     });
   });
 

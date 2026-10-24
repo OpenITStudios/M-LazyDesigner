@@ -4,6 +4,8 @@ import {
   analyzeCrossCubeSeamContinuity,
   projectNativeCubeSeamEdgeToWorld,
   summarizeTextureSeamScanEvidence,
+  summarizeTextureModelFaceInventory,
+  type TextureModelFaceInventoryInput,
   type TextureSeamEdgeInput,
   type CrossCubeSeamEdgeInput,
 } from "@/lib/textureSeamContinuity";
@@ -109,6 +111,149 @@ describe("texture seam continuity", () => {
         { cube_uuid: "other", face: "down", reason: "mapping_unavailable" },
       ],
     })).toThrow("omission evidence");
+  });
+
+  const faceInventory = (
+    overrides: Partial<TextureModelFaceInventoryInput> = {}
+  ): TextureModelFaceInventoryInput => ({
+    cube_count: 1,
+    duplicate_cube_uuid_count: 0,
+    missing_face_slot_count: 0,
+    disabled_face_count: 0,
+    untextured_enabled_face_count: 0,
+    foreign_texture_enabled_face_count: 0,
+    resolver_error_enabled_face_count: 0,
+    eligible_textured_face_count: 6,
+    texture_inventory_state: "verified",
+    outliner_element_count: 1,
+    outliner_cube_entry_count: 1,
+    outliner_non_cube_count: 0,
+    outliner_missing_cube_count: 0,
+    outliner_duplicate_entry_count: 0,
+    sampled_faces: 6,
+    skipped_animated_faces: 0,
+    skipped_mapping_faces: 0,
+    budget_skipped_faces: 0,
+    ...overrides,
+  });
+
+  test("six slots per Cube can be enumerated without certifying their pixels or visual quality", () => {
+    const cleanInventory = summarizeTextureModelFaceInventory(faceInventory());
+    expect(cleanInventory).toMatchObject({
+      source: "native_cube_face_inventory",
+      cube_count: 1,
+      face_slot_count: 6,
+      enabled_face_count: 6,
+      eligible_textured_face_count: 6,
+      sampled_face_count: 6,
+      unexamined_enabled_face_count: 0,
+      inventory_state: "cube_face_slots_enumerated",
+      coverage_state: "edge_samples_only",
+      face_interior_sampled: false,
+      non_cube_texture_coverage_attested: false,
+      whole_scene_visual_coverage_attested: false,
+      visual_verdict: "not_evaluated",
+    });
+    expect(cleanInventory.limitations).toContain(
+      "FACE_INTERIOR_PIXELS_NOT_SAMPLED"
+    );
+  });
+
+  test("disabled, missing, untextured, foreign, unreadable and unsampled are separate model counts", () => {
+    const inventory = summarizeTextureModelFaceInventory(faceInventory({
+      cube_count: 2,
+      missing_face_slot_count: 2,
+      disabled_face_count: 4,
+      untextured_enabled_face_count: 2,
+      foreign_texture_enabled_face_count: 1,
+      resolver_error_enabled_face_count: 1,
+      eligible_textured_face_count: 2,
+      sampled_faces: 1,
+      skipped_mapping_faces: 1,
+      outliner_element_count: 3,
+      outliner_cube_entry_count: 2,
+      outliner_non_cube_count: 1,
+      omission_examples: [
+        { cube_uuid: "head", face: "down", reason: "face_slot_missing" },
+        { cube_uuid: "cuff", face: "up", reason: "face_disabled" },
+        { cube_uuid: "jacket", face: "north", reason: "texture_not_resolved" },
+        { cube_uuid: "arm", face: "south", reason: "texture_outside_project" },
+        { cube_uuid: "hat", face: "east", reason: "texture_resolver_failed" },
+      ],
+    }));
+    expect(inventory.face_slot_count).toBe(12);
+    expect(inventory.enabled_face_count).toBe(6);
+    expect(inventory.unexamined_enabled_face_count).toBe(7);
+    expect(inventory.sample_skipped_face_count).toBe(1);
+    expect(inventory.outliner.non_cube_count).toBe(1);
+    expect(inventory.inventory_state).toBe("scene_scope_partial");
+    expect(inventory.coverage_state).toBe("partial");
+    expect(inventory.omission_examples).toHaveLength(5);
+    expect(inventory.omission_examples_truncated).toBe(true);
+    expect(inventory.limitations).toEqual(expect.arrayContaining([
+      "MODEL_FACE_TEXTURE_OWNERSHIP_UNRESOLVED",
+      "NON_CUBE_ELEMENT_COVERAGE_UNEVALUATED",
+      "MODEL_FACE_EDGE_SAMPLING_PARTIAL",
+    ]));
+  });
+
+  test("unknown Outliner identity or missing Texture inventory must not impersonate complete model scope", () => {
+    const incomplete = summarizeTextureModelFaceInventory(faceInventory({
+      texture_inventory_state: "unavailable",
+      outliner_element_count: null,
+      outliner_cube_entry_count: null,
+      outliner_non_cube_count: null,
+      outliner_missing_cube_count: null,
+      outliner_duplicate_entry_count: null,
+    }));
+    expect(incomplete.inventory_state).toBe("outliner_unknown");
+    expect(incomplete.coverage_state).toBe("partial");
+    expect(incomplete.outliner.state).toBe("unavailable");
+    expect(incomplete.whole_scene_visual_coverage_attested).toBe(false);
+    expect(incomplete.limitations).toEqual(expect.arrayContaining([
+      "OUTLINER_SCENE_SCOPE_UNKNOWN",
+      "TEXTURE_INVENTORY_NOT_FULLY_ATTESTED",
+    ]));
+    const none = summarizeTextureModelFaceInventory(faceInventory({
+      cube_count: 0,
+      missing_face_slot_count: 0, disabled_face_count: 0,
+      eligible_textured_face_count: 0, sampled_faces: 0,
+      outliner_element_count: 0, outliner_cube_entry_count: 0,
+    }));
+    expect(none.coverage_state).toBe("not_evaluated");
+    expect(none.whole_scene_visual_coverage_attested).toBe(false);
+  });
+
+  test("model face ledger rejects lost Cube slots, inaccurate sampling and inconsistent Outliner claims", () => {
+    expect(() => summarizeTextureModelFaceInventory(faceInventory({
+      missing_face_slot_count: 1,
+    }))).toThrow("MODEL_FACE_INVENTORY_INVALID");
+    expect(() => summarizeTextureModelFaceInventory(faceInventory({
+      eligible_textured_face_count: 6, sampled_faces: 5,
+    }))).toThrow("MODEL_FACE_INVENTORY_INVALID");
+    expect(() => summarizeTextureModelFaceInventory(faceInventory({
+      outliner_element_count: 2,
+    }))).toThrow("MODEL_FACE_INVENTORY_INVALID");
+    expect(() => summarizeTextureModelFaceInventory(faceInventory({
+      outliner_cube_entry_count: null,
+    }))).toThrow("MODEL_FACE_INVENTORY_INVALID");
+    expect(() => summarizeTextureModelFaceInventory(faceInventory({
+      cube_count: -1,
+    }))).toThrow("MODEL_FACE_INVENTORY_INVALID");
+  });
+
+  test("model omission ledger is capped, invalid examples cannot masquerade as known face evidence", () => {
+    expect(() => summarizeTextureModelFaceInventory(faceInventory({
+      omission_examples: [{
+        cube_uuid: "face", face: "north", reason: "unknown" as never,
+      }],
+    }))).toThrow("MODEL_FACE_INVENTORY_INVALID");
+    expect(() => summarizeTextureModelFaceInventory(faceInventory({
+      omission_examples: Array.from({ length: 13 }, () => ({
+        cube_uuid: "face", face: "north",
+        reason: "face_disabled" as const,
+      })),
+    }))).toThrow("MODEL_FACE_INVENTORY_INVALID");
   });
 
   test("Runtime list_textures wires bounded seam omissions without claiming visual PASS", async () => {

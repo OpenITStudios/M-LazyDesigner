@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 bounded reference/native cross-Cube freshness:
-- Existing Control Reference Package rereads final image+metadata identity after awaited evidence. Unregistered native seam helpers pin full RGBA hashes of only declared edge textures and check native face UV/material/world owner across async sampling. Same-UUID repaints and metadata drift fail closed. Existing owner regressions authored.
-- Source ONLY; Bun/types, Blockbench native, Golden/cost NOT EXECUTED (CI disabled). No new tool/schema/registration, no Undo or painted-atlas mutation change. Revision match is not whole-scene PBR/variant or user approval.
-- Next: independent material reference approval, semantic image-to-seam check and actual native visual acceptance; preserve guards.
+2026-10-24 Cube-face texture coverage inventory:
+- Existing optional list_textures seam/full diagnostics enumerate six face slots per Cube and reconcile sampled/omitted/untextured/disabled/missing/foreign/unreadable faces, duplicate Cube IDs and non-Cube Outliner owners. Returns explicit model_face_inventory plus bounded omission examples and advisory reasons. No new tool, full atlas read or mutation. Existing pure/native mock regressions authored.
+- Even a complete Cube inventory only attests enumeration, NOT full face pixels, non-Cube texture, PBR/variant, visual reference match or model-wide PASS. Bun/types/installed Blockbench/Golden NOT EXECUTED (CI disabled).
+- Next: investigate real missing face ownership and Native+Golden visual acceptance when capable; existing Reference Package/UV guards remain in place. No user-local commands.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

@@ -19,6 +19,8 @@ import {
   analyzeCrossCubeSeamContinuity,
   projectNativeCubeSeamEdgeToWorld,
   summarizeTextureSeamScanEvidence,
+  summarizeTextureModelFaceInventory,
+  type TextureModelFaceInventoryOmission,
   type CrossCubeSeamEdgeInput,
   type TextureSeamAlphaSemantics,
   type TextureSeamContinuityIntent,
@@ -214,13 +216,79 @@ function sampledEdge(
   return samples;
 }
 
-function seamContinuityRuntime(context?: unknown) {
-  if (typeof Cube === "undefined" || typeof Texture === "undefined") {
+export function seamContinuityRuntime(context?: unknown) {
+  if (typeof Cube === "undefined" || typeof Texture === "undefined" ||
+      !Array.isArray(Cube.all)) {
     return {
       state: "unavailable" as const,
       reason: "blockbench_texture_runtime_unavailable" as const,
     };
   }
+
+  const cubes = [...Cube.all];
+  const registeredTextures = Array.isArray(Texture.all)
+    ? new Set<Texture>(Texture.all) : null;
+  const projectTextures =
+    typeof Project !== "undefined" && Array.isArray(Project?.textures)
+      ? new Set<Texture>(Project.textures)
+      : null;
+  // A registered face may point to a matching Texture object while
+  // Project.textures and Texture.all contain different/duplicate atlases.
+  // Such a partial inventory cannot attest model-wide material ownership.
+  const textureInventoriesMatch = registeredTextures && projectTextures &&
+    Texture.all.length === Project.textures.length &&
+    registeredTextures.size === Texture.all.length &&
+    projectTextures.size === Project.textures.length &&
+    Texture.all.every(texture => projectTextures.has(texture));
+  const textureInventoryState = textureInventoriesMatch
+    ? ("verified" as const)
+    : registeredTextures || projectTextures
+      ? ("partial" as const)
+      : ("unavailable" as const);
+
+  const outliner = typeof Outliner !== "undefined" &&
+      Array.isArray(Outliner?.elements)
+    ? [...Outliner.elements] : null;
+  const cubeObjects = new Set<unknown>(cubes);
+  const outlinerObjects = outliner ? new Set<unknown>(outliner) : null;
+  const outlinerCounts = outliner ? {
+    element_count: outliner.length,
+    cube_entry_count: outliner.filter(item => cubeObjects.has(item)).length,
+    non_cube_count: outliner.filter(item => !cubeObjects.has(item)).length,
+    missing_cube_count: cubes.filter(cube => !outlinerObjects!.has(cube)).length,
+    duplicate_entry_count: outliner.length - outlinerObjects!.size,
+  } : null;
+  // Cube UUID collisions must be known before sampling the *first*
+  // duplicate; otherwise its edges could appear to share native ownership
+  // with a second Cube that is encountered later.
+  const cubeIdCounts = new Map<string, number>();
+  let invalidCubeIds = 0;
+  for (const cube of cubes) {
+    if (typeof cube.uuid !== "string" || !cube.uuid.trim()) {
+      invalidCubeIds += 1;
+    } else {
+      cubeIdCounts.set(cube.uuid, (cubeIdCounts.get(cube.uuid) ?? 0) + 1);
+    }
+  }
+  const duplicateCubeUuidCount = invalidCubeIds +
+    [...cubeIdCounts.values()].reduce(
+      (count, occurrences) => count + Math.max(0, occurrences - 1), 0
+    );
+  let missingFaceSlots = 0;
+  let disabledFaces = 0;
+  let untexturedFaces = 0;
+  let foreignTextureFaces = 0;
+  let resolverErrorFaces = 0;
+  let eligibleTexturedFaces = 0;
+  const modelOmissions: TextureModelFaceInventoryOmission[] = [];
+  const modelOmit = (
+    cubeUuid: string, face: string,
+    reason: TextureModelFaceInventoryOmission["reason"]
+  ): void => {
+    if (modelOmissions.length < 12) {
+      modelOmissions.push({ cube_uuid: cubeUuid, face, reason });
+    }
+  };
 
   const edges: TextureSeamEdgeInput[] = [];
   let scannedFaces = 0;
@@ -238,20 +306,64 @@ function seamContinuityRuntime(context?: unknown) {
     }
   };
 
-  for (const cube of Cube.all ?? []) {
+  for (const cube of cubes) {
+    const cubeUuid = typeof cube.uuid === "string" && cube.uuid.trim()
+      ? cube.uuid : "__unidentified_cube__";
+    const cubeIdentityAmbiguous =
+      cubeUuid === "__unidentified_cube__" ||
+      cubeIdCounts.get(cubeUuid) !== 1;
     for (const faceKey of FACE_KEYS) {
-      const face = cube.faces[faceKey] as RuntimeCubeFace | undefined;
-      if (!face || face.enabled === false) continue;
-      const texture = face.getTexture();
-      if (!texture) continue;
+      const face = cube.faces?.[faceKey] as RuntimeCubeFace | undefined;
+      if (!face) {
+        missingFaceSlots += 1;
+        modelOmit(cubeUuid, faceKey, "face_slot_missing");
+        continue;
+      }
+      if (face.enabled === false) {
+        disabledFaces += 1;
+        modelOmit(cubeUuid, faceKey, "face_disabled");
+        continue;
+      }
+      if (typeof face.getTexture !== "function") {
+        resolverErrorFaces += 1;
+        modelOmit(cubeUuid, faceKey, "texture_resolver_failed");
+        continue;
+      }
+      let texture: ReturnType<RuntimeCubeFace["getTexture"]>;
+      try {
+        texture = face.getTexture();
+      } catch {
+        resolverErrorFaces += 1;
+        modelOmit(cubeUuid, faceKey, "texture_resolver_failed");
+        continue;
+      }
+      if (!texture) {
+        untexturedFaces += 1;
+        modelOmit(cubeUuid, faceKey, "texture_not_resolved");
+        continue;
+      }
+      if ((registeredTextures && !registeredTextures.has(texture)) ||
+          (projectTextures && !projectTextures.has(texture))) {
+        foreignTextureFaces += 1;
+        modelOmit(cubeUuid, faceKey, "texture_outside_project");
+        continue;
+      }
+      eligibleTexturedFaces += 1;
+      if (cubeIdentityAmbiguous) {
+        // Mapping a collision as if it were a unique Cube could create
+        // fictitious same-Cube seam pairs. Keep it in the unexamined ledger.
+        skippedMapping += 1;
+        noteSkipped(cubeUuid, faceKey, "mapping_unavailable");
+        continue;
+      }
       if (texture.height !== texture.display_height) {
         skippedAnimated += 1;
-        noteSkipped(cube.uuid, faceKey, "animated_texture");
+        noteSkipped(cubeUuid, faceKey, "animated_texture");
         continue;
       }
       if (scannedFaces >= SEAM_FACE_BUDGET) {
         budgetSkipped += 1;
-        noteSkipped(cube.uuid, faceKey, "sampling_budget");
+        noteSkipped(cubeUuid, faceKey, "sampling_budget");
         continue;
       }
 
@@ -302,7 +414,7 @@ function seamContinuityRuntime(context?: unknown) {
             break;
           }
           faceEdges.push({
-            cube_uuid: cube.uuid,
+            cube_uuid: cubeUuid,
             cube_name: cube.name,
             face: faceKey,
             edge,
@@ -313,7 +425,7 @@ function seamContinuityRuntime(context?: unknown) {
         }
         if (!complete) {
           skippedMapping += 1;
-          noteSkipped(cube.uuid, faceKey, "mapping_unavailable");
+          noteSkipped(cubeUuid, faceKey, "mapping_unavailable");
           continue;
         }
         edges.push(...faceEdges);
@@ -321,10 +433,10 @@ function seamContinuityRuntime(context?: unknown) {
       } catch (error) {
         if (isTextureDiagnosticBudgetExceeded(error)) {
           budgetSkipped += 1;
-          noteSkipped(cube.uuid, faceKey, "sampling_budget");
+          noteSkipped(cubeUuid, faceKey, "sampling_budget");
         } else {
           skippedMapping += 1;
-          noteSkipped(cube.uuid, faceKey, "mapping_unavailable");
+          noteSkipped(cubeUuid, faceKey, "mapping_unavailable");
         }
       }
     }
@@ -339,6 +451,27 @@ function seamContinuityRuntime(context?: unknown) {
     samples_per_edge_max: SEAM_SAMPLES_PER_EDGE,
     skipped_examples: omissionExamples,
   });
+  const modelFaceInventory = summarizeTextureModelFaceInventory({
+    cube_count: cubes.length,
+    duplicate_cube_uuid_count: duplicateCubeUuidCount,
+    missing_face_slot_count: missingFaceSlots,
+    disabled_face_count: disabledFaces,
+    untextured_enabled_face_count: untexturedFaces,
+    foreign_texture_enabled_face_count: foreignTextureFaces,
+    resolver_error_enabled_face_count: resolverErrorFaces,
+    eligible_textured_face_count: eligibleTexturedFaces,
+    texture_inventory_state: textureInventoryState,
+    outliner_element_count: outlinerCounts?.element_count ?? null,
+    outliner_cube_entry_count: outlinerCounts?.cube_entry_count ?? null,
+    outliner_non_cube_count: outlinerCounts?.non_cube_count ?? null,
+    outliner_missing_cube_count: outlinerCounts?.missing_cube_count ?? null,
+    outliner_duplicate_entry_count: outlinerCounts?.duplicate_entry_count ?? null,
+    sampled_faces: scannedFaces,
+    skipped_animated_faces: skippedAnimated,
+    skipped_mapping_faces: skippedMapping,
+    budget_skipped_faces: budgetSkipped,
+    omission_examples: modelOmissions,
+  });
   const seam = analyzeTextureSeamContinuity(edges);
   return {
     ...seam,
@@ -349,9 +482,14 @@ function seamContinuityRuntime(context?: unknown) {
       reasons: [
         ...seam.gate.reasons,
         ...(scan.unexamined_face_count > 0 ? ["SEAM_SCAN_PARTIAL"] : []),
+        ...(modelFaceInventory.unexamined_enabled_face_count > 0
+          ? ["MODEL_FACE_OWNERSHIP_OR_SAMPLING_INCOMPLETE"] : []),
+        ...(modelFaceInventory.inventory_state !== "cube_face_slots_enumerated"
+          ? ["MODEL_SCENE_INVENTORY_UNVERIFIED"] : []),
       ],
     },
     scan,
+    model_face_inventory: modelFaceInventory,
     efficiency: {
       bounded: true,
       full_atlas_scan: false,

@@ -92,6 +92,200 @@ export function summarizeTextureSeamScanEvidence(
 }
 
 
+
+export type TextureModelFaceInventoryOmission = {
+  cube_uuid: string;
+  face: string;
+  reason:
+    | "face_slot_missing"
+    | "face_disabled"
+    | "texture_not_resolved"
+    | "texture_resolver_failed"
+    | "texture_outside_project";
+};
+
+export type TextureModelFaceInventoryInput = {
+  cube_count: number;
+  duplicate_cube_uuid_count: number;
+  missing_face_slot_count: number;
+  disabled_face_count: number;
+  untextured_enabled_face_count: number;
+  foreign_texture_enabled_face_count: number;
+  resolver_error_enabled_face_count: number;
+  eligible_textured_face_count: number;
+  texture_inventory_state: "verified" | "partial" | "unavailable";
+  outliner_element_count: number | null;
+  outliner_cube_entry_count: number | null;
+  outliner_non_cube_count: number | null;
+  outliner_missing_cube_count: number | null;
+  outliner_duplicate_entry_count: number | null;
+  sampled_faces: number;
+  skipped_animated_faces: number;
+  skipped_mapping_faces: number;
+  budget_skipped_faces: number;
+  omission_examples?: readonly TextureModelFaceInventoryOmission[];
+};
+
+/**
+ * Face *inventory* is not sampled-image coverage or visual verification.
+ * Every native Cube contributes six face slots, including disabled and
+ * untextured ones. A Mesh/non-Cube Outliner entry is never silently counted
+ * as a sampled Cube face. The caller reports exact native identity counts;
+ * this pure owner validates that no face disappeared from the ledger.
+ */
+export function summarizeTextureModelFaceInventory(
+  input: TextureModelFaceInventoryInput
+) {
+  const numeric = [
+    input.cube_count, input.duplicate_cube_uuid_count,
+    input.missing_face_slot_count, input.disabled_face_count,
+    input.untextured_enabled_face_count,
+    input.foreign_texture_enabled_face_count,
+    input.resolver_error_enabled_face_count,
+    input.eligible_textured_face_count, input.sampled_faces,
+    input.skipped_animated_faces, input.skipped_mapping_faces,
+    input.budget_skipped_faces,
+  ];
+  if (numeric.some(value => !Number.isSafeInteger(value) || value < 0) ||
+      !["verified", "partial", "unavailable"].includes(
+        input.texture_inventory_state
+      )) {
+    throw new Error(
+      "MODEL_FACE_INVENTORY_INVALID: face counts must be finite nonnegative safe integers."
+    );
+  }
+  const faceSlots = input.cube_count * 6;
+  if (!Number.isSafeInteger(faceSlots) ||
+      input.duplicate_cube_uuid_count > input.cube_count ||
+      input.missing_face_slot_count + input.disabled_face_count +
+      input.untextured_enabled_face_count +
+      input.foreign_texture_enabled_face_count +
+      input.resolver_error_enabled_face_count +
+      input.eligible_textured_face_count !== faceSlots ||
+      input.sampled_faces + input.skipped_animated_faces +
+      input.skipped_mapping_faces + input.budget_skipped_faces !==
+        input.eligible_textured_face_count) {
+    throw new Error(
+      "MODEL_FACE_INVENTORY_INVALID: six slots per Cube and all sampling dispositions must reconcile exactly."
+    );
+  }
+
+  const outlinerCounts = [
+    input.outliner_element_count,
+    input.outliner_cube_entry_count,
+    input.outliner_non_cube_count,
+    input.outliner_missing_cube_count,
+    input.outliner_duplicate_entry_count,
+  ];
+  const outlinerKnown = outlinerCounts[0] !== null;
+  if ((outlinerKnown && outlinerCounts.some(value =>
+        value === null || !Number.isSafeInteger(value) || value < 0
+      )) ||
+      (!outlinerKnown && outlinerCounts.some(value => value !== null)) ||
+      (outlinerKnown && (
+        input.outliner_cube_entry_count! + input.outliner_non_cube_count! !==
+          input.outliner_element_count ||
+        input.outliner_missing_cube_count! > input.cube_count ||
+        input.outliner_duplicate_entry_count! > input.outliner_element_count!
+      ))) {
+    throw new Error(
+      "MODEL_FACE_INVENTORY_INVALID: Outliner provenance counts are inconsistent."
+    );
+  }
+
+  const missingNativeFaces =
+    input.missing_face_slot_count + input.untextured_enabled_face_count +
+    input.foreign_texture_enabled_face_count +
+    input.resolver_error_enabled_face_count;
+  const skippedSamples =
+    input.skipped_animated_faces + input.skipped_mapping_faces +
+    input.budget_skipped_faces;
+  const unexaminedEnabled = missingNativeFaces + skippedSamples;
+  const examples = input.omission_examples ?? [];
+  const omissionCount = missingNativeFaces + input.disabled_face_count;
+  if (examples.length > 12 || examples.length > omissionCount ||
+      examples.some(example =>
+        !example.cube_uuid || !example.face ||
+        ![
+          "face_slot_missing", "face_disabled", "texture_not_resolved",
+          "texture_resolver_failed", "texture_outside_project",
+        ].includes(example.reason)
+      )) {
+    throw new Error(
+      "MODEL_FACE_INVENTORY_INVALID: face omission examples are not bounded or have invalid identity."
+    );
+  }
+  const inventoryState = !outlinerKnown
+    ? ("outliner_unknown" as const)
+    : input.outliner_missing_cube_count! > 0 ||
+      input.outliner_non_cube_count! > 0 ||
+      input.outliner_duplicate_entry_count! > 0 ||
+      input.duplicate_cube_uuid_count > 0 ||
+      input.texture_inventory_state !== "verified"
+      ? ("scene_scope_partial" as const)
+      : ("cube_face_slots_enumerated" as const);
+  const coverageState = input.sampled_faces === 0
+    ? ("not_evaluated" as const)
+    : unexaminedEnabled > 0 || inventoryState !== "cube_face_slots_enumerated"
+      ? ("partial" as const)
+      : ("edge_samples_only" as const);
+  return {
+    source: "native_cube_face_inventory" as const,
+    cube_count: input.cube_count,
+    face_slot_count: faceSlots,
+    enabled_face_count: faceSlots -
+      input.missing_face_slot_count - input.disabled_face_count,
+    missing_face_slot_count: input.missing_face_slot_count,
+    disabled_face_count: input.disabled_face_count,
+    untextured_enabled_face_count: input.untextured_enabled_face_count,
+    foreign_texture_enabled_face_count: input.foreign_texture_enabled_face_count,
+    resolver_error_enabled_face_count: input.resolver_error_enabled_face_count,
+    eligible_textured_face_count: input.eligible_textured_face_count,
+    sampled_face_count: input.sampled_faces,
+    sample_skipped_face_count: skippedSamples,
+    unexamined_enabled_face_count: unexaminedEnabled,
+    duplicate_cube_uuid_count: input.duplicate_cube_uuid_count,
+    texture_inventory_state: input.texture_inventory_state,
+    outliner: {
+      state: outlinerKnown ? ("enumerated" as const) : ("unavailable" as const),
+      element_count: input.outliner_element_count,
+      cube_entry_count: input.outliner_cube_entry_count,
+      non_cube_count: input.outliner_non_cube_count,
+      missing_cube_count: input.outliner_missing_cube_count,
+      duplicate_entry_count: input.outliner_duplicate_entry_count,
+    },
+    inventory_state: inventoryState,
+    coverage_state: coverageState,
+    omission_examples: examples.map(example => ({ ...example })),
+    omission_examples_truncated: examples.length < omissionCount,
+    // Enumerating every Cube face cannot prove that its image pixels,
+    // hidden surfaces, material cohort or the final model look correct.
+    face_interior_sampled: false as const,
+    non_cube_texture_coverage_attested: false as const,
+    whole_scene_visual_coverage_attested: false as const,
+    visual_verdict: "not_evaluated" as const,
+    limitations: [
+      "FACE_INVENTORY_NOT_VISUAL_COVERAGE",
+      "FACE_INTERIOR_PIXELS_NOT_SAMPLED",
+      "CROSS_CUBE_NATIVE_SEAMS_NOT_EVALUATED",
+      ...(missingNativeFaces > 0 ? ["MODEL_FACE_TEXTURE_OWNERSHIP_UNRESOLVED"] : []),
+      ...(skippedSamples > 0 ? ["MODEL_FACE_EDGE_SAMPLING_PARTIAL"] : []),
+      ...(!outlinerKnown ? ["OUTLINER_SCENE_SCOPE_UNKNOWN"] : []),
+      ...(input.outliner_non_cube_count !== null &&
+        input.outliner_non_cube_count > 0 ?
+        ["NON_CUBE_ELEMENT_COVERAGE_UNEVALUATED"] : []),
+      ...(input.duplicate_cube_uuid_count > 0 ||
+        (input.outliner_missing_cube_count !== null &&
+          input.outliner_missing_cube_count > 0) ||
+        (input.outliner_duplicate_entry_count !== null &&
+          input.outliner_duplicate_entry_count > 0) ?
+        ["MODEL_ELEMENT_IDENTITY_INCONSISTENT"] : []),
+      ...(input.texture_inventory_state !== "verified" ?
+        ["TEXTURE_INVENTORY_NOT_FULLY_ATTESTED"] : []),
+    ],
+  };
+}
+
 /** Alpha may represent opacity/cutout or a non-opacity color/emissive mask. */
 export type TextureSeamAlphaSemantics = "OPACITY" | "NON_OPACITY";
 

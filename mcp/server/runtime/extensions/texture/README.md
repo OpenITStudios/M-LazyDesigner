@@ -49,6 +49,37 @@ means nothing was sampled. `scene_coverage_attested=false`,
 diagnostic. Do not infer visual PASS or join cross-Cube material seams
 from coincident coordinates.
 
+## Native model face inventory (existing `list_textures` diagnostics)
+
+For `list_textures(diagnostics=true, diagnostic_scope="seam"|"full")`,
+the same bounded `seam_continuity` result now includes
+`model_face_inventory`. The native owner visits all six slots of every
+`Cube.all` object *without scanning every atlas pixel*. It reports
+missing face objects, intentionally disabled faces, enabled faces without
+a resolved Texture, unavailable resolvers, foreign/project-mismatched
+Textures, and textured faces eligible for the **existing** 64-face seam
+sampler. All six dispositions reconcile with `Cube.count × 6`; every
+eligible textured face reconciles with sampled/animated/mapping/budget
+dispositions.
+
+`Outliner.elements` is used only for scene identity: Mesh/non-Cube
+elements, missing/duplicated Cube entries, duplicate Cube UUIDs, and
+unavailable Outliner/Texture inventories are surfaced as partial or
+unknown scope. Exact, bounded `cube_uuid + face + reason` examples
+remain available. A non-Cube element is **not** converted into a Cube
+face or assumed complete because its texture resembles an atlas.
+`MODEL_FACE_OWNERSHIP_OR_SAMPLING_INCOMPLETE` and
+`MODEL_SCENE_INVENTORY_UNVERIFIED` are advisory reasons, not visual
+FAIL verdicts.
+
+A complete Cube inventory can coexist with missing face interior pixel
+review, non-Cube surfaces, PBR/variant dependencies and unresolved
+reference-to-model material correspondence. `face_interior_sampled=false`,
+`non_cube_texture_coverage_attested=false`,
+`whole_scene_visual_coverage_attested=false` and
+`visual_verdict=not_evaluated` are mandatory; no new public tool, mutation,
+extra atlas scan or cross-Cube activation follows from the inventory.
+
 ## Declared native cross-Cube seams (unregistered source)
 
 The existing `authoring.ts` now exports

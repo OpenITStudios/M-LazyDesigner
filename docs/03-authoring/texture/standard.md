@@ -479,6 +479,25 @@ all unseen seams have been examined.
 
 **Bounded Runtime seam coverage:** `list_textures(diagnostics=true, diagnostic_scope="seam"|"full")` now reports `seam_continuity.scan.coverage_state`: `edge_samples_only` when all eligible faces received bounded intra-Cube samples, `partial` when animated/mapping/budget omissions exist, and `not_evaluated` when none were sampled. Exact `cube_uuid + face + reason` examples are capped and may be truncated. `unexamined_face_count` counts missed eligible textured faces, not every potential occluded/untextured model surface. An empty review-candidate list is **not a clean-scene verdict**: only four sample points per edge are considered, cross-Cube native continuity is not sampled, and neither whole-face nor visual coverage is attested. `SEAM_SCAN_PARTIAL` makes omissions visible in the existing advisory gate without declaring visual failure.
 
+**Native Cube-face inventory versus sampled seam scope:**
+The existing optional `list_textures` seam/full diagnostic also returns
+`seam_continuity.model_face_inventory`: six native slots per Cube, how
+many are disabled or missing, enabled but untextured, foreign to the
+project Texture inventory, unreadable through `getTexture()`, eligible,
+and actually sampled within the existing seam budget. It also detects
+non-Cube Outliner elements, missing/duplicate Cube identities, and
+unavailable inventory evidence. These categories reconcile exactly;
+otherwise the source check fails. Missing/untextured/foreign faces and
+non-Cube elements are **not** silently erased from model coverage.
+`MODEL_FACE_OWNERSHIP_OR_SAMPLING_INCOMPLETE` /
+`MODEL_SCENE_INVENTORY_UNVERIFIED` remain advisory gate reasons.
+
+`inventory_state="cube_face_slots_enumerated"` is NOT texture quality
+PASS: sampled edges are not whole-face pixels, no non-Cube texture is
+reviewed, render/material reference correspondence remains unverified,
+and a disabled face may be intentional. `visual_verdict=not_evaluated`
+and `whole_scene_visual_coverage_attested=false` remain explicit.
+
 **Cross-Cube seam diagnostics:** Compare edges only when the surface/material
 identity and continuity intent agree, the world-facing normals align, and
 both physical endpoints fall within the declared tolerance (including on
