@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 P0 painted atlas UV-repack safety:
-- The active native texture template rebuild and U7 pre-Undo adapter now refuse UV relocation on non-empty RGBA, hidden RGB/alpha 0, layered/animated or unverifiable textures. Blank flattened atlases retain the supported path; U7 protects explicit size overrides and all mapped texture channels.
-- Existing bitmap-runtime, texture-atlas-integrity, and native-adapter regression owners contain source tests. SOURCE ONLY: current-SHA Bun/types, real Blockbench and Golden visual NOT EXECUTED (CI disabled).
-- Still open: verified atomic pixel migration to preserve painted details when UV islands actually move; native cross-Cube seam/whole-scene coverage and generated manage_uv_layout registration. Do not claim these are completed or ask for user-local testing.
+2026-10-24 P0 bounded seam diagnostic integrity:
+- Existing list_textures(seam/full) now reports explicit sampled/partial/not-evaluated coverage, unexamined textured-face counts, reasoned bounded Cube face omissions and SEAM_SCAN_PARTIAL. Cross-Cube and full-scene visual proof remain explicitly not attested.
+- Existing seam pure regression and Runtime source-contract tests authored; exact-SHA Bun/types, real Blockbench and Golden visual NOT EXECUTED (CI disabled).
+- Still open: true native cross-Cube seam sampling with declared material/continuity intent, full-scene coverage and visual proof; verified atomic migration of painted pixels after UV relocation; generator-coupled U7 registration. Painted-atlas repack safeguard committed at 065599c; do not redo.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

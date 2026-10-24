@@ -446,6 +446,8 @@ Use the bounded `evidence_gaps.sample_alignment_examples` and
 cohort; counts and truncated examples are navigation, **not proof** that
 all unseen seams have been examined.
 
+**Bounded Runtime seam coverage:** `list_textures(diagnostics=true, diagnostic_scope="seam"|"full")` now reports `seam_continuity.scan.coverage_state`: `edge_samples_only` when all eligible faces received bounded intra-Cube samples, `partial` when animated/mapping/budget omissions exist, and `not_evaluated` when none were sampled. Exact `cube_uuid + face + reason` examples are capped and may be truncated. `unexamined_face_count` counts missed eligible textured faces, not every potential occluded/untextured model surface. An empty review-candidate list is **not a clean-scene verdict**: only four sample points per edge are considered, cross-Cube native continuity is not sampled, and neither whole-face nor visual coverage is attested. `SEAM_SCAN_PARTIAL` makes omissions visible in the existing advisory gate without declaring visual failure.
+
 **Cross-Cube seam diagnostics:** Compare edges only when the surface/material
 identity and continuity intent agree, the world-facing normals align, and
 both physical endpoints fall within the declared tolerance (including on

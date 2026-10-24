@@ -16,8 +16,10 @@ import {
 } from "@/lib/uv/facePixelMapping";
 import {
   analyzeTextureSeamContinuity,
+  summarizeTextureSeamScanEvidence,
   type TextureSeamEdgeInput,
   type TextureSeamRgba,
+  type TextureSeamSkippedFace,
 } from "@/lib/texture/seamContinuity";
 import {
   analyzePbrTextureContent,
@@ -205,6 +207,16 @@ function seamContinuityRuntime(context?: unknown) {
   let skippedAnimated = 0;
   let skippedMapping = 0;
   let budgetSkipped = 0;
+  const omissionExamples: TextureSeamSkippedFace[] = [];
+  const noteSkipped = (
+    cubeUuid: string,
+    face: string,
+    reason: TextureSeamSkippedFace["reason"]
+  ): void => {
+    if (omissionExamples.length < 12) {
+      omissionExamples.push({ cube_uuid: cubeUuid, face, reason });
+    }
+  };
 
   for (const cube of Cube.all ?? []) {
     for (const faceKey of FACE_KEYS) {
@@ -214,10 +226,12 @@ function seamContinuityRuntime(context?: unknown) {
       if (!texture) continue;
       if (texture.height !== texture.display_height) {
         skippedAnimated += 1;
+        noteSkipped(cube.uuid, faceKey, "animated_texture");
         continue;
       }
       if (scannedFaces >= SEAM_FACE_BUDGET) {
         budgetSkipped += 1;
+        noteSkipped(cube.uuid, faceKey, "sampling_budget");
         continue;
       }
 
@@ -279,6 +293,7 @@ function seamContinuityRuntime(context?: unknown) {
         }
         if (!complete) {
           skippedMapping += 1;
+          noteSkipped(cube.uuid, faceKey, "mapping_unavailable");
           continue;
         }
         edges.push(...faceEdges);
@@ -286,23 +301,37 @@ function seamContinuityRuntime(context?: unknown) {
       } catch (error) {
         if (isTextureDiagnosticBudgetExceeded(error)) {
           budgetSkipped += 1;
+          noteSkipped(cube.uuid, faceKey, "sampling_budget");
         } else {
           skippedMapping += 1;
+          noteSkipped(cube.uuid, faceKey, "mapping_unavailable");
         }
       }
     }
   }
 
+  const scan = summarizeTextureSeamScanEvidence({
+    face_budget: SEAM_FACE_BUDGET,
+    scanned_faces: scannedFaces,
+    skipped_animated_faces: skippedAnimated,
+    skipped_mapping_faces: skippedMapping,
+    budget_skipped_faces: budgetSkipped,
+    samples_per_edge_max: SEAM_SAMPLES_PER_EDGE,
+    skipped_examples: omissionExamples,
+  });
+  const seam = analyzeTextureSeamContinuity(edges);
   return {
-    ...analyzeTextureSeamContinuity(edges),
-    scan: {
-      face_budget: SEAM_FACE_BUDGET,
-      scanned_faces: scannedFaces,
-      skipped_animated_faces: skippedAnimated,
-      skipped_mapping_faces: skippedMapping,
-      budget_skipped_faces: budgetSkipped,
-      samples_per_edge_max: SEAM_SAMPLES_PER_EDGE,
+    ...seam,
+    // Keep the existing advisory result, but do not return a falsely empty
+    // reasons list when the bounded scan skipped requested model surfaces.
+    gate: {
+      ...seam.gate,
+      reasons: [
+        ...seam.gate.reasons,
+        ...(scan.unexamined_face_count > 0 ? ["SEAM_SCAN_PARTIAL"] : []),
+      ],
     },
+    scan,
     efficiency: {
       bounded: true,
       full_atlas_scan: false,

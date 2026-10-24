@@ -17,6 +17,81 @@ export type TextureSeamEdgeInput = {
 
 export const TEXTURE_SEAM_EXAMPLE_LIMIT = 6;
 
+export type TextureSeamSkippedFace = {
+  cube_uuid: string;
+  face: string;
+  reason: "animated_texture" | "mapping_unavailable" | "sampling_budget";
+};
+
+export type TextureSeamScanEvidenceInput = {
+  face_budget: number;
+  samples_per_edge_max: number;
+  scanned_faces: number;
+  skipped_animated_faces: number;
+  skipped_mapping_faces: number;
+  budget_skipped_faces: number;
+  skipped_examples?: readonly TextureSeamSkippedFace[];
+};
+
+/**
+ * Bounded native sampling is not complete scene coverage, even when no
+ * faces are skipped: four edge samples do not inspect the face interior,
+ * image-to-geometry fidelity, or cross-Cube continuity. Never infer PASS.
+ */
+export function summarizeTextureSeamScanEvidence(
+  input: TextureSeamScanEvidenceInput
+) {
+  const counters = [
+    input.face_budget, input.samples_per_edge_max, input.scanned_faces,
+    input.skipped_animated_faces, input.skipped_mapping_faces,
+    input.budget_skipped_faces,
+  ];
+  if (counters.some(value => !Number.isSafeInteger(value) || value < 0) ||
+      input.face_budget < 1 || input.samples_per_edge_max < 1 ||
+      input.scanned_faces > input.face_budget) {
+    throw new Error("Texture seam sampling evidence requires valid bounded face and sample counts.");
+  }
+  const omitted = input.skipped_animated_faces +
+    input.skipped_mapping_faces + input.budget_skipped_faces;
+  const examples = input.skipped_examples ?? [];
+  if (examples.length > 12 || examples.length > omitted ||
+      examples.some(item =>
+        !item.cube_uuid || !item.face ||
+        !["animated_texture", "mapping_unavailable", "sampling_budget"].includes(item.reason)
+      )) {
+    throw new Error("Texture seam sampling omission evidence is invalid or exceeds its 12-face budget.");
+  }
+  return {
+    face_budget: input.face_budget,
+    scanned_faces: input.scanned_faces,
+    skipped_animated_faces: input.skipped_animated_faces,
+    skipped_mapping_faces: input.skipped_mapping_faces,
+    budget_skipped_faces: input.budget_skipped_faces,
+    samples_per_edge_max: input.samples_per_edge_max,
+    eligible_textured_face_count: input.scanned_faces + omitted,
+    unexamined_face_count: omitted,
+    coverage_state: input.scanned_faces === 0
+      ? ("not_evaluated" as const)
+      : omitted > 0
+        ? ("partial" as const)
+        : ("edge_samples_only" as const),
+    sampling_scope: "intra_cube_face_edges" as const,
+    scene_coverage_attested: false as const,
+    cross_cube_sampling_attested: false as const,
+    visual_verdict: "not_evaluated" as const,
+    omission_examples: examples.map(item => ({ ...item })),
+    omission_examples_truncated: examples.length < omitted,
+    limitations: [
+      "EDGE_SAMPLES_NOT_FULL_FACE_COVERAGE",
+      "CROSS_CUBE_NATIVE_SEAMS_NOT_EVALUATED",
+      ...(input.skipped_animated_faces > 0 ? ["ANIMATED_FACES_UNEVALUATED"] : []),
+      ...(input.skipped_mapping_faces > 0 ? ["FACE_UV_MAPPING_UNEVALUATED"] : []),
+      ...(input.budget_skipped_faces > 0 ? ["SAMPLING_BUDGET_EXHAUSTED"] : []),
+    ],
+  };
+}
+
+
 /** Alpha may represent opacity/cutout or a non-opacity color/emissive mask. */
 export type TextureSeamAlphaSemantics = "OPACITY" | "NON_OPACITY";
 

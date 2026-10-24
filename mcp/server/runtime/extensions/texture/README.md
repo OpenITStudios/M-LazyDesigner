@@ -30,3 +30,21 @@ Do not reintroduce a second mutation implementation in the Runtime extension lay
 
 
 `authoring.ts` may wrap `manage_material` only to augment the returned authoring status/workflow receipt after calling the original executor. It must not plan or apply PBR membership mutations.
+
+## Seam diagnostic scope and omissions
+
+`list_textures(diagnostics=true, diagnostic_scope="seam"|"full")`
+retains bounded native *intra-Cube edge* sampling (64 successful faces,
+up to four samples per edge). Its `seam_continuity.scan` now exposes
+`coverage_state`, total eligible/scanned/unexamined textured faces,
+bounded `cube_uuid + face + reason` omission examples and truncation.
+Skipped animated, unmappable or budget-exhausted faces raise
+`SEAM_SCAN_PARTIAL` in the existing advisory gate reasons.
+
+`edge_samples_only` does not mean whole-face or model-wide visual
+coverage; `partial` identifies omissions and `not_evaluated`
+means nothing was sampled. `scene_coverage_attested=false`,
+`cross_cube_sampling_attested=false`, and
+`visual_verdict=not_evaluated` are permanent limits of this bounded
+diagnostic. Do not infer visual PASS or join cross-Cube material seams
+from coincident coordinates.

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   analyzeTextureSeamContinuity,
   analyzeCrossCubeSeamContinuity,
+  summarizeTextureSeamScanEvidence,
   type TextureSeamEdgeInput,
   type CrossCubeSeamEdgeInput,
 } from "@/lib/textureSeamContinuity";
@@ -27,6 +28,96 @@ function edge(
 }
 
 describe("texture seam continuity", () => {
+  test("bounded seam coverage never attests whole-scene or cross-Cube visual quality", () => {
+    const scan = summarizeTextureSeamScanEvidence({
+      face_budget: 64,
+      scanned_faces: 3,
+      skipped_animated_faces: 0,
+      skipped_mapping_faces: 0,
+      budget_skipped_faces: 0,
+      samples_per_edge_max: 4,
+    });
+    expect(scan.coverage_state).toBe("edge_samples_only");
+    expect(scan.eligible_textured_face_count).toBe(3);
+    expect(scan.unexamined_face_count).toBe(0);
+    expect(scan.scene_coverage_attested).toBe(false);
+    expect(scan.cross_cube_sampling_attested).toBe(false);
+    expect(scan.visual_verdict).toBe("not_evaluated");
+    expect(scan.limitations).toContain("CROSS_CUBE_NATIVE_SEAMS_NOT_EVALUATED");
+    const none = summarizeTextureSeamScanEvidence({
+      face_budget: 64, scanned_faces: 0,
+      skipped_animated_faces: 0, skipped_mapping_faces: 0,
+      budget_skipped_faces: 0, samples_per_edge_max: 4,
+    });
+    expect(none.coverage_state).toBe("not_evaluated");
+    expect(none.scene_coverage_attested).toBe(false);
+  });
+
+  test("seam omission ledger identifies bounded skipped faces, not a false clean result", () => {
+    const scan = summarizeTextureSeamScanEvidence({
+      face_budget: 64, scanned_faces: 2,
+      skipped_animated_faces: 1, skipped_mapping_faces: 2,
+      budget_skipped_faces: 3, samples_per_edge_max: 4,
+      skipped_examples: [
+        { cube_uuid: "head", face: "north", reason: "animated_texture" },
+        { cube_uuid: "cuff", face: "down", reason: "mapping_unavailable" },
+        { cube_uuid: "wing", face: "west", reason: "sampling_budget" },
+      ],
+    });
+    expect(scan.coverage_state).toBe("partial");
+    expect(scan.eligible_textured_face_count).toBe(8);
+    expect(scan.unexamined_face_count).toBe(6);
+    expect(scan.omission_examples).toHaveLength(3);
+    expect(scan.omission_examples_truncated).toBe(true);
+    expect(scan.limitations).toEqual(expect.arrayContaining([
+      "EDGE_SAMPLES_NOT_FULL_FACE_COVERAGE",
+      "CROSS_CUBE_NATIVE_SEAMS_NOT_EVALUATED",
+      "ANIMATED_FACES_UNEVALUATED",
+      "FACE_UV_MAPPING_UNEVALUATED",
+      "SAMPLING_BUDGET_EXHAUSTED",
+    ]));
+    const noneScanned = summarizeTextureSeamScanEvidence({
+      face_budget: 64, scanned_faces: 0,
+      skipped_animated_faces: 0, skipped_mapping_faces: 1,
+      budget_skipped_faces: 0, samples_per_edge_max: 4,
+    });
+    expect(noneScanned.coverage_state).toBe("not_evaluated");
+    expect(noneScanned.unexamined_face_count).toBe(1);
+  });
+
+  test("seam scan evidence refuses impossible counts and invented skipped-face examples", () => {
+    const base = {
+      face_budget: 64, scanned_faces: 2,
+      skipped_animated_faces: 0, skipped_mapping_faces: 1,
+      budget_skipped_faces: 0, samples_per_edge_max: 4,
+    };
+    expect(() => summarizeTextureSeamScanEvidence({
+      ...base, scanned_faces: 65,
+    })).toThrow("valid bounded face and sample counts");
+    expect(() => summarizeTextureSeamScanEvidence({
+      ...base, skipped_mapping_faces: -1,
+    })).toThrow();
+    expect(() => summarizeTextureSeamScanEvidence({
+      ...base, skipped_examples: [
+        { cube_uuid: "cube", face: "north", reason: "invalid" as never },
+      ],
+    })).toThrow("omission evidence");
+    expect(() => summarizeTextureSeamScanEvidence({
+      ...base, skipped_examples: [
+        { cube_uuid: "cube", face: "north", reason: "mapping_unavailable" },
+        { cube_uuid: "other", face: "down", reason: "mapping_unavailable" },
+      ],
+    })).toThrow("omission evidence");
+  });
+
+  test("Runtime list_textures wires bounded seam omissions without claiming visual PASS", async () => {
+    const runtime = await Bun.file("server/runtime/extensions/texture/authoring.ts").text();
+    expect(runtime).toContain("summarizeTextureSeamScanEvidence({");
+    expect(runtime).toContain("noteSkipped(cube.uuid, faceKey");
+    expect(runtime).toContain('"SEAM_SCAN_PARTIAL"');
+    expect(runtime).toContain("scan.unexamined_face_count > 0");
+  });
+
   test("reports intra-Cube scope instead of certifying coincident edges on different Cubes", () => {
     const result = analyzeTextureSeamContinuity([
       edge(), edge({ cube_uuid: "cube-b", face: "east", samples: [[255, 255, 255, 255]] }),
