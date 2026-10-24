@@ -182,7 +182,13 @@ export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly 
     "mcp/tests/texture-authoring-contract.test.ts",
   ],
   "mcp/lib/texture/seamContinuity.ts": [
+    "mcp/tests/texture-cross-cube-native.test.ts",
     "mcp/tests/texture-seam-continuity.test.ts",
+  ],
+  "mcp/server/runtime/extensions/texture/authoring.ts": [
+    "mcp/tests/texture-cross-cube-native.test.ts",
+    "mcp/tests/texture-seam-continuity.test.ts",
+    "mcp/tests/texture-runtime-policy.test.ts",
   ],
   "mcp/lib/texture/geometrySignalCompiler.ts": [
     "mcp/tests/texture-geometry-signal-compiler.test.ts",

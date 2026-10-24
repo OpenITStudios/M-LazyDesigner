@@ -346,6 +346,101 @@ export type CrossCubeSeamEdgeInput = TextureSeamEdgeInput & {
   world_normal: readonly [number, number, number];
 };
 
+export type NativeCubeSeamFace =
+  | "north" | "south" | "east" | "west" | "up" | "down";
+
+const NATIVE_CUBE_NORMALS: Record<NativeCubeSeamFace, readonly [number, number, number]> = {
+  north: [0, 0, -1], south: [0, 0, 1],
+  east: [1, 0, 0], west: [-1, 0, 0],
+  up: [0, 1, 0], down: [0, -1, 0],
+};
+
+/**
+ * THREE.Matrix4.elements uses column-major 4x4 storage. CubeFace.UVToLocal
+ * produces mesh-local positions, not world points. Only an affine,
+ * orthogonal, non-reflected world transform can be safely used to derive
+ * comparable face normals from native cardinal directions.
+ *
+ * Shear, reflection, missing/unsettled matrix and degenerate edges are
+ * unresolved evidence, never "continuous" by default.
+ */
+export function projectNativeCubeSeamEdgeToWorld(input: {
+  face: NativeCubeSeamFace;
+  local_start: readonly [number, number, number];
+  local_end: readonly [number, number, number];
+  matrix_world: readonly number[];
+}): {
+  start: [number, number, number];
+  end: [number, number, number];
+  world_normal: [number, number, number];
+} {
+  const m = input.matrix_world;
+  if (!(input.face in NATIVE_CUBE_NORMALS) ||
+      m.length !== 16 || m.some(value => !Number.isFinite(value)) ||
+      Math.abs(m[3]) > 1e-9 || Math.abs(m[7]) > 1e-9 ||
+      Math.abs(m[11]) > 1e-9 || Math.abs(m[15] - 1) > 1e-9) {
+    throw new Error("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED: require a valid affine Cube world matrix.");
+  }
+  const axes = [
+    [m[0], m[1], m[2]],
+    [m[4], m[5], m[6]],
+    [m[8], m[9], m[10]],
+  ];
+  const dot = (a: readonly number[], b: readonly number[]): number =>
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const lengths = axes.map(axis => Math.hypot(...axis));
+  if (lengths.some(length => !Number.isFinite(length) || length < 1e-9) ||
+      Math.abs(dot(axes[0], axes[1]) / (lengths[0] * lengths[1])) > 1e-6 ||
+      Math.abs(dot(axes[0], axes[2]) / (lengths[0] * lengths[2])) > 1e-6 ||
+      Math.abs(dot(axes[1], axes[2]) / (lengths[1] * lengths[2])) > 1e-6) {
+    throw new Error("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED: shear or degenerate Cube axes cannot attest a physical seam.");
+  }
+  const cross01 = [
+    axes[0][1] * axes[1][2] - axes[0][2] * axes[1][1],
+    axes[0][2] * axes[1][0] - axes[0][0] * axes[1][2],
+    axes[0][0] * axes[1][1] - axes[0][1] * axes[1][0],
+  ];
+  if (dot(cross01, axes[2]) <= 1e-12) {
+    throw new Error("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED: reflected or inverted Cube matrices require separate normal validation.");
+  }
+  const point = (p: readonly number[]): [number, number, number] => {
+    if (p.length !== 3 || p.some(value => !Number.isFinite(value))) {
+      throw new Error("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED: local Cube edge must contain finite XYZ coordinates.");
+    }
+    return [
+      m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12],
+      m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13],
+      m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14],
+    ];
+  };
+  const start = point(input.local_start), end = point(input.local_end);
+  if ([...start, ...end].some(value => !Number.isFinite(value) || Math.abs(value) > 30_000_000) ||
+      Math.hypot(start[0] - end[0], start[1] - end[1], start[2] - end[2]) <= 1e-6) {
+    throw new Error("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED: world edge is degenerate or outside supported coordinates.");
+  }
+  const normal = NATIVE_CUBE_NORMALS[input.face];
+  // Orthogonal affine axes preserve the normal direction of cardinal
+  // Cube faces; a shear/reflection was rejected before this projection.
+  const projected = [
+    axes[0][0] * normal[0] + axes[1][0] * normal[1] + axes[2][0] * normal[2],
+    axes[0][1] * normal[0] + axes[1][1] * normal[1] + axes[2][1] * normal[2],
+    axes[0][2] * normal[0] + axes[1][2] * normal[1] + axes[2][2] * normal[2],
+  ];
+  const magnitude = Math.hypot(...projected);
+  if (!Number.isFinite(magnitude) || magnitude < 1e-9) {
+    throw new Error("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED: world face normal is undefined.");
+  }
+  return {
+    start,
+    end,
+    world_normal: [
+      projected[0] / magnitude,
+      projected[1] / magnitude,
+      projected[2] / magnitude,
+    ],
+  };
+}
+
 type CrossCubeSkipReason =
   | "SAME_CUBE"
   | "INTENTIONAL_BOUNDARY"

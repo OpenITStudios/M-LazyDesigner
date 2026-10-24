@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   analyzeTextureSeamContinuity,
   analyzeCrossCubeSeamContinuity,
+  projectNativeCubeSeamEdgeToWorld,
   summarizeTextureSeamScanEvidence,
   type TextureSeamEdgeInput,
   type CrossCubeSeamEdgeInput,
@@ -499,6 +500,90 @@ describe("texture seam continuity", () => {
   });
 });
 
+
+describe("world-space native Cube face projection", () => {
+  const identity = [
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+  ] as const;
+
+  test("rotates and translates mesh-local UVToLocal endpoints into world coordinates", () => {
+    const z90 = [
+      0, 1, 0, 0,
+      -1, 0, 0, 0,
+      0, 0, 1, 0,
+      3, 5, 7, 1,
+    ];
+    const result = projectNativeCubeSeamEdgeToWorld({
+      face: "north",
+      local_start: [0, 0, 0],
+      local_end: [2, 0, 0],
+      matrix_world: z90,
+    });
+    expect(result.start).toEqual([3, 5, 7]);
+    expect(result.end).toEqual([3, 7, 7]);
+    expect(result.world_normal).toEqual([0, 0, -1]);
+
+    const y90 = [
+      0, 0, -1, 0,
+      0, 1, 0, 0,
+      1, 0, 0, 0,
+      4, 0, 1, 1,
+    ];
+    const rotated = projectNativeCubeSeamEdgeToWorld({
+      face: "north", local_start: [0, 0, 0],
+      local_end: [0, 2, 0], matrix_world: y90,
+    });
+    expect(rotated.start).toEqual([4, 0, 1]);
+    expect(rotated.end).toEqual([4, 2, 1]);
+    expect(rotated.world_normal).toEqual([-1, 0, 0]);
+  });
+
+  test("orthogonal nonuniform Cube scale preserves comparable world normals", () => {
+    const scaled = [
+      2, 0, 0, 0,
+      0, 3, 0, 0,
+      0, 0, 4, 0,
+      0, 0, 0, 1,
+    ];
+    const result = projectNativeCubeSeamEdgeToWorld({
+      face: "up", local_start: [0, 0, 0],
+      local_end: [1, 0, 0], matrix_world: scaled,
+    });
+    expect(result.end).toEqual([2, 0, 0]);
+    expect(result.world_normal).toEqual([0, 1, 0]);
+  });
+
+  test("reflections, shear, degeneracy, perspective and invalid transforms fail closed", () => {
+    const edge = {
+      face: "north" as const,
+      local_start: [0, 0, 0] as [number, number, number],
+      local_end: [1, 0, 0] as [number, number, number],
+      matrix_world: [...identity] as number[],
+    };
+    const reflected = [...identity];
+    reflected[0] = -1;
+    const sheared = [...identity];
+    sheared[4] = 0.25;
+    const perspective = [...identity];
+    perspective[3] = 0.1;
+    const broken = [...identity];
+    broken[0] = NaN;
+    for (const matrix_world of [reflected, sheared, perspective, broken, [1, 2, 3]]) {
+      expect(() => projectNativeCubeSeamEdgeToWorld({
+        ...edge, matrix_world,
+      })).toThrow("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED");
+    }
+    expect(() => projectNativeCubeSeamEdgeToWorld({
+      ...edge, local_end: [0, 0, 0],
+    })).toThrow("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED");
+    expect(() => projectNativeCubeSeamEdgeToWorld({
+      ...edge, local_end: [30_000_001, 0, 0],
+    })).toThrow("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED");
+  });
+});
 
 describe("cross-Cube seam continuity diagnostics", () => {
   function cross(overrides: Partial<CrossCubeSeamEdgeInput> = {}): CrossCubeSeamEdgeInput {

@@ -12,9 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 U7 unregistered Blockbench Texture+UV adapter:
-- `mcp/server/runtime/uv/pixelMigrationRuntime.ts` now supplies native scene/Cube/Texture/face-binding enumeration, flattened RGBA Texture.edit, full bitmap+UV Undo, source recheck at beginUndo, all-atlas/UV restore, and project-affinity safety to the existing transaction port. Mock native tests and focused routing authored; matching-SHA Bun/types, installed Undo/codec/reopen/visual NOT EXECUTED (CI disabled).
-- DO NOT activate/register: painted atlas repack guard remains enforced. True Blockbench runtime and complete-ownership/face-binding tests must pass in capable environment before generator-coupled manage_uv_layout integration. Mesh/non-Cube elements, layers, animation and physical pixel resampling remain intentionally unsupported; native cross-Cube seam sampling and full-scene visual acceptance remain open.
+2026-10-24 declared native cross-Cube seam source:
+- Unregistered read-only `inspectDeclaredNativeCrossCubeSeams` uses explicit per-edge intent/material/surface, Cube world-matrix projection and bounded exact RGBA samples; reports omissions and never invents continuity. Pure/native mock regressions + affected test routing authored. No new public schema or Runtime registration.
+- Bun/TypeScript, installed world/texel sampling, whole-scene/Golden visual NOT EXECUTED (CI disabled). `list_textures` still intra-Cube; native helper NOT activated.
+- Next: approved declaration delivery + generator if public contract changes, matching-SHA native/visual proof. Pixel migration native Undo/reopen remains unverified; retain painted-atlas repack guard.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

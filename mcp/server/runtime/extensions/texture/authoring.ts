@@ -16,7 +16,12 @@ import {
 } from "@/lib/uv/facePixelMapping";
 import {
   analyzeTextureSeamContinuity,
+  analyzeCrossCubeSeamContinuity,
+  projectNativeCubeSeamEdgeToWorld,
   summarizeTextureSeamScanEvidence,
+  type CrossCubeSeamEdgeInput,
+  type TextureSeamAlphaSemantics,
+  type TextureSeamContinuityIntent,
   type TextureSeamEdgeInput,
   type TextureSeamRgba,
   type TextureSeamSkippedFace,
@@ -337,6 +342,251 @@ function seamContinuityRuntime(context?: unknown) {
       full_atlas_scan: false,
       edge_samples_only: true,
     },
+  };
+}
+
+/**
+ * A future approved material/continuity source may explicitly declare
+ * physical Cube edges. A material name or coincident endpoint alone does not
+ * authorize continuous-surface comparison. This API is deliberately NOT
+ * registered as a Runtime/Gateway operation; the active list_textures seam
+ * response stays intra-Cube until this contract is integrated and verified.
+ */
+export type DeclaredNativeCrossCubeSeamEdge = {
+  cube_uuid: string;
+  face: (typeof FACE_KEYS)[number];
+  edge: "left" | "right" | "top" | "bottom";
+  continuity_intent: TextureSeamContinuityIntent;
+  surface_id: string | null;
+  material_id: string | null;
+};
+
+export const DECLARED_CROSS_CUBE_NATIVE_EDGE_LIMIT = 64;
+const DECLARED_CROSS_CUBE_SKIP_EXAMPLE_LIMIT = 12;
+
+export function inspectDeclaredNativeCrossCubeSeams(
+  declarations: readonly DeclaredNativeCrossCubeSeamEdge[],
+  context?: unknown,
+  alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
+) {
+  if (!Array.isArray(declarations) ||
+      declarations.length > DECLARED_CROSS_CUBE_NATIVE_EDGE_LIMIT) {
+    throw new Error(
+      "CROSS_CUBE_DECLARATION_INVALID: at most 64 explicit native seam edges may be inspected."
+    );
+  }
+  const keys = new Set<string>();
+  for (const declaration of declarations) {
+    if (!declaration ||
+        typeof declaration.cube_uuid !== "string" ||
+        !declaration.cube_uuid.trim() ||
+        !FACE_KEYS.includes(declaration.face) ||
+        !["left", "right", "top", "bottom"].includes(declaration.edge) ||
+        !["REQUIRED", "INTENTIONAL_BOUNDARY", "UNSPECIFIED"].includes(
+          declaration.continuity_intent
+        ) ||
+        (declaration.surface_id !== null &&
+          (typeof declaration.surface_id !== "string" || !declaration.surface_id.trim())) ||
+        (declaration.material_id !== null &&
+          (typeof declaration.material_id !== "string" || !declaration.material_id.trim())) ||
+        (declaration.continuity_intent === "REQUIRED" &&
+          (!declaration.surface_id || !declaration.material_id))) {
+      throw new Error(
+        "CROSS_CUBE_DECLARATION_INVALID: require Cube UUID, face, edge, explicit intent, and material/surface identity for REQUIRED seams."
+      );
+    }
+    const key = declaration.cube_uuid + ":" +
+      declaration.face + ":" + declaration.edge;
+    if (keys.has(key)) {
+      throw new Error("CROSS_CUBE_DECLARATION_INVALID: a Cube face edge was declared twice.");
+    }
+    keys.add(key);
+  }
+
+  const empty = analyzeCrossCubeSeamContinuity([], 6, alphaSemantics);
+  if (declarations.length === 0) {
+    return {
+      ...empty,
+      state: "not_evaluated" as const,
+      declaration_state: "missing" as const,
+      sampled_declared_edge_count: 0,
+      omitted_declared_edge_count: 0,
+      diagnostic_io: null,
+      omission_examples: [],
+      omission_examples_truncated: false,
+      note: "Cross-Cube continuity requires approved explicit material and surface intent. No native sampling or visual verdict was performed.",
+    };
+  }
+  if (typeof Cube === "undefined" || typeof Texture === "undefined" ||
+      !Array.isArray(Cube.all)) {
+    return {
+      ...empty,
+      state: "unavailable" as const,
+      declaration_state: "explicit" as const,
+      reason: "blockbench_cross_cube_runtime_unavailable" as const,
+      sampled_declared_edge_count: 0,
+      omitted_declared_edge_count: declarations.length,
+      diagnostic_io: null,
+      omission_examples: declarations.slice(0, DECLARED_CROSS_CUBE_SKIP_EXAMPLE_LIMIT)
+        .map(item => ({
+          cube_uuid: item.cube_uuid, face: item.face,
+          edge: item.edge, reason: "native_runtime_unavailable",
+        })),
+      omission_examples_truncated: declarations.length > DECLARED_CROSS_CUBE_SKIP_EXAMPLE_LIMIT,
+      gate: {
+        ...empty.gate,
+        reasons: ["CROSS_CUBE_NATIVE_EVIDENCE_PARTIAL"],
+      },
+    };
+  }
+  const cubes = new Map<string, Cube>();
+  for (const cube of Cube.all) {
+    if (typeof cube.uuid !== "string" || !cube.uuid.trim() ||
+        cubes.has(cube.uuid)) {
+      throw new Error(
+        "CROSS_CUBE_NATIVE_OWNER_AMBIGUOUS: source Cube UUIDs must be unique and non-empty."
+      );
+    }
+    cubes.set(cube.uuid, cube);
+  }
+  const nativeContext = ensureTextureDiagnosticInvocationContext(context);
+  const boundary: Record<DeclaredNativeCrossCubeSeamEdge["edge"],
+    [[number, number], [number, number]]> = {
+    left: [[0, 0], [0, 1]],
+    right: [[1, 0], [1, 1]],
+    top: [[0, 0], [1, 0]],
+    bottom: [[0, 1], [1, 1]],
+  };
+  const sampled: CrossCubeSeamEdgeInput[] = [];
+  const omissions: Array<{
+    cube_uuid: string; face: string; edge: string; reason: string;
+  }> = [];
+  let omittedCount = 0;
+  const omit = (declaration: DeclaredNativeCrossCubeSeamEdge, reason: string) => {
+    omittedCount += 1;
+    if (omissions.length < DECLARED_CROSS_CUBE_SKIP_EXAMPLE_LIMIT) {
+      omissions.push({
+        cube_uuid: declaration.cube_uuid,
+        face: declaration.face,
+        edge: declaration.edge,
+        reason,
+      });
+    }
+  };
+  for (const declaration of declarations) {
+    const cube = cubes.get(declaration.cube_uuid);
+    const face = cube?.faces[declaration.face] as RuntimeCubeFace | undefined;
+    if (!cube || !face || face.enabled === false ||
+        typeof face.getTexture !== "function") {
+      omit(declaration, "cube_or_face_unavailable");
+      continue;
+    }
+    let texture: Texture | null | undefined;
+    try {
+      texture = face.getTexture();
+    } catch {
+      omit(declaration, "texture_unavailable");
+      continue;
+    }
+    if (!texture) {
+      omit(declaration, "texture_unavailable");
+      continue;
+    }
+    if (texture.height !== texture.display_height) {
+      omit(declaration, "animated_texture_unverified");
+      continue;
+    }
+    const mesh = cube.mesh;
+    if (!mesh || typeof mesh.updateWorldMatrix !== "function" ||
+        !mesh.matrixWorld || !Array.isArray(mesh.matrixWorld.elements)) {
+      omit(declaration, "world_transform_unavailable");
+      continue;
+    }
+    try {
+      // CubeFace.UVToLocal emits mesh-local vectors (after subtracting Cube
+      // origin); parent-group pivots and rotations live in matrixWorld.
+      mesh.updateWorldMatrix(true, false);
+      const localStart = faceBoundaryPoint(face, ...boundary[declaration.edge][0]);
+      const localEnd = faceBoundaryPoint(face, ...boundary[declaration.edge][1]);
+      if (!localStart || !localEnd) {
+        omit(declaration, "native_edge_mapping_unavailable");
+        continue;
+      }
+      const world = projectNativeCubeSeamEdgeToWorld({
+        face: declaration.face,
+        local_start: localStart,
+        local_end: localEnd,
+        matrix_world: mesh.matrixWorld.elements,
+      });
+      const mapping = mapFaceUvToTexturePixels(
+        face.uv,
+        {
+          width: texture.width,
+          displayHeight: texture.display_height,
+          uvWidth: texture.getUVWidth(),
+          uvHeight: texture.getUVHeight(),
+        },
+        declaration.cube_uuid + ":" + declaration.face + " cross-Cube seam"
+      );
+      const [localWidth, localHeight] = faceLocalPixelSize(
+        mapping, face.rotation, "cross-Cube native face pixels"
+      );
+      const samples = sampledEdge(
+        nativeContext,
+        texture,
+        face,
+        mapping,
+        declaration.edge,
+        localWidth,
+        localHeight,
+        "cross-Cube native face samples"
+      );
+      if (!samples || samples.length < 2) {
+        omit(declaration, "insufficient_exact_texel_samples");
+        continue;
+      }
+      sampled.push({
+        cube_uuid: cube.uuid,
+        cube_name: cube.name,
+        face: declaration.face,
+        edge: declaration.edge,
+        ...world,
+        samples,
+        continuity_intent: declaration.continuity_intent,
+        surface_id: declaration.surface_id,
+        material_id: declaration.material_id,
+      });
+    } catch (error) {
+      omit(declaration, isTextureDiagnosticBudgetExceeded(error)
+        ? "pixel_budget_exhausted"
+        : "native_world_or_pixel_evidence_unverified");
+    }
+  }
+
+  const reviewed = analyzeCrossCubeSeamContinuity(
+    sampled, 6, alphaSemantics
+  );
+  return {
+    ...reviewed,
+    declaration_state: "explicit" as const,
+    state: sampled.length === 0 ? ("not_evaluated" as const) :
+      reviewed.state,
+    sampled_declared_edge_count: sampled.length,
+    omitted_declared_edge_count: omittedCount,
+    omission_examples: omissions,
+    omission_examples_truncated: omittedCount > omissions.length,
+    // Source-backed sampling != matching-SHA installed Blockbench acceptance.
+    native_sampling_attested: false as const,
+    scene_coverage_attested: false as const,
+    visual_verdict: "not_evaluated" as const,
+    gate: {
+      ...reviewed.gate,
+      reasons: [
+        ...reviewed.gate.reasons,
+        ...(omittedCount > 0 ? ["CROSS_CUBE_NATIVE_EVIDENCE_PARTIAL"] : []),
+      ],
+    },
+    diagnostic_io: textureDiagnosticReadMetrics(nativeContext),
   };
 }
 

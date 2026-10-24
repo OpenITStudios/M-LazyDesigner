@@ -487,9 +487,17 @@ quantized coordinate, one endpoint, or a nearby T-junction is insufficient.
 Three or more edges connected by tolerance remain **ambiguous**, never an
 arbitrarily accepted pair. An `INTENTIONAL_BOUNDARY` stays excluded even
 when geometry nearly coincides; a sharp color/material separation can be
-correct according to the approved reference. These checks remain advisory,
-caller-supplied texture evidence, not native sampling or automatic visual
-PASS. Verify only the ranked material seam candidates on fresh model views.
+correct according to the approved reference. The active `list_textures` seam workflow still tests intra-Cube edges only;
+its cross-Cube result is not evaluated. An **unregistered read-only**
+`inspectDeclaredNativeCrossCubeSeams` source helper is now available for
+future native material-intent workflow integration. It requires exact
+per-edge continuity/material/surface declarations and applies the current
+Cube mesh's **world matrix** to `CubeFace.UVToLocal` endpoints before
+comparing physical 3D edges; it rejects reflection/shear, degenerate
+geometry, unsupported animation and insufficient texel evidence. It reuses
+the existing bounded RGBA sampler and the pure cross-Cube comparison
+owner. Source existence is NOT installed native proof or visual PASS.
+Verify only ranked material seam candidates on fresh model views.
 
 **RGB seam evidence and alpha meaning:** Intra-Cube and cross-Cube seam
 diagnostics use one sample-comparison rule. In `OPACITY` mode, RGB is

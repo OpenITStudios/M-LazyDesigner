@@ -48,3 +48,33 @@ means nothing was sampled. `scene_coverage_attested=false`,
 `visual_verdict=not_evaluated` are permanent limits of this bounded
 diagnostic. Do not infer visual PASS or join cross-Cube material seams
 from coincident coordinates.
+
+## Declared native cross-Cube seams (unregistered source)
+
+The existing `authoring.ts` now exports
+`inspectDeclaredNativeCrossCubeSeams(declarations, context?, alphaSemantics?)`
+for a **read-only, unregistered** bounded diagnostic. Each explicitly
+declared `cube_uuid + face + edge` carries
+`continuity_intent`, `surface_id` and `material_id`. `REQUIRED`
+needs non-empty, approved surface/material identity. Duplicate or malformed
+declarations fail before sampling; no continuity is inferred from coincident
+geometry, image color, Cube/Texture name or missing input.
+
+The native source resolves face-local edge endpoints with the existing
+`CubeFace.UVToLocal` helper, transforms them through the actual
+`cube.mesh.matrixWorld` (including parent-group pivots), and derives the
+world-facing normal from the validated affine Cube matrix. Reflected,
+sheared, non-finite, missing or degenerate transforms are **not evaluated**.
+Exact RGBA edge samples reuse the existing bounded diagnostic read context
+and face pixel mapper; animated, untextured, one-texel or otherwise
+unreadable faces generate bounded omission examples. The canonical pure
+`analyzeCrossCubeSeamContinuity` then compares only physically coincident,
+aligned, declared same-material and same-surface edge pairs.
+
+This source remains **unwired** from production `list_textures`: the
+latter keeps its stable intra-Cube response until a complete, generated
+and accepted client declaration protocol is available. The new diagnostic
+still returns `native_sampling_attested=false`,
+`scene_coverage_attested=false`, and
+`visual_verdict=not_evaluated`. Mock tests are NOT installed Blockbench
+sampling or visual proof; the helper does not approve a texture.

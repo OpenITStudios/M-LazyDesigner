@@ -749,6 +749,7 @@ describe("affected execution planner", () => {
   test("recent Texture source changes route directly to their owning regressions", () => {
     const cases: Array<[string, string]> = [
       ["mcp/lib/texture/seamContinuity.ts", "mcp/tests/texture-seam-continuity.test.ts"],
+      ["mcp/server/runtime/extensions/texture/authoring.ts", "mcp/tests/texture-cross-cube-native.test.ts"],
       ["mcp/lib/texture/geometrySignalCompiler.ts", "mcp/tests/texture-geometry-signal-compiler.test.ts"],
       ["mcp/lib/texture/geometrySignalBuilder.ts", "mcp/tests/texture-geometry-signal-compiler.test.ts"],
       ["mcp/lib/texture/maskedOps.ts", "mcp/tests/texture-masks.test.ts"],
@@ -765,9 +766,27 @@ describe("affected execution planner", () => {
       expect(plan.checks, source).toContain("TARGETED_TESTS");
       expect(plan.targeted_tests, source).toContain(owningTest);
       expect(plan.commands, source).toContain(
-        `bun test ${owningTest.slice("mcp/".length)}`
+        `bun test ${plan.targeted_tests.map(test => test.slice("mcp/".length)).join(" ")}`
       );
       expect(plan.commands, source).not.toContain("bun run verify:full");
+    }
+  });
+
+  test("native cross-Cube seam additions select both world-transform and Runtime owners", () => {
+    for (const source of [
+      "mcp/lib/texture/seamContinuity.ts",
+      "mcp/server/runtime/extensions/texture/authoring.ts",
+    ]) {
+      const plan = planAffectedExecution({
+        changedPaths: [source], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify).toBe(false);
+      expect(plan.targeted_tests).toContain(
+        "mcp/tests/texture-cross-cube-native.test.ts"
+      );
+      expect(plan.targeted_tests).toContain(
+        "mcp/tests/texture-seam-continuity.test.ts"
+      );
     }
   });
 
