@@ -521,7 +521,8 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
         missing_face_slot_count: 10,
         eligible_textured_face_count: 2,
         sampled_face_count: 2,
-        unexamined_enabled_face_count: 10,
+        unexamined_enabled_face_count: 0,
+        unexamined_face_slot_count: 10,
         texture_inventory_state: "verified",
         inventory_state: "cube_face_slots_enumerated",
         coverage_state: "partial",
@@ -549,7 +550,8 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
       if (!("model_face_inventory" in untextured)) throw Error("No native model census");
       expect(untextured.model_face_inventory.untextured_enabled_face_count).toBe(1);
       expect(untextured.model_face_inventory.sampled_face_count).toBe(1);
-      expect(untextured.model_face_inventory.unexamined_enabled_face_count).toBe(11);
+      expect(untextured.model_face_inventory.unexamined_enabled_face_count).toBe(1);
+      expect(untextured.model_face_inventory.unexamined_face_slot_count).toBe(11);
 
       face.getTexture = (() => fakeTexture("outside-project", 30)) as never;
       const foreign = seamContinuityRuntime();

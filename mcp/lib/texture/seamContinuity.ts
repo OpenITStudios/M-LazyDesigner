@@ -193,14 +193,19 @@ export function summarizeTextureModelFaceInventory(
     );
   }
 
-  const missingNativeFaces =
-    input.missing_face_slot_count + input.untextured_enabled_face_count +
+  // A missing slot has no enabled face to sample. Keep it separate from
+  // enabled-but-unexamined faces; the latter must never exceed the number
+  // of enabled faces in the native Cube inventory.
+  const unownedEnabled =
+    input.untextured_enabled_face_count +
     input.foreign_texture_enabled_face_count +
     input.resolver_error_enabled_face_count;
+  const missingNativeFaces = input.missing_face_slot_count + unownedEnabled;
   const skippedSamples =
     input.skipped_animated_faces + input.skipped_mapping_faces +
     input.budget_skipped_faces;
-  const unexaminedEnabled = missingNativeFaces + skippedSamples;
+  const unexaminedEnabled = unownedEnabled + skippedSamples;
+  const unexaminedSlots = faceSlots - input.sampled_faces;
   const examples = input.omission_examples ?? [];
   const omissionCount = missingNativeFaces + input.disabled_face_count;
   if (examples.length > 12 || examples.length > omissionCount ||
@@ -226,7 +231,7 @@ export function summarizeTextureModelFaceInventory(
       : ("cube_face_slots_enumerated" as const);
   const coverageState = input.sampled_faces === 0
     ? ("not_evaluated" as const)
-    : unexaminedEnabled > 0 || inventoryState !== "cube_face_slots_enumerated"
+    : unexaminedSlots > 0 || inventoryState !== "cube_face_slots_enumerated"
       ? ("partial" as const)
       : ("edge_samples_only" as const);
   return {
@@ -244,6 +249,9 @@ export function summarizeTextureModelFaceInventory(
     sampled_face_count: input.sampled_faces,
     sample_skipped_face_count: skippedSamples,
     unexamined_enabled_face_count: unexaminedEnabled,
+    // Includes disabled and absent slots. Unlike the enabled count this
+    // answers how many of the Cube's six native slots were not sampled.
+    unexamined_face_slot_count: unexaminedSlots,
     duplicate_cube_uuid_count: input.duplicate_cube_uuid_count,
     texture_inventory_state: input.texture_inventory_state,
     outliner: {

@@ -13,7 +13,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 ## Next REMOTE_GITHUB work
 
 2026-10-24 Cube-face texture coverage inventory:
-- Existing optional list_textures seam/full diagnostics enumerate six face slots per Cube and reconcile sampled/omitted/untextured/disabled/missing/foreign/unreadable faces, duplicate Cube IDs and non-Cube Outliner owners. Returns explicit model_face_inventory plus bounded omission examples and advisory reasons. No new tool, full atlas read or mutation. Existing pure/native mock regressions authored.
+- Existing optional list_textures seam/full diagnostics enumerate six face slots per Cube and reconcile sampled/untextured/disabled/missing/foreign/unreadable states, duplicate Cube IDs and non-Cube Outliner owners. Separate active-unexamined face count from all non-sampled slots (including missing/disabled). Returns explicit model_face_inventory plus bounded omission examples and advisory reasons. No new tool, full atlas read or mutation. Existing pure/native mock regressions authored.
 - Even a complete Cube inventory only attests enumeration, NOT full face pixels, non-Cube texture, PBR/variant, visual reference match or model-wide PASS. Bun/types/installed Blockbench/Golden NOT EXECUTED (CI disabled).
 - Next: investigate real missing face ownership and Native+Golden visual acceptance when capable; existing Reference Package/UV guards remain in place. No user-local commands.
 

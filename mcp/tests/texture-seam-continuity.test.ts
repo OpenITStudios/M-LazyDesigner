@@ -147,6 +147,7 @@ describe("texture seam continuity", () => {
       eligible_textured_face_count: 6,
       sampled_face_count: 6,
       unexamined_enabled_face_count: 0,
+      unexamined_face_slot_count: 0,
       inventory_state: "cube_face_slots_enumerated",
       coverage_state: "edge_samples_only",
       face_interior_sampled: false,
@@ -183,8 +184,12 @@ describe("texture seam continuity", () => {
     }));
     expect(inventory.face_slot_count).toBe(12);
     expect(inventory.enabled_face_count).toBe(6);
-    expect(inventory.unexamined_enabled_face_count).toBe(7);
+    expect(inventory.unexamined_enabled_face_count).toBe(5);
+    expect(inventory.unexamined_face_slot_count).toBe(11);
     expect(inventory.sample_skipped_face_count).toBe(1);
+    expect(inventory.enabled_face_count).toBe(
+      inventory.sampled_face_count + inventory.unexamined_enabled_face_count
+    );
     expect(inventory.outliner.non_cube_count).toBe(1);
     expect(inventory.inventory_state).toBe("scene_scope_partial");
     expect(inventory.coverage_state).toBe("partial");

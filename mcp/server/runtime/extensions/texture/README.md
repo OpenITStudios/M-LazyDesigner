@@ -58,9 +58,13 @@ the same bounded `seam_continuity` result now includes
 missing face objects, intentionally disabled faces, enabled faces without
 a resolved Texture, unavailable resolvers, foreign/project-mismatched
 Textures, and textured faces eligible for the **existing** 64-face seam
-sampler. All six dispositions reconcile with `Cube.count × 6`; every
+sampler. All six dispositions reconcile with six face slots per Cube; every
 eligible textured face reconciles with sampled/animated/mapping/budget
-dispositions.
+dispositions. `unexamined_enabled_face_count` excludes missing slots
+and disabled faces; `unexamined_face_slot_count` includes all
+non-sampled slots. The invariant is
+`enabled_face_count = sampled_face_count + unexamined_enabled_face_count`.
+Neither number certifies painted appearance.
 
 `Outliner.elements` is used only for scene identity: Mesh/non-Cube
 elements, missing/duplicated Cube entries, duplicate Cube UUIDs, and

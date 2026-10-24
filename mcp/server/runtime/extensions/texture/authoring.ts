@@ -482,7 +482,8 @@ export function seamContinuityRuntime(context?: unknown) {
       reasons: [
         ...seam.gate.reasons,
         ...(scan.unexamined_face_count > 0 ? ["SEAM_SCAN_PARTIAL"] : []),
-        ...(modelFaceInventory.unexamined_enabled_face_count > 0
+        ...(modelFaceInventory.unexamined_enabled_face_count > 0 ||
+          modelFaceInventory.missing_face_slot_count > 0
           ? ["MODEL_FACE_OWNERSHIP_OR_SAMPLING_INCOMPLETE"] : []),
         ...(modelFaceInventory.inventory_state !== "cube_face_slots_enumerated"
           ? ["MODEL_SCENE_INVENTORY_UNVERIFIED"] : []),

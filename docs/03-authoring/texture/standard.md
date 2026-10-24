@@ -487,7 +487,10 @@ project Texture inventory, unreadable through `getTexture()`, eligible,
 and actually sampled within the existing seam budget. It also detects
 non-Cube Outliner elements, missing/duplicate Cube identities, and
 unavailable inventory evidence. These categories reconcile exactly;
-otherwise the source check fails. Missing/untextured/foreign faces and
+otherwise the source check fails. `unexamined_enabled_face_count`
+does not include missing slots or disabled faces;
+`unexamined_face_slot_count` includes every non-sampled slot.
+Missing/untextured/foreign faces and
 non-Cube elements are **not** silently erased from model coverage.
 `MODEL_FACE_OWNERSHIP_OR_SAMPLING_INCOMPLETE` /
 `MODEL_SCENE_INVENTORY_UNVERIFIED` remain advisory gate reasons.
