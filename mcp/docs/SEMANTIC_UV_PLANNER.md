@@ -32,6 +32,8 @@ surface/world extent
 
 ## Important limits
 
+Semantic `atlas_width`, `atlas_height`, reserved positions and MaxRects placements use **physical bitmap pixels**. Before native application, the existing `nativeApplyPlan` compiler requires explicit bitmap and logical atlas dimensions and converts physical pixel coordinates to Blockbench logical UV independently per axis; do not pass pixel placements as native UV. This conversion is internal source code, not proof of a registered/live workflow.
+
 This layer does not yet mutate Blockbench faces. It also does not infer Cube face islands automatically from geometry. Native UV extraction/application is Geometry/Modelling-owned inside the shared AUTHORING Runtime surface. Native source/apply/rollback components now exist under `mcp/lib/uv/` and `mcp/server/runtime/uv/`, but the semantic planner is not yet a registered MCP executor. Undo, pixel-grid correctness, Box-UV/native rotation and save/reopen still need matching native proof before registration.
 
 Shared UV is explicit. The planner never guesses reuse from equal dimensions alone.

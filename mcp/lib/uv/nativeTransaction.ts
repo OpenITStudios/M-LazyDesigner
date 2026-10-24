@@ -1,4 +1,5 @@
 import type { NativeUvApplyOperation } from "@/lib/uv/nativeApplyPlan";
+import { requireSupportedFaceRotation } from "@/lib/uv/facePixelMapping";
 
 export type NativeUvTransactionPlan = {
   expected_fingerprint: string;
@@ -33,8 +34,8 @@ export function validateNativeUvTransactionPlan(plan: NativeUvTransactionPlan): 
     if (operation.uv.some((value) => !Number.isFinite(value))) {
       throw new Error("Native UV transaction contains non-finite UV values for " + operation.island_id + ".");
     }
-    if (operation.rotation !== 0 && operation.rotation !== 90) {
-      throw new Error("Semantic UV transaction supports only generated 0/90-degree packing rotation.");
-    }
+    // A packed 0/90-degree additional turn must retain the native face's
+    // original 0/90/180/270 orientation through the transaction.
+    requireSupportedFaceRotation(operation.rotation, "Native semantic UV transaction");
   }
 }

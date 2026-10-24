@@ -1,7 +1,7 @@
 # Semantic UV Native Boundary
 
 Status: SOURCE IMPLEMENTED / LIVE PROOF PENDING
-Updated: 2026-09-21
+Updated: 2026-10-24
 Branch: Local
 
 ## Ownership
@@ -29,7 +29,7 @@ Authoring Recipe
 → one affected-only Undo transaction
 ```
 
-The transaction rejects stale source fingerprints, duplicate face targets, non-finite UVs, out-of-bounds logical UVs, non-integer logical UV coordinates, Box-UV targets, and concurrent Blockbench edits.
+The transaction rejects stale source fingerprints, duplicate face targets, non-finite UVs, out-of-bounds logical UVs, non-integral **physical-pixel** mapping (fractional logical UV can be valid), Box-UV targets, and concurrent Blockbench edits. The semantic placement-to-native compiler now preserves signed U/V corner order and existing 0/90/180/270-degree face rotations, applying a requested 90-degree packing turn relative to the authored rotation. Collapsed or non-finite native source UV is rejected before mutation. Semantic MaxRects placements are in **physical bitmap pixels**, whereas the Blockbench Cube face stores **logical UV units**. The compiler now requires both bitmap and logical dimensions, maps the two axes independently (including rectangular atlas sizing; animated textures require separately verified frame dimensions), and rejects missing scale or non-integer physical placements before a transaction can be built. Static code/regression coverage is not native save/reopen proof.
 
 ## Proof boundary
 

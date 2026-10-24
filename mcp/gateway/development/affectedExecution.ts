@@ -259,6 +259,7 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
     "mcp/tests/uv-maxrects-planner.test.ts",
   ],
   "mcp/lib/uv/nativeApplyPlan.ts": [
+    "mcp/tests/uv-identity-bridge.test.ts",
     "mcp/tests/uv-native-apply-plan.test.ts",
   ],
   "mcp/lib/uv/nativeState.ts": [
