@@ -329,15 +329,18 @@ Implemented source contracts now include:
     its own face rectangles when its explicit offset changes. A scope
     violation uses the existing verified restore/cancel/rollback path;
     uncertain rollback remains OUTCOME_UNKNOWN, never visual PASS;
-20. automatic base-color atlas discovery now binds both physical pixel
-    dimensions and native atlas UUID (when available) to the existing bounded
-    plan registry. A second discovery detects asynchronous atlas changes
-    before a plan is published, and a read-only pre-Undo apply check rejects
-    outdated plans. The private atlas dependency also participates in
-    content-addressed plan IDs. Explicit pre-atlas bitmap overrides still
-    require no atlas lookup. Same-UUID pixel repaint with unchanged size is
-    not attested by this geometry/UV freshness contract; visual texture
-    acceptance remains a separate step.
+20. automatic base-color atlas discovery now binds physical bitmap/frame
+    dimensions, native atlas UUID, logical atlas dimensions, and a decoded
+    RGBA SHA-256 revision to the existing bounded plan registry. The native
+    owner reuses `fullTextureRgba` and `computeTextureRevision`, not a second
+    revision implementation. Discovery and read-only pre-Undo apply compare
+    these private dependencies, rejecting even same-UUID/same-size repaints
+    before an old UV plan may mutate. The full bitmap digest includes every
+    frame, while physical height for UV density remains per displayed frame.
+    Async discovery errors or mismatched native bitmap/frame geometry fail
+    closed; explicit pre-atlas dimensions bypass atlas reads. Existing source
+    service mocks without a revision cannot attest pixel freshness. Digest
+    parity is **not** Texture PASS, native Undo proof or visual approval.
 
 The source-ready integration intentionally does NOT register a new Runtime capability yet. The existing `server/runtime/uv/layoutService.ts` now exports its declarative tool specification and an uncalled registration function, so the future activation can reuse one persistent plan/apply service instance without a new engine or Gateway API. Registration changes generated MCP API documentation, and repository policy forbids hand-editing generated outputs. LOCAL_CODE must run the canonical docs generator when `manage_uv_layout` is wired to the Geometry/Modelling owner on the shared AUTHORING Runtime surface. Source presence alone is not native acceptance or UV Layout PASS.
 

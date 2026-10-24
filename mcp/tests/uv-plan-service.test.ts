@@ -97,6 +97,18 @@ describe("UV plan registry and service", () => {
     expect(repeated.auto_bitmap_source).toEqual(
       { width: 32, height: 32, atlas_uuid: "atlas-A" }
     );
+    const revised = registry.put(fakePlan, "sha256:atlas", fakeReport, {
+      width: 32, height: 32, atlas_uuid: "atlas-A",
+      logical_width: 32, logical_height: 32,
+      atlas_revision: "sha256:32x32:" + "a".repeat(64),
+    });
+    const repainted = registry.put(fakePlan, "sha256:atlas", fakeReport, {
+      width: 32, height: 32, atlas_uuid: "atlas-A",
+      logical_width: 32, logical_height: 32,
+      atlas_revision: "sha256:32x32:" + "b".repeat(64),
+    });
+    expect(revised.plan_id).not.toBe(atlasA.plan_id);
+    expect(repainted.plan_id).not.toBe(revised.plan_id);
   });
 
   test("consuming one UV plan revokes competing plans from the same source only", () => {
@@ -380,6 +392,87 @@ describe("UV plan registry and service", () => {
     })).rejects.toThrow("STALE_UV_PLAN");
     expect(atlasReads).toBe(2);
     expect(registry.size()).toBe(0);
+  });
+
+  test("same UUID and bitmap size with changed decoded RGBA revision invalidates UV plan before Undo", async () => {
+    const a = "sha256:32x32:" + "a".repeat(64);
+    const b = "sha256:32x32:" + "b".repeat(64);
+    const original = {
+      width: 32, height: 32,
+      logical_width: 32, logical_height: 32,
+      atlas_uuid: "same-uuid", atlas_revision: a,
+    };
+    let bitmap = original;
+    let adapters = 0;
+    const service = createUvLayoutService({
+      readSource: nativeFixture,
+      readBitmapDimensions: () => bitmap,
+      createApplyAdapter: () => {
+        adapters++;
+        throw new Error("stale pixel revision must be rejected before native Undo");
+      },
+    });
+    const planned = await service.plan({
+      mode: "REPACK_SELECTED",
+      island_ids: ["face:b:north"],
+      constraints: [{ id: "no-padding", selector: { cube_uuids: ["b"] },
+        constraints: { padding_pixels: 0 } }],
+    });
+    expect(planned.report.apply_allowed).toBe(true);
+    bitmap = { ...original, atlas_revision: b };
+    await expect(service.apply({
+      plan_id: planned.plan_id,
+      expected_source_fingerprint: planned.source_fingerprint,
+    })).rejects.toThrow("STALE_UV_PLAN");
+    expect(adapters).toBe(0);
+  });
+
+  test("same-UUID RGBA change while asynchronously planning never publishes stale UV handles", async () => {
+    const registry = new UvPlanRegistry();
+    let reads = 0;
+    const service = createUvLayoutService({
+      readSource: nativeFixture,
+      readBitmapDimensions: () => ({
+        width: 32, height: 32,
+        logical_width: 32, logical_height: 32,
+        atlas_uuid: "same-uuid",
+        atlas_revision: "sha256:32x32:" + (reads++ === 0 ? "a" : "b").repeat(64),
+      }),
+      createApplyAdapter: () => {
+        throw new Error("plan discovery cannot start a native Undo");
+      },
+    }, registry);
+    await expect(service.plan({
+      mode: "REPACK_SELECTED", island_ids: ["face:b:north"],
+      constraints: [{ id: "no-padding", selector: { cube_uuids: ["b"] },
+        constraints: { padding_pixels: 0 } }],
+    })).rejects.toThrow("STALE_UV_PLAN");
+    expect(reads).toBe(2);
+    expect(registry.size()).toBe(0);
+  });
+
+  test("native logical atlas mismatch and malformed pixel revisions are refused before planning", async () => {
+    let atlas = {
+      width: 32, height: 32, logical_width: 16, logical_height: 32,
+      atlas_uuid: "base", atlas_revision: "sha256:32x32:" + "a".repeat(64),
+    };
+    let adapters = 0;
+    const service = createUvLayoutService({
+      readSource: nativeFixture,
+      readBitmapDimensions: () => atlas,
+      createApplyAdapter: () => {
+        adapters++;
+        throw new Error("invalid atlas must not allocate a native adapter");
+      },
+    });
+    await expect(service.plan({
+      mode: "REPACK_SELECTED", island_ids: ["face:b:north"],
+    })).rejects.toThrow("UV_BITMAP_LOGICAL_MISMATCH");
+    atlas = { ...atlas, logical_width: 32, atlas_revision: "not-a-decoded-rgba-revision" };
+    await expect(service.plan({
+      mode: "REPACK_SELECTED", island_ids: ["face:b:north"],
+    })).rejects.toThrow("UV_BITMAP_SOURCE_INVALID");
+    expect(adapters).toBe(0);
   });
 
   test("service fails closed when neither base-atlas dimensions nor an explicit pre-atlas scale exists", async () => {

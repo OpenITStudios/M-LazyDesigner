@@ -73,17 +73,31 @@ function requireValidAutoBitmapSource(source: UvAutoBitmapSource): UvAutoBitmapS
   if (
     !Number.isSafeInteger(source.width) || source.width <= 0 ||
     !Number.isSafeInteger(source.height) || source.height <= 0 ||
-    (source.atlas_uuid !== undefined && !source.atlas_uuid.trim())
+    (source.logical_width === undefined) !== (source.logical_height === undefined) ||
+    (source.logical_width !== undefined &&
+      (!Number.isSafeInteger(source.logical_width) || source.logical_width <= 0)) ||
+    (source.logical_height !== undefined &&
+      (!Number.isSafeInteger(source.logical_height) || source.logical_height <= 0)) ||
+    (source.atlas_uuid !== undefined &&
+      (typeof source.atlas_uuid !== "string" || !source.atlas_uuid.trim())) ||
+    (source.atlas_revision !== undefined &&
+      (typeof source.atlas_revision !== "string" ||
+       !/^sha256:\d+x\d+:[0-9a-f]{64}$/.test(source.atlas_revision)))
   ) {
     throw new Error(
-      "UV_BITMAP_SOURCE_INVALID: automatic atlas dimensions must be positive " +
-      "safe integers and the optional UUID must be non-empty."
+      "UV_BITMAP_SOURCE_INVALID: automatic atlas dimensions, optional logical UV, UUID and decoded RGBA revision must be valid."
     );
   }
   return {
     width: source.width,
     height: source.height,
     ...(source.atlas_uuid !== undefined ? { atlas_uuid: source.atlas_uuid } : {}),
+    ...(source.logical_width !== undefined
+      ? { logical_width: source.logical_width, logical_height: source.logical_height }
+      : {}),
+    ...(source.atlas_revision !== undefined
+      ? { atlas_revision: source.atlas_revision }
+      : {}),
   };
 }
 
@@ -94,7 +108,10 @@ function sameAutoBitmapSource(
   return actual !== null && actual !== undefined &&
     expected.width === actual.width &&
     expected.height === actual.height &&
-    (expected.atlas_uuid ?? null) === (actual.atlas_uuid ?? null);
+    (expected.atlas_uuid ?? null) === (actual.atlas_uuid ?? null) &&
+    (expected.logical_width ?? null) === (actual.logical_width ?? null) &&
+    (expected.logical_height ?? null) === (actual.logical_height ?? null) &&
+    (expected.atlas_revision ?? null) === (actual.atlas_revision ?? null);
 }
 
 export function createUvLayoutService(
@@ -121,6 +138,13 @@ export function createUvLayoutService(
         : undefined;
       const automaticBitmap = discoveredBitmap
         ? requireValidAutoBitmapSource(discoveredBitmap) : undefined;
+      if (automaticBitmap?.logical_width !== undefined &&
+          (automaticBitmap.logical_width !== native.logical_width ||
+           automaticBitmap.logical_height !== native.logical_height)) {
+        throw new Error(
+          "UV_BITMAP_LOGICAL_MISMATCH: the base-color atlas logical UV dimensions differ from the active project."
+        );
+      }
       const bitmapWidth = input.bitmap_width ?? automaticBitmap?.width;
       const bitmapHeight = input.bitmap_height ?? automaticBitmap?.height;
       if (
@@ -198,7 +222,7 @@ export function createUvLayoutService(
         automaticBitmap, await dependencies.readBitmapDimensions?.()
       )) {
         throw new Error(
-          "STALE_UV_PLAN: base-color atlas dimensions or identity changed during planning."
+          "STALE_UV_PLAN: base-color atlas dimensions, identity, logical UV or decoded pixels changed during planning."
         );
       }
       const stored = registry.put(
@@ -244,14 +268,15 @@ export function createUvLayoutService(
         );
       }
 
-      // Automatic atlas dimensions/identity are required plan dependencies.
+      // Automatic atlas dimensions, UV scale and pixel revision are required
+      // private plan dependencies. This rejects same-UUID repaints before Undo.
       // This is a read-only preflight, before consuming the plan or opening
       // native Undo. Explicit pre-atlas sizes bypass native atlas discovery.
       if (stored.auto_bitmap_source && !sameAutoBitmapSource(
         stored.auto_bitmap_source, await dependencies.readBitmapDimensions?.()
       )) {
         throw new Error(
-          "STALE_UV_PLAN: base-color atlas dimensions or identity changed after planning. Replan before applying."
+          "STALE_UV_PLAN: base-color atlas dimensions, identity, logical UV or decoded pixels changed after planning. Replan before applying."
         );
       }
 

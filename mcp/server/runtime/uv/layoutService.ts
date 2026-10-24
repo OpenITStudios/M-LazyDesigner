@@ -12,6 +12,8 @@ import {
   readBlockbenchUvNativeSource,
 } from "./layoutRuntime";
 import { textureProductionRole } from "../../tools/texture/atlas";
+import { fullTextureRgba } from "@/lib/texture/bitmapRuntime";
+import { computeTextureRevision } from "@/lib/texture/revision";
 
 /**
  * Declarative UV capability contract. Not registered until the canonical
@@ -74,7 +76,7 @@ export function registerUvLayoutTool(): void {
 export function createBlockbenchUvLayoutService() {
   return createUvLayoutService({
     readSource: readBlockbenchUvNativeSource,
-    readBitmapDimensions: () => {
+    readBitmapDimensions: async () => {
       const textures = Project?.textures ?? Texture.all;
       const base = textures.filter(
         (texture) =>
@@ -87,12 +89,42 @@ export function createBlockbenchUvLayoutService() {
           "UV_AUTO_BITMAP_AMBIGUOUS: expected one base-color atlas before automatic texel-density planning."
         );
       }
+      const texture = base[0];
+      const atlasUuid = texture.uuid;
+      const frameHeight = texture.display_height;
+      const uvWidth = texture.getUVWidth();
+      const uvHeight = texture.getUVHeight();
+      const bitmap = fullTextureRgba(texture);
+      if (bitmap.width !== texture.width || bitmap.height !== texture.height ||
+          !Number.isSafeInteger(frameHeight) ||
+          frameHeight <= 0 ||
+          bitmap.height % frameHeight !== 0) {
+        throw new Error(
+          "UV_BITMAP_NATIVE_SOURCE_INCONSISTENT: base atlas decoded canvas and frame dimensions disagree."
+        );
+      }
+      // Reuse the same decoded-RGBA revision algorithm as get_texture and
+      // paint_texture_transaction. A same-UUID/same-size repaint now changes
+      // the private plan dependency; do not trust UI selection or timestamps.
+      const atlasRevision = await computeTextureRevision(
+        bitmap.pixels, bitmap.width, bitmap.height
+      );
+      if (texture.width !== bitmap.width || texture.height !== bitmap.height ||
+          texture.uuid !== atlasUuid || texture.display_height !== frameHeight ||
+          texture.getUVWidth() !== uvWidth || texture.getUVHeight() !== uvHeight) {
+        throw new Error(
+          "STALE_UV_PLAN: base atlas metadata changed during decoded-pixel revision read."
+        );
+      }
       return {
-        width: base[0].width,
-        height: base[0].display_height,
-        ...(typeof base[0].uuid === "string" && base[0].uuid.trim()
-          ? { atlas_uuid: base[0].uuid }
+        width: texture.width,
+        height: frameHeight,
+        logical_width: uvWidth,
+        logical_height: uvHeight,
+        ...(typeof atlasUuid === "string" && atlasUuid.trim()
+          ? { atlas_uuid: atlasUuid }
           : {}),
+        atlas_revision: atlasRevision,
       };
     },
     createApplyAdapter: createBlockbenchUvApplyAdapter,

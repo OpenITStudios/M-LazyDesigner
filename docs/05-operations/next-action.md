@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 Semantic per-face UV orientation parity:
-- Source changes preserve native signed face U/V direction and original 0/90/180/270 rotation through semantic packing; native UV compilation requires explicit pixel-to-logical atlas scale (including rectangular atlases). Native transaction accepts the four valid quarter-turns; malformed/collapsed face mappings fail before Undo.
-- Existing native UV compiler/transaction/identity regressions cover mirroring, quarter-turns, invalid source and non-square physical-to-logical mapping. Exact-SHA Bun/TypeScript/Blockbench/Golden proof NOT EXECUTED (CI disabled).
-- Next when a capable runtime exists: matching-SHA UV regressions, generator-owned manage_uv_layout registration, then native save/reopen/export and visual proof. Prior shared UV/grid source is committed at 3490a82; do not repeat it.
+2026-10-24 U7 automatic atlas pixel-freshness protection:
+- Existing UV plan/registry now track the canonical decoded-RGBA revision, bitmap/frame dimensions, logical UV dimensions and atlas UUID. Same-size repaint invalidates an old plan before Undo. Explicit pre-atlas overrides remain independent.
+- Existing UV service and registration tests cover stale pixels during plan/apply, invalid digest and UV-scale mismatch. REMOTE_GITHUB source only: exact-HEAD Bun/typecheck, installed native/Golden and accepted-result cost NOT EXECUTED (CI disabled).
+- Next on a capable cloud/native environment: run matching-SHA focused UV suites, then canonical-generator-coupled manage_uv_layout registration and installed save/reopen/visual acceptance. Do not redo completed source corrections (3490a82, 7058cbe).
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

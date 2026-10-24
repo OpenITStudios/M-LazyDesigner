@@ -135,6 +135,17 @@ describe("UV Runtime registration readiness", () => {
     }).success).toBe(false);
   });
 
+  test("native UV bitmap discovery uses the existing exact RGBA revision owner without registering UV", async () => {
+    const runtime = await Bun.file("server/runtime/uv/layoutService.ts").text();
+    for (const marker of [
+      "fullTextureRgba", "computeTextureRevision",
+      "atlas_revision: atlasRevision",
+      "logical_width: uvWidth", "logical_height: uvHeight",
+      "UV_BITMAP_NATIVE_SOURCE_INCONSISTENT",
+    ]) expect(runtime).toContain(marker);
+    expect(tools).not.toHaveProperty("manage_uv_layout");
+  });
+
   test("remote prewiring does not register manage_uv_layout before generated docs can be refreshed", () => {
     expect(tools).not.toHaveProperty("manage_uv_layout");
   });

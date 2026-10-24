@@ -2,11 +2,16 @@ import { createHash } from "node:crypto";
 import type { UvLayoutPlan } from "@/lib/uv/contracts";
 import type { UvDryRunReport } from "@/lib/uv/dryRun";
 
-/** Automatic native atlas dimensions/identity are plan inputs, not public UV state. */
+/** Private automatic atlas dependencies; content revision tracks same-UUID repaints. */
 export type UvAutoBitmapSource = Readonly<{
   width: number;
   height: number;
   atlas_uuid?: string;
+  /** Frame-local logical UV dimensions; native paths supply both. */
+  logical_width?: number;
+  logical_height?: number;
+  /** SHA-256 revision of the full decoded RGBA bitmap (all animation frames). */
+  atlas_revision?: string;
 }>;
 
 export type UvStoredPlan = {
