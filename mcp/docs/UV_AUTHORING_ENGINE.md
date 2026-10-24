@@ -340,7 +340,19 @@ Implemented source contracts now include:
     Async discovery errors or mismatched native bitmap/frame geometry fail
     closed; explicit pre-atlas dimensions bypass atlas reads. Existing source
     service mocks without a revision cannot attest pixel freshness. Digest
-    parity is **not** Texture PASS, native Undo proof or visual approval.
+    parity is **not** Texture PASS, native Undo proof or visual approval;
+21. before an existing base-color texture is regenerated with a new template,
+    and before a U7 native apply opens Undo, the same canonical texture
+    bitmap guard checks every decoded RGBA channel. Only fully zero,
+    flattened, single-frame, dimension-consistent textures are eligible for
+    automatic UV relocation without pixel migration. Transparent but nonzero
+    RGB, layered/animated state, or unknown/mismatched bitmap evidence blocks
+    the mutation before native Undo. The U7 native guard also protects
+    explicit pre-atlas size overrides, which otherwise bypass automatic atlas
+    discovery. This is a **rejection of unsafe repacking**, not migration:
+    preserving already-painted atlas pixels across moved UV islands remains
+    an unimplemented operation requiring an atomic texture+UV transaction
+    and independent native/visual acceptance.
 
 The source-ready integration intentionally does NOT register a new Runtime capability yet. The existing `server/runtime/uv/layoutService.ts` now exports its declarative tool specification and an uncalled registration function, so the future activation can reuse one persistent plan/apply service instance without a new engine or Gateway API. Registration changes generated MCP API documentation, and repository policy forbids hand-editing generated outputs. LOCAL_CODE must run the canonical docs generator when `manage_uv_layout` is wired to the Geometry/Modelling owner on the shared AUTHORING Runtime surface. Source presence alone is not native acceptance or UV Layout PASS.
 

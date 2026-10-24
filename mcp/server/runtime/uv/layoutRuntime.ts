@@ -1,6 +1,7 @@
 /// <reference types="blockbench-types" />
 
 import type { UvFaceKey } from "@/lib/uv/contracts";
+import { requireEmptyTextureBeforeUvRepack } from "@/lib/texture/bitmapRuntime";
 import type { UvCubeSnapshot } from "@/lib/uv/islands";
 import {
   buildUvNativeSourceSnapshot,
@@ -267,6 +268,18 @@ export function createBlockbenchUvApplyAdapter(): UvApplyAdapter {
       if (Undo.current_save) {
         throw new Error(
           "Finish the current Blockbench edit before applying a UV layout plan."
+        );
+      }
+      // Guard the actual native Undo boundary, including explicit bitmap
+      // overrides that intentionally bypass the optional atlas discovery.
+      // Every loaded texture can depend on the scene's UV mapping (variants,
+      // masks, material channels), not just the default base atlas.
+      const textures = typeof Texture === "undefined"
+        ? []
+        : (Project?.textures ?? Texture.all ?? []);
+      for (const texture of textures) {
+        requireEmptyTextureBeforeUvRepack(
+          texture, "manage_uv_layout native apply"
         );
       }
       const cubes = cubesForInstructions(instructions);

@@ -455,6 +455,23 @@ describe("texture atlas integrity", () => {
     expect(code.indexOf("return resizeMappedAtlas(")).toBeLessThan(begin);
   });
 
+  test("native template rebuild rejects authored pixels before the generator or Undo", async () => {
+    const code = await source("server/tools/texture/create.ts");
+    const rebuild = code.indexOf("if (rebuildTexture) {");
+    const guard = code.indexOf("requireEmptyTextureBeforeUvRepack(", rebuild);
+    const template = code.indexOf("return await runNativeTemplateEdit(", rebuild);
+    const generator = code.indexOf("await generator.generateTemplate(", template);
+    expect(guard).toBeGreaterThan(rebuild);
+    expect(guard).toBeLessThan(template);
+    expect(template).toBeLessThan(generator);
+    expect(code).toContain('rebuildTexture, "create_texture template rebuild"');
+    expect(code).toContain('if (type === "template" && !rearrange_uv)');
+    // A native resize retains the existing mapping; the destructive repack
+    // must have its own content guard instead of blocking both operations.
+    expect(code.indexOf("return resizeMappedAtlas(rebuildTexture"))
+      .toBeLessThan(guard);
+  });
+
   test("texture creation preflight runs before Undo and prevents atlas fragmentation", async () => {
     const [texture, atlas] = await Promise.all([
       source("server/tools/texture/create.ts"),

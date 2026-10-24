@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 U7 automatic atlas pixel-freshness protection:
-- Existing UV plan/registry now track the canonical decoded-RGBA revision, bitmap/frame dimensions, logical UV dimensions and atlas UUID. Same-size repaint invalidates an old plan before Undo. Explicit pre-atlas overrides remain independent.
-- Existing UV service and registration tests cover stale pixels during plan/apply, invalid digest and UV-scale mismatch. REMOTE_GITHUB source only: exact-HEAD Bun/typecheck, installed native/Golden and accepted-result cost NOT EXECUTED (CI disabled).
-- Next on a capable cloud/native environment: run matching-SHA focused UV suites, then canonical-generator-coupled manage_uv_layout registration and installed save/reopen/visual acceptance. Do not redo completed source corrections (3490a82, 7058cbe).
+2026-10-24 P0 painted atlas UV-repack safety:
+- The active native texture template rebuild and U7 pre-Undo adapter now refuse UV relocation on non-empty RGBA, hidden RGB/alpha 0, layered/animated or unverifiable textures. Blank flattened atlases retain the supported path; U7 protects explicit size overrides and all mapped texture channels.
+- Existing bitmap-runtime, texture-atlas-integrity, and native-adapter regression owners contain source tests. SOURCE ONLY: current-SHA Bun/types, real Blockbench and Golden visual NOT EXECUTED (CI disabled).
+- Still open: verified atomic pixel migration to preserve painted details when UV islands actually move; native cross-Cube seam/whole-scene coverage and generated manage_uv_layout registration. Do not claim these are completed or ask for user-local testing.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

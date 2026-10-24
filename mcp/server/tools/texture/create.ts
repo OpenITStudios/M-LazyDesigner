@@ -16,6 +16,7 @@ import {
   textureProductionRole,
 } from "../texture-atlas";
 import { resolveTextureToolMaterial } from "./materialState";
+import { requireEmptyTextureBeforeUvRepack } from "@/lib/texture/bitmapRuntime";
 
 
 
@@ -165,6 +166,14 @@ export function registerCreateTextureTool(): void {
           }
           if (Texture.all.some(texture => texture !== rebuildTexture)) {
             throw new Error("Rebuild UV before adding variants or PBR channels; dependent atlases require matching remapping.");
+          }
+          // Native template regeneration changes UV mapping and may replace
+          // the existing bitmap. Never infer that an already-colored template
+          // is disposable: block before the generator and its Undo snapshot.
+          if (type === "template" && rearrange_uv) {
+            requireEmptyTextureBeforeUvRepack(
+              rebuildTexture, "create_texture template rebuild"
+            );
           }
         } else requireTextureCreationPreflight({
           width,

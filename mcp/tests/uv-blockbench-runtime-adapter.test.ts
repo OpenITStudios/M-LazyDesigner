@@ -177,6 +177,52 @@ describe("Blockbench UV runtime adapter ownership", () => {
   });
 
 
+  test("UV native pre-Undo guard protects painted atlases even with explicit bitmap scale", async () => {
+    const names = ["Project", "ModelProject", "Texture", "Cube", "Undo", "Canvas"];
+    const original = names.map(name =>
+      Object.getOwnPropertyDescriptor(globalThis, name)
+    );
+    const pixels = new Uint8ClampedArray(2 * 2 * 4);
+    pixels[0] = 42;
+    const texture = {
+      name: "authored", width: 2, height: 2, display_height: 2,
+      frameCount: 1, layers_enabled: false,
+      canvas: { width: 2, height: 2 },
+      ctx: { getImageData: () => ({ data: pixels }) },
+    };
+    const project = { uuid: "repack-guard-project", textures: [texture] };
+    let undoCalls = 0;
+    const undo = {
+      current_save: null,
+      initEdit: () => { undoCalls++; },
+    };
+    const values = [
+      project, { all: [project] }, { all: [texture] },
+      { all: [] }, undo, { updateAll: () => {} },
+    ];
+    try {
+      names.forEach((name, index) => Object.defineProperty(globalThis, name, {
+        configurable: true, writable: true, value: values[index],
+      }));
+      const adapter = createBlockbenchUvApplyAdapter();
+      await expect(Promise.resolve().then(() => adapter.beginUndo?.([])))
+        .rejects.toThrow("UV_PAINTED_ATLAS_REPACK_BLOCKED");
+      expect(undoCalls).toBe(0);
+
+      // A truly empty, flattened bitmap can enter the unchanged native
+      // transaction path; this is not an assertion about live Blockbench.
+      pixels[0] = 0;
+      await adapter.beginUndo?.([]);
+      expect(undoCalls).toBe(1);
+    } finally {
+      names.forEach((name, index) => {
+        const descriptor = original[index];
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+        else Reflect.deleteProperty(globalThis, name);
+      });
+    }
+  });
+
   test("native adapter stays a narrow translation/Undo boundary", async () => {
     const source = await Bun.file(
       "server/runtime/uv/layoutRuntime.ts"

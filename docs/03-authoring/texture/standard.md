@@ -162,6 +162,8 @@ authoring inputs, not mapped-model visual PASS.
 
 Do not change UV Layout after substantial Texture Styling without a concrete reason.
 
+**Source-only fail-closed protection for repacking an existing atlas:** until an atomic pixel migration with preserved signed face orientation, shared UV ownership, variants/PBR alignment, and verified Undo exists, automatic `create_texture(type=template, texture_id=..., rearrange_uv=true)` and the future U7 `manage_uv_layout` native apply must not rewrite UV ownership while a mapped texture contains any nonzero decoded RGBA channel. Fully transparent **but nonzero RGB** is authored data, not proof of blankness; layers, animation frames, inconsistent bitmap evidence or unreadable pixels also block the operation. A strictly zeroed, flattened, single-frame atlas can be repacked. This safeguard deliberately **does not implement** texture-pixel migration and does not claim visual correctness. The non-repacking atlas resize is a separate operation and has its own constraints.
+
 A material UV change invalidates affected downstream assumptions:
 
 - mapped physical region;

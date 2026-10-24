@@ -1,5 +1,51 @@
 /// <reference types="blockbench-types" />
 
+/**
+ * Fail closed on UV repacks that would silently detach authored atlas pixels
+ * from their original Cube surfaces. This intentionally permits only a fully
+ * zeroed, flattened, single-frame bitmap; zero alpha alone is insufficient
+ * because hidden RGB may be meaningful for masks or later alpha changes.
+ *
+ * This does NOT migrate pixels. A future migrated/reviewed transaction must
+ * atomically update the image and UVs instead of bypassing this guard.
+ */
+export function requireEmptyTextureBeforeUvRepack(
+  texture: Texture,
+  context: string
+): void {
+  if (
+    texture.layers_enabled === true ||
+    (texture.frameCount ?? 1) !== 1 ||
+    texture.height !== texture.display_height
+  ) {
+    throw new Error(
+      "UV_ATLAS_REPACK_UNSAFE_STATE: " + context +
+      " cannot auto-repack layered or animated textures without pixel migration."
+    );
+  }
+
+  const bitmap = fullTextureRgba(texture);
+  const expected = bitmap.width * bitmap.height * 4;
+  if (
+    bitmap.width !== texture.width ||
+    bitmap.height !== texture.height ||
+    !Number.isSafeInteger(expected) ||
+    bitmap.pixels.length !== expected
+  ) {
+    throw new Error(
+      "UV_ATLAS_REPACK_BITMAP_MISMATCH: " + context +
+      " cannot attest the complete decoded RGBA atlas before changing UV ownership."
+    );
+  }
+  if (bitmap.pixels.some(channel => channel !== 0)) {
+    throw new Error(
+      "UV_PAINTED_ATLAS_REPACK_BLOCKED: " + context +
+      " would change UV ownership while the atlas contains non-empty RGBA pixels. " +
+      "Preserve the original layout or use a separately verified atomic pixel-migration workflow."
+    );
+  }
+}
+
 export function fullTextureRgba(texture: Texture): {
   pixels: Uint8ClampedArray;
   width: number;
