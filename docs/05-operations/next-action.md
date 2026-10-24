@@ -12,10 +12,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 P0 bounded seam diagnostic integrity:
-- Existing list_textures(seam/full) now reports explicit sampled/partial/not-evaluated coverage, unexamined textured-face counts, reasoned bounded Cube face omissions and SEAM_SCAN_PARTIAL. Cross-Cube and full-scene visual proof remain explicitly not attested.
-- Existing seam pure regression and Runtime source-contract tests authored; exact-SHA Bun/types, real Blockbench and Golden visual NOT EXECUTED (CI disabled).
-- Still open: true native cross-Cube seam sampling with declared material/continuity intent, full-scene coverage and visual proof; verified atomic migration of painted pixels after UV relocation; generator-coupled U7 registration. Painted-atlas repack safeguard committed at 065599c; do not redo.
+2026-10-24 U7 read-only UV pixel migration candidate:
+- `mcp/lib/uv/pixelMigration.ts` prepares bounded RGBA candidates from a pinned U7 source/plan and explicit static flattened color/variant/PBR atlases. Preserves Box nets, signed faces, quarter-turns and swaps; rejects conflicts, fixed ownership, resampling, mismatched/stale state. Tests and focused routing authored; Bun/types/native/visual NOT EXECUTED (CI disabled).
+- Native painted-atlas repack remains blocked. Candidate is NOT an image/UV mutation or visual PASS. Remaining: atomic texture+UV Undo/rollback/persistence with full scene/texture ownership and exact revision proof; generator-coupled manage_uv_layout registration when local execution is available; native cross-Cube seams and full visual acceptance. Do not repeat committed preflight/seam source work.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

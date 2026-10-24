@@ -284,6 +284,9 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
   "mcp/lib/uv/physicalEvidence.ts": [
     "mcp/tests/uv-physical-evidence.test.ts",
   ],
+  "mcp/lib/uv/pixelMigration.ts": [
+    "mcp/tests/uv-pixel-migration.test.ts",
+  ],
   "mcp/lib/uv/planRegistry.ts": [
     "mcp/tests/uv-plan-service.test.ts",
   ],

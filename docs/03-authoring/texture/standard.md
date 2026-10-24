@@ -164,6 +164,20 @@ Do not change UV Layout after substantial Texture Styling without a concrete rea
 
 **Source-only fail-closed protection for repacking an existing atlas:** until an atomic pixel migration with preserved signed face orientation, shared UV ownership, variants/PBR alignment, and verified Undo exists, automatic `create_texture(type=template, texture_id=..., rearrange_uv=true)` and the future U7 `manage_uv_layout` native apply must not rewrite UV ownership while a mapped texture contains any nonzero decoded RGBA channel. Fully transparent **but nonzero RGB** is authored data, not proof of blankness; layers, animation frames, inconsistent bitmap evidence or unreadable pixels also block the operation. A strictly zeroed, flattened, single-frame atlas can be repacked. This safeguard deliberately **does not implement** texture-pixel migration and does not claim visual correctness. The non-repacking atlas resize is a separate operation and has its own constraints.
 
+**Migration candidate is not an apply operation:** `mcp/lib/uv/pixelMigration.ts`
+can compute a pure, deterministic RGBA candidate from one pinned U7 plan and
+every explicitly supplied, flattened static dependent texture. It preserves
+signed U/V face orientation, face-local quarter-turns, complete Box-UV nets,
+shared source texels and cyclic swaps without sequential-copy damage.
+It refuses any resampling, overlapping fixed ownership, nonzero foreign
+destination content (even at alpha 0), inconsistent PBR/variant snapshot or
+unrepresentable pixel boundaries. Its bounded results are explicitly
+`candidate_only`; scene ownership, native Undo/persistence and mapped-model
+appearance are **not attested**. The previously installed pre-Undo guard on
+painted atlases stays active. Pixel migration cannot be enabled for a real
+model until a texture+UV atomic native owner proves safe apply, rollback and
+visual correspondence.
+
 A material UV change invalidates affected downstream assumptions:
 
 - mapped physical region;

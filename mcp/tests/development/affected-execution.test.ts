@@ -537,6 +537,19 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("UV pixel migration candidate changes retain their focused owner without a new Gateway route", () => {
+    const plan = planAffectedExecution({
+      changedPaths: ["mcp/lib/uv/pixelMigration.ts"],
+      semanticImpact: impact(),
+    });
+    expect(plan.fallback_full_verify).toBe(false);
+    expect(plan.checks).toContain("TARGETED_TESTS");
+    expect(plan.targeted_tests).toEqual([
+      "mcp/tests/uv-pixel-migration.test.ts",
+    ]);
+    expect(plan.commands).toContain("bun test tests/uv-pixel-migration.test.ts");
+  });
+
   test("new unowned UV sources retain full verification rather than typecheck-only green", () => {
     for (const path of [
       "mcp/lib/uv/futureAuthoringHelper.ts",

@@ -254,6 +254,8 @@ U4 deterministic MaxRects planner/scorer     SOURCE IMPLEMENTED
 U5 stable incremental packing modes           SOURCE IMPLEMENTED
 U6 evidence-driven stack proposals             SOURCE IMPLEMENTED
 U7 native adapter / stale guard / atomic apply SOURCE IMPLEMENTED
+U7 lossless pixel-migration candidate           SOURCE IMPLEMENTED (READ-ONLY)
+U7 native texture+UV migration transaction     NOT IMPLEMENTED / LIVE PROOF PENDING
 U7 Runtime capability registration             LOCAL_CODE GENERATOR PENDING
 U8 native compatibility / save-reopen proof   LIVE_BLOCKBENCH AFTER U7 REGISTRATION
 U9 optional mesh/xatlas investigation         DEFERRED
@@ -350,9 +352,33 @@ Implemented source contracts now include:
     the mutation before native Undo. The U7 native guard also protects
     explicit pre-atlas size overrides, which otherwise bypass automatic atlas
     discovery. This is a **rejection of unsafe repacking**, not migration:
-    preserving already-painted atlas pixels across moved UV islands remains
-    an unimplemented operation requiring an atomic texture+UV transaction
-    and independent native/visual acceptance.
+    preserving already-painted atlas pixels across moved UV islands requires
+    a separately verified atomic texture+UV transaction.
+
+**Read-only pixel migration candidate:** `lib/uv/pixelMigration.ts` now
+prepares complete RGBA bitmap candidates for explicit, matching flattened
+single-frame atlases. It reuses the U7 native source fingerprint, plan
+validator/translator and shared signed/rotated face-local pixel mapper,
+then validates exact texel bijection before copying from immutable input.
+It supports lossless per-face translation and 90-degree layout turns with
+authored U/V mirroring, Box-UV net translation, compatible exact-shared
+islands, cyclic region swaps, and coordinated base/variant/PBR snapshots.
+It rejects native source drift, density/extent changes requiring resampling,
+different bitmap/layer/frame states, insufficient source/fixed ownership,
+target collisions with nonzero unrelated RGBA (including hidden RGB),
+and conflicting shared-destination source pixels. Bounded candidate buffers
+retain untouched input pixels. A computed `candidate_only` receipt always
+states `native_apply_attested=false`, `scene_ownership_attested=false`, and
+`visual_verdict=not_evaluated`.
+
+**This does not authorize native painted-atlas repack.** No bitmap candidate
+is applied by the registered Texture tool, existing U7 native adapter or
+unregistered `manage_uv_layout` route. The existing no-painted-pixel
+pre-Undo guard remains intact. Activation needs explicit full-scene
+texture ownership, atlas revision checks, native layer/animation policy,
+one atomic texture+UV Undo transaction with bounded rollback/postconditions,
+generator-owned documentation and actual installed/visual proof. Do not
+interpret candidate pixel equality as mapped-model Texture PASS.
 
 The source-ready integration intentionally does NOT register a new Runtime capability yet. The existing `server/runtime/uv/layoutService.ts` now exports its declarative tool specification and an uncalled registration function, so the future activation can reuse one persistent plan/apply service instance without a new engine or Gateway API. Registration changes generated MCP API documentation, and repository policy forbids hand-editing generated outputs. LOCAL_CODE must run the canonical docs generator when `manage_uv_layout` is wired to the Geometry/Modelling owner on the shared AUTHORING Runtime surface. Source presence alone is not native acceptance or UV Layout PASS.
 
