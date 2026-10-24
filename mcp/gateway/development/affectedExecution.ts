@@ -286,6 +286,10 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
   ],
   "mcp/lib/uv/pixelMigration.ts": [
     "mcp/tests/uv-pixel-migration.test.ts",
+    "mcp/tests/uv-pixel-migration-transaction.test.ts",
+  ],
+  "mcp/lib/uv/pixelMigrationTransaction.ts": [
+    "mcp/tests/uv-pixel-migration-transaction.test.ts",
   ],
   "mcp/lib/uv/planRegistry.ts": [
     "mcp/tests/uv-plan-service.test.ts",

@@ -178,6 +178,18 @@ painted atlases stays active. Pixel migration cannot be enabled for a real
 model until a texture+UV atomic native owner proves safe apply, rollback and
 visual correspondence.
 
+**Atomic source contract, not an activated workflow:** The
+`mcp/lib/uv/pixelMigrationTransaction.ts` adapter contract requires
+complete Cube-only scene ownership and every project Texture UUID,
+exact preflight SHA-256 RGBA revisions, a second whole-state read before
+a synchronous bitmap+UV Undo, exact post-apply UV/bitmap readback, and
+verified restoration of **both** on failure. Partial Undo ownership or
+uncertain finishEdit is `UV_PIXEL_MIGRATION_OUTCOME_UNKNOWN`, not permission
+for an automatic retry. Mock-adapter source tests cannot prove this works
+in an installed Blockbench session. The existing painted-atlas mutation
+block remains active until a real native adapter and visual/persistence
+acceptance are available.
+
 A material UV change invalidates affected downstream assumptions:
 
 - mapped physical region;

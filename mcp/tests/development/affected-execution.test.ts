@@ -537,17 +537,27 @@ describe("affected execution planner", () => {
     }
   });
 
-  test("UV pixel migration candidate changes retain their focused owner without a new Gateway route", () => {
-    const plan = planAffectedExecution({
-      changedPaths: ["mcp/lib/uv/pixelMigration.ts"],
-      semanticImpact: impact(),
-    });
-    expect(plan.fallback_full_verify).toBe(false);
-    expect(plan.checks).toContain("TARGETED_TESTS");
-    expect(plan.targeted_tests).toEqual([
-      "mcp/tests/uv-pixel-migration.test.ts",
-    ]);
-    expect(plan.commands).toContain("bun test tests/uv-pixel-migration.test.ts");
+  test("UV migration kernel and transaction each route to their focused regressions", () => {
+    for (const [path, targeted] of [
+      ["mcp/lib/uv/pixelMigration.ts", [
+        "mcp/tests/uv-pixel-migration-transaction.test.ts",
+        "mcp/tests/uv-pixel-migration.test.ts",
+      ]],
+      ["mcp/lib/uv/pixelMigrationTransaction.ts", [
+        "mcp/tests/uv-pixel-migration-transaction.test.ts",
+      ]],
+    ] as const) {
+      const plan = planAffectedExecution({
+        changedPaths: [path],
+        semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify).toBe(false);
+      expect(plan.checks).toContain("TARGETED_TESTS");
+      expect(plan.targeted_tests).toEqual([...targeted]);
+      expect(plan.commands).toContain(
+        "bun test " + targeted.map(test => test.slice(4)).join(" ")
+      );
+    }
   });
 
   test("new unowned UV sources retain full verification rather than typecheck-only green", () => {

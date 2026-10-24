@@ -255,7 +255,8 @@ U5 stable incremental packing modes           SOURCE IMPLEMENTED
 U6 evidence-driven stack proposals             SOURCE IMPLEMENTED
 U7 native adapter / stale guard / atomic apply SOURCE IMPLEMENTED
 U7 lossless pixel-migration candidate           SOURCE IMPLEMENTED (READ-ONLY)
-U7 native texture+UV migration transaction     NOT IMPLEMENTED / LIVE PROOF PENDING
+U7 texture+UV atomic transaction contract      SOURCE IMPLEMENTED / ADAPTER ONLY
+U7 native migration adapter/activation          NOT IMPLEMENTED / LIVE PROOF PENDING
 U7 Runtime capability registration             LOCAL_CODE GENERATOR PENDING
 U8 native compatibility / save-reopen proof   LIVE_BLOCKBENCH AFTER U7 REGISTRATION
 U9 optional mesh/xatlas investigation         DEFERRED
@@ -370,6 +371,36 @@ and conflicting shared-destination source pixels. Bounded candidate buffers
 retain untouched input pixels. A computed `candidate_only` receipt always
 states `native_apply_attested=false`, `scene_ownership_attested=false`, and
 `visual_verdict=not_evaluated`.
+
+**Atomic texture+UV adapter contract (source-only):**
+`lib/uv/pixelMigrationTransaction.ts` now composes the existing U7
+UV instruction/postcondition owners with the pure RGBA migration kernel and
+canonical decoded texture SHA-256 revisions. Its injected native adapter
+must enumerate all Cube owners and every project texture by UUID, explicitly
+refuse unsupported non-Cube UV owners, and pin one project identity.
+Preflight validates exact expected revisions for all dependent atlases;
+the complete bitmap and UV source is re-read after asynchronous planning
+and before a **synchronous** native beginUndo with both bitmap and UV scope.
+
+Within the adapter-owned edit, every atlas candidate and UV instruction
+is applied, then exact full-bitmap readback, native instruction/scope parity
+and revision checks run before a second post-hash read immediately prior
+to synchronous finishUndo. On pre-commit failure, the adapter must restore
+**all** bitmap and UV state, cancel its own edit, and pass an exact full
+rollback readback. Partial rollback, partial Undo initialization, or uncertain
+finishUndo is `UV_PIXEL_MIGRATION_OUTCOME_UNKNOWN` and must never auto-retry.
+Snapshot inputs, candidate arrays and adapter-facing buffers are cloned
+separately, with shared atlas bitmap/byte ceilings enforced **before** copy
+and hashing. The adapter-harness success receipt is
+`execution=committed_by_adapter`, but explicitly retains
+`native_runtime_attested=false`, `saved_model_attested=false`,
+`visual_verdict=not_evaluated`.
+
+This contract is NOT a native implementation. No Blockbench image+UV writer
+has been connected to it; its complete-scene evidence manifest remains a
+requirement for a future real native enumerator rather than proven installed
+coverage. The transaction tests use disposable mock adapters, not Blockbench
+or user assets.
 
 **This does not authorize native painted-atlas repack.** No bitmap candidate
 is applied by the registered Texture tool, existing U7 native adapter or
