@@ -142,6 +142,7 @@ export const TEXTURE_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly 
     "mcp/tests/texture-atlas-integrity.test.ts",
   ],
   "mcp/lib/texture/treatmentPlan.ts": [
+    "mcp/tests/texture-cross-cube-native.test.ts",
     "mcp/tests/texture-treatment-intelligence.test.ts",
   ],
   "mcp/lib/texture/evidenceDelivery.ts": [

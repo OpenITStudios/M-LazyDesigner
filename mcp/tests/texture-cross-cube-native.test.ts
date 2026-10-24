@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   inspectDeclaredNativeCrossCubeSeams,
+  inspectTreatmentBoundNativeCrossCubeSeams,
   type DeclaredNativeCrossCubeSeamEdge,
 } from "@/server/runtime/extensions/texture/authoring";
+import { planTextureTreatment } from "@/lib/textureTreatmentPlan";
 
 const identity = [
   1, 0, 0, 0,
@@ -58,7 +60,9 @@ function fakeCube(
     },
   };
   const mesh = {
-    matrixWorld: { elements: translation(offsetX, 0, 0) },
+    matrixWorld: {
+      elements: translation(offsetX, 0, 0) as number[] | Float32Array,
+    },
     updateWorldMatrix(_parents: boolean, _children: boolean) {
       return;
     },
@@ -122,6 +126,30 @@ function withMockNative<T>(
   }
 }
 
+function observedTreatmentWithCrossCubeSeam() {
+  return planTextureTreatment({
+    required_faces: [
+      { cube_uuid: "left", face: "north" },
+      { cube_uuid: "right", face: "north" },
+    ],
+    regions: [{
+      region: "front-panel", evidence: "observed",
+      surface_pattern: "painted_metal", render_profile: "opaque",
+      face_targets: [
+        { cube_uuid: "left", face: "north", treatment: "PAINT" },
+        { cube_uuid: "right", face: "north", treatment: "PAINT" },
+      ],
+    }],
+    seam_pairs: [{
+      left: { cube_uuid: "left", face: "north", edge: "right" },
+      right: { cube_uuid: "right", face: "north", edge: "left" },
+      continuity_intent: "REQUIRED",
+      surface_id: "front_cohort",
+      material_id: "stone",
+    }],
+  });
+}
+
 describe("explicit cross-Cube native seam samples (unregistered)", () => {
   test("world-transform projection compares only declared same-material edges", () => {
     withMockNative(() => {
@@ -141,6 +169,78 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
       expect(result.scene_coverage_attested).toBe(false);
       expect(result.visual_verdict).toBe("not_evaluated");
       expect(result.diagnostic_io?.read_calls).toBe(4);
+    });
+  });
+
+  test("treatment-owned explicit seam pair uses native face ownership and preserves review-only status", () => {
+    withMockNative(() => {
+      const result = inspectTreatmentBoundNativeCrossCubeSeams(
+        observedTreatmentWithCrossCubeSeam()
+      );
+      expect(result.treatment_handoff).toMatchObject({
+        source: "texture_treatment_plan",
+        state: "review_required",
+        scope: "explicit_face_inventory",
+        declared_pair_count: 1,
+        native_binding_attested: false,
+        material_approval_attested: false,
+        texture_revision_attested: false,
+        scene_coverage_attested: false,
+        visual_verdict: "not_evaluated",
+      });
+      expect(result.sampled_declared_edge_count).toBe(2);
+      expect(result.compared_pair_count).toBe(1);
+      expect(result.review.high_contrast_count).toBe(1);
+      expect(result.visual_verdict).toBe("not_evaluated");
+    });
+  });
+
+  test("native THREE.Float32Array matrices permit physically declared continuity", () => {
+    withMockNative(cubes => {
+      cubes.left.mesh.matrixWorld.elements =
+        new Float32Array(translation(0, 0, 0));
+      cubes.right.mesh.matrixWorld.elements =
+        new Float32Array(translation(2, 0, 0));
+      const result = inspectTreatmentBoundNativeCrossCubeSeams(
+        observedTreatmentWithCrossCubeSeam()
+      );
+      expect(result.compared_pair_count).toBe(1);
+      expect(result.omitted_declared_edge_count).toBe(0);
+      expect(result.treatment_handoff.state).toBe("review_required");
+    });
+  });
+
+  test("an otherwise complete treatment plan without explicit seam pairs never invents them", () => {
+    withMockNative(() => {
+      const noPairs = observedTreatmentWithCrossCubeSeam();
+      noPairs.seam_pairs = [];
+      const result = inspectTreatmentBoundNativeCrossCubeSeams(noPairs);
+      expect(result.treatment_handoff.state).toBe("not_evaluated");
+      expect(result.sampled_declared_edge_count).toBe(0);
+      expect(result.compared_pair_count).toBe(0);
+      expect(result.visual_verdict).toBe("not_evaluated");
+    });
+  });
+
+  test("incomplete treatment ownership refuses native reads rather than accepting assumed seams", () => {
+    withMockNative(() => {
+      const incomplete = planTextureTreatment({
+        regions: [{
+          region: "front-panel", evidence: "observed",
+          surface_pattern: "painted_metal", render_profile: "opaque",
+        }],
+      });
+      expect(() => inspectTreatmentBoundNativeCrossCubeSeams(incomplete))
+        .toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+    });
+  });
+
+  test("source treatment and native material mismatches remain unresolved even with a declared pair", () => {
+    withMockNative(cubes => {
+      cubes.right.faces.north.material_name = "emissive";
+      expect(() => inspectTreatmentBoundNativeCrossCubeSeams(
+        observedTreatmentWithCrossCubeSeam()
+      )).toThrow("TEXTURE_SEAM_HANDOFF_NATIVE_MATERIAL_MISMATCH");
     });
   });
 

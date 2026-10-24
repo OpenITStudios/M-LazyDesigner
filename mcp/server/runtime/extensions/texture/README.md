@@ -94,3 +94,33 @@ still returns `native_sampling_attested=false`,
 `scene_coverage_attested=false`, and
 `visual_verdict=not_evaluated`. Mock tests are NOT installed Blockbench
 sampling or visual proof; the helper does not approve a texture.
+
+## Treatment-plan seam declarations (unregistered)
+
+`lib/texture/treatmentPlan.ts` now accepts optional explicit `seam_pairs`
+within a complete `required_faces` inventory. Each cross-Cube pair names
+both Cube/face/edge endpoints, `continuity_intent`, `surface_id` and
+`material_id`. `REQUIRED` also needs observed reference evidence,
+compatible render material/PBR intent, and non-transparent face ownership;
+unknown or mismatched data blocks treatment readiness.
+
+The pure `buildTextureTreatmentCrossCubeSeamHandoff` checks **all**
+planned face owners against resolved native Texture UUID and
+`CubeFace.material_name` bindings; sampling only the convenient paired
+faces is not enough. The unregistered read-only
+`inspectTreatmentBoundNativeCrossCubeSeams` uses the current Cube/Texture
+inventory and the existing cross-Cube sampler. For real Blockbench matrices,
+`matrixWorld.elements` may be a `Float32Array` or `Float64Array`:
+the projector now accepts exact 16-element typed arrays as well as ordinary
+arrays, with the same affine and geometry checks.
+
+No automatic continuity is inferred from neighboring Cubes or matching
+colors. Readiness of a treatment plan is **not** user or visual approval.
+The handoff remains review-only with
+`native_binding_attested=false`,
+`material_approval_attested=false`,
+`texture_revision_attested=false`,
+`scene_coverage_attested=false`,
+`visual_verdict=not_evaluated`. The existing registered
+`list_textures` continues to report intra-Cube seams only until a
+genuinely approved public declaration path and native evidence exist.

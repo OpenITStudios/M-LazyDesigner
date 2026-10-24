@@ -31,6 +31,11 @@ import {
   type PbrContentTextureInput,
 } from "@/lib/texture/pbrContent";
 import { analyzeTextureMaterialStatus } from "@/lib/texture/materialStatus";
+import {
+  buildTextureTreatmentCrossCubeSeamHandoff,
+  type TextureTreatmentNativeFaceBinding,
+  planTextureTreatment,
+} from "@/lib/texture/treatmentPlan";
 
 type RuntimeToolDefinition = {
   execute: (
@@ -540,7 +545,9 @@ export function inspectDeclaredNativeCrossCubeSeams(
     }
     const mesh = cube.mesh;
     if (!mesh || typeof mesh.updateWorldMatrix !== "function" ||
-        !mesh.matrixWorld || !Array.isArray(mesh.matrixWorld.elements)) {
+        !mesh.matrixWorld ||
+        typeof mesh.matrixWorld.elements?.length !== "number" ||
+        mesh.matrixWorld.elements.length !== 16) {
       omit(declaration, "world_transform_unavailable");
       continue;
     }
@@ -664,6 +671,90 @@ export function inspectDeclaredNativeCrossCubeSeams(
       ],
     },
     diagnostic_io: textureDiagnosticReadMetrics(nativeContext),
+  };
+}
+
+/**
+ * Pure Texture treatment plan -> current native binding handoff. Existing
+ * FaceTreatment assignments and explicit seam_pairs own the semantic scope;
+ * no matching-color/material guess or user approval is inferred. The live
+ * inspector rechecks each face after sampled RGBA reads.
+ *
+ * UNREGISTERED: the existing list_textures API remains intra-Cube only.
+ */
+export function inspectTreatmentBoundNativeCrossCubeSeams(
+  plan: ReturnType<typeof planTextureTreatment>,
+  context?: unknown,
+  alphaSemantics: TextureSeamAlphaSemantics = "OPACITY"
+) {
+  if (plan.domain !== "texture_treatment_plan" ||
+      plan.readiness.scope !== "explicit_face_inventory" ||
+      plan.readiness.state !== "ready" ||
+      plan.face_coverage.state !== "assigned" ||
+      plan.readiness.unresolved.length !== 0) {
+    throw new Error(
+      "TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY: full treatment face ownership must be ready before native reads."
+    );
+  }
+  if (typeof Cube === "undefined" || typeof Texture === "undefined" ||
+      !Array.isArray(Cube.all) || !Array.isArray(Texture.all)) {
+    throw new Error(
+      "TEXTURE_SEAM_HANDOFF_NATIVE_UNAVAILABLE: current Cube and Texture inventories are required."
+    );
+  }
+  const nativeCubes = new Map<string, Cube>();
+  for (const cube of Cube.all) {
+    if (typeof cube.uuid !== "string" || !cube.uuid.trim() ||
+        nativeCubes.has(cube.uuid)) {
+      throw new Error(
+        "TEXTURE_SEAM_HANDOFF_NATIVE_UNAVAILABLE: native Cube UUIDs are missing or ambiguous."
+      );
+    }
+    nativeCubes.set(cube.uuid, cube);
+  }
+  const bindings: TextureTreatmentNativeFaceBinding[] = [];
+  for (const region of plan.regions) {
+    for (const target of region.face_targets) {
+      const face = nativeCubes.get(target.cube_uuid)?.faces[target.face];
+      if (!face || typeof face.getTexture !== "function" ||
+          typeof face.material_name !== "string") {
+        throw new Error(
+          "TEXTURE_SEAM_HANDOFF_NATIVE_UNAVAILABLE: declared treatment face cannot be inspected."
+        );
+      }
+      const texture = face.getTexture();
+      if (texture && (!Texture.all.includes(texture) ||
+          (typeof Project !== "undefined" && Array.isArray(Project?.textures) &&
+           !Project.textures.includes(texture)))) {
+        throw new Error(
+          "TEXTURE_SEAM_HANDOFF_NATIVE_UNAVAILABLE: resolved face atlas does not belong to the current texture inventory."
+        );
+      }
+      bindings.push({
+        cube_uuid: target.cube_uuid,
+        face: target.face,
+        texture_uuid: texture ? texture.uuid : null,
+        native_material_name: face.material_name,
+      });
+    }
+  }
+  const handoff = buildTextureTreatmentCrossCubeSeamHandoff(plan, bindings);
+  const inspected = inspectDeclaredNativeCrossCubeSeams(
+    handoff.declarations, context, alphaSemantics
+  );
+  return {
+    ...inspected,
+    treatment_handoff: {
+      source: handoff.source,
+      state: handoff.state,
+      scope: handoff.scope,
+      declared_pair_count: handoff.declared_pair_count,
+      native_binding_attested: false as const,
+      material_approval_attested: false as const,
+      texture_revision_attested: false as const,
+      scene_coverage_attested: false as const,
+      visual_verdict: "not_evaluated" as const,
+    },
   };
 }
 

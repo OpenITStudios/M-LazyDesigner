@@ -735,15 +735,19 @@ describe("affected execution planner", () => {
     expect(plan.commands).not.toContain("bun run verify:full");
   });
 
-  test("Texture face-treatment changes select their existing owner test", () => {
+  test("Texture treatment plus declared seam handoff preserve both behavior owners", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/texture/treatmentPlan.ts"],
       semanticImpact: impact(),
     });
     expect(plan.fallback_full_verify).toBe(false);
     expect(plan.targeted_tests).toEqual([
+      "mcp/tests/texture-cross-cube-native.test.ts",
       "mcp/tests/texture-treatment-intelligence.test.ts",
     ]);
+    expect(plan.commands).toContain(
+      "bun test tests/texture-cross-cube-native.test.ts tests/texture-treatment-intelligence.test.ts"
+    );
   });
 
   test("recent Texture source changes route directly to their owning regressions", () => {

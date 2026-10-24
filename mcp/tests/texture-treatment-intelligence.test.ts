@@ -4,7 +4,12 @@ import {
   getTextureSurfacePatternRecipe,
   TEXTURE_SURFACE_PATTERN_NAMES,
 } from "@/lib/textureSurfacePattern";
-import { planTextureTreatment } from "@/lib/textureTreatmentPlan";
+import {
+  buildTextureTreatmentCrossCubeSeamHandoff,
+  planTextureTreatment,
+  type TextureTreatmentPlanInput,
+  type TextureTreatmentNativeFaceBinding,
+} from "@/lib/textureTreatmentPlan";
 import { VANILLA_TEXTURE_KNOWLEDGE } from "@/lib/textureVanillaKnowledge";
 
 function pixels(alpha: readonly number[]): Uint8ClampedArray {
@@ -174,5 +179,191 @@ describe("texture treatment intelligence", () => {
     expect(VANILLA_TEXTURE_KNOWLEDGE.copied_texture_assets_required).toBe(false);
     expect(VANILLA_TEXTURE_KNOWLEDGE.principles.join(" ")).toContain("ordered");
     expect(VANILLA_TEXTURE_KNOWLEDGE.anti_patterns.join(" ")).toContain("intermediate alpha");
+  });
+});
+
+
+function explicitSeamTreatment(): TextureTreatmentPlanInput {
+  const left = { cube_uuid: "panel-left", face: "north" as const };
+  const right = { cube_uuid: "panel-right", face: "north" as const };
+  const underside = { cube_uuid: "panel-left", face: "down" as const };
+  return {
+    required_faces: [left, right, underside],
+    regions: [{
+      region: "continuous-front",
+      evidence: "observed",
+      surface_pattern: "painted_metal",
+      render_profile: "opaque",
+      face_targets: [
+        { ...left, treatment: "PAINT" },
+        { ...right, treatment: "PAINT" },
+        { ...underside, treatment: "INTENTIONAL_FLAT" },
+      ],
+    }],
+    seam_pairs: [{
+      left: { ...left, edge: "right" },
+      right: { ...right, edge: "left" },
+      continuity_intent: "REQUIRED",
+      surface_id: "panel-front",
+      material_id: "surface-metal",
+    }],
+  };
+}
+function nativeSeamFaceBindings(): TextureTreatmentNativeFaceBinding[] {
+  return [
+    { cube_uuid: "panel-left", face: "north", texture_uuid: "base-left", native_material_name: "" },
+    { cube_uuid: "panel-right", face: "north", texture_uuid: "base-right", native_material_name: "" },
+    { cube_uuid: "panel-left", face: "down", texture_uuid: "base-left", native_material_name: "" },
+  ];
+}
+
+describe("texture treatment-owned cross-Cube seam handoff", () => {
+  test("only explicit observed per-face pair becomes bounded review-only native declarations", () => {
+    const input = explicitSeamTreatment();
+    const plan = planTextureTreatment(input);
+    expect(plan.readiness.state).toBe("ready");
+    const handoff = buildTextureTreatmentCrossCubeSeamHandoff(
+      plan, nativeSeamFaceBindings()
+    );
+    expect(handoff.state).toBe("review_required");
+    expect(handoff.source).toBe("texture_treatment_plan");
+    expect(handoff.scope).toBe("explicit_face_inventory");
+    expect(handoff.declared_pair_count).toBe(1);
+    expect(handoff.declarations).toEqual([
+      {
+        cube_uuid: "panel-left", face: "north", edge: "right",
+        continuity_intent: "REQUIRED",
+        surface_id: "panel-front", material_id: "surface-metal",
+        expected_texture_uuid: "base-left",
+        expected_native_material_name: "",
+      },
+      {
+        cube_uuid: "panel-right", face: "north", edge: "left",
+        continuity_intent: "REQUIRED",
+        surface_id: "panel-front", material_id: "surface-metal",
+        expected_texture_uuid: "base-right",
+        expected_native_material_name: "",
+      },
+    ]);
+    expect(handoff.native_binding_attested).toBe(false);
+    expect(handoff.texture_revision_attested).toBe(false);
+    expect(handoff.material_approval_attested).toBe(false);
+    expect(handoff.scene_coverage_attested).toBe(false);
+    expect(handoff.visual_verdict).toBe("not_evaluated");
+  });
+
+  test("treatment owner never guesses seams from complete face inventory alone", () => {
+    const input = explicitSeamTreatment();
+    delete input.seam_pairs;
+    const plan = planTextureTreatment(input);
+    expect(plan.readiness.state).toBe("ready");
+    const result = buildTextureTreatmentCrossCubeSeamHandoff(
+      plan, nativeSeamFaceBindings()
+    );
+    expect(result.state).toBe("not_evaluated");
+    expect(result.declarations).toEqual([]);
+    expect(result.declared_pair_count).toBe(0);
+  });
+
+  test("unobserved surfaces and missing semantic identifiers cannot become continuous seams", () => {
+    const inferred = explicitSeamTreatment();
+    inferred.regions[0].evidence = "inferred";
+    const inferredPlan = planTextureTreatment(inferred);
+    expect(inferredPlan.readiness.state).toBe("review_required");
+    expect(inferredPlan.readiness.unresolved).toContainEqual({
+      region: "*", reason: "SEAM_OBSERVED_REFERENCE_REQUIRED",
+    });
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      inferredPlan, nativeSeamFaceBindings()
+    )).toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+
+    const unnamed = explicitSeamTreatment();
+    unnamed.seam_pairs![0].material_id = null;
+    const planned = planTextureTreatment(unnamed);
+    expect(planned.readiness.unresolved).toContainEqual({
+      region: "*", reason: "SEAM_SURFACE_AND_MATERIAL_REQUIRED",
+    });
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      planned, nativeSeamFaceBindings()
+    )).toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+  });
+
+  test("cross-region render/PBR disagreements block inferred shared material ownership", () => {
+    const input = explicitSeamTreatment();
+    input.regions = [
+      {
+        ...input.regions[0],
+        face_targets: input.regions[0].face_targets!.filter(
+          face => face.cube_uuid === "panel-left"
+        ),
+      },
+      {
+        region: "other", evidence: "observed",
+        surface_pattern: "painted_metal", render_profile: "translucent",
+        pbr_intent: "none",
+        face_targets: [
+          { cube_uuid: "panel-right", face: "north", treatment: "PAINT" },
+        ],
+      },
+    ];
+    const plan = planTextureTreatment(input);
+    expect(plan.readiness.unresolved).toContainEqual({
+      region: "*", reason: "SEAM_RENDER_OR_PBR_COHORT_MISMATCH",
+    });
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      plan, nativeSeamFaceBindings()
+    )).toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+  });
+
+  test("duplicate, same-Cube and out-of-scope seam edges fail before a native handoff", () => {
+    const repeated = explicitSeamTreatment();
+    repeated.seam_pairs = [repeated.seam_pairs![0], repeated.seam_pairs![0]];
+    expect(() => planTextureTreatment(repeated)).toThrow(
+      "TEXTURE_SEAM_PAIR_DUPLICATE"
+    );
+    const oneCube = explicitSeamTreatment();
+    oneCube.seam_pairs = [{
+      ...oneCube.seam_pairs![0],
+      right: { cube_uuid: "panel-left", face: "down", edge: "left" },
+    }];
+    expect(() => planTextureTreatment(oneCube)).toThrow(
+      "TEXTURE_SEAM_PAIR_DUPLICATE"
+    );
+    const incomplete = explicitSeamTreatment();
+    incomplete.required_faces = undefined;
+    const planned = planTextureTreatment(incomplete);
+    expect(planned.readiness.state).toBe("review_required");
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      planned, nativeSeamFaceBindings()
+    )).toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+  });
+
+  test("the complete native face inventory and consistent material-name mapping are required", () => {
+    const plan = planTextureTreatment(explicitSeamTreatment());
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      plan, nativeSeamFaceBindings().slice(0, 2)
+    )).toThrow("TEXTURE_SEAM_HANDOFF_SCOPE_INVALID");
+    const foreign = nativeSeamFaceBindings();
+    foreign[2] = { ...foreign[2], cube_uuid: "not-in-plan" };
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      plan, foreign
+    )).toThrow("TEXTURE_SEAM_HANDOFF_SCOPE_INVALID");
+    const untextured = nativeSeamFaceBindings();
+    untextured[1].texture_uuid = null;
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      plan, untextured
+    )).toThrow("TEXTURE_SEAM_HANDOFF_BINDING_UNAVAILABLE");
+    const mismatchedMaterial = nativeSeamFaceBindings();
+    mismatchedMaterial[1].native_material_name = "entity_emissive";
+    expect(() => buildTextureTreatmentCrossCubeSeamHandoff(
+      plan, mismatchedMaterial
+    )).toThrow("TEXTURE_SEAM_HANDOFF_NATIVE_MATERIAL_MISMATCH");
+  });
+
+  test("planning retains independent copies of authored seam pair endpoints", () => {
+    const input = explicitSeamTreatment();
+    const plan = planTextureTreatment(input);
+    input.seam_pairs![0].left.edge = "top";
+    expect(plan.seam_pairs[0].left.edge).toBe("right");
   });
 });

@@ -541,6 +541,33 @@ describe("world-space native Cube face projection", () => {
     expect(rotated.world_normal).toEqual([-1, 0, 0]);
   });
 
+  test("accepts native THREE Matrix4 typed elements without incorrectly requiring Array.isArray", () => {
+    const matrix_world = new Float32Array([
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      2, 3, 4, 1,
+    ]);
+    expect(Array.isArray(matrix_world)).toBe(false);
+    const projected = projectNativeCubeSeamEdgeToWorld({
+      face: "north",
+      local_start: [0, 0, 0],
+      local_end: [0, 1, 0],
+      matrix_world,
+    });
+    expect(projected.start).toEqual([2, 3, 4]);
+    expect(projected.end).toEqual([2, 4, 4]);
+    expect(projected.world_normal).toEqual([0, 0, -1]);
+
+    matrix_world[3] = Number.NaN;
+    expect(() => projectNativeCubeSeamEdgeToWorld({
+      face: "north",
+      local_start: [0, 0, 0],
+      local_end: [0, 1, 0],
+      matrix_world,
+    })).toThrow("CROSS_CUBE_WORLD_TRANSFORM_UNVERIFIED");
+  });
+
   test("orthogonal nonuniform Cube scale preserves comparable world normals", () => {
     const scaled = [
       2, 0, 0, 0,

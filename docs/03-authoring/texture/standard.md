@@ -507,6 +507,27 @@ RGBA revision. The helper reports `comparison_state` and still explicitly
 does **not** attest texture revision, material approval, full scene coverage
 or mapped visuals. Verify only ranked material seam candidates on fresh model views.
 
+**Treatment-owned cross-Cube seam handoff (source only):**
+`planTextureTreatment` may carry explicit pairs of `cube_uuid + face +
+edge` targets as `seam_pairs`. Pairs must connect different Cubes and
+refer to the complete `required_faces` ownership of the same treatment
+plan; a target edge cannot be claimed twice. `REQUIRED` continuity needs
+an explicit surface/material identity, observed reference evidence,
+compatible render/PBR cohorts and no intentionally transparent face.
+Missing or incompatible evidence blocks planning readiness and can never
+be inferred from coincident geometry or matching colors.
+
+`buildTextureTreatmentCrossCubeSeamHandoff` verifies all required face
+bindings, not just paired seam faces. The unregistered
+`inspectTreatmentBoundNativeCrossCubeSeams` reads current resolved
+Blockbench texture UUID and native material names and delegates to the
+existing conservative cross-Cube sampler. THREE `matrixWorld.elements`
+accepts native `Float32Array`/`Float64Array` and ordinary 16-value
+numeric arrays. Even when a plan is ready and an edge is sampled, the
+result is **review-required**: material approval, texture SHA revision,
+full scene coverage, installed native validity and mapped visual PASS
+are not automatically attested. Production `list_textures` is unchanged.
+
 **RGB seam evidence and alpha meaning:** Intra-Cube and cross-Cube seam
 diagnostics use one sample-comparison rule. In `OPACITY` mode, RGB is
 compared only when both corresponding texels have nonzero alpha; alpha holes

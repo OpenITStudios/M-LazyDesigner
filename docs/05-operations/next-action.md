@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 cross-Cube native seam binding provenance:
-- Unregistered helper requires resolved Texture UUID, native Texture/project membership and exact face material_name alongside declared material/surface intent. Rechecks bindings, UV, rotation and world matrix after sampling; stale/foreign owners excluded (including single-texture overrides). Regression owner expanded. No new public schema.
-- `comparison_state` never treats zero comparable pairs as clean; full RGBA revision, semantic material approval, installed/native sampling and mapped visuals NOT ATTESTED. Bun/types/native/Golden NOT EXECUTED (CI disabled).
-- Next: genuine owner-backed treatment-plan handoff, native proof and generator only if public contract changes. Keep painted-UV repack block and current registration unchanged.
+2026-10-24 treatment-owned cross-Cube seam handoff:
+- Fixed THREE Float32Array/Float64Array matrixWorld support in pure/native seam projection. Treatment owner now accepts explicit cross-Cube seam_pairs with complete required face inventory and checks observed evidence, render/PBR parity, transparency and duplicate ownership. Unregistered native helper resolves face bindings and calls existing sampler. Focused pure/native mock regressions authored; no public schema change.
+- Readiness means source treatment planning only; handoff is REVIEW_REQUIRED, never approval or visual PASS. Native texture revision, full-scene/Golden and installed world sampling NOT ATTESTED. Bun/typecheck/native NOT EXECUTED (CI disabled).
+- Next: genuine trusted approval/evidence handoff, matching-SHA executable tests and installed Blockbench sampling before any approved generator-coupled public activation. Painted-atlas UV migration still guarded.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 

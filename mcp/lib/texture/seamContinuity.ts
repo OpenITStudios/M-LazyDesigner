@@ -368,13 +368,18 @@ export function projectNativeCubeSeamEdgeToWorld(input: {
   face: NativeCubeSeamFace;
   local_start: readonly [number, number, number];
   local_end: readonly [number, number, number];
-  matrix_world: readonly number[];
+  matrix_world: ArrayLike<number>;
 }): {
   start: [number, number, number];
   end: [number, number, number];
   world_normal: [number, number, number];
 } {
-  const m = input.matrix_world;
+  // THREE.Matrix4.elements may be Float32Array/Float64Array, not Array.
+  // Normalize exactly 16 entries so all numeric checks share one path.
+  const matrix = input.matrix_world;
+  const m = matrix && typeof matrix.length === "number" && matrix.length === 16
+    ? Array.from(matrix)
+    : [];
   if (!(input.face in NATIVE_CUBE_NORMALS) ||
       m.length !== 16 || m.some(value => !Number.isFinite(value)) ||
       Math.abs(m[3]) > 1e-9 || Math.abs(m[7]) > 1e-9 ||
