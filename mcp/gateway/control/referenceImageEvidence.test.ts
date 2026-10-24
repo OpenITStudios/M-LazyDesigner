@@ -6,7 +6,11 @@ import { createHash } from "node:crypto";
 import { buildControlStageContext } from "./contextProjection";
 import type { ControlWorkspaceProjection } from "./workspace";
 import { readReferenceImageEvidence, summarizeReferenceAlphaSilhouette } from "./referenceImageEvidence";
-import { readReferencePackageProjection } from "./referencePackage";
+import {
+  inspectTextureSeamReferenceImageIdentity,
+  readReferencePackageProjection,
+} from "./referencePackage";
+import { planTextureTreatment } from "../../lib/texture/treatmentPlan";
 
 const RED_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQoAHxcCAk+Uzr4AAAAASUVORK5CYII=", "base64"
@@ -253,5 +257,165 @@ describe("actual reference image evidence — Control owner", () => {
     expect(source).toContain('type: "image" as const');
     expect(source).toContain("visual_verdict: \"not_evaluated\"");
     expect(source).toContain("model_image_capture_required: true");
+  });
+});
+
+
+function requiredSeamPlan(observedRevision: string) {
+  const left = { cube_uuid: "panel-left", face: "north" as const };
+  const right = { cube_uuid: "panel-right", face: "north" as const };
+  const pair = {
+    left: { ...left, edge: "right" as const },
+    right: { ...right, edge: "left" as const },
+  };
+  return planTextureTreatment({
+    required_faces: [left, right],
+    regions: [{
+      region: "front-panel", evidence: "observed",
+      surface_pattern: "painted_metal", render_profile: "opaque",
+      face_targets: [
+        { ...left, treatment: "PAINT" },
+        { ...right, treatment: "PAINT" },
+      ],
+    }],
+    seam_pairs: [{
+      ...pair,
+      continuity_intent: "REQUIRED",
+      surface_id: "front-panel", material_id: "painted-metal",
+      reference_observation: {
+        reference_id: "IMG_FRONT",
+        reference_revision: observedRevision,
+        observation_id: "front-joint",
+        observed_edges: [pair.left, pair.right],
+      },
+    }],
+  });
+}
+
+const textureImage = (status = "APPROVED") => [{
+  id: "IMG_FRONT",
+  file: "images/front.png",
+  role: "MATERIAL_TEXTURE",
+  used_by: ["TEXTURE"],
+  status,
+  view: "front",
+}];
+
+describe("source-byte-backed treatment seam reference identity", () => {
+  test("reuses actual package image SHA and double-read evidence without claiming user approval", async () => {
+    const root = await packageRoot(textureImage());
+    const source = await readReferencePackageProjection(root);
+    expect(source.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    const sha = createHash("sha256").update(RED_PNG).digest("hex");
+    expect(source.images[0].sha256).toBe(sha);
+    const inspected = await inspectTextureSeamReferenceImageIdentity({
+      reference_package_path: root,
+      expected_reference_fingerprint: source.fingerprint!,
+      treatment_plan: requiredSeamPlan("sha256:" + sha),
+    });
+    expect(inspected).toMatchObject({
+      state: "source_image_bytes_matched",
+      source: "reference_package_image_readback",
+      reference_fingerprint: source.fingerprint,
+      observed_pair_count: 1,
+      source_image_bytes_matched: true,
+      assertion_provenance: "REFERENCE_PACKAGE_DECLARED_UNAUTHENTICATED",
+      material_approval_attested: false,
+      observation_visibility_attested: false,
+      scene_coverage_attested: false,
+      visual_verdict: "not_evaluated",
+      images: [{
+        reference_id: "IMG_FRONT",
+        source_image_sha256: sha,
+        package_declared_status: "APPROVED",
+        media_type: "image/png",
+        byte_length: RED_PNG.length,
+      }],
+    });
+    // No source PNG bytes or base64 are leaked into the stage metadata.
+    expect(JSON.stringify(inspected)).not.toContain(RED_PNG.toString("base64"));
+    expect(JSON.stringify(inspected)).not.toContain('"data":');
+  });
+
+  test("changed source image bytes cannot silently inherit a prior package fingerprint", async () => {
+    const root = await packageRoot(textureImage());
+    const prior = await readReferencePackageProjection(root);
+    const sha = createHash("sha256").update(RED_PNG).digest("hex");
+    await writeFile(join(root, "images/front.png"), BLUE_PNG);
+    await expect(inspectTextureSeamReferenceImageIdentity({
+      reference_package_path: root,
+      expected_reference_fingerprint: prior.fingerprint!,
+      treatment_plan: requiredSeamPlan("sha256:" + sha),
+    })).rejects.toThrow("TEXTURE_SEAM_REFERENCE_SOURCE_CHANGED");
+  });
+
+  test("caller-invented or stale seam image revisions cannot be source-byte verified", async () => {
+    const root = await packageRoot(textureImage());
+    const source = await readReferencePackageProjection(root);
+    for (const expected of [
+      "source-v1",
+      "sha256:" + "a".repeat(64),
+    ]) {
+      await expect(inspectTextureSeamReferenceImageIdentity({
+        reference_package_path: root,
+        expected_reference_fingerprint: source.fingerprint!,
+        treatment_plan: requiredSeamPlan(expected),
+      })).rejects.toThrow(expected === "source-v1"
+        ? "TEXTURE_SEAM_REFERENCE_REVISION_INVALID"
+        : "TEXTURE_SEAM_REFERENCE_REVISION_CHANGED");
+    }
+  });
+
+  test("package-declared image status and TEXTURE stage relevance are required but not independently approved", async () => {
+    for (const [rows, reason] of [
+      [textureImage("DRAFT"), "TEXTURE_SEAM_REFERENCE_PACKAGE_NOT_APPROVED"],
+      [[{ ...textureImage()[0], used_by: ["GEOMETRY"] }],
+        "TEXTURE_SEAM_REFERENCE_IMAGE_SCOPE"],
+    ] as const) {
+      const root = await packageRoot([...rows]);
+      const source = await readReferencePackageProjection(root);
+      const sha = createHash("sha256").update(RED_PNG).digest("hex");
+      await expect(inspectTextureSeamReferenceImageIdentity({
+        reference_package_path: root,
+        expected_reference_fingerprint: source.fingerprint!,
+        treatment_plan: requiredSeamPlan("sha256:" + sha),
+      })).rejects.toThrow(reason);
+    }
+  });
+
+  test("modified treatment plan or missing edge observation fails before source read", async () => {
+    const root = await packageRoot(textureImage());
+    const source = await readReferencePackageProjection(root);
+    const sha = createHash("sha256").update(RED_PNG).digest("hex");
+    const stale = requiredSeamPlan("sha256:" + sha);
+    stale.seam_pairs[0].surface_id = null;
+    await expect(inspectTextureSeamReferenceImageIdentity({
+      reference_package_path: root,
+      expected_reference_fingerprint: source.fingerprint!,
+      treatment_plan: stale,
+    })).rejects.toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+
+    const missing = requiredSeamPlan("sha256:" + sha);
+    delete missing.seam_pairs[0].reference_observation;
+    await expect(inspectTextureSeamReferenceImageIdentity({
+      reference_package_path: root,
+      expected_reference_fingerprint: source.fingerprint!,
+      treatment_plan: missing,
+    })).rejects.toThrow("TEXTURE_SEAM_HANDOFF_PLAN_NOT_READY");
+  });
+
+  test("no explicit edge observation cannot be promoted into verified image evidence", async () => {
+    const plan = requiredSeamPlan("sha256:" + "a".repeat(64));
+    plan.seam_pairs.length = 0;
+    const proof = await inspectTextureSeamReferenceImageIdentity({
+      reference_package_path: "/nonexistent/should-not-read",
+      expected_reference_fingerprint: "f".repeat(64),
+      treatment_plan: plan,
+    });
+    expect(proof.state).toBe("not_evaluated");
+    expect(proof.reference_fingerprint).toBeNull();
+    expect(proof.source_image_bytes_matched).toBe(false);
+    expect(proof.images).toEqual([]);
+    expect(proof.material_approval_attested).toBe(false);
   });
 });

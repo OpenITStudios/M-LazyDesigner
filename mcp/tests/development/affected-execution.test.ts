@@ -776,6 +776,25 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("Reference Package byte identity changes select its two retained Control source suites", () => {
+    for (const changedPath of [
+      "mcp/gateway/control/referencePackage.ts",
+      "mcp/gateway/control/referenceImageEvidence.ts",
+    ]) {
+      const plan = planAffectedExecution({
+        changedPaths: [changedPath], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify).toBe(false);
+      expect(plan.targeted_tests).toEqual([
+        "mcp/gateway/control/referenceImageEvidence.test.ts",
+        "mcp/gateway/control/referencePackage.test.ts",
+      ]);
+      expect(plan.commands).toContain(
+        "bun test gateway/control/referenceImageEvidence.test.ts gateway/control/referencePackage.test.ts"
+      );
+    }
+  });
+
   test("native cross-Cube seam additions select both world-transform and Runtime owners", () => {
     for (const source of [
       "mcp/lib/texture/seamContinuity.ts",

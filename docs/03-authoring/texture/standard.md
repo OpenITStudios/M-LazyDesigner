@@ -537,6 +537,22 @@ is sampled, the result is **review-required**: material approval, texture SHA re
 full scene coverage, installed native validity and mapped visual PASS
 are not automatically attested. Production `list_textures` is unchanged.
 
+**Exact Reference Package image identity for seam observations:**
+The existing Gateway Control Reference reader now has an *unregistered,
+read-only* bridge that checks a `seam_pairs[].reference_observation`
+against a **current real image file** in `REFERENCE.json`. The
+observation's `reference_id` must match a declared TEXTURE image ID,
+`reference_revision` must be `sha256:<actual-image-SHA-256>`, and
+the caller must pin the current Reference Package fingerprint. The
+reader recomputes image bytes and denies stale/missing, non-TEXTURE,
+non-`APPROVED` package-declared sources; no source bytes are copied
+into diagnostic JSON. This is stronger than a made-up `source-v1`
+label, but *package-declared APPROVED remains unverified user approval*.
+Content identity does not establish that the image actually shows the
+claimed Cube seam. The sampler is still unregistered and no visual
+acceptance, material approval, model-wide coverage or texture pixel
+revision is inferred.
+
 **RGB seam evidence and alpha meaning:** Intra-Cube and cross-Cube seam
 diagnostics use one sample-comparison rule. In `OPACITY` mode, RGB is
 compared only when both corresponding texels have nonzero alpha; alpha holes

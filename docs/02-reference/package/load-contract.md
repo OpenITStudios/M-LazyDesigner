@@ -229,6 +229,35 @@ stage Markdown image IDs
 
 Particle textures/resources are loaded by explicit path from the particle block, not by browsing every image/resource.
 
+### Cross-Cube Texture seam observation identity (optional, source-only)
+
+The existing Control Reference Package reader now also owns
+`inspectTextureSeamReferenceImageIdentity` for a *read-only*, **unregistered**
+texture treatment handoff. This helper accepts a canonical treatment
+plan and the **current** pinned Reference Package fingerprint. Each
+explicit seam observation must identify a `REFERENCE.json.images[].id`
+and use a `reference_revision` of `sha256:<64 lowercase hex>`
+matching the **actual packaged image bytes**, as recomputed by
+`readReferencePackageProjection` and freshly checked by
+`readReferenceImageEvidence`.
+
+It reads at most four explicitly named TEXTURE-stage images and requires
+each to carry a package-declared `status="APPROVED"`. Package status is
+**not independent user approval** and the image may not visually support
+the caller's alleged seam observation. This establishes source-image
+byte identity only; no segmentation, semantic seam correspondence or
+painted-model visual PASS follows. The receipt has
+`source_image_bytes_matched=true` with the source fingerprint, image IDs,
+SHA-256 and byte lengths but **never returns image bytes/base64**.
+`material_approval_attested=false`,
+`observation_visibility_attested=false`,
+`visual_verdict=not_evaluated` remain explicit.
+
+No `seam_pairs` means `not_evaluated` and no reference file reads.
+Stale package fingerprints, changed image contents, invalid revisions,
+missing TEXTURE relevance or unapproved package-declared image status
+fail closed. There is no new Gateway tool or Runtime seam activation.
+
 ## Scale / Resource Loading Rule
 
 Model scale comes from `REFERENCE.json.requirements`:

@@ -5,7 +5,8 @@ import {
   parseReferencePackage,
 } from "./referenceParser";
 import type { ControlReferenceProjection } from "./referenceTypes";
-import { inspectReferenceImages } from "./referenceImageEvidence";
+import { inspectReferenceImages, readReferenceImageEvidence } from "./referenceImageEvidence";
+import { requireTextureTreatmentSeamPlanReady } from "../../lib/texture/treatmentPlan";
 import { fileMetadataSignature } from "./fileSignature";
 
 export type {
@@ -171,4 +172,133 @@ export async function readReferencePackageProjection(
       package_root: dirname(sourcePath),
     };
   }
+}
+
+
+/**
+ * Read-only bridge to the canonical Reference Package image owner.
+ *
+ * This verifies actual on-disk source image SHA-256, current Reference Package
+ * fingerprint, declared TEXTURE stage relevance and package-declared review
+ * status for *exact* seam-reference observations. It does NOT authenticate a
+ * user/reviewer, inspect what the image depicts, or approve a Cube seam.
+ *
+ * No binary source image enters the returned metadata or AI/Gateway context.
+ * The handoff remains unregistered and cannot activate native seam sampling.
+ */
+export async function inspectTextureSeamReferenceImageIdentity(input: {
+  reference_package_path: string;
+  expected_reference_fingerprint: string;
+  treatment_plan: Parameters<typeof requireTextureTreatmentSeamPlanReady>[0];
+}) {
+  const { treatment_plan: plan } = input;
+  requireTextureTreatmentSeamPlanReady(plan);
+  // The plan is already bounded to <=32 paired edges by the canonical
+  // treatment owner; do not retrieve unrelated or unreferenced images.
+  const observations = plan.seam_pairs.flatMap(pair =>
+    pair.reference_observation ? [pair.reference_observation] : []
+  );
+  if (!observations.length) {
+    return {
+      source: "reference_package_image_readback" as const,
+      state: "not_evaluated" as const,
+      reference_fingerprint: null,
+      observed_pair_count: 0,
+      images: [],
+      assertion_provenance: "CALLER_DECLARATION_UNVERIFIED" as const,
+      source_image_bytes_matched: false as const,
+      material_approval_attested: false as const,
+      observation_visibility_attested: false as const,
+      scene_coverage_attested: false as const,
+      visual_verdict: "not_evaluated" as const,
+    };
+  }
+  if (typeof input.expected_reference_fingerprint !== "string" ||
+      !/^[a-f0-9]{64}$/.test(input.expected_reference_fingerprint)) {
+    throw new Error(
+      "TEXTURE_SEAM_REFERENCE_FINGERPRINT_REQUIRED: pin the current Control Reference Package fingerprint."
+    );
+  }
+  const ids = [...new Set(observations.map(row => row.reference_id))].sort();
+  if (ids.length > 4) {
+    throw new Error(
+      "TEXTURE_SEAM_REFERENCE_IMAGE_BUDGET: no more than four declared current-stage reference images per evidence read."
+    );
+  }
+  for (const observation of observations) {
+    if (!/^sha256:[0-9a-f]{64}$/.test(observation.reference_revision)) {
+      throw new Error(
+        "TEXTURE_SEAM_REFERENCE_REVISION_INVALID: source readback requires a decoded package image SHA-256 token."
+      );
+    }
+  }
+
+  // Reuse Control's source security: package-relative path, symlink, size,
+  // MIME-signature and full source-byte content hashing. This recalculates
+  // actual image hashes even if REFERENCE.json itself was cacheable.
+  const current = await readReferencePackageProjection(
+    input.reference_package_path
+  );
+  if (!current.available || !current.fingerprint) {
+    throw new Error(
+      "TEXTURE_SEAM_REFERENCE_SOURCE_UNAVAILABLE: current Reference Package cannot attest image identity."
+    );
+  }
+  if (current.fingerprint !== input.expected_reference_fingerprint) {
+    throw new Error(
+      "TEXTURE_SEAM_REFERENCE_SOURCE_CHANGED: the Reference Package or image bytes changed since the caller observed it."
+    );
+  }
+  for (const id of ids) {
+    const declared = current.images.find(image => image.id === id);
+    if (!declared || declared.integrity !== "VERIFIED" ||
+        !declared.used_by.includes("TEXTURE")) {
+      throw new Error(
+        "TEXTURE_SEAM_REFERENCE_IMAGE_SCOPE: a declared source image is missing, invalid or not a TEXTURE reference."
+      );
+    }
+    if (declared.status !== "APPROVED") {
+      // APPROVED is a field in REFERENCE.json, not an independently
+      // authenticated user's review action.
+      throw new Error(
+        "TEXTURE_SEAM_REFERENCE_PACKAGE_NOT_APPROVED: the selected image is not marked APPROVED in the current package."
+      );
+    }
+  }
+
+  // The existing Control reader checks the package-declared content SHA
+  // against a fresh second read. A file replaced while this request runs
+  // is therefore never silently accepted.
+  const evidence = await readReferenceImageEvidence(current, ids);
+  const byId = new Map(evidence.map(image => [image.id, image]));
+  for (const observation of observations) {
+    const image = byId.get(observation.reference_id);
+    if (!image ||
+        observation.reference_revision !== "sha256:" + image.sha256) {
+      throw new Error(
+        "TEXTURE_SEAM_REFERENCE_REVISION_CHANGED: the observed seam image revision differs from the actual Reference Package bytes."
+      );
+    }
+  }
+
+  return {
+    source: "reference_package_image_readback" as const,
+    state: "source_image_bytes_matched" as const,
+    reference_fingerprint: current.fingerprint,
+    observed_pair_count: observations.length,
+    images: evidence.map(image => ({
+      reference_id: image.id,
+      source_image_sha256: image.sha256,
+      media_type: image.mime_type,
+      byte_length: image.bytes,
+      // Status is package-declared only; it never proves user approval.
+      package_declared_status: image.status,
+    })),
+    assertion_provenance: "REFERENCE_PACKAGE_DECLARED_UNAUTHENTICATED" as const,
+    source_image_bytes_matched: true as const,
+    material_approval_attested: false as const,
+    observation_visibility_attested: false as const,
+    scene_coverage_attested: false as const,
+    visual_verdict: "not_evaluated" as const,
+  };
 }

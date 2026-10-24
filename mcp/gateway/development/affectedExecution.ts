@@ -610,6 +610,16 @@ function sharedContractTestsForPath(path: string): readonly string[] {
   if (path === "mcp/lib/authoring/semanticHistory.ts") {
     return SEMANTIC_HISTORY_CONTRACT_TESTS;
   }
+  if (path === "mcp/gateway/control/referencePackage.ts" ||
+      path === "mcp/gateway/control/referenceImageEvidence.ts") {
+    // The canonical Reference Package read is also the source-image SHA
+    // authority. Keep real binary-identity and stage-consistency regressions
+    // with the focused image and package readers.
+    return [
+      "mcp/gateway/control/referenceImageEvidence.test.ts",
+      "mcp/gateway/control/referencePackage.test.ts",
+    ];
+  }
   if (path === "mcp/gateway/control/delta/recheck.ts") {
     // Target extraction is a shared Control domain boundary, not a single
     // capability owner. Select its existing Geometry/UV/Texture/Animation

@@ -12,10 +12,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Next REMOTE_GITHUB work
 
-2026-10-24 seam reference observation and replay safety:
-- Canonical treatment owner requires explicit edge-scoped reference observation (reference ID/revision, observation ID, exact two edges) for REQUIRED seam pairs; `evidence=observed` alone is insufficient. Handoff replays canonical source validation before native reads so post-ready edits cannot bypass continuity/face scope checks. Manifests retain `CALLER_DECLARATION_UNVERIFIED`, never approval. Pure/native regression additions authored.
-- Cross-Cube helper still unregistered. Bun/types/native/Golden NOT EXECUTED (CI disabled). No independent trusted reference/approval source, full RGBA revision or scene-wide visual acceptance.
-- Next: only a genuinely trusted asset/reviewer evidence owner can attest reference approval and revision; otherwise retain advisory-only source. Continue exact-SHA source/native proof when environment exists, no user-local commands. Painted-atlas repack guard unchanged.
+2026-10-24 source-byte verified Reference Package seam observations:
+- Existing Gateway Control referencePackage owner now compares seam observation IDs/revisions to real current package TEXTURE-stage image SHA-256 via the existing verified image reader, with pinned package fingerprint and APPROVED package metadata. Real byte identity only; user approval and whether the image depicts the requested seam remain NOT ATTESTED. Focused existing Control regression+affected routing authored. No public tool or native activation.
+- Bun/types, installed Blockbench native, full scene/Golden and cost NOT EXECUTED (CI disabled). Cross-Cube seam helper remains unregistered; painted-atlas UV repack stays guarded.
+- Next: trusted reviewer approval and semantic image-edge observation correspondence, only when real authority exists; exact-SHA source/native proof. Do not repeat source readback implementation.
 
 B0-A source trace: [FLOW_MCP_BATCH0_AUDIT.md](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) (six source-registered routes, UV still unregistered). The import-safe test remains authored but not executed; generator-coupled UV activation and native acceptance are deferred.
 
