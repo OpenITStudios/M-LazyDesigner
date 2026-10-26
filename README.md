@@ -103,34 +103,45 @@ Static source/CI proof can establish routing, contracts, schemas, deterministic 
 
 ## Repository Map
 
-```text
-.agents/skills/    task/domain specialists loaded only when relevant
-docs/              hierarchical canonical documentation; start at docs/README.md
-apps/desktop/      Tauri/Svelte/Rust desktop machine control plane
-distribution/      product install/update/rollback/package authority
-mcp/               Runtime/Gateway plus package-scoped engineering support
-workspace/         persistent active/saved asset packages
-experiments/       bounded research only
-```
+One repository contains two distinct responsibilities. Choose the relevant owner before reading or writing.
+
+| Responsibility | Canonical owner | Contents |
+| --- | --- | --- |
+| Product development | `mcp/` | Gateway, Control, Runtime/plugin, schemas, generators, source tests and package-local builds |
+| Desktop development | `apps/desktop/` | Tauri/Svelte/Rust application and machine control plane |
+| Product distribution | `distribution/` | Managed install, update, rollback and packaging |
+| Working system | `.agents/` | Agent routing, specialist Skills and permission preflight; not asset storage |
+| Working guidance | `docs/` | 01-product, 02-reference and 03-authoring guide asset work; 04-system owns architecture/ownership; 05-operations owns current proof and continuation |
+| Asset projects | `workspace/` | Persistent `active/<project>/` and explicitly saved `saved/<project>/` packages |
+| Research | `experiments/` | Bounded experiments and retained research inputs; not production dependencies |
+| GitHub configuration | `.github/` | Repository automation and templates |
+
+Control's implementation stays in `mcp/`; its authoring instructions and projected context use the existing working-system owners. Do not copy source, Skills or policy into a second development/authoring tree. Start documentation discovery at [docs/README.md](docs/README.md), development at [CONTRIBUTING.md](CONTRIBUTING.md), and asset work at [workspace/README.md](workspace/README.md).
 
 ## Repository Root Policy
 
-The repository root is intentionally sparse. New top-level entries are allowed only for these roles:
+This is the canonical layout and naming policy. The root is a navigation facade, not a storage area.
 
-- canonical entrypoints/governance (`README.md`, `AGENTS.md`, `CONTEXT.md`, contribution/security/license files);
-- repository-wide toolchain configuration (`.github/`, dotfiles);
-- durable product domains (`apps/`, `distribution/`, `docs/`, `mcp/`, `workspace/`, `experiments/`).
+Allowed source directories: `.agents/`, `.github/`, `apps/`, `distribution/`, `docs/`, `experiments/`, `mcp/`, `workspace/`.
 
-Do not create top-level feature, temporary, generated, benchmark, fixture, archive, or project folders. Place them under the owning domain instead.
+Allowed source files: `.bun-version`, `.editorconfig`, `.gitattributes`, `.gitignore`, `AGENTS.md`, `CONTEXT.md`, `CONTRIBUTING.md`, `GITHUB_RULES.md`, `LICENSE`, `package.json`, `README.md`, `SECURITY.md`.
 
-Naming contract:
+Git metadata `.git` may be a directory or worktree pointer file. Ignored local state may use `.cache/`, `.codex/`, `.claude/`, `.idea/`, `.vscode/`, local `.env`/`.env.*` files, and OS metadata `.DS_Store`, `Thumbs.db`, `Desktop.ini`. Existing `.blockit/`, `.capture/` and `.sample-renders/` are compatibility-only local state, not destinations for new work. Local state must never be tracked or contain the only copy of a reference or authored asset.
 
-- directories: lowercase kebab-case;
-- code identifiers: follow the owning language convention;
-- one concept = one canonical name; compatibility aliases stay explicitly marked and temporary;
-- use `stage` for Geometry/Texturing/Animation semantics; legacy `phase` survives only where compatibility requires it.
+Layout rules:
 
-`distribution/` owns product packaging/install/update/rollback and may consume production artifacts; production Runtime/Gateway source must not depend on distribution. `experiments/` is non-authoritative research. Production source and active asset state must not depend on it.
+1. A new root entry requires a demonstrated repository-wide toolchain/governance need and a matching policy/test update. Feature, fixture, benchmark, archive, temporary and per-asset directories belong under their existing owner.
+2. Each file has one canonical owner. MCP implementation/tests belong in `mcp/`; Desktop implementation/tests in `apps/desktop/`; installers/packages in `distribution/`. Working instructions use `.agents/` and `docs/`; authored outputs use `workspace/`.
+3. Images, GIFs, videos, ZIPs and models never belong loose at root. Retain project references with their project; research inputs with their experiment. Never infer asset association from appearance alone.
+4. New directories and ordinary retained artifact names use lowercase kebab-case and describe their role. Keep mandated toolchain names, language identifiers, Bedrock exports and explicitly documented compatibility identifiers intact. Avoid `misc`, `stuff`, download timestamps and `final-final` as permanent names.
+5. Asset packages follow [workspace/README.md](workspace/README.md): project `README.md`, one current editable model, `references/`, `assets/`, `exports/` and disposable `.cache/` as needed. Do not create empty placeholder directories. Move active work to `saved/` only on explicit user instruction.
+6. Cache is reproducible/disposable. Durable references, editable models and delivery exports stay with their owner. Generated artifacts follow their canonical generator and package build destination.
+7. A move must preserve content and update affected imports, links, generators, installers and tests. Check existing destinations before moving; never overwrite user work or delete an unverified duplicate.
+8. One concept has one canonical name. Compatibility aliases must be identified explicitly. Use `stage` for Geometry/Texturing/Animation semantics; legacy `phase` survives only where compatibility requires it.
+9. New documentation extends the existing canonical domain. Git owns history; do not create parallel policy registries, archives or state systems.
+10. Run `bun --cwd mcp run verify:repository` after layout changes. Its root contract checks files, directories and tracked local state, reports offending paths, and never moves or deletes them automatically.
+
+`distribution/` may consume production artifacts; production Runtime/Gateway source must not depend on distribution. `experiments/` is non-authoritative research. Production source and active asset state must not depend on it.
 
 ## Development
 

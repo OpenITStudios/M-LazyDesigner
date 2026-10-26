@@ -103,6 +103,8 @@ Material logical commits include `Work`, `State`, and `Proof`, with `Decision`, 
 
 ## Repository hygiene
 
+Follow the [Repository Root Policy](README.md#repository-root-policy) for the root allowlist, development versus working-system ownership, naming and safe moves. Run the repository checks after layout changes.
+
 - never commit credentials, tokens, private keys, or local `.env` values;
 - keep dependencies and action revisions pinned according to current repository policy;
 - keep `workspace/active/<project>/README.md` resume-critical rather than chronological;

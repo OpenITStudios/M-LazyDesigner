@@ -211,11 +211,11 @@ Do not create duplicate navigation, review archives, decision logs, roadmaps, or
 
 ## Repository Top-Level Discipline
 
-Keep the root sparse and deterministic for Codex navigation.
+Follow [README Root Policy](README.md#repository-root-policy); root layout tests enforce its allowlist.
 
 Allowed top-level domains are `.agents/`, `.github/`, `apps/`, `distribution/`, `docs/`, `mcp/`, `workspace/`, and `experiments/`, plus repository-wide entrypoint/governance/toolchain files.
 
-Do not add top-level feature, generated, fixture, benchmark, archive, temporary, or per-asset directories. Put them under the canonical owner.
+Keep source in mcp/apps/distribution, working instructions in .agents/docs, and assets in workspace; never create parallel development/authoring trees.
 
 Naming:
 - directories use lowercase kebab-case;

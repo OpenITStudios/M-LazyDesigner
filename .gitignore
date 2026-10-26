@@ -1,6 +1,7 @@
 # OS / editor-local state
 .DS_Store
 Thumbs.db
+Desktop.ini
 .idea/
 .vscode/
 *.swp
@@ -40,7 +41,7 @@ workspace/**/.cache/
 workspace/**/mcp-results.jsonl
 
 # Experimental transient runtime/proof output. Intentional harness source stays tracked.
-Experimental/**/.cache/
+experiments/**/.cache/
 
 # Repository-root generated visual/debug output is transient and must stay local.
 .capture/

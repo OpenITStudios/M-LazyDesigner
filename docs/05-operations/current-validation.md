@@ -4,11 +4,13 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 ## Current authority
 
-2026-10-26: user-authorized LOCAL_CODE validation of `OpenITStudios/M-LazyDesigner`/`Local`, input `a3ff57b48252fcf7ed4022e4f4810975baef566c`, in the clean dependency-modernization worktree. Original checkout/assets remain unchanged; 52 modified/untracked files have verified recovery copies. The 438 locally missing Crimson Sentinel files remain tracked remotely and recoverable from original Git HEAD; no asset deletion/migration approval is implied.
+2026-10-26: user-authorized LOCAL_CODE validation of `OpenITStudios/M-LazyDesigner`/`Local`, input `a3ff57b48252fcf7ed4022e4f4810975baef566c`, in the clean dependency-modernization worktree. Prior primary source/assets are preserved; root policy/check edits and two hash-verified GIF relocations are the only later organization changes. All 52 recovery payloads remain intact. The 438 locally missing Crimson Sentinel files remain tracked remotely and recoverable from original Git HEAD; no asset deletion/migration approval is implied.
 
 CI DISABLED. No Actions, main change, release, installation or native mutation. Frozen dependency inputs match; no package changes/install. Validation uses cached Bun 1.4.3, Node 24.22.0, pinned Rust 1.99.1, not the older default-path Bun.
 
-Initial exact-SHA `verify:full`: 295 repository PASS / 4 FAIL. Compiler failures included malformed casts, missing Runtime-generation import/UV mapping and stale fixtures. Repairs retain native safety/public tools; regression covers rectangular physical/logical recipe UV. Control UV target extraction now reads each receipt field once (existing getter-count regression). Old receipt/ancestry/bitmap/compaction tests now exercise current source, preserving refusal and visual-disclaimer checks. Backend's static line ceiling was explicitly rebased 760→1,000 after generation/catalog/passive-probe protections; queue/affinity delegation assertions remain. Search tests retain native-first ranking while allowing a lower-ranked maintenance candidate; production search is unchanged.
+Source repairs are recorded at `bf42bbacba506d61436c85c142a8fe359e0f3cc0`; exact-commit `verify:full` PASS (matching SHA in `verify-full-exact.log`). The initial four repository failures and earlier installer timeout remain historical diagnostics; no native proof follows.
+
+Current bounded work is root organization: one repo, separate product-development and working-system ownership, explicit root files/domains, safe naming/moves and rejection of tracked local state. Primary root check: 5 PASS; clean-worktree repository checks: 301 PASS. Two root GIFs retain identical SHA-256 at canonical experiment paths and in recovery. Full source proof above applies to its recorded commit, not the older dirty primary checkout or an untested later change.
 
 ## Current proof matrix
 
