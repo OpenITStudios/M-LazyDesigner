@@ -1,18 +1,16 @@
 # LazyDesigner Current Validation
 
-This file owns current proof interpretation only and the requested dependency-efficiency report. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details, including the source-only 23–24 October work at `a3ff57b4` and earlier reports at `ce5299aa`/`b9b4756e`.
+This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details, including the source-only 23–24 October work at `a3ff57b4` and earlier reports at `ce5299aa`/`b9b4756e`.
 
 ## Current authority
 
 2026-10-26: user-authorized LOCAL_CODE work on OpenITStudios/M-LazyDesigner/Local in the dependency-modernization worktree. Primary source remains dirty at 44b03b52. Recovery preserves 52 payloads; two root GIFs moved to canonical references. The 438 pre-existing missing Crimson Sentinel paths remain recoverable from Git.
 
-CI DISABLED. No Actions, main changes or release publishing. New native acceptance: NOT EXECUTED. Dependencies unchanged; Desktop version metadata is 0.1.1. Toolchain: Bun 1.4.3, Node 24.22.0, Rust 1.99.1.
+CI DISABLED. No Actions/main/release publishing. Runtime/visual acceptance: NOT EXECUTED. Desktop 0.1.1 installed; dependencies unchanged. Toolchain: Bun 1.4.3, Node 24.22.0, Rust 1.99.1.
 
-Source reconciliation at `bf42bbac`: exact-commit `verify:full` PASS; matching SHA in `verify-full-exact.log`. Earlier repository failures/installer timeout remain diagnostics.
+Accepted source: `37baddccc0e89f9a9ebed91576d421c0de6e7ef9`; exact-commit verify:full PASS in ignored `.cache/alignment-verify-full-37baddcc.log` (matching SHA, EXIT_CODE=0). Repository 302, Runtime 2529, installer/migration 34, authoring 166, Gateway/manifest 298 and Golden contracts 44 PASS; types/unused/generators/evaluations/benchmarks/build PASS. Desktop source PASS: TS6/TS7, frontend and Rust 83. Prior candidate compiler/continuity failures remain recorded, not hidden.
 
-Current bounded work: App/Gateway/Runtime managed alignment and explicitly authorized PC migration. Source candidate PASS: repository 302, authoring 166, installer/migration 34, Rust 83; Desktop TS6/TS7/frontend and generated freshness. Tests cover drift, unrelated Codex settings, old source process detection, backed-up migration, failed activation recovery, repository ownership and Desktop compatibility. Logs: ignored `.cache/alignment-*.log`.
-
-Native installation/staging artifacts are not built at this source checkpoint. Old Codex source sessions are active and must defer migration. No current installed-runtime, restart/reconnect, trust/load, visual or end-to-end stability PASS is inferred. Older primary source retains its own pending changes.
+App 0.1.1 installed at `%LOCALAPPDATA%/Programs/LazyDesigner/`; registry path and bundled package match that source. Compiled package install/idempotence/stdio smoke PASS. Actual legacy migration returns STAGED while old Codex source sessions are active; original config/plugin remain byte-identical to recovery. Package/installer receipts: ignored `.cache/alignment-artifacts.json` and `alignment-installed-app.json`. Finish through Desktop after closing Codex. Native plugin trust/load, live matching health/catalog and restart/reconnect remain unverified; no live or asset-quality acceptance follows.
 
 ## Current proof matrix
 

@@ -69,7 +69,7 @@ Generated/runtime/static verification does not establish live Blockbench visual 
 
 ## Desktop control-plane contract
 
-The planned LazyDesigner Desktop application must reuse this managed distribution rather than implement a second updater, rollback engine, release downloader, Codex configuration writer, or Gateway package manager.
+The LazyDesigner Desktop application reuses this managed distribution rather than implement a second updater, rollback engine, release downloader, Codex configuration writer, or Gateway package manager.
 
 Its machine-facing read contract is:
 
