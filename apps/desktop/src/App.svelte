@@ -144,7 +144,7 @@
     try {
       status = await observeStatus(invoke<SystemStatus>('system_status'), 30_000);
       if (status && devFixture) status = applyDevFixture(status, devFixture);
-      if (status?.manager_available) setupStaged = false;
+      setupStaged = !status?.manager_available && status?.bootstrap_pending === true;
       connectionMonitor.fullStatusSucceeded();
     } catch (cause) {
       // A failed full observation must never leave actions enabled using
@@ -347,6 +347,11 @@
 
   async function installLazyDesigner() {
     if (devFixture) return;
+    return performInstall(false);
+  }
+
+  async function performInstall(migrateLegacy: boolean) {
+    if (devFixture) return;
     if (!status?.bootstrap_available || status.manager_available || busyAction || statusProbeFailures >= 2) return;
     busyAction = 'install';
     migrationConflict = false;
@@ -360,7 +365,7 @@
           recordOperation('Install LazyDesigner', feedback.kind, feedback.status);
           setupStaged = !feedback.verifyRuntime;
         },
-      });
+      }, migrateLegacy);
       const ready = outcome.readiness;
       if (!ready) {
         showSuccessToast(outcome.feedback.message, outcome.feedback.kind);
@@ -606,6 +611,7 @@
           {migrationConflict} {migrationConflictKind} {error} {errorDetail} {operations}
           {refresh} {showRetiredPluginFile} {chooseBlockbenchExecutable}
           {showPluginFile} {exportDiagnostics} {runManagedAction}
+            migrateLegacySetup={() => performInstall(true)}
         />
       {/if}
     </section>

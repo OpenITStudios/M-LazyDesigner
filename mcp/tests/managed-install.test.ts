@@ -5,6 +5,8 @@ import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { applyTransaction, configureCodex, installPackage, installedState, parseManifest, parsePublishedReleaseManifest, LEGACY_REPOSITORY, readOptional, recoverInstallation, repairInstallation, rollbackStatus, REPOSITORY, requireMatchingReleaseManifest, requireExpectedUpdateSource, preflightManagedInstallTargets, requirePlainPath, sameInstalledPath, sha256, SKILLS, PACKAGE_SOURCE_PATHS, withInstallLock, type InstallOptions, type Manifest } from "../../distribution/managed-install";
+import { inspectAlignment } from "../../distribution/alignment";
+import { legacyClientActive } from "../../distribution/managed-install";
 import { MODELLING_PATH, TEXTURING_PATH, ANIMATION_PATH, PROFILE_PATHS } from "../gateway/control/contexts";
 const parse = (s: string): any => Bun.TOML.parse(s);
 
@@ -23,7 +25,7 @@ test("installation identity survives native Windows path virtualization", async 
 
 async function fixture(directory: string, digit = "a"): Promise<Manifest> {
   const paths = ["lazydesigner.exe", "lazydesigner_mcp.js", "AGENTS.md", "THIRD_PARTY_NOTICES.txt", ...PACKAGE_SOURCE_PATHS];
-  const manifest: Manifest = { schema: 1, repository: REPOSITORY, source_sha: digit.repeat(40), build_identity: "sha256:" + digit.repeat(64), platform: "windows-x64", files: [] };
+  const manifest: Manifest = { schema: 1, repository: REPOSITORY, source_sha: digit.repeat(40), build_identity: "sha256:" + digit.repeat(64), desktop_contract: { minimum: 1, maximum: 1 }, platform: "windows-x64", files: [] };
   for (const path of paths) {
     const bytes = Buffer.from(path === "lazydesigner_mcp.js" ? `globalThis.__LAZYDESIGNER_BUILD_ID__="${manifest.build_identity}";` : `Fixture ${path} ${digit}\n`);
     await mkdir(dirname(join(directory, path)), { recursive: true }); await writeFile(join(directory, path), bytes);
@@ -359,8 +361,90 @@ test("managed status exposes one desktop-ready machine health contract", async (
     tls_ready: false,
     tls_error: "missing test identity",
     rollback: { available: false, previous_source_sha: null, transaction: null },
+    alignment: { schema: 1, state: "unverified", issues: ["NOT_INSTALLED"], desktop_contract: null },
   });
   assert.equal(observedConfig, undefined);
+}));
+
+test("alignment verifies the installed package and Codex target without confusing closed Runtime with drift", async () => sandbox(async (d, o) => {
+  const pkg = join(d, "pkg"); await fixture(pkg); await installPackage(pkg, o, parse);
+  assert.equal((await inspectAlignment(o.root, parse)).state, "aligned");
+  await writeFile(o.config, (await readFile(o.config, "utf8")) + '\n[mcp_servers.other]\ncommand="other.exe"\n');
+  assert.equal((await inspectAlignment(o.root, parse)).state, "aligned");
+  await writeFile(o.config, (await readFile(o.config, "utf8")).replace(/"command" = "[^"]+"/, '"command" = "bun.exe"'));
+  assert.ok((await inspectAlignment(o.root, parse)).issues.includes("CODEX_ENTRY_DRIFT"));
+  await writeFile(o.plugin, "changed plugin");
+  assert.ok((await inspectAlignment(o.root, parse)).issues.includes("MANAGED_FILE_DRIFT"));
+  const state = JSON.parse(await readFile(join(o.root, "installed.json"), "utf8"));
+  state.owned[o.plugin] = sha256("changed plugin");
+  await writeFile(join(o.root, "installed.json"), JSON.stringify(state));
+  assert.ok((await inspectAlignment(o.root, parse)).issues.includes("MANAGED_FILE_DRIFT"));
+}));
+
+test("legacy migration is explicit, preserves unrelated client settings, and rollback restores legacy bytes", async () => sandbox(async (d, o) => {
+  const pkg = join(d, "pkg"); await fixture(pkg);
+  const original = '# keep\nmodel="test"\n# BEGIN BLOCKIT MANAGED\n[mcp_servers.blockit]\ncommand="bun.exe"\nargs=["old.ts"]\ntool_timeout_sec=240\n[mcp_servers.blockit.env]\nBLOCKIT_RUNTIME_URL="https://127.0.0.1:3000/bb-mcp"\n# END BLOCKIT MANAGED\n[mcp_servers.other]\ncommand="other.exe"\n';
+  await mkdir(dirname(o.config), { recursive: true }); await writeFile(o.config, original);
+  await mkdir(dirname(o.plugin), { recursive: true }); const retired = join(dirname(o.plugin), "blockit_mcp.js");
+  await writeFile(retired, "ORIGINAL LEGACY BYTES");
+  await assert.rejects(installPackage(pkg, o, parse), /Retired/);
+  await installPackage(pkg, o, parse, false, true, 1);
+  const config = parse(await readFile(o.config, "utf8"));
+  assert.equal(config.model, "test"); assert.equal(config.mcp_servers.other.command, "other.exe");
+  assert.equal(config.mcp_servers.blockit, undefined);
+  assert.equal(config.mcp_servers.lazydesigner.tool_timeout_sec, 240);
+  assert.equal(config.mcp_servers.lazydesigner.env.LAZYDESIGNER_RUNTIME_URL, "https://127.0.0.1:3000/bb-mcp");
+  assert.equal(await readOptional(retired), null);
+  assert.equal((await inspectAlignment(o.root, parse)).state, "aligned");
+  assert.equal((await rollbackStatus(o.root)).available, true);
+  await recoverInstallation(o.root, true);
+  assert.equal(await readFile(o.config, "utf8"), original);
+  assert.equal(await readFile(retired, "utf8"), "ORIGINAL LEGACY BYTES");
+}));
+
+test("repository workspace remains user-owned and incompatible Desktop cannot activate", async () => sandbox(async (d, o) => {
+  const pkg = join(d, "pkg"); await fixture(pkg);
+  await mkdir(join(o.workspace, ".git"), { recursive: true }); await mkdir(join(o.workspace, "docs"), { recursive: true });
+  await writeFile(join(o.workspace, "AGENTS.md"), "USER REPOSITORY ROUTING");
+  await writeFile(join(o.workspace, "docs/README.md"), "USER DOCUMENTATION");
+  o.workspace_mode = "repository";
+  await assert.rejects(installPackage(pkg, o, parse, false, false, 2), /DESKTOP_UPDATE_REQUIRED/);
+  assert.equal(await installedState(o.root), null);
+  await installPackage(pkg, o, parse, false, false, 1);
+  assert.equal(await readFile(join(o.workspace, "AGENTS.md"), "utf8"), "USER REPOSITORY ROUTING");
+  assert.equal(await readOptional(join(o.workspace, ".agents/skills/lazydesigner-modelling/SKILL.md")), null);
+  assert.equal((await inspectAlignment(o.root, parse)).state, "aligned");
+}));
+
+test("migration refuses ambiguous sections and never discards unrelated configuration", () => {
+  const bad = '# BEGIN BLOCKIT MANAGED\n[mcp_servers.blockit]\ncommand="old.exe"\n[mcp_servers.other]\ncommand="other.exe"\n# END BLOCKIT MANAGED\n';
+  assert.throws(() => configureCodex(bad, "new.exe", parse, false, true), /unrelated/);
+  assert.throws(() => configureCodex('[mcp_servers.blockit]\nenabled=false\n', "new.exe", parse, false, true), /Disabled/);
+});
+
+test("legacy source sessions are detected across Windows path separators and disappear after owner exit", async () => sandbox(async (d, o) => {
+  if (process.platform !== "win32") return;
+  const script = join(d, "gateway.ts");
+  await writeFile(script, 'console.log("ready"); await Bun.sleep(60_000);');
+  await mkdir(dirname(o.config), { recursive: true });
+  await writeFile(o.config, `[mcp_servers.blockit]\ncommand=${JSON.stringify(process.execPath.replaceAll("\\", "/"))}\nargs=[${JSON.stringify(script.replaceAll("\\", "/"))}]\n`);
+  const child = Bun.spawn([process.execPath, script], { stdout: "pipe", stderr: "pipe" });
+  try {
+    const reader = child.stdout.getReader(); await reader.read(); reader.releaseLock();
+    assert.equal(await legacyClientActive(o.config), true);
+  } finally { child.kill(); await child.exited; }
+  assert.equal(await legacyClientActive(o.config), false);
+}));
+
+test("failed activation verification restores the pre-migration configuration and deleted plugin", async () => sandbox(async (d, o) => {
+  await mkdir(dirname(o.config), { recursive: true }); await writeFile(o.config, "OLD CONFIG");
+  await mkdir(dirname(o.plugin), { recursive: true }); await writeFile(o.plugin, "OLD PLUGIN");
+  await assert.rejects(applyTransaction(o.root, [
+    { path: o.plugin, bytes: null, expected: sha256("OLD PLUGIN") },
+    { path: o.config, bytes: Buffer.from("NEW CONFIG"), expected: sha256("OLD CONFIG") },
+  ], undefined, async () => { throw new Error("Activation failed"); }), /Activation failed/);
+  assert.equal(await readFile(o.config, "utf8"), "OLD CONFIG");
+  assert.equal(await readFile(o.plugin, "utf8"), "OLD PLUGIN");
 }));
 
 

@@ -67,7 +67,8 @@ describe("managed startup update contract", () => {
     expect(preflight).toBeLessThan(staging);
     expect(preflight).toBeLessThan(provision);
     expect(install).toContain("await requirePlainPath(retiredPlugin)");
-    expect(install).toContain("configureCodex(configuration, executable, parseToml, adopt)");
+    expect(install).toContain("configureCodex(configuration, executable, parseToml, adopt, migrateLegacy)");
+    expect(install).toContain("await readOptional(retiredPlugin) !== null && !migrateLegacy");
     expect(install).toContain("await preflightManagedInstallTargets(options, join(version,");
   });
 
@@ -127,7 +128,9 @@ describe("managed startup update contract", () => {
     expect(rust).toContain('command.arg("--expected-source-sha").arg(sha)');
     expect(rust).toContain('A verified selected update source is required.');
     expect(cli).toContain("requireExpectedUpdateSource(publishedManifest, expectedSourceSha)");
-    expect(cli).toContain("requireExpectedUpdateSource(await verifyPackage(pending.directory), expectedSourceSha)");
+    expect(cli).toContain("const candidate = await verifyPackage(pending.directory)");
+    expect(cli).toContain("requireExpectedUpdateSource(candidate, expectedSourceSha)");
+    expect(cli).toContain("requireDesktopContract(candidate, desktopContract ?? pending.desktop_contract)");
   });
 
   test("a staged update revalidates in place and never offers activation without proof", async () => {

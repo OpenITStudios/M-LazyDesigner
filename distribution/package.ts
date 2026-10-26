@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   if (process.platform !== "win32" || process.arch !== "x64") throw new Error("Build and smoke-test the Windows package on a Windows x64 runner.");
   const sourceSha = await run(["git", "rev-parse", "HEAD"], repo);
   if (!/^[a-f0-9]{40}$/.test(sourceSha) || process.env.GITHUB_SHA && process.env.GITHUB_SHA !== sourceSha) throw new Error("Source SHA does not match the release checkout.");
-  if (await run(["git", "status", "--porcelain", "--untracked-files=no"], repo)) throw new Error("Managed packages require a clean tracked checkout.");
+  if (await run(["git", "status", "--porcelain", "--untracked-files=all"], repo)) throw new Error("Managed packages require a clean tracked checkout with no untracked inputs.");
   await rm(output, { recursive: true, force: true }); await mkdir(packageDir, { recursive: true });
   const plugin = await readFile(join(repo, "mcp/dist", MCP_BUNDLE_FILENAME));
   const buildIdentity = extractPluginBuildIdentity(plugin.toString());
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
     }
   }
   await inventory(packageDir);
-  const manifest: Manifest = { schema: 1, repository: REPOSITORY, source_sha: sourceSha, build_identity: buildIdentity, platform: "windows-x64", files };
+  const manifest: Manifest = { schema: 1, repository: REPOSITORY, source_sha: sourceSha, build_identity: buildIdentity, desktop_contract: { minimum: 1, maximum: 1 }, platform: "windows-x64", files };
   const manifestBytes = JSON.stringify(manifest, null, 2) + "\n";
   await writeFile(join(packageDir, "lazydesigner-package.json"), manifestBytes);
   await writeFile(join(output, "lazydesigner-package.json"), manifestBytes);

@@ -9,6 +9,14 @@ import type { ManagedProgress } from "../../../apps/desktop/src/desktopTypes";
 import { observeStatus } from "../../../apps/desktop/src/statusObservation";
 
 describe("Desktop setup ordering", () => {
+  test("legacy migration is requested only by the explicit setup action", async () => {
+    const calls: unknown[] = [];
+    const invoke: DesktopInvoke = async (_command, args) => { calls.push(args); return { receipt: { status: "STAGED" } } as never; };
+    const hooks = { refresh: async () => {}, onReadiness: () => {}, onBootstrap: () => {} };
+    await createSetupOperations(invoke).install(hooks);
+    await createSetupOperations(invoke).install(hooks, true);
+    expect(calls).toEqual([undefined, { migrateLegacy: true }]);
+  });
   test.each(["STAGED", "INSTALLED"])("bootstrap %s preserves intermediate state and readiness order", async (status) => {
     const events: string[] = [];
     const invoke: DesktopInvoke = async command => {
@@ -200,6 +208,7 @@ describe("Desktop connection observations", () => {
     const changes: Partial<ConnectionObservation>[] = [
       { gateway_active: false }, { blockbench_running: false }, { runtime_listener_live: false },
       { plugin_integrity: "missing" }, { project_revision: "2" }, { project_session_live: false },
+      { configuration_revision: "changed-client-configuration" },
     ];
     for (const change of changes) {
       expect(connectionChanged({ ...observation, ...change }, baseline), JSON.stringify(change)).toBe(true);

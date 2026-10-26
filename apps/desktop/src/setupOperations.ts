@@ -17,8 +17,8 @@ export function createSetupOperations(invoke: DesktopInvoke) {
 
   return {
     connect: ensureReady,
-    async install(hooks: ReadinessHooks & { onBootstrap: (feedback: BootstrapInstallFeedback) => void }) {
-      const result = await invoke<BootstrapActionResult>('bootstrap_install');
+    async install(hooks: ReadinessHooks & { onBootstrap: (feedback: BootstrapInstallFeedback) => void }, migrateLegacy = false) {
+      const result = await invoke<BootstrapActionResult>('bootstrap_install', migrateLegacy ? { migrateLegacy: true } : undefined);
       const feedback = bootstrapInstallPresentation(result.receipt);
       hooks.onBootstrap(feedback);
       await hooks.refresh();

@@ -1,6 +1,6 @@
 use crate::{
     blockbench::BlockbenchState,
-    system_status::ManagedStatus,
+    system_status::{ManagedStatus, installation_matches},
 };
 use serde::Serialize;
 
@@ -92,6 +92,7 @@ pub(crate) fn product_state(
     let Some(managed) = managed else {
         return "attention";
     };
+    if !installation_matches(managed) { return "attention"; }
     if !managed.tls_ready {
         return "security-setup";
     }
@@ -142,6 +143,13 @@ pub(crate) fn readiness(
             ready: false,
         };
     };
+    if !installation_matches(managed) {
+        return ReadinessProjection {
+            state: "needs-attention",
+            summary: "Installed components or AI client configuration do not match, or this Desktop requires an update. Open Support for the alignment details.",
+            ready: false,
+        };
+    }
     if !managed.tls_ready {
         return ReadinessProjection {
             state: "needs-attention",
@@ -239,6 +247,10 @@ mod tests {
             tls_ready,
             tls_error: None,
             rollback: None,
+            alignment: Some(crate::system_status::InstallationAlignment {
+                schema: 1, state: "aligned".to_string(), issues: vec![],
+                desktop_contract: Some(crate::system_status::DesktopContract { minimum: 1, maximum: 1 }),
+            }),
         }
     }
 
@@ -265,6 +277,19 @@ mod tests {
         assert_eq!(result.ownership, "client-owned");
         assert_eq!(result.state, "client-disconnected");
         assert!(result.action.unwrap().contains("Reconnect LazyDesigner MCP"));
+    }
+
+    #[test]
+    fn readiness_refuses_missing_drifted_or_incompatible_installation_proof() {
+        let mut installed = managed(true, true, true);
+        let gateway = gateway(Some(&installed), true, true, true);
+        assert!(readiness(true, Some(&installed), true, true, &gateway, "ready").ready);
+        installed.alignment.as_mut().unwrap().desktop_contract.as_mut().unwrap().minimum = 2;
+        assert!(!readiness(true, Some(&installed), true, true, &gateway, "ready").ready);
+        installed.alignment.as_mut().unwrap().state = "drifted".to_string();
+        assert!(!readiness(true, Some(&installed), true, true, &gateway, "ready").ready);
+        installed.alignment = None;
+        assert!(!readiness(true, Some(&installed), true, true, &gateway, "ready").ready);
     }
 
     #[test]

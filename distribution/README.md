@@ -31,6 +31,20 @@ LazyDesigner has one native Geometry authoring path. Retired 3D-assisted/Hunyuan
 
 ## Safe activation and recovery
 
+### Installation alignment and Desktop compatibility
+
+The existing package manifest owns the optional `desktop_contract` range. New packages declare it; legacy packages without it remain inspectable but cannot claim verified alignment. Desktop embeds its source SHA and supported contract (currently 1). Its version label is not compatibility evidence. Desktop install/update passes `--desktop-contract`; an incompatible candidate returns `DESKTOP_UPDATE_REQUIRED` before staging or activation. Install a compatible verified Desktop installer before retrying; this does not enable unsigned self-update or a second updater.
+
+The existing `status` result adds `alignment`: `aligned`, `drifted` or `unverified`, with bounded issue codes and the package's Desktop contract. Full inspection verifies the immutable package, managed targets, exact versioned Codex executable and MCP entry. Other Codex servers/settings may change without creating false drift. A stopped Blockbench is connection state, not installation drift. Managed MCP startup refuses unresolved drift before opening the Runtime connection. Desktop full status and readiness consume this proof; its lightweight watcher only observes configuration revision to request a new full inspection after an edit.
+
+`--workspace-mode repository --workspace <checkout>` keeps that checkout's AGENTS, Skills, docs and assets user/Git-owned. The managed installer installs executables/plugin and its Codex entry, without copying working-system files over the repository. This mode is pinned in installed state and preserved through updates and rollback. The ordinary standalone authoring workspace remains supported.
+
+### Explicit legacy migration
+
+First install may use `--migrate-legacy`, or the explicit backed-up migration action in Desktop Support. Strict TOML preservation removes only a verified older BlockIT entry; recognized endpoint/TLS environment names are converted, user timeouts and unrelated client settings remain intact. Ambiguous, disabled, remote or unknown legacy environment settings stop migration for review.
+
+The old plugin in the selected profile is removed from its active path only inside the existing journaled transaction, after its exact bytes and the original configuration have been retained. Failed final activation verification restores the previous state. Migration also observes source-launched old client processes, which have no managed leases; active old sessions keep the verified package staged without killing or restarting their owner. Retrying setup reuses that pending package. Old machine roots and user assets are retained and never selected as the new active installation.
+
 Updates are explicit, not network polling during authoring. The package is downloaded/built and verified before activation. Active Gateway process leases or a responding Runtime postpone replacement. A pending update may activate only when no conflicting Gateway/Runtime is active.
 
 
@@ -38,7 +52,7 @@ Desktop startup discovery uses the read-only `check-update` command. Published m
 
 `check-update` never stages or activates files. Network lookup is bounded and happens only when explicitly invoked by the Desktop startup owner; it is not called by normal MCP launch or the Desktop connection heartbeat.
 
-The manager never kills applications, closes unsaved models, silently overwrites user-edited managed Skills, or mutates user assets. A retired `blockit_mcp.js` file in the same Blockbench profile prevents new plugin activation until explicit migration; neither it nor its user-owned files are deleted. Transaction journals and hashes protect install/update/rollback. Local modifications require explicit adoption where supported.
+The manager never kills applications, closes unsaved models, silently overwrites user-edited managed Skills, or mutates user assets. A retired `blockit_mcp.js` file in the same Blockbench profile prevents new plugin activation until the explicit backed-up migration above. Transaction journals and hashes protect install/update/rollback. Local modifications require explicit adoption where supported.
 
 ## Codex configuration
 

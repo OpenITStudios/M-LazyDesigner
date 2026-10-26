@@ -8,8 +8,11 @@ import { DEFAULT_RUNTIME_URL, normalizeRuntimeUrl } from "../mcp/gateway/runtime
 import { MCP_BUNDLE_FILENAME } from "../mcp/compatibility/build-artifact";
 import { probeLoopbackPort } from "./runtime-probe";
 import { buildManagedStatus } from "./status";
+import { inspectAlignment } from "./alignment";
+import { legacyClientActive } from "./managed-install";
+import { rollbackStatus } from "./managed-install";
 import { ensureRuntimeTlsIdentity, renewRuntimeTlsIdentity, runtimeTlsStatus } from "./runtime-tls";
-import { atomicWrite, activeGateways, installedState, installPackage, parsePublishedReleaseManifest, readOptional, recoverInstallation, repairInstallation, REPOSITORY, requirePlainPath, sameInstalledPath, sha256, verifyPackage, requireMatchingReleaseManifest, requireExpectedUpdateSource, preflightManagedInstallTargets, withInstallLock, type InstallOptions, type Manifest } from "./managed-install";
+import { atomicWrite, activeGateways, installedState, installPackage, parsePublishedReleaseManifest, readOptional, recoverInstallation, repairInstallation, REPOSITORY, requirePlainPath, sameInstalledPath, sha256, verifyPackage, requireMatchingReleaseManifest, requireExpectedUpdateSource, requireDesktopContract, preflightManagedInstallTargets, withInstallLock, type InstallOptions, type Manifest } from "./managed-install";
 
 const RELEASE_ASSET = "lazydesigner-windows-x64.zip";
 const RELEASE_MANIFEST_ASSET = "lazydesigner-package.json";
@@ -18,8 +21,8 @@ const command = raw.shift() ?? "help";
 const flags = new Map<string, string>();
 for (let i = 0; i < raw.length; i++) {
   const flag = raw[i]!;
-  if (!["--root", "--workspace", "--plugin-path", "--config", "--package", "--tag", "--expected-source-sha", "--adopt", "--preview", "--progress-json"].includes(flag) || flags.has(flag)) throw new Error(`Unknown or repeated option: ${flag}`);
-  if (["--adopt", "--preview", "--progress-json"].includes(flag)) flags.set(flag, "true");
+  if (!["--root", "--workspace", "--workspace-mode", "--plugin-path", "--config", "--package", "--tag", "--expected-source-sha", "--desktop-contract", "--migrate-legacy", "--adopt", "--preview", "--progress-json"].includes(flag) || flags.has(flag)) throw new Error(`Unknown or repeated option: ${flag}`);
+  if (["--adopt", "--preview", "--progress-json", "--migrate-legacy"].includes(flag)) flags.set(flag, "true");
   else { const value = raw[++i]; if (!value || value.startsWith("--")) throw new Error(`Missing value for ${flag}`); flags.set(flag, value); }
 }
 const executableDir = dirname(process.execPath);
@@ -27,6 +30,10 @@ const inferredRoot = /[\\/]versions[\\/][a-f0-9]{40}$/.test(executableDir) ? dir
 const root = resolve(flags.get("--root") ?? process.env.LAZYDESIGNER_HOME ?? inferredRoot ?? join(process.env.LOCALAPPDATA ?? homedir(), "LazyDesigner", "managed"));
 const pendingPath = join(root, "pending.json");
 const expectedSourceSha = flags.get("--expected-source-sha") ?? null;
+const desktopContract = flags.has("--desktop-contract") ? Number(flags.get("--desktop-contract")) : undefined;
+if (desktopContract !== undefined && (!Number.isSafeInteger(desktopContract) || desktopContract < 1)) throw new Error("Invalid Desktop contract.");
+if (flags.has("--workspace-mode") && flags.get("--workspace-mode") !== "repository") throw new Error("Invalid workspace mode.");
+if (flags.has("--migrate-legacy") && command !== "install") throw new Error("Legacy migration is only supported by an explicit install.");
 if (expectedSourceSha !== null && !/^[a-f0-9]{40}$/.test(expectedSourceSha)) {
   throw new Error("Selected update source identity is invalid.");
 }
@@ -59,11 +66,14 @@ async function runtimeOnline(config?: string): Promise<boolean> {
 async function activatePending(): Promise<unknown> {
   const rawPending = await readOptional(pendingPath);
   if (!rawPending) return { status: "NO_PENDING_UPDATE" };
-  const pending = JSON.parse(rawPending.toString()) as { directory: string; options: InstallOptions; adopt: boolean };
+  const pending = JSON.parse(rawPending.toString()) as { directory: string; options: InstallOptions; adopt: boolean; migrate_legacy?: boolean; desktop_contract?: number };
   if (!sameInstalledPath(pending.options.root, root) || !sameInstalledPath(dirname(dirname(resolve(pending.directory))), join(root, "downloads")) || !/^[0-9a-f-]{36}$/.test(basename(dirname(pending.directory))) || basename(pending.directory) !== "package") throw new Error("Pending update is outside its installation.");
   if (await activeGateways(root) || await runtimeOnline(pending.options.config)) return { status: "STAGED", reason: "Close Blockbench and finish existing Codex MCP sessions; then run update again. Files are replaced automatically, not manually." };
-  requireExpectedUpdateSource(await verifyPackage(pending.directory), expectedSourceSha);
-  const result = await installPackage(pending.directory, pending.options, parseToml, pending.adopt);
+  if (pending.migrate_legacy && await legacyClientActive(pending.options.config)) return { status: "STAGED", reason: "Finish the older BlockIT/Codex MCP sessions, then finish setup in Desktop. The verified package is retained; existing files are unchanged." };
+  const candidate = await verifyPackage(pending.directory);
+  requireExpectedUpdateSource(candidate, expectedSourceSha);
+  requireDesktopContract(candidate, desktopContract ?? pending.desktop_contract);
+  const result = await installPackage(pending.directory, pending.options, parseToml, pending.adopt, pending.migrate_legacy === true, desktopContract ?? pending.desktop_contract);
   await rm(pendingPath);
   await rm(dirname(pending.directory), { recursive: true, force: true }).catch(e => console.error(`LazyDesigner staging cleanup deferred: ${String(e)}`));
   return { status: "INSTALLED", ...result, plugin: pending.options.plugin, workspace: pending.options.workspace, note: "First installation still requires native Blockbench plugin trust/load permission. Later updates replace the same file automatically; start Blockbench and a fresh Codex session." };
@@ -230,7 +240,7 @@ async function checkUpdate(): Promise<unknown> {
       ) {
         const manifest = await verifyPackage(parsed.directory);
         return {
-          status: "UPDATE_STAGED",
+          status: desktopUpdateRequired(manifest) ? "DESKTOP_UPDATE_REQUIRED" : "UPDATE_STAGED",
           installed_source_sha: installed.source_sha,
           available_source_sha: manifest.source_sha,
         };
@@ -249,12 +259,18 @@ async function checkUpdate(): Promise<unknown> {
   const release = await fetchPublishedRelease();
   const manifest = await fetchUpdateManifest(release);
   return {
-    status: manifest.source_sha === installed.source_sha ? "UP_TO_DATE" : "UPDATE_AVAILABLE",
+    status: desktopUpdateRequired(manifest) ? "DESKTOP_UPDATE_REQUIRED" : manifest.source_sha === installed.source_sha ? "UP_TO_DATE" : "UPDATE_AVAILABLE",
     installed_source_sha: installed.source_sha,
     available_source_sha: manifest.source_sha,
     tag: release.tag_name,
     published_at: typeof release.published_at === "string" ? release.published_at : null,
   };
+}
+
+function desktopUpdateRequired(manifest: Manifest): boolean {
+  if (desktopContract === undefined) return false;
+  const contract = manifest.desktop_contract;
+  return !contract || desktopContract < contract.minimum || desktopContract > contract.maximum;
 }
 
 async function fetchRelease(): Promise<string> {
@@ -322,6 +338,8 @@ async function main(): Promise<void> {
       if (installedPackage.source_sha !== state.source_sha) {
         throw new Error("Installed LazyDesigner source does not match its managed package.");
       }
+      const alignment = await inspectAlignment(root, parseToml);
+      if (alignment.state !== "aligned") throw new Error(`INSTALLATION_MISMATCH: ${alignment.issues.join(", ")}. Open Desktop Support; no Runtime operation was executed.`);
       // The Gateway inherits the exact installed plugin build identity.
       // HTTP health cannot substitute an arbitrary Runtime on the same port.
       process.env.LAZYDESIGNER_EXPECTED_RUNTIME_BUILD_ID = installedPackage.build_identity;
@@ -343,6 +361,10 @@ async function main(): Promise<void> {
     if (command === "recover" || command === "rollback") {
       progress(command, "preflight");
       if (await activeGateways(root) || await runtimeOnline(previous?.options.config)) throw new Error("Close Blockbench and active Codex MCP sessions before recovery/rollback.");
+      if (command === "rollback") {
+        const target = await rollbackStatus(root);
+        if (target.previous_source_sha) requireDesktopContract(await verifyPackage(join(root, "versions", target.previous_source_sha)), desktopContract);
+      }
       progress(command, command === "rollback" ? "restoring-previous-version" : "recovering-transaction");
       await recoverInstallation(root, command === "rollback");
       if (command === "rollback") await rm(pendingPath, { force: true });
@@ -360,22 +382,24 @@ async function main(): Promise<void> {
     progress(command, "preflight");
     await recoverInstallation(root);
     // Retrying a staged update uses its already-verified local package: no repeated download.
-    if (command === "update" && await readOptional(pendingPath) && !flags.has("--tag") && !flags.has("--preview")) { progress("update", "activating-staged"); receipt(await activatePending()); return; }
+    if ((command === "update" || command === "install") && await readOptional(pendingPath) && !flags.has("--tag") && !flags.has("--preview")) { progress(command, "activating-staged"); receipt(await activatePending()); return; }
     if (command === "update") progress("update", "fetching-release");
     const source = command === "install" ? resolve(flags.get("--package") ?? executableDir) : await fetchRelease();
     progress(command, "verifying-package");
     const manifest = await verifyPackage(source);
+    requireDesktopContract(manifest, desktopContract);
     if (command === "update") requireExpectedUpdateSource(manifest, expectedSourceSha);
     const options: InstallOptions = previous?.options ?? {
       root, workspace: resolve(flags.get("--workspace") ?? join(homedir(), "LazyDesigner-Workspace")),
       plugin: resolve(flags.get("--plugin-path") ?? join(root, "plugin", MCP_BUNDLE_FILENAME)),
       config: resolve(flags.get("--config") ?? join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "config.toml")),
+      ...(flags.get("--workspace-mode") === "repository" ? { workspace_mode: "repository" as const } : {}),
     };
     // A known old plugin or BlockIT Codex server must block before copying a
     // staged package or provisioning TLS. Activation repeats this preflight.
     await preflightManagedInstallTargets(
       options, join(root, "versions", manifest.source_sha, "lazydesigner.exe"),
-      parseToml, flags.has("--adopt")
+      parseToml, flags.has("--adopt"), flags.has("--migrate-legacy")
     );
     // Retain the candidate under installation ownership even when a downloaded ZIP is later removed.
     const staging = command === "update" ? source : join(root, "downloads", randomUUID(), "package");
@@ -387,7 +411,7 @@ async function main(): Promise<void> {
     progress(command, "staging");
     await verifyPackage(staging);
     if (command === "install" && !previous) { progress("install", "provisioning-runtime-security"); ensureRuntimeTlsIdentity(); }
-    await atomicWrite(pendingPath, Buffer.from(JSON.stringify({ directory: staging, options, adopt: flags.has("--adopt") })));
+    await atomicWrite(pendingPath, Buffer.from(JSON.stringify({ directory: staging, options, adopt: flags.has("--adopt"), migrate_legacy: flags.has("--migrate-legacy"), desktop_contract: desktopContract })));
     progress(command, "activating");
     receipt(await activatePending());
   }, command === "recover");

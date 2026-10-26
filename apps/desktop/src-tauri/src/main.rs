@@ -146,17 +146,18 @@ fn bootstrap_install_error(message: String) -> DesktopError {
 }
 
 #[tauri::command]
-fn bootstrap_install(app: tauri::AppHandle) -> Result<BootstrapActionResult, DesktopError> {
+fn bootstrap_install(app: tauri::AppHandle, migrate_legacy: Option<bool>) -> Result<BootstrapActionResult, DesktopError> {
+    let migrate_legacy = migrate_legacy.unwrap_or(false) || system_status::pending_bootstrap() == Some(true);
     let older_plugin = system_status::retired_plugin_for_setup()
         .map_err(|message| DesktopError::recoverable("BLOCKBENCH_PROFILE_UNVERIFIED", message))?;
-    if older_plugin {
+    if older_plugin && !migrate_legacy {
         operation_log::record("bootstrap_install", "LEGACY_MIGRATION_REQUIRED");
         return Err(DesktopError::recoverable(
             "LEGACY_PLUGIN_MIGRATION_REQUIRED",
             "An older BlockIT plugin is present. Review and back up the old plugin before installing the new LazyDesigner Runtime.".to_string(),
         ));
     }
-    let result = system_status::bootstrap_install(&app);
+    let result = system_status::bootstrap_install(&app, migrate_legacy);
     operation_log::record("bootstrap_install", if result.is_ok() { "ok" } else { "error" });
     result.map_err(bootstrap_install_error)
 }

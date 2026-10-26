@@ -41,6 +41,7 @@ export function productMessage(value: SystemStatus) {
 
 export function productGuidance(value: SystemStatus, pluginApprovalNeeded: boolean) {
   const mode = productMode(value);
+  if (mode === 'attention' && value.managed?.installed && value.managed.alignment?.state !== 'aligned') return 'Open Support to verify the managed package, plugin and AI client configuration before reconnecting.';
   if (mode === 'welcome' && !value.bootstrap_available) return 'This Desktop build does not contain the setup package. Open Support and export diagnostics.';
   if (mode === 'security-setup' && !value.maintenance.setup_tls) return value.maintenance.blocked_reason ?? 'Secure setup is temporarily unavailable. Close active authoring tasks and try again.';
   if (mode === 'unsupported') return 'Update Blockbench to a supported version, then refresh this page.';
@@ -159,6 +160,10 @@ export function desktopErrorNotice(cause: unknown): DesktopErrorNotice {
   const known = (title: string, message: string): DesktopErrorNotice => ({
     title, message, detail,
   });
+  if (/DESKTOP_UPDATE_REQUIRED/.test(detail ?? '')) return known('Desktop update required',
+    'The selected package needs a compatible Desktop installer. The active installation was preserved.');
+  if (/INSTALLATION_MISMATCH/.test(detail ?? '')) return known('Installed components need verification',
+    'Open Support to check the managed package, plugin and AI client entry before reconnecting.');
   if (code === 'PROJECT_DELETE_REVIEW_FAILED' || code === 'PROJECT_RECYCLE_FAILED') {
     if (/close all Blockbench|close Blockbench/i.test(detail ?? '')) {
       return known('Close Blockbench first',

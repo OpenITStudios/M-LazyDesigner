@@ -88,7 +88,7 @@
     {#if setupStaged}
       <section class="inline-guidance" role="status">
         <strong>Setup waiting for Blockbench</strong>
-        <span>The verified package is staged but not installed. Save your models, close Blockbench and active AI sessions, then choose Finish setup. No model file has been changed.</span>
+        <span>Setup is staged but not installed. Save your models, close Blockbench and active AI sessions, then choose Finish setup. The package is verified again before activation. No model file has been changed.</span>
       </section>
     {/if}
     {#if migrationConflict}
@@ -228,7 +228,7 @@
 
     {@render projectNavigator(status)}
 
-    {#if (productMode(status) !== 'ready' && productMode(status) !== 'client-wait') || status.gateway.state === 'gateway-detected' || status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED'}
+    {#if (productMode(status) !== 'ready' && productMode(status) !== 'client-wait') || status.gateway.state === 'gateway-detected' || status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED' || updateCheck?.status === 'DESKTOP_UPDATE_REQUIRED'}
     <section class="content-section">
       <div class="section-heading">
         <div><h2>AI connection and updates</h2><p>Editing remains available independently of AI connectivity.</p></div>
@@ -241,11 +241,11 @@
             {statusProbeFailures >= 2 ? 'Check required' : productMode(status) === 'ready' ? 'Connected' : productMode(status) === 'client-wait' ? (status.gateway.state === 'gateway-detected' ? 'MCP handshake unverified' : 'Not connected yet') : productHeadline(status)}
           </strong>
         </div>
-        {#if status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED' || updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED'}
+        {#if status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED' || updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED' || updateCheck?.status === 'DESKTOP_UPDATE_REQUIRED'}
           <div class="definition-row update-definition">
             <span>Update</span>
             <div class="inline-action">
-              <strong>{status.managed?.pending
+              <strong>{updateCheck?.status === 'DESKTOP_UPDATE_REQUIRED' ? 'Compatible Desktop installer required' : status.managed?.pending
                 ? updateCheck?.status === 'UPDATE_STAGED'
                   ? 'Package staged · not active'
                   : updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED'
@@ -254,7 +254,7 @@
                 : updateCheck?.status === 'UPDATE_AVAILABLE'
                   ? 'Update available · not downloaded'
                   : 'Update not activated'}</strong>
-              {#if updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED'}
+              {#if updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED' || updateCheck?.status === 'DESKTOP_UPDATE_REQUIRED'}
                 <button class="secondary-button small-button" onclick={() => navigate('Support')}>Support</button>
               {:else if status.managed?.pending && updateCheck?.status !== 'UPDATE_STAGED'}
                 <button class="secondary-button small-button" onclick={verifyPendingUpdate} disabled={busyAction !== null || statusProbeFailures >= 2}>Verify package</button>

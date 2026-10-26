@@ -37,6 +37,7 @@ export type ManagedStatus = {
     tls_ready: boolean;
     tls_error: string | null;
     rollback?: { available: boolean; previous_source_sha: string | null; transaction: string | null };
+    alignment?: { schema: number; state: 'aligned' | 'drifted' | 'unverified'; issues: string[]; desktop_contract: { minimum: number; maximum: number } | null };
   };
 
 export type MaintenanceAvailability = {
@@ -70,6 +71,7 @@ export type ConnectionStatus = {
     plugin_integrity: 'ready' | 'missing' | 'modified' | 'invalid' | 'unknown';
     project_revision: string | null;
     project_session_live: boolean;
+    configuration_revision?: string | null;
   };
 
 export type SystemStatus = {
@@ -83,6 +85,7 @@ export type SystemStatus = {
     maintenance: MaintenanceAvailability;
     manager_available: boolean;
     bootstrap_available: boolean;
+    bootstrap_pending?: boolean;
     runtime_listener_live: boolean;
     runtime_endpoint_match: boolean | null;
     /** null means no version evidence; false means an observed mismatch. */
@@ -91,6 +94,8 @@ export type SystemStatus = {
     managed: ManagedStatus | null;
     project_navigation: ProjectNavigation;
     diagnostic: string | null;
+    desktop_build?: { source_sha: string; contract: number };
+    configuration_revision?: string | null;
   };
 
 export type PluginFileActionResult = {
@@ -108,7 +113,7 @@ export type ManagedActionResult = {
   };
 
 export type ManagedUpdateCheck = {
-    status: 'NOT_INSTALLED' | 'UP_TO_DATE' | 'UPDATE_AVAILABLE' | 'UPDATE_STAGED' | 'UPDATE_STAGED_UNVERIFIED';
+    status: 'NOT_INSTALLED' | 'UP_TO_DATE' | 'UPDATE_AVAILABLE' | 'UPDATE_STAGED' | 'UPDATE_STAGED_UNVERIFIED' | 'DESKTOP_UPDATE_REQUIRED';
     installed_source_sha: string | null;
     available_source_sha: string | null;
     tag: string | null;

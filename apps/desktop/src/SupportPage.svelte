@@ -18,6 +18,7 @@
   export let showPluginFile: () => Promise<void>;
   export let exportDiagnostics: () => Promise<void>;
   export let runManagedAction: (action: ManagedAction) => Promise<void>;
+  export let migrateLegacySetup: () => Promise<void>;
 </script>
 
 <main class="page-content settings-content">
@@ -37,11 +38,13 @@
   {#if migrationConflict}
     <section class="settings-section">
       <h2>Review previous {migrationConflictKind === 'plugin' ? 'plugin' : 'AI client'}</h2>
+      <p>Migration backs up the previous client entry and plugin in the installation journal, preserves other client settings, and waits for active sessions to finish before switching components.</p>
+      <button class="secondary-button" onclick={migrateLegacySetup} disabled={busyAction !== null || status.manager_available}>Back up and migrate previous setup</button>
       {#if migrationConflictKind === 'plugin'}
-        <p>Save your models and close Blockbench. Review the existing plugin and keep a backup before using Blockbench's own plugin controls. LazyDesigner will not delete or adopt that file automatically. After the conflict is safely resolved, return to Workspace and choose Check again.</p>
+        <p>Save your models and close Blockbench. You can inspect the previous plugin before choosing the backed-up migration above. Migration removes the old plugin from the active profile only after retaining its exact bytes for rollback.</p>
         <button class="secondary-button" onclick={showRetiredPluginFile}>Show existing plugin</button>
       {:else}
-        <p>Back up your Codex configuration and review the older BlockIT MCP entry. LazyDesigner will not modify that entry or start another server automatically. Once a verified migration has resolved the conflict, return to Workspace and choose Check again.</p>
+        <p>Finish the older Codex MCP sessions before activating migration. The explicit migration replaces only the previous MCP entry, preserves other settings, and retains the original configuration for rollback.</p>
       {/if}
     </section>
   {/if}
@@ -59,11 +62,28 @@
     <h2>About</h2>
     <div class="definition-rows">
       <div class="definition-row"><span>LazyDesigner Desktop version</span><strong>{desktopVersion}</strong></div>
+      {#if status.desktop_build}<div class="definition-row"><span>Desktop build</span><code>{status.desktop_build.source_sha.slice(0,12)}</code></div>{/if}
       <div class="definition-row"><span>Blockbench version</span><strong>{status.blockbench.version ?? 'Unavailable'}</strong></div>
       {#if status.managed?.installed?.source_sha}<div class="definition-row"><span>Managed build</span><code>{status.managed.installed.source_sha.slice(0,12)}</code></div>{/if}
       {#if status.plugin_integrity !== 'ready'}<div class="definition-row"><span>Blockbench plugin</span><strong class="status-warning">{status.plugin_integrity === 'missing' ? 'Repairing / missing' : status.plugin_integrity === 'modified' ? 'Modified' : 'Needs attention'}</strong></div>{/if}
     </div>
   </section>
+
+  {#if status.managed?.installed}
+    <section class="settings-section">
+      <h2>Installation alignment</h2>
+      <p>{status.managed.alignment?.state === 'aligned' ? 'Managed package, plugin and AI client configuration match. Connection readiness is checked separately.' : 'The installed components have not been verified as a matching set. Review the details before preparing the AI connection.'}</p>
+      {#if status.managed.alignment?.desktop_contract && status.desktop_build && (status.desktop_build.contract < status.managed.alignment.desktop_contract.minimum || status.desktop_build.contract > status.managed.alignment.desktop_contract.maximum)}
+        <p>Update the Desktop application using the verified installer for this package. Your models remain available.</p>
+      {/if}
+      {#if status.managed.alignment?.issues.length}
+        <details class="advanced-recovery"><summary>Alignment details</summary>
+          <div class="recovery-list">{#each status.managed.alignment.issues as issue}<div><code>{issue}</code></div>{/each}</div>
+        </details>
+      {/if}
+      {#if status.managed.pending}<p>An update is staged. Finish active MCP sessions and close Blockbench after saving before activating it.</p>{/if}
+    </section>
+  {/if}
 
   <section class="settings-section">
     <h2>Troubleshooting</h2>
@@ -93,7 +113,7 @@
       <details class="advanced-recovery">
         <summary><span><strong>Advanced recovery</strong><small>Use only if normal setup or updates cannot finish.</small></span><span>Show</span></summary>
         <div class="recovery-list">
-          <div><span><strong>Restore previous version</strong><small>{status.maintenance.rollback ? 'Return to the last verified version.' : 'No previous version is available.'}</small></span><button class="secondary-button small-button" onclick={() => runManagedAction('rollback')} disabled={!status.maintenance.rollback || busyAction !== null || statusProbeFailures >= 2}>Restore</button></div>
+          <div><span><strong>Restore previous setup</strong><small>{status.maintenance.rollback ? 'Return to the previous verified package or backed-up legacy setup.' : 'No previous setup is available.'}</small></span><button class="secondary-button small-button" onclick={() => runManagedAction('rollback')} disabled={!status.maintenance.rollback || busyAction !== null || statusProbeFailures >= 2}>Restore</button></div>
           <div><span><strong>Repair LazyDesigner</strong><small>{status.maintenance.repair ? 'Restore missing files from the current installation.' : 'Repair is not available right now.'}</small></span><button class="secondary-button small-button" onclick={() => runManagedAction('repair')} disabled={!status.maintenance.repair || busyAction !== null || statusProbeFailures >= 2}>Repair</button></div>
           <div><span><strong>Finish incomplete setup</strong><small>{status.maintenance.recover ? 'Recover an interrupted installation.' : 'No interrupted setup was found.'}</small></span><button class="secondary-button small-button" onclick={() => runManagedAction('recover')} disabled={!status.maintenance.recover || busyAction !== null || statusProbeFailures >= 2}>Recover</button></div>
         </div>

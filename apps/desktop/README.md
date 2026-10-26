@@ -4,6 +4,10 @@ This directory owns the desktop **machine control plane** only.
 
 ## Responsibilities
 
+Desktop 0.1.1 embeds its source SHA and compatibility contract. Support shows this build separately from the active managed build. Readiness requires a verified aligned installation and a supported manifest contract; an old manager lacking alignment evidence cannot make this Desktop ready. The manager retains authority for the inspection and update transaction. See [Managed Distribution](../../distribution/README.md#installation-alignment-and-desktop-compatibility).
+
+Support's explicit legacy migration requests the manager's backed-up, session-safe path. Normal setup still refuses legacy conflicts until that action is selected. A migration waiting for old Codex processes remains staged; finish those MCP sessions and retry setup. Product/Runtime updates are refused before activation when they require a different Desktop contract; use the verified compatible Desktop installer. No unsigned self-updater is enabled.
+
 - detect whether desktop Blockbench is running;
 - discover the existing LazyDesigner managed installation;
 - invoke the canonical managed `lazydesigner.exe status` contract;

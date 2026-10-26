@@ -27,12 +27,13 @@ export const PACKAGE_SOURCE_PATHS = [
   ".agents/skills/lazydesigner-animation/references/fidelity-correction-evidence.md",
 ];
 export const sha256 = (bytes: Uint8Array | string): string => createHash("sha256").update(bytes).digest("hex");
-export type Manifest = { schema: 1; repository: string; source_sha: string; build_identity: string; platform: "windows-x64"; files: Array<{ path: string; size: number; sha256: string }> };
-export type InstallOptions = { root: string; workspace: string; plugin: string; config: string };
+export type DesktopContract = { minimum: number; maximum: number };
+export type Manifest = { schema: 1; repository: string; source_sha: string; build_identity: string; platform: "windows-x64"; desktop_contract?: DesktopContract; files: Array<{ path: string; size: number; sha256: string }> };
+export type InstallOptions = { root: string; workspace: string; plugin: string; config: string; workspace_mode?: "repository" };
 type Installed = { schema: 1; source_sha: string; options: InstallOptions; owned: Record<string, string> };
 export type RollbackStatus = { available: boolean; previous_source_sha: string | null; transaction: string | null };
-export type Edit = { path: string; bytes: Uint8Array; expected: string | null };
-type Entry = { path: string; before: string | null; after: string; index: number };
+export type Edit = { path: string; bytes: Uint8Array | null; expected: string | null };
+type Entry = { path: string; before: string | null; after: string | null; index: number };
 type Journal = { schema: 1; status: "prepared" | "committed" | "rolled_back"; entries: Entry[] };
 const BEGIN = "# BEGIN LAZYDESIGNER MANAGED";
 const END = "# END LAZYDESIGNER MANAGED";
@@ -47,6 +48,9 @@ export function parseManifest(value: unknown): Manifest {
       || !/^[a-f0-9]{40}$/.test(m.source_sha) || !/^sha256:[a-f0-9]{64}$/.test(m.build_identity)
       || !Array.isArray(m.files) || m.files.length > 80) throw new Error("Invalid LazyDesigner package manifest.");
   const paths = new Set<string>();
+  if (m.desktop_contract !== undefined && (!Number.isSafeInteger(m.desktop_contract.minimum)
+      || !Number.isSafeInteger(m.desktop_contract.maximum) || m.desktop_contract.minimum < 1
+      || m.desktop_contract.maximum < m.desktop_contract.minimum)) throw new Error("Invalid Desktop compatibility contract.");
   let total = 0;
   for (const f of m.files) {
     if (!f || !allowedPackagePath(f.path) || paths.has(f.path.toLowerCase())
@@ -59,6 +63,14 @@ export function parseManifest(value: unknown): Manifest {
     if (!paths.has(required.toLowerCase())) throw new Error(`Incomplete package: ${required}`);
   }
   return m;
+}
+
+export function requireDesktopContract(manifest: Manifest, contract?: number): void {
+  if (contract === undefined) return; // Standalone CLI installations do not require Desktop.
+  const supported = manifest.desktop_contract;
+  if (!Number.isSafeInteger(contract) || !supported || contract < supported.minimum || contract > supported.maximum) {
+    throw new Error("DESKTOP_UPDATE_REQUIRED: This package is not compatible with the running Desktop. Install a compatible Desktop before activating it.");
+  }
 }
 
 /** Remote update manifests may not use the legacy on-disk compatibility identity. */
@@ -203,9 +215,41 @@ function requireTomlStatements(text: string): void {
 
 // Parse both versions with Bun's TOML parser; never regex-edit unvalidated config.
 // Existing unowned LazyDesigner configuration needs explicit adoption, other servers do not.
-export function configureCodex(original: string, executable: string, parse: (text: string) => any, adopt = false): string {
+export function configureCodex(original: string, executable: string, parse: (text: string) => any, adopt = false, migrateLegacy = false): string {
   requireTomlStatements(original);
   const before = parse(original);
+  if (migrateLegacy && before.mcp_servers?.blockit) {
+    if (before.mcp_servers.lazydesigner) throw new Error("Both client entries exist; review the conflict before migration.");
+    const legacy = structuredClone(before.mcp_servers.blockit);
+    if (legacy.enabled === false || Object.hasOwn(legacy, "url")) throw new Error("Disabled or remote legacy entries require explicit review.");
+    let base = original;
+    const begin = "# BEGIN BLOCKIT MANAGED", end = "# END BLOCKIT MANAGED";
+    if (base.includes(begin) || base.includes(end)) {
+      const start = base.indexOf(begin), stop = base.indexOf(end);
+      if (start < 0 || stop < start || base.indexOf(begin, start + 1) >= 0 || base.indexOf(end, stop + 1) >= 0) throw new Error("Malformed legacy managed section.");
+      base = base.slice(0, start) + base.slice(stop + end.length);
+    } else {
+      let inside = false;
+      base = base.split(/(?<=\n)/).filter(line => {
+        if (/^\s*\[/.test(line)) inside = /^\s*\[mcp_servers\.blockit(?:\.[A-Za-z0-9_-]+)?\]\s*(?:#.*)?(?:\r?\n)?$/.test(line);
+        return !inside;
+      }).join("");
+    }
+    const expected = structuredClone(before);
+    delete expected.mcp_servers.blockit;
+    if (!Object.keys(expected.mcp_servers).length) delete expected.mcp_servers;
+    if (canonicalJson(parse(base)) !== canonicalJson(expected)) throw new Error("Legacy migration would change unrelated configuration.");
+    if (legacy.env) {
+      for (const key of Object.keys(legacy.env)) {
+        if (!key.startsWith("BLOCKIT_")) continue;
+        const replacement = ({ BLOCKIT_RUNTIME_URL: "LAZYDESIGNER_RUNTIME_URL", BLOCKIT_TLS_DIR: "LAZYDESIGNER_TLS_DIR" } as Record<string, string>)[key];
+        if (!replacement || Object.hasOwn(legacy.env, replacement)) throw new Error("Legacy environment requires explicit review.");
+        legacy.env[replacement] = legacy.env[key]; delete legacy.env[key];
+      }
+    }
+    const prepared = `${base}\n[mcp_servers.lazydesigner]\n${Object.entries(legacy).map(([key, value]) => `${JSON.stringify(key)} = ${tomlScalar(value)}`).join("\n")}\n`;
+    return configureCodex(prepared, executable, parse, true);
+  }
   // A retired client entry is a separate, potentially active Runtime owner.
   // Preserve it until an explicit backed-up migration; never auto-adopt.
   if (before.mcp_servers?.blockit || original.includes("# BEGIN BLOCKIT MANAGED")) {
@@ -235,20 +279,26 @@ export function configureCodex(original: string, executable: string, parse: (tex
   // explicit user timeouts remain authoritative and are never rewritten.
   const options = { tool_timeout_sec: 180, ...prior, command: executable, args: ["mcp"] };
   if (Object.hasOwn(options, "url")) throw new Error("Existing lazydesigner points to a remote server; refusing to replace it.");
-  const scalar = (v: unknown): string => {
-    if (typeof v === "string") return JSON.stringify(v);
-    if (typeof v === "boolean" || typeof v === "number" && Number.isFinite(v)) return String(v);
-    if (Array.isArray(v)) return `[${v.map(scalar).join(", ")}]`;
-    if (v && typeof v === "object") return `{ ${Object.entries(v).map(([k, x]) => `${JSON.stringify(k)} = ${scalar(x)}`).join(", ")} }`;
-    throw new Error("Unsupported existing LazyDesigner TOML value; no configuration changed.");
-  };
+  const scalar = tomlScalar;
   const after = managedBlock(base, `[mcp_servers.lazydesigner]\n${Object.entries(options).map(([k, v]) => `${JSON.stringify(k)} = ${scalar(v)}`).join("\n")}`);
   requireTomlStatements(after);
   const parsed = parse(after);
   const strip = (o: any) => { const copy = structuredClone(o); if (copy.mcp_servers) { delete copy.mcp_servers.lazydesigner; if (!Object.keys(copy.mcp_servers).length) delete copy.mcp_servers; } return copy; };
-  const canonical = (v: any): any => Array.isArray(v) ? v.map(canonical) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canonical(v[k])])) : v;
-  if (JSON.stringify(canonical(strip(before))) !== JSON.stringify(canonical(strip(parsed))) || JSON.stringify(canonical(parsed.mcp_servers?.lazydesigner)) !== JSON.stringify(canonical(options))) throw new Error("Codex configuration preservation check failed.");
+  if (canonicalJson(strip(before)) !== canonicalJson(strip(parsed)) || canonicalJson(parsed.mcp_servers?.lazydesigner) !== canonicalJson(options)) throw new Error("Codex configuration preservation check failed.");
   return after;
+}
+
+function tomlScalar(v: unknown): string {
+    if (typeof v === "string") return JSON.stringify(v);
+    if (typeof v === "boolean" || typeof v === "number" && Number.isFinite(v)) return String(v);
+    if (Array.isArray(v)) return `[${v.map(tomlScalar).join(", ")}]`;
+    if (v && typeof v === "object") return `{ ${Object.entries(v).map(([k, x]) => `${JSON.stringify(k)} = ${tomlScalar(x)}`).join(", ")} }`;
+    throw new Error("Unsupported existing LazyDesigner TOML value; no configuration changed.");
+}
+
+function canonicalJson(value: unknown): string {
+  const canonical = (v: any): any => Array.isArray(v) ? v.map(canonical) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map(k => [k, canonical(v[k])])) : v;
+  return JSON.stringify(canonical(value));
 }
 
 async function rollbackJournal(root: string, id: string): Promise<void> {
@@ -258,7 +308,7 @@ async function rollbackJournal(root: string, id: string): Promise<void> {
   if (journal.schema !== 1 || !Array.isArray(journal.entries) || journal.entries.length > 100) throw new Error("Invalid installation journal.");
   // Validate every target/backup first, so a local edit blocks the entire rollback.
   for (const e of journal.entries) {
-    if (!Number.isInteger(e.index) || e.index < 0 || e.index >= journal.entries.length || !/^[a-f0-9]{64}$/.test(e.after) || e.before !== null && !/^[a-f0-9]{64}$/.test(e.before)) throw new Error("Invalid rollback entry.");
+    if (!Number.isInteger(e.index) || e.index < 0 || e.index >= journal.entries.length || e.after !== null && !/^[a-f0-9]{64}$/.test(e.after) || e.before !== null && !/^[a-f0-9]{64}$/.test(e.before)) throw new Error("Invalid rollback entry.");
     await requirePlainPath(e.path);
     await requirePlainPath(join(dir, `${e.index}.before`));
     const current = await digestAt(e.path);
@@ -284,7 +334,7 @@ export async function recoverInstallation(root: string, rollbackCommitted = fals
   if (journal.status === "prepared" || journal.status === "committed" && rollbackCommitted) await rollbackJournal(root, id);
 }
 
-export async function applyTransaction(root: string, edits: Edit[], afterWrite?: (count: number) => void): Promise<string> {
+export async function applyTransaction(root: string, edits: Edit[], afterWrite?: (count: number) => void, beforeCommit?: () => Promise<void>): Promise<string> {
   await recoverInstallation(root);
   const unique = new Set(edits.map(e => resolve(e.path).toLowerCase()));
   if (unique.size !== edits.length) throw new Error("Duplicate installation target.");
@@ -299,17 +349,19 @@ export async function applyTransaction(root: string, edits: Edit[], afterWrite?:
     const before = await readOptional(edit.path);
     if ((before === null ? null : sha256(before)) !== edit.expected) throw new Error(`Concurrent change during backup: ${edit.path}`);
     if (before !== null) await writeFile(join(dir, `${index}.before`), before, { flag: "wx" });
-    journal.entries.push({ path: edit.path, before: edit.expected, after: sha256(edit.bytes), index });
+    journal.entries.push({ path: edit.path, before: edit.expected, after: edit.bytes === null ? null : sha256(edit.bytes), index });
   }
   await writeFile(join(dir, "journal.json"), jsonBytes(journal), { flag: "wx" });
   await atomicWrite(join(root, "transaction.json"), jsonBytes({ id }));
   try {
     for (const [index, edit] of edits.entries()) {
       if (await digestAt(edit.path) !== edit.expected) throw new Error(`Concurrent change: ${edit.path}`);
-      await atomicWrite(edit.path, edit.bytes);
-      if (await digestAt(edit.path) !== sha256(edit.bytes)) throw new Error(`Write verification failed: ${edit.path}`);
+      if (edit.bytes === null) await rm(edit.path, { force: true });
+      else await atomicWrite(edit.path, edit.bytes);
+      if (await digestAt(edit.path) !== (edit.bytes === null ? null : sha256(edit.bytes))) throw new Error(`Write verification failed: ${edit.path}`);
       afterWrite?.(index + 1);
     }
+    await beforeCommit?.();
     journal.status = "committed"; await atomicWrite(join(dir, "journal.json"), jsonBytes(journal));
     return id;
   } catch (e) {
@@ -340,7 +392,12 @@ export async function rollbackStatus(root: string): Promise<RollbackStatus> {
   if (journal.schema !== 1 || journal.status !== "committed" || !Array.isArray(journal.entries)) return { available: false, previous_source_sha: null, transaction: id };
   const statePath = resolve(join(root, "installed.json")).toLowerCase();
   const stateEntry = journal.entries.find(entry => resolve(entry.path).toLowerCase() === statePath);
-  if (!stateEntry || stateEntry.before === null || !Number.isInteger(stateEntry.index)) return { available: false, previous_source_sha: null, transaction: id };
+  if (!stateEntry || !Number.isInteger(stateEntry.index)) return { available: false, previous_source_sha: null, transaction: id };
+  if (stateEntry.before === null) {
+    const retired = journal.entries.find(entry => basename(entry.path) === "blockit_mcp.js" && entry.after === null && entry.before !== null && Number.isInteger(entry.index));
+    const bytes = retired ? await readOptional(join(dir, `${retired.index}.before`)) : null;
+    return { available: !!bytes && sha256(bytes) === retired?.before, previous_source_sha: null, transaction: id };
+  }
   const backup = await readOptional(join(dir, `${stateEntry.index}.before`));
   if (!backup || sha256(backup) !== stateEntry.before) return { available: false, previous_source_sha: null, transaction: id };
   try {
@@ -358,9 +415,17 @@ export async function preflightManagedInstallTargets(
   options: InstallOptions,
   executable: string,
   parseToml: (text: string) => any,
-  adopt = false
+  adopt = false,
+  migrateLegacy = false
 ): Promise<void> {
-  for (const p of Object.values(options)) await requirePlainPath(p);
+  for (const p of [options.root, options.workspace, options.plugin, options.config]) await requirePlainPath(p);
+  if (options.workspace_mode !== undefined && options.workspace_mode !== "repository") throw new Error("Invalid workspace mode.");
+  if (options.workspace_mode === "repository") {
+    for (const name of [".git", "AGENTS.md", "docs/README.md"]) {
+      await requirePlainPath(join(options.workspace, name));
+      await lstat(join(options.workspace, name));
+    }
+  }
   if (basename(options.plugin) !== MCP_BUNDLE_FILENAME) {
     throw new Error(`The plugin destination must be ${MCP_BUNDLE_FILENAME}.`);
   }
@@ -370,19 +435,20 @@ export async function preflightManagedInstallTargets(
   }
   const retiredPlugin = join(dirname(options.plugin), "blockit_mcp.js");
   await requirePlainPath(retiredPlugin);
-  if (await readOptional(retiredPlugin) !== null) {
+  if (await readOptional(retiredPlugin) !== null && !migrateLegacy) {
     throw new Error("Retired BlockIT plugin exists in this Blockbench profile. Explicit migration is required; no file was replaced.");
   }
   await requirePlainPath(options.config);
   // Reuse the authoritative TOML preservation and retired-server rules.
   const configuration = (await readOptional(options.config))?.toString() ?? "";
-  configureCodex(configuration, executable, parseToml, adopt);
+  configureCodex(configuration, executable, parseToml, adopt, migrateLegacy);
 }
 
-export async function installPackage(directory: string, options: InstallOptions, parseToml: (s: string) => any, adopt = false): Promise<{ source_sha: string; changed_files: number; transaction: string | null }> {
+export async function installPackage(directory: string, options: InstallOptions, parseToml: (s: string) => any, adopt = false, migrateLegacy = false, desktopContract?: number): Promise<{ source_sha: string; changed_files: number; transaction: string | null }> {
   const m = await verifyPackage(directory);
+  requireDesktopContract(m, desktopContract);
   const version = join(options.root, "versions", m.source_sha);
-  await preflightManagedInstallTargets(options, join(version, "lazydesigner.exe"), parseToml, adopt);
+  await preflightManagedInstallTargets(options, join(version, "lazydesigner.exe"), parseToml, adopt, migrateLegacy);
   const previous = await installedState(options.root);
   await requirePlainPath(version);
   // Immutable version directory: interrupted copies can resume, conflicting bytes cannot.
@@ -402,13 +468,19 @@ export async function installPackage(directory: string, options: InstallOptions,
   };
   for (const f of m.files) {
     if (f.path === "lazydesigner.exe" || f.path === "LICENSE" || f.path === "THIRD_PARTY_NOTICES.txt") continue;
+    if (options.workspace_mode === "repository" && f.path !== MCP_BUNDLE_FILENAME) continue;
     const path = f.path === MCP_BUNDLE_FILENAME ? options.plugin : join(options.workspace, f.path);
     const bytes = await readFile(join(version, f.path));
     if (f.path === "AGENTS.md") await plan(path, Buffer.from(managedBlock((await readOptional(path))?.toString() ?? "", bytes.toString())), true);
     else await plan(path, bytes);
   }
   const configuration = (await readOptional(options.config))?.toString() ?? "";
-  await plan(options.config, Buffer.from(configureCodex(configuration, join(version, "lazydesigner.exe"), parseToml, adopt)), true);
+  await plan(options.config, Buffer.from(configureCodex(configuration, join(version, "lazydesigner.exe"), parseToml, adopt, migrateLegacy)), true);
+  if (migrateLegacy) {
+    const retired = join(dirname(options.plugin), "blockit_mcp.js");
+    const bytes = await readOptional(retired);
+    if (bytes !== null) edits.push({ path: retired, bytes: null, expected: sha256(bytes) });
+  }
   // A cmd entrypoint is for explicit maintenance only; MCP starts the executable directly.
   const escaped = join(version, "lazydesigner.exe");
   if (/[\r\n"%!]/.test(escaped)) throw new Error("Install path contains unsupported Windows command characters.");
@@ -416,7 +488,14 @@ export async function installPackage(directory: string, options: InstallOptions,
   const state: Installed = { schema: 1, source_sha: m.source_sha, options, owned };
   const statePath = join(options.root, "installed.json"), stateBytes = jsonBytes(state);
   if (await digestAt(statePath) !== sha256(stateBytes)) edits.push({ path: statePath, bytes: stateBytes, expected: await digestAt(statePath) });
-  const transaction = edits.length ? await applyTransaction(options.root, edits) : null;
+  const verifyActivation = async () => {
+    if (JSON.stringify(await verifyPackage(version)) !== JSON.stringify(m)) throw new Error("Package changed during activation.");
+    for (const [path, expected] of Object.entries(owned)) {
+      if (await digestAt(path) !== expected) throw new Error(`Activation integrity failed: ${path}`);
+    }
+  };
+  const transaction = edits.length ? await applyTransaction(options.root, edits, undefined, verifyActivation) : null;
+  if (!edits.length) await verifyActivation();
   return { source_sha: m.source_sha, changed_files: edits.length, transaction };
 }
 
@@ -431,6 +510,22 @@ export async function activeGateways(root: string): Promise<boolean> {
     await rm(join(dir, file));
   }
   return false;
+}
+
+/** Old source-launched clients have no managed leases. Observe them during
+ * explicit migration only; their stdio owner must close them normally. */
+export async function legacyClientActive(config: string): Promise<boolean> {
+  const text = (await readOptional(config))?.toString() ?? "";
+  const legacy = Bun.TOML.parse(text).mcp_servers?.blockit as { command?: string; args?: string[] } | undefined;
+  if (!legacy) return false;
+  if (process.platform !== "win32" || typeof legacy.command !== "string" || !isAbsolute(legacy.command)) return true;
+  const script = Array.isArray(legacy.args) ? legacy.args.find(arg => isAbsolute(arg) && /\.(?:ts|js)$/i.test(arg)) ?? "" : "";
+  const probe = Bun.spawn(["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command",
+    '$ErrorActionPreference="Stop"; $exe=$env:LAZYDESIGNER_LEGACY_COMMAND.Replace([char]92,[char]47); $script=$env:LAZYDESIGNER_LEGACY_SCRIPT.Replace([char]92,[char]47); $items=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.Replace([char]92,[char]47) -eq $exe -and (!$script -or ($_.CommandLine -and $_.CommandLine.Replace([char]92,[char]47).IndexOf($script,[StringComparison]::OrdinalIgnoreCase) -ge 0)) }); if($items.Count -gt 0){"active"}else{"idle"}'
+  ], { env: { ...process.env, LAZYDESIGNER_LEGACY_COMMAND: legacy.command, LAZYDESIGNER_LEGACY_SCRIPT: script }, stdout: "pipe", stderr: "pipe", windowsHide: true, timeout: 10_000 });
+  const [output, error, code] = await Promise.all([new Response(probe.stdout).text(), new Response(probe.stderr).text(), probe.exited]);
+  if (code !== 0 || !["active", "idle"].includes(output.trim())) throw new Error(`Legacy session observation failed; migration remains staged. ${error.slice(0, 200)}`);
+  return output.trim() === "active";
 }
 
 

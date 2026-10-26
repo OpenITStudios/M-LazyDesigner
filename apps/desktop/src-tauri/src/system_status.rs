@@ -31,6 +31,22 @@ pub struct ManagedInstalled {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ManagedRollback { pub available: bool, pub previous_source_sha: Option<String>, pub transaction: Option<String> }
 
+pub const DESKTOP_CONTRACT: u32 = 1;
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DesktopContract { pub minimum: u32, pub maximum: u32 }
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct InstallationAlignment {
+    pub schema: u8,
+    pub state: String,
+    pub issues: Vec<String>,
+    pub desktop_contract: Option<DesktopContract>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DesktopBuild { pub source_sha: &'static str, pub contract: u32 }
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ManagedStatus {
     pub schema: u8,
@@ -44,6 +60,25 @@ pub struct ManagedStatus {
     pub tls_error: Option<String>,
     #[serde(default)]
     pub rollback: Option<ManagedRollback>,
+    #[serde(default)]
+    pub alignment: Option<InstallationAlignment>,
+}
+
+pub(crate) fn installation_matches(managed: &ManagedStatus) -> bool {
+    managed.alignment.as_ref().is_some_and(|alignment| {
+        alignment.schema == 1 && alignment.state == "aligned" && alignment.issues.is_empty()
+            && alignment.desktop_contract.as_ref().is_some_and(|c| c.minimum > 0
+                && c.minimum <= DESKTOP_CONTRACT && DESKTOP_CONTRACT <= c.maximum)
+    })
+}
+
+// Metadata comparison only: a client config edit requests one full status refresh.
+fn configuration_revision(root: &Path) -> Option<String> {
+    let state: Value = serde_json::from_slice(&fs::read(root.join("installed.json")).ok()?).ok()?;
+    let config = state.get("options")?.get("config")?.as_str()?;
+    let metadata = fs::symlink_metadata(config).ok()?;
+    let modified = metadata.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_nanos();
+    Some(format!("{}:{}:{}", metadata.file_type().is_symlink(), metadata.len(), modified))
 }
 
 fn default_runtime_url() -> String {
@@ -100,6 +135,7 @@ pub struct ConnectionStatus {
     pub plugin_integrity: &'static str,
     pub project_revision: Option<String>,
     pub project_session_live: bool,
+    pub configuration_revision: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -121,6 +157,9 @@ pub struct SystemStatus {
     pub managed: Option<ManagedStatus>,
     pub project_navigation: ProjectNavigation,
     pub diagnostic: Option<String>,
+    pub desktop_build: DesktopBuild,
+    pub configuration_revision: Option<String>,
+    pub bootstrap_pending: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,6 +178,16 @@ fn managed_root() -> Option<PathBuf> {
     env::var_os("LAZYDESIGNER_HOME")
         .map(PathBuf::from)
         .or_else(|| env::var_os("LOCALAPPDATA").map(|base| PathBuf::from(base).join("LazyDesigner").join("managed")))
+}
+
+// Resume the already requested migration; activation still revalidates the package.
+pub fn pending_bootstrap() -> Option<bool> {
+    let path = managed_root()?.join("pending.json");
+    let metadata = fs::symlink_metadata(&path).ok()?;
+    if !metadata.is_file() || metadata.len() > 16 * 1024 { return None; }
+    let value: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+    value.get("directory")?.as_str()?;
+    Some(value.get("migrate_legacy").and_then(Value::as_bool).unwrap_or(false))
 }
 
 
@@ -466,7 +515,7 @@ fn manager_executable(root: &Path) -> Result<PathBuf, String> {
 }
 
 pub fn ensure_ready(app: &AppHandle) -> Result<EnsureReadyResult, String> {
-    let initial = collect();
+    let mut initial = collect();
     if !initial.manager_available {
         return Err("LazyDesigner is not installed yet.".to_string());
     }
@@ -512,6 +561,7 @@ pub fn ensure_ready(app: &AppHandle) -> Result<EnsureReadyResult, String> {
         }
 
         run_managed_action(app, "repair", None)?;
+        initial = collect();
         current = collect_connection_status();
         if current.plugin_integrity != "ready" {
             return Ok(EnsureReadyResult {
@@ -526,6 +576,14 @@ pub fn ensure_ready(app: &AppHandle) -> Result<EnsureReadyResult, String> {
         }
     }
 
+    if !initial.managed.as_ref().is_some_and(installation_matches) {
+        return Ok(EnsureReadyResult {
+            status: "NEEDS_ATTENTION", reason: "INSTALLATION_MISMATCH",
+            runtime_online: false, gateway_active: current.gateway_active.unwrap_or(false),
+            blockbench_running: current.blockbench_running, plugin_integrity: current.plugin_integrity,
+            manual_plugin_approval_recommended: false,
+        });
+    }
     if current.blockbench_running {
         if editor_profile_for_model(None).is_err() {
             return Ok(EnsureReadyResult {
@@ -652,7 +710,7 @@ fn compose_status(
     let runtime_build_match = runtime_health::matching_build_identity(
         expected_build.as_deref(), &runtime_session
     );
-    let runtime_ready = runtime_health::ready(
+    let runtime_ready = managed.as_ref().is_some_and(installation_matches) && runtime_health::ready(
         managed.as_ref().map(|value| value.runtime_online).unwrap_or(false),
         managed_runtime_url,
         expected_build.as_deref(),
@@ -717,6 +775,9 @@ fn compose_status(
         managed,
         project_navigation,
         diagnostic,
+        desktop_build: DesktopBuild { source_sha: env!("LAZYDESIGNER_DESKTOP_SOURCE_SHA"), contract: DESKTOP_CONTRACT },
+        configuration_revision: managed_root().as_deref().and_then(configuration_revision),
+        bootstrap_pending: pending_bootstrap().is_some(),
     }
 }
 
@@ -824,6 +885,7 @@ pub fn collect_connection_status() -> ConnectionStatus {
             plugin_integrity: "unknown",
             project_revision: project_revision.clone(),
             project_session_live,
+            configuration_revision: None,
         };
     };
 
@@ -839,6 +901,7 @@ pub fn collect_connection_status() -> ConnectionStatus {
             plugin_integrity,
             project_revision: project_revision.clone(),
             project_session_live,
+            configuration_revision: configuration_revision(&root),
         };
     }
 
@@ -854,6 +917,7 @@ pub fn collect_connection_status() -> ConnectionStatus {
     ConnectionStatus {
         schema: 1,
         gateway_mcp_ready: verified_catalog,
+        configuration_revision: configuration_revision(&root),
         observed_at_unix_ms: observed_at_unix_ms(),
         blockbench_running,
         runtime_listener_live: trusted_listener,
@@ -946,7 +1010,7 @@ pub fn bootstrap_available(app: &tauri::AppHandle) -> bool {
     bootstrap_resource(app).is_ok()
 }
 
-pub fn bootstrap_install(app: &tauri::AppHandle) -> Result<BootstrapActionResult, String> {
+pub fn bootstrap_install(app: &tauri::AppHandle, migrate_legacy: bool) -> Result<BootstrapActionResult, String> {
     if managed_root()
         .and_then(|root| manager_executable(&root).ok())
         .is_some()
@@ -962,15 +1026,19 @@ pub fn bootstrap_install(app: &tauri::AppHandle) -> Result<BootstrapActionResult
         .ok_or_else(|| "LOCALAPPDATA/LAZYDESIGNER_HOME is unavailable.".to_string())?;
     let plugin = blockbench_managed_plugin_path()?;
 
-    let output = run_output(
-        Command::new(&manager)
+    let mut command = Command::new(&manager);
+    command
             .arg("install")
             .arg("--root")
             .arg(&root)
             .arg("--package")
             .arg(package)
             .arg("--plugin-path")
-            .arg(&plugin),
+            .arg(&plugin)
+            .arg("--desktop-contract").arg(DESKTOP_CONTRACT.to_string());
+    if migrate_legacy { command.arg("--migrate-legacy"); }
+    let output = run_output(
+        &mut command,
         Duration::from_secs(300),
         "LazyDesigner bootstrap installation",
     )?;
@@ -1007,7 +1075,8 @@ pub fn check_managed_update() -> Result<ManagedUpdateCheck, String> {
         Command::new(&executable)
             .arg("check-update")
             .arg("--root")
-            .arg(&root),
+            .arg(&root)
+            .arg("--desktop-contract").arg(DESKTOP_CONTRACT.to_string()),
         Duration::from_secs(12),
         "Managed update check",
     )?;
@@ -1025,7 +1094,7 @@ pub fn check_managed_update() -> Result<ManagedUpdateCheck, String> {
         .map_err(|_| "Managed update check returned invalid JSON.".to_string())?;
     if !matches!(
         result.status.as_str(),
-        "NOT_INSTALLED" | "UP_TO_DATE" | "UPDATE_AVAILABLE" | "UPDATE_STAGED" | "UPDATE_STAGED_UNVERIFIED"
+        "NOT_INSTALLED" | "UP_TO_DATE" | "UPDATE_AVAILABLE" | "UPDATE_STAGED" | "UPDATE_STAGED_UNVERIFIED" | "DESKTOP_UPDATE_REQUIRED"
     ) {
         return Err("Managed update check returned an unsupported status.".to_string());
     }
@@ -1083,6 +1152,7 @@ pub fn run_managed_action(app: &AppHandle, action: &str, expected_source_sha: Op
     }
     let mut command = Command::new(&executable);
     command.arg(action).arg("--root").arg(&root).arg("--progress-json");
+    command.arg("--desktop-contract").arg(DESKTOP_CONTRACT.to_string());
     if let Some(sha) = expected_source_sha {
         command.arg("--expected-source-sha").arg(sha);
     }

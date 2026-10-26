@@ -1,6 +1,6 @@
 [package]
 name = "lazydesigner"
-version = "0.1.0"
+version = "0.1.1"
 description = "LazyDesigner desktop control plane"
 authors = ["Halo Karya Media"]
 license = "GPL-3.0-only"

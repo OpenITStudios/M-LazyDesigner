@@ -7,6 +7,7 @@ export type ConnectionObservation = {
   plugin_integrity: string;
   project_revision: string | null;
   project_session_live: boolean;
+  configuration_revision?: string | null;
 };
 
 export type ConnectionBaseline = {
@@ -16,6 +17,7 @@ export type ConnectionBaseline = {
   managed: { gateway_active: boolean } | null;
   gateway?: { state: string };
   project_navigation: { revision: string | null; session_live: boolean };
+  configuration_revision?: string | null;
 };
 
 export function connectionChanged(candidate: ConnectionObservation, current: ConnectionBaseline): boolean {
@@ -27,6 +29,7 @@ export function connectionChanged(candidate: ConnectionObservation, current: Con
     || (typeof candidate.gateway_mcp_ready === "boolean" && current.gateway !== undefined
       && candidate.gateway_mcp_ready !== (current.gateway.state === "healthy"))
     || candidate.project_revision !== current.project_navigation.revision
+    || candidate.configuration_revision !== current.configuration_revision
     || candidate.project_session_live !== current.project_navigation.session_live;
 }
 

@@ -4,13 +4,15 @@ This file owns current proof interpretation only and the requested dependency-ef
 
 ## Current authority
 
-2026-10-26: user-authorized LOCAL_CODE validation of `OpenITStudios/M-LazyDesigner`/`Local`, input `a3ff57b48252fcf7ed4022e4f4810975baef566c`, in the clean dependency-modernization worktree. Prior primary source/assets are preserved; root policy/check edits and two hash-verified GIF relocations are the only later organization changes. All 52 recovery payloads remain intact. The 438 locally missing Crimson Sentinel files remain tracked remotely and recoverable from original Git HEAD; no asset deletion/migration approval is implied.
+2026-10-26: user-authorized LOCAL_CODE work on OpenITStudios/M-LazyDesigner/Local in the dependency-modernization worktree. Primary source remains dirty at 44b03b52. Recovery preserves 52 payloads; two root GIFs moved to canonical references. The 438 pre-existing missing Crimson Sentinel paths remain recoverable from Git.
 
-CI DISABLED. No Actions, main change, release, installation or native mutation. Frozen dependency inputs match; no package changes/install. Validation uses cached Bun 1.4.3, Node 24.22.0, pinned Rust 1.99.1, not the older default-path Bun.
+CI DISABLED. No Actions, main changes or release publishing. New native acceptance: NOT EXECUTED. Dependencies unchanged; Desktop version metadata is 0.1.1. Toolchain: Bun 1.4.3, Node 24.22.0, Rust 1.99.1.
 
-Source repairs are recorded at `bf42bbacba506d61436c85c142a8fe359e0f3cc0`; exact-commit `verify:full` PASS (matching SHA in `verify-full-exact.log`). The initial four repository failures and earlier installer timeout remain historical diagnostics; no native proof follows.
+Source reconciliation at `bf42bbac`: exact-commit `verify:full` PASS; matching SHA in `verify-full-exact.log`. Earlier repository failures/installer timeout remain diagnostics.
 
-Current bounded work is root organization: one repo, separate product-development and working-system ownership, explicit root files/domains, safe naming/moves and rejection of tracked local state. Primary root check: 5 PASS; clean-worktree repository checks: 301 PASS. Two root GIFs retain identical SHA-256 at canonical experiment paths and in recovery. Full source proof above applies to its recorded commit, not the older dirty primary checkout or an untested later change.
+Current bounded work: App/Gateway/Runtime managed alignment and explicitly authorized PC migration. Source candidate PASS: repository 302, authoring 166, installer/migration 34, Rust 83; Desktop TS6/TS7/frontend and generated freshness. Tests cover drift, unrelated Codex settings, old source process detection, backed-up migration, failed activation recovery, repository ownership and Desktop compatibility. Logs: ignored `.cache/alignment-*.log`.
+
+Native installation/staging artifacts are not built at this source checkpoint. Old Codex source sessions are active and must defer migration. No current installed-runtime, restart/reconnect, trust/load, visual or end-to-end stability PASS is inferred. Older primary source retains its own pending changes.
 
 ## Current proof matrix
 
