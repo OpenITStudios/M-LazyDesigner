@@ -10,21 +10,33 @@ CI DISABLED. No Actions/main/release publishing. Runtime/visual acceptance: NOT 
 
 Accepted source: `37baddccc0e89f9a9ebed91576d421c0de6e7ef9`; exact-commit verify:full PASS in ignored `.cache/alignment-verify-full-37baddcc.log` (matching SHA, EXIT_CODE=0). Repository 302, Runtime 2529, installer/migration 34, authoring 166, Gateway/manifest 298 and Golden contracts 44 PASS; types/unused/generators/evaluations/benchmarks/build PASS. Desktop source PASS: TS6/TS7, frontend and Rust 83. Prior candidate compiler/continuity failures remain recorded, not hidden.
 
-App 0.1.1 installed at `%LOCALAPPDATA%/Programs/LazyDesigner/`; registry path and bundled package match that source. Compiled package install/idempotence/stdio smoke PASS. Actual legacy migration returns STAGED while old Codex source sessions are active; original config/plugin remain byte-identical to recovery. Package/installer receipts: ignored `.cache/alignment-artifacts.json` and `alignment-installed-app.json`. Finish through Desktop after closing Codex. Native plugin trust/load, live matching health/catalog and restart/reconnect remain unverified; no live or asset-quality acceptance follows.
+App 0.1.1 installed at `%LOCALAPPDATA%/Programs/LazyDesigner/`; registry path and bundled package match that source. Compiled package install/idempotence/stdio smoke PASS. Actual legacy migration returns STAGED while old Codex source sessions are active; original config/plugin remain byte-identical to recovery. Package/installer receipts: ignored `.cache/alignment-artifacts.json` and `alignment-installed-app.json`. The user now explicitly defers Finish setup while using Codex; retain STAGED and assess App first. Native plugin trust/load, live matching health/catalog and restart/reconnect remain unverified; no live or asset-quality acceptance follows.
+
+## Desktop readiness assessment — 2026-10-26
+
+Verdict: source-qualified candidate with a verified installed package; operational readiness is not yet accepted. LOCAL_CODE source inspection only; installed Windows UI was not observed. No setup or process restart was performed.
+
+| App area | Evidence and remaining acceptance |
+| --- | --- |
+| Setup, update and recovery | Manager owns transactions, exact package alignment, compatibility and rollback; staged migration is observed. Actual Desktop restart/resume, failure recovery and activated rollback remain unverified. Keep activation deferred. |
+| Status and action clarity | Source distinguishes installation alignment, Runtime and client ownership; stale observation gates AI maintenance. `desktopFixtures.ts` has nine presentation states but no staged-bootstrap, alignment-drift or Desktop-update-required scenarios. Existing ready fixtures omit the new alignment projection. This is a test coverage gap, not proof of a production connection defect. |
+| Routine model work | Open/Open Model are independent of AI setup. `LAUNCHED` means launch acknowledgment; correct native model-tab selection is explicitly not verified. Native file dialog, cancellation and correct-file/profile behavior need disposable model acceptance. |
+| Project data safety | Source uses reviewed identity/token checks and Windows Recycle Bin; no permanent-delete fallback. Actual recycle, cancellation/failure and restoration are NOT EXECUTED. Do not accept the destructive UI path from source tests alone. |
+| UI and accessibility | Historical 1280x720 synthetic frontend evidence exists; it predates the alignment changes. Current Workspace/Support states, narrow layout, keyboard/focus and error recovery need renewed presentation inspection followed by Windows/Tauri checks. |
+| Supported delivery | Desktop 0.1.1 installer/package identity is verified. Automatic Desktop self-update and self-extracting portable Blockbench launchers are unsupported; managed-component update does not upgrade Desktop. These are explicit limits, not a promise of seamless update support. |
+
+First independent work: bring the existing presentation fixtures up to the current IPC contract and cover pending/mismatch states before reviewing those screens. Next, validate non-destructive editor/project/navigation flows using disposable inputs. Native migration/reconnect and Recycle Bin acceptance remain distinct, deferred tasks; no readiness percentage or release acceptance is inferred from passing test counts.
 
 ## Current proof matrix
 
-| Surface | Actual evidence / boundary |
+| Surface | Current evidence / boundary |
 | --- | --- |
-| Initial pinned HEAD repository | FAIL: four checks above; not a full MCP run |
-| Repaired source candidate | Repository 299/61 files, Runtime 2529/430, authoring 166/31, Gateway+manifest 298/34 PASS; project graph, MCP/Gateway types and unused checks PASS |
-| Generated artifacts | Canonical `docs:check` PASS during repair; no hand-edited generated output |
-| Desktop source at a3ff57b4 | `npm run verify:source` PASS: TS6 compatibility + TS7 Svelte checks, frontend build, locked Cargo check and 82 Rust tests; Desktop source/dependencies unchanged by this repair |
-| Other source gates | Capability/decision evaluations, benchmark contract/scripts, surface guards and plugin build PASS; bundle identity `sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5` |
-| Managed install / full invocation | One full invocation stopped on a 5s installer-test timeout after Runtime PASS. Same test then PASS in 1.2s; all 28 installer tests PASS separately in 5.98s with unchanged deadlines/assertions. This is component evidence, not a successful full invocation |
-| Packaging / native / visual / Golden / token cost | NOT EXECUTED in this local reconciliation |
+| Executable source | Exact 37baddcc full gate and Desktop source checks PASS as recorded above |
+| Installed Desktop/package | Installer, file hashes and bundled source verified; compiled CLI smoke PASS |
+| Migration | STAGED only; old active client/plugin preserved |
+| Native UI / Runtime / data operations | NOT EXECUTED for this installed candidate; no product-ready acceptance |
 
-Logs: ignored `.cache/local-acceptance/a3ff57b4/`; retain the failed full invocation. Final exact-commit qualification uses `verify-full-exact.log`; require its completed exit/result and matching Git SHA rather than inheriting the candidate/ancestor proof. No installed/native proof follows.
+Earlier candidate failures and intermediate counts remain in Git history and ignored qualification logs. Canonical docs:check passed during source qualification; generated output remains generator-owned.
 
 ## Current source-only authoring boundaries
 
@@ -44,20 +56,6 @@ The B0-A [trace](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) distinguishes six sour
 `ba4ed7f3` (2026-10-21): 296 repository tests/61 files; 163 focused tests/18 files; MCP/Gateway types; Desktop TS6/TS7; frontend/plugin build and generated freshness PASS. Full MCP, new packaging and native/visual checks were NOT EXECUTED in that batch.
 
 `d334106e`: Svelte at 1280x720, official Tauri mockIPC/24 synthetic projects: list persistence/scroll, menus, dialog focus, Tab/Escape and error recovery observed. 296 repository tests, types/build PASS. Narrow viewport, Recycle Bin, installed Tauri and native save/reopen NOT EXECUTED.
-
-## Dependency efficiency report - historical 2026-10-20
-
-At `bcdb2399`, ten production process snapshots use the existing `process.rs` helper: one fresh identity scan with PID/name/executable and dead-process removal, no cache. Removed unused sysinfo component/disk/network/user features without weakening editor/profile/PID guards.
-
-| Native path | Run 1 median / p95 ms | Run 2 median / p95 ms |
-| --- | --- | --- |
-| Previous new_all + second refresh | 50.373 / 64.267 | 68.188 / 77.296 |
-| Previous new + default refresh | 11.437 / 14.894 | 19.068 / 25.780 |
-| New production identity snapshot | 8.222 / 8.964 | 9.909 / 11.384 |
-
-Historical median reduction: 83.7–85.5% versus double-scan and 28.1–48.0% versus old single-scan. These are local scan measurements, not application startup/latency, tokens or cross-machine guarantees. Method: Windows x64, Rust 1.99.1 release, sysinfo 0.39.6/system; actual production helper; three warmups + twenty samples per case, alternating order; current PID/executable validated; rounded (n-1)*0.5/p95 indices. Disposable `cargo +1.99.1 run --release --manifest-path .cache/process-scan-bench/Cargo.toml` ran twice. Full source/method details remain in Git at `9c95bd84`.
-
-Feature activation changed from component/default/disk/network/system/user to system. Cargo.lock 437→436 packages (removed macOS-only objc2-open-directory); Windows dependency nodes stayed 258. No installer-size or Windows package-count reduction claim. Historical `bcdb2399` has 81 Rust tests, locked Rust 1.95/1.99 checks, integrated NSIS and disposable CLI install/status smoke. Installer 35.36 MiB, SHA256 `5D27257F580639DA08546B023916A894B93829C763974E484EB5A8291861E9AD`; no current installer acceptance follows.
 
 ## Dependency/security boundaries
 
