@@ -64,7 +64,9 @@ describe("place_cube creation completeness", () => {
     expect(elementPreflight).toBeGreaterThan(start);
     expect(defaultPreflight).toBeLessThan(undo);
     expect(elementPreflight).toBeLessThan(undo);
-    expect(cubes.indexOf("inflate: element.inflate", start)).toBeGreaterThan(undo);
+    const creation = cubes.indexOf("new Cube(", undo);
+    expect(creation).toBeGreaterThan(undo);
+    expect(cubes.indexOf("inflate: element.inflate", creation)).toBeGreaterThan(creation);
   });
 
   test("Phase 3 extends the existing Cube tool instead of adding a new tool family", async () => {

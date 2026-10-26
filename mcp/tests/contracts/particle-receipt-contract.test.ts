@@ -103,6 +103,6 @@ describe("shared particle mutation receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/particleMutation"'
     );
-    expect(control).toContain("some(isVerifiedParticleWriteReceipt)");
+    expect(control).toContain("receiptMatches(value, isVerifiedParticleWriteReceipt)");
   });
 });

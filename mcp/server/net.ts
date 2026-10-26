@@ -38,6 +38,7 @@ import {
   RuntimeGenerationRetiredError,
   RuntimeOperationQueueFullError,
   RuntimeQueuedOperationAbandonedError,
+  isRuntimeGenerationCurrent,
   runRuntimeOperationExclusive,
   waitForRuntimeOperationDrain
 } from '@/lib/runtime/lifecycle'

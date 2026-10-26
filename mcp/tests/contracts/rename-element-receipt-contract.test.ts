@@ -106,6 +106,6 @@ describe("shared rename-element receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/renameElement"'
     );
-    expect(control).toContain("some(isAppliedRenameElementReceipt)");
+    expect(control).toContain("receiptMatches(value, isAppliedRenameElementReceipt)");
   });
 });

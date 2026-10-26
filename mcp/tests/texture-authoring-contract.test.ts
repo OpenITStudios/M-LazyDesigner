@@ -202,6 +202,7 @@ describe("texturing authoring contract", () => {
       size: [16, 32],
       flip_u: false,
       flip_v: false,
+      in_bounds: true,
     });
 
     expect(
@@ -216,6 +217,7 @@ describe("texturing authoring contract", () => {
       size: [16, 32],
       flip_u: true,
       flip_v: true,
+      in_bounds: true,
     });
 
     expect(

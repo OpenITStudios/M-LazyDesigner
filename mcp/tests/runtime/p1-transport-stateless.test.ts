@@ -111,7 +111,9 @@ describe("P1.4 stateless Streamable HTTP ownership", () => {
     const source = await readTransportOwners();
     expect(source).toContain("BLOCKIT_AUTHORING_PHASE_AFFINITY_HEADER");
     expect(source).toContain("requestedAuthoringPhase !== null");
-    expect(source).toContain("requestMcpPhaseSwitch(envelope.targetAuthoringPhase)");
+    expect(source).toContain("runWithMcpStageRequest(");
+    expect(source).toContain("requestedAuthoringPhase ?? getActiveMcpAuthoringStage()");
+    expect(source).not.toContain("requestMcpPhaseSwitch(");
   });
 
   test("standalone SSE and session DELETE are not offered by the default endpoint", async () => {

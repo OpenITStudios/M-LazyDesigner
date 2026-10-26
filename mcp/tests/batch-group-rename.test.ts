@@ -74,6 +74,7 @@ describe("Group batch rename",()=>{
       );
 
       const result = await run();
+      if (typeof result === "string") throw new Error("Expected a structured rename receipt");
       expect(result.structuredContent).toMatchObject({
         action: "rename",
         bone: { uuid: "bone-uuid", name: "new_bone", parent: "root" },

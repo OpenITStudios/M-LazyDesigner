@@ -91,7 +91,7 @@ describe("entity atlas region copy",()=>{
     expect(() => requireExactBrushPostcondition(
       original, spill, 3, 2,
       [{ x: 0, y: 1 }, { x: 1, y: 1 }], "#11223380"
-    )).toThrow("postcondition mismatch");
+    )).toThrow("changed an unrequested pixel");
     const spillBetween = original.slice();
     spillBetween.set([17, 34, 51, 128], (1 * 3) * 4);
     spillBetween.set([17, 34, 51, 128], (1 * 3 + 2) * 4);

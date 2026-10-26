@@ -187,7 +187,9 @@ describe("Gateway structural ownership", () => {
     expect(backend).not.toContain(
       "Runtime did not honor this Gateway"
     );
-    expect(backend.split("\n").length).toBeLessThan(760);
+    // Generation/catalog revalidation and passive-probe retirement added bounded
+    // transport coordination; queue and affinity policy remain delegated above.
+    expect(backend.split("\n").length).toBeLessThan(1_000);
   });
 
   test("Gateway protocol stays lower-level than capability engines", async () => {

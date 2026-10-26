@@ -31,6 +31,7 @@ class MockCube {
     }, data);
     this.faces = Object.fromEntries(["north","south","east","west","up","down"].map(key => [key, {
       uv: [0,0,16,16], rotation: 0, enabled: true,
+      getTexture() { return texture; },
       extend(change) { Object.assign(this, structuredClone(change)); },
     }]));
   }
@@ -186,7 +187,7 @@ describe("model creation effectiveness — correction accuracy", () => {
 
   test("nine valid Cube footprints do not make provisional atlas capacity a Geometry gate", () => {
     runCubeRuntimeFixture(String.raw`
-const result = await create(Array.from({ length: 9 }, (_, i) => ({ name: "mass_" + i, from: [0,0,0], to: [16,16,16] })));
+const result = await create(Array.from({ length: 9 }, (_, i) => ({ name: "mass_" + i, from: [i*16,0,0], to: [(i+1)*16,16,16] })));
 assert.equal(result.added, 9);
 assert.equal(Cube.all.length, 9);
 assert.equal(result.box_uv_layout, "deferred_for_native_template");
@@ -238,7 +239,7 @@ assert.equal(undo.started, before);
 
   test("batch correction returns fresh state and effects for every requested UUID", () => {
     runCubeRuntimeFixture(String.raw`
-const made = await create([{ name: "a", from: [0,0,0], to: [16,16,16] }, { name: "b", from: [0,0,0], to: [16,16,16] }]);
+const made = await create([{ name: "a", from: [0,0,0], to: [16,16,16] }, { name: "b", from: [16,0,0], to: [32,16,16] }]);
 const ids = made.cubes.map(cube => cube.uuid);
 const result = await invoke("manage_cubes", { operation: "batch_update", updates: [
   { id: ids[0], to: [18,16,16] },

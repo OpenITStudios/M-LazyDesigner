@@ -82,10 +82,10 @@ describe("LazyDesigner Control active contract", () => {
 
   test("Gateway bootstrap states client Skill-content and quality boundaries", async () => {
     const source = await Bun.file("gateway/index.ts").text();
-    expect(source).toContain("Skill/profile handles, not Skill contents");
+    expect(source).toContain("Load active Skill/profile via Control handles");
     expect(source).toContain("content survives compaction");
-    expect(source).toContain("smallest judgeable sample");
-    expect(source).toContain("stage_context.reference_recovery");
+    expect(source).toContain("Sample before bulk visual edits");
+    expect(source).toContain("paged status(reference_fact_request) with fingerprint");
     const handler = await Bun.file("gateway/handlers/registerCoreTools.ts").text();
     expect(handler).toContain("reference_fact_request");
     expect(handler).toContain("readReferenceFactPage");
@@ -93,7 +93,7 @@ describe("LazyDesigner Control active contract", () => {
     expect(handler).toContain("REFERENCE_FACT_NOT_OMITTED");
     expect(handler).toContain("contents still present in the client's active context");
     expect(handler).toContain("compaction/restart");
-    expect(source).toContain("not use a successful receipt as visual approval");
+    expect(source).toContain("mutation success is not visual approval");
   });
 
   test("routing policy remains direct-first and bounded without being retransmitted in every packet", async () => {

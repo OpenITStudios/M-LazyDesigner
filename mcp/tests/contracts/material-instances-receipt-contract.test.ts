@@ -73,6 +73,6 @@ describe("shared material-instance receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/materialInstances"'
     );
-    expect(control).toContain("some(isMaterialInstanceMutationReceipt)");
+    expect(control).toContain("receiptMatches(value, isMaterialInstanceMutationReceipt)");
   });
 });

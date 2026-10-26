@@ -46,7 +46,7 @@ describe("correction candidate ranking safety", () => {
     }])).toThrow("REFERENCE_CORRECTION_DELTA_NONFINITE");
     expect(() => deriveReferenceCorrectionVectors([{
       kind: "CENTER_OFFSET", instance_id: "seat",
-      expected_center: [1e308, 1e308, 1e308], actual_center: [0, 0, 0],
+      expected_center: [1.5e308, 1.5e308, 1.5e308], actual_center: [0, 0, 0],
     }])).toThrow("REFERENCE_CORRECTION_DISTANCE_NONFINITE");
 
     const valid = deriveReferenceCorrectionVectors([

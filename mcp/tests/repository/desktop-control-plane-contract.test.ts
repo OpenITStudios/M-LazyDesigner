@@ -317,10 +317,11 @@ describe("Desktop control-plane ownership", () => {
     expect(projectNavigation).toContain("continue_model_id_for_path");
     expect(projectNavigation).toContain("continue_model_id");
     expect(projectNavigation).toContain("continue_model_requires_the_exact_last_saved_model_to_exist");
-    expect(navigator).toContain("state.continue_model_id");
-    expect(navigator).toContain("candidate.id === state.continue_model_id && candidate.exists");
-    expect(navigator).toContain("{:else if continueTarget(navigation)}");
-    expect(navigator).toContain("candidate.exists");
+    const presentation = await source("../apps/desktop/src/desktopPresentation.ts");
+    expect(presentation).toContain("state.continue_model_id");
+    expect(presentation).toContain("candidate.id === state.continue_model_id && candidate.exists");
+    expect(navigator).toContain("$: targetToContinue = continueTarget(navigation)");
+    expect(navigator).toContain("{:else if targetToContinue}");
     expect(app).not.toContain("project.root_path");
     expect(readme).toContain("Paths stay hidden in the normal UI");
   });
@@ -345,8 +346,7 @@ describe("Desktop control-plane ownership", () => {
   });
 
   test("manager failure retains verified read-only model selection rather than blanking Workspace", async () => {
-    const [app, nav, rust] = await Promise.all([
-      source("../apps/desktop/src/App.svelte"),
+    const [nav, rust] = await Promise.all([
       source("../apps/desktop/src/ProjectNavigator.svelte"),
       source("../apps/desktop/src-tauri/src/system_status.rs"),
     ]);
@@ -404,7 +404,8 @@ describe("Desktop control-plane ownership", () => {
     expect(backend).toContain("state.recent_models.iter()");
     expect(dto).toContain("recent_model_ids: string[]");
     expect(navigator).toContain("<h2>Recent Models</h2>");
-    expect(navigator).toContain("state.recent_model_ids");
+    expect(navigator).toContain("$: recentTargets = recentModelTargets(navigation)");
+    expect(await source("../apps/desktop/src/desktopPresentation.ts")).toContain("state.recent_model_ids");
     expect(main).toContain("async fn browse_model()");
     expect(main).toContain("async fn open_blockbench_editor()");
     expect(main).toContain("tauri::async_runtime::spawn_blocking(blockbench::browse_model)");
@@ -500,8 +501,7 @@ describe("Desktop control-plane ownership", () => {
   });
 
   test("Desktop Project Navigator UI is isolated from command orchestration", async () => {
-    const [app, navigator] = await Promise.all([
-      source("../apps/desktop/src/App.svelte"),
+    const [navigator] = await Promise.all([
       source("../apps/desktop/src/ProjectNavigator.svelte"),
     ]);
 

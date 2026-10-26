@@ -103,8 +103,8 @@ describe("shared bone-rigging receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/boneRigging"'
     );
-    expect(control).toContain("some(isBoneRiggingStateReceipt)");
-    expect(control).toContain("some(isBoneRiggingDeletionReceipt)");
-    expect(control).toContain("some(isNativeIkControllerReceipt)");
+    expect(control).toContain("receiptMatches(value, isBoneRiggingStateReceipt)");
+    expect(control).toContain("receiptMatches(value, isBoneRiggingDeletionReceipt)");
+    expect(control).toContain("receiptMatches(value, isNativeIkControllerReceipt)");
   });
 });

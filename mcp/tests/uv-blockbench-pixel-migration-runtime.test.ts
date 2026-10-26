@@ -315,7 +315,7 @@ describe("unregistered native Texture + UV migration adapter harness", () => {
   });
 
   test("unexpected native callback canvas or missing write callback triggers verified recovery", async () => {
-    await withBlockbench(async ({ base, mer, cube, history }) => {
+    await withBlockbench(async ({ base, cube, history }) => {
       const adapter = createBlockbenchUvPixelMigrationAdapter();
       const before = await adapter.readState();
       const plan = planFromNative(cube);

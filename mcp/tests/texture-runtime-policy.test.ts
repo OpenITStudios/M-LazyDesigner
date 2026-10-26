@@ -218,7 +218,8 @@ describe("texture runtime wiring policy", () => {
     const end = source.indexOf("const png = rgbaToPngDataUrl(", start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    expect(source.slice(start, end)).toContain("display_height: texture.display_height");
+    expect(source).toContain("display_height: texture.display_height");
+    expect(source.slice(start, end)).toContain("display_height: sourceIdentity.display_height");
     expect(source.slice(end)).toContain("snapshot.rgba");
     expect(source.slice(end)).toContain("snapshot.region.width");
     expect(source.slice(end)).toContain("snapshot.region.height");

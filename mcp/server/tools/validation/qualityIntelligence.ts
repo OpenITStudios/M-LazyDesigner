@@ -36,7 +36,6 @@ import {
 } from "@/lib/animation/craftEvidence";
 
 const wiredTools = new Set<string>();
-const CUBE_FACE_KEYS = ["north", "south", "east", "west", "up", "down"] as const;
 const TEXTURE_OPTIMIZATION_PIXEL_BUDGET = 32_768;
 
 function objectRecord(value: unknown): Record<string, unknown> | null {

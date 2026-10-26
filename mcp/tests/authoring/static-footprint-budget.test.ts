@@ -71,15 +71,15 @@ describe("static footprint budget", () => {
     expect(schemaEnd).toBeGreaterThan(schemaStart);
     expect(gatewaySchemaBlock.length).toBeLessThan(2_900);
     for (const invariant of [
-      "status only when orientation is unknown or stale",
-      "Known capability: invoke directly",
-      "Unknown/stale capability: search",
-      "Real schema uncertainty: describe",
-      "receipt_only=no confirmation read",
-      "focused_read=inspect only if returned state is insufficient",
-      "visual=refresh only decision-changing visual evidence",
+      "status only for missing/stale orientation",
+      "Known capability/schema: invoke directly",
+      "Unknown: search",
+      "uncertain schema: describe required branch",
+      "receipt_only=no reread",
+      "focused_read=missing evidence only",
+      "visual=decision-changing evidence",
       "Geometry/Texturing share AUTHORING",
-      "Never auto-retry an interrupted mutation",
+      "Never auto-retry interrupted mutations",
     ]) expect(instructionBlock).toContain(invariant);
   });
 

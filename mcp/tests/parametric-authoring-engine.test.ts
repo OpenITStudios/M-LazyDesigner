@@ -270,7 +270,7 @@ describe("Parametric Authoring Engine G0-G2", () => {
         plane: { axis: "X", position: 1e308 },
         uv_policy: "UNIQUE", texture_policy: "UNIQUE", rig_policy: "INDEPENDENT",
       }],
-    })).toThrow(/three finite values/);
+    })).toThrow("RECIPE_SYMMETRY_COORDINATE_NONFINITE");
     expect(() => compileAuthoringRecipe({
       schema: 1, compiler_version: 1, id: "constraint-overflow",
       name: "constraint-overflow",
@@ -292,7 +292,7 @@ describe("Parametric Authoring Engine G0-G2", () => {
         target_anchor: ["MIN", "MIN", "MIN"],
         offset: [1e308, 0, 0],
       }],
-    })).toThrow(/three finite values/);
+    })).toThrow("RECIPE_CONSTRAINT_NONFINITE_COORDINATE");
     // A sub-unit Cube can still be legitimate with per-face UV;
     // the native adapter alone knows whether Box UV needs restriction.
     const thin = compileAuthoringRecipe({

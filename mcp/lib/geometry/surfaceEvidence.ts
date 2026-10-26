@@ -242,7 +242,7 @@ export function analyzeGeometryPoseSequence(
   if (!base.project_uuid.trim() || !base.animation_uuid.trim()) {
     throw new Error("GEOMETRY_POSE_IDENTITY_REQUIRED");
   }
-  const observed = [...snapshots].sort((a, b) => a.time_seconds - b.time_seconds);
+  const observed: GeometryPoseObbSnapshot[] = [...snapshots].sort((a, b) => a.time_seconds - b.time_seconds);
   const baseIds = new Set(observed[0].cubes.map((cube) => cube.uuid));
   let omitted = 0;
   for (let i = 0; i < observed.length; i++) {
@@ -816,10 +816,8 @@ export function analyzeStaticCubeMergeCandidates(
           examples.push({
             cube_uuids: ids as [string, string],
             axis: (["x", "y", "z"] as const)[axis],
-            merged_from: a.min.map((value, i) => Math.min(value, b.min[i]))
-              as [number, number, number],
-            merged_to: a.max.map((value, i) => Math.max(value, b.max[i]))
-              as [number, number, number],
+            merged_from: a.min.map((value, i) => Math.min(value, b.min[i])) as [number, number, number],
+            merged_to: a.max.map((value, i) => Math.max(value, b.max[i])) as [number, number, number],
             requirement: "UV_TEXTURE_PIVOT_RIG_REVIEW",
           });
         }

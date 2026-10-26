@@ -125,7 +125,7 @@ describe("Blockbench UV runtime adapter ownership", () => {
 
 
   test("partial native Undo initialization cancels only its own edit and preserves the first fault", async () => {
-    const original = ["Project", "ModelProject", "Undo"].map(name =>
+    const original = ["Project", "ModelProject", "Undo", "Cube"].map(name =>
       Object.getOwnPropertyDescriptor(globalThis, name)
     );
     const project = { uuid: "uv-fixture-project" };
@@ -144,6 +144,7 @@ describe("Blockbench UV runtime adapter ownership", () => {
       mock("Project", project);
       mock("ModelProject", { all: [project] });
       mock("Undo", undo);
+      mock("Cube", { all: [] });
       const adapter = createBlockbenchUvApplyAdapter();
       let caught: unknown;
       try { await adapter.beginUndo?.([]); }
@@ -168,7 +169,7 @@ describe("Blockbench UV runtime adapter ownership", () => {
       expect((unknown as UvTransactionOutcomeUnknownError).cause).toBe(failure);
       expect((unknown as UvTransactionOutcomeUnknownError).outcomeUnknown).toBe(true);
     } finally {
-      ["Project", "ModelProject", "Undo"].forEach((name, index) => {
+      ["Project", "ModelProject", "Undo", "Cube"].forEach((name, index) => {
         const descriptor = original[index];
         if (descriptor) Object.defineProperty(globalThis, name, descriptor);
         else Reflect.deleteProperty(globalThis, name);

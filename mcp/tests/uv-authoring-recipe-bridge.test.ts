@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { deriveAuthoringRecipeUvIslands, expandAffectedUvIds } from "@/lib/uv/authoringRecipeUv";
 import type { CompiledAuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import { compileAuthoringRecipeSemanticUvWorkflow } from "@/lib/uv/workflow";
+import type { NativeUvCubeSnapshot } from "@/lib/uv/nativeState";
 
 function fixture(): CompiledAuthoringRecipe {
   return {
@@ -19,6 +21,36 @@ function fixture(): CompiledAuthoringRecipe {
 }
 
 describe("Authoring Recipe to semantic UV bridge", () => {
+  test("workflow passes physical atlas and logical project dimensions to native compilation", () => {
+    const compiled = fixture();
+    const faces = ["north", "south", "east", "west", "up", "down"] as const;
+    const nativeFace = { uv: [4, 6, 0, 0] as const, rotation: 270 };
+    const snapshots: NativeUvCubeSnapshot[] = compiled.placements.map(placement => ({
+      cube_uuid: placement.id, box_uv: false, autouv: 0,
+      faces: { north: nativeFace, south: nativeFace, east: nativeFace,
+        west: nativeFace, up: nativeFace, down: nativeFace },
+    }));
+    const targets = compiled.placements.flatMap(placement => faces.map(face => ({
+      island_id: placement.id + ":" + face, cube_uuid: placement.id, face,
+      current_uv: [4, 6, 0, 0] as const, current_rotation: 270,
+    })));
+    const options = { atlas_width: 256, atlas_height: 512,
+      logical_width: 128, logical_height: 128, default_texel_density: 1 };
+    const result = compileAuthoringRecipeSemanticUvWorkflow(compiled, snapshots, targets, options);
+    expect(result.native_plan.complete).toBe(true);
+    for (const operation of result.native_plan.operations) {
+      const placement = result.semantic.placements.find(item => item.id === operation.island_id)!;
+      expect(operation.uv).toEqual([
+        (placement.x + placement.width) / 2, (placement.y + placement.height) / 4,
+        placement.x / 2, placement.y / 4,
+      ]);
+      expect(operation.rotation).toBe(270);
+    }
+    expect(() => compileAuthoringRecipeSemanticUvWorkflow(
+      compiled, snapshots, targets, { ...options, logical_width: 0 }
+    )).toThrow("UV_NATIVE_ATLAS_MAPPING_REQUIRED");
+  });
+
   test("maps mirrored face correspondence explicitly", () => {
     const islands = deriveAuthoringRecipeUvIslands(fixture(), { texel_density_by_cohort: { cloth: 2 } });
     const rightEast = islands.find((island) => island.id === "right:east")!;

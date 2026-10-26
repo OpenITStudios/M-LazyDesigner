@@ -170,6 +170,7 @@ describe("model-wide texel density diagnostics", () => {
       const output = await tool.execute(
         await tool.parameterSchema.parseAsync({ id: "cube-1", detail: "uv" })
       );
+      if (typeof output === "string") throw new Error("Expected structured UV inspection");
       const uv = (output.structuredContent as any).uv;
       expect(uv.texture_space).toMatchObject({
         scope: "default_texture", effective_texture: { uuid: "base" },

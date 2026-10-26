@@ -13,6 +13,8 @@ import type { NativeUvTransactionPlan } from "@/lib/uv/nativeTransaction";
 
 export type CompileSemanticUvWorkflowOptions = AuthoringRecipeUvOptions &
   Omit<SemanticUvPlanOptions, "affected_ids" | "previous_placements"> & {
+    logical_width: number;
+    logical_height: number;
     previous_placements?: readonly AtlasPlacement[];
     previous_semantic_placements?: ReturnType<typeof planSemanticUv>["placements"];
     affected_instance_ids?: readonly string[];
@@ -40,7 +42,12 @@ export function compileAuthoringRecipeSemanticUvWorkflow(
     affected_ids: affectedIds,
   });
 
-  const nativePlan = compileNativeUvApplyPlan(semantic.placements, nativeTargets);
+  const nativePlan = compileNativeUvApplyPlan(semantic.placements, nativeTargets, {
+    bitmap_width: options.atlas_width,
+    bitmap_height: options.atlas_height,
+    logical_width: options.logical_width,
+    logical_height: options.logical_height,
+  });
   if (!nativePlan.complete) {
     throw new Error(
       "Semantic UV native target mapping is incomplete. Missing targets: " +

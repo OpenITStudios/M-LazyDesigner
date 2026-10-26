@@ -81,8 +81,8 @@ describe("Geometry identity and duplication hardening", () => {
       const shared = new TestGroup("group-unique", "Body");
       TestGroup.all = [shared];
       g.Outliner = { elements: [shared] };
-      expect(resolveUniqueDestructiveElement("group-unique")).toBe(shared);
-      expect(resolveUniqueDestructiveElement("Body")).toBe(shared);
+      expect(resolveUniqueDestructiveElement("group-unique") === (shared as unknown)).toBe(true);
+      expect(resolveUniqueDestructiveElement("Body") === (shared as unknown)).toBe(true);
     } finally {
       for (const key of ["Cube", "Group", "Outliner"]) {
         if (old[key as keyof typeof old] === undefined) delete g[key];

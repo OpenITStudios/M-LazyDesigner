@@ -3,14 +3,12 @@
 import type { UvFaceKey } from "@/lib/uv/contracts";
 import {
   fingerprintUvNativeSource,
-  type UvNativeMutationInstruction,
 } from "@/lib/uv/adapters/blockbenchCubeUv";
 import {
   type UvPixelMigrationAtomicAdapter,
   type UvPixelMigrationScopedState,
 } from "@/lib/uv/pixelMigrationTransaction";
 import {
-  type UvMigrationCandidate,
   UV_MIGRATION_MAX_TEXTURES,
   UV_MIGRATION_MAX_BITMAP_PIXELS,
   UV_MIGRATION_MAX_TOTAL_RGBA_BYTES,
@@ -157,7 +155,7 @@ function exactFaceTextureBindings(
         );
       }
       const texture = face.getTexture();
-      const uuid = texture?.uuid ?? null;
+      const uuid = texture ? texture.uuid : null;
       if (uuid !== null && !textureUuids.has(uuid)) {
         throw new Error(
           "UV_PIXEL_MIGRATION_TEXTURE_SCOPE_INCOMPLETE: face refers to an atlas outside the project."

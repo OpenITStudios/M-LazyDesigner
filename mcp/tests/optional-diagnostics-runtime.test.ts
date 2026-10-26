@@ -16,8 +16,8 @@ describe("optional diagnostic execution", () => {
       let reads=0;
       class G {static all=[{uuid:"root",name:"root",parent:"root"}];}
       class B {uuid="root"; name="root";
-        position=[{time:0,getArray(){reads++;return [0,0,0];}},
-          {time:1,getArray(){reads++;return [1,0,0];}}]; rotation=[];scale=[];}
+        position=[{time:0,data_points:[{}],interpolation:"linear",getArray(){reads++;return [0,0,0];}},
+          {time:1,data_points:[{}],interpolation:"linear",getArray(){reads++;return [1,0,0];}}]; rotation=[];scale=[];}
       globalThis.Group=G;globalThis.BoneAnimator=B;
       globalThis.AnimationItem={all:[{uuid:"target",loop:"loop",length:1,animators:{root:new B()}}],selected:{uuid:"other"}};
       const defs=getAllToolDefinitions();

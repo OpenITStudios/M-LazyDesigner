@@ -105,7 +105,7 @@ describe("Gateway orchestration recovery state", () => {
       result: { revision: 1 },
     };
     const originalEvidence = state.evidence.put(record);
-    const correctionInput = {
+    const correctionInput: Parameters<typeof state.corrections.start>[0] = {
       recipe_id: "recovery-asset",
       base_recipe: recipe(),
       verification_request: record.request,

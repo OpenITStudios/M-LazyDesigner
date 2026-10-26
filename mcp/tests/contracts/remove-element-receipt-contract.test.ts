@@ -69,6 +69,6 @@ describe("shared remove-element receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/removeElement"'
     );
-    expect(control).toContain("some(isRemoveElementReceipt)");
+    expect(control).toContain("receiptMatches(value, isRemoveElementReceipt)");
   });
 });

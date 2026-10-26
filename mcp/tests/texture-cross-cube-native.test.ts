@@ -469,7 +469,7 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
 
   test("revision-pinned treatment path blocks stale bitmap without mutating Cube UV ownership", async () => {
     await withMockNativeAsync(async cubes => {
-      const before = [...cubes.right.faces.north.uv];
+      const before = [...cubes.right.faces.north.uv] as [number, number, number, number];
       const expected = await pinnedRevisions(cubes);
       cubes.right.faces.north.getTexture().setShade(40);
       await expect(inspectRevisionPinnedTreatmentCrossCubeSeams(
@@ -598,7 +598,7 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
       const project = (
         globalThis as unknown as { Project: { textures: unknown[] } }
       ).Project;
-      project.textures.pop();
+      project.textures = project.textures.slice(0, -1);
       const result = seamContinuityRuntime();
       if (!("model_face_inventory" in result)) throw Error("No native model census");
       expect(result.model_face_inventory.texture_inventory_state).toBe("partial");

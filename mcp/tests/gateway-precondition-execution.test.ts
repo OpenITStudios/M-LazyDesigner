@@ -41,8 +41,8 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
     const session = new GatewaySessionState();
     session.synchronizeProject("active-model-a");
     expect(session.facts.project_bound).toBe(true);
-    session.onRuntimeGenerationChange();
-    expect(session.projectUuid).toBe("active-model-a");
+    session.onRuntimeGenerationChange(null);
+    expect(session.projectUuid).toBeNull();
     expect(session.facts.project_bound).toBe("unknown");
   });
 

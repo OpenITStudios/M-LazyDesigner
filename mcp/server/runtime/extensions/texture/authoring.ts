@@ -534,7 +534,7 @@ export function inspectDeclaredNativeCrossCubeSeams(
     );
   }
   const keys = new Set<string>();
-  for (const declaration of declarations) {
+  for (const declaration of declarations as readonly DeclaredNativeCrossCubeSeamEdge[]) {
     if (!declaration ||
         typeof declaration.cube_uuid !== "string" ||
         !declaration.cube_uuid.trim() ||
@@ -649,7 +649,7 @@ export function inspectDeclaredNativeCrossCubeSeams(
       });
     }
   };
-  for (const declaration of declarations) {
+  for (const declaration of declarations as readonly DeclaredNativeCrossCubeSeamEdge[]) {
     const cube = cubes.get(declaration.cube_uuid);
     const face = cube?.faces[declaration.face] as RuntimeCubeFace | undefined;
     if (!cube || !face || face.enabled === false ||
@@ -758,7 +758,7 @@ export function inspectDeclaredNativeCrossCubeSeams(
           !nativeTextures.includes(resolvedAfter) ||
           (projectTextures && !projectTextures.includes(resolvedAfter)) ||
           face.material_name !== declaration.expected_native_material_name ||
-          face.enabled === false ||
+          Reflect.get(face, "enabled") === false ||
           face.rotation !== nativeRotation ||
           nativeUv.length !== face.uv.length ||
           nativeUv.some((coordinate, index) => coordinate !== face.uv[index]) ||

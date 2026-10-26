@@ -275,7 +275,7 @@ describe("UV U7 apply contracts", () => {
       expect(Math.min(instruction.uv[1], instruction.uv[3])).toBe(nextRect.y);
       expect(Math.abs(instruction.uv[2] - instruction.uv[0])).toBe(nextRect.width);
       expect(Math.abs(instruction.uv[3] - instruction.uv[1])).toBe(nextRect.height);
-      expect(original.cubes[1].faces[0].uv).toEqual(source[1].faces[0].uv);
+      expect(original.cubes[1].faces[0].uv).toEqual([...source[1].faces[0].uv] as [number, number, number, number]);
     }
   });
 

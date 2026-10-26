@@ -99,6 +99,7 @@ test("reparent verifies native parent and outliner membership before Undo commit
       tool.execute(await tool.parameterSchema.parseAsync({ id: "node", parent: "target" }));
 
     const success = await run();
+    if (typeof success === "string") throw new Error("Expected a structured reparent receipt");
     expect(success.structuredContent).toMatchObject({
       execution: "applied", id: "node", previous_parent: "prior",
       parent: "target", transform_policy: "preserve_local",
@@ -192,7 +193,9 @@ test("legacy bone parent and unparent reject no-op and invalid native hierarchy 
         bone_data: { name: "bone", ...(action === "parent" ? { parent: "parent-next" } : {}) },
       }));
 
-    expect((await run("parent")).structuredContent).toMatchObject({
+    const parentResult = await run("parent");
+    if (typeof parentResult === "string") throw new Error("Expected a structured parenting receipt");
+    expect(parentResult.structuredContent).toMatchObject({
       action: "parent", bone: { uuid: "bone", parent: "parent-next" },
     });
     expect(child.parent).toBe(nextParent);
@@ -201,7 +204,9 @@ test("legacy bone parent and unparent reject no-op and invalid native hierarchy 
     await expect(run("parent")).rejects.toThrow("no authored effect");
     expect(undo.started).toBe(1);
 
-    expect((await run("unparent")).structuredContent).toMatchObject({
+    const unparentResult = await run("unparent");
+    if (typeof unparentResult === "string") throw new Error("Expected a structured unparenting receipt");
+    expect(unparentResult.structuredContent).toMatchObject({
       action: "unparent", bone: { uuid: "bone", parent: "root" },
     });
     expect(nextParent.children).not.toContain(child);
@@ -279,7 +284,9 @@ test("legacy bone set_pivot refuses meshless/no-op and verifies native origin", 
     expect(undo.started).toBe(0);
 
     bone.mesh = {};
-    expect((await run([3, 4, 5])).structuredContent).toMatchObject({
+    const pivotResult = await run([3, 4, 5]);
+    if (typeof pivotResult === "string") throw new Error("Expected a structured pivot receipt");
+    expect(pivotResult.structuredContent).toMatchObject({
       action: "set_pivot", bone: { uuid: "bone-pivot", origin: [3, 4, 5] },
     });
     expect(undo).toEqual({ started: 1, finished: 1, cancelled: 0 });

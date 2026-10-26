@@ -466,8 +466,7 @@ export function registerBoneRiggingTool(): void {
             renamePlan = planGroupRename(
               Group.all,
               [{ id: targetBone.uuid, new_name: bone_data.new_name }],
-              (typeof AnimationItem === "undefined" ? [] : AnimationItem.all)
-                as unknown as RenameAnimation[]
+              (typeof AnimationItem === "undefined" ? [] : AnimationItem.all) as unknown as RenameAnimation[]
             );
             break;
   

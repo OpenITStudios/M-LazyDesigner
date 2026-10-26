@@ -71,7 +71,7 @@ describe("Runtime boundary regressions", () => {
 
     expect(source).toContain("getCapabilityMetadata");
     expect(source).toContain("capabilityEffects?.projectAffinity");
-    expect(source).toContain("capabilityEffects?.phaseAffinity");
+    expect(source).toContain("runWithMcpStageRequest(");
     expect(source).not.toContain("capability === 'create_project'");
     expect(source).not.toContain("envelope.capability === 'create_project'");
     expect(source).not.toContain("capability === 'switch_authoring_phase'");

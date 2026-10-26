@@ -391,7 +391,7 @@ export function collectUvAtlasUsages(): UvAtlasUsage[] {
         cube_uuid: cube.uuid,
         cube_name: cube.name,
         face: faceKey,
-        texture_uuid: texture?.uuid ?? null,
+        texture_uuid: texture ? texture.uuid : null,
         uv: [...face.uv],
         box_uv: cube.box_uv === true,
         autouv: cube.autouv,

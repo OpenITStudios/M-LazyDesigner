@@ -35,7 +35,7 @@ describe("texture visual convergence contract", () => {
     expect(capture).toContain("structuredContent");
   });
 
-  test("paint transaction returns bounded post-mutation texture evidence without a full-atlas reread", async () => {
+  test("paint transaction bounds delivered evidence while retaining full-bitmap freshness guards", async () => {
     const [transaction, bitmap] = await Promise.all([
       source("server/tools/paint/textureTransaction.ts"),
       source("lib/texture/bitmapRuntime.ts"),
@@ -46,7 +46,9 @@ describe("texture visual convergence contract", () => {
     expect(transaction).toContain("dirtyRegion.pixels");
     expect(transaction).toContain('kind: "affected_region_png"');
     expect(transaction).toContain("revision: plannedReceipt.revision.after");
-    expect((transaction.match(/fullTextureRgba\(texture\)/g) ?? []).length).toBe(2);
+    expect((transaction.match(/fullTextureRgba\(texture\)/g) ?? []).length).toBe(4);
+    expect(transaction).toContain("requireUnchangedTextureBitmap(before, fullTextureRgba(texture))");
+    expect(transaction).toContain("bitmap changed after postcondition verification");
     expect(bitmap).toContain("export function cropRgbaRect");
     expect(bitmap).toContain("pixels.subarray(sourceStart, sourceEnd)");
   });

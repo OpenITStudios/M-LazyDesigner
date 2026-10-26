@@ -146,7 +146,8 @@ describe("affected execution planner", () => {
       semanticImpact: impact(),
     });
     expect(plan.fallback_full_verify).toBe(false);
-    expect(plan.checks).toContain("PROJECT_GRAPH");
+    expect(plan.checks).toContain("TYPECHECK_RUNTIME");
+    expect(plan.checks).toContain("AUDIT_UNUSED_RUNTIME");
     expect(plan.targeted_tests).toEqual([
       "mcp/tests/live/texture-runtime-live-contract.test.ts",
     ]);
@@ -263,7 +264,7 @@ describe("affected execution planner", () => {
         changedPaths: [path], semanticImpact: impact(),
       });
       expect(plan.fallback_full_verify).toBe(false);
-      expect(plan.targeted_tests).toEqual(expectedTests);
+      expect(plan.targeted_tests).toEqual([...expectedTests]);
     }
   });
 

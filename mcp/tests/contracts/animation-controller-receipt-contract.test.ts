@@ -114,6 +114,6 @@ describe("shared animation controller receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/animationController"'
     );
-    expect(control).toContain("some(isAnimationControllerReceipt)");
+    expect(control).toContain("receiptMatches(value, isAnimationControllerReceipt)");
   });
 });

@@ -264,7 +264,7 @@ describe("texture seam continuity", () => {
   test("Runtime list_textures wires bounded seam omissions without claiming visual PASS", async () => {
     const runtime = await Bun.file("server/runtime/extensions/texture/authoring.ts").text();
     expect(runtime).toContain("summarizeTextureSeamScanEvidence({");
-    expect(runtime).toContain("noteSkipped(cube.uuid, faceKey");
+    expect(runtime).toContain("noteSkipped(cubeUuid, faceKey");
     expect(runtime).toContain('"SEAM_SCAN_PARTIAL"');
     expect(runtime).toContain("scan.unexamined_face_count > 0");
   });
@@ -740,13 +740,13 @@ describe("world-space native Cube face projection", () => {
       local_end: [1, 0, 0] as [number, number, number],
       matrix_world: [...identity] as number[],
     };
-    const reflected = [...identity];
+    const reflected: number[] = [...identity];
     reflected[0] = -1;
-    const sheared = [...identity];
+    const sheared: number[] = [...identity];
     sheared[4] = 0.25;
-    const perspective = [...identity];
+    const perspective: number[] = [...identity];
     perspective[3] = 0.1;
-    const broken = [...identity];
+    const broken: number[] = [...identity];
     broken[0] = NaN;
     for (const matrix_world of [reflected, sheared, perspective, broken, [1, 2, 3]]) {
       expect(() => projectNativeCubeSeamEdgeToWorld({

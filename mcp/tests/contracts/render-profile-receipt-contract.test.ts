@@ -164,6 +164,6 @@ describe("shared render-profile receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/renderProfile"'
     );
-    expect(control).toContain("some(isRenderProfileMutationReceipt)");
+    expect(control).toContain("receiptMatches(value, isRenderProfileMutationReceipt)");
   });
 });

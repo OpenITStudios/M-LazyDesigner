@@ -18,6 +18,7 @@ import {
   normalizeRuntimeUrl,
 } from "@/gateway/runtime/identity";
 import { decorateCapabilities, projectCapabilitiesForSearch } from "@/gateway/control/capabilities";
+import type { ControlCapabilitySummary } from "@/gateway/control/types";
 import {
   getCapabilityBranchFields,
   projectCapabilityInputSchema,
@@ -188,7 +189,7 @@ describe("BlockIT Gateway contract", () => {
   });
 
   test("search projection removes orientation constants but keeps routing ownership", () => {
-    const [projected] = projectCapabilitiesForSearch([{
+    const capabilities: ControlCapabilitySummary[] = [{
       capability_id: "manage_cubes",
       description: "Create or update cubes.",
       tier: "primary",
@@ -205,7 +206,8 @@ describe("BlockIT Gateway contract", () => {
           anchor_test: "mcp/tests/model-effectiveness-correction-accuracy.test.ts",
         },
       },
-    }]);
+    }];
+    const [projected] = projectCapabilitiesForSearch(capabilities);
 
     expect(projected.authoring_domain).toBe("GEOMETRY");
     expect(projected.flags).toEqual(["destructive"]);
@@ -538,7 +540,7 @@ describe("BlockIT Gateway contract", () => {
     });
   });
 
-  test("Gateway compacts audited read-only summaries while preserving non-text evidence", () => {
+  test("Gateway preserves unique read-only summaries and non-text evidence", () => {
     const summary = [{ type: "text", text: "Project fixture: 4 Cubes, 2 Groups, 1 Texture." }];
     const structured = {
       project: { uuid: "project-a", name: "fixture" },
@@ -560,7 +562,7 @@ describe("BlockIT Gateway contract", () => {
           true
         ),
         capability
-      ).toEqual([{ type: "text", text: "Read complete." }]);
+      ).toBe(summary);
     }
 
     const image = [{ type: "image", data: "fixture", mimeType: "image/png" }];
@@ -600,7 +602,12 @@ describe("BlockIT Gateway contract", () => {
         "not_applicable",
         true
       )
-    ).toEqual([{ type: "text", text: "Read complete." }]);
+    ).toBe(summary);
+
+    expect(compactGatewayCapabilityContent(
+      "future_read_capability", structured,
+      [{ type: "text", text: "Read complete." }], "not_applicable", true
+    )).toEqual([{ type: "text", text: "Read complete." }]);
 
     expect(
       compactGatewayCapabilityContent(
@@ -792,9 +799,13 @@ describe("BlockIT Gateway contract", () => {
         { execution: "applied", modified: 1, after: { uuid: "cube-a" } },
         verbose
       )
-    ).toEqual([
-      { type: "text", text: "Cube mutation applied; use structured receipt." },
-    ]);
+    ).toBe(verbose);
+
+    expect(compactGatewayCapabilityContent(
+      "manage_cubes",
+      { execution: "applied", modified: 1, after: { uuid: "cube-a" } },
+      [{ type: "text", text: "Applied authored update to Cube leg." }]
+    )).toEqual([{ type: "text", text: "Cube mutation applied; use structured receipt." }]);
 
     expect(
       compactGatewayCapabilityContent(

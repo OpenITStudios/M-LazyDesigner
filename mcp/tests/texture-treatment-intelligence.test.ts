@@ -142,7 +142,7 @@ describe("texture treatment intelligence", () => {
         { cube_uuid: "boot", face: "down" },
       ],
     })).toThrow("duplicate Cube/face");
-    expect(() => planTextureTreatment({
+    expect(planTextureTreatment({
       required_faces: [{ cube_uuid: "boot", face: "down" }],
       regions: [{
         ...base, face_targets: [
@@ -152,7 +152,7 @@ describe("texture treatment intelligence", () => {
     }).readiness.unresolved).toContainEqual({
       region: "cloth", reason: "SHARED_UV_SOURCE_REQUIRED",
     });
-    expect(() => planTextureTreatment({
+    expect(planTextureTreatment({
       regions: [{
         ...base, face_targets: [
           { cube_uuid: "boot", face: "down", treatment: "PAINT" },

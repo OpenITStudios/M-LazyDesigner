@@ -33,9 +33,9 @@ const THIN_FACE_UV = [
   { face: "down", uv: [8, 0, 9, 0.5] },
 ] as const;
 
-function sameVec3(actual: unknown, expected: readonly number[]): boolean {
+function sameVec3(actual: unknown, expected: unknown): boolean {
   return (
-    Array.isArray(actual) &&
+    Array.isArray(actual) && Array.isArray(expected) && expected.length === 3 &&
     actual.length === 3 &&
     actual.every((value, index) => value === expected[index])
   );

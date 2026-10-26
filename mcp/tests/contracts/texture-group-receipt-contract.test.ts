@@ -58,6 +58,6 @@ describe("shared texture-group receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/textureGroup"'
     );
-    expect(control).toContain("some(isTextureGroupReceipt)");
+    expect(control).toContain("receiptMatches(value, isTextureGroupReceipt)");
   });
 });

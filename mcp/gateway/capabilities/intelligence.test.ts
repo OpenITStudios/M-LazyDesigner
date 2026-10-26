@@ -130,7 +130,12 @@ describe("capability intelligence routing", () => {
     for (const results of [ready, unknown, blocked]) {
       expect(results[0]?.capability_id).toBe("manage_cubes");
       expect(results[0]?.branch).toEqual({ field: "operation", value: "update" });
-      expect(results.map((result) => result.capability_id)).not.toContain("emulate_clicks");
+      // A lexically relevant maintenance candidate may follow native intent;
+      // its tier must not change and it must never displace the authoring route.
+      expect(results.findIndex(result => result.capability_id === "emulate_clicks"))
+        .toBeGreaterThan(0);
+      expect(results.find(result => result.capability_id === "emulate_clicks")?.tier)
+        .toBe("maintenance");
     }
     expect(ready[0]?.eligibility).toBeUndefined();
     expect(unknown[0]).toMatchObject({

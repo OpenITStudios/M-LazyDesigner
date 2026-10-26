@@ -96,6 +96,6 @@ describe("REMOTE_GITHUB authoring handoff contracts", () => {
       expect(continuation).not.toContain(retired);
     }
     expect(continuation).toContain("The persistent Gateway owns client stability and Runtime");
-    expect(continuation).toContain("Native\nand visual checks remain NOT_EXECUTED until actually observed");
+    expect(continuation).toMatch(/Native\s+and visual checks remain NOT_EXECUTED until actually observed/);
   });
 });

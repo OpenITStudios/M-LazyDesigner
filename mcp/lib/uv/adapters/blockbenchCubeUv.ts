@@ -368,7 +368,7 @@ export function assertUvNativeMutationScoped(
   before: UvNativeSourceSnapshot,
   after: UvNativeSourceSnapshot
 ): void {
-  const fail = (reason: string): never => {
+  const fail: (reason: string) => never = (reason) => {
     throw new Error("UV_APPLY_SCOPE_VIOLATION: " + reason);
   };
   if (

@@ -160,7 +160,7 @@ describe("atomic Texture + UV source transaction contract (adapter-only)", () =>
       const f = fixture();
       const input = await request(f);
       if (problem === "oversized") f.harness.state.atlases[0] = {
-        ...f.harness.state.atlases[0], width: 9_000,
+        ...f.harness.state.atlases[0], width: 9_000_000,
       };
       else f.harness.state.atlases[0] = {
         ...f.harness.state.atlases[0], layers_enabled: true as never,

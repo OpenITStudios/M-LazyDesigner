@@ -68,7 +68,7 @@ describe("bounded visual verification scope registry", () => {
       const direct = verificationScopeForResult(capability, "visual", receipt);
       const wrapped = verificationScopeForResult(capability, "visual", envelope);
       expect(wrapped, capability).toEqual(direct);
-      expect(wrapped?.kind, capability).toBe(kind);
+      expect(String(wrapped?.kind), capability).toBe(kind);
       expect(reads, capability).toBe(1);
     }
   });

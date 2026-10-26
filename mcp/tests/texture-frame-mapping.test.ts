@@ -86,7 +86,7 @@ describe("texture frame mapping", () => {
       edit(callback: (
         canvas: { width: number; height: number },
         env: Record<string, any>
-      )) {
+      ) => void) {
         if (writeBehavior === "skipped") return;
         const offset = editOffset;
         const ctx = {
@@ -134,6 +134,7 @@ describe("texture frame mapping", () => {
         }));
 
       const result = await run([{ x: 0, y: 16 }, { x: 5, y: 31 }]);
+      if (typeof result === "string") throw new Error("Expected a structured paint receipt");
       expect(result.structuredContent).toMatchObject({
         mode: "exact_pixels",
         affected_rect: [0, 16, 6, 32],
@@ -217,7 +218,7 @@ describe("texture frame mapping", () => {
       layers_enabled: true, layers: [layerA, layerB], selected_layer: layerA,
       getActiveLayer: () => activeLayer,
       getActiveCanvas: () => ({ canvas, offset }),
-      edit(callback: (canvas: typeof canvas, env: { ctx: typeof ctx; offset: number[] }) => void) {
+      edit(callback: (target: typeof canvas, env: { ctx: typeof ctx; offset: number[] }) => void) {
         if (switchPoint === "before_callback") {
           activeLayer = layerB;
           this.selected_layer = layerB;
@@ -260,6 +261,7 @@ describe("texture frame mapping", () => {
         }));
 
       const good = await run(0);
+      if (typeof good === "string") throw new Error("Expected a structured paint receipt");
       expect(good.structuredContent).toMatchObject({
         mode: "exact_pixels",
         write_target: { kind: "active_layer", layer_uuid: "ink" },

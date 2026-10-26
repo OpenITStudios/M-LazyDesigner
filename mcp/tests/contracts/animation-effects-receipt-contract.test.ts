@@ -94,6 +94,6 @@ describe("shared animation effects receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/animationEffects"'
     );
-    expect(control).toContain("some(isAnimationEffectsReceipt)");
+    expect(control).toContain("receiptMatches(value, isAnimationEffectsReceipt)");
   });
 });

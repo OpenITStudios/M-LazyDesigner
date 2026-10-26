@@ -227,7 +227,7 @@ function inspectFaceTextureSpace(face: CubeFace): EffectiveTextureSpace {
   if (face.texture === null) {
     return { state: "no_texture", texture: null, metrics: null };
   }
-  return inspectEffectiveTextureSpace(face.getTexture() ?? null);
+  return inspectEffectiveTextureSpace(face.getTexture() || null);
 }
 
 const CUBE_FACE_KEYS = [

@@ -106,6 +106,6 @@ describe("shared locator mutation receipt contract", () => {
     expect(control).toContain(
       'from "../../../lib/receipts/locatorMutation"'
     );
-    expect(control).toContain("some(isLocatorMutationReceipt)");
+    expect(control).toContain("receiptMatches(value, isLocatorMutationReceipt)");
   });
 });

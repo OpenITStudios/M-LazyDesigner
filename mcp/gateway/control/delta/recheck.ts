@@ -37,14 +37,17 @@ export type ControlDownstreamRecheck = {
 function uvTargetFromCandidates(candidates: readonly Record<string, unknown>[]): ControlDownstreamRecheck["target"] | undefined {
   for (const candidate of candidates) {
     const receipt = record(candidate.receipt) ?? candidate;
-    const cubeIds = Array.isArray(receipt.changed_cube_ids)
-      ? receipt.changed_cube_ids.filter((value): value is string => typeof value === "string")
+    const changedCubeIds = receipt.changed_cube_ids;
+    const changedIslandIds = receipt.changed_island_ids;
+    const changedFaces = receipt.changed_faces;
+    const cubeIds = Array.isArray(changedCubeIds)
+      ? changedCubeIds.filter((value): value is string => typeof value === "string")
       : [];
-    const islandIds = Array.isArray(receipt.changed_island_ids)
-      ? receipt.changed_island_ids.filter((value): value is string => typeof value === "string")
+    const islandIds = Array.isArray(changedIslandIds)
+      ? changedIslandIds.filter((value): value is string => typeof value === "string")
       : [];
-    const faces = Array.isArray(receipt.changed_faces)
-      ? receipt.changed_faces.flatMap((value) => {
+    const faces = Array.isArray(changedFaces)
+      ? changedFaces.flatMap((value) => {
           const face = record(value);
           return typeof face?.cube_uuid === "string" &&
             (typeof face.face === "string" || face.face === null)

@@ -123,7 +123,7 @@ describe("UV atomic transaction contracts", () => {
     expect(writtenUv).not.toBeNull();
     expect(writtenUv![0]).toBeGreaterThan(writtenUv![2]);
     expect(writtenUv![1]).toBeGreaterThan(writtenUv![3]);
-    expect(native.cubes[1].faces[0].uv).toEqual(writtenUv);
+    expect([...native.cubes[1].faces[0].uv]).toEqual(writtenUv!);
     expect(original.cubes[1].faces[0].uv).toEqual([12, 4, 10, 0]);
   });
 

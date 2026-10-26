@@ -18,7 +18,7 @@ describe("Astra context efficiency measurement", () => {
     const cubes = byName.get("manage_cubes_continuation");
     const inspect = byName.get("inspect_elements_detail_schema");
 
-    for (const measurement of [delta, search, searchEnvelope, describeEnvelope, cubeText, cubes, inspect]) {
+    for (const measurement of [delta, search, searchEnvelope, describeEnvelope, cubes, inspect]) {
       expect(measurement).toBeDefined();
       expect(measurement!.saved_bytes).toBeGreaterThan(0);
       expect(measurement!.after_bytes).toBeLessThan(measurement!.before_bytes);
@@ -28,7 +28,10 @@ describe("Astra context efficiency measurement", () => {
     expect(search!.reduction_percent).toBeGreaterThan(5);
     expect(searchEnvelope!.reduction_percent).toBeGreaterThan(0);
     expect(describeEnvelope!.reduction_percent).toBeGreaterThan(5);
-    expect(cubeText!.reduction_percent).toBeGreaterThan(30);
+    // The visual-approval disclaimer is unique evidence and must survive compaction.
+    expect(cubeText).toBeDefined();
+    expect(cubeText!.saved_bytes).toBe(0);
+    expect(cubeText!.after_bytes).toBe(cubeText!.before_bytes);
     expect(cubes!.reduction_percent).toBeGreaterThan(35);
     expect(inspect!.reduction_percent).toBeGreaterThan(60);
 

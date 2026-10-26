@@ -11,9 +11,19 @@ import { readRecipePartCaptureScope } from "@/server/runtime/recipes/authoring/s
 const runtime = globalThis as unknown as {
   Project: unknown;
   Cube: unknown;
+  Group: unknown;
 };
 const previousProject = runtime.Project;
 const previousCube = runtime.Cube;
+const previousGroup = runtime.Group;
+
+class MockGroup {
+  origin = [0, 0, 0];
+  rotation = [0, 0, 0];
+  visibility = true;
+  parent: unknown = "root";
+  constructor(public uuid: string, public name: string) {}
+}
 
 function recipe(): AuthoringRecipe {
   return {
@@ -37,6 +47,7 @@ function setNativeScene() {
     from: [...placement.from], to: [...placement.to],
     origin: [...placement.origin], rotation: [...placement.rotation],
     inflate: placement.inflate,
+    parent: "root" as string | MockGroup,
     lazydesigner_recipe_id: source.id,
     lazydesigner_recipe_instance_id: placement.id,
   }));
@@ -49,12 +60,14 @@ function setNativeScene() {
     textures: [],
   };
   runtime.Cube = { all: cubes };
+  runtime.Group = MockGroup;
   return { source, cubes };
 }
 
 afterEach(() => {
   runtime.Project = previousProject;
   runtime.Cube = previousCube;
+  runtime.Group = previousGroup;
 });
 
 describe("current recipe-owned part evidence uses one native identity owner", () => {
@@ -91,11 +104,10 @@ describe("current recipe-owned part evidence uses one native identity owner", ()
   test("parent group changes invalidate capture without changing recipe/Undo identity", () => {
     const { source, cubes } = setNativeScene();
     const original = readRecipePartCaptureScope(source.id, ["native-cube-0"]);
-    const group = { uuid: "hinge-group", origin: [0,0,0], rotation: [0,0,0],
-      visibility: true, parent: "root" };
+    const group = new MockGroup("hinge-group", "Hinge");
     (cubes[0] as typeof cubes[number] & { parent?: unknown }).parent = group;
     const attached = readRecipePartCaptureScope(source.id, ["native-cube-0"]);
-    expect(attached.native_snapshot_fingerprint).toBe(original.native_snapshot_fingerprint);
+    expect(attached.native_snapshot_fingerprint).not.toBe(original.native_snapshot_fingerprint);
     expect(attached.capture_dependency_fingerprint).not.toBe(original.capture_dependency_fingerprint);
     group.rotation[1] = 45;
     const turned = readRecipePartCaptureScope(source.id, ["native-cube-0"]);
@@ -106,7 +118,7 @@ describe("current recipe-owned part evidence uses one native identity owner", ()
     group.visibility = false;
     const hidden = readRecipePartCaptureScope(source.id, ["native-cube-0"]);
     expect(hidden.capture_dependency_fingerprint).not.toBe(pivot.capture_dependency_fingerprint);
-    expect(hidden.native_snapshot_fingerprint).toBe(original.native_snapshot_fingerprint);
+    expect(hidden.native_snapshot_fingerprint).not.toBe(original.native_snapshot_fingerprint);
   });
 
   test("atlas pixels and UV edits invalidate capture dependency fingerprints", () => {
@@ -132,13 +144,11 @@ describe("current recipe-owned part evidence uses one native identity owner", ()
 
   test("invalid hierarchy and ambiguous texture identities fail closed", () => {
     const { source, cubes } = setNativeScene();
-    const loop: { uuid: string; origin: number[]; rotation: number[]; parent: unknown } = {
-      uuid: "loop", origin: [0,0,0], rotation: [0,0,0], parent: "root",
-    };
+    const loop = new MockGroup("loop", "Loop");
     loop.parent = loop;
     (cubes[0] as typeof cubes[number] & { parent?: unknown }).parent = loop;
     expect(() => readRecipePartCaptureScope(source.id, []))
-      .toThrow("PART_CORRESPONDENCE_PARENT_HIERARCHY_INVALID");
+      .toThrow("RECIPE_NATIVE_PARENT_UNKNOWN");
     loop.parent = "root";
     const project = runtime.Project as { textures: Array<Record<string, unknown>> };
     const same = { uuid: "duplicate", width: 1, height: 1,
@@ -163,8 +173,7 @@ describe("current recipe-owned part evidence uses one native identity owner", ()
     unrelated.from[0] = 4;
     const corrected = readRecipePartCaptureScope(source.id, ["native-cube-0"]);
     expect(corrected.capture_dependency_fingerprint).not.toBe(obstructed.capture_dependency_fingerprint);
-    const group = { uuid: "foreign-parent", origin: [0, 0, 0],
-      rotation: [0, 0, 0], parent: "root" };
+    const group = new MockGroup("foreign-parent", "Foreign");
     (unrelated as typeof unrelated & { parent?: unknown }).parent = group;
     const parented = readRecipePartCaptureScope(source.id, ["native-cube-0"]);
     group.rotation[1] = 45;

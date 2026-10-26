@@ -25,8 +25,8 @@ describe("native UV apply plan", () => {
           ], oneToOne);
           expect(result.complete).toBe(true);
           expect(result.operations).toHaveLength(1);
-          expect(result.operations[0].uv).toEqual(expected);
-          expect(result.operations[0].rotation).toBe(
+          expect(result.operations[0].uv).toEqual([...expected]);
+          expect(Number(result.operations[0].rotation)).toBe(
             (currentRotation + (rotated ? 90 : 0)) % 360
           );
         }
