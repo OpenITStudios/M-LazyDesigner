@@ -43,7 +43,7 @@ The existing `status` result adds `alignment`: `aligned`, `drifted` or `unverifi
 
 First install may use `--migrate-legacy`, or the explicit backed-up migration action in Desktop Support. Strict TOML preservation removes only a verified older BlockIT entry; recognized endpoint/TLS environment names are converted, user timeouts and unrelated client settings remain intact. Ambiguous, disabled, remote or unknown legacy environment settings stop migration for review.
 
-The old plugin in the selected profile is removed from its active path only inside the existing journaled transaction, after its exact bytes and the original configuration have been retained. Failed final activation verification restores the previous state. Migration also observes source-launched old client processes, which have no managed leases; active old sessions keep the verified package staged without killing or restarting their owner. Retrying setup reuses that pending package. Old machine roots and user assets are retained and never selected as the new active installation.
+The old plugin in the selected profile is removed from its active path only inside the existing journaled transaction, after its exact bytes and the original configuration have been retained. Failed final activation verification restores the previous state. Migration also observes source-launched old client processes, which have no managed leases; active old sessions keep the verified package staged without killing or restarting their owner. Retrying setup reuses that pending package. User assets remain untouched. After explicit retirement authorization, verified old machine roots/toolchains may be moved to isolated recovery outside active installation paths; record file hashes and recheck configuration, plugin and process ownership. Recovery copies are not a second selectable installation.
 
 Updates are explicit, not network polling during authoring. The package is downloaded/built and verified before activation. Active Gateway process leases or a responding Runtime postpone replacement. A pending update may activate only when no conflicting Gateway/Runtime is active.
 
@@ -53,6 +53,10 @@ Desktop startup discovery uses the read-only `check-update` command. Published m
 `check-update` never stages or activates files. Network lookup is bounded and happens only when explicitly invoked by the Desktop startup owner; it is not called by normal MCP launch or the Desktop connection heartbeat.
 
 The manager never kills applications, closes unsaved models, silently overwrites user-edited managed Skills, or mutates user assets. A retired `blockit_mcp.js` file in the same Blockbench profile prevents new plugin activation until the explicit backed-up migration above. Transaction journals and hashes protect install/update/rollback. Local modifications require explicit adoption where supported.
+
+### Retired-system policy
+
+Normal operation has exactly one LazyDesigner managed root, one configured LazyDesigner MCP entry and one plugin in the selected Blockbench profile. Never launch an old BlockIT root, source command, environment fallback or plugin to recover a modern installation. Preserve legacy detection and negative tests so stale installations fail closed. Names in history, test fixtures and internal compatibility symbols are not permission to execute retired software. Retire only exact-owned processes after explicit user authorization; keep Codex itself open when requested. Do not delete asset folders or unrelated servers. Installation alignment and live Runtime readiness require separate evidence.
 
 ## Codex configuration
 

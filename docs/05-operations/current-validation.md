@@ -1,6 +1,6 @@
 # LazyDesigner Current Validation
 
-This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details, including the source-only 23–24 October work at `a3ff57b4` and earlier reports at `ce5299aa`/`b9b4756e`.
+This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
 ## Current authority
 
@@ -10,7 +10,9 @@ CI DISABLED. No Actions/main/release publishing. Runtime/visual acceptance: NOT 
 
 Accepted source: `37baddccc0e89f9a9ebed91576d421c0de6e7ef9`; exact-commit verify:full PASS in ignored `.cache/alignment-verify-full-37baddcc.log` (matching SHA, EXIT_CODE=0). Repository 302, Runtime 2529, installer/migration 34, authoring 166, Gateway/manifest 298 and Golden contracts 44 PASS; types/unused/generators/evaluations/benchmarks/build PASS. Desktop source PASS: TS6/TS7, frontend and Rust 83. Prior candidate compiler/continuity failures remain recorded, not hidden.
 
-App 0.1.1 installed at `%LOCALAPPDATA%/Programs/LazyDesigner/`; registry path and bundled package match that source. Compiled package install/idempotence/stdio smoke PASS. Actual legacy migration returns STAGED while old Codex source sessions are active; original config/plugin remain byte-identical to recovery. Package/installer receipts: ignored `.cache/alignment-artifacts.json` and `alignment-installed-app.json`. The user now explicitly defers Finish setup while using Codex; retain STAGED and assess App first. Native plugin trust/load, live matching health/catalog and restart/reconnect remain unverified; no live or asset-quality acceptance follows.
+App 0.1.1 and managed source 37baddcc are installed; package/installer receipts remain in ignored .cache. On explicit user authority, nine BlockIT MCP children were stopped while Codex PID 18096 remained open. Canonical migration INSTALLED (transaction 61cc6b1b-1bbc-485a-a114-a32d6ea70d20); alignment=aligned, issues=[], pending=false. Codex has one lazydesigner entry with LAZYDESIGNER_RUNTIME_URL; other settings are semantically unchanged. Old plugin, %LOCALAPPDATA%/BlockIT and old Bun 1.3.14 are absent from active paths. Windows startup/service/task inspection found no matching legacy entry.
+
+Recovery: machine-local Codex tmp/lazydesigner-legacy-retirement-2026-10-26-43c676139dad498bb56c019b824e095c; original config/plugin, process receipt and hash inventory of 261 retired files. Hidden content required a separate, hash-verified Directory.Move. Receipt/status: ignored .cache/legacy-retirement*.json. No Blockbench launch, plugin trust, live catalog, UI or asset mutation followed; Runtime remains offline. Installation alignment is not live readiness.
 
 ## Desktop readiness assessment — 2026-10-26
 
@@ -18,14 +20,14 @@ Verdict: source-qualified candidate with a verified installed package; operation
 
 | App area | Evidence and remaining acceptance |
 | --- | --- |
-| Setup, update and recovery | Manager owns transactions, exact package alignment, compatibility and rollback; staged migration is observed. Actual Desktop restart/resume, failure recovery and activated rollback remain unverified. Keep activation deferred. |
+| Setup, update and recovery | Manager owns transactions, exact package alignment, compatibility and rollback; migration is installed and aligned. Actual Desktop restart/resume, failure recovery and activated rollback remain unverified. |
 | Status and action clarity | Source distinguishes installation alignment, Runtime and client ownership; stale observation gates AI maintenance. `desktopFixtures.ts` has nine presentation states but no staged-bootstrap, alignment-drift or Desktop-update-required scenarios. Existing ready fixtures omit the new alignment projection. This is a test coverage gap, not proof of a production connection defect. |
 | Routine model work | Open/Open Model are independent of AI setup. `LAUNCHED` means launch acknowledgment; correct native model-tab selection is explicitly not verified. Native file dialog, cancellation and correct-file/profile behavior need disposable model acceptance. |
 | Project data safety | Source uses reviewed identity/token checks and Windows Recycle Bin; no permanent-delete fallback. Actual recycle, cancellation/failure and restoration are NOT EXECUTED. Do not accept the destructive UI path from source tests alone. |
 | UI and accessibility | Historical 1280x720 synthetic frontend evidence exists; it predates the alignment changes. Current Workspace/Support states, narrow layout, keyboard/focus and error recovery need renewed presentation inspection followed by Windows/Tauri checks. |
 | Supported delivery | Desktop 0.1.1 installer/package identity is verified. Automatic Desktop self-update and self-extracting portable Blockbench launchers are unsupported; managed-component update does not upgrade Desktop. These are explicit limits, not a promise of seamless update support. |
 
-First independent work: bring the existing presentation fixtures up to the current IPC contract and cover pending/mismatch states before reviewing those screens. Next, validate non-destructive editor/project/navigation flows using disposable inputs. Native migration/reconnect and Recycle Bin acceptance remain distinct, deferred tasks; no readiness percentage or release acceptance is inferred from passing test counts.
+First independent work: bring the existing presentation fixtures up to the current IPC contract and cover pending/mismatch states before reviewing those screens. Next, validate non-destructive editor/project/navigation flows using disposable inputs. Native reconnect and Recycle Bin acceptance remain distinct, deferred tasks; no readiness percentage or release acceptance is inferred from passing test counts.
 
 ## Current proof matrix
 
@@ -33,10 +35,10 @@ First independent work: bring the existing presentation fixtures up to the curre
 | --- | --- |
 | Executable source | Exact 37baddcc full gate and Desktop source checks PASS as recorded above |
 | Installed Desktop/package | Installer, file hashes and bundled source verified; compiled CLI smoke PASS |
-| Migration | STAGED only; old active client/plugin preserved |
+| Migration | INSTALLED/aligned; legacy active paths absent; unrelated settings preserved |
 | Native UI / Runtime / data operations | NOT EXECUTED for this installed candidate; no product-ready acceptance |
 
-Earlier candidate failures and intermediate counts remain in Git history and ignored qualification logs. Canonical docs:check passed during source qualification; generated output remains generator-owned.
+Earlier candidate evidence remains in Git/history logs. Canonical docs:check passed during qualification; generated output remains generator-owned.
 
 ## Current source-only authoring boundaries
 
@@ -52,8 +54,6 @@ The 23–24 October changes are coherently committed source and regression inten
 The B0-A [trace](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) distinguishes six source-registered routes from unregistered UV; neither is installed proof.
 
 ## Historical source and frontend evidence
-
-`ba4ed7f3` (2026-10-21): 296 repository tests/61 files; 163 focused tests/18 files; MCP/Gateway types; Desktop TS6/TS7; frontend/plugin build and generated freshness PASS. Full MCP, new packaging and native/visual checks were NOT EXECUTED in that batch.
 
 `d334106e`: Svelte at 1280x720, official Tauri mockIPC/24 synthetic projects: list persistence/scroll, menus, dialog focus, Tab/Escape and error recovery observed. 296 repository tests, types/build PASS. Narrow viewport, Recycle Bin, installed Tauri and native save/reopen NOT EXECUTED.
 
