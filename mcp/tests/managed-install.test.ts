@@ -436,7 +436,7 @@ test("legacy source sessions are detected across Windows path separators and dis
   assert.equal(await legacyClientActive(o.config), false);
 }));
 
-test("failed activation verification restores the pre-migration configuration and deleted plugin", async () => sandbox(async (d, o) => {
+test("failed activation verification restores the pre-migration configuration and deleted plugin", async () => sandbox(async (_d, o) => {
   await mkdir(dirname(o.config), { recursive: true }); await writeFile(o.config, "OLD CONFIG");
   await mkdir(dirname(o.plugin), { recursive: true }); await writeFile(o.plugin, "OLD PLUGIN");
   await assert.rejects(applyTransaction(o.root, [

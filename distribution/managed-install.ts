@@ -516,7 +516,8 @@ export async function activeGateways(root: string): Promise<boolean> {
  * explicit migration only; their stdio owner must close them normally. */
 export async function legacyClientActive(config: string): Promise<boolean> {
   const text = (await readOptional(config))?.toString() ?? "";
-  const legacy = Bun.TOML.parse(text).mcp_servers?.blockit as { command?: string; args?: string[] } | undefined;
+  const parsed = Bun.TOML.parse(text) as { mcp_servers?: { blockit?: { command?: string; args?: string[] } } };
+  const legacy = parsed.mcp_servers?.blockit;
   if (!legacy) return false;
   if (process.platform !== "win32" || typeof legacy.command !== "string" || !isAbsolute(legacy.command)) return true;
   const script = Array.isArray(legacy.args) ? legacy.args.find(arg => isAbsolute(arg) && /\.(?:ts|js)$/i.test(arg)) ?? "" : "";
