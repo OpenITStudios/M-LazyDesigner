@@ -12,13 +12,13 @@ Accepted managed source: 7b45bd69027954d306f9fcf0482227e60fb0de18. Exact-commit 
 
 Actual canonical stdio initially failed OWNERSHIP_UNVERIFIED despite explicit-root status=aligned. Windows casing and MSIX logical/physical aliases caused lexical ownership drift. Red/green regressions cover both and foreign-path/root rejection. Corrected package is installed (transaction 251eca45-61c9-45b0-a53e-b8d8034c5b40); automatic-root alignment=aligned, issues=[], pending=false. Old BlockIT active paths stay absent; unrelated Codex settings preserved.
 
-User confirmed plugin approval. Read-only client using the exact Codex command/args passed initialize, four public tools, discovery and Runtime handshake/catalog: connection=ready, mcp_client_ready=true, 47 capabilities; build sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5 matches package. Temporary-client LIVE_BLOCKBENCH transport/catalog proof; not this chat's MCP session. Its tool inventory still exposes the retired namespace; client reload remains deferred. No model mutation or visual acceptance. Receipts: ignored .cache/canonical-path-*.json/log; reusable temporary verifier canonical-path-stdio.mjs --catalog.
+LIVE_BLOCKBENCH transport/catalog now verified through this actual chat's mcp__lazydesigner tools. Initial ECONNREFUSED coincided with Blockbench closed. Reopening the same approved profile restored Runtime without another trust action; the same client Gateway recovered through discovery. Status: connection=ready, mcp_client_ready=true, catalog_stale=false, catalog_count=47, Control=READY. Build sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5 matches the installed package. Desktop's managed projection independently reports aligned, Gateway active, Runtime online, pending=false. One offline-to-online cycle is accepted; repeated fault recovery, model operations and UI quality are not. Receipts: ignored .cache/current-codex-live-proof.json and current-codex-managed-status.json. Earlier temporary-client proof remains in canonical-path-*.json/log.
 
 Recovery: machine-local Codex tmp/lazydesigner-legacy-retirement-2026-10-26-43c676139dad498bb56c019b824e095c; original config/plugin, process receipt and hash inventory of 261 retired files. Hidden content required a separate, hash-verified Directory.Move. Receipt/status: ignored .cache/legacy-retirement*.json. App/Blockbench were subsequently launched for the bounded read-only acceptance above. No UI layout or asset mutation was accepted.
 
 ## Desktop readiness assessment — 2026-10-26
 
-Verdict: source-qualified candidate with a verified installed package; operational readiness is not yet accepted. LOCAL_CODE source inspection only; installed Windows UI was not observed. App/Blockbench process launch is observed; their UI layout is not accepted.
+Verdict: source/package and live connectivity qualified; complete App readiness remains unaccepted. Process launch is observed; Windows UI layout is not accepted.
 
 | App area | Evidence and remaining acceptance |
 | --- | --- |
@@ -38,7 +38,7 @@ App fixtures/layout and disposable editor/project flows remain unaccepted. Nativ
 | Executable source | Exact 7b45bd69 full gate PASS; unchanged Desktop checks scoped above |
 | Installed Desktop/package | Desktop 0.1.1/contract 1; managed 7b45bd69; compiled installed stdio PASS |
 | Migration | INSTALLED/aligned; legacy active paths absent; unrelated settings preserved |
-| Runtime transport/catalog | Matching build, ready handshake, 47 capabilities through temporary client PASS; current chat reload pending |
+| Runtime transport/catalog | Actual Codex chat: matching build, fresh 47-capability catalog, Control READY; one offline-to-online recovery PASS |
 | Native UI / data operations | NOT EXECUTED for this candidate; no product-ready acceptance |
 
 Earlier candidate evidence remains in Git/history logs. Canonical docs:check passed during qualification; generated output remains generator-owned.
@@ -58,7 +58,7 @@ The B0-A [trace](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) distinguishes six sour
 
 ## Historical source and frontend evidence
 
-`d334106e`: Svelte at 1280x720, official Tauri mockIPC/24 synthetic projects: list persistence/scroll, menus, dialog focus, Tab/Escape and error recovery observed. 296 repository tests, types/build PASS. Narrow viewport, Recycle Bin, installed Tauri and native save/reopen NOT EXECUTED.
+`d334106e`: historical 1280x720 mockIPC UI proof only; native/narrow/Recycle Bin/save-reopen NOT EXECUTED.
 
 ## Dependency/security boundaries
 
