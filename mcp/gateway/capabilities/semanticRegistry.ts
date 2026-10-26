@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "../../lib/semantic/canonical";
+import { CAPABILITY_QUERY_SYNONYMS } from "./intelligence";
 import {
   CAPABILITY_BRANCH_MANIFEST,
   manifestEntryForBranch,
@@ -172,9 +173,10 @@ export function capabilitySemanticCatalogRevisions(
   const ordered = [...records].sort((left, right) =>
     left.id.localeCompare(right.id)
   );
-  const routing = semanticFingerprint(
-    ordered.map((entry) => [entry.id, entry.fingerprints.routing])
-  );
+  const routing = semanticFingerprint({
+    entries: ordered.map((entry) => [entry.id, entry.fingerprints.routing]),
+    query_synonyms: CAPABILITY_QUERY_SYNONYMS,
+  });
   const graph = semanticFingerprint(
     ordered.map((entry) => [entry.id, entry.fingerprints.graph])
   );

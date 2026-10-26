@@ -1,13 +1,13 @@
 {
   "version": "0.2.0",
-  "generatedAt": "2026-10-17T11:17:11.540Z",
+  "generatedAt": "2026-10-26T16:28:46.544Z",
   "semantic": {
     "semantic_revision_schema": 1,
     "revisions": {
-      "routing": "e3b4df5015294b045e084a4d118148d8b7c3f19bb4f07010efe5f80399802cbf",
+      "routing": "7748b6ab13ffe0e947064da178651eafeb435db2b76d1b798cd54698e0c7d56b",
       "graph": "d238a53ebacaf03b0fb7f509df2c01bf2446701c858ebdfedd93bab462cb3433",
       "schema_projection": "64569b45b225760e778d935d732d1112b06cf2e9e1cb08cddd4f408ee5ad54be",
-      "aggregate": "08389866680ad64b883dba0df7a8fa3579fd85602c251146888e2c0d87541e51"
+      "aggregate": "50d93eaaf2a4823c875566a899bc68c3cdc8f1be4d3ffacbdc72142ee3a04c92"
     },
     "artifact_kind": "DOCS_API"
   },

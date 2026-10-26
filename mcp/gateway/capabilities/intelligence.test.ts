@@ -23,6 +23,36 @@ describe("capability intelligence routing", () => {
     tool("manage_animation_timeline", "Manage animation timeline data."),
   ];
 
+  const authoringTools = [
+    ...tools,
+    tool("paint_texture_transaction", "Apply bounded pixel operations to a texture."),
+    tool("paint_with_brush", "Paint texture with a brush."),
+    tool("modify_group", "Move or rotate a group."),
+  ];
+
+  test.each([
+    ["warnai tekstur", "paint_texture_transaction", undefined],
+    ["Tolong warnai tekstur ini", "paint_texture_transaction", undefined],
+    ["pindahkan grup ke induk", "reparent_element", undefined],
+    ["buat kubus", "manage_cubes", "create"],
+    ["pindahkan kubus", "manage_cubes", "update"],
+  ] as const)("routes Indonesian intent %s without confusing painting, parenting and transforms", (query, capability, operation) => {
+    const [result] = searchCapabilityCatalog(authoringTools, query, 2, {
+      authoringPhase: "geometry",
+      facts: { project_bound: false },
+    });
+    expect(result?.capability_id).toBe(capability);
+    if (operation) expect(result?.branch).toEqual({ field: "operation", value: operation });
+    if (capability === "paint_texture_transaction" || capability === "manage_cubes") {
+      expect(result?.eligibility).toBe("BLOCKED");
+      expect(result?.requires).toContain("project_bound");
+    }
+  });
+
+  test.each(["cuaca hari ini", "transfer rekening bank"])("unrelated Indonesian intent %s does not invent an authoring route", query => {
+    expect(searchCapabilityCatalog(authoringTools, query, 2, { authoringPhase: "geometry" })).toEqual([]);
+  });
+
   test("shared scoring retains branch order and Stage evidence for IK", () => {
     const ikTool = tool("bone_rigging", "Advanced IK and bone mirroring.");
     const active = semanticMatchesForTool(

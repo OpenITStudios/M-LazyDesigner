@@ -51,7 +51,14 @@ function semanticEntriesForTool(name: string): readonly CapabilitySemanticEntry[
   return semanticEntriesByTool.get(name) ?? [];
 }
 
-const SYNONYMS: Readonly<Record<string, readonly string[]>> = {
+export const CAPABILITY_QUERY_SYNONYMS: Readonly<Record<string, readonly string[]>> = {
+  buat: ["create"],
+  kubus: ["cube", "cubes"],
+  warnai: ["paint"],
+  tekstur: ["texture"],
+  pindahkan: ["move"],
+  grup: ["group"],
+  induk: ["parent"],
   proportions: ["size", "dimensions", "scale", "length", "width", "height", "thickness"],
   resize: ["scale", "dimensions", "proportions", "bigger", "smaller", "taller", "shorter", "wider", "narrower"],
   taller: ["resize", "lengthen", "height", "proportions"],
@@ -82,7 +89,7 @@ function expandedTokens(query: string): Set<string> {
   const base = normalize(query);
   const out = new Set(base);
   for (const token of base) {
-    for (const synonym of SYNONYMS[token] ?? []) {
+    for (const synonym of CAPABILITY_QUERY_SYNONYMS[token] ?? []) {
       for (const expanded of normalize(synonym)) out.add(expanded);
     }
   }
