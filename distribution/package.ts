@@ -78,7 +78,7 @@ async function main(): Promise<void> {
   // No Blockbench is running here: this proves only the compiled stdio boundary.
   // Start the installed executable exactly as Codex does, not a forwarding parent.
   const gatewayExecutable = join(smokeRoot, "installed", "versions", sourceSha, "lazydesigner.exe");
-  const gateway = Bun.spawn([gatewayExecutable, "mcp", "--root", join(smokeRoot, "installed")], { env: smokeEnv, stdin: "pipe", stdout: "pipe", stderr: "inherit" });
+  const gateway = Bun.spawn([gatewayExecutable, "mcp"], { env: smokeEnv, stdin: "pipe", stdout: "pipe", stderr: "inherit" });
   gateway.stdin.write(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "managed-package-smoke", version: "1" } } }) + "\n");
   const reader = gateway.stdout.getReader(); let buffer = ""; let timer: ReturnType<typeof setTimeout> | undefined;
   async function responseLine(): Promise<any> {

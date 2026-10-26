@@ -22,17 +22,19 @@ export async function inspectAlignment(root: string, parse: (text: string) => an
     if (manifest.source_sha !== installed.source_sha) result.issues.push("PACKAGE_IDENTITY_DRIFT");
     result.desktop_contract = manifest.desktop_contract ?? null;
     if (!result.desktop_contract) result.issues.push("DESKTOP_CONTRACT_UNVERIFIED");
-    const targets = new Set([resolve(installed.options.config), resolve(join(root, "lazydesigner.cmd")), resolve(installed.options.plugin)]);
+    // Executable discovery can change casing for the same Windows location.
+    const targetKey = (path: string) => process.platform === "win32" ? resolve(path).toLowerCase() : resolve(path);
+    const targets = new Set([installed.options.config, join(root, "lazydesigner.cmd"), installed.options.plugin].map(targetKey));
     if (installed.options.workspace_mode !== "repository") {
       for (const file of manifest.files) {
         if (["lazydesigner.exe", "LICENSE", "THIRD_PARTY_NOTICES.txt", MCP_BUNDLE_FILENAME].includes(file.path)) continue;
-        targets.add(resolve(join(installed.options.workspace, file.path)));
+        targets.add(targetKey(join(installed.options.workspace, file.path)));
       }
     }
     if (Object.keys(installed.owned).length !== targets.size) result.issues.push("OWNERSHIP_UNVERIFIED");
     for (const [path, expected] of Object.entries(installed.owned)) {
-      if (!targets.has(resolve(path))) { result.issues.push("OWNERSHIP_UNVERIFIED"); continue; }
-      if (resolve(path).toLowerCase() === resolve(installed.options.config).toLowerCase()) continue;
+      if (!targets.has(targetKey(path))) { result.issues.push("OWNERSHIP_UNVERIFIED"); continue; }
+      if (targetKey(path) === targetKey(installed.options.config)) continue;
       await requirePlainPath(path);
       const bytes = await readOptional(path);
       if (!bytes || sha256(bytes) !== expected) result.issues.push("MANAGED_FILE_DRIFT");

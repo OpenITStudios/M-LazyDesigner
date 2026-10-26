@@ -381,6 +381,19 @@ test("alignment verifies the installed package and Codex target without confusin
   assert.ok((await inspectAlignment(o.root, parse)).issues.includes("MANAGED_FILE_DRIFT"));
 }));
 
+test("Windows alignment accepts root casing from executable discovery and rejects foreign owned paths", async () => sandbox(async (d, o) => {
+  if (process.platform !== "win32") return;
+  const pkg = join(d, "pkg"); await fixture(pkg); await installPackage(pkg, o, parse);
+  const discoveredRoot = o.root.toUpperCase();
+  assert.equal((await inspectAlignment(discoveredRoot, parse)).state, "aligned");
+  const state = JSON.parse(await readFile(join(o.root, "installed.json"), "utf8"));
+  const wrapper = Object.keys(state.owned).find(path => path.endsWith("lazydesigner.cmd"))!;
+  state.owned[join(d, "foreign/lazydesigner.cmd")] = state.owned[wrapper];
+  delete state.owned[wrapper];
+  await writeFile(join(o.root, "installed.json"), JSON.stringify(state));
+  assert.ok((await inspectAlignment(discoveredRoot, parse)).issues.includes("OWNERSHIP_UNVERIFIED"));
+}));
+
 test("legacy migration is explicit, preserves unrelated client settings, and rollback restores legacy bytes", async () => sandbox(async (d, o) => {
   const pkg = join(d, "pkg"); await fixture(pkg);
   const original = '# keep\nmodel="test"\n# BEGIN BLOCKIT MANAGED\n[mcp_servers.blockit]\ncommand="bun.exe"\nargs=["old.ts"]\ntool_timeout_sec=240\n[mcp_servers.blockit.env]\nBLOCKIT_RUNTIME_URL="https://127.0.0.1:3000/bb-mcp"\n# END BLOCKIT MANAGED\n[mcp_servers.other]\ncommand="other.exe"\n';
