@@ -8,9 +8,11 @@ This file owns current proof interpretation only. Continuation: [next-action.md]
 
 CI DISABLED. No release or CI changes. Authoring/visual acceptance: NOT EXECUTED. Desktop 0.1.1 installed; dependencies unchanged. Toolchain: Bun 1.4.3, Node 24.22.0, Rust 1.99.1.
 
-Accepted managed source: 7b45bd69027954d306f9fcf0482227e60fb0de18. Exact-commit verify:full PASS in ignored .cache/canonical-path-msix-verify-retry.log (EXIT_CODE=0): repository 302, Runtime 2529, installer 35, authoring 166, Gateway/manifest 298, Golden 44; remaining source/build gates PASS. The first attempt timed out and Bun crashed; its log is retained. Desktop 0.1.1 remains at source 37baddcc, compatible contract 1; prior unchanged TS6/TS7/frontend/83 Rust proof remains scoped there.
+Working source 611024930ec823d544f72ce2a9b417f7a37d4afd: bounded Indonesian discovery repair, not deployed. Seven new regressions cover painting, parent changes, create/update distinction, unrelated queries and prerequisites; four failed before correction. Gateway/contracts 341, repository 302, types/unused, docs freshness and routing/decision evaluations PASS. Registered 54-tool source probes select expected routes. Broad discovery remains Top-1=0.537, Top-3=0.787 on 108 cases (unchanged baseline); 19 decision cases remain accurate. No full-source or new live acceptance is claimed. Logs: ignored .cache/intent-routing-*.log.
 
-Actual canonical stdio initially failed OWNERSHIP_UNVERIFIED despite explicit-root status=aligned. Windows casing and MSIX logical/physical aliases caused lexical ownership drift. Red/green regressions cover both and foreign-path/root rejection. Corrected package is installed (transaction 251eca45-61c9-45b0-a53e-b8d8034c5b40); automatic-root alignment=aligned, issues=[], pending=false. Old BlockIT active paths stay absent; unrelated Codex settings preserved.
+Installed qualification — Accepted managed source: 7b45bd69027954d306f9fcf0482227e60fb0de18. Exact-commit verify:full PASS in ignored .cache/canonical-path-msix-verify-retry.log (EXIT_CODE=0): repository 302, Runtime 2529, installer 35, authoring 166, Gateway/manifest 298, Golden 44; remaining source/build gates PASS. The first attempt timed out and Bun crashed; its log is retained. Desktop 0.1.1 remains at source 37baddcc, compatible contract 1; prior unchanged TS6/TS7/frontend/83 Rust proof remains scoped there.
+
+Installed package fixes Windows/MSIX ownership drift; transaction 251eca45-61c9-45b0-a53e-b8d8034c5b40, alignment=aligned, pending=false. Legacy active paths remain absent; unrelated client settings preserved.
 
 LIVE_BLOCKBENCH transport/catalog now verified through this actual chat's mcp__lazydesigner tools. Initial ECONNREFUSED coincided with Blockbench closed. Reopening the same approved profile restored Runtime without another trust action; the same client Gateway recovered through discovery. Status: connection=ready, mcp_client_ready=true, catalog_stale=false, catalog_count=47, Control=READY. Build sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5 matches the installed package. Desktop's managed projection independently reports aligned, Gateway active, Runtime online, pending=false. One offline-to-online cycle is accepted; repeated fault recovery, model operations and UI quality are not. Receipts: ignored .cache/current-codex-live-proof.json and current-codex-managed-status.json. Earlier temporary-client proof remains in canonical-path-*.json/log.
 
@@ -35,7 +37,8 @@ App fixtures/layout and disposable editor/project flows remain unaccepted. Nativ
 
 | Surface | Current evidence / boundary |
 | --- | --- |
-| Executable source | Exact 7b45bd69 full gate PASS; unchanged Desktop checks scoped above |
+| Working source | 61102493 bounded routing checks PASS; not deployed or full-gate qualified |
+| Installed source | Exact 7b45bd69 full gate PASS; Desktop checks scoped above |
 | Installed Desktop/package | Desktop 0.1.1/contract 1; managed 7b45bd69; compiled installed stdio PASS |
 | Migration | INSTALLED/aligned; legacy active paths absent; unrelated settings preserved |
 | Runtime transport/catalog | Actual Codex chat: matching build, fresh 47-capability catalog, Control READY; one offline-to-online recovery PASS |
@@ -45,16 +48,12 @@ Earlier candidate evidence remains in Git/history logs. Canonical docs:check pas
 
 ## Current source-only authoring boundaries
 
-The 23–24 October changes are coherently committed source and regression intent, not blanket accepted native functionality:
+The 23–24 October source protections remain scoped to regressions, not blanket native approval. Git owns their detailed history.
 
-- Geometry: native transform/ancestry identity, Box UV/duplicate preflight, bounded OBB/shape evidence and correction parity/no-op refusal. Numeric evidence is not silhouette approval; LD-Q04 sampling remains blocked.
-- UV: project-bound/single-use plans, RGBA freshness, signed/rotated physical/logical mapping, shared-cohort/pixel-grid integrity and scoped rollback. `manage_uv_layout` remains UNREGISTERED; activation and generated API must change together.
-- Painted atlas: production repack requires proven-empty static flattened bitmaps. Pixel-migration candidates/transactions/native adapter remain unregistered preparation, without installed Undo/save-reopen/Golden acceptance.
-- Texture: six-slot Cube census enumerates disabled/missing/untextured/foreign/unreadable ownership, non-Cube/duplicate owners and sample omissions. Preserve `enabled_face_count = sampled_face_count + unexamined_enabled_face_count`; missing/disabled belong to all-unsampled slots. Enumeration does not certify face pixels, Mesh, variants/PBR or visual quality.
-- Cross-Cube seams: unregistered helpers pin declared reference observations, native Texture/material/world identity and RGBA revisions. Image-byte identity is not reviewer approval; async freshness is a bounded read window, not an atomic Reference+Model transaction or visual PASS.
-- Animation: key compaction/numeric recovery source is not playback acceptance.
-
-The B0-A [trace](../../mcp/docs/FLOW_MCP_BATCH0_AUDIT.md) distinguishes six source-registered routes from unregistered UV; neither is installed proof.
+- Geometry: transform/ancestry identity, Box UV/duplicates and OBB correction source exist; numeric evidence is not silhouette PASS; LD-Q04 sampling remains blocked.
+- UV/painted atlas: manage_uv_layout and migration helpers remain unregistered. Empty static bitmap guards remain; installed Undo/save-reopen/Golden acceptance is missing.
+- Texture: six-slot Cube census and scoped seam sampling do not certify all face pixels, Mesh, variants/PBR or visual quality. Preserve enabled_face_count = sampled_face_count + unexamined_enabled_face_count; missing/disabled faces remain unsampled. Alpha/rotation/material/revision safeguards remain source-only evidence.
+- Animation numeric recovery is not playback acceptance. The B0-A trace separates registered routes from unregistered UV.
 
 ## Historical source and frontend evidence
 
