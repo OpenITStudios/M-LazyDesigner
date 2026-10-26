@@ -6,37 +6,40 @@ This file owns current proof interpretation only. Continuation: [next-action.md]
 
 2026-10-26: user-authorized LOCAL_CODE work on OpenITStudios/M-LazyDesigner/Local in the dependency-modernization worktree. Primary source remains dirty at 44b03b52. Recovery preserves 52 payloads; two root GIFs moved to canonical references. The 438 pre-existing missing Crimson Sentinel paths remain recoverable from Git.
 
-CI DISABLED. No Actions/main/release publishing. Runtime/visual acceptance: NOT EXECUTED. Desktop 0.1.1 installed; dependencies unchanged. Toolchain: Bun 1.4.3, Node 24.22.0, Rust 1.99.1.
+CI DISABLED. No release or CI changes. Authoring/visual acceptance: NOT EXECUTED. Desktop 0.1.1 installed; dependencies unchanged. Toolchain: Bun 1.4.3, Node 24.22.0, Rust 1.99.1.
 
-Accepted source: `37baddccc0e89f9a9ebed91576d421c0de6e7ef9`; exact-commit verify:full PASS in ignored `.cache/alignment-verify-full-37baddcc.log` (matching SHA, EXIT_CODE=0). Repository 302, Runtime 2529, installer/migration 34, authoring 166, Gateway/manifest 298 and Golden contracts 44 PASS; types/unused/generators/evaluations/benchmarks/build PASS. Desktop source PASS: TS6/TS7, frontend and Rust 83. Prior candidate compiler/continuity failures remain recorded, not hidden.
+Accepted managed source: 7b45bd69027954d306f9fcf0482227e60fb0de18. Exact-commit verify:full PASS in ignored .cache/canonical-path-msix-verify-retry.log (EXIT_CODE=0): repository 302, Runtime 2529, installer 35, authoring 166, Gateway/manifest 298, Golden 44; remaining source/build gates PASS. The first attempt timed out and Bun crashed; its log is retained. Desktop 0.1.1 remains at source 37baddcc, compatible contract 1; prior unchanged TS6/TS7/frontend/83 Rust proof remains scoped there.
 
-App 0.1.1 and managed source 37baddcc are installed; package/installer receipts remain in ignored .cache. On explicit user authority, nine BlockIT MCP children were stopped while Codex PID 18096 remained open. Canonical migration INSTALLED (transaction 61cc6b1b-1bbc-485a-a114-a32d6ea70d20); alignment=aligned, issues=[], pending=false. Codex has one lazydesigner entry with LAZYDESIGNER_RUNTIME_URL; other settings are semantically unchanged. Old plugin, %LOCALAPPDATA%/BlockIT and old Bun 1.3.14 are absent from active paths. Windows startup/service/task inspection found no matching legacy entry.
+Actual canonical stdio initially failed OWNERSHIP_UNVERIFIED despite explicit-root status=aligned. Windows casing and MSIX logical/physical aliases caused lexical ownership drift. Red/green regressions cover both and foreign-path/root rejection. Corrected package is installed (transaction 251eca45-61c9-45b0-a53e-b8d8034c5b40); automatic-root alignment=aligned, issues=[], pending=false. Old BlockIT active paths stay absent; unrelated Codex settings preserved.
 
-Recovery: machine-local Codex tmp/lazydesigner-legacy-retirement-2026-10-26-43c676139dad498bb56c019b824e095c; original config/plugin, process receipt and hash inventory of 261 retired files. Hidden content required a separate, hash-verified Directory.Move. Receipt/status: ignored .cache/legacy-retirement*.json. No Blockbench launch, plugin trust, live catalog, UI or asset mutation followed; Runtime remains offline. Installation alignment is not live readiness.
+User confirmed plugin approval. Read-only client using the exact Codex command/args passed initialize, four public tools, discovery and Runtime handshake/catalog: connection=ready, mcp_client_ready=true, 47 capabilities; build sha256:7086721b70c6e47db0bde7473b2038318e28f590959b8b4db42f7557a01de6b5 matches package. Temporary-client LIVE_BLOCKBENCH transport/catalog proof; not this chat's MCP session. Its tool inventory still exposes the retired namespace; client reload remains deferred. No model mutation or visual acceptance. Receipts: ignored .cache/canonical-path-*.json/log; reusable temporary verifier canonical-path-stdio.mjs --catalog.
+
+Recovery: machine-local Codex tmp/lazydesigner-legacy-retirement-2026-10-26-43c676139dad498bb56c019b824e095c; original config/plugin, process receipt and hash inventory of 261 retired files. Hidden content required a separate, hash-verified Directory.Move. Receipt/status: ignored .cache/legacy-retirement*.json. App/Blockbench were subsequently launched for the bounded read-only acceptance above. No UI layout or asset mutation was accepted.
 
 ## Desktop readiness assessment — 2026-10-26
 
-Verdict: source-qualified candidate with a verified installed package; operational readiness is not yet accepted. LOCAL_CODE source inspection only; installed Windows UI was not observed. No setup or process restart was performed.
+Verdict: source-qualified candidate with a verified installed package; operational readiness is not yet accepted. LOCAL_CODE source inspection only; installed Windows UI was not observed. App/Blockbench process launch is observed; their UI layout is not accepted.
 
 | App area | Evidence and remaining acceptance |
 | --- | --- |
 | Setup, update and recovery | Manager owns transactions, exact package alignment, compatibility and rollback; migration is installed and aligned. Actual Desktop restart/resume, failure recovery and activated rollback remain unverified. |
-| Status and action clarity | Source distinguishes installation alignment, Runtime and client ownership; stale observation gates AI maintenance. `desktopFixtures.ts` has nine presentation states but no staged-bootstrap, alignment-drift or Desktop-update-required scenarios. Existing ready fixtures omit the new alignment projection. This is a test coverage gap, not proof of a production connection defect. |
-| Routine model work | Open/Open Model are independent of AI setup. `LAUNCHED` means launch acknowledgment; correct native model-tab selection is explicitly not verified. Native file dialog, cancellation and correct-file/profile behavior need disposable model acceptance. |
+| Status and action clarity | Nine development fixtures omit staged bootstrap, alignment drift and Desktop-update-required states; ready fixtures omit alignment. This is a coverage gap; stale-state maintenance guards exist. |
+| Routine model work | Open/Open Model are independent of AI setup. LAUNCHED does not verify the correct tab; native dialog, cancellation and file/profile selection need disposable acceptance. |
 | Project data safety | Source uses reviewed identity/token checks and Windows Recycle Bin; no permanent-delete fallback. Actual recycle, cancellation/failure and restoration are NOT EXECUTED. Do not accept the destructive UI path from source tests alone. |
 | UI and accessibility | Historical 1280x720 synthetic frontend evidence exists; it predates the alignment changes. Current Workspace/Support states, narrow layout, keyboard/focus and error recovery need renewed presentation inspection followed by Windows/Tauri checks. |
-| Supported delivery | Desktop 0.1.1 installer/package identity is verified. Automatic Desktop self-update and self-extracting portable Blockbench launchers are unsupported; managed-component update does not upgrade Desktop. These are explicit limits, not a promise of seamless update support. |
+| Supported delivery | Desktop installer identity is verified. Automatic Desktop self-update and portable wrappers are unsupported; component update does not upgrade Desktop. |
 
-First independent work: bring the existing presentation fixtures up to the current IPC contract and cover pending/mismatch states before reviewing those screens. Next, validate non-destructive editor/project/navigation flows using disposable inputs. Native reconnect and Recycle Bin acceptance remain distinct, deferred tasks; no readiness percentage or release acceptance is inferred from passing test counts.
+App fixtures/layout and disposable editor/project flows remain unaccepted. Native reconnect/reload recovery and Recycle Bin are separate tasks; passing counts do not establish release readiness.
 
 ## Current proof matrix
 
 | Surface | Current evidence / boundary |
 | --- | --- |
-| Executable source | Exact 37baddcc full gate and Desktop source checks PASS as recorded above |
-| Installed Desktop/package | Installer, file hashes and bundled source verified; compiled CLI smoke PASS |
+| Executable source | Exact 7b45bd69 full gate PASS; unchanged Desktop checks scoped above |
+| Installed Desktop/package | Desktop 0.1.1/contract 1; managed 7b45bd69; compiled installed stdio PASS |
 | Migration | INSTALLED/aligned; legacy active paths absent; unrelated settings preserved |
-| Native UI / Runtime / data operations | NOT EXECUTED for this installed candidate; no product-ready acceptance |
+| Runtime transport/catalog | Matching build, ready handshake, 47 capabilities through temporary client PASS; current chat reload pending |
+| Native UI / data operations | NOT EXECUTED for this candidate; no product-ready acceptance |
 
 Earlier candidate evidence remains in Git/history logs. Canonical docs:check passed during qualification; generated output remains generator-owned.
 

@@ -6,22 +6,22 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 - Repository `OpenITStudios/M-LazyDesigner`; development authority `Local`. User-authorized PC work resumed on 2026-10-26.
 - Worktree input: a3ff57b4. Primary stays dirty at 44b03b52; only authorized root organization was applied there. Recovery preserves 52 payloads; 438 pre-existing missing asset paths remain in Git. Do not reset, overwrite or republish them.
-- Cached Bun 1.4.3, Node 24.22.0 and Rust 1.99.1 are available. Existing dependency/lock inputs match; do not install or upgrade dependencies merely for ceremony.
+- Cached Bun 1.4.3, Node 24.22.0 and Rust 1.99.1 are available. Do not reinstall unchanged dependencies.
 - CI DISABLED: verification definitions remain inert. Do not enable workflows, change main/settings or publish releases. Native installation/asset mutation is not part of source reconciliation.
 
 ## LOCAL_CODE checkpoint
 
-Managed alignment implementation is source-qualified at `37baddccc0e89f9a9ebed91576d421c0de6e7ef9`. Exact-commit verify:full PASS: repository 302, Runtime 2529, installer 34, authoring 166, Gateway/manifest 298 and Golden contracts 44; types/unused/generators/evaluations/benchmarks/build PASS. Desktop source also passed TS6/TS7, frontend and 83 Rust tests. Logs: ignored `.cache/alignment-verify-full-37baddcc.log`, `alignment-desktop-source-exact.log` and `alignment-build-app-37baddcc.log`.
+Managed source 7b45bd69027954d306f9fcf0482227e60fb0de18 is installed and exact-commit verify:full qualified (302 repository, 2529 Runtime, 35 installer, 166 authoring, 298 Gateway/manifest, 44 Golden). Canonical-path-msix-verify-retry.log records PASS; the first timeout/Bun crash remains logged. The Windows casing/MSIX physical-path ownership bug now has red/green regressions and actual installed stdio proof. Desktop 0.1.1 remains compatible at contract 1; do not reinstall it merely for this managed fix.
 
-Desktop 0.1.1 and managed source 37baddcc are installed, with repository workspace mode bound to the primary checkout. The user explicitly authorized stopping only BlockIT MCP children while keeping Codex open. Nine exact-matched children stopped; canonical migration INSTALLED; one lazydesigner client entry and plugin; alignment=aligned, issues=[], pending=false. Other Codex settings are semantically unchanged. Old BlockIT root and Bun 1.3.14 were removed from active paths into isolated machine-local recovery (261 files inventoried). No legacy startup/service/task entry was found in the inspected Windows surfaces.
+Nine legacy children were explicitly retired with Codex kept open. Old active root/plugin/Bun remain absent; isolated recovery contains 261 files. User approved the new plugin in Blockbench. The exact configured executable passed initialize, four tools and discovery: Runtime build matches package, MCP ready, catalog=47, connection=ready. This bounded LIVE_BLOCKBENCH proof used a temporary stdio client (.cache/canonical-path-stdio.mjs --catalog), not the current chat's cached MCP connection. App/Blockbench remain open; assets untouched.
 
 Current priority: retain one active LazyDesigner system and assess App readiness. Never select retired roots, source launchers or BLOCKIT environment fallbacks. Existing identity/alignment guards must remain. Do not restart Codex, auto-restore BlockIT, or claim live readiness; this open client may retain its old tool inventory until an explicit reconnect.
 
 Next bounded App work: update existing development fixtures for staged bootstrap, alignment drift and Desktop-contract mismatch against current IPC types. Inspect Workspace/Support layout, keyboard/error recovery and managerless browsing with disposable inputs. Native dialogs, model-tab, restart and Recycle Bin need separate proof. See current-validation.md; do not reinstall to repeat source proof.
 
-Deferred native residue: Blockbench-owned plugin trust/load, explicit client reconnect and matching live health/catalog. Migration is already installed; do not repeat setup. Runtime remains offline and is not accepted.
+Remaining client residue: this chat still exposes the old tool namespace; verify the new server after the user reloads the MCP client. No restart was performed. Do not repeat setup or claim that an independent stdio verifier reconnected this chat. Runtime reload/restart stability, native UI and authoring are separate acceptance.
 
-[Managed Distribution](../../distribution/README.md) owns Desktop compatibility, alignment and journaled recovery. Git-owned repository instructions/assets are preserved. The older dirty primary code is not synchronized or qualified by these worktree results. Native and visual checks remain NOT_EXECUTED until actually observed. Runtime acceptance: NOT EXECUTED. Keep docs:check / verify:full boundaries. No second engine, router or parallel state owner.
+[Managed Distribution](../../distribution/README.md) owns Desktop compatibility, alignment and journaled recovery. Git-owned repository instructions/assets are preserved. The older dirty primary code is not synchronized or qualified by these worktree results. For remaining UI/authoring procedures: Native and visual checks remain NOT_EXECUTED until actually observed. Authoring Runtime acceptance: NOT EXECUTED. Keep docs:check / verify:full boundaries. No second engine, router or parallel state owner.
 
 ## Next REMOTE_GITHUB work
 
