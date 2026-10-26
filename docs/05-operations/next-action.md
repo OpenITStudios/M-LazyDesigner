@@ -17,7 +17,7 @@ Current user authorized implementation and PC migration of one managed App/Gatew
 
 Source candidate: repository 302, authoring 166, installer/migration 34 and Rust 83 PASS; Desktop TS6/TS7, frontend build and generated freshness PASS. Logs: ignored `.cache/alignment-*.log`. No new Gateway tool, asset mutation, source-checkout replacement, CI activation or release publishing.
 
-Build App and managed package from one clean implementation commit before PC staging. The old Codex source Gateways are currently active: migration must remain STAGED until their client owner closes them. Do not kill them, silently replace the old profile/plugin, or inherit native proof from source tests. Resume via Desktop Finish setup after those sessions end; native plugin trust/load and matching live MCP health/catalog still require actual observation. New binaries are not yet built at this source checkpoint. Native/visual acceptance: NOT EXECUTED.
+Build App and managed package from one clean implementation commit before PC staging. The old Codex source Gateways are currently active: migration must remain STAGED until their client owner closes them. Do not kill them, silently replace the old profile/plugin, or inherit native proof from source tests. Resume via Desktop Finish setup after those sessions end; native plugin trust/load and matching live MCP health/catalog still require actual observation. New binaries are not yet built at this source checkpoint. Native and visual checks remain NOT_EXECUTED until actually observed. New-bundle acceptance: NOT EXECUTED. Proof uses docs:check and verify:full. No second engine, router or parallel state owner.
 
 ## Next REMOTE_GITHUB work
 
