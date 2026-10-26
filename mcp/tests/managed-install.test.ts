@@ -386,12 +386,16 @@ test("Windows alignment accepts root casing from executable discovery and reject
   const pkg = join(d, "pkg"); await fixture(pkg); await installPackage(pkg, o, parse);
   const discoveredRoot = o.root.toUpperCase();
   assert.equal((await inspectAlignment(discoveredRoot, parse)).state, "aligned");
+  assert.equal((await inspectAlignment(realpathSync.native(o.root), parse)).state, "aligned");
   const state = JSON.parse(await readFile(join(o.root, "installed.json"), "utf8"));
   const wrapper = Object.keys(state.owned).find(path => path.endsWith("lazydesigner.cmd"))!;
   state.owned[join(d, "foreign/lazydesigner.cmd")] = state.owned[wrapper];
   delete state.owned[wrapper];
   await writeFile(join(o.root, "installed.json"), JSON.stringify(state));
   assert.ok((await inspectAlignment(discoveredRoot, parse)).issues.includes("OWNERSHIP_UNVERIFIED"));
+  state.options.root = join(d, "foreign"); await mkdir(state.options.root);
+  await writeFile(join(o.root, "installed.json"), JSON.stringify(state));
+  assert.equal((await inspectAlignment(discoveredRoot, parse)).state, "unverified");
 }));
 
 test("legacy migration is explicit, preserves unrelated client settings, and rollback restores legacy bytes", async () => sandbox(async (d, o) => {

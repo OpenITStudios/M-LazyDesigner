@@ -24,7 +24,8 @@ export async function inspectAlignment(root: string, parse: (text: string) => an
     if (!result.desktop_contract) result.issues.push("DESKTOP_CONTRACT_UNVERIFIED");
     // Executable discovery can change casing for the same Windows location.
     const targetKey = (path: string) => process.platform === "win32" ? resolve(path).toLowerCase() : resolve(path);
-    const targets = new Set([installed.options.config, join(root, "lazydesigner.cmd"), installed.options.plugin].map(targetKey));
+    // installedState already verifies logical/physical root identity (MSIX).
+    const targets = new Set([installed.options.config, join(installed.options.root, "lazydesigner.cmd"), installed.options.plugin].map(targetKey));
     if (installed.options.workspace_mode !== "repository") {
       for (const file of manifest.files) {
         if (["lazydesigner.exe", "LICENSE", "THIRD_PARTY_NOTICES.txt", MCP_BUNDLE_FILENAME].includes(file.path)) continue;
