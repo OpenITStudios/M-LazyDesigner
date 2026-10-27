@@ -150,6 +150,50 @@ describe("semantic dependency matrix", () => {
       "--previous-semantic-snapshot",
     ])).rejects.toThrow("--previous-semantic-snapshot requires a JSON file path.");
   });
+  test("source-only graph review identifies branchless readiness risks from canonical manifest", () => {
+    const plan = buildAffectedExecutionPlan([
+      "./mcp\\gateway\\capabilities\\graph.ts",
+    ]);
+    const review = plan.graph_branch_readiness_review;
+    expect(review).toMatchObject({
+      status: "OPEN_BRANCH_SELECTION_REVIEW",
+      source_only: true,
+      omitted_count: 0,
+    });
+    const texture = review?.candidates.find((entry) =>
+      entry.capability === "create_texture"
+    );
+    expect(texture?.branch_count).toBeGreaterThanOrEqual(2);
+    expect(texture?.prerequisites).toEqual(
+      expect.arrayContaining(["project_bound", "geometry_available", "texture_available"])
+    );
+    const uv = review?.candidates.find((entry) =>
+      entry.capability === "manage_uv_layout"
+    );
+    expect(uv?.possible_branches).toContainEqual({
+      field: "operation", value: "apply",
+    });
+    // A diagnostic does not remove source revision or generated API gates.
+    expect(plan.semantic_source_alignment?.generator_sync_required).toBe(true);
+    expect(() => assertSemanticSourceAlignedForAffectedRun(plan))
+      .toThrow("SEMANTIC_REVISION_UNVERIFIED");
+  });
+
+  test("branchless review is scoped to graph or manifest source, not unrelated work", () => {
+    const unrelated = buildAffectedExecutionPlan([
+      "mcp/tests/semantic-dependency-matrix.test.ts",
+    ]);
+    expect(unrelated.graph_branch_readiness_review).toBeUndefined();
+
+    const manifest = buildAffectedExecutionPlan([
+      "mcp/gateway/capabilities/manifest.ts",
+    ]);
+    expect(manifest.graph_branch_readiness_review?.candidates.some(
+      (entry) => entry.capability === "manage_cubes"
+    )).toBe(true);
+    expect(manifest.graph_branch_readiness_review?.candidates.length).toBeLessThanOrEqual(12);
+  });
+
   test("surface lookup returns defensive copies", () => {
     const first = semanticDependenciesForSurface("AI_CONTEXT");
     first.push("schema_projection");

@@ -69,6 +69,57 @@ function semanticSourceRevisionAlignment(
   };
 }
 
+
+/**
+ * Read-only audit of graph branches that require an explicit discriminator.
+ * Without a branch, manifestEntryForBranch has no graph for these entries,
+ * so search-time readiness can default to READY even when an operation is
+ * unknown. This diagnosis never changes Runtime eligibility or source hashes.
+ */
+function graphBranchReadinessReview(changedPaths: readonly string[]) {
+  const changed = new Set(changedPaths.map((path) =>
+    path.replaceAll("\\", "/").replace(/^\.\//, "")
+  ));
+  if (!changed.has("mcp/gateway/capabilities/graph.ts") &&
+      !changed.has("mcp/gateway/capabilities/manifest.ts")) return null;
+
+  const byCapability = new Map<
+    string, typeof CAPABILITY_BRANCH_MANIFEST[number][]
+  >();
+  for (const entry of CAPABILITY_BRANCH_MANIFEST) {
+    const entries = byCapability.get(entry.capability) ?? [];
+    entries.push(entry);
+    byCapability.set(entry.capability, entries);
+  }
+
+  const candidates = [...byCapability].flatMap(([capability, entries]) => {
+    // Do not invent ambiguity for registered extensions, a truly branchless
+    // graph, or a single explicitly supported operation.
+    const variants = entries.filter((entry) => entry.branch && entry.graph);
+    if (variants.length < 2 || entries.some((entry) => !entry.branch && entry.graph)) {
+      return [];
+    }
+    const prerequisites = [...new Set(variants.flatMap(
+      (entry) => [...(entry.graph?.requires ?? [])]
+    ))].sort();
+    if (prerequisites.length === 0) return [];
+    return [{
+      capability,
+      branch_count: variants.length,
+      possible_branches: variants.map((entry) => entry.branch!),
+      prerequisites,
+    }];
+  }).sort((a, b) => a.capability.localeCompare(b.capability));
+  return {
+    status: "OPEN_BRANCH_SELECTION_REVIEW" as const,
+    source_only: true,
+    candidates: candidates.slice(0, 12),
+    omitted_count: Math.max(0, candidates.length - 12),
+    // Generation and native execution have not been performed.
+    next_action: "Resolve branchless readiness in the canonical graph, synchronize semantic/API revisions, and verify matching source",
+  };
+}
+
 export function buildAffectedExecutionPlan(
   changedPaths: readonly string[],
   previousSemanticRegistry?: readonly CapabilitySemanticRecord[]
@@ -91,9 +142,11 @@ export function buildAffectedExecutionPlan(
   const sourceAlignment = semanticSourceRevisionAlignment(
     changedPaths, previousSemanticRegistry, semanticDiff
   );
+  const graphReview = graphBranchReadinessReview(changedPaths);
 
   return {
     semantic_impact: semanticImpact,
+    ...(graphReview ? { graph_branch_readiness_review: graphReview } : {}),
     ...(sourceAlignment ? { semantic_source_alignment: sourceAlignment } : {}),
     ...(semanticInvalidation
       ? {
