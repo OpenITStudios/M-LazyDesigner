@@ -10,6 +10,8 @@ import {
   bestSemanticMatchForTool,
   bm25CapabilityScores,
   capabilityQueryTokens,
+  hasExplicitCapabilityAction,
+  independentActionClauses,
 } from "./intelligence";
 import { evaluateCapabilityPreconditions } from "./graph";
 import type {
@@ -268,7 +270,7 @@ function advertisesElementRemoval(tool: BackendTool): boolean {
   );
 }
 
-export function searchCapabilityCatalog(
+function searchSingleIntentCatalog(
   tools: readonly BackendTool[],
   query: string,
   limit: number,
@@ -382,4 +384,60 @@ export function searchCapabilityCatalog(
           }
         : {}),
     }));
+}
+
+
+/**
+ * Only split an explicitly connected request when every clause identifies a
+ * real action and more than one active capability is required. Source catalog
+ * search is read-only: it never assumes a previous clause was executed or
+ * updates dependency facts for future clauses.
+ *
+ * A missing clause fails closed instead of representing the remaining
+ * results as a complete solution. Same-capability multi-step requests retain
+ * the existing branch-free ambiguity handling in the single-intent scorer.
+ */
+export function searchCapabilityCatalog(
+  tools: readonly BackendTool[],
+  query: string,
+  limit: number,
+  context?: CapabilitySearchContext
+): CapabilitySummary[] {
+  const exact = exactCapabilityMatch(tools, query);
+  if (exact) return [summarizeCapability(exact)];
+
+  const clauses = independentActionClauses(query);
+  if (clauses.length >= 2 && clauses.length <= 3) {
+    const matches = clauses.map((clause) =>
+      searchSingleIntentCatalog(tools, clause, 1, context)[0]
+    );
+    const actionSupported = matches.map((match, index) => {
+      if (!match) return false;
+      const clause = clauses[index]!;
+      return hasExplicitCapabilityAction(match.capability_id, clause) ||
+        (requestsElementRemoval(substantiveQueryTerms(clause)) &&
+          match.capability_id === "remove_element");
+    });
+
+    // An explicitly actionable step without a discoverable companion is not
+    // permission to pick another tool for the entire compound request.
+    if (actionSupported.some(Boolean) && matches.some((match) => !match)) {
+      return [];
+    }
+
+    if (actionSupported.every(Boolean)) {
+      const selected = matches as CapabilitySummary[];
+      const differentTools = new Set(
+        selected.map((result) => result.capability_id)
+      );
+      if (differentTools.size > 1) {
+        const boundedLimit = Math.max(1, Math.min(50, Math.trunc(limit)));
+        return selected.slice(0, boundedLimit).map((result, index) => ({
+          ...result,
+          why: `step ${index + 1}/${selected.length}; invoke separately; recheck prerequisites`,
+        }));
+      }
+    }
+  }
+  return searchSingleIntentCatalog(tools, query, limit, context);
 }

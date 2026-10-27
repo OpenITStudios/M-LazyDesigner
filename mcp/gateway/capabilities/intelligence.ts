@@ -174,7 +174,7 @@ function branchHasExplicitAction(
  */
 const ACTION_CLAUSE_CONNECTORS = /\b(?:and|then|dan|lalu|kemudian|serta|sekaligus)\b/i;
 
-function independentActionClauses(query: string): string[] {
+export function independentActionClauses(query: string): string[] {
   if (!ACTION_CLAUSE_CONNECTORS.test(query)) return [];
   return query.split(/\b(?:and|then|dan|lalu|kemudian|serta|sekaligus)\b/i)
     .map((clause) => clause.trim())
@@ -210,6 +210,23 @@ function containsDistinctOperationSteps(
     if (actions.size > 1) return true;
   }
   return false;
+}
+
+
+/**
+ * Per-clause action evidence for search-only multi-tool orientation.
+ * The canonical branch manifest remains the single semantic authority;
+ * a shared object noun or unrelated word match is not an action.
+ */
+export function hasExplicitCapabilityAction(
+  capability: string,
+  query: string
+): boolean {
+  const tokens = expandedTokens(query);
+  const words = relevantOperationWords(query);
+  return semanticEntriesForTool(capability).some((entry) =>
+    branchHasExplicitAction(entry, tokens, words)
+  );
 }
 
 function phaseBoost(capability: string, context?: CapabilityRoutingContext): number {

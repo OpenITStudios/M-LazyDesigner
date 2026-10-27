@@ -255,6 +255,86 @@ describe("capability intelligence routing", () => {
     expect(result?.branch).toEqual({ field: "operation", value: "update" });
   });
 
+  test("separately discovers geometry and texture capabilities in intent order", () => {
+    const available = [
+      tool("manage_cubes", "Create and update Bedrock cubes."),
+      tool("paint_with_brush", "Paint a texture with a brush."),
+      tool("inspect_elements", "Inspect model cubes."),
+    ];
+    const found = searchCapabilityCatalog(
+      available, "move cube then paint texture with brush", 4,
+      { authoringPhase: "geometry", facts: { project_bound: true, geometry_available: true } }
+    );
+    expect(found.map((result) => result.capability_id)).toEqual([
+      "manage_cubes", "paint_with_brush",
+    ]);
+    expect(found[0]?.branch).toEqual({ field: "operation", value: "update" });
+    expect(found[0]?.why).toContain("step 1/2");
+    expect(found[1]?.why).toContain("step 2/2");
+  });
+
+  test("finds Indonesian mixed Geometry and Texture intents without combining executions", () => {
+    const found = searchCapabilityCatalog(
+      authoringTools, "pindahkan kubus lalu warnai tekstur", 4, {
+        authoringPhase: "geometry",
+        facts: { project_bound: false },
+      }
+    );
+    expect(found.map((result) => result.capability_id)).toEqual([
+      "manage_cubes", "paint_texture_transaction",
+    ]);
+    expect(found[0]?.branch).toEqual({ field: "operation", value: "update" });
+    expect(found[0]?.eligibility).toBe("BLOCKED");
+    expect(found[0]?.requires).toContain("project_bound");
+    expect(found[1]?.eligibility).toBe("BLOCKED");
+    expect(found[1]?.requires).toContain("project_bound");
+  });
+
+  test("returns a bounded incomplete-step hint when search limit is one", () => {
+    const found = searchCapabilityCatalog(
+      [
+        tool("manage_cubes", "Create and update cubes."),
+        tool("paint_with_brush", "Paint texture with a brush."),
+      ],
+      "move cube then paint texture with brush", 1,
+      { authoringPhase: "geometry" }
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ capability_id: "manage_cubes" });
+    expect(found[0]?.why).toContain("step 1/2");
+    expect(found[0]?.why).toContain("recheck prerequisites");
+  });
+
+  test("fails closed when a compound request requires an unavailable UV step", () => {
+    const found = searchCapabilityCatalog(
+      [tool("manage_cubes", "Create and update cubes.")],
+      "move cube then pack uv islands", 4,
+      { authoringPhase: "geometry" }
+    );
+    expect(found).toEqual([]);
+  });
+
+  test("does not split unrelated nouns joined by and into fictional operations", () => {
+    const tools = [
+      tool("manage_cubes", "Create and update geometry cubes."),
+      tool("list_textures", "Read texture and material names."),
+    ];
+    const original = searchCapabilityCatalog(tools, "cube and texture", 4);
+    expect(original.some((result) => result.why?.startsWith("step "))).toBe(false);
+  });
+
+  test("keeps distinct branches of one tool unmerged and branch-free", () => {
+    const found = searchCapabilityCatalog(
+      [tool("manage_cubes", "Create and update cubes.")],
+      "create cube then move it", 4,
+      { authoringPhase: "geometry" }
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.capability_id).toBe("manage_cubes");
+    expect(found[0]?.branch).toBeUndefined();
+    expect(found[0]?.why).toContain("multiple operations");
+  });
+
   test("shared scoring retains branch order and Stage evidence for IK", () => {
     const ikTool = tool("bone_rigging", "Advanced IK and bone mirroring.");
     const active = semanticMatchesForTool(
