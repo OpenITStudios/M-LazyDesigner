@@ -4,6 +4,8 @@ import {
   semanticDependenciesForSurface,
   semanticSurfacesAffectedByDimensions,
 } from "../gateway/development/semanticDependencyMatrix";
+import { buildAffectedExecutionPlan } from "../scripts/development/plan-affected-execution";
+import { CAPABILITY_SEMANTIC_REGISTRY } from "../gateway/capabilities/semanticRegistry";
 
 describe("semantic dependency matrix", () => {
   test("centralizes all semantic consumers", () => {
@@ -29,6 +31,71 @@ describe("semantic dependency matrix", () => {
     expect(surfaces).not.toContain("DOCS_API");
   });
 
+
+  test("flags routing-only source changes with no manifest baseline", () => {
+    const planned = buildAffectedExecutionPlan([
+      "./mcp\\\\gateway\\\\capabilities\\\\catalog.ts",
+      "mcp/gateway/capabilities/intelligence.ts",
+    ]);
+    expect(planned.semantic_source_alignment).toMatchObject({
+      status: "SNAPSHOT_REQUIRED",
+      changed_implementation_paths: [
+        "mcp/gateway/capabilities/catalog.ts",
+        "mcp/gateway/capabilities/intelligence.ts",
+      ],
+      impacted_dimensions: ["routing"],
+      untracked_dimensions: ["routing"],
+      generator_sync_required: true,
+    });
+    expect(planned.execution.targeted_tests)
+      .toContain("mcp/gateway/capabilities/intelligence.test.ts");
+  });
+
+  test("flags algorithm drift invisible to a manifest-only semantic snapshot", () => {
+    const planned = buildAffectedExecutionPlan(
+      ["mcp/gateway/capabilities/graph.ts"],
+      CAPABILITY_SEMANTIC_REGISTRY
+    );
+    expect(planned.semantic_diff).toEqual([]);
+    expect(planned.semantic_source_alignment).toMatchObject({
+      status: "IMPLEMENTATION_REVISION_GAP",
+      impacted_dimensions: ["graph"],
+      untracked_dimensions: ["graph"],
+      generator_sync_required: true,
+    });
+  });
+
+  test("acknowledges a manifest revision without pretending API is regenerated", () => {
+    const previous = CAPABILITY_SEMANTIC_REGISTRY.map((entry, i) =>
+      i === 0 ? {
+        ...entry,
+        semanticFingerprint: "0".repeat(64),
+        fingerprints: {
+          ...entry.fingerprints,
+          routing: "0".repeat(64),
+          aggregate: "0".repeat(64),
+        },
+      } : entry
+    );
+    const planned = buildAffectedExecutionPlan(
+      ["mcp/gateway/capabilities/intelligence.ts"], previous
+    );
+    expect(planned.semantic_diff?.some((diff) =>
+      diff.dimensions.includes("ROUTING")
+    )).toBe(true);
+    expect(planned.semantic_source_alignment).toMatchObject({
+      status: "MANIFEST_REVISION_CHANGED",
+      untracked_dimensions: [],
+      generator_sync_required: true,
+    });
+  });
+
+  test("does not demand generator sync for an unrelated authoring regression", () => {
+    const planned = buildAffectedExecutionPlan([
+      "mcp/tests/semantic-dependency-matrix.test.ts",
+    ]);
+    expect(planned.semantic_source_alignment).toBeUndefined();
+  });
   test("surface lookup returns defensive copies", () => {
     const first = semanticDependenciesForSurface("AI_CONTEXT");
     first.push("schema_projection");
