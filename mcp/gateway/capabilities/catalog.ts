@@ -111,11 +111,10 @@ function nearCapabilityNameScore(
 
 
 /**
- * The source manifest knows possible operations, not which executors the
- * active Runtime advertises. Specific requests for absent operations must
- * not silently select an unrelated tool through shared vocabulary.
- * Broad keyword discovery, available aliases and genuine alternative
- * advertised implementations remain searchable.
+ * Explicit requests for absent Runtime capabilities must not select an
+ * unrelated executor through word overlap. A natural-language request may
+ * use a registered alternative only when it advertises the same intent.
+ * This is a filter ahead of the existing ranker, not a separate router.
  */
 function containsOrderedTerms(
   haystack: readonly string[],
@@ -130,19 +129,22 @@ function containsOrderedTerms(
   return false;
 }
 
-function availableToolAdvertisesIntent(
-  tools: readonly BackendTool[],
-  phrase: readonly string[]
+function toolAdvertisesIntent(
+  tool: BackendTool,
+  phrase: readonly string[],
+  requiresMutation: boolean
 ): boolean {
+  // A read-only inspector may discuss editing, but must not be used as a
+  // substitute for an explicitly declared native mutation.
+  if (requiresMutation && tool.annotations?.readOnlyHint === true) return false;
   const exactPhrase = phrase.join(" ");
-  return tools.some((tool) =>
+  return (
     containsOrderedTerms(substantiveQueryTerms(tool.description ?? ""), phrase) ||
     getCapabilityMetadata(tool.name).searchAliases.some(
       (alias) => substantiveQueryTerms(alias).join(" ") === exactPhrase
     ) ||
     CAPABILITY_BRANCH_MANIFEST.some(
-      (entry) =>
-        entry.capability === tool.name &&
+      (entry) => entry.capability === tool.name &&
         entry.semantic?.intents.some(
           (intent) => containsOrderedTerms(substantiveQueryTerms(intent), phrase)
         )
@@ -150,43 +152,70 @@ function availableToolAdvertisesIntent(
   );
 }
 
-function requestsUnavailableDeclaredCapability(
+/**
+ * null: ordinary search (no known unavailable intent);
+ * empty set: missing explicit identity or no valid replacement;
+ * nonempty set: only these active alternatives may be ranked.
+ */
+function alternativesForUnavailableIntent(
   tools: readonly BackendTool[],
+  query: string,
   queryTerms: readonly string[]
-): boolean {
-  if (queryTerms.length === 0) return false;
+): ReadonlySet<string> | null {
+  if (queryTerms.length === 0) return null;
   const registered = new Set(tools.map((tool) => tool.name.toLowerCase()));
-  const effectiveQuery = queryTerms.join(" ");
-  const canonicalName = normalizedIdentifier(effectiveQuery);
+  const normalizedQuery = queryTerms.join(" ");
+  const canonicalName = normalizedIdentifier(normalizedQuery);
+  const absent = new Map<
+    string,
+    Array<{ phrase: readonly string[]; requiresMutation: boolean }>
+  >();
+  const requireIntent = (
+    capability: string,
+    phrase: readonly string[],
+    requiresMutation = false
+  ): void => {
+    const entries = absent.get(capability) ?? [];
+    entries.push({ phrase, requiresMutation });
+    absent.set(capability, entries);
+  };
 
-  // An explicit known identifier must not resolve to a different executor.
   if (CAPABILITY_CORE_MANIFEST.has(canonicalName) &&
-      !registered.has(canonicalName)) return true;
+      !registered.has(canonicalName)) {
+    // Literal API identifiers cannot silently become a different tool.
+    if (query.trim().toLowerCase() === canonicalName) return new Set();
+    requireIntent(canonicalName, queryTerms);
+  }
 
-  // One-word searches stay broad. An unavailable *multiword* alias or
-  // manifest intent is specific enough to avoid accidental substitution.
-  if (queryTerms.length < 2) return false;
-  for (const [capability, definition] of CAPABILITY_CORE_MANIFEST) {
-    if (registered.has(capability)) continue;
-    const absentAlias = definition.aliases?.some((alias) => {
-      const aliasTerms = substantiveQueryTerms(alias);
-      return aliasTerms.length >= 2 && aliasTerms.join(" ") === effectiveQuery;
-    });
-    if (absentAlias && !availableToolAdvertisesIntent(tools, queryTerms)) {
-      return true;
+  if (queryTerms.length >= 2) {
+    for (const [capability, definition] of CAPABILITY_CORE_MANIFEST) {
+      if (registered.has(capability)) continue;
+      if (definition.aliases?.some((alias) => {
+        const terms = substantiveQueryTerms(alias);
+        return terms.length >= 2 && terms.join(" ") === normalizedQuery;
+      })) requireIntent(capability, queryTerms);
+    }
+
+    for (const entry of CAPABILITY_BRANCH_MANIFEST) {
+      if (registered.has(entry.capability)) continue;
+      for (const intent of entry.semantic?.intents ?? []) {
+        const terms = substantiveQueryTerms(intent);
+        if (terms.length >= 2 && containsOrderedTerms(queryTerms, terms)) {
+          requireIntent(entry.capability, terms, entry.operationClass === "MUTATION");
+        }
+      }
     }
   }
 
-  for (const entry of CAPABILITY_BRANCH_MANIFEST) {
-    if (registered.has(entry.capability)) continue;
-    for (const intent of entry.semantic?.intents ?? []) {
-      const intentTerms = substantiveQueryTerms(intent);
-      if (intentTerms.length < 2 ||
-          !containsOrderedTerms(queryTerms, intentTerms)) continue;
-      if (!availableToolAdvertisesIntent(tools, intentTerms)) return true;
-    }
-  }
-  return false;
+  if (absent.size === 0) return null;
+  const requirements = [...absent.values()];
+  return new Set(
+    tools.filter((tool) => requirements.every((alternatives) =>
+      alternatives.some(({ phrase, requiresMutation }) =>
+        toolAdvertisesIntent(tool, phrase, requiresMutation)
+      )
+    )).map((tool) => tool.name)
+  );
 }
 
 export function searchCapabilityCatalog(
@@ -210,22 +239,24 @@ export function searchCapabilityCatalog(
   // A generic-only discovery query has no actionable intent and should not
   // traverse the catalog or compute ranking weights.
   if (hasQuery && effectiveQuery.length === 0) return [];
-  if (hasQuery && requestsUnavailableDeclaredCapability(tools, queryTerms)) {
-    return [];
-  }
+  const alternatives = alternativesForUnavailableIntent(tools, query, queryTerms);
+  if (alternatives !== null && alternatives.size === 0) return [];
+  const discoverableTools = alternatives === null
+    ? tools
+    : tools.filter((tool) => alternatives.has(tool.name));
   // Query expansion is shared across both ranking strategies and all tools.
   // No persistent query cache: a Runtime catalog or Stage may change at any time.
   const queryTokens = capabilityQueryTokens(effectiveQuery);
   // Empty discovery lists non-maintenance capabilities without a BM25 query.
   const bm25Scores = effectiveQuery.length > 0
-    ? bm25CapabilityScores(tools, effectiveQuery, queryTokens)
+    ? bm25CapabilityScores(discoverableTools, effectiveQuery, queryTokens)
     : new Map<string, number>();
   // Lexical relevance is a bounded secondary signal, not an intent override.
   const maxBm25 = Math.max(1, ...bm25Scores.values());
 
   // Only relevant, discoverable candidates need readiness/graph scoring.
   // Keep every ranked candidate's original score and safety semantics.
-  return tools
+  return discoverableTools
     .map((tool) => {
       const metadata = getCapabilityMetadata(tool.name);
       const tier = metadata.tier;

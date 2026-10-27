@@ -79,14 +79,46 @@ describe("capability intelligence routing", () => {
       .toEqual([]);
   });
 
-  test("preserves a genuinely advertised alternative with the intended operation", () => {
+  test("limits substitutes to registered alternatives that advertise the operation", () => {
     const alternative = tool(
       "available_uv_packer", "Pack UV islands into an atlas."
     );
-    const [match] = searchCapabilityCatalog(
-      [alternative], "pack uv islands", 4
+    const distractor = tool(
+      "list_textures", "Inspect UV atlas islands and texture layout."
     );
-    expect(match?.capability_id).toBe("available_uv_packer");
+    const results = searchCapabilityCatalog(
+      [alternative, distractor], "pack uv islands", 4
+    );
+    expect(results.map((match) => match.capability_id))
+      .toEqual(["available_uv_packer"]);
+  });
+
+  test("allows natural-language legacy names to find registered consolidated tools", () => {
+    const active = [
+      tool("manage_animation_timeline", "Manage animation timeline data."),
+      tool("modify_group", "Modify a group transform."),
+    ];
+    expect(searchCapabilityCatalog(active, "animation timeline", 4)
+      .map((match) => match.capability_id))
+      .toEqual(["manage_animation_timeline"]);
+    // Exact API identifiers are still authoritative, not aliases.
+    expect(searchCapabilityCatalog(active, "animation_timeline", 4))
+      .toEqual([]);
+  });
+
+  test("rejects read-only descriptions as substitutes for unavailable UV mutations", () => {
+    const inspector: BackendTool = {
+      ...tool("inspect_uv", "Apply UV plan for diagnostic preview."),
+      annotations: { readOnlyHint: true },
+    };
+    expect(searchCapabilityCatalog([inspector], "apply uv plan", 4))
+      .toEqual([]);
+    const native = tool("manage_uv_layout", "Apply native UV plans.");
+    expect(searchCapabilityCatalog([native, inspector], "apply uv plan", 4)[0])
+      .toMatchObject({
+        capability_id: "manage_uv_layout",
+        branch: { field: "operation", value: "apply" },
+      });
   });
 
   test("retains available intent, prerequisite evidence, and exact-name discovery", () => {
