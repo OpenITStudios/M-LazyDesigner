@@ -97,6 +97,9 @@ export function analyzeAnimationContactEvidence(input: {
     max_distance: number;
     mean_distance: number;
     max_marker_drift_from_first: number | null;
+    max_support_tangential_drift: number | null;
+    max_support_normal_displacement: number | null;
+    support_tangential_drift_violation: boolean | null;
     planted_drift_violation: boolean;
     max_marker_step_speed: number | null;
     sampling_coverage: "not_evaluated" | "complete" | "incomplete";
@@ -164,6 +167,25 @@ export function analyzeAnimationContactEvidence(input: {
     const rawDrift = constraint.mode === "planted"
       ? Math.max(...samples.map((sample) => distance(sample.marker, firstMarker)))
       : null;
+    const supportAxis = constraint.support_plane
+      ? constraint.support_plane.axis === "X"
+        ? 0
+        : constraint.support_plane.axis === "Y" ? 1 : 2
+      : null;
+    const tangentAxes = supportAxis === null
+      ? null : [0, 1, 2].filter((axis) => axis !== supportAxis);
+    // The declared support normal separates vertical lift from planar slip;
+    // no axis is guessed for constraints without an explicit support plane.
+    const supportTangentialDrift = tangentAxes
+      ? Math.max(...samples.map((sample) => Math.hypot(
+          sample.marker[tangentAxes[0]!] - firstMarker[tangentAxes[0]!],
+          sample.marker[tangentAxes[1]!] - firstMarker[tangentAxes[1]!]
+        )))
+      : null;
+    const supportNormalDisplacement = supportAxis === null
+      ? null : Math.max(...samples.map((sample) =>
+          Math.abs(sample.marker[supportAxis] - firstMarker[supportAxis])
+        ));
     let maxGap = 0, maxSpeed = 0;
     for (let i = 1; i < samples.length; i++) {
       const dt = samples[i].time - samples[i - 1].time;
@@ -176,7 +198,10 @@ export function analyzeAnimationContactEvidence(input: {
       ? samples.map((sample) => planePenetration(sample.marker, constraint.support_plane!))
       : [];
     if (distances.some((item) => !Number.isFinite(item.distance)) ||
-        !Number.isFinite(rawDrift ?? 0) || !Number.isFinite(maxGap) ||
+        !Number.isFinite(rawDrift ?? 0) ||
+        !Number.isFinite(supportTangentialDrift ?? 0) ||
+        !Number.isFinite(supportNormalDisplacement ?? 0) ||
+        !Number.isFinite(maxGap) ||
         !Number.isFinite(maxSpeed) || penetrations.some((value) => !Number.isFinite(value))) {
       invalid("CONTACT_METRICS_NONFINITE");
       continue;
@@ -221,6 +246,12 @@ export function analyzeAnimationContactEvidence(input: {
       max_distance: round(Math.max(...distances.map((entry) => entry.distance))),
       mean_distance: round(distances.reduce((sum, entry) => sum + entry.distance, 0) / distances.length),
       max_marker_drift_from_first: rawDrift === null ? null : round(rawDrift),
+      max_support_tangential_drift: supportTangentialDrift === null
+        ? null : round(supportTangentialDrift),
+      max_support_normal_displacement: supportNormalDisplacement === null
+        ? null : round(supportNormalDisplacement),
+      support_tangential_drift_violation: supportTangentialDrift === null
+        ? null : supportTangentialDrift > constraint.tolerance,
       planted_drift_violation: sliding,
       max_marker_step_speed: constraint.mode === "planted" && samples.length >= 2 ? round(maxSpeed) : null,
       sampling_coverage: coverage,
@@ -254,6 +285,6 @@ export function analyzeAnimationContactEvidence(input: {
     unverified_constraint_count: unverifiedCount,
     pass_constraint_count: results.length - reviewCount - unverifiedCount,
     constraints: results,
-    note: "Contact distances, planted foot drift, optional time-window coverage and support-plane penetration are numeric caller-supplied diagnostics only. A passing distance tolerance does not prove believable weight, timing, deformation or visual quality; PASS never attests native sampling, IK or scene behavior, and reference-grounded native playback remains required.",
+    note: "Contact distances, planted foot drift (including support-plane sliding versus lift when declared), optional time-window coverage and support-plane penetration are numeric caller-supplied diagnostics only. A passing distance tolerance does not prove believable weight, timing, deformation or visual quality; PASS never attests native sampling, IK or scene behavior, and reference-grounded native playback remains required.",
   };
 }

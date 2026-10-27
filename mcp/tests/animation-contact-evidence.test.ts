@@ -376,3 +376,51 @@ test("existing planted sliding and penetration cases report explicit review caus
   requireAvailable(result);
   expect(result.constraints[0]?.review_reasons).toEqual(["SUPPORT_PLANE_PENETRATION"]);
 });
+
+
+test("support plane separates planted sliding from vertical lift without assigning a visual verdict", () => {
+  const base = {
+    mode: "planted" as const, tolerance: 0.1,
+    support_plane: {
+      axis: "Y" as const, coordinate: 0,
+      allowed_side: "POSITIVE" as const, penetration_tolerance: 0,
+    },
+  };
+  const result = analyzeAnimationContactEvidence({ constraints: [
+    { ...base, id: "slide", samples: [
+      { time: 0, marker: [0, 0, 0] as const, target: [0, 0, 0] as const },
+      { time: 0.2, marker: [0.25, 0.02, 0] as const, target: [0.25, 0.02, 0] as const },
+    ] },
+    { ...base, id: "lift", samples: [
+      { time: 0, marker: [0, 0, 0] as const, target: [0, 0, 0] as const },
+      { time: 0.2, marker: [0.02, 0.4, 0] as const, target: [0.02, 0.4, 0] as const },
+    ] },
+  ] });
+  requireAvailable(result);
+  expect(result.constraints[0]).toMatchObject({
+    status: "review", support_tangential_drift_violation: true,
+    max_support_tangential_drift: 0.25,
+    max_support_normal_displacement: 0.02,
+  });
+  expect(result.constraints[1]).toMatchObject({
+    status: "review", support_tangential_drift_violation: false,
+    max_support_tangential_drift: 0.02,
+    max_support_normal_displacement: 0.4,
+  });
+  expect(result.visual_verdict).toBe("not_evaluated");
+});
+
+test("support-plane decomposition stays unavailable for an unanchored moving contact", () => {
+  const result = analyzeAnimationContactEvidence({ constraints: [{
+    id: "hand", mode: "pair", tolerance: 0.1,
+    samples: [
+      { time: 0, marker: [0, 0, 0], target: [0, 0, 0] },
+      { time: 0.2, marker: [0.3, 0, 0], target: [0.3, 0, 0] },
+    ],
+  }] });
+  requireAvailable(result);
+  expect(result.constraints[0]?.max_support_tangential_drift).toBeNull();
+  expect(result.constraints[0]?.max_support_normal_displacement).toBeNull();
+  expect(result.constraints[0]?.support_tangential_drift_violation).toBeNull();
+  expect(result.constraints[0]?.status).toBe("pass");
+});
