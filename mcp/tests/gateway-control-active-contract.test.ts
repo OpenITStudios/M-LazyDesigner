@@ -124,6 +124,46 @@ describe("LazyDesigner Control active contract", () => {
     expect(second.task_context_id).toBe(first.task_context_id);
   });
 
+  test("same-build Runtime replacement changes asset task identity", async () => {
+    const options = { currentUserDelta: "resize the same cube" };
+    const first = await buildControlPacket(status, options);
+    const refreshed = await buildControlPacket({
+      ...status,
+      connection: {
+        ...status.connection, generation: 2, catalog_refresh_count: 2,
+      },
+    }, options);
+    const replacement = await buildControlPacket({
+      ...status,
+      runtime: {
+        ...status.runtime,
+        runtime_signature: "runtime-restarted",
+        connected_signature: "runtime-restarted",
+      },
+    }, options);
+
+    expect(first.task_context_id).toMatch(/^task:[a-f0-9]{20}$/);
+    expect(refreshed.task_context_id).toBe(first.task_context_id);
+    expect(replacement.task_context_id).not.toBe(first.task_context_id);
+  });
+
+  test("development task identity also distinguishes Runtime instances", async () => {
+    const options = {
+      taskMode: "SYSTEM_DEVELOPMENT" as const,
+      taskIntent: "fix animation keyframe constraints",
+    };
+    const first = await buildControlPacket(status, options);
+    const replacement = await buildControlPacket({
+      ...status,
+      runtime: {
+        ...status.runtime,
+        runtime_signature: "runtime-second-instance",
+        connected_signature: "runtime-second-instance",
+      },
+    }, options);
+    expect(replacement.task_context_id).not.toBe(first.task_context_id);
+  });
+
   test("unresolved development routing remains bounded and fail-closed", () => {
     const result = resolveDevelopmentIntent("something unusual elsewhere");
     expect(result.task_class).toBe("SYSTEM_DEVELOPMENT");

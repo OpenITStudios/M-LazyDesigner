@@ -22,7 +22,10 @@ export type ControlContextDelivery = {
 export type ControlTaskMode = "ASSET_AUTHORING" | "SYSTEM_DEVELOPMENT";
 
 function runtimeContextIdentity(snapshot: ControlSnapshot): string {
-  return snapshot.runtime.build_identity ?? snapshot.runtime.runtime_signature ?? "offline";
+  // Build identity can survive a Runtime restart. The Runtime signature
+  // includes instance, Stage and exposed surface, so it owns task-cohort
+  // freshness. Fall back to the build only if no signature is available.
+  return snapshot.runtime.runtime_signature ?? snapshot.runtime.build_identity ?? "offline";
 }
 
 export function taskContextId(

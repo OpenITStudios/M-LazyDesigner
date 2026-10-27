@@ -83,6 +83,27 @@ describe("semantic-aware context cache", () => {
     expect(result.invalidated_ids).toEqual([current.id]);
   });
 
+  test("Runtime replacement keeps unchanged static Skill handles cached", () => {
+    const current = handle(
+      "ctx:skill/modelling@aaaaaaaaaaaa.bbbbbbbbbbbb",
+      ["routing", "graph"]
+    );
+    const original = snapshot([current]);
+    const replacement: ControlSnapshot = {
+      ...original,
+      runtime: {
+        ...original.runtime,
+        build_identity: "sha256:same-build",
+        runtime_signature: "different-instance",
+      },
+    };
+    const delivery = filterContext(replacement, [current.id], "ASSET_AUTHORING");
+
+    expect(delivery.required).toEqual([]);
+    expect(delivery.cached_ids).toEqual([current.id]);
+    expect(delivery.invalidated_ids).toEqual([]);
+  });
+
   test("schema-only changes do not invalidate routing+graph context", () => {
     const current = handle(
       "ctx:profile/vehicle@aaaaaaaaaaaa.bbbbbbbbbbbb",
