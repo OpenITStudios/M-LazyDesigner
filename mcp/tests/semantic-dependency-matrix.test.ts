@@ -194,6 +194,35 @@ describe("semantic dependency matrix", () => {
     expect(manifest.graph_branch_readiness_review?.candidates.length).toBeLessThanOrEqual(12);
   });
 
+  test.each([
+    "mcp/gateway/capabilities/manifest.ts",
+    "mcp/gateway/capabilities/semanticRegistry.ts",
+    "mcp/gateway/development/semanticArtifact.ts",
+    "mcp/scripts/generate/generate-docs.ts",
+    "mcp/scripts/generate/internal/docs-manifest.ts",
+    "mcp/scripts/generate/generate-hybrid4-schemas.ts",
+    "mcp/docs/llms/install.md",
+    "mcp/docs/api.json",
+    "mcp/docs/index.html",
+    "mcp/prompts/manifest.json",
+    "mcp/gateway/experimental/generated/hybrid4Schemas.ts",
+  ])("generator-owned source or output %s requires docs freshness", (path) => {
+    const plan = buildAffectedExecutionPlan([path]);
+    expect(plan.execution.checks).toContain("DOCS_FRESHNESS");
+    expect(plan.execution.commands.some(
+      (command) => command === "bun run docs:check" ||
+        command === "bun run verify:full"
+    )).toBe(true);
+  });
+
+  test("unrelated Gateway session source does not trigger generated-doc checks", () => {
+    const plan = buildAffectedExecutionPlan([
+      "mcp/gateway/session/state.ts",
+    ]);
+    expect(plan.execution.checks).not.toContain("DOCS_FRESHNESS");
+    expect(plan.execution.commands).not.toContain("bun run docs:check");
+  });
+
   test("surface lookup returns defensive copies", () => {
     const first = semanticDependenciesForSurface("AI_CONTEXT");
     first.push("schema_projection");

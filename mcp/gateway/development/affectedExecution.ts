@@ -724,7 +724,20 @@ function affectsDocs(path: string): boolean {
     path.startsWith("mcp/server/runtime/") ||
     path.startsWith("mcp/build/") ||
     path.startsWith("mcp/prompts/") ||
-    path === "mcp/lib/factories.ts"
+    path === "mcp/lib/factories.ts" ||
+    // The generated API embeds canonical semantic catalog revisions. These
+    // owners can change the stamp without changing any Runtime tool schema.
+    path === "mcp/gateway/capabilities/manifest.ts" ||
+    path === "mcp/gateway/capabilities/semanticRegistry.ts" ||
+    path === "mcp/gateway/development/semanticArtifact.ts" ||
+    // All generated targets and their canonical producers must use the same
+    // docs:check freshness gate. A docs-only source edit can change HTML.
+    path.startsWith("mcp/scripts/generate/") ||
+    path.startsWith("mcp/docs/llms/") ||
+    path === "mcp/docs/api.json" ||
+    path === "mcp/docs/index.html" ||
+    path === "mcp/prompts/manifest.json" ||
+    path === "mcp/gateway/experimental/generated/hybrid4Schemas.ts"
   );
 }
 
