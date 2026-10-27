@@ -11,6 +11,7 @@ import {
   requireValidPlannedKeyframeTimes,
   requireValidPlannedPasteChannelTimes,
   reverseBatchTimeBounds,
+  requireBoundedNumericBakeSamplePlan,
   selectBatchKeyframes,
 } from "@/lib/animation/batchPlanning";
 export {
@@ -23,6 +24,7 @@ export {
   requireValidPlannedKeyframeTimes,
   requireValidPlannedPasteChannelTimes,
   reverseBatchTimeBounds,
+  requireBoundedNumericBakeSamplePlan,
   selectBatchKeyframes,
 } from "@/lib/animation/batchPlanning";
 import { recordCurrentCapabilitySemanticHistoryEffect } from "@/lib/authoring/semanticHistory";
@@ -191,12 +193,45 @@ export function registerAnimationBatchTools(): void {
         if (operation === "bake") {
           const interval =
             parameters.bake_interval ?? 1 / animation.snapping;
-          if (!Number.isFinite(interval) || interval <= 0) {
-            throw new Error(
-              "Bake interval must be a finite number greater than 0."
-            );
+
+          // Native Blockbench 5.2.2 IK baking uses sampleIK(), quaternion
+          // corrections and controller-key removal. Simple authored-track
+          // interpolation cannot reproduce those IK poses.
+          if (typeof NullObject !== "undefined") {
+            if (!Array.isArray(NullObject.all)) {
+              throw new Error("NATIVE_IK_STATE_UNVERIFIED: NullObject registry is unavailable.");
+            }
+            for (const node of NullObject.all) {
+              if (!node.ik_target) continue;
+              const controller = animation.animators[node.uuid];
+              if (controller && !Array.isArray(controller.keyframes)) {
+                throw new Error("NATIVE_IK_STATE_UNVERIFIED: keyed IK controller state is unreadable.");
+              }
+              if (controller?.keyframes.length) {
+                throw new Error(
+                  "NATIVE_IK_BAKE_REQUIRED: batch bake only interpolates authored numeric " +
+                  "keyframes, not native IK solver poses. Active controller: " + node.uuid
+                );
+              }
+            }
           }
-  
+
+          const selectedAnimators = new Set(keyframes.map((kf) => kf.animator));
+          const ranges: Array<{ start: number; end: number }> = [];
+          for (const animator of selectedAnimators) {
+            for (const channel of ["rotation", "position", "scale"] as const) {
+              const channelKeyframes = animator[channel];
+              const matched = keyframes.filter((kf) =>
+                kf.animator === animator && kf.channel === channel
+              );
+              if (!channelKeyframes || matched.length < 2) continue;
+              ranges.push({
+                start: Math.min(...matched.map((kf) => kf.time)),
+                end: Math.max(...matched.map((kf) => kf.time)),
+              });
+            }
+          }
+          const numericBakePlan = requireBoundedNumericBakeSamplePlan(ranges, interval);
           const originalTimelineTime = Timeline.time;
           const animators = new Set(keyframes.map((kf) => kf.animator));
           const bakeSamples: Array<{
@@ -218,19 +253,28 @@ export function registerAnimationBatchTools(): void {
                 const startTime = Math.min(...selectedKfs.map((kf: BBKeyframe) => kf.time));
                 const endTime = Math.max(...selectedKfs.map((kf: BBKeyframe) => kf.time));
   
-                for (let time = startTime; time <= endTime; time += interval) {
+                // Indexed sampling avoids additive floating-point clock drift.
+                // Count was bounded across ALL channels before entry.
+                const stepCount = Math.ceil((endTime - startTime) / interval);
+                let lastPlannedTime: number | null = null;
+                for (let index = 0; index <= stepCount; index += 1) {
+                  const time = startTime + index * interval;
+                  if (time > endTime + 1e-9) continue;
                   const targetTime = Timeline.snapTime(time, animation);
+                  if (!Number.isFinite(targetTime) || targetTime < 0 || targetTime > 10000) {
+                    throw new Error("BAKE_SNAPPED_TIME_INVALID: native time snapping was invalid.");
+                  }
                   if (targetTime < startTime || targetTime > endTime) continue;
+                  if (lastPlannedTime !== null && targetTime < lastPlannedTime - 1e-9) {
+                    throw new Error("BAKE_SNAPPED_TIME_NONMONOTONIC: native timeline reversed a sample.");
+                  }
                   const alreadyExists = channelKfs.some(
                     (kf: BBKeyframe) => Math.abs(kf.time - targetTime) < 0.001
                   );
-                  const alreadyPlanned = bakeSamples.some(
-                    (sample) =>
-                      sample.animator === animator &&
-                      sample.channel === channel &&
-                      Math.abs(sample.time - targetTime) < 0.001
-                  );
+                  const alreadyPlanned = lastPlannedTime !== null &&
+                    Math.abs(lastPlannedTime - targetTime) < 0.001;
                   if (alreadyExists || alreadyPlanned) continue;
+                  lastPlannedTime = targetTime;
   
                   Timeline.time = targetTime;
                   const values = animator.interpolate(channel, true);
@@ -252,13 +296,28 @@ export function registerAnimationBatchTools(): void {
   
             Timeline.time = originalTimelineTime;
   
-            if (bakeSamples.length) {
-              Undo.initEdit({
-                animations: [animation],
-              });
-              editStarted = true;
-  
-              bakeSamples.forEach((sample) => {
+            if (!bakeSamples.length) {
+              throw new Error(
+                "BAKE_NO_NEW_KEYS: requested sampling creates no new authored keyframes."
+              );
+            }
+            // Verify the actual insertion and entire affected channel counts
+            // before accepting one full-animation Undo snapshot.
+            const expectedCounts = new Map<any, Map<string, number>>();
+            for (const sample of bakeSamples) {
+              let tracks = expectedCounts.get(sample.animator);
+              if (!tracks) {
+                tracks = new Map<string, number>();
+                expectedCounts.set(sample.animator, tracks);
+              }
+              if (!tracks.has(sample.channel)) {
+                tracks.set(sample.channel, sample.animator[sample.channel].length);
+              }
+              tracks.set(sample.channel, tracks.get(sample.channel)! + 1);
+            }
+            Undo.initEdit({ animations: [animation] });
+            editStarted = true;
+            bakeSamples.forEach((sample) => {
                 const keyframe = sample.animator.addKeyframe({
                   channel: sample.channel,
                   time: sample.time,
@@ -271,18 +330,32 @@ export function registerAnimationBatchTools(): void {
                     },
                   ],
                 });
-                if (!keyframe) {
+                if (!keyframe || keyframe.animator !== sample.animator ||
+                    keyframe.channel !== sample.channel ||
+                    keyframe.interpolation !== "linear" ||
+                    !Number.isFinite(keyframe.time) ||
+                    Math.abs(keyframe.time - sample.time) > 1e-8 ||
+                    !sample.animator[sample.channel].includes(keyframe)) {
                   throw new Error(
-                    `Channel "${sample.channel}" is unavailable while baking animation.`
+                    "BAKE_NATIVE_POSTCONDITION_MISMATCH: created keyframe is not " +
+                    "the planned linear keyframe on the intended native channel."
                   );
                 }
               });
-  
+              for (const [animator, tracks] of expectedCounts) {
+                for (const [channel, count] of tracks) {
+                  if (animator[channel].length !== count) {
+                    throw new Error(
+                      "BAKE_NATIVE_POSTCONDITION_MISMATCH: native keyframe count " +
+                      "differs from the planned full-animation Undo state."
+                    );
+                  }
+                }
+              }
               animation.setLength();
               Undo.finishEdit("Batch keyframe operation: bake");
-              recordCurrentCapabilitySemanticHistoryEffect("batch_keyframe_operations");
               editStarted = false;
-            }
+              recordCurrentCapabilitySemanticHistoryEffect("batch_keyframe_operations");
           } catch (error) {
             if (editStarted) {
               Undo.cancelEdit(true);
@@ -298,12 +371,13 @@ export function registerAnimationBatchTools(): void {
             operation,
             source_keyframes: keyframes.length,
             created_keyframes: bakeSamples.length,
+            ...numericBakePlan,
           };
           return {
             content: [
               {
                 type: "text" as const,
-                text: `Bake used ${keyframes.length} source keyframe(s) and created ${bakeSamples.length} new keyframe(s).`,
+                text: `Numeric bake used ${keyframes.length} source keyframe(s) and created ${bakeSamples.length} linear keyframe(s); native IK solver baking was not performed.`,
               },
             ],
             structuredContent: result,

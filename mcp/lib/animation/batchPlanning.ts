@@ -150,6 +150,46 @@ export function requireValidPlannedPasteChannelTimes(
 }
 
 
+
+/**
+ * Batch bake interpolates authored numeric channels; it does NOT sample IK
+ * solver poses. Bound the full invocation before changing Timeline or Undo.
+ */
+export const ANIMATION_BAKE_SAMPLE_VISIT_LIMIT = 16_384;
+
+export function requireBoundedNumericBakeSamplePlan(
+  ranges: readonly Readonly<{ start: number; end: number }>[],
+  interval: number
+) {
+  if (!Number.isFinite(interval) || interval <= 0) {
+    throw new Error("BAKE_INTERVAL_INVALID: interval must be finite and positive.");
+  }
+  if (!ranges.length) {
+    throw new Error("BAKE_NO_ELIGIBLE_TRACKS: select two distinct-time keys on one authored numeric track.");
+  }
+  let plannedVisits = 0;
+  for (const range of ranges) {
+    if (!Number.isFinite(range.start) || !Number.isFinite(range.end) ||
+        range.start < 0 || range.end > 10000 || range.end <= range.start) {
+      throw new Error("BAKE_TRACK_RANGE_INVALID: invalid or coincident selected keyframe times.");
+    }
+    const visits = Math.ceil((range.end - range.start) / interval) + 1;
+    if (!Number.isSafeInteger(visits) ||
+        visits > ANIMATION_BAKE_SAMPLE_VISIT_LIMIT - plannedVisits) {
+      throw new Error("BAKE_SAMPLE_BUDGET_EXCEEDED: maximum " +
+        ANIMATION_BAKE_SAMPLE_VISIT_LIMIT + " total numeric sampling visits.");
+    }
+    plannedVisits += visits;
+  }
+  return {
+    planned_sample_visits: plannedVisits,
+    eligible_track_count: ranges.length,
+    sample_visit_limit: ANIMATION_BAKE_SAMPLE_VISIT_LIMIT,
+    bake_kind: "numeric_keyframe_interpolation" as const,
+    native_ik_baked: false as const,
+  };
+}
+
 export type BatchSelectionMode = "all" | "selected" | "range" | "pattern";
 
 export type BatchSelectionRange = Readonly<{
