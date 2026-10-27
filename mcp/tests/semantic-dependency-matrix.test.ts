@@ -34,7 +34,7 @@ describe("semantic dependency matrix", () => {
 
   test("flags routing-only source changes with no manifest baseline", () => {
     const planned = buildAffectedExecutionPlan([
-      "./mcp\\\\gateway\\\\capabilities\\\\catalog.ts",
+      "./mcp\\gateway\\capabilities\\catalog.ts",
       "mcp/gateway/capabilities/intelligence.ts",
     ]);
     expect(planned.semantic_source_alignment).toMatchObject({

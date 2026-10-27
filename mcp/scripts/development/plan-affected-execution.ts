@@ -33,7 +33,7 @@ function semanticSourceRevisionAlignment(
   diffs: ReturnType<typeof diffCapabilitySemanticRegistry>
 ) {
   const owners = [...new Set(paths.map((path) =>
-    path.replaceAll("\\\\", "/").replace(/^\\.\\//, "")
+    path.replaceAll("\\", "/").replace(/^\.\//, "")
   ))].filter((path) => SEMANTIC_IMPLEMENTATION_DIMENSIONS[path]);
   if (owners.length === 0) return null;
 
