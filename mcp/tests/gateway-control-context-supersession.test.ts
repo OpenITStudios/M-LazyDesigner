@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildControlPacket } from "@/gateway/control";
+import {
+  buildControlPacket,
+  projectControlPacketForGateway,
+} from "@/gateway/control";
 import type { GatewayRuntimeStatus } from "@/gateway/backend";
 
 const baseStatus: GatewayRuntimeStatus = {
@@ -140,6 +143,24 @@ describe("Control superseded context non-repetition", () => {
     expect(texture.context.invalidated_ids).not.toContain(known[2]);
     expect(texture.context.cached_ids).not.toContain(activeIds[0]);
     expect(texture.context.cached_ids).not.toContain(activeIds[1]);
+  });
+
+  test("authoring-to-development handoff withdraws old specialist at Gateway boundary", async () => {
+    const authoring = await buildControlPacket(baseStatus);
+    const skill = authoring.context.required.find((entry) =>
+      entry.id.startsWith("ctx:skill/")
+    )!;
+    const development = await buildControlPacket(baseStatus, {
+      taskMode: "SYSTEM_DEVELOPMENT",
+      taskIntent: "repair routing code",
+      knownContextIds: [skill.id, "ctx:doc/reference@older.version"],
+    });
+    const projected = projectControlPacketForGateway(development);
+
+    expect(development.context.required).toEqual([]);
+    expect(development.context.invalidated_ids).toEqual([skill.id]);
+    expect(projected.context).toEqual({ invalidated_ids: [skill.id] });
+    expect(development.task_context_id).toMatch(/^task:[a-f0-9]{20}$/);
   });
 
   test("authoring-stage change invalidates the previous specialist family", async () => {

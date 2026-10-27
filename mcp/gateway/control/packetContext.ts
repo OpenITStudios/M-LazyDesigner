@@ -28,6 +28,37 @@ function runtimeContextIdentity(snapshot: ControlSnapshot): string {
   return snapshot.runtime.runtime_signature ?? snapshot.runtime.build_identity ?? "offline";
 }
 
+/**
+ * Development work follows the Runtime instance, not the author's current
+ * Geometry/Texturing/Animation phase. The canonical Runtime signature is
+ * JSON with a generation identity plus volatile phase and tool-count fields.
+ * Retain opaque or generation-less signatures unchanged: dropping fields
+ * without instance evidence could incorrectly merge separate Runtimes.
+ */
+function developmentRuntimeContextIdentity(snapshot: ControlSnapshot): string {
+  const signature = snapshot.runtime.runtime_signature;
+  if (!signature) return runtimeContextIdentity(snapshot);
+  try {
+    const parsed: unknown = JSON.parse(signature);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const fields = parsed as Record<string, unknown>;
+      const hasInstance =
+        (typeof fields.instance_id === "string" && fields.instance_id.length > 0) ||
+        (typeof fields.startup_time === "string" && fields.startup_time.length > 0);
+      if (hasInstance) {
+        return canonicalJson(Object.fromEntries(
+          Object.entries(fields).filter(
+            ([key]) => key !== "authoring_phase" && key !== "exposed_tool_count"
+          )
+        ));
+      }
+    }
+  } catch {
+    // Noncanonical signatures remain opaque to preserve restart detection.
+  }
+  return signature;
+}
+
 export function taskContextId(
   snapshot: ControlSnapshot,
   workspace: ControlWorkspaceProjection,
@@ -40,7 +71,7 @@ export function taskContextId(
     mode === "SYSTEM_DEVELOPMENT"
       ? {
           mode,
-          runtime: runtimeContextIdentity(snapshot),
+          runtime: developmentRuntimeContextIdentity(snapshot),
           development_domain:
             development?.domain ?? "no-development-domain",
           development_intent:
@@ -88,7 +119,19 @@ export function filterContext(
   mode: ControlTaskMode
 ): ControlContextDelivery {
   if (mode === "SYSTEM_DEVELOPMENT") {
-    return { required: [], optional: [], cached_ids: [], invalidated_ids: [] };
+    // Authoring Skills and modelling profiles must not remain active when
+    // the same chat switches into repository development. Other document
+    // handles belong to their own context authority and are not withdrawn.
+    const inactiveAuthoring = knownContextIds.filter((id) => {
+      const family = contextFamily(id);
+      return family === "ctx:skill" || family === "ctx:profile";
+    });
+    return {
+      required: [],
+      optional: [],
+      cached_ids: [],
+      invalidated_ids: [...new Set(inactiveAuthoring)],
+    };
   }
 
   const known = new Set(knownContextIds);

@@ -104,6 +104,33 @@ describe("semantic-aware context cache", () => {
     expect(delivery.invalidated_ids).toEqual([]);
   });
 
+  test("switching to system development invalidates authoring Skills and profiles only", () => {
+    const skill = "ctx:skill/modelling@aaaaaaaaaaaa.bbbbbbbbbbbb";
+    const profile = "ctx:profile/vehicle@cccccccccccc.dddddddddddd";
+    const generic = "ctx:doc/reference@eeeeeeeeeeee.ffffffffffff";
+    const results = filterContext(
+      snapshot([handle(skill, ["routing", "graph"])]),
+      [skill, profile, generic, skill],
+      "SYSTEM_DEVELOPMENT"
+    );
+    expect(results).toEqual({
+      required: [],
+      optional: [],
+      cached_ids: [],
+      invalidated_ids: [skill, profile],
+    });
+  });
+
+  test("system-development context with no prior authoring handles has no invalidations", () => {
+    const results = filterContext(
+      snapshot([]),
+      ["ctx:doc/reference@older.revision"],
+      "SYSTEM_DEVELOPMENT"
+    );
+    expect(results.invalidated_ids).toEqual([]);
+    expect(results.required).toEqual([]);
+  });
+
   test("schema-only changes do not invalidate routing+graph context", () => {
     const current = handle(
       "ctx:profile/vehicle@aaaaaaaaaaaa.bbbbbbbbbbbb",

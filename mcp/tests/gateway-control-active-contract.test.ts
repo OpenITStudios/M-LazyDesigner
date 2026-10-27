@@ -9,6 +9,7 @@ import {
   resolveDevelopmentIntent,
 } from "@/gateway/control";
 import type { GatewayRuntimeStatus } from "@/gateway/backend";
+import { createRuntimeSignature } from "@/gateway/runtime/identity";
 
 const status: GatewayRuntimeStatus = {
   gateway: "ready",
@@ -162,6 +163,71 @@ describe("LazyDesigner Control active contract", () => {
       },
     }, options);
     expect(replacement.task_context_id).not.toBe(first.task_context_id);
+  });
+
+  test("development cohort ignores phase/tool surface changes within one Runtime instance", async () => {
+    const options = {
+      taskMode: "SYSTEM_DEVELOPMENT" as const,
+      taskIntent: "repair a capability routing defect",
+    };
+    const health = {
+      build_identity: "sha256:build-a",
+      instance_id: "runtime-instance-a",
+      startup_time: "2026-10-27T00:00:00Z",
+      exposed_tool_count: 47,
+      product: {
+        id: "lazydesigner",
+        version: "0.1.1",
+        profile: "stable",
+        authoring_phase: "geometry",
+      },
+    };
+    const signature = createRuntimeSignature(health);
+    const original: GatewayRuntimeStatus = {
+      ...status,
+      runtime: {
+        ...status.runtime,
+        runtime_signature: signature,
+        connected_signature: signature,
+      },
+    };
+    const changedPhaseHealth = {
+      ...health,
+      exposed_tool_count: 34,
+      product: { ...health.product, authoring_phase: "animation" },
+    };
+    const changedPhaseSignature = createRuntimeSignature(changedPhaseHealth);
+    const changedPhase: GatewayRuntimeStatus = {
+      ...original,
+      affinity: { ...status.affinity, authoring_phase: "animation" },
+      runtime: {
+        ...original.runtime,
+        runtime_signature: changedPhaseSignature,
+        connected_signature: changedPhaseSignature,
+      },
+    };
+    const restartedSignature = createRuntimeSignature({
+      ...changedPhaseHealth,
+      instance_id: "runtime-instance-b",
+    });
+    const restarted: GatewayRuntimeStatus = {
+      ...changedPhase,
+      runtime: {
+        ...changedPhase.runtime,
+        runtime_signature: restartedSignature,
+        connected_signature: restartedSignature,
+      },
+    };
+
+    const first = await buildControlPacket(original, options);
+    const sameInstance = await buildControlPacket(changedPhase, options);
+    const nextInstance = await buildControlPacket(restarted, options);
+    expect(sameInstance.task_context_id).toBe(first.task_context_id);
+    expect(nextInstance.task_context_id).not.toBe(first.task_context_id);
+
+    const authoringFirst = await buildControlPacket(original);
+    const authoringChanged = await buildControlPacket(changedPhase);
+    expect(authoringChanged.task_context_id).not.toBe(authoringFirst.task_context_id);
   });
 
   test("unresolved development routing remains bounded and fail-closed", () => {
