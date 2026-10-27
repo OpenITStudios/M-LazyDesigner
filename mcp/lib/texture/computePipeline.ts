@@ -106,6 +106,8 @@ export type TextureComputeReceipt = {
     planner: TextureComputeCostPlan;
     region: {
       bounded: boolean;
+      mask_scope?: "exact_cube_faces";
+      covered_pixels?: number;
       target_rect: [number, number, number, number];
       compute_rect: [number, number, number, number];
       halo: number;
@@ -779,7 +781,8 @@ export function applyTextureComputePipeline(
   width: number,
   height: number,
   steps: readonly TextureComputeStep[],
-  targetRect?: TextureComputeRect
+  targetRect?: TextureComputeRect,
+  targetMask?: Uint8Array
 ): TextureComputeResult {
   if (
     !Number.isSafeInteger(width) ||
@@ -805,6 +808,18 @@ export function applyTextureComputePipeline(
   const target = targetRect
     ? requireTextureComputeRect(targetRect, width, height)
     : { x: 0, y: 0, width, height };
+  let coveredPixels = 0;
+  if (targetMask !== undefined) {
+    if (!targetRect || !(targetMask instanceof Uint8Array) ||
+        targetMask.length !== target.width * target.height) {
+      throw new Error("FACE_SCOPE_MASK_INVALID: exact ROI mask required.");
+    }
+    for (const bit of targetMask) {
+      if (bit !== 0 && bit !== 1) throw new Error("FACE_SCOPE_MASK_INVALID: expected 0/1 texels.");
+      coveredPixels += bit;
+    }
+    if (coveredPixels === 0) throw new Error("FACE_SCOPE_MASK_EMPTY: zero face-owned texels.");
+  }
   if (targetRect) {
     for (const step of plan.steps) requireRoiSafeStep(step);
   }
@@ -900,6 +915,16 @@ export function applyTextureComputePipeline(
         height: target.height,
       }
     );
+    if (targetMask) {
+      // Restore every unselected byte before computing the authoritative
+      // change count, PNG crop and native one-Undo texture transaction.
+      for (let index=0;index<targetMask.length;index++) {
+        if (targetMask[index] === 1) continue;
+        const x=index%target.width, y=Math.floor(index/target.width);
+        const sourceOffset=((target.y+y)*width+target.x+x)*4;
+        targetPatch.set(source.subarray(sourceOffset,sourceOffset+4),index*4);
+      }
+    }
     changed = changedRectForPatch(source, targetPatch, width, target);
     outputPixels = new Uint8ClampedArray(source);
     writeTextureComputeRect(outputPixels, width, target, targetPatch);
@@ -935,6 +960,10 @@ export function applyTextureComputePipeline(
         planner: costPlan,
         region: {
           bounded: targetRect !== undefined,
+          ...(targetMask ? {
+            mask_scope: "exact_cube_faces" as const,
+            covered_pixels: coveredPixels,
+          } : {}),
           target_rect: [
             target.x,
             target.y,

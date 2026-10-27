@@ -10,6 +10,7 @@ import {
   parseTextureComputeRequest,
   parseTextureComputeSteps,
 } from "@/lib/textureComputeRequest";
+import { planFaceScopedTextureSelection } from "@/lib/texture/selectionPlanning";
 
 describe("texture compute request and pipeline", () => {
   test("parses compact compute steps into strict internal operations", () => {
@@ -83,6 +84,124 @@ describe("texture compute request and pipeline", () => {
       [{ operation: "gradient_map", ramp: ["#16441e", "#c1f4c4"],
         options: { sourceHueColor: "#ff0000" } }]
     )).toThrow("explicit target_rect");
+  });
+
+
+  test("selective face-owned recoloring preserves same-hue material elsewhere in atlas",()=>{
+    const faces=[
+      {cube_uuid:"cloth",face:"north" as const,enabled:true,
+        texture_uuid:"atlas",native_material_name:"cloth",rect:[0,0,2,2] as const},
+      {cube_uuid:"eye",face:"north" as const,enabled:true,
+        texture_uuid:"atlas",native_material_name:"eye",rect:[3,0,5,2] as const},
+    ];
+    const request=parseTextureComputeRequest([{
+      operation:"gradient_map",
+      args:{ramp:["#16441e","#c1f4c4"],source_hue_color:"#ff0000",
+        face_targets:[{cube_uuid:"cloth",face:"north"}]},
+    }]);
+    expect(request.target_rect).toBeNull();
+    const scope=planFaceScopedTextureSelection({
+      texture_uuid:"atlas",bitmap_width:5,bitmap_height:2,
+      faces,face_targets:request.face_targets!,
+    });
+    expect(scope).toMatchObject({target_rect:{x:0,y:0,width:2,height:2},
+      covered_pixels:4,material_identity:"native_named"});
+    const pixels=new Uint8ClampedArray(Array.from({length:10},()=>[190,0,0,255]).flat());
+    const output=applyTextureComputePipeline(pixels,5,2,request.steps,
+      scope.target_rect,scope.target_mask);
+    expect(output.receipt.changed_pixels).toBe(4);
+    expect(output.receipt.execution.region)
+      .toMatchObject({mask_scope:"exact_cube_faces",covered_pixels:4});
+    for(let y=0;y<2;y++)for(let x=2;x<5;x++){
+      const i=(y*5+x)*4;
+      expect([...output.pixels.slice(i,i+4)]).toEqual([...pixels.slice(i,i+4)]);
+    }
+  });
+
+  test("disjoint faces keep sparse pixels outside both UVs byte-identical",()=>{
+    const faces=[
+      {cube_uuid:"a",face:"north" as const,enabled:true,
+        texture_uuid:"atlas",native_material_name:"",rect:[0,0,1,1] as const},
+      {cube_uuid:"b",face:"north" as const,enabled:true,
+        texture_uuid:"atlas",native_material_name:"",rect:[4,0,5,1] as const},
+    ];
+    const scope=planFaceScopedTextureSelection({
+      texture_uuid:"atlas",bitmap_width:5,bitmap_height:1,faces,
+      face_targets:[{cube_uuid:"a",face:"north"},{cube_uuid:"b",face:"north"}],
+    });
+    expect([...scope.target_mask]).toEqual([1,0,0,0,1]);
+    expect(scope.material_identity).toBe("unnamed_default");
+    const pixels=new Uint8ClampedArray(Array.from({length:5},()=>[180,0,0,255]).flat());
+    const request=parseTextureComputeRequest([{
+      operation:"gradient_map",args:{ramp:["#16441e","#c1f4c4"],
+        source_hue_color:"#ff0000",face_targets:[{cube_uuid:"a",face:"north"}]},
+    }]);
+    const result=applyTextureComputePipeline(pixels,5,1,request.steps,
+      scope.target_rect,scope.target_mask);
+    expect(result.receipt.changed_pixels).toBe(2);
+    expect([...result.pixels.slice(4,16)]).toEqual([...pixels.slice(4,16)]);
+  });
+
+  test("unselected exact or partially shared UV ownership refuses recoloring",()=>{
+    const left={cube_uuid:"left",face:"north" as const,enabled:true,
+      texture_uuid:"atlas",native_material_name:"cloth",rect:[0,0,2,2] as const};
+    for(const rect of [[0,0,2,2],[1,1,3,3]] as const){
+      expect(()=>planFaceScopedTextureSelection({
+        texture_uuid:"atlas",bitmap_width:8,bitmap_height:8,
+        faces:[left,{...left,cube_uuid:"right",native_material_name:"eye",rect}],
+        face_targets:[{cube_uuid:"left",face:"north"}],
+      })).toThrow("FACE_SCOPE_UNSELECTED_UV_OWNER");
+    }
+    expect(()=>planFaceScopedTextureSelection({
+      texture_uuid:"atlas",bitmap_width:8,bitmap_height:8,
+      faces:[left,{...left,cube_uuid:"right",rect:[2,0,4,2] as const}],
+      face_targets:[{cube_uuid:"left",face:"north"}],
+    })).not.toThrow();
+  });
+
+  test("face planner rejects partial selected overlap and mixed native materials",()=>{
+    const a={cube_uuid:"a",face:"north" as const,enabled:true,
+      texture_uuid:"atlas",native_material_name:"cloth",rect:[0,0,2,2] as const};
+    const run=(b:typeof a)=>planFaceScopedTextureSelection({
+      texture_uuid:"atlas",bitmap_width:8,bitmap_height:8,
+      faces:[a,b],
+      face_targets:[{cube_uuid:"a",face:"north"},{cube_uuid:"b",face:"north"}],
+    });
+    expect(()=>run({...a,cube_uuid:"b",rect:[1,1,3,3] as const}))
+      .toThrow("FACE_SCOPE_PARTIAL_UV_OVERLAP");
+    expect(()=>run({...a,cube_uuid:"b",rect:[2,0,4,2] as const,
+      native_material_name:"metal"})).toThrow("FACE_SCOPE_MATERIAL_MISMATCH");
+  });
+
+  test("face-target parser blocks combined rectangle/mixed/unscoped edits",()=>{
+    const gradient={operation:"gradient_map" as const,
+      args:{ramp:["#16441e","#c1f4c4"],source_hue_color:"#ff0000",
+        face_targets:[{cube_uuid:"a",face:"north"}]}};
+    expect(()=>parseTextureComputeRequest([{...gradient,args:{...gradient.args,
+      target_rect:{x:0,y:0,width:1,height:1}}}])).toThrow("mutually exclusive");
+    expect(()=>parseTextureComputeRequest([gradient,
+      {operation:"posterize",args:{levels:3}}])).toThrow("one selective gradient");
+    expect(()=>parseTextureComputeRequest([{operation:"gradient_map",
+      args:{ramp:["#16441e","#c1f4c4"],face_targets:[{cube_uuid:"a",face:"north"}]}
+    }])).toThrow("source_hue_color");
+    expect(()=>parseTextureComputeRequest([{...gradient,args:{...gradient.args,
+      face_targets:[gradient.args.face_targets[0],gradient.args.face_targets[0]]}}
+    ])).toThrow("face_targets");
+  });
+
+  test("internal pixel masks reject mismatched, empty and illegal coverage",()=>{
+    const image=new Uint8ClampedArray([190,0,0,255]);
+    const steps=[{operation:"gradient_map" as const,ramp:["#16441e","#c1f4c4"],
+      options:{sourceHueColor:"#ff0000"}}];
+    const rect={x:0,y:0,width:1,height:1};
+    expect(()=>applyTextureComputePipeline(image,1,1,steps,rect,new Uint8Array([0])))
+      .toThrow("FACE_SCOPE_MASK_EMPTY");
+    expect(()=>applyTextureComputePipeline(image,1,1,steps,rect,new Uint8Array([2])))
+      .toThrow("FACE_SCOPE_MASK_INVALID");
+    expect(()=>applyTextureComputePipeline(image,1,1,steps,rect,new Uint8Array(0)))
+      .toThrow("FACE_SCOPE_MASK_INVALID");
+    expect(()=>applyTextureComputePipeline(image,1,1,steps,undefined,new Uint8Array([1])))
+      .toThrow("FACE_SCOPE_MASK_INVALID");
   });
 
   test("extracts one bounded pipeline target from compute[0] without changing public envelope", () => {

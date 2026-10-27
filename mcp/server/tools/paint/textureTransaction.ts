@@ -6,6 +6,16 @@ import { bakeNativeCubeAo } from "@/lib/geometry/cubeAoRuntime";
 import { imageContent } from "@/lib/protocol/imageContent";
 import { resolvePaintTexture } from "@/lib/texture/selection";
 import {
+  planFaceScopedTextureSelection,
+  type NativeFaceFootprint,
+} from "@/lib/texture/selectionPlanning";
+import type { TextureTreatmentFace } from "@/lib/texture/treatmentPlan";
+import {
+  mapFaceUvToTexturePixels,
+  requireExactFacePixelGrid,
+  requireSupportedFaceRotation,
+} from "@/lib/uv/facePixelMapping";
+import {
   applyPaintTransactionRgba,
   buildPaintTransactionReceipt,
   paintTransactionParameters,
@@ -274,6 +284,99 @@ function finalizeTexturePngWrite(
   }
 }
 
+
+const FACE_RECOLOR_KEYS = ["north","south","east","west","up","down"] as const;
+
+/** Read-only native owner snapshot, recomputed after asynchronous planning. */
+function captureNativeFaceRecolorScope(
+  texture: Texture, width: number, height: number,
+  targets: readonly TextureTreatmentFace[]
+) {
+  if (typeof Format === "undefined" || Format.id !== "bedrock" ||
+      typeof Cube === "undefined" || !Array.isArray(Cube.all) ||
+      typeof Texture === "undefined" || !Array.isArray(Texture.all) ||
+      typeof Project === "undefined" || !Array.isArray(Project?.textures)) {
+    throw new Error("FACE_SCOPE_NATIVE_UNAVAILABLE: requires complete Bedrock Entity Cube/texture state.");
+  }
+  const channel = (texture as Texture & { pbr_channel?: string }).pbr_channel;
+  if (channel && channel !== "color" && channel !== "albedo") {
+    throw new Error("FACE_SCOPE_COLOR_ONLY: packed PBR support channels must not be hue-recolored.");
+  }
+  if (texture.layers_enabled === true || (texture.frameCount ?? 1) !== 1 ||
+      texture.height !== texture.display_height ||
+      texture.width !== width || texture.height !== height) {
+    throw new Error("FACE_SCOPE_UNSUPPORTED_ATLAS: require one flattened physical bitmap frame.");
+  }
+  const registry=new Set<Texture>(Texture.all);
+  const projectTextures=new Set<Texture>(Project.textures);
+  if (registry.size !== Texture.all.length ||
+      projectTextures.size !== Project.textures.length ||
+      registry.size !== projectTextures.size ||
+      [...registry].some((t)=>!projectTextures.has(t)) || !registry.has(texture)) {
+    throw new Error("FACE_SCOPE_TEXTURE_INVENTORY_INCOMPLETE: nonunique or foreign textures.");
+  }
+  if (typeof Outliner === "undefined" || !Array.isArray(Outliner.elements) ||
+      Cube.all.some((cube)=>!Outliner.elements.includes(cube)) ||
+      Outliner.elements.filter((el)=>el instanceof Cube).length !== Cube.all.length ||
+      Outliner.elements.some((el)=>!(el instanceof Cube) && typeof el === "object" &&
+        el !== null && "faces" in el)) {
+    throw new Error("FACE_SCOPE_OUTLINER_INCOMPLETE: cannot attest all texture-capable geometry.");
+  }
+  const scale={
+    width, displayHeight:height,
+    uvWidth:texture.getUVWidth(), uvHeight:texture.getUVHeight(),
+  };
+  const footprints: NativeFaceFootprint[]=[];
+  const snapshot: unknown[]=[];
+  const ids=new Set<string>();
+  for(const cube of [...Cube.all].sort((a,b)=>a.uuid.localeCompare(b.uuid))) {
+    if (typeof cube.uuid !== "string" || !cube.uuid.trim() || ids.has(cube.uuid)) {
+      throw new Error("FACE_SCOPE_CUBE_IDENTITY_AMBIGUOUS: unique UUIDs required.");
+    }
+    ids.add(cube.uuid);
+    const boxUv=cube.box_uv===true || (cube.box_uv!==false && Project?.box_uv===true);
+    snapshot.push([cube.uuid,cube.from,cube.to,cube.origin,cube.rotation,
+      cube.inflate,cube.box_uv,cube.mirror_uv,cube.visibility]);
+    for(const key of FACE_RECOLOR_KEYS) {
+      const face=cube.faces?.[key];
+      if(!face) throw new Error("FACE_SCOPE_FACE_INVENTORY_INCOMPLETE: "+cube.uuid+":"+key);
+      const enabled=face.enabled!==false;
+      const material=(face as CubeFace & { material_name?: string }).material_name??"";
+      if(typeof material!=="string")throw new Error("FACE_SCOPE_MATERIAL_UNRESOLVED");
+      if(enabled && typeof face.getTexture!=="function") {
+        throw new Error("FACE_SCOPE_TEXTURE_RESOLVER_UNAVAILABLE");
+      }
+      const bound=enabled?face.getTexture():null;
+      if(bound && (!registry.has(bound)||!projectTextures.has(bound))) {
+        throw new Error("FACE_SCOPE_FOREIGN_TEXTURE: "+cube.uuid+":"+key);
+      }
+      if(bound && bound.uuid===texture.uuid && bound!==texture) {
+        throw new Error("FACE_SCOPE_TEXTURE_IDENTITY_AMBIGUOUS");
+      }
+      let rect: [number,number,number,number]|null=null;
+      if(enabled && bound===texture) {
+        if(boxUv)throw new Error("FACE_SCOPE_BOX_UV_UNVERIFIED: per-face grid ownership required.");
+        const label=cube.uuid+":"+key+" selective recolor";
+        const mapping=mapFaceUvToTexturePixels(face.uv,scale,label);
+        requireExactFacePixelGrid(mapping,label);
+        requireSupportedFaceRotation(face.rotation,label);
+        rect=mapping.rect;
+      }
+      footprints.push({cube_uuid:cube.uuid,face:key,enabled,
+        texture_uuid:bound?.uuid??null,native_material_name:material,rect});
+      snapshot.push([cube.uuid,key,enabled,bound?.uuid??null,
+        face.texture,material,face.uv,face.rotation]);
+    }
+  }
+  const plan=planFaceScopedTextureSelection({
+    texture_uuid:texture.uuid,bitmap_width:width,bitmap_height:height,
+    faces:footprints,face_targets:targets,
+  });
+  return {...plan,native_snapshot:JSON.stringify([
+    texture.uuid,width,height,scale.uvWidth,scale.uvHeight,snapshot,
+  ])};
+}
+
 export function registerPaintTextureTransactionTool(): void {
   createTool(
     paintTextureTransactionToolDocs.name,
@@ -303,13 +406,19 @@ export function registerPaintTextureTransactionTool(): void {
         const computeRequest = compute
           ? parseTextureComputeRequest(compute)
           : null;
+        const faceScope = computeRequest?.face_targets
+          ? captureNativeFaceRecolorScope(
+              texture, before.width, before.height, computeRequest.face_targets
+            )
+          : null;
         const computeResult = computeRequest
           ? applyTextureComputePipeline(
               before.pixels,
               before.width,
               before.height,
               computeRequest.steps,
-              computeRequest.target_rect ?? undefined
+              faceScope?.target_rect ?? computeRequest.target_rect ?? undefined,
+              faceScope?.target_mask
             )
           : null;
         const applied = computeResult
@@ -365,6 +474,16 @@ export function registerPaintTextureTransactionTool(): void {
         // Recheck the entire RGBA source synchronously before opening Undo or
         // overwriting the dirty region with a stale planned candidate.
         requireUnchangedTextureBitmap(before, fullTextureRgba(texture));
+        const requireCurrentFaceScope = () => {
+          if (!faceScope || !computeRequest?.face_targets) return;
+          const current = captureNativeFaceRecolorScope(
+            texture, before.width, before.height, computeRequest.face_targets
+          );
+          if (current.native_snapshot !== faceScope.native_snapshot) {
+            throw new Error("FACE_SCOPE_STALE_NATIVE_STATE: UV/material/geometry changed during planning.");
+          }
+        };
+        requireCurrentFaceScope();
 
         const undoAspects: UndoAspects = {
           bitmap: true,
@@ -432,6 +551,7 @@ export function registerPaintTextureTransactionTool(): void {
             fullTextureRgba(texture),
             "Paint transaction bitmap changed after postcondition verification. Refusing stale PNG publication and Undo completion."
           );
+          requireCurrentFaceScope();
           if (preparedOutput && outputBytes) {
             commitTexturePngWrite(preparedOutput.fs, preparedOutput.state, outputBytes);
           }
@@ -501,6 +621,14 @@ export function registerPaintTextureTransactionTool(): void {
                   changed_pixels:
                     computeResult.receipt.changed_pixels,
                   execution: computeResult.receipt.execution,
+                  ...(faceScope ? { face_scope: {
+                    scope: "explicit_cube_faces" as const,
+                    face_count: faceScope.face_count,
+                    covered_pixels: faceScope.covered_pixels,
+                    native_material_name: faceScope.native_material_name,
+                    material_identity: faceScope.material_identity,
+                    note: faceScope.note,
+                  }} : {}),
                 }
               : null,
             visual_evidence: affectedRegionImage
