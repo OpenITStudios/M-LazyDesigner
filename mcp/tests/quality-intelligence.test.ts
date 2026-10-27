@@ -304,13 +304,13 @@ describe("bounded authoring quality intelligence", () => {
 
   test("coherent sibling pairs produce read-only candidate offsets; nested mirrored parents do not", () => {
     const result = analyzeRigGraph([
-      { uuid: "root", name: "root", origin: [0, 0, 0] },
-      { uuid: "leftParent", name: "left_arm", origin: [-4, 8, 1], parent_uuid: "root" },
-      { uuid: "rightParent", name: "right_arm", origin: [4, 8, 1], parent_uuid: "root" },
-      { uuid: "leftHand", name: "left_hand", origin: [-6, 8, 1], parent_uuid: "leftParent" },
-      { uuid: "rightHand", name: "right_hand", origin: [6, 8.3, 1], parent_uuid: "rightParent" },
-      { uuid: "leftLeg", name: "left_leg", origin: [-2, 0, 0], parent_uuid: "root" },
-      { uuid: "rightLeg", name: "right_leg", origin: [2, 0.3, 0], parent_uuid: "root" },
+      { uuid: "root", name: "root", origin: [0, 0, 0], rotation: [0, 0, 0] },
+      { uuid: "leftParent", name: "left_arm", origin: [-4, 8, 1], rotation: [0, 0, 0], parent_uuid: "root" },
+      { uuid: "rightParent", name: "right_arm", origin: [4, 8, 1], rotation: [0, 0, 0], parent_uuid: "root" },
+      { uuid: "leftHand", name: "left_hand", origin: [-6, 8, 1], rotation: [0, 0, 0], parent_uuid: "leftParent" },
+      { uuid: "rightHand", name: "right_hand", origin: [6, 8.3, 1], rotation: [0, 0, 0], parent_uuid: "rightParent" },
+      { uuid: "leftLeg", name: "left_leg", origin: [-2, 0, 0], rotation: [0, 0, 0], parent_uuid: "root" },
+      { uuid: "rightLeg", name: "right_leg", origin: [2, 0.3, 0], rotation: [0, 0, 0], parent_uuid: "root" },
     ]);
     expect(result.state).toBe("valid_graph");
     if (result.state !== "valid_graph") throw new Error("expected valid graph");
@@ -323,6 +323,44 @@ describe("bounded authoring quality intelligence", () => {
       .toMatchObject({ parent_relation: "paired_named_parents", hypothetical_right_offset_if_symmetry_approved: null });
   });
 
+
+  test("rotated ancestor blocks geometric symmetry offsets but keeps advisory pair evidence", () => {
+    const result = analyzeRigGraph([
+      { uuid: "root", name: "root", origin: [0, 0, 0], rotation: [0, 30, 0] },
+      { uuid: "left", name: "left_leg", origin: [-3, 0, 0], rotation: [0, 0, 0], parent_uuid: "root" },
+      { uuid: "right", name: "right_leg", origin: [3, 0.5, 0], rotation: [0, 0, 0], parent_uuid: "root" },
+      { uuid: "left2", name: "left_arm", origin: [-6, 8, 0], rotation: [0, 0, 0], parent_uuid: "root" },
+      { uuid: "right2", name: "right_arm", origin: [6, 8, 0], rotation: [0, 0, 0], parent_uuid: "root" },
+    ]);
+    expect(result.state).toBe("valid_graph");
+    if (result.state !== "valid_graph") throw new Error("expected valid graph");
+    expect(result.mirrored_pivot_candidates?.pair_count).toBe(2);
+    expect(result.mirrored_pivot_candidates?.examples).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          part_key: "leg",
+          hypothetical_offset_blocker: "TRANSFORM_CHAIN_UNVERIFIED",
+          hypothetical_right_offset_if_symmetry_approved: null,
+        }),
+      ])
+    );
+  });
+
+  test("missing transform data never silently becomes a zero-rotation assumption", () => {
+    const result = analyzeRigGraph([
+      { uuid: "left", name: "left_leg", origin: [-3, 0, 0] },
+      { uuid: "right", name: "right_leg", origin: [3, 0.5, 0] },
+      { uuid: "left2", name: "left_arm", origin: [-6, 8, 0] },
+      { uuid: "right2", name: "right_arm", origin: [6, 8, 0] },
+    ]);
+    expect(result.state).toBe("valid_graph");
+    if (result.state !== "valid_graph") throw new Error("expected valid graph");
+    expect(result.mirrored_pivot_candidates?.pair_count).toBe(2);
+    expect(result.mirrored_pivot_candidates?.examples.every(
+      (pair) => pair.hypothetical_offset_blocker === "TRANSFORM_CHAIN_UNVERIFIED" &&
+        pair.hypothetical_right_offset_if_symmetry_approved === null
+    )).toBe(true);
+  });
   test("disagreeing pair planes cannot become an implicit correction request", () => {
     const result = analyzeRigGraph([
       { uuid: "l1", name: "left_ear", origin: [-2, 1, 0] },

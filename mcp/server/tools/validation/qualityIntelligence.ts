@@ -95,6 +95,7 @@ function rigGraphRuntime() {
       uuid: group.uuid,
       name: group.name,
       origin: [...group.origin],
+      rotation: [...group.rotation],
       parent_uuid:
         group.parent instanceof Group ? group.parent.uuid : null,
     }))

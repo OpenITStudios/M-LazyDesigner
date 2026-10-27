@@ -213,6 +213,8 @@ export type RigGroupInput = {
   name: string;
   origin: readonly number[];
   parent_uuid?: string | null;
+  /** Native group orientation. Missing orientation is not evidence of zero rotation. */
+  rotation?: readonly number[];
 };
 
 function median(values: readonly number[]): number | null {
@@ -273,6 +275,26 @@ function mirrorParentRelation(
       parentCandidates.left[0]?.uuid !== lp.uuid ||
       parentCandidates.right[0]?.uuid !== rp.uuid) return null;
   return "paired_named_parents";
+}
+
+
+function hasUnrotatedRigAncestry(
+  group: RigGroupInput,
+  byUuid: ReadonlyMap<string, RigGroupInput>
+): boolean {
+  const visited = new Set<string>();
+  let current: RigGroupInput | undefined = group;
+  while (current) {
+    if (visited.has(current.uuid)) return false;
+    visited.add(current.uuid);
+    if (!current.rotation || current.rotation.length !== 3 ||
+        current.rotation.some((angle) =>
+          !Number.isFinite(angle) || Math.abs(angle) > 1e-6
+        )) return false;
+    if (!current.parent_uuid) return true;
+    current = byUuid.get(current.parent_uuid);
+  }
+  return false;
 }
 
 function namedMirrorPivotEvidence(groups: readonly RigGroupInput[], exampleLimit: number) {
@@ -349,8 +371,17 @@ function namedMirrorPivotEvidence(groups: readonly RigGroupInput[], exampleLimit
       parent_relation: pair.parent_relation,
       cohort_plane_deviation: cohortPlane === null ? null
         : roundMetric(Math.abs(pair.local_plane_x - cohortPlane)),
+      hypothetical_offset_blocker: !coherentCohort
+        ? "COHORT_SYMMETRY_UNVERIFIED" as const
+        : pair.parent_relation !== "shared_parent"
+          ? "DIFFERENT_PARENT_SPACES" as const
+          : !hasUnrotatedRigAncestry(pair.left, byUuid) ||
+              !hasUnrotatedRigAncestry(pair.right, byUuid)
+            ? "TRANSFORM_CHAIN_UNVERIFIED" as const : null,
       hypothetical_right_offset_if_symmetry_approved: coherentCohort &&
-        pair.parent_relation === "shared_parent" && cohortPlane !== null
+        pair.parent_relation === "shared_parent" && cohortPlane !== null &&
+        hasUnrotatedRigAncestry(pair.left, byUuid) &&
+        hasUnrotatedRigAncestry(pair.right, byUuid)
         ? [
             roundMetric(2 * cohortPlane - pair.left.origin[0] - pair.right.origin[0]),
             roundMetric(pair.left.origin[1] - pair.right.origin[1]),
@@ -358,7 +389,7 @@ function namedMirrorPivotEvidence(groups: readonly RigGroupInput[], exampleLimit
           ] as [number, number, number] : null,
     })),
     examples_truncated: pairs.length > exampleLimit,
-    note: "Named counterpart evidence never authorizes symmetry. A hypothetical right-side model-space offset is supplied only for sibling pairs in a coherent multi-pair cohort; it is not a safe native mutation plan, and must not be applied without explicit user symmetry intent and preview. Mirrored-parent descendants are inspection-only.",
+    note: "Named counterpart evidence never authorizes symmetry. A hypothetical right-side model-space offset is supplied only for sibling pairs in a coherent multi-pair cohort with explicitly observed zero-rotation ancestry; missing/rotated transforms fail closed. It is not a safe native mutation plan, and must not be applied without explicit user symmetry intent and preview. Mirrored-parent descendants are inspection-only.",
   };
 }
 
