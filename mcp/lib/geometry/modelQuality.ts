@@ -248,8 +248,36 @@ function namedRigSide(name: string): { side: RigMirrorSide; key: string } | null
   return { side: /^(left|l)$/i.test(sideToken) ? "left" : "right", key };
 }
 
+
+type MirrorParentRelation = "shared_parent" | "paired_named_parents";
+
+function mirrorParentRelation(
+  left: RigGroupInput, right: RigGroupInput,
+  byUuid: ReadonlyMap<string, RigGroupInput>,
+  named: ReadonlyMap<string, { left: RigGroupInput[]; right: RigGroupInput[] }>
+): MirrorParentRelation | null {
+  const leftParent = left.parent_uuid ?? null;
+  const rightParent = right.parent_uuid ?? null;
+  if (leftParent === rightParent) return "shared_parent";
+  if (!leftParent || !rightParent) return null;
+  const lp = byUuid.get(leftParent);
+  const rp = byUuid.get(rightParent);
+  if (!lp || !rp) return null;
+  const leftSide = namedRigSide(lp.name);
+  const rightSide = namedRigSide(rp.name);
+  if (!leftSide || !rightSide ||
+      leftSide.side !== "left" || rightSide.side !== "right" ||
+      leftSide.key !== rightSide.key) return null;
+  const parentCandidates = named.get(leftSide.key);
+  if (parentCandidates?.left.length !== 1 || parentCandidates.right.length !== 1 ||
+      parentCandidates.left[0]?.uuid !== lp.uuid ||
+      parentCandidates.right[0]?.uuid !== rp.uuid) return null;
+  return "paired_named_parents";
+}
+
 function namedMirrorPivotEvidence(groups: readonly RigGroupInput[], exampleLimit: number) {
   const named = new Map<string, { left: RigGroupInput[]; right: RigGroupInput[] }>();
+  const byUuid = new Map(groups.map((group) => [group.uuid, group] as const));
   for (const group of groups) {
     const parsed = namedRigSide(group.name);
     if (!parsed || !finiteVec3(group.origin)) continue;
@@ -266,8 +294,10 @@ function namedMirrorPivotEvidence(groups: readonly RigGroupInput[], exampleLimit
     height_delta: number;
     depth_delta: number;
     lateral_separation: number;
+    parent_relation: MirrorParentRelation;
   }> = [];
   let ambiguousPairNames = 0;
+  let incompatibleParentPairs = 0;
   for (const [key, sides] of [...named].sort(([a], [b]) => a.localeCompare(b))) {
     if (sides.left.length === 0 || sides.right.length === 0) continue;
     if (sides.left.length !== 1 || sides.right.length !== 1) {
@@ -276,6 +306,11 @@ function namedMirrorPivotEvidence(groups: readonly RigGroupInput[], exampleLimit
     }
     const left = sides.left[0]!;
     const right = sides.right[0]!;
+    const parentRelation = mirrorParentRelation(left, right, byUuid, named);
+    if (!parentRelation) {
+      incompatibleParentPairs += 1;
+      continue;
+    }
     const a = finiteVec3(left.origin);
     const b = finiteVec3(right.origin);
     if (!a || !b) continue;
@@ -288,18 +323,21 @@ function namedMirrorPivotEvidence(groups: readonly RigGroupInput[], exampleLimit
       key, left, right, local_plane_x: localPlane,
       height_delta: heightDelta, depth_delta: depthDelta,
       lateral_separation: lateralSeparation,
+      parent_relation: parentRelation,
     });
   }
   // Two or more named counterparts are needed even to estimate a shared
   // coordinate plane. The estimate is not a user-approved symmetry constraint.
   const cohortPlane = pairs.length >= 2 ? median(pairs.map((pair) => pair.local_plane_x)) : null;
+  const maxPlaneDeviation = cohortPlane === null ? null
+    : Math.max(...pairs.map((pair) => Math.abs(pair.local_plane_x - cohortPlane)));
+  const coherentCohort = maxPlaneDeviation !== null && maxPlaneDeviation <= 0.25;
   return {
     pair_count: pairs.length,
     ambiguous_name_pair_count: ambiguousPairNames,
+    incompatible_parent_pair_count: incompatibleParentPairs,
     cohort_mirror_plane_x: cohortPlane === null ? null : roundMetric(cohortPlane),
-    max_cohort_plane_deviation: cohortPlane === null ? null : roundMetric(
-      Math.max(...pairs.map((pair) => Math.abs(pair.local_plane_x - cohortPlane)))
-    ),
+    max_cohort_plane_deviation: maxPlaneDeviation === null ? null : roundMetric(maxPlaneDeviation),
     examples: pairs.slice(0, exampleLimit).map((pair) => ({
       part_key: pair.key,
       left_uuid: pair.left.uuid, right_uuid: pair.right.uuid,
@@ -308,11 +346,19 @@ function namedMirrorPivotEvidence(groups: readonly RigGroupInput[], exampleLimit
       pivot_height_delta: roundMetric(pair.height_delta),
       pivot_depth_delta: roundMetric(pair.depth_delta),
       lateral_separation: roundMetric(pair.lateral_separation),
+      parent_relation: pair.parent_relation,
       cohort_plane_deviation: cohortPlane === null ? null
         : roundMetric(Math.abs(pair.local_plane_x - cohortPlane)),
+      hypothetical_right_offset_if_symmetry_approved: coherentCohort &&
+        pair.parent_relation === "shared_parent" && cohortPlane !== null
+        ? [
+            roundMetric(2 * cohortPlane - pair.left.origin[0] - pair.right.origin[0]),
+            roundMetric(pair.left.origin[1] - pair.right.origin[1]),
+            roundMetric(pair.left.origin[2] - pair.right.origin[2]),
+          ] as [number, number, number] : null,
     })),
     examples_truncated: pairs.length > exampleLimit,
-    note: "Side-name pairing is advisory pivot evidence. Asymmetry may be intentional; the cohort X-plane estimate is not an approved symmetry plane, an authored correction, or a visual verdict.",
+    note: "Named counterpart evidence never authorizes symmetry. A hypothetical right-side model-space offset is supplied only for sibling pairs in a coherent multi-pair cohort; it is not a safe native mutation plan, and must not be applied without explicit user symmetry intent and preview. Mirrored-parent descendants are inspection-only.",
   };
 }
 
@@ -457,7 +503,8 @@ export function analyzeRigGraph(
       coincident_examples: coincidentExamples,
       examples_truncated: coincidentCount > coincidentExamples.length,
     },
-    ...(mirrorEvidence && mirrorEvidence.pair_count > 0 ? { mirrored_pivot_candidates: mirrorEvidence } : {}),
+    ...(mirrorEvidence && (mirrorEvidence.pair_count > 0 || mirrorEvidence.incompatible_parent_pair_count > 0)
+      ? { mirrored_pivot_candidates: mirrorEvidence } : {}),
     review_hints: reviewHints,
   };
 }

@@ -288,6 +288,56 @@ describe("bounded authoring quality intelligence", () => {
     expect(onePair.mirrored_pivot_candidates?.cohort_mirror_plane_x).toBeNull();
   });
 
+
+  test("rig symmetry evidence rejects unrelated parent branches, preserving unrelated structure", () => {
+    const result = analyzeRigGraph([
+      { uuid: "leftRoot", name: "left_segment", origin: [0, 0, 0] },
+      { uuid: "otherRoot", name: "other_branch", origin: [0, 0, 0] },
+      { uuid: "left", name: "left_hand", origin: [-2, 2, 0], parent_uuid: "leftRoot" },
+      { uuid: "right", name: "right_hand", origin: [2, 2, 0], parent_uuid: "otherRoot" },
+    ]);
+    expect(result.state).toBe("valid_graph");
+    if (result.state !== "valid_graph") throw new Error("expected valid graph");
+    expect(result.mirrored_pivot_candidates?.pair_count).toBe(0);
+    expect(result.mirrored_pivot_candidates?.incompatible_parent_pair_count).toBe(1);
+  });
+
+  test("coherent sibling pairs produce read-only candidate offsets; nested mirrored parents do not", () => {
+    const result = analyzeRigGraph([
+      { uuid: "root", name: "root", origin: [0, 0, 0] },
+      { uuid: "leftParent", name: "left_arm", origin: [-4, 8, 1], parent_uuid: "root" },
+      { uuid: "rightParent", name: "right_arm", origin: [4, 8, 1], parent_uuid: "root" },
+      { uuid: "leftHand", name: "left_hand", origin: [-6, 8, 1], parent_uuid: "leftParent" },
+      { uuid: "rightHand", name: "right_hand", origin: [6, 8.3, 1], parent_uuid: "rightParent" },
+      { uuid: "leftLeg", name: "left_leg", origin: [-2, 0, 0], parent_uuid: "root" },
+      { uuid: "rightLeg", name: "right_leg", origin: [2, 0.3, 0], parent_uuid: "root" },
+    ]);
+    expect(result.state).toBe("valid_graph");
+    if (result.state !== "valid_graph") throw new Error("expected valid graph");
+    const evidence = result.mirrored_pivot_candidates!;
+    expect(evidence.pair_count).toBe(3);
+    expect(evidence.cohort_mirror_plane_x).toBe(0);
+    expect(evidence.examples.find((p) => p.part_key === "leg"))
+      .toMatchObject({ parent_relation: "shared_parent", hypothetical_right_offset_if_symmetry_approved: [0, -0.3, 0] });
+    expect(evidence.examples.find((p) => p.part_key === "hand"))
+      .toMatchObject({ parent_relation: "paired_named_parents", hypothetical_right_offset_if_symmetry_approved: null });
+  });
+
+  test("disagreeing pair planes cannot become an implicit correction request", () => {
+    const result = analyzeRigGraph([
+      { uuid: "l1", name: "left_ear", origin: [-2, 1, 0] },
+      { uuid: "r1", name: "right_ear", origin: [2, 1, 0] },
+      { uuid: "l2", name: "left_tail", origin: [8, 0, 0] },
+      { uuid: "r2", name: "right_tail", origin: [10, 0, 0] },
+    ]);
+    expect(result.state).toBe("valid_graph");
+    if (result.state !== "valid_graph") throw new Error("expected valid graph");
+    expect(result.mirrored_pivot_candidates?.max_cohort_plane_deviation).toBeGreaterThan(0.25);
+    expect(result.mirrored_pivot_candidates?.examples.every(
+      (p) => p.hypothetical_right_offset_if_symmetry_approved === null
+    )).toBe(true);
+  });
+
   test("texture color profile is deterministic, sampled, and palette-bounded", () => {
     const pixels = new Uint8ClampedArray([
       255, 0, 0, 255,
