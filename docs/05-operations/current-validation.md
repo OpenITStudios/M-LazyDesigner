@@ -10,7 +10,7 @@ CI DISABLED. No release or CI changes. Authoring/visual acceptance: NOT EXECUTED
 
 Working source 611024930ec823d544f72ce2a9b417f7a37d4afd: bounded Indonesian discovery repair, not deployed. Seven new regressions cover painting, parent changes, create/update distinction, unrelated queries and prerequisites; four failed before correction. Gateway/contracts 341, repository 302, types/unused, docs freshness and routing/decision evaluations PASS at that prior source SHA. Registered 54-tool source probes select expected routes. Broad discovery remains Top-1=0.537, Top-3=0.787 on 108 cases (unchanged baseline); 19 decision cases remain accurate. No full-source or new live acceptance is claimed. Logs: ignored .cache/intent-routing-*.log.
 
-2026-10-27 REMOTE_GITHUB Stage 2–3 source: discovery guards absent canonical IDs and declared intents; when a natural-language equivalent is advertised by the current catalog, only those registered alternatives remain eligible for ranking. Explicit API identifiers cannot be silently replaced, and declared mutations cannot be replaced by read-only inspectors. Regression cases are written but NOT EXECUTED. No tests, builds, CI, native Runtime, visual checks or PC interactions by user instruction. Source behavior and broad routing quality remain UNVERIFIED; installed 7b45bd69 unchanged.
+2026-10-27 REMOTE_GITHUB Stage 2-4 source: absent canonical routes and declared intents are constrained to currently advertised alternatives; explicit API identifiers never silently reroute. Shared noun matches no longer authorize an arbitrary create/update/UV operation, while explicit model-element removal cannot select Cube updates or read-only inspectors. Focused regression cases are authored but NOT EXECUTED. No tests, builds, CI, native Runtime, visual checks or PC interactions by user instruction. Source behavior, TypeScript correctness and broad routing quality remain UNVERIFIED; installed 7b45bd69 unchanged.
 
 Installed qualification — Accepted managed source: 7b45bd69027954d306f9fcf0482227e60fb0de18. Exact-commit verify:full PASS in ignored .cache/canonical-path-msix-verify-retry.log (EXIT_CODE=0): repository 302, Runtime 2529, installer 35, authoring 166, Gateway/manifest 298, Golden 44; remaining source/build gates PASS. The first attempt timed out and Bun crashed; its log is retained. Desktop 0.1.1 remains at source 37baddcc, compatible contract 1; prior unchanged TS6/TS7/frontend/83 Rust proof remains scoped there.
 
@@ -39,7 +39,7 @@ App fixtures/layout and disposable editor/project flows remain unaccepted. Nativ
 
 | Surface | Current evidence / boundary |
 | --- | --- |
-| Working source | 61102493 prior routing PASS; Stage 2–3 source/regressions NOT EXECUTED; not deployed |
+| Working source | 61102493 prior routing PASS; Stage 2-4 source/regressions NOT EXECUTED; not deployed |
 | Installed source | Exact 7b45bd69 full gate PASS; Desktop checks scoped above |
 | Installed Desktop/package | Desktop 0.1.1/contract 1; managed 7b45bd69; compiled installed stdio PASS |
 | Migration | INSTALLED/aligned; legacy active paths absent; unrelated settings preserved |

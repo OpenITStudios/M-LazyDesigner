@@ -135,6 +135,36 @@ function overlap(tokens: ReadonlySet<string>, field: ReadonlySet<string>, weight
   return value;
 }
 
+
+// Treat single shared nouns as topic evidence, not authority to guess a
+// branch-specific mutation. A full declared intent may identify a branch
+// even when its verb is not included in the shorter branch verb vocabulary.
+const OPERATION_FILLER_WORDS = new Set([
+  "a", "an", "the", "this", "that", "my", "please", "tolong", "ini",
+]);
+
+function relevantOperationWords(value: string): string[] {
+  return normalize(value).filter((word) => !OPERATION_FILLER_WORDS.has(word));
+}
+
+function branchHasExplicitAction(
+  entry: CapabilitySemanticEntry,
+  queryTokens: ReadonlySet<string>,
+  queryWords: readonly string[]
+): boolean {
+  if (overlap(queryTokens, cachedEntryText(entry).verb, 1) > 0) return true;
+  return entry.intents.some((intent) => {
+    const phrase = relevantOperationWords(intent);
+    if (phrase.length < 2 || phrase.length > queryWords.length) return false;
+    for (let start = 0; start <= queryWords.length - phrase.length; start++) {
+      if (phrase.every((word, index) => queryWords[start + index] === word)) {
+        return true;
+      }
+    }
+    return false;
+  });
+}
+
 function phaseBoost(capability: string, context?: CapabilityRoutingContext): number {
   const active = context?.authoringPhase;
   if (!active) return 0;
@@ -235,6 +265,11 @@ export function semanticMatchesForTool(
   // These inputs belong to the tool/query, not to each operation branch.
   const genericEvidence = genericCapabilityScore(tool, queryTokens);
   const stageAdjustment = phaseBoost(tool.name, context);
+  const queryWords = relevantOperationWords(query);
+  const actionEvidence = entries.map((entry) =>
+    branchHasExplicitAction(entry, queryTokens, queryWords)
+  );
+  const competingAction = entries.length > 1 && actionEvidence.some(Boolean);
 
   if (entries.length === 0) {
     return [{
@@ -245,7 +280,7 @@ export function semanticMatchesForTool(
     }];
   }
 
-  return entries.map((entry) => {
+  return entries.map((entry, index) => {
     const text = cachedEntryText(entry);
     const intentEvidence = overlap(queryTokens, text.intent, 12);
     const verbEvidence = overlap(queryTokens, text.verb, 9);
@@ -255,6 +290,8 @@ export function semanticMatchesForTool(
       genericEvidence + intentEvidence + verbEvidence + nounEvidence + exampleEvidence;
     let score = positiveEvidence;
     score -= overlap(queryTokens, text.exclude, 12);
+    // A shared object noun must not outvote another branch's explicit action.
+    if (competingAction && !actionEvidence[index]) score -= 28;
     if (positiveEvidence > 0) score += stageAdjustment;
 
     const reasonParts: string[] = [];
@@ -285,8 +322,22 @@ export function bestSemanticMatchForTool(
   context?: CapabilityRoutingContext,
   preparedQueryTokens?: ReadonlySet<string>
 ): CapabilitySemanticMatch {
-  return semanticMatchesForTool(tool, query, context, preparedQueryTokens)
+  const best = semanticMatchesForTool(tool, query, context, preparedQueryTokens)
     .sort((a, b) => b.score - a.score)[0]!;
+  const entries = semanticEntriesForTool(tool.name);
+  if (entries.length < 2) return best;
+  const tokens = preparedQueryTokens ?? expandedTokens(query);
+  const words = relevantOperationWords(query);
+  if (entries.some((entry) => branchHasExplicitAction(entry, tokens, words))) {
+    return best;
+  }
+  // The capability is discoverable, but create/update/plan/apply etc. must
+  // be supplied by the caller rather than guessed from common nouns.
+  return {
+    ...best,
+    branch: undefined,
+    reason: best.matched ? "operation unspecified" : best.reason,
+  };
 }
 
 export function listCapabilitySemantics(): readonly CapabilitySemanticEntry[] {

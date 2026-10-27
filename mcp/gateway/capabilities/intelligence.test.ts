@@ -147,6 +147,81 @@ describe("capability intelligence routing", () => {
       .toEqual([]);
   });
 
+  test.each([
+    ["create a cube", "create"],
+    ["move the cube", "update"],
+    ["resize cube", "update"],
+    ["simplify geometry", "simplify"],
+  ] as const)("uses the declared action to choose %s without guessing", (query, branch) => {
+    const [result] = searchCapabilityCatalog(
+      [tool("manage_cubes", "Create and update cubes.")],
+      query, 4, { authoringPhase: "geometry" }
+    );
+    expect(result).toMatchObject({
+      capability_id: "manage_cubes",
+      branch: { field: "operation", value: branch },
+    });
+  });
+
+  test("does not invent branch operations from a shared object noun", () => {
+    const [cube] = searchCapabilityCatalog(
+      [tool("manage_cubes", "Create and update cubes.")],
+      "cube", 4, { authoringPhase: "geometry" }
+    );
+    const [uv] = searchCapabilityCatalog(
+      [tool("manage_uv_layout", "Plan or apply UV layout.")],
+      "uv", 4, { authoringPhase: "geometry" }
+    );
+    expect(cube?.capability_id).toBe("manage_cubes");
+    expect(cube?.branch).toBeUndefined();
+    expect(uv?.capability_id).toBe("manage_uv_layout");
+    expect(uv?.branch).toBeUndefined();
+  });
+
+  test("accepts a complete manifest intent even when its verb is not separately listed", () => {
+    const [result] = searchCapabilityCatalog(
+      [tool("manage_uv_layout", "Plan or apply UV layout.")],
+      "set texel density", 4, { authoringPhase: "geometry" }
+    );
+    expect(result?.branch).toEqual({ field: "operation", value: "plan" });
+  });
+
+  test.each(["remove cube", "delete cube", "hapus kubus", "hapus grup"])(
+    "prefers an element remover over Cube updates for %s", (query) => {
+      const [result] = searchCapabilityCatalog([
+        ...authoringTools,
+        tool("remove_element", "Remove a model element."),
+      ], query, 4, { authoringPhase: "geometry" });
+      expect(result?.capability_id).toBe("remove_element");
+      expect(result?.branch).toBeUndefined();
+    }
+  );
+
+  test.each(["delete cube", "hapus kubus", "hapus grup"])(
+    "does not substitute create/update for unavailable deletion %s", (query) => {
+      expect(searchCapabilityCatalog(authoringTools, query, 4, {
+        authoringPhase: "geometry",
+      })).toEqual([]);
+    }
+  );
+
+  test("will not select a read-only fake element deletion capability", () => {
+    const inspector: BackendTool = {
+      ...tool("inspect_remove_element", "Remove cube diagnostic guidance."),
+      annotations: { readOnlyHint: true },
+    };
+    expect(searchCapabilityCatalog([
+      inspector, tool("manage_cubes", "Create cubes."),
+    ], "delete cube", 4, { authoringPhase: "geometry" })).toEqual([]);
+  });
+
+  test("allows an available extension that explicitly advertises Cube deletion", () => {
+    const [result] = searchCapabilityCatalog([
+      tool("vendor_remove_cube", "Remove model cubes safely."),
+    ], "hapus kubus", 4, { authoringPhase: "geometry" });
+    expect(result?.capability_id).toBe("vendor_remove_cube");
+  });
+
   test("shared scoring retains branch order and Stage evidence for IK", () => {
     const ikTool = tool("bone_rigging", "Advanced IK and bone mirroring.");
     const active = semanticMatchesForTool(

@@ -218,6 +218,56 @@ function alternativesForUnavailableIntent(
   );
 }
 
+
+/**
+ * Deleting geometry is not a Cube update, an inspector or a generic click.
+ * Only apply this safety gate to explicit model-element removal requests;
+ * texture, UV and animation deletion remain with their own domain owners.
+ */
+function requestsElementRemoval(queryTerms: readonly string[]): boolean {
+  const words = new Set(queryTerms);
+  const removal = ["remove", "delete", "hapus", "hapuskan"]
+    .some((word) => words.has(word));
+  const element = [
+    "cube", "cubes", "cuboid", "kubus", "group", "grup",
+    "bone", "tulang", "element", "elemen",
+  ].some((word) => words.has(word));
+  if (!removal || !element) return false;
+  if (["texture", "tekstur", "pixel", "pixels", "uv", "animation",
+      "animasi", "material"].some((word) => words.has(word))) return false;
+  // "Remove from parent" can be a hierarchy change, not object deletion.
+  if ((words.has("from") && (words.has("parent") || words.has("bone"))) ||
+      (words.has("dari") && words.has("induk"))) return false;
+  return true;
+}
+
+function advertisesElementRemoval(tool: BackendTool): boolean {
+  if (tool.annotations?.readOnlyHint === true) return false;
+  const definition = CAPABILITY_CORE_MANIFEST.get(tool.name);
+  if (definition && definition.stage !== "geometry") return false;
+  const semantics = CAPABILITY_BRANCH_MANIFEST
+    .filter((entry) => entry.capability === tool.name);
+  const phrases = [
+    tool.name,
+    ...(definition?.aliases ?? []),
+    ...semantics.flatMap((entry) => [
+      ...(entry.semantic?.intents ?? []),
+      ...(entry.semantic?.verbs ?? []),
+    ]),
+    ...(!definition ? [tool.description ?? ""] : []),
+  ];
+  if (!phrases.some((phrase) => substantiveQueryTerms(phrase)
+    .some((word) => word === "delete" || word === "remove"))) {
+    return false;
+  }
+  // Unknown extensions must explicitly mention model elements rather than
+  // getting permission merely by using a destructive verb.
+  return definition !== undefined || phrases.some((phrase) =>
+    ["cube", "cubes", "cuboid", "group", "bone", "element", "geometry"]
+      .some((word) => substantiveQueryTerms(phrase).includes(word))
+  );
+}
+
 export function searchCapabilityCatalog(
   tools: readonly BackendTool[],
   query: string,
@@ -244,19 +294,27 @@ export function searchCapabilityCatalog(
   const discoverableTools = alternatives === null
     ? tools
     : tools.filter((tool) => alternatives.has(tool.name));
-  // Query expansion is shared across both ranking strategies and all tools.
-  // No persistent query cache: a Runtime catalog or Stage may change at any time.
-  const queryTokens = capabilityQueryTokens(effectiveQuery);
+  const elementRemoval = requestsElementRemoval(queryTerms);
+  const candidateTools = elementRemoval
+    ? discoverableTools.filter(advertisesElementRemoval)
+    : discoverableTools;
+  // Keep safety-limited action evidence at the catalog boundary, rather than
+  // teaching every semantic noun that deleting means updating a Cube.
+  // General synonym and branch semantics remain with the existing ranker.
+  const baseTokens = capabilityQueryTokens(effectiveQuery);
+  const queryTokens = elementRemoval
+    ? new Set([...baseTokens, "remove"])
+    : baseTokens;
   // Empty discovery lists non-maintenance capabilities without a BM25 query.
   const bm25Scores = effectiveQuery.length > 0
-    ? bm25CapabilityScores(discoverableTools, effectiveQuery, queryTokens)
+    ? bm25CapabilityScores(candidateTools, effectiveQuery, queryTokens)
     : new Map<string, number>();
   // Lexical relevance is a bounded secondary signal, not an intent override.
   const maxBm25 = Math.max(1, ...bm25Scores.values());
 
   // Only relevant, discoverable candidates need readiness/graph scoring.
   // Keep every ranked candidate's original score and safety semantics.
-  return discoverableTools
+  return candidateTools
     .map((tool) => {
       const metadata = getCapabilityMetadata(tool.name);
       const tier = metadata.tier;
