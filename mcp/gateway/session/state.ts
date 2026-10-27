@@ -50,26 +50,46 @@ export class GatewaySessionState {
     gatewayOrchestrationRecoveryState.invalidateRuntimeGeneration();
   }
 
+  private acceptVerifiedAuthoringPhase(
+    next: BlockitAuthoringPhaseAffinity | null,
+    receiptBefore: BlockitAuthoringPhaseAffinity | null = null
+  ): void {
+    // A confirmed handoff can arrive before the first explicit status call.
+    // In that case its validated before/after receipt still proves drift.
+    const changed =
+      (this.verifiedAuthoringPhase !== null &&
+       this.verifiedAuthoringPhase !== next) ||
+      (receiptBefore !== null && receiptBefore !== next);
+    if (changed) {
+      gatewayOrchestrationRecoveryState.invalidateRuntimeGeneration();
+      this.executionState = null;
+      // A handoff verifies the Stage, never old model/texture/UV facts.
+      this.capabilityFacts = seedCapabilityFacts({
+        projectBound: this.capabilityFactsProjectUuid === null ? null : true,
+      });
+    }
+    this.verifiedAuthoringPhase = next;
+  }
+
   onVerifiedRuntimeStatus(
     projectUuid: string | null,
     authoringPhase?: BlockitAuthoringPhaseAffinity | null
   ): void {
     this.runtimeUnavailable = false;
     this.synchronizeProject(projectUuid);
-    // Only MCP/catalog-ready status supplies a verified phase. On a phase
-    // change, the project binding survives but previous authoring evidence,
-    // Control continuation and capability readiness no longer do.
     if (authoringPhase !== undefined) {
-      if (this.verifiedAuthoringPhase !== null &&
-          this.verifiedAuthoringPhase !== authoringPhase) {
-        gatewayOrchestrationRecoveryState.invalidateRuntimeGeneration();
-        this.executionState = null;
-        this.capabilityFacts = seedCapabilityFacts({
-          projectBound: projectUuid === null ? null : true,
-        });
-      }
-      this.verifiedAuthoringPhase = authoringPhase;
+      this.acceptVerifiedAuthoringPhase(authoringPhase);
     }
+  }
+
+  onVerifiedPhaseReceipt(
+    phaseBefore: BlockitAuthoringPhaseAffinity | null,
+    phaseAfter: BlockitAuthoringPhaseAffinity
+  ): void {
+    // Only successful, backend-validated phase effect receipts call here.
+    // They invalidate immediately, without an extra status or Runtime read.
+    this.runtimeUnavailable = false;
+    this.acceptVerifiedAuthoringPhase(phaseAfter, phaseBefore);
   }
 
   onRuntimeGenerationChange(verifiedProjectUuid: string | null): void {

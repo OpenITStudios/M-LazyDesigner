@@ -243,6 +243,61 @@ describe("Gateway Runtime-generation session recovery", () => {
       .toBe(before);
   });
 
+  test("successful phase receipt retires stale facts before the next status call", () => {
+    const session = new GatewaySessionState();
+    session.onVerifiedRuntimeStatus("receipt-project", "geometry");
+    session.replaceFacts({ ...session.facts, geometry_available: true, uv_plan_available: true });
+    session.controlExecutionState = { revision: 63 } as never;
+    const before = gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
+
+    session.onVerifiedPhaseReceipt("geometry", "animation");
+
+    expect(session.projectUuid).toBe("receipt-project");
+    expect(session.facts).toEqual({ project_bound: true });
+    expect(session.controlExecutionState).toBeNull();
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before + 1);
+
+    // The first status after an in-band handoff is an observation, not a
+    // second transition; new verified facts remain usable.
+    session.replaceFacts({ ...session.facts, animation_available: true });
+    session.onVerifiedRuntimeStatus("receipt-project", "animation");
+    expect(session.facts.animation_available).toBe(true);
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before + 1);
+  });
+
+  test("a verified before/after handoff is sufficient without prior phase status", () => {
+    const session = new GatewaySessionState();
+    session.synchronizeProject("no-status-project");
+    session.replaceFacts({ ...session.facts, geometry_available: true });
+    const before = gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
+
+    session.onVerifiedPhaseReceipt("geometry", "texturing");
+
+    expect(session.facts).toEqual({ project_bound: true });
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before + 1);
+    session.onVerifiedRuntimeStatus("no-status-project", "texturing");
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before + 1);
+  });
+
+  test("a successful no-op phase receipt preserves current authoring state", () => {
+    const session = new GatewaySessionState();
+    session.onVerifiedRuntimeStatus("unchanged-project", "texturing");
+    session.replaceFacts({ ...session.facts, texture_available: true });
+    session.controlExecutionState = { revision: 64 } as never;
+    const before = gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
+
+    session.onVerifiedPhaseReceipt("texturing", "texturing");
+
+    expect(session.facts.texture_available).toBe(true);
+    expect(session.controlExecutionState).toEqual({ revision: 64 });
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before);
+  });
+
   test("subsequent bound status preserves fresh Runtime facts without repeating project reset", () => {
     const session = new GatewaySessionState();
     session.synchronizeProject("project-a");

@@ -167,6 +167,16 @@ export class GatewayCapabilityExecutor {
         this.session.synchronizeProject(receipt.projectUuid);
       }
 
+      // The Backend already validated a successful phase-transition receipt.
+      // Retire facts/evidence/continuation before the next request, not only
+      // when the client later asks for status. Do not trust failed outcomes.
+      if (succeeded && capabilityNeedsPhaseSnapshot(capability) &&
+          receipt.phaseAfter !== null) {
+        this.session.onVerifiedPhaseReceipt(
+          receipt.phaseBefore, receipt.phaseAfter
+        );
+      }
+
       this.session.replaceFacts(
         applyCapabilityGraphOutcome(
           this.session.facts,
