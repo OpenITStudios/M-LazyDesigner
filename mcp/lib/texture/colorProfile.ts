@@ -24,6 +24,8 @@ type HueFamilyBucket = {
   b: number;
   luma_min: number;
   luma_max: number;
+  shadow_rgb: [number, number, number];
+  highlight_rgb: [number, number, number];
 };
 
 function ratio(value: number, total: number): number {
@@ -119,13 +121,21 @@ export function analyzeTextureColorProfile(
         sector, count: 0, r: 0, g: 0, b: 0,
         luma_min: Number.POSITIVE_INFINITY,
         luma_max: Number.NEGATIVE_INFINITY,
+        shadow_rgb: [r, g, b],
+        highlight_rgb: [r, g, b],
       };
       family.count += 1;
       family.r += r;
       family.g += g;
       family.b += b;
-      family.luma_min = Math.min(family.luma_min, luma);
-      family.luma_max = Math.max(family.luma_max, luma);
+      if (luma < family.luma_min) {
+        family.luma_min = luma;
+        family.shadow_rgb = [r, g, b];
+      }
+      if (luma > family.luma_max) {
+        family.luma_max = luma;
+        family.highlight_rgb = [r, g, b];
+      }
       hueBuckets.set(sector, family);
       chromatic += 1;
     }
@@ -202,9 +212,16 @@ export function analyzeTextureColorProfile(
         visible_ratio: ratio(family.count, visible),
         luma_min: normalized(family.luma_min),
         luma_max: normalized(family.luma_max),
+        observed_shade_anchors: {
+          shadow_hex: rgbHex(...family.shadow_rgb),
+          base_hex: rgbHex(
+            family.r / family.count, family.g / family.count, family.b / family.count
+          ),
+          highlight_hex: rgbHex(...family.highlight_rgb),
+        },
       })),
       examples_truncated: hueFamilies.length > TEXTURE_HUE_FAMILY_EXAMPLE_LIMIT,
-      note: "Sampled hue families and shade ranges are advisory evidence only. Hue does not identify a material or authorize recoloring; transparent and near-neutral pixels are excluded.",
+      note: "Observed shadow/base/highlight samples describe the existing hue-family shade ladder for bounded, selection-aware recoloring planning. Hue is not a material/UV identity; no target color, region mask, permission to paint or visual verdict is inferred.",
     },
   };
 }

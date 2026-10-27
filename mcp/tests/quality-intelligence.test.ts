@@ -397,6 +397,38 @@ describe("bounded authoring quality intelligence", () => {
     expect(report.luma).toBeNull();
   });
 
+
+  test("hue shade anchors retain original sampled highlights and shadows for later recoloring planning", () => {
+    const source = new Uint8ClampedArray([
+      64, 0, 0, 255,
+      160, 0, 0, 255,
+      255, 0, 0, 255,
+      60, 60, 60, 255,
+    ]);
+    const original = [...source];
+    const report = analyzeTextureColorProfile(source, 4, 1, { maxSamples: 4 });
+    expect(report.hue_families.family_count).toBe(1);
+    expect(report.hue_families.examples[0]?.observed_shade_anchors).toEqual({
+      shadow_hex: "#400000",
+      base_hex: "#a00000",
+      highlight_hex: "#ff0000",
+    });
+    expect([...source]).toEqual(original);
+    expect(report.hue_families.note).toContain("no target color");
+  });
+
+  test("hue shade anchors collapse safely for a single observed chromatic color", () => {
+    const report = analyzeTextureColorProfile(new Uint8ClampedArray([
+      0, 128, 255, 255, 255, 255, 255, 0,
+    ]), 2, 1, { maxSamples: 2 });
+    expect(report.hue_families.examples[0]?.observed_shade_anchors).toEqual({
+      shadow_hex: "#0080ff", base_hex: "#0080ff", highlight_hex: "#0080ff",
+    });
+    expect(report.hue_families.examples[0]?.luma_min).toBe(
+      report.hue_families.examples[0]?.luma_max
+    );
+  });
+
   test("root motion reports Bedrock-scale displacement and stable velocity", () => {
     const result = analyzeRootMotionTrack({
       uuid: "root",
