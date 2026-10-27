@@ -175,6 +175,58 @@ describe("semantic affected graph", () => {
     expect(report.truncated).toBe(true);
   });
 
+  test("a terminal capability exactly at the budget is not truncated", () => {
+    const report = analyzeSemanticImpact({
+      changedPaths: ["mcp/server/tools/terminal.ts"],
+      sourceOwners: {
+        terminal: {
+          source: "mcp/server/tools/terminal.ts",
+          specialist: null,
+          anchor_test: "mcp/tests/terminal-contract.test.ts",
+        },
+      },
+      manifest: [{ id: "cap:terminal", capability: "terminal", graph: {} }],
+      maxCapabilities: 1,
+    });
+
+    expect(report.affected_capabilities.map((entry) => entry.capability))
+      .toEqual(["terminal"]);
+    expect(report.affected_anchor_tests)
+      .toEqual(["mcp/tests/terminal-contract.test.ts"]);
+    expect(report.truncated).toBe(false);
+  });
+
+  test("exact-budget transitive graph exhausts the last node before deciding truncation", () => {
+    const report = analyzeSemanticImpact({
+      changedPaths: ["mcp/server/tools/update.ts"],
+      sourceOwners: {
+        update: {
+          source: "mcp/server/tools/update.ts",
+          specialist: null,
+          anchor_test: "mcp/tests/update-contract.test.ts",
+        },
+        downstream: {
+          source: "mcp/server/tools/downstream.ts",
+          specialist: null,
+          anchor_test: "mcp/tests/downstream-contract.test.ts",
+        },
+      },
+      manifest: [
+        { id: "cap:update", capability: "update",
+          graph: { invalidates: ["uv_plan_available"] } },
+        { id: "cap:downstream", capability: "downstream",
+          graph: { requires: ["uv_plan_available"] } },
+      ],
+      maxCapabilities: 2,
+    });
+
+    expect(report.affected_capabilities.map((entry) => entry.capability))
+      .toEqual(["downstream", "update"]);
+    expect(report.affected_anchor_tests)
+      .toContain("mcp/tests/downstream-contract.test.ts");
+    expect(report.truncated).toBe(false);
+  });
+
   test("honors the capability budget", () => {
     const report = analyzeSemanticImpact({
       changedPaths: [".agents/skills/lazydesigner-texturing/SKILL.md"],

@@ -111,7 +111,10 @@ export function analyzeSemanticImpact(input: {
   const orderedDirect = [...direct].sort((a, b) => a.localeCompare(b));
   const queue = orderedDirect.slice(0, maxCapabilities);
   const visited = new Set(queue);
-  while (queue.length > 0 && visited.size < maxCapabilities) {
+  // Visiting the last allowed capability is not itself truncation. Drain all
+  // admitted nodes to see whether they actually lead beyond the budget.
+  // Enqueuing additional capabilities remains capped by maxCapabilities.
+  while (queue.length > 0) {
     const capability = queue.shift()!;
     // A source change may revoke a fact without producing a new one (e.g.
     // Cube edits invalidate a UV plan). Both effects can change downstream
