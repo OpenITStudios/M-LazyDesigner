@@ -124,6 +124,17 @@ function retainedReservation(
   atlasWidth: number,
   atlasHeight: number
 ): ReservedAtlasRect {
+  // Padding can be clipped at an atlas edge, but the original retained
+  // placement cannot. Never conceal stale/out-of-bounds UVs by clipping them.
+  if (![placement.x, placement.y, placement.width, placement.height].every(Number.isSafeInteger) ||
+      placement.x < 0 || placement.y < 0 ||
+      placement.width <= 0 || placement.height <= 0) {
+    throw new Error("RETAINED_UV_INVALID_GEOMETRY: " + placement.id + " has invalid pixel coordinates or dimensions.");
+  }
+  if (placement.x + placement.width > atlasWidth ||
+      placement.y + placement.height > atlasHeight) {
+    throw new Error("RETAINED_UV_OUT_OF_BOUNDS: " + placement.id + " extends beyond the requested atlas.");
+  }
   const left = Math.max(0, placement.x - padding);
   const top = Math.max(0, placement.y - padding);
   const right = Math.min(atlasWidth, placement.x + placement.width + padding);
@@ -183,6 +194,18 @@ export function planSemanticUv(islands: readonly SemanticUvIsland[], options: Se
     if (affected && !affected.has(island.id)) {
       const retained = previous.get(island.id);
       if (!retained) throw new Error("Affected-only UV planning requires a previous placement for unchanged island " + island.id + ".");
+      const [width, height] = islandPixelSize(island, options);
+      const expectedWidth = retained.rotated ? height : width;
+      const expectedHeight = retained.rotated ? width : height;
+      // An unchanged island must remain compatible with its new requested
+      // density, dimensions and orientation policy. Otherwise callers must
+      // explicitly include that island in the affected set and replan it.
+      if (retained.width !== expectedWidth || retained.height !== expectedHeight ||
+          (retained.cohort !== undefined && retained.cohort !== island.cohort) ||
+          (retained.rotated && island.allow_rotation === false)) {
+        throw new Error("RETAINED_UV_SOURCE_DRIFT: " + island.id +
+          " changed size, cohort or rotation constraints; include it in affected_ids.");
+      }
       reserved.push(retainedReservation(retained, padding, options.atlas_width, options.atlas_height));
       lockedPlacementById.set(island.id, retained);
     }

@@ -49,6 +49,95 @@ describe("semantic UV planner", () => {
     expect(diff.upserts.map((p) => p.id)).toContain("a");
   });
 
+
+  test("incremental UV refuses stale dimensions or changed density on an untouched island", () => {
+    const before = planSemanticUv([
+      { id: "a", world_size: [4, 4], cohort: "base" },
+      { id: "b", world_size: [2, 2], cohort: "base" },
+    ], { atlas_width: 32, atlas_height: 32, default_texel_density: 1 });
+
+    expect(() => planSemanticUv([
+      { id: "a", world_size: [6, 4], cohort: "base" },
+      { id: "b", world_size: [2, 2], cohort: "base" },
+    ], {
+      atlas_width: 32, atlas_height: 32, default_texel_density: 1,
+      previous_placements: before.owner_placements, affected_ids: ["b"],
+    })).toThrow("RETAINED_UV_SOURCE_DRIFT");
+
+    expect(() => planSemanticUv([
+      { id: "a", world_size: [4, 4], cohort: "base", texel_density: 2 },
+      { id: "b", world_size: [2, 2], cohort: "base" },
+    ], {
+      atlas_width: 32, atlas_height: 32, default_texel_density: 1,
+      previous_placements: before.owner_placements, affected_ids: ["b"],
+    })).toThrow("RETAINED_UV_SOURCE_DRIFT");
+  });
+
+  test("incremental UV cannot clip stale out-of-atlas placements into a false valid reservation", () => {
+    expect(() => planSemanticUv([
+      { id: "fixed", world_size: [4, 4], cohort: "base" },
+      { id: "changed", world_size: [2, 2], cohort: "base" },
+    ], {
+      atlas_width: 16, atlas_height: 16, default_texel_density: 1,
+      previous_placements: [{
+        id: "fixed", x: 14, y: 0, width: 4, height: 4,
+        rotated: false, cohort: "base",
+      }],
+      affected_ids: ["changed"],
+      padding: 1,
+    })).toThrow("RETAINED_UV_OUT_OF_BOUNDS");
+  });
+
+  test("incremental UV rejects malformed and fractional retained coordinates", () => {
+    for (const x of [-1, 0.5, Number.NaN]) {
+      expect(() => planSemanticUv([
+        { id: "fixed", world_size: [4, 4], cohort: "base" },
+        { id: "changed", world_size: [2, 2], cohort: "base" },
+      ], {
+        atlas_width: 16, atlas_height: 16, default_texel_density: 1,
+        previous_placements: [{
+          id: "fixed", x, y: 0, width: 4, height: 4,
+          rotated: false, cohort: "base",
+        }],
+        affected_ids: ["changed"],
+      })).toThrow("RETAINED_UV_INVALID_GEOMETRY");
+    }
+  });
+
+  test("incremental UV keeps compatible rotated islands and rejects policy drift", () => {
+    const islands = [
+      { id: "fixed", world_size: [4, 2] as const, cohort: "cloth" },
+      { id: "changed", world_size: [2, 2] as const, cohort: "cloth" },
+    ];
+    const placement = {
+      id: "fixed", x: 0, y: 0, width: 2, height: 4,
+      rotated: true, cohort: "cloth",
+    };
+    const valid = planSemanticUv(islands, {
+      atlas_width: 16, atlas_height: 16, default_texel_density: 1,
+      previous_placements: [placement], affected_ids: ["changed"],
+    });
+    expect(valid.complete).toBe(true);
+    expect(valid.placements.find((p) => p.id === "fixed"))
+      .toMatchObject({ x: 0, y: 0, width: 2, height: 4, rotated: true });
+
+    expect(() => planSemanticUv([
+      { ...islands[0], allow_rotation: false },
+      islands[1],
+    ], {
+      atlas_width: 16, atlas_height: 16, default_texel_density: 1,
+      previous_placements: [placement], affected_ids: ["changed"],
+    })).toThrow("RETAINED_UV_SOURCE_DRIFT");
+
+    expect(() => planSemanticUv([
+      { ...islands[0], cohort: "metal" },
+      islands[1],
+    ], {
+      atlas_width: 16, atlas_height: 16, default_texel_density: 1,
+      previous_placements: [placement], affected_ids: ["changed"],
+    })).toThrow("RETAINED_UV_SOURCE_DRIFT");
+  });
+
   test("keeps explicit locked regions fixed", () => {
     const result = planSemanticUv([
       { id: "logo", world_size: [2,2], cohort: "detail", locked: { x: 0, y: 0, width: 4, height: 4 } },
