@@ -39,6 +39,52 @@ describe("texture compute request and pipeline", () => {
     ]);
   });
 
+
+  test("selective hue-family recolor is bounded to an explicit ROI and preserves unrelated pixels", () => {
+    const source = new Uint8ClampedArray([
+      64, 0, 0, 255, 200, 0, 0, 255, 0, 0, 255, 255,
+      80, 80, 80, 255, 255, 0, 0, 0, 255, 0, 0, 255,
+    ]);
+    const request = parseTextureComputeRequest([{
+      operation: "gradient_map",
+      args: {
+        ramp: ["#16441e", "#c1f4c4"],
+        source_hue_color: "#ff0000", hue_tolerance_degrees: 25,
+        target_rect: { x: 0, y: 0, width: 5, height: 1 },
+      },
+    }]);
+    expect(request.steps).toHaveLength(1);
+    const result = applyTextureComputePipeline(source, 6, 1, request.steps, request.target_rect ?? undefined);
+    expect(result.receipt.changed_pixels).toBe(2);
+    expect([...result.pixels.slice(8)]).toEqual([...source.slice(8)]);
+    expect([...result.pixels.slice(0, 8)]).not.toEqual([...source.slice(0, 8)]);
+    expect(result.receipt.execution.region.bounded).toBe(true);
+  });
+
+  test("selective recolor fails closed without ROI, for mixed steps, and for missing hue identity", () => {
+    expect(() => parseTextureComputeRequest([{
+      operation: "gradient_map",
+      args: { ramp: ["#16441e", "#c1f4c4"], source_hue_color: "#ff0000" },
+    }])).toThrow("explicit target_rect");
+    expect(() => parseTextureComputeRequest([
+      { operation: "gradient_map", args: {
+        ramp: ["#16441e", "#c1f4c4"], source_hue_color: "#ff0000",
+        target_rect: { x: 0, y: 0, width: 1, height: 1 },
+      } },
+      { operation: "posterize", args: { levels: 3 } },
+    ])).toThrow("exactly one");
+    expect(() => parseTextureComputeRequest([{
+      operation: "generated_gradient_map",
+      args: { base_color: "#527935", steps: 5, hue_tolerance_degrees: 15,
+        target_rect: { x: 0, y: 0, width: 1, height: 1 } },
+    }])).toThrow("requires source_hue_color");
+    expect(() => applyTextureComputePipeline(
+      new Uint8ClampedArray([255, 0, 0, 255]), 1, 1,
+      [{ operation: "gradient_map", ramp: ["#16441e", "#c1f4c4"],
+        options: { sourceHueColor: "#ff0000" } }]
+    )).toThrow("explicit target_rect");
+  });
+
   test("extracts one bounded pipeline target from compute[0] without changing public envelope", () => {
     const request = parseTextureComputeRequest([
       {

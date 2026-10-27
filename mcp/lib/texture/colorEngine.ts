@@ -29,6 +29,10 @@ export type GradientMapMode = "nearest" | "blend" | "ordered";
 export type GradientMapOptions = {
   mode?: GradientMapMode;
   matrix?: OrderedDitherMatrix;
+  /** Limit a gradient map to a chromatic family inside an explicit transaction ROI. */
+  sourceHueColor?: string;
+  hueToleranceDegrees?: number;
+  minimumChroma?: number;
 };
 
 export type PalettizeOptions = {
@@ -640,6 +644,58 @@ function rampPosition(
   };
 }
 
+
+type GradientHueSelection = {
+  hue: number;
+  tolerance: number;
+  minimumChroma: number;
+};
+
+function prepareGradientHueSelection(
+  options: GradientMapOptions,
+  context?: TextureColorComputeContext
+): GradientHueSelection | null {
+  if (!options.sourceHueColor) {
+    if (options.hueToleranceDegrees !== undefined || options.minimumChroma !== undefined) {
+      throw new Error("Hue-family tolerance/chroma requires an explicit sourceHueColor.");
+    }
+    return null;
+  }
+  const tolerance = options.hueToleranceDegrees ?? 20;
+  const minimumChroma = options.minimumChroma ?? 0.035;
+  if (!Number.isFinite(tolerance) || tolerance < 5 || tolerance > 60 ||
+      !Number.isFinite(minimumChroma) || minimumChroma < 0.015 || minimumChroma > 0.3) {
+    throw new Error("Hue-family tolerance or minimum chroma is outside its supported bounds.");
+  }
+  const source = oklabToOklch(oklabFor(parseHexRgba(options.sourceHueColor), context));
+  if (source.C < minimumChroma) {
+    throw new Error("Hue-family source color is near-neutral; do not infer a chromatic material family.");
+  }
+  return { hue: source.h, tolerance, minimumChroma };
+}
+
+function gradientHueSelected(
+  lab: Oklab,
+  selection: GradientHueSelection | null
+): boolean {
+  if (!selection) return true;
+  const color = oklabToOklch(lab);
+  return color.C >= selection.minimumChroma &&
+    Math.abs(shortestHueDelta(selection.hue, color.h)) <= selection.tolerance;
+}
+
+function requirePreservingHueRamp(
+  rampLabs: readonly Oklab[],
+  selection: GradientHueSelection | null
+): void {
+  if (!selection) return;
+  for (let index = 1; index < rampLabs.length; index += 1) {
+    if (!(rampLabs[index].L > rampLabs[index - 1].L + 1e-4)) {
+      throw new Error("Hue-family recoloring requires strictly increasing Oklab-lightness ramp anchors.");
+    }
+  }
+}
+
 export function gradientMapRgba(
   pixels: Uint8ClampedArray,
   width: number,
@@ -664,7 +720,9 @@ export function gradientMapRgba(
   const prepared = preparePalette(ramp, context);
   const colors = prepared.colors;
   const labs = prepared.labs;
-  const mode = options.mode ?? "nearest";
+  const selection = prepareGradientHueSelection(options, context);
+  requirePreservingHueRamp(labs, selection);
+  const mode = options.mode ?? (selection ? "blend" : "nearest");
   const matrix = options.matrix ?? "bayer4";
   const ditherMatrix = mode === "ordered" ? matrixInfo(matrix) : null;
   const output = new Uint8ClampedArray(pixels);
@@ -681,8 +739,9 @@ export function gradientMapRgba(
         pixels[offset + 2],
         alpha,
       ];
-      const sourceL = oklabFor(source, context).L;
-      const position = rampPosition(sourceL, ramp.length);
+      const sourceLab = oklabFor(source, context);
+      if (!gradientHueSelected(sourceLab, selection)) continue;
+      const position = rampPosition(sourceLab.L, ramp.length);
       let mapped: Rgba;
 
       if (mode === "nearest") {
@@ -1129,17 +1188,20 @@ export function createGradientMapColorTransform(
   if (ramp.length < 2 || ramp.length > 16) {
     throw new Error("Gradient map ramp must contain 2 to 16 colors.");
   }
-  const mode = options.mode ?? "nearest";
+  const selection = prepareGradientHueSelection(options, context);
+  const mode = options.mode ?? (selection ? "blend" : "nearest");
   if (mode === "ordered") {
     throw new Error(
       "Prepared pointwise gradient transform does not support coordinate-dependent ordered mode."
     );
   }
   const prepared = preparePalette(ramp, context);
+  requirePreservingHueRamp(prepared.labs, selection);
   return (source: Rgba): Rgba => {
     if (source[3] === 0) return source;
-    const sourceL = oklabFor(source, context).L;
-    const position = rampPosition(sourceL, prepared.colors.length);
+    const sourceLab = oklabFor(source, context);
+    if (!gradientHueSelected(sourceLab, selection)) return source;
+    const position = rampPosition(sourceLab.L, prepared.colors.length);
     if (mode === "nearest") {
       const mapped =
         prepared.colors[

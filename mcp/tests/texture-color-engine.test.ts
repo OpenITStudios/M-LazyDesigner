@@ -95,6 +95,33 @@ describe("texture color intelligence core", () => {
     }
   });
 
+
+  test("selective hue gradient maps preserve unrelated hues, neutral pixels, and alpha", () => {
+    const pixels = new Uint8ClampedArray([
+      64, 0, 0, 255, 200, 0, 0, 190,
+      0, 0, 255, 255, 80, 80, 80, 255, 255, 0, 0, 0,
+    ]);
+    const before = [...pixels];
+    const result = gradientMapRgba(pixels, 5, 1, ["#16441e", "#c1f4c4"], {
+      sourceHueColor: "#ff0000", hueToleranceDegrees: 25,
+    });
+    expect([...result.slice(0, 3)]).not.toEqual(before.slice(0, 3));
+    expect([...result.slice(4, 7)]).not.toEqual(before.slice(4, 7));
+    expect(result[7]).toBe(190);
+    expect([...result.slice(8)]).toEqual(before.slice(8));
+    expect([...pixels]).toEqual(before);
+  });
+
+  test("selective hue gradient maps reject near-neutral source and descending shade ramp", () => {
+    const pixels = new Uint8ClampedArray([255, 0, 0, 255]);
+    expect(() => gradientMapRgba(pixels, 1, 1, ["#16441e", "#c1f4c4"], {
+      sourceHueColor: "#777777",
+    })).toThrow("near-neutral");
+    expect(() => gradientMapRgba(pixels, 1, 1, ["#c1f4c4", "#16441e"], {
+      sourceHueColor: "#ff0000",
+    })).toThrow("strictly increasing");
+  });
+
   test("shade ramps are deterministic and monotonic in perceived lightness", () => {
     const ramp = generateShadeRamp("#845442", { steps: 5 });
     expect(ramp).toHaveLength(5);

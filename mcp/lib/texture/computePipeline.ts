@@ -794,6 +794,13 @@ export function applyTextureComputePipeline(
     throw new Error("Texture compute pipeline requires 1 to 12 steps.");
   }
 
+  const selectiveHue = steps.some((step) =>
+    (step.operation === "gradient_map" || step.operation === "generated_gradient_map") &&
+    step.options?.sourceHueColor !== undefined
+  );
+  if (selectiveHue && (!targetRect || steps.length !== 1)) {
+    throw new Error("Selective hue-family recoloring requires exactly one gradient step and explicit target_rect.");
+  }
   const plan = optimizeTextureComputeSteps(steps);
   const target = targetRect
     ? requireTextureComputeRect(targetRect, width, height)

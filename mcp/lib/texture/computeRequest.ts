@@ -49,10 +49,17 @@ const posterizeArgs = z.object({
   strength: z.number().min(0).max(1).optional(),
 }).strict();
 
+const hueSelectionArgs = {
+  source_hue_color: requiredHexColorSchema.optional(),
+  hue_tolerance_degrees: z.number().finite().min(5).max(60).optional(),
+  minimum_chroma: z.number().finite().min(0.015).max(0.3).optional(),
+};
+
 const gradientArgs = z.object({
   ramp: rampSchema,
   mode: gradientModeSchema.optional(),
   matrix: matrixSchema.optional(),
+  ...hueSelectionArgs,
 }).strict();
 
 const generatedGradientArgs = z.object({
@@ -66,6 +73,7 @@ const generatedGradientArgs = z.object({
   highlight_chroma_scale: z.number().finite().min(0).max(4).optional(),
   mode: gradientModeSchema.optional(),
   matrix: matrixSchema.optional(),
+  ...hueSelectionArgs,
 }).strict();
 
 const palettizeArgs = z.object({
@@ -102,11 +110,21 @@ function gradientOptions(
   value: {
     mode?: GradientMapMode;
     matrix?: OrderedDitherMatrix;
+    source_hue_color?: string;
+    hue_tolerance_degrees?: number;
+    minimum_chroma?: number;
   }
 ) {
+  if (!value.source_hue_color &&
+      (value.hue_tolerance_degrees !== undefined || value.minimum_chroma !== undefined)) {
+    throw new Error("Hue-family tolerance/chroma requires source_hue_color.");
+  }
   return {
     ...(value.mode === undefined ? {} : { mode: value.mode }),
     ...(value.matrix === undefined ? {} : { matrix: value.matrix }),
+    ...(value.source_hue_color === undefined ? {} : { sourceHueColor: value.source_hue_color }),
+    ...(value.hue_tolerance_degrees === undefined ? {} : { hueToleranceDegrees: value.hue_tolerance_degrees }),
+    ...(value.minimum_chroma === undefined ? {} : { minimumChroma: value.minimum_chroma }),
   };
 }
 
@@ -318,8 +336,15 @@ export function parseTextureComputeRequest(
     };
   });
 
-  return {
-    steps: parseTextureComputeSteps(normalized),
-    target_rect: targetRect,
-  };
-}
+  const steps = parseTextureComputeSteps(normalized);
+  const selectiveHue = steps.some((step) =>
+    (step.operation === "gradient_map" || step.operation === "generated_gradient_map") &&
+    step.options?.sourceHueColor !== undefined
+  );
+  if (selectiveHue && (!targetRect || steps.length !== 1)) {
+    throw new Error(
+      "Selective hue-family recoloring requires exactly one gradient step with an explicit target_rect; hue is not a material identity."
+    );
+  }
+  return { steps, target_rect: targetRect };
+
