@@ -313,6 +313,40 @@ describe("bounded authoring quality intelligence", () => {
     expect(first.luma?.span).toBeGreaterThan(0);
   });
 
+
+  test("sampled hue families retain shade spread and exclude neutrals and alpha-zero pixels", () => {
+    const pixels = new Uint8ClampedArray([
+      255, 0, 0, 255,
+      100, 0, 0, 255,
+      0, 0, 255, 255,
+      60, 60, 60, 255,
+      0, 255, 0, 0,
+    ]);
+    const report = analyzeTextureColorProfile(pixels, 5, 1, { maxSamples: 5 });
+    expect(report.hue_families.family_count).toBe(2);
+    expect(report.hue_families.chromatic_visible_ratio).toBe(0.75);
+    expect(report.hue_families.neutral_visible_ratio).toBe(0.25);
+    expect(report.hue_families.examples[0]).toMatchObject({
+      center_hue_degrees: 0, visible_ratio: 0.5,
+    });
+    expect(report.hue_families.examples[0]!.luma_max).toBeGreaterThan(
+      report.hue_families.examples[0]!.luma_min
+    );
+    expect(report.hue_families.examples[1]?.center_hue_degrees).toBe(240);
+    expect(report.hue_families.note).toContain("does not identify a material");
+  });
+
+  test("empty visible coverage does not invent a color family", () => {
+    const report = analyzeTextureColorProfile(new Uint8ClampedArray([
+      255, 0, 0, 0, 60, 60, 60, 0,
+    ]), 2, 1);
+    expect(report.hue_families).toMatchObject({
+      family_count: 0, chromatic_visible_ratio: 0, neutral_visible_ratio: 0,
+      examples: [], examples_truncated: false,
+    });
+    expect(report.luma).toBeNull();
+  });
+
   test("root motion reports Bedrock-scale displacement and stable velocity", () => {
     const result = analyzeRootMotionTrack({
       uuid: "root",

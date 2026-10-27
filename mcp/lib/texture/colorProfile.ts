@@ -1,5 +1,6 @@
 export const TEXTURE_COLOR_PROFILE_MAX_SAMPLES = 4096;
 export const TEXTURE_COLOR_PROFILE_PALETTE_SIZE = 6;
+export const TEXTURE_HUE_FAMILY_EXAMPLE_LIMIT = 6;
 
 export type TextureColorProfileOptions = {
   maxSamples?: number;
@@ -13,6 +14,16 @@ type Bucket = {
   g: number;
   b: number;
   a: number;
+};
+
+type HueFamilyBucket = {
+  sector: number;
+  count: number;
+  r: number;
+  g: number;
+  b: number;
+  luma_min: number;
+  luma_max: number;
 };
 
 function ratio(value: number, total: number): number {
@@ -58,6 +69,8 @@ export function analyzeTextureColorProfile(
 
   const stride = Math.max(1, Math.ceil(totalPixels / maxSamples));
   const buckets = new Map<number, Bucket>();
+  const hueBuckets = new Map<number, HueFamilyBucket>();
+  let chromatic = 0;
   let sampled = 0;
   let transparent = 0;
   let translucent = 0;
@@ -88,6 +101,34 @@ export function analyzeTextureColorProfile(
     lumaMin = Math.min(lumaMin, luma);
     lumaMax = Math.max(lumaMax, luma);
     lumaSum += luma;
+
+    // Sampled hue evidence is advisory: never equate colors with material IDs.
+    // Center 30-degree sectors on 0/30/... so nearby reds cross the 0/360 seam.
+    const maxChannel = Math.max(r, g, b);
+    const minChannel = Math.min(r, g, b);
+    const chroma = maxChannel - minChannel;
+    if (maxChannel > 0 && chroma >= 16 && chroma / maxChannel >= 0.18) {
+      const wheel = maxChannel === r
+        ? ((g - b) / chroma) % 6
+        : maxChannel === g
+          ? (b - r) / chroma + 2
+          : (r - g) / chroma + 4;
+      const hue = ((wheel * 60) % 360 + 360) % 360;
+      const sector = Math.floor(((hue + 15) % 360) / 30);
+      const family: HueFamilyBucket = hueBuckets.get(sector) ?? {
+        sector, count: 0, r: 0, g: 0, b: 0,
+        luma_min: Number.POSITIVE_INFINITY,
+        luma_max: Number.NEGATIVE_INFINITY,
+      };
+      family.count += 1;
+      family.r += r;
+      family.g += g;
+      family.b += b;
+      family.luma_min = Math.min(family.luma_min, luma);
+      family.luma_max = Math.max(family.luma_max, luma);
+      hueBuckets.set(sector, family);
+      chromatic += 1;
+    }
 
     // 3-bit-per-channel buckets keep the payload compact while preserving
     // stable dominant-color families for pixel-art atlases.
@@ -121,6 +162,9 @@ export function analyzeTextureColorProfile(
       };
     });
 
+  const hueFamilies = [...hueBuckets.values()]
+    .sort((left, right) => right.count - left.count || left.sector - right.sector);
+
   return {
     state: "available" as const,
     sampling: {
@@ -146,5 +190,21 @@ export function analyzeTextureColorProfile(
     color_bucket_count: buckets.size,
     dominant_visible_ratio: palette[0]?.visible_ratio ?? 0,
     palette,
+    hue_families: {
+      family_count: hueFamilies.length,
+      chromatic_visible_ratio: ratio(chromatic, visible),
+      neutral_visible_ratio: ratio(visible - chromatic, visible),
+      examples: hueFamilies.slice(0, TEXTURE_HUE_FAMILY_EXAMPLE_LIMIT).map((family) => ({
+        center_hue_degrees: family.sector * 30,
+        representative_hex: rgbHex(
+          family.r / family.count, family.g / family.count, family.b / family.count
+        ),
+        visible_ratio: ratio(family.count, visible),
+        luma_min: normalized(family.luma_min),
+        luma_max: normalized(family.luma_max),
+      })),
+      examples_truncated: hueFamilies.length > TEXTURE_HUE_FAMILY_EXAMPLE_LIMIT,
+      note: "Sampled hue families and shade ranges are advisory evidence only. Hue does not identify a material or authorize recoloring; transparent and near-neutral pixels are excluded.",
+    },
   };
 }
