@@ -59,7 +59,7 @@ function addReason(
  *
  * The graph is intentionally derived from existing canonical owners:
  * - explicit capability source/test/specialist ownership;
- * - capability branch requires/produces relationships;
+ * - capability branch requires/produces/invalidates relationships;
  * - explicit predecessor relationships.
  *
  * No generated index is authoritative here.
@@ -91,16 +91,10 @@ export function analyzeSemanticImpact(input: {
     }
   }
 
-  const producersByFact = new Map<string, Set<string>>();
   const consumersByFact = new Map<string, Set<string>>();
   const predecessors = new Map<string, Set<string>>();
 
   for (const entry of input.manifest) {
-    for (const fact of entry.graph?.produces ?? []) {
-      const producers = producersByFact.get(fact) ?? new Set<string>();
-      producers.add(entry.capability);
-      producersByFact.set(fact, producers);
-    }
     for (const fact of entry.graph?.requires ?? []) {
       const consumers = consumersByFact.get(fact) ?? new Set<string>();
       consumers.add(entry.capability);
@@ -119,11 +113,18 @@ export function analyzeSemanticImpact(input: {
   const visited = new Set(queue);
   while (queue.length > 0 && visited.size < maxCapabilities) {
     const capability = queue.shift()!;
-    const producedFacts = input.manifest
+    // A source change may revoke a fact without producing a new one (e.g.
+    // Cube edits invalidate a UV plan). Both effects can change downstream
+    // prerequisite decisions and must reach their canonical regression owners.
+    // This is impact planning only; no Runtime facts are mutated here.
+    const changedFacts = input.manifest
       .filter((entry) => entry.capability === capability)
-      .flatMap((entry) => [...(entry.graph?.produces ?? [])]);
+      .flatMap((entry) => [
+        ...(entry.graph?.produces ?? []),
+        ...(entry.graph?.invalidates ?? []),
+      ]);
 
-    for (const fact of uniqueSorted(producedFacts)) {
+    for (const fact of uniqueSorted(changedFacts)) {
       for (const consumer of consumersByFact.get(fact) ?? []) {
         if (consumer === capability) continue;
         addReason(reasons, consumer, "REQUIRES_CHANGED_FACT");

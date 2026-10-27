@@ -10,7 +10,7 @@ CI DISABLED. No release or CI changes. Authoring/visual acceptance: NOT EXECUTED
 
 Working source 611024930ec823d544f72ce2a9b417f7a37d4afd: bounded Indonesian discovery repair, not deployed. Seven new regressions cover painting, parent changes, create/update distinction, unrelated queries and prerequisites; four failed before correction. Gateway/contracts 341, repository 302, types/unused, docs freshness and routing/decision evaluations PASS at that prior source SHA. Registered 54-tool source probes select expected routes. Broad discovery remains Top-1=0.537, Top-3=0.787 on 108 cases (unchanged baseline); 19 decision cases remain accurate. No full-source or new live acceptance is claimed. Logs: ignored .cache/intent-routing-*.log.
 
-2026-10-27 REMOTE_GITHUB final MCP generated-freshness owner audit: affectedExecution now schedules canonical docs:check for source that can change generated API's semantic revision, generator-owned docs/Hybrid-4 schema producers, generated outputs and embedded installation docs. Focused positive and negative regression cases authored, NOT EXECUTED. No TypeScript, tests, build, generator, CI, deployment, native/visual or PC actions. Source-only branchless graph-readiness diagnosis remains OPEN; its executable fix and fingerprint/API sync must be coherent. Current SHA executable correctness UNVERIFIED. Installed 7b45bd69 unchanged.
+2026-10-27 REMOTE_GITHUB final MCP semantic-impact audit: corrected the canonical affected-source graph to propagate both produced and invalidated prerequisite facts. Previously a capability that only revoked a fact could fail to select dependent capability sources and regression anchors. Reuses existing dependency owner and REQUIRES_CHANGED_FACT reason; no new graph, generated artifact, public tool or native behavior. Regression cases for transitive invalidation, duplicate impacts and bounded truncation authored but NOT EXECUTED. No tests, TypeScript, build, generator, CI, deployment or local/native PC actions. Branchless READY/UNKNOWN runtime defect and routing graph fingerprint/API synchronization remain OPEN. Matching-SHA execution UNVERIFIED; installed 7b45bd69 unchanged.
 
 Installed qualification — Accepted managed source: 7b45bd69027954d306f9fcf0482227e60fb0de18. Exact-commit verify:full PASS in ignored .cache/canonical-path-msix-verify-retry.log (EXIT_CODE=0): repository 302, Runtime 2529, installer 35, authoring 166, Gateway/manifest 298, Golden 44; remaining source/build gates PASS. The first attempt timed out and Bun crashed; its log is retained. Desktop 0.1.1 remains at source 37baddcc, compatible contract 1; prior unchanged TS6/TS7/frontend/83 Rust proof remains scoped there.
 
@@ -39,7 +39,7 @@ App fixtures/layout and disposable editor/project flows remain unaccepted. Nativ
 
 | Surface | Current evidence / boundary |
 | --- | --- |
-| Working source | 61102493 prior routing PASS; generated-owner audit source/regressions NOT EXECUTED; not deployed |
+| Working source | 61102493 prior routing PASS; semantic-impact source/regressions NOT EXECUTED; not deployed |
 | Installed source | Exact 7b45bd69 full gate PASS; Desktop checks scoped above |
 | Installed Desktop/package | Desktop 0.1.1/contract 1; managed 7b45bd69; compiled installed stdio PASS |
 | Migration | INSTALLED/aligned; legacy active paths absent; unrelated settings preserved |
