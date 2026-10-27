@@ -204,7 +204,10 @@ export function registerCoreGatewayTools(
         // The requested UUID persists across Runtime downtime for safe
         // explicit rebind, but is not proof of an active project.
         if (status.runtime.mcp_client_ready) {
-          session.onVerifiedRuntimeStatus(status.affinity.project_uuid);
+          session.onVerifiedRuntimeStatus(
+            status.affinity.project_uuid,
+            status.affinity.authoring_phase
+          );
         } else {
           session.onRuntimeUnavailable();
         }

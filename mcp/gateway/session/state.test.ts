@@ -152,6 +152,97 @@ describe("Gateway Runtime-generation session recovery", () => {
     expect(session.facts.animation_available).toBeUndefined();
   });
 
+  test("verified same-project stage change revokes old authoring facts, Control state and evidence", () => {
+    const session = new GatewaySessionState();
+    session.onVerifiedRuntimeStatus("phase-project", "geometry");
+    session.replaceFacts({
+      ...session.facts,
+      geometry_available: true,
+      uv_layout_current: true,
+      texture_available: true,
+    });
+    session.controlExecutionState = { revision: 54 } as never;
+    const handle = gatewayOrchestrationRecoveryState.evidence.put({
+      request: {
+        domain: "GEOMETRY",
+        source: "capture_model_views",
+        verification_risk: "LOW",
+        views: ["front"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256,
+        size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["stage:test"],
+      },
+      result: { revision: 2 },
+    });
+    const before = gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
+
+    session.onVerifiedRuntimeStatus("phase-project", "texturing");
+
+    expect(session.projectUuid).toBe("phase-project");
+    expect(session.facts).toEqual({ project_bound: true });
+    expect(session.controlExecutionState).toBeNull();
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before + 1);
+    expect(() => gatewayOrchestrationRecoveryState.evidence.get(handle))
+      .toThrow("VERIFICATION_EVIDENCE_NOT_FOUND");
+
+    session.replaceFacts({ ...session.facts, texture_available: true });
+    session.onVerifiedRuntimeStatus("phase-project", "texturing");
+    expect(session.facts.texture_available).toBe(true);
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before + 1);
+  });
+
+  test("repeated verified stage retains fresh facts and Control continuation", () => {
+    const session = new GatewaySessionState();
+    session.onVerifiedRuntimeStatus("steady-project", "geometry");
+    session.replaceFacts({ ...session.facts, geometry_available: true });
+    session.controlExecutionState = { revision: 55 } as never;
+    const before = gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
+
+    session.onVerifiedRuntimeStatus("steady-project", "geometry");
+
+    expect(session.facts).toEqual({
+      project_bound: true, geometry_available: true,
+    });
+    expect(session.controlExecutionState).toEqual({ revision: 55 });
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before);
+  });
+
+  test("runtime recovery and outage each avoid double stage invalidation", () => {
+    const session = new GatewaySessionState();
+    session.onVerifiedRuntimeStatus("recovery-project", "geometry");
+    session.replaceFacts({ ...session.facts, geometry_available: true });
+    const before = gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
+
+    session.onRuntimeGenerationChange("recovery-project");
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before + 1);
+    session.onVerifiedRuntimeStatus("recovery-project", "animation");
+    expect(session.facts).toEqual({ project_bound: true });
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before + 1);
+
+    session.onRuntimeUnavailable();
+    const afterOutage = gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
+    session.onVerifiedRuntimeStatus("recovery-project", "texturing");
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(afterOutage);
+  });
+
+  test("project rebind starts a new verified stage baseline", () => {
+    const session = new GatewaySessionState();
+    session.onVerifiedRuntimeStatus("old-project", "geometry");
+    session.synchronizeProject("new-project");
+    const before = gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
+    session.onVerifiedRuntimeStatus("new-project", "animation");
+    expect(session.facts).toEqual({ project_bound: true });
+    expect(gatewayOrchestrationRecoveryState.snapshot().invalidation_count)
+      .toBe(before);
+  });
+
   test("subsequent bound status preserves fresh Runtime facts without repeating project reset", () => {
     const session = new GatewaySessionState();
     session.synchronizeProject("project-a");

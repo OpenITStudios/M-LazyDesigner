@@ -1,4 +1,5 @@
 import type { ControlExecutionState } from "../control/orchestration";
+import type { BlockitAuthoringPhaseAffinity } from "../../lib/runtime/affinity";
 import {
   seedCapabilityFacts,
   type CapabilityFactState,
@@ -9,6 +10,7 @@ export class GatewaySessionState {
   private executionState: ControlExecutionState | null = null;
   private capabilityFacts: CapabilityFactState = seedCapabilityFacts({});
   private capabilityFactsProjectUuid: string | null = null;
+  private verifiedAuthoringPhase: BlockitAuthoringPhaseAffinity | null = null;
   private runtimeUnavailable = false;
 
   get facts(): CapabilityFactState {
@@ -28,6 +30,8 @@ export class GatewaySessionState {
   }
 
   onRuntimeUnavailable(): void {
+    // An outage revokes the phase baseline even on repeated notices.
+    this.verifiedAuthoringPhase = null;
     // The first handshake can succeed after an unverified status without a
     // generation-change event. New facts may then be written while this flag
     // is still set; a later outage must invalidate those facts again.
@@ -46,13 +50,32 @@ export class GatewaySessionState {
     gatewayOrchestrationRecoveryState.invalidateRuntimeGeneration();
   }
 
-  onVerifiedRuntimeStatus(projectUuid: string | null): void {
+  onVerifiedRuntimeStatus(
+    projectUuid: string | null,
+    authoringPhase?: BlockitAuthoringPhaseAffinity | null
+  ): void {
     this.runtimeUnavailable = false;
     this.synchronizeProject(projectUuid);
+    // Only MCP/catalog-ready status supplies a verified phase. On a phase
+    // change, the project binding survives but previous authoring evidence,
+    // Control continuation and capability readiness no longer do.
+    if (authoringPhase !== undefined) {
+      if (this.verifiedAuthoringPhase !== null &&
+          this.verifiedAuthoringPhase !== authoringPhase) {
+        gatewayOrchestrationRecoveryState.invalidateRuntimeGeneration();
+        this.executionState = null;
+        this.capabilityFacts = seedCapabilityFacts({
+          projectBound: projectUuid === null ? null : true,
+        });
+      }
+      this.verifiedAuthoringPhase = authoringPhase;
+    }
   }
 
   onRuntimeGenerationChange(verifiedProjectUuid: string | null): void {
     this.runtimeUnavailable = false;
+    // Recovery has already retired the former stage; do not retire twice.
+    this.verifiedAuthoringPhase = null;
     // The replacement Runtime already proved its project affinity before
     // this callback. Do not keep an outdated Control UUID if that binding
     // was retired, and do not assume a previously unbound project was adopted.
@@ -74,6 +97,7 @@ export class GatewaySessionState {
     }
 
     if (projectUuid !== this.capabilityFactsProjectUuid) {
+      this.verifiedAuthoringPhase = null;
       this.capabilityFactsProjectUuid = projectUuid;
       this.capabilityFacts = seedCapabilityFacts({
         projectBound: projectUuid !== null,
