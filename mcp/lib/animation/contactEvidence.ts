@@ -99,10 +99,12 @@ export function analyzeAnimationContactEvidence(input: {
     max_marker_drift_from_first: number | null;
     max_support_tangential_drift: number | null;
     max_support_normal_displacement: number | null;
+    max_support_plane_clearance: number | null;
     support_tangential_drift_violation: boolean | null;
     slip_correction_hypothesis: {
       state: "candidate" | "blocked" | "not_applicable";
-      blocker: "SUPPORT_PLANE_REQUIRED" | "COMPLETE_SAMPLING_WINDOW_REQUIRED" | null;
+      blocker: "SUPPORT_PLANE_REQUIRED" | "COMPLETE_SAMPLING_WINDOW_REQUIRED" |
+        "CONTACT_PLANE_CLEARANCE_EXCEEDED" | null;
       space: "caller_declared_world_marker";
       samples: Array<{ time: number; tangential_drift: number; marker_translation_to_anchor: Vec3 }>;
       samples_truncated: boolean;
@@ -193,6 +195,13 @@ export function analyzeAnimationContactEvidence(input: {
       ? null : Math.max(...samples.map((sample) =>
           Math.abs(sample.marker[supportAxis] - firstMarker[supportAxis])
         ));
+    // An explicitly planted marker must remain near the declared contact
+    // plane throughout the stance. Relative vertical drift is insufficient:
+    // a marker that stays elevated would otherwise appear "stationary".
+    const supportPlaneClearance = supportAxis === null || !constraint.support_plane
+      ? null : Math.max(...samples.map((sample) =>
+          Math.abs(sample.marker[supportAxis] - constraint.support_plane!.coordinate)
+        ));
     let maxGap = 0, maxSpeed = 0;
     for (let i = 1; i < samples.length; i++) {
       const dt = samples[i].time - samples[i - 1].time;
@@ -208,6 +217,7 @@ export function analyzeAnimationContactEvidence(input: {
         !Number.isFinite(rawDrift ?? 0) ||
         !Number.isFinite(supportTangentialDrift ?? 0) ||
         !Number.isFinite(supportNormalDisplacement ?? 0) ||
+        !Number.isFinite(supportPlaneClearance ?? 0) ||
         !Number.isFinite(maxGap) ||
         !Number.isFinite(maxSpeed) || penetrations.some((value) => !Number.isFinite(value))) {
       invalid("CONTACT_METRICS_NONFINITE");
@@ -248,9 +258,11 @@ export function analyzeAnimationContactEvidence(input: {
     // Hypothetical correction is intentionally limited to caller-declared
     // planted-world contact with complete time coverage and an explicit plane.
     // This is NOT a bone-local keyframe update or verified native grounding.
-    const canProposeSlip = sliding && tangentAxes !== null &&
-      coverage === "complete" && supportTangentialDrift !== null &&
+    const tangentialSlip = supportTangentialDrift !== null &&
       supportTangentialDrift > constraint.tolerance;
+    const canProposeSlip = sliding && tangentialSlip && tangentAxes !== null &&
+      coverage === "complete" && supportPlaneClearance !== null &&
+      supportPlaneClearance <= constraint.tolerance;
     const slipOffsets = canProposeSlip ? samples.flatMap((sample) => {
       const delta: [number, number, number] = [0, 0, 0];
       for (const axis of tangentAxes!) {
@@ -265,9 +277,13 @@ export function analyzeAnimationContactEvidence(input: {
           }]
         : [];
     }) : [];
-    const slipBlocker: "SUPPORT_PLANE_REQUIRED" | "COMPLETE_SAMPLING_WINDOW_REQUIRED" | null =
+    const slipBlocker: "SUPPORT_PLANE_REQUIRED" | "COMPLETE_SAMPLING_WINDOW_REQUIRED" |
+      "CONTACT_PLANE_CLEARANCE_EXCEEDED" | null =
       !sliding ? null : !tangentAxes ? "SUPPORT_PLANE_REQUIRED"
-        : coverage !== "complete" ? "COMPLETE_SAMPLING_WINDOW_REQUIRED" : null;
+        : !tangentialSlip ? null
+        : coverage !== "complete" ? "COMPLETE_SAMPLING_WINDOW_REQUIRED"
+        : (supportPlaneClearance === null || supportPlaneClearance > constraint.tolerance)
+          ? "CONTACT_PLANE_CLEARANCE_EXCEEDED" : null;
     const slipCorrectionState = canProposeSlip && slipOffsets.length > 0
       ? "candidate" as const
       : slipBlocker
@@ -286,6 +302,8 @@ export function analyzeAnimationContactEvidence(input: {
         ? null : round(supportTangentialDrift),
       max_support_normal_displacement: supportNormalDisplacement === null
         ? null : round(supportNormalDisplacement),
+      max_support_plane_clearance: supportPlaneClearance === null
+        ? null : round(supportPlaneClearance),
       support_tangential_drift_violation: supportTangentialDrift === null
         ? null : supportTangentialDrift > constraint.tolerance,
       slip_correction_hypothesis: {
@@ -328,6 +346,6 @@ export function analyzeAnimationContactEvidence(input: {
     unverified_constraint_count: unverifiedCount,
     pass_constraint_count: results.length - reviewCount - unverifiedCount,
     constraints: results,
-    note: "Contact distances, planted foot drift (including support-plane sliding versus lift when declared), optional time-window coverage and support-plane penetration are numeric caller-supplied diagnostics only. Hypothetical stationary-anchor offsets require an explicit support plane and complete sampling coverage; they are caller-declared world-marker deltas, NOT native bone/local keyframes and must not be auto-applied. A passing distance tolerance does not prove believable weight, timing, deformation or visual quality; PASS never attests native sampling, IK or scene behavior, and reference-grounded native playback remains required.",
+    note: "Contact distances, planted foot drift (including support-plane sliding versus lift when declared), optional time-window coverage and support-plane penetration are numeric caller-supplied diagnostics only. Hypothetical stationary-anchor offsets require an explicit support plane, bounded marker clearance throughout stance and complete sampling coverage; they are caller-declared world-marker deltas, NOT native bone/local keyframes and must not be auto-applied. A passing distance tolerance does not prove believable weight, timing, deformation or visual quality; PASS never attests native sampling, IK or scene behavior, and reference-grounded native playback remains required.",
   };
 }

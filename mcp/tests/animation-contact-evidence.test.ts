@@ -506,3 +506,74 @@ test("lift alone does not produce tangential correction hints", () => {
     .toMatchObject({ state: "not_applicable", samples: [] });
   expect(result.constraints[0]?.max_support_normal_displacement).toBe(0.5);
 });
+
+
+test("lifted foot with sideways motion cannot masquerade as grounded foot sliding", () => {
+  const result = analyzeAnimationContactEvidence({ constraints: [{
+    id: "swing_not_foot_plant",
+    mode: "planted",
+    tolerance: 0.1,
+    sampling_window: { start: 0, end: 0.4, max_gap_seconds: 0.2 },
+    support_plane: {
+      axis: "Y", coordinate: 0, allowed_side: "POSITIVE", penetration_tolerance: 0,
+    },
+    samples: [
+      { time: 0, marker: [0, 0, 0], target: [0, 0, 0] },
+      { time: 0.2, marker: [0.2, 0.6, 0], target: [0.2, 0.6, 0] },
+      { time: 0.4, marker: [0.4, 0.05, 0], target: [0.4, 0.05, 0] },
+    ],
+  }] });
+  requireAvailable(result);
+  expect(result.constraints[0]?.sampling_coverage).toBe("complete");
+  expect(result.constraints[0]?.support_tangential_drift_violation).toBe(true);
+  expect(result.constraints[0]?.max_support_plane_clearance).toBe(0.6);
+  expect(result.constraints[0]?.slip_correction_hypothesis).toEqual({
+    state: "blocked",
+    blocker: "CONTACT_PLANE_CLEARANCE_EXCEEDED",
+    space: "caller_declared_world_marker",
+    samples: [],
+    samples_truncated: false,
+  });
+  expect(result.visual_verdict).toBe("not_evaluated");
+});
+
+test("constant hovering contact also cannot generate a false grounded correction", () => {
+  const result = analyzeAnimationContactEvidence({ constraints: [{
+    id: "hovering_marker",
+    mode: "planted",
+    tolerance: 0.1,
+    sampling_window: { start: 0, end: 0.2, max_gap_seconds: 0.2 },
+    support_plane: {
+      axis: "Y", coordinate: 0, allowed_side: "POSITIVE", penetration_tolerance: 0,
+    },
+    samples: [
+      { time: 0, marker: [0, 0.5, 0], target: [0, 0.5, 0] },
+      { time: 0.2, marker: [0.4, 0.5, 0], target: [0.4, 0.5, 0] },
+    ],
+  }] });
+  requireAvailable(result);
+  expect(result.constraints[0]?.max_support_normal_displacement).toBe(0);
+  expect(result.constraints[0]?.max_support_plane_clearance).toBe(0.5);
+  expect(result.constraints[0]?.slip_correction_hypothesis)
+    .toMatchObject({ state: "blocked", blocker: "CONTACT_PLANE_CLEARANCE_EXCEEDED" });
+});
+
+test("legitimate on-plane stance preserves bounded slip correction candidate", () => {
+  const result = analyzeAnimationContactEvidence({ constraints: [{
+    id: "supported_marker",
+    mode: "planted",
+    tolerance: 0.1,
+    sampling_window: { start: 0, end: 0.2, max_gap_seconds: 0.2 },
+    support_plane: {
+      axis: "Y", coordinate: 0, allowed_side: "POSITIVE", penetration_tolerance: 0,
+    },
+    samples: [
+      { time: 0, marker: [0, 0, 0], target: [0, 0, 0] },
+      { time: 0.2, marker: [0.3, 0.05, 0], target: [0.3, 0.05, 0] },
+    ],
+  }] });
+  requireAvailable(result);
+  expect(result.constraints[0]?.max_support_plane_clearance).toBe(0.05);
+  expect(result.constraints[0]?.slip_correction_hypothesis)
+    .toMatchObject({ state: "candidate", blocker: null });
+});
