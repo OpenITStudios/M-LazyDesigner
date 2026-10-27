@@ -129,6 +129,11 @@ export function analyzeAnimationContactEvidence(input: {
   const invalidExamples: Array<{ id: string; reason: string }> = [];
 
   const constraints: readonly ContactConstraintInput[] = input.constraints;
+  const identityCounts = new Map<string, number>();
+  for (const constraint of constraints) {
+    if (typeof constraint.id !== "string") continue;
+    identityCounts.set(constraint.id, (identityCounts.get(constraint.id) ?? 0) + 1);
+  }
   for (const constraint of constraints) {
     const invalid = (reason: string) => {
       invalidConstraintCount++;
@@ -136,7 +141,14 @@ export function analyzeAnimationContactEvidence(input: {
         invalidExamples.push({ id: constraint.id, reason });
       }
     };
-    if (!constraint.id.trim() ||
+    // Do not produce a clean contact or actionable slip hypothesis for
+    // any member of a duplicated identity, regardless of input order.
+    if (typeof constraint.id === "string" &&
+        (identityCounts.get(constraint.id) ?? 0) > 1) {
+      invalid("DUPLICATE_CONTACT_CONSTRAINT_ID");
+      continue;
+    }
+    if (typeof constraint.id !== "string" || !constraint.id.trim() ||
         !Number.isFinite(constraint.tolerance) || constraint.tolerance < 0 ||
         !validWindow(constraint.sampling_window) || !validPlane(constraint.support_plane)) {
       invalid("INVALID_CONTACT_CONSTRAINT");
@@ -164,7 +176,11 @@ export function analyzeAnimationContactEvidence(input: {
       continue;
     }
     const samples = contactSamples.slice().sort((a, b) => a.time - b.time);
-    if (samples.some((sample, index) => index > 0 && sample.time === samples[index - 1].time)) {
+    // Times closer than the declared numeric sampling resolution cannot
+    // safely support velocities, stance coverage or correction hypotheses.
+    if (samples.some((sample, index) =>
+      index > 0 && sample.time - samples[index - 1].time <= TIME_EPSILON
+    )) {
       invalid("DUPLICATE_SAMPLE_TIMESTAMPS");
       continue;
     }

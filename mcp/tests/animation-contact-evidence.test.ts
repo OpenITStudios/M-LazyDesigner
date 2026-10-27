@@ -577,3 +577,53 @@ test("legitimate on-plane stance preserves bounded slip correction candidate", (
   expect(result.constraints[0]?.slip_correction_hypothesis)
     .toMatchObject({ state: "candidate", blocker: null });
 });
+
+
+test("duplicate contact identities fail closed for every colliding record", () => {
+  const stable = (id: string) => ({
+    id, mode: "planted" as const, tolerance: 0.1,
+    support_plane: {
+      axis: "Y" as const, coordinate: 0,
+      allowed_side: "POSITIVE" as const, penetration_tolerance: 0,
+    },
+    sampling_window: { start: 0, end: 0.2, max_gap_seconds: 0.2 },
+    samples: [
+      { time: 0, marker: [0, 0, 0] as const, target: [0, 0, 0] as const },
+      { time: 0.2, marker: [0.3, 0, 0] as const, target: [0.3, 0, 0] as const },
+    ],
+  });
+  const result = analyzeAnimationContactEvidence({
+    constraints: [stable("left_foot"), stable("left_foot"), stable("right_foot")],
+  });
+  requireAvailable(result);
+  expect(result.invalid_constraint_count).toBe(2);
+  expect(result.invalid_examples.map((item) => item.reason)).toEqual([
+    "DUPLICATE_CONTACT_CONSTRAINT_ID",
+    "DUPLICATE_CONTACT_CONSTRAINT_ID",
+  ]);
+  expect(result.constraints).toHaveLength(1);
+  expect(result.constraints[0]?.id).toBe("right_foot");
+  expect(result.constraints.some((item) => item.id === "left_foot")).toBe(false);
+});
+
+test("sub-microsecond contact timestamps cannot create false motion evidence", () => {
+  const result = analyzeAnimationContactEvidence({
+    constraints: [{
+      id: "foot", mode: "planted", tolerance: 0.1,
+      support_plane: {
+        axis: "Y", coordinate: 0, allowed_side: "POSITIVE",
+        penetration_tolerance: 0,
+      },
+      samples: [
+        { time: 0, marker: [0, 0, 0], target: [0, 0, 0] },
+        { time: 0.0000001, marker: [0.3, 0, 0], target: [0.3, 0, 0] },
+        { time: 0.5, marker: [0.3, 0, 0], target: [0.3, 0, 0] },
+      ],
+    }],
+  });
+  requireAvailable(result);
+  expect(result.invalid_constraint_count).toBe(1);
+  expect(result.invalid_examples[0]?.reason).toBe("DUPLICATE_SAMPLE_TIMESTAMPS");
+  expect(result.constraint_count).toBe(0);
+  expect(result.pass_constraint_count).toBe(0);
+});
