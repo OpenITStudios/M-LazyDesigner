@@ -10,7 +10,10 @@ import {
   parseTextureComputeRequest,
   parseTextureComputeSteps,
 } from "@/lib/textureComputeRequest";
-import { planFaceScopedTextureSelection } from "@/lib/texture/selectionPlanning";
+import {
+  planFaceScopedTextureSelection,
+  type NativeFaceFootprint,
+} from "@/lib/texture/selectionPlanning";
 
 describe("texture compute request and pipeline", () => {
   test("parses compact compute steps into strict internal operations", () => {
@@ -162,7 +165,7 @@ describe("texture compute request and pipeline", () => {
   test("face planner rejects partial selected overlap and mixed native materials",()=>{
     const a={cube_uuid:"a",face:"north" as const,enabled:true,
       texture_uuid:"atlas",native_material_name:"cloth",rect:[0,0,2,2] as const};
-    const run=(b:typeof a)=>planFaceScopedTextureSelection({
+    const run=(b:NativeFaceFootprint)=>planFaceScopedTextureSelection({
       texture_uuid:"atlas",bitmap_width:8,bitmap_height:8,
       faces:[a,b],
       face_targets:[{cube_uuid:"a",face:"north"},{cube_uuid:"b",face:"north"}],
