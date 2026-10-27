@@ -5,7 +5,10 @@ import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_EXPERIMENTAL } from "@/lib/constants";
 import { animationTimelineParameters } from "./timelineSchema";
 export { animationTimelineParameters } from "./timelineSchema";
-import { buildAnimationEasing } from "@/lib/animation/easing";
+import {
+  buildAnimationEasing,
+  inspectAuthoredAnimationEasing,
+} from "@/lib/animation/easing";
 import {
   resolveAnimationClip,
   resolveAnimationRigGroup,
@@ -70,7 +73,39 @@ export function registerAnimationTimelineTool(): void {
         };
   
         let result = "";
-  
+        let easingRefreshed = false;
+
+        // Keep generated Molang timing in the SAME Undo transaction as the
+        // duration/loop update. Exact script provenance is required:
+        // caller-authored time expressions are never replaced automatically.
+        const previousEasing = action === "set_length" || action === "loop"
+          ? inspectAuthoredAnimationEasing(
+              animation.uuid, animationMolang.anim_time_update || ""
+            )
+          : { state: "external" as const };
+        if (previousEasing.state === "modified_generated") {
+          throw new Error(
+            "EASING_TIME_UPDATE_REQUIRES_REVIEW: generated easing was modified, " +
+            "belongs to another clip, or has unknown provenance. Inspect or " +
+            "explicitly clear anim_time_update before changing clip length/loop."
+          );
+        }
+        const synchronizeEasing = () => {
+          if (previousEasing.state !== "owned") return;
+          if (typeof Format === "undefined" || Format.id !== "bedrock") {
+            throw new Error("Easing time synchronization requires a Bedrock Entity project.");
+          }
+          const refreshed = buildAnimationEasing(
+            animation.uuid, animation.length, animation.loop, {
+              curve: previousEasing.curve,
+              direction: previousEasing.direction,
+              replace_existing: false,
+            }
+          );
+          animation.extend({ anim_time_update: refreshed });
+          easingRefreshed = true;
+        };
+
         switch (action) {
           case "delete": {
             Timeline.pause();
@@ -95,7 +130,7 @@ export function registerAnimationTimelineTool(): void {
             runPersistentAnimationEdit("Set whole-clip easing",()=>animation.extend({anim_time_update:expression}));
             Animator.preview();
             return {
-              content:[{type:"text" as const,text:"Applied whole-clip easing. Reapply after changing length or loop mode."}],
+              content:[{type:"text" as const,text:"Applied whole-clip easing. Timeline length/loop edits now synchronize exact managed easing; external editor changes still require reinspection."}],
               structuredContent:{action,animation_id:animation.uuid,anim_time_update:expression,previous_anim_time_update:previous||null,scope:"whole_clip_time"},
             };
           }
@@ -156,8 +191,10 @@ export function registerAnimationTimelineTool(): void {
             }
             runPersistentAnimationEdit("Change animation length", () => {
               animation.setLength(length);
+              synchronizeEasing();
             });
-            result = `Set animation length to ${animation.length} seconds`;
+            result = `Set animation length to ${animation.length} seconds` +
+              (easingRefreshed ? "; managed easing timing refreshed" : "");
             break;
   
           case "set_fps":
@@ -193,8 +230,10 @@ export function registerAnimationTimelineTool(): void {
             }
             runPersistentAnimationEdit("Change animation loop mode", () => {
               animation.setLoop(loop_mode, false);
+              synchronizeEasing();
             });
-            result = `Set loop mode to ${animation.loop}`;
+            result = `Set loop mode to ${animation.loop}` +
+              (easingRefreshed ? "; managed easing timing refreshed" : "");
             break;
   
           case "set_anim_time_update":
@@ -268,6 +307,7 @@ export function registerAnimationTimelineTool(): void {
             action,
             animation: { uuid: animation.uuid, name: animation.name },
             timeline_time: Timeline.time,
+            ...(easingRefreshed ? { managed_easing_refreshed: true } : {}),
           },
         };
       },
