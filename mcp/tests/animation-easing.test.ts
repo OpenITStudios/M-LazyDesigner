@@ -141,6 +141,10 @@ test("managed easing follows duration and loop in one native Undo; custom Molang
     clip.anim_time_update=buildAnimationEasing("owned_clip",6,"once",options) +
       ";q.life_time";
     const saved=clip.anim_time_update;
+    // No-op loop requests must not be blocked by unrelated review state.
+    const noChange=await run({action:"loop",loop_mode:"once"});
+    expect(noChange.structuredContent.changed).toBe(false);
+    expect(opened).toBe(4);
     await expect(run({action:"loop",loop_mode:"loop"}))
       .rejects.toThrow("EASING_TIME_UPDATE_REQUIRES_REVIEW");
     expect(clip.anim_time_update).toBe(saved);

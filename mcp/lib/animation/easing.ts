@@ -5,9 +5,7 @@ export const animationEasingSchema = z.object({
   direction: z.enum(["in", "out", "in_out"]),
   replace_existing: z.boolean().default(false),
 }).strict().describe(
-  "Minecraft Bedrock Entity (bedrock) only. Whole-clip Molang time remapping. " +
-  "Updates to clip length/loop via animation_timeline refresh exact LazyDesigner-owned easing. " +
-  "Native editor or external mutations still require reinspection. Existing authored Molang requires replace_existing=true."
+  "Minecraft Bedrock Entity (bedrock) only. Whole-clip Molang time remapping. Reapply after changing clip length or loop mode. Existing Molang requires replace_existing=true."
 );
 
 type AnimationEasingOptions = z.infer<typeof animationEasingSchema>;

@@ -78,7 +78,10 @@ export function registerAnimationTimelineTool(): void {
         // Keep generated Molang timing in the SAME Undo transaction as the
         // duration/loop update. Exact script provenance is required:
         // caller-authored time expressions are never replaced automatically.
-        const previousEasing = action === "set_length" || action === "loop"
+        const timingMutationRequested =
+          action === "set_length" ||
+          (action === "loop" && loop_mode !== animation.loop);
+        const previousEasing = timingMutationRequested
           ? inspectAuthoredAnimationEasing(
               animation.uuid, animationMolang.anim_time_update || ""
             )
