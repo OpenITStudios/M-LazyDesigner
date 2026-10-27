@@ -318,8 +318,10 @@ export function searchCapabilityCatalog(
     .map((tool) => {
       const metadata = getCapabilityMetadata(tool.name);
       const tier = metadata.tier;
+      // Preserve action connectors for multi-step branch safety; the prepared
+      // token set still excludes generic prose from the scoring engines.
       const semantic = bestSemanticMatchForTool(
-        tool, effectiveQuery, context, queryTokens
+        tool, query, context, queryTokens
       );
       const bm25 = bm25Scores.get(tool.name) ?? 0;
       const nearName = nearCapabilityNameScore(tool.name, query);

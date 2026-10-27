@@ -165,6 +165,53 @@ function branchHasExplicitAction(
   });
 }
 
+
+/**
+ * Distinct action clauses can require separate Runtime mutations even when
+ * they share one consolidated tool. Only an explicit conjunction plus
+ * actionable evidence in more than one clause can suppress a branch hint.
+ * A single phrase such as "make the chair leg taller" remains one operation.
+ */
+const ACTION_CLAUSE_CONNECTORS = /\b(?:and|then|dan|lalu|kemudian|serta|sekaligus)\b/i;
+
+function independentActionClauses(query: string): string[] {
+  if (!ACTION_CLAUSE_CONNECTORS.test(query)) return [];
+  return query.split(/\b(?:and|then|dan|lalu|kemudian|serta|sekaligus)\b/i)
+    .map((clause) => clause.trim())
+    .filter((clause) => relevantOperationWords(clause).length > 0);
+}
+
+function containsDistinctOperationSteps(
+  tool: BackendTool,
+  query: string,
+  context?: CapabilityRoutingContext
+): boolean {
+  const clauses = independentActionClauses(query);
+  if (clauses.length < 2) return false;
+  const entries = semanticEntriesForTool(tool.name);
+  if (entries.filter((entry) => entry.branch).length < 2) return false;
+
+  const actions = new Set<string>();
+  for (const clause of clauses) {
+    const tokens = expandedTokens(clause);
+    const words = relevantOperationWords(clause);
+    const matches = semanticMatchesForTool(tool, clause, context, tokens);
+    let winner: { score: number; field: string; value: string } | null = null;
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]!;
+      if (!entry.branch || !branchHasExplicitAction(entry, tokens, words)) continue;
+      const score = matches[i]?.score ?? Number.NEGATIVE_INFINITY;
+      if (score > (winner?.score ?? Number.NEGATIVE_INFINITY)) {
+        winner = { score, ...entry.branch };
+      }
+    }
+    if (!winner) continue;
+    actions.add(`${winner.field}=${winner.value}`);
+    if (actions.size > 1) return true;
+  }
+  return false;
+}
+
 function phaseBoost(capability: string, context?: CapabilityRoutingContext): number {
   const active = context?.authoringPhase;
   if (!active) return 0;
@@ -328,6 +375,13 @@ export function bestSemanticMatchForTool(
   if (entries.length < 2) return best;
   const tokens = preparedQueryTokens ?? expandedTokens(query);
   const words = relevantOperationWords(query);
+  if (containsDistinctOperationSteps(tool, query, context)) {
+    return {
+      ...best,
+      branch: undefined,
+      reason: best.matched ? "multiple operations; route each step separately" : best.reason,
+    };
+  }
   if (entries.some((entry) => branchHasExplicitAction(entry, tokens, words))) {
     return best;
   }

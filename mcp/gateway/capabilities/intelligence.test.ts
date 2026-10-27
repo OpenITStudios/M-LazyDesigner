@@ -222,6 +222,39 @@ describe("capability intelligence routing", () => {
     expect(result?.capability_id).toBe("vendor_remove_cube");
   });
 
+  test.each([
+    ["create cube then move it", "manage_cubes"],
+    ["buat kubus lalu pindahkan", "manage_cubes"],
+    ["plan uv layout then apply it", "manage_uv_layout"],
+  ] as const)("does not misrepresent separate operations as one %s hint", (query, capability) => {
+    const [result] = searchCapabilityCatalog(
+      tools, query, 4, { authoringPhase: "geometry" }
+    );
+    expect(result?.capability_id).toBe(capability);
+    expect(result?.branch).toBeUndefined();
+    expect(result?.why).toBe("multiple operations; route each step separately");
+  });
+
+  test.each([
+    ["move cube and resize it", "update"],
+    ["create cube and group", "create"],
+  ] as const)("retains one branch for a single actionable operation %s", (query, operation) => {
+    const [result] = searchCapabilityCatalog(
+      [tool("manage_cubes", "Create or update cubes.")],
+      query, 4, { authoringPhase: "geometry" }
+    );
+    expect(result?.capability_id).toBe("manage_cubes");
+    expect(result?.branch).toEqual({ field: "operation", value: operation });
+  });
+
+  test("retains existing explicit correction semantics without treating make as two steps", () => {
+    const [result] = searchCapabilityCatalog(
+      [tool("manage_cubes", "Create and update cubes.")],
+      "make the chair leg taller", 4, { authoringPhase: "geometry" }
+    );
+    expect(result?.branch).toEqual({ field: "operation", value: "update" });
+  });
+
   test("shared scoring retains branch order and Stage evidence for IK", () => {
     const ikTool = tool("bone_rigging", "Advanced IK and bone mirroring.");
     const active = semanticMatchesForTool(
