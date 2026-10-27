@@ -105,31 +105,46 @@ export function buildAffectedExecutionPlan(
       changedPaths,
       semanticImpact,
       ...(semanticInvalidation ? { semanticInvalidation } : {}),
+      ...(sourceAlignment ? { semanticSourceAlignment: sourceAlignment } : {}),
     }),
   };
 }
 
-async function main() {
-  const args = process.argv.slice(2);
-  const semanticSnapshotFlag = args.indexOf("--previous-semantic-snapshot");
+/**
+ * Share the same snapshot input contract across plan-only and run CLIs.
+ * Source comparisons are read-only and never refresh Runtime state.
+ */
+export async function parseAffectedExecutionArguments(
+  rawArgs: readonly string[]
+): Promise<{
+  changedPaths: string[];
+  previousSemanticRegistry?: CapabilitySemanticRecord[];
+}> {
+  const args = [...rawArgs];
+  const index = args.indexOf("--previous-semantic-snapshot");
   let previousSemanticRegistry: CapabilitySemanticRecord[] | undefined;
-
-  if (semanticSnapshotFlag >= 0) {
-    const path = args[semanticSnapshotFlag + 1];
-    if (!path) {
+  if (index >= 0) {
+    const path = args[index + 1];
+    if (!path || path.startsWith("--")) {
       throw new Error("--previous-semantic-snapshot requires a JSON file path.");
     }
-    previousSemanticRegistry = JSON.parse(
-      await readFile(path, "utf8")
-    ) as CapabilitySemanticRecord[];
-    args.splice(semanticSnapshotFlag, 2);
+    const parsed: unknown = JSON.parse(await readFile(path, "utf8"));
+    if (!Array.isArray(parsed)) {
+      throw new Error("Previous semantic registry snapshot must be a JSON array.");
+    }
+    previousSemanticRegistry = parsed as CapabilitySemanticRecord[];
+    args.splice(index, 2);
   }
+  return {
+    changedPaths: args.filter(Boolean),
+    ...(previousSemanticRegistry ? { previousSemanticRegistry } : {}),
+  };
+}
 
-  const changedPaths = args.filter(Boolean);
-  const plan = buildAffectedExecutionPlan(
-    changedPaths,
-    previousSemanticRegistry
-  );
+async function main() {
+  const { changedPaths, previousSemanticRegistry } =
+    await parseAffectedExecutionArguments(process.argv.slice(2));
+  const plan = buildAffectedExecutionPlan(changedPaths, previousSemanticRegistry);
   console.log(JSON.stringify(plan, null, 2));
 }
 

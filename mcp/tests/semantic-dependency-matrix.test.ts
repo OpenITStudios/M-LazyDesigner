@@ -4,7 +4,12 @@ import {
   semanticDependenciesForSurface,
   semanticSurfacesAffectedByDimensions,
 } from "../gateway/development/semanticDependencyMatrix";
-import { buildAffectedExecutionPlan } from "../scripts/development/plan-affected-execution";
+import {
+  buildAffectedExecutionPlan,
+  parseAffectedExecutionArguments,
+} from "../scripts/development/plan-affected-execution";
+import { assertSemanticSourceAlignedForAffectedRun } from
+  "../scripts/development/run-affected-execution";
 import { CAPABILITY_SEMANTIC_REGISTRY } from "../gateway/capabilities/semanticRegistry";
 
 describe("semantic dependency matrix", () => {
@@ -49,6 +54,9 @@ describe("semantic dependency matrix", () => {
     });
     expect(planned.execution.targeted_tests)
       .toContain("mcp/gateway/capabilities/intelligence.test.ts");
+    expect(planned.execution.checks).toContain("DOCS_FRESHNESS");
+    expect(() => assertSemanticSourceAlignedForAffectedRun(planned))
+      .toThrow("SEMANTIC_REVISION_UNVERIFIED: SNAPSHOT_REQUIRED");
   });
 
   test("flags algorithm drift invisible to a manifest-only semantic snapshot", () => {
@@ -63,6 +71,9 @@ describe("semantic dependency matrix", () => {
       untracked_dimensions: ["graph"],
       generator_sync_required: true,
     });
+    expect(planned.execution.checks).toContain("DOCS_FRESHNESS");
+    expect(() => assertSemanticSourceAlignedForAffectedRun(planned))
+      .toThrow("SEMANTIC_REVISION_UNVERIFIED: IMPLEMENTATION_REVISION_GAP");
   });
 
   test("acknowledges a manifest revision without pretending API is regenerated", () => {
@@ -88,6 +99,13 @@ describe("semantic dependency matrix", () => {
       untracked_dimensions: [],
       generator_sync_required: true,
     });
+    expect(planned.execution.checks).toContain("DOCS_FRESHNESS");
+    expect(planned.execution.commands.some(
+      (command) => command === "bun run docs:check" ||
+        command === "bun run verify:full"
+    )).toBe(true);
+    expect(() => assertSemanticSourceAlignedForAffectedRun(planned))
+      .not.toThrow();
   });
 
   test("does not demand generator sync for an unrelated authoring regression", () => {
@@ -95,6 +113,15 @@ describe("semantic dependency matrix", () => {
       "mcp/tests/semantic-dependency-matrix.test.ts",
     ]);
     expect(planned.semantic_source_alignment).toBeUndefined();
+    expect(() => assertSemanticSourceAlignedForAffectedRun(planned))
+      .not.toThrow();
+  });
+
+  test("both CLI parsers fail closed when a snapshot path is missing", async () => {
+    await expect(parseAffectedExecutionArguments([
+      "mcp/gateway/capabilities/catalog.ts",
+      "--previous-semantic-snapshot",
+    ])).rejects.toThrow("--previous-semantic-snapshot requires a JSON file path.");
   });
   test("surface lookup returns defensive copies", () => {
     const first = semanticDependenciesForSurface("AI_CONTEXT");

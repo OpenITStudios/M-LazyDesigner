@@ -1,4 +1,7 @@
-import { buildAffectedExecutionPlan } from "./plan-affected-execution";
+import {
+  buildAffectedExecutionPlan,
+  parseAffectedExecutionArguments,
+} from "./plan-affected-execution";
 
 function commandArgv(command: string): string[] {
   if (command.startsWith("bun run ")) {
@@ -38,9 +41,28 @@ export async function runAffectedCommand(command: string): Promise<void> {
   }
 }
 
+/**
+ * Source tests alone cannot qualify a routing implementation change if its
+ * canonical semantic revision was not tracked. Detect this before invoking
+ * Bun so no check result is mistaken for full source acceptance.
+ */
+export function assertSemanticSourceAlignedForAffectedRun(
+  plan: ReturnType<typeof buildAffectedExecutionPlan>
+): void {
+  const alignment = plan.semantic_source_alignment;
+  if (!alignment || alignment.status === "MANIFEST_REVISION_CHANGED") return;
+  throw new Error(
+    `SEMANTIC_REVISION_UNVERIFIED: ${alignment.status}. ` +
+    "Provide --previous-semantic-snapshot, synchronize the canonical semantic " +
+    "revision and generator-owned API, then rerun affected verification. " +
+    "No checks were executed."
+  );
+}
+
 async function main() {
-  const changedPaths = process.argv.slice(2).filter(Boolean);
-  const plan = buildAffectedExecutionPlan(changedPaths);
+  const { changedPaths, previousSemanticRegistry } =
+    await parseAffectedExecutionArguments(process.argv.slice(2));
+  const plan = buildAffectedExecutionPlan(changedPaths, previousSemanticRegistry);
 
   console.log(
     JSON.stringify(
@@ -49,11 +71,17 @@ async function main() {
         checks: plan.execution.checks,
         targeted_tests: plan.execution.targeted_tests,
         fallback_full_verify: plan.execution.fallback_full_verify,
+        ...(plan.semantic_source_alignment
+          ? { semantic_source_alignment: plan.semantic_source_alignment }
+          : {}),
       },
       null,
       2
     )
   );
+
+  // The plan-only command remains available to inspect unresolved changes.
+  assertSemanticSourceAlignedForAffectedRun(plan);
 
   for (const command of plan.execution.commands) {
     console.log(`[affected] ${command}`);

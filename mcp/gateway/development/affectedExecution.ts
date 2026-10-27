@@ -838,6 +838,10 @@ export function planAffectedExecution(input: {
   changedPaths: readonly string[];
   semanticImpact: SemanticImpactReport;
   semanticInvalidation?: SemanticInvalidationPlan;
+  semanticSourceAlignment?: {
+    status: "SNAPSHOT_REQUIRED" | "IMPLEMENTATION_REVISION_GAP" | "MANIFEST_REVISION_CHANGED";
+    generator_sync_required: boolean;
+  };
 }): AffectedExecutionPlan {
   const changedPaths = uniqueSorted(input.changedPaths.map(normalize));
   const checks = new Set<AffectedExecutionCheck>();
@@ -891,6 +895,14 @@ export function planAffectedExecution(input: {
     checks.add("AUDIT_UNUSED_RUNTIME");
   }
   if (changedPaths.some(affectsDocs)) checks.add("DOCS_FRESHNESS");
+  if (input.semanticSourceAlignment?.generator_sync_required) {
+    // The current semantic manifest fingerprint does not cover executable
+    // routing/graph implementation changes. Schedule generated-doc freshness
+    // even if no manifest diff was visible. The affected runner must still
+    // refuse an untracked revision; passing docs:check cannot close that gap.
+    checks.add("DOCS_FRESHNESS");
+    reasons.push("semantic implementation needs revision and generated API alignment");
+  }
   if (changedPaths.some(affectsGatewayHotPathBenchmark)) {
     checks.add("GATEWAY_HOT_PATH_BENCHMARK");
   }
