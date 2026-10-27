@@ -104,8 +104,35 @@ describe("semantic dependency matrix", () => {
       (command) => command === "bun run docs:check" ||
         command === "bun run verify:full"
     )).toBe(true);
+    // An observed manifest change is not a code-implementation fingerprint.
     expect(() => assertSemanticSourceAlignedForAffectedRun(planned))
-      .not.toThrow();
+      .toThrow("SEMANTIC_REVISION_UNVERIFIED: MANIFEST_REVISION_CHANGED");
+  });
+
+  test("schema-only manifest changes do not qualify executable routing code", () => {
+    const baseline = CAPABILITY_SEMANTIC_REGISTRY.map((entry, i) =>
+      i === 0 ? {
+        ...entry,
+        semanticFingerprint: "0".repeat(64),
+        fingerprints: {
+          ...entry.fingerprints,
+          schema_projection: "0".repeat(64),
+          aggregate: "0".repeat(64),
+        },
+      } : entry
+    );
+    const planned = buildAffectedExecutionPlan(
+      ["mcp/gateway/capabilities/intelligence.ts"], baseline
+    );
+    expect(planned.semantic_diff?.some((diff) =>
+      diff.dimensions.includes("SCHEMA_PROJECTION")
+    )).toBe(true);
+    expect(planned.semantic_source_alignment).toMatchObject({
+      status: "IMPLEMENTATION_REVISION_GAP",
+      untracked_dimensions: ["routing"],
+    });
+    expect(() => assertSemanticSourceAlignedForAffectedRun(planned))
+      .toThrow("SEMANTIC_REVISION_UNVERIFIED: IMPLEMENTATION_REVISION_GAP");
   });
 
   test("does not demand generator sync for an unrelated authoring regression", () => {

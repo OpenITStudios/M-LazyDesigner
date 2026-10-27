@@ -50,12 +50,14 @@ export function assertSemanticSourceAlignedForAffectedRun(
   plan: ReturnType<typeof buildAffectedExecutionPlan>
 ): void {
   const alignment = plan.semantic_source_alignment;
-  if (!alignment || alignment.status === "MANIFEST_REVISION_CHANGED") return;
+  // Manifest revisions alone do not fingerprint executable ranking/graph.
+  // Even an observed manifest change cannot authorize matching source proof.
+  if (!alignment) return;
   throw new Error(
     `SEMANTIC_REVISION_UNVERIFIED: ${alignment.status}. ` +
-    "Provide --previous-semantic-snapshot, synchronize the canonical semantic " +
-    "revision and generator-owned API, then rerun affected verification. " +
-    "No checks were executed."
+    "Manifest-only changes cannot prove executable routing/graph coverage. " +
+    "Synchronize the canonical implementation revision and generated API " +
+    "with a prior semantic snapshot before rerunning. No checks were executed."
   );
 }
 
