@@ -16,6 +16,8 @@ import {
   semanticDerivedArtifactStamp,
   type SemanticDerivedArtifactStamp,
 } from "../development/semanticArtifact";
+import { semanticRevisionForDependencies } from "../development/semanticDependencies";
+import { semanticDependenciesForSurface } from "../development/semanticDependencyMatrix";
 
 export type ControlContextType =
   | "GEOMETRY_CONTEXT"
@@ -390,6 +392,12 @@ export function buildControlStageContext(input: {
     delta: input.currentUserDelta?.trim() || null,
     stage_reference: stageReferenceFingerprint,
     workspace: input.workspace.fingerprint,
+    // Stage context is a routing+graph consumer. Its identity must rotate
+    // with those canonical revisions, even when the reference/workspace
+    // bytes are unchanged; schema-only changes must not invalidate it.
+    semantic_revision: semanticRevisionForDependencies(
+      semanticDependenciesForSurface("AI_STAGE_CONTEXT")
+    ),
   });
 
   return {

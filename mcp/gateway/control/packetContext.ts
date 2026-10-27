@@ -10,6 +10,7 @@ import type {
 import { stageReferenceSemanticFingerprint } from "./contextProjection";
 import type { ContextResolutionIssue } from "./contexts";
 import { semanticRevisionForDependencies } from "../development/semanticDependencies";
+import { semanticDependenciesForSurface } from "../development/semanticDependencyMatrix";
 
 export type ControlContextDelivery = {
   required: ControlContextHandle[];
@@ -91,6 +92,12 @@ export function taskContextId(
               snapshot.authoring.domain,
               reference
             ),
+          // Cohorts share the Stage Context routing/graph dependency. A
+          // semantic policy revision ends the old authoring cohort without
+          // affecting unrelated SYSTEM_DEVELOPMENT task identities.
+          semantic_revision: semanticRevisionForDependencies(
+            semanticDependenciesForSurface("AI_STAGE_CONTEXT")
+          ),
           user_delta:
             currentUserDelta ?? "no-user-delta",
         };
