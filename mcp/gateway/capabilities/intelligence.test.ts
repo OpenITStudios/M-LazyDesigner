@@ -335,6 +335,90 @@ describe("capability intelligence routing", () => {
     expect(found[0]?.why).toContain("multiple operations");
   });
 
+  test("keeps a future UV apply uncertain when prior Cube editing may invalidate its plan", () => {
+    const facts = {
+      project_bound: true,
+      geometry_available: true,
+      uv_plan_available: true,
+    } as const;
+    const found = searchCapabilityCatalog([
+      tool("manage_cubes", "Create and update cubes."),
+      tool("manage_uv_layout", "Plan or apply UV layout."),
+    ], "move cube then apply uv plan", 4, {
+      authoringPhase: "geometry", facts,
+    });
+    expect(found.map((result) => result.capability_id)).toEqual([
+      "manage_cubes", "manage_uv_layout",
+    ]);
+    expect(found[0]?.branch).toEqual({ field: "operation", value: "update" });
+    expect(found[0]?.eligibility).toBeUndefined();
+    expect(found[1]).toMatchObject({
+      branch: { field: "operation", value: "apply" },
+      eligibility: "UNKNOWN",
+      requires: ["uv_plan_available"],
+      predecessor: {
+        capability: "manage_uv_layout",
+        branch: { field: "operation", value: "plan" },
+      },
+    });
+    expect(found[1]?.why).toContain("verify receipt");
+    expect(facts.uv_plan_available).toBe(true);
+  });
+
+  test("does not infer a fresh Texture from a preceding creation request", () => {
+    const found = searchCapabilityCatalog([
+      tool("create_texture", "Create a blank texture."),
+      tool("paint_with_brush", "Paint texture with a brush."),
+    ], "create blank texture then paint texture with brush", 4, {
+      authoringPhase: "texturing",
+      facts: { project_bound: true, texture_available: false },
+    });
+    expect(found.map((result) => result.capability_id)).toEqual([
+      "create_texture", "paint_with_brush",
+    ]);
+    expect(found[0]?.branch).toEqual({ field: "type", value: "blank" });
+    expect(found[1]).toMatchObject({
+      eligibility: "BLOCKED",
+      requires: ["texture_available"],
+    });
+    expect(found[1]?.why).toContain("texture_available");
+  });
+
+  test("does not reuse preexisting Texture readiness for a future replacement", () => {
+    const found = searchCapabilityCatalog([
+      tool("create_texture", "Create a blank texture."),
+      tool("paint_with_brush", "Paint texture with a brush."),
+    ], "create blank texture then paint texture with brush", 4, {
+      authoringPhase: "texturing",
+      facts: { project_bound: true, texture_available: true },
+    });
+    expect(found[1]).toMatchObject({
+      capability_id: "paint_with_brush",
+      eligibility: "UNKNOWN",
+      requires: ["texture_available"],
+    });
+  });
+
+  test("does not lower readiness for prerequisites untouched by earlier steps", () => {
+    const found = searchCapabilityCatalog([
+      tool("manage_cubes", "Create and update cubes."),
+      tool("paint_with_brush", "Paint texture with a brush."),
+    ], "move cube then paint texture with brush", 4, {
+      authoringPhase: "geometry",
+      facts: {
+        project_bound: true,
+        geometry_available: true,
+        texture_available: true,
+      },
+    });
+    expect(found.map((result) => result.capability_id)).toEqual([
+      "manage_cubes", "paint_with_brush",
+    ]);
+    expect(found[1]?.eligibility).toBeUndefined();
+    expect(found[1]?.requires).toBeUndefined();
+    expect(found[1]?.why).toContain("recheck prerequisites");
+  });
+
   test("shared scoring retains branch order and Stage evidence for IK", () => {
     const ikTool = tool("bone_rigging", "Advanced IK and bone mirroring.");
     const active = semanticMatchesForTool(

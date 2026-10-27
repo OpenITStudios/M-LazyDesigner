@@ -22,7 +22,10 @@ manifest branch → requires → READY | UNKNOWN | BLOCKED
 ```
 
 `UNKNOWN` deliberately defers to the native Runtime; a known-false prerequisite
-blocks direct invoke. Missing `graph` fields do not imply missing functionality
+blocks direct invoke. In compound search, earlier *possible* produce/invalidate
+effects only make touched later prerequisites uncertain; no request or search
+promotes a fact to true. Preserve confirmed false blockers and require fresh
+receipts/reorientation between steps. Missing `graph` fields do not imply missing functionality
 or permission to invent prerequisites. `lib/capabilities/manifest.ts` owns
 Runtime capability and Stage metadata; `gateway/development/sourceOwners.ts`
 owns engineering ownership; neither is duplicated here.

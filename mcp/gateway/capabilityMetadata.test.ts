@@ -54,6 +54,33 @@ describe("canonical capability metadata", () => {
     expect(projected[0]).not.toHaveProperty("description");
   });
 
+  test("AI-facing search preserves uncertain future prerequisites from compound routing", () => {
+    const candidates = searchCapabilityCatalog([
+      tool("manage_cubes", "Create and update cubes."),
+      tool("manage_uv_layout", "Plan or apply UV layout."),
+    ], "move cube then apply uv plan", 4, {
+      authoringPhase: "geometry",
+      facts: {
+        project_bound: true,
+        geometry_available: true,
+        uv_plan_available: true,
+      },
+    });
+    const projected = projectCapabilitiesForSearch(candidates);
+    expect(projected).toHaveLength(2);
+    expect(projected[0]?.capability_id).toBe("manage_cubes");
+    expect(projected[1]).toMatchObject({
+      capability_id: "manage_uv_layout",
+      eligibility: "UNKNOWN",
+      requires: ["uv_plan_available"],
+      why: expect.stringContaining("verify receipt"),
+      predecessor: {
+        capability: "manage_uv_layout",
+        branch: { field: "operation", value: "plan" },
+      },
+    });
+  });
+
   test("declares affinity changes while transport refresh remains conservative", () => {
     const project = getCapabilityMetadata("create_project").effects;
     expect(project.projectAffinity).toBe("adopt_created_project");

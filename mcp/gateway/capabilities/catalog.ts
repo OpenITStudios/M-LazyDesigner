@@ -13,7 +13,8 @@ import {
   hasExplicitCapabilityAction,
   independentActionClauses,
 } from "./intelligence";
-import { evaluateCapabilityPreconditions } from "./graph";
+import { capabilityGraphEntry, evaluateCapabilityPreconditions } from "./graph";
+import type { CapabilityFact, CapabilityFactState } from "./types";
 import type {
   BackendTool,
   CapabilitySearchContext,
@@ -432,10 +433,47 @@ export function searchCapabilityCatalog(
       );
       if (differentTools.size > 1) {
         const boundedLimit = Math.max(1, Math.min(50, Math.trunc(limit)));
-        return selected.slice(0, boundedLimit).map((result, index) => ({
-          ...result,
-          why: `step ${index + 1}/${selected.length}; invoke separately; recheck prerequisites`,
-        }));
+        // This is a search projection, NOT a speculative graph outcome.
+        // Earlier steps have not executed. A declared produce/invalidate may
+        // change what a later step requires, but never proves that fact true.
+        const potentiallyChanged = new Set<CapabilityFact>();
+        return selected.map((result, index): CapabilitySummary => {
+          const graph = capabilityGraphEntry(result.capability_id, result.branch);
+          const affected = (graph?.requires ?? []).filter((fact) =>
+            potentiallyChanged.has(fact)
+          );
+          const cautiousFacts: CapabilityFactState = { ...context?.facts };
+          for (const fact of affected) {
+            // Preserve confirmed false prerequisites as BLOCKED. Formerly
+            // true values may be stale after an earlier planned mutation.
+            if (cautiousFacts[fact] !== false) cautiousFacts[fact] = "unknown";
+          }
+          const readiness = affected.length > 0
+            ? evaluateCapabilityPreconditions(
+                result.capability_id, result.branch, cautiousFacts
+              )
+            : null;
+          const projection: CapabilitySummary = {
+            ...result,
+            ...(readiness ? {
+              eligibility: readiness.eligibility,
+              requires: [...new Set([
+                ...(result.requires ?? []),
+                ...readiness.missing,
+                ...readiness.unknown,
+                ...affected,
+              ])],
+            } : {}),
+            why: affected.length > 0
+              ? `step ${index + 1}/${selected.length}; prior action may change ${affected.join(", ")}; verify receipt and recheck prerequisites`
+              : `step ${index + 1}/${selected.length}; invoke separately; recheck prerequisites`,
+          };
+          // Record only hypothetical impact for further search hints.
+          // Runtime/Control facts advance only from authoritative receipts.
+          for (const fact of graph?.produces ?? []) potentiallyChanged.add(fact);
+          for (const fact of graph?.invalidates ?? []) potentiallyChanged.add(fact);
+          return projection;
+        }).slice(0, boundedLimit);
       }
     }
   }
