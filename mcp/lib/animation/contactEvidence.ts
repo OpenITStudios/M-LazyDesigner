@@ -100,6 +100,13 @@ export function analyzeAnimationContactEvidence(input: {
     max_support_tangential_drift: number | null;
     max_support_normal_displacement: number | null;
     support_tangential_drift_violation: boolean | null;
+    slip_correction_hypothesis: {
+      state: "candidate" | "blocked" | "not_applicable";
+      blocker: "SUPPORT_PLANE_REQUIRED" | "COMPLETE_SAMPLING_WINDOW_REQUIRED" | null;
+      space: "caller_declared_world_marker";
+      samples: Array<{ time: number; tangential_drift: number; marker_translation_to_anchor: Vec3 }>;
+      samples_truncated: boolean;
+    };
     planted_drift_violation: boolean;
     max_marker_step_speed: number | null;
     sampling_coverage: "not_evaluated" | "complete" | "incomplete";
@@ -237,6 +244,35 @@ export function analyzeAnimationContactEvidence(input: {
     const status = reviewReasons.length > 0 ? ("review" as const) :
       unverifiedReasons.length > 0 ? ("unverified" as const) : ("pass" as const);
 
+
+    // Hypothetical correction is intentionally limited to caller-declared
+    // planted-world contact with complete time coverage and an explicit plane.
+    // This is NOT a bone-local keyframe update or verified native grounding.
+    const canProposeSlip = sliding && tangentAxes !== null &&
+      coverage === "complete" && supportTangentialDrift !== null &&
+      supportTangentialDrift > constraint.tolerance;
+    const slipOffsets = canProposeSlip ? samples.flatMap((sample) => {
+      const delta: [number, number, number] = [0, 0, 0];
+      for (const axis of tangentAxes!) {
+        delta[axis] = firstMarker[axis] - sample.marker[axis];
+      }
+      const slip = Math.hypot(...delta);
+      return slip > constraint.tolerance
+        ? [{
+            time: round(sample.time),
+            tangential_drift: round(slip),
+            marker_translation_to_anchor: delta.map(round) as Vec3,
+          }]
+        : [];
+    }) : [];
+    const slipBlocker: "SUPPORT_PLANE_REQUIRED" | "COMPLETE_SAMPLING_WINDOW_REQUIRED" | null =
+      !sliding ? null : !tangentAxes ? "SUPPORT_PLANE_REQUIRED"
+        : coverage !== "complete" ? "COMPLETE_SAMPLING_WINDOW_REQUIRED" : null;
+    const slipCorrectionState = canProposeSlip && slipOffsets.length > 0
+      ? "candidate" as const
+      : slipBlocker
+        ? "blocked" as const : "not_applicable" as const;
+
     results.push({
       id: constraint.id,
       mode: constraint.mode,
@@ -252,6 +288,13 @@ export function analyzeAnimationContactEvidence(input: {
         ? null : round(supportNormalDisplacement),
       support_tangential_drift_violation: supportTangentialDrift === null
         ? null : supportTangentialDrift > constraint.tolerance,
+      slip_correction_hypothesis: {
+        state: slipCorrectionState,
+        blocker: slipBlocker,
+        space: "caller_declared_world_marker",
+        samples: slipOffsets.slice(0, exampleLimit),
+        samples_truncated: slipOffsets.length > exampleLimit,
+      },
       planted_drift_violation: sliding,
       max_marker_step_speed: constraint.mode === "planted" && samples.length >= 2 ? round(maxSpeed) : null,
       sampling_coverage: coverage,
@@ -285,6 +328,6 @@ export function analyzeAnimationContactEvidence(input: {
     unverified_constraint_count: unverifiedCount,
     pass_constraint_count: results.length - reviewCount - unverifiedCount,
     constraints: results,
-    note: "Contact distances, planted foot drift (including support-plane sliding versus lift when declared), optional time-window coverage and support-plane penetration are numeric caller-supplied diagnostics only. A passing distance tolerance does not prove believable weight, timing, deformation or visual quality; PASS never attests native sampling, IK or scene behavior, and reference-grounded native playback remains required.",
+    note: "Contact distances, planted foot drift (including support-plane sliding versus lift when declared), optional time-window coverage and support-plane penetration are numeric caller-supplied diagnostics only. Hypothetical stationary-anchor offsets require an explicit support plane and complete sampling coverage; they are caller-declared world-marker deltas, NOT native bone/local keyframes and must not be auto-applied. A passing distance tolerance does not prove believable weight, timing, deformation or visual quality; PASS never attests native sampling, IK or scene behavior, and reference-grounded native playback remains required.",
   };
 }

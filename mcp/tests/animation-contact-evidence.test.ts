@@ -424,3 +424,85 @@ test("support-plane decomposition stays unavailable for an unanchored moving con
   expect(result.constraints[0]?.support_tangential_drift_violation).toBeNull();
   expect(result.constraints[0]?.status).toBe("pass");
 });
+
+
+test("complete planted sampling yields bounded tangential marker correction hints, never keyframe mutations", () => {
+  const source = [
+    { time: 0.4, marker: [0.3, 0.06, 0] as const, target: [0.3, 0.06, 0] as const },
+    { time: 0, marker: [0, 0, 0] as const, target: [0, 0, 0] as const },
+    { time: 0.2, marker: [0.15, 0.02, 0] as const, target: [0.15, 0.02, 0] as const },
+  ];
+  const saved = JSON.stringify(source);
+  const result = analyzeAnimationContactEvidence({ constraints: [{
+    id: "stance", mode: "planted", tolerance: 0.1,
+    sampling_window: { start: 0, end: 0.4, max_gap_seconds: 0.2 },
+    support_plane: { axis: "Y", coordinate: 0, allowed_side: "POSITIVE", penetration_tolerance: 0 },
+    samples: source,
+  }], exampleLimit: 1 });
+  requireAvailable(result);
+  const hints = result.constraints[0]?.slip_correction_hypothesis;
+  expect(hints).toMatchObject({
+    state: "candidate",
+    blocker: null,
+    space: "caller_declared_world_marker",
+    samples_truncated: true,
+    samples: [{
+      time: 0.2,
+      tangential_drift: 0.15,
+      marker_translation_to_anchor: [-0.15, 0, 0],
+    }],
+  });
+  expect(result.visual_verdict).toBe("not_evaluated");
+  expect(JSON.stringify(source)).toBe(saved);
+});
+
+test("drift without complete time coverage cannot yield an applicable slip correction", () => {
+  const result = analyzeAnimationContactEvidence({ constraints: [
+    { id: "missing_plane", mode: "planted", tolerance: 0.1,
+      samples: [
+        { time: 0, marker: [0, 0, 0], target: [0, 0, 0] },
+        { time: 0.5, marker: [0.5, 0, 0], target: [0.5, 0, 0] },
+      ],
+    },
+    { id: "missing_window", mode: "planted", tolerance: 0.1,
+      support_plane: { axis: "Y", coordinate: 0, allowed_side: "POSITIVE", penetration_tolerance: 0 },
+      samples: [
+        { time: 0, marker: [0, 0, 0], target: [0, 0, 0] },
+        { time: 0.5, marker: [0.5, 0, 0], target: [0.5, 0, 0] },
+      ],
+    },
+    { id: "incomplete_window", mode: "planted", tolerance: 0.1,
+      support_plane: { axis: "Y", coordinate: 0, allowed_side: "POSITIVE", penetration_tolerance: 0 },
+      sampling_window: { start: 0, end: 1, max_gap_seconds: 0.2 },
+      samples: [
+        { time: 0, marker: [0, 0, 0], target: [0, 0, 0] },
+        { time: 1, marker: [0.5, 0, 0], target: [0.5, 0, 0] },
+      ],
+    },
+  ]});
+  requireAvailable(result);
+  expect(result.constraints.map((entry) => entry.slip_correction_hypothesis)).toEqual([
+    { state: "blocked", blocker: "SUPPORT_PLANE_REQUIRED",
+      space: "caller_declared_world_marker", samples: [], samples_truncated: false },
+    { state: "blocked", blocker: "COMPLETE_SAMPLING_WINDOW_REQUIRED",
+      space: "caller_declared_world_marker", samples: [], samples_truncated: false },
+    { state: "blocked", blocker: "COMPLETE_SAMPLING_WINDOW_REQUIRED",
+      space: "caller_declared_world_marker", samples: [], samples_truncated: false },
+  ]);
+});
+
+test("lift alone does not produce tangential correction hints", () => {
+  const result = analyzeAnimationContactEvidence({ constraints: [{
+    id: "lift", mode: "planted", tolerance: 0.1,
+    support_plane: { axis: "Y", coordinate: 0, allowed_side: "POSITIVE", penetration_tolerance: 0 },
+    sampling_window: { start: 0, end: 0.2, max_gap_seconds: 0.2 },
+    samples: [
+      { time: 0, marker: [0, 0, 0], target: [0, 0, 0] },
+      { time: 0.2, marker: [0, 0.5, 0], target: [0, 0.5, 0] },
+    ],
+  }] });
+  requireAvailable(result);
+  expect(result.constraints[0]?.slip_correction_hypothesis)
+    .toMatchObject({ state: "not_applicable", samples: [] });
+  expect(result.constraints[0]?.max_support_normal_displacement).toBe(0.5);
+});
