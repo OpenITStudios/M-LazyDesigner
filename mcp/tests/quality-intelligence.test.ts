@@ -249,6 +249,45 @@ describe("bounded authoring quality intelligence", () => {
     expect(result.unresolved_parent_count).toBe(1);
   });
 
+
+  test("side-named rig pivots expose symmetry candidates without declaring a symmetry defect", () => {
+    const result = analyzeRigGraph([
+      { uuid: "root", name: "root", origin: [0, 0, 0], parent_uuid: null },
+      { uuid: "la", name: "left_arm", origin: [-4, 8, 1], parent_uuid: "root" },
+      { uuid: "ra", name: "arm_right", origin: [4, 8, 1], parent_uuid: "root" },
+      { uuid: "ll", name: "LeftLeg", origin: [-2, 0, 0], parent_uuid: "root" },
+      { uuid: "rl", name: "RightLeg", origin: [2, 0.3, 0], parent_uuid: "root" },
+    ]);
+    expect(result.state).toBe("valid_graph");
+    if (result.state !== "valid_graph") throw new Error("expected valid rig graph");
+    expect(result.mirrored_pivot_candidates?.pair_count).toBe(2);
+    expect(result.mirrored_pivot_candidates?.cohort_mirror_plane_x).toBe(0);
+    expect(result.mirrored_pivot_candidates?.examples.find((entry) => entry.part_key === "leg"))
+      .toMatchObject({ left_uuid: "ll", right_uuid: "rl", pivot_height_delta: 0.3 });
+    expect(result.review_hints).not.toContain("MIRROR_ASYMMETRY");
+    expect(result.mirrored_pivot_candidates?.note).toContain("intentional");
+  });
+
+  test("ambiguous side labels do not create false pair evidence", () => {
+    const duplicate = analyzeRigGraph([
+      { uuid: "a", name: "left_arm", origin: [-1, 0, 0] },
+      { uuid: "b", name: "left_arm", origin: [-2, 0, 0] },
+      { uuid: "c", name: "right_arm", origin: [1, 0, 0] },
+    ]);
+    expect(duplicate.state).toBe("valid_graph");
+    if (duplicate.state !== "valid_graph") throw new Error("expected valid rig graph");
+    expect(duplicate.mirrored_pivot_candidates).toBeUndefined();
+
+    const onePair = analyzeRigGraph([
+      { uuid: "l", name: "L_hand", origin: [2, 0, 0] },
+      { uuid: "r", name: "R_hand", origin: [4, 0, 0] },
+    ]);
+    expect(onePair.state).toBe("valid_graph");
+    if (onePair.state !== "valid_graph") throw new Error("expected valid rig graph");
+    expect(onePair.mirrored_pivot_candidates?.pair_count).toBe(1);
+    expect(onePair.mirrored_pivot_candidates?.cohort_mirror_plane_x).toBeNull();
+  });
+
   test("texture color profile is deterministic, sampled, and palette-bounded", () => {
     const pixels = new Uint8ClampedArray([
       255, 0, 0, 255,

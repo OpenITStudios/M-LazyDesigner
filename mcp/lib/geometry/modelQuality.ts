@@ -232,6 +232,90 @@ function distance(first: QualityVec3, second: QualityVec3): number {
   );
 }
 
+
+type RigMirrorSide = "left" | "right";
+
+/** Explicit name conventions are advisory evidence, never a symmetry requirement. */
+function namedRigSide(name: string): { side: RigMirrorSide; key: string } | null {
+  const prefix = /^(left|right|l|r)[\s._-]+(.+)$/i.exec(name);
+  const suffix = /^(.+?)[\s._-]+(left|right|l|r)$/i.exec(name);
+  const camel = /^(Left|Right)([A-Z].*)$/.exec(name);
+  const sideToken = prefix?.[1] ?? camel?.[1] ?? suffix?.[2];
+  const partName = prefix?.[2] ?? camel?.[2] ?? suffix?.[1];
+  if (!sideToken || !partName) return null;
+  const key = partName.replace(/[\s._-]+/g, "").toLowerCase();
+  if (!key) return null;
+  return { side: /^(left|l)$/i.test(sideToken) ? "left" : "right", key };
+}
+
+function namedMirrorPivotEvidence(groups: readonly RigGroupInput[], exampleLimit: number) {
+  const named = new Map<string, { left: RigGroupInput[]; right: RigGroupInput[] }>();
+  for (const group of groups) {
+    const parsed = namedRigSide(group.name);
+    if (!parsed || !finiteVec3(group.origin)) continue;
+    const bucket: { left: RigGroupInput[]; right: RigGroupInput[] } =
+      named.get(parsed.key) ?? { left: [], right: [] };
+    bucket[parsed.side].push(group);
+    named.set(parsed.key, bucket);
+  }
+  const pairs: Array<{
+    key: string;
+    left: RigGroupInput;
+    right: RigGroupInput;
+    local_plane_x: number;
+    height_delta: number;
+    depth_delta: number;
+    lateral_separation: number;
+  }> = [];
+  let ambiguousPairNames = 0;
+  for (const [key, sides] of [...named].sort(([a], [b]) => a.localeCompare(b))) {
+    if (sides.left.length === 0 || sides.right.length === 0) continue;
+    if (sides.left.length !== 1 || sides.right.length !== 1) {
+      ambiguousPairNames += 1;
+      continue;
+    }
+    const left = sides.left[0]!;
+    const right = sides.right[0]!;
+    const a = finiteVec3(left.origin);
+    const b = finiteVec3(right.origin);
+    if (!a || !b) continue;
+    const localPlane = a[0] / 2 + b[0] / 2;
+    const heightDelta = Math.abs(a[1] - b[1]);
+    const depthDelta = Math.abs(a[2] - b[2]);
+    const lateralSeparation = Math.abs(a[0] - b[0]);
+    if (![localPlane, heightDelta, depthDelta, lateralSeparation].every(Number.isFinite)) continue;
+    pairs.push({
+      key, left, right, local_plane_x: localPlane,
+      height_delta: heightDelta, depth_delta: depthDelta,
+      lateral_separation: lateralSeparation,
+    });
+  }
+  // Two or more named counterparts are needed even to estimate a shared
+  // coordinate plane. The estimate is not a user-approved symmetry constraint.
+  const cohortPlane = pairs.length >= 2 ? median(pairs.map((pair) => pair.local_plane_x)) : null;
+  return {
+    pair_count: pairs.length,
+    ambiguous_name_pair_count: ambiguousPairNames,
+    cohort_mirror_plane_x: cohortPlane === null ? null : roundMetric(cohortPlane),
+    max_cohort_plane_deviation: cohortPlane === null ? null : roundMetric(
+      Math.max(...pairs.map((pair) => Math.abs(pair.local_plane_x - cohortPlane)))
+    ),
+    examples: pairs.slice(0, exampleLimit).map((pair) => ({
+      part_key: pair.key,
+      left_uuid: pair.left.uuid, right_uuid: pair.right.uuid,
+      left_name: pair.left.name, right_name: pair.right.name,
+      local_mirror_plane_x: roundMetric(pair.local_plane_x),
+      pivot_height_delta: roundMetric(pair.height_delta),
+      pivot_depth_delta: roundMetric(pair.depth_delta),
+      lateral_separation: roundMetric(pair.lateral_separation),
+      cohort_plane_deviation: cohortPlane === null ? null
+        : roundMetric(Math.abs(pair.local_plane_x - cohortPlane)),
+    })),
+    examples_truncated: pairs.length > exampleLimit,
+    note: "Side-name pairing is advisory pivot evidence. Asymmetry may be intentional; the cohort X-plane estimate is not an approved symmetry plane, an authored correction, or a visual verdict.",
+  };
+}
+
 export function analyzeRigGraph(
   groups: readonly RigGroupInput[],
   exampleLimit = DEFAULT_EXAMPLE_LIMIT
@@ -337,6 +421,7 @@ export function analyzeRigGraph(
   if (roots.length > 1) reviewHints.push("MULTIPLE_ROOT_GROUPS");
   if (coincidentCount > 0) reviewHints.push("COINCIDENT_PARENT_CHILD_PIVOT");
 
+  const mirrorEvidence = critical ? null : namedMirrorPivotEvidence(groups, exampleLimit);
   const pivotMedian = median(pivotDistances);
   const pivotMean =
     pivotDistances.length > 0
@@ -372,6 +457,7 @@ export function analyzeRigGraph(
       coincident_examples: coincidentExamples,
       examples_truncated: coincidentCount > coincidentExamples.length,
     },
+    ...(mirrorEvidence && mirrorEvidence.pair_count > 0 ? { mirrored_pivot_candidates: mirrorEvidence } : {}),
     review_hints: reviewHints,
   };
 }
