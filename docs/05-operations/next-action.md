@@ -4,9 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Current working environment
 
-- Repository `OpenITStudios/M-LazyDesigner`; development authority `Local`. User-authorized PC work resumed on 2026-10-26.
-- Worktree input: a3ff57b4. Primary stays dirty at 44b03b52; only authorized root organization was applied there. Recovery preserves 52 payloads; 438 pre-existing missing asset paths remain in Git. Do not reset, overwrite or republish them.
-- Cached Bun 1.4.3, Node 24.22.0 and Rust 1.99.1 are available. Do not reinstall unchanged dependencies.
+- 2026-10-27 user handoff: upload all completed work to `OpenITStudios/M-LazyDesigner` / `Local` and continue outside Codex. Baseline `6569aaf2`; re-pin GitHub HEAD. No deployment or app changes.
+- Primary stays dirty at `44b03b52`; source/assets already reconciled, current root-policy edits included. Recovery retains 52 payloads; 438 missing local asset paths remain in Git. Preserve the original checkout.
+- Cached Bun 1.4.3, Node 24.22.0 and Rust 1.99.1 are available. Reuse unchanged dependencies.
 - CI DISABLED: verification definitions remain inert. Do not enable workflows, change main/settings or publish releases. Native installation/asset mutation is not part of source reconciliation.
 
 ## LOCAL_CODE checkpoint
