@@ -1,3 +1,5 @@
+import { CAPABILITY_CORE_MANIFEST } from "../../lib/capabilities/manifest";
+import { CAPABILITY_BRANCH_MANIFEST } from "./manifest";
 import {
   CAPABILITY_LIFECYCLE_SEARCH_PENALTY,
   CAPABILITY_TIER_BOOST,
@@ -107,6 +109,86 @@ function nearCapabilityNameScore(
   return 0;
 }
 
+
+/**
+ * The source manifest knows possible operations, not which executors the
+ * active Runtime advertises. Specific requests for absent operations must
+ * not silently select an unrelated tool through shared vocabulary.
+ * Broad keyword discovery, available aliases and genuine alternative
+ * advertised implementations remain searchable.
+ */
+function containsOrderedTerms(
+  haystack: readonly string[],
+  phrase: readonly string[]
+): boolean {
+  if (phrase.length === 0 || phrase.length > haystack.length) return false;
+  for (let start = 0; start <= haystack.length - phrase.length; start++) {
+    if (phrase.every((term, offset) => haystack[start + offset] === term)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function availableToolAdvertisesIntent(
+  tools: readonly BackendTool[],
+  phrase: readonly string[]
+): boolean {
+  const exactPhrase = phrase.join(" ");
+  return tools.some((tool) =>
+    containsOrderedTerms(substantiveQueryTerms(tool.description ?? ""), phrase) ||
+    getCapabilityMetadata(tool.name).searchAliases.some(
+      (alias) => substantiveQueryTerms(alias).join(" ") === exactPhrase
+    ) ||
+    CAPABILITY_BRANCH_MANIFEST.some(
+      (entry) =>
+        entry.capability === tool.name &&
+        entry.semantic?.intents.some(
+          (intent) => containsOrderedTerms(substantiveQueryTerms(intent), phrase)
+        )
+    )
+  );
+}
+
+function requestsUnavailableDeclaredCapability(
+  tools: readonly BackendTool[],
+  queryTerms: readonly string[]
+): boolean {
+  if (queryTerms.length === 0) return false;
+  const registered = new Set(tools.map((tool) => tool.name.toLowerCase()));
+  const effectiveQuery = queryTerms.join(" ");
+  const canonicalName = normalizedIdentifier(effectiveQuery);
+
+  // An explicit known identifier must not resolve to a different executor.
+  if (CAPABILITY_CORE_MANIFEST.has(canonicalName) &&
+      !registered.has(canonicalName)) return true;
+
+  // One-word searches stay broad. An unavailable *multiword* alias or
+  // manifest intent is specific enough to avoid accidental substitution.
+  if (queryTerms.length < 2) return false;
+  for (const [capability, definition] of CAPABILITY_CORE_MANIFEST) {
+    if (registered.has(capability)) continue;
+    const absentAlias = definition.aliases?.some((alias) => {
+      const aliasTerms = substantiveQueryTerms(alias);
+      return aliasTerms.length >= 2 && aliasTerms.join(" ") === effectiveQuery;
+    });
+    if (absentAlias && !availableToolAdvertisesIntent(tools, queryTerms)) {
+      return true;
+    }
+  }
+
+  for (const entry of CAPABILITY_BRANCH_MANIFEST) {
+    if (registered.has(entry.capability)) continue;
+    for (const intent of entry.semantic?.intents ?? []) {
+      const intentTerms = substantiveQueryTerms(intent);
+      if (intentTerms.length < 2 ||
+          !containsOrderedTerms(queryTerms, intentTerms)) continue;
+      if (!availableToolAdvertisesIntent(tools, intentTerms)) return true;
+    }
+  }
+  return false;
+}
+
 export function searchCapabilityCatalog(
   tools: readonly BackendTool[],
   query: string,
@@ -123,10 +205,14 @@ export function searchCapabilityCatalog(
   const hasQuery = normalizeCapabilityQuery(query).length > 0;
   // Ignore generic assistant/tooling words before ranking. Preserve semantic
   // examples and synonyms by feeding the same meaningful query to BOTH rankers.
-  const effectiveQuery = substantiveQueryTerms(query).join(" ");
+  const queryTerms = substantiveQueryTerms(query);
+  const effectiveQuery = queryTerms.join(" ");
   // A generic-only discovery query has no actionable intent and should not
   // traverse the catalog or compute ranking weights.
   if (hasQuery && effectiveQuery.length === 0) return [];
+  if (hasQuery && requestsUnavailableDeclaredCapability(tools, queryTerms)) {
+    return [];
+  }
   // Query expansion is shared across both ranking strategies and all tools.
   // No persistent query cache: a Runtime catalog or Stage may change at any time.
   const queryTokens = capabilityQueryTokens(effectiveQuery);

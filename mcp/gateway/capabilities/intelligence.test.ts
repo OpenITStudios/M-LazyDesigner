@@ -53,6 +53,68 @@ describe("capability intelligence routing", () => {
     expect(searchCapabilityCatalog(authoringTools, query, 2, { authoringPhase: "geometry" })).toEqual([]);
   });
 
+  test.each([
+    "manage_uv_layout",
+    "manage uv layout",
+    "uv layout",
+    "rapikan uv",
+    "plan uv layout",
+    "pack uv islands without overlap",
+  ])("does not substitute a missing declared UV capability for %s", (query) => {
+    const activeCatalog = authoringTools.filter(
+      (candidate) => candidate.name !== "manage_uv_layout"
+    );
+    expect(searchCapabilityCatalog(activeCatalog, query, 4, {
+      authoringPhase: "geometry",
+      facts: { project_bound: true, geometry_available: true },
+    })).toEqual([]);
+  });
+
+  test("declines a weak lexical substitute for an absent declared intent", () => {
+    const misleading = [
+      tool("list_textures", "Inspect UV atlas and island metadata."),
+      tool("manage_cubes", "Create and update geometry cubes."),
+    ];
+    expect(searchCapabilityCatalog(misleading, "pack uv islands", 4))
+      .toEqual([]);
+  });
+
+  test("preserves a genuinely advertised alternative with the intended operation", () => {
+    const alternative = tool(
+      "available_uv_packer", "Pack UV islands into an atlas."
+    );
+    const [match] = searchCapabilityCatalog(
+      [alternative], "pack uv islands", 4
+    );
+    expect(match?.capability_id).toBe("available_uv_packer");
+  });
+
+  test("retains available intent, prerequisite evidence, and exact-name discovery", () => {
+    const activeCatalog = authoringTools.filter(
+      (candidate) => candidate.name !== "manage_uv_layout"
+    );
+    const [painting] = searchCapabilityCatalog(activeCatalog, "warnai tekstur", 4, {
+      authoringPhase: "texturing", facts: { project_bound: false },
+    });
+    expect(painting).toMatchObject({
+      capability_id: "paint_texture_transaction",
+      eligibility: "BLOCKED",
+      requires: ["project_bound"],
+    });
+    expect(searchCapabilityCatalog(authoringTools, "manage_uv_layout", 4))
+      .toMatchObject([{ capability_id: "manage_uv_layout" }]);
+    expect(searchCapabilityCatalog(activeCatalog, "texture", 4).length)
+      .toBeGreaterThan(0);
+    expect(searchCapabilityCatalog([
+      tool("future_extension", "Custom third-party function."),
+    ], "future_extension", 4)[0]?.capability_id).toBe("future_extension");
+  });
+
+  test("does not route an absent exact-only legacy name", () => {
+    expect(searchCapabilityCatalog(authoringTools, "apply_texture", 4))
+      .toEqual([]);
+  });
+
   test("shared scoring retains branch order and Stage evidence for IK", () => {
     const ikTool = tool("bone_rigging", "Advanced IK and bone mirroring.");
     const active = semanticMatchesForTool(
