@@ -655,11 +655,20 @@ function prepareGradientHueSelection(
   options: GradientMapOptions,
   context?: TextureColorComputeContext
 ): GradientHueSelection | null {
-  if (!options.sourceHueColor) {
+  if (options.sourceHueColor === undefined) {
     if (options.hueToleranceDegrees !== undefined || options.minimumChroma !== undefined) {
       throw new Error("Hue-family tolerance/chroma requires an explicit sourceHueColor.");
     }
     return null;
+  }
+  // Presence must never be interpreted as an opt-out: an empty or
+  // invisible swatch would silently turn this into a global gradient map.
+  if (typeof options.sourceHueColor !== "string" || options.sourceHueColor.trim() === "") {
+    throw new Error("Hue-family source color must be a non-empty visible swatch.");
+  }
+  const sourceColor = parseHexRgba(options.sourceHueColor);
+  if (sourceColor[3] === 0) {
+    throw new Error("Hue-family source color must have nonzero alpha; invisible swatches are not material evidence.");
   }
   const tolerance = options.hueToleranceDegrees ?? 20;
   const minimumChroma = options.minimumChroma ?? 0.035;
@@ -667,7 +676,7 @@ function prepareGradientHueSelection(
       !Number.isFinite(minimumChroma) || minimumChroma < 0.015 || minimumChroma > 0.3) {
     throw new Error("Hue-family tolerance or minimum chroma is outside its supported bounds.");
   }
-  const source = oklabToOklch(oklabFor(parseHexRgba(options.sourceHueColor), context));
+  const source = oklabToOklch(oklabFor(sourceColor, context));
   if (source.C < minimumChroma) {
     throw new Error("Hue-family source color is near-neutral; do not infer a chromatic material family.");
   }

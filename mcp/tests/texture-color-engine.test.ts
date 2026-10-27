@@ -122,6 +122,32 @@ describe("texture color intelligence core", () => {
     })).toThrow("strictly increasing");
   });
 
+
+  test("empty or invisible hue source fails closed instead of recoloring an entire atlas", () => {
+    const pixels = new Uint8ClampedArray([
+      240, 10, 10, 255, 10, 20, 240, 255,
+    ]);
+    const original = [...pixels];
+    const ramp = ["#16441e", "#c1f4c4"];
+    for (const badSource of ["", "#ff000000"]) {
+      expect(() => gradientMapRgba(pixels, 2, 1, ramp, {
+        sourceHueColor: badSource,
+      })).toThrow(/Hue-family source color/);
+    }
+    expect([...pixels]).toEqual(original);
+  });
+
+  test("translucent but visible source swatches remain eligible for hue selection", () => {
+    const pixels = new Uint8ClampedArray([
+      200, 0, 0, 100, 0, 0, 255, 255,
+    ]);
+    const result = gradientMapRgba(pixels, 2, 1,
+      ["#16441e", "#c1f4c4"], { sourceHueColor: "#ff000080" });
+    expect([...result.slice(0, 3)]).not.toEqual([...pixels.slice(0, 3)]);
+    expect(result[3]).toBe(100);
+    expect([...result.slice(4)]).toEqual([...pixels.slice(4)]);
+  });
+
   test("shade ramps are deterministic and monotonic in perceived lightness", () => {
     const ramp = generateShadeRamp("#845442", { steps: 5 });
     expect(ramp).toHaveLength(5);
