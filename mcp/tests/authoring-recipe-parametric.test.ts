@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
+import { assessRecipeFeatureOptimization } from "@/lib/authoringRecipe/planning";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 import {
   compileSemanticGeometryEdit,
@@ -271,5 +272,118 @@ describe("lightweight parametric authoring relationships", () => {
 
     expect(rebuild.upserts.map((entry) => entry.id)).toContain("leg:0");
     expect(rebuild.constraint_propagated_instance_ids).toEqual([]);
+  });
+});
+
+describe("read-only feature representation impact for compiled Recipe geometry", () => {
+  function featureRecipe(): AuthoringRecipe {
+    return {
+      schema: 1, compiler_version: 1,
+      id: "crest", name: "crest",
+      prototypes: [{
+        id: "horn_cube", name: "horn", size: [2, 4, 2],
+        semantic_group: "crest",
+      }],
+      patterns: [{
+        kind: "LINEAR", id: "horns", feature_id: "horn",
+        prototype_id: "horn_cube", count: 2, axis: "X", spacing: 5,
+      }],
+      feature_intents: [
+        {
+          id: "horn", label: "Crest horns",
+          visual_role: "THREE_DIMENSIONAL", evidence: "SUPPORTED",
+          evidence_refs: ["image:front:crest"], geometry_reasons: ["SILHOUETTE"],
+        },
+        {
+          id: "crest_mark", label: "Painted crest motif",
+          visual_role: "SURFACE_DETAIL", evidence: "SUPPORTED",
+          evidence_refs: ["image:front:mark"], geometry_reasons: [],
+        },
+      ],
+      symmetry: [{
+        id: "mirrored_horn", source_instance_id: "horns:0",
+        target_instance_id: "mirrored-horn",
+        plane: { axis: "X", position: 0 },
+        uv_policy: "SHARE", texture_policy: "MIRROR", rig_policy: "MIRROR",
+      }],
+    };
+  }
+
+  test("a suggested 3D-to-texture change counts pattern and mirrored instances but cannot delete Cubes", () => {
+    const recipe = featureRecipe();
+    const unchanged = structuredClone(recipe);
+    const report = assessRecipeFeatureOptimization(recipe, [
+      {
+        id: "horn", label: "Crest horns",
+        visual_role: "SURFACE_DETAIL", evidence: "SUPPORTED",
+        evidence_refs: ["image:front:crest"], geometry_reasons: [],
+      },
+      {
+        id: "crest_mark", label: "Painted crest motif",
+        visual_role: "SURFACE_DETAIL", evidence: "SUPPORTED",
+        evidence_refs: ["image:front:mark"], geometry_reasons: [],
+      },
+    ]);
+    expect(report).toMatchObject({
+      state: "review_required",
+      scope: "COMPILED_RECIPE_ONLY",
+      visual_verdict: "NOT_EVALUATED",
+      native_mutation_executed: false,
+      estimated_native_cube_savings: null,
+      review_required_count: 1,
+      possible_native_removal_review_instance_count: 3,
+    });
+    expect(report.candidates).toEqual([
+      {
+        feature_id: "horn", current_route: "GEOMETRY", proposed_route: "TEXTURE",
+        action: "NATIVE_REMOVAL_REVIEW_REQUIRED", realized_recipe_cube_count: 3,
+        instance_id_examples: ["horns:0", "horns:1", "mirrored-horn"],
+        examples_truncated: false, proposed_native_cube_deletion: false,
+      },
+      {
+        feature_id: "crest_mark", current_route: "TEXTURE", proposed_route: "TEXTURE",
+        action: "TEXTURE_HANDOFF_ONLY", realized_recipe_cube_count: 0,
+        instance_id_examples: [], examples_truncated: false,
+        proposed_native_cube_deletion: false,
+      },
+    ]);
+    expect(recipe).toEqual(unchanged);
+    expect(compileAuthoringRecipe(recipe).metrics.realized_cube_count).toBe(3);
+  });
+
+  test("unverified evidence and new 3D needs remain review-required without inventing Geometry", () => {
+    const recipe = featureRecipe();
+    const unverified = assessRecipeFeatureOptimization(recipe, [{
+      id: "horn", label: "Crest horns", visual_role: "SURFACE_DETAIL",
+      evidence: "PROVISIONAL", evidence_refs: ["image:side:provisional"],
+      geometry_reasons: [],
+    }]);
+    expect(unverified.candidates[0]).toMatchObject({
+      proposed_route: "REVIEW_REQUIRED",
+      action: "REFERENCE_REVIEW_REQUIRED",
+      realized_recipe_cube_count: 3,
+    });
+
+    const addGeometry = assessRecipeFeatureOptimization(recipe, [{
+      id: "crest_mark", label: "Painted crest motif",
+      visual_role: "THREE_DIMENSIONAL", evidence: "SUPPORTED",
+      evidence_refs: ["image:front:mark"], geometry_reasons: ["SILHOUETTE"],
+    }]);
+    expect(addGeometry.candidates[0]).toMatchObject({
+      current_route: "TEXTURE",
+      proposed_route: "GEOMETRY",
+      action: "GEOMETRY_CREATION_REQUIRED",
+      realized_recipe_cube_count: 0,
+    });
+    expect(addGeometry.native_mutation_executed).toBe(false);
+  });
+
+  test("legacy/unowned features and empty proposals fail closed without assigning implicit Cube owners", () => {
+    expect(() => assessRecipeFeatureOptimization(chairRecipe(), [{
+      id: "seat", label: "Seat", visual_role: "UNNECESSARY",
+      evidence: "SUPPORTED", evidence_refs: ["image:front"],
+    }])).toThrow("FEATURE_OPTIMIZATION_OWNERSHIP_REQUIRED");
+    expect(() => assessRecipeFeatureOptimization(featureRecipe(), []))
+      .toThrow("FEATURE_OPTIMIZATION_PROPOSALS_REQUIRED");
   });
 });

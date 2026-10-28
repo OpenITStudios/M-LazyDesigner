@@ -4,6 +4,8 @@ import type {
   RecipeFeaturePlanSummary,
   RecipeFeatureRoute,
   RecipeGeometryReason,
+  AuthoringRecipe,
+  CompiledAuthoringRecipe,
 } from "@/lib/authoringRecipe/contracts";
 
 // Feature evidence is supplied by reference-aware Modelling, not inferred
@@ -104,3 +106,128 @@ export function planRecipeFeatureRepresentations(
     },
   };
 }
+
+/**
+ * Review-only representation-change impact for existing Recipe-owned Cubes.
+ * Feature evidence remains caller supplied. This reads compiled instances and
+ * their pattern/symmetry ownership; it does not inspect Blockbench, remove
+ * Cubes, paint an atlas or estimate visual fidelity/native savings.
+ */
+export function assessCompiledRecipeFeatureOptimization(
+  recipe: AuthoringRecipe,
+  compiled: CompiledAuthoringRecipe,
+  proposedFeatures: readonly RecipeFeatureIntent[]
+) {
+  if (recipe.feature_intents === undefined) {
+    throw new Error("FEATURE_OPTIMIZATION_OWNERSHIP_REQUIRED: legacy Recipe has no explicit feature evidence.");
+  }
+  if (!Array.isArray(proposedFeatures) || proposedFeatures.length === 0) {
+    throw new Error("FEATURE_OPTIMIZATION_PROPOSALS_REQUIRED");
+  }
+  if (compiled.recipe_id !== recipe.id ||
+      compiled.metrics.realized_cube_count !== compiled.placements.length) {
+    throw new Error("FEATURE_OPTIMIZATION_COMPILED_RECIPE_MISMATCH");
+  }
+
+  const currentDecisions = new Map(
+    planRecipeFeatureRepresentations(recipe.feature_intents).decisions.map(
+      (entry) => [entry.id, entry] as const
+    )
+  );
+  const proposed = planRecipeFeatureRepresentations(proposedFeatures).decisions;
+  const featureByPattern = new Map(
+    recipe.patterns.map((pattern) => [pattern.id, pattern.feature_id] as const)
+  );
+  const ownedByInstance = new Map<string, string>();
+  const compiledInstanceIds = new Set(compiled.placements.map((placement) => placement.id));
+  if (compiledInstanceIds.size !== compiled.placements.length) {
+    throw new Error("FEATURE_OPTIMIZATION_COMPILED_INSTANCE_IDENTITY_AMBIGUOUS");
+  }
+
+  for (const placement of compiled.placements) {
+    const feature = featureByPattern.get(placement.source_pattern_id);
+    if (feature !== undefined) ownedByInstance.set(placement.id, feature);
+  }
+  // The canonical Recipe compiler emits symmetry relations in dependency
+  // order. A mirrored Cube inherits source feature ownership, never a guessed
+  // semantic_group or matching display name.
+  for (const relation of compiled.symmetry_relationships) {
+    const owner = ownedByInstance.get(relation.source_instance_id);
+    if (!owner || !compiledInstanceIds.has(relation.target_instance_id) ||
+        ownedByInstance.has(relation.target_instance_id)) {
+      throw new Error("FEATURE_OPTIMIZATION_SYMMETRY_OWNER_UNVERIFIED");
+    }
+    ownedByInstance.set(relation.target_instance_id, owner);
+  }
+  if (ownedByInstance.size !== compiled.placements.length) {
+    throw new Error("FEATURE_OPTIMIZATION_INSTANCE_OWNER_UNVERIFIED");
+  }
+  const instancesByFeature = new Map<string, string[]>();
+  for (const placement of compiled.placements) {
+    const owner = ownedByInstance.get(placement.id)!;
+    const items = instancesByFeature.get(owner) ?? [];
+    items.push(placement.id);
+    instancesByFeature.set(owner, items);
+  }
+
+  type Action =
+    | "KEEP_GEOMETRY"
+    | "TEXTURE_HANDOFF_ONLY"
+    | "NO_NATIVE_CHANGE"
+    | "NATIVE_REMOVAL_REVIEW_REQUIRED"
+    | "GEOMETRY_CREATION_REQUIRED"
+    | "REFERENCE_REVIEW_REQUIRED";
+
+  const candidates = proposed.map((decision) => {
+    const current = currentDecisions.get(decision.id);
+    const instanceIds = instancesByFeature.get(decision.id) ?? [];
+    let action: Action;
+    if (!current || decision.route === "REVIEW_REQUIRED") {
+      action = "REFERENCE_REVIEW_REQUIRED";
+    } else if (decision.route === "GEOMETRY") {
+      action = instanceIds.length > 0 ? "KEEP_GEOMETRY" : "GEOMETRY_CREATION_REQUIRED";
+    } else if (instanceIds.length > 0) {
+      // Never silently convert already-authored 3D Geometry to Texture/Omit.
+      action = "NATIVE_REMOVAL_REVIEW_REQUIRED";
+    } else {
+      action = decision.route === "TEXTURE" ? "TEXTURE_HANDOFF_ONLY" : "NO_NATIVE_CHANGE";
+    }
+    return {
+      feature_id: decision.id,
+      current_route: current?.route ?? null,
+      proposed_route: decision.route,
+      action,
+      realized_recipe_cube_count: instanceIds.length,
+      instance_id_examples: instanceIds.slice(0, 8),
+      examples_truncated: instanceIds.length > 8,
+      // Native presence, effect on silhouette and deletion remain unverified.
+      proposed_native_cube_deletion: false as const,
+    };
+  });
+
+  const reviewActions = new Set<Action>([
+    "REFERENCE_REVIEW_REQUIRED",
+    "NATIVE_REMOVAL_REVIEW_REQUIRED",
+    "GEOMETRY_CREATION_REQUIRED",
+  ]);
+  const nativeDeletionCandidates = candidates.filter(
+    (item) => item.action === "NATIVE_REMOVAL_REVIEW_REQUIRED"
+  );
+  return {
+    state: candidates.some((item) => reviewActions.has(item.action))
+      ? ("review_required" as const) : ("ready" as const),
+    scope: "COMPILED_RECIPE_ONLY" as const,
+    visual_verdict: "NOT_EVALUATED" as const,
+    native_mutation_executed: false as const,
+    estimated_native_cube_savings: null,
+    proposal_count: candidates.length,
+    review_required_count: candidates.filter(
+      (item) => reviewActions.has(item.action)
+    ).length,
+    possible_native_removal_review_instance_count: nativeDeletionCandidates.reduce(
+      (sum, item) => sum + item.realized_recipe_cube_count, 0
+    ),
+    candidates,
+  };
+}
+

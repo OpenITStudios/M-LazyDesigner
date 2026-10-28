@@ -1,4 +1,5 @@
-import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import type { AuthoringRecipe, RecipeFeatureIntent } from "@/lib/authoringRecipe/contracts";
+import { assessCompiledRecipeFeatureOptimization } from "@/lib/authoringRecipe/featureDecision";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 import {
@@ -36,6 +37,16 @@ function bounded(values: readonly string[]) {
     examples: values.slice(0, EXAMPLE_LIMIT),
     examples_truncated: values.length > EXAMPLE_LIMIT,
   };
+}
+
+/** Read-only compiled Recipe geometry-to-texture/omit candidate analysis. */
+export function assessRecipeFeatureOptimization(
+  recipe: AuthoringRecipe,
+  proposedFeatures: readonly RecipeFeatureIntent[]
+) {
+  return assessCompiledRecipeFeatureOptimization(
+    recipe, compileAuthoringRecipe(recipe), proposedFeatures
+  );
 }
 
 export function summarizeAuthoringRecipeRebuild(

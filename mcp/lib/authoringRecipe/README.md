@@ -44,6 +44,15 @@ before expanding native Cubes when the feature contract is present.
   implicit native deletion; the replacement must be reviewed in the existing
   Texture/Geometry lifecycle.
 
+The existing `featureDecision.ts` now also assesses **read-only representation
+change candidates** using the existing compiler's pattern/instance ownership.
+`planning.ts` exposes `assessRecipeFeatureOptimization` for explicit proposal
+features, including mirrored Cube instances traced to the original feature.
+It reports a review requirement before changing an authored Geometry feature
+to Texture/Omit, never issues native removals, invents texture pixels, or
+claims that a Recipe instance count is a verified live Cube saving. A legacy
+Recipe without explicit feature ownership cannot be auto-optimized.
+
 Reference-driven correction planning reuses the canonical Cube geometry
 contract: `reference/correction.ts` rejects overflowed numeric differences;
 `semanticEdit.ts` validates all proposed Cube endpoints/pivots/rotations and
