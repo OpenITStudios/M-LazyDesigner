@@ -5,7 +5,7 @@ import {
   type ReferenceImageRegion,
   type ReferencePartRole,
 } from "@/lib/reference/imageRegionEvidence";
-import type { ModelView } from "@/lib/reference/visualEvidence";
+import { MODEL_VIEWS, type ModelView } from "@/lib/reference/visualEvidence";
 
 type CorrespondenceState = "SUPPORTED" | "PROVISIONAL" | "CONFLICTING" | "UNAVAILABLE";
 type RegionRole = ReferenceImageRegion["evidence_role"];
@@ -32,6 +32,8 @@ export type PartCorrespondenceProposal = {
     source_sha256: string;
     model_evidence_handle: string;
     model_view: ModelView;
+    /** Exact shaded PNG bytes of the reviewed model view, never a file label. */
+    model_image_sha256: string;
     /** Set only after actual source and current model images were examined. */
     source_pixels_inspected: boolean;
     model_pixels_inspected: boolean;
@@ -61,6 +63,8 @@ export type PartCorrespondenceInput = {
       capture_dependency_fingerprint: string;
       evidence_handle: string;
       views: readonly ModelView[];
+      /** Already-rendered shaded PNG digests from this exact capture, one per view. */
+      image_digests: readonly { view: ModelView; sha256: string }[];
     };
   };
   proposals: readonly PartCorrespondenceProposal[];
@@ -95,6 +99,7 @@ export type PartCorrespondenceClaim = {
     | "OCCLUDED_NOT_ABSENT"
     | "RELATIONSHIP_NEEDS_SEPARATE_REVIEW"
     | "VIEW_NOT_CAPTURED"
+    | "MODEL_CAPTURE_IMAGE_IDENTITY_UNVERIFIED"
     | "IMAGE_REVIEW_NOT_COMPLETE"
     | "IMAGE_REVIEW_STALE"
     | "VISUAL_MISMATCH_REPORTED";
@@ -138,6 +143,29 @@ function conflictingSourceViewHashes(images: readonly CorrespondenceSourceImage[
   return new Set([...viewsByHash.entries()]
     .filter(([, views]) => views.size > 1)
     .map(([hash]) => hash));
+}
+
+/** A view label is not an image identity. Bind every advertised capture view to
+ * the corresponding current shaded PNG digest before accepting review claims.
+ * Identical bytes in different views are allowed (symmetric models exist).
+ * The native capture owner provides the hashes; this pure join cannot certify pixels.
+ */
+function captureImageDigests(
+  capture: PartCorrespondenceInput["model"]["capture"]
+): Map<ModelView, string> | null {
+  if (!Array.isArray(capture.views) || capture.views.length < 1 ||
+      capture.views.length > 5 ||
+      new Set(capture.views).size !== capture.views.length ||
+      capture.views.some((view) => !MODEL_VIEWS.includes(view)) ||
+      !Array.isArray(capture.image_digests) ||
+      capture.image_digests.length !== capture.views.length) return null;
+  const digests = new Map<ModelView, string>();
+  for (const image of capture.image_digests) {
+    if (!image || !capture.views.includes(image.view) ||
+        !SHA256.test(image.sha256) || digests.has(image.view)) return null;
+    digests.set(image.view, image.sha256);
+  }
+  return digests;
 }
 
 function assertBoundedInput(input: PartCorrespondenceInput): Map<string, CompactSemanticIdentity> {
@@ -198,6 +226,7 @@ export function assessVisualPartCorrespondence(input: PartCorrespondenceInput): 
   const ownerConflicts = new Set(ownership.ownership_issues.map((issue) => issue.image_region_id));
   const conflictingViewHashes = conflictingSourceViewHashes(input.reference.images);
   const model = input.model;
+  const capturedImages = captureImageDigests(model.capture);
   const stale = !SHA256.test(input.reference.package_fingerprint) ||
     input.reference.package_fingerprint !== input.reference.current_package_fingerprint ||
     !NATIVE_FINGERPRINT.test(model.native_snapshot_fingerprint) ||
@@ -259,7 +288,13 @@ export function assessVisualPartCorrespondence(input: PartCorrespondenceInput): 
     if (cubes.some((uuid) => !nativeByUuid.has(uuid))) {
       return result("UNAVAILABLE", "NATIVE_TARGET_NOT_PROVEN");
     }
+    if (!Array.isArray(model.capture.views)) {
+      return result("UNAVAILABLE", "MODEL_CAPTURE_IMAGE_IDENTITY_UNVERIFIED");
+    }
     if (!model.capture.views.includes(image.view)) return result("UNAVAILABLE", "VIEW_NOT_CAPTURED");
+    if (!capturedImages || !capturedImages.has(image.view)) {
+      return result("UNAVAILABLE", "MODEL_CAPTURE_IMAGE_IDENTITY_UNVERIFIED");
+    }
     if (region.visibility === "OCCLUDED") return result("PROVISIONAL", "OCCLUDED_NOT_ABSENT");
     if (region.evidence_role === "CONTACT" || region.evidence_role === "NEGATIVE_SPACE") {
       return result("PROVISIONAL", "RELATIONSHIP_NEEDS_SEPARATE_REVIEW");
@@ -277,7 +312,8 @@ export function assessVisualPartCorrespondence(input: PartCorrespondenceInput): 
         review.source_region_id !== region.id ||
         review.source_sha256 !== image.sha256 ||
         review.model_evidence_handle !== model.capture.evidence_handle ||
-        review.model_view !== image.view) {
+        review.model_view !== image.view ||
+        review.model_image_sha256 !== capturedImages.get(image.view)) {
       return result("UNAVAILABLE", "IMAGE_REVIEW_STALE");
     }
     return review.outcome === "MATCHED"

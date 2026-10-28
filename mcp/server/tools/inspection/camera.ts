@@ -1096,6 +1096,7 @@ export function registerCameraTools() {
               capture_dependency_fingerprint: after.capture_dependency_fingerprint,
               evidence_handle: captureEvidenceHandle,
               views: selectedViews,
+              image_digests: imageDigests,
             },
           },
           // Deliberately omit review: freshly captured model images have

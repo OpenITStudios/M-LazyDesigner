@@ -96,6 +96,10 @@ not LazyDesigner benchmarks, nor proof of native reference similarity.
 - one native-state fingerprint/receipt for the **affected model scope**;
   current capture identity, canonical view, front direction, framing/camera
   plan, and evidence handle. Do not invent model revision from a timestamp;
+- for each actual shaded capture view, its image SHA-256 bound to that view.
+  Reviewed claims must match both the capture handle and the exact view-image
+  digest; a view label or unchanged handle alone is insufficient. Identical
+  pixels in distinct views are possible for symmetric models and are allowed;
 - current target existence/visibility and, if required by the question,
   a real inspected hierarchy/attachment relationship;
 - explicit correspondence proposal: `part_id → target Cube UUID(s)`.
@@ -138,6 +142,7 @@ confidence-as-probability, unbounded list, or implicit correction command.
 | Part maps to many owned Cubes | Valid when resolved identities and relationships are explicit |
 | One Cube claims unrelated parts without a justified shared relationship | `CONFLICTING`, no silent ownership merge |
 | Model changed since capture, image SHA changed, or cameras cannot be paired | `UNAVAILABLE / PROVISIONAL`, refuse convergence/quality PASS |
+| Captured model view missing its shaded PNG hash, or review cites another digest | `UNAVAILABLE`; do not promote an old review by matching view labels alone |
 | Correct source/model association but visibly wrong form, attachment, or marking | Feed independently reviewed existing `visualObservation` criterion; **do not** auto-choose a 3D repair operation |
 
 An `EXTRA_UNSUPPORTED_PART` claim needs an explicit relevant scope and

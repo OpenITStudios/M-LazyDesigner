@@ -18,6 +18,8 @@ type Editable<T> = T extends readonly unknown[]
   : T extends object ? { -readonly [K in keyof T]: Editable<T[K]> } : T;
 
 const HASH = "a".repeat(64);
+const MODEL_FRONT_SHA = "f".repeat(64);
+const MODEL_LEFT_SHA = "e".repeat(64);
 const BASE_REF = "c".repeat(64);
 const CAPTURE = "verificationevidence:current";
 
@@ -76,6 +78,7 @@ function fixture(): Editable<PartCorrespondenceInput> {
         native_snapshot_fingerprint: fingerprint,
         capture_dependency_fingerprint: "sha256:" + "d".repeat(64),
         evidence_handle: CAPTURE, views: ["front"],
+        image_digests: [{ view: "front", sha256: MODEL_FRONT_SHA }],
       },
     },
     proposals: [{
@@ -85,6 +88,7 @@ function fixture(): Editable<PartCorrespondenceInput> {
         outcome: "MATCHED", source_image_id: "IMG_FRONT",
         source_region_id: "seat-volume", source_sha256: HASH,
         model_evidence_handle: CAPTURE, model_view: "front",
+        model_image_sha256: MODEL_FRONT_SHA,
         source_pixels_inspected: true, model_pixels_inspected: true,
       },
     }],
@@ -183,6 +187,64 @@ describe("pure source-image to recipe-owned Cube correspondence", () => {
     });
   });
 
+
+  test("model review binds to the exact shaded PNG digest for its captured view", () => {
+    const missing = fixture();
+    missing.model.capture.image_digests = [];
+    expect(evaluate(missing)).toMatchObject({
+      state: "UNAVAILABLE", reason: "MODEL_CAPTURE_IMAGE_IDENTITY_UNVERIFIED",
+    });
+    const invalid = fixture();
+    invalid.model.capture.image_digests[0]!.sha256 = "not-a-digest";
+    expect(evaluate(invalid)).toMatchObject({
+      state: "UNAVAILABLE", reason: "MODEL_CAPTURE_IMAGE_IDENTITY_UNVERIFIED",
+    });
+    const wrongView = fixture();
+    wrongView.model.capture.image_digests[0]!.view = "left";
+    expect(evaluate(wrongView)).toMatchObject({
+      state: "UNAVAILABLE", reason: "MODEL_CAPTURE_IMAGE_IDENTITY_UNVERIFIED",
+    });
+    const missingReviewDigest = fixture();
+    missingReviewDigest.proposals[0]!.review!.model_image_sha256 = "";
+    expect(evaluate(missingReviewDigest)).toMatchObject({
+      state: "UNAVAILABLE", reason: "IMAGE_REVIEW_STALE",
+    });
+    const changedPixels = fixture();
+    changedPixels.model.capture.image_digests[0]!.sha256 = "b".repeat(64);
+    expect(evaluate(changedPixels)).toMatchObject({
+      state: "UNAVAILABLE", reason: "IMAGE_REVIEW_STALE",
+    });
+    expect(evaluate(fixture())).toMatchObject({
+      state: "SUPPORTED", reason: "MATCH_REVIEWED",
+    });
+  });
+
+  test("identical rendered pixels from separate valid model views remain allowed for symmetric geometry", () => {
+    const input = fixture();
+    input.reference.images.push({
+      ...structuredClone(input.reference.images[0]!),
+      id: "IMG_LEFT", view: "left", sha256: "b".repeat(64),
+    });
+    input.model.capture.views.push("left");
+    input.model.capture.image_digests.push({
+      view: "left", sha256: MODEL_FRONT_SHA,
+    });
+    input.proposals.push({
+      ...structuredClone(input.proposals[0]!),
+      image_id: "IMG_LEFT",
+      review: {
+        ...structuredClone(input.proposals[0]!.review!),
+        source_image_id: "IMG_LEFT",
+        source_sha256: "b".repeat(64),
+        model_view: "left",
+        model_image_sha256: MODEL_FRONT_SHA,
+      },
+    });
+    const result = assessVisualPartCorrespondence(input);
+    expect(result.claims.map((claim) => claim.state)).toEqual(["SUPPORTED", "SUPPORTED"]);
+    expect(result.visual_verdict).toBe("NOT_EVALUATED");
+  });
+
   test("occlusion cannot prove hidden geometry; surface details belong to TEXTURE", () => {
     const hidden = fixture();
     hidden.reference.images[0]!.regions = parseReferenceImageRegions([{
@@ -259,12 +321,14 @@ describe("pure source-image to recipe-owned Cube correspondence", () => {
       view: "left", sha256: HASH,
     });
     x.model.capture.views.push("left");
+    x.model.capture.image_digests.push({ view: "left", sha256: MODEL_LEFT_SHA });
     x.proposals.push({
       ...structuredClone(x.proposals[0]!),
       image_id: "IMG_LEFT",
       review: {
         ...structuredClone(x.proposals[0]!.review!),
         source_image_id: "IMG_LEFT", model_view: "left",
+        model_image_sha256: MODEL_LEFT_SHA,
       },
     });
     const result = assessVisualPartCorrespondence(x);
@@ -284,12 +348,14 @@ describe("pure source-image to recipe-owned Cube correspondence", () => {
       view: "left", sha256: leftSha,
     });
     x.model.capture.views.push("left");
+    x.model.capture.image_digests.push({ view: "left", sha256: MODEL_LEFT_SHA });
     x.proposals.push({
       ...structuredClone(x.proposals[0]!),
       image_id: "IMG_LEFT",
       review: {
         ...structuredClone(x.proposals[0]!.review!),
         source_image_id: "IMG_LEFT", source_sha256: leftSha, model_view: "left",
+        model_image_sha256: MODEL_LEFT_SHA,
       },
     });
     const result = assessVisualPartCorrespondence(x);
