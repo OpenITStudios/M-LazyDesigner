@@ -378,6 +378,119 @@ describe("read-only feature representation impact for compiled Recipe geometry",
     expect(addGeometry.native_mutation_executed).toBe(false);
   });
 
+
+  test("a retained dependent feature blocks Geometry-to-Texture handoff before native removal", () => {
+    const recipe = featureRecipe();
+    recipe.prototypes.push({
+      id: "leg_cube", name: "support_leg", size: [1, 3, 1],
+      semantic_group: "leg",
+    });
+    recipe.patterns.push({
+      kind: "LINEAR", id: "legs", feature_id: "leg",
+      prototype_id: "leg_cube", count: 1, axis: "X", spacing: 0,
+      start: [0, 0, 0],
+    });
+    recipe.feature_intents!.push({
+      id: "leg", label: "Supporting leg", visual_role: "THREE_DIMENSIONAL",
+      evidence: "SUPPORTED", evidence_refs: ["reference:side:leg"],
+      geometry_reasons: ["CONTACT"],
+    });
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "leg_follows_horn",
+      source_instance_id: "legs:0", target_instance_id: "horns:0",
+      axes: ["X"],
+      source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MAX", "MIN", "MIN"],
+      offset: [0, 0, 0],
+    }];
+    const baseline = structuredClone(recipe);
+    const hornProposal = {
+      id: "horn", label: "Crest horns",
+      visual_role: "SURFACE_DETAIL" as const, evidence: "SUPPORTED" as const,
+      evidence_refs: ["reference:front:crest"], geometry_reasons: [],
+    };
+    const legProposal = {
+      id: "leg", label: "Supporting leg",
+      visual_role: "UNNECESSARY" as const, evidence: "SUPPORTED" as const,
+      evidence_refs: ["reference:side:leg"], geometry_reasons: [],
+    };
+
+    const single = assessRecipeFeatureOptimization(recipe, [hornProposal]);
+    expect(single).toMatchObject({
+      state: "review_required",
+      review_required_count: 1,
+      constraint_dependency_review_feature_count: 1,
+      possible_native_removal_review_instance_count: 3,
+      native_mutation_executed: false,
+    });
+    expect(single.candidates[0]).toMatchObject({
+      feature_id: "horn",
+      action: "CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED",
+      realized_recipe_cube_count: 3,
+      proposed_native_cube_deletion: false,
+      constraint_impact: {
+        constraint_count: 1,
+        retained_peer_constraint_count: 1,
+        retained_dependent_constraint_count: 1,
+        examples: [{
+          id: "leg_follows_horn", role: "ANCHOR_TARGET",
+          source_instance_id: "legs:0", target_instance_id: "horns:0",
+          peer_feature_id: "leg", peer_route: "GEOMETRY",
+        }],
+      },
+    });
+
+    const legOnly = assessRecipeFeatureOptimization(recipe, [legProposal]);
+    expect(legOnly.candidates[0]).toMatchObject({
+      action: "CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED",
+      constraint_impact: {
+        constraint_count: 1, retained_peer_constraint_count: 1,
+        retained_dependent_constraint_count: 0,
+        examples: [{ role: "DEPENDENT_SOURCE", peer_feature_id: "horn" }],
+      },
+    });
+
+    // Even if both features are explicitly reclassified, their ANCHOR must
+    // be separately resolved. No Recipe/Undo mutation or native savings claim.
+    const both = assessRecipeFeatureOptimization(recipe, [hornProposal, legProposal]);
+    expect(both.constraint_dependency_review_feature_count).toBe(0);
+    expect(both.candidates.every((item) =>
+      item.action === "NATIVE_REMOVAL_REVIEW_REQUIRED"
+    )).toBe(true);
+    expect(both.candidates.map((item) =>
+      item.constraint_impact?.constraint_count
+    )).toEqual([1, 1]);
+    expect(recipe).toEqual(baseline);
+    expect(compileAuthoringRecipe(recipe).metrics.realized_cube_count).toBe(4);
+  });
+
+  test("constraints internal to one feature require cleanup but do not invent an external dependent", () => {
+    const recipe = featureRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "horn_chain",
+      source_instance_id: "horns:1", target_instance_id: "horns:0",
+      axes: ["Y"],
+      source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MAX", "MIN"],
+      offset: [0, 0, 0],
+    }];
+    const result = assessRecipeFeatureOptimization(recipe, [{
+      id: "horn", label: "Crest horns",
+      visual_role: "UNNECESSARY", evidence: "SUPPORTED",
+      evidence_refs: ["reference:front:crest"], geometry_reasons: [],
+    }]);
+    expect(result.candidates[0]).toMatchObject({
+      action: "NATIVE_REMOVAL_REVIEW_REQUIRED",
+      constraint_impact: {
+        constraint_count: 1,
+        retained_peer_constraint_count: 0,
+        retained_dependent_constraint_count: 0,
+        examples: [{ id: "horn_chain", peer_feature_id: "horn" }],
+      },
+    });
+    expect(result.native_mutation_executed).toBe(false);
+  });
+
   test("legacy/unowned features and empty proposals fail closed without assigning implicit Cube owners", () => {
     expect(() => assessRecipeFeatureOptimization(chairRecipe(), [{
       id: "seat", label: "Seat", visual_role: "UNNECESSARY",

@@ -53,6 +53,16 @@ to Texture/Omit, never issues native removals, invents texture pixels, or
 claims that a Recipe instance count is a verified live Cube saving. A legacy
 Recipe without explicit feature ownership cannot be auto-optimized.
 
+The read-only report also traces canonical `ANCHOR` constraint endpoints through
+the compiled instance-to-feature identity map, including Recipe-owned symmetry
+instances. A proposed Geometry→Texture/Omit change that leaves a constraint
+connected to another retained/unresolved feature is marked
+`CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED`. The summary distinguishes constraints
+with retained peer features from constraints wholly internal to the proposed
+change. Neither case authorizes native deletion, ignores dependent rigs/UVs,
+or proves an atlas can replace the geometry. Coordinates or display names do
+not establish dependency ownership.
+
 Reference-driven correction planning reuses the canonical Cube geometry
 contract: `reference/correction.ts` rejects overflowed numeric differences;
 `semanticEdit.ts` validates all proposed Cube endpoints/pivots/rotations and

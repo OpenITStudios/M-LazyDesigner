@@ -170,17 +170,78 @@ export function assessCompiledRecipeFeatureOptimization(
     instancesByFeature.set(owner, items);
   }
 
+  // A proposed 3D→Texture/Omit conversion may invalidate ANCHOR constraints
+  // owned by a different still-retained feature. The current compiler proves
+  // instance IDs; never infer this relationship from names or proximity.
+  type AnchorDependency = {
+    id: string;
+    role: "DEPENDENT_SOURCE" | "ANCHOR_TARGET";
+    source_instance_id: string;
+    target_instance_id: string;
+    peer_feature_id: string;
+  };
+  const dependencyByFeature = new Map<string, AnchorDependency[]>();
+  const recordDependency = (featureId: string, dependency: AnchorDependency) => {
+    const rows = dependencyByFeature.get(featureId) ?? [];
+    rows.push(dependency);
+    dependencyByFeature.set(featureId, rows);
+  };
+  for (const constraint of recipe.constraints ?? []) {
+    const sourceFeature = ownedByInstance.get(constraint.source_instance_id);
+    const targetFeature = ownedByInstance.get(constraint.target_instance_id);
+    if (constraint.kind !== "ANCHOR" || !sourceFeature || !targetFeature) {
+      throw new Error("FEATURE_OPTIMIZATION_CONSTRAINT_OWNER_UNVERIFIED");
+    }
+    recordDependency(sourceFeature, {
+      id: constraint.id,
+      role: "DEPENDENT_SOURCE",
+      source_instance_id: constraint.source_instance_id,
+      target_instance_id: constraint.target_instance_id,
+      peer_feature_id: targetFeature,
+    });
+    if (targetFeature !== sourceFeature) {
+      recordDependency(targetFeature, {
+        id: constraint.id,
+        role: "ANCHOR_TARGET",
+        source_instance_id: constraint.source_instance_id,
+        target_instance_id: constraint.target_instance_id,
+        peer_feature_id: sourceFeature,
+      });
+    }
+  }
+  for (const rows of dependencyByFeature.values()) {
+    rows.sort((left, right) => left.id.localeCompare(right.id));
+  }
+  const proposedRouteById = new Map(
+    proposed.map((decision) => [decision.id, decision.route] as const)
+  );
+  const peerRoute = (featureId: string): RecipeFeatureRoute =>
+    proposedRouteById.get(featureId) ??
+    currentDecisions.get(featureId)?.route ??
+    "REVIEW_REQUIRED";
+
   type Action =
     | "KEEP_GEOMETRY"
     | "TEXTURE_HANDOFF_ONLY"
     | "NO_NATIVE_CHANGE"
     | "NATIVE_REMOVAL_REVIEW_REQUIRED"
+    | "CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED"
     | "GEOMETRY_CREATION_REQUIRED"
     | "REFERENCE_REVIEW_REQUIRED";
 
   const candidates = proposed.map((decision) => {
     const current = currentDecisions.get(decision.id);
     const instanceIds = instancesByFeature.get(decision.id) ?? [];
+    const impactedConstraints = dependencyByFeature.get(decision.id) ?? [];
+    // "REVIEW_REQUIRED" on the peer is not permission to delete its anchor:
+    // treat unknown retained geometry conservatively until its owner resolves.
+    const retainedPeers = impactedConstraints.filter((row) =>
+      row.peer_feature_id !== decision.id &&
+      !["TEXTURE", "OMIT"].includes(peerRoute(row.peer_feature_id))
+    );
+    const retainedDependents = retainedPeers.filter(
+      (row) => row.role === "ANCHOR_TARGET"
+    );
     let action: Action;
     if (!current || decision.route === "REVIEW_REQUIRED") {
       action = "REFERENCE_REVIEW_REQUIRED";
@@ -188,7 +249,11 @@ export function assessCompiledRecipeFeatureOptimization(
       action = instanceIds.length > 0 ? "KEEP_GEOMETRY" : "GEOMETRY_CREATION_REQUIRED";
     } else if (instanceIds.length > 0) {
       // Never silently convert already-authored 3D Geometry to Texture/Omit.
-      action = "NATIVE_REMOVAL_REVIEW_REQUIRED";
+      // When another feature still needs its constraint endpoint, the
+      // structural repair comes BEFORE a possible Texture handoff/removal.
+      action = retainedPeers.length > 0
+        ? "CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED"
+        : "NATIVE_REMOVAL_REVIEW_REQUIRED";
     } else {
       action = decision.route === "TEXTURE" ? "TEXTURE_HANDOFF_ONLY" : "NO_NATIVE_CHANGE";
     }
@@ -200,6 +265,22 @@ export function assessCompiledRecipeFeatureOptimization(
       realized_recipe_cube_count: instanceIds.length,
       instance_id_examples: instanceIds.slice(0, 8),
       examples_truncated: instanceIds.length > 8,
+      ...(impactedConstraints.length > 0 ? {
+        constraint_impact: {
+          constraint_count: impactedConstraints.length,
+          retained_peer_constraint_count: retainedPeers.length,
+          retained_dependent_constraint_count: retainedDependents.length,
+          examples: impactedConstraints.slice(0, 8).map((row) => ({
+            id: row.id,
+            role: row.role,
+            source_instance_id: row.source_instance_id,
+            target_instance_id: row.target_instance_id,
+            peer_feature_id: row.peer_feature_id,
+            peer_route: peerRoute(row.peer_feature_id),
+          })),
+          examples_truncated: impactedConstraints.length > 8,
+        },
+      } : {}),
       // Native presence, effect on silhouette and deletion remain unverified.
       proposed_native_cube_deletion: false as const,
     };
@@ -208,10 +289,12 @@ export function assessCompiledRecipeFeatureOptimization(
   const reviewActions = new Set<Action>([
     "REFERENCE_REVIEW_REQUIRED",
     "NATIVE_REMOVAL_REVIEW_REQUIRED",
+    "CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED",
     "GEOMETRY_CREATION_REQUIRED",
   ]);
   const nativeDeletionCandidates = candidates.filter(
-    (item) => item.action === "NATIVE_REMOVAL_REVIEW_REQUIRED"
+    (item) => item.action === "NATIVE_REMOVAL_REVIEW_REQUIRED" ||
+      item.action === "CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED"
   );
   return {
     state: candidates.some((item) => reviewActions.has(item.action))
@@ -223,6 +306,9 @@ export function assessCompiledRecipeFeatureOptimization(
     proposal_count: candidates.length,
     review_required_count: candidates.filter(
       (item) => reviewActions.has(item.action)
+    ).length,
+    constraint_dependency_review_feature_count: candidates.filter(
+      (item) => item.action === "CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED"
     ).length,
     possible_native_removal_review_instance_count: nativeDeletionCandidates.reduce(
       (sum, item) => sum + item.realized_recipe_cube_count, 0
