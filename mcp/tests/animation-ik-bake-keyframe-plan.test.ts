@@ -80,6 +80,7 @@ describe("native Blockbench IK sample normalization and keyframe planning",()=>{
       tracks:[{group_uuid:"upper",rotations:[]},{group_uuid:"upper",rotations:[]}],
     })).toThrow("IK_BAKE_TRACK_INVENTORY_MISMATCH");
     expect(()=>nativeIkFrameTimes(200,144)).toThrow("IK_BAKE_SAMPLE_BUDGET_EXCEEDED");
+    expect(()=>nativeIkFrameTimes(0.1,1)).toThrow("IK_BAKE_INSUFFICIENT_NATIVE_FRAMES");
   });
 
   test("existing native solver frame decoder is read-only and refuses missing samples",()=>{

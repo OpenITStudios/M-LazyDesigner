@@ -51,6 +51,9 @@ export function nativeIkFrameTimes(duration: number, fps: number): number[] {
     timeline.push(timeline.length / fps);
     time += interval;
   }
+  if (timeline.length < 2) {
+    throw new Error("IK_BAKE_INSUFFICIENT_NATIVE_FRAMES: at least two IK solver sample frames required.");
+  }
   return timeline;
 }
 

@@ -659,10 +659,10 @@ function nativeIkBakeSourceRuntime(item: RuntimeAnimationItem) {
     animation_uuid: item.uuid,
     duration_seconds: item.length,
     snapping_fps: item.snapping,
-    anim_time_update: typeof item.anim_time_update === "string"
-      ? item.anim_time_update : "",
-    blend_weight: typeof item.blend_weight === "string"
-      ? item.blend_weight : "",
+    // Authored numeric Molang is still authored semantics. It must not
+    // disappear simply because its runtime representation is non-string.
+    anim_time_update: normalizeMolangStorage(item.anim_time_update),
+    blend_weight: normalizeMolangStorage(item.blend_weight),
     groups,
     locator_uuids: typeof Locator !== "undefined" && Array.isArray(Locator.all)
       ? Locator.all.map((locator: Locator) => locator.uuid) : [],

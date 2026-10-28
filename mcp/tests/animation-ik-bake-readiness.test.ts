@@ -101,6 +101,14 @@ describe("Blockbench native IK bake source eligibility", () => {
     }
   });
 
+  test("too-short native sample spans are not valid IK coverage", () => {
+    const result=analyzeNativeIkBakeReadiness({
+      ...baseline(),duration_seconds:0.1,snapping_fps:1,
+    });
+    expect(result.state).toBe("blocked");
+    expect(result.blocking_reasons).toContain("IK_BAKE_NATIVE_SAMPLE_SPAN_TOO_SHORT");
+  });
+
   test("native 144 FPS clamp, maximum duration and total work budget fail closed", () => {
     const overrate=analyzeNativeIkBakeReadiness({...baseline(),snapping_fps:200});
     expect(overrate.blocking_reasons).toContain("IK_BAKE_NATIVE_SAMPLING_FPS_MISMATCH");

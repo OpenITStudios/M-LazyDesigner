@@ -91,6 +91,11 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
       input.duration_seconds > 200) {
     fail("IK_BAKE_DURATION_OUT_OF_NATIVE_RANGE");
   }
+  if (Number.isFinite(input?.duration_seconds) &&
+      Number.isSafeInteger(input?.snapping_fps) &&
+      input.duration_seconds * input.snapping_fps < 1) {
+    fail("IK_BAKE_NATIVE_SAMPLE_SPAN_TOO_SHORT");
+  }
   if (!Number.isSafeInteger(input?.snapping_fps) ||
       input.snapping_fps < 1 || input.snapping_fps > 144) {
     // Native sampleIK clamps FPS at 144 while the baking action derives
