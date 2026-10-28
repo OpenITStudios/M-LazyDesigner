@@ -4,9 +4,11 @@
  * this module deliberately NEVER invokes it.
  */
 import {
+  nativeIkFrameTimes,
   planNativeIkBakedKeyframes,
   type NativeIkKeyframePlanInput,
 } from "@/lib/animation/ikBakeKeyframePlan";
+import { IK_BAKE_MAX_WORK_UNITS } from "@/lib/animation/ikBakeReadiness";
 
 type NativeIkSolverFrame = {
   array: readonly number[];
@@ -34,7 +36,16 @@ export function prepareNativeIkBakeFromExistingSamples(input: {
     }
     groups.set(group.uuid, group);
   }
+  if (!Array.isArray(input.expected_group_uuids)) {
+    throw new Error("IK_BAKE_TRACK_INVENTORY_MISMATCH: expected bone IDs are missing.");
+  }
   const expected = new Set(input.expected_group_uuids);
+  const nativeFrameCount = nativeIkFrameTimes(
+    input.duration_seconds, input.snapping_fps
+  ).length;
+  if (expected.size * nativeFrameCount > IK_BAKE_MAX_WORK_UNITS) {
+    throw new Error("IK_BAKE_SAMPLE_BUDGET_EXCEEDED: native sample normalization exceeds aggregate budget.");
+  }
   if (expected.size !== input.expected_group_uuids.length ||
       Object.keys(input.samples).length !== expected.size ||
       Object.keys(input.samples).some((id) => !expected.has(id))) {
@@ -44,8 +55,10 @@ export function prepareNativeIkBakeFromExistingSamples(input: {
   for (const uuid of input.expected_group_uuids) {
     const group = groups.get(uuid);
     const frames = input.samples[uuid];
-    if (!group || !Array.isArray(frames)) {
-      throw new Error("IK_BAKE_SAMPLING_INCOMPLETE: bone " + uuid + " is unavailable.");
+    if (!group || !Array.isArray(frames) ||
+        frames.length !== nativeFrameCount) {
+      throw new Error("IK_BAKE_SAMPLING_INCOMPLETE: bone " + uuid +
+        " did not supply exactly every native clock frame.");
     }
     const rawRotation = group.rotation;
     if (!Array.isArray(rawRotation) || rawRotation.length !== 3 ||

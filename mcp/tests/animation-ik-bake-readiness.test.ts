@@ -24,6 +24,7 @@ const baseline = (): NativeIkBakeReadinessInput => ({
   snapping_fps: 20,
   anim_time_update: "",
   blend_weight: "",
+  unsupported_armature_count: 0,
   groups: [
     group("body", null),
     group("upper", "body", [0, 15, 0]),
@@ -110,6 +111,18 @@ describe("Blockbench native IK bake source eligibility", () => {
     });
     expect(budget.estimated_native_work_units).toBeGreaterThan(IK_BAKE_MAX_WORK_UNITS);
     expect(budget.blocking_reasons).toContain("IK_BAKE_NATIVE_SAMPLING_BUDGET_EXCEEDED");
+  });
+
+  test("unknown ArmatureBone runtime inventory never silently becomes zero", () => {
+    const input=baseline();
+    const missing=analyzeNativeIkBakeReadiness({
+      ...input,unsupported_armature_count:undefined as unknown as number,
+    });
+    const nonzero=analyzeNativeIkBakeReadiness({
+      ...input,unsupported_armature_count:2,
+    });
+    expect(missing.blocking_reasons).toContain("IK_BAKE_NATIVE_INVENTORY_INCOMPLETE");
+    expect(nonzero.blocking_reasons).toContain("IK_BAKE_NATIVE_INVENTORY_INCOMPLETE");
   });
 
   test("unkeyed controllers with other authored keys cannot be silently deleted by native bake", () => {

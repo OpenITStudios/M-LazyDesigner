@@ -101,6 +101,11 @@ describe("native Blockbench IK sample normalization and keyframe planning",()=>{
       expect(()=>prepareNativeIkBakeFromExistingSamples({
         ...input,samples:{upper:frames},
       })).toThrow("IK_BAKE_SAMPLING_INCOMPLETE");
+      // Fail before decoding any Eulers or touching the virtual scene.
+      const extra = Array.from({length: n + 1},()=>sample(1));
+      expect(()=>prepareNativeIkBakeFromExistingSamples({
+        ...input,samples:{upper:frames,lower:extra},
+      })).toThrow("IK_BAKE_SAMPLING_INCOMPLETE");
     } finally {g.Group=oldGroup;}
   });
 });

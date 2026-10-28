@@ -673,7 +673,7 @@ function nativeIkBakeSourceRuntime(item: RuntimeAnimationItem) {
           ArmatureBone?: { all?: unknown[] };
         }
       ).ArmatureBone;
-      return Array.isArray(armature?.all) ? armature.all.length : 0;
+      return Array.isArray(armature?.all) ? armature.all.length : null;
     })(),
   });
 }

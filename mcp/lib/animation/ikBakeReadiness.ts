@@ -44,7 +44,8 @@ export type NativeIkBakeReadinessInput = Readonly<{
   groups: readonly IkBakeGroupSnapshot[];
   locator_uuids: readonly string[];
   controllers: readonly IkBakeControllerSnapshot[];
-  unsupported_armature_count?: number;
+  /** Required; unknown ArmatureBone inventory is not proof of absence. */
+  unsupported_armature_count: number;
 }>;
 
 function nonEmptyId(value: unknown): value is string {
@@ -103,8 +104,8 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
       !Array.isArray(input.controllers) ||
       input.controllers.length > IK_BAKE_MAX_CONTROLLERS ||
       !Array.isArray(input.locator_uuids) ||
-      !Number.isSafeInteger(input.unsupported_armature_count ?? 0) ||
-      (input.unsupported_armature_count ?? 0) > 0) {
+      !Number.isSafeInteger(input.unsupported_armature_count) ||
+      input.unsupported_armature_count !== 0) {
     fail("IK_BAKE_NATIVE_INVENTORY_INCOMPLETE");
   }
 
