@@ -59,7 +59,14 @@ test("simplification quantifies parent-local shape drift and painted UV risk",()
   const cube={
     uuid:"s",name:"shoulder",from:[0.01,0,0],to:[1.99,2,2],
     rotation:[0,0,0],origin:[1,1,1],inflate:0,box_uv:false,
-    face_textures:["atlas-texture",false,null],
+    uv_faces:[
+      {face:"north" as const,texture:"atlas-texture"},
+      {face:"south" as const,texture:false},
+      {face:"east" as const,texture:false},
+      {face:"west" as const,texture:false},
+      {face:"up" as const,texture:false},
+      {face:"down" as const,texture:false},
+    ],
   };
   const before=JSON.stringify(cube);
   const updates=planCubeSimplification([cube],request({ids:["s"]}));
@@ -87,7 +94,14 @@ test("same-span translation has no texture stretch, rotated pivot has bounded dr
   const cube={
     uuid:"c",name:"body",from:[0,0,0],to:[2,2,2],
     rotation:[0,0,0],origin:[1,1,1],inflate:0,
-    box_uv:true,face_textures:["texture"],
+    box_uv:true,uv_faces:[
+      {face:"north" as const,texture:"atlas-texture"},
+      {face:"south" as const,texture:false},
+      {face:"east" as const,texture:false},
+      {face:"west" as const,texture:false},
+      {face:"up" as const,texture:false},
+      {face:"down" as const,texture:false},
+    ],
   };
   const moved=analyzeCubeSimplificationFidelity([{
     cube,update:{id:"c",from:[1,0,0],to:[3,2,2]},
@@ -113,7 +127,14 @@ test("textured simplify refuses altered physical span before Undo",async()=>{
   const cube={
     uuid:"painted",name:"painted",from:[.01,0,0],to:[1.99,2,2],
     rotation:[0,0,0],origin:[0,0,0],inflate:0,
-    box_uv:false,faces:{north:{texture:"atlas"}},
+    box_uv:false,faces:{
+      north:{texture:"atlas"},
+      south:{texture:false},
+      east:{texture:false},
+      west:{texture:false},
+      up:{texture:false},
+      down:{texture:false},
+    },
   };
   g.Project={};g.Cube={all:[cube]};g.Undo={initEdit(){opened++}};
   try{
@@ -156,4 +177,50 @@ test("simplify fidelity analysis and safety precede actual native batch Undo",as
   expect(section.indexOf("SIMPLIFY_TEXTURE_MAPPING_REVIEW_REQUIRED"))
     .toBeLessThan(section.indexOf("executeBatchUpdateCubes({ updates })"));
   expect(section).not.toContain("Undo.initEdit(");
+});
+
+
+test("mapped north face ignores Z-only thickness changes, but east face detects them",()=>{
+  const cube={
+    uuid:"side-detail",name:"side-detail",
+    from:[0,0,0],to:[2,2,2],origin:[0,0,0],
+    rotation:[0,0,0],inflate:0,box_uv:false,
+    uv_faces:[
+      {face:"north" as const,texture:"front"},
+      {face:"south" as const,texture:false},
+      {face:"east" as const,texture:false},
+      {face:"west" as const,texture:false},
+      {face:"up" as const,texture:false},
+      {face:"down" as const,texture:false},
+    ],
+  };
+  const update={id:"side-detail",to:[2,2,3]};
+  const north=analyzeCubeSimplificationFidelity([{cube,update}]);
+  expect(north.max_physical_extent_scale_ratio).toBe(1.5);
+  expect(north.mapped_texture_stretch_risk_count).toBe(0);
+  const east=analyzeCubeSimplificationFidelity([{
+    cube:{...cube,uv_faces:cube.uv_faces.map((face) =>
+      face.face==="north" ? {...face,texture:false} :
+      face.face==="east" ? {...face,texture:"side"} : face
+    )},
+    update,
+  }]);
+  expect(east.mapped_texture_stretch_risk_count).toBe(1);
+});
+
+test("missing or duplicate UV face inventory cannot authorize implicit simplification",()=>{
+  const cube={
+    uuid:"a",name:"a",from:[0,0,0],to:[2,2,2],
+    rotation:[0,0,0],origin:[0,0,0],inflate:0,
+  };
+  const update={id:"a",to:[3,2,2]};
+  const duplicate=analyzeCubeSimplificationFidelity([{
+    cube:{...cube,uv_faces:[
+      {face:"north" as const,texture:false},
+      {face:"north" as const,texture:false},
+    ]},
+    update,
+  }]);
+  expect(duplicate.incomplete_face_inventory_count).toBe(1);
+  expect(duplicate.per_cube[0].mapped_face_count).toBeNull();
 });

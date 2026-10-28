@@ -1194,10 +1194,12 @@ export function registerCubesTools() {
               origin: cube.origin,
               inflate: cube.inflate ?? 0,
               box_uv: cube.box_uv,
-              face_textures: cube.faces
-                ? Object.values(cube.faces).map((face) =>
-                    (face as CubeFace & { texture?: unknown }).texture
-                  )
+              uv_faces: cube.faces
+                ? Object.entries(cube.faces).map(([face, data]) => ({
+                    face: face as CubeFaceDirection,
+                    texture: (data as CubeFace & { texture?: unknown }).texture,
+                    enabled: data.enabled !== false,
+                  }))
                 : undefined,
             },
             update,

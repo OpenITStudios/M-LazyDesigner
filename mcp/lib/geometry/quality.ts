@@ -286,7 +286,11 @@ export function analyzeGeometryHygiene(
 export type CubeSimplificationFidelityInput = {
   cube: GeometryCubeQualityInput & {
     /** When absent, an unverified face inventory is NOT an untextured Cube. */
-    face_textures?: readonly unknown[];
+    uv_faces?: readonly {
+      face: "north" | "south" | "east" | "west" | "up" | "down";
+      texture?: unknown;
+      enabled?: boolean;
+    }[];
   };
   update: {
     id: string;
@@ -385,15 +389,40 @@ export function analyzeCubeSimplificationFidelity(
     const driftBound = simplifyFiniteMetric(
       boundChange + angularBound, "parent-local corner drift upper bound"
     );
-    const inventoryComplete = Array.isArray(cube.face_textures);
-    const mappedFaceCount = inventoryComplete
-      ? cube.face_textures!.filter(texture =>
-          texture !== false && texture !== null && texture !== undefined
-        ).length
-      : null;
-    const textureStretchRisk = mappedFaceCount !== null &&
-      mappedFaceCount > 0 && extentChanged &&
-      worstExtentRatio > 1 + GEOMETRY_QUALITY_EPSILON;
+    // Only the two physical axes of each textured, enabled Cube face
+    // determine whether its fixed UV rectangle will stretch. A Z-only
+    // thickness edit does not change a textured north/south X-Y face.
+    const faceAxes = {
+      north: [0, 1], south: [0, 1],
+      east: [2, 1], west: [2, 1],
+      up: [0, 2], down: [0, 2],
+    } as const;
+    const faceInventory = cube.uv_faces;
+    const faceIds = Array.isArray(faceInventory)
+      ? faceInventory.map((face) => face?.face) : [];
+    const inventoryComplete = Array.isArray(faceInventory) &&
+      faceInventory.length === 6 &&
+      faceIds.every((id) => typeof id === "string" && id in faceAxes) &&
+      new Set(faceIds).size === 6;
+    const mappedFaces = inventoryComplete
+      ? faceInventory!.filter((face) =>
+          face.enabled !== false &&
+          face.texture !== false && face.texture !== null &&
+          face.texture !== undefined
+        )
+      : [];
+    const mappedFaceCount = inventoryComplete ? mappedFaces.length : null;
+    const textureStretchRisk = mappedFaces.some((face) =>
+      faceAxes[face.face].some((axis) => {
+        if (beforeSize[axis] === afterSize[axis]) return false;
+        // Zero spans remain zero by the topology guard above. Changing a
+        // positive physical extent changes texel scale on this face.
+        const before = beforeSize[axis], after = afterSize[axis];
+        return before > 0 && after > 0 &&
+          Math.max(before / after, after / before) >
+          1 + GEOMETRY_QUALITY_EPSILON;
+      })
+    );
 
     return {
       cube_uuid: cube.uuid,
