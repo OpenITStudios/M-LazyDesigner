@@ -25,6 +25,8 @@ export type IkBakeControllerSnapshot = Readonly<{
   source_uuid: string | null;
   parent_group_uuid: string | null;
   pole_uuid: string | null;
+  /** Native target-rotation lock may emit an extra target-bone sample. */
+  lock_target_rotation: boolean;
   position_keyframes: number;
   total_keyframes: number;
 }>;
@@ -130,6 +132,9 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
   // action, or an unsampled rotation/scale/effect track could be deleted.
   for (const controller of controllers) {
     if (!controller.target_uuid) continue;
+    if (typeof controller.lock_target_rotation !== "boolean") {
+      fail("IK_BAKE_TARGET_ROTATION_LOCK_UNVERIFIED");
+    }
     if (!Number.isSafeInteger(controller.position_keyframes) ||
         !Number.isSafeInteger(controller.total_keyframes) ||
         controller.position_keyframes < 0 ||
@@ -206,7 +211,14 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
       fail("IK_BAKE_CHAIN_HAS_NO_ROTATION_REFERENCE");
       continue;
     }
-    const invalid = fitted.some((group) =>
+    // Blockbench displayIK() reverses the source->target chain and emits a
+    // rotation for every bone EXCEPT its final target. With an explicit
+    // ik_source, that source is included; with an implicit parent, it is not.
+    // The target receives its own rotation sample only when native
+    // lock_ik_target_rotation is explicitly enabled.
+    const emitted = fitted.slice(1);
+    if (controller.lock_target_rotation === true) emitted.push(target);
+    const invalid = emitted.some((group) =>
       !Array.isArray(group.rotation) || group.rotation.length !== 3 ||
       !group.rotation.every((v) => Number.isFinite(v)) ||
       !group.transform_available ||
@@ -217,16 +229,16 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
       fail("IK_BAKE_PRE_ROTATION_OR_TRANSFORM_UNVERIFIED");
       continue;
     }
-    if (fitted.some((group) => affected.has(group.uuid))) {
+    if (emitted.some((group) => affected.has(group.uuid))) {
       fail("IK_BAKE_OVERLAPPING_CHAINS_UNVERIFIED");
       continue;
     }
-    for (const group of fitted) affected.add(group.uuid);
-    const rotated = fitted.filter((group) =>
+    for (const group of emitted) affected.add(group.uuid);
+    const rotated = emitted.filter((group) =>
       group.rotation.some((v) => Math.abs(v) > 1e-6)
     ).length;
     affectedPreRotatedGroups += rotated;
-    const units = frames * fitted.length;
+    const units = frames * emitted.length;
     estimatedNativeWork += units;
     expectedControllerKeysRemoved += controller.total_keyframes;
     if (chainExamples.length < MAX_EXAMPLES) {
@@ -234,7 +246,7 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
         controller_uuid: controller.uuid,
         target_uuid: target.uuid,
         source_uuid: source.uuid,
-        affected_group_uuids: fitted.map((group) => group.uuid).slice(0, 24),
+        affected_group_uuids: emitted.map((group) => group.uuid).slice(0, 24),
         pre_rotated_group_count: rotated,
       });
     }
@@ -254,6 +266,8 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
     native_work_unit_limit: IK_BAKE_MAX_WORK_UNITS,
     expected_controller_keyframes_removed: expectedControllerKeysRemoved,
     affected_group_count: affected.size,
+    /** Exact expected sample keys for a future native sample validator. */
+    expected_sampled_group_uuids: [...affected].sort(),
     pre_rotated_group_count: affectedPreRotatedGroups,
     examples: chainExamples,
     examples_truncated: affected.size > 24 || activeControllers.length > MAX_EXAMPLES,

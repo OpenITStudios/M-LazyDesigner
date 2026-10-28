@@ -34,7 +34,8 @@ const baseline = (): NativeIkBakeReadinessInput => ({
   controllers: [{
     uuid: "ik_foot", target_uuid: "foot",
     source_uuid: "body", parent_group_uuid: "body",
-    pole_uuid: "knee_pole", position_keyframes: 4,
+    pole_uuid: "knee_pole", lock_target_rotation: false,
+    position_keyframes: 4,
     total_keyframes: 6,
   }],
 });
@@ -54,15 +55,39 @@ describe("Blockbench native IK bake source eligibility", () => {
       active_controller_count: 1,
       evaluated_chain_count: 1,
       estimated_native_frame_count: 21,
-      estimated_native_work_units: 84,
+      estimated_native_work_units: 63,
       expected_controller_keyframes_removed: 6,
-      affected_group_count: 4,
+      affected_group_count: 3,
       pre_rotated_group_count: 1,
       blocking_reasons: [],
     });
     expect(r.examples[0]?.affected_group_uuids)
-      .toEqual(["foot", "lower", "upper", "body"]);
+      .toEqual(["lower", "upper", "body"]);
+    expect(r.expected_sampled_group_uuids).toEqual(["body","lower","upper"]);
     expect(JSON.stringify(input)).toBe(before);
+  });
+
+
+  test("native IK emits source/hinge rotations, not an implicit end-effector rotation", () => {
+    const unlocked=analyzeNativeIkBakeReadiness(baseline());
+    expect(unlocked.expected_sampled_group_uuids).toEqual(["body","lower","upper"]);
+    const input=baseline();
+    const locked=analyzeNativeIkBakeReadiness({
+      ...input,
+      controllers: [{...input.controllers[0]!,lock_target_rotation:true}],
+    });
+    expect(locked.state).toBe("candidate_source_only");
+    expect(locked.expected_sampled_group_uuids).toEqual(["body","foot","lower","upper"]);
+    expect(locked.affected_group_count).toBe(4);
+    expect(locked.estimated_native_work_units).toBe(84);
+    // A direct, incomplete snapshot must not silently assume the target lock is off.
+    const missingLock = {...input.controllers[0]!} as Record<string,unknown>;
+    delete missingLock.lock_target_rotation;
+    const incomplete=analyzeNativeIkBakeReadiness({
+      ...input,
+      controllers:[missingLock as unknown as typeof input.controllers[number]],
+    });
+    expect(incomplete.blocking_reasons).toContain("IK_BAKE_TARGET_ROTATION_LOCK_UNVERIFIED");
   });
 
   test("unpatched, prerelease and unknown post-review editor versions cannot claim eligibility", () => {
@@ -172,7 +197,7 @@ describe("Blockbench native IK bake source eligibility", () => {
       groups:[group("body",null),group("foot","body")],
       controllers:[{
         uuid:"ik_foot",target_uuid:"foot",source_uuid:null,
-        parent_group_uuid:"body",pole_uuid:null,
+        parent_group_uuid:"body",pole_uuid:null,lock_target_rotation:false,
         position_keyframes:2,total_keyframes:2,
       }],
     });

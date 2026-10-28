@@ -644,6 +644,7 @@ function nativeIkBakeSourceRuntime(item: RuntimeAnimationItem) {
       source_uuid: native.ik_source || null,
       parent_group_uuid: node.parent instanceof Group ? node.parent.uuid : null,
       pole_uuid: native.ik_pole || null,
+      lock_target_rotation: node.lock_ik_target_rotation === true,
       position_keyframes: Array.isArray(animator?.position)
         ? animator.position.length : 0,
       total_keyframes: Array.isArray(animator?.keyframes)
