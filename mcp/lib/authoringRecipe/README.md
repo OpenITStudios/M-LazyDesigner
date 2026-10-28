@@ -324,6 +324,48 @@ owner-specific native receipts requires a separate authenticated producer
 contract and installed evidence, not a self-declared handle. Even a correctly
 bound reference is not visual, rig, export or deletion acceptance.
 
+### Canonical saved-Recipe source observation ownership
+
+The existing `AuthoringRecipeService` now exposes
+`captureStoredRecipeOptimizationSourceObservations` for **only**
+`RECIPE_ANCHOR_RELATION` and `RECIPE_SYMMETRY_RELATION`, the two owner checks
+that can genuinely be sourced from the currently saved Recipe. It first
+re-inspects source freshness and refuses stale baselines. A successful source
+read issues a short-lived `RECIPE_REVIEW_SOURCE_OBSERVATION` handle in the
+**existing bounded `AuthoringEvidenceRegistry`**, not a new receipt store.
+The handle is meaningful only when resolved by the same live Recipe Service
+registry; it expires upon eviction or a Runtime generation change. Source
+observations have **lower retention priority** than saved semantic-identity
+and Apply receipts: the existing bounded registry refuses an entire new
+source-observation batch if it cannot fit without displacing protected Recipe
+evidence. A later important Recipe receipt may still evict an earlier review
+source observation. This protects pending transactional recovery from routine
+read-only review scans. No second registry is introduced. The handle is not
+a cryptographic signature, native test receipt, or external issuer credential.
+
+`reconcileStoredGeometryOptimizationReviewEvidence` optionally accepts
+`owner_source_observation_handle` on a claimant's exact full-scope reference.
+It accepts an observation as genuinely service-issued only after checking
+the same registry's record kind, saved Recipe ID, exact planned Anchor/Symmetry
+owner/check, source binding, full-scope hash and observation purpose.
+Unregistered, expired, malformed, wrong-kind, cross-service or wrong-owner
+handles cannot establish source ownership. A properly resolved record is
+reported as `RECIPE_SOURCE_OBSERVED_NOT_REVIEWED`; an invalid one is
+`OWNER_SOURCE_OBSERVATION_REJECTED`. Legacy caller-supplied reference IDs
+without an issuer handle remain `REFERENCE_BOUND_UNATTESTED`.
+
+This limited source observation **does not authenticate independent**
+native UV, PBR/material, animation, reference visual or Bedrock export
+check outcomes. In particular, a valid Recipe source handle cannot be
+replayed as proof from a different evidence owner; it does not resolve an
+Anchor/Symmetry semantic risk, complete visual acceptance or enable deletion.
+The reconciliation always retains `verified_evidence_count: 0`,
+`owner_provenance_verified: false`, `review_approved: false`,
+`safe_to_delete: false` and `native_mutation_authorized: false`.
+Real cross-owner review acceptance needs actual owner-owned evidence
+issuance and independent native proof; **source snapshots and hash handles
+must never be promoted into an artificial PASS**.
+
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 `planning.ts` owns pure planning APIs. `service.ts` owns bounded stateful plan/apply/identity/evidence lifecycle and may compose recipe modules, but recipe source must not depend on Gateway or Runtime executors.

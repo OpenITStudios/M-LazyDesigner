@@ -487,6 +487,12 @@ export type RecipeRiskReviewEvidenceReference = {
   evidence_owner: RecipeRiskReviewDefinition["evidence_owner"];
   source_binding_fingerprint: string;
   evidence_ref: string;
+  /**
+   * Optional same-Runtime Recipe source observation handle. Only the Recipe
+   * evidence registry may resolve it. An arbitrary string, raw hash, or
+   * source observation from another owner is NOT an authenticated review.
+   */
+  owner_source_observation_handle?: `authoringevidence:${string}`;
   full_scope: RecipeRiskReviewFullScope;
 };
 

@@ -8,6 +8,7 @@ import {
   type RecipeRiskReviewEvidenceReference,
 } from "@/lib/authoringRecipe/planning";
 import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
+import { AuthoringEvidenceRegistry } from "@/lib/authoringRecipe/evidenceRegistry";
 import {
   fingerprintAuthoringRecipeNativeSnapshot,
   type AuthoringRecipeNativeSnapshot,
@@ -2108,6 +2109,405 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
       verified_evidence_count: 0,
       review_approved: false,
       safe_to_delete: false,
+    });
+  });
+
+
+  test("canonical saved-Recipe owner issues source observations but never review approval", async () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "owned-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const snapshot = native(recipe, [null, null]);
+    let applyCalls = 0;
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snapshot),
+      readCoincidenceSurface: (_id, native) => surfaceFixture(native),
+      createApplyAdapter: () => {
+        applyCalls++;
+        throw new Error("Read-only source ownership cannot request Apply.");
+      },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({
+      recipe_id: recipe.id,
+    });
+    const capture = await service.captureStoredRecipeOptimizationSourceObservations({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+    });
+    expect(capture).toMatchObject({
+      state: "RECIPE_SOURCE_OBSERVATIONS_CAPTURED",
+      source_freshness_state: "SOURCE_CURRENT",
+      source_binding_fingerprint: report.review_source_identity.source_binding_fingerprint,
+      source_observation_count: 1,
+      source_observation_only: true,
+      independent_owner_review_executed: false,
+      owner_visual_verified: false,
+      native_mutation_authorized: false,
+      observations: [{
+        check_id: "RECIPE_ANCHOR_RELATION", evidence_owner: "SAVED_RECIPE",
+      }],
+    });
+    expect(capture.observations[0]!.evidence_handle)
+      .toMatch(/^authoringevidence:[a-f0-9]{64}$/);
+    const claims = ownerReferenceClaims(report);
+    const anchor = claims.find(claim => claim.check_id === "RECIPE_ANCHOR_RELATION")!;
+    anchor.owner_source_observation_handle = capture.observations[0]!.evidence_handle;
+    const result = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: claims,
+    });
+    expect(result).toMatchObject({
+      state: "REFERENCES_BOUND_UNATTESTED",
+      source_freshness_state: "SOURCE_CURRENT",
+      submitted_reference_count: 2,
+      matched_unattested_reference_count: 2,
+      recipe_source_observation_count: 1,
+      checks: [
+        {
+          check_id: "RECIPE_ANCHOR_RELATION",
+          state: "RECIPE_SOURCE_OBSERVED_NOT_REVIEWED",
+          recipe_source_observation_confirmed: true,
+          owner_provenance_verified: false,
+          native_check_executed: false,
+        },
+        {
+          check_id: "NATIVE_VISUAL_AND_EXPORT",
+          state: "REFERENCE_BOUND_UNATTESTED",
+          recipe_source_observation_confirmed: false,
+        },
+      ],
+      verified_evidence_count: 0,
+      review_approved: false, safe_to_delete: false,
+      native_mutation_authorized: false,
+      visual_verdict: "NOT_EVALUATED",
+    });
+    expect(applyCalls).toBe(0);
+    expect(service.evidenceRegistrySize()).toBe(1);
+  });
+
+  test("unrelated visual review never receives a fabricated saved-Recipe source observation", async () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snapshot),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply."); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({
+      recipe_id: recipe.id,
+    });
+    const capture = await service.captureStoredRecipeOptimizationSourceObservations({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+    });
+    expect(capture).toMatchObject({
+      state: "NO_SAVED_RECIPE_OWNER_CHECKS",
+      observations: [], source_observation_count: 0,
+      independent_owner_review_executed: false,
+    });
+    expect(service.evidenceRegistrySize()).toBe(0);
+  });
+
+  test("guessed and foreign-service source handles are rejected instead of accepted as authenticated evidence", async () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "guard-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const snap = native(recipe, [null, null]);
+    const dependencies = {
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: (_id: string, owned: AuthoringRecipeNativeSnapshot) =>
+        surfaceFixture(owned),
+      createApplyAdapter: () => {
+        throw new Error("No native transaction.");
+      },
+    };
+    const issuingService = createAuthoringRecipeService(dependencies);
+    const otherService = createAuthoringRecipeService(dependencies);
+    const prior = await issuingService.inspectStoredGeometryCoincidence({
+      recipe_id: recipe.id,
+    });
+    const minted = await issuingService.captureStoredRecipeOptimizationSourceObservations({
+      recipe_id: recipe.id,
+      expected_review_source_identity: prior.review_source_identity,
+    });
+    const refs = ownerReferenceClaims(prior);
+    refs[0]!.owner_source_observation_handle = minted.observations[0]!.evidence_handle;
+    const foreign = await otherService.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: prior.review_source_identity,
+      references: refs,
+    });
+    expect(foreign).toMatchObject({
+      state: "REFERENCES_MISMATCHED",
+      recipe_source_observation_count: 0,
+      checks: [{ state: "OWNER_SOURCE_OBSERVATION_REJECTED" }],
+      verified_evidence_count: 0, review_approved: false,
+    });
+    refs[0]!.owner_source_observation_handle =
+      `authoringevidence:${"f".repeat(64)}`;
+    const forged = await issuingService.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: prior.review_source_identity,
+      references: refs,
+    });
+    expect(forged).toMatchObject({
+      state: "REFERENCES_MISMATCHED",
+      checks: [{ state: "OWNER_SOURCE_OBSERVATION_REJECTED" }],
+      native_mutation_authorized: false,
+    });
+  });
+
+  test("Recipe source handle cannot impersonate UV/material or animation owners", async () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "native-ownership-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const snap = native(recipe, [null, null]);
+    const surface = surfaceFixture(snap);
+    surface.cubes[0]!.uv_offset = [4, 0];
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: () => structuredClone(surface),
+      createApplyAdapter: () => { throw new Error("No mutation."); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const minted = await service.captureStoredRecipeOptimizationSourceObservations({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+    });
+    const claims = ownerReferenceClaims(report);
+    const uv = claims.find(claim => claim.check_id === "NATIVE_UV_MAPPING")!;
+    uv.owner_source_observation_handle = minted.observations[0]!.evidence_handle;
+    const result = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: claims,
+    });
+    expect(result).toMatchObject({
+      state: "REFERENCES_MISMATCHED",
+      recipe_source_observation_count: 0,
+      verified_evidence_count: 0,
+      review_approved: false,
+    });
+    expect(result.checks.find(check => check.check_id === "NATIVE_UV_MAPPING"))
+      .toMatchObject({
+        state: "OWNER_SOURCE_OBSERVATION_REJECTED",
+        recipe_source_observation_confirmed: false,
+        owner_provenance_verified: false,
+      });
+  });
+
+  test("stale source refuses capture and previous observed source never survives a Recipe change", async () => {
+    let recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "initial-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const snap = native(recipe, [null, null]);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No native Apply."); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const minted = await service.captureStoredRecipeOptimizationSourceObservations({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+    });
+    const existingSize = service.evidenceRegistrySize();
+    recipe = structuredClone(recipe);
+    recipe.constraints![0]!.id = "changed-anchor";
+    await expect(service.captureStoredRecipeOptimizationSourceObservations({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+    })).rejects.toThrow("RECIPE_OPTIMIZATION_REVIEW_SOURCE_STALE");
+    expect(service.evidenceRegistrySize()).toBe(existingSize);
+    const claims = ownerReferenceClaims(report);
+    claims[0]!.owner_source_observation_handle = minted.observations[0]!.evidence_handle;
+    const reconciled = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: claims,
+    });
+    expect(reconciled).toMatchObject({
+      state: "SOURCE_STALE", recipe_source_observation_count: 0,
+      verified_evidence_count: 0, review_approved: false,
+    });
+  });
+
+  test("malformed observation handles fail before any new native source read", async () => {
+    const recipe = coincidenceRecipe();
+    const snap = native(recipe, [null, null]);
+    let reads = 0;
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => { reads++; return structuredClone(snap); },
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply."); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const claims = ownerReferenceClaims(report);
+    claims[0]!.owner_source_observation_handle = "authoringevidence:INVALID";
+    const before = reads;
+    await expect(service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: claims,
+    })).rejects.toThrow("RECIPE_OPTIMIZATION_REVIEW_REFERENCES_INVALID");
+    expect(reads).toBe(before);
+  });
+
+  test("insufficient registry space refuses the whole owner source batch before partial issuance", async () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "source-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    recipe.symmetry = [{
+      id: "source-mirror", source_instance_id: "shells:0",
+      target_instance_id: "mirrored-shell",
+      plane: { axis: "X", position: 1 },
+      uv_policy: "SHARE", texture_policy: "MIRROR", rig_policy: "MIRROR",
+    }];
+    const snap = native(recipe, [null, null, null]);
+    const registry = new AuthoringEvidenceRegistry(1);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply."); },
+    }, undefined, registry);
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    await expect(service.captureStoredRecipeOptimizationSourceObservations({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+    })).rejects.toThrow("AUTHORING_REVIEW_SOURCE_OBSERVATION_CAPACITY");
+    expect(service.evidenceRegistrySize()).toBe(0);
+    expect(report.optimization_review_plan.batches.map(b => b.check_id))
+      .toEqual([
+        "RECIPE_ANCHOR_RELATION",
+        "RECIPE_SYMMETRY_RELATION",
+        "NATIVE_VISUAL_AND_EXPORT",
+      ]);
+  });
+
+  test("read-only source observations cannot evict protected semantic identity evidence", async () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "protected-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const snap = native(recipe, [null, null]);
+    const registry = new AuthoringEvidenceRegistry(1);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply."); },
+    }, undefined, registry);
+    const compact = await service.resolveIdentityCompact({
+      recipe_id: recipe.id, target: { instance_ids: ["shells:0"] },
+    });
+    expect(service.readEvidence(compact.evidence_handle).kind).toBe("SEMANTIC_IDENTITY");
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    await expect(service.captureStoredRecipeOptimizationSourceObservations({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+    })).rejects.toThrow("AUTHORING_REVIEW_SOURCE_OBSERVATION_CAPACITY");
+    expect(service.readEvidence(compact.evidence_handle).kind).toBe("SEMANTIC_IDENTITY");
+    expect(service.evidenceRegistrySize()).toBe(1);
+  });
+
+  test("protected Recipe evidence takes precedence when the bounded registry fills", async () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "fifo-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const snap = native(recipe, [null, null]);
+    const registry = new AuthoringEvidenceRegistry(2);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply."); },
+    }, undefined, registry);
+    const prior = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const captured = await service.captureStoredRecipeOptimizationSourceObservations({
+      recipe_id: recipe.id,
+      expected_review_source_identity: prior.review_source_identity,
+    });
+    expect(captured.source_observation_count).toBe(1);
+    const identityA = await service.resolveIdentityCompact({
+      recipe_id: recipe.id, target: { instance_ids: ["shells:0"] },
+    });
+    const identityB = await service.resolveIdentityCompact({
+      recipe_id: recipe.id, target: { instance_ids: ["shells:1"] },
+    });
+    expect(service.evidenceRegistrySize()).toBe(2);
+    expect(service.readEvidence(identityA.evidence_handle).kind).toBe("SEMANTIC_IDENTITY");
+    expect(service.readEvidence(identityB.evidence_handle).kind).toBe("SEMANTIC_IDENTITY");
+    expect(() => service.readEvidence(captured.observations[0]!.evidence_handle))
+      .toThrow("AUTHORING_EVIDENCE_NOT_FOUND");
+  });
+
+  test("a genuine semantic identity handle is not a Recipe review source receipt", async () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "receipt-kind-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const snap = native(recipe, [null, null]);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply."); },
+    });
+    const receipt = await service.resolveIdentityCompact({
+      recipe_id: recipe.id, target: { instance_ids: ["shells:0"] },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const claims = ownerReferenceClaims(report);
+    claims[0]!.owner_source_observation_handle = receipt.evidence_handle;
+    const result = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: claims,
+    });
+    expect(result).toMatchObject({
+      state: "REFERENCES_MISMATCHED",
+      checks: [{ state: "OWNER_SOURCE_OBSERVATION_REJECTED" }],
+      recipe_source_observation_count: 0,
+      verified_evidence_count: 0,
+      review_approved: false,
     });
   });
 

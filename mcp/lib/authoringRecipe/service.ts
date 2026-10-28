@@ -197,6 +197,71 @@ export function createAuthoringRecipeService(
     };
   };
 
+
+  /**
+   * Issue bounded same-service source observations only for saved Recipe
+   * Anchor/Symmetry dependencies. The canonical stored-Recipe reader is
+   * available here; independent UV/material/animation/visual review receipts
+   * are not. Source observation is NEVER review approval.
+   */
+  const captureStoredRecipeOptimizationSourceObservations = async (input: {
+    recipe_id: string;
+    expected_review_source_identity: RecipeOptimizationReviewSourceIdentity;
+  }) => {
+    const freshness = await checkStoredGeometryOptimizationReviewFreshness(input);
+    if (freshness.state === "SOURCE_STALE") {
+      throw new Error(
+        "RECIPE_OPTIMIZATION_REVIEW_SOURCE_STALE: re-inspect current Recipe before issuing observations."
+      );
+    }
+    const ownerBatches = freshness.current_review_plan.batches.filter(batch =>
+      batch.evidence_owner === "SAVED_RECIPE" &&
+      (batch.check_id === "RECIPE_ANCHOR_RELATION" ||
+       batch.check_id === "RECIPE_SYMMETRY_RELATION") &&
+      batch.source_readiness === "SOURCE_FIELDS_PRESENT"
+    );
+    // Avoid partial issuance and never displace pending Apply/identity
+    // evidence from the shared bounded registry.
+    evidenceRegistry.assertCanAddReviewSourceObservations(ownerBatches.length);
+    const observations = ownerBatches.map(batch => {
+      if (batch.check_id !== "RECIPE_ANCHOR_RELATION" &&
+          batch.check_id !== "RECIPE_SYMMETRY_RELATION") {
+        throw new Error("RECIPE_OPTIMIZATION_REVIEW_OWNER_INVALID");
+      }
+      return {
+        check_id: batch.check_id,
+        evidence_owner: "SAVED_RECIPE" as const,
+        full_scope_fingerprint: batch.full_scope_fingerprint,
+        evidence_handle: evidenceRegistry.put({
+          kind: "RECIPE_REVIEW_SOURCE_OBSERVATION",
+          value: {
+            recipe_id: input.recipe_id,
+            check_id: batch.check_id,
+            evidence_owner: "SAVED_RECIPE" as const,
+            source_binding_fingerprint:
+              freshness.current_review_source_identity.source_binding_fingerprint,
+            full_scope_fingerprint: batch.full_scope_fingerprint,
+            source_observation: "SAVED_RECIPE_CURRENT_SOURCE_ONLY" as const,
+          },
+        }),
+      };
+    });
+    return {
+      state: observations.length
+        ? ("RECIPE_SOURCE_OBSERVATIONS_CAPTURED" as const)
+        : ("NO_SAVED_RECIPE_OWNER_CHECKS" as const),
+      source_freshness_state: freshness.state,
+      source_binding_fingerprint:
+        freshness.current_review_source_identity.source_binding_fingerprint,
+      observations,
+      source_observation_count: observations.length,
+      source_observation_only: true as const,
+      independent_owner_review_executed: false as const,
+      owner_visual_verified: false as const,
+      native_mutation_authorized: false as const,
+    };
+  };
+
   /**
    * Match caller-supplied review references to the exact NEW owner review
    * plan only after re-reading and comparing its full source identity.
@@ -227,6 +292,10 @@ export function createAuthoringRecipeService(
           typeof claim.evidence_ref !== "string" ||
           claim.evidence_ref.length < 1 || claim.evidence_ref.length > 160 ||
           claim.evidence_ref !== claim.evidence_ref.trim() ||
+          !(claim.owner_source_observation_handle === undefined ||
+            /^authoringevidence:[a-f0-9]{64}$/.test(
+              claim.owner_source_observation_handle
+            )) ||
           claim.full_scope?.check_id !== claim.check_id ||
           claim.full_scope?.evidence_owner !== claim.evidence_owner) {
         throw new Error("RECIPE_OPTIMIZATION_REVIEW_REFERENCES_INVALID");
@@ -252,6 +321,36 @@ export function createAuthoringRecipeService(
     }
     const checks = plan.batches.map(batch => {
       const reference = references.get(batch.check_id);
+      let recipeSourceObservationConfirmed = false;
+      let observationRejected = false;
+      const sourceAndScopeMatch =
+        freshness.state !== "SOURCE_STALE" && reference !== undefined &&
+        reference.claim.source_binding_fingerprint ===
+          freshness.current_review_source_identity.source_binding_fingerprint &&
+        reference.full_scope_fingerprint === batch.full_scope_fingerprint;
+      if (sourceAndScopeMatch && reference !== undefined &&
+          reference.claim.owner_source_observation_handle !== undefined) {
+        const handle = reference.claim.owner_source_observation_handle;
+        let issued: ReturnType<typeof evidenceRegistry.get> | null = null;
+        try {
+          issued = evidenceRegistry.get(handle);
+        } catch {
+          // A guessed, expired or foreign Runtime handle has no authority.
+        }
+        if (batch.evidence_owner === "SAVED_RECIPE" &&
+            issued?.kind === "RECIPE_REVIEW_SOURCE_OBSERVATION" &&
+            issued.value.recipe_id === input.recipe_id &&
+            issued.value.evidence_owner === batch.evidence_owner &&
+            issued.value.check_id === batch.check_id &&
+            issued.value.source_binding_fingerprint ===
+              freshness.current_review_source_identity.source_binding_fingerprint &&
+            issued.value.full_scope_fingerprint === batch.full_scope_fingerprint &&
+            issued.value.source_observation === "SAVED_RECIPE_CURRENT_SOURCE_ONLY") {
+          recipeSourceObservationConfirmed = true;
+        } else {
+          observationRejected = true;
+        }
+      }
       const state = freshness.state === "SOURCE_STALE"
         ? ("SOURCE_STALE" as const)
         : !reference
@@ -263,7 +362,11 @@ export function createAuthoringRecipeService(
               ? ("SCOPE_MISMATCH" as const)
               : batch.source_readiness === "SOURCE_FIELDS_INCOMPLETE"
                 ? ("SOURCE_INCOMPLETE" as const)
-                : ("REFERENCE_BOUND_UNATTESTED" as const);
+                : observationRejected
+                  ? ("OWNER_SOURCE_OBSERVATION_REJECTED" as const)
+                  : recipeSourceObservationConfirmed
+                    ? ("RECIPE_SOURCE_OBSERVED_NOT_REVIEWED" as const)
+                    : ("REFERENCE_BOUND_UNATTESTED" as const);
       return {
         check_id: batch.check_id,
         evidence_owner: batch.evidence_owner,
@@ -271,18 +374,26 @@ export function createAuthoringRecipeService(
         source_readiness: batch.source_readiness,
         expected_full_scope_fingerprint: batch.full_scope_fingerprint,
         reference_submitted: Boolean(reference),
+        recipe_source_observation_confirmed: recipeSourceObservationConfirmed,
+        // A verified Recipe-source registry lookup is still NOT independent
+        // UV/material/animation/visual provenance or review approval.
         owner_provenance_verified: false as const,
         native_check_executed: false as const,
       };
     });
     const mismatched = checks.some(check =>
       check.state === "SOURCE_BINDING_MISMATCH" ||
-      check.state === "SCOPE_MISMATCH"
+      check.state === "SCOPE_MISMATCH" ||
+      check.state === "OWNER_SOURCE_OBSERVATION_REJECTED"
     );
     const missing = checks.some(check => check.state === "REFERENCE_MISSING");
     const incomplete = checks.some(check => check.state === "SOURCE_INCOMPLETE");
     const matchedReferenceCount = checks.filter(check =>
-      check.state === "REFERENCE_BOUND_UNATTESTED"
+      check.state === "REFERENCE_BOUND_UNATTESTED" ||
+      check.state === "RECIPE_SOURCE_OBSERVED_NOT_REVIEWED"
+    ).length;
+    const recipeSourceObservationCount = checks.filter(check =>
+      check.state === "RECIPE_SOURCE_OBSERVED_NOT_REVIEWED"
     ).length;
     return {
       state: freshness.state === "SOURCE_STALE"
@@ -303,6 +414,7 @@ export function createAuthoringRecipeService(
       check_count: checks.length,
       submitted_reference_count: references.size,
       matched_unattested_reference_count: matchedReferenceCount,
+      recipe_source_observation_count: recipeSourceObservationCount,
       checks,
       owner_provenance_verified: false as const,
       verified_evidence_count: 0 as const,
@@ -324,6 +436,7 @@ export function createAuthoringRecipeService(
     },
     inspectStoredGeometryCoincidence,
     checkStoredGeometryOptimizationReviewFreshness,
+    captureStoredRecipeOptimizationSourceObservations,
     reconcileStoredGeometryOptimizationReviewEvidence,
     async resolveIdentity(input: { recipe_id: string; target: SemanticGeometryTarget }) {
       if (!dependencies.readStoredRecipe) {
