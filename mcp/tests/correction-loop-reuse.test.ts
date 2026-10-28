@@ -584,6 +584,167 @@ describe("zero-waste correction loop reuse", () => {
     expect(registry.projectContinuation(handle).mode).toBe("VERIFY_PENDING");
   });
 
+
+  test("blocking visual focus wins over cheaper nonblocking corrections without spending a rejected attempt", () => {
+    const registry = new CorrectionLoopRegistry();
+    const handle = registry.start({
+      recipe_id: "asset-priority",
+      base_recipe: { ...recipe(), id: "asset-priority", name: "asset-priority" },
+      verification_request: {
+        domain: "GEOMETRY",
+        source: "capture_model_views",
+        verification_risk: "HIGH",
+        views: ["front", "left", "front_left_3q"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 512,
+        size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["arms:0", "arms:1"],
+      },
+      verification_evidence_handle: "verificationevidence:priority-0",
+      discrepancies: [
+        {
+          code: "SILHOUETTE_BLOCKING",
+          severity: "BLOCKING",
+          summary: "Primary mass is visibly too narrow.",
+          quality_class: "PRIMARY_FORM",
+          owner: "GEOMETRY",
+          cause_family: "SIZE_MISMATCH",
+          views: ["front"],
+          evidence_targets: ["silhouette", "width"],
+        },
+        {
+          code: "TRIM_MINOR",
+          severity: "REVIEW",
+          summary: "Trim alignment could be improved.",
+          quality_class: "SECONDARY_DETAIL",
+          owner: "GEOMETRY",
+          cause_family: "POSITION_MISMATCH",
+          views: ["left"],
+          evidence_targets: ["attachment"],
+        },
+      ],
+    });
+    const minor = {
+      id: "cheap-trim",
+      predicted_error: 0.001,
+      mutation_cost: 0.001,
+      risk: 0.001,
+      patch: {
+        target_discrepancy_codes: ["TRIM_MINOR"],
+        correction_family: "TRANSLATE" as const,
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: { kind: "TRANSLATE" as const, delta: [0.25, 0, 0] as [number, number, number] },
+        },
+      },
+    };
+    const silhouette = {
+      id: "primary-resize",
+      predicted_error: 0.35,
+      mutation_cost: 0.2,
+      risk: 0.2,
+      patch: {
+        target_discrepancy_codes: ["SILHOUETTE_BLOCKING"],
+        correction_family: "RESIZE" as const,
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: {
+            kind: "RESIZE_AXIS" as const,
+            axis: "X" as const,
+            mode: "ADD" as const,
+            value: 1,
+            anchor: "MIN" as const,
+          },
+        },
+      },
+    };
+
+    const original = registry.projectContinuation(handle);
+    expect(registry.planGeometryCorrection(handle, [minor])).toMatchObject({
+      state: "BLOCKED",
+      attempt: 0,
+      blocked_reason: "BLOCKING_FOCUS_REQUIRES_TARGET",
+    });
+    expect(registry.projectContinuation(handle)).toEqual(original);
+
+    const decision = registry.planGeometryCorrection(handle, [minor, silhouette]);
+    expect(decision).toMatchObject({
+      state: "CORRECTION_READY",
+      attempt: 1,
+      decision_summary: {
+        selected_candidate_id: "primary-resize",
+        rejected_candidate_ids: ["cheap-trim"],
+        candidate_count: 2,
+      },
+    });
+    expect(decision.reverification_discrepancies?.map((item) => item.code)).toEqual([
+      "SILHOUETTE_BLOCKING",
+    ]);
+  });
+
+  test("nonblocking geometry reviews retain existing caller-cost ranking", () => {
+    const registry = new CorrectionLoopRegistry();
+    const handle = registry.start({
+      recipe_id: "asset-nonblocking",
+      base_recipe: { ...recipe(), id: "asset-nonblocking", name: "asset-nonblocking" },
+      verification_request: {
+        domain: "GEOMETRY",
+        source: "capture_model_views",
+        verification_risk: "MEDIUM",
+        views: ["front", "left"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256,
+        size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["arms:0", "arms:1"],
+      },
+      verification_evidence_handle: "verificationevidence:review-0",
+      discrepancies: [
+        { code: "WIDTH_REVIEW", severity: "REVIEW", summary: "Width may need adjustment." },
+        { code: "TRIM_REVIEW", severity: "INFO", summary: "Trim may need adjustment." },
+      ],
+    });
+    const cheap = {
+      id: "cheap",
+      predicted_error: 0.01,
+      mutation_cost: 0.01,
+      risk: 0.01,
+      patch: {
+        target_discrepancy_codes: ["TRIM_REVIEW"],
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: { kind: "TRANSLATE" as const, delta: [0.25, 0, 0] as [number, number, number] },
+        },
+      },
+    };
+    const expensive = {
+      id: "expensive",
+      predicted_error: 0.3,
+      mutation_cost: 0.2,
+      risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["WIDTH_REVIEW"],
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: {
+            kind: "RESIZE_AXIS" as const,
+            axis: "X" as const,
+            mode: "ADD" as const,
+            value: 1,
+            anchor: "MIN" as const,
+          },
+        },
+      },
+    };
+    const decision = registry.planGeometryCorrection(handle, [expensive, cheap]);
+    expect(decision).toMatchObject({
+      state: "CORRECTION_READY",
+      decision_summary: {
+        selected_candidate_id: "cheap",
+        rejected_candidate_ids: ["expensive"],
+      },
+    });
+  });
+
   test("returns only compact solver decision metadata instead of candidate payloads", () => {
     const registry = new CorrectionLoopRegistry();
     const handle = registry.start({

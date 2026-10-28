@@ -131,6 +131,7 @@ type CorrectionLoopDecision = {
     | "REPEATED_FAILURE_WITHOUT_NEW_EVIDENCE"
     | "CORRECTION_ATTEMPT_LIMIT"
     | "NO_ELIGIBLE_CORRECTION"
+    | "BLOCKING_FOCUS_REQUIRES_TARGET"
     | "CORRECTION_NO_GEOMETRY_CHANGE"
     | "CANDIDATE_BUDGET_EXCEEDED"
     | "CORRECTION_FAMILY_MISMATCH"
@@ -969,9 +970,33 @@ export class CorrectionLoopRegistry {
       };
     }
 
+    // A diagnosed BLOCKING defect cannot be displaced by a cheaper minor edit.
+    // Explicit code ownership is required; descriptions and metric estimates
+    // alone cannot establish that a candidate repairs the critical defect.
+    const blockingFocusCode = focus?.severity === "BLOCKING" ? focus.code : null;
+    const focusedCandidates = blockingFocusCode === null
+      ? candidates
+      : candidates.filter((candidate) =>
+          candidate.patch.target_discrepancy_codes?.includes(blockingFocusCode)
+        );
+    if (blockingFocusCode !== null && candidates.length > 0 && focusedCandidates.length === 0) {
+      return {
+        handle,
+        state: "BLOCKED",
+        attempt: record.attempt,
+        verification_request: structuredClone(record.verification_request),
+        blocked_reason: "BLOCKING_FOCUS_REQUIRES_TARGET",
+      };
+    }
+
     let decision;
     try {
-      decision = selectLowestCostCorrection(candidates, options);
+      // Validate every supplied candidate, including nonfocus alternatives,
+      // before choosing the lowest-cost correction within the blocking scope.
+      const validated = selectLowestCostCorrection(candidates, options);
+      decision = blockingFocusCode === null
+        ? validated
+        : selectLowestCostCorrection(focusedCandidates, options);
     } catch {
       return {
         handle,
@@ -1083,7 +1108,10 @@ export class CorrectionLoopRegistry {
       attempt: record.attempt,
       decision_summary: {
         selected_candidate_id: decision.selected.id,
-        rejected_candidate_ids: [...decision.rejected_ids],
+        rejected_candidate_ids: candidates
+          .filter((candidate) => candidate.id !== decision.selected.id)
+          .map((candidate) => candidate.id)
+          .sort(),
         selected_metrics: {
           predicted_error: decision.selected.predicted_error,
           mutation_cost: decision.selected.mutation_cost,
