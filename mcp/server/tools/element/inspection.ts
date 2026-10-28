@@ -3,6 +3,8 @@
 import { z } from "zod";
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_STABLE } from "@/lib/constants";
+import { readAuthoringRecipeCubeOwnership } from "@/server/runtime/recipes/authoring/ownership";
+import { createBlockbenchAuthoringRecipeService } from "@/server/runtime/recipes/authoring/service";
 import {
   mapFaceUvToTexturePixels,
   requireFiniteFaceUv,
@@ -24,13 +26,19 @@ export const inspectElementParameters = z.object({
     .optional()
     .default("geometry")
     .describe("Geometry transform by default; request `uv` only when UV mapping needs inspection."),
+  recipe_optimization_review: z
+    .boolean()
+    .optional()
+    .describe(
+      "Opt-in read-only Geometry coincidence/risk/review report for an exact Recipe-owned Cube UUID. Never simplifies or removes Geometry."
+    ),
 });
 
 export const elementInspectionToolDocs: ToolSpec[] = [
   {
     name: "inspect_element",
     description:
-      "Returns focused authored state for one explicit element. Defaults to compact geometry/hierarchy data; request UV detail only when mapping needs inspection.",
+      "Returns focused authored state for one element. Defaults to compact geometry/hierarchy data; opt in to UV detail or a read-only Recipe-owned Cube optimization review.",
     annotations: {
       title: "Inspect Authored Element",
       readOnlyHint: true,
@@ -918,33 +926,97 @@ function inspectNullObject(element: NullObject) {
   };
 }
 
+/**
+ * Canonical inspection executor used by both inspect_element and the
+ * existing inspect_elements(mode=detail) consolidated route. Opt-in Recipe
+ * review is a read from the current native service, not a new tool/engine.
+ * It never calls Recipe Apply, native Undo or an animation preview.
+ */
+export async function inspectElementSource(
+  input: z.input<typeof inspectElementParameters>
+) {
+  const { id, detail = "geometry", recipe_optimization_review } =
+    inspectElementParameters.parse(input);
+  const element = resolveInspectableElement(id);
+  let recipeReview: Awaited<
+    ReturnType<
+      ReturnType<typeof createBlockbenchAuthoringRecipeService>["inspectStoredGeometryCoincidence"]
+    >
+  > | null = null;
+  let ownerIdentity: { recipe_id: string; instance_id: string } | null = null;
+  if (recipe_optimization_review === true) {
+    if (!(element instanceof Cube)) {
+      throw new Error(
+        "RECIPE_OPTIMIZATION_CUBE_REQUIRED: opt-in review requires an exact Recipe-owned Cube UUID."
+      );
+    }
+    if (id !== element.uuid) {
+      throw new Error(
+        "RECIPE_OPTIMIZATION_UUID_REQUIRED: use the exact native Cube UUID, not a name."
+      );
+    }
+    ownerIdentity = readAuthoringRecipeCubeOwnership(element);
+    if (!ownerIdentity) {
+      throw new Error(
+        "RECIPE_OPTIMIZATION_OWNERSHIP_REQUIRED: selected Cube is not owned by a saved Recipe."
+      );
+    }
+    const project = Project;
+    const service = createBlockbenchAuthoringRecipeService();
+    recipeReview = await service.inspectStoredGeometryCoincidence({
+      recipe_id: ownerIdentity.recipe_id,
+    });
+    // Bind the selected target to this same currently active project and
+    // exact Cube identity; the report itself already checked Recipe/native
+    // ownership, UV, material, animation and stored-Recipe source drift.
+    const after = readAuthoringRecipeCubeOwnership(element);
+    if (!Project || Project !== project ||
+        recipeReview.surface_project_uuid !== project.uuid ||
+        !(Cube.all ?? []).includes(element) ||
+        element.uuid !== id || !after ||
+        after.recipe_id !== ownerIdentity.recipe_id ||
+        after.instance_id !== ownerIdentity.instance_id) {
+      throw new Error(
+        "RECIPE_OPTIMIZATION_SELECTED_CUBE_CHANGED_DURING_INSPECTION"
+      );
+    }
+  }
+  const result =
+    element instanceof Cube
+      ? inspectCube(element, detail)
+      : element instanceof Group
+        ? inspectGroup(element)
+        : element instanceof Locator
+          ? inspectLocator(element)
+          : inspectNullObject(element);
+  const detailSummary =
+    element instanceof Cube && detail === "uv" ? " with UV mapping detail" : "";
+  const reviewSummary = recipeReview === null ? ""
+    : ` Recipe-owned source review: ${recipeReview.coincident_group_count} coincident group(s); no native review or deletion executed.`;
+  return {
+    content: [{
+      type: "text" as const,
+      text: `Inspected ${result.type} "${result.name}" (${result.uuid})${detailSummary}.${reviewSummary}`,
+    }],
+    structuredContent: recipeReview === null ? result : {
+      ...result,
+      recipe_optimization_review: {
+        selected_cube_uuid: element.uuid,
+        selected_recipe_id: ownerIdentity!.recipe_id,
+        selected_instance_id: ownerIdentity!.instance_id,
+        ...recipeReview,
+      },
+    },
+  };
+}
+
 export function registerElementInspectionTools() {
   createTool(
     elementInspectionToolDocs[0].name,
     {
       ...elementInspectionToolDocs[0],
-      async execute({ id, detail }) {
-        const element = resolveInspectableElement(id);
-        const result =
-          element instanceof Cube
-            ? inspectCube(element, detail)
-            : element instanceof Group
-              ? inspectGroup(element)
-              : element instanceof Locator
-                ? inspectLocator(element)
-                : inspectNullObject(element);
-        const detailSummary =
-          element instanceof Cube && detail === "uv" ? " with UV mapping detail" : "";
-
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Inspected ${result.type} "${result.name}" (${result.uuid})${detailSummary}.`,
-            },
-          ],
-          structuredContent: result,
-        };
+      async execute(args) {
+        return inspectElementSource(args);
       },
     },
     elementInspectionToolDocs[0].status

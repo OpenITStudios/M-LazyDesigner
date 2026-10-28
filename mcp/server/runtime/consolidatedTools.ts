@@ -54,7 +54,7 @@ const consolidatedInspectionParameters = z.union([
 export const consolidatedInspectionToolDocs = {
   name: "inspect_elements",
   description:
-    "Inspects Bedrock elements through one focused boundary. Use mode=outline for hierarchy, search for bounded criteria discovery, or detail for one authored element with optional UV data.",
+    "Inspects Bedrock elements through outline, search, or detail. Detail can opt in to read-only Recipe-owned Cube optimization review without changing Geometry.",
   annotations: { title: "Inspect Elements", readOnlyHint: true },
   parameters: consolidatedInspectionParameters,
   branches: {

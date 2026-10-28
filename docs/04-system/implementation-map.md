@@ -293,6 +293,13 @@ Additional canonical tool domains:
 mcp/server/tools/geometry/cubes.ts
 → Cube authoring + Cube geometry/UV mutation owner
 
+mcp/server/tools/element/inspection.ts
+→ existing inspect_element / inspect_elements(mode=detail) read-only Cube
+  inspection; opt-in Recipe-owned optimization report delegates to
+  mcp/server/runtime/recipes/authoring/service.ts, which composes the
+  canonical mcp/lib/authoringRecipe/service.ts and planning.ts.
+  No separate optimizer, tool family, or direct Apply is registered here.
+
 mcp/server/tools/project/project.ts
 → project creation/info/bounds owner
 

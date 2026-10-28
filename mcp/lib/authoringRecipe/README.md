@@ -372,6 +372,48 @@ This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 Recipe code must not depend on `orchestration/`. Orchestration may consume recipe outputs.
 
+## B12 — Existing Runtime inspection integration (source-only)
+
+The canonical Recipe read-only pipeline is now **reachable from the existing
+`inspect_elements` capability**, without installing a new checker or public
+tool. Use its retained `mode=detail` branch with an **exact native Cube UUID**
+and the optional `recipe_optimization_review: true` flag. The same
+`inspect_element` executor owns the behavior; the consolidated route reuses
+its canonical input schema and execution function.
+
+Only a Cube with both valid `lazydesigner_recipe_id` and
+`lazydesigner_recipe_instance_id` can request the opt-in review. The executor
+uses `readAuthoringRecipeCubeOwnership` to discover saved ownership, invokes
+the existing `createBlockbenchAuthoringRecipeService()`, then reads
+`inspectStoredGeometryCoincidence({ recipe_id })`. The response appends
+`recipe_optimization_review` to ordinary Cube inspection, including the
+selected Cube/instance/Recipe identity, native source fingerprints, exact
+same-parent coincidence candidate examples, risk categories, deduplicated
+owner review requirements and freshness source identity. It validates that
+the exact selected Cube and project remain current before returning. It
+does **not** build a second optimizer, run per-Cube checkers, create a new
+Gateway capability, initiate Undo, call Apply, inspect animation poses, or
+remove Geometry.
+
+The flag is optional and defaults to absent: ordinary
+`inspect_elements(mode=detail)` and `inspect_element` retain their legacy
+shape and do **not** incur expensive Recipe/UV/bitmap/animation reads. All
+other detail modes and existing outline/search branches are unchanged.
+A request to review an unowned Cube, Group or other element fails explicitly,
+as does a name instead of an exact Cube UUID; no silent source ownership is
+inferred from visual similarity.
+
+This is **source-level Runtime wiring**, not proof that a packaged plugin
+executed successfully in live Blockbench. A fresh opt-in inspection can
+report candidates, uncertainty and exact review work but must continue to
+return `state: REVIEW_ONLY`, `native_mutation_executed: false`,
+`visual_verdict: NOT_EVALUATED`, and no inferred removable Cube count.
+A one-shot inspection instantiates a temporary Recipe Service; it does **not**
+issue persistent cross-call evidence handles or claim an authenticated
+UV/material/animation/visual review. Full native/visual and Bedrock-export
+equivalence still require independent installed evidence before a
+later explicit representation-change transaction is even considered.
+
 ## Native Group ancestry and stale-plan safety
 
 The native Recipe Cube snapshot includes both a root-to-parent Group UUID
