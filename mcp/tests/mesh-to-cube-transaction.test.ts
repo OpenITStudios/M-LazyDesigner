@@ -156,3 +156,40 @@ test("native writer is unregistered and refuses unsupported context before Undo"
     })).toThrow("MESH_CUBE_NATIVE_CONTEXT_UNVERIFIED");
   }finally{g.Blockbench=prior.Blockbench;}
 });
+
+
+test("oversized and incomplete Mesh sources do not defeat the bounded revision gate",()=>{
+  const source=exactSource();
+  const large=Object.fromEntries(Array.from({length:513},(_,i)=>[
+    "oversize-"+i,[i,0,0],
+  ]));
+  const result=planMeshToCubeTransaction({...source,vertices:large});
+  expect(result).toMatchObject({
+    state:"blocked",
+    source_revision:null,
+    blocked_reasons:["MESH_CUBE_SOURCE_BUDGET_EXCEEDED"],
+    cube:null,
+  });
+  const malformed=planMeshToCubeTransaction({
+    ...source,faces:{bad:{vertices:["a","missing","b"]}},
+  });
+  expect(malformed.state).toBe("blocked");
+  expect(malformed.source_revision).toBeNull();
+});
+
+test("unserializable native metadata is refused, never trusted as a revision",()=>{
+  const source=exactSource();
+  const cycle:Record<string,unknown>={};
+  cycle.back=cycle;
+  const revised=planMeshToCubeTransaction({
+    ...source,faces:{...source.faces,north:{
+      ...source.faces.north,
+      texture:cycle,
+    }},
+  });
+  expect(revised.state).toBe("blocked");
+  expect(revised.source_revision).toBeNull();
+  expect(revised.blocked_reasons).toContain(
+    "MESH_CUBE_SOURCE_REVISION_UNAVAILABLE"
+  );
+});

@@ -34,8 +34,12 @@ export function captureNativeMeshToCubeSource(mesh: Mesh): MeshToCubeSource {
   }
   const parentId=typeof Group!=="undefined" && mesh.parent instanceof Group
     ?mesh.parent.uuid:mesh.parent==="root"?"root":null;
-  const parentLineage:MeshToCubeSource["parent_lineage"] extends infer _T ?
-    Array<{uuid:string;origin:number[];rotation:number[];export:boolean}> : never=[];
+  const parentLineage:Array<{
+    uuid:string;
+    origin:number[];
+    rotation:number[];
+    export:boolean;
+  }>=[];
   let lineageKnown=mesh.parent==="root";
   if(typeof Group!=="undefined" && mesh.parent instanceof Group){
     lineageKnown=true;

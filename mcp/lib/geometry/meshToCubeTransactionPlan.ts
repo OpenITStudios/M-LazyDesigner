@@ -1,5 +1,7 @@
 import {
   analyzeMeshToCubeFidelity,
+  MESH_TO_CUBE_VERTEX_LIMIT,
+  MESH_TO_CUBE_FACE_LIMIT,
   type MeshToCubeInput,
 } from "./meshToCubeFidelity";
 import { validateCubeGeometrySpan } from "./cubeSpan";
@@ -133,7 +135,28 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
     return {...base,state:"blocked",source_revision:null,
       blocked_reasons:["MESH_CUBE_SOURCE_INVENTORY_INVALID"],cube:null};
   }
+  // The UV/geometry owner caps native meshes at 512 vertices/faces.
+  // Source revision must not defeat that limit by stringifying the
+  // full malformed or over-budget payload after analysis refuses it.
+  const vertices=Object.keys(source.vertices);
+  const faces=Object.keys(source.faces);
+  const rawFaces=Object.keys(source.raw_face_vertex_orders);
+  const seams=Object.keys(source.seams);
+  if(vertices.length>MESH_TO_CUBE_VERTEX_LIMIT ||
+     faces.length>MESH_TO_CUBE_FACE_LIMIT ||
+     rawFaces.length>MESH_TO_CUBE_FACE_LIMIT ||
+     seams.length>MESH_TO_CUBE_FACE_LIMIT*4 ||
+     rawFaces.some(id=>!Array.isArray(source.raw_face_vertex_orders[id]) ||
+       source.raw_face_vertex_orders[id].length>4)){
+    return {...base,state:"blocked",source_revision:null,
+      blocked_reasons:["MESH_CUBE_SOURCE_BUDGET_EXCEEDED"],cube:null};
+  }
   const fidelity=analyzeMeshToCubeFidelity(source);
+  if(fidelity.state==="unverified"){
+    return {...base,state:"blocked",source_revision:null,
+      blocked_reasons:["MESH_CUBE_EXACT_GEOMETRY_REQUIRED",
+        ...fidelity.reasons].sort(),cube:null};
+  }
   if(fidelity.state==="unverified" || !fidelity.geometry_surface_exact_candidate ||
      !fidelity.local_candidate_box){
     flag("MESH_CUBE_EXACT_GEOMETRY_REQUIRED");
@@ -183,10 +206,10 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
     flag("MESH_CUBE_BEDROCK_CUBE_FORMAT_UNVERIFIED");
   }
   const defaultTexture=source.format.default_texture_uuid;
-  const rawFaces=Object.keys(source.faces).sort();
+  const sourceFaceIds=Object.keys(source.faces).sort();
   const authoredFaceOrders=Object.keys(source.raw_face_vertex_orders).sort();
-  if(rawFaces.length!==authoredFaceOrders.length ||
-     rawFaces.some((id,i)=>id!==authoredFaceOrders[i] ||
+  if(sourceFaceIds.length!==authoredFaceOrders.length ||
+     sourceFaceIds.some((id,i)=>id!==authoredFaceOrders[i] ||
        !Array.isArray(source.raw_face_vertex_orders[id]) ||
        source.raw_face_vertex_orders[id].length!==source.faces[id]?.vertices.length)){
     flag("MESH_CUBE_NATIVE_FACE_INVENTORY_UNVERIFIED");
@@ -257,11 +280,17 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
       }
     }
   }
+  let revision:string|null=null;
+  try{
+    revision=sourceSignature(source);
+  }catch{
+    flag("MESH_CUBE_SOURCE_REVISION_UNAVAILABLE");
+  }
   const reasons=[...blocked].sort();
   return {
     ...base,
     state:reasons.length?"blocked":"candidate_source_only",
-    source_revision:sourceSignature(source),
+    source_revision:revision,
     blocked_reasons:reasons,
     cube:reasons.length?null:cube,
   };
