@@ -213,16 +213,16 @@ function assessCorrectionConvergence(
   }
 
   let improved = false;
+  let regressed = false;
   let causeChanged = false;
   for (const [code, prior] of beforeByCode) {
     const current = afterByCode.get(code);
     if (!current) continue;
-    if (
-      CONVERGENCE_SEVERITY_RANK[current.severity] <
-      CONVERGENCE_SEVERITY_RANK[prior.severity]
-    ) {
-      improved = true;
-    }
+    const severityChange =
+      CONVERGENCE_SEVERITY_RANK[current.severity] -
+      CONVERGENCE_SEVERITY_RANK[prior.severity];
+    if (severityChange < 0) improved = true;
+    if (severityChange > 0) regressed = true;
     if (
       discrepancyDiagnosisIdentity(current) !==
       discrepancyDiagnosisIdentity(prior)
@@ -231,6 +231,11 @@ function assessCorrectionConvergence(
     }
   }
 
+  // One worsened targeted defect outweighs gains on another target.
+  // Preserve the existing v1 continuation vocabulary: PLATEAU means no
+  // demonstrable safe convergence, including mixed improvement/regression.
+  // No image quality verdict is inferred from categorical severity changes.
+  if (regressed) return "PLATEAU";
   if (improved) return "IMPROVED";
   if (causeChanged) return "CAUSE_CHANGED";
   return "PLATEAU";

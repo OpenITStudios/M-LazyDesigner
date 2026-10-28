@@ -2038,6 +2038,79 @@ describe("zero-waste correction loop reuse", () => {
     expect(retry.attempt).toBe(1);
   });
 
+
+  test("a worsened targeted defect cannot be masked by improvement of another target", () => {
+    const registry = new CorrectionLoopRegistry();
+    const handle = registry.start({
+      recipe_id: "asset-mixed-convergence",
+      base_recipe: { ...recipe(), id: "asset-mixed-convergence", name: "asset-mixed-convergence" },
+      verification_request: {
+        domain: "GEOMETRY", source: "capture_model_views",
+        verification_risk: "MEDIUM", views: ["front", "left"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["arms:0", "arms:1"],
+      },
+      verification_evidence_handle: "verificationevidence:mixed-before",
+      discrepancies: [
+        {
+          code: "MAIN_FORM", severity: "BLOCKING",
+          summary: "Primary mass is wrong.",
+          quality_class: "PRIMARY_FORM", owner: "GEOMETRY",
+          cause_family: "SIZE_MISMATCH", views: ["front"],
+        },
+        {
+          code: "SIDE_CONTACT", severity: "INFO",
+          summary: "Small contact gap remains.",
+          quality_class: "NEGATIVE_SPACE_CONTACT", owner: "GEOMETRY",
+          cause_family: "SIZE_MISMATCH", views: ["left"],
+        },
+      ],
+    });
+    const candidate = {
+      id: "widen-arms", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["MAIN_FORM", "SIDE_CONTACT"],
+        correction_family: "RESIZE" as const,
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: { kind: "RESIZE_AXIS" as const, axis: "X" as const,
+            mode: "ADD" as const, value: 1, anchor: "MIN" as const },
+        },
+      },
+    };
+    expect(registry.planGeometryCorrection(handle, [candidate]).state).toBe("CORRECTION_READY");
+    registry.updateEvidence(handle, "verificationevidence:mixed-after", [
+      {
+        code: "MAIN_FORM", severity: "REVIEW",
+        summary: "Primary mass appears improved.",
+        quality_class: "PRIMARY_FORM", owner: "GEOMETRY",
+        cause_family: "SIZE_MISMATCH", views: ["front"],
+      },
+      {
+        code: "SIDE_CONTACT", severity: "BLOCKING",
+        summary: "Contact is now severely wrong.",
+        quality_class: "NEGATIVE_SPACE_CONTACT", owner: "GEOMETRY",
+        cause_family: "SIZE_MISMATCH", views: ["left"],
+      },
+    ], { recovered_views: ["front", "left"] });
+
+    const continuation = registry.projectContinuation(handle);
+    expect(continuation).toMatchObject({
+      state: "BLOCKED",
+      convergence: {
+        state: "PLATEAU",
+        target_discrepancy_codes: ["MAIN_FORM", "SIDE_CONTACT"],
+      },
+      quality_focus: { code: "SIDE_CONTACT", severity: "BLOCKING" },
+    });
+    expect(registry.planGeometryCorrection(handle, [candidate])).toMatchObject({
+      state: "BLOCKED",
+      attempt: 1,
+      blocked_reason: "BLOCKING_PLATEAU_REQUIRES_NEW_EVIDENCE",
+    });
+  });
+
   test("severity reduction counts as demonstrated gain and permits one bounded continuation", () => {
     const registry = new CorrectionLoopRegistry();
     const handle = registry.start({
