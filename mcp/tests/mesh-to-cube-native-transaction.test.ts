@@ -110,16 +110,18 @@ function withNativeFixture(
     static all:FakeCube[]=[];
     static instances:FakeCube[]=[];
     uuid="new-cube-"+(++cubeSerial);
-    name:string;
-    from:number[];
-    to:number[];
-    origin:number[];
-    rotation:number[];
-    color:number;
-    autouv:number;
-    box_uv:boolean;
-    visibility:boolean;
-    shade:boolean;
+    // Object.assign(options) in the fake constructor supplies all fields;
+    // explicit definite assignments keep the isolated strict TS fixture valid.
+    name!:string;
+    from!:number[];
+    to!:number[];
+    origin!:number[];
+    rotation!:number[];
+    color!:number;
+    autouv!:number;
+    box_uv!:boolean;
+    visibility!:boolean;
+    shade!:boolean;
     parent:FakeGroup|"root"="root";
     faces:Record<string,any>;
     constructor(options:any){
