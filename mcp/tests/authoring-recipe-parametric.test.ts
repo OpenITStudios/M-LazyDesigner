@@ -1036,6 +1036,246 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
       .toThrow("RECIPE_OPTIMIZATION_SURFACE_ANIMATION_TRACK_INVALID");
   });
 
+
+  test("missing UV/material/motion evidence remains unknown, never a low-risk merge", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["bone", "bone"]);
+    const unmeasured = assessRecipeNativeCoincidence(recipe, snapshot);
+    expect(unmeasured).toMatchObject({
+      state: "REVIEW_ONLY",
+      optimization_risk_summary: {
+        scope: "ALL_COINCIDENT_RECIPE_GROUPS",
+        evidence_incomplete_groups: 1,
+        structural_dependency_groups: 0,
+        observed_difference_or_motion_groups: 0,
+        manual_visual_review_groups: 0,
+        automatic_removal_allowed: false,
+      },
+      candidate_examples: [{
+        optimization_risk: {
+          category: "EVIDENCE_INCOMPLETE",
+          recommended_review: "OBTAIN_MISSING_NATIVE_EVIDENCE",
+          native_removal_authorized: false,
+          reason_codes: [
+            "UV_EVIDENCE_UNAVAILABLE",
+            "MATERIAL_EVIDENCE_UNAVAILABLE",
+            "ANIMATION_EVIDENCE_UNAVAILABLE",
+            "RENDERED_EQUIVALENCE_UNVERIFIED",
+          ],
+        },
+        safe_to_delete: false,
+      }],
+    });
+    expect(unmeasured.estimated_removable_cube_count).toBeNull();
+  });
+
+  test("matching authored fields still require native visual, rig and export review", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const surface = surfaceFixture(snapshot);
+    const unchanged = structuredClone(surface);
+    const report = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(report).toMatchObject({
+      optimization_risk_summary: {
+        manual_visual_review_groups: 1,
+        evidence_incomplete_groups: 0,
+        structural_dependency_groups: 0,
+        observed_difference_or_motion_groups: 0,
+      },
+      candidate_examples: [{
+        optimization_risk: {
+          category: "MANUAL_VISUAL_REVIEW",
+          reason_codes: ["RENDERED_EQUIVALENCE_UNVERIFIED"],
+          recommended_review: "VERIFY_NATIVE_VISUAL_RIG_AND_EXPORT",
+          native_removal_authorized: false,
+        },
+      }],
+      visual_verdict: "NOT_EVALUATED",
+      native_mutation_executed: false,
+    });
+    expect(surface).toEqual(unchanged);
+  });
+
+  test("observed UV and material differences outrank missing motion evidence, retaining every reason", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["bone", "bone"]);
+    const surface = surfaceFixture(snapshot);
+    surface.cubes[1]!.uv_offset = [8, 0];
+    surface.cubes[1]!.faces[0]!.material_name = "emissive";
+    surface.animations = null;
+    const reported = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(reported).toMatchObject({
+      optimization_risk_summary: {
+        observed_difference_or_motion_groups: 1,
+        evidence_incomplete_groups: 0,
+        manual_visual_review_groups: 0,
+      },
+      candidate_examples: [{
+        optimization_risk: {
+          category: "OBSERVED_DIFFERENCE_OR_MOTION",
+          reason_codes: [
+            "UV_MAPPING_DIFFERENT",
+            "MATERIAL_BINDING_DIFFERENT",
+            "ANIMATION_EVIDENCE_UNAVAILABLE",
+            "RENDERED_EQUIVALENCE_UNVERIFIED",
+          ],
+          recommended_review: "INSPECT_UV_MATERIAL_AND_MOTION_DEPENDENCIES",
+          native_removal_authorized: false,
+        },
+      }],
+    });
+  });
+
+  test("observed face-material differences remain visible even when material evidence is incomplete", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const surface = surfaceFixture(snapshot);
+    // One face now has no resolved texture, so a comparison cannot claim
+    // equivalent materials, but the differing assignment is still observed.
+    surface.cubes[0]!.faces[0]!.texture_ref = null;
+    const report = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(report).toMatchObject({
+      groups_with_material_differences: 1,
+      groups_with_unverified_material: 1,
+      optimization_risk_summary: {
+        observed_difference_or_motion_groups: 1,
+        evidence_incomplete_groups: 0,
+      },
+      candidate_examples: [{
+        material_binding_state: "UNVERIFIED",
+        material_or_visibility_difference: true,
+        optimization_risk: {
+          category: "OBSERVED_DIFFERENCE_OR_MOTION",
+          reason_codes: [
+            "MATERIAL_BINDING_DIFFERENT",
+            "MATERIAL_EVIDENCE_UNAVAILABLE",
+            "RENDERED_EQUIVALENCE_UNVERIFIED",
+          ],
+          native_removal_authorized: false,
+        },
+        safe_to_delete: false,
+      }],
+    });
+  });
+
+  test("keyed ancestor animation is an observed motion dependency without a false geometry savings claim", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["bone", "bone"]);
+    const surface = surfaceFixture(snapshot);
+    surface.animations = { clips: [{
+      uuid: "clip:walk",
+      clip_settings_sha256: "a".repeat(64),
+      bone_tracks: [{
+        bone_uuid: "bone", position_keyframes: 1, rotation_keyframes: 2,
+        scale_keyframes: 0, keyframe_content_sha256: "b".repeat(64),
+      }],
+    }] };
+    const first = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(first).toMatchObject({
+      optimization_risk_summary: { observed_difference_or_motion_groups: 1 },
+      candidate_examples: [{
+        optimization_risk: {
+          category: "OBSERVED_DIFFERENCE_OR_MOTION",
+          reason_codes: ["ANIMATED_PARENT_BONE", "RENDERED_EQUIVALENCE_UNVERIFIED"],
+        },
+        animation_binding_state: "BONE_TRACKS_PRESENT",
+        safe_to_delete: false,
+      }],
+    });
+    surface.animations.clips[0]!.bone_tracks[0]!.keyframe_content_sha256 = "d".repeat(64);
+    const changed = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(changed.candidate_examples[0]!.animated_motion_source_fingerprint)
+      .not.toBe(first.candidate_examples[0]!.animated_motion_source_fingerprint);
+    expect(changed.candidate_examples[0]!.optimization_risk.category)
+      .toBe("OBSERVED_DIFFERENCE_OR_MOTION");
+    expect(changed.native_mutation_executed).toBe(false);
+  });
+
+  test("anchor and symmetry dependencies take priority while preserving independent UV and animation warnings", () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "shell-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    recipe.symmetry = [{
+      id: "mirror-shell", source_instance_id: "shells:0",
+      target_instance_id: "mirror",
+      plane: { axis: "X", position: 1 },
+      uv_policy: "SHARE", texture_policy: "MIRROR", rig_policy: "MIRROR",
+    }];
+    const snapshot = native(recipe, ["bone", "bone", "bone"]);
+    const surface = surfaceFixture(snapshot);
+    surface.cubes[2]!.uv_offset = [4, 0];
+    surface.animations = { clips: [{
+      uuid: "clip:walk", clip_settings_sha256: "a".repeat(64),
+      bone_tracks: [{
+        bone_uuid: "bone", position_keyframes: 0, rotation_keyframes: 1,
+        scale_keyframes: 0, keyframe_content_sha256: "b".repeat(64),
+      }],
+    }] };
+    const report = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(report).toMatchObject({
+      optimization_risk_summary: {
+        structural_dependency_groups: 1,
+        observed_difference_or_motion_groups: 0,
+        evidence_incomplete_groups: 0,
+        manual_visual_review_groups: 0,
+      },
+      candidate_examples: [{
+        group_size: 3,
+        optimization_risk: {
+          category: "STRUCTURAL_DEPENDENCY",
+          reason_codes: [
+            "ANCHOR_CONSTRAINT_PRESENT",
+            "SYMMETRY_RELATION_PRESENT",
+            "UV_MAPPING_DIFFERENT",
+            "ANIMATED_PARENT_BONE",
+            "RENDERED_EQUIVALENCE_UNVERIFIED",
+          ],
+          recommended_review: "REVIEW_RELATIONSHIP_OWNERSHIP",
+          native_removal_authorized: false,
+        },
+        safe_to_delete: false,
+      }],
+    });
+    expect(report.estimated_removable_cube_count).toBeNull();
+  });
+
+  test("risk summary covers every coincident group even when candidate examples are truncated", () => {
+    const recipe = coincidenceRecipe();
+    recipe.patterns = Array.from({ length: 9 }, (_, i) => ({
+      kind: "LINEAR" as const,
+      id: "duplicate-cluster-" + i, prototype_id: "shell",
+      count: 2, axis: "X" as const, spacing: 0,
+      start: [i * 6, 0, 0] as [number, number, number],
+    }));
+    const compiled = compileAuthoringRecipe(recipe);
+    expect(compiled.placements).toHaveLength(18);
+    const report = assessRecipeNativeCoincidence(
+      recipe, native(recipe, Array(18).fill(null))
+    );
+    expect(report).toMatchObject({
+      coincident_group_count: 9,
+      candidate_examples_truncated: true,
+      optimization_risk_summary: {
+        scope: "ALL_COINCIDENT_RECIPE_GROUPS",
+        evidence_incomplete_groups: 9,
+        structural_dependency_groups: 0,
+        observed_difference_or_motion_groups: 0,
+        manual_visual_review_groups: 0,
+        automatic_removal_allowed: false,
+      },
+      visual_verdict: "NOT_EVALUATED",
+      native_mutation_executed: false,
+    });
+    expect(report.candidate_examples).toHaveLength(8);
+    expect(report.candidate_examples.every((group) =>
+      group.optimization_risk.native_removal_authorized === false
+    )).toBe(true);
+  });
+
   test("existing Recipe Service reads stored native source without applying any mutation", async () => {
     const recipe = coincidenceRecipe();
     const snapshot = native(recipe, [null, null]);

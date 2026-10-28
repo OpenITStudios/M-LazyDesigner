@@ -159,6 +159,41 @@ Bedrock export or permission to delete, merge, or reduce any Cube. The
 optional read runs only for targeted inspection and rechecks native geometry,
 UV and material/animation inventories for in-flight source changes.
 
+### Risk-first coincidence review (source-only)
+
+The existing `assessRecipeNativeCoincidence` now classifies each exact
+same-parent geometry group using only its established evidence: authored
+Geometry/parent identity, Anchor constraints, Symmetry relations, native
+UV/PBR/material differences and content-addressed parent Bone tracks.
+
+`optimization_risk.category` has four **review priorities**, applied in
+fixed precedence:
+
+1. `STRUCTURAL_DEPENDENCY`: an Anchor or Symmetry relation protects an
+   authored relationship regardless of visual-field matches.
+2. `OBSERVED_DIFFERENCE_OR_MOTION`: mismatched UV/material assignments or
+   observed keyed ancestor motion need separate native inspection.
+3. `EVIDENCE_INCOMPLETE`: missing UV/material or animation coverage is an
+   unknown, never a positive inference of redundancy.
+4. `MANUAL_VISUAL_REVIEW`: reviewed source fields match, but rendered
+   similarity, animation/controller behavior and export equivalence remain
+   unproven.
+
+All matching reasons remain in deterministic `reason_codes`, including
+unavailable evidence when a higher-priority issue also exists. An observed
+material assignment/visibility difference is reported even if a missing
+texture prevents full material verification: these are **two independent
+facts**, never a reason to suppress the mismatch. The result contains one
+bounded next-review recommendation, not an execution command.
+The `optimization_risk_summary` counts **all** candidate groups even when
+`candidate_examples` is truncated to eight. These categories are
+explanatory priority labels, **not** probabilities, quality scores, measured
+Cube savings, native readiness gates, or permission to mutate. Every candidate
+retains `safe_to_delete: false` and `optimization_risk.native_removal_authorized:
+false`; the report remains `native_mutation_executed: false` with visual
+verdict `NOT_EVALUATED`.
+No new registry, GPU model, evaluator, public Gateway surface or Undo path.
+
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 `planning.ts` owns pure planning APIs. `service.ts` owns bounded stateful plan/apply/identity/evidence lifecycle and may compose recipe modules, but recipe source must not depend on Gateway or Runtime executors.

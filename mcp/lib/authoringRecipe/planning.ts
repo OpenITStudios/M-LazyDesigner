@@ -283,6 +283,103 @@ function validatedRecipeSurfaceState(
 }
 
 /**
+ * Explain why co-located Recipe Cubes must not be optimized without further
+ * evidence. This prioritizes review work; it is not a native deletion gate,
+ * pixel similarity score or probability estimate. Every category still
+ * requires explicit visual/rig/export acceptance before an asset mutation.
+ *
+ * The decision consumes only facts already validated by this module:
+ * ownership relations, native UV/material assignments and parent Bone tracks.
+ */
+export type RecipeCoincidenceRiskReason =
+  | "ANCHOR_CONSTRAINT_PRESENT"
+  | "SYMMETRY_RELATION_PRESENT"
+  | "UV_MAPPING_DIFFERENT"
+  | "MATERIAL_BINDING_DIFFERENT"
+  | "ANIMATED_PARENT_BONE"
+  | "UV_EVIDENCE_UNAVAILABLE"
+  | "MATERIAL_EVIDENCE_UNAVAILABLE"
+  | "ANIMATION_EVIDENCE_UNAVAILABLE"
+  | "RENDERED_EQUIVALENCE_UNVERIFIED";
+
+export type RecipeCoincidenceRiskCategory =
+  | "STRUCTURAL_DEPENDENCY"
+  | "OBSERVED_DIFFERENCE_OR_MOTION"
+  | "EVIDENCE_INCOMPLETE"
+  | "MANUAL_VISUAL_REVIEW";
+
+export type RecipeCoincidenceReviewAction =
+  | "REVIEW_RELATIONSHIP_OWNERSHIP"
+  | "INSPECT_UV_MATERIAL_AND_MOTION_DEPENDENCIES"
+  | "OBTAIN_MISSING_NATIVE_EVIDENCE"
+  | "VERIFY_NATIVE_VISUAL_RIG_AND_EXPORT";
+
+function classifyRecipeCoincidenceRisk(input: {
+  anchor_constraint_count: number;
+  symmetry_relation_count: number;
+  uv_mapping_state: "UNVERIFIED" | "DIFFERENT" | "MATCHED_FIELDS";
+  material_binding_state: "UNVERIFIED" | "DIFFERENT" | "MATCHED_FIELDS";
+  /** An observable difference may coexist with incomplete material proofs. */
+  observed_material_or_visibility_difference: boolean;
+  animation_binding_state: "UNVERIFIED" | "BONE_TRACKS_PRESENT" | "NO_PARENT_BONE_TRACKS_OBSERVED";
+}): {
+  category: RecipeCoincidenceRiskCategory;
+  reason_codes: RecipeCoincidenceRiskReason[];
+  recommended_review: RecipeCoincidenceReviewAction;
+  native_removal_authorized: false;
+} {
+  const reasons: RecipeCoincidenceRiskReason[] = [];
+  if (input.anchor_constraint_count > 0) reasons.push("ANCHOR_CONSTRAINT_PRESENT");
+  if (input.symmetry_relation_count > 0) reasons.push("SYMMETRY_RELATION_PRESENT");
+  if (input.uv_mapping_state === "DIFFERENT") reasons.push("UV_MAPPING_DIFFERENT");
+  if (input.material_binding_state === "DIFFERENT" ||
+      input.observed_material_or_visibility_difference) {
+    reasons.push("MATERIAL_BINDING_DIFFERENT");
+  }
+  if (input.animation_binding_state === "BONE_TRACKS_PRESENT") reasons.push("ANIMATED_PARENT_BONE");
+  if (input.uv_mapping_state === "UNVERIFIED") reasons.push("UV_EVIDENCE_UNAVAILABLE");
+  if (input.material_binding_state === "UNVERIFIED") reasons.push("MATERIAL_EVIDENCE_UNAVAILABLE");
+  if (input.animation_binding_state === "UNVERIFIED") reasons.push("ANIMATION_EVIDENCE_UNAVAILABLE");
+  // Even all matching source fields cannot prove the Cube is visually, rig-
+  // or export-equivalent. A native renderer/pose evaluation is not available.
+  reasons.push("RENDERED_EQUIVALENCE_UNVERIFIED");
+
+  const hasStructuralDependency =
+    input.anchor_constraint_count > 0 || input.symmetry_relation_count > 0;
+  const hasObservedDifferenceOrMotion =
+    input.uv_mapping_state === "DIFFERENT" ||
+    input.material_binding_state === "DIFFERENT" ||
+    input.observed_material_or_visibility_difference ||
+    input.animation_binding_state === "BONE_TRACKS_PRESENT";
+  const hasEvidenceGap =
+    input.uv_mapping_state === "UNVERIFIED" ||
+    input.material_binding_state === "UNVERIFIED" ||
+    input.animation_binding_state === "UNVERIFIED";
+
+  const category: RecipeCoincidenceRiskCategory = hasStructuralDependency
+    ? "STRUCTURAL_DEPENDENCY"
+    : hasObservedDifferenceOrMotion
+      ? "OBSERVED_DIFFERENCE_OR_MOTION"
+      : hasEvidenceGap
+        ? "EVIDENCE_INCOMPLETE"
+        : "MANUAL_VISUAL_REVIEW";
+  const recommended_review: RecipeCoincidenceReviewAction =
+    category === "STRUCTURAL_DEPENDENCY"
+      ? "REVIEW_RELATIONSHIP_OWNERSHIP"
+      : category === "OBSERVED_DIFFERENCE_OR_MOTION"
+        ? "INSPECT_UV_MATERIAL_AND_MOTION_DEPENDENCIES"
+        : category === "EVIDENCE_INCOMPLETE"
+          ? "OBTAIN_MISSING_NATIVE_EVIDENCE"
+          : "VERIFY_NATIVE_VISUAL_RIG_AND_EXPORT";
+  return {
+    category,
+    reason_codes: reasons,
+    recommended_review,
+    native_removal_authorized: false,
+  };
+}
+
+/**
  * Read-only exact authored-geometry coincidence report, scoped to a saved
  * Recipe's verified native Cube inventory. This deliberately does NOT infer
  * duplicates from Recipe coordinates alone: identical local coordinates under
@@ -408,24 +505,37 @@ export function assessRecipeNativeCoincidence(
         ? "sha256:" + createHash("sha256")
           .update(JSON.stringify(scopedMotionRevisions)).digest("hex")
         : null;
+      const uvState = !hasCompleteSurface
+        ? ("UNVERIFIED" as const)
+        : uvDifferent ? ("DIFFERENT" as const) : ("MATCHED_FIELDS" as const);
+      const materialState = !hasCompleteSurface || materialUnresolved
+        ? ("UNVERIFIED" as const)
+        : materialDifferent ? ("DIFFERENT" as const) : ("MATCHED_FIELDS" as const);
+      const animationState = !surfaceState?.animation_inventory_available
+        ? ("UNVERIFIED" as const)
+        : animatedClips.length
+          ? ("BONE_TRACKS_PRESENT" as const)
+          : ("NO_PARENT_BONE_TRACKS_OBSERVED" as const);
+      const optimizationRisk = classifyRecipeCoincidenceRisk({
+        anchor_constraint_count: anchorIds.length,
+        symmetry_relation_count: symmetryIds.length,
+        uv_mapping_state: uvState,
+        material_binding_state: materialState,
+        observed_material_or_visibility_difference: materialDifferent,
+        animation_binding_state: animationState,
+      });
       return {
         group_size: ordered.length,
         parent_path: [...ordered[0].parent_path!],
-        animation_binding_state: !surfaceState?.animation_inventory_available
-          ? ("UNVERIFIED" as const)
-          : animatedClips.length
-            ? ("BONE_TRACKS_PRESENT" as const)
-            : ("NO_PARENT_BONE_TRACKS_OBSERVED" as const),
+        animation_binding_state: animationState,
         animated_ancestor_count: keyedAncestorCount,
         animated_clip_count: animatedClips.length,
         animated_motion_source_fingerprint: motionSourceRevision,
         animated_clip_examples: animatedClips.slice(0, 8),
         animated_clip_examples_truncated: animatedClips.length > 8,
-        uv_mapping_state: !hasCompleteSurface ? ("UNVERIFIED" as const)
-          : uvDifferent ? ("DIFFERENT" as const) : ("MATCHED_FIELDS" as const),
-        material_binding_state: !hasCompleteSurface || materialUnresolved
-          ? ("UNVERIFIED" as const)
-          : materialDifferent ? ("DIFFERENT" as const) : ("MATCHED_FIELDS" as const),
+        uv_mapping_state: uvState,
+        material_binding_state: materialState,
+        optimization_risk: optimizationRisk,
         ...(hasCompleteSurface
           ? { material_or_visibility_difference: materialDifferent }
           : {}),
@@ -457,7 +567,7 @@ export function assessRecipeNativeCoincidence(
       group => group.uv_mapping_state === "DIFFERENT"
     ).length,
     groups_with_material_differences: candidates.filter(
-      group => group.material_binding_state === "DIFFERENT"
+      group => group.material_or_visibility_difference === true
     ).length,
     groups_with_unverified_material: candidates.filter(
       group => group.material_binding_state === "UNVERIFIED"
@@ -468,6 +578,24 @@ export function assessRecipeNativeCoincidence(
     groups_with_unverified_animation: candidates.filter(
       group => group.animation_binding_state === "UNVERIFIED"
     ).length,
+    optimization_risk_summary: {
+      structural_dependency_groups: candidates.filter(
+        group => group.optimization_risk.category === "STRUCTURAL_DEPENDENCY"
+      ).length,
+      observed_difference_or_motion_groups: candidates.filter(
+        group => group.optimization_risk.category === "OBSERVED_DIFFERENCE_OR_MOTION"
+      ).length,
+      evidence_incomplete_groups: candidates.filter(
+        group => group.optimization_risk.category === "EVIDENCE_INCOMPLETE"
+      ).length,
+      manual_visual_review_groups: candidates.filter(
+        group => group.optimization_risk.category === "MANUAL_VISUAL_REVIEW"
+      ).length,
+      // Categories are exclusive; reason codes are not. The summary covers
+      // every candidate, including those beyond the eight example slots.
+      scope: "ALL_COINCIDENT_RECIPE_GROUPS" as const,
+      automatic_removal_allowed: false as const,
+    },
     candidate_examples: candidates.slice(0, 8),
     candidate_examples_truncated: candidates.length > 8,
     estimated_removable_cube_count: null,
@@ -480,7 +608,9 @@ export function assessRecipeNativeCoincidence(
       "track snapshots including keyframe values/interpolation and clip settings. " +
       "No parent tracks observed is NOT proof of a static model; matching fields do not " +
       "prove PBR shader fidelity, alpha/rendered appearance, animation pose, controller " +
-      "binding, unrelated geometry or Bedrock export. Never delete Cubes.",
+      "binding, unrelated geometry or Bedrock export. The deterministic " +
+      "optimization_risk categories prioritize manual review and carry explicit " +
+      "reason codes, never a score, auto-action or authorization to delete Cubes.",
   };
 }
 
