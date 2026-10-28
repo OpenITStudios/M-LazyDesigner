@@ -17,7 +17,6 @@ import { AuthoringEvidenceRegistry, type AuthoringEvidenceHandle } from "@/lib/a
 import { compactAuthoringApplyReceipt, compactSemanticIdentityResolution } from "@/lib/authoringRecipe/compactReceipt";
 import {
   planRecipeFeatureRepresentations,
-  assessRecipeFeatureOptimization,
   selectRecipeRebuildExecutionStrategy,
   summarizeAuthoringRecipeRebuild,
 } from "@/lib/authoringRecipe/planning";
