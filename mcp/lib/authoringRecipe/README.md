@@ -194,6 +194,45 @@ false`; the report remains `native_mutation_executed: false` with visual
 verdict `NOT_EVALUATED`.
 No new registry, GPU model, evaluator, public Gateway surface or Undo path.
 
+### Risk-guided review batches — before any proposed Geometry mutation
+
+The same opt-in `assessRecipeNativeCoincidence` report contains
+`optimization_review_plan`. This is a **source-only review plan** for
+candidate coincidence, NOT a post-apply `VerificationTask`: the canonical
+`orchestration/verificationPlan.ts` still owns verification AFTER a
+real authoring impact. Here, six review checks are routed to the existing
+Recipe, UV, material, animation and visual/export evidence owners,
+ordered and deduplicated per domain:
+
+- `RECIPE_ANCHOR_RELATION`: exact saved Recipe constraint source/target IDs
+- `RECIPE_SYMMETRY_RELATION`: exact mirror relations and UV/texture/rig policies
+- `NATIVE_UV_MAPPING`: affected native Cube UUID UV/face orientation and mapping
+- `NATIVE_MATERIAL_BINDING`: affected face materials, atlas revisions and PBR channels
+- `NATIVE_BONE_ANIMATION`: scoped parent Bone tracks, keyframe content and clips
+- `NATIVE_VISUAL_AND_EXPORT`: reference, relevant pose, scene and native export proof
+
+One check per domain can carry **multiple risk reason codes**, including a
+simultaneously observed material difference and missing material evidence.
+The plan aggregates all candidate groups into at most six owner batches;
+it carries exact total group/instance/UUID/relation/clip counts but only
+bounded sorted scope examples. A 9-group review cannot silently become an
+8-group review just because candidate examples are truncated. UV-only
+problems target their affected candidate groups, rather than triggering
+a full model-wide recheck. The risk reasons, candidate review IDs, and
+report-wide batches are deterministically derived from the same already
+validated source; they never invent external image evidence or tools.
+When an example scope is truncated, its ID examples are **not** sufficient
+to execute complete review: retrieve the full fresh owner inventory first,
+rather than treating preview examples as the exhaustive list.
+
+Every check has `execution_state: NOT_EXECUTED`, and the plan has
+`state: PREPARED_SOURCE_ONLY`, `native_review_executed: false`,
+`native_mutation_authorized: false`, and `visual_verdict: NOT_EVALUATED`.
+The evidence owners are **requirements**, not verified availability of
+specific Gateway tools or background actions. Completing these checks
+needs separately grounded results; even success does not automatically
+authorize Cube deletion, Texture handoff or release.
+
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 `planning.ts` owns pure planning APIs. `service.ts` owns bounded stateful plan/apply/identity/evidence lifecycle and may compose recipe modules, but recipe source must not depend on Gateway or Runtime executors.

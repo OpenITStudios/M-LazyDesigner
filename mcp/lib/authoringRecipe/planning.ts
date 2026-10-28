@@ -380,6 +380,84 @@ function classifyRecipeCoincidenceRisk(input: {
 }
 
 /**
+ * Risk-guided source REVIEW requirements, not post-apply VerificationTasks.
+ * The existing orchestration/verificationPlan is reserved for executed
+ * authoring impact; no native check, MCP capability or visual PASS is implied.
+ *
+ * Check order is the canonical batching order. Each reason maps to at most
+ * one check, so missing and changed evidence in the same domain share one
+ * owner-scoped review rather than triggering duplicate model-wide reads.
+ */
+export type RecipeRiskReviewCheckId =
+  | "RECIPE_ANCHOR_RELATION"
+  | "RECIPE_SYMMETRY_RELATION"
+  | "NATIVE_UV_MAPPING"
+  | "NATIVE_MATERIAL_BINDING"
+  | "NATIVE_BONE_ANIMATION"
+  | "NATIVE_VISUAL_AND_EXPORT";
+
+type RecipeRiskReviewDefinition = {
+  id: RecipeRiskReviewCheckId;
+  evidence_owner:
+    | "SAVED_RECIPE"
+    | "NATIVE_UV_OWNER"
+    | "NATIVE_MATERIAL_OWNER"
+    | "NATIVE_ANIMATION_OWNER"
+    | "REFERENCE_VISUAL_EXPORT_OWNER";
+  trigger_reasons: readonly RecipeCoincidenceRiskReason[];
+  required_evidence: string;
+};
+
+const RECIPE_RISK_REVIEW_DEFINITIONS: readonly RecipeRiskReviewDefinition[] = [
+  {
+    id: "RECIPE_ANCHOR_RELATION",
+    evidence_owner: "SAVED_RECIPE",
+    trigger_reasons: ["ANCHOR_CONSTRAINT_PRESENT"],
+    required_evidence: "Review exact Recipe ANCHOR source/target IDs and dependent Geometry before changing either instance.",
+  },
+  {
+    id: "RECIPE_SYMMETRY_RELATION",
+    evidence_owner: "SAVED_RECIPE",
+    trigger_reasons: ["SYMMETRY_RELATION_PRESENT"],
+    required_evidence: "Review Recipe symmetry source/target, mirror plane and UV/texture/rig policies before removing a paired Cube.",
+  },
+  {
+    id: "NATIVE_UV_MAPPING",
+    evidence_owner: "NATIVE_UV_OWNER",
+    trigger_reasons: ["UV_MAPPING_DIFFERENT", "UV_EVIDENCE_UNAVAILABLE"],
+    required_evidence: "Obtain fresh exact-Cube per-face/Box UV orientation and mapped texture coverage for these native UUIDs.",
+  },
+  {
+    id: "NATIVE_MATERIAL_BINDING",
+    evidence_owner: "NATIVE_MATERIAL_OWNER",
+    trigger_reasons: ["MATERIAL_BINDING_DIFFERENT", "MATERIAL_EVIDENCE_UNAVAILABLE"],
+    required_evidence: "Inspect face material instances, TextureGroup/PBR companions, atlas revisions, visibility and export for these native UUIDs.",
+  },
+  {
+    id: "NATIVE_BONE_ANIMATION",
+    evidence_owner: "NATIVE_ANIMATION_OWNER",
+    trigger_reasons: ["ANIMATED_PARENT_BONE", "ANIMATION_EVIDENCE_UNAVAILABLE"],
+    required_evidence: "Read authored ancestor BoneAnimator keyframe/clip source and assess rig/controller/pose dependencies without mutating Timeline.",
+  },
+  {
+    id: "NATIVE_VISUAL_AND_EXPORT",
+    evidence_owner: "REFERENCE_VISUAL_EXPORT_OWNER",
+    trigger_reasons: ["RENDERED_EQUIVALENCE_UNVERIFIED"],
+    required_evidence: "Compare grounded reference views and relevant poses; independently verify native visual parity and Bedrock export before any reduction.",
+  },
+];
+
+type RecipeRiskReviewScope = {
+  candidate_group_count: number;
+  instance_ids: Set<string>;
+  native_cube_uuids: Set<string>;
+  anchor_relation_ids: Set<string>;
+  symmetry_relation_ids: Set<string>;
+  animation_clip_ids: Set<string>;
+  trigger_reasons: Set<RecipeCoincidenceRiskReason>;
+};
+
+/**
  * Read-only exact authored-geometry coincidence report, scoped to a saved
  * Recipe's verified native Cube inventory. This deliberately does NOT infer
  * duplicates from Recipe coordinates alone: identical local coordinates under
@@ -458,6 +536,9 @@ export function assessRecipeNativeCoincidence(
     link(symmetryByInstance, relation.target_instance_id, relation.id);
   }
 
+  // This Map is local to one pure report, not a new registry or persistence.
+  // It deduplicates candidate review work into at most six owner-domain batches.
+  const reviewsByCheck = new Map<RecipeRiskReviewCheckId, RecipeRiskReviewScope>();
   const candidates = [...sameShape.values()]
     .filter(group => group.length > 1)
     .map(group => {
@@ -524,6 +605,38 @@ export function assessRecipeNativeCoincidence(
         observed_material_or_visibility_difference: materialDifferent,
         animation_binding_state: animationState,
       });
+      const reviewDefinitions = RECIPE_RISK_REVIEW_DEFINITIONS.filter(def =>
+        def.trigger_reasons.some(code => optimizationRisk.reason_codes.includes(code))
+      );
+      for (const definition of reviewDefinitions) {
+        const scope = reviewsByCheck.get(definition.id) ?? {
+          candidate_group_count: 0,
+          instance_ids: new Set<string>(),
+          native_cube_uuids: new Set<string>(),
+          anchor_relation_ids: new Set<string>(),
+          symmetry_relation_ids: new Set<string>(),
+          animation_clip_ids: new Set<string>(),
+          trigger_reasons: new Set<RecipeCoincidenceRiskReason>(),
+        };
+        scope.candidate_group_count++;
+        for (const cube of ordered) {
+          scope.instance_ids.add(cube.instance_id);
+          scope.native_cube_uuids.add(cube.uuid);
+        }
+        if (definition.id === "RECIPE_ANCHOR_RELATION") {
+          for (const id of anchorIds) scope.anchor_relation_ids.add(id);
+        }
+        if (definition.id === "RECIPE_SYMMETRY_RELATION") {
+          for (const id of symmetryIds) scope.symmetry_relation_ids.add(id);
+        }
+        if (definition.id === "NATIVE_BONE_ANIMATION") {
+          for (const id of animatedClips) scope.animation_clip_ids.add(id);
+        }
+        for (const code of definition.trigger_reasons) {
+          if (optimizationRisk.reason_codes.includes(code)) scope.trigger_reasons.add(code);
+        }
+        reviewsByCheck.set(definition.id, scope);
+      }
       return {
         group_size: ordered.length,
         parent_path: [...ordered[0].parent_path!],
@@ -536,6 +649,12 @@ export function assessRecipeNativeCoincidence(
         uv_mapping_state: uvState,
         material_binding_state: materialState,
         optimization_risk: optimizationRisk,
+        optimization_review: {
+          state: "PREPARED_SOURCE_ONLY" as const,
+          check_ids: reviewDefinitions.map(def => def.id),
+          native_review_executed: false as const,
+          native_removal_authorized: false as const,
+        },
         ...(hasCompleteSurface
           ? { material_or_visibility_difference: materialDifferent }
           : {}),
@@ -551,6 +670,29 @@ export function assessRecipeNativeCoincidence(
       };
     })
     .sort((a, b) => a.instance_id_examples[0]!.localeCompare(b.instance_id_examples[0]!));
+
+  // Build the actual owner review batches from ALL candidate scopes, not just
+  // the first eight example cards. The full IDs never leak into the report:
+  // only exact counts and bounded sorted examples are returned.
+  const reviewBatches = RECIPE_RISK_REVIEW_DEFINITIONS.flatMap(definition => {
+    const scope = reviewsByCheck.get(definition.id);
+    if (!scope) return [];
+    return [{
+      check_id: definition.id,
+      evidence_owner: definition.evidence_owner,
+      required_evidence: definition.required_evidence,
+      trigger_reason_codes: definition.trigger_reasons.filter(code =>
+        scope.trigger_reasons.has(code)
+      ),
+      candidate_group_count: scope.candidate_group_count,
+      instance_scope: bounded([...scope.instance_ids].sort()),
+      native_cube_scope: bounded([...scope.native_cube_uuids].sort()),
+      anchor_relation_scope: bounded([...scope.anchor_relation_ids].sort()),
+      symmetry_relation_scope: bounded([...scope.symmetry_relation_ids].sort()),
+      animation_clip_scope: bounded([...scope.animation_clip_ids].sort()),
+      execution_state: "NOT_EXECUTED" as const,
+    }];
+  });
 
   return {
     state: "REVIEW_ONLY" as const,
@@ -596,6 +738,18 @@ export function assessRecipeNativeCoincidence(
       scope: "ALL_COINCIDENT_RECIPE_GROUPS" as const,
       automatic_removal_allowed: false as const,
     },
+    optimization_review_plan: {
+      state: "PREPARED_SOURCE_ONLY" as const,
+      scope: "DEDUPLICATED_OWNER_CHECKS_FOR_COINCIDENT_GROUPS" as const,
+      check_count: reviewBatches.length,
+      group_check_count: reviewBatches.reduce(
+        (total, batch) => total + batch.candidate_group_count, 0
+      ),
+      batches: reviewBatches,
+      native_review_executed: false as const,
+      visual_verdict: "NOT_EVALUATED" as const,
+      native_mutation_authorized: false as const,
+    },
     candidate_examples: candidates.slice(0, 8),
     candidate_examples_truncated: candidates.length > 8,
     estimated_removable_cube_count: null,
@@ -610,7 +764,10 @@ export function assessRecipeNativeCoincidence(
       "prove PBR shader fidelity, alpha/rendered appearance, animation pose, controller " +
       "binding, unrelated geometry or Bedrock export. The deterministic " +
       "optimization_risk categories prioritize manual review and carry explicit " +
-      "reason codes, never a score, auto-action or authorization to delete Cubes.",
+      "reason codes, never a score, auto-action or authorization to delete Cubes. " +
+      "The opt-in risk-guided review plan batches exact affected scopes by existing " +
+      "owner: Recipe relations, native UV/material/animation and reference/export. " +
+      "No checks have been executed; capabilities, visuals and export proof remain unverified.",
   };
 }
 

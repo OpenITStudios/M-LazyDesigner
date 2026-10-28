@@ -1276,6 +1276,238 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
     )).toBe(true);
   });
 
+
+  test("risk review batches missing UV/material/animation evidence once per owner with exact Cube scope", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["same-bone", "same-bone"]);
+    const report = assessRecipeNativeCoincidence(recipe, snapshot);
+    const plan = report.optimization_review_plan;
+    expect(plan).toMatchObject({
+      state: "PREPARED_SOURCE_ONLY",
+      scope: "DEDUPLICATED_OWNER_CHECKS_FOR_COINCIDENT_GROUPS",
+      check_count: 4,
+      group_check_count: 4,
+      native_review_executed: false,
+      native_mutation_authorized: false,
+      visual_verdict: "NOT_EVALUATED",
+    });
+    expect(plan.batches.map(batch => batch.check_id)).toEqual([
+      "NATIVE_UV_MAPPING",
+      "NATIVE_MATERIAL_BINDING",
+      "NATIVE_BONE_ANIMATION",
+      "NATIVE_VISUAL_AND_EXPORT",
+    ]);
+    for (const batch of plan.batches) {
+      expect(batch).toMatchObject({
+        candidate_group_count: 1,
+        execution_state: "NOT_EXECUTED",
+        instance_scope: {
+          count: 2, examples: ["shells:0", "shells:1"],
+          examples_truncated: false,
+        },
+        native_cube_scope: {
+          count: 2, examples: ["native-shells:0", "native-shells:1"],
+          examples_truncated: false,
+        },
+        anchor_relation_scope: { count: 0 },
+        symmetry_relation_scope: { count: 0 },
+      });
+    }
+    expect(report.candidate_examples[0]!.optimization_review).toMatchObject({
+      state: "PREPARED_SOURCE_ONLY",
+      check_ids: plan.batches.map(batch => batch.check_id),
+      native_review_executed: false,
+      native_removal_authorized: false,
+    });
+    expect(report.estimated_removable_cube_count).toBeNull();
+  });
+
+  test("all matching authored UV/material fields still request only native visual/export review", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const surface = surfaceFixture(snapshot);
+    const unchanged = structuredClone(surface);
+    const report = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(report.optimization_review_plan).toMatchObject({
+      check_count: 1, group_check_count: 1,
+      batches: [{
+        check_id: "NATIVE_VISUAL_AND_EXPORT",
+        evidence_owner: "REFERENCE_VISUAL_EXPORT_OWNER",
+        trigger_reason_codes: ["RENDERED_EQUIVALENCE_UNVERIFIED"],
+        candidate_group_count: 1,
+        execution_state: "NOT_EXECUTED",
+      }],
+    });
+    expect(report.candidate_examples[0]!.optimization_review.check_ids)
+      .toEqual(["NATIVE_VISUAL_AND_EXPORT"]);
+    expect(surface).toEqual(unchanged);
+    expect(report.native_mutation_executed).toBe(false);
+  });
+
+  test("observed material differences and unresolved material proof produce one targeted review batch", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const surface = surfaceFixture(snapshot);
+    surface.cubes[0]!.faces[0]!.texture_ref = null;
+    const report = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    const batches = report.optimization_review_plan.batches;
+    expect(batches.map(batch => batch.check_id)).toEqual([
+      "NATIVE_MATERIAL_BINDING", "NATIVE_VISUAL_AND_EXPORT",
+    ]);
+    expect(batches[0]).toMatchObject({
+      check_id: "NATIVE_MATERIAL_BINDING",
+      trigger_reason_codes: [
+        "MATERIAL_BINDING_DIFFERENT",
+        "MATERIAL_EVIDENCE_UNAVAILABLE",
+      ],
+      candidate_group_count: 1,
+      native_cube_scope: { count: 2 },
+    });
+    expect(report.optimization_review_plan.check_count).toBe(2);
+    expect(report.candidate_examples[0]!.optimization_review.check_ids)
+      .toEqual(["NATIVE_MATERIAL_BINDING", "NATIVE_VISUAL_AND_EXPORT"]);
+  });
+
+  test("Anchor/Symmetry and animated Bone produce distinct owner reviews with scoped relation/clip IDs", () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "shell-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    recipe.symmetry = [{
+      id: "mirror-shell", source_instance_id: "shells:0",
+      target_instance_id: "mirror", plane: { axis: "X", position: 1 },
+      uv_policy: "SHARE", texture_policy: "MIRROR", rig_policy: "MIRROR",
+    }];
+    const snapshot = native(recipe, ["bone", "bone", "bone"]);
+    const surface = surfaceFixture(snapshot);
+    surface.cubes[2]!.uv_offset = [6, 0];
+    surface.animations = { clips: [{
+      uuid: "clip:walk", clip_settings_sha256: "a".repeat(64),
+      bone_tracks: [{
+        bone_uuid: "bone", position_keyframes: 1,
+        rotation_keyframes: 2, scale_keyframes: 0,
+        keyframe_content_sha256: "b".repeat(64),
+      }],
+    }] };
+    const report = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(report.optimization_review_plan.batches.map(batch => batch.check_id))
+      .toEqual([
+        "RECIPE_ANCHOR_RELATION",
+        "RECIPE_SYMMETRY_RELATION",
+        "NATIVE_UV_MAPPING",
+        "NATIVE_BONE_ANIMATION",
+        "NATIVE_VISUAL_AND_EXPORT",
+      ]);
+    expect(report.optimization_review_plan).toMatchObject({
+      check_count: 5, group_check_count: 5,
+      batches: [
+        {
+          evidence_owner: "SAVED_RECIPE",
+          anchor_relation_scope: { count: 1, examples: ["shell-anchor"] },
+        },
+        {
+          evidence_owner: "SAVED_RECIPE",
+          symmetry_relation_scope: { count: 1, examples: ["mirror-shell"] },
+        },
+        { instance_scope: { count: 3 } },
+        { animation_clip_scope: { count: 1, examples: ["clip:walk"] } },
+        { native_cube_scope: { count: 3 } },
+      ],
+    });
+    expect(report.candidate_examples[0]!.optimization_risk.category)
+      .toBe("STRUCTURAL_DEPENDENCY");
+    expect(report.optimization_review_plan.native_mutation_authorized).toBe(false);
+  });
+
+  test("deduped reviews cover all nine groups and exact IDs even when preview is truncated", () => {
+    const recipe = coincidenceRecipe();
+    recipe.patterns = Array.from({ length: 9 }, (_, i) => ({
+      kind: "LINEAR" as const,
+      id: "duplicate-cluster-" + i,
+      prototype_id: "shell", count: 2,
+      axis: "X" as const, spacing: 0,
+      start: [i * 6, 0, 0] as [number, number, number],
+    }));
+    const snapshot = native(recipe, Array(18).fill(null));
+    const report = assessRecipeNativeCoincidence(recipe, snapshot);
+    expect(report.candidate_examples_truncated).toBe(true);
+    expect(report.candidate_examples).toHaveLength(8);
+    const plan = report.optimization_review_plan;
+    expect(plan).toMatchObject({
+      state: "PREPARED_SOURCE_ONLY",
+      check_count: 4,
+      group_check_count: 36,
+      native_review_executed: false,
+    });
+    for (const batch of plan.batches) {
+      expect(batch).toMatchObject({
+        candidate_group_count: 9,
+        instance_scope: { count: 18, examples_truncated: true },
+        native_cube_scope: { count: 18, examples_truncated: true },
+      });
+      expect(batch.instance_scope.examples).toHaveLength(12);
+      expect(batch.native_cube_scope.examples).toHaveLength(12);
+    }
+    expect(plan.batches[3]!.check_id).toBe("NATIVE_VISUAL_AND_EXPORT");
+    expect(report.optimization_risk_summary.evidence_incomplete_groups).toBe(9);
+  });
+
+  test("an observed UV mismatch scopes UV review only to its cohort, not unrelated matching Cubes", () => {
+    const recipe = coincidenceRecipe();
+    recipe.patterns = [
+      { kind: "LINEAR", id: "cluster-a", prototype_id: "shell",
+        count: 2, axis: "X", spacing: 0, start: [0, 0, 0] },
+      { kind: "LINEAR", id: "cluster-b", prototype_id: "shell",
+        count: 2, axis: "X", spacing: 0, start: [8, 0, 0] },
+    ];
+    const snapshot = native(recipe, Array(4).fill(null));
+    const surface = surfaceFixture(snapshot);
+    const modified = surface.cubes.find(cube => cube.instance_id === "cluster-a:1");
+    expect(modified).toBeDefined();
+    modified!.uv_offset = [4, 0];
+    const report = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(report.coincident_group_count).toBe(2);
+    expect(report.optimization_review_plan.batches.map(batch => batch.check_id))
+      .toEqual(["NATIVE_UV_MAPPING", "NATIVE_VISUAL_AND_EXPORT"]);
+    expect(report.optimization_review_plan.batches[0]).toMatchObject({
+      candidate_group_count: 1,
+      instance_scope: {
+        count: 2, examples: ["cluster-a:0", "cluster-a:1"],
+      },
+      native_cube_scope: {
+        count: 2, examples: ["native-cluster-a:0", "native-cluster-a:1"],
+      },
+      execution_state: "NOT_EXECUTED",
+    });
+    expect(report.optimization_review_plan.batches[1]).toMatchObject({
+      candidate_group_count: 2,
+      instance_scope: { count: 4 },
+    });
+    expect(report.optimization_review_plan.group_check_count).toBe(3);
+  });
+
+  test("no coincident Recipe geometry creates no optimizer review work", () => {
+    const recipe = coincidenceRecipe();
+    const pattern = recipe.patterns[0]!;
+    if (pattern.kind !== "LINEAR") throw new Error("Unexpected fixture pattern.");
+    pattern.spacing = 4;
+    const snapshot = native(recipe, [null, null]);
+    const report = assessRecipeNativeCoincidence(recipe, snapshot);
+    expect(report).toMatchObject({
+      coincident_group_count: 0,
+      optimization_review_plan: {
+        state: "PREPARED_SOURCE_ONLY",
+        check_count: 0, group_check_count: 0, batches: [],
+        native_review_executed: false,
+        native_mutation_authorized: false,
+      },
+    });
+    expect(report.candidate_examples).toEqual([]);
+  });
+
   test("existing Recipe Service reads stored native source without applying any mutation", async () => {
     const recipe = coincidenceRecipe();
     const snapshot = native(recipe, [null, null]);
@@ -1296,6 +1528,10 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
       inspected_native_cube_count: 2,
       coincident_group_count: 1,
       native_mutation_executed: false,
+      optimization_review_plan: {
+        check_count: 4, group_check_count: 4,
+        native_review_executed: false,
+      },
     });
     expect(readCount).toBe(1);
     expect(mutationCount).toBe(0);
