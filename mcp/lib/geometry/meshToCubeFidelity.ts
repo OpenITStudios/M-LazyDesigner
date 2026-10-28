@@ -3,6 +3,12 @@
  * Works entirely on authored local vertices/faces. It never mutates Mesh,
  * instantiates Cube, evaluates animation, samples pixels, or certifies export.
  */
+import {
+  planCubeFaceUvFromMeshCorners,
+  type CubeSide,
+  type CubeUvCorner,
+} from "./meshToCubeUvPlan";
+
 export const MESH_TO_CUBE_ANALYSIS_LIMIT = 16;
 export const MESH_TO_CUBE_VERTEX_LIMIT = 512;
 export const MESH_TO_CUBE_FACE_LIMIT = 512;
@@ -159,6 +165,98 @@ function sideIsComplete(
   return a[u]!==b[u] && a[v]!==b[v];
 }
 
+
+
+/**
+ * Derive all six *potential* native Cube-face UV/material assignments from
+ * the already verified eight-corner/six-side Mesh geometry. No mutation and
+ * no claim that current textures or Bedrock material instances are saved.
+ */
+function buildMeshCubeFaceTransfer(input: {
+  sides:Readonly<Record<Side,readonly FaceMeasure[]>>;
+  points:Readonly<Record<string,Vec3>>;
+  from:Vec3;
+  to:Vec3;
+}) {
+  const faces=SIDES.map(side=>{
+    const parts=input.sides[side];
+    const sourceKeys=parts.map(p=>p.key);
+    const materialVariants=new Set(parts.map(materialIdentity));
+    const materialSplit=materialVariants.size!==1;
+    const sourceTexture=parts[0]?.texture;
+    const textureBinding=parts.every(p=>p.texture===sourceTexture) ?
+      sourceTexture===false?"single_texture_default" as const :
+      sourceTexture===null?"hidden_face" as const :
+      typeof sourceTexture==="string"?"explicit_texture_uuid" as const :
+      "unresolved" as const : "split" as const;
+    const materialName=parts[0]?.material_name ?? "";
+    const corners=new Map<string,{position:Vec3;uv:readonly number[]}>();
+    let uvConflict=false;
+    for(const part of parts){
+      for(const id of part.keys){
+        const uv=part.uv?.[id];
+        if(!uv){uvConflict=true;continue;}
+        const prior=corners.get(id);
+        if(prior && (uv.length!==2 || prior.uv.length!==2 ||
+          uv.some((x,index)=>Math.abs(x-prior.uv[index])>GEOMETRY_EPSILON))){
+          uvConflict=true;
+        }else if(!prior){
+          corners.set(id,{position:input.points[id],uv});
+        }
+      }
+    }
+    const prepared=uvConflict ? {
+      state:"blocked" as const,reason:"MESH_TRIANGULATED_UV_SEAM" as const,
+      native_export_verified:false as const,
+    } : planCubeFaceUvFromMeshCorners({
+      face:side,from:input.from,to:input.to,
+      corners:[...corners.values()] as readonly CubeUvCorner[],
+    });
+    const reasons:string[]=[];
+    if(materialSplit)reasons.push("MESH_FACE_MATERIAL_OR_TEXTURE_SPLIT");
+    if(textureBinding==="unresolved")reasons.push("MESH_FACE_TEXTURE_BINDING_UNRESOLVED");
+    if(textureBinding==="split")reasons.push("MESH_FACE_TEXTURE_BINDING_SPLIT");
+    if(prepared.state==="blocked")reasons.push(prepared.reason);
+    return {
+      face:side,
+      source_mesh_face_keys:sourceKeys,
+      texture_binding:textureBinding,
+      texture_uuid:typeof sourceTexture==="string"?sourceTexture:null,
+      material_name:materialSplit?null:materialName,
+      uv_rect:prepared.state==="representable"?prepared.uv:null,
+      uv_rotation:prepared.state==="representable"?prepared.rotation:null,
+      uv_mirrored_u:prepared.state==="representable"?prepared.uv_mirrored_u:null,
+      uv_mirrored_v:prepared.state==="representable"?prepared.uv_mirrored_v:null,
+      max_corner_uv_error:prepared.state==="representable"?
+        prepared.max_corner_uv_error:null,
+      state:reasons.length?"review_required" as const:"candidate_source_only" as const,
+      reasons,
+    };
+  });
+  return {
+    state:faces.every(face=>face.state==="candidate_source_only")?
+      "all_faces_candidate_source_only" as const:"review_required" as const,
+    proposed_cube_uv_mode:"per_face" as const,
+    face_count:6,
+    representable_uv_face_count:faces.filter(face=>face.uv_rect!==null).length,
+    reviewed_face_count:faces.filter(face=>face.state==="review_required").length,
+    texture_binding_unresolved_count:faces.filter(face=>
+      face.texture_binding==="unresolved" || face.texture_binding==="split"
+    ).length,
+    material_split_face_count:faces.filter(face=>
+      face.reasons.includes("MESH_FACE_MATERIAL_OR_TEXTURE_SPLIT")
+    ).length,
+    faces,
+    native_cube_ready:false as const,
+    native_material_transfer_executed:false as const,
+    native_texture_transfer_executed:false as const,
+    note:"Six candidate Cube-face UV rectangles and rotation values are " +
+      "mathematically matched to Mesh UV corners under the Blockbench " +
+      "CubeFace convention. No texture assets, material instances, rig, " +
+      "world pose, atlas pixels, normal direction or Bedrock export verified.",
+  };
+}
+
 export function analyzeMeshToCubeFidelity(mesh:MeshToCubeInput) {
   const shared={
     mesh_uuid:mesh?.uuid??null,
@@ -177,6 +275,12 @@ export function analyzeMeshToCubeFidelity(mesh:MeshToCubeInput) {
     surface_boundary_alignment_ratio:null,
     non_boundary_triangle_area_fraction:null,
     native_cube_ready:false as const,
+    cube_face_transfer:{
+      state:"not_evaluable" as const,
+      reason:"MESH_SOURCE_NOT_VERIFIED" as const,
+      faces:[],
+      native_cube_ready:false as const,
+    },
     uv_fidelity:"not_verified" as const,
     note:"Malformed or over-budget Mesh cannot support a Cube fidelity claim. No model was changed.",
   });
@@ -278,6 +382,14 @@ export function analyzeMeshToCubeFidelity(mesh:MeshToCubeInput) {
   });
   const uvRectSides=uvSides.filter(face=>face.uv_rectangular_candidate).length;
   const splitSides=uvSides.filter(face=>face.material_or_texture_split).length;
+  const cubeFaceTransfer=shapeExact?buildMeshCubeFaceTransfer({
+    sides,points,from:min,to:max,
+  }):{
+    state:"not_evaluable" as const,
+    reason:"MESH_SHAPE_REQUIRES_APPROXIMATION" as const,
+    faces:[],
+    native_cube_ready:false as const,
+  };
   const reasons:string[]=[];
   if(!shapeExact)reasons.push("BBOX_APPROXIMATION_CHANGES_SURFACE");
   if(shapeExact && normalMismatches>0)reasons.push("MESH_FACE_WINDING_REQUIRES_REVIEW");
@@ -287,6 +399,9 @@ export function analyzeMeshToCubeFidelity(mesh:MeshToCubeInput) {
   if(unknownTextureFaceCount>0)reasons.push("MESH_FACE_TEXTURE_IDENTITY_UNVERIFIED");
   if(mappedFaceCount>0 && uvRectSides!==6)reasons.push("MESH_FACE_UV_NOT_FULLY_RECTANGULAR");
   if(splitSides>0)reasons.push("MESH_TRIANGULATED_FACE_MATERIAL_SPLIT");
+  if(shapeExact && cubeFaceTransfer.state==="review_required"){
+    reasons.push("MESH_TO_CUBE_FACE_TRANSFER_REVIEW_REQUIRED");
+  }
   const classification=shapeExact ?
     (reasons.some(reason=>reason!=="MESH_FACE_UV_NOT_FULLY_RECTANGULAR") ?
        "exact_shape_requires_review" as const : "exact_geometry_candidate" as const) :
@@ -317,6 +432,7 @@ export function analyzeMeshToCubeFidelity(mesh:MeshToCubeInput) {
     rectangular_uv_side_count:uvRectSides,
     fragmented_material_side_count:splitSides,
     uv_sides:uvSides,
+    cube_face_transfer:cubeFaceTransfer,
     uv_fidelity:"requires_native_face_mapping_review" as const,
     shading:mesh.shading,
     armature_attached:mesh.armature_attached,

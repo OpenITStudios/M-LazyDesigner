@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { planCubeFaceUvFromMeshCorners } from "@/lib/geometry/meshToCubeUvPlan";
 import {
   analyzeMeshToCubeFidelity,
   summarizeMeshToCubeFidelity,
@@ -202,4 +203,168 @@ describe("read-only Mesh-to-Cube fidelity analyzer",()=>{
     expect(runtime).not.toContain("Undo.initEdit");
     expect(runtime).not.toContain("Timeline.time =");
   });
+});
+
+
+test("exact Mesh UV transfer recovers six native Cube-face UV rectangles without mutation",()=>{
+  const mesh=box(),snapshot=JSON.stringify(mesh);
+  const result=analyzeMeshToCubeFidelity(mesh);
+  expect(result.geometry_surface_exact_candidate).toBe(true);
+  expect(result.cube_face_transfer).toMatchObject({
+    state:"all_faces_candidate_source_only",
+    proposed_cube_uv_mode:"per_face",
+    face_count:6,representable_uv_face_count:6,reviewed_face_count:0,
+    native_cube_ready:false,
+    native_material_transfer_executed:false,
+    native_texture_transfer_executed:false,
+  });
+  expect(result.cube_face_transfer.faces).toHaveLength(6);
+  for(const face of result.cube_face_transfer.faces){
+    expect(face).toMatchObject({
+      state:"candidate_source_only",texture_uuid:"atlas",
+      texture_binding:"explicit_texture_uuid",material_name:"body",
+    });
+    expect(face.uv_rect).toHaveLength(4);
+    expect([0,90,180,270]).toContain(face.uv_rotation);
+    expect(face.max_corner_uv_error).toBeLessThan(1e-6);
+  }
+  expect(JSON.stringify(mesh)).toBe(snapshot);
+});
+
+test("UV corner orientation on a north face respects native CubeFace UVToLocal",()=>{
+  const from=[0,0,0],to=[2,2,2];
+  const points=[
+    {position:[0,2,0],uv:[0,0]},
+    {position:[2,2,0],uv:[16,0]},
+    {position:[0,0,0],uv:[0,16]},
+    {position:[2,0,0],uv:[16,16]},
+  ];
+  const exact=planCubeFaceUvFromMeshCorners({
+    face:"north",from,to,corners:points,
+  });
+  expect(exact.state).toBe("representable");
+  if(exact.state==="representable"){
+    expect(exact.uv).toEqual([16,0,0,16]);
+    expect(exact.rotation).toBe(0);
+    expect(exact.uv_mirrored_u).toBe(true);
+    expect(exact.native_export_verified).toBe(false);
+  }
+});
+
+test("UV orientation requires a quarter-turn when corner U follows Cube V",()=>{
+  const corners=[
+    {position:[0,2,0],uv:[0,0]},
+    {position:[2,2,0],uv:[0,12]},
+    {position:[0,0,0],uv:[12,0]},
+    {position:[2,0,0],uv:[12,12]},
+  ];
+  const result=planCubeFaceUvFromMeshCorners({
+    face:"north",from:[0,0,0],to:[2,2,2],corners,
+  });
+  expect(result.state).toBe("representable");
+  if(result.state==="representable"){
+    expect([90,270]).toContain(result.rotation);
+    expect(result.max_corner_uv_error).toBeLessThan(1e-6);
+  }
+});
+
+test("arbitrary UV corner permutation is NOT representable just because bounds are rectangular",()=>{
+  const mesh=box();
+  const uv={...mesh.faces.north.uv};
+  const keys=mesh.faces.north.vertices;
+  const swapped={...uv,[keys[0]]:uv[keys[1]],[keys[1]]:uv[keys[0]]};
+  const result=analyzeMeshToCubeFidelity({
+    ...mesh,faces:{...mesh.faces,north:{...mesh.faces.north,uv:swapped}},
+  });
+  expect(result.rectangular_uv_side_count).toBe(6); // legacy bound-only test
+  expect(result.cube_face_transfer.state).toBe("review_required");
+  const north=result.cube_face_transfer.faces.find(f=>f.face==="north");
+  expect(north?.uv_rect).toBeNull();
+  expect(north?.reasons).toContain("CUBE_UV_CORNER_ORIENTATION_UNREPRESENTABLE");
+  expect(result.reasons).toContain("MESH_TO_CUBE_FACE_TRANSFER_REVIEW_REQUIRED");
+  expect(result.native_cube_ready).toBe(false);
+});
+
+test("triangulated Cube-face seams refuse an otherwise exact mesh mapping",()=>{
+  const mesh=box();
+  const face=mesh.faces.north,v=face.vertices;
+  const faces={...mesh.faces};
+  delete (faces as Record<string,unknown>).north;
+  (faces as Record<string,unknown>).tri_a={
+    ...face,vertices:[v[0],v[1],v[2]],uv:face.uv,
+  };
+  (faces as Record<string,unknown>).tri_b={
+    ...face,vertices:[v[0],v[2],v[3]],
+    uv:{...face.uv,[v[0]]:[99,99]},
+  };
+  const result=analyzeMeshToCubeFidelity({...mesh,faces});
+  expect(result.geometry_surface_exact_candidate).toBe(true);
+  const north=result.cube_face_transfer.faces.find(f=>f.face==="north");
+  expect(north?.state).toBe("review_required");
+  expect(north?.reasons).toContain("MESH_TRIANGULATED_UV_SEAM");
+  expect(result.cube_face_transfer.native_cube_ready).toBe(false);
+});
+
+test("triangulated sides must preserve one texture and material identity",()=>{
+  const mesh=box(),face=mesh.faces.north,v=face.vertices;
+  const faces={...mesh.faces};delete (faces as Record<string,unknown>).north;
+  (faces as Record<string,unknown>).tri_a={
+    ...face,vertices:[v[0],v[1],v[2]],texture:"atlas",
+  };
+  (faces as Record<string,unknown>).tri_b={
+    ...face,vertices:[v[0],v[2],v[3]],texture:"other",
+  };
+  const report=analyzeMeshToCubeFidelity({...mesh,faces});
+  const north=report.cube_face_transfer.faces.find(f=>f.face==="north");
+  expect(north?.texture_binding).toBe("split");
+  expect(north?.reasons).toContain("MESH_FACE_MATERIAL_OR_TEXTURE_SPLIT");
+  expect(report.cube_face_transfer.material_split_face_count).toBe(1);
+});
+
+test("Blockbench false texture binding is single-texture default, not necessarily invisible",()=>{
+  const mesh=box();
+  const faces=Object.fromEntries(Object.entries(mesh.faces).map(([name,face])=>[
+    name,{...face,texture:false},
+  ]));
+  const report=analyzeMeshToCubeFidelity({...mesh,faces});
+  expect(report.cube_face_transfer.state).toBe("all_faces_candidate_source_only");
+  for(const face of report.cube_face_transfer.faces){
+    expect(face.texture_binding).toBe("single_texture_default");
+    expect(face.texture_uuid).toBeNull();
+  }
+});
+
+test("wedge and invalid Mesh produce no Cube UV transfer plan",()=>{
+  const mesh=box();
+  const wedge={
+    ...mesh,vertices:{a:[0,0,0],b:[2,0,0],c:[0,2,0],d:[0,0,2]},
+    faces:{t:{vertices:["a","b","c"],uv:{a:[0,0],b:[4,0],c:[0,4]}}},
+  };
+  const partial=analyzeMeshToCubeFidelity(wedge);
+  expect(partial.cube_face_transfer.state).toBe("not_evaluable");
+  expect(partial.native_cube_ready).toBe(false);
+  const invalid=analyzeMeshToCubeFidelity({
+    ...mesh,faces:{bad:{vertices:["a","missing","b"]}},
+  });
+  expect(invalid.cube_face_transfer.state).toBe("not_evaluable");
+});
+
+test("CubeFace mapping plan rejects warped, missing and degenerate corners without mutating state",()=>{
+  const bounds={face:"north" as const,from:[0,0,0],to:[2,2,2]};
+  expect(planCubeFaceUvFromMeshCorners({...bounds,corners:[]})).toMatchObject({
+    state:"blocked",reason:"CUBE_UV_INVALID_CORNER",
+  });
+  const corners=[
+    {position:[0,0,0],uv:[0,0]},
+    {position:[2,0,0],uv:[16,0]},
+    {position:[0,2,0],uv:[0,16]},
+    {position:[2,2,0],uv:[16,16]},
+  ];
+  expect(planCubeFaceUvFromMeshCorners({
+    ...bounds,corners:corners.map(c=>({...c,uv:[0,0]})),
+  })).toMatchObject({state:"blocked",reason:"CUBE_UV_DEGENERATE_RECTANGLE"});
+  expect(planCubeFaceUvFromMeshCorners({
+    ...bounds,corners:corners.map((c,i)=>
+      i===0?{...c,position:[0.1,0,0]}:c),
+  })).toMatchObject({state:"blocked",reason:"CUBE_UV_INCOMPLETE_RECTANGLE"});
 });
