@@ -83,6 +83,23 @@ export function captureNativeMeshToCubeSource(mesh: Mesh): MeshToCubeSource {
   }
   const defaultTexture=typeof Texture!=="undefined" &&
     typeof Texture.getDefault==="function"?Texture.getDefault():null;
+  let defaultTextureMetrics:MeshToCubeSource["default_texture_metrics"]=null;
+  if(defaultTexture){
+    try{
+      defaultTextureMetrics={
+        uuid:defaultTexture.uuid,
+        width:defaultTexture.width,
+        height:defaultTexture.height,
+        display_height:defaultTexture.display_height,
+        uv_width:defaultTexture.getUVWidth(),
+        uv_height:defaultTexture.getUVHeight(),
+        error:defaultTexture.error,
+      };
+    }catch{
+      // Missing/failed native texture data must block source acceptance.
+    }
+  }
+  const project=typeof Project!=="undefined" && Project?Project:null;
   const f=typeof Format!=="undefined"?Format:null;
   return {
     uuid:mesh.uuid,name:mesh.name,
@@ -94,6 +111,11 @@ export function captureNativeMeshToCubeSource(mesh: Mesh): MeshToCubeSource {
     armature_attached:armatureAttached,
     parent_lineage:lineageKnown?parentLineage:null,
     parent_sibling_index:groupIndex<0?null:groupIndex,
+    project_uuid:typeof project?.uuid==="string"?project.uuid:null,
+    project_logical_texture_size:project
+      ?([project.texture_width,project.texture_height] as [number,number]):null,
+    project_box_uv:typeof project?.box_uv==="boolean"?project.box_uv:null,
+    default_texture_metrics:defaultTextureMetrics,
     raw_face_vertex_orders:rawFaceVertexOrders,
     seams:mesh.seams??{},
     source_visibility:mesh.visibility!==false,
@@ -183,6 +205,21 @@ export function writePreparedMeshToCubeTransaction(input:{
   let undoAttempted=false, mutationStarted=false, editFinished=false;
   let created:Cube|null=null;
   const activeSave=()=>(Undo as typeof Undo & {current_save?:unknown}).current_save;
+  const rollbackRestored=():boolean=>{
+    const restored=Mesh.all.filter(item=>item.uuid===mesh.uuid);
+    if(restored.length!==1 ||
+       (created && Cube.all.some(item=>item.uuid===created!.uuid)) ||
+       activeSave())return false;
+    try{
+      const currentSource=inspectNativeMeshToCubeTransaction(restored[0]);
+      return currentSource.state==="candidate_source_only" &&
+        currentSource.source_revision===prepared.source_revision &&
+        restored[0].getParentArray().indexOf(restored[0])===
+          cubeFields.sibling_index;
+    }catch{
+      return false;
+    }
+  };
   try{
     undoAttempted=true;
     const save=Undo.initEdit(aspects) as unknown as {
@@ -267,9 +304,34 @@ export function writePreparedMeshToCubeTransaction(input:{
     }
     const entry=Undo.finishEdit("Convert authored Mesh to Bedrock Cube",{
       elements:[created],outliner:true,collections:[],
-    }) as unknown as {before?:unknown;post?:unknown}|undefined;
-    if(!entry || !entry.before || !entry.post || activeSave()){
+    }) as unknown as {
+      before?:{elements?:Record<string,unknown>;outliner?:unknown};
+      post?:{elements?:Record<string,unknown>;outliner?:unknown};
+    }|undefined;
+    if(!entry?.before?.elements || !entry.post?.elements ||
+       !entry.before.outliner || !entry.post.outliner ||
+       Object.keys(entry.before.elements).length!==1 ||
+       Object.keys(entry.post.elements).length!==1 ||
+       !Object.prototype.hasOwnProperty.call(entry.before.elements,mesh.uuid) ||
+       !Object.prototype.hasOwnProperty.call(entry.post.elements,created.uuid) ||
+       activeSave()){
       throw new Error("MESH_CUBE_NATIVE_UNDO_POSTCONDITION_UNVERIFIED");
+    }
+    // Native finished_edit listeners may change authored state after all
+    // pre-commit checks. Such a result is uncertain, never silently PASS.
+    if(Mesh.all.some(node=>node.uuid===mesh.uuid) ||
+       Cube.all.filter(node=>node.uuid===created!.uuid).length!==1 ||
+       !Cube.all.includes(created) ||
+       created.parent!==parent ||
+       created.getParentArray().indexOf(created)!==cubeFields.sibling_index ||
+       cubeFields.faces.some(mapping=>{
+         const face=created!.faces[mapping.face];
+         return !face || !same(face.uv,mapping.uv) ||
+           face.rotation!==mapping.rotation ||
+           face.texture!==mapping.texture ||
+           face.material_name!==mapping.material_name;
+       })){
+      throw new Error("MESH_CUBE_NATIVE_POSTCOMMIT_STATE_CHANGED");
     }
     editFinished=true;
   }catch(error){
@@ -277,6 +339,9 @@ export function writePreparedMeshToCubeTransaction(input:{
       if(activeSave()){
         try{
           Undo.cancelEdit(true);
+          if(!rollbackRestored()){
+            throw new Error("Native Undo cancel returned without restoring the exact Mesh source.");
+          }
         }catch(rollbackError){
           throw new Error(
             "MESH_CUBE_NATIVE_ROLLBACK_UNVERIFIED: abort; inspect authored " +

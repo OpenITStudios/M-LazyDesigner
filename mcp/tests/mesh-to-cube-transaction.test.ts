@@ -25,7 +25,15 @@ function exactSource():MeshToCubeSource {
     origin:[0,0,0],rotation:[0,0,0],parent_id:"bone",
     shading:"flat",armature_attached:false,
     parent_lineage:[{uuid:"bone",origin:[0,0,0],rotation:[0,0,0],export:true}],
-    parent_sibling_index:0,raw_face_vertex_orders:orders,seams:{},
+    parent_sibling_index:0,
+    project_uuid:"project-alpha",
+    project_logical_texture_size:[16,16],
+    project_box_uv:false,
+    default_texture_metrics:{
+      uuid:"atlas",width:16,height:16,display_height:16,
+      uv_width:16,uv_height:16,error:0,
+    },
+    raw_face_vertex_orders:orders,seams:{},
     source_visibility:true,source_export:true,source_locked:false,
     source_selected:false,source_mesh_subselection_active:false,
     source_color:1,source_render_order:null,
@@ -74,6 +82,9 @@ test("source revision tracks UV, geometry, material, parent bone and environment
     {...x,parent_lineage:[{uuid:"bone",origin:[3,0,0],rotation:[0,0,0],export:true}]},
     {...x,parent_sibling_index:1},
     {...x,format:{...x.format,default_texture_uuid:"other"}},
+    {...x,project_uuid:"project-beta"},
+    {...x,project_logical_texture_size:[32,16]},
+    {...x,default_texture_metrics:{...x.default_texture_metrics!,width:32}},
     {...x,raw_face_vertex_orders:{...x.raw_face_vertex_orders,
       north:[...x.raw_face_vertex_orders.north].reverse()}},
   ];
@@ -275,4 +286,59 @@ test("oversized authored Mesh-face UV payload never reaches source fingerprint",
     state:"blocked",source_revision:null,cube:null,
     blocked_reasons:["MESH_CUBE_SOURCE_BUDGET_EXCEEDED"],
   });
+});
+
+
+test("project UUID, logical UV space and loaded texture metadata are fail-closed",()=>{
+  const source=exactSource();
+  const cases:Array<{variant:MeshToCubeSource;reason:string}>=[
+    {
+      variant:{...source,project_uuid:null},
+      reason:"MESH_CUBE_PROJECT_IDENTITY_UNVERIFIED",
+    },
+    {
+      variant:{...source,project_logical_texture_size:null},
+      reason:"MESH_CUBE_PROJECT_UV_CONTEXT_UNVERIFIED",
+    },
+    {
+      variant:{...source,project_logical_texture_size:[0,16]},
+      reason:"MESH_CUBE_PROJECT_UV_CONTEXT_UNVERIFIED",
+    },
+    {
+      variant:{...source,project_box_uv:null},
+      reason:"MESH_CUBE_PROJECT_UV_CONTEXT_UNVERIFIED",
+    },
+    {
+      variant:{...source,default_texture_metrics:null},
+      reason:"MESH_CUBE_TEXTURE_METRICS_OR_LOAD_UNVERIFIED",
+    },
+    {
+      variant:{
+        ...source,
+        default_texture_metrics:{...source.default_texture_metrics!,width:0},
+      },
+      reason:"MESH_CUBE_TEXTURE_METRICS_OR_LOAD_UNVERIFIED",
+    },
+    {
+      variant:{
+        ...source,
+        default_texture_metrics:{...source.default_texture_metrics!,error:2},
+      },
+      reason:"MESH_CUBE_TEXTURE_METRICS_OR_LOAD_UNVERIFIED",
+    },
+  ];
+  for(const {variant,reason} of cases){
+    const result=planMeshToCubeTransaction(variant);
+    expect(result.state).toBe("blocked");
+    expect(result.cube).toBeNull();
+    expect(result.blocked_reasons).toContain(reason);
+  }
+  const initial=planMeshToCubeTransaction(source);
+  const resized=planMeshToCubeTransaction({
+    ...source,
+    default_texture_metrics:{...source.default_texture_metrics!,uv_width:32},
+  });
+  expect(initial.state).toBe("candidate_source_only");
+  expect(resized.state).toBe("candidate_source_only");
+  expect(resized.source_revision).not.toBe(initial.source_revision);
 });

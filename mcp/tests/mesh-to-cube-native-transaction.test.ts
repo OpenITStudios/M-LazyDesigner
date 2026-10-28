@@ -17,6 +17,8 @@ type FixtureHooks = {
   throwAfterMeshRemoval?: boolean;
   throwAfterFinishCommit?: boolean;
   throwDuringCancel?: boolean;
+  skipRestoreOnCancel?: boolean;
+  alterCubeAfterFinish?: boolean;
 };
 function withNativeFixture(
   body:(ctx:{
@@ -193,6 +195,9 @@ function withNativeFixture(
       };
       delete this.current_save;
       this.history.push(entry);
+      if(hooks.alterCubeAfterFinish){
+        FakeCube.all[0].faces.north.uv[0]=999;
+      }
       if(hooks.throwAfterFinishCommit)throw Error("NATIVE_FINISHED_EDIT_CALLBACK");
       return entry;
     },
@@ -205,18 +210,25 @@ function withNativeFixture(
         group.children.length=0;
         group.children.push(mesh);
         if(!FakeMesh.all.includes(mesh))FakeMesh.all.push(mesh);
-        mesh.vertices.a[0]=0;
+        if(!hooks.skipRestoreOnCancel)mesh.vertices.a[0]=0;
       }
       delete this.current_save;
     },
   };
-  const project={mesh_selection:{} as Record<string,unknown>};
+  const project={
+    uuid:"project-alpha",
+    texture_width:16,texture_height:16,box_uv:false,
+    mesh_selection:{} as Record<string,unknown>,
+  };
   const bind={
     Mesh:FakeMesh,Cube:FakeCube,Group:FakeGroup,
     Project:project,Outliner:{root},Undo:undo,
     Blockbench:{version:"5.2.2"},
     Format:{id:"bedrock",bone_rig:true,single_texture:true,uv_rotation:true},
-    Texture:{getDefault:()=>({uuid:"atlas"})},
+    Texture:{getDefault:()=>({
+      uuid:"atlas",width:16,height:16,display_height:16,
+      getUVWidth:()=>16,getUVHeight:()=>16,error:0,
+    })},
     AnimationItem:{all:[]},
   };
   try {
@@ -348,4 +360,43 @@ describe("unregistered Mesh-to-Cube native transaction source contract",()=>{
       expect(calls.init).toBe(0);
     });
   });
+});
+
+
+test("source freshness invalidates same UUID canvas resize and project tab switch before Undo",()=>{
+  withNativeFixture(({mesh,project,calls})=>{
+    const prepared=inspectNativeMeshToCubeTransaction(mesh);
+    project.texture_width=32;
+    expect(()=>writePreparedMeshToCubeTransaction({mesh,prepared}))
+      .toThrow("MESH_CUBE_NATIVE_SOURCE_CHANGED");
+    expect(calls.init).toBe(0);
+    project.texture_width=16;
+    project.uuid="project-other";
+    expect(()=>writePreparedMeshToCubeTransaction({mesh,prepared}))
+      .toThrow("MESH_CUBE_NATIVE_SOURCE_CHANGED");
+    expect(calls.init).toBe(0);
+  });
+});
+
+test("cancelEdit returning without restoring the original Mesh source is not accepted",()=>{
+  withNativeFixture(({mesh,calls,Mesh,Cube})=>{
+    const prepared=inspectNativeMeshToCubeTransaction(mesh);
+    expect(()=>writePreparedMeshToCubeTransaction({mesh,prepared}))
+      .toThrow("MESH_CUBE_NATIVE_ROLLBACK_UNVERIFIED");
+    expect(calls).toEqual({init:1,finish:0,cancel:1});
+    expect(Mesh.all).toEqual([mesh]);
+    expect(Cube.all).toHaveLength(0);
+    expect(mesh.vertices.a[0]).toBe(.25);
+  },{mutateMeshDuringInitEdit:true,skipRestoreOnCancel:true});
+});
+
+test("finished_edit listener changing committed Cube data forces OUTCOME_UNKNOWN",()=>{
+  withNativeFixture(({mesh,undo,Cube,calls})=>{
+    const prepared=inspectNativeMeshToCubeTransaction(mesh);
+    expect(()=>writePreparedMeshToCubeTransaction({mesh,prepared}))
+      .toThrow("MESH_CUBE_MUTATION_OUTCOME_UNKNOWN");
+    expect(calls).toEqual({init:1,finish:1,cancel:0});
+    expect(undo.history).toHaveLength(1);
+    expect(Cube.all[0].faces.north.uv[0]).toBe(999);
+  },{alterCubeAfterFinish:true});
 });

@@ -20,6 +20,19 @@ export type MeshToCubeSource = MeshToCubeInput & {
     export: boolean;
   }[] | null;
   parent_sibling_index: number | null;
+  /** Project and texture context is part of the source-freshness contract. */
+  project_uuid: string | null;
+  project_logical_texture_size: readonly [number,number] | null;
+  project_box_uv: boolean | null;
+  default_texture_metrics: Readonly<{
+    uuid: string;
+    width: number;
+    height: number;
+    display_height: number;
+    uv_width: number;
+    uv_height: number;
+    error: number;
+  }> | null;
   raw_face_vertex_orders: Readonly<Record<string, readonly string[]>>;
   seams: Readonly<Record<string, string>>;
   source_visibility: boolean;
@@ -109,6 +122,8 @@ function sourceSignature(source: MeshToCubeSource): string {
   const value = JSON.stringify([
     source.uuid,source.name,source.origin,source.rotation,
     source.parent_id,source.parent_lineage,source.parent_sibling_index,
+    source.project_uuid,source.project_logical_texture_size,
+    source.project_box_uv,source.default_texture_metrics,
     source.shading,source.armature_attached,source.armature_reference,
     source.animation_reference_count,
     source.source_visibility,source.source_export,source.source_locked,
@@ -221,6 +236,27 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
   }
   if(fidelity.cube_face_transfer.state!=="all_faces_candidate_source_only"){
     flag("MESH_CUBE_UV_TRANSFER_INCOMPLETE");
+  }
+  // A matching texture UUID does not establish matching UV/pixel metrics
+  // or even that the selected Blockbench project is still the same.
+  if(!nonempty(source.project_uuid)){
+    flag("MESH_CUBE_PROJECT_IDENTITY_UNVERIFIED");
+  }
+  const logical=source.project_logical_texture_size;
+  if(!Array.isArray(logical) || logical.length!==2 ||
+     !logical.every(n=>Number.isSafeInteger(n) && n>0) ||
+     typeof source.project_box_uv!=="boolean"){
+    flag("MESH_CUBE_PROJECT_UV_CONTEXT_UNVERIFIED");
+  }
+  const texture=source.default_texture_metrics;
+  if(!texture || !nonempty(texture.uuid) ||
+     texture.uuid!==source.format.default_texture_uuid ||
+     ![texture.width,texture.height,texture.display_height,
+       texture.uv_width,texture.uv_height].every(
+         n=>Number.isSafeInteger(n) && n>0
+       ) ||
+     texture.error!==0){
+    flag("MESH_CUBE_TEXTURE_METRICS_OR_LOAD_UNVERIFIED");
   }
   if(source.shading!=="flat")flag("MESH_CUBE_FLAT_SHADING_REQUIRED");
   if(source.armature_attached!==false || (source.armature_reference && source.armature_reference.length>0)){
