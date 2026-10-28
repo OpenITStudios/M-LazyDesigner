@@ -124,6 +124,22 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
     Boolean(controller?.target_uuid) && controller?.position_keyframes > 0
   );
   if (!activeControllers.length) fail("IK_BAKE_NO_KEYED_NATIVE_CONTROLLER");
+  // Blockbench's bake_ik_animation removes *all* keyframes on each
+  // controller with a resolved IK target, even if that controller did not
+  // contribute position samples. This must be surfaced before any native
+  // action, or an unsampled rotation/scale/effect track could be deleted.
+  for (const controller of controllers) {
+    if (!controller.target_uuid) continue;
+    if (!Number.isSafeInteger(controller.position_keyframes) ||
+        !Number.isSafeInteger(controller.total_keyframes) ||
+        controller.position_keyframes < 0 ||
+        controller.total_keyframes < controller.position_keyframes) {
+      fail("IK_BAKE_CONTROLLER_KEYFRAME_INVENTORY_INVALID");
+    } else if (controller.position_keyframes === 0 &&
+               controller.total_keyframes > 0) {
+      fail("IK_BAKE_UNSAMPLED_CONTROLLER_KEYS_AT_RISK");
+    }
+  }
 
   const affected = new Set<string>();
   const chainExamples: Array<{

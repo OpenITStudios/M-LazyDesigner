@@ -87,6 +87,30 @@ describe("Blockbench native IK bake source eligibility", () => {
     expect(budget.blocking_reasons).toContain("IK_BAKE_NATIVE_SAMPLING_BUDGET_EXCEEDED");
   });
 
+  test("unkeyed controllers with other authored keys cannot be silently deleted by native bake", () => {
+    const candidate = baseline();
+    const source = candidate.controllers[0]!;
+    const result = analyzeNativeIkBakeReadiness({
+      ...candidate,
+      controllers: [
+        source,
+        {
+          ...source,
+          uuid: "inactive_ik_controller",
+          target_uuid: "lower",
+          position_keyframes: 0,
+          total_keyframes: 2,
+        },
+      ],
+    });
+    expect(result.state).toBe("blocked");
+    expect(result.blocking_reasons).toContain(
+      "IK_BAKE_UNSAMPLED_CONTROLLER_KEYS_AT_RISK"
+    );
+    expect(result.active_controller_count).toBe(1);
+    expect(result.native_ik_baked).toBe(false);
+  });
+
   test("unkeyed controller and modified Molang cannot prove native IK coverage", () => {
     const empty=baseline().controllers[0]!;
     const unkeyed=analyzeNativeIkBakeReadiness({

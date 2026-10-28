@@ -666,8 +666,14 @@ function nativeIkBakeSourceRuntime(item: RuntimeAnimationItem) {
     locator_uuids: typeof Locator !== "undefined" && Array.isArray(Locator.all)
       ? Locator.all.map((locator: Locator) => locator.uuid) : [],
     controllers,
-    unsupported_armature_count: typeof ArmatureBone !== "undefined" &&
-      Array.isArray(ArmatureBone.all) ? ArmatureBone.all.length : 0,
+    unsupported_armature_count: (() => {
+      const armature = (
+        globalThis as unknown as {
+          ArmatureBone?: { all?: unknown[] };
+        }
+      ).ArmatureBone;
+      return Array.isArray(armature?.all) ? armature.all.length : 0;
+    })(),
   });
 }
 
