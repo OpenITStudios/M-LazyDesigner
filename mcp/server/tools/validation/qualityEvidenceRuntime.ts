@@ -7,6 +7,7 @@ import {
   GEOMETRY_WORLD_OBB_SAMPLE_LIMIT,
 } from "@/lib/geometry/surfaceEvidence";
 import { orientedBoxFromCube } from "@/lib/geometry/blockbenchCubeObb";
+import {captureNativeMeshToCubeSource, inspectNativeMeshToCubeTransaction} from "../geometry/meshToCubeNativeTransaction";
 import { isEffectivelyVisible } from "@/lib/geometry/renderedModelBounds";
 import {
   summarizeMeshToCubeFidelity,
@@ -45,53 +46,19 @@ function nativeMeshToCubeFidelity() {
   const visible=(Mesh.all ?? []).filter((mesh:Mesh)=>mesh.visibility!==false);
   const selected=[...visible].sort((a,b)=>a.uuid.localeCompare(b.uuid))
     .slice(0,MESH_TO_CUBE_ANALYSIS_LIMIT);
-  const reads:MeshToCubeInput[]=selected.map(mesh=>{
-    const nativeVertices=mesh.vertices ?? {};
-    const nativeFaces=mesh.faces ?? {};
-    // Count before visiting face keys or invoking native quad sorting.
-    const tooLarge=Object.keys(nativeVertices).length>MESH_TO_CUBE_VERTEX_LIMIT ||
-      Object.keys(nativeFaces).length>MESH_TO_CUBE_FACE_LIMIT;
-    const faces:Record<string,MeshToCubeInput["faces"][string]>={};
-    if(!tooLarge){
-      for(const [key,face] of Object.entries(nativeFaces)){
-        let faceKeys:readonly string[]=[];
-        try {
-          // MeshFace vertices are not generally pre-sorted. This native
-          // function computes a convex winding but has no authored mutation.
-          faceKeys=face.getSortedVertices();
-        } catch {
-          // A broken native face is not convertible; pure owner refuses it.
-        }
-        faces[key]={
-          vertices:faceKeys,
-          uv:face.uv,
-          texture:face.texture,
-          material_name:(face as MeshFace & {material_name?:string}).material_name,
-        };
-      }
-    }
-    const parentId=typeof Group!=="undefined" && mesh.parent instanceof Group
-      ?mesh.parent.uuid:mesh.parent==="root"?"root":null;
-    let armatureAttached:boolean|null=null;
-    try {
-      armatureAttached=typeof mesh.getArmature==="function"
-        ?Boolean(mesh.getArmature()):null;
-    } catch {
-      armatureAttached=null;
-    }
-    return {
-      uuid:mesh.uuid,name:mesh.name,
-      // Send the native count bound through to the pure analyst. Oversized
-      // source is explicitly unverified, not silently reduced to a small one.
-      vertices:tooLarge ? nativeVertices : nativeVertices,
-      faces:tooLarge ? nativeFaces as unknown as MeshToCubeInput["faces"] : faces,
-      origin:mesh.origin,rotation:mesh.rotation,parent_id:parentId,
-      shading:mesh.shading,armature_attached:armatureAttached,
-    };
-  });
-  return summarizeMeshToCubeFidelity(reads,{
+  const reads:MeshToCubeInput[]=selected.map(mesh=>
+    captureNativeMeshToCubeSource(mesh)
+  );
+  const base=summarizeMeshToCubeFidelity(reads,{
     total_visible_mesh_count:visible.length,
   });
+  return {
+    ...base,
+    results:base.results.map((entry,index)=>({
+      ...entry,
+      conversion_transaction_preflight:inspectNativeMeshToCubeTransaction(selected[index]),
+    })),
+  };
 }
 
 function geometrySurfaceRuntime() {
