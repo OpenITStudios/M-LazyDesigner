@@ -29,6 +29,8 @@ export type IkBakeControllerSnapshot = Readonly<{
   lock_target_rotation: boolean;
   position_keyframes: number;
   total_keyframes: number;
+  /** Ordered UUIDs of all authored IK-controller keys at the inspected state. */
+  keyframe_uuids: readonly string[];
 }>;
 
 export type NativeIkBakeReadinessInput = Readonly<{
@@ -64,6 +66,47 @@ function unique(values: readonly string[]): boolean {
   return new Set(values).size === values.length;
 }
 
+
+/**
+ * Stable, non-cryptographic drift detector for the complete SOURCE inventory.
+ * Not authentication, not a solver sample proof, and not user approval.
+ * Include pose topology, native IK pole/lock settings, and controller key IDs
+ * even when their counts remain unchanged. Both readers use this same owner.
+ */
+function sourceStateRevision(input: NativeIkBakeReadinessInput): string {
+  if (!input || typeof input !== "object") return "invalid";
+  const encoded = JSON.stringify([
+    input.blockbench_version, input.format_id, input.animate_mode,
+    input.selected_clip_uuid, input.animation_uuid,
+    input.duration_seconds, input.snapping_fps,
+    input.anim_time_update ?? null, input.blend_weight ?? null,
+    Array.isArray(input.groups)
+      ? input.groups.map((g) => [
+          g?.uuid, g?.parent_uuid, g?.rotation,
+          g?.transform_available, g?.native_fix_rotation_available,
+        ])
+      : null,
+    Array.isArray(input.locator_uuids) ? input.locator_uuids : null,
+    Array.isArray(input.controllers)
+      ? input.controllers.map((c) => [
+          c?.uuid, c?.target_uuid, c?.source_uuid, c?.parent_group_uuid,
+          c?.pole_uuid, c?.lock_target_rotation, c?.position_keyframes,
+          c?.total_keyframes, c?.keyframe_uuids,
+        ])
+      : null,
+    input.unsupported_armature_count,
+  ]);
+  let a = 2166136261, b = 0x9e3779b9;
+  for (let i = 0; i < encoded.length; i++) {
+    const ch = encoded.charCodeAt(i);
+    a = Math.imul(a ^ ch, 16777619);
+    b = Math.imul(b ^ (ch + (i & 0xff)), 2246822519);
+  }
+  return "drift-v1:" + encoded.length + ":" +
+    (a >>> 0).toString(16).padStart(8, "0") + ":" +
+    (b >>> 0).toString(16).padStart(8, "0");
+}
+
 export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) {
   const reasons = new Set<string>();
   const fail = (reason: string) => { reasons.add(reason); };
@@ -72,6 +115,8 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
     upstream_action: "bake_ik_animation" as const,
     sample_authority: "BLOCKBENCH_NATIVE_SAMPLE_IK" as const,
     source_baseline: "BLOCKBENCH_5_2_2" as const,
+    source_state_revision: sourceStateRevision(input),
+    source_revision_kind: "NON_CRYPTOGRAPHIC_DRIFT_DETECTOR_ONLY" as const,
     animation_uuid: input?.animation_uuid ?? null,
     duration_seconds: input?.duration_seconds ?? null,
     snapping_fps: input?.snapping_fps ?? null,
@@ -140,6 +185,16 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
   // contribute position samples. This must be surfaced before any native
   // action, or an unsampled rotation/scale/effect track could be deleted.
   for (const controller of controllers) {
+    if (!controller || typeof controller !== "object") {
+      fail("IK_BAKE_CONTROLLER_KEYFRAME_INVENTORY_INVALID");
+      continue;
+    }
+    if (!Array.isArray(controller.keyframe_uuids) ||
+        controller.keyframe_uuids.length !== controller.total_keyframes ||
+        controller.keyframe_uuids.some((id) => !nonEmptyId(id)) ||
+        !unique(controller.keyframe_uuids)) {
+      fail("IK_BAKE_CONTROLLER_KEYFRAME_IDENTITY_INVALID");
+    }
     if (!controller.target_uuid) continue;
     if (typeof controller.lock_target_rotation !== "boolean") {
       fail("IK_BAKE_TARGET_ROTATION_LOCK_UNVERIFIED");

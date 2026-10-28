@@ -8,7 +8,10 @@ import {
   planNativeIkBakedKeyframes,
   type NativeIkKeyframePlanInput,
 } from "@/lib/animation/ikBakeKeyframePlan";
-import { IK_BAKE_MAX_WORK_UNITS } from "@/lib/animation/ikBakeReadiness";
+import {
+  IK_BAKE_MAX_WORK_UNITS,
+  analyzeNativeIkBakeReadiness,
+} from "@/lib/animation/ikBakeReadiness";
 
 type NativeIkSolverFrame = {
   array: readonly number[];
@@ -111,5 +114,88 @@ export function prepareNativeIkBakeFromExistingSamples(input: {
     snapping_fps: input.snapping_fps,
     expected_group_uuids: input.expected_group_uuids,
     tracks,
+  });
+}
+
+function normalizeIkBakeMolang(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  return String(value).trim().replace(/\n/g, "");
+}
+
+/** Read-only, exact native source snapshot shared by inspection and pre-Undo. */
+export function captureNativeIkBakeReadiness(item: BBAnimation) {
+  if (typeof Group === "undefined" || !Array.isArray(Group.all) ||
+      typeof NullObject === "undefined" || !Array.isArray(NullObject.all) ||
+      typeof AnimationItem === "undefined") {
+    return {
+      state: "unavailable" as const,
+      reason: "native_ik_inventory_unavailable" as const,
+      native_ik_baked: false as const,
+    };
+  }
+  const groups = Group.all.map((group: Group) => {
+    const native = group as Group & {
+      scene_object?: { fix_rotation?: unknown };
+      mesh?: unknown;
+    };
+    return {
+      uuid: group.uuid,
+      parent_uuid: group.parent instanceof Group ? group.parent.uuid : null,
+      rotation: Array.isArray(group.rotation) ? [...group.rotation] : [],
+      transform_available: Boolean(native.scene_object && native.mesh),
+      native_fix_rotation_available: Boolean(native.scene_object?.fix_rotation),
+    };
+  });
+  const controllers = NullObject.all.map((node: NullObject) => {
+    const native = node as NullObject & {
+      ik_source?: string;
+      ik_pole?: string;
+    };
+    const animator = item.animators[node.uuid] as unknown as {
+      position?: unknown[];
+      keyframes?: Array<{ uuid?: string }>;
+    } | undefined;
+    return {
+      uuid: node.uuid,
+      target_uuid: node.ik_target || null,
+      source_uuid: native.ik_source || null,
+      parent_group_uuid: node.parent instanceof Group ? node.parent.uuid : null,
+      pole_uuid: native.ik_pole || null,
+      lock_target_rotation: node.lock_ik_target_rotation === true,
+      position_keyframes: Array.isArray(animator?.position)
+        ? animator.position.length : 0,
+      total_keyframes: Array.isArray(animator?.keyframes)
+        ? animator.keyframes.length : 0,
+      keyframe_uuids: Array.isArray(animator?.keyframes)
+        ? animator.keyframes.map((keyframe) =>
+            typeof keyframe?.uuid === "string" ? keyframe.uuid : ""
+          )
+        : [],
+    };
+  });
+  return analyzeNativeIkBakeReadiness({
+    blockbench_version: typeof Blockbench !== "undefined" ? Blockbench.version : "",
+    format_id: typeof Format !== "undefined" ? Format.id : "",
+    animate_mode: typeof Modes !== "undefined" && Modes.animate === true,
+    selected_clip_uuid: AnimationItem.selected?.uuid ?? null,
+    animation_uuid: item.uuid,
+    duration_seconds: item.length,
+    snapping_fps: item.snapping,
+    // Authored numeric Molang is still authored semantics. It must not
+    // disappear simply because its runtime representation is non-string.
+    anim_time_update: normalizeIkBakeMolang(item.anim_time_update),
+    blend_weight: normalizeIkBakeMolang(item.blend_weight),
+    groups,
+    locator_uuids: typeof Locator !== "undefined" && Array.isArray(Locator.all)
+      ? Locator.all.map((locator: Locator) => locator.uuid) : [],
+    controllers,
+    unsupported_armature_count: (() => {
+      const armature = (
+        globalThis as unknown as {
+          ArmatureBone?: { all?: unknown[] };
+        }
+      ).ArmatureBone;
+      return Array.isArray(armature?.all) ? armature.all.length : null;
+    })(),
   });
 }

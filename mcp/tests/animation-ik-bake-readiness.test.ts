@@ -38,6 +38,7 @@ const baseline = (): NativeIkBakeReadinessInput => ({
     pole_uuid: "knee_pole", lock_target_rotation: false,
     position_keyframes: 4,
     total_keyframes: 6,
+    keyframe_uuids: ["k0","k1","k2","k3","k4","k5"],
   }],
 });
 
@@ -133,6 +134,28 @@ describe("Blockbench native IK bake source eligibility", () => {
     expect(nonzero.blocking_reasons).toContain("IK_BAKE_NATIVE_INVENTORY_INCOMPLETE");
   });
 
+  test("same-count replacements of IK controller keys change the source revision", () => {
+    const input=baseline();
+    const before=analyzeNativeIkBakeReadiness(input);
+    const modified=analyzeNativeIkBakeReadiness({
+      ...input,controllers:[{
+        ...input.controllers[0]!,
+        keyframe_uuids:["other",...input.controllers[0]!.keyframe_uuids.slice(1)],
+      }],
+    });
+    expect(before.state).toBe("candidate_source_only");
+    expect(modified.state).toBe("candidate_source_only");
+    expect(modified.source_state_revision).not.toBe(before.source_state_revision);
+    const collision=analyzeNativeIkBakeReadiness({
+      ...input,controllers:[{
+        ...input.controllers[0]!,
+        keyframe_uuids:["k0","k0","k2","k3","k4","k5"],
+      }],
+    });
+    expect(collision.blocking_reasons)
+      .toContain("IK_BAKE_CONTROLLER_KEYFRAME_IDENTITY_INVALID");
+  });
+
   test("unkeyed controllers with other authored keys cannot be silently deleted by native bake", () => {
     const candidate = baseline();
     const source = candidate.controllers[0]!;
@@ -146,6 +169,7 @@ describe("Blockbench native IK bake source eligibility", () => {
           target_uuid: "lower",
           position_keyframes: 0,
           total_keyframes: 2,
+          keyframe_uuids: ["new-0","new-1"],
         },
       ],
     });
@@ -220,6 +244,7 @@ describe("Blockbench native IK bake source eligibility", () => {
         uuid:"ik_foot",target_uuid:"foot",source_uuid:null,
         parent_group_uuid:"body",pole_uuid:null,lock_target_rotation:false,
         position_keyframes:2,total_keyframes:2,
+        keyframe_uuids:["ik-0","ik-1"],
       }],
     });
     expect(r.blocking_reasons).toContain("IK_BAKE_CHAIN_HAS_NO_ROTATION_REFERENCE");

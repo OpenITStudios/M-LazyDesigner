@@ -19,7 +19,7 @@ import {
   analyzeAnimationMotionDynamics,
   type AnimationMotionTrackInput,
 } from "@/lib/animation/motionDynamics";
-import { analyzeNativeIkBakeReadiness } from "@/lib/animation/ikBakeReadiness";
+import { captureNativeIkBakeReadiness } from "@/server/tools/animation/ikBakeNativeSamples";
 
 type JsonRecord = Record<string, unknown>;
 type RuntimeAnimationItem = BBAnimation | AnimationController;
@@ -602,82 +602,6 @@ function wireTimelineNativeProperties(): void {
 }
 
 
-/** No Timeline writes, frame evaluation, native solver calls or Undo. */
-function nativeIkBakeSourceRuntime(item: RuntimeAnimationItem) {
-  if (isAnimationControllerRuntime(item)) {
-    return { state: "not_applicable" as const, reason: "animation_controller" as const };
-  }
-  if (typeof Group === "undefined" || !Array.isArray(Group.all) ||
-      typeof NullObject === "undefined" || !Array.isArray(NullObject.all) ||
-      typeof AnimationItem === "undefined") {
-    return {
-      state: "unavailable" as const,
-      reason: "native_ik_inventory_unavailable" as const,
-      native_ik_baked: false as const,
-    };
-  }
-  const groups = Group.all.map((group: Group) => {
-    const native = group as Group & {
-      scene_object?: { fix_rotation?: unknown };
-      mesh?: unknown;
-    };
-    return {
-      uuid: group.uuid,
-      parent_uuid: group.parent instanceof Group ? group.parent.uuid : null,
-      rotation: [...group.rotation],
-      transform_available: Boolean(native.scene_object && native.mesh),
-      native_fix_rotation_available: Boolean(native.scene_object?.fix_rotation),
-    };
-  });
-  const controllers = NullObject.all.map((node: NullObject) => {
-    const native = node as NullObject & {
-      ik_source?: string;
-      ik_pole?: string;
-    };
-    const animator = item.animators[node.uuid] as unknown as {
-      position?: unknown[];
-      keyframes?: unknown[];
-    } | undefined;
-    return {
-      uuid: node.uuid,
-      target_uuid: node.ik_target || null,
-      source_uuid: native.ik_source || null,
-      parent_group_uuid: node.parent instanceof Group ? node.parent.uuid : null,
-      pole_uuid: native.ik_pole || null,
-      lock_target_rotation: node.lock_ik_target_rotation === true,
-      position_keyframes: Array.isArray(animator?.position)
-        ? animator.position.length : 0,
-      total_keyframes: Array.isArray(animator?.keyframes)
-        ? animator.keyframes.length : 0,
-    };
-  });
-  return analyzeNativeIkBakeReadiness({
-    blockbench_version: typeof Blockbench !== "undefined" ? Blockbench.version : "",
-    format_id: typeof Format !== "undefined" ? Format.id : "",
-    animate_mode: typeof Modes !== "undefined" && Modes.animate === true,
-    selected_clip_uuid: AnimationItem.selected?.uuid ?? null,
-    animation_uuid: item.uuid,
-    duration_seconds: item.length,
-    snapping_fps: item.snapping,
-    // Authored numeric Molang is still authored semantics. It must not
-    // disappear simply because its runtime representation is non-string.
-    anim_time_update: normalizeMolangStorage(item.anim_time_update),
-    blend_weight: normalizeMolangStorage(item.blend_weight),
-    groups,
-    locator_uuids: typeof Locator !== "undefined" && Array.isArray(Locator.all)
-      ? Locator.all.map((locator: Locator) => locator.uuid) : [],
-    controllers,
-    unsupported_armature_count: (() => {
-      const armature = (
-        globalThis as unknown as {
-          ArmatureBone?: { all?: unknown[] };
-        }
-      ).ArmatureBone;
-      return Array.isArray(armature?.all) ? armature.all.length : null;
-    })(),
-  });
-}
-
 function wireInspectDiagnostics(): void {
   const definition = runtimeDefinition("inspect_animation");
   const originalExecute = definition.execute.bind(definition);
@@ -700,7 +624,9 @@ function wireInspectDiagnostics(): void {
       structuredContent: {
         ...structured,
         native_properties: nativePropertySummary(item),
-        native_ik_bake_source: nativeIkBakeSourceRuntime(item),
+        native_ik_bake_source: isAnimationControllerRuntime(item)
+          ? { state: "not_applicable" as const, reason: "animation_controller" as const }
+          : captureNativeIkBakeReadiness(item),
         molang_analysis: molang,
         motion_dynamics: motionDynamicsRuntime(item),
         client_entity_wiring: clientEntityWiringRuntime(

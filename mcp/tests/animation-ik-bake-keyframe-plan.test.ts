@@ -131,6 +131,7 @@ function mutationFixture() {
       uuid: "ik", target_uuid: "tip", source_uuid: "root",
       parent_group_uuid: "root", pole_uuid: null,
       lock_target_rotation: false, position_keyframes: 2, total_keyframes: 2,
+      keyframe_uuids: ["old-0","old-1"],
     }],
   });
   const frameCount=nativeIkFrameTimes(1,20).length;
@@ -213,12 +214,15 @@ describe("unregistered native IK keyframe writer",()=>{
   ) {
     const g=globalThis as any;
     const names=["Group","BoneAnimator","NullObject","Blockbench","Format",
-      "Modes","AnimationItem","Undo","Timeline"];
+      "Modes","AnimationItem","Undo","Timeline","Locator","ArmatureBone"];
     const old=Object.fromEntries(names.map((name)=>[name,g[name]]));
     const fixture=mutationFixture();
     class FakeGroup {
       static all:any[]=[];
-      constructor(public uuid:string) {}
+      rotation=[0,0,0];
+      mesh={};
+      scene_object={fix_rotation:{x:0,y:0,z:0}};
+      constructor(public uuid:string,public parent:unknown="root") {}
     }
     let keySerial=0;
     class FakeBoneAnimator {
@@ -237,13 +241,16 @@ describe("unregistered native IK keyframe writer",()=>{
     }
     class FakeNullObject {
       static all:any[]=[];
+      ik_source="root";
+      ik_pole="";
+      lock_ik_target_rotation=false;
       constructor(public uuid:string,public ik_target:string,public parent:unknown) {}
     }
     g.Group=FakeGroup;
     g.BoneAnimator=FakeBoneAnimator;
     g.NullObject=FakeNullObject;
-    const root=new FakeGroup("root"),mid=new FakeGroup("mid");
-    const tip=new FakeGroup("tip");
+    const root=new FakeGroup("root"),mid=new FakeGroup("mid",root);
+    const tip=new FakeGroup("tip",mid);
     FakeGroup.all=[root,mid,tip];
     const controller=new FakeNullObject("ik","tip",root);
     FakeNullObject.all=[controller];
@@ -255,7 +262,8 @@ describe("unregistered native IK keyframe writer",()=>{
         remove(){const ix=keys.indexOf(key);if(ix>=0)keys.splice(ix,1);}};
       keys.push(key);
     }
-    const ctrl:any={animation:clip,get keyframes(){return keys;}};
+    const ctrl:any={animation:clip,get keyframes(){return keys;},
+      get position(){return keys;}};
     for(const key of keys)key.animator=ctrl;
     clip.animators={root:a,mid:b,ik:ctrl};
     let opened=0,finished=0,canceled=0;
@@ -267,6 +275,8 @@ describe("unregistered native IK keyframe writer",()=>{
     g.AnimationItem={selected:clip,all:[clip]};
     g.Undo=undo;
     g.Timeline={time:0.75};
+    g.Locator={all:[]};
+    g.ArmatureBone={all:[]};
     try {callback({clip,controllers:ctrl,bones:{root:a,mid:b},undo,timeline:g.Timeline});}
     finally {for(const name of names)g[name]=old[name];}
   }
@@ -310,6 +320,34 @@ describe("unregistered native IK keyframe writer",()=>{
       expect(undo.opened).toBe(1);
       expect(undo.finished).toBe(0);
       expect(undo.canceled).toBe(1);
+    });
+  });
+
+  test("current native hierarchy and controller key identities are reconciled before Undo",()=>{
+    withNativeFixture(({clip,controllers,undo})=>{
+      const {ready,plan}=mutationFixture();
+      const g=globalThis as any;
+      g.Group.all.find((group:any)=>group.uuid==="mid").rotation[1]=15;
+      expect(()=>writePreparedNativeIkBakeKeyframes({
+        animation:clip,readiness:ready,plan,
+      })).toThrow("IK_BAKE_SOURCE_STATE_CHANGED");
+      expect(undo.opened).toBe(0);
+    });
+    withNativeFixture(({clip,controllers,undo})=>{
+      const {ready,plan}=mutationFixture();
+      controllers.keyframes[0].uuid="replacement-key";
+      expect(()=>writePreparedNativeIkBakeKeyframes({
+        animation:clip,readiness:ready,plan,
+      })).toThrow("IK_BAKE_SOURCE_STATE_CHANGED");
+      expect(undo.opened).toBe(0);
+    });
+    withNativeFixture(({clip,controllers,undo})=>{
+      const {ready,plan}=mutationFixture();
+      (globalThis as any).NullObject.all[0].ik_pole="changed-pole";
+      expect(()=>writePreparedNativeIkBakeKeyframes({
+        animation:clip,readiness:ready,plan,
+      })).toThrow("IK_BAKE_SOURCE_STATE_CHANGED");
+      expect(undo.opened).toBe(0);
     });
   });
 

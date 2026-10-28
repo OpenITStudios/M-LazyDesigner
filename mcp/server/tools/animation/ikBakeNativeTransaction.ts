@@ -6,6 +6,7 @@ import {
   type planNativeIkBakedKeyframes,
 } from "@/lib/animation/ikBakeKeyframePlan";
 import type { analyzeNativeIkBakeReadiness } from "@/lib/animation/ikBakeReadiness";
+import { captureNativeIkBakeReadiness } from "./ikBakeNativeSamples";
 
 /**
  * Internal, UNREGISTERED keyframe writer. Does not invoke sampleIK(),
@@ -33,6 +34,18 @@ export function writePreparedNativeIkBakeKeyframes(input: {
     throw new Error(
       "IK_BAKE_NATIVE_WRITE_CONTEXT_UNVERIFIED: require exact Blockbench 5.2.2, " +
       "selected Bedrock clip and complete native animation/Undo runtime."
+    );
+  }
+
+  const current = captureNativeIkBakeReadiness(animation);
+  if (current.state !== "candidate_source_only" ||
+      readiness.state !== "candidate_source_only" ||
+      current.source_state_revision !== readiness.source_state_revision ||
+      !current.source_state_revision.startsWith("drift-v1:")) {
+    throw new Error(
+      "IK_BAKE_SOURCE_STATE_CHANGED: current native rig, controller keys, " +
+      "clip timing or IK settings differ from the inspected source; " +
+      "refresh readiness and solver samples before any Undo."
     );
   }
 
