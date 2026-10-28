@@ -233,6 +233,52 @@ specific Gateway tools or background actions. Completing these checks
 needs separately grounded results; even success does not automatically
 authorize Cube deletion, Texture handoff or release.
 
+### Risk review source readiness and freshness (no execution)
+
+The same read-only coincidence report now includes
+`review_source_identity` containing the complete saved **Recipe source**
+revision (including constraint/symmetry/feature metadata), owned native Cube
+and Group fingerprint, optional UV/material/animation surface fingerprint,
+native project UUID, review-batch fingerprint and an overall binding digest.
+These `sha256:` values are **drift detectors**, not signed/authenticated
+receipts. In particular, a Recipe metadata change can invalidate an old
+review even when compiled Cube coordinates and the native Undo fingerprint
+are unchanged.
+
+Each existing risk-guided review batch retains `execution_state: NOT_EXECUTED`
+and adds one narrowly defined `source_readiness`:
+`SOURCE_FIELDS_PRESENT` (read-only fields observed),
+`SOURCE_FIELDS_INCOMPLETE` (required owner source unavailable), or
+`NATIVE_PROOF_REQUIRED` (rendered visual/pose/export evidence still missing).
+The summary never calls a source read a verified review or a visual PASS.
+Examples truncated to 12 IDs are *not* an exhaustive executable work scope.
+
+The existing `AuthoringRecipeService` offers
+`checkStoredGeometryOptimizationReviewFreshness`. Given the **full prior
+report source identity** and the exact saved Recipe ID, it executes a fresh
+read using the same read-only inspection owner and compares independently
+the Recipe, native geometry/parent state, UV/material/animation, native
+project UUID, and current review plan. It returns:
+
+- `SOURCE_STALE`: one or more source dimensions differ; discard the old
+  review plan and use the returned current plan as a new review baseline.
+- `SOURCE_INCOMPLETE`: source dimensions match but current required data
+  are absent; no completeness/quality acceptance is possible.
+- `SOURCE_CURRENT`: all *observed source dimensions* match and required
+  source fields are present. The actual owner/native/visual review is still
+  `NOT_EXECUTED`, regardless of this result.
+
+Malformed or inconsistent caller-supplied identities fail closed before
+re-reading the source. The saved Recipe is cloned for inspection and read
+again before returning, because metadata can change independently of native
+Cube geometry. Native surface capture also rechecks face texture/material
+bindings, bitmap revisions, TextureGroup membership, UV, authored Bone track
+content and owned geometry against the active project; mixed-source snapshots
+are refused. These are **point-in-time consistency checks**, not transaction
+locks or proof that externally supplied baseline IDs are authentic. No new
+state manager, material mutation, auto-merge, public tool, native verification,
+or Cube deletion is implied.
+
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 `planning.ts` owns pure planning APIs. `service.ts` owns bounded stateful plan/apply/identity/evidence lifecycle and may compose recipe modules, but recipe source must not depend on Gateway or Runtime executors.

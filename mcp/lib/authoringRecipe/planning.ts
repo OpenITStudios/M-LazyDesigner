@@ -388,6 +388,23 @@ function classifyRecipeCoincidenceRisk(input: {
  * one check, so missing and changed evidence in the same domain share one
  * owner-scoped review rather than triggering duplicate model-wide reads.
  */
+/** An explicit drift detector, not a native-attested or signed receipt. */
+export type RecipeOptimizationReviewSourceIdentity = {
+  schema: 1;
+  recipe_id: string;
+  recipe_source_fingerprint: string;
+  native_source_fingerprint: string;
+  surface_source_fingerprint: string | null;
+  project_uuid: string | null;
+  review_plan_fingerprint: string;
+  source_binding_fingerprint: string;
+};
+
+function fingerprintReviewSource(value: unknown): string {
+  return "sha256:" + createHash("sha256")
+    .update(JSON.stringify(value)).digest("hex");
+}
+
 export type RecipeRiskReviewCheckId =
   | "RECIPE_ANCHOR_RELATION"
   | "RECIPE_SYMMETRY_RELATION"
@@ -690,14 +707,53 @@ export function assessRecipeNativeCoincidence(
       anchor_relation_scope: bounded([...scope.anchor_relation_ids].sort()),
       symmetry_relation_scope: bounded([...scope.symmetry_relation_ids].sort()),
       animation_clip_scope: bounded([...scope.animation_clip_ids].sort()),
+      source_readiness: definition.id === "NATIVE_VISUAL_AND_EXPORT"
+        ? ("NATIVE_PROOF_REQUIRED" as const)
+        : definition.trigger_reasons.some(code => scope.trigger_reasons.has(code) &&
+            (code === "UV_EVIDENCE_UNAVAILABLE" ||
+             code === "MATERIAL_EVIDENCE_UNAVAILABLE" ||
+             code === "ANIMATION_EVIDENCE_UNAVAILABLE"))
+          ? ("SOURCE_FIELDS_INCOMPLETE" as const)
+          : ("SOURCE_FIELDS_PRESENT" as const),
       execution_state: "NOT_EXECUTED" as const,
     }];
   });
+  const recipeSourceFingerprint = fingerprintReviewSource(recipe);
+  const nativeSourceFingerprint = fingerprintAuthoringRecipeNativeSnapshot(native);
+  const surfaceSourceFingerprint = surfaceState?.revision ?? null;
+  const projectUuid = surfaceState?.project_uuid ?? null;
+  const reviewPlanFingerprint = fingerprintReviewSource({
+    definition_version: 1,
+    batches: reviewBatches,
+  });
+  const reviewIdentityFields = {
+    schema: 1 as const,
+    recipe_id: recipe.id,
+    recipe_source_fingerprint: recipeSourceFingerprint,
+    native_source_fingerprint: nativeSourceFingerprint,
+    surface_source_fingerprint: surfaceSourceFingerprint,
+    project_uuid: projectUuid,
+    review_plan_fingerprint: reviewPlanFingerprint,
+  };
+  const reviewSourceIdentity: RecipeOptimizationReviewSourceIdentity = {
+    ...reviewIdentityFields,
+    source_binding_fingerprint: fingerprintReviewSource(reviewIdentityFields),
+  };
+  const incompleteChecks = reviewBatches.filter(
+    check => check.source_readiness === "SOURCE_FIELDS_INCOMPLETE"
+  ).length;
+  const sourceObservedChecks = reviewBatches.filter(
+    check => check.source_readiness === "SOURCE_FIELDS_PRESENT"
+  ).length;
+  const nativeProofChecks = reviewBatches.filter(
+    check => check.source_readiness === "NATIVE_PROOF_REQUIRED"
+  ).length;
 
   return {
     state: "REVIEW_ONLY" as const,
     scope: "EXACT_RECIPE_OWNED_NATIVE_AUTHORED_GEOMETRY" as const,
-    native_snapshot_fingerprint: fingerprintAuthoringRecipeNativeSnapshot(native),
+    native_snapshot_fingerprint: nativeSourceFingerprint,
+    review_source_identity: reviewSourceIdentity,
     inspected_native_cube_count: native.cubes.length,
     coincident_group_count: candidates.length,
     coincident_native_cube_count: candidates.reduce((sum, c) => sum + c.group_size, 0),
@@ -741,6 +797,15 @@ export function assessRecipeNativeCoincidence(
     optimization_review_plan: {
       state: "PREPARED_SOURCE_ONLY" as const,
       scope: "DEDUPLICATED_OWNER_CHECKS_FOR_COINCIDENT_GROUPS" as const,
+      source_readiness: {
+        state: incompleteChecks > 0
+          ? ("SOURCE_INCOMPLETE" as const)
+          : ("SOURCE_FIELDS_OBSERVED_REVIEW_PENDING" as const),
+        source_fields_present_check_count: sourceObservedChecks,
+        source_fields_incomplete_check_count: incompleteChecks,
+        native_proof_required_check_count: nativeProofChecks,
+        native_review_executed: false as const,
+      },
       check_count: reviewBatches.length,
       group_check_count: reviewBatches.reduce(
         (total, batch) => total + batch.candidate_group_count, 0
@@ -767,6 +832,9 @@ export function assessRecipeNativeCoincidence(
       "reason codes, never a score, auto-action or authorization to delete Cubes. " +
       "The opt-in risk-guided review plan batches exact affected scopes by existing " +
       "owner: Recipe relations, native UV/material/animation and reference/export. " +
+      "The bounded source identity fingerprints pin Recipe metadata, current native Cube " +
+      "state, optional UV/material/motion source and complete review plan. They are drift " +
+      "detectors only, never authenticated native acceptance or deletion authority. " +
       "No checks have been executed; capabilities, visuals and export proof remain unverified.",
   };
 }

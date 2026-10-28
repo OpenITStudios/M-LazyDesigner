@@ -1508,6 +1508,283 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
     expect(report.candidate_examples).toEqual([]);
   });
 
+
+  test("review source identity pins Recipe, native, UV/material/motion and all six-check work", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const report = assessRecipeNativeCoincidence(
+      recipe, snapshot, surfaceFixture(snapshot)
+    );
+    const identity = report.review_source_identity;
+    expect(identity).toMatchObject({
+      schema: 1,
+      recipe_id: recipe.id,
+      native_source_fingerprint: report.native_snapshot_fingerprint,
+      surface_source_fingerprint: report.surface_snapshot_fingerprint,
+      project_uuid: "review-project-1",
+    });
+    for (const id of [
+      identity.recipe_source_fingerprint,
+      identity.native_source_fingerprint,
+      identity.surface_source_fingerprint,
+      identity.review_plan_fingerprint,
+      identity.source_binding_fingerprint,
+    ]) {
+      expect(id).toMatch(/^sha256:[a-f0-9]{64}$/);
+    }
+    expect(report.optimization_review_plan.source_readiness).toEqual({
+      state: "SOURCE_FIELDS_OBSERVED_REVIEW_PENDING",
+      source_fields_present_check_count: 0,
+      source_fields_incomplete_check_count: 0,
+      native_proof_required_check_count: 1,
+      native_review_executed: false,
+    });
+    expect(report.optimization_review_plan.batches[0]).toMatchObject({
+      check_id: "NATIVE_VISUAL_AND_EXPORT",
+      source_readiness: "NATIVE_PROOF_REQUIRED",
+      execution_state: "NOT_EXECUTED",
+    });
+  });
+
+  test("review readiness never treats absent UV/material/animation as verified", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const report = assessRecipeNativeCoincidence(recipe, snapshot);
+    expect(report.review_source_identity).toMatchObject({
+      project_uuid: null, surface_source_fingerprint: null,
+    });
+    expect(report.optimization_review_plan.source_readiness).toEqual({
+      state: "SOURCE_INCOMPLETE",
+      source_fields_present_check_count: 0,
+      source_fields_incomplete_check_count: 3,
+      native_proof_required_check_count: 1,
+      native_review_executed: false,
+    });
+    expect(report.optimization_review_plan.batches.map(b => b.source_readiness))
+      .toEqual([
+        "SOURCE_FIELDS_INCOMPLETE",
+        "SOURCE_FIELDS_INCOMPLETE",
+        "SOURCE_FIELDS_INCOMPLETE",
+        "NATIVE_PROOF_REQUIRED",
+      ]);
+  });
+
+  test("constraint-only Recipe metadata drift invalidates review despite unchanged compiled Cubes", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const before = assessRecipeNativeCoincidence(recipe, snapshot);
+    const next = structuredClone(recipe);
+    next.constraints = [{
+      kind: "ANCHOR", id: "shells-cluster-anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"],
+      source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const after = assessRecipeNativeCoincidence(next, snapshot);
+    expect(after.native_snapshot_fingerprint).toBe(before.native_snapshot_fingerprint);
+    expect(after.review_source_identity.recipe_source_fingerprint)
+      .not.toBe(before.review_source_identity.recipe_source_fingerprint);
+    expect(after.review_source_identity.review_plan_fingerprint)
+      .not.toBe(before.review_source_identity.review_plan_fingerprint);
+    expect(after.review_source_identity.source_binding_fingerprint)
+      .not.toBe(before.review_source_identity.source_binding_fingerprint);
+    expect(after.optimization_review_plan.batches[0].check_id)
+      .toBe("RECIPE_ANCHOR_RELATION");
+    expect(snapshot.cubes).toHaveLength(2);
+  });
+
+  test("bitmap-only drift invalidates source identity without pretending native Geometry changed", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const surface = surfaceFixture(snapshot);
+    const before = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    surface.textures[0].image_sha256 = "e".repeat(64);
+    const after = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(after.review_source_identity.native_source_fingerprint)
+      .toBe(before.review_source_identity.native_source_fingerprint);
+    expect(after.review_source_identity.recipe_source_fingerprint)
+      .toBe(before.review_source_identity.recipe_source_fingerprint);
+    expect(after.review_source_identity.surface_source_fingerprint)
+      .not.toBe(before.review_source_identity.surface_source_fingerprint);
+    expect(after.review_source_identity.review_plan_fingerprint)
+      .toBe(before.review_source_identity.review_plan_fingerprint);
+    expect(after.review_source_identity.source_binding_fingerprint)
+      .not.toBe(before.review_source_identity.source_binding_fingerprint);
+    expect(after.native_mutation_executed).toBe(false);
+  });
+
+  test("Recipe Service checks current source without executing any risk review or native mutation", async () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    let adapters = 0;
+    let activeSurface = surfaceFixture(snapshot);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snapshot),
+      readCoincidenceSurface: () => structuredClone(activeSurface),
+      createApplyAdapter: () => {
+        adapters++;
+        throw new Error("review-only must not make Apply adapters");
+      },
+    });
+    const prior = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const current = await service.checkStoredGeometryOptimizationReviewFreshness({
+      recipe_id: recipe.id,
+      expected_review_source_identity: prior.review_source_identity,
+    });
+    expect(current).toMatchObject({
+      state: "SOURCE_CURRENT",
+      comparison_scope: "CALLER_SUPPLIED_REVIEW_SOURCE_DRIFT_ONLY",
+      changed_source_parts: [],
+      current_review_source_identity: prior.review_source_identity,
+      current_review_plan: {
+        check_count: 1, source_readiness: {
+          state: "SOURCE_FIELDS_OBSERVED_REVIEW_PENDING",
+        },
+        native_review_executed: false,
+      },
+      native_verification_executed: false,
+      visual_verdict: "NOT_EVALUATED",
+      native_mutation_authorized: false,
+    });
+    expect(adapters).toBe(0);
+
+    // Same Cube geometry, but a per-face material assignment changed.
+    activeSurface.cubes[0].faces[0].material_name = "new_material";
+    const stale = await service.checkStoredGeometryOptimizationReviewFreshness({
+      recipe_id: recipe.id,
+      expected_review_source_identity: prior.review_source_identity,
+    });
+    expect(stale).toMatchObject({
+      state: "SOURCE_STALE",
+      changed_source_parts: ["UV_MATERIAL_ANIMATION", "REVIEW_PLAN"],
+      current_review_plan: { check_count: 2 },
+      native_verification_executed: false,
+      native_mutation_authorized: false,
+    });
+    expect(adapters).toBe(0);
+  });
+
+  test("freshness detects saved Recipe dependency changes that leave native geometry unchanged", async () => {
+    let recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snapshot),
+      readCoincidenceSurface: (_id, nativeSource) => surfaceFixture(nativeSource),
+      createApplyAdapter: () => { throw new Error("No native Apply during review."); },
+    });
+    const baseline = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    recipe = structuredClone(recipe);
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "same-geometry-dependency",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const result = await service.checkStoredGeometryOptimizationReviewFreshness({
+      recipe_id: recipe.id,
+      expected_review_source_identity: baseline.review_source_identity,
+    });
+    expect(result.state).toBe("SOURCE_STALE");
+    expect(result.changed_source_parts).toEqual(["RECIPE", "REVIEW_PLAN"]);
+    expect(result.current_review_source_identity.native_source_fingerprint)
+      .toBe(baseline.review_source_identity.native_source_fingerprint);
+    expect(result.current_review_plan.batches[0].check_id)
+      .toBe("RECIPE_ANCHOR_RELATION");
+  });
+
+  test("missing native surface stays incomplete and malformed caller baselines fail before a read", async () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    let readCount = 0;
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => { readCount++; return snapshot; },
+      createApplyAdapter: () => { throw new Error("No native Apply."); },
+    });
+    const baseline = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const result = await service.checkStoredGeometryOptimizationReviewFreshness({
+      recipe_id: recipe.id,
+      expected_review_source_identity: baseline.review_source_identity,
+    });
+    expect(result).toMatchObject({
+      state: "SOURCE_INCOMPLETE",
+      changed_source_parts: [],
+      current_review_plan: {
+        source_readiness: { state: "SOURCE_INCOMPLETE" },
+        native_review_executed: false,
+      },
+      native_mutation_authorized: false,
+    });
+    const previousReads = readCount;
+    await expect(service.checkStoredGeometryOptimizationReviewFreshness({
+      recipe_id: recipe.id,
+      expected_review_source_identity: {
+        ...baseline.review_source_identity,
+        recipe_source_fingerprint: "sha256:" + "f".repeat(64),
+      },
+    })).rejects.toThrow("RECIPE_OPTIMIZATION_REVIEW_BASELINE_INVALID");
+    expect(readCount).toBe(previousReads);
+  });
+
+  test("freshness distinguishes project changes and native parent changes from Recipe changes", async () => {
+    const recipe = coincidenceRecipe();
+    let owned = native(recipe, [null, null]);
+    let projectId = "review-project-1";
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(owned),
+      readCoincidenceSurface: (_id, snap) => {
+        const surface = surfaceFixture(snap);
+        surface.project_uuid = projectId;
+        return surface;
+      },
+      createApplyAdapter: () => { throw new Error("No native Apply."); },
+    });
+    const baseline = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    projectId = "other-project";
+    const switched = await service.checkStoredGeometryOptimizationReviewFreshness({
+      recipe_id: recipe.id,
+      expected_review_source_identity: baseline.review_source_identity,
+    });
+    expect(switched.state).toBe("SOURCE_STALE");
+    expect(switched.changed_source_parts).toEqual(["UV_MATERIAL_ANIMATION", "PROJECT"]);
+
+    projectId = "review-project-1";
+    owned = native(recipe, ["bone", "bone"]);
+    const moved = await service.checkStoredGeometryOptimizationReviewFreshness({
+      recipe_id: recipe.id,
+      expected_review_source_identity: baseline.review_source_identity,
+    });
+    expect(moved.state).toBe("SOURCE_STALE");
+    expect(moved.changed_source_parts).toContain("NATIVE_GEOMETRY");
+    expect(moved.changed_source_parts).toContain("UV_MATERIAL_ANIMATION");
+    expect(moved.changed_source_parts).not.toContain("RECIPE");
+  });
+
+  test("an in-flight saved Recipe mutation fails closed before returning a mixed-source report", async () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snapshot),
+      readCoincidenceSurface: (_id, source) => {
+        recipe.constraints = [{
+          kind: "ANCHOR", id: "concurrently-updated-anchor",
+          source_instance_id: "shells:1", target_instance_id: "shells:0",
+          axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+          target_anchor: ["MIN", "MIN", "MIN"],
+        }];
+        return surfaceFixture(source);
+      },
+      createApplyAdapter: () => { throw new Error("No native mutation."); },
+    });
+    await expect(service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id }))
+      .rejects.toThrow("RECIPE_OPTIMIZATION_RECIPE_CHANGED_DURING_INSPECTION");
+  });
+
   test("existing Recipe Service reads stored native source without applying any mutation", async () => {
     const recipe = coincidenceRecipe();
     const snapshot = native(recipe, [null, null]);

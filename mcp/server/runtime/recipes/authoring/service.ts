@@ -270,7 +270,7 @@ export function readBlockbenchRecipeCoincidenceSurface(
   if (selectedTextures.length > 256) {
     throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_SCOPE_EXCEEDED");
   }
-  const textures = selectedTextures.map(texture => {
+  const inspectTextureRevision = (texture: Texture) => {
       if (!texture.uuid || !Number.isSafeInteger(texture.width) ||
           texture.width <= 0 || !Number.isSafeInteger(texture.height) ||
           texture.height <= 0 || typeof texture.getDataURL !== "function") {
@@ -293,7 +293,9 @@ export function readBlockbenchRecipeCoincidenceSurface(
         pbr_channel: typeof texture.pbr_channel === "string" &&
           texture.pbr_channel.trim() ? texture.pbr_channel : "color",
       };
-    }).sort((a, b) => a.uuid.localeCompare(b.uuid));
+    };
+  const textures = selectedTextures.map(inspectTextureRevision)
+    .sort((a, b) => a.uuid.localeCompare(b.uuid));
   const material_groups = selectedGroups.map(group => ({
     uuid: group.uuid,
     is_material: group.is_material === true,
@@ -308,10 +310,76 @@ export function readBlockbenchRecipeCoincidenceSurface(
     material_config_sha256: coincidenceMaterialConfigRevision(group),
   })).sort((a, b) => a.uuid.localeCompare(b.uuid));
   const currentAnimations = readRecipeAncestorAnimationInventory(native);
+
+  // All of these reads are opt-in and bounded. A second source inventory
+  // must match the first, not just the Geometry and UV coordinates:
+  // face texture/material overrides and atlas pixels may change independently.
+  const freshScene = Cube.all ?? [];
+  const freshByUuid = new Map(freshScene.map(cube => [cube.uuid, cube]));
+  if (freshByUuid.size !== realCubes.size ||
+      freshScene.length !== scene.length ||
+      [...realCubes].some(([uuid, cube]) => freshByUuid.get(uuid) !== cube)) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_SOURCE_CHANGED_DURING_INSPECTION");
+  }
+  const initialFaceBindings = cubeSurfaces.map(cube => ({
+    uuid: cube.uuid, visibility: cube.visibility, export: cube.export,
+    faces: cube.faces.map(face => ({
+      face: face.face, texture_ref: face.texture_ref,
+      material_name: face.material_name,
+    })),
+  }));
+  const currentFaceBindings = cubeSurfaces.map(saved => {
+    const cube = freshByUuid.get(saved.uuid);
+    if (!cube) {
+      throw new Error("RECIPE_OPTIMIZATION_NATIVE_SOURCE_CHANGED_DURING_INSPECTION");
+    }
+    return {
+      uuid: saved.uuid, visibility: cube.visibility !== false,
+      export: cube.export !== false,
+      faces: saved.faces.map(savedFace => {
+        const face = cube.faces[savedFace.face];
+        if (!face ||
+            !(face.material_name === undefined || typeof face.material_name === "string")) {
+          throw new Error("RECIPE_OPTIMIZATION_NATIVE_SOURCE_CHANGED_DURING_INSPECTION");
+        }
+        const rawTexture: unknown = face.texture;
+        if (!(rawTexture === null || rawTexture === undefined ||
+            rawTexture === false || (typeof rawTexture === "string" &&
+              rawTexture.trim() && rawTexture === rawTexture.trim()))) {
+          throw new Error("RECIPE_OPTIMIZATION_NATIVE_SOURCE_CHANGED_DURING_INSPECTION");
+        }
+        return {
+          face: savedFace.face,
+          texture_ref: typeof rawTexture === "string" ? rawTexture
+            : rawTexture === false ? false : null,
+          material_name: face.material_name ?? "",
+        };
+      }),
+    };
+  });
+  const currentTextureList = (boundProject.textures ?? Texture.all) as Texture[];
+  if (new Set(currentTextureList.map(tex => tex.uuid)).size !== currentTextureList.length) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_SOURCE_CHANGED_DURING_INSPECTION");
+  }
+  const currentSelectedTextures = currentTextureList.filter(tex =>
+    referencedTextures.has(tex.uuid) ||
+    typeof tex.group === "string" && groupIds.has(tex.group)
+  );
+  const currentTextures = currentSelectedTextures.map(inspectTextureRevision)
+    .sort((a, b) => a.uuid.localeCompare(b.uuid));
+  const currentGroupList = (typeof TextureGroup !== "undefined" &&
+    Array.isArray(TextureGroup.all) ? TextureGroup.all : []) as TextureGroup[];
+  const currentSelectedGroups = currentGroupList.filter(group => groupIds.has(group.uuid));
+  if (currentSelectedGroups.length !== selectedGroups.length ||
+      currentSelectedGroups.some(group => !selectedGroups.includes(group))) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_SOURCE_CHANGED_DURING_INSPECTION");
+  }
   const uvAfter = readBlockbenchUvNativeSource();
   if (Project !== boundProject ||
       uvAfter.project_uuid !== boundProject.uuid ||
       fingerprintUvNativeSource(uvAfter) !== fingerprintUvNativeSource(uv) ||
+      JSON.stringify(currentFaceBindings) !== JSON.stringify(initialFaceBindings) ||
+      JSON.stringify(currentTextures) !== JSON.stringify(textures) ||
       JSON.stringify(currentMaterialGroups) !== JSON.stringify(material_groups) ||
       JSON.stringify(currentAnimations) !== JSON.stringify(animations) ||
       fingerprintAuthoringRecipeNativeSnapshot(

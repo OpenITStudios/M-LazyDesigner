@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 import {
@@ -19,6 +20,7 @@ import { compactAuthoringApplyReceipt, compactSemanticIdentityResolution } from 
 import {
   planRecipeFeatureRepresentations,
   assessRecipeNativeCoincidence,
+  type RecipeOptimizationReviewSourceIdentity,
   selectRecipeRebuildExecutionStrategy,
   summarizeAuthoringRecipeRebuild,
 } from "@/lib/authoringRecipe/planning";
@@ -69,6 +71,129 @@ export function createAuthoringRecipeService(
       ...(featurePlan ? { feature_plan: featurePlan } : {}),
     };
   };
+
+  /**
+   * The saved Recipe itself is a review dependency: ANCHOR, symmetry and
+   * feature metadata can change without any native Cube fingerprint change.
+   * Re-read it after the opt-in UV/material/animation capture.
+   */
+  const inspectStoredGeometryCoincidence = async (input: { recipe_id: string }) => {
+    if (!dependencies.readStoredRecipe) {
+      throw new Error("RECIPE_STORE_UNAVAILABLE: native Geometry inspection requires saved Recipe ownership.");
+    }
+    const stored = await dependencies.readStoredRecipe(input.recipe_id);
+    if (!stored) {
+      throw new Error("RECIPE_NOT_STORED: no saved Recipe exists for " + input.recipe_id + ".");
+    }
+    const recipe = structuredClone(stored);
+    const native = structuredClone(await dependencies.readOwned(input.recipe_id));
+    assertAuthoringRecipeNativeMatchesCompiled(native, recipe);
+    const provided = dependencies.readCoincidenceSurface
+      ? await dependencies.readCoincidenceSurface(input.recipe_id, native)
+      : undefined;
+    const surface = provided ? structuredClone(provided) : undefined;
+    if (surface) {
+      const currentNative = await dependencies.readOwned(input.recipe_id);
+      if (fingerprintAuthoringRecipeNativeSnapshot(currentNative) !==
+          fingerprintAuthoringRecipeNativeSnapshot(native)) {
+        throw new Error("RECIPE_OPTIMIZATION_NATIVE_CHANGED_DURING_INSPECTION");
+      }
+    }
+    const report = assessRecipeNativeCoincidence(recipe, native, surface);
+    const reread = await dependencies.readStoredRecipe(input.recipe_id);
+    if (!reread || ("sha256:" + createHash("sha256")
+      .update(JSON.stringify(reread)).digest("hex")) !==
+        report.review_source_identity.recipe_source_fingerprint) {
+      throw new Error("RECIPE_OPTIMIZATION_RECIPE_CHANGED_DURING_INSPECTION");
+    }
+    return report;
+  };
+
+  /**
+   * Compare a caller-supplied prior report identity to a NEW read from the
+   * same existing Recipe Service. This validates only source freshness and
+   * source-field completeness, not native review execution or visual PASS.
+   * Unknown/malformed baselines fail closed; no receipt store is created.
+   */
+  const checkStoredGeometryOptimizationReviewFreshness = async (input: {
+    recipe_id: string;
+    expected_review_source_identity: RecipeOptimizationReviewSourceIdentity;
+  }) => {
+    const expected = input.expected_review_source_identity;
+    const sha = /^sha256:[a-f0-9]{64}$/;
+    const fingerprintFields = [
+      expected?.recipe_source_fingerprint,
+      expected?.native_source_fingerprint,
+      expected?.review_plan_fingerprint,
+      expected?.source_binding_fingerprint,
+    ];
+    const fields = {
+      schema: 1 as const,
+      recipe_id: expected?.recipe_id,
+      recipe_source_fingerprint: expected?.recipe_source_fingerprint,
+      native_source_fingerprint: expected?.native_source_fingerprint,
+      surface_source_fingerprint: expected?.surface_source_fingerprint,
+      project_uuid: expected?.project_uuid,
+      review_plan_fingerprint: expected?.review_plan_fingerprint,
+    };
+    const bound = "sha256:" + createHash("sha256")
+      .update(JSON.stringify(fields)).digest("hex");
+    if (!expected || expected.schema !== 1 ||
+        typeof input.recipe_id !== "string" || !input.recipe_id.trim() ||
+        expected.recipe_id !== input.recipe_id ||
+        fingerprintFields.some(value => typeof value !== "string" || !sha.test(value)) ||
+        !(expected.surface_source_fingerprint === null ||
+          typeof expected.surface_source_fingerprint === "string" &&
+          sha.test(expected.surface_source_fingerprint)) ||
+        !(expected.project_uuid === null ||
+          typeof expected.project_uuid === "string" &&
+          expected.project_uuid.trim().length > 0 &&
+          expected.project_uuid === expected.project_uuid.trim()) ||
+        (expected.project_uuid === null) !== (expected.surface_source_fingerprint === null) ||
+        expected.source_binding_fingerprint !== bound) {
+      throw new Error(
+        "RECIPE_OPTIMIZATION_REVIEW_BASELINE_INVALID: supply the complete prior source identity."
+      );
+    }
+    const current = await inspectStoredGeometryCoincidence({
+      recipe_id: input.recipe_id,
+    });
+    const actual = current.review_source_identity;
+    const changed_source_parts: Array<
+      "RECIPE" | "NATIVE_GEOMETRY" | "UV_MATERIAL_ANIMATION" | "PROJECT" | "REVIEW_PLAN"
+    > = [];
+    if (expected.recipe_source_fingerprint !== actual.recipe_source_fingerprint) {
+      changed_source_parts.push("RECIPE");
+    }
+    if (expected.native_source_fingerprint !== actual.native_source_fingerprint) {
+      changed_source_parts.push("NATIVE_GEOMETRY");
+    }
+    if (expected.surface_source_fingerprint !== actual.surface_source_fingerprint) {
+      changed_source_parts.push("UV_MATERIAL_ANIMATION");
+    }
+    if (expected.project_uuid !== actual.project_uuid) {
+      changed_source_parts.push("PROJECT");
+    }
+    if (expected.review_plan_fingerprint !== actual.review_plan_fingerprint) {
+      changed_source_parts.push("REVIEW_PLAN");
+    }
+    const complete = actual.surface_source_fingerprint !== null &&
+      current.optimization_review_plan.source_readiness.state !== "SOURCE_INCOMPLETE";
+    return {
+      state: changed_source_parts.length
+        ? ("SOURCE_STALE" as const)
+        : complete
+          ? ("SOURCE_CURRENT" as const)
+          : ("SOURCE_INCOMPLETE" as const),
+      comparison_scope: "CALLER_SUPPLIED_REVIEW_SOURCE_DRIFT_ONLY" as const,
+      changed_source_parts,
+      current_review_source_identity: actual,
+      current_review_plan: current.optimization_review_plan,
+      native_verification_executed: false as const,
+      visual_verdict: "NOT_EVALUATED" as const,
+      native_mutation_authorized: false as const,
+    };
+  };
   return {
     plan: planPair,
     async planStored(nextRecipe: AuthoringRecipe) {
@@ -77,35 +202,8 @@ export function createAuthoringRecipeService(
       if (!previousRecipe) throw new Error("RECIPE_NOT_STORED: no previous recipe source exists for " + nextRecipe.id + "; use explicit previous/next planning for first adoption.");
       return planPair(previousRecipe, nextRecipe);
     },
-    /**
-     * Read-only native coincidence scan. Requires current saved Recipe and
-     * the same native owned-snapshot reader as ordinary Recipe planning.
-     * Does not create an MCP route, start Undo or modify an asset.
-     */
-    async inspectStoredGeometryCoincidence(input: { recipe_id: string }) {
-      if (!dependencies.readStoredRecipe) {
-        throw new Error("RECIPE_STORE_UNAVAILABLE: native Geometry inspection requires saved Recipe ownership.");
-      }
-      const recipe = await dependencies.readStoredRecipe(input.recipe_id);
-      if (!recipe) {
-        throw new Error("RECIPE_NOT_STORED: no saved Recipe exists for " + input.recipe_id + ".");
-      }
-      const native = await dependencies.readOwned(input.recipe_id);
-      // Verify canonical saved Recipe ownership before the potentially
-      // expensive opt-in UV/texture read, and keep the Undo snapshot immutable.
-      assertAuthoringRecipeNativeMatchesCompiled(native, recipe);
-      const surface = dependencies.readCoincidenceSurface
-        ? await dependencies.readCoincidenceSurface(input.recipe_id, native)
-        : undefined;
-      if (surface) {
-        const current = await dependencies.readOwned(input.recipe_id);
-        if (fingerprintAuthoringRecipeNativeSnapshot(current) !==
-            fingerprintAuthoringRecipeNativeSnapshot(native)) {
-          throw new Error("RECIPE_OPTIMIZATION_NATIVE_CHANGED_DURING_INSPECTION");
-        }
-      }
-      return assessRecipeNativeCoincidence(recipe, native, surface);
-    },
+    inspectStoredGeometryCoincidence,
+    checkStoredGeometryOptimizationReviewFreshness,
     async resolveIdentity(input: { recipe_id: string; target: SemanticGeometryTarget }) {
       if (!dependencies.readStoredRecipe) {
         throw new Error("RECIPE_STORE_UNAVAILABLE: Runtime did not provide project recipe persistence.");

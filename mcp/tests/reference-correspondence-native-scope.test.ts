@@ -9,6 +9,7 @@ import {
 import {
   readRecipePartCaptureScope,
   readRecipeAncestorAnimationInventory,
+  readBlockbenchRecipeCoincidenceSurface,
 } from "@/server/runtime/recipes/authoring/service";
 import { readBlockbenchAuthoringRecipeOwnedState } from "@/server/runtime/recipes/authoring/runtime";
 
@@ -19,6 +20,9 @@ const runtime = globalThis as unknown as {
   AnimationItem: unknown;
   AnimationController: unknown;
   BoneAnimator: unknown;
+  ModelProject: unknown;
+  Texture: unknown;
+  TextureGroup: unknown;
 };
 const previousProject = runtime.Project;
 const previousCube = runtime.Cube;
@@ -26,6 +30,9 @@ const previousGroup = runtime.Group;
 const previousAnimationItem = runtime.AnimationItem;
 const previousAnimationController = runtime.AnimationController;
 const previousBoneAnimator = runtime.BoneAnimator;
+const previousModelProject = runtime.ModelProject;
+const previousTexture = runtime.Texture;
+const previousTextureGroup = runtime.TextureGroup;
 
 class MockGroup {
   origin = [0, 0, 0];
@@ -81,6 +88,9 @@ afterEach(() => {
   runtime.AnimationItem = previousAnimationItem;
   runtime.AnimationController = previousAnimationController;
   runtime.BoneAnimator = previousBoneAnimator;
+  runtime.ModelProject = previousModelProject;
+  runtime.Texture = previousTexture;
+  runtime.TextureGroup = previousTextureGroup;
 });
 
 describe("current recipe-owned part evidence uses one native identity owner", () => {
@@ -307,6 +317,95 @@ describe("read-only native Recipe ancestor keyframe source provenance", () => {
 
     runtime.AnimationItem = undefined;
     expect(readRecipeAncestorAnimationInventory(scene.saved)).toBeNull();
+  });
+});
+
+describe("native Recipe coincidence surface freshness in one bounded read", () => {
+  function setupSurface() {
+    const { source, cubes } = setNativeScene();
+    const faces = ["north", "south", "east", "west", "up", "down"] as const;
+    for (const cube of cubes) {
+      Object.assign(cube, {
+        box_uv: true, uv_offset: [0, 0],
+        autouv: 1, mirror_uv: false,
+        visibility: true, export: true,
+        faces: Object.fromEntries(faces.map(face => [face, {
+          uv: [0, 0, 4, 4], rotation: 0, enabled: true,
+          texture: "atlas", material_name: "",
+        }])),
+      });
+    }
+    const texture = {
+      uuid: "atlas", width: 32, height: 32,
+      group: "", pbr_channel: "color",
+      getDataURL: () => "data:image/png;base64," +
+        Buffer.from("unchanged-bitmap").toString("base64"),
+    };
+    const currentProject = runtime.Project as Record<string, unknown>;
+    Object.assign(currentProject, {
+      texture_width: 32, texture_height: 32,
+      textures: [texture],
+    });
+    runtime.ModelProject = { all: [currentProject] };
+    runtime.Texture = { all: [texture] };
+    runtime.TextureGroup = { all: [] };
+    runtime.AnimationItem = undefined; // explicit unavailable, never "no motion"
+    return { source, cubes, texture };
+  }
+
+  test("unmodified native UV/face/bitmap inventory returns a read-only source snapshot", () => {
+    const { source } = setupSurface();
+    const owned = readBlockbenchAuthoringRecipeOwnedState(source.id);
+    const revision = readBlockbenchRecipeCoincidenceSurface(source.id, owned);
+    expect(revision).toMatchObject({
+      project_uuid: "editor-project-1",
+      native_source_fingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      logical_uv_width: 32, logical_uv_height: 32,
+      animations: null,
+    });
+    expect(revision.textures).toHaveLength(1);
+    expect(revision.textures[0]).toMatchObject({
+      uuid: "atlas",
+      image_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(revision.cubes).toHaveLength(2);
+    expect(revision.cubes[0]).toMatchObject({
+      instance_id: "seats:0", visibility: true,
+    });
+    expect(revision.cubes[0]!.faces).toHaveLength(6);
+    expect(revision.cubes[0]!.faces[0]).toMatchObject({
+      face: "down", texture_ref: "atlas", material_name: "",
+    });
+  });
+
+  test("a face material change during the bitmap reader invalidates the entire native source", () => {
+    const { source, cubes, texture } = setupSurface();
+    const target = cubes[0] as typeof cubes[number] & {
+      faces: Record<string, { material_name: string }>;
+    };
+    texture.getDataURL = () => {
+      target.faces.north!.material_name = "material-changing-during-read";
+      return "data:image/png;base64," +
+        Buffer.from("unchanged-bitmap").toString("base64");
+    };
+    const native = readBlockbenchAuthoringRecipeOwnedState(source.id);
+    expect(() => readBlockbenchRecipeCoincidenceSurface(source.id, native))
+      .toThrow("RECIPE_OPTIMIZATION_NATIVE_SOURCE_CHANGED_DURING_INSPECTION");
+  });
+
+  test("a bitmap revision that changes between two native reads invalidates source identity", () => {
+    const { source, texture } = setupSurface();
+    let reads = 0;
+    texture.getDataURL = () => {
+      reads++;
+      return "data:image/png;base64," +
+        Buffer.from(reads === 1 ? "bitmap-version-1" : "bitmap-version-2")
+          .toString("base64");
+    };
+    const native = readBlockbenchAuthoringRecipeOwnedState(source.id);
+    expect(() => readBlockbenchRecipeCoincidenceSurface(source.id, native))
+      .toThrow("RECIPE_OPTIMIZATION_NATIVE_SOURCE_CHANGED_DURING_INSPECTION");
+    expect(reads).toBe(2);
   });
 });
 
