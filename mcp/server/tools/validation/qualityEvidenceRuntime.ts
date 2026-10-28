@@ -8,6 +8,13 @@ import {
 } from "@/lib/geometry/surfaceEvidence";
 import { orientedBoxFromCube } from "@/lib/geometry/blockbenchCubeObb";
 import { isEffectivelyVisible } from "@/lib/geometry/renderedModelBounds";
+import {
+  summarizeMeshToCubeFidelity,
+  MESH_TO_CUBE_ANALYSIS_LIMIT,
+  MESH_TO_CUBE_VERTEX_LIMIT,
+  MESH_TO_CUBE_FACE_LIMIT,
+  type MeshToCubeInput,
+} from "@/lib/geometry/meshToCubeFidelity";
 import { analyzeUvPhysicalEvidence, type UvPhysicalFaceInput } from "@/lib/uv/physicalEvidence";
 import { analyzeAnimationCraftEvidence, type AnimationCraftTrackInput } from "@/lib/animation/craftEvidence";
 
@@ -23,6 +30,68 @@ function objectRecord(value: unknown): JsonRecord | null {
 
 function nonZeroRotation(values: readonly number[] | undefined): boolean {
   return Boolean(values && values.slice(0, 3).some((value) => Number.isFinite(value) && Math.abs(value) > 1e-5));
+}
+
+
+/** Read bounded authored Mesh data; never sort/mutate native faces or geometry. */
+function nativeMeshToCubeFidelity() {
+  if (typeof Mesh === "undefined" || !Array.isArray(Mesh.all)) {
+    return {
+      state:"unavailable" as const,
+      reason:"blockbench_mesh_inventory_unavailable" as const,
+      native_conversion_executed:false as const,
+    };
+  }
+  const visible=(Mesh.all ?? []).filter((mesh:Mesh)=>mesh.visibility!==false);
+  const selected=[...visible].sort((a,b)=>a.uuid.localeCompare(b.uuid))
+    .slice(0,MESH_TO_CUBE_ANALYSIS_LIMIT);
+  const reads:MeshToCubeInput[]=selected.map(mesh=>{
+    const nativeVertices=mesh.vertices ?? {};
+    const nativeFaces=mesh.faces ?? {};
+    // Count before visiting face keys or invoking native quad sorting.
+    const tooLarge=Object.keys(nativeVertices).length>MESH_TO_CUBE_VERTEX_LIMIT ||
+      Object.keys(nativeFaces).length>MESH_TO_CUBE_FACE_LIMIT;
+    const faces:Record<string,MeshToCubeInput["faces"][string]>={};
+    if(!tooLarge){
+      for(const [key,face] of Object.entries(nativeFaces)){
+        let faceKeys:readonly string[]=[];
+        try {
+          // MeshFace vertices are not generally pre-sorted. This native
+          // function computes a convex winding but has no authored mutation.
+          faceKeys=face.getSortedVertices();
+        } catch {
+          // A broken native face is not convertible; pure owner refuses it.
+        }
+        faces[key]={
+          vertices:faceKeys,
+          uv:face.uv,
+          texture:face.texture,
+          material_name:(face as MeshFace & {material_name?:string}).material_name,
+        };
+      }
+    }
+    const parentId=typeof Group!=="undefined" && mesh.parent instanceof Group
+      ?mesh.parent.uuid:mesh.parent==="root"?"root":null;
+    let armatureAttached:boolean|null=null;
+    try {
+      armatureAttached=typeof mesh.getArmature==="function"
+        ?Boolean(mesh.getArmature()):null;
+    } catch {
+      armatureAttached=null;
+    }
+    return {
+      uuid:mesh.uuid,name:mesh.name,
+      // Send the native count bound through to the pure analyst. Oversized
+      // source is explicitly unverified, not silently reduced to a small one.
+      vertices:tooLarge ? nativeVertices : nativeVertices,
+      faces:tooLarge ? nativeFaces as unknown as MeshToCubeInput["faces"] : faces,
+      origin:mesh.origin,rotation:mesh.rotation,parent_id:parentId,
+      shading:mesh.shading,armature_attached:armatureAttached,
+    };
+  });
+  return summarizeMeshToCubeFidelity(reads,{
+    total_visible_mesh_count:visible.length,
+  });
 }
 
 function geometrySurfaceRuntime() {
@@ -79,6 +148,7 @@ function geometrySurfaceRuntime() {
   });
   return {
     ...base,
+    mesh_to_cube_fidelity: nativeMeshToCubeFidelity(),
     current_preview_world_obb_review: analyzeCurrentPreviewObbContainment(
       poseInputs, {
         omitted_cube_count: visibleCubes.length - sampled.length,
