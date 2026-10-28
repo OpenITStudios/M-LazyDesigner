@@ -94,12 +94,13 @@ export function createAuthoringRecipeService(
       ? await dependencies.readCoincidenceSurface(input.recipe_id, native)
       : undefined;
     const surface = provided ? structuredClone(provided) : undefined;
-    if (surface) {
-      const currentNative = await dependencies.readOwned(input.recipe_id);
-      if (fingerprintAuthoringRecipeNativeSnapshot(currentNative) !==
-          fingerprintAuthoringRecipeNativeSnapshot(native)) {
-        throw new Error("RECIPE_OPTIMIZATION_NATIVE_CHANGED_DURING_INSPECTION");
-      }
+    // The owned native source must be stable for BOTH opt-in surfaces and
+    // source-only callers. A missing UV/material snapshot is not permission
+    // to return a stale Geometry/parent baseline without re-reading it.
+    const currentNative = await dependencies.readOwned(input.recipe_id);
+    if (fingerprintAuthoringRecipeNativeSnapshot(currentNative) !==
+        fingerprintAuthoringRecipeNativeSnapshot(native)) {
+      throw new Error("RECIPE_OPTIMIZATION_NATIVE_CHANGED_DURING_INSPECTION");
     }
     const report = assessRecipeNativeCoincidence(recipe, native, surface);
     const reread = await dependencies.readStoredRecipe(input.recipe_id);

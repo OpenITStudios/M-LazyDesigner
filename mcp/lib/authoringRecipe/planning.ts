@@ -810,6 +810,17 @@ export function assessRecipeNativeCoincidence(
       execution_state: "NOT_EXECUTED" as const,
     }];
   });
+  // Bind the hypothetical tail instance to its EXACT native UUID from the
+  // already validated owned snapshot. A display name or bounded candidate
+  // example is never allowed to resolve the target for this draft.
+  const counterfactualPattern = recipe.patterns.length === 1
+    ? recipe.patterns[0] : null;
+  const tailInstanceId = counterfactualPattern?.kind === "LINEAR" &&
+    counterfactualPattern.count >= 2
+      ? counterfactualPattern.id + ":" + (counterfactualPattern.count - 1)
+      : null;
+  const tailNativeCube = tailInstanceId === null ? null :
+    native.cubes.find(cube => cube.instance_id === tailInstanceId);
   // Source-only counterfactual is derived from the SAME validated report.
   // It never mutates or returns a replacement Recipe or calls native Apply.
   const counterfactual = previewRecipeCoincidenceCounterfactual(recipe, {
@@ -818,6 +829,7 @@ export function assessRecipeNativeCoincidence(
     native_recipe_cube_count: native.cubes.length,
     risk_category: candidates.length === 1
       ? candidates[0]!.optimization_risk.category : null,
+    hypothetical_removed_native_cube_uuid: tailNativeCube?.uuid ?? null,
   });
   const recipeSourceFingerprint = fingerprintReviewSource(recipe);
   const nativeSourceFingerprint = fingerprintAuthoringRecipeNativeSnapshot(native);

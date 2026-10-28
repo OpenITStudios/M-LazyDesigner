@@ -247,6 +247,7 @@ describe("B12 existing inspect_elements detail → Recipe optimization source in
             compiled_recipe_cube_count_in_draft: 1,
             compiled_recipe_cube_delta: -1,
             counterfactual_removed_instance_id: "pair:1",
+            counterfactual_removed_native_cube_uuid: "native-pair-1",
           },
           native_reduction_measured: null,
           native_mutation_executed: false,

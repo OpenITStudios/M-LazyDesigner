@@ -17,6 +17,11 @@ export type RecipeCoincidenceCounterfactualInput = {
   coincident_group_size: number | null;
   native_recipe_cube_count: number;
   risk_category: string | null;
+  /**
+   * Already-resolved exact owner UUID for the last instance of the one
+   * candidate pattern. This is NOT permission to remove that native Cube.
+   */
+  hypothetical_removed_native_cube_uuid: string | null;
 };
 
 const SOURCE_ONLY_BOUNDARY = {
@@ -39,7 +44,7 @@ export function previewRecipeCoincidenceCounterfactual(
   });
 
   if (source.coincident_group_count === 0) {
-    return unavailable("NO_VERIFIED_NATIVE_COINCIDENCE");
+    return unavailable("NO_EXACT_AUTHORED_NATIVE_COINCIDENCE");
   }
   if ((recipe.constraints?.length ?? 0) > 0 ||
       (recipe.symmetry?.length ?? 0) > 0) {
@@ -66,6 +71,12 @@ export function previewRecipeCoincidenceCounterfactual(
         : "OBSERVED_DIFFERENCE_OR_DEPENDENCY"
     );
   }
+  if (typeof source.hypothetical_removed_native_cube_uuid !== "string" ||
+      source.hypothetical_removed_native_cube_uuid.length === 0 ||
+      source.hypothetical_removed_native_cube_uuid.trim() !==
+        source.hypothetical_removed_native_cube_uuid) {
+    return unavailable("NATIVE_COUNTERFACTUAL_TARGET_UNRESOLVED");
+  }
 
   const draft = structuredClone(recipe);
   const draftPattern = draft.patterns[0];
@@ -79,6 +90,10 @@ export function previewRecipeCoincidenceCounterfactual(
   // This is pure: the edited draft is neither returned nor stored/applied.
   const rebuild = planIncrementalRecipeRebuild(recipe, draft);
   const expectedRemovedId = pattern.id + ":" + (pattern.count - 1);
+  const expectedPreservedIds = Array.from(
+    { length: pattern.count - 1 },
+    (_, index) => pattern.id + ":" + index
+  ).sort();
   if (rebuild.metrics.previous_cube_count !== pattern.count ||
       rebuild.metrics.next_cube_count !== pattern.count - 1 ||
       rebuild.remove_instance_ids.length !== 1 ||
@@ -87,7 +102,10 @@ export function previewRecipeCoincidenceCounterfactual(
       rebuild.metadata_only_instance_ids.length !== 0 ||
       rebuild.symmetry_changed_relation_ids.length !== 0 ||
       rebuild.constraint_propagated_instance_ids.length !== 0 ||
-      rebuild.preserved_instance_ids.length !== pattern.count - 1) {
+      rebuild.preserved_instance_ids.length !== expectedPreservedIds.length ||
+      rebuild.preserved_instance_ids.some(
+        (id, index) => id !== expectedPreservedIds[index]
+      )) {
     return unavailable("COUNTERFACTUAL_REBUILD_NOT_REMOVAL_ONLY");
   }
   return {
@@ -103,6 +121,8 @@ export function previewRecipeCoincidenceCounterfactual(
       compiled_recipe_cube_delta: rebuild.metrics.next_cube_count -
         rebuild.metrics.previous_cube_count,
       counterfactual_removed_instance_id: expectedRemovedId,
+      counterfactual_removed_native_cube_uuid:
+        source.hypothetical_removed_native_cube_uuid,
       source_recipe_fingerprint_before: rebuild.previous_recipe_fingerprint,
       source_recipe_fingerprint_in_draft: rebuild.next_recipe_fingerprint,
       unchanged_compiled_instance_count: rebuild.preserved_instance_ids.length,

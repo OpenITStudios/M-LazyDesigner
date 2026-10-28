@@ -2529,6 +2529,7 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
         compiled_recipe_cube_count_in_draft: 1,
         compiled_recipe_cube_delta: -1,
         counterfactual_removed_instance_id: "shells:1",
+        counterfactual_removed_native_cube_uuid: "native-shells:1",
         unchanged_compiled_instance_count: 1,
         source_recipe_fingerprint_before: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
         source_recipe_fingerprint_in_draft: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
@@ -2564,11 +2565,30 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
           compiled_recipe_cube_count_in_draft: 2,
           compiled_recipe_cube_delta: -1,
           counterfactual_removed_instance_id: "shells:2",
+          counterfactual_removed_native_cube_uuid: "native-shells:2",
           unchanged_compiled_instance_count: 2,
         },
         native_reduction_measured: null,
       },
     });
+  });
+
+  test("counterfactual resolves exact native ownership without guessing Cube names", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const newUuid = "real-native-cube-identity-2";
+    snapshot.cubes[1]!.uuid = newUuid;
+    const report = assessRecipeNativeCoincidence(recipe, snapshot, surfaceFixture(snapshot));
+    expect(report.optimization_counterfactual).toMatchObject({
+      state: "SOURCE_COUNTERFACTUAL_ONLY",
+      simulation: {
+        counterfactual_removed_instance_id: "shells:1",
+        counterfactual_removed_native_cube_uuid: newUuid,
+      },
+      native_removal_authorized: false,
+      native_mutation_executed: false,
+    });
+    expect(snapshot.cubes[1]!.name).toBe("shell_2");
   });
 
   test("incomplete UV or material source refuses the draft even for coincident Cube coordinates", () => {
@@ -2690,7 +2710,7 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
     expect(assessRecipeNativeCoincidence(recipe, differentlyParented)
       .optimization_counterfactual).toMatchObject({
       state: "NOT_PREPARED",
-      reason: "NO_VERIFIED_NATIVE_COINCIDENCE",
+      reason: "NO_EXACT_AUTHORED_NATIVE_COINCIDENCE",
       simulation: null,
     });
 
@@ -2707,6 +2727,27 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
       reason: "PATTERN_OUTSIDE_NARROW_COUNTERFACTUAL_SCOPE",
       simulation: null,
     });
+  });
+
+  test("source-only Recipe inspection rejects native Cube drift even when UV/material capture is unavailable", async () => {
+    const recipe = coincidenceRecipe();
+    const baseline = native(recipe, [null, null]);
+    let nativeReads = 0;
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => {
+        nativeReads++;
+        const current = structuredClone(baseline);
+        if (nativeReads === 2) current.cubes[0]!.from[0] += 1;
+        return current;
+      },
+      createApplyAdapter: () => { throw new Error("No native Apply in read-only inspection."); },
+    });
+    await expect(service.inspectStoredGeometryCoincidence({
+      recipe_id: recipe.id,
+    })).rejects.toThrow("RECIPE_OPTIMIZATION_NATIVE_CHANGED_DURING_INSPECTION");
+    expect(nativeReads).toBe(2);
+    expect(baseline.cubes[0]!.from[0]).toBe(0);
   });
 
   test("existing Recipe Service reads stored native source without applying any mutation", async () => {
@@ -2734,7 +2775,8 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
         native_review_executed: false,
       },
     });
-    expect(readCount).toBe(1);
+    // The second native read is required even with no optional surface.
+    expect(readCount).toBe(2);
     expect(mutationCount).toBe(0);
     expect(service.registrySize()).toBe(0);
     expect(service.evidenceRegistrySize()).toBe(0);

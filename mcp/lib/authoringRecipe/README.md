@@ -446,6 +446,36 @@ Even matching authored source cannot prove visual, rig or controller parity.
 This is a source-only first experiment, not a general-purpose Geometry
 reduction engine and not an authorization to delete Cubes.
 
+### B14 — Exact native identity and source-only drift closure
+
+The B13 hypothetical one-instance LINEAR reduction now reports both
+`counterfactual_removed_instance_id` **and** the corresponding
+`counterfactual_removed_native_cube_uuid`, obtained exclusively from the
+already verified Recipe-owned native Cube inventory. It never guesses the
+target by name, candidate example order, or visual proximity. Missing exact
+native UUID resolution refuses the draft; retained compiled instance IDs
+must also match the full expected set, not just the previous count.
+
+These are **source identity bindings**, not an instruction or permission to
+remove a native Cube. The result is still `SOURCE_COUNTERFACTUAL_ONLY`,
+`native_reduction_measured: null`, `native_mutation_executed: false`,
+`native_removal_authorized: false` and `visual_verdict: NOT_EVALUATED`.
+The no-coincidence refusal is named
+`NO_EXACT_AUTHORED_NATIVE_COINCIDENCE` to avoid implying that native visual
+equivalence was ever verified.
+
+The existing `AuthoringRecipeService.inspectStoredGeometryCoincidence`
+also re-reads the native Recipe-owned Cube inventory on **every** inspection,
+including when the optional UV/material/animation surface reader is absent.
+If Geometry or Group source changes during the read, it fails with
+`RECIPE_OPTIMIZATION_NATIVE_CHANGED_DURING_INSPECTION` before returning
+a stale review. Previously this second native read happened only when a
+surface snapshot existed. Saved-Recipe metadata freshness and native
+surface read-window protections remain in place.
+
+This closes two exact integration holes without any new checker, registry,
+Gateway route, native Apply transaction, or installed Blockbench claim.
+
 ## Native Group ancestry and stale-plan safety
 
 The native Recipe Cube snapshot includes both a root-to-parent Group UUID
