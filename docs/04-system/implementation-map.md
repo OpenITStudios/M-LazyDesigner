@@ -298,6 +298,9 @@ mcp/server/tools/element/inspection.ts
   inspection; opt-in Recipe-owned optimization report delegates to
   mcp/server/runtime/recipes/authoring/service.ts, which composes the
   canonical mcp/lib/authoringRecipe/service.ts and planning.ts.
+  The pure mcp/lib/authoringRecipe/optimizationCounterfactual.ts helper
+  uses the existing incremental Recipe planner for one zero-spaced LINEAR
+  draft only; no live removal, new checker or tool family is introduced.
   No separate optimizer, tool family, or direct Apply is registered here.
 
 mcp/server/tools/project/project.ts

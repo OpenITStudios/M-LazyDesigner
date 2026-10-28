@@ -414,6 +414,38 @@ UV/material/animation/visual review. Full native/visual and Bedrock-export
 equivalence still require independent installed evidence before a
 later explicit representation-change transaction is even considered.
 
+### B13 — First source-level Cube counterfactual
+
+`assessRecipeNativeCoincidence` now includes `optimization_counterfactual` from
+a small pure Recipe-domain helper. This uses the existing incremental
+rebuild planner, NOT another checker or native optimizer.
+
+The only supported case is a Recipe with exactly one zero-spaced LINEAR
+pattern, one prototype, at least two co-located native Recipe-owned Cubes
+under the same parent, no Anchor/Symmetry or explicit feature-intent owner,
+and identical observed UV/material fields without authored parent Bone tracks.
+Missing source evidence, an animation or material difference, unsupported
+pattern, or differing hierarchy results in `NOT_PREPARED` with a reason.
+
+For the supported case, a **cloned Recipe** with the LINEAR count reduced
+from N to N−1 is passed to `planIncrementalRecipeRebuild`. The existing
+planner compiles both Recipe versions and validates the counterfactual is
+exactly one tail instance removal, with zero upserts or metadata-only edits
+and every other compiled instance preserved. The draft is never returned,
+persisted, applied or submitted to Undo.
+
+`SOURCE_COUNTERFACTUAL_ONLY` reports pattern identity, before/after
+**compiled Recipe** Cube counts, `compiled_recipe_cube_delta`, exact
+hypothetical removed instance and source fingerprints. It does not prove
+that the native Blockbench model or Bedrock export can be simplified:
+`native_reduction_measured: null`, `native_mutation_executed: false`,
+`native_removal_authorized: false`, `visual_verdict: NOT_EVALUATED`,
+and the parent `estimated_removable_cube_count: null` remain mandatory.
+Even matching authored source cannot prove visual, rig or controller parity.
+
+This is a source-only first experiment, not a general-purpose Geometry
+reduction engine and not an authorization to delete Cubes.
+
 ## Native Group ancestry and stale-plan safety
 
 The native Recipe Cube snapshot includes both a root-to-parent Group UUID

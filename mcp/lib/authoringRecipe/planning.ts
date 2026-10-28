@@ -10,6 +10,7 @@ import {
   type RecipeNativeSurfaceSnapshot,
 } from "@/lib/authoringRecipe/nativeState";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
+import { previewRecipeCoincidenceCounterfactual } from "@/lib/authoringRecipe/optimizationCounterfactual";
 import {
   compileSemanticGeometryEdit,
   type SemanticGeometryEditIntent,
@@ -809,6 +810,15 @@ export function assessRecipeNativeCoincidence(
       execution_state: "NOT_EXECUTED" as const,
     }];
   });
+  // Source-only counterfactual is derived from the SAME validated report.
+  // It never mutates or returns a replacement Recipe or calls native Apply.
+  const counterfactual = previewRecipeCoincidenceCounterfactual(recipe, {
+    coincident_group_count: candidates.length,
+    coincident_group_size: candidates.length === 1 ? candidates[0]!.group_size : null,
+    native_recipe_cube_count: native.cubes.length,
+    risk_category: candidates.length === 1
+      ? candidates[0]!.optimization_risk.category : null,
+  });
   const recipeSourceFingerprint = fingerprintReviewSource(recipe);
   const nativeSourceFingerprint = fingerprintAuthoringRecipeNativeSnapshot(native);
   const surfaceSourceFingerprint = surfaceState?.revision ?? null;
@@ -885,6 +895,7 @@ export function assessRecipeNativeCoincidence(
       scope: "ALL_COINCIDENT_RECIPE_GROUPS" as const,
       automatic_removal_allowed: false as const,
     },
+    optimization_counterfactual: counterfactual,
     optimization_review_plan: {
       state: "PREPARED_SOURCE_ONLY" as const,
       scope: "DEDUPLICATED_OWNER_CHECKS_FOR_COINCIDENT_GROUPS" as const,
@@ -926,6 +937,9 @@ export function assessRecipeNativeCoincidence(
       "The bounded source identity fingerprints pin Recipe metadata, current native Cube " +
       "state, optional UV/material/motion source and complete review plan. They are drift " +
       "detectors only, never authenticated native acceptance or deletion authority. " +
+      "A narrow zero-spaced LINEAR pattern can additionally show a PURE cloned-Recipe " +
+      "one-instance counterfactual, but compiled source deltas are not measured native " +
+      "savings. No replacement Recipe is stored or applied. " +
       "No checks have been executed; capabilities, visuals and export proof remain unverified.",
   };
 }

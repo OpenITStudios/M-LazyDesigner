@@ -58,7 +58,7 @@ class NativeCube {
     uv: number[];
     rotation: number;
     enabled: boolean;
-    texture: false;
+    texture: string | false;
     material_name: string;
   }> = {};
   constructor(value: Record<string, unknown>) {
@@ -194,6 +194,12 @@ describe("B12 existing inspect_elements detail → Recipe optimization source in
           native_review_executed: false,
           native_mutation_authorized: false,
         },
+        optimization_counterfactual: {
+          state: "NOT_PREPARED",
+          reason: "SOURCE_UV_MATERIAL_OR_ANIMATION_INCOMPLETE",
+          simulation: null,
+          native_mutation_executed: false,
+        },
         native_mutation_executed: false,
         visual_verdict: "NOT_EVALUATED",
         estimated_removable_cube_count: null,
@@ -202,6 +208,58 @@ describe("B12 existing inspect_elements detail → Recipe optimization source in
     expect(inspected.content[0]!.text).toContain("no native review or deletion executed");
     expect(cubes).toHaveLength(2);
     expect(cubes[0]!.from).toEqual([0, 0, 0]);
+  });
+
+  test("B13 opt-in inspection returns a true compiler-only one-instance draft with matching source fields", async () => {
+    const { recipe, project, cubes } = setupNativeRecipe();
+    const atlas = {
+      uuid: "base-atlas",
+      width: 32, height: 32,
+      group: "", pbr_channel: "color",
+      getDataURL: () => "data:image/png;base64," +
+        Buffer.from("source-only-pixel-data").toString("base64"),
+    };
+    Object.assign(project, { textures: [atlas] });
+    runtime.Texture = { all: [atlas] };
+    runtime.AnimationItem = { all: [] };
+    runtime.BoneAnimator = class MockBoneAnimator {};
+    for (const cube of cubes) {
+      for (const face of Object.values(cube.faces)) {
+        face.texture = atlas.uuid;
+      }
+    }
+    const priorCount = NativeCube.all.length;
+    const report = await inspectElementSource({
+      id: cubes[0]!.uuid, recipe_optimization_review: true,
+    });
+    expect(report.structuredContent).toMatchObject({
+      recipe_optimization_review: {
+        selected_recipe_id: recipe.id,
+        coincident_group_count: 1,
+        groups_with_unverified_animation: 0,
+        optimization_counterfactual: {
+          state: "SOURCE_COUNTERFACTUAL_ONLY",
+          simulation: {
+            pattern_id: "pair",
+            pattern_count_before: 2,
+            pattern_count_in_draft: 1,
+            compiled_recipe_cube_count_before: 2,
+            compiled_recipe_cube_count_in_draft: 1,
+            compiled_recipe_cube_delta: -1,
+            counterfactual_removed_instance_id: "pair:1",
+          },
+          native_reduction_measured: null,
+          native_mutation_executed: false,
+          native_removal_authorized: false,
+          visual_verdict: "NOT_EVALUATED",
+        },
+        estimated_removable_cube_count: null,
+        visual_verdict: "NOT_EVALUATED",
+      },
+    });
+    expect(NativeCube.all).toHaveLength(priorCount);
+    expect(recipe.patterns[0]).toMatchObject({ count: 2 });
+    expect(cubes[1]!.lazydesigner_recipe_instance_id).toBe("pair:1");
   });
 
   test("opt-in review rejects a unique name instead of trusting name-based Recipe identity", async () => {

@@ -2511,6 +2511,204 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
     });
   });
 
+
+  test("narrow duplicate LINEAR Recipe gets exact one-Cube compiled counterfactual without native Apply", () => {
+    const recipe = coincidenceRecipe();
+    const nativeSnapshot = native(recipe, [null, null]);
+    const surface = surfaceFixture(nativeSnapshot);
+    const original = structuredClone(recipe);
+    const originalSnapshot = structuredClone(nativeSnapshot);
+    const report = assessRecipeNativeCoincidence(recipe, nativeSnapshot, surface);
+    expect(report.optimization_counterfactual).toMatchObject({
+      state: "SOURCE_COUNTERFACTUAL_ONLY",
+      reason: "PURE_RECIPE_COMPILE_DELTA_NOT_NATIVE_SAVINGS",
+      simulation: {
+        pattern_id: "shells", pattern_kind: "LINEAR",
+        pattern_count_before: 2, pattern_count_in_draft: 1,
+        compiled_recipe_cube_count_before: 2,
+        compiled_recipe_cube_count_in_draft: 1,
+        compiled_recipe_cube_delta: -1,
+        counterfactual_removed_instance_id: "shells:1",
+        unchanged_compiled_instance_count: 1,
+        source_recipe_fingerprint_before: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        source_recipe_fingerprint_in_draft: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      },
+      native_reduction_measured: null,
+      native_mutation_executed: false,
+      native_removal_authorized: false,
+      visual_verdict: "NOT_EVALUATED",
+      next_recipe_included: false,
+    });
+    expect(report.estimated_removable_cube_count).toBeNull();
+    expect(report.optimization_review_plan.native_mutation_authorized).toBe(false);
+    expect(recipe).toEqual(original);
+    expect(nativeSnapshot).toEqual(originalSnapshot);
+    expect(compileAuthoringRecipe(recipe).metrics.realized_cube_count).toBe(2);
+  });
+
+  test("three coincident LINEAR Cubes simulate exactly one tail removal, not a blanket merge", () => {
+    const recipe = coincidenceRecipe();
+    const pattern = recipe.patterns[0]!;
+    if (pattern.kind !== "LINEAR") throw new Error("fixture requires linear pattern");
+    pattern.count = 3;
+    const source = native(recipe, [null, null, null]);
+    const report = assessRecipeNativeCoincidence(recipe, source, surfaceFixture(source));
+    expect(report).toMatchObject({
+      coincident_group_count: 1,
+      optimization_counterfactual: {
+        state: "SOURCE_COUNTERFACTUAL_ONLY",
+        simulation: {
+          pattern_count_before: 3,
+          pattern_count_in_draft: 2,
+          compiled_recipe_cube_count_before: 3,
+          compiled_recipe_cube_count_in_draft: 2,
+          compiled_recipe_cube_delta: -1,
+          counterfactual_removed_instance_id: "shells:2",
+          unchanged_compiled_instance_count: 2,
+        },
+        native_reduction_measured: null,
+      },
+    });
+  });
+
+  test("incomplete UV or material source refuses the draft even for coincident Cube coordinates", () => {
+    const recipe = coincidenceRecipe();
+    const source = native(recipe, [null, null]);
+    const noSurface = assessRecipeNativeCoincidence(recipe, source);
+    expect(noSurface.optimization_counterfactual).toMatchObject({
+      state: "NOT_PREPARED",
+      reason: "SOURCE_UV_MATERIAL_OR_ANIMATION_INCOMPLETE",
+      simulation: null, native_mutation_executed: false,
+    });
+    const surface = surfaceFixture(source);
+    surface.cubes[1]!.faces[0]!.texture_ref = null;
+    const unresolved = assessRecipeNativeCoincidence(recipe, source, surface);
+    expect(unresolved.groups_with_unverified_material).toBe(1);
+    expect(unresolved.candidate_examples[0]!.optimization_risk.reason_codes)
+      .toContain("MATERIAL_EVIDENCE_UNAVAILABLE");
+    // An explicitly different face binding remains an observed difference
+    // even when its texture cannot be resolved (B7 precedence).
+    expect(unresolved.optimization_counterfactual).toMatchObject({
+      state: "NOT_PREPARED",
+      reason: "OBSERVED_DIFFERENCE_OR_DEPENDENCY",
+      simulation: null,
+    });
+  });
+
+  test("different face material assignments block compiled counterfactual, not just native deletion", () => {
+    const recipe = coincidenceRecipe();
+    const source = native(recipe, [null, null]);
+    const surface = surfaceFixture(source);
+    surface.cubes[1]!.faces[0]!.material_name = "emissive";
+    const scan = assessRecipeNativeCoincidence(recipe, source, surface);
+    expect(scan.optimization_counterfactual).toMatchObject({
+      state: "NOT_PREPARED",
+      reason: "OBSERVED_DIFFERENCE_OR_DEPENDENCY",
+      simulation: null,
+      native_removal_authorized: false,
+    });
+  });
+
+  test("animated Bone source blocks source counterfactual regardless of matching Cube coordinates", () => {
+    const recipe = coincidenceRecipe();
+    const source = native(recipe, ["bone", "bone"]);
+    const surface = surfaceFixture(source);
+    surface.animations = { clips: [{
+      uuid: "walk",
+      clip_settings_sha256: "a".repeat(64),
+      bone_tracks: [{
+        bone_uuid: "bone", position_keyframes: 0,
+        rotation_keyframes: 2, scale_keyframes: 0,
+        keyframe_content_sha256: "b".repeat(64),
+      }],
+    }] };
+    const scan = assessRecipeNativeCoincidence(recipe, source, surface);
+    expect(scan.optimization_counterfactual).toMatchObject({
+      state: "NOT_PREPARED",
+      reason: "OBSERVED_DIFFERENCE_OR_DEPENDENCY",
+      simulation: null,
+    });
+    expect(scan.groups_with_authored_bone_animation).toBe(1);
+  });
+
+  test("Recipe Anchor and feature ownership refuse narrow one-Cube counterfactual", () => {
+    const constrained = coincidenceRecipe();
+    constrained.constraints = [{
+      kind: "ANCHOR", id: "still-needed",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    const anchored = native(constrained, [null, null]);
+    const report = assessRecipeNativeCoincidence(
+      constrained, anchored, surfaceFixture(anchored)
+    );
+    expect(report.optimization_counterfactual).toMatchObject({
+      state: "NOT_PREPARED",
+      reason: "RECIPE_RELATIONSHIPS_REQUIRE_PRESERVATION",
+      simulation: null,
+    });
+
+    const mirrored = coincidenceRecipe();
+    mirrored.symmetry = [{
+      id: "source-mirror", source_instance_id: "shells:0",
+      target_instance_id: "mirrored-shell",
+      plane: { axis: "X", position: 1 },
+      uv_policy: "SHARE", texture_policy: "MIRROR", rig_policy: "MIRROR",
+    }];
+    const mirroredNative = native(mirrored, [null, null, null]);
+    expect(assessRecipeNativeCoincidence(
+      mirrored, mirroredNative, surfaceFixture(mirroredNative)
+    ).optimization_counterfactual).toMatchObject({
+      state: "NOT_PREPARED",
+      reason: "RECIPE_RELATIONSHIPS_REQUIRE_PRESERVATION",
+      simulation: null,
+    });
+
+    const featureOwned = coincidenceRecipe();
+    featureOwned.feature_intents = [{
+      id: "authored-shell", label: "Authored Shell",
+      visual_role: "THREE_DIMENSIONAL", evidence: "SUPPORTED",
+      evidence_refs: ["reference-claim"],
+      geometry_reasons: ["VOLUME"],
+    }];
+    const pattern = featureOwned.patterns[0]!;
+    if (pattern.kind !== "LINEAR") throw new Error("fixture requires linear pattern");
+    pattern.feature_id = "authored-shell";
+    const owned = native(featureOwned, [null, null]);
+    expect(assessRecipeNativeCoincidence(featureOwned, owned, surfaceFixture(owned))
+      .optimization_counterfactual).toMatchObject({
+      state: "NOT_PREPARED",
+      reason: "FEATURE_SEMANTICS_REQUIRE_INDEPENDENT_REVIEW",
+      simulation: null,
+    });
+  });
+
+  test("different native Bone ancestry and separate patterns never create invented reduction previews", () => {
+    const recipe = coincidenceRecipe();
+    const differentlyParented = native(recipe, ["left", "right"]);
+    expect(assessRecipeNativeCoincidence(recipe, differentlyParented)
+      .optimization_counterfactual).toMatchObject({
+      state: "NOT_PREPARED",
+      reason: "NO_VERIFIED_NATIVE_COINCIDENCE",
+      simulation: null,
+    });
+
+    const grid = coincidenceRecipe();
+    grid.patterns = [{
+      kind: "GRID", id: "grid-shells", prototype_id: "shell",
+      counts: [1, 2], axes: ["X", "Y"],
+      spacing: [0, 0],
+    }];
+    const grouped = native(grid, [null, null]);
+    expect(assessRecipeNativeCoincidence(grid, grouped, surfaceFixture(grouped))
+      .optimization_counterfactual).toMatchObject({
+      state: "NOT_PREPARED",
+      reason: "PATTERN_OUTSIDE_NARROW_COUNTERFACTUAL_SCOPE",
+      simulation: null,
+    });
+  });
+
   test("existing Recipe Service reads stored native source without applying any mutation", async () => {
     const recipe = coincidenceRecipe();
     const snapshot = native(recipe, [null, null]);
