@@ -1,4 +1,7 @@
-import { IK_BAKE_MAX_WORK_UNITS } from "./ikBakeReadiness";
+import {
+  IK_BAKE_MAX_WORK_UNITS,
+  type analyzeNativeIkBakeReadiness,
+} from "./ikBakeReadiness";
 
 export type NativeIkLocalRotationTrack = Readonly<{
   group_uuid: string;
@@ -178,5 +181,133 @@ export function planNativeIkBakedKeyframes(input: NativeIkKeyframePlanInput) {
     max_rounding_error_degrees: Number(sourceMaxRoundingErrorDegrees.toFixed(7)),
     keyframes: baked,
     note: "Native solver rotation plan only. Does not sample, bake, remove IK controllers, author keyframes, restore preview, or prove Bedrock playback.",
+  };
+}
+
+/**
+ * A source-only preflight of the intended authored-state delta.
+ *
+ * A caller-supplied sample or readiness object does NOT attest that
+ * sampleIK() ran or that the editor preview has been restored. Only
+ * an internal, separately accepted live native orchestration may pass its
+ * fresh captured result to the unregistered native transaction adapter.
+ */
+export type NativeIkBakeMutationInventory = Readonly<{
+  animation_uuid: string;
+  animation_length: number;
+  snapping_fps: number;
+  selected_animation_uuid: string | null;
+  rotation_tracks: readonly {
+    bone_uuid: string;
+    existing_keyframe_count: number;
+  }[];
+  controller_tracks: readonly {
+    controller_uuid: string;
+    existing_keyframe_count: number;
+  }[];
+}>;
+
+export function requireNativeIkBakeMutationPreflight(input: {
+  plan: ReturnType<typeof planNativeIkBakedKeyframes>;
+  readiness: ReturnType<typeof analyzeNativeIkBakeReadiness>;
+  inventory: NativeIkBakeMutationInventory;
+}) {
+  const { plan, readiness, inventory } = input;
+  if (!plan || plan.state !== "PREPARED_SOURCE_ONLY" ||
+      plan.sample_origin !== "CALLER_SUPPLIED_NOT_ATTESTED" ||
+      plan.native_ik_baked !== false ||
+      !readiness || readiness.state !== "candidate_source_only" ||
+      readiness.blocking_reasons.length !== 0 ||
+      readiness.native_ik_baked !== false) {
+    throw new Error("IK_BAKE_MUTATION_NOT_ELIGIBLE: unresolved source plan or native readiness.");
+  }
+  if (!inventory || inventory.animation_uuid !== plan.animation_uuid ||
+      inventory.selected_animation_uuid !== inventory.animation_uuid ||
+      !Number.isFinite(inventory.animation_length) ||
+      !Number.isSafeInteger(inventory.snapping_fps)) {
+    throw new Error("IK_BAKE_MUTATION_CLIP_IDENTITY_MISMATCH: fresh selected clip required.");
+  }
+  const sampleTimes = nativeIkFrameTimes(
+    inventory.animation_length, inventory.snapping_fps
+  );
+  const expectedBones = readiness.expected_sampled_group_uuids;
+  if (!Array.isArray(expectedBones) || expectedBones.length === 0 ||
+      plan.expected_bone_count !== expectedBones.length ||
+      plan.frame_count_per_bone !== sampleTimes.length ||
+      plan.total_native_rotation_samples !== expectedBones.length * sampleTimes.length ||
+      plan.planned_rotation_keyframe_count !== plan.keyframes.length ||
+      plan.keyframes.length < 1 ||
+      plan.keyframes.length > IK_BAKE_MAX_WORK_UNITS ||
+      !Array.isArray(inventory.rotation_tracks) ||
+      inventory.rotation_tracks.length !== expectedBones.length) {
+    throw new Error("IK_BAKE_MUTATION_SAMPLE_MISMATCH: planned bones/frames differ from current clip.");
+  }
+  const expectedSet = new Set(expectedBones);
+  const actualBoneSet = new Set<string>();
+  for (const track of inventory.rotation_tracks) {
+    if (!track || !expectedSet.has(track.bone_uuid) ||
+        actualBoneSet.has(track.bone_uuid)) {
+      throw new Error("IK_BAKE_MUTATION_BONE_IDENTITY_MISMATCH: incomplete or duplicate bone track.");
+    }
+    actualBoneSet.add(track.bone_uuid);
+    // A native IK bake must not erase or silently combine existing authored
+    // rotation tracks without a separately approved reconciliation policy.
+    if (track.existing_keyframe_count !== 0) {
+      throw new Error("IK_BAKE_MUTATION_EXISTING_ROTATION_KEYS: bone " +
+        track.bone_uuid + " already owns authored rotation keyframes.");
+    }
+  }
+
+  if (readiness.examples_truncated ||
+      !Array.isArray(readiness.examples) ||
+      readiness.examples.length !== readiness.active_controller_count ||
+      !Array.isArray(inventory.controller_tracks) ||
+      inventory.controller_tracks.length !== readiness.active_controller_count) {
+    throw new Error("IK_BAKE_MUTATION_CONTROLLER_SCOPE_INCOMPLETE: full IK controller identity is required.");
+  }
+  const controllerIds = new Set(readiness.examples.map((row) => row.controller_uuid));
+  const observedControllers = new Set<string>();
+  let removedKeyframes = 0;
+  for (const track of inventory.controller_tracks) {
+    if (!track || !controllerIds.has(track.controller_uuid) ||
+        observedControllers.has(track.controller_uuid) ||
+        !Number.isSafeInteger(track.existing_keyframe_count) ||
+        track.existing_keyframe_count <= 0) {
+      throw new Error("IK_BAKE_MUTATION_CONTROLLER_IDENTITY_MISMATCH: stale or duplicate IK controller.");
+    }
+    observedControllers.add(track.controller_uuid);
+    removedKeyframes += track.existing_keyframe_count;
+  }
+  if (removedKeyframes !== readiness.expected_controller_keyframes_removed) {
+    throw new Error("IK_BAKE_MUTATION_CONTROLLER_KEY_COUNT_CHANGED: IK keyframes changed since inspection.");
+  }
+
+  const plannedIds = new Set<string>();
+  for (const keyframe of plan.keyframes) {
+    if (!keyframe || !expectedSet.has(keyframe.bone_uuid) ||
+        keyframe.channel !== "rotation" ||
+        keyframe.interpolation !== "linear" ||
+        !Number.isFinite(keyframe.time) ||
+        keyframe.time < 0 || keyframe.time > inventory.animation_length ||
+        !sampleTimes.includes(keyframe.time) ||
+        !Array.isArray(keyframe.values) || keyframe.values.length !== 3 ||
+        !keyframe.values.every(Number.isFinite)) {
+      throw new Error("IK_BAKE_MUTATION_KEYFRAME_INVALID: exact finite native clock values required.");
+    }
+    const id = keyframe.bone_uuid + ":" + keyframe.time;
+    if (plannedIds.has(id)) {
+      throw new Error("IK_BAKE_MUTATION_DUPLICATE_KEYFRAME: duplicate bone/time pair.");
+    }
+    plannedIds.add(id);
+  }
+  return {
+    state: "SOURCE_PREFLIGHT_ONLY" as const,
+    animation_uuid: inventory.animation_uuid,
+    selected_bone_count: expectedSet.size,
+    planned_native_keyframe_count: plan.keyframes.length,
+    controller_keyframes_to_remove: removedKeyframes,
+    native_ik_baked: false as const,
+    undo_executed: false as const,
+    visual_verdict: "NOT_EVALUATED" as const,
   };
 }
