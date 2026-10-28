@@ -34,6 +34,44 @@ session draft preserves those flags and adds an **UNVERIFIED** human-review
 criterion. No extra authoring tools, screenshots or routine Codex context are
 introduced.
 
+### Accepted artifact and final-revision integrity — all eight tasks
+
+An `accepted_result: true` run for **any** of the eight canonical Golden
+Tasks requires the captured immutable starting `input_asset_sha256`, a
+live `input_project_uuid`, and a valid persisted `output_asset_sha256`
+**different from the starting asset bytes**. Previously, the evaluator
+required the persisted output only for `golden-existing-model-correction`;
+the other seven tasks could be marked accepted despite missing final
+artifact evidence. A changed output hash proves persisted bytes changed,
+**not** visual/reference, UV, motion or export acceptance.
+
+The final successful verification event must occur **after the last mutation
+event** (including a failed/uncertain mutation), and the final verification
+event must itself have succeeded. A successful earlier capture cannot
+certify later edits; an unsuccessful later verification cannot be hidden
+behind an earlier success. Any additional `FAIL` acceptance evidence
+precludes an overall accepted result, even if the failed criterion is
+outside the minimum corpus criteria. These are consistency requirements
+on existing trace and review records, not new inspections.
+
+Comparison of two purportedly accepted session reports also requires
+each to carry `LIVE_BLOCKBENCH` proof scope, a canonical task ID and schema,
+valid reference/Control provenance, valid nonnegative metrics, a live input
+project UUID, valid changed persisted output bytes, and identical starting
+model/reference fingerprints across baseline and candidate. Arbitrary
+source-only PASS reports, placeholder task IDs, invalid metrics, and
+missing output artifacts cannot produce claimed efficiency gains.
+When optional usage telemetry is merged into an **accepted** final session,
+it must come from the exact same source SHA and `LIVE_BLOCKBENCH` proof
+scope. SHA-unknown/source-only usage may be retained for incomplete
+diagnostics, never merged into accepted cost metrics. These fields are
+self-reported provenance until a live owner confirms them, so neither
+this validator nor the comparison itself authenticates human acceptance.
+
+The corpus remains **UNMEASURED**. A source-regression test of these gates
+does not create a live model, independently authenticate a human's review,
+or establish eight accepted Golden Tasks.
+
 ## First baseline — Existing Model Correction
 
 For `golden-existing-model-correction`, use the **same unchanged starting

@@ -70,6 +70,15 @@ export function finalizeGoldenSession(input: {
         `Astra usage source_sha ${input.usage.source_sha} does not match golden run ${run.source_sha}.`
       );
     }
+    // Incomplete sessions may retain partial/unknown telemetry, but an
+    // accepted quality claim must not combine run metrics with telemetry
+    // lacking the same exact installed-source SHA and live proof scope.
+    if (accepted && (input.usage.source_sha !== run.source_sha ||
+        input.usage.proof_scope !== "LIVE_BLOCKBENCH")) {
+      throw new Error(
+        "Accepted Golden usage requires exact matching source_sha and LIVE_BLOCKBENCH proof."
+      );
+    }
 
     // The Golden run and client/provider telemetry must describe the same
     // model. A mismatched model label would make a valid run look like Sol/Astra.

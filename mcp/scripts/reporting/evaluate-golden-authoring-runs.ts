@@ -214,6 +214,18 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
         throw new Error(`${prefix} accepted correction output_asset_sha256 must differ from input_asset_sha256.`);
       }
     }
+    // Every Golden Task needs a saved and content-addressed final .bbmodel.
+    // A tool trace and a manually declared PASS do not prove persistence.
+    if (!provenance.output_asset_sha256) {
+      throw new Error(
+        `${prefix} accepted result requires output_asset_sha256 from a saved .bbmodel.`
+      );
+    }
+    if (provenance.output_asset_sha256 === provenance.input_asset_sha256) {
+      throw new Error(
+        `${prefix} accepted result requires output_asset_sha256 different from starting input_asset_sha256.`
+      );
+    }
     // Require verified seed identity for every accepted task, not just
     // corrections. Otherwise two successful runs may start from different
     // models and make their token/call comparison meaningless.
@@ -227,6 +239,13 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
     }
     if (run.quality_verdict !== "PASS") {
       throw new Error(`${prefix} cannot be accepted unless quality_verdict is PASS.`);
+    }
+    // A run cannot claim full PASS while its own evidence reports a material
+    // FAIL, even when the failed item is an additional non-corpus criterion.
+    if (run.acceptance_evidence.some(entry => entry.verdict === "FAIL")) {
+      throw new Error(
+        `${prefix} accepted result cannot contain FAIL acceptance evidence.`
+      );
     }
     if (
       !run.pipeline_provenance.reference_package_fingerprint ||
@@ -250,6 +269,22 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
     if (run.trace.some((event) => event.required_for_decision === null)) {
       throw new Error(
         `${prefix} accepted result requires decision labels for every trace event.`
+      );
+    }
+    // A successful check from BEFORE the latest edit cannot establish the
+    // quality of the final model. A later failed verify also invalidates
+    // an earlier successful check. This orders EXISTING trace events; it
+    // never adds another readback or invents native visual acceptance.
+    const lastMutationIndex = run.trace.findLastIndex((event) =>
+      event.kind === "mutate"
+    );
+    const lastVerificationIndex = run.trace.findLastIndex((event) =>
+      event.kind === "verify"
+    );
+    if (lastVerificationIndex <= lastMutationIndex ||
+        run.trace[lastVerificationIndex]?.success !== true) {
+      throw new Error(
+        `${prefix} accepted result requires a successful final verification after the last mutation.`
       );
     }
     const humanAcceptance = evidenceByCriterion.get("human_acceptance");

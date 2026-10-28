@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import goldenCorpus from "../fixtures/golden-task-cases.json";
 import {
   summarizeGoldenAuthoringDocument,
   validateGoldenAuthoringDocument,
@@ -98,6 +99,81 @@ function acceptedRun(): GoldenAuthoringDocument {
 }
 
 describe("golden authoring accepted-result benchmark", () => {
+  test("all eight Golden Tasks reject accepted claims without distinct persisted output", () => {
+    expect(goldenCorpus.tasks).toHaveLength(8);
+    for (const task of goldenCorpus.tasks) {
+      const document = acceptedRun();
+      const run = document.runs[0]!;
+      run.task_id = task.id;
+      run.acceptance_evidence = [...task.acceptance, "human_acceptance"].map(
+        criterion => ({
+          criterion,
+          verdict: "PASS" as const,
+          evidence_ref: "example-human-asserted:" + criterion,
+        })
+      );
+      run.pipeline_provenance.output_asset_sha256 = null;
+      expect(() => validateGoldenAuthoringDocument(document))
+        .toThrow("output_asset_sha256");
+      run.pipeline_provenance.output_asset_sha256 =
+        run.pipeline_provenance.input_asset_sha256;
+      expect(() => validateGoldenAuthoringDocument(document))
+        .toThrow("output_asset_sha256");
+      run.pipeline_provenance.output_asset_sha256 = "d".repeat(64);
+      expect(() => validateGoldenAuthoringDocument(document)).not.toThrow();
+    }
+  });
+
+  test("an earlier successful verification cannot accept a newer mutation", () => {
+    const document = acceptedRun();
+    document.runs[0]!.trace.push({
+      index: 3, kind: "mutate", success: true,
+      capability: "manage_cubes", required_for_decision: true,
+    });
+    expect(() => validateGoldenAuthoringDocument(document))
+      .toThrow("successful final verification after the last mutation");
+    document.runs[0]!.trace.push({
+      index: 4, kind: "verify", success: false,
+      capability: "capture_model_views", required_for_decision: true,
+    });
+    expect(() => validateGoldenAuthoringDocument(document))
+      .toThrow("successful final verification after the last mutation");
+    document.runs[0]!.trace[4]!.success = true;
+    expect(() => validateGoldenAuthoringDocument(document)).not.toThrow();
+  });
+
+  test("a failed final verification invalidates an earlier successful check even without later mutations", () => {
+    const document = acceptedRun();
+    document.runs[0]!.trace.push({
+      index: 3, kind: "verify", success: false,
+      capability: "capture_model_views", required_for_decision: true,
+    });
+    expect(() => validateGoldenAuthoringDocument(document))
+      .toThrow("successful final verification after the last mutation");
+  });
+
+  test("an unsuccessful or unknown last mutation still requires a fresh verification", () => {
+    const document = acceptedRun();
+    document.runs[0]!.trace.push({
+      index: 3, kind: "mutate", success: false,
+      capability: "manage_cubes", required_for_decision: true,
+    });
+    expect(() => validateGoldenAuthoringDocument(document))
+      .toThrow("successful final verification after the last mutation");
+  });
+
+
+  test("contradictory additional FAIL evidence prevents accepted quality", () => {
+    const doc = acceptedRun();
+    doc.runs[0]!.acceptance_evidence.push({
+      criterion: "reference_visual_hidden_mismatch",
+      verdict: "FAIL",
+      evidence_ref: "review:actual-visible-mismatch",
+    });
+    expect(() => validateGoldenAuthoringDocument(doc))
+      .toThrow("accepted result cannot contain FAIL acceptance evidence");
+  });
+
   test("reports efficiency only after explicit accepted PASS evidence", () => {
     const summary = summarizeGoldenAuthoringDocument(acceptedRun());
     expect(summary.runs[0]?.metrics_available).toBe(true);

@@ -10,12 +10,14 @@ function accepted(sha: string, calls: number): FinalGoldenSessionReport {
     report: "golden-session-final",
     task_id: "golden-existing-model-correction",
     source_sha: sha,
+    proof_scope: "LIVE_BLOCKBENCH",
     state: "ACCEPTED",
     quality_verdict: "PASS",
     accepted_result: true,
     pipeline_provenance: {
       input_asset_sha256: "a".repeat(64),
       output_asset_sha256: "c".repeat(64),
+      input_project_uuid: "benchmark-project-active",
       reference_package_fingerprint: "b".repeat(64),
       control_task_context_id: "task:abcdef1234567890abcd",
       runtime_build_identity: "runtime-" + sha.slice(0, 8),
@@ -88,6 +90,51 @@ describe("accepted golden session comparison", () => {
     ).toThrow("same reference package fingerprint");
   });
 
+
+  test("refuses source-only or missing-proof comparisons even with matching PASS labels", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+    baseline.proof_scope = "LOCAL_CODE";
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("requires LIVE_BLOCKBENCH proof");
+    baseline.proof_scope = undefined;
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("requires LIVE_BLOCKBENCH proof");
+    baseline.proof_scope = "LIVE_BLOCKBENCH";
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate })
+      .quality_gate).toBe("BOTH_ACCEPTED_PASS_SAME_REFERENCE");
+  });
+
+  test("every Golden Task comparison requires saved output digests on both sides", () => {
+    for (const task of ["golden-existing-model-correction", "golden-prop-chair",
+      "golden-mechanical-lift", "golden-humanoid-fisherman",
+      "golden-organic-flower", "golden-layered-cutout-display",
+      "golden-pbr-machine", "golden-particle-smoke"]) {
+      const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+      const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+      baseline.task_id = task;
+      candidate.task_id = task;
+      baseline.pipeline_provenance.output_asset_sha256 = null;
+      expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+        .toThrow("requires a valid changed output_asset_sha256");
+      baseline.pipeline_provenance.output_asset_sha256 = "c".repeat(64);
+      candidate.pipeline_provenance.output_asset_sha256 = "a".repeat(64);
+      expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+        .toThrow("requires a valid changed output_asset_sha256");
+      candidate.pipeline_provenance.output_asset_sha256 = "d".repeat(64);
+      expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+        .not.toThrow();
+    }
+  });
+
+  test("refuses a missing live project provenance on either comparison side", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+    candidate.pipeline_provenance.input_project_uuid = null;
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("requires a live input_project_uuid");
+  });
+
   test("rejects comparisons starting from a different or unknown model", () => {
     const baseline = accepted(
       "1234567890abcdef1234567890abcdef12345678", 5
@@ -111,11 +158,11 @@ describe("accepted golden session comparison", () => {
     const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
     baseline.pipeline_provenance.output_asset_sha256 = null;
     expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
-      .toThrow("baseline accepted correction requires a valid changed output_asset_sha256");
+      .toThrow("baseline accepted Golden comparison requires a valid changed output_asset_sha256");
     baseline.pipeline_provenance.output_asset_sha256 = "c".repeat(64);
     candidate.pipeline_provenance.output_asset_sha256 = "a".repeat(64);
     expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
-      .toThrow("candidate accepted correction requires a valid changed output_asset_sha256");
+      .toThrow("candidate accepted Golden comparison requires a valid changed output_asset_sha256");
     candidate.pipeline_provenance.output_asset_sha256 = "d".repeat(64);
     expect(() => compareAcceptedGoldenSessions({ baseline, candidate })).not.toThrow();
   });
@@ -156,8 +203,8 @@ describe("accepted golden session comparison", () => {
   test("requires identical starting asset bytes for modern Golden Tasks too", () => {
     const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
     const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
-    baseline.task_id = candidate.task_id = "A_known_transform";
-    candidate.pipeline_provenance.input_asset_sha256 = "c".repeat(64);
+    baseline.task_id = candidate.task_id = "golden-mechanical-lift";
+    candidate.pipeline_provenance.input_asset_sha256 = "d".repeat(64);
     expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
       .toThrow("same valid input_asset_sha256");
     candidate.pipeline_provenance.input_asset_sha256 = null;
@@ -165,6 +212,39 @@ describe("accepted golden session comparison", () => {
       .toThrow("same valid input_asset_sha256");
     candidate.pipeline_provenance.input_asset_sha256 = baseline.pipeline_provenance.input_asset_sha256;
     expect(compareAcceptedGoldenSessions({ baseline, candidate }).input_asset_comparable).toBe(true);
+  });
+
+
+  test("rejects arbitrary synthetic IDs rather than comparing them as canonical Golden Tasks", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+    baseline.task_id = "A_known_transform";
+    candidate.task_id = "A_known_transform";
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("requires a known canonical Golden task ID");
+  });
+
+  test("rejects invalid or negative efficiency inputs instead of reporting a fictitious improvement", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+    candidate.metrics!.tool_calls_to_accepted_result = -4;
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("invalid tool_calls_to_accepted_result metric");
+    candidate.metrics!.tool_calls_to_accepted_result = Number.NaN;
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("invalid tool_calls_to_accepted_result metric");
+  });
+
+  test("comparison refuses malformed reference and Control provenance hashes", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+    candidate.pipeline_provenance.reference_package_fingerprint = "not-a-sha";
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("complete end-to-end pipeline provenance");
+    candidate.pipeline_provenance.reference_package_fingerprint = "b".repeat(64);
+    candidate.pipeline_provenance.control_task_context_id = "task:not-hex";
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("complete end-to-end pipeline provenance");
   });
 
   test("reports Astra/Sol provenance without inventing cost or model identity", () => {

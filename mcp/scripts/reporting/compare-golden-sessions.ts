@@ -1,3 +1,5 @@
+import goldenCorpus from "../../tests/fixtures/golden-task-cases.json";
+
 type MetricSet = {
   tool_calls_to_accepted_result: number | null;
   decision_required_calls: number | null;
@@ -21,12 +23,15 @@ export type FinalGoldenSessionReport = {
   report: "golden-session-final";
   task_id: string;
   source_sha: string;
+  /** Emitted by the canonical Golden session finalizer. */
+  proof_scope?: "LOCAL_CODE" | "LIVE_BLOCKBENCH";
   state: "ACCEPTED" | "INCOMPLETE";
   quality_verdict: "PASS" | "FAIL" | "UNVERIFIED";
   accepted_result: boolean | null;
   pipeline_provenance: {
     input_asset_sha256?: string | null;
     output_asset_sha256?: string | null;
+    input_project_uuid?: string | null;
     reference_package_fingerprint: string | null;
     control_task_context_id: string | null;
     runtime_build_identity: string | null;
@@ -85,12 +90,42 @@ function validateAcceptedReport(
   if (!/^[0-9a-f]{40}$/.test(value.source_sha)) {
     throw new Error(`${label}.source_sha must be an exact 40-character Git SHA.`);
   }
+  if (value.schema !== 1 ||
+      !goldenCorpus.tasks.some(task => task.id === value.task_id)) {
+    throw new Error(
+      `${label} accepted Golden comparison requires a known canonical Golden task ID and schema 1.`
+    );
+  }
+  for (const key of METRIC_KEYS) {
+    const metric = value.metrics[key];
+    if (metric !== null &&
+        (typeof metric !== "number" || !Number.isFinite(metric) || metric < 0)) {
+      throw new Error(`${label} accepted Golden comparison has invalid ${key} metric.`);
+    }
+  }
+  if (value.proof_scope !== "LIVE_BLOCKBENCH") {
+    throw new Error(
+      `${label} accepted Golden comparison requires LIVE_BLOCKBENCH proof; source-only or unknown scope is not comparable.`
+    );
+  }
+  const provenance = value.pipeline_provenance;
+  if (!provenance?.input_project_uuid ||
+      provenance.input_project_uuid !== provenance.input_project_uuid.trim()) {
+    throw new Error(`${label} accepted Golden comparison requires a live input_project_uuid.`);
+  }
+  const outputHash = provenance.output_asset_sha256;
+  if (!outputHash || !/^[0-9a-f]{64}$/.test(outputHash) ||
+      outputHash === provenance.input_asset_sha256) {
+    throw new Error(
+      `${label} accepted Golden comparison requires a valid changed output_asset_sha256.`
+    );
+  }
   if (
     !value.pipeline_provenance ||
-    !value.pipeline_provenance.reference_package_fingerprint ||
-    !value.pipeline_provenance.control_task_context_id ||
-    !value.pipeline_provenance.runtime_build_identity ||
-    !value.pipeline_provenance.artifact_revision
+    !/^[0-9a-f]{64}$/.test(value.pipeline_provenance.reference_package_fingerprint ?? "") ||
+    !/^task:[0-9a-f]{20}$/.test(value.pipeline_provenance.control_task_context_id ?? "") ||
+    !value.pipeline_provenance.runtime_build_identity?.trim() ||
+    !value.pipeline_provenance.artifact_revision?.trim()
   ) {
     throw new Error(`${label} must contain complete end-to-end pipeline provenance.`);
   }
@@ -127,17 +162,8 @@ export function compareAcceptedGoldenSessions(input: {
     );
   }
 
-  if (input.baseline.task_id === "golden-existing-model-correction") {
-    for (const [label, report] of [
-      ["baseline", input.baseline], ["candidate", input.candidate],
-    ] as const) {
-      const output = report.pipeline_provenance.output_asset_sha256;
-      if (!output || !/^[0-9a-f]{64}$/.test(output) ||
-          output === report.pipeline_provenance.input_asset_sha256) {
-        throw new Error(`${label} accepted correction requires a valid changed output_asset_sha256.`);
-      }
-    }
-  }
+  // The persisted-output gate applies to every Golden Task in the shared
+  // validator above; correction is no longer a privileged special case.
   const baselineModel = input.baseline.usage?.model?.trim() || null;
   const candidateModel = input.candidate.usage?.model?.trim() || null;
   const modelPairState = !baselineModel || !candidateModel
@@ -174,6 +200,7 @@ export function compareAcceptedGoldenSessions(input: {
       input.baseline.pipeline_provenance.reference_package_fingerprint,
     input_asset_sha256: firstInput,
     input_asset_comparable: true,
+    persisted_outputs_validated: true as const,
     model_pair: {
       baseline: baselineModel,
       candidate: candidateModel,

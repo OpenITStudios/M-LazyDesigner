@@ -95,6 +95,53 @@ function usage(sourceSha: string): UsageDocument {
   };
 }
 
+
+function acceptedGolden(): GoldenAuthoringDocument {
+  const doc = golden();
+  const run = doc.runs[0]!;
+  run.quality_verdict = "PASS";
+  run.accepted_result = true;
+  run.user_corrections = 1;
+  run.correction_rounds = 1;
+  run.accepted_result_ms = 700;
+  run.pipeline_provenance = {
+    input_asset_sha256: "a".repeat(64),
+    output_asset_sha256: "b".repeat(64),
+    input_project_uuid: "golden-fixture-live-project",
+    reference_package_fingerprint: "c".repeat(64),
+    control_task_context_id: "task:1234567890abcdef1234",
+    runtime_build_identity: "installed-build-fixture",
+    artifact_revision: "saved-asset-fixture",
+  };
+  run.trace = [
+    {
+      index: 0, kind: "mutate", success: true,
+      capability: "manage_cubes", required_for_decision: true,
+    },
+    {
+      index: 1, kind: "verify", success: true,
+      capability: "capture_model_views", required_for_decision: true,
+    },
+  ];
+  run.acceptance_evidence = run.acceptance_evidence.map(entry => ({
+    ...entry, verdict: "PASS" as const,
+    evidence_ref: "human-asserted-fixture:" + entry.criterion,
+  }));
+  return doc;
+}
+
+function acceptedUsage(sourceSha: string): UsageDocument {
+  const doc = usage(sourceSha);
+  doc.runs[0]!.quality_verdict = "PASS";
+  doc.runs[0]!.task_success = true;
+  doc.runs[0]!.accepted_result = true;
+  doc.runs[0]!.calls = {
+    total: 2, search: 0, describe: 0, inspect: 0,
+    mutate: 1, verify: 1, recovery: 0,
+  };
+  return doc;
+}
+
 describe("golden session finalizer", () => {
   test("keeps an unresolved draft incomplete and withholds metrics", () => {
     const report = finalizeGoldenSession({ golden: golden() });
@@ -136,6 +183,43 @@ describe("golden session finalizer", () => {
     expect(() => finalizeGoldenSession({
       golden: goldenRun, usage: measured,
     })).toThrow("total_tokens conflicts");
+  });
+
+
+  test("accepted Golden quality refuses usage telemetry lacking a source SHA", () => {
+    const goldenDoc = acceptedGolden();
+    const telemetry = acceptedUsage(goldenDoc.runs[0]!.source_sha);
+    telemetry.source_sha = null;
+    expect(() => finalizeGoldenSession({ golden: goldenDoc, usage: telemetry }))
+      .toThrow("Accepted Golden usage requires exact matching source_sha and LIVE_BLOCKBENCH proof");
+  });
+
+  test("accepted Golden quality refuses source-only usage telemetry even with matching SHA", () => {
+    const goldenDoc = acceptedGolden();
+    const telemetry = acceptedUsage(goldenDoc.runs[0]!.source_sha);
+    telemetry.proof_scope = "LOCAL_CODE";
+    expect(() => finalizeGoldenSession({ golden: goldenDoc, usage: telemetry }))
+      .toThrow("Accepted Golden usage requires exact matching source_sha and LIVE_BLOCKBENCH proof");
+  });
+
+  test("accepted Golden quality allows matching live telemetry but never authenticates external PASS", () => {
+    const goldenDoc = acceptedGolden();
+    const telemetry = acceptedUsage(goldenDoc.runs[0]!.source_sha);
+    const report = finalizeGoldenSession({ golden: goldenDoc, usage: telemetry });
+    expect(report).toMatchObject({
+      state: "ACCEPTED", quality_verdict: "PASS",
+      proof_scope: "LIVE_BLOCKBENCH",
+      usage: { model: "gpt-5.6-sol", calls_total: 2 },
+    });
+    expect(report.metrics?.tool_calls_to_accepted_result).toBe(2);
+  });
+
+  test("incomplete Golden drafts may retain SHA-unknown telemetry only as diagnostics", () => {
+    const partialUsage = usage("1234567890abcdef1234567890abcdef12345678");
+    partialUsage.source_sha = null;
+    const report = finalizeGoldenSession({ golden: golden(), usage: partialUsage });
+    expect(report.state).toBe("INCOMPLETE");
+    expect(report.metrics).toBeNull();
   });
 
   test("merges same-SHA telemetry without upgrading quality", () => {
