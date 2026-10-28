@@ -5,7 +5,11 @@ import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
 import {
   assertAuthoringRecipeNativeMatchesCompiled,
   fingerprintAuthoringRecipeNativeSnapshot,
+  type AuthoringRecipeNativeSnapshot,
+  type RecipeNativeSurfaceSnapshot,
 } from "@/lib/authoringRecipe/nativeState";
+import { fingerprintUvNativeSource } from "@/lib/uv/adapters/blockbenchCubeUv";
+import { readBlockbenchUvNativeSource } from "@/server/runtime/uv/layoutRuntime";
 import { resolveSemanticIdentity } from "@/lib/authoringRecipe/semanticIdentity";
 import {
   findAuthoringRecipeInStore,
@@ -16,9 +20,131 @@ import {
   readAuthoringRecipeStoreProperty,
 } from "./ownership";
 
+/**
+ * Opt-in native material/UV evidence. This shares the existing UV snapshot
+ * reader and Recipe-owned native state, but is NEVER used in the native Undo
+ * source fingerprint or as a Geometry deletion authorization.
+ */
+export function readBlockbenchRecipeCoincidenceSurface(
+  recipeId: string,
+  native: AuthoringRecipeNativeSnapshot
+): RecipeNativeSurfaceSnapshot {
+  const boundProject = typeof Project !== "undefined" ? Project : null;
+  if (!boundProject || typeof boundProject.uuid !== "string" ||
+      !boundProject.uuid.trim()) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_PROJECT_REQUIRED");
+  }
+  const nativeFingerprint = fingerprintAuthoringRecipeNativeSnapshot(native);
+  const uv = readBlockbenchUvNativeSource();
+  if (uv.project_uuid !== boundProject.uuid) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_PROJECT_CHANGED");
+  }
+  const uvByUuid = new Map(uv.cubes.map(cube => [cube.uuid, cube]));
+  const scene = Cube.all ?? [];
+  const realCubes = new Map(scene.map(cube => [cube.uuid, cube]));
+  if (realCubes.size !== scene.length) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_UUID_AMBIGUOUS");
+  }
+  const referencedTextures = new Set<string>();
+  const cubeSurfaces = native.cubes.map(saved => {
+    const cube = realCubes.get(saved.uuid);
+    const uvCube = uvByUuid.get(saved.uuid);
+    if (!cube || !uvCube || cube.name !== saved.name ||
+        JSON.stringify(uvCube.from) !== JSON.stringify(saved.from) ||
+        JSON.stringify(uvCube.to) !== JSON.stringify(saved.to)) {
+      throw new Error("RECIPE_OPTIMIZATION_NATIVE_TARGET_CHANGED");
+    }
+    const faces = uvCube.faces.map(savedFace => {
+      const face = cube.faces[savedFace.face];
+      if (!face) {
+        throw new Error("RECIPE_OPTIMIZATION_NATIVE_FACE_MISSING");
+      }
+      const rawTexture: unknown = face.texture;
+      if (!(rawTexture === null || rawTexture === undefined ||
+          rawTexture === false || (typeof rawTexture === "string" &&
+          rawTexture.trim() && rawTexture === rawTexture.trim()))) {
+        throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_REF_INVALID");
+      }
+      const texture_ref: string | false | null =
+        typeof rawTexture === "string" ? rawTexture
+          : rawTexture === false ? false : null;
+      if (typeof texture_ref === "string") {
+        referencedTextures.add(texture_ref);
+      }
+      return {
+        face: savedFace.face,
+        uv: [...savedFace.uv] as [number, number, number, number],
+        rotation: savedFace.rotation,
+        enabled: savedFace.enabled,
+        texture_ref,
+      };
+    });
+    return {
+      uuid: saved.uuid, instance_id: saved.instance_id,
+      visibility: cube.visibility !== false, export: cube.export !== false,
+      box_uv: uvCube.box_uv, autouv: uvCube.autouv,
+      mirror_uv: uvCube.mirror_uv,
+      uv_offset: uvCube.uv_offset
+        ? [...uvCube.uv_offset] as [number, number] : null,
+      faces,
+    };
+  });
+  if (referencedTextures.size > 256) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_SCOPE_EXCEEDED");
+  }
+  const textureList = (boundProject.textures ?? Texture.all) as Texture[];
+  if (new Set(textureList.map(tex => tex.uuid)).size !== textureList.length) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_UUID_AMBIGUOUS");
+  }
+  const textures = textureList.filter(tex => referencedTextures.has(tex.uuid))
+    .map(texture => {
+      if (!texture.uuid || !Number.isSafeInteger(texture.width) ||
+          texture.width <= 0 || !Number.isSafeInteger(texture.height) ||
+          texture.height <= 0 || typeof texture.getDataURL !== "function") {
+        throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_UNREADABLE");
+      }
+      const data = texture.getDataURL();
+      if (typeof data !== "string" ||
+          !/^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(data)) {
+        throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_UNREADABLE");
+      }
+      const bytes = Buffer.from(data.slice(data.indexOf(",") + 1), "base64");
+      if (!bytes.length) {
+        throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_UNREADABLE");
+      }
+      return {
+        uuid: texture.uuid, width: texture.width, height: texture.height,
+        image_sha256: createHash("sha256").update(bytes).digest("hex"),
+        group_uuid: typeof texture.group === "string" &&
+          texture.group.trim() ? texture.group : null,
+      };
+    }).sort((a, b) => a.uuid.localeCompare(b.uuid));
+  if (textures.length !== referencedTextures.size) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_REF_UNRESOLVED");
+  }
+  const uvAfter = readBlockbenchUvNativeSource();
+  if (Project !== boundProject ||
+      uvAfter.project_uuid !== boundProject.uuid ||
+      fingerprintUvNativeSource(uvAfter) !== fingerprintUvNativeSource(uv) ||
+      fingerprintAuthoringRecipeNativeSnapshot(
+        readBlockbenchAuthoringRecipeOwnedState(recipeId)
+      ) !== nativeFingerprint) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_SOURCE_CHANGED_DURING_INSPECTION");
+  }
+  return {
+    project_uuid: boundProject.uuid,
+    native_source_fingerprint: nativeFingerprint,
+    logical_uv_width: uv.logical_width,
+    logical_uv_height: uv.logical_height,
+    textures,
+    cubes: cubeSurfaces,
+  };
+}
+
 export function createBlockbenchAuthoringRecipeService() {
   return createAuthoringRecipeService({
     readOwned: readBlockbenchAuthoringRecipeOwnedState,
+    readCoincidenceSurface: readBlockbenchRecipeCoincidenceSurface,
     readStoredRecipe: (recipeId) => {
       if (!Project) {
         throw new Error(

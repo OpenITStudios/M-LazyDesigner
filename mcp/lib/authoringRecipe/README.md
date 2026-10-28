@@ -123,6 +123,20 @@ per-Cube visibility, animation, unrelated scene contents or rendered appearance
 are interchangeable. No Cube-count saving, native operation or visual PASS is
 inferred. Legacy source-only snapshots without parent identity fail closed.
 
+For an opt-in native inspection, `inspectStoredGeometryCoincidence` now also
+accepts the Runtime owner's bounded read-only UV/material snapshot, distinct
+from `AuthoringRecipeNativeSnapshot` and its Undo fingerprint. The planner
+requires exact Recipe-owned UUID/instance alignment, current native source
+fingerprint, all six face UV/rotation/enabled fields, Box UV settings, texture
+references and revision digests. It reports **matched authored UV fields**,
+**different UV fields**, **different material assignments/visibility**, or
+**unverified material refs** independently for each coincident group. Atlas
+image SHA is a revision of encoded image bytes, not pixel fidelity evidence.
+Even matched fields are not proof of equivalent PBR/shaders/animation or
+permission to delete, merge, or reduce any Cube. The optional native read
+only runs for this targeted inspection and is checked against a second
+native-geometry snapshot before a report is returned.
+
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 `planning.ts` owns pure planning APIs. `service.ts` owns bounded stateful plan/apply/identity/evidence lifecycle and may compose recipe modules, but recipe source must not depend on Gateway or Runtime executors.

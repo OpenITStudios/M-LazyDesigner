@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AuthoringRecipe, CompiledCubePlacement, RecipeVec3 } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
+import type { UvFaceKey } from "@/lib/uv/contracts";
 
 /** Authored ancestor Group state, not a sampled animation pose or new registry. */
 export type RecipeParentAuthoredState = {
@@ -106,6 +107,44 @@ export type AuthoringRecipeNativeCubeState = {
   parent_path?: string[];
   /** Native adapter emits this; optional only for legacy pure-state fixtures. */
   parent_authored_state?: RecipeParentAuthoredState[];
+};
+
+/**
+ * Opt-in visual-surface read for Recipe coincidence review only.
+ * Not part of AuthoringRecipeNativeSnapshot or its Undo fingerprint:
+ * geometry transactions must not accidentally change ownership semantics.
+ * Texture image SHA is a revision of encoded image bytes, NOT visual PASS.
+ */
+export type RecipeNativeSurfaceSnapshot = {
+  project_uuid: string;
+  native_source_fingerprint: string;
+  logical_uv_width: number;
+  logical_uv_height: number;
+  textures: Array<{
+    uuid: string;
+    width: number;
+    height: number;
+    image_sha256: string;
+    group_uuid: string | null;
+  }>;
+  cubes: Array<{
+    uuid: string;
+    instance_id: string;
+    visibility: boolean;
+    export: boolean;
+    box_uv: boolean;
+    autouv: number;
+    mirror_uv: boolean;
+    uv_offset: [number, number] | null;
+    faces: Array<{
+      face: UvFaceKey;
+      uv: [number, number, number, number];
+      rotation: number;
+      enabled: boolean;
+      /** null/false are not assumed to resolve to identical materials. */
+      texture_ref: string | false | null;
+    }>;
+  }>;
 };
 
 export type AuthoringRecipeNativeSnapshot = {

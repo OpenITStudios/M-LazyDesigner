@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { AuthoringRecipe, RecipeFeatureIntent } from "@/lib/authoringRecipe/contracts";
 import { assessCompiledRecipeFeatureOptimization } from "@/lib/authoringRecipe/featureDecision";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
@@ -6,6 +7,7 @@ import {
   fingerprintAuthoringRecipeNativeSnapshot,
   type AuthoringRecipeNativeSnapshot,
   type RecipeParentAuthoredState,
+  type RecipeNativeSurfaceSnapshot,
 } from "@/lib/authoringRecipe/nativeState";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 import {
@@ -55,6 +57,119 @@ export function assessRecipeFeatureOptimization(
   );
 }
 
+const COINCIDENCE_FACE_KEYS = ["north", "south", "east", "west", "up", "down"] as const;
+const SURFACE_REVISION_SHA256 = /^[a-f0-9]{64}$/;
+
+/**
+ * All evidence must be current, complete and bijectively bound to the same
+ * Recipe-owned UUID/instance inventory before even comparing UV/material
+ * assignments. Do not depend on Cube names or client-supplied similarity.
+ */
+function validatedRecipeSurfaceState(
+  native: AuthoringRecipeNativeSnapshot,
+  surface: RecipeNativeSurfaceSnapshot
+) {
+  const fingerprint = fingerprintAuthoringRecipeNativeSnapshot(native);
+  const fail = (reason: string): never => {
+    throw new Error("RECIPE_OPTIMIZATION_SURFACE_" + reason);
+  };
+  if (!surface || typeof surface.project_uuid !== "string" ||
+      !surface.project_uuid.trim() || surface.project_uuid !== surface.project_uuid.trim() ||
+      surface.native_source_fingerprint !== fingerprint) {
+    fail("SOURCE_STALE");
+  }
+  if (![surface.logical_uv_width, surface.logical_uv_height].every(
+    value => Number.isSafeInteger(value) && value > 0
+  ) || !Array.isArray(surface.textures) || surface.textures.length > 256 ||
+      !Array.isArray(surface.cubes) || surface.cubes.length !== native.cubes.length) {
+    fail("SCOPE_INVALID");
+  }
+  const textures = new Map<string, RecipeNativeSurfaceSnapshot["textures"][number]>();
+  for (const texture of surface.textures) {
+    if (!texture || typeof texture.uuid !== "string" || !texture.uuid.trim() ||
+        texture.uuid !== texture.uuid.trim() || textures.has(texture.uuid) ||
+        !Number.isSafeInteger(texture.width) || texture.width <= 0 ||
+        !Number.isSafeInteger(texture.height) || texture.height <= 0 ||
+        typeof texture.image_sha256 !== "string" ||
+        !SURFACE_REVISION_SHA256.test(texture.image_sha256) ||
+        !(texture.group_uuid === null ||
+          typeof texture.group_uuid === "string" && texture.group_uuid.trim().length > 0)) {
+      fail("TEXTURE_INVALID");
+    }
+    textures.set(texture.uuid, texture);
+  }
+  const sourceByUuid = new Map(native.cubes.map(cube => [cube.uuid, cube]));
+  const byUuid = new Map<string, {
+    uv: string;
+    material: string;
+    unresolved_material: boolean;
+  }>();
+  const instanceIds = new Set<string>();
+  for (const cube of surface.cubes) {
+    if (!cube || typeof cube.uuid !== "string" ||
+        !sourceByUuid.has(cube.uuid) || byUuid.has(cube.uuid) ||
+        cube.instance_id !== sourceByUuid.get(cube.uuid)!.instance_id ||
+        instanceIds.has(cube.instance_id) ||
+        typeof cube.visibility !== "boolean" || typeof cube.export !== "boolean" ||
+        typeof cube.box_uv !== "boolean" || typeof cube.mirror_uv !== "boolean" ||
+        !Number.isFinite(cube.autouv) ||
+        !(cube.uv_offset === null || Array.isArray(cube.uv_offset) &&
+          cube.uv_offset.length === 2 &&
+          cube.uv_offset.every(value => Number.isFinite(value))) ||
+        cube.box_uv && cube.uv_offset === null ||
+        !Array.isArray(cube.faces) ||
+        cube.faces.length !== COINCIDENCE_FACE_KEYS.length) {
+      fail("CUBE_IDENTITY_OR_UV_INVALID");
+    }
+    const faces = new Map<string, RecipeNativeSurfaceSnapshot["cubes"][number]["faces"][number]>();
+    for (const face of cube.faces) {
+      if (!face || !COINCIDENCE_FACE_KEYS.includes(face.face) ||
+          faces.has(face.face) || !Array.isArray(face.uv) ||
+          face.uv.length !== 4 || face.uv.some(value => !Number.isFinite(value)) ||
+          !Number.isFinite(face.rotation) || typeof face.enabled !== "boolean" ||
+          !(face.texture_ref === null || face.texture_ref === false ||
+            typeof face.texture_ref === "string" && textures.has(face.texture_ref))) {
+        fail("FACE_OR_TEXTURE_INVALID");
+      }
+      faces.set(face.face, face);
+    }
+    if (faces.size !== COINCIDENCE_FACE_KEYS.length) {
+      fail("FACE_OR_TEXTURE_INVALID");
+    }
+    const ordered = COINCIDENCE_FACE_KEYS.map(face => faces.get(face)!);
+    const unresolved_material = ordered.some(face =>
+      face.enabled && (face.texture_ref === null || face.texture_ref === false)
+    );
+    const uv = JSON.stringify({
+      box_uv: cube.box_uv, autouv: cube.autouv,
+      mirror_uv: cube.mirror_uv, uv_offset: cube.uv_offset,
+      faces: ordered.map(face => ({
+        face: face.face, uv: face.uv, rotation: face.rotation,
+        enabled: face.enabled,
+      })),
+    });
+    const material = JSON.stringify({
+      visibility: cube.visibility, export: cube.export,
+      faces: ordered.map(face => ({
+        face: face.face, enabled: face.enabled, texture_ref: face.texture_ref,
+        texture: typeof face.texture_ref === "string"
+          ? textures.get(face.texture_ref) : null,
+      })),
+    });
+    instanceIds.add(cube.instance_id);
+    byUuid.set(cube.uuid, { uv, material, unresolved_material });
+  }
+  if (byUuid.size !== native.cubes.length) {
+    fail("INCOMPLETE_CUBE_SCOPE");
+  }
+  return {
+    byUuid,
+    project_uuid: surface.project_uuid,
+    revision: "sha256:" + createHash("sha256")
+      .update(JSON.stringify(surface)).digest("hex"),
+  };
+}
+
 /**
  * Read-only exact authored-geometry coincidence report, scoped to a saved
  * Recipe's verified native Cube inventory. This deliberately does NOT infer
@@ -64,9 +179,12 @@ export function assessRecipeFeatureOptimization(
  */
 export function assessRecipeNativeCoincidence(
   recipe: AuthoringRecipe,
-  native: AuthoringRecipeNativeSnapshot
+  native: AuthoringRecipeNativeSnapshot,
+  surface?: RecipeNativeSurfaceSnapshot
 ) {
   assertAuthoringRecipeNativeMatchesCompiled(native, recipe);
+  const surfaceState = surface === undefined
+    ? null : validatedRecipeSurfaceState(native, surface);
   const nativeUuidSet = new Set<string>();
   const ancestorStates = new Map<string, string>();
   const sameShape = new Map<string, typeof native.cubes>();
@@ -141,9 +259,26 @@ export function assessRecipeNativeCoincidence(
       const symmetryIds = [...new Set(ordered.flatMap(cube =>
         [...(symmetryByInstance.get(cube.instance_id) ?? [])]
       ))].sort();
+      const compared = ordered.map(cube => surfaceState?.byUuid.get(cube.uuid));
+      const hasCompleteSurface = surfaceState !== null &&
+        compared.every(row => row !== undefined);
+      const uvDifferent = hasCompleteSurface &&
+        new Set(compared.map(row => row!.uv)).size > 1;
+      const materialDifferent = hasCompleteSurface &&
+        new Set(compared.map(row => row!.material)).size > 1;
+      const materialUnresolved = hasCompleteSurface &&
+        compared.some(row => row!.unresolved_material);
       return {
         group_size: ordered.length,
         parent_path: [...ordered[0].parent_path!],
+        uv_mapping_state: !hasCompleteSurface ? ("UNVERIFIED" as const)
+          : uvDifferent ? ("DIFFERENT" as const) : ("MATCHED_FIELDS" as const),
+        material_binding_state: !hasCompleteSurface || materialUnresolved
+          ? ("UNVERIFIED" as const)
+          : materialDifferent ? ("DIFFERENT" as const) : ("MATCHED_FIELDS" as const),
+        ...(hasCompleteSurface
+          ? { material_or_visibility_difference: materialDifferent }
+          : {}),
         instance_id_examples: ordered.slice(0, 8).map(cube => cube.instance_id),
         native_uuid_examples: ordered.slice(0, 8).map(cube => cube.uuid),
         examples_truncated: ordered.length > 8,
@@ -164,14 +299,29 @@ export function assessRecipeNativeCoincidence(
     inspected_native_cube_count: native.cubes.length,
     coincident_group_count: candidates.length,
     coincident_native_cube_count: candidates.reduce((sum, c) => sum + c.group_size, 0),
+    surface_evidence_state: surfaceState
+      ? ("SNAPSHOT_BOUND" as const) : ("UNAVAILABLE" as const),
+    surface_snapshot_fingerprint: surfaceState?.revision ?? null,
+    surface_project_uuid: surfaceState?.project_uuid ?? null,
+    groups_with_uv_differences: candidates.filter(
+      group => group.uv_mapping_state === "DIFFERENT"
+    ).length,
+    groups_with_material_differences: candidates.filter(
+      group => group.material_binding_state === "DIFFERENT"
+    ).length,
+    groups_with_unverified_material: candidates.filter(
+      group => group.material_binding_state === "UNVERIFIED"
+    ).length,
     candidate_examples: candidates.slice(0, 8),
     candidate_examples_truncated: candidates.length > 8,
     estimated_removable_cube_count: null,
     native_mutation_executed: false as const,
     visual_verdict: "NOT_EVALUATED" as const,
-    note: "Exact Recipe-owned authored Cube transforms and full native parent state matched. " +
-      "UV/texture/material, per-Cube visibility, animation binding, unrelated geometry, " +
-      "rendered overlap and Bedrock export remain UNVERIFIED. These are review candidates only.",
+    note: "This is an exact authored-geometry/parent coincidence report, not deletion proof. " +
+      "Optional surface inspection compares native Box/per-face UV, face texture bindings, " +
+      "atlas encoded-image revisions and authored visibility/export. Matching fields do not " +
+      "prove PBR/shader equivalence, alpha/rendered appearance, animation pose, unrelated " +
+      "geometry or Bedrock export. Never delete Cubes on this evidence alone.",
   };
 }
 

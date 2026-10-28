@@ -8,7 +8,9 @@ import {
 import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
 import type {
   AuthoringRecipeNativeSnapshot,
+  RecipeNativeSurfaceSnapshot,
   RecipeParentAuthoredState,
+  fingerprintAuthoringRecipeNativeSnapshot,
 } from "@/lib/authoringRecipe/nativeState";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 import {
@@ -645,6 +647,175 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
         safe_to_delete: false,
       }],
     });
+  });
+
+
+  function surfaceFixture(
+    snapshot: AuthoringRecipeNativeSnapshot
+  ): RecipeNativeSurfaceSnapshot {
+    return {
+      project_uuid: "review-project-1",
+      native_source_fingerprint: fingerprintAuthoringRecipeNativeSnapshot(snapshot),
+      logical_uv_width: 32, logical_uv_height: 32,
+      textures: [
+        { uuid: "atlas-main", width: 32, height: 32,
+          image_sha256: "a".repeat(64), group_uuid: null },
+        { uuid: "atlas-detail", width: 32, height: 32,
+          image_sha256: "b".repeat(64), group_uuid: "detail-material" },
+      ],
+      cubes: snapshot.cubes.map(cube => ({
+        uuid: cube.uuid, instance_id: cube.instance_id,
+        visibility: true, export: true, box_uv: true,
+        autouv: 1, mirror_uv: false,
+        uv_offset: [0, 0],
+        faces: (["north", "south", "east", "west", "up", "down"] as const)
+          .map(face => ({
+            face, uv: [0, 0, 4, 4] as [number, number, number, number],
+            rotation: 0, enabled: true, texture_ref: "atlas-main",
+          })),
+      })),
+    };
+  }
+
+  test("read-only surface comparison distinguishes UV differences from material/visibility differences", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["shared", "shared"]);
+    const surface = surfaceFixture(snapshot);
+    const source = structuredClone(surface);
+    const matched = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(matched).toMatchObject({
+      surface_evidence_state: "SNAPSHOT_BOUND",
+      groups_with_uv_differences: 0,
+      groups_with_material_differences: 0,
+      groups_with_unverified_material: 0,
+      candidate_examples: [{
+        uv_mapping_state: "MATCHED_FIELDS",
+        material_binding_state: "MATCHED_FIELDS",
+        safe_to_delete: false,
+      }],
+    });
+    surface.cubes[1]!.uv_offset = [8, 0];
+    const uvChanged = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(uvChanged).toMatchObject({
+      groups_with_uv_differences: 1,
+      groups_with_material_differences: 0,
+      candidate_examples: [{
+        uv_mapping_state: "DIFFERENT",
+        material_binding_state: "MATCHED_FIELDS",
+      }],
+    });
+    surface.cubes[1]!.faces[0]!.texture_ref = "atlas-detail";
+    surface.cubes[1]!.visibility = false;
+    const materialsChanged = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(materialsChanged).toMatchObject({
+      groups_with_uv_differences: 1,
+      groups_with_material_differences: 1,
+      candidate_examples: [{
+        uv_mapping_state: "DIFFERENT",
+        material_binding_state: "DIFFERENT",
+        material_or_visibility_difference: true,
+      }],
+    });
+    expect(materialsChanged.native_mutation_executed).toBe(false);
+    expect(source.cubes[1]!.uv_offset).toEqual([0, 0]);
+  });
+
+  test("unknown/default face textures fail closed as unverified, not material equivalence", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const surface = surfaceFixture(snapshot);
+    surface.cubes[0]!.faces[0]!.texture_ref = null;
+    const report = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(report).toMatchObject({
+      groups_with_unverified_material: 1,
+      candidate_examples: [{ material_binding_state: "UNVERIFIED",
+        uv_mapping_state: "MATCHED_FIELDS", safe_to_delete: false }],
+    });
+  });
+
+  test("surface snapshots reject stale native sources, ambiguous identities and incomplete face/texture data", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const valid = surfaceFixture(snapshot);
+    const stale = structuredClone(valid);
+    stale.native_source_fingerprint = "sha256:" + "f".repeat(64);
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, stale))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_SOURCE_STALE");
+
+    const missingCube = structuredClone(valid);
+    missingCube.cubes.pop();
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, missingCube))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_SCOPE_INVALID");
+
+    const duplicateCube = structuredClone(valid);
+    duplicateCube.cubes[1]!.uuid = duplicateCube.cubes[0]!.uuid;
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, duplicateCube))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_CUBE_IDENTITY_OR_UV_INVALID");
+
+    const missingFace = structuredClone(valid);
+    missingFace.cubes[0]!.faces.pop();
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, missingFace))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_FACE_OR_TEXTURE_INVALID");
+
+    const unknownTexture = structuredClone(valid);
+    unknownTexture.cubes[0]!.faces[0]!.texture_ref = "unknown-atlas";
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, unknownTexture))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_FACE_OR_TEXTURE_INVALID");
+
+    const malformedRevision = structuredClone(valid);
+    malformedRevision.textures[0]!.image_sha256 = "not-a-real-sha";
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, malformedRevision))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_TEXTURE_INVALID");
+  });
+
+  test("atlas image revision changes invalidate the surface evidence identity without claiming visual PASS", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const surface = surfaceFixture(snapshot);
+    const before = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    surface.textures[0]!.image_sha256 = "c".repeat(64);
+    const after = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(after.surface_snapshot_fingerprint).not.toBe(before.surface_snapshot_fingerprint);
+    expect(after.candidate_examples[0]?.safe_to_delete).toBe(false);
+    expect(after.visual_verdict).toBe("NOT_EVALUATED");
+  });
+
+  test("Recipe Service binds optional surface data to a stable owned native snapshot, without native mutation", async () => {
+    const recipe = coincidenceRecipe();
+    const snap = native(recipe, [null, null]);
+    const current = structuredClone(snap);
+    let reads = 0, surfaces = 0, adapters = 0;
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => { reads++; return structuredClone(current); },
+      readCoincidenceSurface: (_recipeId, source) => {
+        surfaces++;
+        return surfaceFixture(source);
+      },
+      createApplyAdapter: () => { adapters++; throw new Error("No mutation requested"); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    expect(report).toMatchObject({
+      surface_evidence_state: "SNAPSHOT_BOUND",
+      groups_with_uv_differences: 0,
+      native_mutation_executed: false,
+    });
+    expect(reads).toBe(2);
+    expect(surfaces).toBe(1);
+    expect(adapters).toBe(0);
+    expect(service.registrySize()).toBe(0);
+
+    const drifting = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(current),
+      readCoincidenceSurface: (_id, source) => {
+        current.cubes[0]!.from[0] += 1;
+        return surfaceFixture(source);
+      },
+      createApplyAdapter: () => { throw new Error("should not mutate"); },
+    });
+    await expect(drifting.inspectStoredGeometryCoincidence({ recipe_id: recipe.id }))
+      .rejects.toThrow("RECIPE_OPTIMIZATION_NATIVE_CHANGED_DURING_INSPECTION");
   });
 
   test("existing Recipe Service reads stored native source without applying any mutation", async () => {

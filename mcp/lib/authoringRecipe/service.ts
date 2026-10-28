@@ -4,6 +4,7 @@ import {
   assertAuthoringRecipeNativeMatchesCompiled,
   fingerprintAuthoringRecipeNativeSnapshot,
   type AuthoringRecipeNativeSnapshot,
+  type RecipeNativeSurfaceSnapshot,
 } from "@/lib/authoringRecipe/nativeState";
 import {
   applyAuthoringRecipeIncrementalAtomic,
@@ -39,6 +40,11 @@ export type AuthoringRecipeServiceDependencies = {
   readOwned(recipeId: string): Promise<AuthoringRecipeNativeSnapshot> | AuthoringRecipeNativeSnapshot;
   readStoredRecipe?(recipeId: string): Promise<AuthoringRecipe | null> | AuthoringRecipe | null;
   createApplyAdapter(recipeId: string): AuthoringRecipeApplyAdapter;
+  /** Opt-in native visual-surface read, entirely separate from Undo state. */
+  readCoincidenceSurface?(
+    recipeId: string,
+    native: AuthoringRecipeNativeSnapshot
+  ): Promise<RecipeNativeSurfaceSnapshot> | RecipeNativeSurfaceSnapshot;
 };
 export function createAuthoringRecipeService(
   dependencies: AuthoringRecipeServiceDependencies,
@@ -85,7 +91,20 @@ export function createAuthoringRecipeService(
         throw new Error("RECIPE_NOT_STORED: no saved Recipe exists for " + input.recipe_id + ".");
       }
       const native = await dependencies.readOwned(input.recipe_id);
-      return assessRecipeNativeCoincidence(recipe, native);
+      // Verify canonical saved Recipe ownership before the potentially
+      // expensive opt-in UV/texture read, and keep the Undo snapshot immutable.
+      assertAuthoringRecipeNativeMatchesCompiled(native, recipe);
+      const surface = dependencies.readCoincidenceSurface
+        ? await dependencies.readCoincidenceSurface(input.recipe_id, native)
+        : undefined;
+      if (surface) {
+        const current = await dependencies.readOwned(input.recipe_id);
+        if (fingerprintAuthoringRecipeNativeSnapshot(current) !==
+            fingerprintAuthoringRecipeNativeSnapshot(native)) {
+          throw new Error("RECIPE_OPTIMIZATION_NATIVE_CHANGED_DURING_INSPECTION");
+        }
+      }
+      return assessRecipeNativeCoincidence(recipe, native, surface);
     },
     async resolveIdentity(input: { recipe_id: string; target: SemanticGeometryTarget }) {
       if (!dependencies.readStoredRecipe) {
