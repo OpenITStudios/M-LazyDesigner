@@ -173,6 +173,8 @@ export function planNativeIkBakedKeyframes(input: NativeIkKeyframePlanInput) {
     native_undo_verified: false as const,
     visual_verdict: "NOT_EVALUATED" as const,
     animation_uuid: input.animation_uuid,
+    duration_seconds: input.duration_seconds,
+    snapping_fps: input.snapping_fps,
     expected_bone_count: expected.length,
     frame_count_per_bone: times.length,
     total_native_rotation_samples: originalSampleCount,
@@ -224,7 +226,10 @@ export function requireNativeIkBakeMutationPreflight(input: {
   if (!inventory || inventory.animation_uuid !== plan.animation_uuid ||
       inventory.selected_animation_uuid !== inventory.animation_uuid ||
       !Number.isFinite(inventory.animation_length) ||
-      !Number.isSafeInteger(inventory.snapping_fps)) {
+      !Number.isSafeInteger(inventory.snapping_fps) ||
+      inventory.animation_uuid !== readiness.animation_uuid ||
+      inventory.animation_length !== readiness.duration_seconds ||
+      inventory.snapping_fps !== readiness.snapping_fps) {
     throw new Error("IK_BAKE_MUTATION_CLIP_IDENTITY_MISMATCH: fresh selected clip required.");
   }
   const sampleTimes = nativeIkFrameTimes(
@@ -232,6 +237,8 @@ export function requireNativeIkBakeMutationPreflight(input: {
   );
   const expectedBones = readiness.expected_sampled_group_uuids;
   if (!Array.isArray(expectedBones) || expectedBones.length === 0 ||
+      plan.duration_seconds !== inventory.animation_length ||
+      plan.snapping_fps !== inventory.snapping_fps ||
       plan.expected_bone_count !== expectedBones.length ||
       plan.frame_count_per_bone !== sampleTimes.length ||
       plan.total_native_rotation_samples !== expectedBones.length * sampleTimes.length ||

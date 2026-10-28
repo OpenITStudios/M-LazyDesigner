@@ -185,7 +185,18 @@ describe("internal native IK write transaction preflight",()=>{
     expect(()=>preflight({selected_animation_uuid:"other"}))
       .toThrow("IK_BAKE_MUTATION_CLIP_IDENTITY_MISMATCH");
     expect(()=>preflight({snapping_fps:30}))
-      .toThrow("IK_BAKE_MUTATION_SAMPLE_MISMATCH");
+      .toThrow("IK_BAKE_MUTATION_CLIP_IDENTITY_MISMATCH");
+    // A 0.99-second clip at 20fps has the same native sample count
+    // as 1 second, but must not consume a 1-second solver plan.
+    expect(nativeIkFrameTimes(.99,20).length).toBe(
+      nativeIkFrameTimes(1,20).length
+    );
+    expect(()=>preflight({animation_length:.99}))
+      .toThrow("IK_BAKE_MUTATION_CLIP_IDENTITY_MISMATCH");
+    const altered={...plan,duration_seconds:.99};
+    expect(()=>requireNativeIkBakeMutationPreflight({
+      readiness:ready,plan:altered,inventory,
+    })).toThrow("IK_BAKE_MUTATION_SAMPLE_MISMATCH");
     const duplicate={...plan,
       keyframes:[...plan.keyframes,plan.keyframes[0]],
       planned_rotation_keyframe_count:plan.planned_rotation_keyframe_count+1,
@@ -209,13 +220,14 @@ describe("unregistered native IK keyframe writer",()=>{
       static all:any[]=[];
       constructor(public uuid:string) {}
     }
+    let keySerial=0;
     class FakeBoneAnimator {
       readonly rotation:any[]=[];
       readonly keyframes:any[]=[];
       constructor(public animation:any) {}
       addKeyframe(payload:any) {
         const key={
-          ...payload,uuid:"kf-"+Math.random(),animator:this,
+          ...payload,uuid:"kf-"+(++keySerial),animator:this,
           getArray(){const v=this.data_points[0];return [v.x,v.y,v.z];},
         };
         this.rotation.push(key);
