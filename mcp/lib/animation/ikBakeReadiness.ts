@@ -197,7 +197,8 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
         !unique(controller.keyframe_uuids)) {
       fail("IK_BAKE_CONTROLLER_KEYFRAME_IDENTITY_INVALID");
     }
-    if (!Array.isArray(controller.keyframe_undo_copies) ||
+    if (!Array.isArray(controller.keyframe_uuids) ||
+        !Array.isArray(controller.keyframe_undo_copies) ||
         controller.keyframe_undo_copies.length !== controller.total_keyframes ||
         controller.keyframe_undo_copies.some((row, index) =>
           !row || typeof row !== "object" || Array.isArray(row) ||

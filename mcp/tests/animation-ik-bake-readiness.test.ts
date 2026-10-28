@@ -164,6 +164,23 @@ describe("Blockbench native IK bake source eligibility", () => {
       .toContain("IK_BAKE_CONTROLLER_KEYFRAME_IDENTITY_INVALID");
   });
 
+  test("missing controller key UUID inventory fails closed without a parser crash",()=>{
+    const input=baseline();
+    const malformed=analyzeNativeIkBakeReadiness({
+      ...input,controllers:[{
+        ...input.controllers[0]!,
+        keyframe_uuids:undefined as unknown as string[],
+      }],
+    });
+    expect(malformed.state).toBe("blocked");
+    expect(malformed.blocking_reasons).toContain(
+      "IK_BAKE_CONTROLLER_KEYFRAME_IDENTITY_INVALID"
+    );
+    expect(malformed.blocking_reasons).toContain(
+      "IK_BAKE_CONTROLLER_KEYFRAME_SOURCE_UNVERIFIED"
+    );
+  });
+
   test("same-UUID native interpolation/value changes invalidate previous IK samples",()=>{
     const input=baseline();
     const before=analyzeNativeIkBakeReadiness(input);
