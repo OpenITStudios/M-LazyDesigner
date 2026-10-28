@@ -45,7 +45,7 @@ export type NativeIkBakeReadinessInput = Readonly<{
   locator_uuids: readonly string[];
   controllers: readonly IkBakeControllerSnapshot[];
   /** Required; unknown ArmatureBone inventory is not proof of absence. */
-  unsupported_armature_count: number;
+  unsupported_armature_count: number | null;
 }>;
 
 function nonEmptyId(value: unknown): value is string {
