@@ -6,16 +6,26 @@ import {
   serializeAuthoringRecipeStore,
   upsertAuthoringRecipeStore,
 } from "@/lib/authoringRecipe/store";
-import { readRecipePartCaptureScope } from "@/server/runtime/recipes/authoring/service";
+import {
+  readRecipePartCaptureScope,
+  readRecipeAncestorAnimationInventory,
+} from "@/server/runtime/recipes/authoring/service";
+import { readBlockbenchAuthoringRecipeOwnedState } from "@/server/runtime/recipes/authoring/runtime";
 
 const runtime = globalThis as unknown as {
   Project: unknown;
   Cube: unknown;
   Group: unknown;
+  AnimationItem: unknown;
+  AnimationController: unknown;
+  BoneAnimator: unknown;
 };
 const previousProject = runtime.Project;
 const previousCube = runtime.Cube;
 const previousGroup = runtime.Group;
+const previousAnimationItem = runtime.AnimationItem;
+const previousAnimationController = runtime.AnimationController;
+const previousBoneAnimator = runtime.BoneAnimator;
 
 class MockGroup {
   origin = [0, 0, 0];
@@ -68,6 +78,9 @@ afterEach(() => {
   runtime.Project = previousProject;
   runtime.Cube = previousCube;
   runtime.Group = previousGroup;
+  runtime.AnimationItem = previousAnimationItem;
+  runtime.AnimationController = previousAnimationController;
+  runtime.BoneAnimator = previousBoneAnimator;
 });
 
 describe("current recipe-owned part evidence uses one native identity owner", () => {
@@ -193,3 +206,107 @@ describe("current recipe-owned part evidence uses one native identity owner", ()
       .toThrow("PART_CORRESPONDENCE_RECIPE_NOT_STORED");
   });
 });
+
+describe("read-only native Recipe ancestor keyframe source provenance", () => {
+  function setupMotion() {
+    const { source, cubes } = setNativeScene();
+    const bone = new MockGroup("animated-bone", "Animated bone");
+    cubes[0]!.parent = bone;
+    cubes[1]!.parent = bone;
+    const saved = readBlockbenchAuthoringRecipeOwnedState(source.id);
+
+    class MockBoneAnimator {
+      uuid = bone.uuid;
+      position: unknown[] = [];
+      rotation: unknown[] = [];
+      scale: unknown[] = [];
+    }
+    runtime.BoneAnimator = MockBoneAnimator;
+    runtime.AnimationController = undefined;
+    let rotationValue = 12;
+    let interpolation = "linear";
+    const key = {
+      uuid: "native-key-1",
+      time: 0.25,
+      getUndoCopy: () => ({
+        uuid: "native-key-1", time: 0.25,
+        interpolation,
+        data_points: [{ x: 0, y: rotationValue, z: 0 }],
+      }),
+    };
+    const animator = new MockBoneAnimator();
+    animator.rotation = [key];
+    const clip = {
+      uuid: "walk-clip", loop: "loop", length: 1, snapping: 20,
+      animators: { [bone.uuid]: animator },
+    };
+    runtime.AnimationItem = { all: [clip] };
+    return {
+      saved, clip, animator,
+      key,
+      changeValue: (value: number) => { rotationValue = value; },
+      changeInterpolation: (value: string) => { interpolation = value; },
+    };
+  }
+
+  test("same-UUID/same-count native keyframe edits change content revision without sampling a pose", () => {
+    const scene = setupMotion();
+    const first = readRecipeAncestorAnimationInventory(scene.saved);
+    expect(first?.clips[0]).toMatchObject({
+      uuid: "walk-clip",
+      bone_tracks: [{
+        bone_uuid: "animated-bone",
+        rotation_keyframes: 1, position_keyframes: 0,
+        scale_keyframes: 0,
+      }],
+    });
+    const baseTrack = first!.clips[0]!.bone_tracks[0]!;
+    expect(baseTrack.keyframe_content_sha256).toMatch(/^[a-f0-9]{64}$/);
+    const firstSettings = first!.clips[0]!.clip_settings_sha256;
+
+    scene.changeValue(80);
+    const edited = readRecipeAncestorAnimationInventory(scene.saved);
+    expect(edited!.clips[0]!.bone_tracks[0]!.rotation_keyframes).toBe(1);
+    expect(edited!.clips[0]!.bone_tracks[0]!.keyframe_content_sha256)
+      .not.toBe(baseTrack.keyframe_content_sha256);
+    expect(edited!.clips[0]!.clip_settings_sha256).toBe(firstSettings);
+
+    scene.changeInterpolation("bezier");
+    const interpolated = readRecipeAncestorAnimationInventory(scene.saved);
+    expect(interpolated!.clips[0]!.bone_tracks[0]!.keyframe_content_sha256)
+      .not.toBe(edited!.clips[0]!.bone_tracks[0]!.keyframe_content_sha256);
+
+    scene.clip.length = 2;
+    const durationChanged = readRecipeAncestorAnimationInventory(scene.saved);
+    expect(durationChanged!.clips[0]!.clip_settings_sha256).not.toBe(firstSettings);
+    expect(durationChanged!.clips[0]!.bone_tracks[0]!.keyframe_content_sha256)
+      .toBe(interpolated!.clips[0]!.bone_tracks[0]!.keyframe_content_sha256);
+    expect(scene.key.uuid).toBe("native-key-1");
+    expect(scene.key.time).toBe(0.25);
+  });
+
+  test("missing native Undo keyframe content and duplicate UUIDs fail closed", () => {
+    const scene = setupMotion();
+    const original = scene.animator.rotation[0];
+    scene.animator.rotation[0] = {
+      uuid: "native-key-1", time: 0.25,
+    };
+    expect(() => readRecipeAncestorAnimationInventory(scene.saved))
+      .toThrow("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_SOURCE_UNVERIFIED");
+
+    scene.animator.rotation = [original, original];
+    expect(() => readRecipeAncestorAnimationInventory(scene.saved))
+      .toThrow("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_SOURCE_UNVERIFIED");
+
+    scene.animator.rotation = [original];
+    scene.animator.position = Array.from({ length: 8193 }, (_, i) => ({
+      uuid: "oversized-key-" + i, time: i / 20,
+    }));
+    expect(() => readRecipeAncestorAnimationInventory(scene.saved))
+      .toThrow("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_BUDGET_EXCEEDED");
+
+    runtime.AnimationItem = undefined;
+    expect(readRecipeAncestorAnimationInventory(scene.saved)).toBeNull();
+  });
+});
+

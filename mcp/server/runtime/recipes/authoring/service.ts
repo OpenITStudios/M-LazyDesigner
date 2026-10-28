@@ -25,7 +25,7 @@ import {
  * This does not evaluate a pose, animation controllers or Molang conditions.
  * If runtime inventory is absent, report unknown instead of asserting static.
  */
-function readRecipeAncestorAnimationInventory(native: AuthoringRecipeNativeSnapshot):
+export function readRecipeAncestorAnimationInventory(native: AuthoringRecipeNativeSnapshot):
   RecipeNativeSurfaceSnapshot["animations"] {
   if (typeof AnimationItem === "undefined" ||
       !Array.isArray(AnimationItem.all) ||
@@ -34,10 +34,14 @@ function readRecipeAncestorAnimationInventory(native: AuthoringRecipeNativeSnaps
   if (allItems.length > 64) {
     throw new Error("RECIPE_OPTIMIZATION_ANIMATION_SCOPE_EXCEEDED");
   }
-  const ancestorIds = new Set(native.cubes.flatMap(cube => cube.parent_path ?? []));
+  const ancestorIds = [...new Set(
+    native.cubes.flatMap(cube => cube.parent_path ?? [])
+  )].sort();
   const clips: NonNullable<RecipeNativeSurfaceSnapshot["animations"]>["clips"] = [];
   const visitedClips = new Set<string>();
   let trackCount = 0;
+  let totalKeyframes = 0;
+  let encodedKeyframeBytes = 0;
   for (const item of allItems) {
     if (typeof AnimationController !== "undefined" && item instanceof AnimationController) {
       continue;
@@ -49,34 +53,104 @@ function readRecipeAncestorAnimationInventory(native: AuthoringRecipeNativeSnaps
       throw new Error("RECIPE_OPTIMIZATION_ANIMATION_CLIP_INVALID");
     }
     visitedClips.add(clip.uuid);
+    const clipProperties = clip as BBAnimation & {
+      anim_time_update?: unknown;
+      blend_weight?: unknown;
+      start_delay?: unknown;
+      loop_delay?: unknown;
+      override?: unknown;
+    };
+    const settings = [
+      clip.loop, clip.length, clip.snapping,
+      clipProperties.anim_time_update ?? null,
+      clipProperties.blend_weight ?? null,
+      clipProperties.start_delay ?? null,
+      clipProperties.loop_delay ?? null,
+      clipProperties.override ?? null,
+    ];
+    if (!Number.isFinite(clip.length) || !Number.isFinite(clip.snapping) ||
+        settings.some(value => value !== null &&
+          typeof value !== "string" && typeof value !== "number" &&
+          typeof value !== "boolean")) {
+      throw new Error("RECIPE_OPTIMIZATION_ANIMATION_CLIP_SETTINGS_INVALID");
+    }
+    const clip_settings_sha256 = createHash("sha256")
+      .update(JSON.stringify(settings)).digest("hex");
     const boneTracks: NonNullable<RecipeNativeSurfaceSnapshot["animations"]>["clips"][number]["bone_tracks"] = [];
-    for (const boneUuid of [...ancestorIds].sort()) {
+    for (const boneUuid of ancestorIds) {
       const animator = clip.animators[boneUuid];
       if (!animator) continue;
-      if (!(animator instanceof BoneAnimator)) {
+      if (!(animator instanceof BoneAnimator) || animator.uuid !== boneUuid) {
         throw new Error("RECIPE_OPTIMIZATION_ANIMATION_BONE_IDENTITY_INVALID");
       }
-      const count = (channel: "position" | "rotation" | "scale") => {
-        const keys = animator[channel];
-        if (keys === undefined) return 0;
-        if (!Array.isArray(keys) || keys.length > 65536) {
-          throw new Error("RECIPE_OPTIMIZATION_ANIMATION_CHANNEL_INVALID");
-        }
-        return keys.length;
-      };
-      const position = count("position"), rotation = count("rotation"), scale = count("scale");
-      if (position + rotation + scale === 0) continue;
+      const seenKeys = new Set<string>();
+      const contentByChannel = (["position", "rotation", "scale"] as const)
+        .map(channel => {
+          const keys = animator[channel] as BBKeyframe[] | undefined;
+          if (keys === undefined) {
+            return { channel, count: 0, keys: [] as Array<{
+              uuid: string; time: number; native: string;
+            }> };
+          }
+          if (!Array.isArray(keys) || keys.length > 65536 ||
+              totalKeyframes + keys.length > 8192) {
+            throw new Error("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_BUDGET_EXCEEDED");
+          }
+          totalKeyframes += keys.length;
+          const snapshots = keys.map(key => {
+            if (!key || typeof key.uuid !== "string" || !key.uuid.trim() ||
+                seenKeys.has(key.uuid) || !Number.isFinite(key.time) ||
+                typeof key.getUndoCopy !== "function") {
+              throw new Error("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_SOURCE_UNVERIFIED");
+            }
+            seenKeys.add(key.uuid);
+            let nativeCopy: unknown;
+            try {
+              nativeCopy = key.getUndoCopy(true, { absolute_paths: false });
+            } catch {
+              throw new Error("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_SOURCE_UNVERIFIED");
+            }
+            if (!nativeCopy || typeof nativeCopy !== "object") {
+              throw new Error("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_SOURCE_UNVERIFIED");
+            }
+            let encoded: string | undefined;
+            try {
+              encoded = JSON.stringify(nativeCopy);
+            } catch {
+              throw new Error("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_SOURCE_UNVERIFIED");
+            }
+            if (!encoded || encoded === "{}" || encoded.length > 65536 ||
+                encodedKeyframeBytes + encoded.length > 2_097_152) {
+              throw new Error("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_SOURCE_UNVERIFIED");
+            }
+            encodedKeyframeBytes += encoded.length;
+            return { uuid: key.uuid, time: key.time, native: encoded };
+          }).sort((a, b) => a.time - b.time || a.uuid.localeCompare(b.uuid));
+          return { channel, count: keys.length, keys: snapshots };
+        });
+      const [position, rotation, scale] = contentByChannel;
+      if (!position || !rotation || !scale) {
+        throw new Error("RECIPE_OPTIMIZATION_ANIMATION_KEYFRAME_SOURCE_UNVERIFIED");
+      }
+      if (position.count + rotation.count + scale.count === 0) continue;
       if (++trackCount > 4096) {
         throw new Error("RECIPE_OPTIMIZATION_ANIMATION_SCOPE_EXCEEDED");
       }
       boneTracks.push({
         bone_uuid: boneUuid,
-        position_keyframes: position,
-        rotation_keyframes: rotation,
-        scale_keyframes: scale,
+        position_keyframes: position.count,
+        rotation_keyframes: rotation.count,
+        scale_keyframes: scale.count,
+        // getUndoCopy(true) retains native values, Molang, interpolation
+        // and handles. No Timeline or preview mutation occurs.
+        keyframe_content_sha256: createHash("sha256")
+          .update(JSON.stringify(contentByChannel)).digest("hex"),
       });
     }
-    clips.push({ uuid: clip.uuid, bone_tracks: boneTracks });
+    clips.push({
+      uuid: clip.uuid, clip_settings_sha256,
+      bone_tracks: boneTracks,
+    });
   }
   return { clips: clips.sort((a, b) => a.uuid.localeCompare(b.uuid)) };
 }

@@ -139,11 +139,20 @@ when their textures do not appear on Cube faces directly. Missing or
 conflicting PBR memberships fail closed.
 
 The same read-only inspection can report authored BoneAnimator tracks attached
-to a Cube's ancestor Group UUIDs. This is a **structural motion dependency**,
-not a sampled animated pose or evidence that unobserved controller/Molang
-effects are absent. If the native animation inventory is unavailable, motion
-status stays `UNVERIFIED`; `NO_PARENT_BONE_TRACKS_OBSERVED` does not mean a
-Cube is safe to delete. No new rig or animation engine is introduced.
+to a Cube's ancestor Group UUIDs. Every reported keyed Bone track now carries
+a bounded SHA-256 of the native keyframe Undo copies (including authored
+values, Molang data, interpolation and handles) and a separate SHA-256 of
+relevant clip timing/loop/source settings. An exact UUID/count match with
+different keyframe content changes the per-group
+`animated_motion_source_fingerprint` and overall surface revision; it cannot
+silently reuse the prior motion review. Missing native keyframe identity/copy
+data and oversized source payloads **fail closed**. Native capture is read-only
+and does not run `Animator.preview()`, move the Timeline or edit keyframes.
+This is a **structural motion dependency**, not a sampled animated pose or
+evidence that unobserved controller/Molang effects are absent. If the native
+animation inventory is unavailable, motion status stays `UNVERIFIED`;
+`NO_PARENT_BONE_TRACKS_OBSERVED` does not mean a Cube is safe to delete.
+No new rig or animation engine is introduced.
 Even matched UV/material fields and absent observed parent tracks are not
 proof of identical PBR/shaders, alpha/rendered appearance, animation,
 Bedrock export or permission to delete, merge, or reduce any Cube. The

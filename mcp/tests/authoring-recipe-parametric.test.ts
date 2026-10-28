@@ -911,9 +911,11 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
     const surface = surfaceFixture(snapshot);
     surface.animations = { clips: [{
       uuid: "clip:walk",
+      clip_settings_sha256: "a".repeat(64),
       bone_tracks: [{
         bone_uuid: "animated-bone",
         position_keyframes: 2, rotation_keyframes: 4, scale_keyframes: 0,
+        keyframe_content_sha256: "b".repeat(64),
       }],
     }] };
     const observed = assessRecipeNativeCoincidence(recipe, snapshot, surface);
@@ -948,9 +950,10 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
     const snapshot = native(recipe, ["bone", "bone"]);
     const valid = surfaceFixture(snapshot);
     valid.animations = { clips: [{
-      uuid: "clip:a",
+      uuid: "clip:a", clip_settings_sha256: "c".repeat(64),
       bone_tracks: [{ bone_uuid: "bone", position_keyframes: 0,
-        rotation_keyframes: 3, scale_keyframes: 0 }],
+        rotation_keyframes: 3, scale_keyframes: 0,
+        keyframe_content_sha256: "d".repeat(64) }],
     }] };
     const wrong = structuredClone(valid);
     wrong.animations!.clips[0]!.bone_tracks[0]!.bone_uuid = "unrelated-bone";
@@ -963,6 +966,73 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
     const invalidCount = structuredClone(valid);
     invalidCount.animations!.clips[0]!.bone_tracks[0]!.rotation_keyframes = -1;
     expect(() => assessRecipeNativeCoincidence(recipe, snapshot, invalidCount))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_ANIMATION_TRACK_INVALID");
+  });
+
+  test("same-count native keyframe/clip revisions invalidate scoped motion identity", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["bone", "bone"]);
+    const surface = surfaceFixture(snapshot);
+    surface.animations = { clips: [{
+      uuid: "clip:walk", clip_settings_sha256: "a".repeat(64),
+      bone_tracks: [{
+        bone_uuid: "bone", position_keyframes: 1,
+        rotation_keyframes: 2, scale_keyframes: 0,
+        keyframe_content_sha256: "b".repeat(64),
+      }],
+    }] };
+    const initial = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    const matched = initial.candidate_examples[0]!;
+    expect(matched.animation_binding_state).toBe("BONE_TRACKS_PRESENT");
+    expect(matched.animated_clip_count).toBe(1);
+    expect(matched.animated_motion_source_fingerprint).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+    // A changed keyframe value/interpolation can keep the same count and UUID.
+    surface.animations.clips[0]!.bone_tracks[0]!.keyframe_content_sha256 = "e".repeat(64);
+    const edited = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(edited.candidate_examples[0]!.animated_motion_source_fingerprint)
+      .not.toBe(matched.animated_motion_source_fingerprint);
+    expect(edited.surface_snapshot_fingerprint).not.toBe(initial.surface_snapshot_fingerprint);
+    expect(edited.candidate_examples[0]!.animated_clip_count).toBe(1);
+    expect(edited.candidate_examples[0]!.safe_to_delete).toBe(false);
+
+    // Clip timing/loop or Molang settings are a separate motion dependency.
+    surface.animations.clips[0]!.clip_settings_sha256 = "f".repeat(64);
+    const settingsEdited = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(settingsEdited.candidate_examples[0]!.animated_motion_source_fingerprint)
+      .not.toBe(edited.candidate_examples[0]!.animated_motion_source_fingerprint);
+
+    surface.animations = null;
+    const unavailable = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(unavailable.candidate_examples[0]!.animated_motion_source_fingerprint).toBeNull();
+    expect(unavailable.candidate_examples[0]!.animation_binding_state).toBe("UNVERIFIED");
+  });
+
+  test("missing or malformed keyed content digests never certify motion continuity", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["bone", "bone"]);
+    const surface = surfaceFixture(snapshot);
+    surface.animations = { clips: [{
+      uuid: "clip:walk", clip_settings_sha256: "a".repeat(64),
+      bone_tracks: [{
+        bone_uuid: "bone", position_keyframes: 1,
+        rotation_keyframes: 1, scale_keyframes: 0,
+        keyframe_content_sha256: "b".repeat(64),
+      }],
+    }] };
+    const missingSettings = structuredClone(surface);
+    missingSettings.animations!.clips[0]!.clip_settings_sha256 = "";
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, missingSettings))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_ANIMATION_IDENTITY_INVALID");
+
+    const missingTrack = structuredClone(surface);
+    missingTrack.animations!.clips[0]!.bone_tracks[0]!.keyframe_content_sha256 = "";
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, missingTrack))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_ANIMATION_TRACK_INVALID");
+
+    const invalidTrack = structuredClone(surface);
+    invalidTrack.animations!.clips[0]!.bone_tracks[0]!.keyframe_content_sha256 = "wrong";
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, invalidTrack))
       .toThrow("RECIPE_OPTIMIZATION_SURFACE_ANIMATION_TRACK_INVALID");
   });
 

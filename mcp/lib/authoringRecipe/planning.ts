@@ -145,6 +145,11 @@ function validatedRecipeSurfaceState(
   // Absent/null clips cannot prove that no animation or controller exists.
   const ancestorUuids = new Set(native.cubes.flatMap(cube => cube.parent_path ?? []));
   const clipsByBone = new Map<string, Set<string>>();
+  const motionRevisionsByBone = new Map<string, Array<{
+    clip_uuid: string;
+    clip_settings_sha256: string;
+    keyframe_content_sha256: string;
+  }>>();
   const clips = surface.animations?.clips;
   if (surface.animations !== null) {
     if (!surface.animations || !Array.isArray(clips) || clips.length > 64) {
@@ -155,6 +160,8 @@ function validatedRecipeSurfaceState(
     for (const clip of clips!) {
       if (!clip || typeof clip.uuid !== "string" || !clip.uuid.trim() ||
           clip.uuid !== clip.uuid.trim() || clipIds.has(clip.uuid) ||
+          typeof clip.clip_settings_sha256 !== "string" ||
+          !SURFACE_REVISION_SHA256.test(clip.clip_settings_sha256) ||
           !Array.isArray(clip.bone_tracks)) fail("ANIMATION_IDENTITY_INVALID");
       clipIds.add(clip.uuid);
       const withinClip = new Set<string>();
@@ -162,6 +169,8 @@ function validatedRecipeSurfaceState(
         if (!track || typeof track.bone_uuid !== "string" ||
             !ancestorUuids.has(track.bone_uuid) ||
             withinClip.has(track.bone_uuid) ||
+            typeof track.keyframe_content_sha256 !== "string" ||
+            !SURFACE_REVISION_SHA256.test(track.keyframe_content_sha256) ||
             ![track.position_keyframes, track.rotation_keyframes, track.scale_keyframes]
               .every(n => Number.isSafeInteger(n) && n >= 0 && n <= 65536)) {
           fail("ANIMATION_TRACK_INVALID");
@@ -173,6 +182,13 @@ function validatedRecipeSurfaceState(
         const linked = clipsByBone.get(track.bone_uuid) ?? new Set<string>();
         linked.add(clip.uuid);
         clipsByBone.set(track.bone_uuid, linked);
+        const revisions = motionRevisionsByBone.get(track.bone_uuid) ?? [];
+        revisions.push({
+          clip_uuid: clip.uuid,
+          clip_settings_sha256: clip.clip_settings_sha256,
+          keyframe_content_sha256: track.keyframe_content_sha256,
+        });
+        motionRevisionsByBone.set(track.bone_uuid, revisions);
       }
     }
   }
@@ -260,6 +276,7 @@ function validatedRecipeSurfaceState(
     project_uuid: surface.project_uuid,
     animation_inventory_available: surface.animations !== null,
     clipsByBone,
+    motionRevisionsByBone,
     revision: "sha256:" + createHash("sha256")
       .update(JSON.stringify(surface)).digest("hex"),
   };
@@ -365,15 +382,32 @@ export function assessRecipeNativeCoincidence(
         compared.some(row => row!.unresolved_material);
       const linkedClips = new Set<string>();
       let keyedAncestorCount = 0;
+      const scopedMotionRevisions: Array<{
+        bone_uuid: string;
+        clip_uuid: string;
+        clip_settings_sha256: string;
+        keyframe_content_sha256: string;
+      }> = [];
       if (surfaceState?.animation_inventory_available) {
         for (const uuid of ordered[0].parent_path ?? []) {
           const bound = surfaceState.clipsByBone.get(uuid);
           if (!bound || bound.size === 0) continue;
           keyedAncestorCount++;
           for (const clip of bound) linkedClips.add(clip);
+          for (const revision of surfaceState.motionRevisionsByBone.get(uuid) ?? []) {
+            scopedMotionRevisions.push({ bone_uuid: uuid, ...revision });
+          }
         }
       }
       const animatedClips = [...linkedClips].sort();
+      scopedMotionRevisions.sort((a, b) =>
+        a.bone_uuid.localeCompare(b.bone_uuid) ||
+        a.clip_uuid.localeCompare(b.clip_uuid)
+      );
+      const motionSourceRevision = surfaceState?.animation_inventory_available
+        ? "sha256:" + createHash("sha256")
+          .update(JSON.stringify(scopedMotionRevisions)).digest("hex")
+        : null;
       return {
         group_size: ordered.length,
         parent_path: [...ordered[0].parent_path!],
@@ -384,6 +418,7 @@ export function assessRecipeNativeCoincidence(
             : ("NO_PARENT_BONE_TRACKS_OBSERVED" as const),
         animated_ancestor_count: keyedAncestorCount,
         animated_clip_count: animatedClips.length,
+        animated_motion_source_fingerprint: motionSourceRevision,
         animated_clip_examples: animatedClips.slice(0, 8),
         animated_clip_examples_truncated: animatedClips.length > 8,
         uv_mapping_state: !hasCompleteSurface ? ("UNVERIFIED" as const)
@@ -441,7 +476,8 @@ export function assessRecipeNativeCoincidence(
     note: "This is an exact authored-geometry/parent coincidence report, not deletion proof. " +
       "Optional surface inspection compares native Box/per-face UV, face texture bindings, " +
       "atlas encoded-image revisions, material-group/PBR channel memberships, face material " +
-      "instances, authored visibility/export, and observed ancestor BoneAnimator tracks. " +
+      "instances, authored visibility/export, and content-addressed native ancestor BoneAnimator " +
+      "track snapshots including keyframe values/interpolation and clip settings. " +
       "No parent tracks observed is NOT proof of a static model; matching fields do not " +
       "prove PBR shader fidelity, alpha/rendered appearance, animation pose, controller " +
       "binding, unrelated geometry or Bedrock export. Never delete Cubes.",

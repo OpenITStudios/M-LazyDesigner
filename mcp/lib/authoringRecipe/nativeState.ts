@@ -139,11 +139,22 @@ export type RecipeNativeSurfaceSnapshot = {
   animations: {
     clips: Array<{
       uuid: string;
+      /**
+       * Content-addressed loop/duration/Molang/update source properties.
+       * Never equivalent to sampled motion or native playback proof.
+       */
+      clip_settings_sha256: string;
       bone_tracks: Array<{
         bone_uuid: string;
         position_keyframes: number;
         rotation_keyframes: number;
         scale_keyframes: number;
+        /**
+         * Full authored native keyframe identity and getUndoCopy content
+         * (including interpolation and handles) on this Bone/clip.
+         * Counts alone cannot prove that the motion source is unchanged.
+         */
+        keyframe_content_sha256: string;
       }>;
     }>;
   } | null;
