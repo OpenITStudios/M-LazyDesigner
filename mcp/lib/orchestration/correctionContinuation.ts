@@ -70,6 +70,8 @@ export type CorrectionLoopContinuation = {
   }>;
   verification: {
     pending: boolean;
+    /** Present only while a plan awaits a matching native Recipe Apply receipt. */
+    awaiting_native_apply_receipt?: true;
     target_discrepancy_codes: string[];
     stale_views: ModelView[];
     domain: VerificationEvidenceRequest["domain"];

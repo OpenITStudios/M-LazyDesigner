@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import type { AuthoringRecipeApplyReceipt } from "@/lib/authoringRecipe/transaction";
 import type { SemanticGeometryOperation } from "@/lib/authoringRecipe/semanticEdit";
 import { correctionContinuationDelta, correctionContinuationId } from "@/lib/orchestration/correctionContinuation";
 import { CorrectionLoopRegistry } from "@/lib/orchestration/correctionLoop";
@@ -23,9 +24,208 @@ function recipe(): AuthoringRecipe {
   };
 }
 
+
+/**
+ * Legacy convergence tests model a successfully committed native edit. They
+ * must synthesize that receipt explicitly, rather than let a planning call
+ * impersonate execution. These fixtures never establish live Blockbench proof.
+ */
+function syntheticRecipeApplyReceipt(
+  decision: ReturnType<CorrectionLoopRegistry["planGeometryCorrection"]>,
+  before: string,
+  after: string,
+  undoIndex: number
+): AuthoringRecipeApplyReceipt {
+  const plan = decision.rebuild;
+  if (decision.state !== "CORRECTION_READY" || !plan || !decision.next_recipe) {
+    throw new Error("Expected an eligible synthetic Recipe Apply plan.");
+  }
+  const ids = (reason: "ADDED" | "CHANGED") =>
+    plan.reasons.filter((item) => item.reason === reason).map((item) => item.instance_id);
+  return {
+    schema: 1, execution: "applied", recipe_id: decision.next_recipe.id,
+    previous_recipe_fingerprint: plan.previous_recipe_fingerprint,
+    next_recipe_fingerprint: plan.next_recipe_fingerprint,
+    native_source_fingerprint_before: before,
+    native_source_fingerprint_after: after,
+    native_undo_provenance: {
+      token: "synthetic-recipe-undo-" + undoIndex,
+      project_uuid: "synthetic-project",
+      undo_index: undoIndex,
+    },
+    created_instance_ids: ids("ADDED"),
+    updated_instance_ids: ids("CHANGED"),
+    removed_instance_ids: [...plan.remove_instance_ids],
+    preserved_instance_ids: [...plan.preserved_instance_ids],
+    metadata_only_instance_ids: [...plan.metadata_only_instance_ids],
+    symmetry_changed_relation_ids: [...plan.symmetry_changed_relation_ids],
+    affected_count: plan.metrics.native_affected_count,
+    recipe_affected_count: plan.metrics.affected_count,
+    invalidates: {
+      geometry_structure: true, uv_mapping: true,
+      texture_appearance: true, animation_motion: true,
+    },
+  };
+}
+
+class SyntheticAppliedCorrectionLoopRegistry extends CorrectionLoopRegistry {
+  private readonly lastNativeByHandle = new Map<string, string>();
+  private applySequence = 0;
+
+  override planGeometryCorrection(
+    ...args: Parameters<CorrectionLoopRegistry["planGeometryCorrection"]>
+  ): ReturnType<CorrectionLoopRegistry["planGeometryCorrection"]> {
+    const decision = super.planGeometryCorrection(...args);
+    if (decision.state !== "CORRECTION_READY") return decision;
+    const sequence = ++this.applySequence;
+    const before = this.lastNativeByHandle.get(args[0]) ?? "sha256:" + "0".repeat(64);
+    const after = "sha256:" + sequence.toString(16).padStart(64, "0");
+    this.acknowledgeAppliedGeometryCorrection(
+      args[0], syntheticRecipeApplyReceipt(decision, before, after, sequence)
+    );
+    this.lastNativeByHandle.set(args[0], after);
+    return decision;
+  }
+}
+
 describe("zero-waste correction loop reuse", () => {
-  test("ineffective geometry correction never spends an attempt or makes evidence stale", () => {
+
+  test("planning preserves active Recipe and attempts until a matching native Apply receipt", () => {
     const registry = new CorrectionLoopRegistry();
+    const handle = registry.start({
+      recipe_id: "asset",
+      base_recipe: recipe(),
+      verification_request: {
+        domain: "GEOMETRY", source: "capture_model_views",
+        verification_risk: "LOW", views: ["front"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["arms:0", "arms:1"],
+      },
+      verification_evidence_handle: "verificationevidence:receipt-before",
+      discrepancies: [{
+        code: "WIDTH", severity: "REVIEW", summary: "Width is incorrect.",
+        quality_class: "PRIMARY_FORM", owner: "GEOMETRY",
+        cause_family: "SIZE_MISMATCH", views: ["front"],
+      }],
+    });
+    const candidate = {
+      id: "resize", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["WIDTH"],
+        correction_family: "RESIZE" as const,
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: { kind: "RESIZE_AXIS" as const, axis: "X" as const,
+            mode: "ADD" as const, value: 1, anchor: "MIN" as const },
+        },
+      },
+    };
+    const firstPlan = registry.planGeometryCorrection(handle, [candidate]);
+    expect(firstPlan.state).toBe("CORRECTION_READY");
+    expect(firstPlan.attempt).toBe(1); // projected, not an executed attempt
+    const pending = registry.projectContinuation(handle);
+    expect(pending).toMatchObject({
+      attempt: 0,
+      state: "VERIFY_PENDING",
+      verification: {
+        awaiting_native_apply_receipt: true, pending: true,
+        target_discrepancy_codes: ["WIDTH"], stale_views: [],
+      },
+    });
+    expect(pending.fresh_view_evidence).toEqual([{
+      view: "front", handle: "verificationevidence:receipt-before",
+    }]);
+    expect(registry.planGeometryCorrection(handle, [candidate])).toMatchObject({
+      state: "BLOCKED", attempt: 0, blocked_reason: "CORRECTION_APPLY_PENDING",
+    });
+    expect(() => registry.updateEvidence(handle, "verificationevidence:fake-after", [{
+      code: "WIDTH", severity: "INFO", summary: "Fabricated improvement.",
+    }])).toThrow("CORRECTION_APPLY_RECEIPT_REQUIRED");
+    expect(registry.projectContinuation(handle)).toEqual(pending);
+
+    const before = "sha256:" + "1".repeat(64);
+    const after = "sha256:" + "2".repeat(64);
+    const valid = syntheticRecipeApplyReceipt(firstPlan, before, after, 1);
+    for (const mismatched of [
+      { ...valid, execution: "unchanged" as const },
+      { ...valid, recipe_id: "different-recipe" },
+      { ...valid, next_recipe_fingerprint: "sha256:" + "3".repeat(64) },
+      { ...valid, updated_instance_ids: ["not-the-target"] },
+      { ...valid, native_undo_provenance: undefined },
+      { ...valid, native_source_fingerprint_after: before },
+    ]) {
+      expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, mismatched))
+        .toThrow("CORRECTION_APPLY_RECEIPT_MISMATCH");
+      expect(registry.projectContinuation(handle)).toEqual(pending);
+    }
+
+    expect(registry.acknowledgeAppliedGeometryCorrection(handle, valid)).toEqual({
+      state: "VERIFY_PENDING", attempt: 1,
+    });
+    const afterAck = registry.projectContinuation(handle);
+    expect(afterAck).toMatchObject({
+      attempt: 1, state: "VERIFY_PENDING",
+      verification: {
+        pending: true, target_discrepancy_codes: ["WIDTH"],
+        stale_views: ["front"],
+      },
+    });
+    expect(afterAck.verification.awaiting_native_apply_receipt).toBeUndefined();
+    expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, valid))
+      .toThrow("CORRECTION_APPLY_NOT_PENDING");
+    registry.updateEvidence(handle, "verificationevidence:receipt-after", [{
+      code: "WIDTH", severity: "INFO", summary: "Width residual improved.",
+      quality_class: "PRIMARY_FORM", owner: "GEOMETRY",
+      cause_family: "SIZE_MISMATCH", views: ["front"],
+    }], { recovered_views: ["front"] });
+    expect(registry.projectContinuation(handle).convergence.state).toBe("IMPROVED");
+  });
+
+  test("runtime change blocks pending Apply acknowledgement without advancing the Recipe", () => {
+    const registry = new CorrectionLoopRegistry();
+    const handle = registry.start({
+      recipe_id: "asset", base_recipe: recipe(),
+      verification_request: {
+        domain: "GEOMETRY", source: "capture_model_views",
+        verification_risk: "LOW", views: ["front"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["arms:0", "arms:1"],
+      },
+      verification_evidence_handle: "verificationevidence:runtime-before",
+      discrepancies: [{
+        code: "WIDTH", severity: "REVIEW", summary: "Width mismatch.",
+        views: ["front"],
+      }],
+    });
+    const plan = registry.planGeometryCorrection(handle, [{
+      id: "resize", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["WIDTH"],
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: { kind: "RESIZE_AXIS", axis: "X",
+            mode: "ADD", value: 1, anchor: "MIN" },
+        },
+      },
+    }]);
+    expect(plan.state).toBe("CORRECTION_READY");
+    registry.invalidateRuntimeGeneration();
+    const receipt = syntheticRecipeApplyReceipt(
+      plan, "sha256:" + "1".repeat(64), "sha256:" + "2".repeat(64), 1
+    );
+    expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, receipt))
+      .toThrow("CORRECTION_APPLY_SOURCE_STALE");
+    expect(registry.projectContinuation(handle)).toMatchObject({
+      attempt: 0,
+      verification: { pending: true, recovery_required: true },
+    });
+  });
+
+
+  test("ineffective geometry correction never spends an attempt or makes evidence stale", () => {
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -78,7 +278,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("unavailable UV evidence cannot create a correction loop or disturb an existing continuation", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const input: Parameters<CorrectionLoopRegistry["start"]>[0] = {
       recipe_id: "uv-unavailable",
       base_recipe: recipe(),
@@ -106,7 +306,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("raw correction entrypoints reject duplicate identity without changing continuation", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const input: Parameters<CorrectionLoopRegistry["start"]>[0] = {
       recipe_id: "identity-boundary",
       base_recipe: recipe(),
@@ -144,7 +344,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("missing targeted discrepancy cannot be cleared without fresh complete view evidence", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "clearance",
       base_recipe: recipe(),
@@ -206,7 +406,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("full-batch clearance needs every relevant camera, not disappearance alone", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "full-clear",
       base_recipe: recipe(),
@@ -232,7 +432,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("reuses the same verification scope for a bounded correction", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -290,7 +490,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("reverification carries only the discrepancy targeted by the selected correction", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -365,7 +565,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("bounds correction candidate count by verification risk", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const lowHandle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -438,7 +638,7 @@ describe("zero-waste correction loop reuse", () => {
 
   test("allows three candidates at HIGH risk but rejects a fourth", () => {
     const makeHandle = (suffix: string) => {
-      const registry = new CorrectionLoopRegistry();
+      const registry = new SyntheticAppliedCorrectionLoopRegistry();
       const handle = registry.start({
         recipe_id: "asset-" + suffix,
         base_recipe: { ...recipe(), id: "asset-" + suffix, name: "asset-" + suffix },
@@ -491,7 +691,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("rejects correction family and semantic operation mismatch", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -538,7 +738,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("selects DECISION_SUMMARY automatically for the immediate post-solver handoff", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-mode",
       base_recipe: { ...recipe(), id: "asset-mode", name: "asset-mode" },
@@ -586,7 +786,7 @@ describe("zero-waste correction loop reuse", () => {
 
 
   test("blocking visual focus wins over cheaper nonblocking corrections without spending a rejected attempt", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-priority",
       base_recipe: { ...recipe(), id: "asset-priority", name: "asset-priority" },
@@ -683,7 +883,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("nonblocking geometry reviews retain existing caller-cost ranking", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-nonblocking",
       base_recipe: { ...recipe(), id: "asset-nonblocking", name: "asset-nonblocking" },
@@ -746,7 +946,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("returns only compact solver decision metadata instead of candidate payloads", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-summary",
       base_recipe: { ...recipe(), id: "asset-summary", name: "asset-summary" },
@@ -827,7 +1027,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("deduplicates unchanged continuation payloads by deterministic identity", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-dedup",
       base_recipe: { ...recipe(), id: "asset-dedup", name: "asset-dedup" },
@@ -921,7 +1121,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("never defers decision-changing continuation boundaries", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-group-boundary",
       base_recipe: { ...recipe(), id: "asset-group-boundary", name: "asset-group-boundary" },
@@ -977,7 +1177,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("groups same-boundary continuation churn into one final delivery", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-group-same-boundary",
       base_recipe: { ...recipe(), id: "asset-group-same-boundary", name: "asset-group-same-boundary" },
@@ -1018,7 +1218,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("aborting a continuation group restores normal delivery without publishing intermediate state", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-group-abort",
       base_recipe: { ...recipe(), id: "asset-group-abort", name: "asset-group-abort" },
@@ -1054,7 +1254,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("sends only changed view evidence and resolved discrepancy codes as continuation delta", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-delta",
       base_recipe: { ...recipe(), id: "asset-delta", name: "asset-delta" },
@@ -1143,7 +1343,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("projects a pruned correction continuation without internal recipe or solver history", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-continuation",
       base_recipe: { ...recipe(), id: "asset-continuation", name: "asset-continuation" },
@@ -1242,7 +1442,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("second correction remains VERIFY_PENDING until its fresh evidence arrives", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-second-pending",
       base_recipe: { ...recipe(), id: "asset-second-pending", name: "asset-second-pending" },
@@ -1313,7 +1513,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("targeted evidence update preserves unrelated discrepancies and tracks per-view handles across rounds", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -1417,7 +1617,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("falls back to recapturing all request views when discrepancy view provenance is missing", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -1469,7 +1669,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("expired evidence fails closed until fresh verification arrives without consuming an attempt", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-recovery",
       base_recipe: { ...recipe(), id: "asset-recovery", name: "asset-recovery" },
@@ -1570,7 +1770,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("runtime generation invalidation marks every active loop for evidence recovery", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handles = ["a", "b"].map((suffix) =>
       registry.start({
         recipe_id: "asset-" + suffix,
@@ -1609,7 +1809,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("runtime generation invalidation aborts an open continuation group", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-generation",
       base_recipe: { ...recipe(), id: "asset-generation", name: "asset-generation" },
@@ -1649,7 +1849,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("rejects a correction that targets a discrepancy absent from current evidence", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -1697,7 +1897,7 @@ describe("zero-waste correction loop reuse", () => {
 
 
   test("reverification and Runtime recovery cannot claim new quality evidence from the same handle", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-freshness",
       base_recipe: { ...recipe(), id: "asset-freshness", name: "asset-freshness" },
@@ -1765,7 +1965,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("blocks a second correction when no new evidence exists", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -1813,7 +2013,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("allows a second bounded correction only after fresh verification evidence", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -1869,7 +2069,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("evidence-backed cause rejects a mismatched repair family", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-causal",
       base_recipe: recipe(),
@@ -1917,7 +2117,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("structural causes stay on their owning route instead of being disguised as numeric edits", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-structural",
       base_recipe: recipe(),
@@ -1966,7 +2166,7 @@ describe("zero-waste correction loop reuse", () => {
 
 
   test("same-cause same-severity re-verification stops low-value repeat correction", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-plateau",
       base_recipe: { ...recipe(), id: "asset-plateau", name: "asset-plateau" },
@@ -2040,7 +2240,7 @@ describe("zero-waste correction loop reuse", () => {
 
 
   test("a worsened targeted defect cannot be masked by improvement of another target", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-mixed-convergence",
       base_recipe: { ...recipe(), id: "asset-mixed-convergence", name: "asset-mixed-convergence" },
@@ -2112,7 +2312,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("severity reduction counts as demonstrated gain and permits one bounded continuation", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-improved",
       base_recipe: { ...recipe(), id: "asset-improved", name: "asset-improved" },
@@ -2180,7 +2380,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("new evidence changing the diagnosed cause breaks plateau and allows a new route", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-cause-change",
       base_recipe: { ...recipe(), id: "asset-cause-change", name: "asset-cause-change" },
@@ -2259,7 +2459,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("blocking plateau never becomes acceptance and requires new evidence", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
       recipe_id: "asset-blocking-plateau",
       base_recipe: { ...recipe(), id: "asset-blocking-plateau", name: "asset-blocking-plateau" },
@@ -2322,7 +2522,7 @@ describe("zero-waste correction loop reuse", () => {
 
 
   test("structured observations enter correction only after evidence compilation", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const result = registry.startFromObservations({
       recipe_id: "asset-observed",
       base_recipe: recipe(),
@@ -2382,7 +2582,7 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("observation update excludes unsupported claims from fresh correction evidence", () => {
-    const registry = new CorrectionLoopRegistry();
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const started = registry.startFromObservations({
       recipe_id: "asset-observed-update",
       base_recipe: recipe(),

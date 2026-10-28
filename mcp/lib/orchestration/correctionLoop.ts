@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import type { AuthoringRecipeApplyReceipt } from "@/lib/authoringRecipe/transaction";
 import type { SemanticGeometryEditIntent } from "@/lib/authoringRecipe/semanticEdit";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
@@ -66,9 +67,20 @@ type CorrectionEvidenceUpdateOptions = {
   };
 };
 
+type PendingGeometryApplication = {
+  next_recipe: AuthoringRecipe;
+  rebuild: ReturnType<typeof planIncrementalRecipeRebuild>;
+  target_snapshot: VerificationDiscrepancy[];
+  stale_views: ModelView[];
+  evidence_fingerprint: string;
+};
+
 type CorrectionLoopRecord = {
   recipe_id: string;
   base_recipe: AuthoringRecipe;
+  pending_application: PendingGeometryApplication | null;
+  last_native_source_fingerprint: string | null;
+  last_native_project_uuid: string | null;
   verification_request: VerificationEvidenceRequest;
   verification_evidence_handle: VerificationEvidenceHandle;
   discrepancies: VerificationDiscrepancy[];
@@ -139,7 +151,8 @@ type CorrectionLoopDecision = {
     | "CAUSE_REQUIRES_OWNER_ROUTE"
     | "QUALITY_PLATEAU_NO_GAIN"
     | "BLOCKING_PLATEAU_REQUIRES_NEW_EVIDENCE"
-    | "EVIDENCE_RECOVERY_REQUIRED";
+    | "EVIDENCE_RECOVERY_REQUIRED"
+    | "CORRECTION_APPLY_PENDING";
 };
 
 function candidateBudget(
@@ -270,6 +283,9 @@ export class CorrectionLoopRegistry {
       | "next_continuation_group_id"
       | "evidence_recovery_required"
       | "evidence_recovery_reason"
+      | "pending_application"
+      | "last_native_source_fingerprint"
+      | "last_native_project_uuid"
     > & {
       observations: readonly StructuredVisualObservation[];
     }
@@ -313,6 +329,9 @@ export class CorrectionLoopRegistry {
       | "next_continuation_group_id"
       | "evidence_recovery_required"
       | "evidence_recovery_reason"
+      | "pending_application"
+      | "last_native_source_fingerprint"
+      | "last_native_project_uuid"
     >
   ): CorrectionLoopHandle {
     if (input.verification_request.source === null) {
@@ -332,6 +351,9 @@ export class CorrectionLoopRegistry {
 
     const record: CorrectionLoopRecord = {
       ...structuredClone(input),
+      pending_application: null,
+      last_native_source_fingerprint: null,
+      last_native_project_uuid: null,
       attempt: 0,
       evidence_fingerprint: fingerprintEvidence(
         input.verification_evidence_handle,
@@ -415,7 +437,8 @@ export class CorrectionLoopRegistry {
       ...(item.cause_family ? { cause_family: item.cause_family } : {}),
     }));
 
-    const pending =
+    const awaitingApplyReceipt = record.pending_application !== null;
+    const pending = awaitingApplyReceipt ||
       record.pending_stale_views.length > 0 || record.evidence_recovery_required;
     const plateau = record.convergence_state === "PLATEAU";
     const state: CorrectionLoopContinuation["state"] =
@@ -455,9 +478,10 @@ export class CorrectionLoopRegistry {
       fresh_view_evidence: freshViewEvidence,
       verification: {
         pending,
-        target_discrepancy_codes: [
-          ...record.pending_target_discrepancy_codes,
-        ],
+        ...(awaitingApplyReceipt ? { awaiting_native_apply_receipt: true as const } : {}),
+        target_discrepancy_codes: record.pending_application
+          ? record.pending_application.target_snapshot.map((item) => item.code)
+          : [...record.pending_target_discrepancy_codes],
         stale_views: [...record.pending_stale_views],
         domain: record.verification_request.domain,
         source: record.verification_request.source,
@@ -709,6 +733,12 @@ export class CorrectionLoopRegistry {
     const record = this.entries.get(handle);
     if (!record) throw new Error("CORRECTION_LOOP_NOT_FOUND: handle expired.");
 
+    // Planning does not change the native model. Block observation-driven
+    // convergence until the existing Recipe owner supplies a matching receipt.
+    if (record.pending_application !== null) {
+      throw new Error("CORRECTION_APPLY_RECEIPT_REQUIRED: acknowledge native Apply before interpreting a new quality observation.");
+    }
+
     if (record.evidence_recovery_required) {
       const recovered = new Set(options.recovered_views ?? []);
       const missingRecoveryViews = record.pending_stale_views.filter(
@@ -862,6 +892,14 @@ export class CorrectionLoopRegistry {
   ): CorrectionLoopDecision {
     const record = this.entries.get(handle);
     if (!record) throw new Error("CORRECTION_LOOP_NOT_FOUND: handle expired.");
+
+    if (record.pending_application !== null) {
+      return {
+        handle, state: "BLOCKED", attempt: record.attempt,
+        verification_request: structuredClone(record.verification_request),
+        blocked_reason: "CORRECTION_APPLY_PENDING",
+      };
+    }
 
     if (record.evidence_recovery_required) {
       return {
@@ -1100,26 +1138,21 @@ export class CorrectionLoopRegistry {
       return evidenceHandle ? [{ view, handle: evidenceHandle }] : [];
     });
 
-    record.base_recipe = structuredClone(nextRecipe);
-    record.attempt = (record.attempt + 1) as 1 | 2;
-    record.last_attempt_evidence_fingerprint = record.evidence_fingerprint;
-    record.last_attempt_target_snapshot = structuredClone(
-      reverificationDiscrepancies
-    );
-    record.pending_target_discrepancy_codes = reverificationDiscrepancies.map(
-      (item) => item.code
-    );
-    record.convergence_state = "PENDING_VERIFICATION";
-    record.convergence_target_codes = [
-      ...record.pending_target_discrepancy_codes,
-    ];
-    record.pending_stale_views = [...staleViews];
+    // A planned correction is only an ephemeral proposal. Neither the
+    // authoritative Recipe nor the executed attempt count moves before Apply.
+    record.pending_application = {
+      next_recipe: structuredClone(nextRecipe),
+      rebuild: structuredClone(rebuild),
+      target_snapshot: structuredClone(reverificationDiscrepancies),
+      stale_views: [...staleViews],
+      evidence_fingerprint: record.evidence_fingerprint,
+    };
 
     return {
       handle,
       continuation_mode: "DECISION_SUMMARY",
       state: "CORRECTION_READY",
-      attempt: record.attempt,
+      attempt: (record.attempt + 1) as 1 | 2,
       decision_summary: {
         selected_candidate_id: decision.selected.id,
         rejected_candidate_ids: candidates
@@ -1149,6 +1182,82 @@ export class CorrectionLoopRegistry {
           : "CONSERVATIVE_ALL_VIEWS",
       },
     };
+  }
+
+
+  /**
+   * Called only after the caller resolves the real native APPLY_RECEIPT from
+   * the existing Recipe Service's authoring evidence registry. This is a
+   * source-level consistency guard, not standalone authentication of a
+   * caller-provided receipt or proof of visual resemblance.
+   */
+  acknowledgeAppliedGeometryCorrection(
+    handle: CorrectionLoopHandle,
+    receipt: AuthoringRecipeApplyReceipt
+  ): { state: "VERIFY_PENDING"; attempt: 1 | 2 } {
+    const record = this.entries.get(handle);
+    if (!record) throw new Error("CORRECTION_LOOP_NOT_FOUND: handle expired.");
+    const pending = record.pending_application;
+    if (!pending) {
+      throw new Error("CORRECTION_APPLY_NOT_PENDING: no planned Geometry correction awaits a receipt.");
+    }
+    if (record.evidence_recovery_required ||
+        pending.evidence_fingerprint !== record.evidence_fingerprint) {
+      throw new Error("CORRECTION_APPLY_SOURCE_STALE: reconcile the project and evidence before proceeding.");
+    }
+    const plan = pending.rebuild;
+    const expected = (reason: "ADDED" | "CHANGED") =>
+      plan.reasons.filter((row) => row.reason === reason).map((row) => row.instance_id).sort();
+    const sameIds = (actual: unknown, expectedIds: readonly string[]) =>
+      Array.isArray(actual) &&
+      actual.every((value) => typeof value === "string" && value.trim() === value && value.length > 0) &&
+      new Set(actual).size === actual.length &&
+      actual.length === expectedIds.length &&
+      [...actual].sort().every((value, index) => value === expectedIds[index]);
+    const provenance = receipt?.native_undo_provenance;
+    const nativeHash = /^sha256:[a-f0-9]{64}$/;
+    if (
+      !receipt || receipt.schema !== 1 || receipt.execution !== "applied" ||
+      receipt.recipe_id !== record.recipe_id ||
+      receipt.previous_recipe_fingerprint !== plan.previous_recipe_fingerprint ||
+      receipt.next_recipe_fingerprint !== plan.next_recipe_fingerprint ||
+      receipt.affected_count !== plan.metrics.native_affected_count ||
+      receipt.recipe_affected_count !== plan.metrics.affected_count ||
+      !nativeHash.test(receipt.native_source_fingerprint_before) ||
+      !nativeHash.test(receipt.native_source_fingerprint_after) ||
+      receipt.native_source_fingerprint_before === receipt.native_source_fingerprint_after ||
+      !receipt.invalidates || receipt.invalidates.geometry_structure !== true ||
+      !sameIds(receipt.created_instance_ids, expected("ADDED")) ||
+      !sameIds(receipt.updated_instance_ids, expected("CHANGED")) ||
+      !sameIds(receipt.removed_instance_ids, plan.remove_instance_ids) ||
+      !sameIds(receipt.preserved_instance_ids, plan.preserved_instance_ids) ||
+      !sameIds(receipt.metadata_only_instance_ids, plan.metadata_only_instance_ids) ||
+      !sameIds(receipt.symmetry_changed_relation_ids, plan.symmetry_changed_relation_ids) ||
+      !provenance || typeof provenance.token !== "string" ||
+      !provenance.token.trim() ||
+      typeof provenance.project_uuid !== "string" || !provenance.project_uuid.trim() ||
+      !Number.isSafeInteger(provenance.undo_index) || provenance.undo_index < 0 ||
+      (record.last_native_source_fingerprint !== null &&
+        record.last_native_source_fingerprint !== receipt.native_source_fingerprint_before) ||
+      (record.last_native_project_uuid !== null &&
+        record.last_native_project_uuid !== provenance.project_uuid)
+    ) {
+      throw new Error("CORRECTION_APPLY_RECEIPT_MISMATCH: exact Recipe/Undo provenance required; state unchanged.");
+    }
+
+    // All checks precede mutation. Native Apply does not prove visual PASS.
+    record.base_recipe = structuredClone(pending.next_recipe);
+    record.attempt = (record.attempt + 1) as 1 | 2;
+    record.last_attempt_evidence_fingerprint = record.evidence_fingerprint;
+    record.last_attempt_target_snapshot = structuredClone(pending.target_snapshot);
+    record.pending_target_discrepancy_codes = pending.target_snapshot.map((item) => item.code);
+    record.convergence_state = "PENDING_VERIFICATION";
+    record.convergence_target_codes = [...record.pending_target_discrepancy_codes];
+    record.pending_stale_views = [...pending.stale_views];
+    record.last_native_source_fingerprint = receipt.native_source_fingerprint_after;
+    record.last_native_project_uuid = provenance.project_uuid;
+    record.pending_application = null;
+    return { state: "VERIFY_PENDING", attempt: record.attempt };
   }
 
   setScopeIdentity(scopeIdentity: string): void {

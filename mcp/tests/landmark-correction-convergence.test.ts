@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import type { AuthoringRecipeApplyReceipt } from "@/lib/authoringRecipe/transaction";
 import { CorrectionLoopRegistry } from "@/lib/orchestration/correctionLoop";
 import {
   compareReferenceLandmarkProjection,
@@ -73,6 +74,35 @@ function startWithPendingCorrection() {
     },
   }]);
   expect(decision.state).toBe("CORRECTION_READY");
+  // This synthetic receipt represents the prior native edit; the pure
+  // landmark tests start from a committed correction, not a raw plan.
+  const rebuild = decision.rebuild!;
+  const receipt: AuthoringRecipeApplyReceipt = {
+    schema: 1, execution: "applied", recipe_id: decision.next_recipe!.id,
+    previous_recipe_fingerprint: rebuild.previous_recipe_fingerprint,
+    next_recipe_fingerprint: rebuild.next_recipe_fingerprint,
+    native_source_fingerprint_before: "sha256:" + "1".repeat(64),
+    native_source_fingerprint_after: "sha256:" + "2".repeat(64),
+    native_undo_provenance: {
+      token: "synthetic-landmark-undo",
+      project_uuid: "bedrock-project-1", undo_index: 1,
+    },
+    created_instance_ids: rebuild.reasons
+      .filter((row) => row.reason === "ADDED").map((row) => row.instance_id),
+    updated_instance_ids: rebuild.reasons
+      .filter((row) => row.reason === "CHANGED").map((row) => row.instance_id),
+    removed_instance_ids: [...rebuild.remove_instance_ids],
+    preserved_instance_ids: [...rebuild.preserved_instance_ids],
+    metadata_only_instance_ids: [...rebuild.metadata_only_instance_ids],
+    symmetry_changed_relation_ids: [...rebuild.symmetry_changed_relation_ids],
+    affected_count: rebuild.metrics.native_affected_count,
+    recipe_affected_count: rebuild.metrics.affected_count,
+    invalidates: {
+      geometry_structure: true, uv_mapping: true,
+      texture_appearance: true, animation_motion: true,
+    },
+  };
+  registry.acknowledgeAppliedGeometryCorrection(handle, receipt);
   return { registry, handle };
 }
 
