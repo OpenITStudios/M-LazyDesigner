@@ -22,7 +22,11 @@ A correction plan is **not** an executed edit. The canonical
 changing the active base Recipe or consuming an executed attempt. An authoritative
 `APPLY_RECEIPT` from the existing Recipe Service evidence registry must be
 validated with `acknowledgeAppliedGeometryCorrection` before the next Recipe
-becomes the base and affected model views are invalidated. Receipt identity,
+becomes the base and affected model views are invalidated. The registry is
+constructed using that same Recipe Service's `readEvidence` method and accepts
+only its `authoringevidence:` handle from `applyCompact`. Raw receipt objects,
+unknown/expired handles and unrelated semantic identity evidence are rejected.
+The same source is not reconstructed or cached in Orchestration. Receipt identity,
 actual changed instance IDs, native snapshot fingerprints, project identity
 and Undo provenance fail closed. If an edit outcome is uncertain, inspect
 native state independently; do not automatically replay or manufacture an

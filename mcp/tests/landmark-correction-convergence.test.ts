@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import type { AuthoringRecipeApplyReceipt } from "@/lib/authoringRecipe/transaction";
+import { AuthoringEvidenceRegistry } from "@/lib/authoringRecipe/evidenceRegistry";
 import { CorrectionLoopRegistry } from "@/lib/orchestration/correctionLoop";
 import {
   compareReferenceLandmarkProjection,
@@ -39,7 +40,10 @@ function capture(handle: string, x: number): LandmarkCaptureEvidence {
 }
 
 function startWithPendingCorrection() {
-  const registry = new CorrectionLoopRegistry();
+  const receiptOwner = new AuthoringEvidenceRegistry();
+  const registry = new CorrectionLoopRegistry(8, {
+    readEvidence: (handle) => receiptOwner.get(handle),
+  });
   const handle = registry.start({
     recipe_id: "landmark-asset",
     base_recipe: recipe(),
@@ -102,7 +106,8 @@ function startWithPendingCorrection() {
       texture_appearance: true, animation_motion: true,
     },
   };
-  registry.acknowledgeAppliedGeometryCorrection(handle, receipt);
+  const receiptHandle = receiptOwner.put({ kind: "APPLY_RECEIPT", value: receipt });
+  registry.acknowledgeAppliedGeometryCorrection(handle, receiptHandle);
   return { registry, handle };
 }
 

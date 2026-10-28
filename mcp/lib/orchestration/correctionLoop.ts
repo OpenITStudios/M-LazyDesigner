@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import type { AuthoringRecipeApplyReceipt } from "@/lib/authoringRecipe/transaction";
+import type {
+  AuthoringEvidence,
+  AuthoringEvidenceHandle,
+} from "@/lib/authoringRecipe/evidenceRegistry";
 import type { SemanticGeometryEditIntent } from "@/lib/authoringRecipe/semanticEdit";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
@@ -65,6 +69,15 @@ type CorrectionEvidenceUpdateOptions = {
     before: LandmarkCaptureEvidence;
     after: LandmarkCaptureEvidence;
   };
+};
+
+/**
+ * Inject the readEvidence method of the *same* canonical AuthoringRecipeService
+ * that performed applyCompact. The Orchestration layer must not import its
+ * native Runtime service or create a competing receipt store.
+ */
+type CorrectionApplyEvidenceSource = {
+  readEvidence(handle: AuthoringEvidenceHandle): AuthoringEvidence;
 };
 
 type PendingGeometryApplication = {
@@ -258,7 +271,10 @@ export class CorrectionLoopRegistry {
   private readonly entries = new Map<CorrectionLoopHandle, CorrectionLoopRecord>();
   private scopeIdentity = "unbound:0";
 
-  constructor(private readonly maxEntries = 8) {
+  constructor(
+    private readonly maxEntries = 8,
+    private readonly applyEvidenceSource: CorrectionApplyEvidenceSource | null = null
+  ) {
     if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 32) {
       throw new Error("Correction loop registry maxEntries must be 1..32.");
     }
@@ -1186,14 +1202,14 @@ export class CorrectionLoopRegistry {
 
 
   /**
-   * Called only after the caller resolves the real native APPLY_RECEIPT from
-   * the existing Recipe Service's authoring evidence registry. This is a
-   * source-level consistency guard, not standalone authentication of a
-   * caller-provided receipt or proof of visual resemblance.
+   * Accept only an evidence handle resolved by the exact Recipe Service
+   * injected at construction. Caller-authored receipt objects, arbitrary
+   * evidence handles, and non-apply evidence cannot advance the correction.
+   * Source ownership is verified here; visual/installed native quality is not.
    */
   acknowledgeAppliedGeometryCorrection(
     handle: CorrectionLoopHandle,
-    receipt: AuthoringRecipeApplyReceipt
+    receiptHandle: AuthoringEvidenceHandle
   ): { state: "VERIFY_PENDING"; attempt: 1 | 2 } {
     const record = this.entries.get(handle);
     if (!record) throw new Error("CORRECTION_LOOP_NOT_FOUND: handle expired.");
@@ -1205,6 +1221,20 @@ export class CorrectionLoopRegistry {
         pending.evidence_fingerprint !== record.evidence_fingerprint) {
       throw new Error("CORRECTION_APPLY_SOURCE_STALE: reconcile the project and evidence before proceeding.");
     }
+    if (!this.applyEvidenceSource) {
+      throw new Error("CORRECTION_APPLY_SOURCE_UNAVAILABLE: bind the existing Recipe Service readEvidence owner before accepting Apply.");
+    }
+    if (typeof receiptHandle !== "string" ||
+        !/^authoringevidence:[a-f0-9]{64}$/.test(receiptHandle)) {
+      throw new Error("CORRECTION_APPLY_EVIDENCE_HANDLE_INVALID: use an exact Authoring Recipe evidence handle.");
+    }
+    // The stored receipt belongs to the canonical Recipe Service that actually
+    // performed applyCompact. Never accept a raw caller-created object here.
+    const evidence = this.applyEvidenceSource.readEvidence(receiptHandle);
+    if (!evidence || evidence.kind !== "APPLY_RECEIPT") {
+      throw new Error("CORRECTION_APPLY_EVIDENCE_KIND_MISMATCH: only a stored APPLY_RECEIPT is accepted.");
+    }
+    const receipt: AuthoringRecipeApplyReceipt = evidence.value;
     const plan = pending.rebuild;
     const expected = (reason: "ADDED" | "CHANGED") =>
       plan.reasons.filter((row) => row.reason === reason).map((row) => row.instance_id).sort();

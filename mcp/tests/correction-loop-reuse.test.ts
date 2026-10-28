@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import type { AuthoringRecipeApplyReceipt } from "@/lib/authoringRecipe/transaction";
+import { AuthoringEvidenceRegistry } from "@/lib/authoringRecipe/evidenceRegistry";
 import type { SemanticGeometryOperation } from "@/lib/authoringRecipe/semanticEdit";
 import { correctionContinuationDelta, correctionContinuationId } from "@/lib/orchestration/correctionContinuation";
 import { CorrectionLoopRegistry } from "@/lib/orchestration/correctionLoop";
@@ -69,8 +70,15 @@ function syntheticRecipeApplyReceipt(
 }
 
 class SyntheticAppliedCorrectionLoopRegistry extends CorrectionLoopRegistry {
+  private readonly receipts: AuthoringEvidenceRegistry;
   private readonly lastNativeByHandle = new Map<string, string>();
   private applySequence = 0;
+
+  constructor() {
+    const receipts = new AuthoringEvidenceRegistry();
+    super(8, { readEvidence: (handle) => receipts.get(handle) });
+    this.receipts = receipts;
+  }
 
   override planGeometryCorrection(
     ...args: Parameters<CorrectionLoopRegistry["planGeometryCorrection"]>
@@ -80,9 +88,11 @@ class SyntheticAppliedCorrectionLoopRegistry extends CorrectionLoopRegistry {
     const sequence = ++this.applySequence;
     const before = this.lastNativeByHandle.get(args[0]) ?? "sha256:" + "0".repeat(64);
     const after = "sha256:" + sequence.toString(16).padStart(64, "0");
-    this.acknowledgeAppliedGeometryCorrection(
-      args[0], syntheticRecipeApplyReceipt(decision, before, after, sequence)
-    );
+    const receiptHandle = this.receipts.put({
+      kind: "APPLY_RECEIPT",
+      value: syntheticRecipeApplyReceipt(decision, before, after, sequence),
+    });
+    this.acknowledgeAppliedGeometryCorrection(args[0], receiptHandle);
     this.lastNativeByHandle.set(args[0], after);
     return decision;
   }
@@ -91,7 +101,10 @@ class SyntheticAppliedCorrectionLoopRegistry extends CorrectionLoopRegistry {
 describe("zero-waste correction loop reuse", () => {
 
   test("planning preserves active Recipe and attempts until a matching native Apply receipt", () => {
-    const registry = new CorrectionLoopRegistry();
+    const receiptOwner = new AuthoringEvidenceRegistry();
+    const registry = new CorrectionLoopRegistry(8, {
+      readEvidence: (handle) => receiptOwner.get(handle),
+    });
     const handle = registry.start({
       recipe_id: "asset",
       base_recipe: recipe(),
@@ -147,6 +160,19 @@ describe("zero-waste correction loop reuse", () => {
     const before = "sha256:" + "1".repeat(64);
     const after = "sha256:" + "2".repeat(64);
     const valid = syntheticRecipeApplyReceipt(firstPlan, before, after, 1);
+    expect(() => registry.acknowledgeAppliedGeometryCorrection(
+      handle, "authoringevidence:" + "f".repeat(64)
+    )).toThrow("AUTHORING_EVIDENCE_NOT_FOUND");
+    expect(() => registry.acknowledgeAppliedGeometryCorrection(
+      handle, valid as unknown as `authoringevidence:${string}`
+    )).toThrow("CORRECTION_APPLY_EVIDENCE_HANDLE_INVALID");
+    const wrongKind = receiptOwner.put({
+      kind: "SEMANTIC_IDENTITY",
+      value: { recipe_id: "asset", selected_by: "INSTANCE_IDS",
+        count: 0, identities: [] },
+    });
+    expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, wrongKind))
+      .toThrow("CORRECTION_APPLY_EVIDENCE_KIND_MISMATCH");
     for (const mismatched of [
       { ...valid, execution: "unchanged" as const },
       { ...valid, recipe_id: "different-recipe" },
@@ -155,12 +181,16 @@ describe("zero-waste correction loop reuse", () => {
       { ...valid, native_undo_provenance: undefined },
       { ...valid, native_source_fingerprint_after: before },
     ]) {
-      expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, mismatched))
+      const mismatchHandle = receiptOwner.put({
+        kind: "APPLY_RECEIPT", value: mismatched,
+      });
+      expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, mismatchHandle))
         .toThrow("CORRECTION_APPLY_RECEIPT_MISMATCH");
       expect(registry.projectContinuation(handle)).toEqual(pending);
     }
 
-    expect(registry.acknowledgeAppliedGeometryCorrection(handle, valid)).toEqual({
+    const validHandle = receiptOwner.put({ kind: "APPLY_RECEIPT", value: valid });
+    expect(registry.acknowledgeAppliedGeometryCorrection(handle, validHandle)).toEqual({
       state: "VERIFY_PENDING", attempt: 1,
     });
     const afterAck = registry.projectContinuation(handle);
@@ -172,7 +202,7 @@ describe("zero-waste correction loop reuse", () => {
       },
     });
     expect(afterAck.verification.awaiting_native_apply_receipt).toBeUndefined();
-    expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, valid))
+    expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, validHandle))
       .toThrow("CORRECTION_APPLY_NOT_PENDING");
     registry.updateEvidence(handle, "verificationevidence:receipt-after", [{
       code: "WIDTH", severity: "INFO", summary: "Width residual improved.",
@@ -183,7 +213,10 @@ describe("zero-waste correction loop reuse", () => {
   });
 
   test("runtime change blocks pending Apply acknowledgement without advancing the Recipe", () => {
-    const registry = new CorrectionLoopRegistry();
+    const receiptOwner = new AuthoringEvidenceRegistry();
+    const registry = new CorrectionLoopRegistry(8, {
+      readEvidence: (handle) => receiptOwner.get(handle),
+    });
     const handle = registry.start({
       recipe_id: "asset", base_recipe: recipe(),
       verification_request: {
@@ -212,10 +245,12 @@ describe("zero-waste correction loop reuse", () => {
     }]);
     expect(plan.state).toBe("CORRECTION_READY");
     registry.invalidateRuntimeGeneration();
-    const receipt = syntheticRecipeApplyReceipt(
-      plan, "sha256:" + "1".repeat(64), "sha256:" + "2".repeat(64), 1
-    );
-    expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, receipt))
+    const receiptHandle = receiptOwner.put({ kind: "APPLY_RECEIPT",
+      value: syntheticRecipeApplyReceipt(
+        plan, "sha256:" + "1".repeat(64), "sha256:" + "2".repeat(64), 1
+      ),
+    });
+    expect(() => registry.acknowledgeAppliedGeometryCorrection(handle, receiptHandle))
       .toThrow("CORRECTION_APPLY_SOURCE_STALE");
     expect(registry.projectContinuation(handle)).toMatchObject({
       attempt: 0,
