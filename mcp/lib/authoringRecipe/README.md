@@ -132,10 +132,23 @@ references and revision digests. It reports **matched authored UV fields**,
 **different UV fields**, **different material assignments/visibility**, or
 **unverified material refs** independently for each coincident group. Atlas
 image SHA is a revision of encoded image bytes, not pixel fidelity evidence.
-Even matched fields are not proof of equivalent PBR/shaders/animation or
-permission to delete, merge, or reduce any Cube. The optional native read
-only runs for this targeted inspection and is checked against a second
-native-geometry snapshot before a report is returned.
+The opt-in snapshot additionally includes per-face Bedrock material-instance
+names, referenced TextureGroup identity/material configuration revisions,
+and the full set of PBR companion channels (color, normal/height, MER), even
+when their textures do not appear on Cube faces directly. Missing or
+conflicting PBR memberships fail closed.
+
+The same read-only inspection can report authored BoneAnimator tracks attached
+to a Cube's ancestor Group UUIDs. This is a **structural motion dependency**,
+not a sampled animated pose or evidence that unobserved controller/Molang
+effects are absent. If the native animation inventory is unavailable, motion
+status stays `UNVERIFIED`; `NO_PARENT_BONE_TRACKS_OBSERVED` does not mean a
+Cube is safe to delete. No new rig or animation engine is introduced.
+Even matched UV/material fields and absent observed parent tracks are not
+proof of identical PBR/shaders, alpha/rendered appearance, animation,
+Bedrock export or permission to delete, merge, or reduce any Cube. The
+optional read runs only for targeted inspection and rechecks native geometry,
+UV and material/animation inventories for in-flight source changes.
 
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 

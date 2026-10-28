@@ -21,6 +21,78 @@ import {
 } from "./ownership";
 
 /**
+ * Observe only authored BoneAnimator channels for ancestors of Recipe Cubes.
+ * This does not evaluate a pose, animation controllers or Molang conditions.
+ * If runtime inventory is absent, report unknown instead of asserting static.
+ */
+function readRecipeAncestorAnimationInventory(native: AuthoringRecipeNativeSnapshot):
+  RecipeNativeSurfaceSnapshot["animations"] {
+  if (typeof AnimationItem === "undefined" ||
+      !Array.isArray(AnimationItem.all) ||
+      typeof BoneAnimator === "undefined") return null;
+  const allItems = AnimationItem.all as unknown as Array<BBAnimation | AnimationController>;
+  if (allItems.length > 64) {
+    throw new Error("RECIPE_OPTIMIZATION_ANIMATION_SCOPE_EXCEEDED");
+  }
+  const ancestorIds = new Set(native.cubes.flatMap(cube => cube.parent_path ?? []));
+  const clips: NonNullable<RecipeNativeSurfaceSnapshot["animations"]>["clips"] = [];
+  const visitedClips = new Set<string>();
+  let trackCount = 0;
+  for (const item of allItems) {
+    if (typeof AnimationController !== "undefined" && item instanceof AnimationController) {
+      continue;
+    }
+    const clip = item as BBAnimation;
+    if (!clip || typeof clip.uuid !== "string" || !clip.uuid.trim() ||
+        visitedClips.has(clip.uuid) ||
+        !clip.animators || typeof clip.animators !== "object") {
+      throw new Error("RECIPE_OPTIMIZATION_ANIMATION_CLIP_INVALID");
+    }
+    visitedClips.add(clip.uuid);
+    const boneTracks: NonNullable<RecipeNativeSurfaceSnapshot["animations"]>["clips"][number]["bone_tracks"] = [];
+    for (const boneUuid of [...ancestorIds].sort()) {
+      const animator = clip.animators[boneUuid];
+      if (!animator) continue;
+      if (!(animator instanceof BoneAnimator)) {
+        throw new Error("RECIPE_OPTIMIZATION_ANIMATION_BONE_IDENTITY_INVALID");
+      }
+      const count = (channel: "position" | "rotation" | "scale") => {
+        const keys = animator[channel];
+        if (keys === undefined) return 0;
+        if (!Array.isArray(keys) || keys.length > 65536) {
+          throw new Error("RECIPE_OPTIMIZATION_ANIMATION_CHANNEL_INVALID");
+        }
+        return keys.length;
+      };
+      const position = count("position"), rotation = count("rotation"), scale = count("scale");
+      if (position + rotation + scale === 0) continue;
+      if (++trackCount > 4096) {
+        throw new Error("RECIPE_OPTIMIZATION_ANIMATION_SCOPE_EXCEEDED");
+      }
+      boneTracks.push({
+        bone_uuid: boneUuid,
+        position_keyframes: position,
+        rotation_keyframes: rotation,
+        scale_keyframes: scale,
+      });
+    }
+    clips.push({ uuid: clip.uuid, bone_tracks: boneTracks });
+  }
+  return { clips: clips.sort((a, b) => a.uuid.localeCompare(b.uuid)) };
+}
+
+/** Exact material configuration revision; no PBR renderer inference. */
+function coincidenceMaterialConfigRevision(group: TextureGroup): string | null {
+  if (group.is_material !== true) return null;
+  const config = group.material_config;
+  if (!config) return null;
+  return createHash("sha256").update(JSON.stringify([
+    config.color_value ?? null, config.mer_value ?? null,
+    config.subsurface_value ?? null, config.saved ?? null,
+  ])).digest("hex");
+}
+
+/**
  * Opt-in native material/UV evidence. This shares the existing UV snapshot
  * reader and Recipe-owned native state, but is NEVER used in the native Undo
  * source fingerprint or as a Geometry deletion authorization.
@@ -71,12 +143,16 @@ export function readBlockbenchRecipeCoincidenceSurface(
       if (typeof texture_ref === "string") {
         referencedTextures.add(texture_ref);
       }
+      if (!(face.material_name === undefined || typeof face.material_name === "string")) {
+        throw new Error("RECIPE_OPTIMIZATION_NATIVE_FACE_MATERIAL_INVALID");
+      }
       return {
         face: savedFace.face,
         uv: [...savedFace.uv] as [number, number, number, number],
         rotation: savedFace.rotation,
         enabled: savedFace.enabled,
         texture_ref,
+        material_name: face.material_name ?? "",
       };
     });
     return {
@@ -96,8 +172,31 @@ export function readBlockbenchRecipeCoincidenceSurface(
   if (new Set(textureList.map(tex => tex.uuid)).size !== textureList.length) {
     throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_UUID_AMBIGUOUS");
   }
-  const textures = textureList.filter(tex => referencedTextures.has(tex.uuid))
-    .map(texture => {
+  const directTextures = textureList.filter(tex => referencedTextures.has(tex.uuid));
+  if (directTextures.length !== referencedTextures.size) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_REF_UNRESOLVED");
+  }
+  const selectedGroupIds = new Set(directTextures.map(tex =>
+    typeof tex.group === "string" && tex.group.trim() ? tex.group : null
+  ).filter((uuid): uuid is string => uuid !== null));
+  const selectedGroups = (typeof TextureGroup !== "undefined" &&
+    Array.isArray(TextureGroup.all) ? TextureGroup.all : [])
+    .filter((group: TextureGroup) => selectedGroupIds.has(group.uuid));
+  if (selectedGroups.length !== selectedGroupIds.size ||
+      new Set(selectedGroups.map(group => group.uuid)).size !== selectedGroups.length) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_MATERIAL_GROUP_AMBIGUOUS");
+  }
+  const groupIds = new Set(selectedGroups.map(group => group.uuid));
+  // Texture sets include normal/height/MER companions even if not assigned
+  // directly to Cube faces; excluding them would hide PBR differences.
+  const selectedTextures = textureList.filter(tex =>
+    referencedTextures.has(tex.uuid) ||
+    typeof tex.group === "string" && groupIds.has(tex.group)
+  );
+  if (selectedTextures.length > 256) {
+    throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_SCOPE_EXCEEDED");
+  }
+  const textures = selectedTextures.map(texture => {
       if (!texture.uuid || !Number.isSafeInteger(texture.width) ||
           texture.width <= 0 || !Number.isSafeInteger(texture.height) ||
           texture.height <= 0 || typeof texture.getDataURL !== "function") {
@@ -117,15 +216,30 @@ export function readBlockbenchRecipeCoincidenceSurface(
         image_sha256: createHash("sha256").update(bytes).digest("hex"),
         group_uuid: typeof texture.group === "string" &&
           texture.group.trim() ? texture.group : null,
+        pbr_channel: typeof texture.pbr_channel === "string" &&
+          texture.pbr_channel.trim() ? texture.pbr_channel : "color",
       };
     }).sort((a, b) => a.uuid.localeCompare(b.uuid));
-  if (textures.length !== referencedTextures.size) {
-    throw new Error("RECIPE_OPTIMIZATION_NATIVE_TEXTURE_REF_UNRESOLVED");
-  }
+  const material_groups = selectedGroups.map(group => ({
+    uuid: group.uuid,
+    is_material: group.is_material === true,
+    material_config_sha256: coincidenceMaterialConfigRevision(group),
+  })).sort((a, b) => a.uuid.localeCompare(b.uuid));
+  const animations = readRecipeAncestorAnimationInventory(native);
+  // An inspection is synchronous within Runtime: compare the same metadata
+  // again at the end to reject in-flight edits before returning evidence.
+  const currentMaterialGroups = selectedGroups.map(group => ({
+    uuid: group.uuid,
+    is_material: group.is_material === true,
+    material_config_sha256: coincidenceMaterialConfigRevision(group),
+  })).sort((a, b) => a.uuid.localeCompare(b.uuid));
+  const currentAnimations = readRecipeAncestorAnimationInventory(native);
   const uvAfter = readBlockbenchUvNativeSource();
   if (Project !== boundProject ||
       uvAfter.project_uuid !== boundProject.uuid ||
       fingerprintUvNativeSource(uvAfter) !== fingerprintUvNativeSource(uv) ||
+      JSON.stringify(currentMaterialGroups) !== JSON.stringify(material_groups) ||
+      JSON.stringify(currentAnimations) !== JSON.stringify(animations) ||
       fingerprintAuthoringRecipeNativeSnapshot(
         readBlockbenchAuthoringRecipeOwnedState(recipeId)
       ) !== nativeFingerprint) {
@@ -137,6 +251,8 @@ export function readBlockbenchRecipeCoincidenceSurface(
     logical_uv_width: uv.logical_width,
     logical_uv_height: uv.logical_height,
     textures,
+    material_groups,
+    animations,
     cubes: cubeSurfaces,
   };
 }

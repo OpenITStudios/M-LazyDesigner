@@ -659,10 +659,15 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
       logical_uv_width: 32, logical_uv_height: 32,
       textures: [
         { uuid: "atlas-main", width: 32, height: 32,
-          image_sha256: "a".repeat(64), group_uuid: null },
+          image_sha256: "a".repeat(64), group_uuid: null, pbr_channel: "color" },
         { uuid: "atlas-detail", width: 32, height: 32,
-          image_sha256: "b".repeat(64), group_uuid: "detail-material" },
+          image_sha256: "b".repeat(64), group_uuid: "detail-material", pbr_channel: "color" },
       ],
+      material_groups: [{
+        uuid: "detail-material", is_material: true,
+        material_config_sha256: "c".repeat(64),
+      }],
+      animations: { clips: [] },
       cubes: snapshot.cubes.map(cube => ({
         uuid: cube.uuid, instance_id: cube.instance_id,
         visibility: true, export: true, box_uv: true,
@@ -672,6 +677,7 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
           .map(face => ({
             face, uv: [0, 0, 4, 4] as [number, number, number, number],
             rotation: 0, enabled: true, texture_ref: "atlas-main",
+            material_name: "",
           })),
       })),
     };
@@ -816,6 +822,148 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
     });
     await expect(drifting.inspectStoredGeometryCoincidence({ recipe_id: recipe.id }))
       .rejects.toThrow("RECIPE_OPTIMIZATION_NATIVE_CHANGED_DURING_INSPECTION");
+  });
+
+
+  test("per-face material-instance changes preserve distinct visual semantics on coincident Cubes", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["bone", "bone"]);
+    const surface = surfaceFixture(snapshot);
+    const matched = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(matched.groups_with_material_differences).toBe(0);
+    expect(matched.candidate_examples[0]).toMatchObject({
+      material_binding_state: "MATCHED_FIELDS",
+      animation_binding_state: "NO_PARENT_BONE_TRACKS_OBSERVED",
+    });
+    surface.cubes[1]!.faces[0]!.material_name = "emissive";
+    const changed = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(changed.groups_with_material_differences).toBe(1);
+    expect(changed.candidate_examples[0]).toMatchObject({
+      material_binding_state: "DIFFERENT",
+      safe_to_delete: false,
+    });
+    expect(changed.estimated_removable_cube_count).toBeNull();
+  });
+
+  test("PBR companion channels and TextureGroup config contribute to source revision", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const surface = surfaceFixture(snapshot);
+    surface.textures[0]!.group_uuid = "detail-material";
+    surface.textures[1]!.pbr_channel = "normal";
+    const first = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(first).toMatchObject({
+      surface_evidence_state: "SNAPSHOT_BOUND",
+      groups_with_material_differences: 0,
+      groups_with_unverified_material: 0,
+      candidate_examples: [{ material_binding_state: "MATCHED_FIELDS" }],
+    });
+    surface.textures[1]!.image_sha256 = "d".repeat(64);
+    const normalChanged = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(normalChanged.surface_snapshot_fingerprint)
+      .not.toBe(first.surface_snapshot_fingerprint);
+    surface.material_groups[0]!.material_config_sha256 = "e".repeat(64);
+    const configChanged = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(configChanged.surface_snapshot_fingerprint)
+      .not.toBe(normalChanged.surface_snapshot_fingerprint);
+
+    surface.material_groups[0]!.material_config_sha256 = null;
+    expect(assessRecipeNativeCoincidence(recipe, snapshot, surface))
+      .toMatchObject({
+        groups_with_unverified_material: 1,
+        candidate_examples: [{ material_binding_state: "UNVERIFIED" }],
+      });
+  });
+
+  test("unknown/ambiguous material groups, PBR channels and face instances are rejected", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const valid = surfaceFixture(snapshot);
+    const unresolved = structuredClone(valid);
+    unresolved.material_groups = [];
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, unresolved))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_TEXTURE_INVALID");
+    const ambiguous = structuredClone(valid);
+    ambiguous.material_groups.push(structuredClone(ambiguous.material_groups[0]!));
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, ambiguous))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_MATERIAL_GROUP_INVALID");
+    const invalidInstance = structuredClone(valid);
+    invalidInstance.cubes[0]!.faces[0]!.material_name = null as unknown as string;
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, invalidInstance))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_FACE_OR_TEXTURE_INVALID");
+    const channels = structuredClone(valid);
+    channels.textures.push({
+      uuid: "atlas-height", width: 32, height: 32,
+      image_sha256: "f".repeat(64), group_uuid: "detail-material",
+      pbr_channel: "height",
+    }, {
+      uuid: "atlas-normal", width: 32, height: 32,
+      image_sha256: "d".repeat(64), group_uuid: "detail-material",
+      pbr_channel: "normal",
+    });
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, channels))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_PBR_CHANNEL_AMBIGUOUS");
+  });
+
+  test("current ancestor BoneAnimator tracks protect Geometry, never promise animation-free deletion", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["animated-bone", "animated-bone"]);
+    const surface = surfaceFixture(snapshot);
+    surface.animations = { clips: [{
+      uuid: "clip:walk",
+      bone_tracks: [{
+        bone_uuid: "animated-bone",
+        position_keyframes: 2, rotation_keyframes: 4, scale_keyframes: 0,
+      }],
+    }] };
+    const observed = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(observed).toMatchObject({
+      groups_with_authored_bone_animation: 1,
+      groups_with_unverified_animation: 0,
+      candidate_examples: [{
+        animation_binding_state: "BONE_TRACKS_PRESENT",
+        animated_ancestor_count: 1,
+        animated_clip_count: 1,
+        animated_clip_examples: ["clip:walk"],
+        safe_to_delete: false,
+      }],
+    });
+    surface.animations = null;
+    const unavailable = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(unavailable).toMatchObject({
+      groups_with_authored_bone_animation: 0,
+      groups_with_unverified_animation: 1,
+      candidate_examples: [{ animation_binding_state: "UNVERIFIED" }],
+    });
+    surface.animations = { clips: [] };
+    const withoutTracks = assessRecipeNativeCoincidence(recipe, snapshot, surface);
+    expect(withoutTracks.candidate_examples[0]).toMatchObject({
+      animation_binding_state: "NO_PARENT_BONE_TRACKS_OBSERVED",
+      safe_to_delete: false,
+    });
+  });
+
+  test("animation evidence must have unique clips, valid ancestor UUIDs and bounded keyed channels", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["bone", "bone"]);
+    const valid = surfaceFixture(snapshot);
+    valid.animations = { clips: [{
+      uuid: "clip:a",
+      bone_tracks: [{ bone_uuid: "bone", position_keyframes: 0,
+        rotation_keyframes: 3, scale_keyframes: 0 }],
+    }] };
+    const wrong = structuredClone(valid);
+    wrong.animations!.clips[0]!.bone_tracks[0]!.bone_uuid = "unrelated-bone";
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, wrong))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_ANIMATION_TRACK_INVALID");
+    const duplicate = structuredClone(valid);
+    duplicate.animations!.clips.push(structuredClone(duplicate.animations!.clips[0]!));
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, duplicate))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_ANIMATION_IDENTITY_INVALID");
+    const invalidCount = structuredClone(valid);
+    invalidCount.animations!.clips[0]!.bone_tracks[0]!.rotation_keyframes = -1;
+    expect(() => assessRecipeNativeCoincidence(recipe, snapshot, invalidCount))
+      .toThrow("RECIPE_OPTIMIZATION_SURFACE_ANIMATION_TRACK_INVALID");
   });
 
   test("existing Recipe Service reads stored native source without applying any mutation", async () => {

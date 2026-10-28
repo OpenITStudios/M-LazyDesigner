@@ -126,7 +126,27 @@ export type RecipeNativeSurfaceSnapshot = {
     height: number;
     image_sha256: string;
     group_uuid: string | null;
+    /** Native PBR channel such as color/normal/height/mer. */
+    pbr_channel: string | null;
   }>;
+  /** Exact referenced TextureGroup identities and current material settings. */
+  material_groups: Array<{
+    uuid: string;
+    is_material: boolean;
+    material_config_sha256: string | null;
+  }>;
+  /** Read-only authored BoneAnimator inventory; null means unavailable. */
+  animations: {
+    clips: Array<{
+      uuid: string;
+      bone_tracks: Array<{
+        bone_uuid: string;
+        position_keyframes: number;
+        rotation_keyframes: number;
+        scale_keyframes: number;
+      }>;
+    }>;
+  } | null;
   cubes: Array<{
     uuid: string;
     instance_id: string;
@@ -143,6 +163,8 @@ export type RecipeNativeSurfaceSnapshot = {
       enabled: boolean;
       /** null/false are not assumed to resolve to identical materials. */
       texture_ref: string | false | null;
+      /** An empty string is an explicit unassigned per-face material instance. */
+      material_name: string;
     }>;
   }>;
 };

@@ -59,6 +59,7 @@ export function assessRecipeFeatureOptimization(
 
 const COINCIDENCE_FACE_KEYS = ["north", "south", "east", "west", "up", "down"] as const;
 const SURFACE_REVISION_SHA256 = /^[a-f0-9]{64}$/;
+const PBR_CHANNELS = ["color", "normal", "height", "mer"] as const;
 
 /**
  * All evidence must be current, complete and bijectively bound to the same
@@ -81,8 +82,21 @@ function validatedRecipeSurfaceState(
   if (![surface.logical_uv_width, surface.logical_uv_height].every(
     value => Number.isSafeInteger(value) && value > 0
   ) || !Array.isArray(surface.textures) || surface.textures.length > 256 ||
+      !Array.isArray(surface.material_groups) || surface.material_groups.length > 256 ||
       !Array.isArray(surface.cubes) || surface.cubes.length !== native.cubes.length) {
     fail("SCOPE_INVALID");
+  }
+  const groups = new Map<string, RecipeNativeSurfaceSnapshot["material_groups"][number]>();
+  for (const group of surface.material_groups) {
+    if (!group || typeof group.uuid !== "string" || !group.uuid.trim() ||
+        group.uuid !== group.uuid.trim() || groups.has(group.uuid) ||
+        typeof group.is_material !== "boolean" ||
+        !(group.material_config_sha256 === null ||
+          typeof group.material_config_sha256 === "string" &&
+          SURFACE_REVISION_SHA256.test(group.material_config_sha256))) {
+      fail("MATERIAL_GROUP_INVALID");
+    }
+    groups.set(group.uuid, group);
   }
   const textures = new Map<string, RecipeNativeSurfaceSnapshot["textures"][number]>();
   for (const texture of surface.textures) {
@@ -93,10 +107,74 @@ function validatedRecipeSurfaceState(
         typeof texture.image_sha256 !== "string" ||
         !SURFACE_REVISION_SHA256.test(texture.image_sha256) ||
         !(texture.group_uuid === null ||
-          typeof texture.group_uuid === "string" && texture.group_uuid.trim().length > 0)) {
+          typeof texture.group_uuid === "string" && groups.has(texture.group_uuid)) ||
+        !(texture.pbr_channel === null ||
+          typeof texture.pbr_channel === "string" &&
+          texture.pbr_channel.length <= 32)) {
       fail("TEXTURE_INVALID");
     }
     textures.set(texture.uuid, texture);
+  }
+  // Include all referenced PBR material channels, even textures not bound
+  // directly to a Cube face (normal/height/MER companions).
+  const materialMembers = new Map<string, Array<RecipeNativeSurfaceSnapshot["textures"][number]>>();
+  for (const texture of textures.values()) {
+    if (texture.group_uuid === null) continue;
+    const members = materialMembers.get(texture.group_uuid) ?? [];
+    members.push(texture);
+    materialMembers.set(texture.group_uuid, members);
+  }
+  for (const members of materialMembers.values()) {
+    members.sort((a, b) => a.uuid.localeCompare(b.uuid));
+  }
+  for (const group of groups.values()) {
+    if (!group.is_material) continue;
+    const seen = new Set<string>();
+    for (const texture of materialMembers.get(group.uuid) ?? []) {
+      if (!texture.pbr_channel ||
+          !PBR_CHANNELS.includes(texture.pbr_channel as typeof PBR_CHANNELS[number]) ||
+          seen.has(texture.pbr_channel)) {
+        fail("PBR_CHANNEL_AMBIGUOUS");
+      }
+      seen.add(texture.pbr_channel);
+    }
+    if (seen.has("normal") && seen.has("height")) fail("PBR_CHANNEL_AMBIGUOUS");
+  }
+
+  // Native clips are an inventory of explicitly observed group tracks only.
+  // Absent/null clips cannot prove that no animation or controller exists.
+  const ancestorUuids = new Set(native.cubes.flatMap(cube => cube.parent_path ?? []));
+  const clipsByBone = new Map<string, Set<string>>();
+  const clips = surface.animations?.clips;
+  if (surface.animations !== null) {
+    if (!surface.animations || !Array.isArray(clips) || clips.length > 64) {
+      fail("ANIMATION_SCOPE_INVALID");
+    }
+    const clipIds = new Set<string>();
+    let trackCount = 0;
+    for (const clip of clips!) {
+      if (!clip || typeof clip.uuid !== "string" || !clip.uuid.trim() ||
+          clip.uuid !== clip.uuid.trim() || clipIds.has(clip.uuid) ||
+          !Array.isArray(clip.bone_tracks)) fail("ANIMATION_IDENTITY_INVALID");
+      clipIds.add(clip.uuid);
+      const withinClip = new Set<string>();
+      for (const track of clip.bone_tracks) {
+        if (!track || typeof track.bone_uuid !== "string" ||
+            !ancestorUuids.has(track.bone_uuid) ||
+            withinClip.has(track.bone_uuid) ||
+            ![track.position_keyframes, track.rotation_keyframes, track.scale_keyframes]
+              .every(n => Number.isSafeInteger(n) && n >= 0 && n <= 65536)) {
+          fail("ANIMATION_TRACK_INVALID");
+        }
+        withinClip.add(track.bone_uuid);
+        if (++trackCount > 4096) fail("ANIMATION_SCOPE_INVALID");
+        if (track.position_keyframes + track.rotation_keyframes +
+            track.scale_keyframes === 0) continue;
+        const linked = clipsByBone.get(track.bone_uuid) ?? new Set<string>();
+        linked.add(clip.uuid);
+        clipsByBone.set(track.bone_uuid, linked);
+      }
+    }
   }
   const sourceByUuid = new Map(native.cubes.map(cube => [cube.uuid, cube]));
   const byUuid = new Map<string, {
@@ -127,6 +205,7 @@ function validatedRecipeSurfaceState(
           faces.has(face.face) || !Array.isArray(face.uv) ||
           face.uv.length !== 4 || face.uv.some(value => !Number.isFinite(value)) ||
           !Number.isFinite(face.rotation) || typeof face.enabled !== "boolean" ||
+          typeof face.material_name !== "string" || face.material_name.length > 160 ||
           !(face.texture_ref === null || face.texture_ref === false ||
             typeof face.texture_ref === "string" && textures.has(face.texture_ref))) {
         fail("FACE_OR_TEXTURE_INVALID");
@@ -137,9 +216,13 @@ function validatedRecipeSurfaceState(
       fail("FACE_OR_TEXTURE_INVALID");
     }
     const ordered = COINCIDENCE_FACE_KEYS.map(face => faces.get(face)!);
-    const unresolved_material = ordered.some(face =>
-      face.enabled && (face.texture_ref === null || face.texture_ref === false)
-    );
+    const unresolved_material = ordered.some(face => {
+      if (!face.enabled) return false;
+      if (typeof face.texture_ref !== "string") return true;
+      const texture = textures.get(face.texture_ref)!;
+      const group = texture.group_uuid ? groups.get(texture.group_uuid) : null;
+      return Boolean(group?.is_material && group.material_config_sha256 === null);
+    });
     const uv = JSON.stringify({
       box_uv: cube.box_uv, autouv: cube.autouv,
       mirror_uv: cube.mirror_uv, uv_offset: cube.uv_offset,
@@ -150,11 +233,21 @@ function validatedRecipeSurfaceState(
     });
     const material = JSON.stringify({
       visibility: cube.visibility, export: cube.export,
-      faces: ordered.map(face => ({
-        face: face.face, enabled: face.enabled, texture_ref: face.texture_ref,
-        texture: typeof face.texture_ref === "string"
-          ? textures.get(face.texture_ref) : null,
-      })),
+      faces: ordered.map(face => {
+        const texture = typeof face.texture_ref === "string"
+          ? textures.get(face.texture_ref) : null;
+        const group = texture?.group_uuid
+          ? groups.get(texture.group_uuid) : null;
+        return {
+          face: face.face, enabled: face.enabled,
+          texture_ref: face.texture_ref, material_name: face.material_name,
+          texture,
+          group: group ?? null,
+          // A material color face may depend on other channel textures
+          // that do not appear in direct Cube-face bindings.
+          group_members: group ? materialMembers.get(group.uuid) ?? [] : [],
+        };
+      }),
     });
     instanceIds.add(cube.instance_id);
     byUuid.set(cube.uuid, { uv, material, unresolved_material });
@@ -165,6 +258,8 @@ function validatedRecipeSurfaceState(
   return {
     byUuid,
     project_uuid: surface.project_uuid,
+    animation_inventory_available: surface.animations !== null,
+    clipsByBone,
     revision: "sha256:" + createHash("sha256")
       .update(JSON.stringify(surface)).digest("hex"),
   };
@@ -268,9 +363,29 @@ export function assessRecipeNativeCoincidence(
         new Set(compared.map(row => row!.material)).size > 1;
       const materialUnresolved = hasCompleteSurface &&
         compared.some(row => row!.unresolved_material);
+      const linkedClips = new Set<string>();
+      let keyedAncestorCount = 0;
+      if (surfaceState?.animation_inventory_available) {
+        for (const uuid of ordered[0].parent_path ?? []) {
+          const bound = surfaceState.clipsByBone.get(uuid);
+          if (!bound || bound.size === 0) continue;
+          keyedAncestorCount++;
+          for (const clip of bound) linkedClips.add(clip);
+        }
+      }
+      const animatedClips = [...linkedClips].sort();
       return {
         group_size: ordered.length,
         parent_path: [...ordered[0].parent_path!],
+        animation_binding_state: !surfaceState?.animation_inventory_available
+          ? ("UNVERIFIED" as const)
+          : animatedClips.length
+            ? ("BONE_TRACKS_PRESENT" as const)
+            : ("NO_PARENT_BONE_TRACKS_OBSERVED" as const),
+        animated_ancestor_count: keyedAncestorCount,
+        animated_clip_count: animatedClips.length,
+        animated_clip_examples: animatedClips.slice(0, 8),
+        animated_clip_examples_truncated: animatedClips.length > 8,
         uv_mapping_state: !hasCompleteSurface ? ("UNVERIFIED" as const)
           : uvDifferent ? ("DIFFERENT" as const) : ("MATCHED_FIELDS" as const),
         material_binding_state: !hasCompleteSurface || materialUnresolved
@@ -312,6 +427,12 @@ export function assessRecipeNativeCoincidence(
     groups_with_unverified_material: candidates.filter(
       group => group.material_binding_state === "UNVERIFIED"
     ).length,
+    groups_with_authored_bone_animation: candidates.filter(
+      group => group.animation_binding_state === "BONE_TRACKS_PRESENT"
+    ).length,
+    groups_with_unverified_animation: candidates.filter(
+      group => group.animation_binding_state === "UNVERIFIED"
+    ).length,
     candidate_examples: candidates.slice(0, 8),
     candidate_examples_truncated: candidates.length > 8,
     estimated_removable_cube_count: null,
@@ -319,9 +440,11 @@ export function assessRecipeNativeCoincidence(
     visual_verdict: "NOT_EVALUATED" as const,
     note: "This is an exact authored-geometry/parent coincidence report, not deletion proof. " +
       "Optional surface inspection compares native Box/per-face UV, face texture bindings, " +
-      "atlas encoded-image revisions and authored visibility/export. Matching fields do not " +
-      "prove PBR/shader equivalence, alpha/rendered appearance, animation pose, unrelated " +
-      "geometry or Bedrock export. Never delete Cubes on this evidence alone.",
+      "atlas encoded-image revisions, material-group/PBR channel memberships, face material " +
+      "instances, authored visibility/export, and observed ancestor BoneAnimator tracks. " +
+      "No parent tracks observed is NOT proof of a static model; matching fields do not " +
+      "prove PBR shader fidelity, alpha/rendered appearance, animation pose, controller " +
+      "binding, unrelated geometry or Bedrock export. Never delete Cubes.",
   };
 }
 
