@@ -4,13 +4,15 @@ import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import {
   assessRecipeFeatureOptimization,
   assessRecipeNativeCoincidence,
+  fingerprintRecipeRiskReviewScope,
+  type RecipeRiskReviewEvidenceReference,
 } from "@/lib/authoringRecipe/planning";
 import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
-import type {
-  AuthoringRecipeNativeSnapshot,
-  RecipeNativeSurfaceSnapshot,
-  RecipeParentAuthoredState,
+import {
   fingerprintAuthoringRecipeNativeSnapshot,
+  type AuthoringRecipeNativeSnapshot,
+  type RecipeNativeSurfaceSnapshot,
+  type RecipeParentAuthoredState,
 } from "@/lib/authoringRecipe/nativeState";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 import {
@@ -1783,6 +1785,330 @@ describe("native-parent-aware Recipe geometry coincidence review", () => {
     });
     await expect(service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id }))
       .rejects.toThrow("RECIPE_OPTIMIZATION_RECIPE_CHANGED_DURING_INSPECTION");
+  });
+
+
+  /** A claimant's reference is deliberately NOT an authenticated owner receipt. */
+  function ownerReferenceClaims(
+    report: ReturnType<typeof assessRecipeNativeCoincidence>
+  ): RecipeRiskReviewEvidenceReference[] {
+    return report.optimization_review_plan.batches.map(batch => ({
+      check_id: batch.check_id,
+      evidence_owner: batch.evidence_owner,
+      source_binding_fingerprint: report.review_source_identity.source_binding_fingerprint,
+      evidence_ref: "synthetic-unattested:" + batch.check_id,
+      full_scope: {
+        check_id: batch.check_id,
+        evidence_owner: batch.evidence_owner,
+        candidate_group_count: batch.candidate_group_count,
+        trigger_reason_codes: [...batch.trigger_reason_codes],
+        instance_ids: [...batch.instance_scope.examples],
+        native_cube_uuids: [...batch.native_cube_scope.examples],
+        anchor_relation_ids: [...batch.anchor_relation_scope.examples],
+        symmetry_relation_ids: [...batch.symmetry_relation_scope.examples],
+        animation_clip_ids: [...batch.animation_clip_scope.examples],
+      },
+    }));
+  }
+
+  test("complete same-source review references bind only as unverified claims, never a PASS", async () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    let adapterRequests = 0;
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snapshot),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => {
+        adapterRequests++;
+        throw new Error("No native Apply for review reconciliation.");
+      },
+    });
+    const initial = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const references = ownerReferenceClaims(initial);
+    expect(references).toHaveLength(1);
+    const reconciled = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: initial.review_source_identity,
+      references,
+    });
+    expect(reconciled).toMatchObject({
+      state: "REFERENCES_BOUND_UNATTESTED",
+      source_freshness_state: "SOURCE_CURRENT",
+      reconciliation_scope: "CALLER_SUPPLIED_REFERENCE_SCOPE_MATCH_ONLY",
+      check_count: 1,
+      submitted_reference_count: 1,
+      matched_unattested_reference_count: 1,
+      checks: [{
+        check_id: "NATIVE_VISUAL_AND_EXPORT",
+        state: "REFERENCE_BOUND_UNATTESTED",
+        source_readiness: "NATIVE_PROOF_REQUIRED",
+        owner_provenance_verified: false,
+        native_check_executed: false,
+      }],
+      owner_provenance_verified: false,
+      verified_evidence_count: 0,
+      native_review_executed: false,
+      review_approved: false,
+      safe_to_delete: false,
+      native_mutation_authorized: false,
+      visual_verdict: "NOT_EVALUATED",
+    });
+    expect(adapterRequests).toBe(0);
+    expect(service.registrySize()).toBe(0);
+    expect(service.evidenceRegistrySize()).toBe(0);
+  });
+
+  test("unsubmitted owner evidence remains missing even with a current Recipe source", async () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snapshot),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply"); },
+    });
+    const first = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const result = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: first.review_source_identity,
+      references: [],
+    });
+    expect(result).toMatchObject({
+      state: "REFERENCES_MISSING",
+      submitted_reference_count: 0,
+      matched_unattested_reference_count: 0,
+      checks: [{ state: "REFERENCE_MISSING" }],
+      native_mutation_authorized: false,
+    });
+  });
+
+  test("a claim cannot replace missing UV/material/motion source fields", async () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snapshot),
+      createApplyAdapter: () => { throw new Error("No Apply"); },
+    });
+    const current = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const refs = ownerReferenceClaims(current);
+    expect(refs).toHaveLength(4);
+    const result = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: current.review_source_identity,
+      references: refs,
+    });
+    expect(result).toMatchObject({
+      state: "SOURCE_INCOMPLETE",
+      source_freshness_state: "SOURCE_INCOMPLETE",
+      submitted_reference_count: 4,
+      matched_unattested_reference_count: 1,
+      verified_evidence_count: 0,
+      native_mutation_authorized: false,
+    });
+    expect(result.checks.map(c => c.state)).toEqual([
+      "SOURCE_INCOMPLETE",
+      "SOURCE_INCOMPLETE",
+      "SOURCE_INCOMPLETE",
+      "REFERENCE_BOUND_UNATTESTED",
+    ]);
+  });
+
+  test("the full scope digest detects omitted IDs beyond the twelve displayed examples", async () => {
+    const recipe = coincidenceRecipe();
+    recipe.patterns = Array.from({ length: 9 }, (_, i) => ({
+      kind: "LINEAR" as const, id: "coincident-" + i,
+      prototype_id: "shell", count: 2,
+      axis: "X" as const, spacing: 0,
+      start: [i * 6, 0, 0] as [number, number, number],
+    }));
+    const snap = native(recipe, Array(18).fill(null));
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply"); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    expect(report).toMatchObject({
+      coincident_group_count: 9,
+      optimization_review_plan: { check_count: 1 },
+    });
+    expect(report.optimization_review_plan.batches[0].native_cube_scope).toMatchObject({
+      count: 18, examples_truncated: true,
+    });
+    const claim = ownerReferenceClaims(report)[0]!;
+    expect(claim.full_scope.instance_ids).toHaveLength(12);
+    const partial = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: [claim],
+    });
+    expect(partial).toMatchObject({
+      state: "REFERENCES_MISMATCHED",
+      checks: [{ state: "SCOPE_MISMATCH" }],
+      verified_evidence_count: 0,
+      safe_to_delete: false,
+    });
+    claim.full_scope.instance_ids = snap.cubes.map(cube => cube.instance_id);
+    claim.full_scope.native_cube_uuids = snap.cubes.map(cube => cube.uuid);
+    expect(fingerprintRecipeRiskReviewScope(claim.full_scope))
+      .toBe(report.optimization_review_plan.batches[0].full_scope_fingerprint);
+    // Display order and claimant enumeration order are not significance.
+    claim.full_scope.native_cube_uuids.reverse();
+    expect(fingerprintRecipeRiskReviewScope(claim.full_scope))
+      .toBe(report.optimization_review_plan.batches[0].full_scope_fingerprint);
+    const full = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: [claim],
+    });
+    expect(full.state).toBe("REFERENCES_BOUND_UNATTESTED");
+    expect(full.native_review_executed).toBe(false);
+  });
+
+  test("wrong Cube IDs or mismatched source identity never match the current review", async () => {
+    const recipe = coincidenceRecipe();
+    const snap = native(recipe, [null, null]);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply"); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const scopeWrong = ownerReferenceClaims(report);
+    scopeWrong[0]!.full_scope.native_cube_uuids[1] = "different-but-valid-uuid";
+    const mismatched = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: scopeWrong,
+    });
+    expect(mismatched).toMatchObject({
+      state: "REFERENCES_MISMATCHED",
+      checks: [{ state: "SCOPE_MISMATCH" }],
+    });
+    const wrongSource = ownerReferenceClaims(report);
+    wrongSource[0]!.source_binding_fingerprint = "sha256:" + "f".repeat(64);
+    const rejectedSource = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: wrongSource,
+    });
+    expect(rejectedSource).toMatchObject({
+      state: "REFERENCES_MISMATCHED",
+      checks: [{ state: "SOURCE_BINDING_MISMATCH" }],
+    });
+  });
+
+  test("stale Recipe review baselines override obsolete check references without asserting validity", async () => {
+    const recipe = coincidenceRecipe();
+    const snap = native(recipe, [null, null]);
+    const surface = surfaceFixture(snap);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      readCoincidenceSurface: () => structuredClone(surface),
+      createApplyAdapter: () => { throw new Error("No Apply"); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const old = ownerReferenceClaims(report);
+    surface.cubes[0]!.faces[0]!.material_name = "new-emissive";
+    const result = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: old,
+    });
+    expect(result).toMatchObject({
+      state: "SOURCE_STALE",
+      source_freshness_state: "SOURCE_STALE",
+      changed_source_parts: ["UV_MATERIAL_ANIMATION", "REVIEW_PLAN"],
+      submitted_reference_count: 1,
+      verified_evidence_count: 0,
+      review_approved: false,
+    });
+    expect(result.checks.every(check => check.state === "SOURCE_STALE")).toBe(true);
+  });
+
+  test("duplicate/unplanned owner claims and malformed scope are rejected before any proof promotion", async () => {
+    const recipe = coincidenceRecipe();
+    const snap = native(recipe, [null, null]);
+    let reads = 0;
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => { reads++; return structuredClone(snap); },
+      readCoincidenceSurface: (_, owned) => surfaceFixture(owned),
+      createApplyAdapter: () => { throw new Error("No Apply"); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    const ref = ownerReferenceClaims(report)[0]!;
+    const beforeReads = reads;
+    await expect(service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: [ref, structuredClone(ref)],
+    })).rejects.toThrow("RECIPE_OPTIMIZATION_REVIEW_REFERENCES_INVALID");
+    expect(reads).toBe(beforeReads);
+
+    const invalid = structuredClone(ref);
+    invalid.full_scope.native_cube_uuids.push(invalid.full_scope.native_cube_uuids[0]!);
+    await expect(service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: [invalid],
+    })).rejects.toThrow("RECIPE_OPTIMIZATION_REVIEW_FULL_SCOPE_INVALID");
+    expect(reads).toBe(beforeReads);
+
+    const wrongOwner = structuredClone(ref);
+    wrongOwner.evidence_owner = "NATIVE_UV_OWNER";
+    wrongOwner.full_scope.evidence_owner = "NATIVE_UV_OWNER";
+    await expect(service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: [wrongOwner],
+    })).rejects.toThrow("RECIPE_OPTIMIZATION_REVIEW_FULL_SCOPE_INVALID");
+    expect(reads).toBe(beforeReads);
+
+    const unplanned = structuredClone(ref);
+    unplanned.check_id = "RECIPE_ANCHOR_RELATION";
+    unplanned.evidence_owner = "SAVED_RECIPE";
+    unplanned.full_scope.check_id = "RECIPE_ANCHOR_RELATION";
+    unplanned.full_scope.evidence_owner = "SAVED_RECIPE";
+    unplanned.full_scope.trigger_reason_codes = ["ANCHOR_CONSTRAINT_PRESENT"];
+    await expect(service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: [unplanned],
+    })).rejects.toThrow("RECIPE_OPTIMIZATION_REVIEW_CHECK_NOT_PLANNED");
+  });
+
+  test("when there is no coincidence, no claimed evidence is required or accepted", async () => {
+    const recipe = coincidenceRecipe();
+    const pattern = recipe.patterns[0]!;
+    if (pattern.kind !== "LINEAR") throw new Error("unexpected fixture");
+    pattern.spacing = 6;
+    const snap = native(recipe, [null, null]);
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => structuredClone(snap),
+      createApplyAdapter: () => { throw new Error("No Apply"); },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({ recipe_id: recipe.id });
+    expect(report.optimization_review_plan.check_count).toBe(0);
+    const result = await service.reconcileStoredGeometryOptimizationReviewEvidence({
+      recipe_id: recipe.id,
+      expected_review_source_identity: report.review_source_identity,
+      references: [],
+    });
+    expect(result).toMatchObject({
+      state: "NO_REVIEW_CANDIDATES",
+      check_count: 0,
+      submitted_reference_count: 0,
+      verified_evidence_count: 0,
+      review_approved: false,
+      safe_to_delete: false,
+    });
   });
 
   test("existing Recipe Service reads stored native source without applying any mutation", async () => {

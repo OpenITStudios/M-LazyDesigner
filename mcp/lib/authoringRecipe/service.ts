@@ -20,7 +20,9 @@ import { compactAuthoringApplyReceipt, compactSemanticIdentityResolution } from 
 import {
   planRecipeFeatureRepresentations,
   assessRecipeNativeCoincidence,
+  fingerprintRecipeRiskReviewScope,
   type RecipeOptimizationReviewSourceIdentity,
+  type RecipeRiskReviewEvidenceReference,
   selectRecipeRebuildExecutionStrategy,
   summarizeAuthoringRecipeRebuild,
 } from "@/lib/authoringRecipe/planning";
@@ -194,6 +196,124 @@ export function createAuthoringRecipeService(
       native_mutation_authorized: false as const,
     };
   };
+
+  /**
+   * Match caller-supplied review references to the exact NEW owner review
+   * plan only after re-reading and comparing its full source identity.
+   *
+   * A matching opaque reference is NOT verified owner evidence: this service
+   * has no authenticated UV/material/animation/visual receipt resolver.
+   * Thus no caller-provided "PASS" or link can clear a risk or authorize Apply.
+   */
+  const reconcileStoredGeometryOptimizationReviewEvidence = async (input: {
+    recipe_id: string;
+    expected_review_source_identity: RecipeOptimizationReviewSourceIdentity;
+    references: readonly RecipeRiskReviewEvidenceReference[];
+  }) => {
+    if (!Array.isArray(input?.references) || input.references.length > 6) {
+      throw new Error("RECIPE_OPTIMIZATION_REVIEW_REFERENCES_INVALID");
+    }
+    const references = new Map<string, {
+      claim: RecipeRiskReviewEvidenceReference;
+      full_scope_fingerprint: string;
+    }>();
+    const sha = /^sha256:[a-f0-9]{64}$/;
+    for (const claim of input.references) {
+      if (!claim || typeof claim.check_id !== "string" ||
+          references.has(claim.check_id) ||
+          typeof claim.evidence_owner !== "string" ||
+          typeof claim.source_binding_fingerprint !== "string" ||
+          !sha.test(claim.source_binding_fingerprint) ||
+          typeof claim.evidence_ref !== "string" ||
+          claim.evidence_ref.length < 1 || claim.evidence_ref.length > 160 ||
+          claim.evidence_ref !== claim.evidence_ref.trim() ||
+          claim.full_scope?.check_id !== claim.check_id ||
+          claim.full_scope?.evidence_owner !== claim.evidence_owner) {
+        throw new Error("RECIPE_OPTIMIZATION_REVIEW_REFERENCES_INVALID");
+      }
+      // The canonical planner validates every complete ID set and computes
+      // the same digest for the full batch before examples are truncated.
+      references.set(claim.check_id, {
+        claim,
+        full_scope_fingerprint: fingerprintRecipeRiskReviewScope(claim.full_scope),
+      });
+    }
+    const freshness = await checkStoredGeometryOptimizationReviewFreshness({
+      recipe_id: input.recipe_id,
+      expected_review_source_identity: input.expected_review_source_identity,
+    });
+    const plan = freshness.current_review_plan;
+    const expectedChecks = new Set(plan.batches.map(batch => batch.check_id));
+    if (freshness.state !== "SOURCE_STALE" &&
+        [...references.keys()].some(checkId => !expectedChecks.has(checkId))) {
+      throw new Error(
+        "RECIPE_OPTIMIZATION_REVIEW_CHECK_NOT_PLANNED: reference targets an unrequested owner review."
+      );
+    }
+    const checks = plan.batches.map(batch => {
+      const reference = references.get(batch.check_id);
+      const state = freshness.state === "SOURCE_STALE"
+        ? ("SOURCE_STALE" as const)
+        : !reference
+          ? ("REFERENCE_MISSING" as const)
+          : reference.claim.source_binding_fingerprint !==
+              freshness.current_review_source_identity.source_binding_fingerprint
+            ? ("SOURCE_BINDING_MISMATCH" as const)
+            : reference.full_scope_fingerprint !== batch.full_scope_fingerprint
+              ? ("SCOPE_MISMATCH" as const)
+              : batch.source_readiness === "SOURCE_FIELDS_INCOMPLETE"
+                ? ("SOURCE_INCOMPLETE" as const)
+                : ("REFERENCE_BOUND_UNATTESTED" as const);
+      return {
+        check_id: batch.check_id,
+        evidence_owner: batch.evidence_owner,
+        state,
+        source_readiness: batch.source_readiness,
+        expected_full_scope_fingerprint: batch.full_scope_fingerprint,
+        reference_submitted: Boolean(reference),
+        owner_provenance_verified: false as const,
+        native_check_executed: false as const,
+      };
+    });
+    const mismatched = checks.some(check =>
+      check.state === "SOURCE_BINDING_MISMATCH" ||
+      check.state === "SCOPE_MISMATCH"
+    );
+    const missing = checks.some(check => check.state === "REFERENCE_MISSING");
+    const incomplete = checks.some(check => check.state === "SOURCE_INCOMPLETE");
+    const matchedReferenceCount = checks.filter(check =>
+      check.state === "REFERENCE_BOUND_UNATTESTED"
+    ).length;
+    return {
+      state: freshness.state === "SOURCE_STALE"
+        ? ("SOURCE_STALE" as const)
+        : mismatched
+          ? ("REFERENCES_MISMATCHED" as const)
+          : missing
+            ? ("REFERENCES_MISSING" as const)
+            : incomplete
+              ? ("SOURCE_INCOMPLETE" as const)
+              : checks.length === 0
+                ? ("NO_REVIEW_CANDIDATES" as const)
+                : ("REFERENCES_BOUND_UNATTESTED" as const),
+      reconciliation_scope: "CALLER_SUPPLIED_REFERENCE_SCOPE_MATCH_ONLY" as const,
+      source_freshness_state: freshness.state,
+      changed_source_parts: freshness.changed_source_parts,
+      current_review_source_identity: freshness.current_review_source_identity,
+      check_count: checks.length,
+      submitted_reference_count: references.size,
+      matched_unattested_reference_count: matchedReferenceCount,
+      checks,
+      owner_provenance_verified: false as const,
+      verified_evidence_count: 0 as const,
+      native_review_executed: false as const,
+      review_approved: false as const,
+      safe_to_delete: false as const,
+      native_mutation_authorized: false as const,
+      visual_verdict: "NOT_EVALUATED" as const,
+    };
+  };
+
   return {
     plan: planPair,
     async planStored(nextRecipe: AuthoringRecipe) {
@@ -204,6 +324,7 @@ export function createAuthoringRecipeService(
     },
     inspectStoredGeometryCoincidence,
     checkStoredGeometryOptimizationReviewFreshness,
+    reconcileStoredGeometryOptimizationReviewEvidence,
     async resolveIdentity(input: { recipe_id: string; target: SemanticGeometryTarget }) {
       if (!dependencies.readStoredRecipe) {
         throw new Error("RECIPE_STORE_UNAVAILABLE: Runtime did not provide project recipe persistence.");

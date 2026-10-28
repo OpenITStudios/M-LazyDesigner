@@ -279,6 +279,51 @@ locks or proof that externally supplied baseline IDs are authentic. No new
 state manager, material mutation, auto-merge, public tool, native verification,
 or Cube deletion is implied.
 
+### Full owner-scope binding and review reference reconciliation
+
+For every pre-optimization review batch, `full_scope_fingerprint` now hashes
+the **complete** canonical check identity, evidence-owner label, reason codes,
+candidate-group count and complete sorted Recipe instance/native Cube UUID,
+Anchor, Symmetry and animation-clip ID sets **before** output examples are
+truncated. The public summary still limits display IDs to twelve. This avoids
+treating the first twelve examples as the full scope when reviewing large
+assets. A claimant's scope manifest is independently validated for bounded
+nonempty unique IDs, valid owner/check association and exact fingerprint
+equality. The fingerprint is not a signed receipt or a capability to mutate.
+
+The same existing `AuthoringRecipeService` now offers internal
+`reconcileStoredGeometryOptimizationReviewEvidence`. It reuses the B9
+freshness check and the current six-owner review plan before considering
+up to six caller-supplied opaque evidence references. Each submitted reference
+must identify the exact owner/check, previously bound source identity and
+**complete** declared native/Recipe/relationship scope. Mixed sources,
+wrong owner associations, omitted Cubes and duplicate/unplanned checks are
+rejected or explicitly reported without using a fallback to names or
+preview examples.
+
+Reconciliation has strictly **non-authoritative diagnostic states**:
+
+- `SOURCE_STALE`: the saved Recipe/native/surface/project/review plan changed;
+  previously submitted check references cannot be reused.
+- `REFERENCES_MISMATCHED`: a source binding or full intended scope differs.
+- `REFERENCES_MISSING`: a required review owner has no submitted reference.
+- `SOURCE_INCOMPLETE`: current native input lacks required source fields,
+  even if a claimant supplies a reference.
+- `REFERENCES_BOUND_UNATTESTED`: only reference identity and complete declared
+  scope match the latest read. **No native owner proof has been authenticated.**
+- `NO_REVIEW_CANDIDATES`: there are no coincident groups to review.
+
+The output never repeats arbitrary reference content and always reports
+`owner_provenance_verified: false`, `verified_evidence_count: 0`,
+`native_review_executed: false`, `review_approved: false`,
+`safe_to_delete: false` and `native_mutation_authorized: false`. The
+current Recipe evidence registry holds Recipe Apply receipts and semantic
+identities, not independent UV/material/animation/visual PASS receipts;
+it **must not be repurposed** into a fake all-owner authority. Resolving those
+owner-specific native receipts requires a separate authenticated producer
+contract and installed evidence, not a self-declared handle. Even a correctly
+bound reference is not visual, rig, export or deletion acceptance.
+
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
 `planning.ts` owns pure planning APIs. `service.ts` owns bounded stateful plan/apply/identity/evidence lifecycle and may compose recipe modules, but recipe source must not depend on Gateway or Runtime executors.

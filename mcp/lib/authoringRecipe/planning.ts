@@ -464,6 +464,79 @@ const RECIPE_RISK_REVIEW_DEFINITIONS: readonly RecipeRiskReviewDefinition[] = [
   },
 ];
 
+/**
+ * Full exact owner scope is hashed before the public result is truncated to
+ * examples. The digest is a drift detector for a claimant's complete scope,
+ * not authentication of that claimant or proof that its evidence was executed.
+ */
+export type RecipeRiskReviewFullScope = {
+  check_id: RecipeRiskReviewCheckId;
+  evidence_owner: RecipeRiskReviewDefinition["evidence_owner"];
+  candidate_group_count: number;
+  trigger_reason_codes: RecipeCoincidenceRiskReason[];
+  instance_ids: string[];
+  native_cube_uuids: string[];
+  anchor_relation_ids: string[];
+  symmetry_relation_ids: string[];
+  animation_clip_ids: string[];
+};
+
+/** Opaque claimant references are NEVER interpreted as owner-attested proof. */
+export type RecipeRiskReviewEvidenceReference = {
+  check_id: RecipeRiskReviewCheckId;
+  evidence_owner: RecipeRiskReviewDefinition["evidence_owner"];
+  source_binding_fingerprint: string;
+  evidence_ref: string;
+  full_scope: RecipeRiskReviewFullScope;
+};
+
+export function fingerprintRecipeRiskReviewScope(scope: RecipeRiskReviewFullScope): string {
+  const definition = RECIPE_RISK_REVIEW_DEFINITIONS.find(d => d.id === scope?.check_id);
+  const ids = [
+    scope?.instance_ids, scope?.native_cube_uuids,
+    scope?.anchor_relation_ids, scope?.symmetry_relation_ids,
+    scope?.animation_clip_ids,
+  ];
+  const validIds = (list: unknown): list is string[] =>
+    Array.isArray(list) && list.length <= 4096 &&
+    list.every(value => typeof value === "string" &&
+      value.length > 0 && value.length <= 160 &&
+      value === value.trim()) &&
+    new Set(list).size === list.length;
+  if (!definition || scope.evidence_owner !== definition.evidence_owner ||
+      !Number.isSafeInteger(scope.candidate_group_count) ||
+      scope.candidate_group_count < 1 || scope.candidate_group_count > 4096 ||
+      ids.some(list => !validIds(list)) ||
+      scope.instance_ids.length === 0 ||
+      scope.native_cube_uuids.length !== scope.instance_ids.length ||
+      !Array.isArray(scope.trigger_reason_codes) ||
+      scope.trigger_reason_codes.length < 1 ||
+      scope.trigger_reason_codes.length > definition.trigger_reasons.length ||
+      new Set(scope.trigger_reason_codes).size !== scope.trigger_reason_codes.length ||
+      scope.trigger_reason_codes.some(code => !definition.trigger_reasons.includes(code)) ||
+      (scope.check_id !== "RECIPE_ANCHOR_RELATION" &&
+        scope.anchor_relation_ids.length > 0) ||
+      (scope.check_id !== "RECIPE_SYMMETRY_RELATION" &&
+        scope.symmetry_relation_ids.length > 0) ||
+      (scope.check_id !== "NATIVE_BONE_ANIMATION" &&
+        scope.animation_clip_ids.length > 0)) {
+    throw new Error("RECIPE_OPTIMIZATION_REVIEW_FULL_SCOPE_INVALID");
+  }
+  return fingerprintReviewSource({
+    check_id: definition.id,
+    evidence_owner: definition.evidence_owner,
+    candidate_group_count: scope.candidate_group_count,
+    trigger_reason_codes: definition.trigger_reasons.filter(code =>
+      scope.trigger_reason_codes.includes(code)
+    ),
+    instance_ids: [...scope.instance_ids].sort(),
+    native_cube_uuids: [...scope.native_cube_uuids].sort(),
+    anchor_relation_ids: [...scope.anchor_relation_ids].sort(),
+    symmetry_relation_ids: [...scope.symmetry_relation_ids].sort(),
+    animation_clip_ids: [...scope.animation_clip_ids].sort(),
+  });
+}
+
 type RecipeRiskReviewScope = {
   candidate_group_count: number;
   instance_ids: Set<string>;
@@ -694,19 +767,31 @@ export function assessRecipeNativeCoincidence(
   const reviewBatches = RECIPE_RISK_REVIEW_DEFINITIONS.flatMap(definition => {
     const scope = reviewsByCheck.get(definition.id);
     if (!scope) return [];
-    return [{
+    const fullScope: RecipeRiskReviewFullScope = {
       check_id: definition.id,
       evidence_owner: definition.evidence_owner,
-      required_evidence: definition.required_evidence,
+      candidate_group_count: scope.candidate_group_count,
       trigger_reason_codes: definition.trigger_reasons.filter(code =>
         scope.trigger_reasons.has(code)
       ),
-      candidate_group_count: scope.candidate_group_count,
-      instance_scope: bounded([...scope.instance_ids].sort()),
-      native_cube_scope: bounded([...scope.native_cube_uuids].sort()),
-      anchor_relation_scope: bounded([...scope.anchor_relation_ids].sort()),
-      symmetry_relation_scope: bounded([...scope.symmetry_relation_ids].sort()),
-      animation_clip_scope: bounded([...scope.animation_clip_ids].sort()),
+      instance_ids: [...scope.instance_ids].sort(),
+      native_cube_uuids: [...scope.native_cube_uuids].sort(),
+      anchor_relation_ids: [...scope.anchor_relation_ids].sort(),
+      symmetry_relation_ids: [...scope.symmetry_relation_ids].sort(),
+      animation_clip_ids: [...scope.animation_clip_ids].sort(),
+    };
+    return [{
+      check_id: fullScope.check_id,
+      evidence_owner: fullScope.evidence_owner,
+      required_evidence: definition.required_evidence,
+      trigger_reason_codes: fullScope.trigger_reason_codes,
+      candidate_group_count: fullScope.candidate_group_count,
+      full_scope_fingerprint: fingerprintRecipeRiskReviewScope(fullScope),
+      instance_scope: bounded(fullScope.instance_ids),
+      native_cube_scope: bounded(fullScope.native_cube_uuids),
+      anchor_relation_scope: bounded(fullScope.anchor_relation_ids),
+      symmetry_relation_scope: bounded(fullScope.symmetry_relation_ids),
+      animation_clip_scope: bounded(fullScope.animation_clip_ids),
       source_readiness: definition.id === "NATIVE_VISUAL_AND_EXPORT"
         ? ("NATIVE_PROOF_REQUIRED" as const)
         : definition.trigger_reasons.some(code => scope.trigger_reasons.has(code) &&
