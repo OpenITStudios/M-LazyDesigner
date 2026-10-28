@@ -193,10 +193,11 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
           !Array.isArray(face.vertices) || face.vertices.length>4)return true;
        if(!face.uv)return false;
        if(typeof face.uv!=="object" || Array.isArray(face.uv))return true;
-       const keys=Object.keys(face.uv);
+       const uvMap=face.uv;
+       const keys=Object.keys(uvMap);
        return keys.length>4 || keys.some(key=>
-         key.length>160 || !Array.isArray(face.uv?.[key]) ||
-         face.uv[key].length!==2
+         key.length>160 || !Array.isArray(uvMap[key]) ||
+         uvMap[key].length!==2
        );
      }) || vertices.some(id=>id.length>160) ||
      faces.some(id=>id.length>160) ||
