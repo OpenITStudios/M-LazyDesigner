@@ -145,6 +145,14 @@ ground relationship = explicit
 
 Approved dimensions are numeric target authority. Reference pixels/panel size are not geometry calibration.
 
+Source-level cross-view world dimensions must be finite and non-negative.
+A documented planar/cutout span of exactly zero is a valid observed
+constraint, not an absent measurement: conflicting zero-versus-positive
+claims from different views must be reported as a conflict. Explicit
+negative, non-finite or unknown-axis measurements are invalid evidence,
+not silently omitted to make another view appear consistent. Even a
+consistent cross-view semantic constraint is not a visual/reference PASS.
+
 Before a significant Cube cohort is applied, convert any approved
 block dimensions to native units (16 units per Minecraft block), derive
 each actual `to-from` span and rendered span after `inflate`, then

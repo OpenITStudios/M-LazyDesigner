@@ -25,8 +25,10 @@ export type CrossViewIssue =
 const DEFAULT_RELATIVE_TOLERANCE = 0.08;
 const MAX_EXAMPLES = 12;
 
-function finitePositive(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0;
+function finiteDimension(value: unknown): value is number {
+  // A physically intentional planar span may be exactly zero. It is still
+  // a real constraint and must participate in cross-view comparison.
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
 
 function canonicalParent(value: string | null | undefined): string | null {
@@ -53,6 +55,34 @@ export function analyzeReferenceCrossViewEvidence(input: {
   if (!Number.isInteger(exampleLimit) || exampleLimit < 1 || exampleLimit > 100) {
     return { state: "unavailable" as const, reason: "example_limit_invalid" as const };
   }
+  if (!Array.isArray(input.observations)) {
+    return { state: "unavailable" as const, reason: "observations_invalid" as const };
+  }
+  // An explicit invalid world-space measurement must never be silently
+  // discarded while another axis makes the same part look cross-view
+  // consistent. Missing axes are fine; malformed supplied facts are not.
+  for (const observation of input.observations) {
+    if (!observation || typeof observation !== "object" ||
+        typeof observation.view !== "string" ||
+        typeof observation.part_id !== "string" ||
+        (observation.required !== undefined &&
+          typeof observation.required !== "boolean") ||
+        (observation.attachment_parent !== undefined &&
+          observation.attachment_parent !== null &&
+          typeof observation.attachment_parent !== "string")) {
+      return { state: "unavailable" as const, reason: "observation_identity_invalid" as const };
+    }
+    const dimensions = observation.dimensions;
+    if (dimensions === undefined) continue;
+    if (!dimensions || typeof dimensions !== "object" ||
+        Array.isArray(dimensions) ||
+        Object.entries(dimensions).some(([axis, value]) =>
+          !["x", "y", "z"].includes(axis) ||
+          (value !== undefined && !finiteDimension(value))
+        )) {
+      return { state: "unavailable" as const, reason: "dimension_constraint_invalid" as const };
+    }
+  }
 
   const usable = input.observations
     .filter((entry) => entry.view.trim().length > 0 && entry.part_id.trim().length > 0)
@@ -76,7 +106,7 @@ export function analyzeReferenceCrossViewEvidence(input: {
     for (const axis of ["x", "y", "z"] as const) {
       const values = observations
         .map((entry) => ({ view: entry.view, value: entry.dimensions?.[axis] }))
-        .filter((entry): entry is { view: string; value: number } => finitePositive(entry.value));
+        .filter((entry): entry is { view: string; value: number } => finiteDimension(entry.value));
       if (values.length < 2) continue;
       // Repeated claims from one view can reveal contradictions but never
       // establish independent cross-view support.
