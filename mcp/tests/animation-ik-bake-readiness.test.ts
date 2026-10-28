@@ -1,0 +1,157 @@
+import { describe, test, expect } from "bun:test";
+import {
+  analyzeNativeIkBakeReadiness,
+  IK_BAKE_MAX_WORK_UNITS,
+  type NativeIkBakeReadinessInput,
+} from "@/lib/animation/ikBakeReadiness";
+
+const group = (
+  uuid: string, parent_uuid: string | null,
+  rotation: readonly number[] = [0, 0, 0],
+  native_fix_rotation_available = true
+) => ({
+  uuid, parent_uuid, rotation,
+  transform_available: true, native_fix_rotation_available,
+});
+
+const baseline = (): NativeIkBakeReadinessInput => ({
+  blockbench_version: "5.2.2",
+  format_id: "bedrock",
+  animate_mode: true,
+  selected_clip_uuid: "walk",
+  animation_uuid: "walk",
+  duration_seconds: 1,
+  snapping_fps: 20,
+  anim_time_update: "",
+  blend_weight: "",
+  groups: [
+    group("body", null),
+    group("upper", "body", [0, 15, 0]),
+    group("lower", "upper"),
+    group("foot", "lower"),
+  ],
+  locator_uuids: ["knee_pole"],
+  controllers: [{
+    uuid: "ik_foot", target_uuid: "foot",
+    source_uuid: "body", parent_group_uuid: "body",
+    pole_uuid: "knee_pole", position_keyframes: 4,
+    total_keyframes: 6,
+  }],
+});
+
+describe("Blockbench native IK bake source eligibility", () => {
+  test("derives a bounded real IK chain and pre-rotation risk without executing native baking", () => {
+    const input=baseline();
+    const before=JSON.stringify(input);
+    const r=analyzeNativeIkBakeReadiness(input);
+    expect(r).toMatchObject({
+      state: "candidate_source_only",
+      source_baseline: "BLOCKBENCH_5_2_2",
+      native_ik_baked: false,
+      native_undo_verified: false,
+      native_preview_restored: false,
+      visual_verdict: "not_evaluated",
+      active_controller_count: 1,
+      evaluated_chain_count: 1,
+      estimated_native_frame_count: 21,
+      estimated_native_work_units: 84,
+      expected_controller_keyframes_removed: 6,
+      affected_group_count: 4,
+      pre_rotated_group_count: 1,
+      blocking_reasons: [],
+    });
+    expect(r.examples[0]?.affected_group_uuids)
+      .toEqual(["foot", "lower", "upper", "body"]);
+    expect(JSON.stringify(input)).toBe(before);
+  });
+
+  test("unpatched, prerelease and unknown post-review editor versions cannot claim eligibility", () => {
+    for (const version of ["5.2.1", "5.2.2-beta.1", "5.3.0", "unknown"]) {
+      const r=analyzeNativeIkBakeReadiness({
+        ...baseline(), blockbench_version:version,
+      });
+      expect(r.state).toBe("blocked");
+      expect(r.blocking_reasons).toContain("IK_BAKE_NATIVE_VERSION_REVIEW_REQUIRED");
+    }
+  });
+
+  test("native 144 FPS clamp, maximum duration and total work budget fail closed", () => {
+    const overrate=analyzeNativeIkBakeReadiness({...baseline(),snapping_fps:200});
+    expect(overrate.blocking_reasons).toContain("IK_BAKE_NATIVE_SAMPLING_FPS_MISMATCH");
+    const long=analyzeNativeIkBakeReadiness({...baseline(),duration_seconds:201});
+    expect(long.blocking_reasons).toContain("IK_BAKE_DURATION_OUT_OF_NATIVE_RANGE");
+    const budget=analyzeNativeIkBakeReadiness({
+      ...baseline(),duration_seconds:200,snapping_fps:144,
+    });
+    expect(budget.estimated_native_work_units).toBeGreaterThan(IK_BAKE_MAX_WORK_UNITS);
+    expect(budget.blocking_reasons).toContain("IK_BAKE_NATIVE_SAMPLING_BUDGET_EXCEEDED");
+  });
+
+  test("unkeyed controller and modified Molang cannot prove native IK coverage", () => {
+    const empty=baseline().controllers[0]!;
+    const unkeyed=analyzeNativeIkBakeReadiness({
+      ...baseline(), controllers:[{...empty,position_keyframes:0}],
+    });
+    expect(unkeyed.blocking_reasons).toContain("IK_BAKE_NO_KEYED_NATIVE_CONTROLLER");
+    const molang=analyzeNativeIkBakeReadiness({
+      ...baseline(),anim_time_update:"q.anim_time*2",
+    });
+    expect(molang.blocking_reasons)
+      .toContain("IK_BAKE_MOLANG_SAMPLING_SEMANTICS_UNVERIFIED");
+    const selection=analyzeNativeIkBakeReadiness({
+      ...baseline(),selected_clip_uuid:"other",
+    });
+    expect(selection.blocking_reasons).toContain("IK_BAKE_SELECTED_ANIMATION_REQUIRED");
+  });
+
+  test("missing target, unsupported pole and missing native pre-rotation data are explicit blockers", () => {
+    const controller=baseline().controllers[0]!;
+    const missing=analyzeNativeIkBakeReadiness({
+      ...baseline(),controllers:[{...controller,target_uuid:"missing"}],
+    });
+    expect(missing.blocking_reasons)
+      .toContain("IK_BAKE_CHAIN_TARGET_OR_SOURCE_UNRESOLVED");
+    const pole=analyzeNativeIkBakeReadiness({
+      ...baseline(),controllers:[{...controller,pole_uuid:"unknown"}],
+    });
+    expect(pole.blocking_reasons).toContain("IK_BAKE_POLE_UNRESOLVED_OR_DEGENERATE");
+    const transforms=analyzeNativeIkBakeReadiness({
+      ...baseline(),groups:baseline().groups.map((g) =>
+        g.uuid==="upper" ? {...g,native_fix_rotation_available:false} : g
+      ),
+    });
+    expect(transforms.blocking_reasons)
+      .toContain("IK_BAKE_PRE_ROTATION_OR_TRANSFORM_UNVERIFIED");
+  });
+
+  test("duplicate ids, invalid ancestry and overlapping IK chains cannot silently merge baked keys", () => {
+    const same=baseline();
+    const dup=analyzeNativeIkBakeReadiness({
+      ...same,groups:[...same.groups,same.groups[0]!],
+    });
+    expect(dup.blocking_reasons).toContain("IK_BAKE_NATIVE_IDENTITY_AMBIGUOUS");
+    const controller=same.controllers[0]!;
+    const unrelated=analyzeNativeIkBakeReadiness({
+      ...same,controllers:[{...controller,source_uuid:"unrelated"}],
+    });
+    expect(unrelated.blocking_reasons)
+      .toContain("IK_BAKE_CHAIN_TARGET_OR_SOURCE_UNRESOLVED");
+    const overlap=analyzeNativeIkBakeReadiness({
+      ...same,controllers:[controller,{...controller,uuid:"ik_other"}],
+    });
+    expect(overlap.blocking_reasons).toContain("IK_BAKE_OVERLAPPING_CHAINS_UNVERIFIED");
+  });
+
+  test("implicit parent source that produces no rotation reference remains blocked", () => {
+    const r=analyzeNativeIkBakeReadiness({
+      ...baseline(),
+      groups:[group("body",null),group("foot","body")],
+      controllers:[{
+        uuid:"ik_foot",target_uuid:"foot",source_uuid:null,
+        parent_group_uuid:"body",pole_uuid:null,
+        position_keyframes:2,total_keyframes:2,
+      }],
+    });
+    expect(r.blocking_reasons).toContain("IK_BAKE_CHAIN_HAS_NO_ROTATION_REFERENCE");
+  });
+});
