@@ -132,6 +132,10 @@ function mutationFixture() {
       parent_group_uuid: "root", pole_uuid: null,
       lock_target_rotation: false, position_keyframes: 2, total_keyframes: 2,
       keyframe_uuids: ["old-0","old-1"],
+      keyframe_undo_copies:[
+        {uuid:"old-0",time:0,channel:"position",data_points:[{x:0,y:0,z:0}]},
+        {uuid:"old-1",time:.5,channel:"position",data_points:[{x:1,y:0,z:0}]},
+      ],
     }],
   });
   const frameCount=nativeIkFrameTimes(1,20).length;
@@ -258,8 +262,15 @@ describe("unregistered native IK keyframe writer",()=>{
     const a=new FakeBoneAnimator(clip),b=new FakeBoneAnimator(clip);
     const keys:any[]=[];
     for (let i=0;i<2;i++) {
-      const key:any={uuid:"old-"+i,animator:null,
-        remove(){const ix=keys.indexOf(key);if(ix>=0)keys.splice(ix,1);}};
+      const key:any={
+        uuid:"old-"+i,animator:null,time:i*.5,channel:"position",
+        data_points:[{x:i,y:0,z:0}],
+        getUndoCopy(){return {
+          uuid:key.uuid,time:key.time,channel:key.channel,
+          data_points:key.data_points.map((v:any)=>({...v})),
+        };},
+        remove(){const ix=keys.indexOf(key);if(ix>=0)keys.splice(ix,1);},
+      };
       keys.push(key);
     }
     const ctrl:any={animation:clip,get keyframes(){return keys;},
@@ -300,7 +311,7 @@ describe("unregistered native IK keyframe writer",()=>{
       // A repeated unobserved mutation is not idempotently re-applied.
       expect(()=>writePreparedNativeIkBakeKeyframes({
         animation:clip,readiness:ready,plan,
-      })).toThrow("IK_BAKE_MUTATION_EXISTING_ROTATION_KEYS");
+      })).toThrow("IK_BAKE_SOURCE_STATE_CHANGED");
       expect(undo.opened).toBe(1);
     });
   });
@@ -336,6 +347,14 @@ describe("unregistered native IK keyframe writer",()=>{
     withNativeFixture(({clip,controllers,undo})=>{
       const {ready,plan}=mutationFixture();
       controllers.keyframes[0].uuid="replacement-key";
+      expect(()=>writePreparedNativeIkBakeKeyframes({
+        animation:clip,readiness:ready,plan,
+      })).toThrow("IK_BAKE_SOURCE_STATE_CHANGED");
+      expect(undo.opened).toBe(0);
+    });
+    withNativeFixture(({clip,controllers,undo})=>{
+      const {ready,plan}=mutationFixture();
+      controllers.keyframes[0].data_points[0].x=30;
       expect(()=>writePreparedNativeIkBakeKeyframes({
         animation:clip,readiness:ready,plan,
       })).toThrow("IK_BAKE_SOURCE_STATE_CHANGED");

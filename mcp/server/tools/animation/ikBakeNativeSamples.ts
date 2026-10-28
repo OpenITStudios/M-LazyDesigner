@@ -146,6 +146,9 @@ export function captureNativeIkBakeReadiness(item: BBAnimation) {
       native_fix_rotation_available: Boolean(native.scene_object?.fix_rotation),
     };
   });
+  // Bound native Undo-copy inspection across the entire controller set;
+  // do not materialize unbounded authored keyframe payloads in diagnostics.
+  let remainingKeyframeSnapshotBudget = IK_BAKE_MAX_WORK_UNITS;
   const controllers = NullObject.all.map((node: NullObject) => {
     const native = node as NullObject & {
       ik_source?: string;
@@ -153,8 +156,27 @@ export function captureNativeIkBakeReadiness(item: BBAnimation) {
     };
     const animator = item.animators[node.uuid] as unknown as {
       position?: unknown[];
-      keyframes?: Array<{ uuid?: string }>;
+      keyframes?: Array<{
+        uuid?: string;
+        getUndoCopy?: (save: boolean, options?: { absolute_paths: boolean }) => unknown;
+      }>;
     } | undefined;
+    const keyframes = Array.isArray(animator?.keyframes)
+      ? animator.keyframes : [];
+    const snapshotAllowed = keyframes.length <= remainingKeyframeSnapshotBudget;
+    if (snapshotAllowed) remainingKeyframeSnapshotBudget -= keyframes.length;
+    const keyframeCopies = snapshotAllowed
+      ? keyframes.map((keyframe) => {
+          if (typeof keyframe?.getUndoCopy !== "function") return null;
+          try {
+            // Source-parity snapshot: captures numeric/Molang components,
+            // interpolation and Bezier handles, not just stable UUIDs.
+            return keyframe.getUndoCopy(true, { absolute_paths: false });
+          } catch {
+            return null;
+          }
+        })
+      : [];
     return {
       uuid: node.uuid,
       target_uuid: node.ik_target || null,
@@ -166,11 +188,10 @@ export function captureNativeIkBakeReadiness(item: BBAnimation) {
         ? animator.position.length : 0,
       total_keyframes: Array.isArray(animator?.keyframes)
         ? animator.keyframes.length : 0,
-      keyframe_uuids: Array.isArray(animator?.keyframes)
-        ? animator.keyframes.map((keyframe) =>
-            typeof keyframe?.uuid === "string" ? keyframe.uuid : ""
-          )
-        : [],
+      keyframe_uuids: keyframes.map((keyframe) =>
+        typeof keyframe?.uuid === "string" ? keyframe.uuid : ""
+      ),
+      keyframe_undo_copies: keyframeCopies,
     };
   });
   return analyzeNativeIkBakeReadiness({

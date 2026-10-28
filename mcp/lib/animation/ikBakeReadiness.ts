@@ -31,6 +31,8 @@ export type IkBakeControllerSnapshot = Readonly<{
   total_keyframes: number;
   /** Ordered UUIDs of all authored IK-controller keys at the inspected state. */
   keyframe_uuids: readonly string[];
+  /** Canonical Blockbench Keyframe.getUndoCopy(true) snapshots, no UI mutation. */
+  keyframe_undo_copies: readonly unknown[];
 }>;
 
 export type NativeIkBakeReadinessInput = Readonly<{
@@ -91,7 +93,7 @@ function sourceStateRevision(input: NativeIkBakeReadinessInput): string {
       ? input.controllers.map((c) => [
           c?.uuid, c?.target_uuid, c?.source_uuid, c?.parent_group_uuid,
           c?.pole_uuid, c?.lock_target_rotation, c?.position_keyframes,
-          c?.total_keyframes, c?.keyframe_uuids,
+          c?.total_keyframes, c?.keyframe_uuids, c?.keyframe_undo_copies,
         ])
       : null,
     input.unsupported_armature_count,
@@ -194,6 +196,14 @@ export function analyzeNativeIkBakeReadiness(input: NativeIkBakeReadinessInput) 
         controller.keyframe_uuids.some((id) => !nonEmptyId(id)) ||
         !unique(controller.keyframe_uuids)) {
       fail("IK_BAKE_CONTROLLER_KEYFRAME_IDENTITY_INVALID");
+    }
+    if (!Array.isArray(controller.keyframe_undo_copies) ||
+        controller.keyframe_undo_copies.length !== controller.total_keyframes ||
+        controller.keyframe_undo_copies.some((row, index) =>
+          !row || typeof row !== "object" || Array.isArray(row) ||
+          (row as { uuid?: unknown }).uuid !== controller.keyframe_uuids[index]
+        )) {
+      fail("IK_BAKE_CONTROLLER_KEYFRAME_SOURCE_UNVERIFIED");
     }
     if (!controller.target_uuid) continue;
     if (typeof controller.lock_target_rotation !== "boolean") {

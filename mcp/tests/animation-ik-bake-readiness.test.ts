@@ -39,6 +39,10 @@ const baseline = (): NativeIkBakeReadinessInput => ({
     position_keyframes: 4,
     total_keyframes: 6,
     keyframe_uuids: ["k0","k1","k2","k3","k4","k5"],
+    keyframe_undo_copies: Array.from({length:6},(_,i)=>({
+      uuid:"k"+i,time:i/10,channel:"position",
+      data_points:[{x:i,y:0,z:0}],
+    })),
   }],
 });
 
@@ -141,6 +145,10 @@ describe("Blockbench native IK bake source eligibility", () => {
       ...input,controllers:[{
         ...input.controllers[0]!,
         keyframe_uuids:["other",...input.controllers[0]!.keyframe_uuids.slice(1)],
+        keyframe_undo_copies:[
+          {...(input.controllers[0]!.keyframe_undo_copies[0] as object),uuid:"other"},
+          ...input.controllers[0]!.keyframe_undo_copies.slice(1),
+        ],
       }],
     });
     expect(before.state).toBe("candidate_source_only");
@@ -154,6 +162,32 @@ describe("Blockbench native IK bake source eligibility", () => {
     });
     expect(collision.blocking_reasons)
       .toContain("IK_BAKE_CONTROLLER_KEYFRAME_IDENTITY_INVALID");
+  });
+
+  test("same-UUID native interpolation/value changes invalidate previous IK samples",()=>{
+    const input=baseline();
+    const before=analyzeNativeIkBakeReadiness(input);
+    const edited=analyzeNativeIkBakeReadiness({
+      ...input,controllers:[{
+        ...input.controllers[0]!,
+        keyframe_undo_copies: input.controllers[0]!.keyframe_undo_copies.map(
+          (copy,i)=>i===0
+            ? {...(copy as object),data_points:[{x:99,y:0,z:0}]}
+            : copy
+        ),
+      }],
+    });
+    expect(before.state).toBe("candidate_source_only");
+    expect(edited.state).toBe("candidate_source_only");
+    expect(edited.source_state_revision).not.toBe(before.source_state_revision);
+    const missing=analyzeNativeIkBakeReadiness({
+      ...input,controllers:[{
+        ...input.controllers[0]!,keyframe_undo_copies:[null],
+      }],
+    });
+    expect(missing.blocking_reasons).toContain(
+      "IK_BAKE_CONTROLLER_KEYFRAME_SOURCE_UNVERIFIED"
+    );
   });
 
   test("unkeyed controllers with other authored keys cannot be silently deleted by native bake", () => {
@@ -170,6 +204,10 @@ describe("Blockbench native IK bake source eligibility", () => {
           position_keyframes: 0,
           total_keyframes: 2,
           keyframe_uuids: ["new-0","new-1"],
+          keyframe_undo_copies:[
+            {uuid:"new-0",channel:"position",time:0},
+            {uuid:"new-1",channel:"position",time:0.5},
+          ],
         },
       ],
     });
@@ -245,6 +283,10 @@ describe("Blockbench native IK bake source eligibility", () => {
         parent_group_uuid:"body",pole_uuid:null,lock_target_rotation:false,
         position_keyframes:2,total_keyframes:2,
         keyframe_uuids:["ik-0","ik-1"],
+        keyframe_undo_copies:[
+          {uuid:"ik-0",channel:"position",time:0},
+          {uuid:"ik-1",channel:"position",time:0.5},
+        ],
       }],
     });
     expect(r.blocking_reasons).toContain("IK_BAKE_CHAIN_HAS_NO_ROTATION_REFERENCE");
