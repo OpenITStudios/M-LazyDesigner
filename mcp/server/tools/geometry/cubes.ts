@@ -13,6 +13,7 @@ import {
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { autoUvEnum, cubeSchema, faceEnum } from "@/lib/schemas/geometry";
 import { readRenderedCubeBounds, isEffectivelyVisible } from "@/lib/geometry/renderedModelBounds";
+import { analyzeCubeSimplificationFidelity } from "@/lib/geometry/quality";
 import { STATUS_STABLE } from "@/lib/constants";
 import { resolveCoreCube, resolveCoreGroup, resolveUniqueUuid } from "@/lib/core/identity";
 import { requireOpenProject } from "@/lib/core/project";
@@ -1178,11 +1179,67 @@ export function registerCubesTools() {
       if (request.operation === "simplify") {
         requireOpenProject("simplifying Cubes");
         const updates = planCubeSimplification(Cube.all, request);
+        const fidelity = analyzeCubeSimplificationFidelity(updates.map((update) => {
+          const cube = resolveUniqueUuid(Cube.all ?? [], update.id, {
+            kind: "Cube",
+            notFoundHint: "Inspect the exact Cube UUID before simplifying.",
+          });
+          return {
+            cube: {
+              uuid: cube.uuid,
+              name: cube.name,
+              from: cube.from,
+              to: cube.to,
+              rotation: cube.rotation,
+              origin: cube.origin,
+              inflate: cube.inflate ?? 0,
+              box_uv: cube.box_uv,
+              face_textures: cube.faces
+                ? Object.values(cube.faces).map((face) =>
+                    (face as CubeFace & { texture?: unknown }).texture
+                  )
+                : undefined,
+            },
+            update,
+          };
+        }));
         if (request.dry_run || updates.length === 0) return {
-          content: [{ type: "text" as const, text: `${updates.length} Cube correction(s) planned; no mutation.` }],
-          structuredContent: { execution: request.dry_run ? "planned" : "unchanged", updates },
+          content: [{
+            type: "text" as const,
+            text: String(updates.length) +
+              " Cube correction(s) planned; no mutation. Parent-local shape " +
+              "and physical UV scale risks measured; visual fidelity not evaluated.",
+          }],
+          structuredContent: {
+            execution: request.dry_run ? "planned" : "unchanged",
+            updates,
+            simplification_fidelity: fidelity,
+          },
         };
-        return executeBatchUpdateCubes({ updates });
+        // Existing face texture ownership is an actual pre-Undo safety gate.
+        // Explicit batch_update remains available after reviewing a remap.
+        if (fidelity.incomplete_face_inventory_count > 0) {
+          throw new Error(
+            "SIMPLIFY_UV_INVENTORY_UNVERIFIED: native face texture ownership is " +
+            "unavailable. No Undo started; inspect Cube faces first."
+          );
+        }
+        if (fidelity.mapped_texture_stretch_risk_count > 0) {
+          throw new Error(
+            "SIMPLIFY_TEXTURE_MAPPING_REVIEW_REQUIRED: snapping Cube bounds " +
+            "would alter painted-face physical dimensions while keeping UV " +
+            "coordinates. No Undo started. Review the dry-run report; use " +
+            "explicit batch_update after approving a UV remap."
+          );
+        }
+        const result = await executeBatchUpdateCubes({ updates });
+        return {
+          ...result,
+          structuredContent: {
+            ...result.structuredContent,
+            simplification_fidelity: fidelity,
+          },
+        };
       }
       return executeBatchUpdateCubes(request);
     },

@@ -1,4 +1,4 @@
-import { boxUvSubunitAxes } from "./cubeSpan";
+import { boxUvSubunitAxes, validateCubeGeometrySpan } from "./cubeSpan";
 
 export const GEOMETRY_QUALITY_EPSILON = 1e-6;
 export const GEOMETRY_QUALITY_EXAMPLE_LIMIT = 6;
@@ -271,5 +271,169 @@ export function analyzeGeometryHygiene(
       group_count: duplicateGroupCount,
       ...duplicateBounded,
     },
+  };
+}
+
+
+/**
+ * Measures potential simplification shape and surface mapping changes without
+ * touching Blockbench state. The corner movement bound is conservative and
+ * independent of Euler order: each component rotation moves a point within
+ * 2*r*sin(delta/2) and the triangle inequality composes rotations.
+ *
+ * Bounds are parent-local, NOT world-space or animation/visual acceptance.
+ */
+export type CubeSimplificationFidelityInput = {
+  cube: GeometryCubeQualityInput & {
+    /** When absent, an unverified face inventory is NOT an untextured Cube. */
+    face_textures?: readonly unknown[];
+  };
+  update: {
+    id: string;
+    from?: readonly number[];
+    to?: readonly number[];
+    rotation?: readonly number[];
+  };
+};
+
+function simplifyFiniteTriple(
+  values: readonly number[] | undefined,
+  context: string
+): [number, number, number] {
+  if (!Array.isArray(values) || values.length !== 3 ||
+      !values.every(Number.isFinite)) {
+    throw new Error(
+      "SIMPLIFY_FIDELITY_INVALID_VECTOR: " + context + " must contain three finite numbers."
+    );
+  }
+  return [values[0], values[1], values[2]];
+}
+
+function simplifyFiniteMetric(value: number, description: string): number {
+  if (!Number.isFinite(value)) {
+    throw new Error("SIMPLIFY_FIDELITY_NONFINITE: " + description);
+  }
+  return Object.is(value, -0) ? 0 : value;
+}
+
+export function analyzeCubeSimplificationFidelity(
+  changes: readonly CubeSimplificationFidelityInput[]
+) {
+  if (!Array.isArray(changes) || changes.length > 32) {
+    throw new Error("SIMPLIFY_FIDELITY_BUDGET: at most 32 Cube changes per review.");
+  }
+  const seen = new Set<string>();
+  const perCube = changes.map(({ cube, update }) => {
+    if (!cube || !update || typeof cube.uuid !== "string" ||
+        !cube.uuid || cube.uuid !== update.id || seen.has(cube.uuid)) {
+      throw new Error("SIMPLIFY_FIDELITY_IDENTITY: unique exact Cube UUID required.");
+    }
+    seen.add(cube.uuid);
+    const from = simplifyFiniteTriple(cube.from, cube.uuid + " from");
+    const to = simplifyFiniteTriple(cube.to, cube.uuid + " to");
+    const nextFrom = simplifyFiniteTriple(update.from ?? from, cube.uuid + " new from");
+    const nextTo = simplifyFiniteTriple(update.to ?? to, cube.uuid + " new to");
+    const rotation = simplifyFiniteTriple(cube.rotation ?? [0,0,0], cube.uuid + " rotation");
+    const nextRotation = simplifyFiniteTriple(update.rotation ?? rotation, cube.uuid + " new rotation");
+    const inflate = cube.inflate ?? 0;
+    validateCubeGeometrySpan(from, to, inflate, "Simplify source " + cube.uuid);
+    validateCubeGeometrySpan(nextFrom, nextTo, inflate, "Simplify result " + cube.uuid);
+
+    const beforeSize = to.map((n,i) => n - from[i]) as [number,number,number];
+    const afterSize = nextTo.map((n,i) => n - nextFrom[i]) as [number,number,number];
+    const extentChanged = beforeSize.some((n,i) => n !== afterSize[i]);
+    let worstExtentRatio = 1;
+    for (let axis = 0; axis < 3; axis++) {
+      const before = beforeSize[axis], after = afterSize[axis];
+      if ((before === 0) !== (after === 0)) {
+        throw new Error("SIMPLIFY_FIDELITY_SPAN_CLASS_CHANGED: plane-to-volume change is not implicit simplification.");
+      }
+      if (before === 0) continue;
+      worstExtentRatio = simplifyFiniteMetric(
+        Math.max(worstExtentRatio, before / after, after / before),
+        "Cube physical surface extent scale"
+      );
+    }
+
+    // Corresponding inflated cuboid corners move by at most the norm of
+    // their greatest per-axis endpoint differences before new rotation.
+    const boundChange = simplifyFiniteMetric(Math.hypot(...[0,1,2].map(axis =>
+      Math.max(
+        Math.abs(nextFrom[axis] - from[axis]),
+        Math.abs(nextTo[axis] - to[axis])
+      )
+    )), "Cube bounds displacement");
+    const angles = [0,1,2].map(axis => {
+      const mod = Math.abs(nextRotation[axis] - rotation[axis]) % 360;
+      return Math.min(mod, 360 - mod);
+    });
+    let angularBound = 0;
+    if (angles.some(d => d !== 0)) {
+      const pivot = simplifyFiniteTriple(cube.origin, cube.uuid + " pivot");
+      const radius = simplifyFiniteMetric(Math.hypot(...[0,1,2].map(axis =>
+        Math.max(
+          Math.abs(nextFrom[axis] - inflate - pivot[axis]),
+          Math.abs(nextTo[axis] + inflate - pivot[axis])
+        )
+      )), "Cube maximum corner-to-pivot radius");
+      angularBound = simplifyFiniteMetric(
+        angles.reduce((total,angle) =>
+          total + 2 * radius * Math.sin(angle * Math.PI / 360), 0
+        ), "rotated Cube corner displacement"
+      );
+    }
+    const driftBound = simplifyFiniteMetric(
+      boundChange + angularBound, "parent-local corner drift upper bound"
+    );
+    const inventoryComplete = Array.isArray(cube.face_textures);
+    const mappedFaceCount = inventoryComplete
+      ? cube.face_textures!.filter(texture =>
+          texture !== false && texture !== null && texture !== undefined
+        ).length
+      : null;
+    const textureStretchRisk = mappedFaceCount !== null &&
+      mappedFaceCount > 0 && extentChanged &&
+      worstExtentRatio > 1 + GEOMETRY_QUALITY_EPSILON;
+
+    return {
+      cube_uuid: cube.uuid,
+      cube_name: cube.name,
+      parent_local_corner_drift_upper_bound: driftBound,
+      parent_local_bounds_movement_upper_bound: boundChange,
+      parent_local_rotation_movement_upper_bound: angularBound,
+      projected_outline_drift_upper_bound: driftBound,
+      before_size_xyz: beforeSize,
+      after_size_xyz: afterSize,
+      max_physical_extent_scale_ratio: worstExtentRatio,
+      mapped_face_count: mappedFaceCount,
+      face_inventory_complete: inventoryComplete,
+      mapped_texture_stretch_risk: textureStretchRisk,
+      box_uv_template_review_required: cube.box_uv === true && extentChanged,
+      pivot_field_preserved: true as const,
+      uv_coordinate_fields_preserved: true as const,
+    };
+  });
+  return {
+    state: perCube.length ? ("geometry_change_requires_review" as const) : ("no_change" as const),
+    coordinate_scope: "parent_local_conservative_upper_bound" as const,
+    visual_verdict: "not_evaluated" as const,
+    animation_pose_sweep: "not_evaluated" as const,
+    cube_count: perCube.length,
+    max_corner_drift_upper_bound: perCube.reduce((v,c) =>
+      Math.max(v,c.parent_local_corner_drift_upper_bound),0),
+    max_physical_extent_scale_ratio: perCube.reduce((v,c) =>
+      Math.max(v,c.max_physical_extent_scale_ratio),1),
+    mapped_texture_stretch_risk_count: perCube.filter(c =>
+      c.mapped_texture_stretch_risk).length,
+    incomplete_face_inventory_count: perCube.filter(c =>
+      !c.face_inventory_complete).length,
+    box_uv_template_review_count: perCube.filter(c =>
+      c.box_uv_template_review_required).length,
+    per_cube: perCube,
+    note:
+      "Conservative parent-local geometry bound only, not world-space or " +
+      "pose-swept silhouette PASS. Unchanged pivot/UV fields do not prove " +
+      "painted artwork, texture density or reference shape fidelity. " +
+      "Recheck Box-UV templates after size changes.",
   };
 }
