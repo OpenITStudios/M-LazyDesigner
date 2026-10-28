@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
-import { assessRecipeFeatureOptimization } from "@/lib/authoringRecipe/planning";
+import {
+  assessRecipeFeatureOptimization,
+  assessRecipeNativeCoincidence,
+} from "@/lib/authoringRecipe/planning";
+import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
+import type {
+  AuthoringRecipeNativeSnapshot,
+  RecipeParentAuthoredState,
+} from "@/lib/authoringRecipe/nativeState";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 import {
   compileSemanticGeometryEdit,
@@ -500,3 +508,170 @@ describe("read-only feature representation impact for compiled Recipe geometry",
       .toThrow("FEATURE_OPTIMIZATION_PROPOSALS_REQUIRED");
   });
 });
+
+describe("native-parent-aware Recipe geometry coincidence review", () => {
+  function coincidenceRecipe(): AuthoringRecipe {
+    return {
+      schema: 1, compiler_version: 1,
+      id: "coincident-prop", name: "Co-located geometry",
+      prototypes: [{
+        id: "shell", name: "shell", size: [2, 2, 2],
+        semantic_group: "shell",
+      }],
+      patterns: [{
+        kind: "LINEAR", id: "shells", prototype_id: "shell",
+        count: 2, axis: "X", spacing: 0,
+      }],
+    };
+  }
+
+  function parentState(uuid: string): RecipeParentAuthoredState {
+    return {
+      uuid, name: "Bone " + uuid,
+      origin: [0, 0, 0], rotation: [0, 0, 0],
+      visibility: true, export: true, mirror_uv: false, reset: false,
+      bedrock_binding: null,
+    };
+  }
+
+  function native(
+    recipe: AuthoringRecipe,
+    groups: readonly (string | null)[]
+  ): AuthoringRecipeNativeSnapshot {
+    const cubes = compileAuthoringRecipe(recipe).placements;
+    if (groups.length !== cubes.length) throw new Error("invalid fixture group count");
+    return {
+      schema: 1, recipe_id: recipe.id,
+      cubes: cubes.map((cube, i) => ({
+        uuid: "native-" + cube.id,
+        recipe_id: recipe.id, instance_id: cube.id,
+        name: cube.name, from: [...cube.from], to: [...cube.to],
+        origin: [...cube.origin], rotation: [...cube.rotation],
+        inflate: cube.inflate,
+        parent_path: groups[i] ? [groups[i]!] : [],
+        parent_authored_state: groups[i] ? [parentState(groups[i]!)] : [],
+      })),
+    };
+  }
+
+  test("exact co-located Cubes under one verified parent remain review-only, never automatic savings", () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, ["same-bone", "same-bone"]);
+    const original = structuredClone(snapshot);
+    const scan = assessRecipeNativeCoincidence(recipe, snapshot);
+    expect(scan).toMatchObject({
+      state: "REVIEW_ONLY",
+      scope: "EXACT_RECIPE_OWNED_NATIVE_AUTHORED_GEOMETRY",
+      inspected_native_cube_count: 2, coincident_group_count: 1,
+      coincident_native_cube_count: 2,
+      estimated_removable_cube_count: null,
+      native_mutation_executed: false,
+      visual_verdict: "NOT_EVALUATED",
+      candidate_examples: [{
+        group_size: 2, parent_path: ["same-bone"],
+        instance_id_examples: ["shells:0", "shells:1"],
+        native_uuid_examples: ["native-shells:0", "native-shells:1"],
+        safe_to_delete: false,
+      }],
+    });
+    expect(snapshot).toEqual(original);
+    expect(compileAuthoringRecipe(recipe).metrics.realized_cube_count).toBe(2);
+  });
+
+  test("identical Recipe coordinates under different Bones are never treated as native coincident", () => {
+    const recipe = coincidenceRecipe();
+    const scan = assessRecipeNativeCoincidence(
+      recipe, native(recipe, ["arm-left", "arm-right"])
+    );
+    expect(scan.coincident_group_count).toBe(0);
+    expect(scan.coincident_native_cube_count).toBe(0);
+    expect(scan.state).toBe("REVIEW_ONLY");
+  });
+
+  test("missing ancestry, inconsistent Group state and ambiguous native IDs fail closed", () => {
+    const recipe = coincidenceRecipe();
+    const absent = native(recipe, [null, null]);
+    delete absent.cubes[1]!.parent_path;
+    expect(() => assessRecipeNativeCoincidence(recipe, absent))
+      .toThrow("RECIPE_OPTIMIZATION_PARENT_EVIDENCE_REQUIRED");
+
+    const inconsistent = native(recipe, ["same-bone", "same-bone"]);
+    inconsistent.cubes[1]!.parent_authored_state![0]!.rotation[1] = 30;
+    expect(() => assessRecipeNativeCoincidence(recipe, inconsistent))
+      .toThrow("RECIPE_OPTIMIZATION_PARENT_STATE_CONFLICT");
+
+    const badParentId = native(recipe, ["same", "same"]);
+    badParentId.cubes[0]!.parent_path![0] = " ";
+    expect(() => assessRecipeNativeCoincidence(recipe, badParentId))
+      .toThrow("RECIPE_OPTIMIZATION_PARENT_EVIDENCE_REQUIRED");
+
+    const identity = native(recipe, [null, null]);
+    identity.cubes[1]!.uuid = identity.cubes[0]!.uuid;
+    expect(() => assessRecipeNativeCoincidence(recipe, identity))
+      .toThrow("RECIPE_OPTIMIZATION_NATIVE_UUID_AMBIGUOUS");
+
+    const drift = native(recipe, [null, null]);
+    drift.cubes[0]!.from[0] += 1;
+    expect(() => assessRecipeNativeCoincidence(recipe, drift))
+      .toThrow("RECIPE_NATIVE_STATE_MISMATCH");
+  });
+
+  test("constraint and symmetry-linked coincidences carry owner evidence without removal eligibility", () => {
+    const recipe = coincidenceRecipe();
+    recipe.constraints = [{
+      kind: "ANCHOR", id: "shell_anchor",
+      source_instance_id: "shells:1", target_instance_id: "shells:0",
+      axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+      target_anchor: ["MIN", "MIN", "MIN"],
+    }];
+    recipe.symmetry = [{
+      id: "shell_mirror", source_instance_id: "shells:0",
+      target_instance_id: "mirrored-shell",
+      plane: { axis: "X", position: 1 },
+      uv_policy: "SHARE", texture_policy: "MIRROR", rig_policy: "MIRROR",
+    }];
+    const scan = assessRecipeNativeCoincidence(
+      recipe, native(recipe, ["same", "same", "same"])
+    );
+    expect(scan).toMatchObject({
+      coincident_group_count: 1,
+      coincident_native_cube_count: 3,
+      candidate_examples: [{
+        group_size: 3,
+        anchor_constraint_count: 1,
+        anchor_constraint_examples: ["shell_anchor"],
+        symmetry_relation_count: 1,
+        symmetry_relation_examples: ["shell_mirror"],
+        safe_to_delete: false,
+      }],
+    });
+  });
+
+  test("existing Recipe Service reads stored native source without applying any mutation", async () => {
+    const recipe = coincidenceRecipe();
+    const snapshot = native(recipe, [null, null]);
+    let readCount = 0;
+    let mutationCount = 0;
+    const service = createAuthoringRecipeService({
+      readStoredRecipe: () => recipe,
+      readOwned: () => { readCount++; return snapshot; },
+      createApplyAdapter: () => {
+        mutationCount++;
+        throw new Error("Read-only inspection must not request a native adapter.");
+      },
+    });
+    const report = await service.inspectStoredGeometryCoincidence({
+      recipe_id: recipe.id,
+    });
+    expect(report).toMatchObject({
+      inspected_native_cube_count: 2,
+      coincident_group_count: 1,
+      native_mutation_executed: false,
+    });
+    expect(readCount).toBe(1);
+    expect(mutationCount).toBe(0);
+    expect(service.registrySize()).toBe(0);
+    expect(service.evidenceRegistrySize()).toBe(0);
+  });
+});
+

@@ -17,6 +17,7 @@ import { AuthoringEvidenceRegistry, type AuthoringEvidenceHandle } from "@/lib/a
 import { compactAuthoringApplyReceipt, compactSemanticIdentityResolution } from "@/lib/authoringRecipe/compactReceipt";
 import {
   planRecipeFeatureRepresentations,
+  assessRecipeNativeCoincidence,
   selectRecipeRebuildExecutionStrategy,
   summarizeAuthoringRecipeRebuild,
 } from "@/lib/authoringRecipe/planning";
@@ -24,6 +25,7 @@ import {
 export {
   chooseBoundedGeometryCorrection,
   assessRecipeFeatureOptimization,
+  assessRecipeNativeCoincidence,
   composeReusableAuthoringAssets,
   evaluateSemanticGeometryStack,
   planReferenceGeometryCorrections,
@@ -68,6 +70,22 @@ export function createAuthoringRecipeService(
       const previousRecipe = await dependencies.readStoredRecipe(nextRecipe.id);
       if (!previousRecipe) throw new Error("RECIPE_NOT_STORED: no previous recipe source exists for " + nextRecipe.id + "; use explicit previous/next planning for first adoption.");
       return planPair(previousRecipe, nextRecipe);
+    },
+    /**
+     * Read-only native coincidence scan. Requires current saved Recipe and
+     * the same native owned-snapshot reader as ordinary Recipe planning.
+     * Does not create an MCP route, start Undo or modify an asset.
+     */
+    async inspectStoredGeometryCoincidence(input: { recipe_id: string }) {
+      if (!dependencies.readStoredRecipe) {
+        throw new Error("RECIPE_STORE_UNAVAILABLE: native Geometry inspection requires saved Recipe ownership.");
+      }
+      const recipe = await dependencies.readStoredRecipe(input.recipe_id);
+      if (!recipe) {
+        throw new Error("RECIPE_NOT_STORED: no saved Recipe exists for " + input.recipe_id + ".");
+      }
+      const native = await dependencies.readOwned(input.recipe_id);
+      return assessRecipeNativeCoincidence(recipe, native);
     },
     async resolveIdentity(input: { recipe_id: string; target: SemanticGeometryTarget }) {
       if (!dependencies.readStoredRecipe) {

@@ -108,8 +108,20 @@ still owns final Cube-span validation and the bounded instance budget.
 recipe compiler.** The compiler lacks native parent-group identity for
 already owned/reparented Cubes, so a hard-coded "root" comparison could
 mistake separately transformed Bones for coincident masses. Existing
-direct `manage_cubes` duplicate guards remain active; native-parent-aware
-Recipe review requires verified ownership evidence before integration.
+direct `manage_cubes` duplicate guards remain active.
+
+The existing `planning.ts` now also exposes the opt-in, read-only
+`assessRecipeNativeCoincidence`. It accepts the current Recipe plus a
+matching complete native owned-Cube snapshot, rejects missing/ambiguous Group
+ancestry or inconsistent ancestor state, and groups **exact authored geometry
+under the same native parent**. The current Recipe Service exposes
+`inspectStoredGeometryCoincidence` using its original stored-Recipe/native
+reader; no new MCP tool or state owner is created. Reported groups include
+related anchor and symmetry references, not deletion commands. Matching parent,
+bounds, pivot, rotation and inflate do **not** prove that UVs, textures,
+per-Cube visibility, animation, unrelated scene contents or rendered appearance
+are interchangeable. No Cube-count saving, native operation or visual PASS is
+inferred. Legacy source-only snapshots without parent identity fail closed.
 
 This is not a fifth Gateway tool, a 3D inference model, or a new manager.
 
