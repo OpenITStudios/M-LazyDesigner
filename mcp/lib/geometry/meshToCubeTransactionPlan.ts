@@ -25,6 +25,9 @@ export type MeshToCubeSource = MeshToCubeInput & {
   source_visibility: boolean;
   source_export: boolean;
   source_locked: boolean;
+  source_selected: boolean;
+  /** Null means the native mesh sub-selection inventory could not be read. */
+  source_mesh_subselection_active: boolean | null;
   source_color: number;
   source_render_order: string | null;
   armature_reference: string | null;
@@ -71,6 +74,14 @@ export type MeshToCubeTransactionPlan = Readonly<{
   undo_executed: false;
   native_export_verified: false;
   visual_verdict: "not_evaluated";
+  /** Blockbench 5.2.2 Bedrock compileCube face-shape projection only. */
+  bedrock_uv_source_projection: readonly {
+    face: PlannedCubeFace["face"];
+    uv: readonly [number,number];
+    uv_size: readonly [number,number];
+    uv_rotation: 0|90|180|270|null;
+    material_instance: string|null;
+  }[] | null;
 }>;
 
 function finite3(values: readonly number[] | undefined): values is readonly [number,number,number] {
@@ -101,6 +112,7 @@ function sourceSignature(source: MeshToCubeSource): string {
     source.shading,source.armature_attached,source.armature_reference,
     source.animation_reference_count,
     source.source_visibility,source.source_export,source.source_locked,
+    source.source_selected,source.source_mesh_subselection_active,
     source.source_color,source.source_render_order,
     source.format,orderedVertices,orderedFaces,
     Object.entries(source.seams).sort(([a],[b])=>a.localeCompare(b)),
@@ -118,6 +130,32 @@ function sourceSignature(source: MeshToCubeSource): string {
     (b>>>0).toString(16).padStart(8,"0");
 }
 
+
+
+/**
+ * Read-only source projection of Blockbench 5.2.2 compileCube() per-face UV:
+ * north/east/south/west keep uv=[u0,v0] and uv_size=[du,dv],
+ * whereas up/down reverse the UV origin and signed size on export.
+ * This is NOT a call to the Bedrock codec or evidence of save/reopen parity.
+ */
+function projectBedrockUvSource(
+  cube: NonNullable<MeshToCubeTransactionPlan["cube"]>
+): NonNullable<MeshToCubeTransactionPlan["bedrock_uv_source_projection"]> {
+  return cube.faces.filter(face=>face.texture!==null).map(face=>{
+    const topBottom=face.face==="up" || face.face==="down";
+    const uv=face.uv;
+    return {
+      face:face.face,
+      uv:(topBottom?[uv[2],uv[3]]:[uv[0],uv[1]]) as [number,number],
+      uv_size:(topBottom?
+        [uv[0]-uv[2],uv[1]-uv[3]]:
+        [uv[2]-uv[0],uv[3]-uv[1]]) as [number,number],
+      uv_rotation:face.rotation===0?null:face.rotation,
+      material_instance:face.material_name===""?null:face.material_name,
+    };
+  });
+}
+
 export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeTransactionPlan {
   const blocked = new Set<string>();
   const flag=(reason:string)=>{blocked.add(reason);};
@@ -128,6 +166,7 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
     mesh_replaced:false as const,cube_created:false as const,
     undo_executed:false as const,native_export_verified:false as const,
     visual_verdict:"not_evaluated" as const,
+    bedrock_uv_source_projection:null as MeshToCubeTransactionPlan["bedrock_uv_source_projection"],
   };
   if(!source || !nonempty(source.uuid) ||
      !source.format || !source.vertices || !source.faces ||
@@ -147,7 +186,21 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
      rawFaces.length>MESH_TO_CUBE_FACE_LIMIT ||
      seams.length>MESH_TO_CUBE_FACE_LIMIT*4 ||
      rawFaces.some(id=>!Array.isArray(source.raw_face_vertex_orders[id]) ||
-       source.raw_face_vertex_orders[id].length>4)){
+       source.raw_face_vertex_orders[id].length>4) ||
+     faces.some(id=>{
+       const face=source.faces[id];
+       if(!face || typeof face!=="object" ||
+          !Array.isArray(face.vertices) || face.vertices.length>4)return true;
+       if(!face.uv)return false;
+       if(typeof face.uv!=="object" || Array.isArray(face.uv))return true;
+       const keys=Object.keys(face.uv);
+       return keys.length>4 || keys.some(key=>
+         key.length>160 || !Array.isArray(face.uv?.[key]) ||
+         face.uv[key].length!==2
+       );
+     }) || vertices.some(id=>id.length>160) ||
+     faces.some(id=>id.length>160) ||
+     typeof source.name!=="string" || source.name.length>160){
     return {...base,state:"blocked",source_revision:null,
       blocked_reasons:["MESH_CUBE_SOURCE_BUDGET_EXCEEDED"],cube:null};
   }
@@ -176,6 +229,12 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
   if(!source.source_visibility || !source.source_export || source.source_locked){
     flag("MESH_CUBE_SOURCE_NOT_EDITABLE_VISIBLE_EXPORT");
   }
+  // Native Mesh.remove() clears element and UV/geometry selection. This
+  // source-only transaction does not claim selection-state restoration.
+  if(source.source_selected!==false ||
+     source.source_mesh_subselection_active!==false){
+    flag("MESH_CUBE_SELECTION_RECOVERY_NOT_ATTESTED");
+  }
   if(!Number.isSafeInteger(source.source_color) || source.source_color<0 ||
       source.source_color>255){
     flag("MESH_CUBE_SOURCE_COLOR_UNVERIFIED");
@@ -197,6 +256,10 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
       finite3(g.origin) && finite3(g.rotation) &&
       typeof g.export==="boolean") &&
     new Set(source.parent_lineage.map(g=>g.uuid)).size===source.parent_lineage.length;
+  // Blockbench 5.2.2 Bedrock compileGroup() serializes Cube children of
+  // Groups. A root Cube can be present in Blockbench but absent from the
+  // exported minecraft:geometry bone/cube hierarchy.
+  if(source.parent_id==="root")flag("MESH_CUBE_EXPORTABLE_BONE_REQUIRED");
   if(!validLineage || !Number.isSafeInteger(source.parent_sibling_index) ||
      source.parent_sibling_index===null || source.parent_sibling_index<0){
     flag("MESH_CUBE_PARENT_HIERARCHY_UNVERIFIED");
@@ -293,5 +356,7 @@ export function planMeshToCubeTransaction(source: MeshToCubeSource): MeshToCubeT
     source_revision:revision,
     blocked_reasons:reasons,
     cube:reasons.length?null:cube,
+    bedrock_uv_source_projection:reasons.length===0 && cube
+      ?projectBedrockUvSource(cube):null,
   };
 }

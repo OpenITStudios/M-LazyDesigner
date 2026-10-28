@@ -27,6 +27,7 @@ function exactSource():MeshToCubeSource {
     parent_lineage:[{uuid:"bone",origin:[0,0,0],rotation:[0,0,0],export:true}],
     parent_sibling_index:0,raw_face_vertex_orders:orders,seams:{},
     source_visibility:true,source_export:true,source_locked:false,
+    source_selected:false,source_mesh_subselection_active:false,
     source_color:1,source_render_order:null,
     armature_reference:null,animation_reference_count:0,
     format:{
@@ -192,4 +193,86 @@ test("unserializable native metadata is refused, never trusted as a revision",()
   expect(revised.blocked_reasons).toContain(
     "MESH_CUBE_SOURCE_REVISION_UNAVAILABLE"
   );
+});
+
+
+test("root Outliner Cubes are not claimed exportable by the Bedrock bone serializer",()=>{
+  const source=exactSource();
+  const plan=planMeshToCubeTransaction({
+    ...source,parent_id:"root",parent_lineage:[],
+  });
+  expect(plan.state).toBe("blocked");
+  expect(plan.blocked_reasons).toContain("MESH_CUBE_EXPORTABLE_BONE_REQUIRED");
+  expect(plan.cube).toBeNull();
+  expect(plan.bedrock_uv_source_projection).toBeNull();
+});
+
+test("selected Mesh or unresolved sub-selection refuses native mutation planning",()=>{
+  const source=exactSource();
+  for(const changes of [
+    {source_selected:true},
+    {source_mesh_subselection_active:true},
+    {source_mesh_subselection_active:null},
+  ]){
+    const plan=planMeshToCubeTransaction({...source,...changes});
+    expect(plan.blocked_reasons).toContain(
+      "MESH_CUBE_SELECTION_RECOVERY_NOT_ATTESTED"
+    );
+    expect(plan.cube).toBeNull();
+  }
+  const plan=planMeshToCubeTransaction({...source,source_selected:false});
+  expect(plan.state).toBe("candidate_source_only");
+});
+
+test("source-only Bedrock UV projection matches the 5.2.2 up/down sign inversion",()=>{
+  const source=exactSource();
+  const planned=planMeshToCubeTransaction(source);
+  expect(planned.state).toBe("candidate_source_only");
+  const faces=planned.cube?.faces ?? [];
+  const projection=planned.bedrock_uv_source_projection;
+  expect(projection).toHaveLength(6);
+  const north=faces.find(f=>f.face==="north")!;
+  const up=faces.find(f=>f.face==="up")!;
+  const projectedNorth=projection!.find(f=>f.face==="north")!;
+  const projectedUp=projection!.find(f=>f.face==="up")!;
+  expect(projectedNorth.uv).toEqual([north.uv[0],north.uv[1]]);
+  expect(projectedNorth.uv_size).toEqual([
+    north.uv[2]-north.uv[0],north.uv[3]-north.uv[1],
+  ]);
+  expect(projectedUp.uv).toEqual([up.uv[2],up.uv[3]]);
+  expect(projectedUp.uv_size).toEqual([
+    up.uv[0]-up.uv[2],up.uv[1]-up.uv[3],
+  ]);
+  expect(projection!.every(f=>f.material_instance===null)).toBe(true);
+  expect(planned.native_export_verified).toBe(false);
+});
+
+test("hidden source face is excluded from projected Bedrock export",()=>{
+  const source=exactSource();
+  const planned=planMeshToCubeTransaction({
+    ...source,faces:{...source.faces,north:{
+      ...source.faces.north,texture:null,
+    }},
+  });
+  expect(planned.state).toBe("candidate_source_only");
+  expect(planned.cube?.faces.find(f=>f.face==="north")?.texture).toBeNull();
+  expect(planned.bedrock_uv_source_projection).toHaveLength(5);
+  expect(planned.bedrock_uv_source_projection?.some(f=>f.face==="north"))
+    .toBe(false);
+});
+
+test("oversized authored Mesh-face UV payload never reaches source fingerprint",()=>{
+  const source=exactSource();
+  const huge=Object.fromEntries(Array.from({length:900},(_,i)=>[
+    "unrelated"+i,[i,0],
+  ]));
+  const result=planMeshToCubeTransaction({
+    ...source,faces:{...source.faces,north:{
+      ...source.faces.north,uv:huge,
+    }},
+  });
+  expect(result).toMatchObject({
+    state:"blocked",source_revision:null,cube:null,
+    blocked_reasons:["MESH_CUBE_SOURCE_BUDGET_EXCEEDED"],
+  });
 });

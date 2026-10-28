@@ -99,6 +99,23 @@ export function captureNativeMeshToCubeSource(mesh: Mesh): MeshToCubeSource {
     source_visibility:mesh.visibility!==false,
     source_export:mesh.export!==false,
     source_locked:mesh.locked===true,
+    source_selected:mesh.selected===true,
+    source_mesh_subselection_active:(()=>{
+      const store=typeof Project!=="undefined" && Project
+        ?(Project as typeof Project & {
+          mesh_selection?:Record<string, {
+            vertices?:unknown;
+            edges?:unknown;
+            faces?:unknown;
+          }>;
+        }).mesh_selection:null;
+      if(!store || typeof store!=="object")return null;
+      const row=store[mesh.uuid];
+      if(!row)return false;
+      const fields=[row.vertices,row.edges,row.faces];
+      if(fields.some(value=>!Array.isArray(value)))return null;
+      return fields.some(value=>(value as unknown[]).length>0);
+    })(),
     source_color:mesh.color as number,
     source_render_order:typeof (mesh as Mesh & {render_order?:unknown}).render_order==="string"
       ?(mesh as Mesh & {render_order:string}).render_order:null,
@@ -163,14 +180,22 @@ export function writePreparedMeshToCubeTransaction(input:{
 
   const cubeFields=current.cube;
   const aspects={elements:[mesh] as Array<Mesh|Cube>,outliner:true,collections:[]};
-  let open=false, created:Cube|null=null;
+  let undoAttempted=false, mutationStarted=false, editFinished=false;
+  let created:Cube|null=null;
+  const activeSave=()=>(Undo as typeof Undo & {current_save?:unknown}).current_save;
   try{
+    undoAttempted=true;
     const save=Undo.initEdit(aspects) as unknown as {
       aspects?:{elements?:Array<Mesh|Cube>};
+      elements?:Record<string,unknown>;
+      outliner?:unknown;
     } | undefined;
-    open=true;
     if(!save || save.aspects?.elements!==aspects.elements ||
-       (Undo as typeof Undo & {current_save?:unknown}).current_save!==save){
+       activeSave()!==save ||
+       !save.elements ||
+       Object.keys(save.elements).length!==1 ||
+       !Object.prototype.hasOwnProperty.call(save.elements,mesh.uuid) ||
+       !save.outliner){
       throw new Error("MESH_CUBE_NATIVE_UNDO_SNAPSHOT_UNVERIFIED");
     }
     // Recheck source after synchronous Undo init callbacks, before any
@@ -190,6 +215,7 @@ export function writePreparedMeshToCubeTransaction(input:{
     // Undo.cancelEdit(true) must see the added Cube in its post snapshot;
     // original before-save elements still contains ONLY the source Mesh.
     aspects.elements.push(created);
+    mutationStarted=true;
     created.init();
     created.sortInBefore(mesh,0);
     if(created.parent!==parent || created.getParentArray().indexOf(created)!==
@@ -239,13 +265,35 @@ export function writePreparedMeshToCubeTransaction(input:{
        created.getParentArray().indexOf(created)!==cubeFields.sibling_index){
       throw new Error("MESH_CUBE_NATIVE_REPLACEMENT_POSTCONDITION");
     }
-    Undo.finishEdit("Convert authored Mesh to Bedrock Cube",{
+    const entry=Undo.finishEdit("Convert authored Mesh to Bedrock Cube",{
       elements:[created],outliner:true,collections:[],
-    });
-    open=false;
+    }) as unknown as {before?:unknown;post?:unknown}|undefined;
+    if(!entry || !entry.before || !entry.post || activeSave()){
+      throw new Error("MESH_CUBE_NATIVE_UNDO_POSTCONDITION_UNVERIFIED");
+    }
+    editFinished=true;
   }catch(error){
-    if(open && (Undo as typeof Undo & {current_save?:unknown}).current_save){
-      Undo.cancelEdit(true);
+    if(undoAttempted && !editFinished){
+      if(activeSave()){
+        try{
+          Undo.cancelEdit(true);
+        }catch(rollbackError){
+          throw new Error(
+            "MESH_CUBE_NATIVE_ROLLBACK_UNVERIFIED: abort; inspect authored " +
+            "Mesh/Cube and Undo history before any retry.",
+            {cause:rollbackError}
+          );
+        }
+      }else if(mutationStarted){
+        // finishEdit can have already cleared current_save and modified the
+        // Undo history before an extension listener throws. Never blindly
+        // report rollback or automatically retry the destructive operation.
+        throw new Error(
+          "MESH_CUBE_MUTATION_OUTCOME_UNKNOWN: the native operation may " +
+          "already have committed; inspect Mesh/Cube and history before retry.",
+          {cause:error}
+        );
+      }
     }
     throw error;
   }
