@@ -152,7 +152,11 @@ test("wedge and unsampled UV seam do not become native Cube conversion candidate
 test("existing model inspection consumes the SAME preflight owner as internal writer",async()=>{
   const body=await Bun.file("server/tools/validation/qualityEvidenceRuntime.ts").text();
   expect(body).toContain("captureNativeMeshToCubeSource(mesh)");
-  expect(body).toContain("conversion_transaction_preflight:inspectNativeMeshToCubeTransaction");
+  expect(body).toContain("conversion_transaction_preflight:planMeshToCubeTransaction(reads[index])");
+  expect(body).not.toContain("conversion_transaction_preflight:inspectNativeMeshToCubeTransaction");
+  // Inspect model bounds must capture each Mesh only once; a second read
+  // can silently observe different UV/texture source within one receipt.
+  expect((body.match(/captureNativeMeshToCubeSource\(mesh\)/g)??[]).toHaveLength(1);
   expect(body).toContain('wire("inspect_model_bounds", "surface_integrity"');
   expect(body).not.toContain("writePreparedMeshToCubeTransaction(");
 });

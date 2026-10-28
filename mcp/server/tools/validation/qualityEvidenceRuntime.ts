@@ -7,14 +7,12 @@ import {
   GEOMETRY_WORLD_OBB_SAMPLE_LIMIT,
 } from "@/lib/geometry/surfaceEvidence";
 import { orientedBoxFromCube } from "@/lib/geometry/blockbenchCubeObb";
-import {captureNativeMeshToCubeSource, inspectNativeMeshToCubeTransaction} from "../geometry/meshToCubeNativeTransaction";
+import {captureNativeMeshToCubeSource} from "../geometry/meshToCubeNativeTransaction";
+import {planMeshToCubeTransaction} from "@/lib/geometry/meshToCubeTransactionPlan";
 import { isEffectivelyVisible } from "@/lib/geometry/renderedModelBounds";
 import {
   summarizeMeshToCubeFidelity,
   MESH_TO_CUBE_ANALYSIS_LIMIT,
-  MESH_TO_CUBE_VERTEX_LIMIT,
-  MESH_TO_CUBE_FACE_LIMIT,
-  type MeshToCubeInput,
 } from "@/lib/geometry/meshToCubeFidelity";
 import { analyzeUvPhysicalEvidence, type UvPhysicalFaceInput } from "@/lib/uv/physicalEvidence";
 import { analyzeAnimationCraftEvidence, type AnimationCraftTrackInput } from "@/lib/animation/craftEvidence";
@@ -46,9 +44,10 @@ function nativeMeshToCubeFidelity() {
   const visible=(Mesh.all ?? []).filter((mesh:Mesh)=>mesh.visibility!==false);
   const selected=[...visible].sort((a,b)=>a.uuid.localeCompare(b.uuid))
     .slice(0,MESH_TO_CUBE_ANALYSIS_LIMIT);
-  const reads:MeshToCubeInput[]=selected.map(mesh=>
-    captureNativeMeshToCubeSource(mesh)
-  );
+  // A single native capture owns both geometry evidence and conversion
+  // eligibility. Avoid re-evaluating mutable Mesh/UV/Project globals while
+  // constructing one inspection receipt.
+  const reads=selected.map(mesh=>captureNativeMeshToCubeSource(mesh));
   const base=summarizeMeshToCubeFidelity(reads,{
     total_visible_mesh_count:visible.length,
   });
@@ -56,7 +55,7 @@ function nativeMeshToCubeFidelity() {
     ...base,
     results:base.results.map((entry,index)=>({
       ...entry,
-      conversion_transaction_preflight:inspectNativeMeshToCubeTransaction(selected[index]),
+      conversion_transaction_preflight:planMeshToCubeTransaction(reads[index]),
     })),
   };
 }

@@ -19,6 +19,8 @@ type FixtureHooks = {
   throwDuringCancel?: boolean;
   skipRestoreOnCancel?: boolean;
   alterCubeAfterFinish?: boolean;
+  alterCubeGeometryAfterFinish?: boolean;
+  alterCubeInflateOnInit?: boolean;
 };
 function withNativeFixture(
   body:(ctx:{
@@ -124,6 +126,10 @@ function withNativeFixture(
     box_uv!:boolean;
     visibility!:boolean;
     shade!:boolean;
+    inflate=0;
+    stretch=[1,1,1];
+    export=true;
+    locked=false;
     parent:FakeGroup|"root"="root";
     faces:Record<string,any>;
     constructor(options:any){
@@ -131,7 +137,7 @@ function withNativeFixture(
       this.faces=Object.fromEntries(
         ["north","south","east","west","up","down"].map(id=>[
           id,{
-            uv:[0,0,0,0],rotation:0,
+            uv:[0,0,0,0],rotation:0,enabled:true,
             material_name:"",texture:"atlas",
             extend(data:any){
               if(hooks.throwDuringFaceWrite && id==="north"){
@@ -150,6 +156,7 @@ function withNativeFixture(
     init(){
       FakeCube.all.push(this);
       root.push(this);
+      if(hooks.alterCubeInflateOnInit)this.inflate=2;
       return this;
     }
     getParentArray(){
@@ -197,6 +204,9 @@ function withNativeFixture(
       this.history.push(entry);
       if(hooks.alterCubeAfterFinish){
         FakeCube.all[0].faces.north.uv[0]=999;
+      }
+      if(hooks.alterCubeGeometryAfterFinish){
+        FakeCube.all[0].from[0]=999;
       }
       if(hooks.throwAfterFinishCommit)throw Error("NATIVE_FINISHED_EDIT_CALLBACK");
       return entry;
@@ -399,4 +409,27 @@ test("finished_edit listener changing committed Cube data forces OUTCOME_UNKNOWN
     expect(undo.history).toHaveLength(1);
     expect(Cube.all[0].faces.north.uv[0]).toBe(999);
   },{alterCubeAfterFinish:true});
+});
+
+
+test("native init changing Cube inflation aborts before removing the Mesh",()=>{
+  withNativeFixture(({mesh,Mesh,Cube,calls})=>{
+    const prepared=inspectNativeMeshToCubeTransaction(mesh);
+    expect(()=>writePreparedMeshToCubeTransaction({mesh,prepared}))
+      .toThrow("MESH_CUBE_NATIVE_CUBE_GEOMETRY_POSTCONDITION");
+    expect(calls).toEqual({init:1,finish:0,cancel:1});
+    expect(Mesh.all).toEqual([mesh]);
+    expect(Cube.all).toHaveLength(0);
+  },{alterCubeInflateOnInit:true});
+});
+
+test("finished_edit listener changing Cube geometry reports OUTCOME_UNKNOWN",()=>{
+  withNativeFixture(({mesh,undo,Cube,calls})=>{
+    const prepared=inspectNativeMeshToCubeTransaction(mesh);
+    expect(()=>writePreparedMeshToCubeTransaction({mesh,prepared}))
+      .toThrow("MESH_CUBE_MUTATION_OUTCOME_UNKNOWN");
+    expect(calls).toEqual({init:1,finish:1,cancel:0});
+    expect(undo.history).toHaveLength(1);
+    expect(Cube.all[0].from[0]).toBe(999);
+  },{alterCubeGeometryAfterFinish:true});
 });

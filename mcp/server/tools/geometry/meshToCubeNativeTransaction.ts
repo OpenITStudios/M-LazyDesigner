@@ -279,7 +279,12 @@ export function writePreparedMeshToCubeTransaction(input:{
        !same(created.to,cubeFields.to) ||
        !same(created.origin,cubeFields.origin) ||
        !same(created.rotation,cubeFields.rotation) ||
-       created.color!==cubeFields.color){
+       created.color!==cubeFields.color ||
+       created.inflate!==0 ||
+       !same(created.stretch,[1,1,1]) ||
+       created.export!==true ||
+       created.visibility!==true ||
+       created.shade!==true){
       throw new Error("MESH_CUBE_NATIVE_CUBE_GEOMETRY_POSTCONDITION");
     }
     for(const mapping of cubeFields.faces){
@@ -287,7 +292,8 @@ export function writePreparedMeshToCubeTransaction(input:{
       if(!same(face.uv,mapping.uv) ||
          face.rotation!==mapping.rotation ||
          face.material_name!==mapping.material_name ||
-         face.texture!==mapping.texture){
+         face.texture!==mapping.texture ||
+         face.enabled!==true){
         throw new Error("MESH_CUBE_NATIVE_CUBE_FACE_POSTCONDITION");
       }
     }
@@ -324,12 +330,24 @@ export function writePreparedMeshToCubeTransaction(input:{
        !Cube.all.includes(created) ||
        created.parent!==parent ||
        created.getParentArray().indexOf(created)!==cubeFields.sibling_index ||
+       created.name!==cubeFields.name ||
+       !same(created.from,cubeFields.from) ||
+       !same(created.to,cubeFields.to) ||
+       !same(created.origin,cubeFields.origin) ||
+       !same(created.rotation,cubeFields.rotation) ||
+       created.color!==cubeFields.color ||
+       created.inflate!==0 ||
+       !same(created.stretch,[1,1,1]) ||
+       created.box_uv!==false || created.autouv!==0 ||
+       created.export!==true || created.visibility!==true ||
+       created.shade!==true ||
        cubeFields.faces.some(mapping=>{
          const face=created!.faces[mapping.face];
          return !face || !same(face.uv,mapping.uv) ||
            face.rotation!==mapping.rotation ||
            face.texture!==mapping.texture ||
-           face.material_name!==mapping.material_name;
+           face.material_name!==mapping.material_name ||
+           face.enabled!==true;
        })){
       throw new Error("MESH_CUBE_NATIVE_POSTCOMMIT_STATE_CHANGED");
     }
