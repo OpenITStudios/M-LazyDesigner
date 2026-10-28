@@ -759,6 +759,15 @@ export class CorrectionLoopRegistry {
         throw new Error("TARGET_CLEARANCE_VIEW_MISSING: recheck claim views " + missingViews.join(", "));
       }
     }
+    // A changed severity or cause is not new observation evidence. The same
+    // handle cannot reverify a pending correction or recover an expired/live
+    // Runtime generation, even when the discrepancy still appears in results.
+    // This is an identity guard, not independent pixel/native provenance proof.
+    if ((record.pending_target_discrepancy_codes.length > 0 ||
+         record.evidence_recovery_required) &&
+        evidenceHandle === record.verification_evidence_handle) {
+      throw new Error("CORRECTION_FRESH_EVIDENCE_REQUIRED: pending correction or recovery cannot reuse the previous evidence handle.");
+    }
     // Keep the measurement guard before any correction record mutation.
     // Landmarks only veto unsafe convergence; they cannot diagnose a 3D cause,
     // authorize a candidate, certify visual PASS or perform native Undo.

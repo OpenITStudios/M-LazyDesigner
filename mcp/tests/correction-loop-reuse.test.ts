@@ -1695,6 +1695,75 @@ describe("zero-waste correction loop reuse", () => {
     expect(decision.blocked_reason).toBe("NO_ELIGIBLE_CORRECTION");
   });
 
+
+  test("reverification and Runtime recovery cannot claim new quality evidence from the same handle", () => {
+    const registry = new CorrectionLoopRegistry();
+    const handle = registry.start({
+      recipe_id: "asset-freshness",
+      base_recipe: { ...recipe(), id: "asset-freshness", name: "asset-freshness" },
+      verification_request: {
+        domain: "GEOMETRY",
+        source: "capture_model_views",
+        verification_risk: "LOW",
+        views: ["front"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256,
+        size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["arms:0", "arms:1"],
+      },
+      verification_evidence_handle: "verificationevidence:pre-correction",
+      discrepancies: [{
+        code: "WIDTH_LOW",
+        severity: "REVIEW",
+        summary: "The arm appears too narrow.",
+        views: ["front"],
+        evidence_targets: ["width"],
+      }],
+    });
+    const decision = registry.planGeometryCorrection(handle, [{
+      id: "resize",
+      predicted_error: 0.1,
+      mutation_cost: 0.1,
+      risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["WIDTH_LOW"],
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: { kind: "RESIZE_AXIS", axis: "X", mode: "ADD", value: 1, anchor: "MIN" },
+        },
+      },
+    }]);
+    expect(decision.state).toBe("CORRECTION_READY");
+    const before = registry.projectContinuation(handle);
+    const revised = [{
+      code: "WIDTH_LOW",
+      severity: "INFO" as const,
+      summary: "Claimed width improvement with no fresh capture.",
+      views: ["front" as const],
+      evidence_targets: ["width" as const],
+    }];
+    expect(() =>
+      registry.updateEvidence(handle, "verificationevidence:pre-correction", revised)
+    ).toThrow("CORRECTION_FRESH_EVIDENCE_REQUIRED");
+    expect(registry.projectContinuation(handle)).toEqual(before);
+
+    registry.updateEvidence(handle, "verificationevidence:new-observation", revised);
+    expect(registry.projectContinuation(handle).convergence.state).toBe("IMPROVED");
+
+    registry.invalidateEvidenceHandles(
+      handle,
+      ["verificationevidence:new-observation"],
+      "RUNTIME_GENERATION_CHANGED"
+    );
+    const pendingRecovery = registry.projectContinuation(handle);
+    expect(() =>
+      registry.updateEvidence(handle, "verificationevidence:new-observation", revised, {
+        recovered_views: ["front"],
+      })
+    ).toThrow("CORRECTION_FRESH_EVIDENCE_REQUIRED");
+    expect(registry.projectContinuation(handle)).toEqual(pendingRecovery);
+  });
+
   test("blocks a second correction when no new evidence exists", () => {
     const registry = new CorrectionLoopRegistry();
     const handle = registry.start({
