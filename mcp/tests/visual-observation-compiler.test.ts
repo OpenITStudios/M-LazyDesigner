@@ -89,6 +89,75 @@ describe("structured visual observation compiler", () => {
     });
   });
 
+
+  test("unrecognized visual metadata fails closed before entering priority or correction routing", () => {
+    const valid = {
+      code: "WIDTH_BLOCKING",
+      criterion: "SILHOUETTE_PROPORTION" as const,
+      severity: "BLOCKING" as const,
+      summary: "The primary silhouette is wider than the reviewed reference.",
+      evidence: {
+        current_evidence_ref: "capture:front:current",
+        reference_evidence_ref: "reference:front",
+        views: ["front" as const],
+        evidence_targets: ["silhouette" as const],
+      },
+      cause_family: "SIZE_MISMATCH" as const,
+    };
+    const invalid: unknown[] = [
+      { ...valid, criterion: "__proto__" },
+      { ...valid, severity: "CRITICAL" },
+      { ...valid, cause_family: "INVENTED_GEOMETRY_CAUSE" },
+      { ...valid, evidence: { ...valid.evidence, views: ["mirrored_front"] } },
+      { ...valid, evidence: { ...valid.evidence, evidence_targets: ["impossible_target"] } },
+      { ...valid, evidence: null },
+    ];
+    for (const observation of invalid) {
+      expect(compileStructuredVisualObservation(
+        observation as Parameters<typeof compileStructuredVisualObservation>[0]
+      )).toEqual({
+        state: "UNVERIFIED",
+        discrepancy: null,
+        reason: "OBSERVATION_INVALID",
+      });
+    }
+    expect(compileStructuredVisualObservation(valid)).toMatchObject({
+      state: "SUPPORTED",
+      discrepancy: {
+        severity: "BLOCKING",
+        cause_family: "SIZE_MISMATCH",
+        views: ["front"],
+        evidence_targets: ["silhouette"],
+      },
+    });
+  });
+
+  test("invalid review metadata cannot poison independent supported visual observations", () => {
+    const valid = {
+      code: "CAPE_CONTACT",
+      criterion: "ANIMATION_CONTACT" as const,
+      severity: "REVIEW" as const,
+      summary: "Cape attachment moves away from its intended contact point.",
+      evidence: {
+        current_evidence_ref: "contact:clip:current",
+        views: ["left" as const],
+      },
+      cause_family: "MOTION_MISMATCH" as const,
+    };
+    const compiled = compileStructuredVisualObservations([
+      {
+        ...valid,
+        code: "BAD_VIEW",
+        evidence: { ...valid.evidence, views: ["unknown_view" as "left"] },
+      },
+      valid,
+    ]);
+    expect(compiled.supported.map((item) => item.code)).toEqual(["CAPE_CONTACT"]);
+    expect(compiled.unverified).toEqual([
+      { code: "BAD_VIEW", reason: "OBSERVATION_INVALID" },
+    ]);
+  });
+
   test("conflicting duplicate codes cannot select different correction owners", () => {
     const result = compileStructuredVisualObservations([
       {

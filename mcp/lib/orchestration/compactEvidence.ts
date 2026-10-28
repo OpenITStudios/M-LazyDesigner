@@ -167,6 +167,12 @@ const CAUSE_REPAIR_ROUTE: Readonly<Record<MinecraftCauseFamily, MinecraftRepairR
   UNKNOWN: "MORE_EVIDENCE",
 };
 
+/** Validate untrusted cause codes against the one canonical diagnosis-to-route map. */
+export function isMinecraftCauseFamily(value: unknown): value is MinecraftCauseFamily {
+  return typeof value === "string" &&
+    Object.prototype.hasOwnProperty.call(CAUSE_REPAIR_ROUTE, value);
+}
+
 function qualityClassOf(
   discrepancy: VerificationDiscrepancy
 ): MinecraftQualityClass {

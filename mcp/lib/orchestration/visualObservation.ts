@@ -4,8 +4,13 @@ import type {
   MinecraftQualityOwner,
   VerificationDiscrepancy,
 } from "@/lib/orchestration/compactEvidence";
-import { duplicateDiscrepancyCodes } from "@/lib/orchestration/compactEvidence";
-import type { ModelView, VisualEvidenceTarget } from "@/lib/reference/visualEvidence";
+import { duplicateDiscrepancyCodes, isMinecraftCauseFamily } from "@/lib/orchestration/compactEvidence";
+import {
+  MODEL_VIEWS,
+  VISUAL_EVIDENCE_TARGETS,
+  type ModelView,
+  type VisualEvidenceTarget,
+} from "@/lib/reference/visualEvidence";
 
 export type VisualObservationCriterion =
   | "REQUIRED_PART_COMPLETENESS"
@@ -159,6 +164,16 @@ function nonEmpty(value: string | null | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function knownLabels<T extends string>(
+  values: readonly T[] | undefined,
+  valid: readonly T[]
+): boolean {
+  return values === undefined || (
+    Array.isArray(values) && values.length <= valid.length &&
+    values.every((value) => valid.includes(value))
+  );
+}
+
 function causeCompatible(
   owner: MinecraftQualityOwner,
   cause: MinecraftCauseFamily
@@ -180,7 +195,17 @@ function causeCompatible(
 export function compileStructuredVisualObservation(
   input: StructuredVisualObservation
 ): CompiledVisualObservation {
+  // Well-formed metadata is necessary but does not attest that reference
+  // pixels, native captures or their pairing were independently reviewed.
+  // Unrecognized codes must never enter sorting or causal repair routing.
   if (
+    !input || typeof input !== "object" ||
+    !input.evidence || typeof input.evidence !== "object" ||
+    !Object.prototype.hasOwnProperty.call(CRITERION_CONTRACT, input.criterion) ||
+    !["INFO", "REVIEW", "BLOCKING"].includes(input.severity) ||
+    !knownLabels(input.evidence.views, MODEL_VIEWS) ||
+    !knownLabels(input.evidence.evidence_targets, VISUAL_EVIDENCE_TARGETS) ||
+    (input.cause_family !== undefined && !isMinecraftCauseFamily(input.cause_family)) ||
     !nonEmpty(input.code) ||
     !nonEmpty(input.summary) ||
     input.summary.trim().length > 240
