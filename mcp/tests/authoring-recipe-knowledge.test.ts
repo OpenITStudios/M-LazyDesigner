@@ -6,7 +6,7 @@ import {
   resolveRecipeKnowledgeLinks,
 } from "@/lib/authoringRecipe/knowledge";
 import { suggestRecipeKnowledge } from "@/lib/authoringRecipe/knowledgeSelection";
-import { prepareKnowledgeAwareRecipe } from "@/lib/authoringRecipe/planning";
+import { prepareKnowledgeAwareRecipe } from "@/lib/authoringRecipe/knowledgePlanning";
 import {
   parseAuthoringRecipeStore,
   serializeAuthoringRecipeStore,
@@ -95,6 +95,7 @@ describe("Recipe-owned knowledge: selection, binding, and source-snapshot review
     expect(next.knowledge_links).toEqual([{
       feature_id: "arm", section_id: armSection.id,
       section_sha256: armSection.sha256,
+      source_sha256: index.sources![0]!.content_sha256,
     }]);
     expect(compileAuthoringRecipe(next).placements)
       .toEqual(compileAuthoringRecipe(original).placements);
@@ -124,6 +125,10 @@ describe("Recipe-owned knowledge: selection, binding, and source-snapshot review
       reason: "SECTION_STALE",
     }]);
     expect(stale.compiled.metrics.realized_cube_count).toBe(1);
+    const unrelatedChange = snapshot(knowledge + "\\n\\n## Other rule\\nNew reference note.");
+    const sourceStale = resolveRecipeKnowledgeLinks(bound, unrelatedChange);
+    expect(sourceStale.state).toBe("REVIEW_REQUIRED");
+    expect(sourceStale.issues[0]?.reason).toBe("SOURCE_STALE");
     expect(resolveRecipeKnowledgeLinks(bound, { sections: [] }).issues[0]?.reason)
       .toBe("SECTION_MISSING");
     expect(resolveRecipeKnowledgeLinks(bound, { sections: base.sections }).issues[0]?.reason)
@@ -175,6 +180,13 @@ describe("Recipe-owned knowledge: selection, binding, and source-snapshot review
     }], matching);
     expect(resolveRecipeKnowledgeLinks(bound, external, matching).state)
       .toBe("CURRENT_SOURCE_SNAPSHOT");
+    const changedRevision: KnowledgeIndexSnapshot = {
+      sections: external.sections,
+      sources: external.sources!.map(source => source.origin === "EXTERNAL_SNAPSHOT"
+        ? { ...source, upstream_revision: "v1.2.1" } : source),
+    };
+    expect(resolveRecipeKnowledgeLinks(bound, changedRevision, matching)
+      .issues[0]?.reason).toBe("UPSTREAM_REVISION_STALE");
     expect(resolveRecipeKnowledgeLinks(bound, external, {
       product: "MINECRAFT_BEDROCK", version: "1.20.0",
     }).issues[0]?.reason).toBe("SOURCE_INCOMPATIBLE");

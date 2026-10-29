@@ -18,7 +18,10 @@ export type RecipeKnowledgeIssueReason =
   | "SECTION_MISSING"
   | "SECTION_STALE"
   | "SOURCE_PROVENANCE_MISSING"
-  | "SOURCE_INCOMPATIBLE";
+  | "SOURCE_INCOMPATIBLE"
+  | "SOURCE_STALE"
+  | "UPSTREAM_REVISION_STALE"
+  | "SOURCE_PROVENANCE_CHANGED";
 
 export type RecipeKnowledgeResolution = {
   state: "NOT_BOUND" | "CURRENT_SOURCE_SNAPSHOT" | "REVIEW_REQUIRED";
@@ -26,6 +29,8 @@ export type RecipeKnowledgeResolution = {
     feature_id: string;
     section_id: string;
     section_sha256: string;
+    source_sha256: string;
+    upstream_revision?: string;
     source: string;
     heading: string;
     source_origin: KnowledgeSourceEvidence["origin"];
@@ -55,17 +60,25 @@ export function validateRecipeKnowledgeLinks(recipe: AuthoringRecipe): void {
         !link.section_id.startsWith("knowledge:") ||
         link.section_id.length > 512 ||
         typeof link.section_sha256 !== "string" ||
-        !HASH.test(link.section_sha256)) {
+        !HASH.test(link.section_sha256) ||
+        typeof link.source_sha256 !== "string" ||
+        !HASH.test(link.source_sha256) ||
+        (link.upstream_revision !== undefined &&
+          (typeof link.upstream_revision !== "string" ||
+           !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/.test(link.upstream_revision)))) {
       throw new Error("RECIPE_KNOWLEDGE_LINK_INVALID");
     }
     const key = JSON.stringify([link.feature_id, link.section_id]);
     if (seen.has(key)) throw new Error("RECIPE_KNOWLEDGE_LINK_DUPLICATED");
     seen.add(key);
+    const pinnedRevision = JSON.stringify([
+      link.section_sha256, link.source_sha256, link.upstream_revision ?? null,
+    ]);
     const existingHash = sectionHashes.get(link.section_id);
-    if (existingHash && existingHash !== link.section_sha256) {
+    if (existingHash && existingHash !== pinnedRevision) {
       throw new Error("RECIPE_KNOWLEDGE_LINK_CONFLICTING_REVISION");
     }
-    sectionHashes.set(link.section_id, link.section_sha256);
+    sectionHashes.set(link.section_id, pinnedRevision);
     const count = (perFeature.get(link.feature_id) ?? 0) + 1;
     if (count > 8) throw new Error("RECIPE_KNOWLEDGE_FEATURE_BUDGET_EXCEEDED");
     perFeature.set(link.feature_id, count);
@@ -146,14 +159,22 @@ export function resolveRecipeKnowledgeLinks(
       !section ? "SECTION_MISSING" :
       section.sha256 !== link.section_sha256 ? "SECTION_STALE" :
       !source ? "SOURCE_PROVENANCE_MISSING" :
-      !isEligibleRecipeKnowledgeSource(source, compatibleWith) ? "SOURCE_INCOMPATIBLE" : null;
+      !isEligibleRecipeKnowledgeSource(source, compatibleWith) ? "SOURCE_INCOMPATIBLE" :
+      source.content_sha256 !== link.source_sha256 ? "SOURCE_STALE" :
+      source.origin === "EXTERNAL_SNAPSHOT" &&
+        source.upstream_revision !== link.upstream_revision ? "UPSTREAM_REVISION_STALE" :
+      source.origin === "REPOSITORY" &&
+        link.upstream_revision !== undefined ? "SOURCE_PROVENANCE_CHANGED" : null;
     if (reason) {
       issues.push({ feature_id: link.feature_id, section_id: link.section_id, reason });
     } else if (section && source) {
       matched.push({
         feature_id: link.feature_id, section_id: section.id,
-        section_sha256: section.sha256, source: section.source,
-        heading: section.heading, source_origin: source.origin,
+        section_sha256: section.sha256, source_sha256: source.content_sha256,
+        ...(source.origin === "EXTERNAL_SNAPSHOT"
+          ? { upstream_revision: source.upstream_revision } : {}),
+        source: section.source, heading: section.heading,
+        source_origin: source.origin,
       });
     }
   }
@@ -190,13 +211,17 @@ export function bindRecipeKnowledge(
     }
     const section = index.sections.get(selection.section_id);
     if (!section) throw new Error("RECIPE_KNOWLEDGE_BIND_SECTION_UNKNOWN");
+    const source = index.sources.get(section.source);
     if (!isEligibleRecipeKnowledgeSource(
-      index.sources.get(section.source), compatibleWith
+      source, compatibleWith
     )) throw new Error("RECIPE_KNOWLEDGE_BIND_SOURCE_INELIGIBLE");
     return {
       feature_id: selection.feature_id,
       section_id: section.id,
       section_sha256: section.sha256,
+      source_sha256: source.content_sha256,
+      ...(source.origin === "EXTERNAL_SNAPSHOT"
+        ? { upstream_revision: source.upstream_revision } : {}),
     };
   });
   const next = structuredClone(recipe);

@@ -153,6 +153,10 @@ export type RecipeKnowledgeLink = {
   feature_id: string;
   section_id: string;
   section_sha256: string;
+  /** Exact complete knowledge-source bytes at binding time. */
+  source_sha256: string;
+  /** Exact pinned external upstream revision, when applicable. */
+  upstream_revision?: string;
 };
 
 export type AuthoringRecipe = {

@@ -1,11 +1,5 @@
 import { createHash } from "node:crypto";
 import type { AuthoringRecipe, RecipeFeatureIntent } from "@/lib/authoringRecipe/contracts";
-import type { KnowledgeIndexSnapshot } from "@/lib/semantic/knowledge";
-import { resolveRecipeKnowledgeLinks } from "@/lib/authoringRecipe/knowledge";
-import {
-  suggestRecipeKnowledge,
-  type RecipeKnowledgeSelectionOptions,
-} from "@/lib/authoringRecipe/knowledgeSelection";
 import { assessCompiledRecipeFeatureOptimization } from "@/lib/authoringRecipe/featureDecision";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import {
@@ -1066,27 +1060,5 @@ export function selectRecipeRebuildExecutionStrategy(
     affected_native_instances: 0,
     affected_ratio: 0,
     reason: "NO_CHANGE" as const,
-  };
-}
-
-/**
- * One Recipe planning view: compiled intent plus relevant, source-bound
- * knowledge guidance. Neither an indexed section nor a compiled Cube is
- * evidence of installed Blockbench/visual acceptance.
- */
-export function prepareKnowledgeAwareRecipe(
-  recipe: AuthoringRecipe,
-  knowledgeIndex: KnowledgeIndexSnapshot,
-  options: RecipeKnowledgeSelectionOptions = {}
-) {
-  const compiled = compileAuthoringRecipe(recipe);
-  return {
-    recipe_id: compiled.recipe_id,
-    compiled,
-    knowledge: resolveRecipeKnowledgeLinks(
-      recipe, knowledgeIndex, options.compatible_with
-    ),
-    suggestions: suggestRecipeKnowledge(recipe, knowledgeIndex, options),
-    execution_boundary: "SOURCE_PLANNING_ONLY_NO_NATIVE_MUTATION_OR_VISUAL_PROOF" as const,
   };
 }

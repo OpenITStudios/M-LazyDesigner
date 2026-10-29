@@ -13,15 +13,17 @@ under `mcp/lib/authoringRecipe/`, in small modules:
 - `knowledgeSelection.ts`: bounded, per-feature knowledge suggestions
   using the existing index. External snapshots require exact Bedrock/Blockbench
   compatibility; unproven sources cannot silently become guidance.
-- `planning.ts`: `prepareKnowledgeAwareRecipe` presents the existing compiled
-  Recipe plus relevant suggestions, matched links, and explicit uncertainty.
+- `knowledgePlanning.ts`: `prepareKnowledgeAwareRecipe` composes the existing
+  compiler with guidance and freshness in a small read-only entrypoint;
+  the large legacy `planning.ts` retains its existing responsibilities.
 - `compiler.ts`/`store.ts`: schema-1 Recipes accept optional
   `knowledge_links` and reject malformed/foreign/duplicate links.
   Existing Recipes and their compiled Cube placements are unchanged.
 
 Sequence: index existing canonical knowledge → suggest relevant sections for
-each feature → explicitly bind selected exact section IDs + SHA-256 to the
-same Recipe → compile/plan → inspect link freshness before trusting guidance.
+each feature → explicitly bind selected section IDs, section SHA-256, full source SHA-256
+and optional external revision to the same Recipe → compile/plan → inspect
+link freshness before trusting guidance.
 The Recipe store already owns persistence; no second database or registry.
 Changing knowledge marks the link `REVIEW_REQUIRED`, never silently rebinds
 or edits native assets. Knowledge citations are **advice**, not reference-image
