@@ -8,7 +8,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **Frozen Geometry checkpoint:** G1/G2 + R1–R4 source; R5 paired Golden benchmark source prepared. Last Geometry commit `ec22a6e9d2420f12d116f31bc25ce59491956150`. Bun/typecheck/build, native/visual acceptance NOT EXECUTED; no Geometry quality PASS. Preserve source/proof history.
 
-**Start next chat with Texture & UV audit/curation, then implementation if requested:**
+**Follow the complete [K0–K9 research-to-acceptance procedure](../03-authoring/texture/knowledge-development-plan.md). Start with K0 (audit), then K1 research; do not skip proof gates:**
 
 1. Read [Texture/UV Standard](../03-authoring/texture/standard.md) and relevant `surface-pattern.md`, `material.md`, `render-profile.md`; inspect existing `mcp/lib/uv/`, `mcp/lib/texture/`, and Runtime adapters. Identify real gaps before designing changes.
 2. **UV:** Box/per-face UV, atlas islands and packing, pixel mapping/density, mirrored faces, seams, alpha planes, UV lock and migration. **Modelling owns UV Layout mapping/approval** on coherent frozen Geometry; Texture owns atlas pixels, styling, material/PBR and mapped-model verification. Do not reopen Geometry modelling.

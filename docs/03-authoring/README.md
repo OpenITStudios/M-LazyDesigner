@@ -42,6 +42,11 @@ TEXTURE_CONTEXT
 
 Load only the relevant file under `texture/` when its specific material/render/pattern policy can change the decision.
 
+For **explicit Texture & UV knowledge development** (not ordinary asset
+authoring), use the [K0–K9 research-to-acceptance plan](texture/knowledge-development-plan.md)
+conditionally. UV mapping/approval remains Modelling-owned on the frozen
+Geometry source; Texture owns atlas/styling and mapped-model evidence.
+
 ### Animation / motion
 
 ```text
