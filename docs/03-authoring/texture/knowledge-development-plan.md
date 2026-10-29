@@ -174,6 +174,9 @@ separate observed source facts from proposed hypotheses.
 
 ### K3 — Build source-grounded positive/negative decision cases
 
+**K3 review artifact:** [four Texture/UV source-grounded decision cards](decision-cases.md) with eleven pinned full-file SHA-256 provenance records and one targeted source-only [selection regression](../../../mcp/tests/authoring/texture-decision-cases.test.ts). This is a **candidate/fixture**, not runtime-installed guidance, executed Bun proof, native acceptance or authorization to mutate pixels.
+
+
 Use the **Geometry G1 method**, but with texture/UV semantics. Begin
 with a small diverse pilot and only expand after it discriminates.
 Each candidate card includes:

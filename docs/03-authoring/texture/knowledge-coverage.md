@@ -2,6 +2,8 @@
 
 **Status:** K2 SOURCE AUDIT AND RESEARCH ADOPTION MAP; no Runtime implementation, no native/visual PASS, no executed Bun verification. 2026-10-29.  
 **Pinned source:** `OpenITStudios/M-LazyDesigner` / `Local` at `23bfc62af41292a11658d401e6113944aad7e835`.  
+**K3 candidate follow-on:** [decision-cases.md](decision-cases.md) contains the four source-pinned pilot choices selected below, with hypothetical positive/reject/ambiguous scenarios and an authored (not executed) source-only selection fixture. K2 remains the gap inventory; K3 does not activate native tools.
+
 **Inputs:** [K1 112-record source inventory](research-sources.md), [K0–K9 procedure](knowledge-development-plan.md), [Texture/UV standard](standard.md), [Geometry UV reference](../../../.agents/skills/lazydesigner-modelling/references/uv-layout.md), [Texturing Skill](../../../.agents/skills/lazydesigner-texturing/SKILL.md).  
 **Owner boundary:** Modelling retains UV Layout/UV PASS on frozen Geometry; Texturing owns atlas pixels, styling, alpha/render and PBR. Do not resume Geometry R0–R5. `manage_uv_layout` remains **UNREGISTERED**.
 
