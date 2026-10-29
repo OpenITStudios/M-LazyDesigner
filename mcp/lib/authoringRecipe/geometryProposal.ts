@@ -9,6 +9,10 @@ import {
   type RecipeKnowledgeSnapshot,
 } from "@/lib/authoringRecipe/knowledge";
 import type { RecipeKnowledgeSuggestion } from "@/lib/authoringRecipe/knowledgeSelection";
+import {
+  reviewDeclaredRecipeAssembly,
+  type GeometryAssemblyReview,
+} from "@/lib/authoringRecipe/geometryAssembly";
 
 const MAX_FEATURE_PROPOSALS = 8;
 const MAX_CASE_OPTIONS = 3;
@@ -41,6 +45,8 @@ export type GeometryConstructionProposal = {
   verdict: "PROPOSAL_ONLY" | "MORE_REFERENCE_EVIDENCE_REQUIRED";
   mutation_authorized: false;
   visual_verdict: "NOT_EVALUATED";
+  /** Source-declared ANCHOR / SYMMETRY relationships, never assumed Bone parents. */
+  assembly: GeometryAssemblyReview;
 };
 
 type CaseFields = {
@@ -104,6 +110,9 @@ export function proposeGeometryConstruction(
   const matched = new Set(binding.matched.map(
     link => JSON.stringify([link.feature_id, link.section_id])
   ));
+  const assemblyByFeature = new Map(reviewDeclaredRecipeAssembly(
+    recipe, suggestions.map(suggestion => suggestion.feature_id)
+  ).map(review => [review.feature_id, review] as const));
 
   return suggestions.flatMap((suggestion): GeometryConstructionProposal[] => {
     const feature = features.get(suggestion.feature_id);
@@ -158,6 +167,7 @@ export function proposeGeometryConstruction(
         : "MORE_REFERENCE_EVIDENCE_REQUIRED" as const,
       mutation_authorized: false as const,
       visual_verdict: "NOT_EVALUATED" as const,
+      assembly: assemblyByFeature.get(feature.id)!,
     }];
   });
 }

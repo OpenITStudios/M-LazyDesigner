@@ -1,10 +1,10 @@
 # Geometry Intelligence — Implementation Design
 
-Status: **R0 CURATED; R1 SOURCE IMPLEMENTED (NOT EXECUTED)** (2026-10-29).
-Existing Recipe planning now returns source-bound conditional options before
-candidate compilation. No automatic Cube generation, new compiler pattern,
-trained weights, installed Runtime proof, measured performance or accepted
-asset is claimed.
+Status: **R0 CURATED; R1/R2 SOURCE IMPLEMENTED (NOT EXECUTED)** (2026-10-29).
+Recipe planning now returns bounded conditional strategies and exact declared
+assembly relationships **before** candidate compilation. No automatic Cube,
+Bone parenting, new compiler pattern, trained weights, native proof,
+measured performance or accepted asset is claimed.
 Owner: existing Geometry/Recipe domain. This document is the conditional
 engineering design for [curated external sources](research-sources.md),
 not a second production workflow. Actual modelling policy remains in
@@ -14,13 +14,12 @@ and evidence/acceptance in `mcp/docs/QUALITY_BENCHMARK.md`.
 ## 1. The first wrong boundary
 
 Current `authoringRecipe/service.ts:planPair` calls
-`planIncrementalRecipeRebuild` / compiler **before**
-`collectRecipeKnowledge`, then returns `recipe_knowledge` alongside a
-compiled plan. G1/G2 successfully provide source-bound **advice** and
-reject weak case-title matches; they **do not yet change a construction
-decision before compiling**, independently attest user reference images,
-or derive realistic curves/rigs. Do not portray existing G2 source wiring
-as an autonomous Geometry modeller.
+`collectRecipeKnowledge` **before** `planIncrementalRecipeRebuild`.
+R1 creates conditional knowledge proposals. R2 projects authored
+`ANCHOR`/symmetry dependencies and part identities, but neither stage
+automatically revises a Recipe, independently attests reference images,
+or derives finished native Bone hierarchy/curves. Do not portray this
+source-only preflight as an autonomous Geometry modeller.
 
 **Objective:** when an actual feature decision is unresolved, select the
 minimum useful grounded modelling principle, propose a **bounded**
@@ -150,6 +149,18 @@ and visual proof: NOT EXECUTED.
   Golden source tests must actually run before claiming executable PASS.
 
 ### R2 — Structure-first construction alternatives (P0)
+
+**Current source:** `mcp/lib/authoringRecipe/geometryAssembly.ts`
+reuses the existing pattern expander and declarative Recipe `ANCHOR` /
+`SYMMETRY` relationships to map exact instance IDs to semantic feature
+owners and surface bounded, source-only attachment/symmetry review before
+compilation. `geometryProposal.ts` attaches this as
+`geometry_proposals[].assembly` without another workflow or persistent
+graph. The report never equates positional `ANCHOR` to native Bone
+parenting, treats Group labels as unverified, flags identity exceptions,
+and preserves distinct UV/texture/rig mirror policies.
+**R2 source wired; Bun/typecheck/build/native/visual NOT EXECUTED.**
+New topology/constraints are **not** inferred or auto-created.
 
 - Apply ShapeAssembly/StructureNet **ideas**, not their implementations:
   semantic part graph, parent/contact relation, explicit symmetry,

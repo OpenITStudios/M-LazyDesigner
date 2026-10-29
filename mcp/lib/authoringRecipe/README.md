@@ -80,6 +80,26 @@ and legacy Recipes without feature intents skip the index.
 The R1 source/regression contracts are authored, NOT EXECUTED with Bun,
 TypeScript/build or native Blockbench. No measured 3D fidelity is claimed.
 
+### R2: declared semantic assembly (source only)
+
+`geometryAssembly.ts` now derives a bounded **feature → Recipe instance →
+declared relation** review from the existing `expandRecipePattern`, `ANCHOR`
+and `SYMMETRY` contracts. The R1 `geometry_proposals[].assembly` field
+exposes exact source/target instance IDs, owning semantic feature IDs,
+recorded axis or mirror/UV/texture/rig policies, and conditional reference
+checks. It explicitly distinguishes **positional ANCHOR** from a Blockbench
+Bone parent/pivot and treats `semantic_group` as a label, not a verified
+native Group. Missing/foreign endpoints, duplicate instances, incompatible
+symmetry stage, unverified feature evidence and oversize reviews remain
+`SOURCE_IDENTITY_REVIEW_REQUIRED` for the affected feature. Relationships
+are never invented or applied; the existing compiler/Undo retains sole
+structural and mutation authority.
+
+The review is read-only, only requested through existing opt-in Recipe
+planning/inspection, and preserves direct authoring and legacy Recipes.
+R2 tests are authored in the focused assembly test owner, but Bun/typecheck/
+build/native/visual proof remain NOT EXECUTED.
+
 
 Owns declarative, deterministic recipe semantics for parametric authoring.
 
