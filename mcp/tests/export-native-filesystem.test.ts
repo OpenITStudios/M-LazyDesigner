@@ -14,6 +14,7 @@ test("native restricted fs can overwrite regular projects but rejects symlinks a
   const nativeFs = {
     // Match Blockbench's permitted API, deliberately excluding lstatSync.
     existsSync: fs.existsSync, readdirSync: fs.readdirSync, statSync: fs.statSync,
+    readFileSync: fs.readFileSync,
     writeFileSync: (...args: Parameters<typeof fs.writeFileSync>) => { writes++; fs.writeFileSync(...args); },
   };
   const globals = {
@@ -47,6 +48,9 @@ test("native restricted fs can overwrite regular projects but rejects symlinks a
       "sha256:" + createHash("sha256").update('{"new":true}').digest("hex")
     );
     expect(savedProject.structuredContent.compiled_payload_sha256_scope).toBe("NATIVE_CODEC_OUTPUT_BYTES");
+    expect(savedProject.structuredContent.file_integrity_state).toBe("READBACK_MATCHED");
+    expect(savedProject.structuredContent.written_file_sha256)
+      .toBe(savedProject.structuredContent.compiled_payload_sha256);
     expect(savedProject.structuredContent).not.toHaveProperty("animation_export_identity");
     expect(savedProject.structuredContent.project_before.save_path).toBe("");
     expect(savedProject.structuredContent.project.save_path).toBe(regular);
@@ -130,6 +134,8 @@ test("Bedrock geometry compile identity is checked before delivery or filesystem
   let compiled: unknown = JSON.stringify(document);
   let writes = 0;
   let nativeSaves = 0;
+  let denyReadback = false;
+  let badReadback = false;
   const codec = {
     extension: "json",
     compile: () => compiled,
@@ -143,6 +149,11 @@ test("Bedrock geometry compile identity is checked before delivery or filesystem
   const nativeFs = {
     existsSync: fs.existsSync, readdirSync: fs.readdirSync,
     statSync: fs.statSync,
+    readFileSync: (path: string) => {
+      if (denyReadback) throw new Error("native readback not permitted");
+      if (badReadback) return Buffer.from("x".repeat(Buffer.byteLength(String(compiled))));
+      return fs.readFileSync(path);
+    },
     writeFileSync: (...args: Parameters<typeof fs.writeFileSync>) => {
       writes++; fs.writeFileSync(...args);
     },
@@ -191,6 +202,8 @@ test("Bedrock geometry compile identity is checked before delivery or filesystem
         .update(preview.structuredContent.content).digest("hex")
     );
     expect(preview.structuredContent.wrote_to_path).toBeNull();
+    expect((preview.structuredContent as Record<string, unknown>).file_integrity_state)
+      .toBe("NOT_WRITTEN");
     expect(writes).toBe(0);
     expect(nativeSaves).toBe(0);
 
@@ -222,6 +235,7 @@ test("Bedrock geometry compile identity is checked before delivery or filesystem
       structuredContent: {
         geometry_export_identity: { geometry_count: number };
         wrote_to_path: string; compiled_payload_sha256: string;
+        file_integrity_state: string; written_file_sha256: string | null;
       };
     };
     expect(saved.structuredContent.geometry_export_identity.geometry_count).toBe(2);
@@ -232,6 +246,33 @@ test("Bedrock geometry compile identity is checked before delivery or filesystem
     expect(saved.structuredContent.compiled_payload_sha256).toBe(
       "sha256:" + createHash("sha256").update(compiled).digest("hex")
     );
+    expect(saved.structuredContent.file_integrity_state).toBe("READBACK_MATCHED");
+    expect(saved.structuredContent.written_file_sha256)
+      .toBe(saved.structuredContent.compiled_payload_sha256);
+
+    // A restricted native fs that lacks read permission must not be reported
+    // as a failed save, but also cannot claim file-content attestation.
+    denyReadback = true;
+    const sizeOnlyPath = join(directory, "size-only.json");
+    const sizeOnly = await run({ path: sizeOnlyPath }) as {
+      structuredContent: { file_integrity_state: string;
+        written_file_sha256: string | null; wrote_to_path: string };
+    };
+    expect(sizeOnly.structuredContent.file_integrity_state).toBe("SIZE_ONLY");
+    expect(sizeOnly.structuredContent.written_file_sha256).toBeNull();
+    expect(sizeOnly.structuredContent.wrote_to_path).toBe(sizeOnlyPath);
+    expect(fs.existsSync(sizeOnlyPath)).toBe(true);
+
+    // A same-size but byte-different native readback cannot be accepted as
+    // content-identical. Preserve the destination and do not auto-retry.
+    denyReadback = false;
+    badReadback = true;
+    const uncertainPath = join(directory, "content-uncertain.json");
+    await expect(run({ path: uncertainPath })).rejects.toThrow(
+      "EXPORT_WRITE_OUTCOME_UNKNOWN"
+    );
+    expect(fs.existsSync(uncertainPath)).toBe(true);
+    expect(fs.readFileSync(uncertainPath, "utf8")).toBe(compiled);
   } finally {
     for (const [key, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);

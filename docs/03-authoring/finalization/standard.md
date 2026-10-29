@@ -80,7 +80,15 @@ identifiers, and duplicate identifiers fail before a new filesystem write.
 The bounded `geometry_export_identity` result is structural evidence only:
 it is not proof of atlas/UV completeness, visual acceptance or native
 save/reopen. The `compiled_payload_sha256` identifies native compiled bytes,
-not the current model revision or an independently read-back file.
+not the current model revision. A successful path-backed export additionally
+returns `file_integrity_state`: `READBACK_MATCHED` and
+`written_file_sha256` only when a permission-scoped native file readback
+matches the compiled bytes; otherwise `SIZE_ONLY` retains the existing
+path/length/lifecycle evidence without claiming content identity.
+`NOT_WRITTEN` means compile-only. A proven readback mismatch is
+`EXPORT_WRITE_OUTCOME_UNKNOWN`, with no automatic retry or rollback.
+Even matching hashes do not prove future asset-revision freshness or
+Minecraft playback.
 
 An unintended `unknown`, stale identifier, missing pair, or mismatched reference blocks Finalization for the affected deliverable. It does not erase already-valid Geometry/Texturing/Animation approvals.
 

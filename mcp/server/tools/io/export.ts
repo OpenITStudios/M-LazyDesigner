@@ -109,6 +109,8 @@ type ExportFilesystem = {
     isFile: () => boolean;
     size: number;
   };
+  /** Optional native readback: unsupported permission must not erase a valid save. */
+  readFileSync?: (path: string) => Buffer | string;
 };
 
 function requireBedrockEntityProject(): void {
@@ -398,6 +400,8 @@ export function registerExportTools() {
         const compiledPayloadSha256 = `sha256:${compiledHash.digest("hex")}`;
 
         let wrote_to_path: string | null = null;
+        let fileIntegrityState: "NOT_WRITTEN" | "SIZE_ONLY" | "READBACK_MATCHED" = "NOT_WRITTEN";
+        let writtenFileSha256: string | null = null;
         if (path && exportFs) {
           // Verify the lifecycle owner exists BEFORE touching the filesystem so
           // a failed verification never leaves a half-claimed artifact behind.
@@ -451,6 +455,31 @@ export function registerExportTools() {
             throw new Error(
               `EXPORT_LIFECYCLE_UNVERIFIED: Export artifact was written to ${path}, but native codec lifecycle state did not synchronize to that path. Inspect the destination and active project before retry; no automatic retry or rollback was performed.`
             );
+          }
+
+          fileIntegrityState = "SIZE_ONLY";
+          // Permission-scoped native fs may not offer file readback. Treat
+          // unavailable/denied read access as weaker evidence, NOT proof that
+          // a successful prior write has failed or was rolled back.
+          if (typeof exportFs.readFileSync === "function") {
+            let bytes: Buffer | string | null = null;
+            try {
+              bytes = exportFs.readFileSync(path);
+            } catch {
+              // Save and native lifecycle were already verified by size/path.
+              // The response explicitly keeps a SIZE_ONLY integrity state.
+            }
+            if (typeof bytes === "string" || Buffer.isBuffer(bytes)) {
+              const readbackHash = "sha256:" +
+                createHash("sha256").update(bytes).digest("hex");
+              if (readbackHash !== compiledPayloadSha256) {
+                throw new Error(
+                  `EXPORT_WRITE_OUTCOME_UNKNOWN: File readback differs from compiled codec bytes at ${path}. The destination may have changed or be incomplete; inspect file and native project before any retry. No automatic retry or rollback was performed.`
+                );
+              }
+              writtenFileSha256 = readbackHash;
+              fileIntegrityState = "READBACK_MATCHED";
+            }
           }
           wrote_to_path = path;
         }
@@ -507,6 +536,8 @@ export function registerExportTools() {
           byte_length: byteLength,
           compiled_payload_sha256: compiledPayloadSha256,
           compiled_payload_sha256_scope: "NATIVE_CODEC_OUTPUT_BYTES" as const,
+          file_integrity_state: fileIntegrityState,
+          written_file_sha256: writtenFileSha256,
           ...(animationExportEvidence !== null
             ? { animation_export_identity: animationExportEvidence }
             : {}),
