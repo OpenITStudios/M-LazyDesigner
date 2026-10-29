@@ -27,6 +27,16 @@ export type TextureUvKnowledgePin = {
   expected_section_sha256?: string;
 };
 
+/** Hypothetical case boundaries from trusted, pinned K3 Markdown.
+ * They are advisory prose, NOT observed user reference data or an apply gate.
+ */
+export type TextureUvDecisionExamples = Readonly<{
+  decision: string;
+  positive_hypothesis: string;
+  reject_hypothesis: string;
+  ambiguous_hypothesis: string;
+}>;
+
 export type TextureUvCaseSelection =
   | {
       state: "REVIEW_REQUIRED";
@@ -51,6 +61,7 @@ export type TextureUvCaseSelection =
       section_id: string;
       section_sha256: string;
       guidance_text: string;
+      decision_examples: TextureUvDecisionExamples;
       required_evidence: string;
       reference_scope: "CURRENT_USER_REFERENCE_NOT_ATTESTED";
       target_compatibility: "UNKNOWN_CURRENT_BEDROCK_AND_BLOCKBENCH";
@@ -61,6 +72,7 @@ export type TextureUvCaseSelection =
 
 const MAX_SOURCE_BYTES = 32_768;
 const MAX_CASE_CHARS = 7_000;
+const MAX_CASE_FIELD_CHARS = 800;
 const DIGEST = /^[a-f0-9]{64}$/;
 const CASE_HEADING = /^(?:UV|TEX)-P\d{2} /;
 const CASE_FIELDS = [
@@ -102,8 +114,23 @@ type CaseEntry = {
   id: TextureUvCaseId;
   section: KnowledgeSection;
   guidance: string;
+  decisionExamples: TextureUvDecisionExamples;
   requiredEvidence: string;
 };
+
+/** One exact authored case field, no markup inference or duplicate index.
+ * Keep each evidence boundary bounded instead of forwarding a whole casebook.
+ */
+function readCaseField(body: string, label: string): string {
+  const prefix = `- **${label}:** `;
+  const matches = body.split("\n").filter(line => line.startsWith(prefix));
+  const value = matches.length === 1
+    ? matches[0]!.slice(prefix.length).trim() : "";
+  if (!value || value.length > MAX_CASE_FIELD_CHARS) {
+    throw new Error("TEXTURE_KNOWLEDGE_CASE_FIELD_INVALID");
+  }
+  return value;
+}
 
 /**
  * Bun-embeddable, content-addressed reader. The source must be trusted
@@ -135,15 +162,19 @@ export function createTextureUvCaseReader(markdown: string) {
         CASE_FIELDS.some(field => !body.includes(field))) {
       throw new Error("TEXTURE_KNOWLEDGE_CASE_CONTENT_INVALID");
     }
-    const required = body.match(/^- \*\*Required evidence:\*\*\s*(.+)$/m);
-    if (!required?.[1]?.trim()) {
-      throw new Error("TEXTURE_KNOWLEDGE_CASE_EVIDENCE_MISSING");
-    }
+    const decisionExamples = {
+      decision: readCaseField(body, "Decision"),
+      positive_hypothesis: readCaseField(body, "Positive case (hypothetical)"),
+      reject_hypothesis: readCaseField(body, "Reject case (hypothetical)"),
+      ambiguous_hypothesis: readCaseField(body, "Ambiguous case (hypothetical)"),
+    };
+    const requiredEvidence = readCaseField(body, "Required evidence");
     return {
       id: expectedIds[index]!,
       section,
       guidance: body,
-      requiredEvidence: required[1].trim(),
+      decisionExamples,
+      requiredEvidence,
     };
   });
   const byId = new Map(entries.map(entry => [entry.id, entry]));
@@ -182,6 +213,7 @@ export function createTextureUvCaseReader(markdown: string) {
       section_id: entry.section.id,
       section_sha256: entry.section.sha256,
       guidance_text: entry.guidance,
+      decision_examples: { ...entry.decisionExamples },
       required_evidence: entry.requiredEvidence,
       reference_scope: "CURRENT_USER_REFERENCE_NOT_ATTESTED",
       target_compatibility: "UNKNOWN_CURRENT_BEDROCK_AND_BLOCKBENCH",
@@ -231,6 +263,7 @@ export type TextureUvTechnicalKnowledgeHint = Readonly<{
   source_sha256: string;
   section_sha256: string;
   required_evidence: string;
+  decision_examples: TextureUvDecisionExamples;
   reference_scope: "CURRENT_USER_REFERENCE_NOT_ATTESTED";
   target_compatibility: "UNKNOWN_CURRENT_BEDROCK_AND_BLOCKBENCH";
   mutation_authorized: false;
@@ -271,6 +304,7 @@ export function suggestTextureUvTechnicalKnowledge(
       source_sha256: caseEvidence.source_sha256,
       section_sha256: caseEvidence.section_sha256,
       required_evidence: caseEvidence.required_evidence,
+      decision_examples: { ...caseEvidence.decision_examples },
       reference_scope: caseEvidence.reference_scope,
       target_compatibility: caseEvidence.target_compatibility,
       mutation_authorized: false,

@@ -221,6 +221,15 @@ function expectKnowledgeHints(
       typeof hint.required_evidence === "string" &&
       hint.required_evidence.length > 20,
       `${scope} omitted pinned source identity or required review evidence.`);
+    const examples = (hint.decision_examples ?? {}) as JsonObject;
+    for (const key of [
+      "decision", "positive_hypothesis", "reject_hypothesis", "ambiguous_hypothesis",
+    ]) {
+      const field = examples[key];
+      expect(typeof field === "string" &&
+        field.length > 20 && field.length <= 800,
+        `${scope} omitted or over-expanded ${key}; Gateway must receive actionable source examples without presumed approval.`);
+    }
   }
 }
 

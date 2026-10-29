@@ -253,3 +253,30 @@ is **not covered by a positive live example**, never silently counted as PASS.
 has not executed in this session; Bun, installed Blockbench, active Gateway
 and approved model/reference evidence are unavailable. Do not write K8 PASS,
 visual acceptance, or quality/efficiency claims based on this script.
+
+
+## K8 source-review follow-up: selected knowledge must reach the Gateway
+
+K8 source inspection caught a K5 usefulness gap: the actual normal Gateway
+diagnostic response contained case ID and `required_evidence` but **not** the
+case's APPLY/REJECT/AMBIGUOUS criteria. Clients connected only through the
+four-tool Gateway could not automatically read the K3 Runtime Resource.
+The canonical `mcp/lib/texture/knowledgeCases.ts` now extracts the existing
+four K3 fields once, with a per-field 800-character bound, and includes
+`decision_examples.decision / positive_hypothesis / reject_hypothesis /
+ambiguous_hypothesis` in each opt-in diagnostic hint. It does not duplicate
+the content into a second registry; all fields derive from the pinned
+Markdown and retain the source and case-section SHA-256 identifiers.
+
+A selected hint remains **SOURCE_CANDIDATE / REVIEW_REQUIRED**, with
+`mutation_authorized=false` and current user reference and Bedrock render
+compatibility **unverified**. These textual cases describe hypothetical
+conditions, not observations of the active model. Casebook tampering,
+missing/duplicated field lines and oversized examples fail closed; callers
+cannot mutate the stored case summary through a returned object.
+
+The existing disposable Texturing native verifier and current authoring
+source test owner now check that the conditional Gateway hints include
+those bounded distinctions. No extra normal authoring call or new public
+tool is required. This remains SOURCE ONLY until targeted Bun and
+LIVE_BLOCKBENCH execution really occur.

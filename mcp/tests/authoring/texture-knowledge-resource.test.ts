@@ -58,12 +58,42 @@ describe("K4 on-demand Texture/UV knowledge consumer — no mutation", () => {
       expect(selected.source_sha256).toBe(reader.source_sha256);
       expect(selected.section_id).toContain("decision-cases");
       expect(selected.required_evidence.length).toBeGreaterThan(20);
+      for (const value of Object.values(selected.decision_examples)) {
+        expect(typeof value).toBe("string");
+        expect(value.length).toBeGreaterThan(20);
+        expect(value.length).toBeLessThanOrEqual(800);
+      }
       expect(selected.reference_scope).toBe("CURRENT_USER_REFERENCE_NOT_ATTESTED");
       expect(selected.target_compatibility).toBe("UNKNOWN_CURRENT_BEDROCK_AND_BLOCKBENCH");
       expect(selected.decision_readiness).toBe("REVIEW_REQUIRED");
       expect(selected.mutation_authorized).toBe(false);
       expect(selected.visual_verdict).toBe("not_evaluated");
     }
+  });
+
+  test("case summaries are source-derived, bounded, independent and never approval", async () => {
+    const reader = createTextureUvCaseReader(await readCasebook());
+    const uv = reader.read("UV-P01");
+    const texture = reader.read("TEX-P01");
+    if (uv.state !== "SOURCE_CANDIDATE" ||
+        texture.state !== "SOURCE_CANDIDATE") {
+      throw new Error("K3 source case unavailable");
+    }
+    expect(uv.decision_examples.reject_hypothesis).toContain("unique symbol");
+    expect(uv.decision_examples.ambiguous_hypothesis).toContain("unseen");
+    expect(texture.decision_examples.positive_hypothesis).toContain("painted");
+    expect(texture.decision_examples.reject_hypothesis).toContain("clean painted metal");
+    const original = reader.read("UV-P01");
+    if (original.state !== "SOURCE_CANDIDATE") throw new Error("K3 case stale");
+    uv.decision_examples.positive_hypothesis = "Caller attempted to overwrite guidance";
+    expect(reader.read("UV-P01")).toMatchObject({
+      state: "SOURCE_CANDIDATE",
+      decision_examples: {
+        positive_hypothesis: original.decision_examples.positive_hypothesis,
+      },
+      mutation_authorized: false,
+      decision_readiness: "REVIEW_REQUIRED",
+    });
   });
 
   test("strict case-title selection excludes generic, unrelated and ambiguous queries", async () => {
@@ -158,6 +188,7 @@ describe("K4 on-demand Texture/UV knowledge consumer — no mutation", () => {
       expect(payload.decision_readiness).toBe("REVIEW_REQUIRED");
       expect(payload.mutation_authorized).toBe(false);
       expect(payload.guidance_text).toContain("**Decision:**");
+      expect(payload.decision_examples.reject_hypothesis.length).toBeGreaterThan(20);
       expect(payload.guidance_text).not.toContain("## Source Identity And Rights");
       expect(payload.source_sha256).toMatch(/^[a-f0-9]{64}$/);
     }
@@ -226,6 +257,9 @@ describe("K5/K6 diagnostic knowledge hints", () => {
     });
     expect(items[0]!.source_sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(items[0]!.required_evidence).toContain("Cube UUID");
+    expect(items[0]!.decision_examples.reject_hypothesis).toContain("unique symbol");
+    expect(items[0]!.decision_examples.ambiguous_hypothesis).toContain("unseen");
+    expect(items[0]!.decision_examples.positive_hypothesis).not.toContain("SOURCE_CANDIDATE");
   });
 
   test("flat face evidence picks TEX-P01 only after sampled face coverage", async () => {
@@ -244,6 +278,8 @@ describe("K5/K6 diagnostic knowledge hints", () => {
       observed: { solid_color_face_count: 3, scanned_face_count: 8 },
       mutation_authorized: false,
     });
+    expect(two[1]!.decision_examples.positive_hypothesis).toContain("painted wooden panel");
+    expect(two[1]!.decision_examples.reject_hypothesis).toContain("clean painted metal");
     expect(two.some(x => x.case_id === "TEX-P02" || x.case_id === "TEX-P03"))
       .toBe(false);
   });
