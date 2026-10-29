@@ -124,6 +124,36 @@ Gateway tool. A normal Recipe omitting these observations is unchanged.
 Focused R3 source tests are authored; Bun/typecheck/build/native/visual
 acceptance are NOT EXECUTED.
 
+### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
+
+`geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
+**same-parent** static containment, projected-outline and rectangular
+merge diagnostics. The existing `inspectStoredGeometryCoincidence` opt-in
+native/Recipe snapshot already validates current placement identity and
+parent hierarchy; when a **selected instance** owns an explicit semantic
+feature, its review now includes `geometry_fidelity_review`.
+It does not run during ordinary inspection, normal Geometry mutation or
+a broad unselected review.
+
+The report identifies exact native Cube UUIDs and Recipe instance/feature
+owners, labels candidates `REFERENCE_AND_NATIVE_REVIEW_REQUIRED`, and
+protects cross-feature membership and declared ANCHOR/SYMMETRY dependencies
+as `RETAIN_DECLARED_RELATION`. Known motion, transform, negative-space
+and contact requirements also prevent treating a geometric merge or
+containment as redundancy. The diagnostic is withheld if native parent
+identity, reference claims, target identity or technical scope is missing.
+Partial/missing static evidence cannot mean the asset is error-free.
+
+Every result preserves `quality_verdict: UNVERIFIED`, and
+`safe_to_merge_or_delete: false`: silhouette from current views,
+material/UV/alpha, independent visibility, relevant extreme poses and
+Bedrock export still need their existing reviewers. Repeated unsuccessful
+corrections and evidence freshness remain owned by the existing
+`orchestration/correctionLoop.ts` and Recipe transaction guards;
+R4 does **not** implement an alternative loop, score, auto-simplifier,
+Cube deletion, or native mutation. Focused R4 source tests are authored,
+but Bun/typecheck/build/native and visual proof remain NOT EXECUTED.
+
 
 Owns declarative, deterministic recipe semantics for parametric authoring.
 

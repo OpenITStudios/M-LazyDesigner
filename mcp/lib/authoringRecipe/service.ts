@@ -3,6 +3,7 @@ import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import type { RecipeKnowledgeSnapshot } from "@/lib/authoringRecipe/knowledge";
 import type { GeometryCurveObservation } from "@/lib/authoringRecipe/geometryCurves";
 import { collectRecipeKnowledge, featureIdForRecipeInstance } from "@/lib/authoringRecipe/knowledgePlanning";
+import { reviewRecipeGeometryFidelity } from "@/lib/authoringRecipe/geometryFidelity";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 import {
   assertAuthoringRecipeNativeMatchesCompiled,
@@ -145,9 +146,16 @@ export function createAuthoringRecipeService(
         report.review_source_identity.recipe_source_fingerprint) {
       throw new Error("RECIPE_OPTIMIZATION_RECIPE_CHANGED_DURING_INSPECTION");
     }
+    // R4 uses this SAME already-validated authored native snapshot and
+    // exact Recipe feature ownership. No extra native capture or mutation.
+    // Only explicit opt-in selected-feature inspection runs these bounded
+    // existing SurfaceEvidence geometry diagnostics.
+    const fidelityReview = selectedFeature
+      ? reviewRecipeGeometryFidelity(recipe, native, selectedFeature) : null;
     return {
       ...report,
       ...(recipeKnowledge ? { recipe_knowledge: recipeKnowledge } : {}),
+      ...(fidelityReview ? { geometry_fidelity_review: fidelityReview } : {}),
     };
   };
 

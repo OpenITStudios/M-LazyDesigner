@@ -1,10 +1,11 @@
 # Geometry Intelligence — Implementation Design
 
-Status: **R0 CURATED; R1–R3 SOURCE IMPLEMENTED (NOT EXECUTED)** (2026-10-29).
-Recipe planning now returns conditional strategies, exact declared assembly
-relationships and optional sampled-curve alternatives before candidate
-compilation. No automatic Cube/Bone generation, new compiler pattern,
-trained weights, native proof, measured performance or accepted asset.
+Status: **R0 CURATED; R1–R4 SOURCE IMPLEMENTED (NOT EXECUTED)** (2026-10-29).
+Recipe planning returns conditional strategies, assembly and sampled-curve
+alternatives; R4 adds selected-feature fidelity review to existing opt-in
+native-source inspection. No automatic Cube/Bone generation, new compiler
+pattern, trained weights, native proof, measured performance or accepted
+asset.
 Owner: existing Geometry/Recipe domain. This document is the conditional
 engineering design for [curated external sources](research-sources.md),
 not a second production workflow. Actual modelling policy remains in
@@ -201,6 +202,22 @@ R3 regression source authored; Bun/build/native/visual NOT EXECUTED.
   silhouette/volume/motion benefit.
 
 ### R4 — Quality-preserving correction and optimization (P1)
+
+**Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses
+existing `geometry/surfaceEvidence.ts` analyzers for selected
+current Recipe-owned native Cubes after the canonical authored-state
+read/identity check. Exact same-parent data is required; missing native
+parent states, unsupported transforms or over-budget scopes are partial,
+not an opportunity to guess. The existing opt-in
+`inspectStoredGeometryCoincidence` includes `geometry_fidelity_review`
+for the exact selected feature, with native UUIDs, source fingerprint,
+bounded diagnostic candidates and required visual/UV/rig/export checks.
+Cross-feature and declared ANCHOR/SYMMETRY dependencies are retained.
+This does not estimate safe Cube savings, authorize deletion, generate
+a corrected Recipe, or score whole-model quality. The canonical
+`orchestration/correctionLoop.ts` already blocks same-cause repeats
+without fresh evidence; do not duplicate it. Source/regression authored;
+Bun/build/native/visual NOT EXECUTED.
 
 - Reuse existing bounds, oriented contact, surface integrity and
   difference-first correction. Propose merge/remove only with

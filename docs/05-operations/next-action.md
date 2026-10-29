@@ -4,9 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Primary next to do — verified Recipe knowledge (2026-10-29)
 
-**Priority: Geometry. G1/G2 and R1–R3 source authored; Bun/native NOT EXECUTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
+**Priority: Geometry. G1/G2 and R1–R4 source authored; Bun/native NOT EXECUTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
 
-1. **Geometry first:** R1 precompile guidance, R2 declared attachment/symmetry and R3 optional source-sampled curved alternatives are wired to existing Recipe; no automatic Cube/Bone creation. Next: R4 fidelity-preserving correction/optimization, then G3/R5 native benchmark when executable. G1–R3 tests NOT EXECUTED. [Research](../03-authoring/modelling/research-sources.md) · [Design](../03-authoring/modelling/geometry-intelligence-plan.md).
+1. **Geometry first:** R1/R2/R3 source guidance and R4 bounded native-source fidelity review are wired to existing Recipe; no automatic Cube/merge/delete. Next: G3/R5 matched-input quality benchmark and exact-SHA Bun source proof when executable; G1–R4 tests NOT EXECUTED. [Research](../03-authoring/modelling/research-sources.md) · [Design](../03-authoring/modelling/geometry-intelligence-plan.md).
 2. **Texture second:** curate UV/atlas layout, Minecraft pixel-cluster treatment, palette/material/PBR semantics and seam-safe texture patterns. Preserve the reference's visual identity and measure mapped-model quality.
 3. **Animation third:** curate grounded rig/motion/keyframe, interpolation, contact, loop and controller patterns. Compare playback, motion fidelity and export correctness.
 
