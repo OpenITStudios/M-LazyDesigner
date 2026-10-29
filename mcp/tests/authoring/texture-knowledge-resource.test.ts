@@ -85,7 +85,8 @@ describe("K4 on-demand Texture/UV knowledge consumer — no mutation", () => {
     expect(texture.decision_examples.reject_hypothesis).toContain("clean painted metal");
     const original = reader.read("UV-P01");
     if (original.state !== "SOURCE_CANDIDATE") throw new Error("K3 case stale");
-    uv.decision_examples.positive_hypothesis = "Caller attempted to overwrite guidance";
+    expect(Reflect.set(uv.decision_examples, "positive_hypothesis",
+      "Caller attempted to overwrite guidance")).toBe(true);
     expect(reader.read("UV-P01")).toMatchObject({
       state: "SOURCE_CANDIDATE",
       decision_examples: {
