@@ -6,7 +6,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **User priority; planned, NOT STARTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
 
-1. **Geometry first:** curate reference-grounded geometry patterns, semantic forms, efficient Cube arrangements, bone hierarchy, pivots, constraints and symmetry. Compare guided vs baseline Recipe on the same approved reference.
+1. **Geometry first:** follow [Geometry Knowledge Curation](../03-authoring/modelling/knowledge-curation.md): fill the P0 decision-pair pilot (G-P01..G-P08) with source/negative cases, then connect bounded retrieval to the existing Recipe and benchmark against identical approved references. G0 curation contract recorded; G1+ NOT STARTED.
 2. **Texture second:** curate UV/atlas layout, Minecraft pixel-cluster treatment, palette/material/PBR semantics and seam-safe texture patterns. Preserve the reference's visual identity and measure mapped-model quality.
 3. **Animation third:** curate grounded rig/motion/keyframe, interpolation, contact, loop and controller patterns. Compare playback, motion fidelity and export correctness.
 
