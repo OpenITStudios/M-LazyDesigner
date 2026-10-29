@@ -1,5 +1,37 @@
 # Authoring Recipe Domain
 
+## Recipe-owned knowledge and context-aware selection
+
+Recipe is the **single authoring decision owner**. Existing
+`mcp/lib/semantic/knowledge.ts` remains only the reusable Markdown index
+and bounded selector; it is **not** a competing authoring or approval engine.
+Knowledge references, decisions, geometry compilation, and corrections stay
+under `mcp/lib/authoringRecipe/`, in small modules:
+
+- `knowledge.ts`: validated, feature-owned source revision links;
+  explicit binding and source-snapshot freshness review.
+- `knowledgeSelection.ts`: bounded, per-feature knowledge suggestions
+  using the existing index. External snapshots require exact Bedrock/Blockbench
+  compatibility; unproven sources cannot silently become guidance.
+- `planning.ts`: `prepareKnowledgeAwareRecipe` presents the existing compiled
+  Recipe plus relevant suggestions, matched links, and explicit uncertainty.
+- `compiler.ts`/`store.ts`: schema-1 Recipes accept optional
+  `knowledge_links` and reject malformed/foreign/duplicate links.
+  Existing Recipes and their compiled Cube placements are unchanged.
+
+Sequence: index existing canonical knowledge → suggest relevant sections for
+each feature → explicitly bind selected exact section IDs + SHA-256 to the
+same Recipe → compile/plan → inspect link freshness before trusting guidance.
+The Recipe store already owns persistence; no second database or registry.
+Changing knowledge marks the link `REVIEW_REQUIRED`, never silently rebinds
+or edits native assets. Knowledge citations are **advice**, not reference-image
+proof, visual approval, native runtime evidence, or an automatic Geometry
+classification. Existing `feature_intents.evidence_refs`, Validation owners,
+user approvals and Gateway's four-tool surface remain authoritative.
+No new external model, training loop, public MCP capability, or runtime
+mutation is introduced in this source-only stage.
+
+
 Owns declarative, deterministic recipe semantics for parametric authoring.
 
 ```text

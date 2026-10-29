@@ -39,6 +39,9 @@ export {
   rewriteSemanticGeometryRecipe,
   summarizeAuthoringRecipeRebuild,
 } from "@/lib/authoringRecipe/planning";
+export { prepareKnowledgeAwareRecipe } from "@/lib/authoringRecipe/planning";
+export { suggestRecipeKnowledge } from "@/lib/authoringRecipe/knowledgeSelection";
+export { bindRecipeKnowledge, resolveRecipeKnowledgeLinks } from "@/lib/authoringRecipe/knowledge";
 
 export type AuthoringRecipeServiceDependencies = {
   readOwned(recipeId: string): Promise<AuthoringRecipeNativeSnapshot> | AuthoringRecipeNativeSnapshot;

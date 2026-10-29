@@ -148,6 +148,13 @@ export type CompiledSymmetryRelationship = {
   semantic_pair?: RecipeSymmetryRelation["semantic_pair"];
 };
 
+/** Advisory knowledge linked to a semantic feature at an exact index section revision. */
+export type RecipeKnowledgeLink = {
+  feature_id: string;
+  section_id: string;
+  section_sha256: string;
+};
+
 export type AuthoringRecipe = {
   schema: typeof AUTHORING_RECIPE_SCHEMA_VERSION;
   compiler_version: typeof AUTHORING_RECIPE_COMPILER_VERSION;
@@ -157,6 +164,8 @@ export type AuthoringRecipe = {
   patterns: RecipePattern[];
   /** Optional all-feature routing; legacy recipes keep their original behavior. */
   feature_intents?: RecipeFeatureIntent[];
+  /** Optional pinned knowledge; separate from image/source evidence refs. */
+  knowledge_links?: RecipeKnowledgeLink[];
   constraints?: RecipeConstraint[];
   symmetry?: RecipeSymmetryRelation[];
 };

@@ -8,6 +8,7 @@ import { solveRecipeConstraints } from "@/lib/authoringRecipe/constraints";
 import { applyRecipeSymmetry } from "@/lib/authoringRecipe/symmetry";
 import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
 import { validateCubeGeometrySpan } from "@/lib/geometry/cubeSpan";
+import { validateRecipeKnowledgeLinks } from "@/lib/authoringRecipe/knowledge";
 
 function requireVec3(value: readonly number[], label: string): RecipeVec3 {
   if (value.length !== 3 || value.some((entry) => !Number.isFinite(entry))) throw new Error(label + " must contain three finite values.");
@@ -63,6 +64,7 @@ function realizeCube(prototype: RecipeCubePrototype, instance: RecipeInstance, p
 export function compileAuthoringRecipe(recipe: AuthoringRecipe): CompiledAuthoringRecipe {
   if (recipe.schema !== 1 || recipe.compiler_version !== 1) throw new Error("Unsupported Authoring Recipe version.");
   if (!recipe.id || !recipe.name) throw new Error("Authoring Recipe requires non-empty id and name.");
+  validateRecipeKnowledgeLinks(recipe);
   const prototypeIds = recipe.prototypes.map((prototype) => prototype.id);
   if (new Set(prototypeIds).size !== prototypeIds.length) throw new Error("Authoring Recipe prototype IDs must be unique.");
   recipe.prototypes.forEach(validatePrototype);
