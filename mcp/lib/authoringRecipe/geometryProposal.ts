@@ -13,6 +13,11 @@ import {
   reviewDeclaredRecipeAssembly,
   type GeometryAssemblyReview,
 } from "@/lib/authoringRecipe/geometryAssembly";
+import {
+  reviewGeometryCurveObservations,
+  type GeometryCurveObservation,
+  type GeometryCurveReview,
+} from "@/lib/authoringRecipe/geometryCurves";
 
 const MAX_FEATURE_PROPOSALS = 8;
 const MAX_CASE_OPTIONS = 3;
@@ -47,6 +52,8 @@ export type GeometryConstructionProposal = {
   visual_verdict: "NOT_EVALUATED";
   /** Source-declared ANCHOR / SYMMETRY relationships, never assumed Bone parents. */
   assembly: GeometryAssemblyReview;
+  /** Explicitly sampled R3 centerline review, absent on ordinary Recipes. */
+  curve_review?: GeometryCurveReview;
 };
 
 type CaseFields = {
@@ -86,7 +93,8 @@ export function proposeGeometryConstruction(
   recipe: AuthoringRecipe,
   snapshot: RecipeKnowledgeSnapshot,
   binding: RecipeKnowledgeResolution,
-  suggestions: readonly RecipeKnowledgeSuggestion[]
+  suggestions: readonly RecipeKnowledgeSuggestion[],
+  curveObservations: readonly GeometryCurveObservation[] = []
 ): GeometryConstructionProposal[] {
   if (binding.state === "REVIEW_REQUIRED") return [];
   if (suggestions.length > MAX_FEATURE_PROPOSALS) {
@@ -110,6 +118,13 @@ export function proposeGeometryConstruction(
   const matched = new Set(binding.matched.map(
     link => JSON.stringify([link.feature_id, link.section_id])
   ));
+  const curveByFeature = reviewGeometryCurveObservations(
+    recipe.feature_intents ?? [],
+    new Map(suggestions.map(suggestion =>
+      [suggestion.feature_id, suggestion.feature_route] as const)),
+    suggestions.map(suggestion => suggestion.feature_id),
+    curveObservations
+  );
   const assemblyByFeature = new Map(reviewDeclaredRecipeAssembly(
     recipe, suggestions.map(suggestion => suggestion.feature_id)
   ).map(review => [review.feature_id, review] as const));
@@ -168,6 +183,8 @@ export function proposeGeometryConstruction(
       mutation_authorized: false as const,
       visual_verdict: "NOT_EVALUATED" as const,
       assembly: assemblyByFeature.get(feature.id)!,
+      ...(curveByFeature.has(feature.id)
+        ? { curve_review: curveByFeature.get(feature.id)! } : {}),
     }];
   });
 }

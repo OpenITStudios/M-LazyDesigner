@@ -6,6 +6,7 @@ import {
   type RecipeKnowledgeSnapshot,
 } from "@/lib/authoringRecipe/knowledge";
 import { createRecipeKnowledgeExcerptReader } from "@/lib/authoringRecipe/knowledgeExcerpt";
+import type { GeometryCurveObservation } from "@/lib/authoringRecipe/geometryCurves";
 import {
   selectKnowledgeSections,
   type KnowledgeCompatibility,
@@ -19,6 +20,8 @@ export type RecipeKnowledgeSelectionOptions = {
   max_token_proxy?: number;
   /** Exact bounded semantic feature selection for native Recipe inspection. */
   feature_ids?: readonly string[];
+  /** Optional explicit curve samples from current source evidence, never inferred. */
+  curve_observations?: readonly GeometryCurveObservation[];
 };
 
 export type RecipeKnowledgeSuggestion = {

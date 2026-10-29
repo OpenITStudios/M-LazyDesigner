@@ -1,10 +1,10 @@
 # Geometry Intelligence — Implementation Design
 
-Status: **R0 CURATED; R1/R2 SOURCE IMPLEMENTED (NOT EXECUTED)** (2026-10-29).
-Recipe planning now returns bounded conditional strategies and exact declared
-assembly relationships **before** candidate compilation. No automatic Cube,
-Bone parenting, new compiler pattern, trained weights, native proof,
-measured performance or accepted asset is claimed.
+Status: **R0 CURATED; R1–R3 SOURCE IMPLEMENTED (NOT EXECUTED)** (2026-10-29).
+Recipe planning now returns conditional strategies, exact declared assembly
+relationships and optional sampled-curve alternatives before candidate
+compilation. No automatic Cube/Bone generation, new compiler pattern,
+trained weights, native proof, measured performance or accepted asset.
 Owner: existing Geometry/Recipe domain. This document is the conditional
 engineering design for [curated external sources](research-sources.md),
 not a second production workflow. Actual modelling policy remains in
@@ -174,6 +174,19 @@ New topology/constraints are **not** inferred or auto-created.
   UV/rig constraints, and non-Recipe direct operations. No auto-delete.
 
 ### R3 — Curved/organic construction alternatives (P1)
+
+**Source state:** `mcp/lib/authoringRecipe/geometryCurves.ts` accepts
+explicit transient, reference-handle-linked control samples (centerline
+and positive rectangular cross-section). It derives directional change,
+cross-section differences, span lengths, explicit joint boundaries and
+conditional single-rotated vs segmented-Cuboid alternatives. The existing
+Recipe `plan/planStored` caller accepts optional `curve_observations`
+and returns the result under `geometry_proposals[].curve_review`; no
+default caller, public schema or regular modelling operation changes.
+Positions are supplied by the caller and **not** independently inferred
+or verified from images; no native Cuboids or hierarchy are produced.
+Four or more intervals require complexity review, not a style quota.
+R3 regression source authored; Bun/build/native/visual NOT EXECUTED.
 
 - Borrow Sweep's **centerline + varying cross section** concept:
   identify confirmed orientation changes and significant volume changes,

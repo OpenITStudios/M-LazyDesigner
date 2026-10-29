@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import type { RecipeKnowledgeSnapshot } from "@/lib/authoringRecipe/knowledge";
+import type { GeometryCurveObservation } from "@/lib/authoringRecipe/geometryCurves";
 import { collectRecipeKnowledge, featureIdForRecipeInstance } from "@/lib/authoringRecipe/knowledgePlanning";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 import {
@@ -62,7 +63,11 @@ export function createAuthoringRecipeService(
   registry = new AuthoringRecipePlanRegistry(),
   evidenceRegistry = new AuthoringEvidenceRegistry()
 ) {
-  const planPair = async (previousRecipe: AuthoringRecipe, nextRecipe: AuthoringRecipe) => {
+  const planPair = async (
+    previousRecipe: AuthoringRecipe,
+    nextRecipe: AuthoringRecipe,
+    curveObservations?: readonly GeometryCurveObservation[]
+  ) => {
     if (previousRecipe.id !== nextRecipe.id) throw new Error("Parametric authoring plan requires stable recipe identity.");
     const native = await dependencies.readOwned(previousRecipe.id);
     assertAuthoringRecipeNativeMatchesCompiled(native, previousRecipe);
@@ -71,7 +76,8 @@ export function createAuthoringRecipeService(
     // the authored next Recipe is NEVER rewritten or selected automatically.
     // Failure before planning cannot persist a draft plan or start native Undo.
     const recipeKnowledge = await collectRecipeKnowledge(
-      nextRecipe, dependencies.readKnowledgeIndex
+      nextRecipe, dependencies.readKnowledgeIndex,
+      undefined, curveObservations
     );
     const rebuild = planIncrementalRecipeRebuild(previousRecipe, nextRecipe);
     const featurePlan = nextRecipe.feature_intents !== undefined
@@ -462,11 +468,14 @@ export function createAuthoringRecipeService(
 
   return {
     plan: planPair,
-    async planStored(nextRecipe: AuthoringRecipe) {
+    async planStored(
+      nextRecipe: AuthoringRecipe,
+      curveObservations?: readonly GeometryCurveObservation[]
+    ) {
       if (!dependencies.readStoredRecipe) throw new Error("RECIPE_STORE_UNAVAILABLE: Runtime did not provide project recipe persistence.");
       const previousRecipe = await dependencies.readStoredRecipe(nextRecipe.id);
       if (!previousRecipe) throw new Error("RECIPE_NOT_STORED: no previous recipe source exists for " + nextRecipe.id + "; use explicit previous/next planning for first adoption.");
-      return planPair(previousRecipe, nextRecipe);
+      return planPair(previousRecipe, nextRecipe, curveObservations);
     },
     inspectStoredGeometryCoincidence,
     checkStoredGeometryOptimizationReviewFreshness,

@@ -100,6 +100,30 @@ planning/inspection, and preserves direct authoring and legacy Recipes.
 R2 tests are authored in the focused assembly test owner, but Bun/typecheck/
 build/native/visual proof remain NOT EXECUTED.
 
+### R3: explicitly sampled curved/organic construction alternatives (source only)
+
+`geometryCurves.ts` reviews a **caller-supplied** centerline with up to
+12 source-linked points per feature and positive rectangular cross-section
+parameters. It measures declared spans, directional changes, taper and
+explicit joint boundaries, then offers conditional review of one rotated
+Cuboid versus a segmented cohort. The latter is considered only when the
+declared path actually changes direction/section or has a required joint;
+an almost-straight, constant-section path must not request unnecessary
+micro-segments. Four or more sampled intervals trigger the existing
+complexity-escalation review, **not** a fixed Cube quota.
+
+The optional transient `curve_observations` reaches the existing
+`knowledgePlanning.ts` through `plan/planStored` and is reported as
+`geometry_proposals[].curve_review`. Each sample must name an exact
+feature owner and existing declared reference handle; matching string
+handles is **not** image-content attestation. Bad geometry, unknown owners,
+duplicate IDs, excessive inputs and degenerate spans fail closed.
+No new persisted Recipe schema, compiler pattern, free-form Sweep mesh,
+native Cube placements, inferred Euler rotations, Bone parents or public
+Gateway tool. A normal Recipe omitting these observations is unchanged.
+Focused R3 source tests are authored; Bun/typecheck/build/native/visual
+acceptance are NOT EXECUTED.
+
 
 Owns declarative, deterministic recipe semantics for parametric authoring.
 

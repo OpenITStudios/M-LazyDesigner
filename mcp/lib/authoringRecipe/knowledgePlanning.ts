@@ -53,7 +53,7 @@ export function reviewRecipeKnowledge(
       ...options, feature_ids: featureIds,
     });
   const geometryProposals = proposeGeometryConstruction(
-    recipe, knowledgeIndex, binding, suggestions
+    recipe, knowledgeIndex, binding, suggestions, options.curve_observations
   );
   return {
     knowledge: binding,
@@ -95,7 +95,8 @@ export async function collectRecipeKnowledge(
   recipe: AuthoringRecipe,
   readIndex: (() => Promise<RecipeKnowledgeSnapshot | null> |
     RecipeKnowledgeSnapshot | null) | undefined,
-  featureIds?: readonly string[]
+  featureIds?: readonly string[],
+  curveObservations?: RecipeKnowledgeSelectionOptions["curve_observations"]
 ) {
   if ((recipe.feature_intents?.length ?? 0) === 0 &&
       (recipe.knowledge_links?.length ?? 0) === 0) return null;
@@ -113,6 +114,9 @@ export async function collectRecipeKnowledge(
   return {
     source_state: "AVAILABLE" as const,
     ...reviewRecipeKnowledge(recipe, snapshot,
-      { ...(featureIds ? { feature_ids: featureIds } : {}) }),
+      {
+        ...(featureIds ? { feature_ids: featureIds } : {}),
+        ...(curveObservations ? { curve_observations: curveObservations } : {}),
+      }),
   };
 }
