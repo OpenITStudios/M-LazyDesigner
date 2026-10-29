@@ -200,21 +200,28 @@ function mergeVerificationScope(
 
   if (left.kind === "TEXTURE_REGION" && right.kind === "TEXTURE_REGION") {
     if (left.texture_uuid !== right.texture_uuid) return null;
+    // A cohort's latest source revision wins, but two cropped PNGs from
+    // different revisions are NOT one current image of their union.
+    const union: [number, number, number, number] = [
+      Math.min(left.affected_rect[0], right.affected_rect[0]),
+      Math.min(left.affected_rect[1], right.affected_rect[1]),
+      Math.max(left.affected_rect[2], right.affected_rect[2]),
+      Math.max(left.affected_rect[3], right.affected_rect[3]),
+    ];
+    const latestReturnedImageCoversUnion =
+      right.evidence_source === "mutation_response" &&
+      right.affected_rect[0] <= union[0] &&
+      right.affected_rect[1] <= union[1] &&
+      right.affected_rect[2] >= union[2] &&
+      right.affected_rect[3] >= union[3];
     return {
       kind: "TEXTURE_REGION",
       texture_uuid: right.texture_uuid,
-      affected_rect: [
-        Math.min(left.affected_rect[0], right.affected_rect[0]),
-        Math.min(left.affected_rect[1], right.affected_rect[1]),
-        Math.max(left.affected_rect[2], right.affected_rect[2]),
-        Math.max(left.affected_rect[3], right.affected_rect[3]),
-      ],
+      affected_rect: union,
       revision: right.revision,
-      evidence_source:
-        left.evidence_source === "mutation_response" &&
-        right.evidence_source === "mutation_response"
-          ? "mutation_response"
-          : "follow_up_read",
+      evidence_source: latestReturnedImageCoversUnion
+        ? "mutation_response"
+        : "follow_up_read",
     };
   }
 
@@ -277,12 +284,18 @@ function mergePendingVerification(
   right: ControlPendingVerification
 ): ControlPendingVerification {
   if (!left) return right;
+  // An earlier or later visual mutation with unknown affected scope must
+  // remain broad. Inheriting the other call's precise scope would silently
+  // omit the unbounded mutation at cohort completion.
+  const unboundedVisual =
+    (left.verification_class === "visual" && left.verification_scope === null) ||
+    (right.verification_class === "visual" && right.verification_scope === null);
   return {
     verification_class: strongerVerificationClass(
       left.verification_class,
       right.verification_class
     ),
-    verification_scope: mergeVerificationScope(
+    verification_scope: unboundedVisual ? null : mergeVerificationScope(
       left.verification_scope,
       right.verification_scope
     ),

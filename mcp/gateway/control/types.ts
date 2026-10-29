@@ -34,6 +34,8 @@ export type ControlVerificationScope =
   | {
       kind: "TEXTURE_REGION";
       texture_uuid: string;
+      /** Producer-owned [left, top, right_exclusive, bottom_exclusive],
+       * NOT get_texture.region's [x, y, width, height] form. */
       affected_rect: [number, number, number, number];
       revision: string;
       evidence_source: "mutation_response" | "follow_up_read";

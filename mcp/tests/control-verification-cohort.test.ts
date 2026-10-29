@@ -40,6 +40,33 @@ function cubeDelta(id: string, field: string, min: number, max: number) {
   });
 }
 
+function textureDelta(
+  rect: [number, number, number, number] | null,
+  revision: string,
+  returnImage = true
+) {
+  return buildControlDelta({
+    capability: "paint_texture_transaction",
+    phaseBefore: "texturing",
+    phaseAfter: "texturing",
+    projectUuid: "project-a",
+    succeeded: true,
+    result: {
+      execution: "applied",
+      texture: { uuid: "atlas-a", name: "atlas" },
+      revision: { before: "sha256:prior", after: revision },
+      operation_count: 1,
+      pixel_writes: 4,
+      ...(rect ? { affected_rect: rect,
+        affected_size: [rect[2] - rect[0], rect[3] - rect[1]] } : {}),
+      visual_evidence: rect && returnImage ? {
+        kind: "affected_region_png", affected_rect: rect, revision,
+        width: rect[2] - rect[0], height: rect[3] - rect[1],
+      } : null,
+    },
+  });
+}
+
 describe("Control verification cohort", () => {
   test("default COMPLETE behavior keeps one-call verification semantics", () => {
     const delta = cubeDelta("cube-a", "rotation", -1, 1);
@@ -86,6 +113,72 @@ describe("Control verification cohort", () => {
       ])
     );
     expect(second.state.pending_verification).toBeNull();
+  });
+
+  test("different cropped texture images cannot silently certify a merged final revision", () => {
+    const first = reduceControlExecutionState(
+      null,
+      textureDelta([1, 2, 3, 4], "sha256:rev-1"),
+      { taskContextId: "texture-cohort", cohortBoundary: "CONTINUE" }
+    );
+    expect(first.continuation.next_action.kind).toBe("CONTINUE");
+
+    const completed = reduceControlExecutionState(
+      first.state,
+      textureDelta([10, 12, 14, 16], "sha256:rev-2"),
+      { taskContextId: "texture-cohort", cohortBoundary: "COMPLETE" }
+    );
+    expect(completed.continuation.next_action).toMatchObject({
+      kind: "VERIFY_VISUAL",
+      recommended_capability: "get_texture",
+      verification_scope: {
+        kind: "TEXTURE_REGION",
+        affected_rect: [1, 2, 14, 16],
+        revision: "sha256:rev-2",
+        evidence_source: "follow_up_read",
+      },
+    });
+    expect(completed.state.pending_verification).toBeNull();
+  });
+
+  test("the latest full-cover texture image can replace another read safely", () => {
+    const first = reduceControlExecutionState(
+      null,
+      textureDelta([3, 3, 5, 5], "sha256:rev-1"),
+      { taskContextId: "texture-cohort", cohortBoundary: "CONTINUE" }
+    );
+    const completed = reduceControlExecutionState(
+      first.state,
+      textureDelta([2, 1, 8, 9], "sha256:rev-2"),
+      { taskContextId: "texture-cohort", cohortBoundary: "COMPLETE" }
+    );
+    expect(completed.continuation.next_action).toMatchObject({
+      kind: "REVIEW_RETURNED_EVIDENCE",
+      verification_scope: {
+        affected_rect: [2, 1, 8, 9],
+        revision: "sha256:rev-2",
+        evidence_source: "mutation_response",
+      },
+    });
+  });
+
+  test("unknown visual scope on either cohort side cannot inherit narrow proof", () => {
+    for (const unboundedFirst of [true, false]) {
+      const first = reduceControlExecutionState(
+        null,
+        textureDelta(unboundedFirst ? null : [2, 2, 4, 4], "sha256:rev-1"),
+        { taskContextId: "texture-cohort", cohortBoundary: "CONTINUE" }
+      );
+      const completed = reduceControlExecutionState(
+        first.state,
+        textureDelta(unboundedFirst ? [5, 5, 7, 7] : null, "sha256:rev-2"),
+        { taskContextId: "texture-cohort", cohortBoundary: "COMPLETE" }
+      );
+      expect(completed.continuation.next_action).toMatchObject({
+        kind: "VERIFY_VISUAL",
+        verification_scope: null,
+      });
+    }
   });
 
   test("different task_context_id never inherits pending verification", () => {

@@ -73,6 +73,57 @@ describe("bounded visual verification scope registry", () => {
     }
   });
 
+  test("returned texture PNG evidence requires exact revision, extent and dimensions", () => {
+    const receipt = {
+      texture: { uuid: "atlas-a" },
+      revision: { after: "sha256:revision-new" },
+      affected_rect: [4, 8, 8, 12],
+      visual_evidence: {
+        kind: "affected_region_png",
+        affected_rect: [4, 8, 8, 12],
+        revision: "sha256:revision-new",
+        width: 4, height: 4,
+      },
+    };
+    const scope = (candidate: object) =>
+      verificationScopeForResult("paint_texture_transaction", "visual", candidate);
+    expect(scope(receipt)).toMatchObject({
+      kind: "TEXTURE_REGION",
+      evidence_source: "mutation_response",
+    });
+    for (const visual_evidence of [
+      { kind: "affected_region_png" },
+      { ...receipt.visual_evidence, revision: "sha256:revision-old" },
+      { ...receipt.visual_evidence, affected_rect: [4, 8, 7, 12] },
+      { ...receipt.visual_evidence, width: 3 },
+      { ...receipt.visual_evidence, height: 3 },
+    ]) {
+      expect(scope({ ...receipt, visual_evidence })).toMatchObject({
+        kind: "TEXTURE_REGION",
+        evidence_source: "follow_up_read",
+      });
+    }
+  });
+
+  test("invalid texture region corners never enable narrow visual verification", () => {
+    for (const affected_rect of [
+      [-1, 0, 8, 8],
+      [0, -1, 8, 8],
+      [8, 0, 8, 8],
+      [0, 8, 8, 8],
+      [10, 1, 4, 8],
+      [0, 10, 8, 3],
+      [0, 0, Number.NaN, 8],
+    ]) {
+      expect(verificationScopeForResult("paint_texture_transaction", "visual", {
+        texture: { uuid: "atlas-a" },
+        revision: { after: "revision" },
+        affected_rect,
+        visual_evidence: { kind: "affected_region_png" },
+      })).toBeNull();
+    }
+  });
+
   test("malformed authoritative inner receipt never borrows outer visual proof", () => {
     const cube = {
       visual_scope: {

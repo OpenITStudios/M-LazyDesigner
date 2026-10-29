@@ -113,6 +113,17 @@ repeated unchanged inspection
 
 Use bounded discovery only when identity/schema is unknown or stale.
 
+For a deferred same-task Texture verification cohort, the native paint
+receipt's `affected_rect` uses `[left,top,right_exclusive,bottom_exclusive]`.
+When requesting `get_texture.region`, convert to
+`{x:left,y:top,width:right-left,height:bottom-top}` and pin the latest
+receipt revision. Two older cropped images must not be mistaken for one
+current image of a merged region; reuse the last returned PNG only when
+its source-bound revision and complete extent actually cover the union.
+Otherwise use one affected-region follow-up read. A mutation with no safe
+visual scope requires broad review, not a narrowed scope borrowed from
+another mutation. The evidence still requires actual visual judgement.
+
 ## Gate Semantics
 
 Diagnostic/internal PASS means technical evidence only. It never means user approval.

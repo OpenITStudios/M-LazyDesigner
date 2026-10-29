@@ -64,23 +64,39 @@ export function textureVerificationScope(value: unknown): ControlVerificationSco
   const texture = record(candidate.texture);
   const revision = record(candidate.revision);
   const rect = candidate.affected_rect;
+  // Producer receipts use [left, top, right-exclusive, bottom-exclusive],
+  // not [x, y, width, height]. Reject a non-region rather than advertising
+  // a focused review that can miss the actual changed pixels.
   if (
-    typeof texture?.uuid !== "string" ||
-    typeof revision?.after !== "string" ||
-    !Array.isArray(rect) ||
-    rect.length !== 4 ||
-    !rect.every((entry) => typeof entry === "number" && Number.isSafeInteger(entry))
+    typeof texture?.uuid !== "string" || !texture.uuid.trim() ||
+    typeof revision?.after !== "string" || !revision.after.trim() ||
+    !Array.isArray(rect) || rect.length !== 4 ||
+    !rect.every((entry) => Number.isSafeInteger(entry)) ||
+    rect[0] < 0 || rect[1] < 0 ||
+    rect[2] <= rect[0] || rect[3] <= rect[1]
   ) return null;
   const visualEvidence = record(candidate.visual_evidence);
+  // The native tool emits this metadata only alongside the PNG produced
+  // after the verified mutation. An unbound kind label cannot replace a
+  // fresh on-demand get_texture read of the actual affected region.
+  const imageMatchesReceipt =
+    visualEvidence?.kind === "affected_region_png" &&
+    visualEvidence.revision === revision.after &&
+    Array.isArray(visualEvidence.affected_rect) &&
+    visualEvidence.affected_rect.length === 4 &&
+    visualEvidence.affected_rect.every(
+      (value, index) => value === rect[index]
+    ) &&
+    visualEvidence.width === rect[2] - rect[0] &&
+    visualEvidence.height === rect[3] - rect[1];
   return {
     kind: "TEXTURE_REGION",
     texture_uuid: texture.uuid,
     affected_rect: rect as [number, number, number, number],
     revision: revision.after,
-    evidence_source:
-      visualEvidence?.kind === "affected_region_png"
-        ? "mutation_response"
-        : "follow_up_read",
+    evidence_source: imageMatchesReceipt
+      ? "mutation_response"
+      : "follow_up_read",
   };
 }
 
