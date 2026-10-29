@@ -38,6 +38,7 @@ export type ControlStageDecisionPacket = {
   materials?: ControlReferenceStructuredFact[];
   motion?: ControlReferenceStructuredFact[];
   constraints?: string[];
+  cross_view_evidence?: ControlReferenceProjection["cross_view_evidence"];
 };
 
 export type ControlStageContext = {
@@ -292,6 +293,11 @@ export function decisionPacketForAuthoringDomain(
     if (parts.length > 0) packet.parts = parts;
     if (articulation.length > 0) packet.articulation = articulation;
     if (motion.length > 0) packet.motion = motion;
+  }
+
+  // Forward source-bound evidence through the existing active Geometry packet.
+  if (domain === "GEOMETRY" && reference.cross_view_evidence) {
+    packet.cross_view_evidence = reference.cross_view_evidence;
   }
 
   if (facts.constraints.length > 0) {

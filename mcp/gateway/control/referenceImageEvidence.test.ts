@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { buildControlStageContext } from "./contextProjection";
+import { projectControlStageContextWithHeadroom } from "./contextHeadroom";
 import type { ControlWorkspaceProjection } from "./workspace";
 import { readReferenceImageEvidence, summarizeReferenceAlphaSilhouette } from "./referenceImageEvidence";
 import {
@@ -148,6 +149,79 @@ describe("actual reference image evidence — Control owner", () => {
     expect(statusSource).toContain("regions: image.regions,");
   });
 
+  test("cross-view source facts reach active Geometry Stage Context and block conflicts only", async () => {
+    const fixture = async (depth: number, reuseBytes = false, status = "APPROVED") => {
+      const images = [{
+        id: "FRONT", file: "images/front.png", view: "front",
+        used_by: ["GEOMETRY"], status: "APPROVED",
+        part_world_constraints: [{
+          part_id: "plate", dimensions: { x: 8, z: 0 }, attachment_parent: "root",
+        }],
+      }, {
+        id: "SIDE", file: reuseBytes ? "images/front.png" : "images/side.png",
+        view: "right", used_by: ["GEOMETRY"], status,
+        part_world_constraints: [{
+          part_id: "plate", dimensions: { z: depth }, attachment_parent: "root",
+        }],
+      }];
+      const root = await packageRoot(images);
+      await writeFile(join(root, "images/side.png"), BLUE_PNG);
+      await writeFile(join(root, "REFERENCE.json"), JSON.stringify({
+        schema: "lazydesigner-reference-v1",
+        asset: { name: "Plate", kind: "MODEL", profile: "PROP_FURNITURE" },
+        parts: [{ id: "plate", role: "GEOMETRY" }],
+        readiness: { overall: "READY", geometry: "READY", texture: "READY" },
+        images,
+      }));
+      return root;
+    };
+    const consistent = await readReferencePackageProjection(await fixture(0));
+    expect(consistent.cross_view_evidence).toMatchObject({
+      state: "available", readiness: "consistent_with_available_constraints",
+      comparable_dimension_count: 1, conflict_count: 0,
+      visual_verdict: "not_evaluated",
+    });
+    expect(consistent.readiness.geometry).toBe("READY");
+    const delivered = await readReferenceImageEvidence(consistent, ["FRONT", "SIDE"]);
+    expect(delivered[0]?.part_world_constraints?.[0]).toMatchObject({
+      part_id: "plate", dimensions: { x: 8, z: 0 },
+    });
+
+    const conflicting = await readReferencePackageProjection(await fixture(3));
+    expect(conflicting.cross_view_evidence).toMatchObject({
+      state: "available", readiness: "conflicting", conflict_count: 1,
+      conflict_examples: [{ kind: "dimension_conflict", part_id: "plate", axis: "z" }],
+      visual_verdict: "not_evaluated",
+    });
+    expect(conflicting.readiness.geometry).toBe("BLOCKED");
+    expect(conflicting.readiness.texture).toBe("READY");
+    expect(conflicting.blocking_unknowns).toContain("REFERENCE_CROSS_VIEW_CONFLICT");
+    const context = buildControlStageContext({
+      domain: "GEOMETRY", reference: conflicting, workspace,
+    });
+    expect(context.stage_readiness).toBe("BLOCKED");
+    expect(context.asset_health.stages.reference).toBe("BLOCKED");
+    expect(context.decision_packet.cross_view_evidence?.readiness).toBe("conflicting");
+    const projection = projectControlStageContextWithHeadroom(context, 64).context;
+    expect(projection.decision_packet?.cross_view_evidence?.conflict_count).toBe(1);
+    expect(projection.headroom_state).toBe("REQUIRED_OVER_BUDGET");
+    expect(buildControlStageContext({
+      domain: "TEXTURING", reference: conflicting, workspace,
+    }).decision_packet.cross_view_evidence).toBeUndefined();
+
+    const sameImage = await readReferencePackageProjection(await fixture(0, true));
+    expect(sameImage.cross_view_evidence).toMatchObject({
+      state: "unavailable", reason: "SOURCE_VIEW_IMAGE_IDENTITY_REUSED",
+      visual_verdict: "not_evaluated",
+    });
+    expect(sameImage.readiness.geometry).toBe("BLOCKED");
+    const pending = await readReferencePackageProjection(await fixture(0, false, "DRAFT"));
+    expect(pending.cross_view_evidence).toMatchObject({
+      state: "unavailable", reason: "SOURCE_VIEW_NOT_APPROVED_OR_VERIFIED",
+    });
+    expect(pending.readiness.geometry).toBe("BLOCKED");
+  });
+
   test("fresh image content invalidates stage fingerprint when REFERENCE.json is unchanged", async () => {
     const root = await packageRoot();
     const initial = await readReferencePackageProjection(root);
@@ -256,6 +330,7 @@ describe("actual reference image evidence — Control owner", () => {
     expect(source).toContain("reference_image_ids");
     expect(source).toContain("readReferenceImageEvidence(source, ids)");
     expect(source).toContain('type: "image" as const');
+    expect(source).toContain("part_world_constraints: image.part_world_constraints");
     expect(source).toContain("visual_verdict: \"not_evaluated\"");
     expect(source).toContain("model_image_capture_required: true");
   });

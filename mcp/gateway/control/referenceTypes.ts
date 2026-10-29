@@ -1,6 +1,7 @@
 import type { ModelView } from "../../lib/reference/visualEvidence";
 import type { ReferenceImageLandmark } from "../../lib/reference/landmarkEvidence";
 import type { ReferenceImageRegion } from "../../lib/reference/imageRegionEvidence";
+import type { CrossViewIssue, ReferencePartObservation } from "../../lib/reference/crossViewEvidence";
 
 export type ControlProfile =
   | "PROP_FURNITURE"
@@ -31,6 +32,20 @@ export type ControlReferenceSemanticFacts = {
   materials: ControlReferenceStructuredFact[];
   animation_guidance: ControlReferenceStructuredFact[];
   constraints: string[];
+};
+
+/** Source semantic constraints tied to image-byte identity; never visual approval. */
+export type ControlReferenceCrossViewEvidence = {
+  state: "available" | "unavailable";
+  readiness: "conflicting" | "consistent_with_available_constraints" |
+    "insufficient_comparable_constraints" | null;
+  comparable_dimension_count: number | null;
+  attachment_comparison_count: number | null;
+  conflict_count: number | null;
+  conflict_examples: CrossViewIssue[];
+  conflict_examples_truncated: boolean;
+  reason?: string;
+  visual_verdict: "not_evaluated";
 };
 
 export type ControlReferenceProjection = {
@@ -86,12 +101,16 @@ export type ControlReferenceProjection = {
     landmarks?: ReferenceImageLandmark[];
     /** Authored regions tied to semantic parts. Not automatic segmentation. */
     regions?: ReferenceImageRegion[];
+    /** Explicit world dimensions, not inferred from image pixels. */
+    part_world_constraints?: Array<Omit<ReferencePartObservation, "view">>;
     /** Read-time source-byte identity, not an approval or visual verdict. */
     sha256?: string | null;
     bytes?: number | null;
     media_type?: "image/png" | "image/jpeg" | "image/webp" | null;
     integrity?: "VERIFIED" | "MISSING" | "INVALID";
   }>;
+  /** Existing canonical source-level cross-view evidence (Geometry only). */
+  cross_view_evidence?: ControlReferenceCrossViewEvidence;
   /**
    * Decision-critical facts already owned by REFERENCE.json. Optional for
    * compatibility with older callers; Control projects only the active-stage

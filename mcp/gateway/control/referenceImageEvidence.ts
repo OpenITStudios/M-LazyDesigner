@@ -4,6 +4,7 @@ import { lstat, open, realpath } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve } from "node:path";
 import { canonicalJson } from "../../lib/semantic/canonical";
 import { extractVerifiedPngAlpha } from "../../lib/reference/pngAlphaEvidence";
+import { analyzeReferenceCrossViewEvidence } from "../../lib/reference/crossViewEvidence";
 import type { ControlReferenceProjection } from "./referenceTypes";
 
 type ReferenceImage = ControlReferenceProjection["images"][number];
@@ -86,6 +87,57 @@ async function readImage(root: string, file: string): Promise<{
 }
 
 /**
+ * Reuse canonical pure cross-view analysis on explicitly authored source facts.
+ * Image SHA/status only bind source identity; they never prove visual agreement.
+ */
+function summarizeDeclaredCrossViewConstraints(
+  images: readonly ReferenceImage[]
+): ControlReferenceProjection["cross_view_evidence"] {
+  const claimed = images.filter(image => (image.part_world_constraints?.length ?? 0) > 0);
+  if (claimed.length === 0) return undefined;
+  const unavailable = (reason: string): NonNullable<
+    ControlReferenceProjection["cross_view_evidence"]
+  > => ({
+    state: "unavailable", readiness: null,
+    comparable_dimension_count: null, attachment_comparison_count: null,
+    conflict_count: null, conflict_examples: [],
+    conflict_examples_truncated: false, reason,
+    visual_verdict: "not_evaluated",
+  });
+  if (claimed.some(image => image.integrity !== "VERIFIED" ||
+      image.status !== "APPROVED" || !image.sha256 || !image.view ||
+      !image.used_by.includes("GEOMETRY"))) {
+    return unavailable("SOURCE_VIEW_NOT_APPROVED_OR_VERIFIED");
+  }
+  const viewsByHash = new Map<string, string>();
+  for (const image of claimed) {
+    const previous = viewsByHash.get(image.sha256!);
+    if (previous && previous !== image.view) {
+      return unavailable("SOURCE_VIEW_IMAGE_IDENTITY_REUSED");
+    }
+    viewsByHash.set(image.sha256!, image.view!);
+  }
+  const result = analyzeReferenceCrossViewEvidence({
+    observations: claimed.flatMap(image => image.part_world_constraints!.map(
+      constraint => ({ ...constraint, view: image.view! })
+    )),
+    exampleLimit: 4,
+  });
+  if (result.state === "unavailable") {
+    return unavailable("SEMANTIC_CONSTRAINT_" + result.reason);
+  }
+  return {
+    state: "available", readiness: result.readiness,
+    comparable_dimension_count: result.comparable_dimension_count,
+    attachment_comparison_count: result.attachment_comparison_count,
+    conflict_count: result.conflict_count,
+    conflict_examples: result.conflict_examples,
+    conflict_examples_truncated: result.conflict_examples_truncated,
+    visual_verdict: "not_evaluated",
+  };
+}
+
+/**
  * Bind the current image bytes to Control's existing reference projection.
  * Binary content never enters the normal status/context envelope or a cache.
  * Each package read recomputes the image hashes, including when REFERENCE.json
@@ -148,15 +200,26 @@ export async function inspectReferenceImages(
     if (image.used_by.includes("TEXTURE")) readiness.texture = "BLOCKED";
     if (image.used_by.includes("ANIMATION")) readiness.animation = "BLOCKED";
   }
-  if (broken.length && readiness.overall === "READY") readiness.overall = "BLOCKED";
+  const crossView = summarizeDeclaredCrossViewConstraints(images);
+  const crossViewBlocker = crossView?.state === "unavailable"
+    ? "REFERENCE_CROSS_VIEW_UNAVAILABLE:" + crossView.reason
+    : crossView?.readiness === "conflicting"
+      ? "REFERENCE_CROSS_VIEW_CONFLICT"
+      : null;
+  if (crossViewBlocker) readiness.geometry = "BLOCKED";
+  if ((broken.length || crossViewBlocker) && readiness.overall === "READY") {
+    readiness.overall = "BLOCKED";
+  }
   return {
     ...projection,
     images,
     readiness,
+    ...(crossView ? { cross_view_evidence: crossView } : {}),
     blocking_unknowns: [
       ...new Set([
         ...projection.blocking_unknowns,
         ...broken.map((image) => "REFERENCE_IMAGE_" + image.integrity + ":" + image.id),
+        ...(crossViewBlocker ? [crossViewBlocker] : []),
       ]),
     ],
     fingerprint: createHash("sha256").update(canonicalJson({
@@ -174,6 +237,7 @@ export type DeliveredReferenceImage = {
   status: string | null;
   landmarks: NonNullable<ReferenceImage["landmarks"]>;
   regions: NonNullable<ReferenceImage["regions"]>;
+  part_world_constraints?: NonNullable<ReferenceImage["part_world_constraints"]>;
   sha256: string;
   mime_type: NonNullable<ReferenceImage["media_type"]>;
   bytes: number;
@@ -211,6 +275,9 @@ export async function readReferenceImageEvidence(
       status: image.status,
       landmarks: image.landmarks ?? [],
       regions: image.regions ?? [],
+      ...(image.part_world_constraints
+        ? { part_world_constraints: image.part_world_constraints }
+        : {}),
       sha256: image.sha256,
       mime_type: read.media_type,
       bytes: read.bytes.length,

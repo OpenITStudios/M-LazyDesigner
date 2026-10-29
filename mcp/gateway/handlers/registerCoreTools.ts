@@ -337,6 +337,9 @@ export function registerCoreGatewayTools(
                   status: image.status,
                   landmarks: image.landmarks,
                   regions: image.regions,
+                  ...(image.part_world_constraints
+                    ? { part_world_constraints: image.part_world_constraints }
+                    : {}),
                   sha256: image.sha256,
                   mime_type: image.mime_type,
                   bytes: image.bytes,

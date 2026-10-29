@@ -332,6 +332,43 @@ inconsistent visibility/box combinations make the package invalid. Existing
 packages without `regions` remain valid. No model weights, cloud service,
 new package authority or executable vision model is required.
 
+### Optional confirmed world-space claims by view
+
+`images[].part_world_constraints` permits up to 16 explicit, authored
+world-space observations per named Geometry view. Only use confirmed
+dimensions or attachment relationships; **never infer 3D dimensions from
+pixels**. Every row must reference an existing `parts[].id`, appear once
+per image and supply at least one world-axis span or an attachment parent.
+
+```json
+{
+  "id": "IMG_FRONT",
+  "file": "images/front.png",
+  "view": "front",
+  "used_by": ["GEOMETRY"],
+  "status": "APPROVED",
+  "part_world_constraints": [
+    { "part_id": "panel", "dimensions": { "x": 8, "z": 0 },
+      "attachment_parent": null, "required": true }
+  ]
+}
+```
+
+Dimensions use shared explicitly established model units and world-space
+x/y/z axes; zero is a valid planar span. Invalid/negative axes, ambiguous
+views, undeclared or duplicate parts, and malformed fields invalidate the
+package rather than being silently ignored.
+
+The existing Control Reference Package reader binds these facts to current
+source image bytes and reuses the canonical cross-view semantic analyzer.
+Conflicting or unapproved/unverified image-backed claims block only Geometry
+readiness. Differently labeled views of identical image bytes cannot count
+as independent source views. A consistent comparison is a **source-level
+constraint check**, never visual agreement, native modelling approval or
+proof that the dimensions match the image. The existing optional image
+delivery surface exposes the original facts for human/model review.
+Packages without this optional field keep prior behavior.
+
 `role` examples:
 
 ```text

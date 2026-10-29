@@ -375,6 +375,55 @@ describe("Control reference parser", () => {
     expect(parse({ ...base, images: "front.png" })).toBeNull();
   });
 
+  test("canonical Geometry image constraints reject invalid source dimensions and identities", () => {
+    const parse = (input: unknown) =>
+      parseReferencePackage(JSON.stringify(input), "/pkg/REFERENCE.json", "/pkg");
+    const source = {
+      schema: "lazydesigner-reference-v1",
+      parts: [{ id: "body", role: "GEOMETRY" }],
+      images: [{
+        id: "FRONT", file: "images/front.png", view: "front",
+        used_by: ["GEOMETRY"], status: "APPROVED",
+        part_world_constraints: [{
+          part_id: "body", dimensions: { x: 8, z: 0 },
+          attachment_parent: null, required: true,
+        }],
+      }],
+    };
+    expect(parse(source)?.images[0]?.part_world_constraints)
+      .toEqual(source.images[0].part_world_constraints);
+    const invalid = [
+      [{ part_id: "body", dimensions: { z: -1 } }],
+      [{ part_id: "body", dimensions: { z: null } }],
+      [{ part_id: "body", dimensions: { unknown: 3 } }],
+      [{ part_id: "ghost", dimensions: { z: 1 } }],
+      [{ part_id: "body", dimensions: {} }],
+      [{ part_id: "body", dimensions: { z: 1 }, attachment_parent: "" }],
+      [{ part_id: "body", dimensions: { z: 1 }, required: "yes" }],
+      [{ part_id: "body", required: true }],
+      [{ part_id: "body", dimensions: { z: 1 }, unsupported: true }],
+      [{ part_id: "body", dimensions: { z: 1 } },
+       { part_id: "body", dimensions: { z: 1 } }],
+      [], null,
+    ];
+    for (const rows of invalid) {
+      expect(parse({ ...source, images: [{
+        ...source.images[0], part_world_constraints: rows,
+      }] })).toBeNull();
+    }
+    expect(parse({ ...source, images: [{
+      ...source.images[0], view: undefined,
+    }] })).toBeNull();
+    expect(parse({ ...source, images: [{
+      ...source.images[0], used_by: ["TEXTURE"],
+    }] })).toBeNull();
+    expect(parse({ ...source, images: [{
+      ...source.images[0], part_world_constraints: Array.from(
+        { length: 17 }, () => ({ part_id: "body", dimensions: { z: 0 } })
+      ),
+    }] })).toBeNull();
+  });
+
   test("empty reference keeps a stable unavailable shape", () => {
     expect(emptyReference("REFERENCE_NOT_FOUND")).toMatchObject({
       available: false,

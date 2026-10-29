@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { MODEL_VIEWS, type ModelView } from "../../lib/reference/visualEvidence";
 import { parseReferenceImageLandmarks } from "../../lib/reference/landmarkEvidence";
 import { parseReferenceImageRegions } from "../../lib/reference/imageRegionEvidence";
+import type { ReferencePartObservation, WorldAxis } from "../../lib/reference/crossViewEvidence";
 import { canonicalJson } from "../../lib/semantic/canonical";
 import type {
   ControlProfile,
@@ -77,6 +78,57 @@ function structuredFactList(
 
     return Object.keys(fact).length > 0 ? [fact] : [];
   });
+}
+
+/** Strict optional per-image world facts; reject omissions that could manufacture agreement. */
+function parseImagePartWorldConstraints(
+  value: unknown,
+  declaredParts: ReadonlySet<string>,
+  view: ModelView | null,
+  usedBy: readonly ControlReferenceStage[]
+): Array<Omit<ReferencePartObservation, "view">> | null {
+  if (value === undefined) return [];
+  if (!view || !usedBy.includes("GEOMETRY") || !Array.isArray(value) ||
+      value.length < 1 || value.length > 16) return null;
+  const seen = new Set<string>();
+  const parsed: Array<Omit<ReferencePartObservation, "view">> = [];
+  for (const item of value) {
+    const source = record(item);
+    const partId = stringValue(source?.part_id);
+    if (!source || !partId || !declaredParts.has(partId) || seen.has(partId) ||
+        Object.keys(source).some(key => ![
+          "part_id", "dimensions", "attachment_parent", "required"
+        ].includes(key)) ||
+        (source.required !== undefined && typeof source.required !== "boolean") ||
+        (source.attachment_parent !== undefined &&
+          source.attachment_parent !== null &&
+          (typeof source.attachment_parent !== "string" ||
+            stringValue(source.attachment_parent) === null))) return null;
+    const dimensions = source.dimensions === undefined
+      ? null : record(source.dimensions);
+    if (source.dimensions !== undefined &&
+        (!dimensions || Object.keys(dimensions).length === 0 ||
+          Object.entries(dimensions).some(([axis, number]) =>
+            !["x", "y", "z"].includes(axis) ||
+            typeof number !== "number" || !Number.isFinite(number) || number < 0
+          ))) return null;
+    if (!dimensions && source.attachment_parent === undefined) return null;
+    seen.add(partId);
+    parsed.push({
+      part_id: partId,
+      ...(dimensions
+        ? { dimensions: dimensions as Partial<Record<WorldAxis, number>> }
+        : {}),
+      ...(source.attachment_parent !== undefined
+        ? { attachment_parent: source.attachment_parent === null
+          ? null : stringValue(source.attachment_parent)! }
+        : {}),
+      ...(source.required !== undefined
+        ? { required: source.required as boolean }
+        : {}),
+    });
+  }
+  return parsed;
 }
 
 function profileValue(value: unknown): ControlProfile | null {
@@ -233,9 +285,14 @@ export function parseReferencePackage(
       viewCandidate && MODEL_VIEWS.includes(viewCandidate as ModelView)
         ? viewCandidate as ModelView
         : null;
-    // A point on an unregistered composite sheet has no canonical viewport
-    // coordinates. Crop/panel registration is a separate explicit authoring act.
-    if (landmarks === null || regions === null ||
+    const usedBy = (Array.isArray(item.used_by) ? item.used_by : [])
+      .map(normalizeStage)
+      .filter((stage): stage is ControlReferenceStage => stage !== null);
+    const partWorldConstraints = parseImagePartWorldConstraints(
+      item.part_world_constraints, declaredPartIds, view, usedBy
+    );
+    // A point/claim on an unregistered composite sheet has no canonical view.
+    if (landmarks === null || regions === null || partWorldConstraints === null ||
         ((landmarks.length > 0 || regions.length > 0) && !view) ||
         (regions.length > 0 && (
           ambiguousParts || !declaredPartIds.size ||
@@ -246,11 +303,6 @@ export function parseReferencePackage(
       invalidImageEvidence = true;
       return [];
     }
-    const usedBy = (Array.isArray(item.used_by) ? item.used_by : [])
-      .map(normalizeStage)
-      .filter(
-        (stage): stage is ControlReferenceStage => stage !== null
-      );
     return [{
       id,
       file,
@@ -259,6 +311,9 @@ export function parseReferencePackage(
       status: stringValue(item.status),
       ...(item.landmarks !== undefined ? { landmarks } : {}),
       ...(item.regions !== undefined ? { regions } : {}),
+      ...(item.part_world_constraints !== undefined
+        ? { part_world_constraints: partWorldConstraints! }
+        : {}),
       view,
     }];
   });
