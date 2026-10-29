@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   createTextureUvCaseReader,
+  suggestTextureUvTechnicalKnowledge,
   TEXTURE_UV_CASE_IDS,
 } from "@/lib/texture/knowledgeCases";
 import { getAllResourceDefinitions } from "@/lib/factories";
@@ -179,5 +180,91 @@ describe("K4 on-demand Texture/UV knowledge consumer — no mutation", () => {
     expect(classifyWatchPath(file)).toBe("rebuild");
     expect(classifyWatchPath("../docs/03-authoring/texture/knowledge-coverage.md"))
       .toBe("ignore");
+  });
+});
+
+
+// K5/K6: the normal list_textures diagnostic may surface only bounded,
+// reference-unverified decision hints. Existing ordinary reads remain fast.
+describe("K5/K6 diagnostic knowledge hints", () => {
+  test("empty technical evidence keeps the no-knowledge fast path", () => {
+    let reads = 0;
+    const none = suggestTextureUvTechnicalKnowledge({}, () => {
+      reads += 1;
+      throw new Error("The knowledge reader must not be invoked");
+    });
+    expect(none).toEqual([]);
+    expect(reads).toBe(0);
+    const invalid = suggestTextureUvTechnicalKnowledge({
+      exact_reuse_region_count: Number.NaN,
+      partial_overlap_pair_count: -2,
+      solid_color_face_count: 7,
+      scanned_face_count: 0,
+    }, () => {
+      reads += 1;
+      throw new Error("No confirmed native scope");
+    });
+    expect(invalid).toEqual([]);
+    expect(reads).toBe(0);
+  });
+
+  test("actual shared UV evidence picks UV-P01, but never approves reuse", async () => {
+    const reader = createTextureUvCaseReader(await Bun.file(
+      "../docs/03-authoring/texture/decision-cases.md"
+    ).text());
+    const items = suggestTextureUvTechnicalKnowledge({
+      exact_reuse_region_count: 2,
+      partial_overlap_pair_count: 1,
+    }, id => reader.read(id));
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      state: "REVIEW_REQUIRED", source_state: "SOURCE_CANDIDATE",
+      case_id: "UV-P01", trigger: "UV_PIXEL_OWNERSHIP_REVIEW",
+      observed: { exact_reuse_region_count: 2, partial_overlap_pair_count: 1 },
+      reference_scope: "CURRENT_USER_REFERENCE_NOT_ATTESTED",
+      mutation_authorized: false, visual_verdict: "not_evaluated",
+    });
+    expect(items[0]!.source_sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(items[0]!.required_evidence).toContain("Cube UUID");
+  });
+
+  test("flat face evidence picks TEX-P01 only after sampled face coverage", async () => {
+    const reader = createTextureUvCaseReader(await Bun.file(
+      "../docs/03-authoring/texture/decision-cases.md"
+    ).text());
+    const two = suggestTextureUvTechnicalKnowledge({
+      exact_reuse_region_count: 1,
+      solid_color_face_count: 3,
+      scanned_face_count: 8,
+    }, id => reader.read(id));
+    expect(two.map(x => x.case_id)).toEqual(["UV-P01", "TEX-P01"]);
+    expect(two[1]).toMatchObject({
+      state: "REVIEW_REQUIRED",
+      trigger: "FLAT_TEXTURE_REFERENCE_REVIEW",
+      observed: { solid_color_face_count: 3, scanned_face_count: 8 },
+      mutation_authorized: false,
+    });
+    expect(two.some(x => x.case_id === "TEX-P02" || x.case_id === "TEX-P03"))
+      .toBe(false);
+  });
+
+  test("the established Runtime diagnostic caller is opt-in, bounded, and read-only", async () => {
+    const runtime = await Bun.file(
+      "server/runtime/extensions/texture/authoring.ts"
+    ).text();
+    const scope = runtime.slice(
+      runtime.indexOf("function wireTextureReads(): void {"),
+      runtime.indexOf("const listMaterials = runtimeDefinition(", runtime.indexOf("function wireTextureReads(): void {"))
+    );
+    expect(scope).toContain('if (args.diagnostics !== true) return result;');
+    expect(scope).toContain("structured.uv_audit");
+    expect(scope).toContain("structured.optimization_opportunities");
+    expect(scope).toContain('scope === "uv" || scope === "full"');
+    expect(scope).toContain('scope === "coverage" || scope === "full"');
+    expect(scope).toContain("suggestTextureUvTechnicalKnowledge(");
+    expect(scope).toContain("knowledge_guidance");
+    expect(scope).toContain("TEXTURE_UV_KNOWLEDGE_SOURCE_UNAVAILABLE");
+    expect(scope).not.toContain("Undo.initEdit(");
+    expect(scope).not.toContain("paint_texture_transaction");
   });
 });

@@ -211,3 +211,88 @@ export function createTextureUvCaseReader(markdown: string) {
 
   return { read, select, source_sha256: source.content_sha256 };
 }
+
+
+// K5/K6: a bounded technical diagnostic can identify which *candidate*
+// reference question merits a review. It cannot verify the actual artwork.
+export type TextureUvTechnicalKnowledgeSignals = Readonly<{
+  exact_reuse_region_count?: unknown;
+  partial_overlap_pair_count?: unknown;
+  solid_color_face_count?: unknown;
+  scanned_face_count?: unknown;
+}>;
+
+export type TextureUvTechnicalKnowledgeHint = Readonly<{
+  state: "REVIEW_REQUIRED";
+  source_state: "SOURCE_CANDIDATE";
+  case_id: "UV-P01" | "TEX-P01";
+  trigger: "UV_PIXEL_OWNERSHIP_REVIEW" | "FLAT_TEXTURE_REFERENCE_REVIEW";
+  observed: Readonly<Record<string, number>>;
+  source_sha256: string;
+  section_sha256: string;
+  required_evidence: string;
+  reference_scope: "CURRENT_USER_REFERENCE_NOT_ATTESTED";
+  target_compatibility: "UNKNOWN_CURRENT_BEDROCK_AND_BLOCKBENCH";
+  mutation_authorized: false;
+  visual_verdict: "not_evaluated";
+}>;
+
+/**
+ * Advisory K3 case selection from a currently requested native diagnostic.
+ * It does not classify artistic intent, trigger new diagnostic reads or use
+ * filename/material-name heuristics. No source lookup on the empty fast path.
+ */
+export function suggestTextureUvTechnicalKnowledge(
+  signals: TextureUvTechnicalKnowledgeSignals,
+  readCase: (id: TextureUvCaseId) => TextureUvCaseSelection
+): TextureUvTechnicalKnowledgeHint[] {
+  const count = (value: unknown) =>
+    typeof value === "number" && Number.isSafeInteger(value) && value > 0
+      ? value : 0;
+  const reused = count(signals.exact_reuse_region_count);
+  const overlapping = count(signals.partial_overlap_pair_count);
+  const solid = count(signals.solid_color_face_count);
+  const scanned = count(signals.scanned_face_count);
+  const hints: TextureUvTechnicalKnowledgeHint[] = [];
+
+  function add(
+    id: "UV-P01" | "TEX-P01",
+    trigger: TextureUvTechnicalKnowledgeHint["trigger"],
+    observed: Record<string, number>
+  ) {
+    const caseEvidence = readCase(id);
+    if (caseEvidence.state !== "SOURCE_CANDIDATE") return;
+    hints.push({
+      state: "REVIEW_REQUIRED",
+      source_state: "SOURCE_CANDIDATE",
+      case_id: id,
+      trigger,
+      observed,
+      source_sha256: caseEvidence.source_sha256,
+      section_sha256: caseEvidence.section_sha256,
+      required_evidence: caseEvidence.required_evidence,
+      reference_scope: caseEvidence.reference_scope,
+      target_compatibility: caseEvidence.target_compatibility,
+      mutation_authorized: false,
+      visual_verdict: "not_evaluated",
+    });
+  }
+
+  if (reused > 0 || overlapping > 0) {
+    add("UV-P01", "UV_PIXEL_OWNERSHIP_REVIEW", {
+      exact_reuse_region_count: reused,
+      partial_overlap_pair_count: overlapping,
+    });
+  }
+  // Flat source pixels alone cannot tell whether the artwork is unfinished.
+  // This case asks the artist to review reference-material identity, not to paint.
+  if (solid > 0 && scanned > 0) {
+    add("TEX-P01", "FLAT_TEXTURE_REFERENCE_REVIEW", {
+      solid_color_face_count: solid,
+      scanned_face_count: scanned,
+    });
+  }
+  // No K3 cross-Cube or emissive case without explicit seam pair and material/
+  // renderer binding. Existing intra-Cube scans and MERS file names are insufficient.
+  return hints;
+}

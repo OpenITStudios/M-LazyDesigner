@@ -225,6 +225,38 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
         assigned.get(sourceId)?.treatment.treatment === "SHARED" ||
         !assigned.has(sourceId)) {
       unresolved.push({ region: owner.region, reason: "SHARED_UV_SOURCE_INVALID" });
+      continue;
+    }
+    // K6 source-only semantic preflight: two declarations claiming the same
+    // texels cannot independently demand different explicitly authored pixels
+    // or material treatment. This is REVIEW, not proof of actual native UV
+    // overlap, matching reference artwork or permission to repaint.
+    const sourceOwner = assigned.get(sourceId)!;
+    const destinationRegion = regions.find(region => region.region === owner.region);
+    const sourceRegion = regions.find(region => region.region === sourceOwner.region);
+    if (!destinationRegion || !sourceRegion) continue;
+    if (destinationRegion.surface_pattern && sourceRegion.surface_pattern &&
+        destinationRegion.surface_pattern.pattern !== sourceRegion.surface_pattern.pattern) {
+      unresolved.push({ region: owner.region, reason: "SHARED_UV_PATTERN_CONFLICT" });
+    }
+    if (destinationRegion.render_contract && sourceRegion.render_contract &&
+        destinationRegion.render_contract.minecraft_material_code !==
+          sourceRegion.render_contract.minecraft_material_code) {
+      unresolved.push({ region: owner.region, reason: "SHARED_UV_RENDER_CONFLICT" });
+    }
+    if (destinationRegion.pbr_intent !== sourceRegion.pbr_intent) {
+      unresolved.push({ region: owner.region, reason: "SHARED_UV_PBR_CONFLICT" });
+    }
+    const lhs = destinationRegion.identity_colors;
+    const rhs = sourceRegion.identity_colors;
+    if (lhs.length > 0 && rhs.length > 0 &&
+        (lhs.length !== rhs.length || lhs.some((color, index) =>
+          color.toLowerCase() !== rhs[index]?.toLowerCase()))) {
+      unresolved.push({ region: owner.region, reason: "SHARED_UV_IDENTITY_CONFLICT" });
+    }
+    if (sourceOwner.treatment.treatment === "INTENTIONAL_TRANSPARENT" &&
+        destinationRegion.identity_colors.length > 0) {
+      unresolved.push({ region: owner.region, reason: "SHARED_UV_ALPHA_IDENTITY_CONFLICT" });
     }
   }
 
@@ -422,6 +454,7 @@ export function requireTextureTreatmentSeamPlanReady(
       minecraft_material_code:
         region.render_contract?.minecraft_material_code ?? undefined,
       pbr_intent: region.pbr_intent,
+      identity_colors: region.identity_colors,
       face_targets: region.face_targets,
     })),
     seam_pairs: plan.seam_pairs,

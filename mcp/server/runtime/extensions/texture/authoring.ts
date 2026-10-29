@@ -1,5 +1,10 @@
 /// <reference types="three" />
 /// <reference types="blockbench-types" />
+import textureUvCasebook from "../../../../../docs/03-authoring/texture/decision-cases.md" with { type: "text" };
+import {
+  createTextureUvCaseReader,
+  suggestTextureUvTechnicalKnowledge,
+} from "@/lib/texture/knowledgeCases";
 import {
   ensureTextureDiagnosticInvocationContext,
   isTextureDiagnosticBudgetExceeded,
@@ -1444,6 +1449,54 @@ function wireTextureReads(): void {
     if (!record || !structured) return result;
     const alignment = objectRecord(structured.production_alignment);
     const includePbr = scope === "pbr" || scope === "full";
+
+    // Existing K5/K6 caller: opt-in list_textures diagnostics available via
+    // normal Gateway invoke_capability. Never infer source reference approval
+    // from matching UV rectangles or flat pixels.
+    const uv = (scope === "uv" || scope === "full")
+      ? objectRecord(structured.uv_audit) : null;
+    const reuse = objectRecord(uv?.exact_reuse);
+    const overlap = objectRecord(uv?.partial_overlap);
+    const optimization = objectRecord(structured.optimization_opportunities);
+    const coverage = (scope === "coverage" || scope === "full")
+      ? objectRecord(optimization?.coverage) : null;
+    const coverageReview = objectRecord(coverage?.review);
+    const flat = objectRecord(coverageReview?.solid_color_faces);
+    const validCount = (value: unknown): number =>
+      typeof value === "number" && Number.isSafeInteger(value) && value > 0
+        ? value : 0;
+    const signals = {
+      exact_reuse_region_count: uv?.state === "available"
+        ? validCount(reuse?.region_count) : 0,
+      partial_overlap_pair_count: uv?.state === "available"
+        ? validCount(overlap?.pair_count) : 0,
+      solid_color_face_count: coverage
+        ? validCount(flat?.count) : 0,
+      scanned_face_count: coverage
+        ? validCount(coverage.scanned_faces) : 0,
+    };
+    const hasCaseEvidence =
+      signals.exact_reuse_region_count > 0 ||
+      signals.partial_overlap_pair_count > 0 ||
+      (signals.solid_color_face_count > 0 && signals.scanned_face_count > 0);
+    let knowledgeGuidance: unknown = null;
+    if (hasCaseEvidence) {
+      try {
+        const reader = createTextureUvCaseReader(textureUvCasebook);
+        knowledgeGuidance = suggestTextureUvTechnicalKnowledge(
+          signals, id => reader.read(id)
+        );
+      } catch {
+        // Failure of optional authored knowledge must not suppress existing
+        // authoritative native diagnostics. Do not fabricate an alternate case.
+        knowledgeGuidance = [{
+          state: "REVIEW_REQUIRED",
+          reason: "TEXTURE_UV_KNOWLEDGE_SOURCE_UNAVAILABLE",
+          mutation_authorized: false,
+          visual_verdict: "not_evaluated",
+        }];
+      }
+    }
     return {
       ...record,
       structuredContent: {
@@ -1461,6 +1514,7 @@ function wireTextureReads(): void {
               },
             }
           : {}),
+        ...(knowledgeGuidance ? { knowledge_guidance: knowledgeGuidance } : {}),
         diagnostic_io: textureDiagnosticReadMetrics(invocationContext),
       },
     };

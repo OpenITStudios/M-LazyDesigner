@@ -99,3 +99,74 @@ K4's Resource **cannot** authenticate those user-specific facts, because it rece
 | Efficiency | Only compare accepted baseline/candidate after no fidelity regression | NOT EXECUTED |
 
 **K4 STOP:** selected read-only cases are source-grounded and accessible via their existing Runtime resource; no direct ordinary-Gateway authoring integration or application. Next, choose a single justified K5/K6 source slice with real authenticated current-task evidence, focused positive/negative tests, and no lost default capabilities. Geometry paused; Animation deferred; CI disabled, no release, no user-PC work.
+
+
+// ---- K5–K6 source continuation: 2026-10-30 ----
+
+## One real normal-Gateway diagnostic consumer
+
+The existing `list_textures(diagnostics=true, diagnostic_scope=uv|coverage|full)`
+returns current UV/face-coverage evidence through the four-tool Gateway. K5/K6
+now consumes **only this already-requested structured diagnostic result**, at
+`mcp/server/runtime/extensions/texture/authoring.ts::wireTextureReads`. It
+does not add an input argument, a Gateway tool, another texture reader or an
+automatic painting decision:
+
+- **UV-P01** is offered only when `uv_audit.exact_reuse.region_count > 0`
+  or `uv_audit.partial_overlap.pair_count > 0` on the actual requested UV
+  scope. A matching rectangle means review of art/face ownership, not
+  permission to stack, mirror or repack.
+- **TEX-P01** is offered only when sampled
+  `optimization_opportunities.coverage.review.solid_color_faces.count > 0`
+  and `coverage.scanned_faces > 0`, on explicit coverage/full diagnostics.
+  Flat pixels may be intentional. No wood/metal/color decision is inferred.
+- Both hints include the K3 case's source and section SHA-256 plus required
+  evidence, are `REVIEW_REQUIRED`, and explicitly deny mutation. This is an
+  actual Gateway-reachable technical diagnostic consumer of K4's indexed case
+  source; it is **not** an authenticated visual-reference consumer.
+- No hints are generated for ordinary inventory/default diagnostic=false or
+  evidence-free scopes. There is no casebook parsing when the selected
+  diagnostics contain no relevant signal.
+- **TEX-P02** is not attached to the generic intra-Cube seam scan because
+  it requires explicit observed *cross-Cube* adjacency/continuity.
+  **TEX-P03** is not attached to a bright-looking atlas, PBR map or filename
+  without an actual resolved Bedrock render/material binding. This abstention
+  is required, not an unfinished automatic inference feature.
+- Failure of the optional casebook reader reports
+  `TEXTURE_UV_KNOWLEDGE_SOURCE_UNAVAILABLE` while retaining the
+  independently valid native UV/coverage evidence. No alternate case or
+  silent source substitute is fabricated.
+
+## K6 additional source-owner safety for explicit SHARED texture treatment
+
+`mcp/lib/texture/treatmentPlan.ts` now marks a cross-region `SHARED`
+face as `review_required` if its declared pattern, Minecraft material
+code, optional PBR intent or explicitly specified identity colors conflict
+with its named source face. A shared claim against a face intentionally
+transparent while requesting a distinct colored mark is likewise a conflict.
+This guard requires **no new caller fields** and never manipulates real UV
+or PNG pixels. It does not verify that two face declarations actually map
+to identical texels; that remains the native UV owner.
+
+`requireTextureTreatmentSeamPlanReady` must revalidate the copied
+`identity_colors` as well, so a post-plan mutation cannot inherit the
+previous `ready` state. Unchanged, compatible SHARED plans retain the
+previous structural readiness path; styling/PBR/render visual approval
+remains external to this pure planning result.
+
+## Verification and remaining higher-context residue
+
+- **K5/K6 source slice authored, not executed:** existing knowledge case
+  owner, live diagnostic wrapper, Texture treatment-plan owner and two
+  existing owning regression suites. No new auto-test files.
+- **Execution proof missing:** exact-SHA Bun targeted tests/typecheck/build.
+  CI is disabled; no workflow has been created or enabled. No tests are
+  claimed PASS merely because source assertions were written.
+- **Native proof missing:** same installed Blockbench build, actual
+  project/atlas revision, deterministic face/UV evidence, real Undo and
+  rendered model compared to an approved reference. Case hints do not
+  authorize automatic painting/repack and never claim visual PASS.
+- **Next K7:** focused executable source integration verification on this
+  exact commit when a capable environment exists, plus static review of
+  bounded output and existing Gateway result compaction. K8/K9 remain native,
+  mapped-model and comparison acceptance.

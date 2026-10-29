@@ -233,6 +233,14 @@ default path, source/rollback risks and acceptance matrix.
 
 ### K5 — Implement UV knowledge through bounded source slices
 
+**Source continuation (2026-10-30):** The existing, opt-in `list_textures`
+UV audit now conditionally selects K3 `UV-P01` as a source-pinned
+`REVIEW_REQUIRED` advisory when exact bitmap reuse or partial UV overlap is
+actually observed. No UV source mutation or `manage_uv_layout` activation
+was performed; signed mapping, locking and migration safeguards remain
+unchanged. Source/tests are authored; executable and native proof NOT EXECUTED.
+
+
 Only implement a proven gap in the existing UV owner. Priorities are
 physical-pixel mapping, face direction/rotation, Box/per-face selection,
 semantic island grouping, padding/stacking/mirroring, complete packing,
@@ -255,6 +263,16 @@ there is a real caller and focused test owner. A source-only plan
 does not establish an installed UV Layout PASS.
 
 ### K6 — Implement Texture knowledge through bounded source slices
+
+**Source continuation (2026-10-30):** Explicit sampled solid-color face
+diagnostics can now select K3 `TEX-P01` through the same on-demand
+`list_textures` path without choosing a palette or painting. The canonical
+treatment planner now returns review-required for conflicting explicitly
+shared pixel-pattern/color/render/PBR intents, and revalidates identity
+colors at seam handoff. No automatic cross-Cube seam or emissive inference
+was added because current reference/material binding evidence is absent.
+Source regressions authored; Bun/native/visual proof NOT EXECUTED.
+
 
 Reuse Texture treatment planning, surface patterns, palette/pixel craft,
 region masks, seam continuity, alpha and optional PBR owners.

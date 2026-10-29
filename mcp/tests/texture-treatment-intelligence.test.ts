@@ -25,6 +25,59 @@ function pixels(alpha: readonly number[]): Uint8ClampedArray {
 }
 
 describe("texture treatment intelligence", () => {
+  test("K6 shared texels review conflicting authored region styling without rewriting UV", () => {
+    const shared = (): TextureTreatmentPlanInput => ({
+      required_faces: [
+        { cube_uuid: "left", face: "north" },
+        { cube_uuid: "right", face: "north" },
+      ],
+      regions: [
+        {
+          region: "source", evidence: "observed",
+          surface_pattern: "painted_metal", render_profile: "opaque",
+          identity_colors: ["#AA3300"],
+          face_targets: [{ cube_uuid: "left", face: "north", treatment: "PAINT" }],
+        },
+        {
+          region: "shared", evidence: "observed",
+          surface_pattern: "painted_metal", render_profile: "opaque",
+          identity_colors: ["#aa3300"],
+          face_targets: [{ cube_uuid: "right", face: "north", treatment: "SHARED",
+            shared_with: { cube_uuid: "left", face: "north" } }],
+        },
+      ],
+    });
+    const compatible = shared();
+    const allowed = planTextureTreatment(compatible);
+    expect(allowed.readiness.state).toBe("ready");
+    expect(allowed.face_coverage.visual_verdict).toBe("not_evaluated");
+    // Matching source declaration is not authenticated actual UV reuse.
+    const color = shared();
+    color.regions[1]!.identity_colors = ["#0000ff"];
+    expect(planTextureTreatment(color).readiness.unresolved).toContainEqual({
+      region: "shared", reason: "SHARED_UV_IDENTITY_CONFLICT",
+    });
+    const pattern = shared();
+    pattern.regions[1]!.surface_pattern = "wood_grain";
+    expect(planTextureTreatment(pattern).readiness.unresolved).toContainEqual({
+      region: "shared", reason: "SHARED_UV_PATTERN_CONFLICT",
+    });
+    const render = shared();
+    render.regions[1]!.render_profile = "cutout";
+    expect(planTextureTreatment(render).readiness.unresolved).toContainEqual({
+      region: "shared", reason: "SHARED_UV_RENDER_CONFLICT",
+    });
+    const pbr = shared();
+    pbr.regions[1]!.pbr_intent = "normal";
+    expect(planTextureTreatment(pbr).readiness.unresolved).toContainEqual({
+      region: "shared", reason: "SHARED_UV_PBR_CONFLICT",
+    });
+    // An authoring intent change after ready must be rechecked before seam handoff.
+    allowed.regions[1]!.identity_colors = ["#ffff00"];
+    expect(() => requireTextureTreatmentSeamPlanReady(allowed))
+      .toThrow("post-planning source or continuity intent became unresolved");
+  });
+
   test("surface recipes describe pixel language without selecting render behavior", () => {
     expect(TEXTURE_SURFACE_PATTERN_NAMES.length).toBeGreaterThanOrEqual(12);
     const glass = getTextureSurfacePatternRecipe("clean_glass");
