@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { buildAssetHealthSummary } from "@/lib/assetHealth";
 import { buildControlStageContext } from "@/gateway/control/contextProjection";
+import { workspaceSemanticState } from "@/gateway/control/workspace";
 import type { ControlReferenceProjection } from "@/gateway/control/referenceTypes";
 import type { ControlWorkspaceProjection } from "@/gateway/control/workspace";
 
@@ -169,6 +170,43 @@ describe("asset health summary", () => {
     expect(result.overall).toBe("BLOCKED");
     expect(result.blockers).toContain("REFERENCE_STAGE_BLOCKED");
     expect(result.stages.geometry).toBe("PASS");
+  });
+
+  test("conflicting workspace declarations cannot create whole-asset READY through a first APPROVED value", () => {
+    const text = [
+      "# Chair", "Current Stage: ANIMATION",
+      "Geometry: APPROVED", "Geometry: INVALIDATED",
+      "UV Layout: PASS", "Texturing: APPROVED", "Animation: APPROVED",
+      "Known blocker(s): none",
+    ].join("\n");
+    const actual = workspaceSemanticState(text);
+    expect(actual.gates.geometry).toBe("APPROVED");
+    expect(actual.workspace_issues).toContain("WORKSPACE_LIFECYCLE_FIELD_CONFLICT");
+
+    const ws = { ...workspace(), ...actual };
+    const stage = buildControlStageContext({
+      domain: "ANIMATION", reference: reference(true), workspace: ws,
+    });
+    expect(stage.asset_health.stages.geometry).toBe("PASS");
+    expect(stage.asset_health.overall).toBe("REVIEW");
+    expect(stage.asset_health.blockers).toEqual([]);
+    // The underlying readiness owner still provides the exact orientation
+    // reason; an ambiguous README is not a fabricated technical failure.
+  });
+
+  test("an incomplete workspace blocker projection cannot advertise full readiness", () => {
+    const ws = workspace();
+    ws.blockers_omitted_count = 1;
+    ws.blockers_omitted_sha256 = "a".repeat(64);
+    const result = buildAssetHealthSummary({
+      domain: "ANIMATION", reference: reference(true), workspace: ws,
+    });
+    expect(result.overall).toBe("REVIEW");
+    expect(result.blockers).toEqual([]);
+    ws.blockers = ["critical geometry attachment unresolved"];
+    expect(buildAssetHealthSummary({
+      domain: "ANIMATION", reference: reference(true), workspace: ws,
+    }).overall).toBe("BLOCKED");
   });
 
   test("missing workspace is incomplete rather than failed", () => {

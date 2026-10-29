@@ -89,7 +89,10 @@ animation was explicitly ruled out, and already-approved Animation may be
 reported as complete. Technical `PASS`, missing requirements and unknown
 native evidence must not create a whole-asset READY claim. Control still
 routes the active Stage independently of whether unrelated later work is
-complete. Internal validator clearance is not independent user approval,
+complete. Conflicting Workspace lifecycle declarations or an incomplete
+Workspace blocker projection require orientation and must not produce a
+whole-asset `asset_health.overall=READY`, even when the first gate line says
+`APPROVED`. Internal validator clearance is not independent user approval,
 visual correctness, or native playback acceptance.
 No separate Validation Stage, new MCP tool, per-stage manager or state store
 is required.

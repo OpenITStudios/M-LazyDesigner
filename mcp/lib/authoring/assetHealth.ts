@@ -47,6 +47,10 @@ export type AssetHealthWorkspaceLike = {
     animation: string | null;
   };
   blockers: string[];
+  /** Source declarations may conflict even when the first field says APPROVED. */
+  workspace_issues?: string[];
+  /** Omitted blocker rows must not permit a whole-asset READY summary. */
+  blockers_omitted_count?: number;
 };
 
 function normalized(value: string | null | undefined): string {
@@ -141,14 +145,22 @@ export function buildAssetHealthSummary(input: {
     ...(!animationExcluded ? [stages.animation] : []),
   ];
 
+  // The Control workspace parser can return the first apparently APPROVED
+  // gate alongside a conflicting later declaration. A gate summary must not
+  // independently claim READY while Control correctly requests orientation.
+  const sourceNeedsOrientation =
+    (input.workspace.workspace_issues?.length ?? 0) > 0 ||
+    (input.workspace.blockers_omitted_count ?? 0) > 0;
   const overall: AssetHealthSummary["overall"] =
     blockers.length > 0 || requiredStates.includes("BLOCKED")
       ? "BLOCKED"
-      : requiredStates.every((state) => state === "PASS")
-        ? "READY"
-        : requiredStates.some((state) => state === "REVIEW")
-          ? "REVIEW"
-          : "INCOMPLETE";
+      : sourceNeedsOrientation
+        ? "REVIEW"
+        : requiredStates.every((state) => state === "PASS")
+          ? "READY"
+          : requiredStates.some((state) => state === "REVIEW")
+            ? "REVIEW"
+            : "INCOMPLETE";
 
   return {
     overall,
