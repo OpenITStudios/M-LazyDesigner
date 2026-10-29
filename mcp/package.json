@@ -116,6 +116,7 @@
     "benchmark:golden-session": "bun run ./scripts/reporting/run-golden-benchmark-session.ts",
     "finalize:golden-session": "bun run ./scripts/reporting/finalize-golden-session.ts",
     "compare:golden-sessions": "bun run ./scripts/reporting/compare-golden-sessions.ts",
+    "compare:geometry-knowledge": "bun run ./scripts/reporting/compare-geometry-knowledge.ts",
     "security:audit": "bun audit --audit-level=high",
     "audit:semantic-collisions": "bun run ./scripts/audit/audit-capability-collisions.ts",
     "audit:data": "bun run ./scripts/development/audit-data-inventory.ts",

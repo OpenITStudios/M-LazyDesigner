@@ -136,6 +136,17 @@ Do not compute a single aggregate quality score. Critical failures remain explic
 
 Compare implementation revisions only when task inputs and acceptance criteria are materially equivalent.
 
+For the R5 **within-build** Geometry Knowledge experiment, use
+[Quality Benchmark R5](QUALITY_BENCHMARK.md#r5-source-aligned-geometry-knowledge-pairing-benchmark-only)
+and the benchmark-only `compare:geometry-knowledge` command. This
+specialized filter reuses the Golden comparator but additionally requires
+two separately captured live benchmark sessions with the same seed,
+exact source/build, Control context, known model/telemetry/environment,
+protocol and reference claims;
+the candidate must have one canonical source-hash-checked G1 retrieval
+receipt and the control must have none. Without authenticated exposure
+receipts and human review its output is descriptive **not causal proof**.
+
 An improvement means equal-or-better accepted quality with lower or equal **Cost to Accepted Result**, or a clearly documented quality gain that justifies additional cost.
 
 ## Corpus Intent

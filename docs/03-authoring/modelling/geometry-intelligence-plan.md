@@ -1,11 +1,11 @@
 # Geometry Intelligence — Implementation Design
 
-Status: **R0 CURATED; R1–R4 SOURCE IMPLEMENTED (NOT EXECUTED)** (2026-10-29).
-Recipe planning returns conditional strategies, assembly and sampled-curve
-alternatives; R4 adds selected-feature fidelity review to existing opt-in
-native-source inspection. No automatic Cube/Bone generation, new compiler
-pattern, trained weights, native proof, measured performance or accepted
-asset.
+Status: **R0 CURATED; R1–R4 SOURCE IMPLEMENTED; R5 SOURCE BENCHMARK GATE
+AUTHORED (NOT EXECUTED)** (2026-10-29). Existing Recipe planning and opt-in
+inspection return conditional Geometry reviews. The existing Golden
+comparison now has a strict, benchmark-only matched-source Knowledge
+intervention guard; no live R5 runs, native proof, measured improvement,
+auto-Cube/Bone creation, trained weights or accepted new asset.
 Owner: existing Geometry/Recipe domain. This document is the conditional
 engineering design for [curated external sources](research-sources.md),
 not a second production workflow. Actual modelling policy remains in
@@ -230,6 +230,20 @@ Bun/build/native/visual NOT EXECUTED.
   unrelated operations to pass a validator.
 
 ### R5 — Matched live benchmark before promotion (P1)
+
+**R5 source-only preparation:** the existing
+`scripts/reporting/compare-golden-sessions.ts` owns accepted Golden
+comparisons. `scripts/reporting/compare-geometry-knowledge.ts` applies
+a stricter benchmark-only paired filter with exact task/Reference/seed/
+Control/source/build/model/telemetry/environment/protocol identity,
+separate benchmark session IDs and captured baseline/candidate guidance
+exposure. The authored Project UUID can remain the same when the seed
+is identical; both sessions must independently revalidate starting bytes. The candidate G1 section must match checked-in source/section
+SHA-256. This is NOT a new outcome score, model training pipeline,
+Runtime mode or auto-approval path. Reports still declare
+`NOT_CAUSALLY_ATTESTED`; actual capture bytes and human approval must
+be independently reviewed in LIVE_BLOCKBENCH before any quality/cost
+claim is attributed to Geometry Knowledge. Tests authored, not executed.
 
 - Reuse existing Golden Task fixtures/runner/comparison, initially
   `golden-existing-model-correction` followed by one articulated/

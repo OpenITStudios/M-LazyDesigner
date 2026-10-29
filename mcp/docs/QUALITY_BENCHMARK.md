@@ -182,3 +182,67 @@ specific Geometry case is decision-relevant.
 Use `mcp/scripts/reporting/run-golden-benchmark-session.ts` and the existing
 Golden acceptance/compare validators; do not create another registry, run
 schema, task database or alternative approval pipeline.
+
+
+## R5 source-aligned Geometry Knowledge pairing (benchmark-only)
+
+The existing `compareAcceptedGoldenSessions` owns Golden quality/cost
+comparison. `scripts/reporting/compare-geometry-knowledge.ts` now adds a
+**strict, optional R5 eligibility filter**, **not** another quality scorer,
+Runtime tool or acceptance authority. It compares existing
+`golden-session-final` reports under two conditions using a separately
+captured, content-addressed structured-response sidecar:
+
+1. **CONTROL_NO_CURATED_GUIDANCE:** the actual live response capture shows
+   no selected Geometry case exposed to the modelling decision;
+   `curated_case` is `null`.
+2. **CANDIDATE_CURATED_GUIDANCE:** the actual response capture references
+   one exact G-P01..G-P08 case selected for the **same** semantic feature,
+   with its section ID, section/source SHA-256, heading and source path.
+
+Both arms must already satisfy the original Golden accepted-result
+requirements: approved current Reference, saved changed `.bbmodel`,
+real LIVE_BLOCKBENCH trace, required PASS evidence, human approval and
+recorded cost. This R5 filter **additionally** requires the same task,
+initial model SHA-256, Reference Package, Control task-context ID,
+**identical source SHA/runtime build**, known matching agent model and
+telemetry source, identical protocol SHA-256 and reference-claim handles,
+and matching Blockbench/Bedrock/OS environment. Each arm must use a
+**distinct benchmark session ID** with the same independently revalidated
+immutable seed and distinct response capture ref/content hash.
+The authored Blockbench Project UUID **may legitimately be equal**
+when both sessions load the same original .bbmodel; it is not a session ID.
+A working copy that retained the preceding run's edits is not a control.
+The candidate G1 case must match the exact checked-in canonical casebook
+text and revision, not a plausible title or an external unpinned source.
+
+Use the existing finalizer, then compare via:
+
+```text
+bun run compare:geometry-knowledge -- baseline-final.json candidate-final.json geometry-exposure-pair.json
+```
+
+The exposure-pair document has only
+`baseline_exposure` and `candidate_exposure`. Each holds `mode`,
+`task_id`, `source_sha`, `input_project_uuid`, `benchmark_session_id`, `feature_id`,
+`reference_claim_ids` (1–8), `structured_response_ref` and its
+`structured_response_sha256`, shared `protocol_sha256`, and
+`environment` (`operating_system`, `blockbench_version`,
+`target_bedrock_version`). The candidate's `curated_case` holds
+`feature_id`, `section_id`, `section_sha256`, `source_sha256`,
+`heading`, `source_path`, and
+`guidance_state: CONTENT_HASH_MATCHED_NOT_VISUAL_PROOF`. The control
+must have `curated_case: null`. These are **recorded assertions**: the
+pure comparator checks their coherence with current source/reports but
+does **not independently authenticate capture bytes, absence of earlier
+knowledge exposure, human review, or agent use**.
+
+Result is deliberately
+`MATCHED_ACCEPTED_REPORTS_FOR_HUMAN_REVIEW` with
+`attribution: NOT_CAUSALLY_ATTESTED` and descriptive per-metric deltas.
+Even identical accepted quality with fewer calls is **not** a proven
+knowledge-caused improvement without independent live review of the
+captured responses and any remaining experimental confounders. Failed,
+incomplete, simulated or source-only runs must never be presented as a
+measured Geometry gain. This R5 code is source preparation only;
+**no R5 live pairs were executed or accepted**.
