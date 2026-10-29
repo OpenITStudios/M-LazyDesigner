@@ -144,6 +144,12 @@ face as `review_required` if its declared pattern, Minecraft material
 code, optional PBR intent or explicitly specified identity colors conflict
 with its named source face. A shared claim against a face intentionally
 transparent while requesting a distinct colored mark is likewise a conflict.
+K7 source review strengthens this owner: **one-sided or blank region identity
+colors remain `SHARED_UV_IDENTITY_UNVERIFIED`**; two explicitly specified
+different palettes remain `SHARED_UV_IDENTITY_CONFLICT`. Case/whitespace
+normalization alone does not reject compatible role-aligned colors. Both sides
+entirely unspecified remain structurally valid only; `ready` is never a
+reference-approved decision. The same revalidation applies at seam handoff.
 This guard requires **no new caller fields** and never manipulates real UV
 or PNG pixels. It does not verify that two face declarations actually map
 to identical texels; that remains the native UV owner.
@@ -170,3 +176,52 @@ remains external to this pure planning result.
   exact commit when a capable environment exists, plus static review of
   bounded output and existing Gateway result compaction. K8/K9 remain native,
   mapped-model and comparison acceptance.
+ 
+
+## K7 — Exact-source verification audit (2026-10-30)
+
+The K7 review inspected the actual K4–K6 producers, the `list_textures`
+Runtime extension order, `textureOptimizationRuntime` coverage fields, the
+canonical `planTextureTreatment` owner, the Gateway output compaction
+contract and their existing test owners. The standard Gateway has four
+tools; `list_textures` remains an existing authoring capability.
+
+**Source defect repaired:** explicit `SHARED` treatment regions previously
+tested palette equality only when **both** palettes were nonempty; source-only
+or destination-only identity marks could therefore pass this semantic
+check. A missing counterpart is now `review_required`; actual bitmap/UV
+equality and user reference approval remain independently unverified.
+
+**Source-only preservation checks:** default
+`list_textures(diagnostics=false)` exits without K3 retrieval;
+`diagnostic_scope=uv` consumes only UV audit counts; coverage/full
+may provide a flat-face material review; `seam` and `pbr` alone cannot
+trigger those two cases; K3 cases TEX-P02/TEX-P03 still abstain without
+actual cross-Cube/renderer source evidence. Gateway structuredContent has
+no special K3 stripping, and the overlay issues no native edits.
+
+**Runnable proof remains missing:** this session can inspect source through
+the authenticated GitHub connector but has no checked-out repository,
+Bun/installed dependencies or enabled CI. Git clone via container network
+was unavailable (no GitHub DNS); generic local TypeScript availability is
+not a substitute for repository `bun`/native proof. Static review and
+authored tests are **NOT** executable PASS.
+
+**Targeted K7 verifier once an actual supported code environment exists:**
+
+From `mcp/` on the **exact final K7 SHA**, use the maintained
+repository dependency environment; do not reinstall or change lockfiles
+just to run this report:
+
+```bash
+bun test tests/texture-treatment-intelligence.test.ts tests/authoring/texture-knowledge-resource.test.ts tests/authoring/texture-decision-cases.test.ts tests/texture-atlas-integrity.test.ts
+bun run typecheck
+bun run typecheck:gateway
+bun run plan:affected -- lib/texture/treatmentPlan.ts lib/texture/knowledgeCases.ts server/runtime/extensions/texture/authoring.ts
+bun run verify:affected -- lib/texture/treatmentPlan.ts lib/texture/knowledgeCases.ts server/runtime/extensions/texture/authoring.ts
+```
+
+Use `docs/05-operations/local-acceptance-runbook.md` for K8 when an
+actual matching installed Blockbench build and approved model reference
+exist. Neither static regression definitions nor advisory diagnostics are
+visual PASS. No GitHub workflow re-enabled and no user-PC step demanded.

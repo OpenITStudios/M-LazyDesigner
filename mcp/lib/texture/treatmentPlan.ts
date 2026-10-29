@@ -247,11 +247,19 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
     if (destinationRegion.pbr_intent !== sourceRegion.pbr_intent) {
       unresolved.push({ region: owner.region, reason: "SHARED_UV_PBR_CONFLICT" });
     }
-    const lhs = destinationRegion.identity_colors;
-    const rhs = sourceRegion.identity_colors;
-    if (lhs.length > 0 && rhs.length > 0 &&
+    const lhs = destinationRegion.identity_colors.map(color =>
+      typeof color === "string" ? color.trim().toLowerCase() : "");
+    const rhs = sourceRegion.identity_colors.map(color =>
+      typeof color === "string" ? color.trim().toLowerCase() : "");
+    // One-sided/blank palette intent is missing evidence, not compatibility.
+    // Preserve two genuinely unspecified cohorts as planning-only candidates;
+    // no shared UV claim here is a native/reference visual PASS.
+    if (lhs.some(color => !color) || rhs.some(color => !color) ||
+        (lhs.length === 0) !== (rhs.length === 0)) {
+      unresolved.push({ region: owner.region, reason: "SHARED_UV_IDENTITY_UNVERIFIED" });
+    } else if (lhs.length > 0 &&
         (lhs.length !== rhs.length || lhs.some((color, index) =>
-          color.toLowerCase() !== rhs[index]?.toLowerCase()))) {
+          color !== rhs[index]))) {
       unresolved.push({ region: owner.region, reason: "SHARED_UV_IDENTITY_CONFLICT" });
     }
     if (sourceOwner.treatment.treatment === "INTENTIONAL_TRANSPARENT" &&

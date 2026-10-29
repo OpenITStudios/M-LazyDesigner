@@ -248,6 +248,27 @@ describe("K5/K6 diagnostic knowledge hints", () => {
       .toBe(false);
   });
 
+  test("a stale or unverified case cannot become a diagnostic hint", () => {
+    const noSource = suggestTextureUvTechnicalKnowledge({
+      exact_reuse_region_count: 1,
+      solid_color_face_count: 2,
+      scanned_face_count: 4,
+    }, () => ({
+      state: "REVIEW_REQUIRED" as const,
+      reason: "SOURCE_STALE" as const,
+      mutation_authorized: false as const,
+      visual_verdict: "not_evaluated" as const,
+    }));
+    expect(noSource).toEqual([]);
+    const invalid = suggestTextureUvTechnicalKnowledge({
+      exact_reuse_region_count: Number.POSITIVE_INFINITY,
+      partial_overlap_pair_count: -1,
+      solid_color_face_count: 5,
+      scanned_face_count: Number.NaN,
+    }, () => { throw new Error("An unusable diagnostic must not load knowledge"); });
+    expect(invalid).toEqual([]);
+  });
+
   test("the established Runtime diagnostic caller is opt-in, bounded, and read-only", async () => {
     const runtime = await Bun.file(
       "server/runtime/extensions/texture/authoring.ts"

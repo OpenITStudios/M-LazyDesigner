@@ -72,9 +72,41 @@ describe("texture treatment intelligence", () => {
     expect(planTextureTreatment(pbr).readiness.unresolved).toContainEqual({
       region: "shared", reason: "SHARED_UV_PBR_CONFLICT",
     });
+    // A declared identity on only one side is missing evidence, never
+    // permission to share those pixels or copy the first side's palette.
+    const leftOnly = shared();
+    leftOnly.regions[1]!.identity_colors = [];
+    expect(planTextureTreatment(leftOnly).readiness.unresolved).toContainEqual({
+      region: "shared", reason: "SHARED_UV_IDENTITY_UNVERIFIED",
+    });
+    const rightOnly = shared();
+    rightOnly.regions[0]!.identity_colors = [];
+    expect(planTextureTreatment(rightOnly).readiness.unresolved).toContainEqual({
+      region: "shared", reason: "SHARED_UV_IDENTITY_UNVERIFIED",
+    });
+    const blank = shared();
+    blank.regions[1]!.identity_colors = ["   "];
+    expect(planTextureTreatment(blank).readiness.unresolved).toContainEqual({
+      region: "shared", reason: "SHARED_UV_IDENTITY_UNVERIFIED",
+    });
+    // Formatting and case differences alone are not a different palette.
+    const normalized = shared();
+    normalized.regions[1]!.identity_colors = [" #aa3300 "];
+    expect(planTextureTreatment(normalized).readiness.state).toBe("ready");
+    // Both sides without declared colors remain only structurally ready;
+    // no artistic identity/visual PASS is inferred.
+    const unspecified = shared();
+    unspecified.regions[0]!.identity_colors = [];
+    unspecified.regions[1]!.identity_colors = [];
+    expect(planTextureTreatment(unspecified).readiness.state).toBe("ready");
+
     // An authoring intent change after ready must be rechecked before seam handoff.
     allowed.regions[1]!.identity_colors = ["#ffff00"];
     expect(() => requireTextureTreatmentSeamPlanReady(allowed))
+      .toThrow("post-planning source or continuity intent became unresolved");
+    const staleIdentity = planTextureTreatment(shared());
+    staleIdentity.regions[0]!.identity_colors = [];
+    expect(() => requireTextureTreatmentSeamPlanReady(staleIdentity))
       .toThrow("post-planning source or continuity intent became unresolved");
   });
 
