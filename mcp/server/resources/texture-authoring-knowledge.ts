@@ -1,3 +1,5 @@
+import casebook from "../../../docs/03-authoring/texture/decision-cases.md" with { type: "text" };
+import { createTextureUvCaseReader, type TextureUvCaseId } from "@/lib/texture/knowledgeCases";
 import { createResource, type ResourceSpec } from "@/lib/factories";
 import {
   TEXTURE_SURFACE_PATTERN_NAMES,
@@ -14,16 +16,31 @@ const TOPICS = [
   "vanilla-principles",
   "render-profiles",
   "treatment-plan",
+  "case-uv-p01",
+  "case-tex-p01",
+  "case-tex-p02",
+  "case-tex-p03",
 ] as const;
 
 type TextureKnowledgeTopic = (typeof TOPICS)[number];
+
+const CASE_TOPICS = {
+  "case-uv-p01": "UV-P01",
+  "case-tex-p01": "TEX-P01",
+  "case-tex-p02": "TEX-P02",
+  "case-tex-p03": "TEX-P03",
+} as const satisfies Record<string, TextureUvCaseId>;
+
+function isCaseTopic(value: TextureKnowledgeTopic): value is keyof typeof CASE_TOPICS {
+  return Object.prototype.hasOwnProperty.call(CASE_TOPICS, value);
+}
 
 export const textureAuthoringKnowledgeResourceDocs: ResourceSpec = {
   name: "texture-authoring-knowledge",
   uriTemplate: "texture-authoring://{topic}",
   title: "Texture Authoring Knowledge",
   description:
-    "On-demand LazyDesigner texture treatment knowledge: surface-pattern recipes, Vanilla pixel/render principles, known entity render profiles, and treatment-plan structure. Read only the topic needed for the current texture decision.",
+    "On-demand LazyDesigner texture knowledge: established surface/render principles, treatment planning, and four pinned, source-grounded K3 review cases. Case reads never attest current reference/target compatibility or authorize UV/paint mutations.",
 };
 
 function isTopic(value: string | undefined): value is TextureKnowledgeTopic {
@@ -31,6 +48,15 @@ function isTopic(value: string | undefined): value is TextureKnowledgeTopic {
 }
 
 function topicPayload(topic: TextureKnowledgeTopic) {
+  // Embedded canonical Markdown is indexed ONLY for an explicitly selected
+  // K3 case resource, never at plugin startup or on ordinary texture reads.
+  if (isCaseTopic(topic)) {
+    const candidate = createTextureUvCaseReader(casebook).read(CASE_TOPICS[topic]);
+    if (candidate.state !== "SOURCE_CANDIDATE") {
+      throw new Error("TEXTURE_KNOWLEDGE_CASE_SOURCE_UNAVAILABLE");
+    }
+    return candidate; // Still REVIEW_REQUIRED for any current user asset.
+  }
   if (topic === "surface-patterns") {
     return {
       domain: "surface_pattern",

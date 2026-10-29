@@ -18,6 +18,7 @@ export const RUNTIME_WATCH_TARGETS: RuntimeWatchTarget[] = [
   { path: "macros", recursive: true },
   { path: "prompts/bedrock_entity_workflow.md", recursive: false },
   { path: "../docs/03-authoring/modelling/decision-cases.md", recursive: false },
+  { path: "../docs/03-authoring/texture/decision-cases.md", recursive: false },
 ];
 
 function normalizeRepoPath(path: string): string {
@@ -31,6 +32,9 @@ export function classifyWatchPath(path: string): WatchAction {
     return "regenerate-prompts-and-rebuild";
   }
   if (normalized === "../docs/03-authoring/modelling/decision-cases.md") {
+    return "rebuild";
+  }
+  if (normalized === "../docs/03-authoring/texture/decision-cases.md") {
     return "rebuild";
   }
 

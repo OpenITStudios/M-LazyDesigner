@@ -204,6 +204,9 @@ patterns. Read only the selected card, not the entire source inventory.
 
 ### K4 — Design modular knowledge-informed decisions
 
+**K4 bounded source implementation:** [knowledge-integration.md](knowledge-integration.md) documents read-only, source- and section-hash-gated K3 case retrieval through the existing Texture Resource and canonical semantic index. It does not authorize native changes: every returned card is SOURCE_CANDIDATE with current asset and target compatibility REVIEW_REQUIRED. The four-tool Gateway does not automatically forward Runtime resources, so no normal authoring caller/quality PASS is claimed. Existing no-knowledge fast path, modelling/Texture ownership, UV safety and all four original resource topics remain unchanged. Focused regressions are AUTHORED, Bun/CI/native/visual NOT EXECUTED.
+
+
 Map the cards to the **existing** pipeline:
 
 ```text
