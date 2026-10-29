@@ -259,7 +259,7 @@ describe("K5/K6 diagnostic knowledge hints", () => {
     });
     expect(items[0]!.source).toBe(TEXTURE_UV_CASE_SOURCE_PATH);
     expect(items[0]!.section_id).toContain("decision-cases");
-    expect(items[0]!.section_id).toContain("#uv-p01-");
+    expect(items[0]!.section_id).toMatch(/#.+\/uv-p01-/);
     expect(items[0]!.title).toMatch(/^UV-P01 /);
     expect(items[0]!.source_sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(items[0]!.required_evidence).toContain("Cube UUID");
@@ -286,7 +286,7 @@ describe("K5/K6 diagnostic knowledge hints", () => {
       source: TEXTURE_UV_CASE_SOURCE_PATH,
       mutation_authorized: false,
     });
-    expect(two[1]!.section_id).toContain("#tex-p01-");
+    expect(two[1]!.section_id).toMatch(/#.+\/tex-p01-/);
     expect(two[1]!.title).toMatch(/^TEX-P01 /);
     expect(two[1]!.decision_examples.positive_hypothesis).toContain("painted wooden panel");
     expect(two[1]!.decision_examples.reject_hypothesis).toContain("clean painted metal");
