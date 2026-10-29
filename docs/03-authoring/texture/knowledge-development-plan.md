@@ -91,6 +91,9 @@ No Texture/UV code change is implied by this procedure.
 
 ### K1 — Extensive research beyond Minecraft
 
+**Current K1 evidence:** [112-record extended primary-source research inventory](research-sources.md) across eight streams. This is curated research/rights review only, not imported training data, executed source code, a native PASS or verified visual quality. Select sources on demand; promote only discriminating, rights-compatible K3 decision cases.
+
+
 Research **widely** and collect primary source URLs, versions and
 actual artifacts across at least these independent streams:
 

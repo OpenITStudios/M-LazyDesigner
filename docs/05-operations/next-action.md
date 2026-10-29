@@ -8,12 +8,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **Frozen Geometry checkpoint:** G1/G2 + R1–R4 source; R5 paired Golden benchmark source prepared. Last Geometry commit `ec22a6e9d2420f12d116f31bc25ce59491956150`. Bun/typecheck/build, native/visual acceptance NOT EXECUTED; no Geometry quality PASS. Preserve source/proof history.
 
-**Follow the complete [K0–K9 research-to-acceptance procedure](../03-authoring/texture/knowledge-development-plan.md). Start with K0 (audit), then K1 research; do not skip proof gates:**
+**K0/K1 research continuation (29 October 2026):** [112-source K1 research inventory](../03-authoring/texture/research-sources.md) now covers pinned Mojang/Blockbench native files, real geometry+PBR pairs, DCC, engines, UV algorithms, pixel-art, AI papers and mixed-license community samples. K0 inspected canonical owners and diagnosed potential gaps; K1 records **candidate transfer decisions and counterexamples**, not integrated runtime decisions or accepted texture quality.
 
-1. Read [Texture/UV Standard](../03-authoring/texture/standard.md) and relevant `surface-pattern.md`, `material.md`, `render-profile.md`; inspect existing `mcp/lib/uv/`, `mcp/lib/texture/`, and Runtime adapters. Identify real gaps before designing changes.
-2. **UV:** Box/per-face UV, atlas islands and packing, pixel mapping/density, mirrored faces, seams, alpha planes, UV lock and migration. **Modelling owns UV Layout mapping/approval** on coherent frozen Geometry; Texture owns atlas pixels, styling, material/PBR and mapped-model verification. Do not reopen Geometry modelling.
-3. **Texture knowledge:** Minecraft pixel clusters, palette/value ramps, surface materials, reference identity, alpha/PBR when needed. Curate official Mojang/Blockbench sources first; check license/version for community models. Reuse existing Recipe/semantic index and Validation, not a second engine/database/godfile.
-4. **Safety:** `manage_uv_layout` remains UNREGISTERED pending canonical generator + matching source/API/build verification. Static source/plans cannot claim UV, atlas, seam or visual PASS. No assets, CI, releases, user-PC or Codex work authorized.
+**Next K2 (priority):** compare recorded hypotheses against existing UV/Texture owners and actual consumers; identify P0/P1 *unowned decision gaps*, source/compatibility/license gates, then pilot selected K3 positive/negative cases. Do not expand a case merely because sources are numerous. UV Layout remains Modelling-owned; Texture styling/atlas/PBR remains Texturing-owned. `manage_uv_layout` remains UNREGISTERED. Bun/CI, native/visual tests, asset edits, release and Geometry resumption NOT EXECUTED.
 
 **Order:** Texture & UV ACTIVE; Geometry PAUSED; Animation DEFERRED.
 
