@@ -280,3 +280,67 @@ source test owner now check that the conditional Gateway hints include
 those bounded distinctions. No extra normal authoring call or new public
 tool is required. This remains SOURCE ONLY until targeted Bun and
 LIVE_BLOCKBENCH execution really occur.
+
+ 
+## K9 — Source-closure and Golden acceptance boundary
+
+**Audit outcome:** K0–K8 source-level knowledge research, casebook,
+read-only diagnostic guidance, shared treatment conflict review and the
+disposable native-verifier extension exist on the selected `Local` branch.
+They are **SOURCE-COMPLETE FOR THE CURRENT BOUNDED K-PHASE IMPLEMENTATION**,
+not verified installed quality or authorization to declare production READY.
+
+One K9 traceability defect was resolved in the existing case-hint owner:
+`knowledge_guidance` now includes original `source`, `section_id`
+and `title` as well as the previously present
+`case_id / source_sha256 / section_sha256 / decision_examples`.
+This is an advisory provenance record directly derived from the existing
+semantic index, not a second index or knowledge registry.
+The existing source-only owner tests and native disposable fixture check
+that these identifiers are not lost through the Gateway response.
+
+**Actual experimental acceptance must use existing owners**:
+[Golden Tasks](../../../mcp/docs/GOLDEN_TASKS.md) and
+[Quality Benchmark](../../../mcp/docs/QUALITY_BENCHMARK.md), not a new
+quality scorer, pseudo-dataset or benchmark harness. Select no new Golden
+task merely to cover a K3 paper. The current eight canonical Golden Tasks
+all remain `UNMEASURED`. Three natural Texture/UV probes are:
+
+| Existing Golden Task | Relevant K3 question (if actually observed) | Critical acceptance proof |
+| --- | --- | --- |
+| `golden-existing-model-correction` | UV-P01 asymmetry or TEX-P01 material rework | identical immutable starting bbmodel, approved reference and claim IDs, before/after mapped views, unchanged unaffected atlas pixels |
+| `golden-layered-cutout-display` | TEX-P01 opacity/material and possible UV-P01 reuse | exact alpha semantics, full physical mapped UV, cutout boundary and reference-comparable views |
+| `golden-pbr-machine` | TEX-P03 only if a known material/render binding is verified; TEX-P02 only with declared cross-Cube reference seam | checked render target and channel binding, same atlas/UV revision, accepted seam and PBR/Bedrock export evidence |
+
+The above mapping is a *prospective decision matrix*, not evidence those
+assets exist or were tested with these cases. For a paired baseline/candidate
+study, the same task, immutable reference+seed, target renderer/build,
+acceptance criteria and independently captured source-exposure records are
+mandatory. Merely delivering `knowledge_guidance` **does not prove the
+agent used the case, improved the model, or received human acceptance**.
+Only compare Cost to Accepted Result after both real results pass the
+same reference and native quality criteria. No aggregate quality score.
+
+### Final K9 source audit checklist
+
+| Boundary | Current source finding | Proof state |
+| --- | --- | --- |
+| Modelling owns UV, Texturing owns atlas/material | existing stage ownership preserved | SOURCE INSPECTED |
+| Default simple inventory/Box UV path | K3 hints only when opt-in UV/coverage diagnostics have genuine evidence | SOURCE INSPECTED; BUN NOT EXECUTED |
+| Four source-pinned K3 decisions | 11 upstream/internal pinned UTF-8 SHA-256 source facts with rights/version qualifications | SOURCE INSPECTED, visual applicability UNKNOWN |
+| Source staleness & ambiguity | canonical semantic hashes, strict title and missing/stale abstention | SOURCE INSPECTED; BUN NOT EXECUTED |
+| Pixel migration/Undo/rollback | original native ownership preserved, no manage_uv_layout registration | SOURCE INSPECTED; LIVE NOT EXECUTED |
+| Public Gateway | same four tools; case hints via existing list_textures diagnostic | SOURCE INSPECTED; LIVE NOT EXECUTED |
+| New source provenance fields | source, section_id, title and both hashes present in selected hints | SOURCE INSPECTED; BUN/LIVE NOT EXECUTED |
+| K7/K8 verification | tests + disposable harness prepared, no workflow re-enabled | AUTHORED, NOT EXECUTED |
+| K9 Golden quality or efficiency gain | eight canonical tasks unchanged and still UNMEASURED | **NO LIVE/HUMAN ACCEPTANCE** |
+
+**Required exit sequence, not currently runnable here:** execute the
+exact-SHA targeted Bun tests, typecheck and affected/build gates using an
+actual checked-out and dependency-complete repo; then run the existing
+disposable live Geometry→Texturing harness on the installed matching build;
+then a reference-matched Golden baseline/candidate run with saved artifacts,
+native export and independent human review. Native/visual acceptance remains
+**BLOCKED ON EXECUTION CONTEXT AND APPROVED ASSET**. This source-closure audit
+does not authorize restarting Geometry, Animation, CI, installation, model
+editing or a release.

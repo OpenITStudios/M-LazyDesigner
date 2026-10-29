@@ -214,13 +214,22 @@ function expectKnowledgeHints(
       hint.reference_scope === "CURRENT_USER_REFERENCE_NOT_ATTESTED" &&
       hint.target_compatibility === "UNKNOWN_CURRENT_BEDROCK_AND_BLOCKBENCH",
       `${scope} promoted source knowledge to unverified authoring/visual authority.`);
-    expect(typeof hint.source_sha256 === "string" &&
+    expect(typeof hint.source === "string" &&
+      hint.source === "docs/03-authoring/texture/decision-cases.md" &&
+      typeof hint.section_id === "string" &&
+      hint.section_id.startsWith("knowledge:") &&
+      hint.section_id.includes("decision-cases") &&
+      hint.section_id.includes("#") &&
+      typeof hint.title === "string" &&
+      typeof hint.case_id === "string" &&
+      hint.title.startsWith(hint.case_id + " ") &&
+      typeof hint.source_sha256 === "string" &&
       /^[a-f0-9]{64}$/.test(hint.source_sha256) &&
       typeof hint.section_sha256 === "string" &&
       /^[a-f0-9]{64}$/.test(hint.section_sha256) &&
       typeof hint.required_evidence === "string" &&
       hint.required_evidence.length > 20,
-      `${scope} omitted pinned source identity or required review evidence.`);
+      `${scope} omitted canonical case/source identity, pinned revision or review evidence.`);
     const examples = (hint.decision_examples ?? {}) as JsonObject;
     for (const key of [
       "decision", "positive_hypothesis", "reject_hypothesis", "ambiguous_hypothesis",

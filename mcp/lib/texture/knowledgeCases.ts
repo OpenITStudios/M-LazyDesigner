@@ -260,6 +260,10 @@ export type TextureUvTechnicalKnowledgeHint = Readonly<{
   case_id: "UV-P01" | "TEX-P01";
   trigger: "UV_PIXEL_OWNERSHIP_REVIEW" | "FLAT_TEXTURE_REFERENCE_REVIEW";
   observed: Readonly<Record<string, number>>;
+  /** Stable semantic owner identity; required for future Golden exposure matching. */
+  source: string;
+  section_id: string;
+  title: string;
   source_sha256: string;
   section_sha256: string;
   required_evidence: string;
@@ -301,6 +305,9 @@ export function suggestTextureUvTechnicalKnowledge(
       case_id: id,
       trigger,
       observed,
+      source: caseEvidence.source,
+      section_id: caseEvidence.section_id,
+      title: caseEvidence.title,
       source_sha256: caseEvidence.source_sha256,
       section_sha256: caseEvidence.section_sha256,
       required_evidence: caseEvidence.required_evidence,

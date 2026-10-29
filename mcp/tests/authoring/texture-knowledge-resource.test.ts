@@ -3,6 +3,7 @@ import {
   createTextureUvCaseReader,
   suggestTextureUvTechnicalKnowledge,
   TEXTURE_UV_CASE_IDS,
+  TEXTURE_UV_CASE_SOURCE_PATH,
 } from "@/lib/texture/knowledgeCases";
 import { getAllResourceDefinitions } from "@/lib/factories";
 import { classifyWatchPath, RUNTIME_WATCH_TARGETS } from "@/build/watch-policy";
@@ -256,6 +257,10 @@ describe("K5/K6 diagnostic knowledge hints", () => {
       reference_scope: "CURRENT_USER_REFERENCE_NOT_ATTESTED",
       mutation_authorized: false, visual_verdict: "not_evaluated",
     });
+    expect(items[0]!.source).toBe(TEXTURE_UV_CASE_SOURCE_PATH);
+    expect(items[0]!.section_id).toContain("decision-cases");
+    expect(items[0]!.section_id).toContain("#uv-p01-");
+    expect(items[0]!.title).toMatch(/^UV-P01 /);
     expect(items[0]!.source_sha256).toMatch(/^[a-f0-9]{64}$/);
     expect(items[0]!.required_evidence).toContain("Cube UUID");
     expect(items[0]!.decision_examples.reject_hypothesis).toContain("unique symbol");
@@ -275,10 +280,14 @@ describe("K5/K6 diagnostic knowledge hints", () => {
     expect(two.map(x => x.case_id)).toEqual(["UV-P01", "TEX-P01"]);
     expect(two[1]).toMatchObject({
       state: "REVIEW_REQUIRED",
+      case_id: "TEX-P01",
       trigger: "FLAT_TEXTURE_REFERENCE_REVIEW",
       observed: { solid_color_face_count: 3, scanned_face_count: 8 },
+      source: TEXTURE_UV_CASE_SOURCE_PATH,
       mutation_authorized: false,
     });
+    expect(two[1]!.section_id).toContain("#tex-p01-");
+    expect(two[1]!.title).toMatch(/^TEX-P01 /);
     expect(two[1]!.decision_examples.positive_hypothesis).toContain("painted wooden panel");
     expect(two[1]!.decision_examples.reject_hypothesis).toContain("clean painted metal");
     expect(two.some(x => x.case_id === "TEX-P02" || x.case_id === "TEX-P03"))
