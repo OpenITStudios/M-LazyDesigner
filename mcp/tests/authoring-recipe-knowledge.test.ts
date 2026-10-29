@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
@@ -293,5 +294,104 @@ describe("Recipe source planning and Runtime knowledge bridge", () => {
     const oldPlan = await legacyService.plan(legacy, legacy);
     expect(oldPlan).not.toHaveProperty("recipe_knowledge");
     expect(legacyReads).toBe(0);
+  });
+});
+
+
+describe("G1 source-grounded Geometry knowledge case pilot", () => {
+  const sourcePath = "docs/03-authoring/modelling/decision-cases.md";
+  const cases = readFileSync(
+    new URL("../../docs/03-authoring/modelling/decision-cases.md", import.meta.url),
+    "utf8"
+  );
+  const caseIndex = {
+    sections: indexMarkdownKnowledge(sourcePath, cases),
+    sources: [describeKnowledgeSource(sourcePath, cases)],
+  };
+
+  const queries = [
+    ["G-P01", "scale cross-view depth"],
+    ["G-P02", "primary silhouette mass"],
+    ["G-P03", "protruding form surface marking"],
+    ["G-P04", "sloped form staircase"],
+    ["G-P05", "joint pivot bone parenting"],
+    ["G-P06", "negative space painted shadow"],
+    ["G-P07", "symmetry intentional asymmetry"],
+    ["G-P08", "thin plane uv compatibility"],
+  ] as const;
+
+  test("all eight distinct case sections carry conditional source and counterexample boundaries", () => {
+    const actual = caseIndex.sections.filter(s => /^G-P\d{2} /.test(s.heading));
+    expect(actual).toHaveLength(8);
+    expect(new Set(actual.map(s => s.id)).size).toBe(8);
+    const spans = cases.split(/^## G-P\d{2} /m).slice(1);
+    expect(spans).toHaveLength(8);
+    for (const span of spans) {
+      for (const marker of [
+        "**Apply:**", "**Reject/defer:**", "**Source evidence:**",
+        "**Recipe decision:**", "**Counterexample (hypothetical):**",
+        "**Proof required:**",
+      ]) expect(span).toContain(marker);
+    }
+    expect(cases).toContain("SOURCE-GROUNDED_CANDIDATE");
+    expect(cases).toContain("Git blob object IDs, not SHA-256");
+  });
+
+  test("indexed source selects its exact case per semantic problem without upgrading unknown reference evidence", () => {
+    for (const [id, label] of queries) {
+      const provisional: AuthoringRecipe = {
+        schema: 1, compiler_version: 1,
+        id: "pilot-" + id, name: "geometry decision",
+        prototypes: [], patterns: [],
+        feature_intents: [{
+          id: "test-feature", label, visual_role: "THREE_DIMENSIONAL",
+          evidence: "PROVISIONAL", geometry_reasons: ["SILHOUETTE"],
+        }],
+      };
+      const selected = suggestRecipeKnowledge(provisional, caseIndex, {
+        feature_ids: ["test-feature"], max_per_feature: 1,
+        max_token_proxy: 1600,
+      });
+      expect(selected).toHaveLength(1);
+      expect(selected[0]?.sections[0]?.section_id).toContain(id.toLowerCase());
+      expect(selected[0]?.sections[0]?.section_sha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(selected[0]?.feature_route).toBe("REVIEW_REQUIRED");
+      expect(compileAuthoringRecipe(provisional).feature_plan?.state)
+        .toBe("review_required");
+    }
+  });
+
+  test("explicit Recipe binding preserves knowledge freshness without granting visual approval", () => {
+    const selected = caseIndex.sections.find(s => s.heading.startsWith("G-P05 "))!;
+    const provisional: AuthoringRecipe = {
+      schema: 1, compiler_version: 1,
+      id: "g1-provisional-hinge", name: "mechanical hinge case",
+      prototypes: [], patterns: [],
+      feature_intents: [{
+        id: "hinge", label: "joint pivot bone parenting",
+        visual_role: "THREE_DIMENSIONAL",
+        evidence: "PROVISIONAL", geometry_reasons: ["MOTION"],
+      }],
+    };
+    const bound = bindRecipeKnowledge(provisional, caseIndex, [
+      { feature_id: "hinge", section_id: selected.id },
+    ]);
+    const current = resolveRecipeKnowledgeLinks(bound, caseIndex);
+    expect(current.state).toBe("CURRENT_SOURCE_SNAPSHOT");
+    expect(current.evidence_boundary)
+      .toBe("INDEX_METADATA_ONLY_NOT_VISUAL_OR_RUNTIME_PROOF");
+    expect(compileAuthoringRecipe(bound).feature_plan?.state)
+      .toBe("review_required");
+    const updated = cases.replace(
+      "use the actual joint/hinge pivot.",
+      "use the explicitly confirmed joint/hinge pivot."
+    );
+    expect(updated).not.toBe(cases);
+    const revisedIndex = {
+      sections: indexMarkdownKnowledge(sourcePath, updated),
+      sources: [describeKnowledgeSource(sourcePath, updated)],
+    };
+    expect(resolveRecipeKnowledgeLinks(bound, revisedIndex).issues)
+      .toEqual([{ feature_id: "hinge", section_id: selected.id, reason: "SECTION_STALE" }]);
   });
 });

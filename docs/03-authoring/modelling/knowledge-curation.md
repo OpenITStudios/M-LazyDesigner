@@ -1,6 +1,6 @@
 # Geometry Knowledge Curation Contract
 
-Status: planned curation contract (2026-10-29); **no new curated case accepted or native proof claimed**.
+Status: G0 documented; **G1 eight SOURCE-GROUNDED_CANDIDATE pairs prepared** (2026-10-29). Source facts are pinned where available; negative cases remain hypothetical and deterministic regressions/native/visual acceptance are NOT EXECUTED.
 Owner: `docs/03-authoring/modelling/`; continuation: `docs/05-operations/next-action.md`.
 
 ## Purpose and non-goals
@@ -43,11 +43,14 @@ only when its evidence can change a Recipe choice or prevent a known failure.
 
 ## One canonical knowledge-card shape
 
-Add a compact, named subsection to the **existing** owning modelling policy
-or relevant profile; use its heading/path as the section ID produced by
-`mcp/lib/semantic/knowledge.ts`. Case files/visual evidence stay with their
-existing `workspace/active/<asset>/` owner, not in loose copies. Each
-decision card should contain only the following fields when applicable:
+The bounded G1 pilot's eight **case-only** cards live together in
+[decision-cases.md](decision-cases.md), with unique headings that the existing
+`mcp/lib/semantic/knowledge.ts` can index. This separates evidence examples
+from the already large universal `standard.md` and seven profiles, without
+adding a second modelling policy or an always-loaded corpus. Later sustained
+profile-specific rules must extend their existing owner, not duplicate cards.
+Native asset/image evidence remains with its `workspace/active/<asset>/`
+owner. Each case card should contain only the following fields when applicable:
 
 | Field | Minimum content |
 | --- | --- |
@@ -81,8 +84,11 @@ rest/extreme pose contact/clearance and native export when applicable.
 ## First eight discriminating decision probes (G1)
 
 Each row is **one positive/negative decision pair**, not an asset preset.
-Design approval, measurements and runnable fixtures must be supplied from
-properly licensed, exact-reference cases before marking any pair verified.
+The [G1 casebook](decision-cases.md) now documents each decision with a
+source-grounded positive **structural fact** and a clearly hypothetical
+negative counterexample. This is not accepted artistic/visual test evidence:
+real approved references, matching native proof and executed retrieval
+regressions remain required before claiming the pairs verified.
 
 | ID | Positive case to support | Negative / exception to preserve | Coverage |
 | --- | --- | --- | --- |
@@ -140,9 +146,10 @@ index, add a Gateway tool, or load all profiles into every prompt.
 
 **G0 / planning acceptance:** coverage matrix, unique owners, first eight
 decision-pair targets and exact evidence requirements recorded (this file).
-**G1 / source candidate:** each candidate has current source identity,
-applicability/negative evidence, and a deterministic retrieval/decision
-regression; no visual PASS.
+**G1 / source candidate:** eight cards have source facts, applicability and
+negative decision boundaries. The owning Recipe knowledge regression is
+AUTHORED but NOT EXECUTED; G1 executable acceptance remains pending, and
+the cards are not model-quality PASS.
 **G2 / connected Recipe:** the relevant cards are retrievable on the actual
 Recipe path, respect incompatible/absent/stale sources, and do not alter
 legacy Recipe placement or existing Validation.

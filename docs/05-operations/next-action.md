@@ -4,9 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Primary next to do — verified Recipe knowledge (2026-10-29)
 
-**User priority; planned, NOT STARTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
+**User priority; G1 eight source-grounded candidates authored; tests/native/visual NOT EXECUTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
 
-1. **Geometry first:** follow [Geometry Knowledge Curation](../03-authoring/modelling/knowledge-curation.md): fill the P0 decision-pair pilot (G-P01..G-P08) with source/negative cases, then connect bounded retrieval to the existing Recipe and benchmark against identical approved references. G0 curation contract recorded; G1+ NOT STARTED.
+1. **Geometry first:** follow [Geometry Knowledge Curation](../03-authoring/modelling/knowledge-curation.md): review [eight G1 source-grounded case pairs](../03-authoring/modelling/decision-cases.md) (G-P01..G-P08), execute their focused Recipe retrieval regressions on matching source, then connect bounded Runtime retrieval and compare identical approved references. G1 cases authored, executable proof pending; G2+ NOT STARTED.
 2. **Texture second:** curate UV/atlas layout, Minecraft pixel-cluster treatment, palette/material/PBR semantics and seam-safe texture patterns. Preserve the reference's visual identity and measure mapped-model quality.
 3. **Animation third:** curate grounded rig/motion/keyframe, interpolation, contact, loop and controller patterns. Compare playback, motion fidelity and export correctness.
 
