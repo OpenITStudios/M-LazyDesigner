@@ -94,6 +94,12 @@ Workspace blocker projection require orientation and must not produce a
 whole-asset `asset_health.overall=READY`, even when the first gate line says
 `APPROVED`. Internal validator clearance is not independent user approval,
 visual correctness, or native playback acceptance.
+The active-stage Reference verdict and Reference Package `readiness.overall`
+must stay distinct: an unrelated future-stage `NEEDS_REVIEW` does not stop
+Geometry work, but it prevents whole-asset `asset_health.overall=READY`.
+An overall Reference `BLOCKED` remains visible as a package-level blocker,
+not a fabricated failure of the current Geometry Stage. Missing overall
+reference evidence never becomes complete-asset readiness.
 No separate Validation Stage, new MCP tool, per-stage manager or state store
 is required.
 

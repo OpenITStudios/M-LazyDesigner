@@ -147,6 +147,47 @@ describe("asset health summary", () => {
     expect(result.overall).toBe("REVIEW");
   });
 
+  test("overall Reference review prevents whole-asset READY without blocking an unrelated Stage", () => {
+    const ref = reference(false);
+    ref.readiness.overall = "NEEDS_REVIEW";
+    ref.readiness.geometry = "READY";
+    ref.readiness.texture = "BLOCKED";
+    const ws = workspace();
+    ws.gates.animation = "NOT_STARTED";
+    const stage = buildControlStageContext({
+      domain: "GEOMETRY", reference: ref, workspace: ws,
+    });
+    expect(stage.stage_readiness).toBe("READY");
+    expect(stage.asset_health.stages.reference).toBe("PASS");
+    expect(stage.asset_health.overall).toBe("REVIEW");
+    expect(stage.asset_health.blockers).toEqual([]);
+  });
+
+  test("overall Reference blocker persists in asset health but not the active Geometry gate", () => {
+    const ref = reference(false);
+    ref.readiness.overall = "BLOCKED";
+    ref.readiness.geometry = "READY";
+    ref.readiness.texture = "BLOCKED";
+    const result = buildAssetHealthSummary({
+      domain: "GEOMETRY", reference: ref, workspace: workspace(),
+    });
+    expect(result.stages.reference).toBe("PASS");
+    expect(result.stages.geometry).toBe("PASS");
+    expect(result.overall).toBe("BLOCKED");
+    expect(result.blockers).toContain("REFERENCE_PACKAGE_OVERALL_BLOCKED");
+    expect(result.blockers).not.toContain("REFERENCE_STAGE_BLOCKED");
+  });
+
+  test("missing overall Reference status is not evidence that the full asset is READY", () => {
+    const ref = reference(false);
+    ref.readiness.overall = null;
+    const result = buildAssetHealthSummary({
+      domain: "GEOMETRY", reference: ref, workspace: workspace(),
+    });
+    expect(result.stages.reference).toBe("PASS");
+    expect(result.overall).toBe("INCOMPLETE");
+  });
+
   test("in-progress stages remain review instead of becoming PASS", () => {
     const ws = workspace();
     ws.gates.texturing = "IN_PROGRESS";

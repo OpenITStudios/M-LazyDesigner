@@ -127,6 +127,10 @@ export function buildAssetHealthSummary(input: {
   // Only an explicit, uncontested Reference false permits NOT_REQUIRED.
   const animationExcluded = animationRequirement === false &&
     !requirementConflict && !malformedRequirement;
+  // Stage reference and whole-package reference serve different decisions.
+  // An active Geometry READY must not hide unresolved later-stage package
+  // constraints in an all-asset readiness summary.
+  const packageReferenceState = referenceState("CORE", input.reference);
   const stages: AssetHealthSummary["stages"] = {
     reference: referenceState(input.domain, input.reference),
     // A technical PASS must never substitute for a persisted user approval.
@@ -149,6 +153,9 @@ export function buildAssetHealthSummary(input: {
 
   const blockers: string[] = [];
   if (stages.reference === "BLOCKED") blockers.push("REFERENCE_STAGE_BLOCKED");
+  if (packageReferenceState === "BLOCKED") {
+    blockers.push("REFERENCE_PACKAGE_OVERALL_BLOCKED");
+  }
   if (stages.geometry === "BLOCKED") blockers.push("GEOMETRY_BLOCKED");
   if (stages.uv_layout === "BLOCKED") blockers.push("UV_LAYOUT_BLOCKED");
   if (stages.texturing === "BLOCKED") blockers.push("TEXTURING_BLOCKED");
@@ -159,6 +166,7 @@ export function buildAssetHealthSummary(input: {
 
   const requiredStates = [
     stages.reference,
+    packageReferenceState,
     stages.geometry,
     stages.uv_layout,
     stages.texturing,
@@ -189,6 +197,6 @@ export function buildAssetHealthSummary(input: {
     stages,
     blockers,
     note:
-      "Declared workspace/reference gate summary only, not independent user approval, visual/native/export proof. Unknown Animation requirement never implies NOT_REQUIRED.",
+      "Declared gate summary, not independent approval or native/visual/export proof. Stage reference follows the active domain; whole-asset READY also requires Reference Package overall READY. Unknown Animation requirement never implies NOT_REQUIRED.",
   };
 }

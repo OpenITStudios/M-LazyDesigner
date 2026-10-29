@@ -74,6 +74,9 @@ describe("LazyDesigner Control reference readiness", () => {
     expect(packet.stage_context?.blocking_unknowns).toEqual([]);
     expect(packet.blockers).not.toContain("REFERENCE_STAGE_BLOCKED");
     expect(packet.readiness.reasons).not.toContain("REFERENCE_STAGE_BLOCKED");
+    expect(packet.readiness.modelling_start).toBe("READY");
+    expect(packet.stage_context?.asset_health.stages.reference).toBe("PASS");
+    expect(packet.stage_context?.asset_health.overall).toBe("REVIEW");
   });
 
   test("current-stage NEEDS_REVIEW remains visible through the actual Control packet", async () => {
