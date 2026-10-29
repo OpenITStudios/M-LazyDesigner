@@ -7,6 +7,8 @@ export type ControlWorkspaceSummary = Pick<
 > & {
   /** Canonical README pointer when lifecycle/proof blockers require review. */
   blocker_recovery?: { source_path: string | null; omitted_count: number };
+  /** Included only at Finalization/Complete; no native hash in normal authoring. */
+  finalization_native_revision?: ControlWorkspaceProjection["finalization_native_revision"];
 };
 
 export type ControlReferenceSummary = Pick<
@@ -53,6 +55,9 @@ export function workspaceSummary(
     available: workspace.available,
     fingerprint: workspace.fingerprint,
     asset: workspace.asset,
+    ...(workspace.finalization_native_revision
+      ? { finalization_native_revision: workspace.finalization_native_revision }
+      : {}),
     ...(needsSourceReview
       ? { blocker_recovery: {
           source_path: workspace.source_path,

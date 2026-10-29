@@ -66,6 +66,19 @@ describe("Blockbench project affinity runtime", () => {
     });
   });
 
+  test("a unique bound project exposes its saved checkpoint even when another tab is active", () => {
+    const { a } = installProjects("project-b");
+    a.save_path = "/tmp/source.bbmodel";
+    a.saved = true;
+    const bound = getRuntimeProjectHealth("project-a");
+    expect(bound.requested_project).toEqual({
+      uuid: "project-a", save_path: "/tmp/source.bbmodel", saved: true,
+    });
+    a.saved = false;
+    expect(getRuntimeProjectHealth("project-a").requested_project?.saved).toBe(false);
+    expect(getRuntimeProjectHealth("missing").requested_project).toBeUndefined();
+  });
+
   test("inactive bound project is selected, locked during execution, and prior tab is restored", async () => {
     const { a, b } = installProjects("project-b");
 

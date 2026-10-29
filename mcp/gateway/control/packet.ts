@@ -134,6 +134,16 @@ export async function buildControlPacket(
   const lifecycleBlockers = lifecycle.blocked
     ? lifecycle.reasons
     : [];
+  const finalizationBlockers =
+    mode !== "ASSET_AUTHORING" ? []
+      : [
+          ...(workspace.finalization_native_revision?.state === "STALE"
+            ? ["FINALIZATION_NATIVE_CHECKPOINT_STALE"] : []),
+          ...(["FINALIZATION", "COMPLETE"].includes(
+            workspace.current_stage?.trim().toUpperCase() ?? ""
+          ) && stageContext?.asset_health.overall === "BLOCKED"
+            ? ["FINALIZATION_UPSTREAM_GATES_BLOCKED"] : []),
+        ];
   const blockers = [
     ...snapshot.blockers,
     ...((workspace.blockers_omitted_count ?? 0) > 0
@@ -141,6 +151,7 @@ export async function buildControlPacket(
       : []),
     ...workspaceBlockers,
     ...workspaceIssues,
+    ...finalizationBlockers,
     ...referenceBlockers,
     ...lifecycleBlockers.filter(
       (reason) => !snapshot.blockers.includes(reason)

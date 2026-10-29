@@ -20,6 +20,12 @@ export type RuntimeProjectHealth = {
   /** true = unique tab, false = absent UUID, null = unbound or ambiguous. */
   requested_project_available: boolean | null;
   open_project_count: number;
+  /** Current bound tab's saved native project identity; not acceptance proof. */
+  requested_project?: {
+    uuid: string;
+    save_path: string | null;
+    saved: boolean | null;
+  };
 };
 
 export function normalizeProjectAffinityUuid(value: unknown): string | null {
@@ -96,6 +102,19 @@ export function readRuntimeProjectHealth(value: unknown): RuntimeProjectHealth |
     requested_project_uuid: requested,
     requested_project_available: available,
     open_project_count: openCount,
+    ...(record.requested_project !== undefined &&
+       record.requested_project !== null &&
+       typeof record.requested_project === "object" &&
+       !Array.isArray(record.requested_project) &&
+       typeof (record.requested_project as Record<string, unknown>).uuid === "string"
+      ? { requested_project: {
+          uuid: (record.requested_project as { uuid: string }).uuid,
+          save_path: typeof (record.requested_project as { save_path?: unknown }).save_path === "string"
+            ? (record.requested_project as { save_path: string }).save_path : null,
+          saved: typeof (record.requested_project as { saved?: unknown }).saved === "boolean"
+            ? (record.requested_project as { saved: boolean }).saved : null,
+        } }
+      : {}),
   };
 }
 

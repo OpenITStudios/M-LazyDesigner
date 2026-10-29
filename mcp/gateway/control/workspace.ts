@@ -1,9 +1,21 @@
 import { createHash } from "node:crypto";
 import { canonicalJson } from "../../lib/semantic/canonical";
 import { dirname, join } from "node:path";
-import { readFile, stat } from "node:fs/promises";
+import { isAbsoluteFilesystemPath } from "../../lib/core/path";
+import { lstat, readFile, stat } from "node:fs/promises";
 import { fileMetadataSignature } from "./fileSignature";
 import type { GatewayRuntimeStatus } from "../runtime/backend";
+
+export type FinalizationNativeRevisionEvidence = {
+  state: "MATCHED" | "STALE" | "UNVERIFIED";
+  reason: string;
+  accepted_sha256: string | null;
+  observed_sha256: string | null;
+};
+
+/** A stored accepted checkpoint is compared only at Finalization/Complete. */
+const FINALIZATION_CHECKPOINT_SHA256 = /^sha256:[0-9a-f]{64}$/;
+const FINALIZATION_NATIVE_MAX_BYTES = 64 * 1024 * 1024;
 
 export type ControlWorkspaceProjection = {
   available: boolean;
@@ -21,6 +33,10 @@ export type ControlWorkspaceProjection = {
   blockers: string[];
   /** Optional README continuity declaration, compared against Reference authority. */
   animation_required?: boolean | null;
+  /** Explicit approval checkpoint hash; not a substitute for approval. */
+  finalization_checkpoint_sha256?: string;
+  /** Dynamic current saved-file check, never cached as README semantics. */
+  finalization_native_revision?: FinalizationNativeRevisionEvidence;
   /** Format/identity ambiguity is orientation-only, not implicit approval. */
   workspace_issues?: string[];
   /** Bounded display omitted additional blocker entries; read the current README. */
@@ -89,6 +105,7 @@ export type WorkspaceSemanticState = {
   next_step: string | null;
   blockers: string[];
   animation_required?: boolean | null;
+  finalization_checkpoint_sha256?: string;
   workspace_issues?: string[];
   blockers_omitted_count?: number;
   blockers_omitted_sha256?: string;
@@ -120,6 +137,17 @@ export function workspaceSemanticState(text: string): WorkspaceSemanticState {
         ? true : animationDeclarations[0] === "NO" ? false : null;
     }
   }
+  const checkpointDeclarations = fieldValues(text, "Finalization Checkpoint SHA256");
+  let acceptedCheckpoint: string | undefined;
+  if (checkpointDeclarations.length > 0) {
+    if (checkpointDeclarations.length !== 1) {
+      issues.push("WORKSPACE_FINALIZATION_CHECKPOINT_CONFLICT");
+    } else if (!FINALIZATION_CHECKPOINT_SHA256.test(checkpointDeclarations[0])) {
+      issues.push("WORKSPACE_FINALIZATION_CHECKPOINT_INVALID");
+    } else {
+      acceptedCheckpoint = checkpointDeclarations[0];
+    }
+  }
   // An existing APPROVED/PASS line must not mask a conflicting second line.
   for (const label of ["Current Stage", "Geometry", "UV Layout", "Texturing", "Animation"]) {
     const values = fieldValues(text, label).map((value) => value.toUpperCase());
@@ -139,6 +167,9 @@ export function workspaceSemanticState(text: string): WorkspaceSemanticState {
     next_step: field(text, "Current next step"),
     ...(animationRequired !== undefined
       ? { animation_required: animationRequired }
+      : {}),
+    ...(acceptedCheckpoint
+      ? { finalization_checkpoint_sha256: acceptedCheckpoint }
       : {}),
     blockers: allBlockers.slice(0, 8),
     ...(issues.length > 0 ? { workspace_issues: [...new Set(issues)].sort() } : {}),
@@ -182,6 +213,90 @@ function resolveWorkspaceReadme(
   return savePath ? join(dirname(savePath), "README.md") : null;
 }
 
+/**
+ * Native checkpoint proof is FINALIZATION-only and derived from the already
+ * bound project. It is never a general authoring read, another state store,
+ * or a user-approval assertion. A missing/malformed file fails closed.
+ */
+async function withFinalizationNativeRevision(
+  status: GatewayRuntimeStatus,
+  projection: ControlWorkspaceProjection
+): Promise<ControlWorkspaceProjection> {
+  const stage = projection.current_stage?.trim().toUpperCase();
+  if (!projection.available ||
+      (stage !== "FINALIZATION" && stage !== "COMPLETE")) return projection;
+
+  const accepted = projection.finalization_checkpoint_sha256 ?? null;
+  const failed = (state: FinalizationNativeRevisionEvidence["state"], reason: string,
+    observed: string | null = null): ControlWorkspaceProjection => {
+    const evidence: FinalizationNativeRevisionEvidence = {
+      state, reason, accepted_sha256: accepted, observed_sha256: observed,
+    };
+    return {
+      ...projection,
+      finalization_native_revision: evidence,
+      fingerprint: createHash("sha256")
+        .update(canonicalJson({
+          workspace: projection.fingerprint,
+          finalization_native_revision: evidence,
+        }))
+        .digest("hex"),
+    };
+  };
+
+  const health = status.runtime.health as Record<string, unknown> | null;
+  const context = health?.project_context;
+  const source = context && typeof context === "object" &&
+    !Array.isArray(context) ? context as Record<string, unknown> : null;
+  const requested = source?.requested_project;
+  const target = requested && typeof requested === "object" &&
+    !Array.isArray(requested) ? requested as Record<string, unknown> : null;
+  if (!status.runtime.online || !status.runtime.mcp_client_ready ||
+      !status.affinity.project_uuid ||
+      source?.requested_project_uuid !== status.affinity.project_uuid ||
+      source?.requested_project_available !== true ||
+      target?.uuid !== status.affinity.project_uuid) {
+    return failed("UNVERIFIED", "FINALIZATION_PROJECT_BINDING_UNVERIFIED");
+  }
+  if (target.saved === false) return failed("STALE", "FINALIZATION_NATIVE_PROJECT_UNSAVED");
+  if (target.saved !== true) return failed("UNVERIFIED", "FINALIZATION_NATIVE_SAVED_STATE_UNKNOWN");
+  const nativePath = target.save_path;
+  if (typeof nativePath !== "string" ||
+      !isAbsoluteFilesystemPath(nativePath) ||
+      !/\.bbmodel$/i.test(nativePath)) {
+    return failed("UNVERIFIED", "FINALIZATION_NATIVE_CHECKPOINT_PATH_UNAVAILABLE");
+  }
+  // Workspace identity is the approval source. Do not hash a different
+  // native model elsewhere merely because a bound tab supplied its path.
+  // Native project and active asset README must share the current asset folder.
+  if (!projection.source_path ||
+      dirname(nativePath).replace(/\\/g, "/").toLowerCase() !==
+      dirname(projection.source_path).replace(/\\/g, "/").toLowerCase()) {
+    return failed("UNVERIFIED", "FINALIZATION_NATIVE_CHECKPOINT_WORKSPACE_MISMATCH");
+  }
+  try {
+    const first = await lstat(nativePath);
+    if (!first.isFile() || first.isSymbolicLink() ||
+        first.size <= 0 || first.size > FINALIZATION_NATIVE_MAX_BYTES) {
+      return failed("UNVERIFIED", "FINALIZATION_NATIVE_CHECKPOINT_FILE_UNSUPPORTED");
+    }
+    const bytes = await readFile(nativePath);
+    const last = await lstat(nativePath);
+    if (!last.isFile() || last.isSymbolicLink() ||
+        bytes.byteLength !== first.size ||
+        fileMetadataSignature(first) !== fileMetadataSignature(last)) {
+      return failed("UNVERIFIED", "FINALIZATION_NATIVE_CHECKPOINT_CHANGED_DURING_READ");
+    }
+    const observed = "sha256:" + createHash("sha256").update(bytes).digest("hex");
+    if (!accepted) return failed("UNVERIFIED", "FINALIZATION_ACCEPTED_CHECKPOINT_MISSING", observed);
+    return accepted === observed
+      ? failed("MATCHED", "FINALIZATION_NATIVE_CHECKPOINT_MATCHED", observed)
+      : failed("STALE", "FINALIZATION_NATIVE_CHECKPOINT_MISMATCH", observed);
+  } catch {
+    return failed("UNVERIFIED", "FINALIZATION_NATIVE_CHECKPOINT_READ_UNAVAILABLE");
+  }
+}
+
 export async function readWorkspaceProjection(
   status: GatewayRuntimeStatus,
   workspacePath?: string | null
@@ -218,7 +333,8 @@ export async function readWorkspaceProjection(
     }
     const signature = fileMetadataSignature(info);
     const cached = cache.get(readmePath);
-    if (cached?.signature === signature) return cached.projection;
+    if (cached?.signature === signature)
+      return withFinalizationNativeRevision(status, cached.projection);
 
     const text = await readFile(readmePath, "utf8");
     const semantic = workspaceSemanticState(text);
@@ -229,7 +345,7 @@ export async function readWorkspaceProjection(
       ...semantic,
     };
     cache.set(readmePath, { signature, projection });
-    return projection;
+    return withFinalizationNativeRevision(status, projection);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException)?.code;
     return {

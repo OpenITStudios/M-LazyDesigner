@@ -172,6 +172,44 @@ describe("Control readiness policy", () => {
     expect(geometry.reasons).not.toContain("ANIMATION_REQUIREMENT_CONFLICT");
   });
 
+  test("Finalization requires current native evidence but does not modify earlier Stage gates", () => {
+    const reference = {
+      ...emptyReference("REFERENCE_PATH_UNAVAILABLE"), available: true,
+    };
+    const workspace = {
+      ...emptyWorkspace(), available: true, unavailable_reason: undefined,
+      current_stage: "FINALIZATION",
+      gates: {
+        geometry: "APPROVED", uv_layout: "PASS",
+        texturing: "APPROVED", animation: "NOT_REQUIRED",
+      },
+    };
+    const evaluate = () => buildReadiness(
+      baseSnapshot(), workspace, reference, "ASSET_AUTHORING",
+      lifecycleForDomain("GEOMETRY", workspace), "READY"
+    );
+    expect(evaluate().modelling_start).toBe("NEEDS_ORIENTATION");
+    workspace.finalization_native_revision = {
+      state: "STALE", reason: "FINALIZATION_NATIVE_PROJECT_UNSAVED",
+      accepted_sha256: null, observed_sha256: null,
+    };
+    expect(evaluate().modelling_start).toBe("BLOCKED");
+    expect(evaluate().reasons).toContain("FINALIZATION_NATIVE_CHECKPOINT_STALE");
+    workspace.finalization_native_revision = {
+      state: "MATCHED", reason: "FINALIZATION_NATIVE_CHECKPOINT_MATCHED",
+      accepted_sha256: "sha256:" + "a".repeat(64),
+      observed_sha256: "sha256:" + "a".repeat(64),
+    };
+    expect(evaluate().modelling_start).toBe("NEEDS_ORIENTATION");
+    // No authoritative overall Reference READY has been supplied in this
+    // pure fixture, so a matching hash alone cannot attest the full asset.
+    expect(evaluate().reasons).toContain("FINALIZATION_UPSTREAM_GATES_REQUIRE_REVIEW");
+    expect(workspace.gates).toEqual({
+      geometry: "APPROVED", uv_layout: "PASS",
+      texturing: "APPROVED", animation: "NOT_REQUIRED",
+    });
+  });
+
   test("missing reference asks for orientation, never signals modelling READY", () => {
     const snapshot = baseSnapshot();
     const missing = buildReadiness(

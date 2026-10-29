@@ -65,6 +65,37 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("Finalization source owners select the current native-checkpoint and lifecycle contracts", () => {
+    const cases = [
+      ["mcp/server/projectAffinity.ts", [
+        "mcp/tests/gateway-control-lifecycle-readiness.test.ts",
+        "mcp/tests/project-affinity-runtime.test.ts",
+      ]],
+      ["mcp/lib/runtime/affinity.ts", [
+        "mcp/tests/gateway-control-lifecycle-readiness.test.ts",
+        "mcp/tests/project-affinity-runtime.test.ts",
+      ]],
+      ["mcp/gateway/control/workspace.ts", [
+        "mcp/gateway/control/workspaceSemantic.test.ts",
+        "mcp/tests/asset-health.test.ts",
+        "mcp/tests/gateway-control-lifecycle-readiness.test.ts",
+      ]],
+      ["mcp/lib/authoring/assetHealth.ts", [
+        "mcp/gateway/control/readiness.test.ts",
+        "mcp/tests/asset-health.test.ts",
+        "mcp/tests/gateway-control-lifecycle-readiness.test.ts",
+      ]],
+    ] as const;
+    for (const [path, tests] of cases) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.checks).toContain("PROJECT_GRAPH");
+      expect(plan.targeted_tests, path).toEqual([...tests].sort());
+    }
+  });
+
   test("paint transaction bitmap and filesystem changes select bounded existing owners", () => {
     const cases = [
       ["mcp/lib/texture/bitmapRuntime.ts", [

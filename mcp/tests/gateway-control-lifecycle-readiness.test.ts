@@ -1,6 +1,8 @@
 import { GatewayOperationQueue } from "@/gateway/runtime/operationQueue";
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildControlPacket } from "@/gateway/control";
@@ -137,6 +139,72 @@ describe("LazyDesigner Control lifecycle readiness", () => {
     });
     expect(geometry.readiness.reasons).not.toContain("ANIMATION_REQUIREMENT_CONFLICT");
     expect(geometry.readiness.modelling_start).toBe("READY");
+  });
+
+  test("actual Control status verifies FINALIZATION native checkpoint against bound project", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "lazydesigner-finalization-"));
+    const native = join(dir, "fixture.bbmodel");
+    const bytes = '{"native_revision":1}';
+    const hash = "sha256:" + createHash("sha256").update(bytes).digest("hex");
+    const final = [
+      "# Lifecycle Fixture", "Current Stage: FINALIZATION",
+      "Geometry: APPROVED", "UV Layout: PASS",
+      "Texturing: APPROVED", "Animation: NOT_REQUIRED",
+      "Animation Required: NO",
+      "Finalization Checkpoint SHA256: " + hash,
+      "Current next step: Finalize native outputs", "Known blocker(s): none",
+    ].join("\n");
+    const live = status("texturing");
+    const projectHealth = (live.runtime.health as Record<string, unknown>)
+      .project_context as Record<string, unknown>;
+    projectHealth.requested_project = {
+      uuid: "project-a", save_path: native, saved: true,
+    };
+    try {
+      await writeFile(native, bytes);
+      await writeFile(join(dir, "README.md"), final);
+      await writeFile(join(dir, "REFERENCE.json"), JSON.stringify({
+        schema: "lazydesigner-reference-v1",
+        asset: { name: "test-model", profile: "PROP_FURNITURE" },
+        requirements: { animation_required: false },
+        readiness: {
+          overall: "READY", geometry: "READY", texture: "READY",
+          animation: "NOT_REQUIRED",
+        },
+      }));
+      const matched = await buildControlPacket(live, {
+        workspacePath: dir, referencePackagePath: dir,
+      });
+      expect(matched.workspace.finalization_native_revision?.state).toBe("MATCHED");
+      expect(matched.stage_context?.asset_health.overall).toBe("READY");
+      expect(matched.readiness.modelling_start).toBe("READY");
+      await writeFile(native, '{"native_revision":2}');
+      const stale = await buildControlPacket(live, {
+        workspacePath: dir, referencePackagePath: dir,
+      });
+      expect(stale.workspace.finalization_native_revision?.state).toBe("STALE");
+      expect(stale.workspace.fingerprint).not.toBe(matched.workspace.fingerprint);
+      expect(stale.stage_context?.asset_health.overall).toBe("BLOCKED");
+      expect(stale.readiness.modelling_start).toBe("BLOCKED");
+      expect(stale.blockers).toContain("FINALIZATION_NATIVE_CHECKPOINT_STALE");
+      expect(stale.stage_context?.asset_health.stages.geometry).toBe("PASS");
+
+      // Matching current native bytes do not repair a missing Stage approval.
+      await writeFile(native, bytes);
+      const readme = join(dir, "README.md");
+      await writeFile(readme, final.replace(
+        "Texturing: APPROVED", "Texturing: IN_PROGRESS"
+      ));
+      const incomplete = await buildControlPacket(live, {
+        workspacePath: dir, referencePackagePath: dir,
+      });
+      expect(incomplete.workspace.finalization_native_revision?.state).toBe("MATCHED");
+      expect(incomplete.stage_context?.asset_health.overall).toBe("REVIEW");
+      expect(incomplete.readiness.modelling_start).toBe("NEEDS_ORIENTATION");
+      expect(incomplete.readiness.reasons).toContain("FINALIZATION_UPSTREAM_GATES_REQUIRE_REVIEW");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("missing Workspace asks for orientation instead of inventing downstream failure", async () => {

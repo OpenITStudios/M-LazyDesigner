@@ -175,6 +175,18 @@ FAIL
 
 A correction is accepted only when the intended defect improves without materially regressing another required relation. The same causal direction failing twice without new evidence becomes `BLOCKED` rather than a third guess.
 
+## Finalization revision authority
+
+Only at the finalization/complete Workspace boundary, Control must bind
+the accepted native `.bbmodel` checkpoint digest to the current
+saved project. Stage `APPROVED` fields by themselves are insufficient
+to prove native revision freshness; `MATCHED` is source-byte evidence,
+not user approval or Visual PASS. `STALE` and `UNVERIFIED` are explicit
+Finalization blockers/review states. The normal Stage hot path does not
+hash saved files or pre-load sibling domains. This is computed by the
+existing Runtime project binding + Control Workspace/asset-health owners,
+without another validator, state manager or MCP tool.
+
 ## Stage Exit Projection
 
 Return only state needed by Control/next stage:

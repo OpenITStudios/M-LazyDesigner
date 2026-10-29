@@ -52,6 +52,11 @@ export type AssetHealthWorkspaceLike = {
   workspace_issues?: string[];
   /** Omitted blocker rows must not permit a whole-asset READY summary. */
   blockers_omitted_count?: number;
+  current_stage?: string | null;
+  finalization_native_revision?: {
+    state: "MATCHED" | "STALE" | "UNVERIFIED";
+    reason: string;
+  };
 };
 
 /** Detect a confirmed requirement conflict without assigning new approval truth. */
@@ -163,6 +168,14 @@ export function buildAssetHealthSummary(input: {
   blockers.push(
     ...input.workspace.blockers.filter((entry) => !blockers.includes(entry))
   );
+  const finalizing = ["FINALIZATION", "COMPLETE"].includes(
+    normalized(input.workspace.current_stage)
+  );
+  const nativeFinalization = finalizing
+    ? input.workspace.finalization_native_revision : null;
+  if (nativeFinalization?.state === "STALE") {
+    blockers.push("FINALIZATION_NATIVE_CHECKPOINT_STALE");
+  }
 
   const requiredStates = [
     stages.reference,
@@ -178,6 +191,7 @@ export function buildAssetHealthSummary(input: {
   // independently claim READY while Control correctly requests orientation.
   const sourceNeedsOrientation =
     requirementConflict ||
+    (finalizing && nativeFinalization?.state !== "MATCHED") ||
     (input.workspace.workspace_issues?.length ?? 0) > 0 ||
     (input.workspace.blockers_omitted_count ?? 0) > 0;
   const overall: AssetHealthSummary["overall"] =
@@ -197,6 +211,6 @@ export function buildAssetHealthSummary(input: {
     stages,
     blockers,
     note:
-      "Declared gate summary, not independent approval or native/visual/export proof. Stage reference follows the active domain; whole-asset READY also requires Reference Package overall READY. Unknown Animation requirement never implies NOT_REQUIRED.",
+      "Declared gate summary, not independent user/visual/export approval. Finalization/Complete also requires the current saved native .bbmodel SHA-256 to match the explicitly accepted checkpoint; no automatic approval or Minecraft runtime proof is inferred.",
   };
 }

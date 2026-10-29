@@ -39,6 +39,10 @@ export function getRuntimeProjectHealth (
   const requestedMatches = requestedProjectUuid
     ? projects.filter((project) => project.uuid === requestedProjectUuid)
     : [];
+  const boundProject = requestedMatches.length === 1 ? requestedMatches[0] : null;
+  const hasSavedSource = boundProject !== null &&
+    (typeof boundProject.save_path === "string" ||
+     typeof boundProject.saved === "boolean");
 
   return {
     active_project_uuid: activeProject?.uuid ?? null,
@@ -52,6 +56,13 @@ export function getRuntimeProjectHealth (
         : requestedMatches.length === 0 ? false : null
       : null,
     open_project_count: projects.length,
+    ...(hasSavedSource && boundProject ? { requested_project: {
+      uuid: boundProject.uuid,
+      save_path: typeof boundProject.save_path === "string"
+        ? boundProject.save_path : null,
+      saved: typeof boundProject.saved === "boolean"
+        ? boundProject.saved : null,
+    } } : {}),
   };
 }
 

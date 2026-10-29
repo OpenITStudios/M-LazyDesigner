@@ -135,6 +135,25 @@ native/persistence requirements; a compile receipt alone cannot authorize
 Animation handoff. User-owned historic backups are preserved unless the
 user explicitly authorizes cleanup.
 
+## Finalization native-revision link
+
+At the **FINALIZATION/COMPLETE** boundary only, record the single
+`Finalization Checkpoint SHA256: sha256:<64 lowercase hex>` field in the
+active asset README **after** the required approvals and a native
+`.bbmodel` checkpoint Save. Prefer the `written_file_sha256` from an
+existing verified native project Save receipt; the finalization status may
+also show the current saved native file digest when available. The hash is
+not permission or evidence that a person approved the model.
+
+LazyDesigner Control compares that field with the uniquely bound,
+currently saved native `.bbmodel` file at Finalization. Missing or unreadable
+source/checkpoint remains `UNVERIFIED`; an edited file or native unsaved
+state is `STALE`. Both prevent complete-asset readiness until the needed
+acceptance/binding is re-established. No new model history, copy or
+hashing during normal Geometry/Texturing/Animation is added. Saving a newer
+file does not preserve old acceptance merely because the README still says
+`APPROVED`.
+
 ## Meaningful Persistence
 
 Persist/checkpoint the current `.bbmodel` and update README at meaningful approval/resume/park/completion boundaries:

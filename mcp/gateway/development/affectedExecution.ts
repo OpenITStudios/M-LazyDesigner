@@ -480,6 +480,32 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  // Finalization uses the same bound project/Workspace/Control owners;
+  // one affected source edit should select the existing complete flow tests.
+  if (path === "mcp/server/projectAffinity.ts" ||
+      path === "mcp/lib/runtime/affinity.ts") {
+    return [
+      "mcp/tests/project-affinity-runtime.test.ts",
+      "mcp/tests/gateway-control-lifecycle-readiness.test.ts",
+    ];
+  }
+  if (path === "mcp/gateway/control/workspace.ts" ||
+      path === "mcp/gateway/control/packetData.ts" ||
+      path === "mcp/gateway/control/packet.ts") {
+    return [
+      "mcp/gateway/control/workspaceSemantic.test.ts",
+      "mcp/tests/asset-health.test.ts",
+      "mcp/tests/gateway-control-lifecycle-readiness.test.ts",
+    ];
+  }
+  if (path === "mcp/lib/authoring/assetHealth.ts" ||
+      path === "mcp/gateway/control/readiness.ts") {
+    return [
+      "mcp/gateway/control/readiness.test.ts",
+      "mcp/tests/asset-health.test.ts",
+      "mcp/tests/gateway-control-lifecycle-readiness.test.ts",
+    ];
+  }
   if (path === "mcp/lib/bedrock/export/integrity.ts" ||
       path === "mcp/server/tools/io/export.ts") {
     return [

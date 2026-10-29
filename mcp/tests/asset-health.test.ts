@@ -280,6 +280,36 @@ describe("asset health summary", () => {
     expect(result.stages.animation).toBe("UNVERIFIED");
   });
 
+  test("Finalization health requires a matching saved native revision even with APPROVED stages", () => {
+    const ws = workspace();
+    ws.current_stage = "FINALIZATION";
+    const ref = reference(true);
+    const result = () => buildAssetHealthSummary({
+      domain: "ANIMATION", workspace: ws, reference: ref,
+    });
+    expect(result().overall).toBe("REVIEW");
+    ws.finalization_native_revision = {
+      state: "UNVERIFIED", reason: "FINALIZATION_ACCEPTED_CHECKPOINT_MISSING",
+      accepted_sha256: null, observed_sha256: null,
+    };
+    expect(result().overall).toBe("REVIEW");
+    ws.finalization_native_revision = {
+      state: "STALE", reason: "FINALIZATION_NATIVE_CHECKPOINT_MISMATCH",
+      accepted_sha256: "sha256:" + "a".repeat(64),
+      observed_sha256: "sha256:" + "b".repeat(64),
+    };
+    expect(result().overall).toBe("BLOCKED");
+    expect(result().blockers).toContain("FINALIZATION_NATIVE_CHECKPOINT_STALE");
+    ws.finalization_native_revision = {
+      ...ws.finalization_native_revision,
+      state: "MATCHED", reason: "FINALIZATION_NATIVE_CHECKPOINT_MATCHED",
+    };
+    expect(result().overall).toBe("READY");
+    ws.current_stage = "TEXTURING";
+    ws.finalization_native_revision = undefined;
+    expect(result().overall).toBe("READY");
+  });
+
   test("missing workspace is incomplete rather than failed", () => {
     const ws = workspace();
     ws.available = false;

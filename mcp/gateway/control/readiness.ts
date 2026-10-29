@@ -7,7 +7,10 @@ import type {
 } from "./types";
 import type { ControlTaskMode } from "./packetContext";
 import { relevantTruncatedSectionsForAuthoringDomain } from "./contextProjection";
-import { animationRequirementConflict } from "../../lib/authoring/assetHealth";
+import {
+  animationRequirementConflict,
+  buildAssetHealthSummary,
+} from "../../lib/authoring/assetHealth";
 
 export type LifecycleProjection = {
   ready: boolean;
@@ -136,6 +139,24 @@ export function buildReadiness(
     relevantTruncatedSectionsForAuthoringDomain(snapshot.authoring.domain, reference).length > 0;
   const workspaceIncomplete = (workspace.blockers_omitted_count ?? 0) > 0;
   const workspaceIssues = workspace.available ? (workspace.workspace_issues ?? []) : [];
+  const finalizationRequired = ["FINALIZATION", "COMPLETE"].includes(
+    workspace.current_stage?.trim().toUpperCase() ?? ""
+  );
+  const finalizationRevision = finalizationRequired
+    ? workspace.finalization_native_revision : null;
+  // Reuse the canonical whole-asset health projection: matching source
+  // bytes cannot turn an unapproved Texture, UV or Animation into READY.
+  const finalizationHealth = finalizationRequired
+    ? buildAssetHealthSummary({
+        domain: snapshot.authoring.domain, reference, workspace,
+      }) : null;
+  const finalizationGatesBlocked = finalizationHealth?.overall === "BLOCKED";
+  const finalizationGatesPending = finalizationRequired &&
+    finalizationHealth?.overall !== "READY" && !finalizationGatesBlocked;
+  const finalizationStale = finalizationRequired &&
+    finalizationRevision?.state === "STALE";
+  const finalizationUnverified = finalizationRequired &&
+    finalizationRevision?.state !== "MATCHED" && !finalizationStale;
   const workspaceBlockersUnresolved = workspace.available && workspace.blockers.length > 0;
   const reasons: string[] = [];
 
@@ -152,6 +173,12 @@ export function buildReadiness(
   if (!reference.available) reasons.push("REFERENCE_PACKAGE_UNAVAILABLE");
   if (projectionIncomplete) reasons.push("REFERENCE_PROJECTION_INCOMPLETE");
   if (workspaceIncomplete) reasons.push("WORKSPACE_PROJECTION_INCOMPLETE");
+  if (finalizationStale) reasons.push("FINALIZATION_NATIVE_CHECKPOINT_STALE");
+  if (finalizationGatesBlocked) reasons.push("FINALIZATION_UPSTREAM_GATES_BLOCKED");
+  if (finalizationGatesPending) reasons.push("FINALIZATION_UPSTREAM_GATES_REQUIRE_REVIEW");
+  if (finalizationUnverified) reasons.push(
+    finalizationRevision?.reason ?? "FINALIZATION_NATIVE_CHECKPOINT_UNVERIFIED"
+  );
   if (workspaceBlockersUnresolved) reasons.push("WORKSPACE_BLOCKERS_REQUIRE_REVIEW");
   reasons.push(...workspaceIssues);
   if (activeReferenceBlocked) reasons.push("REFERENCE_STAGE_BLOCKED");
@@ -171,6 +198,8 @@ export function buildReadiness(
     (!runtimeReady && !handshakePending) ||
     (snapshot.project.affinity_uuid !== null && !projectReady) ||
     activeReferenceBlocked ||
+    finalizationStale ||
+    finalizationGatesBlocked ||
     requiredContextUnavailable ||
     lifecycle.blocked;
 
@@ -179,6 +208,7 @@ export function buildReadiness(
       ? "BLOCKED"
       : runtimeReady && projectReady && domainReady && contextReady &&
           reference.available && !activeReferencePending &&
+          !finalizationUnverified && !finalizationGatesPending &&
           !animationRequirementMismatch &&
           !projectionIncomplete && !workspaceIncomplete &&
           !workspaceBlockersUnresolved && workspaceIssues.length === 0 &&

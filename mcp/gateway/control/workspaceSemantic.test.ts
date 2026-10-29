@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -196,6 +197,114 @@ describe("workspace semantic fingerprint", () => {
       const state = workspaceSemanticState(base + "\n" + declaration);
       expect(state.animation_required).toBeUndefined();
       expect(state.workspace_issues).toContain(reason);
+    }
+  });
+
+  test("Finalization checkpoint is a single exact SHA-256, not a loosely inferred approval", () => {
+    const digest = "sha256:" + "a".repeat(64);
+    const text = base + "\nFinalization Checkpoint SHA256: " + digest;
+    expect(workspaceSemanticState(text).finalization_checkpoint_sha256).toBe(digest);
+    expect(workspaceSemanticFingerprint(text)).not.toBe(
+      workspaceSemanticFingerprint(base)
+    );
+    for (const declaration of [
+      "Finalization Checkpoint SHA256: sha256:bad",
+      "Finalization Checkpoint SHA256: " + digest + "\nFinalization Checkpoint SHA256: " + digest,
+    ]) {
+      const result = workspaceSemanticState(base + "\n" + declaration);
+      expect(result.finalization_checkpoint_sha256).toBeUndefined();
+      expect(result.workspace_issues).toContain(
+        declaration.includes("\n")
+          ? "WORKSPACE_FINALIZATION_CHECKPOINT_CONFLICT"
+          : "WORKSPACE_FINALIZATION_CHECKPOINT_INVALID"
+      );
+    }
+  });
+
+  test("Finalization checks the current saved .bbmodel, not a cached README approval", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lazydesigner-final-checkpoint-"));
+    const nativePath = join(directory, "fixture.bbmodel");
+    const readme = join(directory, "README.md");
+    const firstBytes = Buffer.from('{"name":"fixture","revision":1}', "utf8");
+    const digest = "sha256:" + createHash("sha256").update(firstBytes).digest("hex");
+    const source = [
+      "# Fixture", "Current Stage: FINALIZATION",
+      "Geometry: APPROVED", "UV Layout: PASS", "Texturing: APPROVED",
+      "Animation: NOT_REQUIRED", "Known blocker(s): none",
+      "Finalization Checkpoint SHA256: " + digest,
+    ].join("\n");
+    const status = {
+      affinity: { project_uuid: "project-a" },
+      runtime: { online: true, mcp_client_ready: true, health: {
+        project_context: {
+          requested_project_uuid: "project-a",
+          requested_project_available: true,
+          requested_project: {
+            uuid: "project-a", save_path: nativePath, saved: true,
+          },
+        },
+      } },
+    } as unknown as GatewayRuntimeStatus;
+    try {
+      await writeFile(nativePath, firstBytes);
+      await writeFile(readme, source);
+      const accepted = await readWorkspaceProjection(status, directory);
+      expect(accepted.finalization_native_revision).toMatchObject({
+        state: "MATCHED",
+        accepted_sha256: digest, observed_sha256: digest,
+      });
+      expect((await readWorkspaceProjection(status, directory)).finalization_native_revision?.state)
+        .toBe("MATCHED");
+      await writeFile(nativePath, Buffer.from('{"name":"fixture","revision":2}', "utf8"));
+      const changed = await readWorkspaceProjection(status, directory);
+      expect(changed.finalization_native_revision).toMatchObject({
+        state: "STALE", reason: "FINALIZATION_NATIVE_CHECKPOINT_MISMATCH",
+      });
+      expect(changed.fingerprint).not.toBe(accepted.fingerprint);
+      const unsaved = structuredClone(status) as GatewayRuntimeStatus;
+      const health = unsaved.runtime.health as Record<string, unknown>;
+      const context = health.project_context as Record<string, unknown>;
+      (context.requested_project as Record<string, unknown>).saved = false;
+      expect((await readWorkspaceProjection(unsaved, directory)).finalization_native_revision)
+        .toMatchObject({
+          state: "STALE", reason: "FINALIZATION_NATIVE_PROJECT_UNSAVED",
+        });
+      const wrongBinding = structuredClone(status) as GatewayRuntimeStatus;
+      wrongBinding.affinity.project_uuid = "foreign-project";
+      expect((await readWorkspaceProjection(wrongBinding, directory)).finalization_native_revision)
+        .toMatchObject({
+          state: "UNVERIFIED", reason: "FINALIZATION_PROJECT_BINDING_UNVERIFIED",
+        });
+      const foreignDir = await mkdtemp(join(tmpdir(), "lazydesigner-foreign-project-"));
+      try {
+        const foreignPath = join(foreignDir, "fixture.bbmodel");
+        await writeFile(foreignPath, firstBytes);
+        const foreign = structuredClone(status) as GatewayRuntimeStatus;
+        const foreignHealth = foreign.runtime.health as Record<string, unknown>;
+        const foreignContext = foreignHealth.project_context as Record<string, unknown>;
+        (foreignContext.requested_project as Record<string, unknown>).save_path = foreignPath;
+        expect((await readWorkspaceProjection(foreign, directory)).finalization_native_revision)
+          .toMatchObject({
+            state: "UNVERIFIED", reason: "FINALIZATION_NATIVE_CHECKPOINT_WORKSPACE_MISMATCH",
+          });
+      } finally {
+        await rm(foreignDir, { recursive: true, force: true });
+      }
+      await writeFile(readme, source.replace(
+        "Finalization Checkpoint SHA256: " + digest, ""
+      ));
+      const noApproval = await readWorkspaceProjection(status, directory);
+      expect(noApproval.finalization_native_revision).toMatchObject({
+        state: "UNVERIFIED",
+        reason: "FINALIZATION_ACCEPTED_CHECKPOINT_MISSING",
+        accepted_sha256: null,
+      });
+      expect(noApproval.finalization_native_revision?.observed_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
+      await writeFile(readme, source.replace("FINALIZATION", "TEXTURING"));
+      const normalAuthoring = await readWorkspaceProjection(status, directory);
+      expect(normalAuthoring.finalization_native_revision).toBeUndefined();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
     }
   });
 

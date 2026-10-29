@@ -19,6 +19,41 @@ Geometry/Texture work.
 
 Do not use Finalization to launder an `INVALIDATED`, `BLOCKED`, or unapproved upstream stage.
 
+## Current-revision Finalization checkpoint
+
+After the last approved Geometry/UV/Texturing/Animation checkpoint and
+native `.bbmodel` Save, record a single
+`Finalization Checkpoint SHA256: sha256:<64 lowercase hex>` in the active
+asset README. Obtain it from the **matching saved-file readback**
+(`export_model(codec_id=project)` with the intended current path,
+`file_integrity_state=READBACK_MATCHED` and `written_file_sha256`),
+or from the current bound native file digest surfaced by Control status.
+The digest is a checkpoint identity, **not user approval**: the required
+Stage approvals and relevant visual evidence must already exist.
+
+At `Current Stage: FINALIZATION` or `COMPLETE`, the existing Control
+status compares this accepted digest to the **currently saved, uniquely
+bound** Blockbench project's native `.bbmodel`. It also checks that the
+native project reports `saved=true`, limits file inspection to 64 MiB,
+and fails closed on missing/changed/unreadable native evidence.
+`MATCHED` means only matching saved checkpoint bytes;
+`STALE` means the saved source changed or the editor reports unsaved work;
+`UNVERIFIED` means the accepted checkpoint/native binding cannot be proven.
+Neither `STALE` nor `UNVERIFIED` can produce Finalization READY, and
+`MATCHED` is not visual, Minecraft playback, or complete export proof.
+Finalization READY also requires every applicable upstream Workspace gate
+and Reference Package overall readiness to pass independently. Matching
+file bytes cannot promote `IN_PROGRESS`, `INVALIDATED` or
+`NEEDS_REVIEW` to approval.
+
+Normal Geometry/Texturing/Animation status does **not** read or hash
+`.bbmodel` bytes. The native digest is refreshed when Finalization status
+is requested, even if the README cache did not change. A newer native
+Save after the approval requires a new acceptance/review at that revision,
+not editing the expected hash merely to make the comparison green.
+This is an actual source revision gate, not a replacement for the domain
+validators or manual acceptance already required by the workflow.
+
 ## Current-State Authority
 
 After a project switch, native reopen, or material user edit, refresh the affected project/target once before finalization. Otherwise reuse fresh mutation/export receipts; do not broad-reread the project for reassurance.
