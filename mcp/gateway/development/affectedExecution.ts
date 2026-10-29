@@ -480,6 +480,14 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  if (path === "mcp/lib/bedrock/export/integrity.ts" ||
+      path === "mcp/server/tools/io/export.ts") {
+    return [
+      "mcp/tests/animation-native-export.test.ts",
+      "mcp/tests/export-native-filesystem.test.ts",
+      "mcp/tests/export-lifecycle-control-delta.test.ts",
+    ];
+  }
   if (path === "mcp/lib/animation/quality.ts") {
     return ["mcp/tests/quality-efficiency-intelligence.test.ts"];
   }

@@ -46,6 +46,25 @@ describe("affected execution planner", () => {
   });
 
 
+  test("Bedrock export identity and Runtime changes select source/native/lifecycle owner regressions", () => {
+    const expected = [
+      "mcp/tests/animation-native-export.test.ts",
+      "mcp/tests/export-lifecycle-control-delta.test.ts",
+      "mcp/tests/export-native-filesystem.test.ts",
+    ];
+    for (const path of [
+      "mcp/lib/bedrock/export/integrity.ts",
+      "mcp/server/tools/io/export.ts",
+    ]) {
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.targeted_tests, path).toEqual(expected);
+      expect(plan.checks, path).toContain("PROJECT_GRAPH");
+    }
+  });
+
   test("paint transaction bitmap and filesystem changes select bounded existing owners", () => {
     const cases = [
       ["mcp/lib/texture/bitmapRuntime.ts", [

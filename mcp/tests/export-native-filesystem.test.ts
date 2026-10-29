@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, test } from "bun:test";
 import * as fs from "node:fs";
 import { tmpdir } from "node:os";
@@ -42,6 +43,11 @@ test("native restricted fs can overwrite regular projects but rejects symlinks a
     const savedProject = await run(regular) as { structuredContent: Record<string, any>; content: Array<{ text: string }> };
     expect(fs.readFileSync(regular, "utf8")).toBe('{"new":true}');
     expect(savedProject.structuredContent.save_behavior).toBe("NATIVE_PROJECT_SAVE_AS");
+    expect(savedProject.structuredContent.compiled_payload_sha256).toBe(
+      "sha256:" + createHash("sha256").update('{"new":true}').digest("hex")
+    );
+    expect(savedProject.structuredContent.compiled_payload_sha256_scope).toBe("NATIVE_CODEC_OUTPUT_BYTES");
+    expect(savedProject.structuredContent).not.toHaveProperty("animation_export_identity");
     expect(savedProject.structuredContent.project_before.save_path).toBe("");
     expect(savedProject.structuredContent.project.save_path).toBe(regular);
     expect(savedProject.structuredContent.project_lifecycle_changes).toContain("save_path");

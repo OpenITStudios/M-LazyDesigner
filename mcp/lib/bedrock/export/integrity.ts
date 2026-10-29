@@ -34,6 +34,68 @@ export function bedrockAnimationIdentifiers(document: unknown): string[] {
   return animations ? Object.keys(animations) : [];
 }
 
+/**
+ * Verify identity coverage of the native Bedrock AnimationCodec result.
+ * This is a content-only preflight, NOT proof of keyframe fidelity, playback,
+ * Minecraft validity, a saved file, or user/visual approval.
+ *
+ * Consume the exact native clip snapshot passed to compileFile; never infer
+ * a missing clip from a successful codec call or from content byte length.
+ */
+export function assertBedrockAnimationExportMatchesSource(
+  authoredClips: readonly unknown[],
+  compiled: unknown
+) {
+  if (authoredClips.length === 0) {
+    throw new Error("BEDROCK_ANIMATION_EXPORT_NO_CLIPS: no authored clips were supplied.");
+  }
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const clip of authoredClips) {
+    const name = asRecord(clip)?.name;
+    if (typeof name !== "string" || !name.trim() ||
+        name !== name.trim() || seen.has(name)) {
+      throw new Error("BEDROCK_ANIMATION_EXPORT_SOURCE_IDENTITY_INVALID: clip names must be unique, nonempty and exact.");
+    }
+    names.push(name);
+    seen.add(name);
+  }
+  let document: unknown = compiled;
+  if (typeof document === "string") {
+    try {
+      document = JSON.parse(document);
+    } catch {
+      throw new Error("BEDROCK_ANIMATION_EXPORT_CONTENT_INVALID: native compiler did not return valid JSON.");
+    }
+  }
+  const animations = asRecord(asRecord(document)?.animations);
+  if (!animations) {
+    throw new Error("BEDROCK_ANIMATION_EXPORT_CONTENT_INVALID: native output has no animations object.");
+  }
+  const outputNames = bedrockAnimationIdentifiers(document);
+  const missing = missingRequestedDeliverables(names, outputNames);
+  const unexpected = missingRequestedDeliverables(outputNames, names);
+  if (missing.length > 0 || unexpected.length > 0) {
+    throw new Error(
+      `BEDROCK_ANIMATION_EXPORT_IDENTITY_MISMATCH: missing=${missing.join(",") || "none"}; unexpected=${unexpected.join(",") || "none"}.`
+    );
+  }
+  if (outputNames.some((name) => !asRecord(animations[name]))) {
+    throw new Error("BEDROCK_ANIMATION_EXPORT_CONTENT_INVALID: an exported clip has no object payload.");
+  }
+
+  return {
+    state: "SOURCE_CLIP_IDENTITIES_MATCHED" as const,
+    source_clip_count: names.length,
+    compiled_clip_count: outputNames.length,
+    clip_name_examples: outputNames.slice(0, 8),
+    clip_name_examples_truncated: outputNames.length > 8,
+    visual_verdict: "not_evaluated" as const,
+    native_playback_attested: false as const,
+    saved_file_attested: false as const,
+  };
+}
+
 export function analyzeBedrockGeometryOverwrite(
   document: unknown,
   expectedIdentifier: string

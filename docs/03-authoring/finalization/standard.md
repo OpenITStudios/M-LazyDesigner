@@ -47,6 +47,19 @@ A native model containing an animation does not satisfy a separately requested a
 
 `export_model(codec_id=project)` saves editable `.bbmodel`; `codec_id=bedrock` exports geometry JSON. `codec_id=bedrock_animation` compiles all authored clips through native `AnimationCodec` and returns separate Bedrock animation JSON as content only. Omit `path` and compile options, verify `truncated=false`, then persist the returned JSON through the authorized filesystem owner. This route does not export animation controllers or PNGs.
 
+For `bedrock_animation`, the existing export path also checks that the
+native compiler output contains **exactly** the current authored Animation
+clip identities. Missing, duplicate, unexpected, unnamed or empty clips
+cannot silently count as a complete result. The response carries bounded
+`animation_export_identity` evidence and `compiled_payload_sha256` for
+the native codec bytes. That fingerprint is **not** a native asset-revision
+counter, a verified saved-file digest, a visual PASS, or playback proof.
+`bedrock_animation` with `max_content_length=0` is invalid because it
+cannot deliver a file; `truncated=true` remains incomplete and requires
+recovery of the full output without using a partial JSON as an export.
+No additional diagnostic call is required when the successful receipt is
+sufficient; verify current asset state again if edited after compilation.
+
 For a separately requested animation controller, use its actual native Blockbench export/save route; for a PNG use the native texture save/export route. Do not invent additional codec IDs, substitute `.bbmodel`, or bypass through generic UI/eval. If the required native step is unavailable, report that output as pending and keep its finalization blocked. Existing Bedrock geometry files require native overwrite/merge or a new path; `.bbmodel` replacement requires explicit overwrite consent. Animation content compilation does not constitute a native file save or Minecraft playback proof.
 
 ## Identifier / Reference Integrity

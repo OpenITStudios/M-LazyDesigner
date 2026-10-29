@@ -1,6 +1,8 @@
 /// <reference types="three" />
 /// <reference types="blockbench-types" />
+import { createHash } from "node:crypto";
 import { z } from "zod";
+import { assertBedrockAnimationExportMatchesSource } from "@/lib/bedrock/export/integrity";
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_EXPERIMENTAL, STATUS_STABLE } from "@/lib/constants";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
@@ -138,7 +140,9 @@ function codecRegistry(): Record<string, BlockITCodec> {
   return Codecs as Record<string, BlockITCodec>;
 }
 
-function nativeBedrockAnimationCodec(): BlockITCodec | undefined {
+function nativeBedrockAnimationCodec(
+  onCompiled?: (evidence: ReturnType<typeof assertBedrockAnimationExportMatchesSource>) => void
+): BlockITCodec | undefined {
   const native = (globalThis as unknown as {
     AnimationCodec?: { codecs?: { bedrock?: { compileFile?: (clips: unknown[]) => unknown } } };
   }).AnimationCodec?.codecs?.bedrock;
@@ -149,7 +153,11 @@ function nativeBedrockAnimationCodec(): BlockITCodec | undefined {
     compile() {
       const clips = (globalThis as unknown as { Animation?: { all?: unknown[] } }).Animation?.all;
       if (!Array.isArray(clips)) throw new Error("Native Animation.all is unavailable.");
-      return native.compileFile!(clips.slice());
+      const sourceClips = clips.slice();
+      const compiled = native.compileFile!(sourceClips);
+      const identityEvidence = assertBedrockAnimationExportMatchesSource(sourceClips, compiled);
+      onCompiled?.(identityEvidence);
+      return compiled;
     },
   };
 }
@@ -235,13 +243,17 @@ export function registerExportTools() {
       ...exportToolDocs[1],
       async execute({ codec_id, options, path, overwrite, max_content_length }) {
         requireBedrockEntityProject();
+        if (codec_id === "bedrock_animation" && max_content_length === 0) {
+          throw new Error("bedrock_animation is content-only: max_content_length=0 would discard the requested deliverable.");
+        }
         if (codec_id === "bedrock_animation" &&
             (path !== undefined || (options && Object.keys(options).length > 0))) {
           throw new Error("bedrock_animation is content-only: omit path/options; persist the returned native JSON separately.");
         }
         const registry = codecRegistry();
+        let animationExportEvidence: ReturnType<typeof assertBedrockAnimationExportMatchesSource> | null = null;
         const codec = codec_id === "bedrock_animation"
-          ? nativeBedrockAnimationCodec()
+          ? nativeBedrockAnimationCodec((evidence) => { animationExportEvidence = evidence; })
           : registry[codec_id];
 
         if (!codec) {
@@ -365,6 +377,13 @@ export function registerExportTools() {
             `Blockbench codec "${codec_id}" compiled an empty artifact; no file was written.`
           );
         }
+        // Hash the exact codec output, not a guessed native model revision or
+        // independently attested file readback. A source edit after this call
+        // requires a new compile; it cannot inherit the old artifact identity.
+        const compiledHash = createHash("sha256");
+        if (binaryBuffer) compiledHash.update(binaryBuffer);
+        else compiledHash.update(text ?? "", "utf8");
+        const compiledPayloadSha256 = `sha256:${compiledHash.digest("hex")}`;
 
         let wrote_to_path: string | null = null;
         if (path && exportFs) {
@@ -474,6 +493,11 @@ export function registerExportTools() {
                 ? codec.fileName()
                 : Project!.name,
           byte_length: byteLength,
+          compiled_payload_sha256: compiledPayloadSha256,
+          compiled_payload_sha256_scope: "NATIVE_CODEC_OUTPUT_BYTES" as const,
+          ...(animationExportEvidence !== null
+            ? { animation_export_identity: animationExportEvidence }
+            : {}),
           encoding,
           wrote_to_path,
           project: projectAfter,
@@ -489,7 +513,7 @@ export function registerExportTools() {
                 ? codec_id === "project"
                   ? `Saved editable project ${result.file_name} (${byteLength} bytes) using native Blockbench ${saveBehavior === "NATIVE_PROJECT_SAVE" ? "Save" : "Save As"}; active project save path is now ${projectAfter.save_path}. This is not an independent diagnostic copy.`
                   : `Exported ${codec_id} artifact ${result.file_name} (${byteLength} bytes) using native Blockbench export lifecycle; metadata effects: ${projectLifecycleChanges.join(", ") || "none"}.`
-                : `Compiled ${codec_id} artifact ${result.file_name} (${byteLength} bytes); no file path was provided.`,
+                : `Compiled ${codec_id} artifact ${result.file_name} (${byteLength} bytes); no file path was provided.${truncated ? " WARNING: response content was truncated; this is not a complete deliverable." : ""}`,
             },
           ],
           structuredContent: result,
