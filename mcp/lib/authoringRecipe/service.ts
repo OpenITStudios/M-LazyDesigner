@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
-import type { KnowledgeIndexSnapshot } from "@/lib/semantic/knowledge";
+import type { RecipeKnowledgeSnapshot } from "@/lib/authoringRecipe/knowledge";
 import { collectRecipeKnowledge, featureIdForRecipeInstance } from "@/lib/authoringRecipe/knowledgePlanning";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 import {
@@ -49,7 +49,7 @@ export type AuthoringRecipeServiceDependencies = {
   readOwned(recipeId: string): Promise<AuthoringRecipeNativeSnapshot> | AuthoringRecipeNativeSnapshot;
   readStoredRecipe?(recipeId: string): Promise<AuthoringRecipe | null> | AuthoringRecipe | null;
   /** Lazy advisory source; never read by ordinary native authoring operations. */
-  readKnowledgeIndex?(): Promise<KnowledgeIndexSnapshot | null> | KnowledgeIndexSnapshot | null;
+  readKnowledgeIndex?(): Promise<RecipeKnowledgeSnapshot | null> | RecipeKnowledgeSnapshot | null;
   createApplyAdapter(recipeId: string): AuthoringRecipeApplyAdapter;
   /** Opt-in native visual-surface read, entirely separate from Undo state. */
   readCoincidenceSurface?(
@@ -67,11 +67,16 @@ export function createAuthoringRecipeService(
     const native = await dependencies.readOwned(previousRecipe.id);
     assertAuthoringRecipeNativeMatchesCompiled(native, previousRecipe);
     const nativeFingerprint = fingerprintAuthoringRecipeNativeSnapshot(native);
+    // R1 knowledge-driven alternatives are a read-only precompile input:
+    // the authored next Recipe is NEVER rewritten or selected automatically.
+    // Failure before planning cannot persist a draft plan or start native Undo.
+    const recipeKnowledge = await collectRecipeKnowledge(
+      nextRecipe, dependencies.readKnowledgeIndex
+    );
     const rebuild = planIncrementalRecipeRebuild(previousRecipe, nextRecipe);
     const featurePlan = nextRecipe.feature_intents !== undefined
       ? planRecipeFeatureRepresentations(nextRecipe.feature_intents).summary
       : undefined;
-    const recipeKnowledge = await collectRecipeKnowledge(nextRecipe, dependencies.readKnowledgeIndex);
     const stored = registry.put({ native_source_fingerprint: nativeFingerprint, previous_recipe: previousRecipe, next_recipe: nextRecipe, rebuild });
     return {
       plan_id: stored.plan_id,

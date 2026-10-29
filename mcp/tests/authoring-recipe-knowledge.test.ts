@@ -10,6 +10,7 @@ import {
   readBundledRecipeKnowledgeIndex,
 } from "@/server/runtime/recipes/authoring/knowledgeRuntime";
 import { createRecipeKnowledgeExcerptReader } from "@/lib/authoringRecipe/knowledgeExcerpt";
+import { proposeGeometryConstruction } from "@/lib/authoringRecipe/geometryProposal";
 import { reviewRecipeKnowledge } from "@/lib/authoringRecipe/knowledgePlanning";
 import { classifyWatchPath, RUNTIME_WATCH_TARGETS } from "@/build/watch-policy";
 import {
@@ -593,5 +594,195 @@ describe("G2 retrieval discrimination before the G3 Geometry quality benchmark",
       expect(compileAuthoringRecipe(intent).feature_plan?.state)
         .toBe("review_required");
     }
+  });
+});
+
+
+describe("R1 source-grounded Geometry alternatives before Recipe compilation", () => {
+  const canonical = readFileSync(
+    new URL("../../docs/03-authoring/modelling/decision-cases.md", import.meta.url),
+    "utf8"
+  );
+  const index = buildRecipeGeometryCaseIndex(canonical)!;
+  const caseSource = index.sources![0]!;
+
+  function featureRecipe(
+    label: string,
+    opts: {
+      role?: "THREE_DIMENSIONAL" | "SURFACE_DETAIL";
+      evidence?: "SUPPORTED" | "PROVISIONAL" | "CONFLICTING";
+      references?: string[];
+      reasons?: Array<"MOTION" | "SILHOUETTE">;
+    } = {}
+  ): AuthoringRecipe {
+    return {
+      schema: 1, compiler_version: 1,
+      id: "r1-feature", name: "R1 shape draft",
+      prototypes: [], patterns: [],
+      feature_intents: [{
+        id: "part", label, visual_role: opts.role ?? "THREE_DIMENSIONAL",
+        evidence: opts.evidence ?? "SUPPORTED",
+        evidence_refs: opts.references ?? ["reference:joint-side"],
+        geometry_reasons: opts.reasons ??
+          (opts.role === "SURFACE_DETAIL" ? [] : ["MOTION"]),
+      }],
+    };
+  }
+
+  test("pinned source facts yield a bounded, explainable, non-executable geometry option", () => {
+    const target = featureRecipe("joint pivot bone parenting");
+    const before = structuredClone(target);
+    const view = reviewRecipeKnowledge(target, index, {
+      feature_ids: ["part"], max_per_feature: 1,
+    });
+    expect(view.geometry_proposals).toHaveLength(1);
+    const proposal = view.geometry_proposals[0]!;
+    expect(proposal).toMatchObject({
+      feature_id: "part",
+      feature_route: "GEOMETRY",
+      reference_claim_ids: ["reference:joint-side"],
+      verdict: "PROPOSAL_ONLY",
+      mutation_authorized: false,
+      visual_verdict: "NOT_EVALUATED",
+      knowledge: [{
+        source_sha256: caseSource.content_sha256,
+        usage: "ADVISORY_ONLY",
+      }],
+    });
+    expect(proposal.options).toHaveLength(1);
+    expect(proposal.options[0]?.strategy).toBe(
+      "G-P05 Joint Pivot And Bone Parenting"
+    );
+    expect(proposal.options[0]?.contribution).toEqual(["MOTION"]);
+    expect(proposal.options[0]?.apply_when[0]).toContain("known attachment side/axis");
+    expect(proposal.options[0]?.reject_when[0]).toContain("mass center");
+    expect(proposal.options[0]?.recipe_guidance[1]).toContain("separate linked transform");
+    expect(proposal.options[0]?.missing_evidence[0]).toContain("current approved reference");
+    expect(proposal.options[0]?.visual_or_native_proof_needed[0])
+      .toContain("extreme pose");
+    expect(proposal.knowledge[0]?.section_id).toBe(
+      index.sections.find(item => item.heading.startsWith("G-P05 "))?.id
+    );
+    expect(target).toEqual(before);
+    expect(compileAuthoringRecipe(target).placements).toEqual([]);
+  });
+
+  test("provisional or conflicting feature evidence never becomes Geometry authority", () => {
+    for (const evidence of ["PROVISIONAL", "CONFLICTING"] as const) {
+      const target = featureRecipe("joint pivot bone parenting", {
+        evidence,
+        references: ["unverified:view"],
+      });
+      const preflight = reviewRecipeKnowledge(target, index);
+      expect(preflight.geometry_proposals[0]).toMatchObject({
+        feature_route: "REVIEW_REQUIRED",
+        reference_claim_ids: [],
+        verdict: "MORE_REFERENCE_EVIDENCE_REQUIRED",
+        mutation_authorized: false,
+      });
+      expect(preflight.geometry_proposals[0]?.options[0]?.strategy)
+        .toBe("G-P05 Joint Pivot And Bone Parenting");
+      expect(compileAuthoringRecipe(target).feature_plan?.state)
+        .toBe("review_required");
+    }
+  });
+
+  test("surface-only detail, unknown case and ambiguous generic label do not invent Geometry", () => {
+    const texture = featureRecipe("surface cloth markings", {
+      role: "SURFACE_DETAIL", reasons: [],
+    });
+    const textureView = reviewRecipeKnowledge(texture, index);
+    expect(textureView.geometry_proposals).toEqual([]);
+    expect(compileAuthoringRecipe(texture).feature_plan?.texture_handoff.count)
+      .toBe(1);
+    for (const label of ["red eyes glowing pattern", "geometry", "form"]) {
+      const notGrounded = reviewRecipeKnowledge(featureRecipe(label), index);
+      expect(notGrounded.geometry_proposals).toHaveLength(1);
+      expect(notGrounded.geometry_proposals[0]).toMatchObject({
+        options: [], knowledge: [],
+        verdict: "MORE_REFERENCE_EVIDENCE_REQUIRED",
+        mutation_authorized: false,
+      });
+    }
+  });
+
+  test("a changed source, incomplete G1 guidance or mismatched explicit binding cannot silently propose", () => {
+    const original = featureRecipe("joint pivot bone parenting");
+    const section = index.sections.find(item =>
+      item.heading.startsWith("G-P05 "))!;
+    const bound = bindRecipeKnowledge(original, index, [{
+      feature_id: "part", section_id: section.id,
+    }]);
+    const current = reviewRecipeKnowledge(bound, index);
+    expect(current.geometry_proposals[0]?.options).toHaveLength(1);
+    const modified = buildRecipeGeometryCaseIndex(
+      canonical.replace("use the actual joint/hinge pivot.",
+        "use the current observed joint/hinge pivot.")
+    )!;
+    const stale = reviewRecipeKnowledge(bound, modified);
+    expect(stale.knowledge.state).toBe("REVIEW_REQUIRED");
+    expect(stale.suggestions).toEqual([]);
+    expect(stale.geometry_proposals).toEqual([]);
+    const otherLabel = featureRecipe("primary silhouette mass");
+    otherLabel.knowledge_links = bound.knowledge_links;
+    const pinnedOther = reviewRecipeKnowledge(otherLabel, index);
+    expect(pinnedOther.geometry_proposals[0]?.options).toEqual([]);
+    const incomplete = buildRecipeGeometryCaseIndex(
+      canonical.replace("- **Apply:** an articulated limb, panel, wing, jaw",
+        "- **Missing applicability:** an articulated limb, panel, wing, jaw")
+    )!;
+    const invalid = reviewRecipeKnowledge(original, incomplete);
+    expect(invalid.geometry_proposals[0]?.options).toEqual([]);
+    // Missing on-disk source bytes cannot be treated as a verified proposal.
+    const metadataOnly = { sections: index.sections, sources: index.sources };
+    expect(reviewRecipeKnowledge(original, metadataOnly)
+      .geometry_proposals[0]?.options).toEqual([]);
+    // Direct pure function also refuses stale explicit bindings.
+    expect(proposeGeometryConstruction(bound, modified,
+      stale.knowledge, current.suggestions)).toEqual([]);
+  });
+
+  test("the actual service constructs precompile guidance before planning its next Recipe", async () => {
+    const base = recipe();
+    const native: AuthoringRecipeNativeSnapshot = {
+      schema: 1, recipe_id: base.id,
+      cubes: compileAuthoringRecipe(base).placements.map((placement, i) => ({
+        uuid: "native:" + i, recipe_id: base.id, instance_id: placement.id,
+        name: placement.name, from: placement.from, to: placement.to,
+        origin: placement.origin, rotation: placement.rotation,
+        inflate: placement.inflate,
+      })),
+    };
+    let reads = 0;
+    const service = createAuthoringRecipeService({
+      readOwned: () => native,
+      readStoredRecipe: () => base,
+      readKnowledgeIndex: () => { reads++; return index; },
+      createApplyAdapter: () => {
+        throw new Error("R1 proposals must not create native Undo");
+      },
+    });
+    const report = await service.planStored(base);
+    expect(reads).toBe(1);
+    expect(report.recipe_knowledge?.geometry_proposals[0]?.options[0]?.strategy)
+      .toBe("G-P05 Joint Pivot And Bone Parenting");
+    expect(report.recipe_knowledge?.geometry_proposals[0]?.mutation_authorized)
+      .toBe(false);
+    expect(report.summary).toBeDefined();
+    const planCount = reads;
+    const broken = structuredClone(base);
+    broken.prototypes[0]!.size = [-1, 12, 4];
+    const orderService = createAuthoringRecipeService({
+      readOwned: () => native,
+      readKnowledgeIndex: () => {
+        throw new Error("R1_PREFLIGHT_BEFORE_COMPILATION");
+      },
+      createApplyAdapter: () => {
+        throw new Error("No native execution");
+      },
+    });
+    await expect(orderService.plan(base, broken))
+      .rejects.toThrow("R1_PREFLIGHT_BEFORE_COMPILATION");
+    expect(reads).toBe(planCount);
   });
 });

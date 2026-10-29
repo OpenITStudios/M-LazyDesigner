@@ -1,7 +1,10 @@
 # Geometry Intelligence — Implementation Design
 
-Status: **DESIGN ONLY** (2026-10-29); no new runtime feature, agent,
-compiler strategy, trained weights, measured performance or accepted asset.
+Status: **R0 CURATED; R1 SOURCE IMPLEMENTED (NOT EXECUTED)** (2026-10-29).
+Existing Recipe planning now returns source-bound conditional options before
+candidate compilation. No automatic Cube generation, new compiler pattern,
+trained weights, installed Runtime proof, measured performance or accepted
+asset is claimed.
 Owner: existing Geometry/Recipe domain. This document is the conditional
 engineering design for [curated external sources](research-sources.md),
 not a second production workflow. Actual modelling policy remains in
@@ -123,6 +126,13 @@ to turn every missing semantic label into a permanent failure.
   and counterexample. No runtime performance claim.
 
 ### R1 — Knowledge-informed *precompile* proposals (P0)
+
+**Source state:** `mcp/lib/authoringRecipe/geometryProposal.ts` provides
+bounded, provenance-bound conditional strategies. `knowledgePlanning.ts`
+and the existing `service.ts:planPair` consume them before compiling a
+candidate Recipe. This remains advice, not an approved/applicable shape
+or automatic native operation. Executable Bun/typecheck/build/native
+and visual proof: NOT EXECUTED.
 
 - Keep `featureDecision.ts` as the only representation route owner.
   Build a small pure proposal selector using the current Recipe knowledge

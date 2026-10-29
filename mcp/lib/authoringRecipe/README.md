@@ -58,6 +58,28 @@ The eight G1 cases are SOURCE-GROUNDED_CANDIDATE, not Golden assets or
 an advanced model corpus. No new engine, external model, training loop,
 public Gateway capability, or native mutation has been added.
 
+### R1: evidence-bound precompile construction proposals (source only)
+
+`geometryProposal.ts` is a small, pure Recipe helper. It converts exact
+hash-verified G1 case sections into **conditional, read-only** Geometry
+alternatives using the existing `featureDecision.ts` routing. A proposal
+retains the full source and section revisions, application/exclusion criteria,
+unverified applicability conditions, and source-authored Recipe guidance.
+No option may invent coordinates, approve a model, generate Cubes or
+trigger native Undo. An unresolved feature can receive an explained
+hypothesis with `MORE_REFERENCE_EVIDENCE_REQUIRED`; Texture/Omit features
+generate **zero** Geometry construction options.
+
+`reviewRecipeKnowledge` returns bounded `geometry_proposals` next to
+existing `suggestions`. `prepareKnowledgeAwareRecipe` now evaluates
+knowledge **before** compiling the candidate. The existing
+`createAuthoringRecipeService.plan/planStored` caller likewise computes
+the advisory preflight before `planIncrementalRecipeRebuild`, without
+altering the caller-authored Recipe. Stale explicit links withhold options,
+and legacy Recipes without feature intents skip the index.
+The R1 source/regression contracts are authored, NOT EXECUTED with Bun,
+TypeScript/build or native Blockbench. No measured 3D fidelity is claimed.
+
 
 Owns declarative, deterministic recipe semantics for parametric authoring.
 

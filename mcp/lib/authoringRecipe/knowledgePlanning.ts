@@ -3,6 +3,10 @@ import type { RecipeKnowledgeSnapshot } from "@/lib/authoringRecipe/knowledge";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { resolveRecipeKnowledgeLinks } from "@/lib/authoringRecipe/knowledge";
 import {
+  proposeGeometryConstruction,
+  type GeometryConstructionProposal,
+} from "@/lib/authoringRecipe/geometryProposal";
+import {
   suggestRecipeKnowledge,
   type RecipeKnowledgeSelectionOptions,
 } from "@/lib/authoringRecipe/knowledgeSelection";
@@ -17,11 +21,14 @@ export function prepareKnowledgeAwareRecipe(
   knowledgeIndex: RecipeKnowledgeSnapshot,
   options: RecipeKnowledgeSelectionOptions = {}
 ) {
+  // Inspect relevant source and conditional alternatives BEFORE compiling
+  // the candidate Recipe, without changing its prototypes or patterns.
+  const precompile = reviewRecipeKnowledge(recipe, knowledgeIndex, options);
   const compiled = compileAuthoringRecipe(recipe);
   return {
     recipe_id: compiled.recipe_id,
     compiled,
-    ...reviewRecipeKnowledge(recipe, knowledgeIndex, options),
+    ...precompile,
   };
 }
 
@@ -38,15 +45,20 @@ export function reviewRecipeKnowledge(
   const binding = resolveRecipeKnowledgeLinks(
     recipe, knowledgeIndex, options.compatible_with
   );
+  // A stale explicit link blocks both excerpts and proposed construction:
+  // neither one may silently switch knowledge source or revision.
+  const suggestions = binding.state === "REVIEW_REQUIRED" ? [] :
+    suggestRecipeKnowledge(recipe, knowledgeIndex, {
+      max_per_feature: 2, max_token_proxy: 500,
+      ...options, feature_ids: featureIds,
+    });
+  const geometryProposals = proposeGeometryConstruction(
+    recipe, knowledgeIndex, binding, suggestions
+  );
   return {
     knowledge: binding,
-    // Stale explicit references cannot silently supply newer advisory text
-    // under the same Recipe revision; rebind/review them explicitly first.
-    suggestions: binding.state === "REVIEW_REQUIRED" ? [] :
-      suggestRecipeKnowledge(recipe, knowledgeIndex, {
-        max_per_feature: 2, max_token_proxy: 500,
-        ...options, feature_ids: featureIds,
-      }),
+    suggestions,
+    geometry_proposals: geometryProposals,
     ...(binding.state === "REVIEW_REQUIRED"
       ? { guidance_blocked_reason: "RECIPE_KNOWLEDGE_LINK_REVIEW_REQUIRED" as const }
       : {}),
@@ -94,6 +106,7 @@ export async function collectRecipeKnowledge(
       reason: "RECIPE_KNOWLEDGE_INDEX_UNAVAILABLE" as const,
       knowledge: null,
       suggestions: [],
+      geometry_proposals: [] as GeometryConstructionProposal[],
       execution_boundary: "SOURCE_PLANNING_ONLY_NO_NATIVE_MUTATION_OR_VISUAL_PROOF" as const,
     };
   }
