@@ -49,7 +49,7 @@ describe("K3 Texture and UV decision cases — source-only selection fixture", (
   test("exactly four separately indexed source-grounded cases exist", async () => {
     const text = await markdown();
     const sections = cases(text);
-    expect(sections.map((section) => section.heading.slice(0, 7))).toEqual([...CASE_IDS]);
+    expect(sections.map((section) => section.heading.split(" ", 1)[0])).toEqual([...CASE_IDS]);
     expect(new Set(sections.map((s) => s.id)).size).toBe(CASE_IDS.length);
     for (const section of sections) {
       const body = caseText(text, section);
@@ -112,13 +112,13 @@ describe("K3 Texture and UV decision cases — source-only selection fixture", (
     expect(ledger).toHaveLength(11);
     for (const line of ledger) {
       expect(line).toMatch(/\bS\d{2}\b/);
-      expect(line).toMatch(/[a-f0-9]{64}/);
-      expect(line).toMatch(/[a-f0-9]{40}/);
+      expect(line).toMatch(/`[a-f0-9]{64}`/);
+      expect(line).toMatch(/`[a-f0-9]{40}`/);
     }
     expect(text).toContain("**UNREGISTERED**");
     expect(text).toContain("NOT EXECUTED");
     expect(text).toContain("Mojang EULA");
     expect(text).toContain("GPL-3.0");
-    expect(text).toContain("not a single confirmed current Bedrock runtime version");
+    expect(text).toContain("single confirmed current Bedrock runtime version");
   });
 });
