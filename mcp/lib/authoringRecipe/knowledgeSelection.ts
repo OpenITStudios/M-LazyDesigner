@@ -2,6 +2,7 @@ import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
 import {
   indexRecipeKnowledge,
+  RECIPE_GEOMETRY_CASE_SOURCE_PATH,
   type RecipeKnowledgeSnapshot,
 } from "@/lib/authoringRecipe/knowledge";
 import { createRecipeKnowledgeExcerptReader } from "@/lib/authoringRecipe/knowledgeExcerpt";
@@ -67,6 +68,16 @@ export function suggestRecipeKnowledge(
   }
   const index = indexRecipeKnowledge(snapshot, options.compatible_with);
   const readExcerpt = createRecipeKnowledgeExcerptReader(snapshot);
+  // The G1 casebook has a shared "Geometry Decision Cases" parent heading.
+  // Do not let broad context words or the parent heading pick arbitrary cases.
+  // Reuse the canonical section selector on each leaf title only.
+  const caseTitles = index.eligibleSections
+    .filter(section => section.source === RECIPE_GEOMETRY_CASE_SOURCE_PATH)
+    .map(section => ({
+      ...section,
+      heading_path: [section.heading],
+      search_terms: [],
+    }));
   const features = recipe.feature_intents ?? [];
   const knownIds = new Set(features.map(feature => feature.id));
   if (requested?.some(id => !knownIds.has(id))) {
@@ -78,6 +89,18 @@ export function suggestRecipeKnowledge(
   const decisions = planRecipeFeatureRepresentations(features).decisions;
   const routes = new Map(decisions.map(decision => [decision.id, decision.route]));
   return [...selected].sort((a,b) => a.id.localeCompare(b.id)).map(feature => {
+    // For the eight provisional G1 decisions, require a UNIQUE case-title
+    // match to the feature's own words. A tie abstains from case guidance.
+    // Other existing knowledge sources retain their original selection.
+    const titles = selectKnowledgeSections({
+      sections: caseTitles,
+      query: feature.label,
+      limit: 8,
+      maxTokenProxy: 8_000,
+    });
+    const matchedCaseId = titles.length > 0 &&
+      (titles.length === 1 || titles[0]!.score > titles[1]!.score)
+      ? titles[0]!.id : null;
     const query = [
       feature.label, recipe.name, (feature.geometry_reasons ?? []).join(" "),
       options.query ?? "",
@@ -87,7 +110,10 @@ export function suggestRecipeKnowledge(
       query,
       limit,
       maxTokenProxy: tokenBudget,
-    }).map(section => {
+    }).filter(section =>
+      section.source !== RECIPE_GEOMETRY_CASE_SOURCE_PATH ||
+      section.id === matchedCaseId
+    ).map(section => {
       const guidance = readExcerpt(section);
       return {
         section_id: section.id,

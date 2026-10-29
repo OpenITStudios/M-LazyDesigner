@@ -143,3 +143,42 @@ runtime/environment notes
 ```
 
 Compare implementation changes only against equivalent inputs and acceptance criteria. Accepted live benchmark runs must retain end-to-end provenance for the approved Reference Package fingerprint, Control task-context id, Runtime build identity, and resulting artifact revision. Baseline/candidate comparisons require the same Reference Package fingerprint; otherwise they are different authoring inputs and are not comparable efficiency experiments. A prepared fixture or passing static test is not live visual/runtime proof.
+
+
+## G3 Geometry Knowledge A/B — next native acceptance experiment
+
+This is a **future measured run plan**, not source proof or a new evaluation
+engine. G2 retrieval regressions only establish that selected advisory text
+matches a semantic feature and source revision; they do not establish a
+better model. Use the existing Golden Task machinery and six quality
+dimensions above. Initially select `golden-existing-model-correction` for a
+controlled correction, then `golden-humanoid-fisherman`,
+`golden-mechanical-lift`, or `golden-organic-flower` only when a
+specific Geometry case is decision-relevant.
+
+- **Pair inputs:** identical approved reference package SHA-256, user
+  dimensions, required views and acceptance criteria, identical immutable
+  starting `.bbmodel` bytes, matching task ID, Blockbench/Runtimes, and
+  exact recorded source SHAs. The candidate changes only the documented
+  G1 knowledge-availability/selection condition.
+- **Provenance:** record `feature_id`, exact G-P01..G-P08 case section ID,
+  full knowledge-source and section SHA-256, `recipe_knowledge` freshness,
+  matched reference-view evidence and source/installed build identity.
+  A failed or ambiguous case retrieval cannot be treated as successful
+  knowledge application.
+- **Quality first:** require reference-comparable silhouette, proportions,
+  required parts, contact/depth/negative space and motion-ready pivots when
+  applicable; an unsupported new part or critical defect remains FAIL.
+  Preserve the source/visual/user verdict distinctions.
+- **Then measure:** only for equally accepted results, compare correction
+  rounds, repeated causal failures, verification calls, total calls,
+  accepted-result time and actual token usage when observable. Do not
+  replace quality with a scalar score or Cube-count minimization.
+- **Fail closed:** absent LIVE_BLOCKBENCH, missing user acceptance, changed
+  reference or starting model, unqualified source/toolchain, or missing
+  readback leaves the run `UNVERIFIED`. A source-only G1/G2 test is
+  not a Golden Task or a measured A/B result.
+
+Use `mcp/scripts/reporting/run-golden-benchmark-session.ts` and the existing
+Golden acceptance/compare validators; do not create another registry, run
+schema, task database or alternative approval pipeline.

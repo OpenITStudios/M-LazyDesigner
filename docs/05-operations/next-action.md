@@ -6,7 +6,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **User priority; G1 cases documented, G2 source wired; executable/native proof NOT EXECUTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
 
-1. **Geometry first:** [G1 casebook](../03-authoring/modelling/decision-cases.md) is source-grounded; G2 bounded Recipe retrieval is wired but NOT EXECUTED. Next: exact-SHA source verification and installed/visual comparisons against identical approved references, using [curation criteria](../03-authoring/modelling/knowledge-curation.md).
+1. **Geometry first:** [G1 casebook](../03-authoring/modelling/decision-cases.md) is source-grounded; G2 retrieval is source-wired and its false-positive selection guard is authored; tests NOT EXECUTED. Next: exact-SHA source verification and G3 matched-input native/visual A/B comparison, using [curation criteria](../03-authoring/modelling/knowledge-curation.md).
 2. **Texture second:** curate UV/atlas layout, Minecraft pixel-cluster treatment, palette/material/PBR semantics and seam-safe texture patterns. Preserve the reference's visual identity and measure mapped-model quality.
 3. **Animation third:** curate grounded rig/motion/keyframe, interpolation, contact, loop and controller patterns. Compare playback, motion fidelity and export correctness.
 

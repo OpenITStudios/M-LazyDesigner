@@ -15,6 +15,7 @@ import { classifyWatchPath, RUNTIME_WATCH_TARGETS } from "@/build/watch-policy";
 import {
   bindRecipeKnowledge,
   resolveRecipeKnowledgeLinks,
+  RECIPE_GEOMETRY_CASE_SOURCE_PATH,
 } from "@/lib/authoringRecipe/knowledge";
 import { suggestRecipeKnowledge } from "@/lib/authoringRecipe/knowledgeSelection";
 import { prepareKnowledgeAwareRecipe } from "@/lib/authoringRecipe/knowledgePlanning";
@@ -524,5 +525,73 @@ describe("G2 bundled casebook and on-demand Recipe guidance", () => {
       .toBe("rebuild");
     expect(classifyWatchPath("prompts/bedrock_entity_workflow.md"))
       .toBe("regenerate-prompts-and-rebuild");
+  });
+});
+
+
+describe("G2 retrieval discrimination before the G3 Geometry quality benchmark", () => {
+  test("curated cases require a unique feature-title match, never only broad Recipe context", () => {
+    const corpus = readBundledRecipeKnowledgeIndex();
+    expect(corpus).not.toBeNull();
+    const examples: Array<{
+      label: string;
+      recipe_name: string;
+      reason: "SILHOUETTE" | "MOTION" | "TECHNICAL";
+      expected_case: string | null;
+    }> = [
+      { label: "scale cross-view depth", recipe_name: "geometry decision",
+        reason: "SILHOUETTE", expected_case: "G-P01" },
+      { label: "primary silhouette mass", recipe_name: "geometry decision",
+        reason: "SILHOUETTE", expected_case: "G-P02" },
+      { label: "protruding form surface marking", recipe_name: "geometry decision",
+        reason: "SILHOUETTE", expected_case: "G-P03" },
+      { label: "sloped form staircase", recipe_name: "vehicle",
+        reason: "SILHOUETTE", expected_case: "G-P04" },
+      { label: "joint pivot bone parenting", recipe_name: "hinge model",
+        reason: "MOTION", expected_case: "G-P05" },
+      { label: "negative space painted shadow", recipe_name: "geometry decision",
+        reason: "SILHOUETTE", expected_case: "G-P06" },
+      { label: "symmetry intentional asymmetry", recipe_name: "geometry decision",
+        reason: "SILHOUETTE", expected_case: "G-P07" },
+      { label: "thin plane uv compatibility", recipe_name: "geometry decision",
+        reason: "TECHNICAL", expected_case: "G-P08" },
+      { label: "arm pivot", recipe_name: "character",
+        reason: "MOTION", expected_case: "G-P05" },
+      { label: "surface cloth markings", recipe_name: "character",
+        reason: "SILHOUETTE", expected_case: "G-P03" },
+      { label: "red eyes glowing pattern", recipe_name: "character",
+        reason: "SILHOUETTE", expected_case: null },
+      { label: "dragon tail", recipe_name: "creature",
+        reason: "MOTION", expected_case: null },
+      { label: "geometry", recipe_name: "geometry model",
+        reason: "SILHOUETTE", expected_case: null },
+      { label: "form", recipe_name: "generic model",
+        reason: "SILHOUETTE", expected_case: null },
+    ];
+    for (const example of examples) {
+      const intent: AuthoringRecipe = {
+        schema: 1, compiler_version: 1,
+        id: "g2-discriminating-case", name: example.recipe_name,
+        prototypes: [], patterns: [],
+        feature_intents: [{
+          id: "target", label: example.label,
+          visual_role: "THREE_DIMENSIONAL",
+          evidence: "PROVISIONAL",
+          geometry_reasons: [example.reason],
+        }],
+      };
+      const selected = suggestRecipeKnowledge(intent, corpus!, {
+        feature_ids: ["target"], max_per_feature: 2,
+        max_token_proxy: 500,
+      });
+      const curated = selected[0]!.sections.filter(section =>
+        section.source === RECIPE_GEOMETRY_CASE_SOURCE_PATH
+      );
+      expect(curated.map(section => section.heading.slice(0, 5)))
+        .toEqual(example.expected_case ? [example.expected_case] : []);
+      expect(selected[0]?.feature_route).toBe("REVIEW_REQUIRED");
+      expect(compileAuthoringRecipe(intent).feature_plan?.state)
+        .toBe("review_required");
+    }
   });
 });

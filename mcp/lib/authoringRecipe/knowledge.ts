@@ -17,6 +17,9 @@ export type RecipeKnowledgeSnapshot = KnowledgeIndexSnapshot & {
  * asset state store, or source of visual approval.
  */
 export const RECIPE_KNOWLEDGE_MAX_LINKS = 256;
+/** Shared exact source identity; case content itself remains canonical Markdown. */
+export const RECIPE_GEOMETRY_CASE_SOURCE_PATH =
+  "docs/03-authoring/modelling/decision-cases.md" as const;
 const HASH = /^[a-f0-9]{64}$/;
 
 export type RecipeKnowledgeIssueReason =

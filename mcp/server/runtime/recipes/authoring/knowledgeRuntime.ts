@@ -5,10 +5,13 @@ import {
   indexMarkdownKnowledge,
   type KnowledgeIndexSnapshot,
 } from "@/lib/semantic/knowledge";
-import type { RecipeKnowledgeSnapshot } from "@/lib/authoringRecipe/knowledge";
+import {
+  RECIPE_GEOMETRY_CASE_SOURCE_PATH,
+  type RecipeKnowledgeSnapshot,
+} from "@/lib/authoringRecipe/knowledge";
 
 const WORKFLOW_PATH = "prompts/bedrock_entity_workflow.md";
-const GEOMETRY_CASE_PATH = "docs/03-authoring/modelling/decision-cases.md";
+const GEOMETRY_CASE_PATH = RECIPE_GEOMETRY_CASE_SOURCE_PATH;
 const MAX_WORKFLOW_BYTES = 64_000;
 const MAX_CASE_BYTES = 24_000;
 const EXPECTED_CASES = [
