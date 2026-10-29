@@ -18,6 +18,18 @@ describe("Validator gate verdict", () => {
     expect(verdict.visual_pass_claim).toBe(false);
   });
 
+  test("malformed Validator counts fail closed rather than claiming a clean gate", () => {
+    for (const [errors, warnings] of [
+      [Number.NaN, 0], [0, Number.NaN],
+      [-1, 0], [0, -1],
+      [Number.POSITIVE_INFINITY, 0], [0, Number.NEGATIVE_INFINITY],
+      [1.5, 0], [0, 0.5], [Number.MAX_SAFE_INTEGER + 1, 0],
+    ]) {
+      expect(() => deriveValidatorGateVerdict(errors, warnings))
+        .toThrow("VALIDATOR_COUNTS_INVALID");
+    }
+  });
+
   test("clean validator is technical evidence only", () => {
     const verdict = deriveValidatorGateVerdict(0, 0);
     expect(verdict.state).toBe("VALIDATOR_CLEAR");

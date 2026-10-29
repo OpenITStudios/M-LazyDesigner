@@ -22,6 +22,13 @@ export function deriveValidatorGateVerdict(
   errorCount: number,
   warningCount: number
 ): ValidatorGateVerdict {
+  // Counts are expected from current native Validator arrays. Malformed
+  // inputs cannot be interpreted as a clean technical gate: NaN and negative
+  // counts would otherwise bypass both >0 branches and imply VALIDATOR_CLEAR.
+  if (!Number.isSafeInteger(errorCount) || errorCount < 0 ||
+      !Number.isSafeInteger(warningCount) || warningCount < 0) {
+    throw new Error("VALIDATOR_COUNTS_INVALID: expected nonnegative safe integer counts.");
+  }
   if (errorCount > 0) {
     return {
       state: "BLOCKED",
