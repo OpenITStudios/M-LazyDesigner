@@ -174,6 +174,31 @@ describe("workspace semantic fingerprint", () => {
     }
   });
 
+  test("Animation Required continuity preserves explicit YES, NO and UNSPECIFIED", () => {
+    const yes = base + "\nAnimation Required: YES";
+    const no = base + "\nAnimation Required: NO";
+    const unknown = base + "\nAnimation Required: UNSPECIFIED";
+    expect(workspaceSemanticState(yes).animation_required).toBe(true);
+    expect(workspaceSemanticState(no).animation_required).toBe(false);
+    expect(workspaceSemanticState(unknown).animation_required).toBeNull();
+    expect(workspaceSemanticState(base).animation_required).toBeUndefined();
+    expect(workspaceSemanticFingerprint(yes)).not.toBe(workspaceSemanticFingerprint(no));
+    expect(workspaceSemanticFingerprint(no)).not.toBe(workspaceSemanticFingerprint(unknown));
+  });
+
+  test("conflicting or invalid Animation Required statements remain orientation issues", () => {
+    const samples = [
+      { declaration: "Animation Required: MAYBE", reason: "WORKSPACE_ANIMATION_REQUIREMENT_INVALID" },
+      { declaration: "Animation Required: YES\nAnimation Required: NO", reason: "WORKSPACE_ANIMATION_REQUIREMENT_CONFLICT" },
+      { declaration: "Animation Required: NO\nAnimation Required: LATER", reason: "WORKSPACE_ANIMATION_REQUIREMENT_INVALID" },
+    ];
+    for (const { declaration, reason } of samples) {
+      const state = workspaceSemanticState(base + "\n" + declaration);
+      expect(state.animation_required).toBeUndefined();
+      expect(state.workspace_issues).toContain(reason);
+    }
+  });
+
   test("semantic state owns exactly the Control lifecycle fields", () => {
     expect(workspaceSemanticState(base)).toEqual({
       asset: "Chair",

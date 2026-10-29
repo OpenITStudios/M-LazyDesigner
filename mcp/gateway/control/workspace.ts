@@ -19,6 +19,8 @@ export type ControlWorkspaceProjection = {
   };
   next_step: string | null;
   blockers: string[];
+  /** Optional README continuity declaration, compared against Reference authority. */
+  animation_required?: boolean | null;
   /** Format/identity ambiguity is orientation-only, not implicit approval. */
   workspace_issues?: string[];
   /** Bounded display omitted additional blocker entries; read the current README. */
@@ -86,6 +88,7 @@ export type WorkspaceSemanticState = {
   gates: ControlWorkspaceProjection["gates"];
   next_step: string | null;
   blockers: string[];
+  animation_required?: boolean | null;
   workspace_issues?: string[];
   blockers_omitted_count?: number;
   blockers_omitted_sha256?: string;
@@ -101,6 +104,21 @@ export function workspaceSemanticState(text: string): WorkspaceSemanticState {
     issues.push("WORKSPACE_CURRENT_STAGE_MISSING");
   } else if (!WORKSPACE_STAGES.has(currentStage.toUpperCase())) {
     issues.push("WORKSPACE_CURRENT_STAGE_INVALID");
+  }
+  const animationDeclarations = fieldValues(text, "Animation Required")
+    .map((value) => value.toUpperCase());
+  let animationRequired: boolean | null | undefined;
+  if (animationDeclarations.length > 0) {
+    if (animationDeclarations.some(
+      (value) => !["YES", "NO", "UNSPECIFIED"].includes(value)
+    )) {
+      issues.push("WORKSPACE_ANIMATION_REQUIREMENT_INVALID");
+    } else if (new Set(animationDeclarations).size > 1) {
+      issues.push("WORKSPACE_ANIMATION_REQUIREMENT_CONFLICT");
+    } else {
+      animationRequired = animationDeclarations[0] === "YES"
+        ? true : animationDeclarations[0] === "NO" ? false : null;
+    }
   }
   // An existing APPROVED/PASS line must not mask a conflicting second line.
   for (const label of ["Current Stage", "Geometry", "UV Layout", "Texturing", "Animation"]) {
@@ -119,6 +137,9 @@ export function workspaceSemanticState(text: string): WorkspaceSemanticState {
       animation: field(text, "Animation"),
     },
     next_step: field(text, "Current next step"),
+    ...(animationRequired !== undefined
+      ? { animation_required: animationRequired }
+      : {}),
     blockers: allBlockers.slice(0, 8),
     ...(issues.length > 0 ? { workspace_issues: [...new Set(issues)].sort() } : {}),
     ...(omitted.length > 0 ? {

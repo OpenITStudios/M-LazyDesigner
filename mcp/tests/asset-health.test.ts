@@ -209,6 +209,36 @@ describe("asset health summary", () => {
     }).overall).toBe("BLOCKED");
   });
 
+  test("contradictory Animation Required cannot silently omit an unfinished stage", () => {
+    const ws = workspace();
+    ws.animation_required = true;
+    ws.gates.animation = "NOT_STARTED";
+    const ref = reference(false);
+    const stage = buildControlStageContext({
+      domain: "GEOMETRY", reference: ref, workspace: ws,
+    });
+    expect(stage.asset_health.stages.animation).toBe("UNVERIFIED");
+    expect(stage.asset_health.overall).toBe("REVIEW");
+
+    ws.animation_required = false;
+    expect(buildAssetHealthSummary({
+      domain: "GEOMETRY", reference: ref, workspace: ws,
+    })).toMatchObject({
+      overall: "READY", stages: { animation: "NOT_REQUIRED" },
+    });
+  });
+
+  test("malformed Workspace requirement cannot inherit a false NOT_REQUIRED", () => {
+    const ws = workspace();
+    ws.workspace_issues = ["WORKSPACE_ANIMATION_REQUIREMENT_INVALID"];
+    ws.gates.animation = "NOT_STARTED";
+    const result = buildAssetHealthSummary({
+      domain: "TEXTURING", reference: reference(false), workspace: ws,
+    });
+    expect(result.overall).toBe("REVIEW");
+    expect(result.stages.animation).toBe("UNVERIFIED");
+  });
+
   test("missing workspace is incomplete rather than failed", () => {
     const ws = workspace();
     ws.available = false;

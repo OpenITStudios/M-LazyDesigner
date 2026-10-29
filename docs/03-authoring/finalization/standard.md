@@ -11,6 +11,12 @@ Texturing: APPROVED
 Animation: APPROVED | NOT_REQUIRED
 ```
 
+A Workspace `Animation Required` declaration that contradicts the
+confirmed Reference Package requirement is unresolved, not evidence
+that Animation is `NOT_REQUIRED`. Reconcile the existing sources before
+Finalization; do not invent a new approval gate or reset unrelated accepted
+Geometry/Texture work.
+
 Do not use Finalization to launder an `INVALIDATED`, `BLOCKED`, or unapproved upstream stage.
 
 ## Current-State Authority

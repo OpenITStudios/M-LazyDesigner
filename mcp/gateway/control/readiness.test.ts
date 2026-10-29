@@ -143,6 +143,35 @@ describe("Control readiness policy", () => {
     ).modelling_start).toBe("READY");
   });
 
+  test("Animation requirement conflicts orient only the dependent Stage", () => {
+    const ref = {
+      ...emptyReference("REFERENCE_PATH_UNAVAILABLE"),
+      available: true,
+      requirements: {
+        ...emptyReference("REFERENCE_PATH_UNAVAILABLE").requirements,
+        animation_required: false,
+      },
+    };
+    const ws = { ...emptyWorkspace(), available: true,
+      animation_required: true, unavailable_reason: undefined };
+    const animation = baseSnapshot();
+    animation.authoring.domain = "ANIMATION";
+    animation.authoring.phase = "animation";
+    const result = buildReadiness(
+      animation, ws, ref, "ASSET_AUTHORING", NOT_REQUIRED_LIFECYCLE, "READY"
+    );
+    expect(result.modelling_start).toBe("NEEDS_ORIENTATION");
+    expect(result.reasons).toContain("ANIMATION_REQUIREMENT_CONFLICT");
+    expect(result.runtime_ready).toBe(true);
+
+    const geometry = buildReadiness(
+      baseSnapshot(), ws, ref, "ASSET_AUTHORING",
+      NOT_REQUIRED_LIFECYCLE, "READY"
+    );
+    expect(geometry.modelling_start).toBe("READY");
+    expect(geometry.reasons).not.toContain("ANIMATION_REQUIREMENT_CONFLICT");
+  });
+
   test("missing reference asks for orientation, never signals modelling READY", () => {
     const snapshot = baseSnapshot();
     const missing = buildReadiness(

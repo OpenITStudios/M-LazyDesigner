@@ -47,11 +47,24 @@ export type AssetHealthWorkspaceLike = {
     animation: string | null;
   };
   blockers: string[];
+  animation_required?: boolean | null;
   /** Source declarations may conflict even when the first field says APPROVED. */
   workspace_issues?: string[];
   /** Omitted blocker rows must not permit a whole-asset READY summary. */
   blockers_omitted_count?: number;
 };
+
+/** Detect a confirmed requirement conflict without assigning new approval truth. */
+export function animationRequirementConflict(
+  reference: AssetHealthReferenceLike,
+  workspace: AssetHealthWorkspaceLike
+): boolean {
+  const required = reference.requirements.animation_required;
+  const declared = workspace.animation_required;
+  return typeof required === "boolean" &&
+    typeof declared === "boolean" &&
+    required !== declared;
+}
 
 function normalized(value: string | null | undefined): string {
   return value?.trim().toUpperCase() ?? "";
@@ -106,7 +119,14 @@ export function buildAssetHealthSummary(input: {
   // silently become NOT_REQUIRED. Already APPROVED animation is sufficient
   // even when its original requirement was not projected.
   const animationRequirement = input.reference.requirements.animation_required;
-  const animationExcluded = animationRequirement === false;
+  const requirementConflict = animationRequirementConflict(
+    input.reference, input.workspace
+  );
+  const malformedRequirement = (input.workspace.workspace_issues ?? [])
+    .some((reason) => reason.startsWith("WORKSPACE_ANIMATION_REQUIREMENT_"));
+  // Only an explicit, uncontested Reference false permits NOT_REQUIRED.
+  const animationExcluded = animationRequirement === false &&
+    !requirementConflict && !malformedRequirement;
   const stages: AssetHealthSummary["stages"] = {
     reference: referenceState(input.domain, input.reference),
     // A technical PASS must never substitute for a persisted user approval.
@@ -149,6 +169,7 @@ export function buildAssetHealthSummary(input: {
   // gate alongside a conflicting later declaration. A gate summary must not
   // independently claim READY while Control correctly requests orientation.
   const sourceNeedsOrientation =
+    requirementConflict ||
     (input.workspace.workspace_issues?.length ?? 0) > 0 ||
     (input.workspace.blockers_omitted_count ?? 0) > 0;
   const overall: AssetHealthSummary["overall"] =

@@ -97,6 +97,20 @@ visual correctness, or native playback acceptance.
 No separate Validation Stage, new MCP tool, per-stage manager or state store
 is required.
 
+An explicit active-stage Reference Package `NEEDS_REVIEW`,
+`NOT_REQUIRED` or unsupported label is not authoring `READY`.
+`BLOCKED` remains a hard blocker. Unrelated later-stage Reference
+decisions do not block independent Geometry.
+
+Workspace `Animation Required: YES | NO | UNSPECIFIED` is a continuity
+declaration, not a new source of requirements authority. The existing
+Control Workspace parser reads it and the authoring health owner compares
+confirmed YES/NO to `REFERENCE.json requirements.animation_required`.
+Conflicts and malformed declarations cannot create `NOT_REQUIRED` or
+whole-asset `READY`. A conflict orients the dependent Animation decision,
+while Geometry/Texturing remain independently usable. No new checker, state
+manager or routine AI read is added.
+
 ## Evidence Economy
 
 Reuse fresh evidence and mutation receipts. Refresh only the evidence class made stale by a mutation or required to detect a plausible regression.

@@ -106,6 +106,39 @@ describe("LazyDesigner Control lifecycle readiness", () => {
     expect(packet.readiness.reasons).not.toContain("TEXTURE_APPROVAL_REQUIRED");
   });
 
+  test("Animation requirement mismatch is visible through real Control status without stopping Geometry", async () => {
+    const directory = await workspace({
+      geometry: "APPROVED", uv: "PASS", texturing: "APPROVED",
+      animation: "NOT_STARTED",
+    });
+    await writeFile(join(directory, "README.md"), [
+      "# Lifecycle Fixture", "Current Stage: ANIMATION",
+      "Geometry: APPROVED", "UV Layout: PASS",
+      "Texturing: APPROVED", "Animation: NOT_STARTED",
+      "Animation Required: YES", "Known blocker(s): none",
+    ].join("\n"));
+    await writeFile(join(directory, "REFERENCE.json"), JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "test-model", profile: "PROP_FURNITURE" },
+      requirements: { animation_required: false },
+      readiness: { overall: "READY", geometry: "READY",
+        texture: "READY", animation: "READY" },
+    }));
+    const animation = await buildControlPacket(status("animation"), {
+      workspacePath: directory, referencePackagePath: directory,
+    });
+    expect(animation.readiness.modelling_start).toBe("NEEDS_ORIENTATION");
+    expect(animation.readiness.reasons).toContain("ANIMATION_REQUIREMENT_CONFLICT");
+    expect(animation.stage_context?.asset_health.overall).toBe("REVIEW");
+    expect(animation.stage_context?.asset_health.stages.animation).toBe("UNVERIFIED");
+
+    const geometry = await buildControlPacket(status("geometry"), {
+      workspacePath: directory, referencePackagePath: directory,
+    });
+    expect(geometry.readiness.reasons).not.toContain("ANIMATION_REQUIREMENT_CONFLICT");
+    expect(geometry.readiness.modelling_start).toBe("READY");
+  });
+
   test("missing Workspace asks for orientation instead of inventing downstream failure", async () => {
     const packet = await buildControlPacket(
       status("texturing", "project-without-workspace")

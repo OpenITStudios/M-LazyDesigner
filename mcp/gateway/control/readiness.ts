@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import type { ControlTaskMode } from "./packetContext";
 import { relevantTruncatedSectionsForAuthoringDomain } from "./contextProjection";
+import { animationRequirementConflict } from "../../lib/authoring/assetHealth";
 
 export type LifecycleProjection = {
   ready: boolean;
@@ -127,6 +128,10 @@ export function buildReadiness(
   // A missing declaration retains legacy orientation behavior for now.
   const activeReferencePending = referenceStatus !== null &&
     referenceStatus !== "READY" && !activeReferenceBlocked;
+  const animationRequirementMismatch =
+    snapshot.authoring.domain === "ANIMATION" &&
+    workspace.available &&
+    animationRequirementConflict(reference, workspace);
   const projectionIncomplete =
     relevantTruncatedSectionsForAuthoringDomain(snapshot.authoring.domain, reference).length > 0;
   const workspaceIncomplete = (workspace.blockers_omitted_count ?? 0) > 0;
@@ -157,6 +162,7 @@ export function buildReadiness(
         ? "REFERENCE_STAGE_NOT_REQUIRED"
         : "REFERENCE_STAGE_READINESS_INVALID");
   }
+  if (animationRequirementMismatch) reasons.push("ANIMATION_REQUIREMENT_CONFLICT");
   reasons.push(...lifecycle.reasons.filter((reason) => !reasons.includes(reason)));
 
   // The first healthy /health probe still needs orientation, not a false
@@ -173,6 +179,7 @@ export function buildReadiness(
       ? "BLOCKED"
       : runtimeReady && projectReady && domainReady && contextReady &&
           reference.available && !activeReferencePending &&
+          !animationRequirementMismatch &&
           !projectionIncomplete && !workspaceIncomplete &&
           !workspaceBlockersUnresolved && workspaceIssues.length === 0 &&
           !lifecycle.orientation_required
