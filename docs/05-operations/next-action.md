@@ -2,6 +2,16 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
+## Primary next to do — verified Recipe knowledge (2026-10-29)
+
+**User priority; planned, NOT STARTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
+
+1. **Geometry first:** curate reference-grounded geometry patterns, semantic forms, efficient Cube arrangements, bone hierarchy, pivots, constraints and symmetry. Compare guided vs baseline Recipe on the same approved reference.
+2. **Texture second:** curate UV/atlas layout, Minecraft pixel-cluster treatment, palette/material/PBR semantics and seam-safe texture patterns. Preserve the reference's visual identity and measure mapped-model quality.
+3. **Animation third:** curate grounded rig/motion/keyframe, interpolation, contact, loop and controller patterns. Compare playback, motion fidelity and export correctness.
+
+For each stage, study official Mojang Bedrock Samples and Blockbench references first; community/Blockbench Workshop/marketplace examples require verifiable origin, version, usage rights and applicability. Extract transferable techniques, **never copy protected marketplace assets**. Keep `mcp/lib/authoringRecipe/` as the decision owner and reuse the `mcp/lib/semantic/knowledge.ts` index, current Validation and the four Gateway tools; do not introduce a second engine, database or godfile. Record source/compatibility, focused deterministic regressions, and separately verified native/visual results plus cost-to-accepted-result; static source is not runtime or visual PASS. Do not start these phases until the next explicit continuation request.
+
 ## Current working environment
 
 - 2026-10-27 user handoff: upload all completed work to `OpenITStudios/M-LazyDesigner` / `Local` and continue outside Codex. Baseline `6569aaf2`; re-pin GitHub HEAD. No deployment or app changes.
@@ -9,23 +19,13 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 - Cached Bun 1.4.3, Node 24.22.0 and Rust 1.99.1 are available. Reuse unchanged dependencies.
 - CI DISABLED: verification definitions remain inert. Do not enable workflows, change main/settings or publish releases. Native installation/asset mutation is not part of source reconciliation.
 
-## LOCAL_CODE checkpoint
+## Current source / installed proof boundary
 
-Managed source 7b45bd69027954d306f9fcf0482227e60fb0de18 is installed and exact-commit verify:full qualified (302 repository, 2529 Runtime, 35 installer, 166 authoring, 298 Gateway/manifest, 44 Golden). Canonical-path-msix-verify-retry.log records PASS; the first timeout/Bun crash remains logged. The Windows casing/MSIX physical-path ownership bug now has red/green regressions and actual installed stdio proof. Desktop 0.1.1 remains compatible at contract 1; do not reinstall it merely for this managed fix.
-
-Nine legacy children were explicitly retired with Codex kept open. Old active root/plugin/Bun remain absent; isolated recovery contains 261 files. User approved the new plugin in Blockbench. The exact configured executable passed initialize, four tools and discovery: Runtime build matches package, MCP ready, catalog=47, connection=ready. Actual chat mcp__lazydesigner status/search now confirm ready connection, fresh catalog and Control READY. App/Blockbench remain open; assets untouched.
-
-Current priority: improve MCP by flow stage. User prohibits computer-use while working: no App launch/close, client restart or live deployment. Keep existing identity guards; never restore legacy roots or fallbacks. Installed source remains 7b45bd69.
-
-Stage 1 source 61102493 fixes Indonesian authoring discovery and routing freshness. Seven regressions, 341 Gateway/contracts, 302 repository and 54-tool source probes PASS at the recorded SHA. Broad 108-query Top-1=0.537 / Top-3=0.787 is unchanged; not deployed.
-
-Final MCP source audit REMOTE_GITHUB: semantic impact now drains every admitted node before setting truncated; exact-budget complete graphs no longer need false full verification, while real overflow still fails closed. Focused terminal/transitive regressions authored, NOT EXECUTED. Prior invalidates/produces propagation retained. Branchless graph READY/UNKNOWN and executable semantic fingerprint/API synchronization remain generator-coupled OPEN. No tests/typecheck/build/generator/CI/native/PC. Installed 7b45bd69, four tools and generated API unchanged. Next after authorization: coherent graph/revision/API sync, exact-SHA source verification and separate native acceptance.
-
-[Managed Distribution](../../distribution/README.md) owns Desktop compatibility, alignment and journaled recovery. Git-owned repository instructions/assets are preserved. The older dirty primary code is not synchronized or qualified by these worktree results. For remaining UI/authoring procedures: Native and visual checks remain NOT_EXECUTED until actually observed. Authoring Runtime acceptance: NOT EXECUTED. Keep docs:check / verify:full boundaries. No second engine, router or parallel state owner.
+Recipe Knowledge + Planning source is committed through `8155cb2d`; newly authored tests, Bun/typecheck/build, native Blockbench and visual acceptance have NOT been executed for that revision. The older managed `7b45bd69` / Desktop 0.1.1 transport/package qualification applies only to that installed source, not to recent Recipe commits. Detailed prior environment, migration, recovery and execution receipts belong to [current-validation.md](current-validation.md). Preserve the dirty primary checkout, source assets and recovery inventory; do not use the user's PC, deploy, restart clients, enable CI or publish releases. Re-pin GitHub HEAD before any future source work.
 
 ## Next REMOTE_GITHUB work
 
-No historical backlog is active; new MCP work starts at its current owner/tests.
+The verified Recipe knowledge roadmap above is the principal next development goal; other MCP work remains deferred unless needed to unblock its exact owner or acceptance.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 
