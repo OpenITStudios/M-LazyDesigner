@@ -5,6 +5,11 @@ Owner: `docs/03-authoring/modelling/`; continuation: `docs/05-operations/next-ac
 
 ## Purpose and non-goals
 
+Supporting documents: [curated research and licensing](research-sources.md)
+and [modular implementation design](geometry-intelligence-plan.md).
+They are conditional research/development guidance, not normal modelling
+context or an independent knowledge/approval engine.
+
 Enrich the **existing** Recipe's geometry decisions with reusable, evidence-bound
 examples. Quality is **better reference-grounded choices with fewer accepted-result
 corrections**, not more Markdown, models, Cubes, bones, tools, or test files.
