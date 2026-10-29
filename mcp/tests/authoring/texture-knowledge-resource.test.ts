@@ -269,6 +269,19 @@ describe("K5/K6 diagnostic knowledge hints", () => {
     expect(invalid).toEqual([]);
   });
 
+  test("the disposable native verifier includes K3 scope and zero-mutation assertions", async () => {
+    const fixture = await source("scripts/verify/verify-texturing-live.ts");
+    expect(fixture).toContain("requireDisposableConsent()");
+    expect(fixture).toContain("AUTHORING_E2E_PROJECT_NAME");
+    expect(fixture).toContain('expectKnowledgeHints(ordinaryInventory, [], "inventory-only")');
+    expect(fixture).toContain('nativeUvHasReviewSignal ? ["UV-P01"] : []');
+    expect(fixture).toContain('nativeFlatFaceSignal ? ["TEX-P01"] : []');
+    expect(fixture).toContain("knowledgeUvBeforeJson");
+    expect(fixture).toContain("knowledgeAtlasBefore");
+    expect(fixture).toContain("imageDigest(await atlasImage(client, decoyUuid)) === decoyHash");
+    expect(fixture).toContain("artwork_reference_accepted: false");
+  });
+
   test("the established Runtime diagnostic caller is opt-in, bounded, and read-only", async () => {
     const runtime = await Bun.file(
       "server/runtime/extensions/texture/authoring.ts"

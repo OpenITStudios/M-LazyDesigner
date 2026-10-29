@@ -225,3 +225,31 @@ Use `docs/05-operations/local-acceptance-runbook.md` for K8 when an
 actual matching installed Blockbench build and approved model reference
 exist. Neither static regression definitions nor advisory diagnostics are
 visual PASS. No GitHub workflow re-enabled and no user-PC step demanded.
+
+
+## K8 native verification harness — prepared, not executed
+
+The existing disposable `verify:texturing-live` entrypoint is the canonical
+native validation owner. K8 extends its **same existing fixture** rather than
+adding a new tool, model, database, or live test script. It checks:
+
+- `list_textures` **inventory-only** emits no unsolicited `knowledge_guidance`;
+- a current UV-only diagnostic offers `UV-P01` **if and only if** actual
+  exact-reuse or partial-overlap evidence is positive, not `TEX-P01`;
+- a current coverage-only diagnostic offers `TEX-P01` **if and only if**
+  scanned native faces include solid-color candidates, not `UV-P01`;
+- every surfaced hint is source- and section-hash-pinned, REVIEW_REQUIRED,
+  mutation_authorized=false, and visual verdict `not_evaluated`;
+- before/after native Cube UV, production atlas image bytes and unrelated
+  decoy image bytes remain unchanged across diagnostic-only calls.
+
+The verifier already requires `--confirm-disposable`, a matching managed build,
+the previously created disposable Geometry project, and a valid live Runtime
+connection. This K8 extension changes neither the normal authoring tools nor
+the native painting and Undo paths. A case without a positive diagnostic signal
+is **not covered by a positive live example**, never silently counted as PASS.
+
+**Current proof:** source/fixture authored in GitHub only. The live verifier
+has not executed in this session; Bun, installed Blockbench, active Gateway
+and approved model/reference evidence are unavailable. Do not write K8 PASS,
+visual acceptance, or quality/efficiency claims based on this script.

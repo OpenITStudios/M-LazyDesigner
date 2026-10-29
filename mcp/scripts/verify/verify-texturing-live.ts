@@ -180,6 +180,50 @@ function requireReadyUvAudit(result: JsonObject, context: string): void {
   );
 }
 
+/**
+ * K8 candidate diagnostic checks use the existing disposable native fixture.
+ * Knowledge hints remain review-only, not source-art authentication or PASS.
+ */
+function positiveDiagnosticCount(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+    ? value : 0;
+}
+
+function expectKnowledgeHints(
+  result: JsonObject,
+  expectedIds: readonly string[],
+  scope: string
+): void {
+  const raw = result.knowledge_guidance;
+  if (expectedIds.length === 0) {
+    expect(raw === undefined || (Array.isArray(raw) && raw.length === 0),
+      `${scope} returned an unsolicited K3 hint without a qualified diagnostic: ${JSON.stringify(raw)}.`);
+    return;
+  }
+  expect(Array.isArray(raw),
+    `${scope} is missing its source-pinned K3 diagnostic guidance: ${JSON.stringify(raw)}.`);
+  const hints = raw as JsonObject[];
+  const ids = hints.map(hint => hint.case_id);
+  expect(JSON.stringify(ids) === JSON.stringify(expectedIds),
+    `${scope} selected unexpected cases: expected=${JSON.stringify(expectedIds)}, received=${JSON.stringify(ids)}.`);
+  for (const hint of hints) {
+    expect(hint.state === "REVIEW_REQUIRED" &&
+      hint.source_state === "SOURCE_CANDIDATE" &&
+      hint.mutation_authorized === false &&
+      hint.visual_verdict === "not_evaluated" &&
+      hint.reference_scope === "CURRENT_USER_REFERENCE_NOT_ATTESTED" &&
+      hint.target_compatibility === "UNKNOWN_CURRENT_BEDROCK_AND_BLOCKBENCH",
+      `${scope} promoted source knowledge to unverified authoring/visual authority.`);
+    expect(typeof hint.source_sha256 === "string" &&
+      /^[a-f0-9]{64}$/.test(hint.source_sha256) &&
+      typeof hint.section_sha256 === "string" &&
+      /^[a-f0-9]{64}$/.test(hint.section_sha256) &&
+      typeof hint.required_evidence === "string" &&
+      hint.required_evidence.length > 20,
+      `${scope} omitted pinned source identity or required review evidence.`);
+  }
+}
+
 async function exactUndo(client: LiveMcpClient): Promise<void> {
   const undo = structuredObject(
     await client.callTool("undo", { steps: 1 }, "history"),
@@ -526,6 +570,20 @@ async function main(): Promise<void> {
     "Redo did not restore the exact bounded-shape atlas PNG."
   );
 
+  // K8: use the SAME disposable fixture to verify that K5/K6 diagnostic
+  // source guidance does not mutate the actual authored UV or bitmap.
+  const knowledgeUvBefore = await inspectBodyUv(client);
+  expect(knowledgeUvBefore.uv && typeof knowledgeUvBefore.uv === "object",
+    "Native UV evidence is unavailable before diagnostic-only reads.");
+  const knowledgeUvBeforeJson = JSON.stringify(knowledgeUvBefore.uv);
+  const knowledgeAtlasBefore = imageDigest(await atlasImage(client, baseTextureUuid));
+
+  const ordinaryInventory = structuredObject(
+    await client.callTool("list_textures", {}, "inspection"),
+    "list_textures inventory-only"
+  );
+  expectKnowledgeHints(ordinaryInventory, [], "inventory-only");
+
   const finalInventory = structuredObject(
     await client.callTool("list_textures", { diagnostics: true, diagnostic_scope: "uv" }, "inspection"),
     "list_textures"
@@ -536,6 +594,45 @@ async function main(): Promise<void> {
     finalAudit.state === "available" && finalGate.state === "ready",
     `Final UV production gate is not ready: ${JSON.stringify(finalAudit)}.`
   );
+
+  const exactReuse = (finalAudit.exact_reuse ?? {}) as JsonObject;
+  const partialOverlap = (finalAudit.partial_overlap ?? {}) as JsonObject;
+  const nativeUvHasReviewSignal =
+    positiveDiagnosticCount(exactReuse.region_count) > 0 ||
+    positiveDiagnosticCount(partialOverlap.pair_count) > 0;
+  expectKnowledgeHints(
+    finalInventory,
+    nativeUvHasReviewSignal ? ["UV-P01"] : [],
+    "UV-only diagnostics"
+  );
+
+  const coverageInventory = structuredObject(
+    await client.callTool("list_textures", {
+      diagnostics: true, diagnostic_scope: "coverage",
+    }, "inspection"),
+    "list_textures coverage"
+  );
+  const optimization = (coverageInventory.optimization_opportunities ?? {}) as JsonObject;
+  const coverage = (optimization.coverage ?? {}) as JsonObject;
+  expect(Number.isSafeInteger(coverage.scanned_faces) &&
+    (coverage.scanned_faces as number) > 0,
+    `Disposable coverage did not scan any native face: ${JSON.stringify(coverage)}.`);
+  const review = (coverage.review ?? {}) as JsonObject;
+  const solid = (review.solid_color_faces ?? {}) as JsonObject;
+  const nativeFlatFaceSignal = positiveDiagnosticCount(solid.count) > 0;
+  expectKnowledgeHints(
+    coverageInventory,
+    nativeFlatFaceSignal ? ["TEX-P01"] : [],
+    "coverage-only diagnostics"
+  );
+
+  const knowledgeUvAfter = await inspectBodyUv(client);
+  expect(JSON.stringify(knowledgeUvAfter.uv) === knowledgeUvBeforeJson,
+    "Read-only K3 technical guidance changed native UV mapping.");
+  expect(imageDigest(await atlasImage(client, baseTextureUuid)) === knowledgeAtlasBefore,
+    "Read-only K3 technical guidance changed the production texture bitmap.");
+  expect(imageDigest(await atlasImage(client, decoyUuid)) === decoyHash,
+    "Read-only K3 technical guidance changed an unrelated variant/decoy texture.");
 
   console.log(
     JSON.stringify(
@@ -559,6 +656,16 @@ async function main(): Promise<void> {
         bounded_shape_clip_preserved_outside_pixel: true,
         native_painter_undo_redo_exact_atlas: true,
         final_uv_gate: "ready",
+        knowledge_guidance_native_probe: {
+          default_inventory_has_no_guidance: true,
+          uv_case: nativeUvHasReviewSignal ? "UV-P01" : null,
+          uv_case_signal_present: nativeUvHasReviewSignal,
+          material_case: nativeFlatFaceSignal ? "TEX-P01" : null,
+          material_case_signal_present: nativeFlatFaceSignal,
+          coverage_scanned_faces: coverage.scanned_faces,
+          diagnostic_reads_left_uv_and_bitmaps_unchanged: true,
+          artwork_reference_accepted: false,
+        },
         atlas_sha256: {
           before_rebuild: beforeRebuildHash,
           after_rebuild: afterRebuildHash,
@@ -569,7 +676,7 @@ async function main(): Promise<void> {
         cost: client.snapshotMetrics(),
         visual_quality: "not_evaluated",
         next: "Use the existing AUTHORING→Animation Gateway handoff with disposable-test readiness, reconnect once, then run verify:animation-live with --confirm-disposable.",
-        note: "Runs Texturing on the same shared AUTHORING session created by Geometry. Exercises native 16x template/repack, semantic pixel preservation, sub-unit per-face representation without geometry thickening, explicit target isolation, native size-2 Painter, bounded clipping and exact Undo/Redo. This is native behavior proof, not reference-fidelity approval.",
+        note: "Runs Texturing on the same shared AUTHORING session created by Geometry. Exercises native 16x template/repack, semantic pixel preservation, sub-unit per-face representation without geometry thickening, explicit target isolation, native size-2 Painter, bounded clipping, exact Undo/Redo and read-only K3 evidence-guidance scope/bitmap/UV safety. Case hints remain review-only; conditional cases without a current signal are untested, not a visual or reference-fidelity PASS.",
       },
       null,
       2
