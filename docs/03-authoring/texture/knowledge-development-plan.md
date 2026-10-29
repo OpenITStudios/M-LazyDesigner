@@ -144,6 +144,9 @@ missing or weak in LazyDesigner, not repeat already-canonical policy.
 
 ### K2 — Curate a two-track knowledge coverage matrix
 
+**K2 deliverable available:** [knowledge-coverage.md](knowledge-coverage.md) audits 11 UV and 14 Texture decision families against actual owners/tests, separating SOURCE support, unregistered/native proof, selection gaps, and the four prioritized K3 pilot cases. It is an on-demand development audit, not a second authoring standard or automatically loaded knowledge registry.
+
+
 Track UV and Texture distinctly:
 
 | UV track | Texture track |
