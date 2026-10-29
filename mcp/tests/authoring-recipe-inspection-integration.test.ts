@@ -346,3 +346,55 @@ describe("Recipe knowledge inside the existing registered opt-in inspection", ()
     expect(cubes[0]!.from).toEqual([0, 0, 0]);
   });
 });
+
+
+describe("G2 casebook at the registered opt-in Recipe inspection boundary", () => {
+  test("the selected authored feature receives bounded source text without native mutation", async () => {
+    const custom = fixtureRecipe();
+    custom.patterns[0]!.feature_id = "hinge";
+    custom.feature_intents = [{
+      id: "hinge", label: "joint pivot bone parenting",
+      visual_role: "THREE_DIMENSIONAL",
+      geometry_reasons: ["MOTION"],
+      evidence: "SUPPORTED", evidence_refs: ["reference:front"],
+    }];
+    const { cubes } = setupNativeRecipe(custom);
+    const normal = await inspectElementSource({ id: cubes[0]!.uuid });
+    expect(normal.structuredContent).not.toHaveProperty("recipe_optimization_review");
+    const result = await inspectElementSource({
+      id: cubes[0]!.uuid, recipe_optimization_review: true,
+    });
+    expect(result.structuredContent).toMatchObject({
+      recipe_optimization_review: {
+        selected_instance_id: "pair:0",
+        recipe_knowledge: {
+          source_state: "AVAILABLE",
+          suggestions: [{
+            feature_id: "hinge",
+            sections: [{
+              heading: "G-P05 Joint Pivot And Bone Parenting",
+              guidance: {
+                guidance_source_state: "CONTENT_HASH_MATCHED_NOT_VISUAL_PROOF",
+              },
+            }],
+          }],
+        },
+        native_mutation_executed: false,
+        visual_verdict: "NOT_EVALUATED",
+      },
+    });
+    const review = (result.structuredContent as {
+      recipe_optimization_review: {
+        recipe_knowledge: {
+          suggestions: Array<{ sections: Array<{
+            guidance?: { guidance_text: string };
+          }> }>;
+        };
+      };
+    }).recipe_optimization_review.recipe_knowledge;
+    expect(review.suggestions[0]?.sections[0]?.guidance?.guidance_text)
+      .toContain("**Reject/defer:**");
+    expect(cubes).toHaveLength(2);
+    expect(cubes[0]!.from).toEqual([0, 0, 0]);
+  });
+});

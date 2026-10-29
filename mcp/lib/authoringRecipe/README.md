@@ -37,15 +37,26 @@ and up to eight feature suggestions (two sections each). The registered
 `inspect_element` / `inspect_elements(mode=detail)` path, when explicitly
 called with `recipe_optimization_review=true`, returns guidance for the
 exact selected Recipe-owned feature. Ordinary inspection and Geometry edits
-do not read the index. The Runtime adapter
-`server/runtime/recipes/authoring/knowledgeRuntime.ts` reads only the
-canonical **bundled** Bedrock workflow from the existing prompt manifest;
-user overrides and unpinned external content are not treated as repository
-knowledge. Missing source is `UNAVAILABLE`, stale binding is
-`REVIEW_REQUIRED`. Knowledge cannot authorize native Apply, alter Geometry,
-or claim visual/user acceptance. The initial candidate corpus contains only
-the bundled workflow, not an advanced model corpus. No new engine, external
-model, training loop, public Gateway capability, or native mutation is added.
+do not read the index. The Runtime adapter `server/runtime/recipes/authoring/knowledgeRuntime.ts`
+now combines the existing **bundled Bedrock workflow** with exactly eight
+Geometry G1 candidate sections imported as raw text from the canonical
+`docs/03-authoring/modelling/decision-cases.md`. Bun's `type: "text"`
+import embeds this source at build time; the prompt manifest and its generator
+remain unchanged. The casebook is indexed **only when Recipe planning or
+opt-in native inspection requests knowledge**; no Runtime filesystem/network
+fetch, parallel registry or new Gateway capability is involved.
+
+`knowledgeExcerpt.ts` re-verifies the full source SHA-256 and exact
+indexed section revision before returning a single bounded advisory excerpt
+(up to 1,600 characters) for each selected feature. The matching case's
+`Apply`, `Reject/defer` and `Proof required` statements become readable
+rather than returning IDs only. Missing/altered pilot source fails closed;
+stale Recipe bindings suppress suggestions and require review. Normal
+inspection and Geometry mutation do not retrieve new knowledge, and a
+source-hash match is **never** visual, native, reference or user approval.
+The eight G1 cases are SOURCE-GROUNDED_CANDIDATE, not Golden assets or
+an advanced model corpus. No new engine, external model, training loop,
+public Gateway capability, or native mutation has been added.
 
 
 Owns declarative, deterministic recipe semantics for parametric authoring.

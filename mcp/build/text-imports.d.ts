@@ -17,3 +17,9 @@ declare module "*.svg" {
   const content: string;
   export default content;
 }
+
+/** Bun `with { type: "text" }` imports original Markdown, not rendered HTML. */
+declare module "*.md" {
+  const content: string;
+  export default content;
+}

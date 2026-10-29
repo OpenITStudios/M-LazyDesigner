@@ -1,10 +1,13 @@
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
-import { indexRecipeKnowledge } from "@/lib/authoringRecipe/knowledge";
+import {
+  indexRecipeKnowledge,
+  type RecipeKnowledgeSnapshot,
+} from "@/lib/authoringRecipe/knowledge";
+import { createRecipeKnowledgeExcerptReader } from "@/lib/authoringRecipe/knowledgeExcerpt";
 import {
   selectKnowledgeSections,
   type KnowledgeCompatibility,
-  type KnowledgeIndexSnapshot,
 } from "@/lib/semantic/knowledge";
 
 export type RecipeKnowledgeSelectionOptions = {
@@ -28,6 +31,11 @@ export type RecipeKnowledgeSuggestion = {
     start_line: number;
     end_line: number;
     score: number;
+    guidance?: {
+      guidance_text: string;
+      guidance_truncated: boolean;
+      guidance_source_state: "CONTENT_HASH_MATCHED_NOT_VISUAL_PROOF";
+    };
   }>;
   evidence_boundary: "ADVISORY_CANDIDATES_NOT_REFERENCE_OR_VISUAL_PROOF";
 };
@@ -39,7 +47,7 @@ export type RecipeKnowledgeSuggestion = {
  */
 export function suggestRecipeKnowledge(
   recipe: AuthoringRecipe,
-  snapshot: KnowledgeIndexSnapshot,
+  snapshot: RecipeKnowledgeSnapshot,
   options: RecipeKnowledgeSelectionOptions = {}
 ): RecipeKnowledgeSuggestion[] {
   const limit = options.max_per_feature ?? 3;
@@ -58,6 +66,7 @@ export function suggestRecipeKnowledge(
     throw new Error("RECIPE_KNOWLEDGE_SELECTION_FEATURE_SCOPE_INVALID");
   }
   const index = indexRecipeKnowledge(snapshot, options.compatible_with);
+  const readExcerpt = createRecipeKnowledgeExcerptReader(snapshot);
   const features = recipe.feature_intents ?? [];
   const knownIds = new Set(features.map(feature => feature.id));
   if (requested?.some(id => !knownIds.has(id))) {
@@ -78,15 +87,19 @@ export function suggestRecipeKnowledge(
       query,
       limit,
       maxTokenProxy: tokenBudget,
-    }).map(section => ({
-      section_id: section.id,
-      section_sha256: section.sha256,
-      source: section.source,
-      heading: section.heading,
-      start_line: section.start_line,
-      end_line: section.end_line,
-      score: section.score,
-    }));
+    }).map(section => {
+      const guidance = readExcerpt(section);
+      return {
+        section_id: section.id,
+        section_sha256: section.sha256,
+        source: section.source,
+        heading: section.heading,
+        start_line: section.start_line,
+        end_line: section.end_line,
+        score: section.score,
+        ...(guidance ? { guidance } : {}),
+      };
+    });
     return {
       feature_id: feature.id,
       feature_route: routes.get(feature.id)!,

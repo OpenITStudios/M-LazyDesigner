@@ -135,14 +135,16 @@ baseline. One accepted case should test a real boundary, not just a keyword.
 
 ## Critical integration gap and proof gates
 
-Current Runtime `server/runtime/recipes/authoring/knowledgeRuntime.ts` loads
-only the **bundled** `bedrock_entity_workflow` from its canonical prompt
-manifest. New modelling documents are **not automatically available to
-installed Recipe retrieval**. A future implementation must connect only
-selected, provenance-checked Geometry sections through a canonical
-generator/reader (with its generated outputs updated together in an executable
-environment). Do not hand-edit `mcp/prompts/manifest.json`, duplicate the
-index, add a Gateway tool, or load all profiles into every prompt.
+G2 source now wires exactly eight pilot sections through the existing
+Runtime Recipe knowledge adapter using Bun's original-text Markdown import
+from `decision-cases.md` alongside the unmodified canonical workflow
+manifest. The source is bundled at build-time, not read by Runtime from the
+filesystem or external network. Recipe retrieval supplies **only selected
+source-hash-verified excerpts**, and a stale explicit binding blocks guidance.
+Neither this source change nor authored regressions demonstrate an installed
+Blockbench build: executable, native and visual acceptance remain NOT EXECUTED.
+Do not hand-edit `mcp/prompts/manifest.json`, duplicate the index, add a
+Gateway tool, or load all profiles into every prompt.
 
 **G0 / planning acceptance:** coverage matrix, unique owners, first eight
 decision-pair targets and exact evidence requirements recorded (this file).
@@ -150,9 +152,10 @@ decision-pair targets and exact evidence requirements recorded (this file).
 negative decision boundaries. The owning Recipe knowledge regression is
 AUTHORED but NOT EXECUTED; G1 executable acceptance remains pending, and
 the cards are not model-quality PASS.
-**G2 / connected Recipe:** the relevant cards are retrievable on the actual
-Recipe path, respect incompatible/absent/stale sources, and do not alter
-legacy Recipe placement or existing Validation.
+**G2 / connected Recipe:** the relevant cards are now connected at source to
+existing Recipe planning/opt-in inspection with bounded excerpts and
+source-revision checks. Bun/typecheck/build and installed Runtime evidence
+are NOT EXECUTED; no end-to-end operational PASS.
 **G3 / native quality:** matching installed build and same approved reference;
 verified structure, visual fidelity, correction rounds and measured
 cost-to-accepted-result against a comparable baseline.

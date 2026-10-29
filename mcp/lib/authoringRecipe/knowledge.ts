@@ -6,6 +6,11 @@ import type {
   KnowledgeSourceEvidence,
 } from "@/lib/semantic/knowledge";
 
+/** Opt-in source bytes belong to Recipe retrieval, never the generic index. */
+export type RecipeKnowledgeSnapshot = KnowledgeIndexSnapshot & {
+  source_contents?: Readonly<Record<string, string>>;
+};
+
 /**
  * Recipe is the authoring owner. This module binds existing indexed knowledge
  * to Recipe features; it does not create a second index, validation engine,

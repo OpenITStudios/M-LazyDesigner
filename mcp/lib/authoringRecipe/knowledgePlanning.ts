@@ -1,5 +1,5 @@
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
-import type { KnowledgeIndexSnapshot } from "@/lib/semantic/knowledge";
+import type { RecipeKnowledgeSnapshot } from "@/lib/authoringRecipe/knowledge";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { resolveRecipeKnowledgeLinks } from "@/lib/authoringRecipe/knowledge";
 import {
@@ -14,7 +14,7 @@ import {
  */
 export function prepareKnowledgeAwareRecipe(
   recipe: AuthoringRecipe,
-  knowledgeIndex: KnowledgeIndexSnapshot,
+  knowledgeIndex: RecipeKnowledgeSnapshot,
   options: RecipeKnowledgeSelectionOptions = {}
 ) {
   const compiled = compileAuthoringRecipe(recipe);
@@ -29,20 +29,27 @@ export function prepareKnowledgeAwareRecipe(
 /** Compose guidance separately from compilation; incremental planning already compiled. */
 export function reviewRecipeKnowledge(
   recipe: AuthoringRecipe,
-  knowledgeIndex: KnowledgeIndexSnapshot,
+  knowledgeIndex: RecipeKnowledgeSnapshot,
   options: RecipeKnowledgeSelectionOptions = {}
 ) {
   const featureIds = options.feature_ids ??
     [...(recipe.feature_intents ?? [])].map(feature => feature.id).sort().slice(0, 8);
   const total = recipe.feature_intents?.length ?? 0;
+  const binding = resolveRecipeKnowledgeLinks(
+    recipe, knowledgeIndex, options.compatible_with
+  );
   return {
-    knowledge: resolveRecipeKnowledgeLinks(
-      recipe, knowledgeIndex, options.compatible_with
-    ),
-    suggestions: suggestRecipeKnowledge(recipe, knowledgeIndex, {
-      max_per_feature: 2, max_token_proxy: 500,
-      ...options, feature_ids: featureIds,
-    }),
+    knowledge: binding,
+    // Stale explicit references cannot silently supply newer advisory text
+    // under the same Recipe revision; rebind/review them explicitly first.
+    suggestions: binding.state === "REVIEW_REQUIRED" ? [] :
+      suggestRecipeKnowledge(recipe, knowledgeIndex, {
+        max_per_feature: 2, max_token_proxy: 500,
+        ...options, feature_ids: featureIds,
+      }),
+    ...(binding.state === "REVIEW_REQUIRED"
+      ? { guidance_blocked_reason: "RECIPE_KNOWLEDGE_LINK_REVIEW_REQUIRED" as const }
+      : {}),
     total_feature_count: total,
     omitted_feature_count: Math.max(0, total - featureIds.length),
     execution_boundary: "SOURCE_PLANNING_ONLY_NO_NATIVE_MUTATION_OR_VISUAL_PROOF" as const,
@@ -74,8 +81,8 @@ export function featureIdForRecipeInstance(
 /** Lazy advisory composition shared by planStored and explicit Runtime inspection. */
 export async function collectRecipeKnowledge(
   recipe: AuthoringRecipe,
-  readIndex: (() => Promise<KnowledgeIndexSnapshot | null> |
-    KnowledgeIndexSnapshot | null) | undefined,
+  readIndex: (() => Promise<RecipeKnowledgeSnapshot | null> |
+    RecipeKnowledgeSnapshot | null) | undefined,
   featureIds?: readonly string[]
 ) {
   if ((recipe.feature_intents?.length ?? 0) === 0 &&

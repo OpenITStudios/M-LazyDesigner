@@ -4,7 +4,14 @@ import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
 import type { AuthoringRecipeNativeSnapshot } from "@/lib/authoringRecipe/nativeState";
-import { buildRecipeKnowledgeIndexFromWorkflow } from "@/server/runtime/recipes/authoring/knowledgeRuntime";
+import {
+  buildRecipeKnowledgeIndexFromWorkflow,
+  buildRecipeGeometryCaseIndex,
+  readBundledRecipeKnowledgeIndex,
+} from "@/server/runtime/recipes/authoring/knowledgeRuntime";
+import { createRecipeKnowledgeExcerptReader } from "@/lib/authoringRecipe/knowledgeExcerpt";
+import { reviewRecipeKnowledge } from "@/lib/authoringRecipe/knowledgePlanning";
+import { classifyWatchPath, RUNTIME_WATCH_TARGETS } from "@/build/watch-policy";
 import {
   bindRecipeKnowledge,
   resolveRecipeKnowledgeLinks,
@@ -393,5 +400,129 @@ describe("G1 source-grounded Geometry knowledge case pilot", () => {
     };
     expect(resolveRecipeKnowledgeLinks(bound, revisedIndex).issues)
       .toEqual([{ feature_id: "hinge", section_id: selected.id, reason: "SECTION_STALE" }]);
+  });
+});
+
+
+describe("G2 bundled casebook and on-demand Recipe guidance", () => {
+  const canonicalPath = "docs/03-authoring/modelling/decision-cases.md";
+  const cases = readFileSync(
+    new URL("../../docs/03-authoring/modelling/decision-cases.md", import.meta.url),
+    "utf8"
+  );
+  const original = buildRecipeGeometryCaseIndex(cases)!;
+
+  function pilotRecipe(label = "joint pivot bone parenting"): AuthoringRecipe {
+    return {
+      schema: 1, compiler_version: 1, id: "g2-pilot", name: "hinge model",
+      prototypes: [], patterns: [],
+      feature_intents: [{
+        id: "joint", label, visual_role: "THREE_DIMENSIONAL",
+        evidence: "PROVISIONAL", geometry_reasons: ["MOTION"],
+      }],
+    };
+  }
+
+  test("Runtime imports the canonical casebook rather than another generated manifest", () => {
+    const bundled = readBundledRecipeKnowledgeIndex();
+    expect(bundled).not.toBeNull();
+    const sections = bundled!.sections.filter(s => s.source === canonicalPath);
+    expect(sections).toHaveLength(8);
+    expect(sections.map(s => s.heading.slice(0, 5)))
+      .toEqual(["G-P01", "G-P02", "G-P03", "G-P04", "G-P05", "G-P06", "G-P07", "G-P08"]);
+    expect(bundled!.source_contents?.[canonicalPath]).toBe(cases);
+    expect(bundled!.sources?.find(s => s.source === canonicalPath))
+      .toEqual(describeKnowledgeSource(canonicalPath, cases));
+    const broken = cases.replace("## G-P08 Thin", "## G-P09 Thin");
+    expect(buildRecipeGeometryCaseIndex(broken)).toBeNull();
+    expect(buildRecipeGeometryCaseIndex("")).toBeNull();
+  });
+
+  test("the selected case includes only the verified bounded section text and its exception", () => {
+    const index = readBundledRecipeKnowledgeIndex()!;
+    const suggestions = suggestRecipeKnowledge(pilotRecipe(), index, {
+      feature_ids: ["joint"], max_per_feature: 1, max_token_proxy: 500,
+    });
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0]?.feature_route).toBe("REVIEW_REQUIRED");
+    const caseSection = suggestions[0]!.sections[0]!;
+    expect(caseSection.heading.startsWith("G-P05 Joint Pivot")).toBe(true);
+    expect(caseSection.guidance?.guidance_source_state)
+      .toBe("CONTENT_HASH_MATCHED_NOT_VISUAL_PROOF");
+    expect(caseSection.guidance?.guidance_text).toContain("**Apply:**");
+    expect(caseSection.guidance?.guidance_text).toContain("**Reject/defer:**");
+    expect(caseSection.guidance?.guidance_text).toContain("**Proof required:**");
+    expect(caseSection.guidance?.guidance_text).not.toContain("G-P07");
+    expect(caseSection.guidance?.guidance_truncated).toBe(false);
+    expect(compileAuthoringRecipe(pilotRecipe()).feature_plan?.state)
+      .toBe("review_required");
+  });
+
+  test("missing, corrupted and altered source bytes never supply a substituted excerpt", () => {
+    const real = original.sections.find(s => s.heading.startsWith("G-P05 "))!;
+    const read = createRecipeKnowledgeExcerptReader(original);
+    const excerpt = read(real);
+    expect(excerpt?.guidance_text).toContain("joint/hinge pivot");
+    const badBytes = {
+      ...original,
+      source_contents: { [canonicalPath]: cases.replace(
+        "use the actual joint/hinge pivot.",
+        "use a random center pivot."
+      ) },
+    };
+    expect(() => suggestRecipeKnowledge(pilotRecipe(), badBytes, {
+      feature_ids: ["joint"], max_per_feature: 1, max_token_proxy: 500,
+    })).toThrow("RECIPE_KNOWLEDGE_SOURCE_CONTENT_STALE");
+    const tamperedIndex = {
+      ...original, sections: original.sections.map(s =>
+        s.id === real.id ? { ...s, sha256: "0".repeat(64) } : s
+      ),
+    };
+    expect(() => suggestRecipeKnowledge(pilotRecipe(), tamperedIndex, {
+      feature_ids: ["joint"], max_per_feature: 1, max_token_proxy: 500,
+    })).toThrow("RECIPE_KNOWLEDGE_SECTION_CONTENT_STALE");
+    const metadataOnly = {
+      sections: original.sections, sources: original.sources,
+    };
+    expect(suggestRecipeKnowledge(pilotRecipe(), metadataOnly, {
+      feature_ids: ["joint"], max_per_feature: 1,
+    })[0]?.sections[0]).not.toHaveProperty("guidance");
+  });
+
+  test("stale binding suppresses excerpts; a valid source does not authorize an unverified feature", () => {
+    const selected = original.sections.find(s => s.heading.startsWith("G-P05 "))!;
+    const bound = bindRecipeKnowledge(pilotRecipe(), original, [{
+      feature_id: "joint", section_id: selected.id,
+    }]);
+    const current = reviewRecipeKnowledge(bound, original, {
+      feature_ids: ["joint"], max_per_feature: 1,
+    });
+    expect(current.knowledge.state).toBe("CURRENT_SOURCE_SNAPSHOT");
+    expect(current.suggestions[0]?.sections[0]?.guidance?.guidance_text)
+      .toContain("**Reject/defer:**");
+    const updated = buildRecipeGeometryCaseIndex(
+      cases.replace("use the actual joint/hinge pivot.",
+        "use an explicitly confirmed joint/hinge pivot.")
+    )!;
+    const stale = reviewRecipeKnowledge(bound, updated, {
+      feature_ids: ["joint"],
+    });
+    expect(stale.knowledge.state).toBe("REVIEW_REQUIRED");
+    expect(stale.suggestions).toEqual([]);
+    expect(stale.guidance_blocked_reason)
+      .toBe("RECIPE_KNOWLEDGE_LINK_REVIEW_REQUIRED");
+    expect(compileAuthoringRecipe(bound).feature_plan?.state)
+      .toBe("review_required");
+  });
+
+  test("watch mode tracks bundled case changes without touching the prompt generator", () => {
+    expect(RUNTIME_WATCH_TARGETS.some(t =>
+      t.path === "../docs/03-authoring/modelling/decision-cases.md" &&
+      t.recursive === false
+    )).toBe(true);
+    expect(classifyWatchPath("../docs/03-authoring/modelling/decision-cases.md"))
+      .toBe("rebuild");
+    expect(classifyWatchPath("prompts/bedrock_entity_workflow.md"))
+      .toBe("regenerate-prompts-and-rebuild");
   });
 });
