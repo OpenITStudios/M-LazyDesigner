@@ -51,7 +51,13 @@ indexed section revision before returning a single bounded advisory excerpt
 (up to 1,600 characters) for each selected feature. The matching case's
 `Apply`, `Reject/defer` and `Proof required` statements become readable
 rather than returning IDs only. Missing/altered pilot source fails closed;
-stale Recipe bindings suppress suggestions and require review. Normal
+stale Recipe bindings suppress suggestions and require review. A scoped
+integration audit corrected G2 retrieval order: choose at most one
+**uniquely matched G1 case using the feature title first**, then spend
+the remaining per-feature slot/token budget on ordinary workflow sources.
+An ambiguous, absent or over-budget case does not consume the generic
+selector's budget; all other knowledge sources retain their existing
+eligibility and ranking. Normal
 inspection and Geometry mutation do not retrieve new knowledge, and a
 source-hash match is **never** visual, native, reference or user approval.
 The eight G1 cases are SOURCE-GROUNDED_CANDIDATE, not Golden assets or
@@ -66,7 +72,10 @@ alternatives using the existing `featureDecision.ts` routing. A proposal
 retains the full source and section revisions, application/exclusion criteria,
 unverified applicability conditions, and source-authored Recipe guidance.
 No option may invent coordinates, approve a model, generate Cubes or
-trigger native Undo. An unresolved feature can receive an explained
+trigger native Undo. An approved 3D feature with no authored Cube pattern
+still triggers the existing compiler's `FEATURE_GEOMETRY_UNREALIZED`
+guard; proposing a strategy never satisfies mandatory construction.
+An unresolved feature can receive an explained
 hypothesis with `MORE_REFERENCE_EVIDENCE_REQUIRED`; Texture/Omit features
 generate **zero** Geometry construction options.
 

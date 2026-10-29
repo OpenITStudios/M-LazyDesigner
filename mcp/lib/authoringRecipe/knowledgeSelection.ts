@@ -101,22 +101,39 @@ export function suggestRecipeKnowledge(
       limit: 8,
       maxTokenProxy: 8_000,
     });
-    const matchedCaseId = titles.length > 0 &&
+    const matchedCase = titles.length > 0 &&
       (titles.length === 1 || titles[0]!.score > titles[1]!.score)
-      ? titles[0]!.id : null;
+      ? titles[0]! : null;
     const query = [
       feature.label, recipe.name, (feature.geometry_reasons ?? []).join(" "),
       options.query ?? "",
     ].join(" ").slice(0, 512);
-    const sections = selectKnowledgeSections({
-      sections: index.eligibleSections,
-      query,
-      limit,
-      maxTokenProxy: tokenBudget,
-    }).filter(section =>
-      section.source !== RECIPE_GEOMETRY_CASE_SOURCE_PATH ||
-      section.id === matchedCaseId
-    ).map(section => {
+
+    // The previous global ranking consumed slot/token budget on G1 cases
+    // matched only by the shared parent heading or generic Recipe context.
+    // Filtering those AFTER selection could discard a uniquely matched G1
+    // case (e.g. "surface cloth markings" -> G-P03) entirely.
+    //
+    // Reserve at most ONE case by the feature's own title evidence FIRST,
+    // then allocate the remaining budget to the ordinary workflow corpus.
+    // The source index/selector and eligibility rules stay canonical.
+    const selectedCase = matchedCase &&
+      Number.isFinite(matchedCase.token_proxy) &&
+      matchedCase.token_proxy >= 0 &&
+      matchedCase.token_proxy <= tokenBudget ? [matchedCase] : [];
+    const remainingLimit = limit - selectedCase.length;
+    const remainingBudget = tokenBudget -
+      selectedCase.reduce((sum, caseSection) => sum + caseSection.token_proxy, 0);
+    const otherSections = remainingLimit > 0 && remainingBudget > 0
+      ? selectKnowledgeSections({
+        sections: index.eligibleSections.filter(section =>
+          section.source !== RECIPE_GEOMETRY_CASE_SOURCE_PATH),
+        query,
+        limit: remainingLimit,
+        maxTokenProxy: remainingBudget,
+      })
+      : [];
+    const sections = [...selectedCase, ...otherSections].map(section => {
       const guidance = readExcerpt(section);
       return {
         section_id: section.id,

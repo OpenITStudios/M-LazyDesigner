@@ -4,9 +4,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Primary next to do — verified Recipe knowledge (2026-10-29)
 
-**Priority: Geometry. G1/G2, R1–R4 authored; R5 matched-pair source guard prepared. Bun/native NOT EXECUTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
+**Priority: Geometry. G1/G2 and R1–R4 authored; R5 pairing prepared; G2/R1 retrieval audit fixed. Bun/native NOT EXECUTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
 
-1. **Geometry first:** R1–R4 source review plus R5 strict same-source Golden pairing are authored; no auto-Cube/merge/delete, live A/B or quality PASS. Next: exact-SHA Bun/typecheck/build in capable environment, then live R5 paired evaluation with independent capture/human review. G1–R5 tests NOT EXECUTED. [Research](../03-authoring/modelling/research-sources.md) · [Design](../03-authoring/modelling/geometry-intelligence-plan.md).
+1. **Geometry first:** R0–R5 source prepared; G2 unique-case retrieval now reserves its budget and R1 compiler fixture respects required Geometry. No auto-Cube/merge/delete, measured A/B or quality PASS. Next: exact-SHA Bun/typecheck/build in capable environment, then live R5 with authenticated capture/human review. All related Bun tests NOT EXECUTED. [Research](../03-authoring/modelling/research-sources.md) · [Design](../03-authoring/modelling/geometry-intelligence-plan.md).
 2. **Texture second:** curate UV/atlas layout, Minecraft pixel-cluster treatment, palette/material/PBR semantics and seam-safe texture patterns. Preserve the reference's visual identity and measure mapped-model quality.
 3. **Animation third:** curate grounded rig/motion/keyframe, interpolation, contact, loop and controller patterns. Compare playback, motion fidelity and export correctness.
 

@@ -664,7 +664,11 @@ describe("R1 source-grounded Geometry alternatives before Recipe compilation", (
       index.sections.find(item => item.heading.startsWith("G-P05 "))?.id
     );
     expect(target).toEqual(before);
-    expect(compileAuthoringRecipe(target).placements).toEqual([]);
+    // An approved THREE_DIMENSIONAL feature cannot be compiled away simply
+    // because only a knowledge proposal was prepared. This is a valid
+    // compiler safety gate, NOT a requirement for provisional zero Cubes.
+    expect(() => compileAuthoringRecipe(target))
+      .toThrow("FEATURE_GEOMETRY_UNREALIZED");
   });
 
   test("provisional or conflicting feature evidence never becomes Geometry authority", () => {
@@ -784,5 +788,41 @@ describe("R1 source-grounded Geometry alternatives before Recipe compilation", (
     await expect(orderService.plan(base, broken))
       .rejects.toThrow("R1_PREFLIGHT_BEFORE_COMPILATION");
     expect(reads).toBe(planCount);
+  });
+});
+
+
+describe("G2/R1 case-first budget regression", () => {
+  test("a unique G-P03 marking decision survives generic workflow words and 1-slot budget", () => {
+    const index = readBundledRecipeKnowledgeIndex()!;
+    const target: AuthoringRecipe = {
+      schema: 1, compiler_version: 1,
+      id: "g2-budget", name: "generic silhouette geometry",
+      prototypes: [], patterns: [],
+      feature_intents: [{
+        id: "part", label: "surface cloth markings",
+        visual_role: "THREE_DIMENSIONAL",
+        evidence: "PROVISIONAL",
+        geometry_reasons: ["SILHOUETTE"],
+      }],
+    };
+    const selection = suggestRecipeKnowledge(target, index, {
+      feature_ids: ["part"], max_per_feature: 1, max_token_proxy: 350,
+    });
+    expect(selection[0]?.sections.map(section => section.heading)).toEqual([
+      "G-P03 Protruding Form Versus Surface Marking",
+    ]);
+    const review = reviewRecipeKnowledge(target, index, {
+      feature_ids: ["part"], max_per_feature: 1, max_token_proxy: 350,
+    });
+    expect(review.geometry_proposals[0]?.options[0]?.strategy)
+      .toBe("G-P03 Protruding Form Versus Surface Marking");
+    expect(review.geometry_proposals[0]?.verdict)
+      .toBe("MORE_REFERENCE_EVIDENCE_REQUIRED");
+    expect(review.geometry_proposals[0]?.mutation_authorized).toBe(false);
+    expect(suggestRecipeKnowledge(target, index, {
+      feature_ids: ["part"], max_per_feature: 1, max_token_proxy: 60,
+    })[0]?.sections.some(section =>
+      section.source === RECIPE_GEOMETRY_CASE_SOURCE_PATH)).toBe(false);
   });
 });
