@@ -81,8 +81,16 @@ ordinary clip read does not scan motion. Never replace missing evidence
 with a technical or visual PASS merely to save calls.
 
 At Stage exit, incomplete or stale mandatory evidence remains unverified or
-blocked until the owning Stage resolves it. Internal validator clearance is
-not user approval, visual correctness, or native playback acceptance.
+blocked until the owning Stage resolves it. The existing `asset_health`
+projection is a **declared gate summary**, never finalization authorization:
+Geometry/Texturing/Animation require persisted `APPROVED`; UV requires
+`PASS`; unknown `animation_required` is not `NOT_REQUIRED` unless the
+animation was explicitly ruled out, and already-approved Animation may be
+reported as complete. Technical `PASS`, missing requirements and unknown
+native evidence must not create a whole-asset READY claim. Control still
+routes the active Stage independently of whether unrelated later work is
+complete. Internal validator clearance is not independent user approval,
+visual correctness, or native playback acceptance.
 No separate Validation Stage, new MCP tool, per-stage manager or state store
 is required.
 

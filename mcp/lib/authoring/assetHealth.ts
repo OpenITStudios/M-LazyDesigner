@@ -83,7 +83,9 @@ function referenceState(
   if (!reference.available) return "UNVERIFIED";
   const value = normalized(referenceReadinessForDomain(domain, reference));
   if (value === "BLOCKED") return "BLOCKED";
-  if (value === "READY" || value === "PASS") return "PASS";
+  // Reference handoff uses READY, not a technical validator's PASS.
+  // Accepting PASS here could make a malformed reference claim look complete.
+  if (value === "READY") return "PASS";
   return value ? "REVIEW" : "UNVERIFIED";
 }
 
@@ -96,23 +98,28 @@ export function buildAssetHealthSummary(input: {
   reference: AssetHealthReferenceLike;
   workspace: AssetHealthWorkspaceLike;
 }): AssetHealthSummary {
-  const animationRequired =
-    input.reference.requirements.animation_required === true;
+  // Unknown is not false: an unspecified animation requirement must not
+  // silently become NOT_REQUIRED. Already APPROVED animation is sufficient
+  // even when its original requirement was not projected.
+  const animationRequirement = input.reference.requirements.animation_required;
+  const animationExcluded = animationRequirement === false;
   const stages: AssetHealthSummary["stages"] = {
     reference: referenceState(input.domain, input.reference),
+    // A technical PASS must never substitute for a persisted user approval.
     geometry: input.workspace.available
-      ? workspaceGateState(input.workspace.gates.geometry, ["APPROVED", "PASS"])
+      ? workspaceGateState(input.workspace.gates.geometry, ["APPROVED"])
       : "UNVERIFIED",
+    // UV Layout is the technical Geometry-owned gate: only PASS is valid.
     uv_layout: input.workspace.available
-      ? workspaceGateState(input.workspace.gates.uv_layout, ["PASS", "APPROVED"])
+      ? workspaceGateState(input.workspace.gates.uv_layout, ["PASS"])
       : "UNVERIFIED",
     texturing: input.workspace.available
-      ? workspaceGateState(input.workspace.gates.texturing, ["APPROVED", "PASS"])
+      ? workspaceGateState(input.workspace.gates.texturing, ["APPROVED"])
       : "UNVERIFIED",
-    animation: !animationRequired
+    animation: animationExcluded
       ? "NOT_REQUIRED"
       : input.workspace.available
-        ? workspaceGateState(input.workspace.gates.animation, ["APPROVED", "PASS"])
+        ? workspaceGateState(input.workspace.gates.animation, ["APPROVED"])
         : "UNVERIFIED",
   };
 
@@ -131,7 +138,7 @@ export function buildAssetHealthSummary(input: {
     stages.geometry,
     stages.uv_layout,
     stages.texturing,
-    ...(animationRequired ? [stages.animation] : []),
+    ...(!animationExcluded ? [stages.animation] : []),
   ];
 
   const overall: AssetHealthSummary["overall"] =
@@ -149,6 +156,6 @@ export function buildAssetHealthSummary(input: {
     stages,
     blockers,
     note:
-      "Lifecycle/gate summary only. PASS reflects existing authoritative workspace/reference gates; it never invents visual PASS, user approval, rig quality, export acceptance, or runtime proof.",
+      "Declared workspace/reference gate summary only, not independent user approval, visual/native/export proof. Unknown Animation requirement never implies NOT_REQUIRED.",
   };
 }

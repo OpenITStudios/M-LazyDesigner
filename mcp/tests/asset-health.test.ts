@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { buildAssetHealthSummary } from "@/lib/assetHealth";
+import { buildControlStageContext } from "@/gateway/control/contextProjection";
 import type { ControlReferenceProjection } from "@/gateway/control/referenceTypes";
 import type { ControlWorkspaceProjection } from "@/gateway/control/workspace";
 
-function reference(animationRequired = true): ControlReferenceProjection {
+function reference(animationRequired: boolean | null = true): ControlReferenceProjection {
   return {
     available: true,
     source_path: null,
@@ -78,6 +79,71 @@ describe("asset health summary", () => {
     });
     expect(result.stages.animation).toBe("NOT_REQUIRED");
     expect(result.overall).toBe("READY");
+  });
+
+  test("technical PASS never promotes Geometry, Texture, Animation or UV to a finalized approval", () => {
+    for (const [gate, state] of [
+      ["geometry", "PASS"],
+      ["uv_layout", "APPROVED"],
+      ["texturing", "PASS"],
+      ["animation", "PASS"],
+    ] as const) {
+      const ws = workspace();
+      ws.gates[gate] = state;
+      const result = buildAssetHealthSummary({
+        domain: "ANIMATION", reference: reference(true), workspace: ws,
+      });
+      expect(result.stages[gate], gate).toBe("REVIEW");
+      expect(result.overall, gate).toBe("REVIEW");
+      expect(result.blockers).toEqual([]);
+    }
+  });
+
+  test("unknown Animation requirement stays visible, including in the actual Control Stage Context", () => {
+    const ws = workspace();
+    ws.gates.animation = "NOT_STARTED";
+    const ref = reference(null);
+    const unknown = buildControlStageContext({
+      domain: "TEXTURING", workspace: ws, reference: ref,
+    }).asset_health;
+    expect(unknown.stages.animation).toBe("UNVERIFIED");
+    expect(unknown.overall).toBe("INCOMPLETE");
+
+    ws.gates.animation = "NOT_REQUIRED";
+    const unconfirmed = buildAssetHealthSummary({
+      domain: "TEXTURING", workspace: ws, reference: ref,
+    });
+    expect(unconfirmed.stages.animation).toBe("REVIEW");
+    expect(unconfirmed.overall).toBe("REVIEW");
+
+    ws.gates.animation = "APPROVED";
+    const alreadyApproved = buildAssetHealthSummary({
+      domain: "TEXTURING", workspace: ws, reference: ref,
+    });
+    expect(alreadyApproved.stages.animation).toBe("PASS");
+    expect(alreadyApproved.overall).toBe("READY");
+  });
+
+  test("explicit animation requirement cannot be overridden by NOT_REQUIRED or validator PASS", () => {
+    const ws = workspace();
+    for (const value of ["NOT_REQUIRED", "PASS"]) {
+      ws.gates.animation = value;
+      const result = buildAssetHealthSummary({
+        domain: "ANIMATION", workspace: ws, reference: reference(true),
+      });
+      expect(result.stages.animation).toBe("REVIEW");
+      expect(result.overall).toBe("REVIEW");
+    }
+  });
+
+  test("a reference-side technical PASS is not a valid READY assertion", () => {
+    const ref = reference(true);
+    ref.readiness.animation = "PASS";
+    const result = buildAssetHealthSummary({
+      domain: "ANIMATION", workspace: workspace(), reference: ref,
+    });
+    expect(result.stages.reference).toBe("REVIEW");
+    expect(result.overall).toBe("REVIEW");
   });
 
   test("in-progress stages remain review instead of becoming PASS", () => {
