@@ -129,6 +129,89 @@ describe("optional diagnostic execution", () => {
     console.log("texture diagnostic cost", JSON.stringify(results.map(({reads, bytes}: {reads:number;bytes:number}) => ({reads,bytes}))));
   });
 
+
+  test("animation craft evidence is available on diagnostics only, with no redundant native reads", () => {
+    const results = probe(`
+      import {getAllToolDefinitions} from "./lib/factories.ts";
+      import {wireAuthoringEvidenceRuntime} from "./server/tools/validation/qualityEvidenceRuntime.ts";
+      let nativeReads=0;
+      class Bone {uuid="root";name="root";
+        position=[{time:0},{time:0.5},{time:1}];rotation=[];scale=[];}
+      const clip={uuid:"clip",length:1,animators:{root:new Bone()}};
+      globalThis.BoneAnimator=Bone;
+      globalThis.AnimationItem={get all(){nativeReads++;return [clip];}};
+      const defs=getAllToolDefinitions();
+      defs.inspect_animation={execute:async()=>({
+        content:[],structuredContent:{animation:{uuid:"clip"},authored_space:"blockbench_animation"}
+      })};
+      wireAuthoringEvidenceRuntime();
+      wireAuthoringEvidenceRuntime();
+      const out=[];
+      for(const args of [{},{diagnostics:false},{diagnostics:true},{diagnostics:false}]) {
+        const before=nativeReads;
+        const result=await defs.inspect_animation.execute(args);
+        out.push({
+          reads:nativeReads-before,
+          uuid:result.structuredContent.animation.uuid,
+          craft:result.structuredContent.motion_craft_evidence ?? null
+        });
+      }
+      console.log(JSON.stringify(out));
+    `);
+    expect(results.map((row: {reads:number}) => row.reads)).toEqual([0, 0, 1, 0]);
+    for(const row of [results[0],results[1],results[3]]) {
+      expect(row.uuid).toBe("clip");
+      expect(row.craft).toBeNull();
+    }
+    expect(results[2].craft).toMatchObject({
+      state:"available",visual_verdict:"not_evaluated",
+      track_count:1,
+    });
+  });
+
+  test("texture UV physical validation follows the requested diagnostic scope, not PBR inventory", () => {
+    const results=probe(`
+      import {getAllToolDefinitions} from "./lib/factories.ts";
+      import {wireAuthoringEvidenceRuntime} from "./server/tools/validation/qualityEvidenceRuntime.ts";
+      let geometryReads=0;
+      globalThis.Cube={get all(){geometryReads++;return [];}};
+      globalThis.Mesh={all:[]};
+      const defs=getAllToolDefinitions();
+      defs.list_textures={execute:async()=>({
+        content:[],structuredContent:{textures:[{uuid:"atlas"}]}
+      })};
+      wireAuthoringEvidenceRuntime();
+      const out=[];
+      for(const args of [
+        {},{diagnostics:false,diagnostic_scope:"uv"},
+        {diagnostics:true,diagnostic_scope:"pbr"},
+        {diagnostics:true,diagnostic_scope:"uv"},
+        {diagnostics:true,diagnostic_scope:"coverage"},
+        {diagnostics:true,diagnostic_scope:"seam"},
+        {diagnostics:true}
+      ]) {
+        const before=geometryReads;
+        const result=await defs.list_textures.execute(args);
+        out.push({
+          reads:geometryReads-before,
+          texture_count:result.structuredContent.textures.length,
+          uv:result.structuredContent.physical_uv_evidence ?? null
+        });
+      }
+      console.log(JSON.stringify(out));
+    `);
+    expect(results.map((row: {reads:number}) => row.reads))
+      .toEqual([0,0,0,1,1,1,1]);
+    for(const row of results.slice(0,3)) {
+      expect(row.uv).toBeNull();
+      expect(row.texture_count).toBe(1);
+    }
+    for(const row of results.slice(3)) {
+      expect(row.uv).not.toBeNull();
+      expect(row.texture_count).toBe(1);
+    }
+  });
+
   test("registered metadata matches canonical generated ToolSpecs", () => {
     const mismatches = probe(`
       import "./server/server.ts";

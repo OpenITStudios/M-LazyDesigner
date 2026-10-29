@@ -215,11 +215,27 @@ function wire(toolName: string, field: string, read: EvidenceReader): void {
   wired.add(key);
 }
 
-/** Adds read-only deterministic evidence without expanding the public MCP catalog. */
+/**
+ * Stage-owned validation stays on existing inspection capabilities.
+ * Preserve explicit diagnostics scope: an ordinary clip/texture inventory read
+ * must not silently trigger a full native motion or UV scan. Geometry surface
+ * evidence remains part of the explicitly requested inspect_model_bounds read.
+ * This does not add a second validator, registration or approval gate.
+ */
 export function wireAuthoringEvidenceRuntime(): void {
   wire("inspect_model_bounds", "surface_integrity", () => geometrySurfaceRuntime());
-  wire("list_textures", "physical_uv_evidence", (_structured, args) =>
-    objectRecord(args)?.diagnostics === true ? uvPhysicalRuntime() : undefined
+  wire("list_textures", "physical_uv_evidence", (_structured, args) => {
+    const request = objectRecord(args);
+    const scope = typeof request?.diagnostic_scope === "string"
+      ? request.diagnostic_scope : "full";
+    return request?.diagnostics === true &&
+      ["uv", "coverage", "seam", "full"].includes(scope)
+        ? uvPhysicalRuntime()
+        : undefined;
+  });
+  wire("inspect_animation", "motion_craft_evidence", (structured, args) =>
+    objectRecord(args)?.diagnostics === true
+      ? animationCraftRuntime(structured)
+      : undefined
   );
-  wire("inspect_animation", "motion_craft_evidence", (structured) => animationCraftRuntime(structured));
 }

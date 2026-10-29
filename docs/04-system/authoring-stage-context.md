@@ -58,6 +58,34 @@ explicit current user requirement
 
 Runtime/Tool success, validators, diagnostics, scalar scores, hierarchy, bounds, or coordinates do not create visual acceptance or user approval.
 
+## Validation Belongs to the Active Stage
+
+Recipe is an optional deterministic authoring method within Geometry,
+Texturing or Animation. Validation is likewise part of **each domain**,
+not a fourth production Stage, generic checker or second approval authority.
+
+- Geometry / UV: existing bounds, hierarchy, surface and UV evidence owners.
+- Texturing: existing texture, seam, atlas, color and PBR evidence owners.
+- Animation: existing authored-motion, timing, rig and playback evidence owners.
+- Finalization: consumes current approved upstream gates plus requested output
+  integrity; it cannot declare a failed or unverified upstream result accepted.
+
+Run cheap schema and identity preflight inside the existing executor; use
+receipt/delta to select **affected-only** verification after a coherent
+mutation cohort. Detailed inspections are explicit decision calls:
+`inspect_model_bounds` is a focused Geometry inspection;
+`list_textures(diagnostics=true)` limits physical UV evidence to the UV,
+coverage, seam and full scopes (never PBR-only inventory);
+`inspect_animation(diagnostics=true)` enables craft evidence, while the
+ordinary clip read does not scan motion. Never replace missing evidence
+with a technical or visual PASS merely to save calls.
+
+At Stage exit, incomplete or stale mandatory evidence remains unverified or
+blocked until the owning Stage resolves it. Internal validator clearance is
+not user approval, visual correctness, or native playback acceptance.
+No separate Validation Stage, new MCP tool, per-stage manager or state store
+is required.
+
 ## Evidence Economy
 
 Reuse fresh evidence and mutation receipts. Refresh only the evidence class made stale by a mutation or required to detect a plausible regression.
