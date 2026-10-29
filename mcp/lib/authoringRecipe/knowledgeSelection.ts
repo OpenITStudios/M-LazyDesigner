@@ -13,6 +13,8 @@ export type RecipeKnowledgeSelectionOptions = {
   compatible_with?: KnowledgeCompatibility;
   max_per_feature?: number;
   max_token_proxy?: number;
+  /** Exact bounded semantic feature selection for native Recipe inspection. */
+  feature_ids?: readonly string[];
 };
 
 export type RecipeKnowledgeSuggestion = {
@@ -48,11 +50,25 @@ export function suggestRecipeKnowledge(
         (typeof options.query !== "string" || options.query.length > 256))) {
     throw new Error("RECIPE_KNOWLEDGE_SELECTION_BUDGET_INVALID");
   }
+  const requested = options.feature_ids;
+  if (requested !== undefined &&
+      (!Array.isArray(requested) || requested.length > 8 ||
+       requested.some(id => typeof id !== "string" || !id.trim() || id.length > 128) ||
+       new Set(requested).size !== requested.length)) {
+    throw new Error("RECIPE_KNOWLEDGE_SELECTION_FEATURE_SCOPE_INVALID");
+  }
   const index = indexRecipeKnowledge(snapshot, options.compatible_with);
   const features = recipe.feature_intents ?? [];
+  const knownIds = new Set(features.map(feature => feature.id));
+  if (requested?.some(id => !knownIds.has(id))) {
+    throw new Error("RECIPE_KNOWLEDGE_SELECTION_FEATURE_UNKNOWN");
+  }
+  const selected = requested === undefined
+    ? features
+    : features.filter(feature => requested.includes(feature.id));
   const decisions = planRecipeFeatureRepresentations(features).decisions;
   const routes = new Map(decisions.map(decision => [decision.id, decision.route]));
-  return [...features].sort((a,b) => a.id.localeCompare(b.id)).map(feature => {
+  return [...selected].sort((a,b) => a.id.localeCompare(b.id)).map(feature => {
     const query = [
       feature.label, recipe.name, (feature.geometry_reasons ?? []).join(" "),
       options.query ?? "",

@@ -30,8 +30,22 @@ or edits native assets. Knowledge citations are **advice**, not reference-image
 proof, visual approval, native runtime evidence, or an automatic Geometry
 classification. Existing `feature_intents.evidence_refs`, Validation owners,
 user approvals and Gateway's four-tool surface remain authoritative.
-No new external model, training loop, public MCP capability, or runtime
-mutation is introduced in this source-only stage.
+The existing `createAuthoringRecipeService.plan/planStored` consumes a
+demand-driven knowledge index when a Recipe declares feature intents.
+`recipe_knowledge` reports source availability, exact linked revision status,
+and up to eight feature suggestions (two sections each). The registered
+`inspect_element` / `inspect_elements(mode=detail)` path, when explicitly
+called with `recipe_optimization_review=true`, returns guidance for the
+exact selected Recipe-owned feature. Ordinary inspection and Geometry edits
+do not read the index. The Runtime adapter
+`server/runtime/recipes/authoring/knowledgeRuntime.ts` reads only the
+canonical **bundled** Bedrock workflow from the existing prompt manifest;
+user overrides and unpinned external content are not treated as repository
+knowledge. Missing source is `UNAVAILABLE`, stale binding is
+`REVIEW_REQUIRED`. Knowledge cannot authorize native Apply, alter Geometry,
+or claim visual/user acceptance. The initial candidate corpus contains only
+the bundled workflow, not an advanced model corpus. No new engine, external
+model, training loop, public Gateway capability, or native mutation is added.
 
 
 Owns declarative, deterministic recipe semantics for parametric authoring.

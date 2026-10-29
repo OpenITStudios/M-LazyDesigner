@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import type { KnowledgeIndexSnapshot } from "@/lib/semantic/knowledge";
+import { collectRecipeKnowledge, featureIdForRecipeInstance } from "@/lib/authoringRecipe/knowledgePlanning";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 import {
   assertAuthoringRecipeNativeMatchesCompiled,
@@ -46,6 +48,8 @@ export { bindRecipeKnowledge, resolveRecipeKnowledgeLinks } from "@/lib/authorin
 export type AuthoringRecipeServiceDependencies = {
   readOwned(recipeId: string): Promise<AuthoringRecipeNativeSnapshot> | AuthoringRecipeNativeSnapshot;
   readStoredRecipe?(recipeId: string): Promise<AuthoringRecipe | null> | AuthoringRecipe | null;
+  /** Lazy advisory source; never read by ordinary native authoring operations. */
+  readKnowledgeIndex?(): Promise<KnowledgeIndexSnapshot | null> | KnowledgeIndexSnapshot | null;
   createApplyAdapter(recipeId: string): AuthoringRecipeApplyAdapter;
   /** Opt-in native visual-surface read, entirely separate from Undo state. */
   readCoincidenceSurface?(
@@ -67,6 +71,7 @@ export function createAuthoringRecipeService(
     const featurePlan = nextRecipe.feature_intents !== undefined
       ? planRecipeFeatureRepresentations(nextRecipe.feature_intents).summary
       : undefined;
+    const recipeKnowledge = await collectRecipeKnowledge(nextRecipe, dependencies.readKnowledgeIndex);
     const stored = registry.put({ native_source_fingerprint: nativeFingerprint, previous_recipe: previousRecipe, next_recipe: nextRecipe, rebuild });
     return {
       plan_id: stored.plan_id,
@@ -74,6 +79,7 @@ export function createAuthoringRecipeService(
       execution_strategy: selectRecipeRebuildExecutionStrategy(rebuild),
       summary: summarizeAuthoringRecipeRebuild(rebuild),
       ...(featurePlan ? { feature_plan: featurePlan } : {}),
+      ...(recipeKnowledge ? { recipe_knowledge: recipeKnowledge } : {}),
     };
   };
 
@@ -82,7 +88,9 @@ export function createAuthoringRecipeService(
    * feature metadata can change without any native Cube fingerprint change.
    * Re-read it after the opt-in UV/material/animation capture.
    */
-  const inspectStoredGeometryCoincidence = async (input: { recipe_id: string }) => {
+  const inspectStoredGeometryCoincidence = async (input: {
+    recipe_id: string; selected_instance_id?: string;
+  }) => {
     if (!dependencies.readStoredRecipe) {
       throw new Error("RECIPE_STORE_UNAVAILABLE: native Geometry inspection requires saved Recipe ownership.");
     }
@@ -97,6 +105,20 @@ export function createAuthoringRecipeService(
       ? await dependencies.readCoincidenceSurface(input.recipe_id, native)
       : undefined;
     const surface = provided ? structuredClone(provided) : undefined;
+    if (input.selected_instance_id !== undefined &&
+        !native.cubes.some(cube => cube.instance_id === input.selected_instance_id)) {
+      throw new Error("RECIPE_KNOWLEDGE_SELECTED_INSTANCE_NOT_OWNED");
+    }
+    const selectedFeature = input.selected_instance_id !== undefined &&
+      (recipe.feature_intents?.length ?? 0) > 0
+      ? featureIdForRecipeInstance(recipe, input.selected_instance_id)
+      : undefined;
+    const recipeKnowledge = await collectRecipeKnowledge(
+      recipe, dependencies.readKnowledgeIndex,
+      input.selected_instance_id !== undefined
+        ? (selectedFeature ? [selectedFeature] : [])
+        : undefined
+    );
     // The owned native source must be stable for BOTH opt-in surfaces and
     // source-only callers. A missing UV/material snapshot is not permission
     // to return a stale Geometry/parent baseline without re-reading it.
@@ -112,7 +134,10 @@ export function createAuthoringRecipeService(
         report.review_source_identity.recipe_source_fingerprint) {
       throw new Error("RECIPE_OPTIMIZATION_RECIPE_CHANGED_DURING_INSPECTION");
     }
-    return report;
+    return {
+      ...report,
+      ...(recipeKnowledge ? { recipe_knowledge: recipeKnowledge } : {}),
+    };
   };
 
   /**

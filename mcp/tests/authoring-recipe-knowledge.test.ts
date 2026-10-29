@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
+import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
+import type { AuthoringRecipeNativeSnapshot } from "@/lib/authoringRecipe/nativeState";
+import { buildRecipeKnowledgeIndexFromWorkflow } from "@/server/runtime/recipes/authoring/knowledgeRuntime";
 import {
   bindRecipeKnowledge,
   resolveRecipeKnowledgeLinks,
@@ -125,7 +128,7 @@ describe("Recipe-owned knowledge: selection, binding, and source-snapshot review
       reason: "SECTION_STALE",
     }]);
     expect(stale.compiled.metrics.realized_cube_count).toBe(1);
-    const unrelatedChange = snapshot(knowledge + "\\n\\n## Other rule\\nNew reference note.");
+    const unrelatedChange = snapshot(knowledge + "\n\n## Other rule\nNew reference note.");
     const sourceStale = resolveRecipeKnowledgeLinks(bound, unrelatedChange);
     expect(sourceStale.state).toBe("REVIEW_REQUIRED");
     expect(sourceStale.issues[0]?.reason).toBe("SOURCE_STALE");
@@ -151,6 +154,7 @@ describe("Recipe-owned knowledge: selection, binding, and source-snapshot review
     const malformed = recipe();
     malformed.knowledge_links = [{
       feature_id: "arm", section_id: section.id, section_sha256: "untrusted",
+      source_sha256: "a".repeat(64),
     }];
     expect(() => compileAuthoringRecipe(malformed)).toThrow("RECIPE_KNOWLEDGE_LINK_INVALID");
   });
@@ -198,5 +202,96 @@ describe("Recipe-owned knowledge: selection, binding, and source-snapshot review
     expect(() => prepareKnowledgeAwareRecipe(linked, external, {
       compatible_with: matching,
     })).toThrow("FEATURE_DECISION_REVIEW_REQUIRED");
+  });
+});
+
+
+describe("Recipe source planning and Runtime knowledge bridge", () => {
+  test("selects one exact feature without claiming reference or native proof", () => {
+    const index = snapshot();
+    const filtered = suggestRecipeKnowledge(recipe(), index, {
+      feature_ids: ["arm"], max_per_feature: 2,
+    });
+    expect(filtered.map(item => item.feature_id)).toEqual(["arm"]);
+    expect(filtered[0]?.sections[0]?.heading).toBe("Arm pivot");
+    expect(() => suggestRecipeKnowledge(recipe(), index, {
+      feature_ids: ["not-a-feature"],
+    })).toThrow("RECIPE_KNOWLEDGE_SELECTION_FEATURE_UNKNOWN");
+    expect(() => suggestRecipeKnowledge(recipe(), index, {
+      feature_ids: ["arm", "arm"],
+    })).toThrow("RECIPE_KNOWLEDGE_SELECTION_FEATURE_SCOPE_INVALID");
+  });
+
+  test("indexes only bounded source with explicit provenance", () => {
+    expect(buildRecipeKnowledgeIndexFromWorkflow("")).toBeNull();
+    expect(buildRecipeKnowledgeIndexFromWorkflow("X".repeat(64001))).toBeNull();
+    const index = buildRecipeKnowledgeIndexFromWorkflow(
+      "# Bedrock\n## Geometry\nGeometry uses Cube patterns and pivots."
+    )!;
+    expect(index.sections.some(item => item.heading === "Geometry")).toBe(true);
+    expect(index.sources?.[0]).toMatchObject({
+      origin: "REPOSITORY", source: "prompts/bedrock_entity_workflow.md",
+    });
+  });
+
+  test("planStored consumes indexed knowledge; stale and unavailable are not silently accepted", async () => {
+    const base = recipe();
+    const index = snapshot();
+    const pinned = bindRecipeKnowledge(base, index, [{
+      feature_id: "arm", section_id: sectionFor(index, "Arm pivot").id,
+    }]);
+    const geometry: AuthoringRecipeNativeSnapshot = {
+      schema: 1, recipe_id: base.id,
+      cubes: compileAuthoringRecipe(base).placements.map((item, i) => ({
+        uuid: "native-" + i, recipe_id: base.id, instance_id: item.id,
+        name: item.name, from: item.from, to: item.to,
+        origin: item.origin, rotation: item.rotation, inflate: item.inflate,
+      })),
+    };
+    let reads = 0;
+    const service = createAuthoringRecipeService({
+      readOwned: () => geometry, readStoredRecipe: () => base,
+      readKnowledgeIndex: () => { reads++; return index; },
+      createApplyAdapter: () => { throw new Error("No native mutation in planning."); },
+    });
+    const plan = await service.planStored(pinned);
+    expect(reads).toBe(1);
+    expect(plan.recipe_knowledge).toMatchObject({
+      source_state: "AVAILABLE",
+      knowledge: { state: "CURRENT_SOURCE_SNAPSHOT" },
+      suggestions: [{ feature_id: "arm" }, { feature_id: "cloth" }],
+      execution_boundary: "SOURCE_PLANNING_ONLY_NO_NATIVE_MUTATION_OR_VISUAL_PROOF",
+    });
+    const changed = snapshot(knowledge + "\n\n## New rule\nA new unrelated rule.");
+    const staleService = createAuthoringRecipeService({
+      readOwned: () => geometry, readKnowledgeIndex: () => changed,
+      createApplyAdapter: () => { throw new Error("No native mutation."); },
+    });
+    const stale = await staleService.plan(base, pinned);
+    expect(stale.recipe_knowledge).toMatchObject({
+      source_state: "AVAILABLE",
+      knowledge: { state: "REVIEW_REQUIRED", issues: [{ reason: "SOURCE_STALE" }] },
+    });
+    const unavailable = createAuthoringRecipeService({
+      readOwned: () => geometry, readKnowledgeIndex: () => null,
+      createApplyAdapter: () => { throw new Error("No native mutation."); },
+    });
+    const noKnowledge = await unavailable.plan(base, pinned);
+    expect(noKnowledge.recipe_knowledge).toMatchObject({
+      source_state: "UNAVAILABLE", reason: "RECIPE_KNOWLEDGE_INDEX_UNAVAILABLE",
+    });
+    const legacy = structuredClone(base);
+    delete legacy.feature_intents;
+    delete legacy.knowledge_links;
+    for (const pattern of legacy.patterns) delete pattern.feature_id;
+    let legacyReads = 0;
+    const legacyService = createAuthoringRecipeService({
+      readOwned: () => geometry,
+      readKnowledgeIndex: () => { legacyReads++; return index; },
+      createApplyAdapter: () => { throw new Error("No native mutation."); },
+    });
+    const oldPlan = await legacyService.plan(legacy, legacy);
+    expect(oldPlan).not.toHaveProperty("recipe_knowledge");
+    expect(legacyReads).toBe(0);
   });
 });

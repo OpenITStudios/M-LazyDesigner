@@ -2,6 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
+import { readBundledRecipeKnowledgeIndex } from "./knowledgeRuntime";
 import {
   assertAuthoringRecipeNativeMatchesCompiled,
   fingerprintAuthoringRecipeNativeSnapshot,
@@ -403,6 +404,7 @@ export function createBlockbenchAuthoringRecipeService() {
   return createAuthoringRecipeService({
     readOwned: readBlockbenchAuthoringRecipeOwnedState,
     readCoincidenceSurface: readBlockbenchRecipeCoincidenceSurface,
+    readKnowledgeIndex: readBundledRecipeKnowledgeIndex,
     readStoredRecipe: (recipeId) => {
       if (!Project) {
         throw new Error(

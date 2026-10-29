@@ -99,8 +99,7 @@ function fixtureRecipe(): AuthoringRecipe {
   };
 }
 
-function setupNativeRecipe() {
-  const recipe = fixtureRecipe();
+function setupNativeRecipe(recipe = fixtureRecipe()) {
   const compiled = compileAuthoringRecipe(recipe);
   NativeCube.all = compiled.placements.map((placement, index) => new NativeCube({
     uuid: "native-pair-" + index,
@@ -309,5 +308,41 @@ describe("B12 existing inspect_elements detail → Recipe optimization source in
     })).rejects.toThrow("RECIPE_NOT_STORED");
     const ordinary = await inspectElementSource({ id: cubes[0]!.uuid });
     expect(ordinary.structuredContent).toMatchObject({ type: "cube" });
+  });
+});
+
+
+describe("Recipe knowledge inside the existing registered opt-in inspection", () => {
+  test("retrieves only the selected Recipe feature, with no visual or mutation PASS", async () => {
+    const custom = fixtureRecipe();
+    custom.patterns[0]!.feature_id = "shape";
+    custom.feature_intents = [{
+      id: "shape", label: "geometry", visual_role: "THREE_DIMENSIONAL",
+      geometry_reasons: ["SILHOUETTE"], evidence: "SUPPORTED",
+      evidence_refs: ["reference:front"],
+    }, {
+      id: "mark", label: "texture marking", visual_role: "SURFACE_DETAIL",
+      evidence: "SUPPORTED", evidence_refs: ["reference:front"],
+    }];
+    const { cubes } = setupNativeRecipe(custom);
+    const ordinary = await inspectElementSource({ id: cubes[0]!.uuid });
+    expect(ordinary.structuredContent).not.toHaveProperty("recipe_optimization_review");
+    const inspected = await inspectElementSource({
+      id: cubes[0]!.uuid, recipe_optimization_review: true,
+    });
+    expect(inspected.structuredContent).toMatchObject({
+      recipe_optimization_review: {
+        recipe_knowledge: {
+          source_state: "AVAILABLE",
+          knowledge: { state: "NOT_BOUND" },
+          suggestions: [{ feature_id: "shape", feature_route: "GEOMETRY" }],
+          execution_boundary: "SOURCE_PLANNING_ONLY_NO_NATIVE_MUTATION_OR_VISUAL_PROOF",
+        },
+        native_mutation_executed: false,
+        visual_verdict: "NOT_EVALUATED",
+      },
+    });
+    expect(cubes).toHaveLength(2);
+    expect(cubes[0]!.from).toEqual([0, 0, 0]);
   });
 });

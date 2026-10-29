@@ -965,6 +965,7 @@ export async function inspectElementSource(
     const service = createBlockbenchAuthoringRecipeService();
     recipeReview = await service.inspectStoredGeometryCoincidence({
       recipe_id: ownerIdentity.recipe_id,
+      selected_instance_id: ownerIdentity.instance_id,
     });
     // Bind the selected target to this same currently active project and
     // exact Cube identity; the report itself already checked Recipe/native
