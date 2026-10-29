@@ -116,6 +116,131 @@ test("native restricted fs can overwrite regular projects but rejects symlinks a
   }
 });
 
+test("Bedrock geometry compile identity is checked before delivery or filesystem write", async () => {
+  const directory = fs.mkdtempSync(join(tmpdir(), "lazydesigner-geometry-export-"));
+  const destination = join(directory, "geometry-output.json");
+  const project = {
+    name: "fixture", uuid: "fixture", save_path: "", saved: false,
+    export_path: "", export_codec: "",
+  };
+  const document = { format_version: "1.12.0", "minecraft:geometry": [
+    { description: { identifier: "geometry.fixture" }, bones: [] },
+    { description: { identifier: "geometry.fixture_variant" }, bones: [] },
+  ] };
+  let compiled: unknown = JSON.stringify(document);
+  let writes = 0;
+  let nativeSaves = 0;
+  const codec = {
+    extension: "json",
+    compile: () => compiled,
+    afterSave: (path: string) => {
+      nativeSaves++;
+      project.export_path = path;
+      project.export_codec = "bedrock";
+      project.saved = true;
+    },
+  };
+  const nativeFs = {
+    existsSync: fs.existsSync, readdirSync: fs.readdirSync,
+    statSync: fs.statSync,
+    writeFileSync: (...args: Parameters<typeof fs.writeFileSync>) => {
+      writes++; fs.writeFileSync(...args);
+    },
+  };
+  const globals = {
+    Project: project, Format: { id: "bedrock" },
+    Codecs: { bedrock: codec },
+    requireNativeModule: (name: string) => name === "fs" ? nativeFs : null,
+  };
+  const previous = Object.keys(globals).map(
+    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+  );
+  const run = (args: Record<string, unknown> = {}) =>
+    getAllToolDefinitions().export_model.execute(
+      exportModelParameters.parse({ codec_id: "bedrock", ...args })
+    );
+  try {
+    for (const [key, value] of Object.entries(globals)) {
+      Object.defineProperty(globalThis, key, {
+        value, configurable: true, writable: true,
+      });
+    }
+    const preview = await run() as {
+      structuredContent: {
+        geometry_export_identity: {
+          state: string; geometry_count: number;
+          identifier_examples: string[]; visual_verdict: string;
+          uv_texture_attested: boolean; saved_file_attested: boolean;
+        };
+        compiled_payload_sha256: string; content: string;
+        wrote_to_path: null;
+      };
+    };
+    expect(preview.structuredContent.geometry_export_identity).toMatchObject({
+      state: "COMPILED_GEOMETRY_IDENTITIES_VALIDATED",
+      geometry_count: 2,
+      identifier_examples: [
+        "geometry.fixture", "geometry.fixture_variant",
+      ],
+      visual_verdict: "not_evaluated",
+      uv_texture_attested: false,
+      saved_file_attested: false,
+    });
+    expect(preview.structuredContent.compiled_payload_sha256).toBe(
+      "sha256:" + createHash("sha256")
+        .update(preview.structuredContent.content).digest("hex")
+    );
+    expect(preview.structuredContent.wrote_to_path).toBeNull();
+    expect(writes).toBe(0);
+    expect(nativeSaves).toBe(0);
+
+    for (const invalid of [
+      "{}",
+      JSON.stringify({ "minecraft:geometry": [] }),
+      "{invalid-json",
+      JSON.stringify({ "minecraft:geometry": [
+        { description: { identifier: "geometry.unknown" }, bones: [] },
+      ] }),
+      JSON.stringify({ "minecraft:geometry": [
+        { description: { identifier: "geometry.fixture" }, bones: [] },
+        { description: { identifier: "geometry.fixture" }, bones: [] },
+      ] }),
+      JSON.stringify({ "minecraft:geometry": [
+        { description: {}, bones: [] },
+      ] }),
+    ]) {
+      compiled = invalid;
+      await expect(run({ path: destination })).rejects.toThrow(
+        /BEDROCK_GEOMETRY_EXPORT_/
+      );
+      expect(fs.existsSync(destination)).toBe(false);
+      expect(writes).toBe(0);
+      expect(nativeSaves).toBe(0);
+    }
+    compiled = JSON.stringify(document);
+    const saved = await run({ path: destination }) as {
+      structuredContent: {
+        geometry_export_identity: { geometry_count: number };
+        wrote_to_path: string; compiled_payload_sha256: string;
+      };
+    };
+    expect(saved.structuredContent.geometry_export_identity.geometry_count).toBe(2);
+    expect(saved.structuredContent.wrote_to_path).toBe(destination);
+    expect(fs.readFileSync(destination, "utf8")).toBe(compiled);
+    expect(writes).toBe(1);
+    expect(nativeSaves).toBe(1);
+    expect(saved.structuredContent.compiled_payload_sha256).toBe(
+      "sha256:" + createHash("sha256").update(compiled).digest("hex")
+    );
+  } finally {
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("workspace policy keeps one current model and archives only on explicit request", async () => {
   const [policy, active] = await Promise.all([
     Bun.file("../workspace/README.md").text(),

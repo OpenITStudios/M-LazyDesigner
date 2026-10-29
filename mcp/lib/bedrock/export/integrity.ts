@@ -96,6 +96,52 @@ export function assertBedrockAnimationExportMatchesSource(
   };
 }
 
+/**
+ * Verify compiled Bedrock geometry identity before a content response or
+ * native file write. Valid source identifiers are structural evidence only;
+ * they do not establish UV, Texture, rig, visual or runtime correctness.
+ *
+ * Reuse the existing geometry identifier vocabulary and keep this check
+ * inside the export owner. No additional validation tool is registered.
+ */
+export function assertCompiledBedrockGeometryIdentity(compiled: unknown) {
+  let document: unknown = compiled;
+  if (typeof document === "string") {
+    try {
+      document = JSON.parse(document);
+    } catch {
+      throw new Error("BEDROCK_GEOMETRY_EXPORT_CONTENT_INVALID: native compile did not return valid JSON.");
+    }
+  }
+  const geometries = asRecord(document)?.["minecraft:geometry"];
+  if (!Array.isArray(geometries) || geometries.length === 0) {
+    throw new Error("BEDROCK_GEOMETRY_EXPORT_EMPTY: native output contains no minecraft:geometry entries.");
+  }
+  const identifiers: string[] = [];
+  const seen = new Set<string>();
+  for (const geometry of geometries) {
+    const name = asRecord(asRecord(geometry)?.description)?.identifier;
+    if (typeof name !== "string" || !name.trim() || name !== name.trim() ||
+        name === "geometry.unknown" || name.endsWith(".unknown")) {
+      throw new Error("BEDROCK_GEOMETRY_EXPORT_IDENTITY_INVALID: every geometry needs a non-unknown exact identifier.");
+    }
+    if (seen.has(name)) {
+      throw new Error("BEDROCK_GEOMETRY_EXPORT_IDENTITY_DUPLICATE: duplicate geometry identifiers cannot be an accepted export.");
+    }
+    seen.add(name);
+    identifiers.push(name);
+  }
+  return {
+    state: "COMPILED_GEOMETRY_IDENTITIES_VALIDATED" as const,
+    geometry_count: identifiers.length,
+    identifier_examples: identifiers.slice(0, 8),
+    identifier_examples_truncated: identifiers.length > 8,
+    visual_verdict: "not_evaluated" as const,
+    saved_file_attested: false as const,
+    uv_texture_attested: false as const,
+  };
+}
+
 export function analyzeBedrockGeometryOverwrite(
   document: unknown,
   expectedIdentifier: string

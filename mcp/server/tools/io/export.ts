@@ -2,7 +2,10 @@
 /// <reference types="blockbench-types" />
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { assertBedrockAnimationExportMatchesSource } from "@/lib/bedrock/export/integrity";
+import {
+  assertBedrockAnimationExportMatchesSource,
+  assertCompiledBedrockGeometryIdentity,
+} from "@/lib/bedrock/export/integrity";
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_EXPERIMENTAL, STATUS_STABLE } from "@/lib/constants";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
@@ -252,6 +255,7 @@ export function registerExportTools() {
         }
         const registry = codecRegistry();
         let animationExportEvidence: ReturnType<typeof assertBedrockAnimationExportMatchesSource> | null = null;
+        let geometryExportEvidence: ReturnType<typeof assertCompiledBedrockGeometryIdentity> | null = null;
         const codec = codec_id === "bedrock_animation"
           ? nativeBedrockAnimationCodec((evidence) => { animationExportEvidence = evidence; })
           : registry[codec_id];
@@ -377,6 +381,14 @@ export function registerExportTools() {
             `Blockbench codec "${codec_id}" compiled an empty artifact; no file was written.`
           );
         }
+        // Native bedrock geometry is JSON; validate exact codec output
+        // before touching a destination. Do not use prior Workspace labels
+        // or a nonempty byte count as proof of geometry identity.
+        if (codec_id === "bedrock") {
+          geometryExportEvidence = assertCompiledBedrockGeometryIdentity(
+            binaryBuffer ? null : rawResult
+          );
+        }
         // Hash the exact codec output, not a guessed native model revision or
         // independently attested file readback. A source edit after this call
         // requires a new compile; it cannot inherit the old artifact identity.
@@ -497,6 +509,9 @@ export function registerExportTools() {
           compiled_payload_sha256_scope: "NATIVE_CODEC_OUTPUT_BYTES" as const,
           ...(animationExportEvidence !== null
             ? { animation_export_identity: animationExportEvidence }
+            : {}),
+          ...(geometryExportEvidence !== null
+            ? { geometry_export_identity: geometryExportEvidence }
             : {}),
           encoding,
           wrote_to_path,

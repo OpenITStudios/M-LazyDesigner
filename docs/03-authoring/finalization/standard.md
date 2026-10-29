@@ -73,6 +73,15 @@ Before `COMPLETE`, verify the requested output set agrees on every material iden
 - texture/material references;
 - packaged/client binding when requested.
 
+For the Bedrock geometry codec, the export owner now checks the compiled
+`minecraft:geometry` collection and each exact geometry identifier before
+delivering content or writing a file. Empty output, missing or unknown
+identifiers, and duplicate identifiers fail before a new filesystem write.
+The bounded `geometry_export_identity` result is structural evidence only:
+it is not proof of atlas/UV completeness, visual acceptance or native
+save/reopen. The `compiled_payload_sha256` identifies native compiled bytes,
+not the current model revision or an independently read-back file.
+
 An unintended `unknown`, stale identifier, missing pair, or mismatched reference blocks Finalization for the affected deliverable. It does not erase already-valid Geometry/Texturing/Animation approvals.
 
 ## Output Completeness
