@@ -2,15 +2,20 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next to do — verified Recipe knowledge (2026-10-29)
+## Primary next to do — Texture & UV (2026-10-29 chat handoff)
 
-**Priority: Geometry. G1/G2 and R1–R4 authored; R5 pairing prepared; G2/R1 retrieval audit fixed. Bun/native NOT EXECUTED.** Build on the single Knowledge + Recipe authoring path committed at `8155cb2d`. Enrich it **sequentially**, with a reviewable result for each domain before advancing:
+**USER DECISION: STOP Geometry; next chat = Texture & UV via ChatGPT + GitHub (`OpenITStudios/M-LazyDesigner`, branch `Local`).** Do not resume Geometry R0–R5, Animation or live benchmarks without a new request.
 
-1. **Geometry first:** R0–R5 source prepared; G2 unique-case retrieval now reserves its budget and R1 compiler fixture respects required Geometry. No auto-Cube/merge/delete, measured A/B or quality PASS. Next: exact-SHA Bun/typecheck/build in capable environment, then live R5 with authenticated capture/human review. All related Bun tests NOT EXECUTED. [Research](../03-authoring/modelling/research-sources.md) · [Design](../03-authoring/modelling/geometry-intelligence-plan.md).
-2. **Texture second:** curate UV/atlas layout, Minecraft pixel-cluster treatment, palette/material/PBR semantics and seam-safe texture patterns. Preserve the reference's visual identity and measure mapped-model quality.
-3. **Animation third:** curate grounded rig/motion/keyframe, interpolation, contact, loop and controller patterns. Compare playback, motion fidelity and export correctness.
+**Frozen Geometry checkpoint:** G1/G2 + R1–R4 source; R5 paired Golden benchmark source prepared. Last Geometry commit `ec22a6e9d2420f12d116f31bc25ce59491956150`. Bun/typecheck/build, native/visual acceptance NOT EXECUTED; no Geometry quality PASS. Preserve source/proof history.
 
-For each stage, study official Mojang Bedrock Samples and Blockbench references first; community/Blockbench Workshop/marketplace examples require verifiable origin, version, usage rights and applicability. Extract transferable techniques, **never copy protected marketplace assets**. Keep `mcp/lib/authoringRecipe/` as the decision owner and reuse the `mcp/lib/semantic/knowledge.ts` index, current Validation and the four Gateway tools; do not introduce a second engine, database or godfile. Record source/compatibility, focused deterministic regressions, and separately verified native/visual results plus cost-to-accepted-result; static source is not runtime or visual PASS. Texture/Animation remain deferred.
+**Start next chat with Texture & UV audit/curation, then implementation if requested:**
+
+1. Read [Texture/UV Standard](../03-authoring/texture/standard.md) and relevant `surface-pattern.md`, `material.md`, `render-profile.md`; inspect existing `mcp/lib/uv/`, `mcp/lib/texture/`, and Runtime adapters. Identify real gaps before designing changes.
+2. **UV:** Box/per-face UV, atlas islands and packing, pixel mapping/density, mirrored faces, seams, alpha planes, UV lock and migration. **Modelling owns UV Layout mapping/approval** on coherent frozen Geometry; Texture owns atlas pixels, styling, material/PBR and mapped-model verification. Do not reopen Geometry modelling.
+3. **Texture knowledge:** Minecraft pixel clusters, palette/value ramps, surface materials, reference identity, alpha/PBR when needed. Curate official Mojang/Blockbench sources first; check license/version for community models. Reuse existing Recipe/semantic index and Validation, not a second engine/database/godfile.
+4. **Safety:** `manage_uv_layout` remains UNREGISTERED pending canonical generator + matching source/API/build verification. Static source/plans cannot claim UV, atlas, seam or visual PASS. No assets, CI, releases, user-PC or Codex work authorized.
+
+**Order:** Texture & UV ACTIVE; Geometry PAUSED; Animation DEFERRED.
 
 ## Current working environment
 
@@ -21,11 +26,11 @@ For each stage, study official Mojang Bedrock Samples and Blockbench references 
 
 ## Current source / installed proof boundary
 
-Recipe knowledge behavior source is committed through `9e83b0e7`; tests, Bun/typecheck/build, native Blockbench and visual acceptance have NOT been executed on that revision. The older managed `7b45bd69` / Desktop 0.1.1 transport/package qualification applies only to that installed source, not to recent Recipe commits. Detailed prior environment, migration, recovery and execution receipts belong to [current-validation.md](current-validation.md). Preserve the dirty primary checkout, source assets and recovery inventory; do not use the user's PC, deploy, restart clients, enable CI or publish releases. Re-pin GitHub HEAD before any future source work.
+Geometry through `ec22a6e9` and R5 comparator source are preserved; Bun/typecheck/build and native/visual acceptance have NOT EXECUTED on them. The older managed `7b45bd69` / Desktop 0.1.1 transport/package qualification applies only to that installed source, not to recent Recipe commits. Detailed prior environment, migration, recovery and execution receipts belong to [current-validation.md](current-validation.md). Preserve the dirty primary checkout, source assets and recovery inventory; do not use the user's PC, deploy, restart clients, enable CI or publish releases. Re-pin GitHub HEAD before any future source work.
 
 ## Next REMOTE_GITHUB work
 
-The verified Recipe knowledge roadmap above is the principal next development goal; other MCP work remains deferred unless needed to unblock its exact owner or acceptance.
+**Texture & UV is the selected next work.** Geometry R0–R5 is paused, and all other MCP work stays deferred unless it directly supports Texture/UV.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 
