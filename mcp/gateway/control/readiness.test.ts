@@ -113,6 +113,36 @@ describe("Control readiness policy", () => {
     ).modelling_start).toBe("READY");
   });
 
+  test("explicit current-stage reference review or unexpected status cannot advertise READY", () => {
+    const reference = {
+      ...emptyReference("REFERENCE_PATH_UNAVAILABLE"), available: true,
+    };
+    for (const [declared, reason] of [
+      ["NEEDS_REVIEW", "REFERENCE_STAGE_NEEDS_REVIEW"],
+      ["NOT_REQUIRED", "REFERENCE_STAGE_NOT_REQUIRED"],
+      ["PASS", "REFERENCE_STAGE_READINESS_INVALID"],
+      ["invalid", "REFERENCE_STAGE_READINESS_INVALID"],
+    ] as const) {
+      const state = buildReadiness(
+        baseSnapshot(), emptyWorkspace(), reference,
+        "ASSET_AUTHORING", NOT_REQUIRED_LIFECYCLE, declared
+      );
+      expect(state.modelling_start, declared).toBe("NEEDS_ORIENTATION");
+      expect(state.reasons, declared).toContain(reason);
+      expect(state.runtime_ready).toBe(true);
+    }
+    const blocked = buildReadiness(
+      baseSnapshot(), emptyWorkspace(), reference,
+      "ASSET_AUTHORING", NOT_REQUIRED_LIFECYCLE, "  blocked  "
+    );
+    expect(blocked.modelling_start).toBe("BLOCKED");
+    expect(blocked.reasons).toContain("REFERENCE_STAGE_BLOCKED");
+    expect(buildReadiness(
+      baseSnapshot(), emptyWorkspace(), reference,
+      "ASSET_AUTHORING", NOT_REQUIRED_LIFECYCLE, "ready"
+    ).modelling_start).toBe("READY");
+  });
+
   test("missing reference asks for orientation, never signals modelling READY", () => {
     const snapshot = baseSnapshot();
     const missing = buildReadiness(

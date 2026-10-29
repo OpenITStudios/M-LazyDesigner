@@ -76,6 +76,39 @@ describe("LazyDesigner Control reference readiness", () => {
     expect(packet.readiness.reasons).not.toContain("REFERENCE_STAGE_BLOCKED");
   });
 
+  test("current-stage NEEDS_REVIEW remains visible through the actual Control packet", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lazydesigner-stage-review-"));
+    await writeFile(join(directory, "REFERENCE.json"), JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "review_target", profile: "PROP_FURNITURE" },
+      readiness: {
+        overall: "NEEDS_REVIEW", geometry: "NEEDS_REVIEW",
+        texture: "BLOCKED", animation: "NOT_REQUIRED",
+      },
+    }));
+    const packet = await buildControlPacket(status, { referencePackagePath: directory });
+    expect(packet.stage_context?.stage_readiness).toBe("NEEDS_REVIEW");
+    expect(packet.readiness.modelling_start).toBe("NEEDS_ORIENTATION");
+    expect(packet.readiness.reasons).toContain("REFERENCE_STAGE_NEEDS_REVIEW");
+    expect(packet.blockers).not.toContain("REFERENCE_STAGE_BLOCKED");
+    expect(packet.readiness.runtime_ready).toBe(true);
+  });
+
+  test("normalized lowercase reference BLOCKED cannot hide its source blocker", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "lazydesigner-stage-lower-block-"));
+    await writeFile(join(directory, "REFERENCE.json"), JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "blocked_target", profile: "PROP_FURNITURE" },
+      unknowns: { blocking: ["required side view unresolved"], non_blocking: [] },
+      readiness: { overall: "BLOCKED", geometry: " blocked " },
+    }));
+    const packet = await buildControlPacket(status, { referencePackagePath: directory });
+    expect(packet.stage_context?.stage_readiness).toBe("BLOCKED");
+    expect(packet.stage_context?.blocking_unknowns).toContain("required side view unresolved");
+    expect(packet.blockers).toContain("REFERENCE_STAGE_BLOCKED");
+    expect(packet.readiness.modelling_start).toBe("BLOCKED");
+  });
+
   test("BLOCKED active stage projects blocking evidence and fails closed", async () => {
     const directory = await mkdtemp(join(tmpdir(), "lazydesigner-stage-blocked-"));
     await writeFile(join(directory, "REFERENCE.json"), JSON.stringify({

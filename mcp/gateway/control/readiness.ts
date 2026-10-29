@@ -121,7 +121,12 @@ export function buildReadiness(
   // hash alone is not evidence that the AI has read or applied the guidance.
   const contextReady =
     snapshot.context.required.length > 0 && !requiredContextUnavailable;
-  const activeReferenceBlocked = activeReferenceReadiness === "BLOCKED";
+  const referenceStatus = activeReferenceReadiness?.trim().toUpperCase() || null;
+  const activeReferenceBlocked = referenceStatus === "BLOCKED";
+  // A declared non-ready source must never be promoted to start READY.
+  // A missing declaration retains legacy orientation behavior for now.
+  const activeReferencePending = referenceStatus !== null &&
+    referenceStatus !== "READY" && !activeReferenceBlocked;
   const projectionIncomplete =
     relevantTruncatedSectionsForAuthoringDomain(snapshot.authoring.domain, reference).length > 0;
   const workspaceIncomplete = (workspace.blockers_omitted_count ?? 0) > 0;
@@ -145,6 +150,13 @@ export function buildReadiness(
   if (workspaceBlockersUnresolved) reasons.push("WORKSPACE_BLOCKERS_REQUIRE_REVIEW");
   reasons.push(...workspaceIssues);
   if (activeReferenceBlocked) reasons.push("REFERENCE_STAGE_BLOCKED");
+  if (activeReferencePending) {
+    reasons.push(referenceStatus === "NEEDS_REVIEW"
+      ? "REFERENCE_STAGE_NEEDS_REVIEW"
+      : referenceStatus === "NOT_REQUIRED"
+        ? "REFERENCE_STAGE_NOT_REQUIRED"
+        : "REFERENCE_STAGE_READINESS_INVALID");
+  }
   reasons.push(...lifecycle.reasons.filter((reason) => !reasons.includes(reason)));
 
   // The first healthy /health probe still needs orientation, not a false
@@ -160,7 +172,8 @@ export function buildReadiness(
     modelling_start: blocked
       ? "BLOCKED"
       : runtimeReady && projectReady && domainReady && contextReady &&
-          reference.available && !projectionIncomplete && !workspaceIncomplete &&
+          reference.available && !activeReferencePending &&
+          !projectionIncomplete && !workspaceIncomplete &&
           !workspaceBlockersUnresolved && workspaceIssues.length === 0 &&
           !lifecycle.orientation_required
         ? "READY"

@@ -159,10 +159,16 @@ export function readinessForAuthoringDomain(
   domain: ControlAuthoringDomain | null,
   reference: ControlReferenceProjection
 ): string | null {
-  if (domain === "GEOMETRY") return reference.readiness.geometry;
-  if (domain === "TEXTURING") return reference.readiness.texture;
-  if (domain === "ANIMATION") return reference.readiness.animation;
-  return reference.readiness.overall;
+  const stageValue = domain === "GEOMETRY"
+    ? reference.readiness.geometry
+    : domain === "TEXTURING"
+      ? reference.readiness.texture
+      : domain === "ANIMATION"
+        ? reference.readiness.animation
+        : reference.readiness.overall;
+  // Normalize only the active stage. A lowercase BLOCKED must remain
+  // blocked; an unfamiliar declaration never becomes READY.
+  return stageValue?.trim().toUpperCase() || null;
 }
 
 function imagesForStage(
