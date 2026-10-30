@@ -161,6 +161,25 @@ describe("atomic Texture + UV source transaction contract (adapter-only)", () =>
       .toEqual([0, 55, 0, 255]);
     expect(rgbaAt(f.initial.atlases[0].pixels, 8, 2))
       .toEqual([11, 22, 33, 255]);
+
+    // Receipt revisions are derived once from immutable candidate RGBA.
+    // Verify they agree with actual returned native pixels and original
+    // source for every dependent texture without duplicating production
+    // hashing after the full-byte readback.
+    for (const row of r.texture_revisions) {
+      const before = f.initial.atlases.find(
+        atlas => atlas.texture_uuid === row.texture_uuid
+      )!;
+      const native = f.harness.state.atlases.find(
+        atlas => atlas.texture_uuid === row.texture_uuid
+      )!;
+      expect(row.before_revision).toBe(await computeTextureRevision(
+        before.pixels, before.width, before.height
+      ));
+      expect(row.after_revision).toBe(await computeTextureRevision(
+        native.pixels, native.width, native.height
+      ));
+    }
   });
 
   test("oversized or non-flat atlas inventory fails before cloning bitmap snapshots", async () => {

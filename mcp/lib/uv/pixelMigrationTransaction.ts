@@ -388,17 +388,14 @@ export async function applyUvPixelMigrationAtomic(input: {
     if (afterFingerprint === expected_source_fingerprint) {
       throw new Error("UV_PIXEL_MIGRATION_POSTCONDITION: UV geometry did not change.");
     }
+    // Full decoded-RGBA equality (UUID, dimensions, frames and every byte)
+    // with the already-hashed candidates proves the same SHA-256 revision.
+    // A second async digest of these exact native bytes adds no evidence and
+    // lengthens the window where an external edit may race the Undo commit.
     requireAtlasBytes(candidateAtlases, after.atlases, "after native apply");
-    const nativeRevisions = await revisions(after.atlases);
-    for (const [uuid, revision] of Object.entries(afterRevisions)) {
-      if (nativeRevisions[uuid] !== revision) {
-        throw new Error("UV_PIXEL_MIGRATION_POSTCONDITION: native " +
-          "decoded pixels disagree with the planned atlas " + uuid + ".");
-      }
-    }
 
-    // A fresh read is mandatory after asynchronous digests. Do not publish
-    // a receipt for an atlas or UV state that changed before finishUndo.
+    // Re-read native source after the prior async native operations. This
+    // last snapshot still protects against stale UV/pixels before finishUndo.
     const final = await adapter.readState();
     requireSameScene(original, final);
     if (fingerprintUvNativeSource(final.uv) !== afterFingerprint) {

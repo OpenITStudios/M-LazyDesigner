@@ -1,7 +1,7 @@
 # Semantic UV Native Boundary
 
 Status: SOURCE IMPLEMENTED / LIVE PROOF PENDING
-Updated: 2026-10-24
+Updated: 2026-10-31
 Branch: Local
 
 ## Ownership
@@ -39,6 +39,15 @@ before RGBA candidate generation or Undo. Native untextured/disabled faces
 outside the moved island remain allowed. A complete Cube/Texture/face ledger
 is still mandatory; this guard neither attests native scene completeness nor
 activates a production migration tool.
+
+The adapter-only transaction computes expected before/after RGBA revisions
+from immutable snapshots and candidates. After native apply it compares
+**every byte** of each atlas (and its identity/dimensions) with the already
+hashed candidate, then independently re-reads the scene before the synchronous
+Undo commit. It does not re-hash the same proven-equal native bytes during
+that window. The receipt's after revision is thereby tied to actual decoded
+RGBA, not a visual PASS or saved-file claim; rollback and OUTCOME_UNKNOWN
+semantics remain unchanged.
 
 ## Proof boundary
 
