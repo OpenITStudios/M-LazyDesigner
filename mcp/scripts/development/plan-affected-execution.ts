@@ -187,15 +187,23 @@ export function parseGitNameOnlyPaths(output: string): string[] {
   return output.split("\0").filter(Boolean);
 }
 
+/** This list is source-only and includes index/worktree changes plus
+ * nonignored untracked files; a matching HEAD alone is not exact-source proof.
+ */
+export function discoverWorkingGitPaths(): string[] {
+  return [...new Set([
+    ...parseGitNameOnlyPaths(gitText(["diff", "--no-renames", "--name-only", "-z", "HEAD", "--"])),
+    ...parseGitNameOnlyPaths(gitText(["ls-files", "--others", "--exclude-standard", "-z", "--"])),
+  ])].sort();
+}
+
 /** Dirty checkout: all tracked + nonignored untracked changes.
  * Clean checkout: first-parent HEAD changes, or the initial tracked tree.
  * --no-renames retains both removed and added owner paths.
  */
-export function discoverAffectedGitPaths(): string[] {
-  const dirty = [
-    ...parseGitNameOnlyPaths(gitText(["diff", "--no-renames", "--name-only", "-z", "HEAD", "--"])),
-    ...parseGitNameOnlyPaths(gitText(["ls-files", "--others", "--exclude-standard", "-z", "--"])),
-  ];
+export function discoverAffectedGitPaths(
+  dirty: readonly string[] = discoverWorkingGitPaths()
+): string[] {
   if (dirty.length) return [...new Set(dirty)].sort();
   const [head, parent] = gitText(["rev-list", "--parents", "-n", "1", "HEAD"]).trim().split(/\s+/);
   if (!head || !/^[a-f0-9]{40}$/i.test(head)) {
@@ -205,6 +213,21 @@ export function discoverAffectedGitPaths(): string[] {
     ? gitText(["diff", "--no-renames", "--name-only", "-z", parent, head, "--"])
     : gitText(["ls-tree", "-r", "--name-only", "-z", head]);
   return [...new Set(parseGitNameOnlyPaths(changed))].sort();
+}
+
+/** Pin the source bytes, not merely the last Git commit.
+ * Pure regression seam; callers get changes from the one existing Git reader.
+ */
+export function assertExpectedSourceSha(
+  expected: string, actual: string, workingPaths: readonly string[]
+): void {
+  if (actual.toLowerCase() !== expected.toLowerCase()) {
+    throw new Error("Expected source SHA does not match current Git HEAD; no verifier started.");
+  }
+  if (workingPaths.length !== 0) {
+    throw new Error("Expected source SHA requires a clean Git worktree; " +
+      workingPaths.length + " modified or untracked paths. No verifier started.");
+  }
 }
 
 /**
@@ -253,14 +276,17 @@ export async function parseAffectedExecutionArguments(
   if (auto && args.length > 0) {
     throw new Error("--auto cannot be mixed with explicit changed paths.");
   }
+  // --expect-sha is an exact-source preflight, not a branch-name check.
+  // A matching commit with edited/untracked source must not claim SHA proof.
+  // Unpinned --auto remains available for normal dirty worktree iteration.
+  let workingPaths: string[] | undefined;
   if (expectedSha) {
     const actual = gitText(["rev-parse", "--verify", "HEAD"]).trim();
-    if (actual.toLowerCase() !== expectedSha.toLowerCase()) {
-      throw new Error("Expected source SHA does not match current Git HEAD; no verifier started.");
-    }
+    workingPaths = discoverWorkingGitPaths();
+    assertExpectedSourceSha(expectedSha, actual, workingPaths);
   }
   return {
-    changedPaths: auto ? discoverAffectedGitPaths() : args.filter(Boolean),
+    changedPaths: auto ? discoverAffectedGitPaths(workingPaths) : args.filter(Boolean),
     ...(previousSemanticRegistry ? { previousSemanticRegistry } : {}),
   };
 }

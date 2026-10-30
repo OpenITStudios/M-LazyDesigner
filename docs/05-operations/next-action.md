@@ -4,7 +4,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Primary next to do — cross-repository efficiency (2026-10-30)
 
-**USER DECISION:** Optimize end-to-end LazyDesigner using proven sibling-repo patterns without duplicate engines. Existing affected planner now supports Git `--auto`, optional exact `--expect-sha`, and focused Animation numeric/diagnostic regressions. CI remains disabled; no release/native mutation.
+**USER DECISION:** Optimize end-to-end LazyDesigner using proven sibling-repo patterns without duplicate engines. Existing affected planner supports Git `--auto` and SHA-pinned `--expect-sha` (clean source required); focused Animation regressions retained. CI disabled; no release/native mutation.
 
 **Texture/UV checkpoint:** 112-source K0–K9 audit, 25 decision families and guarded physical texel mapping remain in [Texture knowledge integration](../03-authoring/texture/knowledge-integration.md). `manage_uv_layout` still unregistered. Bun/CI/native/visual/Golden acceptance NOT EXECUTED for latest source; no quality PASS.
 

@@ -36,6 +36,8 @@ clean checkout, it checks the latest commit against its first parent (initial
 commit: all tracked paths). Renames retain both old and new ownership paths.
 Unknown or empty change sets retain the conservative full verification gate.
 
-`--expect-sha` refuses mismatched local HEAD before tests. Both flags reuse
+`--expect-sha` refuses mismatched HEAD **and** staged, unstaged or nonignored
+untracked files before tests. Omit it when deliberately verifying a dirty
+working tree: that result cannot count as exact-commit evidence. Both flags reuse
 the existing plan/verify commands, not a new runner or registry. Planning is
 read-only; no CI, installs, cache deletion or native acceptance is implied.

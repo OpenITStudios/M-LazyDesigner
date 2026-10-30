@@ -9,6 +9,7 @@ import {
   buildAffectedExecutionPlan,
   parseAffectedExecutionArguments,
   parseGitNameOnlyPaths,
+  assertExpectedSourceSha,
 } from "../../scripts/development/plan-affected-execution";
 import type { SemanticImpactReport } from "../../gateway/development/impact";
 import { planSemanticInvalidation } from "../../gateway/development/semanticInvalidation";
@@ -83,6 +84,22 @@ describe("affected execution planner", () => {
       .rejects.toThrow("40-hex");
     await expect(parseAffectedExecutionArguments(["--bogus"]))
       .rejects.toThrow("Unknown");
+  });
+
+  test("SHA-pinned affected verification refuses dirty or mismatched source", () => {
+    const sha = "a".repeat(40);
+    expect(() => assertExpectedSourceSha(sha, sha, [])).not.toThrow();
+    expect(() => assertExpectedSourceSha(sha, sha.toUpperCase(), [])).not.toThrow();
+    expect(() => assertExpectedSourceSha(sha, "b".repeat(40), []))
+      .toThrow("does not match current Git HEAD");
+    for (const changed of [
+      ["mcp/gateway/control/packet.ts"], // tracked/staged edit
+      ["mcp/tests/new-regression.test.ts"], // untracked source
+      ["mcp/foo.ts", "mcp/bar.ts"], // mixed changes
+    ]) {
+      expect(() => assertExpectedSourceSha(sha, sha, changed))
+        .toThrow("requires a clean Git worktree");
+    }
   });
 
   test("Hybrid-4 experimental owners trigger bounded benchmark and contract checks", () => {
