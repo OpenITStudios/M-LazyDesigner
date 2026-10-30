@@ -65,6 +65,57 @@ describe("gateway recovery semantics", () => {
     }
   });
 
+  test("contradictory successful Stage receipts require state inspection, never retry", () => {
+    const valid = {
+      phase: "texturing",
+      runtime_surface: "AUTHORING",
+      reason: "continue authoring",
+      resume_from: "current project",
+      readiness_summary: null,
+      surface_changed: false,
+      reload_required: false,
+      action: "continue",
+    };
+    for (const [nativeReceipt, requestedTarget, expectedCode] of [
+      [{ ...valid, runtime_surface: "ANIMATION" }, "texturing", "RUNTIME_SURFACE_MISMATCH"],
+      [{ ...valid, surface_changed: true }, "texturing", "SURFACE_CHANGE_MISMATCH"],
+      [valid, "animation", "AUTHORING_TARGET_MISMATCH"],
+    ] as const) {
+      const application = resolveGatewayCapabilityEffects(
+        "switch_authoring_phase", nativeReceipt, "geometry"
+      );
+      const issue = validateGatewayCapabilityEffectReceipt(
+        application, true, { target_phase: requestedTarget }
+      );
+      expect(issue?.code).toBe(expectedCode);
+
+      const output = gatewayErrorResult(new GatewayBackendError(
+        "BACKEND_UNAVAILABLE", issue!.message, false,
+        { capability: "switch_authoring_phase", receipt_issue: issue!.code }
+      ));
+      expect(output).toMatchObject({
+        isError: true,
+        structuredContent: {
+          code: "BACKEND_UNAVAILABLE",
+          receipt_issue: expectedCode,
+          recovery: {
+            category: "AFFINITY",
+            safe_to_retry: false,
+            state_uncertain: true,
+            requires_status_refresh: true,
+            requires_user_action: false,
+          },
+        },
+      });
+      expect(output.structuredContent.recovery.action).toContain(
+        "never replay the mutation"
+      );
+      expect(recoveryForGatewayError("BACKEND_UNAVAILABLE", true, {
+        receipt_issue: expectedCode,
+      }).safe_to_retry).toBe(false);
+    }
+  });
+
   test("normal availability and unknown issue codes retain their own recovery", () => {
     expect(recoveryForGatewayError("BACKEND_UNAVAILABLE", true)).toMatchObject({
       category: "AVAILABILITY",

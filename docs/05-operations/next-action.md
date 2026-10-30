@@ -26,7 +26,7 @@ Gateway Stage receipt consistency and Golden/affected-test guards are source-aut
 
 ## Next REMOTE_GITHUB work
 
-**P0 integration:** Gateway now requires Stage/Runtime surface/target agreement before accepting a handoff. Existing project binding, header/catalog refresh, same-Stage no-op and generation-change guards remain. Native proof and accepted-result cost are pending; do not add new routing, Gateway tools or a second benchmark.
+**P0 integration:** Gateway verifies Stage/surface/target receipts. Rejected successful affinity mutations now require state inspection rather than replay; ordinary availability remains separate. Project binding, header/catalog refresh, same-Stage no-op and generation guards remain. Native proof/cost pending; no new routing or benchmark.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 

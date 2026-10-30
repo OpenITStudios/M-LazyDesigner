@@ -62,10 +62,14 @@ export function recoveryForGatewayError(
   if (
     code === "BACKEND_UNAVAILABLE" &&
     (details.receipt_issue === "MISSING_PROJECT_UUID" ||
-      details.receipt_issue === "MISSING_AUTHORING_PHASE")
+      details.receipt_issue === "MISSING_AUTHORING_PHASE" ||
+      details.receipt_issue === "RUNTIME_SURFACE_MISMATCH" ||
+      details.receipt_issue === "SURFACE_CHANGE_MISMATCH" ||
+      details.receipt_issue === "AUTHORING_TARGET_MISMATCH")
   ) {
-    // Native mutation reported success but lacked an authoritative affinity
-    // receipt. Never imply that the project/Stage definitely stayed unchanged.
+    // A successful native mutation may precede the failed authority receipt
+    // validation. Missing AND contradictory project/Stage identity are
+    // uncertain outcomes; never advise replay before state inspection.
     return {
       category: "AFFINITY",
       safe_to_retry: false,
