@@ -10,6 +10,8 @@ import {
 } from "../../gateway/capabilities/semanticRegistry";
 import { planSemanticInvalidation } from "../../gateway/development/semanticInvalidation";
 import { readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 
 /**
@@ -163,6 +165,48 @@ export function buildAffectedExecutionPlan(
   };
 }
 
+/** Git-aware entry to the existing affected planner; no new task runner. */
+const REPOSITORY_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+function gitText(args: readonly string[]): string {
+  try {
+    return execFileSync("git", [...args], {
+      cwd: REPOSITORY_ROOT, encoding: "utf8", windowsHide: true,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+  } catch (error) {
+    throw new Error("Affected Git selection unavailable: " +
+      (error instanceof Error ? error.message : String(error)));
+  }
+}
+
+/** Git -z lists must not be split on whitespace/newlines. */
+export function parseGitNameOnlyPaths(output: string): string[] {
+  if (output !== "" && !output.endsWith("\0")) {
+    throw new Error("Incomplete NUL-delimited Git path listing.");
+  }
+  return output.split("\0").filter(Boolean);
+}
+
+/** Dirty checkout: all tracked + nonignored untracked changes.
+ * Clean checkout: first-parent HEAD changes, or the initial tracked tree.
+ * --no-renames retains both removed and added owner paths.
+ */
+export function discoverAffectedGitPaths(): string[] {
+  const dirty = [
+    ...parseGitNameOnlyPaths(gitText(["diff", "--no-renames", "--name-only", "-z", "HEAD", "--"])),
+    ...parseGitNameOnlyPaths(gitText(["ls-files", "--others", "--exclude-standard", "-z", "--"])),
+  ];
+  if (dirty.length) return [...new Set(dirty)].sort();
+  const [head, parent] = gitText(["rev-list", "--parents", "-n", "1", "HEAD"]).trim().split(/\s+/);
+  if (!head || !/^[a-f0-9]{40}$/i.test(head)) {
+    throw new Error("Cannot identify Git HEAD for affected selection.");
+  }
+  const changed = parent
+    ? gitText(["diff", "--no-renames", "--name-only", "-z", parent, head, "--"])
+    : gitText(["ls-tree", "-r", "--name-only", "-z", head]);
+  return [...new Set(parseGitNameOnlyPaths(changed))].sort();
+}
+
 /**
  * Share the same snapshot input contract across plan-only and run CLIs.
  * Source comparisons are read-only and never refresh Runtime state.
@@ -174,6 +218,7 @@ export async function parseAffectedExecutionArguments(
   previousSemanticRegistry?: CapabilitySemanticRecord[];
 }> {
   const args = [...rawArgs];
+  if (args[0] === "--") args.shift();
   const index = args.indexOf("--previous-semantic-snapshot");
   let previousSemanticRegistry: CapabilitySemanticRecord[] | undefined;
   if (index >= 0) {
@@ -188,8 +233,34 @@ export async function parseAffectedExecutionArguments(
     previousSemanticRegistry = parsed as CapabilitySemanticRecord[];
     args.splice(index, 2);
   }
+
+  const expectedIndex = args.indexOf("--expect-sha");
+  let expectedSha: string | undefined;
+  if (expectedIndex >= 0) {
+    const sha = args[expectedIndex + 1];
+    if (!sha || !/^[a-f0-9]{40}$/i.test(sha)) {
+      throw new Error("--expect-sha requires an exact 40-hex commit SHA.");
+    }
+    expectedSha = sha;
+    args.splice(expectedIndex, 2);
+  }
+  const autoIndex = args.indexOf("--auto");
+  const auto = autoIndex >= 0;
+  if (auto) args.splice(autoIndex, 1);
+  if (args.some(path => path.startsWith("--"))) {
+    throw new Error("Unknown affected-selection option.");
+  }
+  if (auto && args.length > 0) {
+    throw new Error("--auto cannot be mixed with explicit changed paths.");
+  }
+  if (expectedSha) {
+    const actual = gitText(["rev-parse", "--verify", "HEAD"]).trim();
+    if (actual.toLowerCase() !== expectedSha.toLowerCase()) {
+      throw new Error("Expected source SHA does not match current Git HEAD; no verifier started.");
+    }
+  }
   return {
-    changedPaths: args.filter(Boolean),
+    changedPaths: auto ? discoverAffectedGitPaths() : args.filter(Boolean),
     ...(previousSemanticRegistry ? { previousSemanticRegistry } : {}),
   };
 }

@@ -22,6 +22,20 @@ Prefer the package commands rather than invoking files directly:
 bun run plan:development-context -- "<intent>" --changed <path>
 bun run plan:affected -- <path>
 bun run verify:affected -- <path>
+bun run plan:affected -- --auto
+bun run verify:affected -- --auto --expect-sha <exact-Local-HEAD>
 bun run analyze:semantic-impact -- <path>
 bun run audit:data # optional --strict fails on authored broken links/alias chains
 ```
+
+## Cross-repository efficiency adoption
+
+`--auto` borrows the Git change-discovery pattern from M-Lazy-Developer and
+M-Minecraft-Emulator. It checks tracked and untracked nonignored paths; on a
+clean checkout, it checks the latest commit against its first parent (initial
+commit: all tracked paths). Renames retain both old and new ownership paths.
+Unknown or empty change sets retain the conservative full verification gate.
+
+`--expect-sha` refuses mismatched local HEAD before tests. Both flags reuse
+the existing plan/verify commands, not a new runner or registry. Planning is
+read-only; no CI, installs, cache deletion or native acceptance is implied.

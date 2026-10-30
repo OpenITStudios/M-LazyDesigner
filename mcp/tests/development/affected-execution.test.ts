@@ -5,7 +5,11 @@ import {
   RECEIPT_CONTRACT_TESTS_BY_PATH,
   UV_REGRESSION_TESTS_BY_PATH,
 } from "../../gateway/development/affectedExecution";
-import { buildAffectedExecutionPlan } from "../../scripts/development/plan-affected-execution";
+import {
+  buildAffectedExecutionPlan,
+  parseAffectedExecutionArguments,
+  parseGitNameOnlyPaths,
+} from "../../scripts/development/plan-affected-execution";
 import type { SemanticImpactReport } from "../../gateway/development/impact";
 import { planSemanticInvalidation } from "../../gateway/development/semanticInvalidation";
 
@@ -23,6 +27,43 @@ function impact(overrides: Partial<SemanticImpactReport> = {}): SemanticImpactRe
 }
 
 describe("affected execution planner", () => {
+  test("Animation knowledge diagnostics reuse existing affected regressions", () => {
+    for (const [path, expected] of [
+      ["mcp/lib/animation/rootMotionAnalysis.ts", "mcp/tests/quality-intelligence.test.ts"],
+      ["mcp/server/tools/validation/qualityIntelligence.ts", "mcp/tests/quality-intelligence.test.ts"],
+      ["mcp/lib/animation/motionDynamics.ts", "mcp/tests/animation-native-intelligence.test.ts"],
+      ["mcp/server/runtime/extensions/animation/nativeIntelligence.ts", "mcp/tests/animation-native-intelligence.test.ts"],
+      ["mcp/lib/animation/motionRecipe.ts", "mcp/tests/motion-recipe.test.ts"],
+    ] as const) {
+      const plan = planAffectedExecution({ changedPaths: [path], semanticImpact: impact() });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.checks, path).toContain("PROJECT_GRAPH");
+      expect(plan.targeted_tests, path).toContain(expected);
+      expect(plan.commands, path).not.toContain("bun run verify:full");
+    }
+  });
+
+  test("Git NUL path parsing preserves names with spaces and rejects truncated lists", () => {
+    expect(parseGitNameOnlyPaths("")).toEqual([]);
+    expect(parseGitNameOnlyPaths("mcp/foo.ts\0docs/with space.md\0")).toEqual([
+      "mcp/foo.ts", "docs/with space.md",
+    ]);
+    expect(() => parseGitNameOnlyPaths("mcp/unclosed.ts")).toThrow("Incomplete");
+  });
+
+  test("affected CLI refuses unknown options and mixed automatic/explicit scope", async () => {
+    await expect(parseAffectedExecutionArguments(["mcp/foo.ts"]))
+      .resolves.toEqual({ changedPaths: ["mcp/foo.ts"] });
+    await expect(parseAffectedExecutionArguments(["--auto", "mcp/foo.ts"]))
+      .rejects.toThrow("--auto cannot be mixed");
+    await expect(parseAffectedExecutionArguments(["--auto", "--auto"]))
+      .rejects.toThrow("Unknown");
+    await expect(parseAffectedExecutionArguments(["--expect-sha", "bad"]))
+      .rejects.toThrow("40-hex");
+    await expect(parseAffectedExecutionArguments(["--bogus"]))
+      .rejects.toThrow("Unknown");
+  });
+
   test("Hybrid-4 experimental owners trigger bounded benchmark and contract checks", () => {
     const plan = buildAffectedExecutionPlan([
       "mcp/gateway/experimental/hybridRegistration.ts",

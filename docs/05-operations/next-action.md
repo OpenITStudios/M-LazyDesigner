@@ -2,9 +2,9 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next to do — Animation (2026-10-30 user handoff)
+## Primary next to do — cross-repository efficiency (2026-10-30)
 
-**USER DECISION:** Texture/UV knowledge pass source-closed; switch focus to Animation in ChatGPT + remote `OpenITStudios/M-LazyDesigner` / `Local`. Geometry R0–R5 remains paused. No CI enablement, release, installed Blockbench mutation or new Gateway tools.
+**USER DECISION:** Optimize end-to-end LazyDesigner using proven sibling-repo patterns without duplicate engines. Existing affected planner now supports Git `--auto`, optional exact `--expect-sha`, and focused Animation numeric/diagnostic regressions. CI remains disabled; no release/native mutation.
 
 **Texture/UV checkpoint:** 112-source K0–K9 audit, 25 decision families and guarded physical texel mapping remain in [Texture knowledge integration](../03-authoring/texture/knowledge-integration.md). `manage_uv_layout` still unregistered. Bun/CI/native/visual/Golden acceptance NOT EXECUTED for latest source; no quality PASS.
 
@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **Animation K4/K5 source:** MotionDynamics and RootMotion reject duplicate timestamps and native pre/post ambiguity; RootMotion also rejects expression gaps, coerced nonnumeric vectors and malformed timestamps, preserving omitted-track diagnostics. Existing-owner regression extended. Exact-SHA Bun/CI/native/visual/Golden **NOT EXECUTED**. No new tools, suites or benchmark tasks.
 
-**Order:** Animation ACTIVE; Texture/UV SOURCE-CLOSED / NATIVE PENDING; Geometry PAUSED. **Next:** run affected source tests on an actual matching Bun worktree when available, then disposable native animation/persistence verification and existing mechanical-lift, fisherman and particle Golden acceptance. Do not redo K0/K1.
+**Order:** Developer-flow SOURCE-CLOSED / BUN PENDING; Animation/Texture native acceptance pending; Geometry PAUSED. **Next:** match-SHA affected source checks, then existing native Animation/Golden acceptance. No extra test or command system.
 
 ## Current working environment
 
@@ -27,7 +27,7 @@ Geometry through `ec22a6e9` and R5 comparator source are preserved; Bun/typechec
 
 ## Next REMOTE_GITHUB work
 
-**Animation is the selected next work.** Reuse existing Animation owners and quality/live proof contracts. Geometry stays paused and Texture/UV does not reopen automatically.
+**Efficiency is the active task.** Reuse Control, Gateway, affected verifier and existing Golden quality checks. Further expansion requires a measured bottleneck; keep Geometry paused.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 

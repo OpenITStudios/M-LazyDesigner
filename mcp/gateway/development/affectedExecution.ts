@@ -514,6 +514,18 @@ function sharedContractTestsForPath(path: string): readonly string[] {
       "mcp/tests/export-lifecycle-control-delta.test.ts",
     ];
   }
+  // Targeted Animation knowledge/diagnostic owners: keep existing domain tests.
+  if (path === "mcp/lib/animation/rootMotionAnalysis.ts" ||
+      path === "mcp/server/tools/validation/qualityIntelligence.ts") {
+    return ["mcp/tests/quality-intelligence.test.ts"];
+  }
+  if (path === "mcp/lib/animation/motionDynamics.ts" ||
+      path === "mcp/server/runtime/extensions/animation/nativeIntelligence.ts") {
+    return ["mcp/tests/animation-native-intelligence.test.ts"];
+  }
+  if (path === "mcp/lib/animation/motionRecipe.ts") {
+    return ["mcp/tests/motion-recipe.test.ts"];
+  }
   if (path === "mcp/lib/animation/quality.ts") {
     return ["mcp/tests/quality-efficiency-intelligence.test.ts"];
   }
