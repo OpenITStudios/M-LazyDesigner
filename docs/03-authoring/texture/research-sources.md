@@ -127,6 +127,19 @@ This is the expanded eight-stream K1 research inventory for **high-fidelity, ref
 | P08 | [LibreSprite](https://github.com/LibreSprite/LibreSprite) | Indexed/pixel-editor techniques in source-available product | Code GPL-2; principles only (CODE) |
 | P09 | [Aseprite EULA](https://github.com/aseprite/aseprite/blob/main/EULA.txt) | Source visible does not mean permissively reusable | No copied engine/source/training by assumption (RIGHTS) |
 
+### TX-01 — Intentional pixel clusters and detail-rest (2026-10-31; research-only)
+
+This is an **evidence enrichment of existing** [TEX-P01](decision-cases.md#tex-p01-reference-material-palette-pixel-clusters), not another K3 case, texture style engine or default shader:
+
+- [PixelJoint's pixel-art tutorial](https://pixeljoint.com/forum/forum_posts.asp?TID=11299) discusses clusters, banding, pillow shading and noise. A single isolated texel can be a legitimate glint/antialiasing pixel; cluster diagnostics alone cannot judge visual success (community author tutorial; rolling page).
+- [Hytale's art-direction article](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale) describes hand-painted form, selective baked shading, avoiding excessive grain and preserving independent model readability. **Do not** adopt Hytale's fixed texel density, proprietary material/shading modes or rendering assumptions for Minecraft Bedrock (first-party source; published 2025-12-22; rolling page).
+- [Riot's portfolio art guidance](https://www.riotgames.com/en/portfolio-and-reel-suggestions) identifies distribution between detail-rich and visually resting areas as a craft consideration, not a quantitative rule (first-party editorial guidance).
+- [80 Level's stylized-environment artist interview](https://80.lv/articles/creating-modules-for-stylised-environments) describes reducing small detail/noise to maintain readability and using painted-light treatment; this is an artist's reported workflow, not independently reproduced performance evidence.
+
+**Positive probe:** an approved, region-specific material reference shows grouped directional value shapes, quiet base surfaces and sparse identity markings; exact source crop, part/face ownership, native UV and physical texel capacity support a compact `surface_pattern` and mapped painting decision. **Negative:** applying repeated texture noise, uniform metal scratches or an equally bright outline to all faces when these details obscure the focal form. **Ambiguous:** intentional point highlights, stippled/dithered art direction, insufficient texels, mismatched render lighting or absent crop → abstain / `REVIEW_REQUIRED`, do **not** auto-smooth or repaint. Confirm from the mapped shaded model, not atlas statistics alone.
+
+**Consumer:** existing `mcp/lib/texture/pixelCraft.ts` supplies bounded advisory cluster evidence; `treatmentPlan.ts`, `surfacePattern.ts` and the current Texturing specialist choose only a current evidence-supported action. No extra public Gateway tool, model weights, bulk source images or new decision index. `TEX-P01` selection behavior and source-native-human proof boundaries remain unchanged.
+
 ## G. AI/procedural texturing research — transferable ideas without new model inference
 
 **Paper license, code license, dataset rights, model weights and source images are independent.** This section supports decision design and counterexamples only: no training, model download, inference or GPU requirement.

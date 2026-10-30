@@ -33,6 +33,17 @@ A material visual `PASS` requires **both the actual approved reference image and
 
 A filename/path/manifest, Reference Evidence Map, prose description, remembered reference, prior observation summary, or old model screenshot is not a substitute for those images.
 
+## Optional art-direction probes (AD-01 / AD-02)
+
+Use these **only** if identity hierarchy or small-display readability is genuinely unresolved; they do not add a mandatory capture to every Cube/tool operation. The research rationale is in [Modelling curated research](../modelling/research-sources.md#artist-oriented-composition-sources--ad-01ad-02-2026-10-31-research-only); the approved user image remains authoritative.
+
+- **AD-01, focal hierarchy:** compare which observable primary mass/landmark conveys the identity and whether unrelated geometry/ornament obscures it. Separate actual source color/marking from cinematic bloom, camera angle or lighting; a bright area is not automatically a required texture change. Name the affected part and reference claim before attributing cause to Geometry or Texture.
+- **AD-02, intended-size silhouette:** inspect a *derived view* of the same current native capture at the asset's intended presentation scale when known. Keep orientation, crop, visible model size, revision and shading comparable to a supported source view. This is a visual-readability probe, **not** a new global thumbnail pixel quota or proof of unobserved depth.
+- **No false comparison:** if the source is an art-render and the model is a neutral Blockbench capture, do not label cinematic lighting, pose or exposure differences as geometry/texture defects. Request only the missing compatible evidence that can change the current decision. Neither a resized screenshot nor a perceptual similarity number independently establishes a `PASS`.
+- **Evidence output:** one identity-bearing discrepancy, its current/reference image hashes or exact current-view evidence refs, view/camera and material presentation context, responsible existing owner if supported, and smallest coherent correction candidate. Unknown correspondence remains `UNVERIFIED`; approval stays with the existing visual verdict and human review.
+
+These probes are adapted from first-party [Riot Character Art](https://www.riotgames.com/en/artedu/character-art), [Riot portfolio guidance](https://www.riotgames.com/en/portfolio-and-reel-suggestions) and [Hytale art direction](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale), not copied visual assets or new renderer contracts. Native and quality benefit **NOT EXECUTED**.
+
 ## Reference Claim / View Grounding
 
 Use a compact Reference Evidence Map only when material identity/view/attachment ambiguity needs explicit tracking; otherwise state the concrete difference and supporting views directly:

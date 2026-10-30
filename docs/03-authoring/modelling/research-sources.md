@@ -46,6 +46,22 @@ All P0 entries are **selected for study/adaptation**, not automatically
 validated production rules. The first four are highest priority because
 Bedrock/native constraints control whether any proposal is executable.
 
+### Artist-oriented composition sources — AD-01/AD-02 (2026-10-31; research-only)
+
+These first-party pages were inspected for the **stated artistic reasoning**, not for transferable Hytale tools, model files, default proportions, texture densities, or claims of LazyDesigner quality. Their content is rolling/unpinned, and all example artwork remains with its creator.
+
+| ID | Publisher source | Observed source-level guidance | Conditional LazyDesigner use / exclusion |
+| --- | --- | --- | --- |
+| ART-01 | [Hytale art director: Making Models for Hytale](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale), published 2025-12-22 | Style pillars emphasize recognizable simplified shapes, distinctive stylization and consistency; details are added where needed for readability | Evaluate deliberate identity-bearing masses and clean blockout; **do not** transfer Hytale's renderer, export, fixed texel ratios, geometry limitations, or proportions into Bedrock |
+| ART-02 | [Riot Games Character Art](https://www.riotgames.com/en/artedu/character-art) | Character translation from 2D into 3D requires recognizable proportions, likeness and readability even at small in-game presentation size | Consider proportional and silhouette decisions only when an approved target view/scale supports them; not a universal character template |
+| ART-03 | [Riot Games Portfolio and Reel Suggestions](https://www.riotgames.com/en/portfolio-and-reel-suggestions) | Recommends process sketches, multi-angle rationale, compelling silhouettes and areas of detail versus areas of rest | Treat focal hierarchy/detail restraint as **review questions**; portfolio evaluation advice is not a numeric art score or approval of any source model |
+
+**AD-01 — Focal hierarchy (hypothesis).** On an approved current reference, name one observable identity-bearing focal feature *only when the image actually supports it*. Before secondary Geometry or mapped Texture detail, compare whether the current model preserves the same visual emphasis in a compatible neutral presentation. Positive candidate: a dominant head/crest/crystal is still readable while nonfocal surfaces remain quieter. Reject: adding evenly distributed spikes or bright trim merely to make every part detailed; refuse to infer intrinsic focal color from cinematic bloom. Ambiguous: one dramatic source image, occlusion or incompatible pose/camera → `UNVERIFIED`. Owner: existing Geometry primary-form review / Texture material-region review; no automatic recipe, symmetry or paint mutation.
+
+**AD-02 — Practical-scale silhouette (hypothesis).** Inspect the current shaded view at a realistic intended viewing scale, with an equivalent-scale reference when available, **in addition to** the native full-resolution check. Positive candidate: the required primary silhouette and identity landmarks remain distinguishable. Reject: a large render looks intricate but the target becomes unrecognizable at actual presentation size. Ambiguous: unknown target scale, different framing/camera, intentional stylized contour or missing actual reference image → `UNVERIFIED`. Owner: [Visual Validation](../validation/visual.md); not a fixed pixel-size limit, visual score, new Runtime capture tool or additional Golden task.
+
+**Promotion requirements:** real source/model paired images and exact revisions; one positive, negative and ambiguous case for each decision; then compare accepted results through the existing Golden benchmark. These advisory cases are **not** extra G-P01–G-P08 index sections and are not installed source knowledge for normal Gateway/Codex clients. Review counts and art appeal remain unmeasured.
+
 ## B. Secondary concepts to evaluate after a demonstrated gap (P1)
 
 | ID | Source | Narrow question | Decision |

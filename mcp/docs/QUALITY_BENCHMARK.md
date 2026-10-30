@@ -145,6 +145,16 @@ runtime/environment notes
 Compare implementation changes only against equivalent inputs and acceptance criteria. Accepted live benchmark runs must retain end-to-end provenance for the approved Reference Package fingerprint, Control task-context id, Runtime build identity, and resulting artifact revision. Baseline/candidate comparisons require the same Reference Package fingerprint; otherwise they are different authoring inputs and are not comparable efficiency experiments. A prepared fixture or passing static test is not live visual/runtime proof.
 
 
+## QA-01 — Blinded paired art-quality review (optional Golden evaluation)
+
+This **extends the existing single full-asset Golden Task** rather than creating another task/runner/scorer. Source rationale: [Riot process/portfolio guidance](https://www.riotgames.com/en/portfolio-and-reel-suggestions) emphasizes design decisions and readability; [DreamSim (NeurIPS 2023)](https://proceedings.nips.cc/paper_files/paper/2023/hash/9f09f316a3eaf59d9ced5ffaefe97e0f-Abstract-Conference.html) demonstrates limits of low-level pixel metrics. Neither source proves automated aesthetic quality or a LazyDesigner result.
+
+**Preparation:** independently run baseline and candidate from byte-identical immutable seed and approved Reference Package; record distinct source/Runtime SHAs, exact asset revisions, views, shading/exposure, camera/crop, intended display scale and pose/time samples. Reject incompatible evidence before preference review. A one-view hero render cannot replace multi-view structure/texture evidence or animated playback.
+
+**Blinding:** show visually comparable current-revision baseline/candidate captures labelled only A/B, with order balanced between reviewers when possible. Ask about *specific* identity-bearing silhouette, focal clarity, material coherence, readable pixel language and motion staging (where applicable); record the view and a concrete reason for the preference, tie or `UNVERIFIED`. Hide version labels, prompts, tool counts and speed during the visual judgement. If only one judge exists, report that limitation; repeated opinions from one judge are not independent votes.
+
+**Acceptance:** preserve per-criterion `PASS / FAIL / UNVERIFIED` and the existing independently documented human acceptance. Never collapse mixed critical failures into an aggregate beauty score, assume aesthetic superiority from a perceptual embedding, or trade away Bedrock/UV/save/export correctness for visual preference. Only once quality is accepted/equal-or-better compare cost, time and corrections through the existing runner/finalizer; no fabricated preferences, new JSON fields or extra Gateways. This protocol is **PREPARED, NOT RUN**.
+
 ## G3 Geometry Knowledge A/B — next native acceptance experiment
 
 This is a **future measured run plan**, not source proof or a new evaluation

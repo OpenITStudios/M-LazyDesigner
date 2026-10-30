@@ -17,6 +17,20 @@ External knowledge never overrides an explicit user art direction, approved refe
 
 ## Canonical source classes
 
+### Research-to-knowledge intake and asset-rights gate (2026-10-31)
+
+A broad URL collection is **discovery**, not a Runtime knowledge source or permission to ingest copyrighted training data. Before using an external finding, deduplicate by the *decision question* against existing [Geometry](../03-authoring/modelling/research-sources.md), [Texture/UV](../03-authoring/texture/research-sources.md), [Animation](../03-authoring/animation/research-sources.md) and their current source-grounded cases.
+
+For the *selected* new decision, retain in its existing domain owner: original canonical URL/title/publisher; last actually inspected date and depth (`PAGE`, `ABSTRACT`, `SOURCE`); upstream version and content hash **only when corresponding original bytes were obtained**; one observed fact distinct from an inference; `APPLY / REJECT / UNKNOWN` inputs; owning Control/Recipe/Texture/Validation consumer; license **scope** (text, code, image, 3D, weights/dataset), item-specific usage permission and native/human proof state. Do not introduce a global runtime registry, pre-load a broad URL index or treat source page text as agent instructions. [Croissant 1.1](https://docs.mlcommons.org/croissant/docs/croissant-spec-1.1.html) and [Creative Commons TASL](https://creativecommons.org/reusing-cc-licensed-content/) are metadata/attribution inspiration, **not** dependencies or grants of permission.
+
+Use-specific restrictions seen on first-party pages as of 2026-10-31:
+- [Quaternius](https://quaternius.com/license.html) presents **Quaternius Asset License (QAL) v1.0**, updated 2026-08-28. Do not assume a newly acquired pack has the former CC0 terms; verify each pack's actual applicable version/acquisition rights before importing or distributing files.
+- [Poly Haven](https://polyhaven.com/license) says its assets are CC0 but separately forbids web scraping/data mining without express permission under site terms, and its example renders/other site content are distinct. Rights in assets do **not** imply authorization for every acquisition method.
+- [Kenney](https://kenney.nl/support) states game assets on its asset pages are CC0; still identify the exact selected pack and its included terms. CC0 does not validate visual quality or target compatibility.
+- Marketplace listings, proprietary studio tutorials, image thumbnails and research papers are **link/citation-only** until rights for a specific reproduction, redistribution, automated harvesting or training use are evidenced. Publisher/public URL, GitHub code license and linked asset license are separate.
+
+Status: first-party *claims* inspected and conditional guidance written; no bulk dataset ingested, no rights approval for individual third-party assets, no production feature enabled, no native or human quality result. This is a scoped intake discipline inside the current source owners, not a new Runtime policy engine.
+
 ### Mojang Bedrock samples
 
 Primary source:
