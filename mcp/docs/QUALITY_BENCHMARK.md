@@ -129,7 +129,7 @@ The target is **Cost to Accepted Result**, not minimum tool calls in isolation.
 
 ## Future Local Benchmark Run
 
-When local testing is authorized, run all six profiles with fixed reference/constraint inputs and retain:
+When a matching live environment is available, run **one full-asset Golden Task** (`golden-full-asset-authoring`) using its isolated fixture; retain these quality dimensions as a review rubric rather than running six unrelated Golden assets:
 
 ```text
 input reference revision
@@ -150,12 +150,13 @@ Compare implementation changes only against equivalent inputs and acceptance cri
 This is a **future measured run plan**, not source proof or a new evaluation
 engine. G2 retrieval regressions only establish that selected advisory text
 matches a semantic feature and source revision; they do not establish a
-better model. Use the updated current Golden corpus with **fresh approved
-references** and disposable seed models. Start with `golden-geometry-correction`
-for a bounded Geometry defect, or select `golden-rigid-authoring`,
-`golden-organic-authoring` or `golden-articulated-authoring` only when
-a particular Geometry/rig decision warrants that different profile.
-Prior production models and old named project cases are not current baselines.
+better model. The **single** current product-level Golden scenario is
+`golden-full-asset-authoring`: create the new Beacon Courier Bot from its
+dedicated blank seed and approved reference through Geometry, UV, Texture,
+Animation and final native acceptance. If measuring one Geometry knowledge
+decision, use the same canonical task, new fixture and identical source/build
+for both experiment arms. Other domains retain their affected regressions;
+do not reintroduce named/micro Golden tasks. Old projects are not baselines.
 
 - **Pair inputs:** identical approved reference package SHA-256, user
   dimensions, required views and acceptance criteria, identical immutable

@@ -1,0 +1,190 @@
+{
+  "schema": "lazydesigner-reference-v1",
+  "asset": {
+    "name": "beacon_courier_bot",
+    "kind": "MODEL",
+    "profile": "MECHANICAL",
+    "task": "NEW_ASSET",
+    "intent": "Model and animate an original brass-and-iron courier bot that signals with the right arm while keeping both feet planted."
+  },
+  "requirements": {
+    "dimensions_blocks": {
+      "width": 2,
+      "height": 2.75,
+      "length": 1.5
+    },
+    "player_relative_scale": "2.75 blocks tall; ground contact at Y=0",
+    "animation_required": true
+  },
+  "approval": {
+    "brief": "PENDING",
+    "visual_authority": "PENDING",
+    "package_generation": "PENDING"
+  },
+  "images": [
+    {
+      "id": "BEACON_COMPOSITE",
+      "file": "turnaround.svg",
+      "role": "CONCEPT_ONLY_UNAPPROVED",
+      "used_by": [
+        "GEOMETRY",
+        "TEXTURE",
+        "ANIMATION"
+      ],
+      "status": "PENDING"
+    }
+  ],
+  "parts": [
+    {
+      "id": "head",
+      "role": "GEOMETRY",
+      "motion": "PIVOT_HEAD",
+      "evidence": "PROPOSED",
+      "description": "Square dark-iron face framed by brass; two amber eyes; short antenna."
+    },
+    {
+      "id": "torso",
+      "role": "GEOMETRY",
+      "motion": "STATIC",
+      "evidence": "PROPOSED",
+      "description": "Brass main body, square amber beacon insert and separate dark frame."
+    },
+    {
+      "id": "left_arm",
+      "role": "GEOMETRY",
+      "motion": "PIVOT_SHOULDER",
+      "evidence": "PROPOSED",
+      "description": "Independent arm with exposed round shoulder."
+    },
+    {
+      "id": "right_arm",
+      "role": "GEOMETRY",
+      "motion": "PIVOT_SHOULDER",
+      "evidence": "PROPOSED",
+      "description": "Independent signal arm; raised without moving the torso."
+    },
+    {
+      "id": "left_leg",
+      "role": "GEOMETRY",
+      "motion": "STATIC_CONTACT",
+      "evidence": "PROPOSED",
+      "description": "Straight metallic support with separate flat foot."
+    },
+    {
+      "id": "right_leg",
+      "role": "GEOMETRY",
+      "motion": "STATIC_CONTACT",
+      "evidence": "PROPOSED",
+      "description": "Second leg with intentional negative space between feet."
+    },
+    {
+      "id": "rear_vent",
+      "role": "TEXTURE",
+      "motion": "STATIC",
+      "evidence": "PROPOSED",
+      "description": "Rear dark vent and small metallic hinge detail."
+    }
+  ],
+  "articulation": [
+    {
+      "id": "right_shoulder",
+      "part_id": "right_arm",
+      "pivot_region": "right shoulder center",
+      "range_degrees": 65,
+      "notes": "signal raises the right arm; torso and feet are world-stationary"
+    },
+    {
+      "id": "left_shoulder",
+      "part_id": "left_arm",
+      "pivot_region": "left shoulder center",
+      "range_degrees": 8,
+      "notes": "idle produces subtle weight, not a limb translation"
+    },
+    {
+      "id": "head_pivot",
+      "part_id": "head",
+      "pivot_region": "head-to-torso collar",
+      "range_degrees": 8,
+      "notes": "head sway is modest and returns to neutral"
+    }
+  ],
+  "materials": [
+    {
+      "id": "brass",
+      "affected_parts": [
+        "torso",
+        "head",
+        "arms",
+        "feet"
+      ],
+      "base_color": "#b57b4c",
+      "style": "128px pixel atlas with intentional broad clusters and sparse edge highlights"
+    },
+    {
+      "id": "dark_iron",
+      "affected_parts": [
+        "torso",
+        "arms",
+        "legs",
+        "rear_vent"
+      ],
+      "base_color": "#344a53",
+      "style": "dark painted metal; avoid noisy microtextures"
+    },
+    {
+      "id": "amber_glass",
+      "affected_parts": [
+        "torso",
+        "head"
+      ],
+      "base_color": "#f3bd61",
+      "style": "pixel-art luminous appearance only; no unverified emissive/PBR requirement"
+    }
+  ],
+  "animation_guidance": [
+    {
+      "name": "animation.beacon_courier.idle",
+      "type": "LOOP",
+      "duration_seconds": 2.4,
+      "participants": [
+        "head",
+        "left_arm",
+        "right_arm"
+      ],
+      "intent": "small shoulder/head sway; feet planted; seamless loop"
+    },
+    {
+      "name": "animation.beacon_courier.signal",
+      "type": "ONCE",
+      "duration_seconds": 1.6,
+      "participants": [
+        "right_arm",
+        "head"
+      ],
+      "intent": "right arm rotates up about 65 degrees, brief hold, then returns; no foot sliding"
+    }
+  ],
+  "constraints": [
+    "Use Bedrock native Cuboids, minimum sufficient geometry and clear negative space between legs.",
+    "One 128x128 base-color atlas; UV Layout PASS before texture painting.",
+    "front_direction=-z; total visible bounds width 32, height 44, depth 24 Blockbench units.",
+    "No design changes after approval unless correction evidence identifies the wrong upstream owner.",
+    "No automatic PBR/particle/gameplay requirements; benchmark covers normal visual asset authoring.",
+    "This is a benchmark concept: approval is PENDING and live execution must not be claimed."
+  ],
+  "unknowns": {
+    "blocking": [
+      "Original turnaround concept awaits explicit user visual approval.",
+      "A Bedrock-readable PNG must replace the SVG concept in the images list before native authoring."
+    ],
+    "non_blocking": [
+      "Optional texture shading can be refined within approved palette."
+    ]
+  },
+  "readiness": {
+    "overall": "BLOCKED",
+    "geometry": "BLOCKED",
+    "texture": "BLOCKED",
+    "animation": "BLOCKED"
+  }
+}

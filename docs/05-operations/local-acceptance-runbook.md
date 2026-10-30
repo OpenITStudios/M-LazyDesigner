@@ -591,41 +591,46 @@ Do not run destructive acceptance commands against:
 
 If a mutation becomes `OUTCOME_UNKNOWN`, inspect the current Blockbench state before any retry.
 
-## 8. Fresh Golden Task acceptance
+## 8. One full-asset Golden Task
 
-The current task IDs, stages and acceptance criteria are owned by
-`mcp/tests/fixtures/golden-task-cases.json` and described in
-`mcp/docs/GOLDEN_TASKS.md`.
+The only canonical product-level Golden is `golden-full-asset-authoring`,
+defined in `mcp/tests/fixtures/golden-task-cases.json`. Its standalone
+fixture folder is `mcp/tests/fixtures/golden/full-asset/`:
 
-**Do not use past production projects, previously accepted model files,
-`workspace/active/`, `workspace/saved/`, or historical Golden outputs
-as seed or working models.** Preserve all such user data unchanged.
+- `reference/turnaround.svg` — original proposed visual turnaround;
+- `reference/REFERENCE.json` — canonical reference, **PENDING** until
+  explicit user approval and supported approved PNG evidence;
+- `seed.bbmodel` — immutable, blank Bedrock format 5.0 source candidate;
+- `README.md` — unique object dimensions, UV/texture/motion and acceptance.
 
-Prepare one newly approved Reference Package with exact views and dimensions,
-then create a new disposable Bedrock `.bbmodel` seed **outside repository
-Workspace**. Fresh authoring starts blank; corrections require an independently
-staged, source-backed Geometry/Texture/Animation prerequisite. Keep the seed
-immutable and open a separate saved working copy with identical initial SHA.
+No historic model, user's Active Workspace, Saved Workspace, old Lift, prior
+Fisherman, Crimson assets or existing approved production asset may become a
+Golden input. The runner refuses Workspace paths, rejects an input whose bytes
+do not match the tracked **blank fixture seed**, and checks the current
+Reference Package using Control's existing read/image-integrity authority.
+`BLOCKED` or non-approved reference prevents even starting native work.
 
-The existing runner checks native project and Runtime identity, actual stage,
-blank/staged content and rejects Workspace input/output paths. It cannot
-cryptographically authenticate the creation history of a copied model, so a
-human reviewer must verify the seed/reference are genuinely new to this run.
+Run the single full workflow on an authorized matching Blockbench build:
+new Reference approval → Geometry/rig → UV PASS → Texture/atlas → explicit
+AUTHORING↔Animation handoff → idle and signal animation → native final save,
+reopen, Bedrock exports, fresh comparable visual review and independent
+human acceptance. Use a separate **saved disposable working copy** of the
+seed and capture output/trace outside repository Workspace. No normal asset
+workflow or Gateway surface change is implied.
 
-Focused source test command, when exact-source executable proof is available:
+Focused source contracts, not native acceptance:
 
 ```bash
 cd mcp
 bun test tests/benchmark/golden-authoring-run-contract.test.ts tests/benchmark/golden-benchmark-session-runner.test.ts tests/benchmark/golden-session-comparison.test.ts tests/benchmark/golden-session-finalizer.test.ts tests/benchmark/quality-benchmark-corpus-contract.test.ts
 ```
 
-These are source-only tests, not native quality PASS. For live acceptance,
-verify the matching build, stage ownership (UV is Geometry; Geometry and
-Texturing share AUTHORING), explicit Animation handoff when applicable,
-fresh comparable Blockbench reference views, native save/reopen/export,
-unchanged other parts and **actual human approval**. Without these,
-quality remains `UNVERIFIED`; old project reports are noncomparable.
-CI remains intentionally disabled.
+Historical six stage-specific tasks are retired as Golden identity. Their
+behavioral regression coverage remains with canonical domain suites. Do not
+create a separate Golden per capability. All full Golden performance claims
+require matching live evidence, human PASS, actual Cost to Accepted Result
+and the same seed/reference in baseline/candidate. Current state: unexecuted,
+reference approval pending. CI stays disabled.
 
 ## 9. Gateway Stability
 

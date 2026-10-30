@@ -1,71 +1,18 @@
 {
   "schema": "lazydesigner-golden-tasks-v1",
   "policy": {
-    "purpose": "Six current workflow scenarios, not prior named assets.",
+    "purpose": "One complete reference-to-export Bedrock asset test; domain regressions remain separate.",
     "execution_state": "UNMEASURED",
-    "reference_policy": "FRESH_APPROVED_REFERENCE_FOR_EACH_BENCHMARK",
+    "reference_policy": "ONE_APPROVED_REFERENCE_FIXTURE_PER_BENCHMARK_REVISION",
     "seed_policy": "NEW_DISPOSABLE_BEDROCK_MODEL_ONLY",
     "historical_project_reuse": "FORBIDDEN",
-    "acceptance_rule": "Live exact-source Runtime, approved reference, saved/reopened/exported artifact evidence and explicit human approval precede Cost to Accepted Result."
+    "acceptance_rule": "Only exact-source LIVE_BLOCKBENCH with approved current reference, accepted visual result, verified save/reopen/export, complete trace and documented human acceptance can be measured."
   },
   "tasks": [
     {
-      "id": "golden-rigid-authoring",
-      "profile": "PROP_FURNITURE",
-      "request": "Create a newly specified rigid Bedrock visual asset from a fresh approved multi-view reference, with exact dimensions, Geometry, UV Layout, Texture and native finalization.",
-      "seed_kind": "BLANK_DISPOSABLE",
-      "start_stage": "geometry",
-      "phases": [
-        "geometry",
-        "texturing"
-      ],
-      "checkpoints": [
-        "GEOMETRY_APPROVED",
-        "UV_LAYOUT_PASS",
-        "TEXTURING_APPROVED",
-        "FINALIZATION_COMPLETE"
-      ],
-      "acceptance": [
-        "reference_fidelity",
-        "silhouette_proportion",
-        "required_parts_and_contact",
-        "uv_layout_integrity",
-        "mapped_texture_continuity",
-        "save_reopen_export_integrity"
-      ],
-      "execution_state": "UNMEASURED"
-    },
-    {
-      "id": "golden-organic-authoring",
-      "profile": "ORGANIC_CURVED",
-      "request": "Create a new organic Bedrock visual form from a fresh approved reference, preserving curves, depth, negative space and minimum sufficient Cuboids through UV and Texturing.",
-      "seed_kind": "BLANK_DISPOSABLE",
-      "start_stage": "geometry",
-      "phases": [
-        "geometry",
-        "texturing"
-      ],
-      "checkpoints": [
-        "GEOMETRY_APPROVED",
-        "UV_LAYOUT_PASS",
-        "TEXTURING_APPROVED",
-        "FINALIZATION_COMPLETE"
-      ],
-      "acceptance": [
-        "reference_fidelity",
-        "organic_silhouette",
-        "depth_and_negative_space",
-        "minimum_sufficient_geometry",
-        "uv_layout_integrity",
-        "mapped_palette_correspondence",
-        "save_reopen_export_integrity"
-      ],
-      "execution_state": "UNMEASURED"
-    },
-    {
-      "id": "golden-articulated-authoring",
-      "profile": "CHARACTER_MOB",
-      "request": "Create a fresh articulated Bedrock entity from an approved new motion reference with rig, UV, Texture, explicit AUTHORING-to-Animation handoff, playback and finalization.",
+      "id": "golden-full-asset-authoring",
+      "profile": "MECHANICAL",
+      "request": "From a separately prepared original approved reference, author one Beacon Courier Bot Minecraft Bedrock Entity completely: Geometry and rig, UV Layout, mapped pixel-art atlas, idle and signal animations, final native save/reopen/export, quality review and accepted-result cost evidence.",
       "seed_kind": "BLANK_DISPOSABLE",
       "start_stage": "geometry",
       "phases": [
@@ -74,6 +21,7 @@
         "animation"
       ],
       "checkpoints": [
+        "REFERENCE_APPROVED",
         "GEOMETRY_APPROVED",
         "UV_LAYOUT_PASS",
         "TEXTURING_APPROVED",
@@ -82,91 +30,21 @@
       ],
       "acceptance": [
         "reference_fidelity",
-        "rig_hierarchy_pivots",
+        "silhouette_proportion",
+        "required_parts_and_negative_space",
+        "hierarchy_and_pivots",
         "uv_layout_integrity",
-        "texture_material_identity",
-        "motion_contact_and_timing",
-        "animation_handoff_integrity",
-        "save_reopen_export_integrity"
-      ],
-      "execution_state": "UNMEASURED"
-    },
-    {
-      "id": "golden-geometry-correction",
-      "profile": "MECHANICAL",
-      "request": "Correct a demonstrable structural defect in a new staged reference-backed model at its Geometry owner; preserve unaffected state and recheck only invalidated UV and Texture.",
-      "seed_kind": "STAGED_DISPOSABLE",
-      "start_stage": "geometry",
-      "phases": [
-        "geometry",
-        "texturing"
-      ],
-      "checkpoints": [
-        "GEOMETRY_APPROVED",
-        "UV_LAYOUT_PASS",
-        "TEXTURING_APPROVED",
-        "FINALIZATION_COMPLETE"
-      ],
-      "acceptance": [
-        "first_wrong_owner",
-        "targeted_correction",
-        "unaffected_state_preserved",
-        "downstream_uv_texture_recheck",
-        "reference_fidelity",
-        "save_reopen_export_integrity"
-      ],
-      "execution_state": "UNMEASURED"
-    },
-    {
-      "id": "golden-texture-correction",
-      "profile": "GENERIC",
-      "request": "Repair one approved-reference palette, atlas or seam defect on a new staged Geometry and UV model without redesigning Geometry or unrelated mapped regions.",
-      "seed_kind": "STAGED_DISPOSABLE",
-      "start_stage": "texturing",
-      "phases": [
-        "texturing"
-      ],
-      "checkpoints": [
-        "GEOMETRY_APPROVED",
-        "UV_LAYOUT_PASS",
-        "TEXTURING_APPROVED",
-        "FINALIZATION_COMPLETE"
-      ],
-      "acceptance": [
-        "reference_fidelity",
-        "texture_target_identity",
-        "mapped_surface_and_seam_fidelity",
-        "uv_evidence_integrity",
-        "approved_geometry_preserved",
-        "bounded_downstream_recheck",
-        "save_reopen_export_integrity"
-      ],
-      "execution_state": "UNMEASURED"
-    },
-    {
-      "id": "golden-animation-correction",
-      "profile": "CHARACTER_MOB",
-      "request": "Repair one action timing/contact defect on a newly staged approved rig with a native animation clip, preserve unrelated clips, playback and persistence.",
-      "seed_kind": "STAGED_DISPOSABLE",
-      "start_stage": "animation",
-      "phases": [
-        "animation"
-      ],
-      "checkpoints": [
-        "GEOMETRY_APPROVED",
-        "UV_LAYOUT_PASS",
-        "TEXTURING_APPROVED",
-        "ANIMATION_APPROVED",
-        "FINALIZATION_COMPLETE"
-      ],
-      "acceptance": [
-        "reference_fidelity",
-        "approved_rig_preserved",
-        "motion_contact_and_order",
-        "unrelated_clips_preserved",
+        "mapped_texture_and_palette",
+        "idle_loop_motion",
+        "signal_contact_timing",
         "authoring_animation_handoff",
         "save_reopen_export_integrity"
       ],
+      "fixture": {
+        "reference_package_path": "tests/fixtures/golden/full-asset/reference/REFERENCE.json",
+        "seed_path": "tests/fixtures/golden/full-asset/seed.bbmodel",
+        "concept_image_path": "tests/fixtures/golden/full-asset/reference/turnaround.svg"
+      },
       "execution_state": "UNMEASURED"
     }
   ]

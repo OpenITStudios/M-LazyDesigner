@@ -2,15 +2,17 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next to do — fresh Golden Task corpus (2026-10-30)
+## Primary next to do — single full-asset Golden Task (2026-10-30)
 
-**USER DECISION:** Rebuild stale Golden Task and associated tests without any old named project, workspace production model or historical preview. Canonical owner: `mcp/tests/fixtures/golden-task-cases.json`, procedure `mcp/docs/GOLDEN_TASKS.md`.
+**USER DECISION:** Golden must be **one complete object**, not six capability microtasks. Retire the prior six task identities. Use `golden-full-asset-authoring` as one job from approved reference through Geometry/rig, UV, Texture, Animation, final save/reopen/export, human quality and Cost to Accepted Result. Keep affected domain regressions as tests, not more Golden Tasks.
 
-**SOURCE-AUTHORED:** Six fresh or newly staged scenarios cover rigid/organic/articulated full authoring and bounded Geometry/Texture/Animation corrections. Existing runner enforces seed for every task, empty/staged source prerequisites, current Stage and no repository Workspace seed or working copy; Geometry Knowledge pairing now derives eligibility from the canonical task corpus. Updated acceptance tests/docs reuse existing evaluators. No new MCP tools, runner, CI or version suffix.
+**STANDALONE FIXTURE:** `mcp/tests/fixtures/golden/full-asset/` contains an original Beacon Courier Bot concept (SVG), source-authored **blank** Bedrock `.bbmodel`, pending `REFERENCE.json` and object specifications. All outside `workspace/active` and `workspace/saved`; existing user projects are never sampled or mutated. Baseline/candidate use the same immutable fixture with separate saved disposable working copies and isolated outputs. No version suffix or second test engine.
 
-**PROOF:** Exact-HEAD static preparation; Bun/typecheck, native Blockbench, visual review, human acceptance and Golden cost measurements are **NOT EXECUTED**. Retired asset-named IDs remain historical, not current baselines.
+**ADMISSION:** Reference package currently **PENDING/BLOCKED**. Runner uses Control reference read and refuses native execution before explicit visual approval, supported approved PNG and all-stage readiness. It checks canonical blank seed bytes, current Stage, installed Runtime and protected Workspace paths.
 
-**NEXT:** Execute matching-source focused source contracts when a capable environment exists. Produce one new approved Reference Package + disposable seed, obtain live native + human PASS, then compare accepted-result efficiency. Never revive old projects for test convenience.
+**PROOF:** New source/fixture is SOURCE_AUTHORED only. Bun/typecheck, native Blockbench import, visual review, animation playback, saved/reopened/exported artifacts, human acceptance and cost measurement **NOT EXECUTED**. Source fixtures cannot claim APPROVED/READY.
+
+**NEXT:** Reference approval + PNG handoff → exact-head focused source tests → matching-runtime disposable full-object authoring → quality gate → compare accepted cost. No historical task-case reuse.
 
 ## Current working environment
 

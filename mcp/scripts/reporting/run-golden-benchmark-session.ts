@@ -12,10 +12,22 @@ import type {
 } from "./evaluate-golden-authoring-runs";
 import type { BenchmarkTraceEvent } from "../../gateway/runtime/benchmarkTrace";
 import { LiveMcpClient, structuredObject } from "../verify/live-e2e-common";
+import { readReferencePackageProjection } from "../../gateway/control/referencePackage";
 
 type GoldenTask = (typeof goldenCorpus.tasks)[number];
 
 const WORKSPACE_ROOT = resolve(fileURLToPath(new URL("../../../workspace/", import.meta.url)));
+const MCP_ROOT = resolve(fileURLToPath(new URL("../../", import.meta.url)));
+const FIXTURE_ROOT = resolve(MCP_ROOT, "tests/fixtures/golden/full-asset");
+
+function fixtureSourcePath(path: string): string {
+  const absolute = resolve(MCP_ROOT, path);
+  const rel = relative(FIXTURE_ROOT, absolute);
+  if (!rel || rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) {
+    throw new Error("Golden benchmark source must remain within its dedicated fixture directory.");
+  }
+  return absolute;
+}
 
 /** Reject production project data at the benchmark boundary; live caller resolves symlinks. */
 export function assertGoldenDisposablePath(path: string, workspaceRoot = WORKSPACE_ROOT): void {
@@ -27,35 +39,70 @@ export function assertGoldenDisposablePath(path: string, workspaceRoot = WORKSPA
 
 /** One existing runner preflight; do not create another model validator or engine. */
 export function validateGoldenSeedContent(task: GoldenTask, value: unknown): void {
+  if (task.seed_kind !== "BLANK_DISPOSABLE" || task.start_stage !== "geometry") {
+    throw new Error("Golden full-asset task requires a blank Geometry seed.");
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Golden benchmark seed must be a Blockbench JSON object.");
+    throw new Error("Golden seed must be a Blockbench JSON object.");
   }
-  const record = value as Record<string, unknown>;
-  const entries = (field: string): unknown[] => {
-    const list = record[field];
-    if (list == null) return [];
-    if (!Array.isArray(list)) throw new Error("Golden seed " + field + " must be an array.");
-    return list;
+  const model = value as Record<string, unknown>;
+  const meta = model.meta;
+  if (!meta || typeof meta !== "object" || Array.isArray(meta) ||
+      (meta as Record<string, unknown>).model_format !== "bedrock" ||
+      typeof (meta as Record<string, unknown>).format_version !== "string") {
+    throw new Error("Golden seed requires Bedrock .bbmodel metadata.");
+  }
+  for (const key of ["elements", "groups", "outliner", "textures", "animations"] as const) {
+    if (!Array.isArray(model[key]) || (model[key] as unknown[]).length !== 0) {
+      throw new Error("Golden full-asset seed must be blank: " + key);
+    }
+  }
+}
+
+/** Same immutable source seed for all baseline/candidate arms, never a historical model. */
+export async function assertCanonicalGoldenSeed(task: GoldenTask, inputPath: string): Promise<void> {
+  const canonical = fixtureSourcePath(task.fixture.seed_path);
+  const [canonicalBytes, incomingBytes] = await Promise.all([
+    readFile(canonical), readFile(inputPath),
+  ]);
+  validateGoldenSeedContent(task, JSON.parse(canonicalBytes.toString("utf8")));
+  validateGoldenSeedContent(task, JSON.parse(incomingBytes.toString("utf8")));
+  const digest = (data: Buffer) => createHash("sha256").update(data).digest("hex");
+  if (digest(canonicalBytes) !== digest(incomingBytes)) {
+    throw new Error("Golden starting model must match the canonical fresh fixture seed bytes.");
+  }
+}
+
+/** Consume Control's existing Reference Package read/integrity, not another reference engine. */
+export async function requireGoldenReferenceReady(task: GoldenTask) {
+  const source = fixtureSourcePath(task.fixture.reference_package_path);
+  const projection = await readReferencePackageProjection(source);
+  const raw = JSON.parse(await readFile(source, "utf8")) as {
+    approval?: { brief?: string; visual_authority?: string; package_generation?: string };
+    unknowns?: { blocking?: string[] };
   };
-  const elements = entries("elements");
-  const outliner = entries("outliner");
-  const textures = entries("textures");
-  const animations = entries("animations");
-  if (task.seed_kind === "BLANK_DISPOSABLE") {
-    if (elements.length || outliner.length || textures.length || animations.length) {
-      throw new Error("Golden fresh-authoring task requires a blank disposable seed.");
-    }
-  } else if (task.seed_kind === "STAGED_DISPOSABLE") {
-    if (!elements.length) throw new Error("Golden correction requires newly staged nonempty Geometry.");
-    if ((task.start_stage === "texturing" || task.start_stage === "animation") && !textures.length) {
-      throw new Error("Golden downstream correction requires a staged texture atlas.");
-    }
-    if (task.start_stage === "animation" && !animations.length) {
-      throw new Error("Golden animation correction requires a staged native animation clip.");
-    }
-  } else {
-    throw new Error("Unknown Golden seed policy.");
+  if (!projection.available || !projection.fingerprint) {
+    throw new Error("Golden Reference Package is missing or invalid.");
   }
+  const approval = raw.approval;
+  if (approval?.brief !== "APPROVED" || approval.visual_authority !== "APPROVED" ||
+      approval.package_generation !== "APPROVED" ||
+      raw.unknowns?.blocking?.length ||
+      projection.readiness.overall !== "READY" ||
+      projection.readiness.geometry !== "READY" ||
+      projection.readiness.texture !== "READY" ||
+      projection.readiness.animation !== "READY") {
+    throw new Error("Golden reference requires explicit visual approval and stage readiness.");
+  }
+  if (projection.images.length === 0 || !projection.images.some(image =>
+    image.status === "APPROVED" && image.integrity === "VERIFIED" &&
+    image.used_by.includes("GEOMETRY") && image.used_by.includes("TEXTURE") &&
+    image.used_by.includes("ANIMATION") && image.media_type === "image/png")) {
+    throw new Error("Golden benchmark requires an approved, verified PNG reference for all stages.");
+  }
+  // Package-declared approval is only a preflight assertion. Final quality
+  // still requires actual live visuals and documented human acceptance.
+  return projection.fingerprint;
 }
 
 export type GoldenSessionPaths = {
@@ -221,7 +268,7 @@ export async function fingerprintGoldenSavedOutputModel(
 
 async function preflightGoldenStartingModel(seedPath: string, task: GoldenTask): Promise<LiveStartingModelBaseline> {
   assertGoldenDisposablePath(await realpath(seedPath));
-  validateGoldenSeedContent(task, JSON.parse(await readFile(seedPath, "utf8")));
+  await assertCanonicalGoldenSeed(task, seedPath);
   const client = new LiveMcpClient({
     expectedPhase: task.start_stage as "geometry" | "texturing" | "animation",
     requiredTools: ["get_project_info"],
@@ -389,6 +436,8 @@ async function main(): Promise<void> {
   if (!inputModelPath) {
     throw new Error("Every Golden Task requires a fresh disposable starting .bbmodel.");
   }
+  // Refuse pending/unapproved references before connecting to native Runtime.
+  await requireGoldenReferenceReady(task);
   const startingBaseline = await preflightGoldenStartingModel(inputModelPath, task);
   const sourceSha = exactGitSha();
   const paths = goldenSessionPaths(task.id, outputRoot);

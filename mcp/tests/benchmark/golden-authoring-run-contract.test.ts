@@ -5,14 +5,14 @@ import {
   validateGoldenAuthoringDocument,
   type GoldenAuthoringDocument,
 } from "../../scripts/reporting/evaluate-golden-authoring-runs";
-const correctionTask = goldenCorpus.tasks.find(task => task.id === "golden-geometry-correction")!;
+const fullTask = goldenCorpus.tasks[0]!;
 
 function acceptedRun(): GoldenAuthoringDocument {
   return {
     schema: "lazydesigner-golden-authoring-runs-v1",
     runs: [
       {
-        task_id: "golden-geometry-correction",
+        task_id: "golden-full-asset-authoring",
         source_sha: "1234567890abcdef1234567890abcdef12345678",
         proof_scope: "LIVE_BLOCKBENCH",
         model: "gpt-5.6-sol",
@@ -68,7 +68,7 @@ function acceptedRun(): GoldenAuthoringDocument {
           },
         ],
         acceptance_evidence: [
-          ...correctionTask.acceptance.map(criterion => ({
+          ...fullTask.acceptance.map(criterion => ({
             criterion, verdict: "PASS" as const, evidence_ref: "synthetic:" + criterion,
           })),
           { criterion: "human_acceptance", verdict: "PASS", evidence_ref: "synthetic-human-review" },
@@ -80,7 +80,7 @@ function acceptedRun(): GoldenAuthoringDocument {
 
 describe("golden authoring accepted-result benchmark", () => {
   test("current Golden tasks reject accepted claims without distinct persisted output", () => {
-    expect(goldenCorpus.tasks).toHaveLength(6);
+    expect(goldenCorpus.tasks).toHaveLength(1);
     for (const task of goldenCorpus.tasks) {
       const document = acceptedRun();
       const run = document.runs[0]!;
@@ -263,9 +263,9 @@ describe("golden authoring accepted-result benchmark", () => {
   test("accepted new-model tasks require a verified starting model", () => {
     const document = acceptedRun();
     const run = document.runs[0]!;
-    run.task_id = "golden-rigid-authoring";
+    run.task_id = "golden-full-asset-authoring";
     run.acceptance_evidence = [
-      ...goldenCorpus.tasks.find(task => task.id === "golden-rigid-authoring")!.acceptance,
+      ...goldenCorpus.tasks.find(task => task.id === "golden-full-asset-authoring")!.acceptance,
       "human_acceptance",
     ].map((criterion) => ({
       criterion, verdict: "PASS" as const, evidence_ref: "verified:" + criterion,
@@ -277,7 +277,7 @@ describe("golden authoring accepted-result benchmark", () => {
     run.pipeline_provenance.input_project_uuid = null;
     expect(() => validateGoldenAuthoringDocument(document))
       .toThrow("live input_project_uuid");
-    run.pipeline_provenance.input_project_uuid = "saved-current-benchmark-start";
+    run.pipeline_provenance.input_project_uuid = "saved-new-benchmark-seed";
     expect(() => validateGoldenAuthoringDocument(document)).not.toThrow();
   });
 

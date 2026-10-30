@@ -12,10 +12,12 @@ import {
   goldenSessionPaths,
   assertGoldenDisposablePath,
   validateGoldenSeedContent,
+  assertCanonicalGoldenSeed,
+  requireGoldenReferenceReady,
 } from "../../scripts/reporting/run-golden-benchmark-session";
 
 const task = goldenCorpus.tasks.find(
-  (entry) => entry.id === "golden-geometry-correction"
+  (entry) => entry.id === "golden-full-asset-authoring"
 )!;
 
 describe("golden benchmark session runner", () => {
@@ -26,34 +28,42 @@ describe("golden benchmark session runner", () => {
       new Date("2026-10-30T00:00:00.000Z")
     );
     expect(paths.directory).toContain(
-      "golden-geometry-correction-2026-10-30T00-00-00-000Z"
+      "golden-full-asset-authoring-2026-10-30T00-00-00-000Z"
     );
     expect(paths.trace.endsWith("trace.ndjson")).toBe(true);
     expect(paths.trace_report.endsWith("trace-report.json")).toBe(true);
     expect(paths.golden_run_draft.endsWith("golden-run-draft.json")).toBe(true);
   });
 
-  test("rejects production assets and stage-invalid fresh seeds", () => {
+  test("one complete Golden fixture rejects production paths, stale seed bytes and unapproved references", async () => {
     const root = join(tmpdir(), "golden-test-root");
     const workspace = join(root, "workspace");
-    expect(() => assertGoldenDisposablePath(join(workspace, "active", "old.bbmodel"), workspace))
-      .toThrow("refuses repository workspace assets");
-    expect(() => assertGoldenDisposablePath(join(workspace, "saved", "old.bbmodel"), workspace))
-      .toThrow("refuses repository workspace assets");
-    expect(() => assertGoldenDisposablePath(join(root, ".cache", "seed.bbmodel"), workspace))
-      .not.toThrow();
-    const fresh = goldenCorpus.tasks.find(t => t.id === "golden-rigid-authoring")!;
-    const texture = goldenCorpus.tasks.find(t => t.id === "golden-texture-correction")!;
-    const animation = goldenCorpus.tasks.find(t => t.id === "golden-animation-correction")!;
-    expect(() => validateGoldenSeedContent(fresh, { elements: [], outliner: [], textures: [], animations: [] }))
-      .not.toThrow();
-    expect(() => validateGoldenSeedContent(fresh, { elements: [{}] })).toThrow("blank disposable seed");
-    expect(() => validateGoldenSeedContent(texture, { elements: [] })).toThrow("newly staged");
-    expect(() => validateGoldenSeedContent(texture, { elements: [{}] })).toThrow("staged texture atlas");
-    expect(() => validateGoldenSeedContent(animation, { elements: [{}], textures: [{}] }))
-      .toThrow("staged native animation clip");
-    expect(() => validateGoldenSeedContent(animation, { elements: [{}], textures: [{}], animations: [{}] }))
-      .not.toThrow();
+    for (const branch of ["active", "saved"]) {
+      expect(() => assertGoldenDisposablePath(join(workspace, branch, "historical.bbmodel"), workspace))
+        .toThrow("refuses repository workspace assets");
+    }
+    const seed = await Bun.file(task.fixture.seed_path).json();
+    expect(() => validateGoldenSeedContent(task, seed)).not.toThrow();
+    expect(() => validateGoldenSeedContent(task, { ...seed, elements: [{}] }))
+      .toThrow("seed must be blank");
+    expect(() => validateGoldenSeedContent(task, { ...seed, textures: [{}] }))
+      .toThrow("seed must be blank");
+    expect(() => validateGoldenSeedContent(task, { ...seed, meta: { model_format: "free" } }))
+      .toThrow("Bedrock .bbmodel metadata");
+    const dir = await mkdtemp(join(tmpdir(), "golden-fresh-seed-"));
+    const copy = join(dir, "input.bbmodel");
+    try {
+      await writeFile(copy, await Bun.file(task.fixture.seed_path).text());
+      await expect(assertCanonicalGoldenSeed(task, copy)).resolves.toBeUndefined();
+      await writeFile(copy, JSON.stringify({ ...seed, name: "other-blank-model" }));
+      await expect(assertCanonicalGoldenSeed(task, copy))
+        .rejects.toThrow("canonical fresh fixture seed bytes");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+    // A generated concept is not an approved reference. No native attempt.
+    await expect(requireGoldenReferenceReady(task))
+      .rejects.toThrow("explicit visual approval");
   });
 
   test("pins the unchanged starting .bbmodel once with SHA-256", async () => {
@@ -159,8 +169,8 @@ describe("golden benchmark session runner", () => {
     expect(draft.runs[0]!.accepted_result).toBeNull();
   });
 
-  test("non-correction task retains pinned starting model fingerprint", () => {
-    const other = goldenCorpus.tasks.find((item) => item.id === "golden-rigid-authoring")!;
+  test("the full Golden task retains its starting model fingerprint", () => {
+    const other = goldenCorpus.tasks.find((item) => item.id === "golden-full-asset-authoring")!;
     const draft = buildGoldenRunDraft({
       task: other, sourceSha: "f".repeat(40), traceEvents: [], wallTimeMs: 120,
       inputAssetSha256: "b".repeat(64), inputProjectUuid: "saved-disposable-project",
@@ -184,7 +194,7 @@ describe("golden benchmark session runner", () => {
     };
     for (const wrong of [
       { ...event, source_sha: "a".repeat(40) },
-      { ...event, task_id: "golden-rigid-authoring" },
+      { ...event, task_id: "golden-retired-case" },
     ]) {
       expect(() => buildGoldenRunDraft({
         task, sourceSha: event.source_sha,

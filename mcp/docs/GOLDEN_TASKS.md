@@ -1,57 +1,106 @@
 # LazyDesigner Golden Task Benchmark
 
-**Current source:** `tests/fixtures/golden-task-cases.json`. Source updated 2026-10-30; all cases still UNMEASURED. This reuses the existing benchmark runner, evaluator and comparator.
+**One canonical Golden Task:** `golden-full-asset-authoring`, defined in
+`tests/fixtures/golden-task-cases.json`. The dedicated fixture lives under
+`tests/fixtures/golden/full-asset/` and is **never a user Active Workspace**.
+It remains `UNMEASURED` until full native reference and human acceptance.
 
-## Rule
+## What is a Golden Task?
 
-Golden Tasks now test **six current authoring decisions**, not old projects. Each live run requires a **new approved Reference Package** and **new disposable Bedrock `.bbmodel` seed**. Historical `workspace/active/` or `workspace/saved/` models, previous production exports and legacy Golden reports may not be reused as inputs/baselines. Do not change or delete that historical user data.
+One **complete new object** must go through the production path:
 
-| Task | New starting state | Authoring decision |
-| --- | --- | --- |
-| `golden-rigid-authoring` | Empty disposable scene | Geometry → UV → Texture → Finalization |
-| `golden-organic-authoring` | Empty disposable scene | Organic Geometry → UV → Texture → Finalization |
-| `golden-articulated-authoring` | Empty disposable scene | Rig → UV → Texture → Animation and playback |
-| `golden-geometry-correction` | Newly staged model | Fix structural defect; focused dependent UV/Texture recheck |
-| `golden-texture-correction` | Newly staged Geometry + atlas | Repair mapped palette/seam; keep Geometry unchanged |
-| `golden-animation-correction` | Newly staged rig + clip | Repair contact/action order; preserve unrelated motion |
-
-Every case requires save/reopen/export evidence. UV Layout belongs to Geometry, Geometry and Texturing share AUTHORING, and only AUTHORING↔Animation changes Runtime surface. PBR, particle and other narrow behaviors retain existing domain tests; they do not automatically need a Golden Task. `astra-live-golden-tasks.json` is a separate call-flow probe, not a source of accepted assets.
-
-## Fresh input admission
-
-1. Prepare a new reference with approved views, dimensions, requirements and SHA-based Reference Package fingerprint; no old asset/reference as a shortcut.
-2. Prepare a saved disposable Bedrock seed **outside the repository Workspace**. New-authoring seeds must be blank; new correction seeds need geometry, plus a texture atlas for Texturing and a pre-existing animation clip for Animation. Benchmark-only blank seeds do not change ordinary production checkpoint policy.
-3. Keep immutable seed bytes and open a separate saved working copy with identical initial SHA. Live preflight checks matching stage, project UUID, native Runtime build and model bytes. The runner rejects direct Workspace paths, including symlink-resolved aliases.
-4. Filesystem/hash checks cannot authenticate the creative origin of a copied model. Reviewer must independently verify the seed and reference were created for this run. A historical model copied to a temp path is still **not allowed**.
-5. Baseline and candidate start from the **same independently revalidated seed and Reference Package**, never from the previous arm's edited output.
-
-## Accepted-result proof guard
-
-Keep the existing `benchmark:golden-session` → `finalize:golden-session` → `compare:golden-sessions`. Acceptance requires exact-source LIVE_BLOCKBENCH provenance, new approved reference and Control context, live project UUID, different valid input/output saved-model hashes, contiguous trace with a successful native mutation and **successful final verification after the last mutation**, PASS for every criterion, no contradictory FAIL, actual current visual/native save-reopen/export evidence and **separate documented human acceptance**. Tool receipts, synthetic benchmarks and static tests never prove visual acceptance.
-
-## First baseline — fresh scoped correction
-
-Select **only one relevant task** for the changed source owner, not all six automatically. Example with a newly created correction seed (never a historical project):
-
-```bash
-cd mcp
-bun run benchmark:golden-session -- golden-geometry-correction .cache/golden-sessions /absolute/path/to/fresh-disposable-seed.bbmodel
+```text
+new approved Reference Package
+→ Control intake / selected Mechanical specialist
+→ native Bedrock project from immutable blank seed
+→ Geometry / pivots / hierarchy → geometry verification
+→ Geometry-approved UV Layout → UV PASS
+→ mapped pixel-art Texture → texture verification
+→ AUTHORING→Animation handoff
+→ native idle and signal clips → motion verification
+→ finalization → native save / reopen / export
+→ current visual/structural/animation PASS + human acceptance
+→ record actual Cost to Accepted Result
 ```
 
-A session begins UNVERIFIED. Record the approved reference, stage gates, model evidence, human review, time, tool calls and actual usage before finalizing. The current focused **source-only** Golden tests are:
+This is **one end-to-end user job**, not six named Golden microtasks.
+Geometry, Texture, Animation, UV, Particle and Gateway regressions continue
+under their existing unit/integration/native test owners, selected by
+`verify:affected` as needed. Do not use them as a substitute for an
+accepted full-asset Golden run; do not run every test after each asset action.
+
+## Original fixture: Beacon Courier Bot
+
+- New mechanical Bedrock entity; dimensions **32 × 44 × 24** Blockbench units,
+  2 × 2.75 × 1.5 Minecraft blocks, floor contact at Y=0, front = -Z.
+- Brass plated torso/head, dark iron limbs and vents, amber face/chest crystal;
+  separated arms and legs, negative space preserved.
+- One **128×128** base-color atlas, no mandatory PBR or gameplay/particle scope.
+- Two native clips: `animation.beacon_courier.idle` (2.4-second loop),
+  `animation.beacon_courier.signal` (1.6-second one-shot right shoulder raise
+  and return, grounded feet).
+- Fresh reference: `tests/fixtures/golden/full-asset/reference/REFERENCE.json`;
+  proposed four-view visual: `reference/turnaround.svg`.
+- Immutable blank source: `tests/fixtures/golden/full-asset/seed.bbmodel`.
+  It is a source-authored Blockbench 5.x Bedrock JSON candidate, not a native
+  verified/imported or prebuilt finished model.
+
+The visual proposal is **PENDING APPROVAL**, so `REFERENCE.json` stays
+`BLOCKED`; runner preflight refuses native work until an explicitly
+approved PNG, package readiness and stage authorization exist. Do not infer
+approval from creating a visual or a successful source test. The SVG is the
+original editable concept; the image recorded as `PENDING` is not a
+Blockbench-ready PNG.
+
+## Separate file and safety rules
+
+- Golden reference/seed are canonical, committed and immutable during each run;
+  only their explicitly reviewed future source revision may replace them.
+- Never use `workspace/active/`, `workspace/saved/`, older approved user
+  models, historic previews or earlier Golden outputs as seed or reference.
+- Open a **byte-identical disposable copy** of the checked-in blank
+  `.bbmodel` in the matching native Blockbench. The runner checks its hash
+  against the canonical fixture seed before connecting, and refuses the
+  production Workspace, modified seeds and wrong project/stage identity.
+- Keep all working `.bbmodel`, PNG atlas, `.geo.json`, animation export,
+  captures and reports in `mcp/.cache/golden-sessions/<session>/` (or another
+  disposable external location). Do not commit live outputs into the fixture,
+  and do not change the normal `workspace/` authoring contract.
+- Use the **same** immutable seed/reference and equivalent input conditions
+  for baseline and candidate. Never start the candidate from baseline output.
+
+## Acceptance
+
+The canonical runner/evaluator/finalizer/comparator already exist. A Golden
+result can be accepted only with matching source, Gateway and Runtime,
+current approved reference and Control provenance, verified native mutation
+trace and **final verification after last mutation**, Geometry/UV/Texture/
+Animation evidence matching the current approved visual, Bedrock export and
+save/reopen parity, no critical defect, and separate documented
+`human_acceptance` PASS. Any missing or stale evidence leaves it UNVERIFIED.
+
+Only **after equal-or-better accepted quality** compare actual time, tool calls,
+redundant readbacks, retries, correction rounds and real token telemetry when
+available. No scalar visual quality score, no fabricated savings.
+
+## Execution / verification
+
+Existing entrypoint (from `mcp/`, in an authorized matching native environment):
+
+```bash
+bun run benchmark:golden-session -- golden-full-asset-authoring .cache/golden-sessions /ABSOLUTE/PATH/TO/mcp/tests/fixtures/golden/full-asset/seed.bbmodel
+```
+
+First approve the current reference and prepare a separate saved working copy.
+The source path above is the **immutable seed**, never the file to edit.
+Run only the focused source contract tests during development:
 
 ```bash
 bun test tests/benchmark/golden-authoring-run-contract.test.ts tests/benchmark/golden-benchmark-session-runner.test.ts tests/benchmark/golden-session-comparison.test.ts tests/benchmark/golden-session-finalizer.test.ts tests/benchmark/quality-benchmark-corpus-contract.test.ts
 ```
 
-## Required Run Record
-
-Retain task ID, source SHA, installed build/environment, approved reference fingerprint, seed/output SHA, live project identity, stage evidence and verdicts, human review, mutation/inspection/verification calls, corrections, timing, token telemetry when actually observed.
-
-## Comparison Rule
-
-Compare only current task IDs with **the same fresh approved reference and immutable starting model**, equivalent acceptance and compatible environment. Quality PASS comes before cost reduction. No aggregate quality score or automatic winner. Geometry Knowledge A/B draws eligible tasks from the canonical corpus phases; do not duplicate the task list.
-
-## Corpus Intent
-
-The six cases cover fresh rigid, organic and articulated authoring, and bounded Geometry, Texture and Animation correction. Retired object-named task IDs and their historical results are **noncomparable**. Add a case only if a real failure mode is missing from existing tests.
+Native success requires an actual current-HEAD `LIVE_BLOCKBENCH` session,
+not the presence of a script or asset. CI remains disabled. Historical six
+specialist-named and prior eight object-named Golden IDs are retired and cannot
+be compared as the current Golden result. `astra-live-golden-tasks.json`
+contains separate small Gateway/call-flow probes, not the product-level Golden.

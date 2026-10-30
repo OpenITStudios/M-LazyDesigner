@@ -19,7 +19,7 @@ function accepted(sha: string, calls: number): FinalGoldenSessionReport {
   return {
     schema: 1,
     report: "golden-session-final",
-    task_id: "golden-geometry-correction",
+    task_id: "golden-full-asset-authoring",
     source_sha: sha,
     proof_scope: "LIVE_BLOCKBENCH",
     state: "ACCEPTED",
@@ -196,7 +196,7 @@ describe("accepted golden session comparison", () => {
       "abcdef1234567890abcdef1234567890abcdef12",
       3
     );
-    otherTask.task_id = "golden-rigid-authoring";
+    otherTask.task_id = "golden-retired-case";
 
     expect(() =>
       compareAcceptedGoldenSessions({
@@ -206,12 +206,12 @@ describe("accepted golden session comparison", () => {
         ),
         candidate: otherTask,
       })
-    ).toThrow("same golden task_id");
+    ).toThrow("requires a known canonical Golden task ID");
   });
   test("requires identical starting asset bytes for modern Golden Tasks too", () => {
     const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
     const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
-    baseline.task_id = candidate.task_id = "golden-articulated-authoring";
+    baseline.task_id = candidate.task_id = "golden-full-asset-authoring";
     candidate.pipeline_provenance.input_asset_sha256 = "d".repeat(64);
     expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
       .toThrow("same valid input_asset_sha256");
@@ -393,11 +393,11 @@ describe("R5 Geometry Knowledge controlled Golden comparison (synthetic contract
     expect(() => compareGeometryKnowledgeGoldenPair(input))
       .toThrow("R5_GEOMETRY_PAIR_SAME_KNOWN_TELEMETRY_SOURCE_REQUIRED");
     input.candidate.usage!.telemetry_source = "verified-provider-usage";
-    input.candidate.task_id = input.baseline.task_id = "golden-texture-correction";
+    input.candidate.task_id = input.baseline.task_id = "golden-retired-case";
     input.baseline_exposure.task_id = input.candidate_exposure.task_id =
-      "golden-texture-correction";
+      "golden-retired-case";
     expect(() => compareGeometryKnowledgeGoldenPair(input))
-      .toThrow("R5_GEOMETRY_PAIR_TASK_NOT_GEOMETRY_RELEVANT");
+      .toThrow("requires a known canonical Golden task ID");
     const missing = syntheticPair();
     missing.candidate.proof_scope = "LOCAL_CODE";
     expect(() => compareGeometryKnowledgeGoldenPair(missing))

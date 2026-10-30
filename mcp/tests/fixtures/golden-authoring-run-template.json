@@ -2,7 +2,7 @@
   "schema": "lazydesigner-golden-authoring-runs-v1",
   "runs": [
     {
-      "task_id": "golden-geometry-correction",
+      "task_id": "golden-full-asset-authoring",
       "source_sha": "0000000000000000000000000000000000000000",
       "proof_scope": "LIVE_BLOCKBENCH",
       "model": null,
@@ -22,27 +22,47 @@
       "trace": [],
       "acceptance_evidence": [
         {
-          "criterion": "first_wrong_owner",
-          "verdict": "UNVERIFIED",
-          "evidence_ref": null
-        },
-        {
-          "criterion": "targeted_correction",
-          "verdict": "UNVERIFIED",
-          "evidence_ref": null
-        },
-        {
-          "criterion": "unaffected_state_preserved",
-          "verdict": "UNVERIFIED",
-          "evidence_ref": null
-        },
-        {
-          "criterion": "downstream_uv_texture_recheck",
-          "verdict": "UNVERIFIED",
-          "evidence_ref": null
-        },
-        {
           "criterion": "reference_fidelity",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
+          "criterion": "silhouette_proportion",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
+          "criterion": "required_parts_and_negative_space",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
+          "criterion": "hierarchy_and_pivots",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
+          "criterion": "uv_layout_integrity",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
+          "criterion": "mapped_texture_and_palette",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
+          "criterion": "idle_loop_motion",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
+          "criterion": "signal_contact_timing",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
+          "criterion": "authoring_animation_handoff",
           "verdict": "UNVERIFIED",
           "evidence_ref": null
         },

@@ -10,14 +10,14 @@ import type {
   UsageDocument,
 } from "../../scripts/evaluate/validate-astra-usage";
 
-const correctionTask = goldenCorpus.tasks.find(task => task.id === "golden-geometry-correction")!;
+const fullTask = goldenCorpus.tasks[0]!;
 
 function golden(): GoldenAuthoringDocument {
   return {
     schema: "lazydesigner-golden-authoring-runs-v1",
     runs: [
       {
-        task_id: "golden-geometry-correction",
+        task_id: "golden-full-asset-authoring",
         source_sha: "1234567890abcdef1234567890abcdef12345678",
         proof_scope: "LIVE_BLOCKBENCH",
         model: null,
@@ -51,7 +51,7 @@ function golden(): GoldenAuthoringDocument {
           },
         ],
         acceptance_evidence: [
-          ...correctionTask.acceptance.map(criterion => ({
+          ...fullTask.acceptance.map(criterion => ({
             criterion, verdict: "UNVERIFIED" as const, evidence_ref: null,
           })),
           { criterion: "human_acceptance", verdict: "UNVERIFIED", evidence_ref: null },
@@ -70,7 +70,7 @@ function usage(sourceSha: string): UsageDocument {
     telemetry_source: "codex",
     runs: [
       {
-        task_id: "golden-geometry-correction",
+        task_id: "golden-full-asset-authoring",
         variant: "zero_waste",
         quality_verdict: "UNVERIFIED",
         task_success: null,
@@ -151,7 +151,7 @@ describe("golden session finalizer", () => {
     expect(report.metrics).toBeNull();
     expect(report.unresolved).toEqual({
       decision_labels: 1,
-      acceptance_evidence: correctionTask.acceptance.length + 1,
+      acceptance_evidence: fullTask.acceptance.length + 1,
     });
   });
 

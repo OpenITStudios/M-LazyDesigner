@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "format_version": "5.0",
+    "model_format": "bedrock",
+    "box_uv": false
+  },
+  "name": "beacon_courier_bot",
+  "model_identifier": "beacon_courier_bot",
+  "resolution": {
+    "width": 128,
+    "height": 128
+  },
+  "visible_box": [
+    2.5,
+    3.1,
+    0
+  ],
+  "elements": [],
+  "groups": [],
+  "outliner": [],
+  "textures": [],
+  "animations": []
+}
