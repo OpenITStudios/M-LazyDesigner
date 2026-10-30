@@ -4,7 +4,8 @@ export type AnimationMotionTrackInput = {
   group_uuid: string;
   group_name: string;
   channel: AnimationMotionChannel;
-  keyframes: Array<{ time: number; value: readonly unknown[] }>;
+  // Multiple native data points may encode pre/post discontinuities.
+  keyframes: Array<{ time: number; value: readonly unknown[]; data_point_count?: number }>;
 };
 
 const EPSILON = 1e-9;
@@ -66,6 +67,20 @@ function magnitude(value: Vec3): number {
 }
 
 function analyzeTrack(track: AnimationMotionTrackInput) {
+  // getArray(0) alone cannot describe a native key with 0 or 2+ data points.
+  // Refuse such numeric diagnostics rather than treating a step as smooth.
+  if (track.keyframes.some((frame) =>
+    frame.data_point_count !== undefined && frame.data_point_count !== 1
+  )) {
+    return {
+      state: "unavailable" as const,
+      reason: "non_single_native_data_point" as const,
+      group_uuid: track.group_uuid,
+      group_name: track.group_name,
+      channel: track.channel,
+      numeric_keyframes: 0,
+    };
+  }
   const unevaluatedKeyframes = track.keyframes.filter(
     (keyframe) => !Number.isFinite(keyframe.time) || keyframe.time < 0 ||
       finiteVec3(keyframe.value) === null
@@ -91,15 +106,21 @@ function analyzeTrack(track: AnimationMotionTrackInput) {
     )
     .sort((left, right) => left.time - right.time);
 
-  const samples: Array<{ time: number; value: Vec3 }> = [];
-  for (const entry of sorted) {
-    const previous = samples[samples.length - 1];
-    if (previous?.time === entry.time) {
-      samples[samples.length - 1] = entry;
-    } else {
-      samples.push(entry);
-    }
+  // Equal timestamps may represent an ordered discontinuity, and choosing
+  // the final entry silently fabricates an authored velocity/path.
+  if (sorted.some((entry, index) =>
+    index > 0 && entry.time === sorted[index - 1]!.time
+  )) {
+    return {
+      state: "unavailable" as const,
+      reason: "duplicate_keyframe_time" as const,
+      group_uuid: track.group_uuid,
+      group_name: track.group_name,
+      channel: track.channel,
+      numeric_keyframes: sorted.length,
+    };
   }
+  const samples = sorted;
 
   if (samples.length < 2) {
     return {

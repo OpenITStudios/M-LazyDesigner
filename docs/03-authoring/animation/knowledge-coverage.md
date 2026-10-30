@@ -82,6 +82,20 @@ Implement a case only through its existing source/test/native owner when a concr
 - **Already source-present:** contact analysis, motion dynamics, IK readiness, linear key reduction, controller blending and recipe compilation must be reused, not reimplemented in a new engine.
 - **Proof boundary:** caller-supplied world contact samples, IK eligibility, curve plans, technical receipts and source tests are **not** physical foot-locking, native playback, save/reopen proof or accepted animation fidelity.
 
-## K4/K5 — Existing verification path only
+## K4 — Diagnostic integrity (SOURCE AUTHORED; NOT EXECUTED)
 
-Use `mcp/docs/GOLDEN_TASKS.md`, `mcp/docs/QUALITY_BENCHMARK.md` and `mcp/scripts/verify/verify-animation-live.ts`. When an exact matching installed build becomes available, compare the **same approved reference fingerprint**, starting `.bbmodel`, target Bedrock version, affected clip/rig UUID, three consecutive cycles for looping motion, contact/attachment timing, export round-trip, correction rounds, elapsed time and user-visible quality. Native acceptance and cost-to-accepted-result remain **NOT EXECUTED**. Do not start a parallel benchmark or request user-PC setup.
+The existing `mcp/lib/animation/motionDynamics.ts` silently kept the last same-time key, and `mcp/server/runtime/extensions/animation/nativeIntelligence.ts` previously extracted `getArray(0)` even for multiple native pre/post data points. This could manufacture numeric movement, velocity and loop continuity from ambiguous motion. This is **not** a claim that actual Blockbench playback is defective.
+
+The corrected owners mark duplicate-time tracks `unavailable: duplicate_keyframe_time` and native 0/2+ data-point tracks `unavailable: non_single_native_data_point`. Valid single-point tracks still produce evidence; mixed clips retain the clean subset plus bounded omissions. The existing `mcp/tests/animation-native-intelligence.test.ts` now owns the positive/negative regression. No authored keys, assets, public tools or automatic IK are changed. **Bun, typecheck, native and CI verification NOT EXECUTED.** Numeric source diagnostics remain non-visual.
+
+## K5 — Existing Animation Golden acceptance only (NOT EXECUTED)
+
+Reuse [the Golden corpus](../../../mcp/docs/GOLDEN_TASKS.md), [quality benchmark](../../../mcp/docs/QUALITY_BENCHMARK.md), [native runbook](../../05-operations/local-acceptance-runbook.md) and `mcp/scripts/verify/verify-animation-live.ts`. Do not create 16 extra benchmark tasks from the A01–A16 candidate risk list. The established **eight Golden Tasks remain UNMEASURED**.
+
+| Existing task | Minimum real-world evidence | Insufficient proxy |
+|---|---|---|
+| `golden-mechanical-lift` | Correct hinge/pivot/clearance in closed, transitional and open poses, entry/exit plus saved/reopened native clip | Numeric rotation or key count alone |
+| `golden-humanoid-fisherman` | Three full idle loops, reel action and recovery, relative hand-to-rod grip, reference-matched weight and save/reopen | One pose or caller-declared contact values |
+| `golden-particle-smoke` | Locator/texture/effect timing plus actual Minecraft witness for `in_game_visibility` | Blockbench preview or asset-only export as gameplay proof |
+
+**Live acceptance sequence:** pin approved reference fingerprint, unchanged starting `.bbmodel`, exact Runtime/build and bone/clip UUIDs; run existing disposable `verify:animation-live` and `verify:persistence-live` in a genuinely available live environment, then capture representative playback, three loops where applicable, saved/exported result and human quality review using the existing Golden session evaluator. Gameplay visibility is a separate external integration dependency, not a normal LazyDesigner authoring deliverable. A run without Blockbench/Minecraft/human evidence stays **NOT EXECUTED / UNVERIFIED**, never PASS. No second scoring or runtime framework.

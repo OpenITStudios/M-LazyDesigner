@@ -473,10 +473,16 @@ function motionDynamicsRuntime(item: RuntimeAnimationItem) {
     );
     for (const channel of ["position", "rotation", "scale"] as const) {
       const keyframes = ((animator[channel] as BBKeyframe[] | undefined) ?? []).map(
-        (keyframe) => ({
-          time: keyframe.time,
-          value: keyframe.getArray(0) as unknown[],
-        })
+        (keyframe) => {
+          const dataPointCount = Array.isArray(keyframe.data_points)
+            ? keyframe.data_points.length : 0;
+          return {
+            time: keyframe.time,
+            data_point_count: dataPointCount,
+            // No fabricated first-point curve for pre/post or absent data.
+            value: dataPointCount === 1 ? keyframe.getArray(0) as unknown[] : [],
+          };
+        }
       );
       if (!keyframes.length) continue;
       tracks.push({

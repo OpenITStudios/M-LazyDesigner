@@ -237,6 +237,69 @@ describe("Bedrock animation native intelligence", () => {
     expect(endpoints.key_timing.review_secondary_timing).toBe(false);
   });
 
+  test("K4 declines duplicate and multi-point native keys without hiding clean tracks", async () => {
+    const clean = {
+      group_uuid: "clean", group_name: "clean", channel: "rotation" as const,
+      keyframes: [
+        { time: 0, value: [0, 0, 0], data_point_count: 1 },
+        { time: 0.5, value: [20, 0, 0], data_point_count: 1 },
+        { time: 1, value: [0, 0, 0], data_point_count: 1 },
+      ],
+    };
+    const duplicate = {
+      ...clean, group_uuid: "duplicate",
+      keyframes: [
+        { time: 0, value: [0, 0, 0] },
+        { time: 0.5, value: [10, 0, 0] },
+        { time: 0.5, value: [-10, 0, 0] },
+        { time: 1, value: [0, 0, 0] },
+      ],
+    };
+    const prepost = {
+      ...clean, group_uuid: "prepost",
+      keyframes: [
+        { time: 0, value: [0, 0, 0], data_point_count: 1 },
+        { time: 0.5, value: [90, 0, 0], data_point_count: 2 },
+        { time: 1, value: [0, 0, 0], data_point_count: 1 },
+      ],
+    };
+    const missing = {
+      ...clean, group_uuid: "missing",
+      keyframes: [
+        { time: 0, value: [0, 0, 0], data_point_count: 0 },
+        { time: 1, value: [10, 0, 0], data_point_count: 1 },
+      ],
+    };
+    const result = analyzeAnimationMotionDynamics({
+      loop_mode: "loop", tracks: [duplicate, prepost, missing, clean],
+      example_limit: 8,
+    });
+    expect(result.state).toBe("available");
+    if (result.state !== "available") throw new Error("expected partial dynamics");
+    expect(result.numeric_track_count).toBe(1);
+    expect(result.unevaluated_track_count).toBe(3);
+    expect(result.unevaluated_examples.map((entry) => entry.reason)).toEqual([
+      "duplicate_keyframe_time",
+      "non_single_native_data_point",
+      "non_single_native_data_point",
+    ]);
+    expect(result.examples.map((entry) => entry.group_uuid)).toEqual(["clean"]);
+    expect(result.key_timing.moving_bone_count).toBe(1);
+    expect(analyzeAnimationMotionDynamics({
+      loop_mode: "loop", tracks: [duplicate, prepost],
+    }).state).toBe("unavailable");
+
+    // This Runtime function is native-only; check the narrow bridge statically.
+    const source = await Bun.file("server/runtime/extensions/animation/nativeIntelligence.ts").text();
+    const begin = source.indexOf("function motionDynamicsRuntime(");
+    const end = source.indexOf("function clientEntityWiringRuntime(", begin);
+    expect(begin).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(begin);
+    const bridge = source.slice(begin, end);
+    expect(bridge).toContain("data_point_count: dataPointCount");
+    expect(bridge).toContain("dataPointCount === 1 ? keyframe.getArray(0)");
+  });
+
   test("runtime wiring expands capability without adding another MCP tool", async () => {
     const [runtime, bootstrap, server, skill] = await Promise.all([
       Bun.file("server/runtime/extensions/animation/nativeIntelligence.ts").text(),
