@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { record, resultCandidates } from "./receipts";
 import { animationVerificationScope, textureVerificationScope } from "./verification";
+import { uvAppliedPlanReceiptSchema } from "../../../lib/uv/receipt";
 
 export type ControlRecheckAction = AssetDependencyRecheckAction;
 
@@ -313,6 +314,8 @@ function targetFromVerificationScope(
 }
 
 export function downstreamRechecksForFreshness(input: {
+  /** Canonical UV apply must use the same receipt proof as Graph readiness. */
+  capability?: string;
   stale: readonly ControlFreshnessScope[];
   currentDomain: ControlAuthoringDomain;
   result?: unknown;
@@ -335,6 +338,16 @@ export function downstreamRechecksForFreshness(input: {
   const sharedUvTarget = () => {
     if (!uvTargetResolved) {
       uvTargetResolved = true;
+      if (input.capability === "manage_uv_layout" &&
+          input.stale.includes("UV_MAPPING") &&
+          !uvAppliedPlanReceiptSchema.safeParse(input.result).success) {
+        // A malformed/partial native UV apply cannot narrow Texture/Seam
+        // rechecks even if it contains believable Cube or face IDs.
+        // Graph readiness uses this same source validator. No fallback to
+        // an unrelated Texture rectangle when UV evidence is suspect.
+        uvAttempted = true;
+        return undefined;
+      }
       const observation = uvTargetFromCandidates(
         currentCandidates(), input.stale.includes("UV_MAPPING")
       );

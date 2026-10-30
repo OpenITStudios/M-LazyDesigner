@@ -85,6 +85,7 @@ export function buildControlDelta(input: {
     input.result
   );
   const downstreamRecheck = downstreamRechecksForFreshness({
+    capability: input.capability,
     stale:
       freshness.basis === "UNKNOWN_OUTCOME"
         ? freshness.unknown
