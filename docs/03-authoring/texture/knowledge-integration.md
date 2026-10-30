@@ -363,3 +363,30 @@ Proof: source and focused regression definitions authored; Bun/typecheck,
 native/visual and Golden acceptance NOT EXECUTED. A real Control caller
 must later supply its fresh canonical projection rather than fabricated
 hashes or guessed face associations.
+
+## P0 follow-on — actual Control source-bound Texture caller (2026-10-30)
+
+`gateway/control/referencePackage.ts::inspectTextureTreatmentReferenceSurfaces`
+is an internal, on-demand caller of the existing `planTextureTreatment`.
+It forbids caller-supplied `reference_context`, pins the expected full
+Reference Package fingerprint, selects at most four explicitly claimed
+current Texture images, requires declared `APPROVED` status, and reuses
+Control's exact on-disk image SHA-256 readback and existing final
+manifest/image double-read guard. Missing, stale, DRAFT, wrong-stage,
+duplicate or otherwise invalid claims refuse or remain `review_required`.
+It returns the treatment plan plus bounded source-identity metadata, **not**
+the underlying image binary, guessed face correspondence, artist consent,
+render evidence or permission to paint.
+
+The active `TEXTURING` stage's existing `decision_packet` now exposes
+up to six compact verified-source `SURFACE_DETAIL` image/region/part
+candidates with explicit omission counts. Source SHA, view and normalized
+box can orient an author to propose exact Cube/face claims without
+transmitting all reference images or adding a public Gateway tool.
+These source hints are package-declared metadata only. The actual model
+face and visual fidelity remain independently unverified.
+
+**Proof:** static GitHub source review and focused Control/projection/source
+tests authored. No Bun/typecheck/CI, installed Blockbench, visual, Bedrock
+export or Golden comparisons executed. No application release, asset,
+UV tool registration or generated API changed.

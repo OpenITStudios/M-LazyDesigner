@@ -10,7 +10,11 @@ import {
   readReferenceImageEvidence,
   type DeliveredReferenceImage,
 } from "./referenceImageEvidence";
-import { requireTextureTreatmentSeamPlanReady } from "../../lib/texture/treatmentPlan";
+import {
+  planTextureTreatment,
+  requireTextureTreatmentSeamPlanReady,
+  type TextureTreatmentPlanInput,
+} from "../../lib/texture/treatmentPlan";
 import { fileMetadataSignature } from "./fileSignature";
 
 export type {
@@ -376,5 +380,116 @@ export async function inspectTextureSeamReferenceImageIdentity(input: {
     observation_visibility_attested: false as const,
     scene_coverage_attested: false as const,
     visual_verdict: "not_evaluated" as const,
+  };
+}
+
+
+/**
+ * Control-owned, on-demand reference source → Texture treatment caller.
+ * An explicit author-proposed Cube/face mapping is checked against a fresh
+ * canonical REFERENCE.json and actual image bytes. The source can attest
+ * an image's identity, NOT whether its visible pixels depict that Cube face.
+ *
+ * Deliberately internal: no additional Gateway tool, model capture, image
+ * payload, painting permission, UV change or user approval is produced.
+ */
+export async function inspectTextureTreatmentReferenceSurfaces(input: {
+  reference_package_path: string;
+  expected_reference_fingerprint: string;
+  treatment_input: TextureTreatmentPlanInput;
+}) {
+  if (typeof input.expected_reference_fingerprint !== "string" ||
+      !/^[a-f0-9]{64}$/.test(input.expected_reference_fingerprint)) {
+    throw new Error("TEXTURE_SURFACE_REFERENCE_FINGERPRINT_REQUIRED");
+  }
+  if (!input.treatment_input || input.treatment_input.reference_context !== undefined) {
+    // The caller may declare FACE↔REGION correspondence, not supply its own
+    // purportedly verified Control source. This function owns that read.
+    throw new Error("TEXTURE_SURFACE_REFERENCE_CONTEXT_UNTRUSTED");
+  }
+  // Snapshot author-proposed data before the first await; caller mutations
+  // during image reads cannot retrospectively change the inspected intent.
+  const intent = structuredClone(input.treatment_input);
+  if (!Array.isArray(intent.regions) || intent.regions.length < 1 ||
+      intent.regions.length > 32 || !Array.isArray(intent.required_faces) ||
+      intent.required_faces.length < 1) {
+    throw new Error("TEXTURE_SURFACE_REFERENCE_FACE_INVENTORY_REQUIRED");
+  }
+  const declarations = intent.regions.flatMap(region =>
+    region.reference_surfaces ?? []
+  );
+  if (!declarations.length || declarations.length > 64) {
+    throw new Error("TEXTURE_SURFACE_REFERENCE_CLAIMS_REQUIRED: 1..64 explicit claims.");
+  }
+  const ids = [...new Set(declarations.map(claim => claim?.image_id))].sort();
+  if (!ids.length || ids.length > 4 || ids.some(id =>
+      typeof id !== "string" || !id.trim() || id.length > 96)) {
+    throw new Error("TEXTURE_SURFACE_REFERENCE_IMAGE_BUDGET: require 1..4 named images.");
+  }
+  const current = await readReferencePackageProjection(input.reference_package_path);
+  if (!current.available || !current.fingerprint ||
+      current.fingerprint !== input.expected_reference_fingerprint) {
+    throw new Error("TEXTURE_SURFACE_REFERENCE_SOURCE_CHANGED");
+  }
+  // Select only explicitly requested, verified, package-APPROVED Texture
+  // images. This is a manifest declaration, not authenticated human consent.
+  const selected = ids.map(id => {
+    const image = current.images.find(row => row.id === id);
+    if (!image || image.integrity !== "VERIFIED" ||
+        !image.sha256 || !/^[a-f0-9]{64}$/.test(image.sha256) ||
+        !image.used_by.includes("TEXTURE")) {
+      throw new Error("TEXTURE_SURFACE_REFERENCE_IMAGE_SCOPE");
+    }
+    if (image.status !== "APPROVED") {
+      throw new Error("TEXTURE_SURFACE_REFERENCE_PACKAGE_NOT_APPROVED");
+    }
+    return {
+      id: image.id,
+      view: image.view ?? null,
+      sha256: image.sha256,
+      integrity: image.integrity,
+      used_by: [...image.used_by],
+      regions: image.regions ?? [],
+    };
+  });
+  // The same canonical planner and its normal unresolved-reason vocabulary
+  // own every semantic/part/face mismatch. No alternate style inference.
+  const plan = planTextureTreatment({
+    ...intent,
+    reference_context: {
+      fingerprint: current.fingerprint,
+      images: selected,
+    },
+  });
+  // Re-read selected raw image bytes and the complete manifest/image identity
+  // using the existing seam-source freshness guard. Never return PNG/base64.
+  const delivered = await readReferenceImageEvidence(current, ids);
+  const final = await readReferencePackageProjection(input.reference_package_path);
+  requireStableSeamReferenceImageRead({
+    initial: current, final, selected_ids: ids, delivered,
+  });
+
+  const consistent = plan.reference_surface_evidence.state === "claim_metadata_matched";
+  return {
+    source: "control_reference_package_texture_surfaces" as const,
+    state: consistent && plan.readiness.state === "ready"
+      ? ("source_identity_matched" as const)
+      : ("review_required" as const),
+    reference_fingerprint: current.fingerprint,
+    selected_image_count: ids.length,
+    source_image_bytes_matched: true as const,
+    image_identity: delivered.map(image => ({
+      image_id: image.id,
+      image_sha256: image.sha256,
+      package_declared_status: image.status,
+    })),
+    matched_claim_count: plan.reference_surface_evidence.matched_claim_count,
+    declared_claim_count: plan.reference_surface_evidence.declared_claim_count,
+    assertion_provenance: "SOURCE_BYTES_CHECKED_CALLER_FACE_MAPPING_UNVERIFIED" as const,
+    native_face_correspondence_attested: false as const,
+    human_approval_attested: false as const,
+    mutation_authorized: false as const,
+    visual_verdict: "not_evaluated" as const,
+    treatment_plan: plan,
   };
 }

@@ -39,6 +39,22 @@ export type ControlStageDecisionPacket = {
   motion?: ControlReferenceStructuredFact[];
   constraints?: string[];
   cross_view_evidence?: ControlReferenceProjection["cross_view_evidence"];
+  texture_surface_regions?: {
+    source_state: "PACKAGE_METADATA_ONLY";
+    total_count: number;
+    returned_count: number;
+    omitted_count: number;
+    regions: Array<{
+      image_id: string;
+      image_sha256: string;
+      view: NonNullable<ControlReferenceProjection["images"][number]["view"]>;
+      image_region_id: string;
+      part_id: string;
+      visibility: "DIRECT" | "PARTIAL";
+      box_uv: [number, number, number, number];
+    }>;
+    visual_verdict: "not_evaluated";
+  };
 };
 
 export type ControlStageContext = {
@@ -277,6 +293,50 @@ export function semanticFactsForAuthoringDomain(
   };
 }
 
+/**
+ * Small, source-identity-carrying candidate index for the existing Texturing
+ * stage packet. Source annotation is never automatic face/UV correspondence.
+ * Missing/unverified/DRAFT images do not produce actionable source hints;
+ * an overfull set advertises explicit omissions rather than silent clipping.
+ */
+function compactTextureSurfaceRegions(
+  reference: ControlReferenceProjection
+): NonNullable<ControlStageDecisionPacket["texture_surface_regions"]> | null {
+  const regions: NonNullable<
+    ControlStageDecisionPacket["texture_surface_regions"]
+  >["regions"] = [];
+  let total = 0;
+  for (const image of reference.images) {
+    if (image.integrity !== "VERIFIED" || image.status !== "APPROVED" ||
+        !image.used_by.includes("TEXTURE") ||
+        !image.view || !image.sha256 ||
+        !/^[a-f0-9]{64}$/.test(image.sha256)) continue;
+    for (const annotation of image.regions ?? []) {
+      if (annotation.evidence_role !== "SURFACE_DETAIL" ||
+          annotation.visibility === "OCCLUDED" || !annotation.box_uv) continue;
+      total++;
+      if (regions.length >= 6) continue;
+      regions.push({
+        image_id: image.id,
+        image_sha256: image.sha256,
+        view: image.view,
+        image_region_id: annotation.id,
+        part_id: annotation.part_id,
+        visibility: annotation.visibility,
+        box_uv: [...annotation.box_uv],
+      });
+    }
+  }
+  return total ? {
+    source_state: "PACKAGE_METADATA_ONLY",
+    total_count: total,
+    returned_count: regions.length,
+    omitted_count: total - regions.length,
+    regions,
+    visual_verdict: "not_evaluated",
+  } : null;
+}
+
 export function decisionPacketForAuthoringDomain(
   domain: ControlAuthoringDomain | null,
   reference: ControlReferenceProjection
@@ -292,6 +352,8 @@ export function decisionPacketForAuthoringDomain(
   } else if (domain === "TEXTURING") {
     const materials = compactFacts(facts.materials, MATERIAL_KEYS);
     if (materials.length > 0) packet.materials = materials;
+    const surfaceRegions = compactTextureSurfaceRegions(reference);
+    if (surfaceRegions) packet.texture_surface_regions = surfaceRegions;
   } else if (domain === "ANIMATION") {
     const parts = compactFacts(facts.parts, GEOMETRY_PART_KEYS);
     const articulation = compactFacts(facts.articulation, ARTICULATION_KEYS);

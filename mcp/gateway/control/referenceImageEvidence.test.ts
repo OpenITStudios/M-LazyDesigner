@@ -9,10 +9,14 @@ import type { ControlWorkspaceProjection } from "./workspace";
 import { readReferenceImageEvidence, summarizeReferenceAlphaSilhouette } from "./referenceImageEvidence";
 import {
   inspectTextureSeamReferenceImageIdentity,
+  inspectTextureTreatmentReferenceSurfaces,
   readReferencePackageProjection,
   requireStableSeamReferenceImageRead,
 } from "./referencePackage";
-import { planTextureTreatment } from "../../lib/texture/treatmentPlan";
+import {
+  planTextureTreatment,
+  type TextureTreatmentPlanInput,
+} from "../../lib/texture/treatmentPlan";
 
 const RED_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQoAHxcCAk+Uzr4AAAAASUVORK5CYII=", "base64"
@@ -561,5 +565,147 @@ describe("source-byte-backed treatment seam reference identity", () => {
     expect(proof.source_image_bytes_matched).toBe(false);
     expect(proof.images).toEqual([]);
     expect(proof.material_approval_attested).toBe(false);
+  });
+});
+
+
+describe("Control source-backed Texture treatment surface handoff", () => {
+  async function surfacePackage(status = "APPROVED", stages = ["TEXTURE"]) {
+    const images = [{
+      ...textureImage(status)[0],
+      used_by: stages,
+      regions: [{
+        id: "badge", part_id: "decal", evidence_role: "SURFACE_DETAIL",
+        visibility: "DIRECT", box_uv: [0.2, 0.2, 0.6, 0.5],
+      }],
+    }];
+    const root = await packageRoot(images);
+    await writeFile(join(root, "REFERENCE.json"), JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "Bench", kind: "MODEL", profile: "PROP_FURNITURE" },
+      readiness: { overall: "READY", texture: "READY" },
+      parts: [{ id: "decal", role: "TEXTURE" }],
+      images,
+    }));
+    return root;
+  }
+  function treatment(sha: string): TextureTreatmentPlanInput {
+    const face = { cube_uuid: "panel", face: "north" as const };
+    return {
+      required_faces: [face],
+      regions: [{
+        region: "logo", evidence: "observed",
+        surface_pattern: "painted_metal", render_profile: "opaque",
+        face_targets: [{ ...face, treatment: "PAINT" }],
+        reference_surfaces: [{
+          image_id: "IMG_FRONT", image_sha256: sha,
+          image_region_id: "badge", part_id: "decal", face,
+        }],
+      }],
+    };
+  }
+
+  test("current on-disk Control source is the actual read-only Texture planner caller", async () => {
+    const root = await surfacePackage();
+    const source = await readReferencePackageProjection(root);
+    const sha = createHash("sha256").update(RED_PNG).digest("hex");
+    const inspected = await inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: source.fingerprint!,
+      treatment_input: treatment(sha),
+    });
+    expect(inspected).toMatchObject({
+      source: "control_reference_package_texture_surfaces",
+      state: "source_identity_matched",
+      reference_fingerprint: source.fingerprint,
+      source_image_bytes_matched: true,
+      selected_image_count: 1,
+      matched_claim_count: 1,
+      declared_claim_count: 1,
+      native_face_correspondence_attested: false,
+      human_approval_attested: false,
+      mutation_authorized: false,
+      visual_verdict: "not_evaluated",
+      treatment_plan: {
+        readiness: { state: "ready" },
+        reference_surface_evidence: {
+          state: "claim_metadata_matched",
+          current_reference_read_attested: false,
+          visual_verdict: "not_evaluated",
+        },
+      },
+    });
+    expect(JSON.stringify(inspected)).not.toContain(RED_PNG.toString("base64"));
+    expect(JSON.stringify(inspected)).not.toContain('"data":');
+
+    // Source bytes are current but an inaccurate caller-part claim still
+    // cannot become a reference-grounded Texture planning decision.
+    const wrong = treatment(sha);
+    wrong.regions[0]!.reference_surfaces![0]!.part_id = "other";
+    const reviewed = await inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: source.fingerprint!,
+      treatment_input: wrong,
+    });
+    expect(reviewed.state).toBe("review_required");
+    expect(reviewed.treatment_plan.readiness.unresolved).toContainEqual({
+      region: "logo", reason: "REFERENCE_SURFACE_PART_MISMATCH",
+    });
+    expect(reviewed.source_image_bytes_matched).toBe(true);
+  });
+
+  test("stale source bytes, DRAFT, wrong stage and caller-forged Control context never pass", async () => {
+    const sha = createHash("sha256").update(RED_PNG).digest("hex");
+    const root = await surfacePackage();
+    const source = await readReferencePackageProjection(root);
+    await writeFile(join(root, "images/front.png"), BLUE_PNG);
+    await expect(inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: source.fingerprint!,
+      treatment_input: treatment(sha),
+    })).rejects.toThrow("TEXTURE_SURFACE_REFERENCE_SOURCE_CHANGED");
+
+    for (const [status, stages, reason] of [
+      ["DRAFT", ["TEXTURE"], "TEXTURE_SURFACE_REFERENCE_PACKAGE_NOT_APPROVED"],
+      ["APPROVED", ["GEOMETRY"], "TEXTURE_SURFACE_REFERENCE_IMAGE_SCOPE"],
+    ] as const) {
+      const other = await surfacePackage(status, [...stages]);
+      const projection = await readReferencePackageProjection(other);
+      await expect(inspectTextureTreatmentReferenceSurfaces({
+        reference_package_path: other,
+        expected_reference_fingerprint: projection.fingerprint!,
+        treatment_input: treatment(sha),
+      })).rejects.toThrow(reason);
+    }
+    const fake = treatment(sha);
+    fake.reference_context = {
+      fingerprint: "f".repeat(64), images: [],
+    };
+    await expect(inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: source.fingerprint!,
+      treatment_input: fake,
+    })).rejects.toThrow("TEXTURE_SURFACE_REFERENCE_CONTEXT_UNTRUSTED");
+    const noClaims = treatment(sha);
+    noClaims.regions[0]!.reference_surfaces = [];
+    await expect(inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: source.fingerprint!,
+      treatment_input: noClaims,
+    })).rejects.toThrow("TEXTURE_SURFACE_REFERENCE_CLAIMS_REQUIRED");
+  });
+
+  test("source handoff double-checks manifest/image identity after await", async () => {
+    const content = await Bun.file("gateway/control/referencePackage.ts").text();
+    const start = content.indexOf("export async function inspectTextureTreatmentReferenceSurfaces");
+    const read = content.indexOf("readReferenceImageEvidence(current, ids)", start);
+    const fresh = content.indexOf("readReferencePackageProjection(input.reference_package_path)", read);
+    const verify = content.indexOf("requireStableSeamReferenceImageRead({", fresh);
+    const proof = content.indexOf("source_image_bytes_matched: true as const", verify);
+    expect(start).toBeGreaterThan(0);
+    expect(read).toBeGreaterThan(start);
+    expect(fresh).toBeGreaterThan(read);
+    expect(verify).toBeGreaterThan(fresh);
+    expect(proof).toBeGreaterThan(verify);
   });
 });

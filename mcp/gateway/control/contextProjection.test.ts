@@ -341,6 +341,71 @@ describe("Control stage semantic projection", () => {
     expect(projected.context.reference_recovery).toEqual(geometry.reference_recovery);
   });
 
+
+  test("Texture stage projects bounded image+region source hints without inventing face ownership", () => {
+    const source: ControlReferenceProjection = {
+      ...reference,
+      images: [{
+        id: "tex-main", file: "tex.png", role: "MATERIAL_TEXTURE",
+        used_by: ["TEXTURE"], status: "APPROVED",
+        view: "front", integrity: "VERIFIED",
+        sha256: "a".repeat(64),
+        regions: Array.from({ length: 9 }, (_, i) => ({
+          id: "mark_" + i, part_id: "coat_marking",
+          evidence_role: "SURFACE_DETAIL" as const,
+          visibility: "DIRECT" as const,
+          box_uv: [0.2, 0.2, 0.6, 0.5] as [number, number, number, number],
+          related_part_id: null,
+        })),
+      }],
+    };
+    const texture = buildControlStageContext({
+      domain: "TEXTURING", reference: source, workspace,
+    });
+    const summary = texture.decision_packet.texture_surface_regions;
+    expect(summary).toMatchObject({
+      source_state: "PACKAGE_METADATA_ONLY",
+      total_count: 9, returned_count: 6, omitted_count: 3,
+      visual_verdict: "not_evaluated",
+      regions: [{
+        image_id: "tex-main", image_sha256: "a".repeat(64),
+        view: "front", part_id: "coat_marking", image_region_id: "mark_0",
+      }],
+    });
+    expect(JSON.stringify(summary)).not.toContain("cube_uuid");
+    expect(buildControlStageContext({
+      domain: "GEOMETRY", reference: source, workspace,
+    }).decision_packet.texture_surface_regions).toBeUndefined();
+    const projected = projectControlStageContextWithHeadroom(texture, 16384);
+    expect(projected.context.decision_packet?.texture_surface_regions?.omitted_count).toBe(3);
+
+    const revised: ControlReferenceProjection = {
+      ...source,
+      images: source.images.map(image => ({
+        ...image, sha256: "b".repeat(64),
+      })),
+    };
+    const next = buildControlStageContext({
+      domain: "TEXTURING", reference: revised, workspace,
+    });
+    expect(next.context_hash).not.toBe(texture.context_hash);
+    expect(next.decision_packet.texture_surface_regions?.regions[0]?.image_sha256)
+      .toBe("b".repeat(64));
+
+    for (const change of [
+      { status: "DRAFT" },
+      { integrity: "INVALID" as const },
+      { view: null },
+      { used_by: ["GEOMETRY"] as Array<"GEOMETRY" | "TEXTURE"> },
+    ]) {
+      const untrusted: ControlReferenceProjection = {
+        ...source, images: source.images.map(image => ({ ...image, ...change })),
+      };
+      expect(decisionPacketForAuthoringDomain("TEXTURING", untrusted)
+        .texture_surface_regions).toBeUndefined();
+    }
+  });
+
   test("stage context carries internal facts plus the compact Codex decision packet", () => {
     const context = buildControlStageContext({
       domain: "GEOMETRY",
