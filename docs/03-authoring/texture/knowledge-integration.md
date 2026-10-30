@@ -344,3 +344,22 @@ native export and independent human review. Native/visual acceptance remains
 **BLOCKED ON EXECUTION CONTEXT AND APPROVED ASSET**. This source-closure audit
 does not authorize restarting Geometry, Animation, CI, installation, model
 editing or a release.
+
+## P0 — Reference-to-Surface source preflight (2026-10-30)
+
+The existing `planTextureTreatment` now optionally compares per-region
+`reference_surfaces` to the caller's current Control-shaped
+`reference_context`: image SHA-256, integrity, TEXTURE usage, valid view,
+visible `SURFACE_DETAIL` annotation, semantic part ID and exact Cube face.
+Missing/stale/hidden/wrong-part evidence remains `review_required`;
+foreign/duplicate claims fail before mutation. The seam handoff rechecks
+copied claims. The default no-context planning path is unchanged.
+
+Even `claim_metadata_matched` is **caller metadata consistency only**:
+no Control read, actual visual-to-face correspondence, native mapping,
+paint permission or human approval is attested. No new registry, public
+tool, UV registration, generated API, CI workflow or asset mutation.
+Proof: source and focused regression definitions authored; Bun/typecheck,
+native/visual and Golden acceptance NOT EXECUTED. A real Control caller
+must later supply its fresh canonical projection rather than fabricated
+hashes or guessed face associations.

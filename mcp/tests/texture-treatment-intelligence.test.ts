@@ -110,6 +110,72 @@ describe("texture treatment intelligence", () => {
       .toThrow("post-planning source or continuity intent became unresolved");
   });
 
+
+  test("P0 explicit source/face claims fail closed on stale or unsupported reference facts", () => {
+    const digest = "b".repeat(64);
+    const face = { cube_uuid: "panel", face: "north" as const };
+    const fixture = (): TextureTreatmentPlanInput => ({
+      required_faces: [face],
+      reference_context: { fingerprint: "a".repeat(64), images: [{
+        id: "FRONT", sha256: digest, view: "front",
+        integrity: "VERIFIED", used_by: ["TEXTURE"],
+        regions: [{ id: "badge", part_id: "body", evidence_role: "SURFACE_DETAIL",
+          visibility: "DIRECT", box_uv: [0.2, 0.2, 0.6, 0.6], related_part_id: null }],
+      }] },
+      regions: [{ region: "badge", evidence: "observed",
+        surface_pattern: "painted_metal", render_profile: "opaque",
+        face_targets: [{ ...face, treatment: "PAINT" }],
+        reference_surfaces: [{ image_id: "FRONT", image_sha256: digest,
+          image_region_id: "badge", part_id: "body", face }],
+      }],
+    });
+    const original = fixture();
+    const ready = planTextureTreatment(original);
+    expect(ready.readiness.state).toBe("ready");
+    expect(ready.reference_surface_evidence).toMatchObject({
+      state: "claim_metadata_matched", matched_claim_count: 1,
+      current_reference_read_attested: false,
+      native_face_mapping_attested: false,
+      mutation_authorized: false, visual_verdict: "not_evaluated",
+    });
+    expect(() => requireTextureTreatmentSeamPlanReady(ready)).not.toThrow();
+    original.reference_context!.images[0]!.sha256 = "c".repeat(64);
+    expect(ready.reference_context?.images[0]?.sha256).toBe(digest);
+    const cases: Array<[(v: TextureTreatmentPlanInput) => void, string]> = [
+      [v => { v.regions[0]!.reference_surfaces![0]!.image_sha256 = "c".repeat(64); }, "REFERENCE_SURFACE_SOURCE_STALE"],
+      [v => { v.regions[0]!.reference_surfaces![0]!.part_id = "wrong"; }, "REFERENCE_SURFACE_PART_MISMATCH"],
+      [v => { v.reference_context!.images[0]!.view = null; }, "REFERENCE_SURFACE_VIEW_UNRESOLVED"],
+      [v => { v.reference_context!.images[0]!.regions![0]!.evidence_role = "PRIMARY_VOLUME"; }, "REFERENCE_SURFACE_NOT_VISIBLE_DETAIL"],
+      [v => { v.reference_context!.images[0]!.regions![0]!.visibility = "OCCLUDED";
+        v.reference_context!.images[0]!.regions![0]!.box_uv = null; }, "REFERENCE_SURFACE_NOT_VISIBLE_DETAIL"],
+      [v => { v.regions[0]!.reference_surfaces = []; }, "REFERENCE_SURFACE_FACE_UNBOUND"],
+      [v => { delete v.reference_context; }, "REFERENCE_SURFACE_CONTEXT_REQUIRED"],
+    ];
+    for (const [mutate, reason] of cases) {
+      const data = fixture(); mutate(data);
+      expect(planTextureTreatment(data).readiness.unresolved).toContainEqual({
+        region: reason === "REFERENCE_SURFACE_CONTEXT_REQUIRED" ? "*" : "badge", reason,
+      });
+    }
+    const stale = planTextureTreatment(fixture());
+    stale.regions[0]!.reference_surfaces![0]!.image_sha256 = "c".repeat(64);
+    expect(() => requireTextureTreatmentSeamPlanReady(stale))
+      .toThrow("post-planning source or continuity intent became unresolved");
+    const duplicate = fixture();
+    duplicate.regions[0]!.reference_surfaces = [
+      ...duplicate.regions[0]!.reference_surfaces!,
+      { ...duplicate.regions[0]!.reference_surfaces![0]! },
+    ];
+    expect(() => planTextureTreatment(duplicate)).toThrow("TEXTURE_REFERENCE_CLAIM_DUPLICATE");
+    const foreign = fixture();
+    foreign.regions[0]!.reference_surfaces![0]!.face = { cube_uuid: "foreign", face: "north" };
+    expect(() => planTextureTreatment(foreign)).toThrow("TEXTURE_REFERENCE_CLAIM_OUT_OF_SCOPE");
+    const legacy = fixture();
+    delete legacy.reference_context; delete legacy.regions[0]!.reference_surfaces;
+    expect(planTextureTreatment(legacy).readiness.state).toBe("ready");
+    expect(planTextureTreatment(legacy).reference_surface_evidence.state).toBe("not_requested");
+  });
+
   test("surface recipes describe pixel language without selecting render behavior", () => {
     expect(TEXTURE_SURFACE_PATTERN_NAMES.length).toBeGreaterThanOrEqual(12);
     const glass = getTextureSurfacePatternRecipe("clean_glass");

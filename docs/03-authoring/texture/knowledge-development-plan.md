@@ -1,7 +1,7 @@
 # Texture & UV Knowledge — Detailed Research-to-Acceptance Procedure
 
-**Status: USER-REQUESTED PROCEDURE, NOT IMPLEMENTATION / NOT EXECUTED**
-(2026-10-29). **Next active phase:** Texture + UV. **Geometry R0–R5: PAUSED.**
+**Status: PROCEDURE; K0–K9 source-closed, runnable/native proof NOT EXECUTED**
+(2026-10-30). **Next active phase:** Texture + UV. **Geometry R0–R5: PAUSED.**
 **Animation: DEFERRED.** Source: OpenITStudios/M-LazyDesigner, branch `Local`.
 The latest checkpoint lives in [Next Action](../../05-operations/next-action.md).
 This file owns the detailed **how**, not a new project status ledger, Runtime
@@ -381,5 +381,8 @@ Each next chat: **PIN Local → read [Next Action](../../05-operations/next-acti
 → owning regressions → honest proof → one coherent commit
 → update existing Next Action → STOP**.
 
-**First continuation is K0.** K1–K9 are the detailed planned procedure,
-not performed research, tested code or native visual acceptance yet.
+**Historical first continuation was K0.** K0–K9 are source-level research,
+integration and verifier preparation recorded in
+[knowledge-integration.md](knowledge-integration.md) and
+[Next Action](../../05-operations/next-action.md). Source closure is not
+executed tests, native acceptance or measured quality.

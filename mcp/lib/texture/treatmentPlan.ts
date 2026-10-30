@@ -8,6 +8,8 @@ import {
   type TextureSurfacePattern,
 } from "./surfacePattern";
 import type { TextureSeamContinuityIntent } from "./seamContinuity";
+import { parseReferenceImageRegions, type ReferenceRegionImage } from "../reference/imageRegionEvidence";
+import { MODEL_VIEWS } from "../reference/visualEvidence";
 
 export type TextureTreatmentEvidenceState = "observed" | "inferred" | "unknown";
 export type TextureTreatmentPbrIntent =
@@ -21,6 +23,19 @@ export type TextureTreatmentPbrIntent =
 export type TextureTreatmentFace = {
   cube_uuid: string;
   face: "north" | "south" | "east" | "west" | "up" | "down";
+};
+/** Explicit image-region to Cube-face declaration; not visual recognition. */
+export type TextureReferenceSurfaceClaim = {
+  image_id: string; image_sha256: string; image_region_id: string;
+  part_id: string; face: TextureTreatmentFace;
+};
+/** Narrow Control image projection; origin/bytes are not authenticated here. */
+export type TextureReferenceSurfaceContext = {
+  fingerprint: string;
+  images: readonly (ReferenceRegionImage & {
+    integrity: "VERIFIED" | "MISSING" | "INVALID";
+    used_by: readonly string[];
+  })[];
 };
 export type TextureTreatmentEdge = TextureTreatmentFace & {
   edge: "left" | "right" | "top" | "bottom";
@@ -89,6 +104,7 @@ export type TextureTreatmentRegionInput = {
   identity_colors?: readonly string[];
   notes?: readonly string[];
   face_targets?: readonly TextureFaceTreatment[];
+  reference_surfaces?: readonly TextureReferenceSurfaceClaim[];
 };
 
 export type TextureTreatmentPlanInput = {
@@ -96,6 +112,7 @@ export type TextureTreatmentPlanInput = {
   regions: readonly TextureTreatmentRegionInput[];
   /** Explicit complete scope for this bounded treatment task; never inferred from a sample. */
   required_faces?: readonly TextureTreatmentFace[];
+  reference_context?: TextureReferenceSurfaceContext;
   /**
    * Specific inter-Cube edge-pair intent with referenced per-face ownership.
    * Authoring metadata, NOT user approval or a claim that seams are continuous.
@@ -193,10 +210,103 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
         ...target,
         ...(target.shared_with ? { shared_with: { ...target.shared_with } } : {}),
       })),
+      ...(region.reference_surfaces ? { reference_surfaces:
+        region.reference_surfaces.map(claim => ({ ...claim, face: { ...claim.face } }))
+      } : {}),
       invariant:
         "surface_pattern describes RGB/pixel language only and never selects render_profile or PBR automatically",
     };
   });
+
+
+  // Strict opt-in metadata checks. Existing callers without reference claims
+  // keep their structural planning behavior; even matched claims never grant
+  // automatic pixel writes or assert that a reference depicts the target face.
+  const referenceRequested = input.reference_context !== undefined ||
+    regions.some(region => region.reference_surfaces !== undefined);
+  let referenceIssues = 0, referenceClaims = 0, referenceMatches = 0;
+  const flag = (region: string, reason: string) => {
+    unresolved.push({ region, reason }); referenceIssues++;
+  };
+  let referenceContext: TextureReferenceSurfaceContext | null = null;
+  if (referenceRequested) {
+    if (!input.reference_context) {
+      flag("*", "REFERENCE_SURFACE_CONTEXT_REQUIRED");
+    } else {
+      const context = input.reference_context;
+      if (!/^[a-f0-9]{64}$/i.test(context.fingerprint) ||
+          !Array.isArray(context.images) || context.images.length > 32) {
+        throw new Error("TEXTURE_REFERENCE_CONTEXT_INVALID");
+      }
+      const imageIds = new Set<string>();
+      referenceContext = { fingerprint: context.fingerprint, images: context.images.map(image => {
+        if (!image || typeof image.id !== "string" || !image.id.trim() ||
+            image.id.length > 96 || imageIds.has(image.id) ||
+            !Array.isArray(image.used_by)) throw new Error("TEXTURE_REFERENCE_CONTEXT_INVALID");
+        imageIds.add(image.id);
+        const parsed = parseReferenceImageRegions(image.regions);
+        if (parsed === null) throw new Error("TEXTURE_REFERENCE_CONTEXT_INVALID");
+        return { id: image.id, sha256: image.sha256 ?? null,
+          integrity: image.integrity, view: image.view ?? null,
+          used_by: [...image.used_by], regions: parsed };
+      }) };
+    }
+    const imageMap = new Map((referenceContext?.images ?? []).map(i => [i.id, i]));
+    for (const region of regions) {
+      const claims = region.reference_surfaces ?? [];
+      if (claims.length > 32 || referenceClaims + claims.length > 64)
+        throw new Error("TEXTURE_REFERENCE_CLAIMS_LIMIT");
+      referenceClaims += claims.length;
+      const targets = new Set(region.face_targets.map(faceId));
+      const mustBind = region.face_targets.filter(f =>
+        f.treatment === "PAINT" || f.treatment === "SHARED").map(faceId);
+      const visited = new Set<string>(), matched = new Set<string>();
+      const parts = new Map<string, string>();
+      for (const claim of claims) {
+        if (!claim || !claim.face ||
+            ![claim.image_id, claim.image_sha256, claim.image_region_id, claim.part_id]
+              .every(v => typeof v === "string" && !!v.trim() && v.length <= 128))
+          throw new Error("TEXTURE_REFERENCE_CLAIM_INVALID");
+        const face = faceId(claim.face);
+        if (!targets.has(face)) throw new Error("TEXTURE_REFERENCE_CLAIM_OUT_OF_SCOPE");
+        const key = JSON.stringify([face, claim.image_id, claim.image_region_id]);
+        if (visited.has(key)) throw new Error("TEXTURE_REFERENCE_CLAIM_DUPLICATE");
+        visited.add(key);
+        if (region.evidence !== "observed") {
+          flag(region.region, "REFERENCE_SURFACE_NOT_OBSERVED"); continue;
+        }
+        const image = imageMap.get(claim.image_id);
+        if (!image || image.integrity !== "VERIFIED" ||
+            !image.used_by.includes("TEXTURE") ||
+            !/^[a-f0-9]{64}$/i.test(claim.image_sha256) ||
+            claim.image_sha256 !== image.sha256) {
+          flag(region.region, "REFERENCE_SURFACE_SOURCE_STALE"); continue;
+        }
+        if (!image.view || !MODEL_VIEWS.includes(image.view)) {
+          flag(region.region, "REFERENCE_SURFACE_VIEW_UNRESOLVED"); continue;
+        }
+        const annotation = image.regions?.find(a => a.id === claim.image_region_id);
+        if (!annotation) {
+          flag(region.region, "REFERENCE_SURFACE_ANNOTATION_MISSING"); continue;
+        }
+        if (annotation.part_id !== claim.part_id) {
+          flag(region.region, "REFERENCE_SURFACE_PART_MISMATCH"); continue;
+        }
+        if (annotation.evidence_role !== "SURFACE_DETAIL" ||
+            annotation.visibility === "OCCLUDED" || !annotation.box_uv) {
+          flag(region.region, "REFERENCE_SURFACE_NOT_VISIBLE_DETAIL"); continue;
+        }
+        if (parts.has(face) && parts.get(face) !== claim.part_id) {
+          flag(region.region, "REFERENCE_SURFACE_FACE_PART_CONFLICT"); continue;
+        }
+        parts.set(face, claim.part_id); matched.add(face); referenceMatches++;
+      }
+      if (region.evidence === "observed") for (const face of mustBind) {
+        if (!matched.has(face) && !claims.some(c => faceId(c.face) === face))
+          flag(region.region, "REFERENCE_SURFACE_FACE_UNBOUND");
+      }
+    }
+  }
 
   // Missing face ownership is a planning defect, not a styling verdict.
   const missing = expected
@@ -388,6 +498,20 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
         },
       } : {}),
     })),
+    ...(referenceContext ? { reference_context: referenceContext } : {}),
+    reference_surface_evidence: {
+      state: !referenceRequested ? ("not_requested" as const)
+        : referenceIssues ? ("review_required" as const)
+          : referenceClaims ? ("claim_metadata_matched" as const)
+            : ("not_evaluated" as const),
+      reference_fingerprint: referenceContext?.fingerprint ?? null,
+      declared_claim_count: referenceClaims, matched_claim_count: referenceMatches,
+      assertion_provenance: "CALLER_CONTROL_PROJECTION_UNATTESTED" as const,
+      current_reference_read_attested: false as const,
+      native_face_mapping_attested: false as const,
+      mutation_authorized: false as const,
+      visual_verdict: "not_evaluated" as const,
+    },
     seam_reference_evidence_state: seamPairs.some(pair =>
       pair.continuity_intent === "REQUIRED"
     ) ? ("caller_observation_unverified" as const)
@@ -455,6 +579,7 @@ export function requireTextureTreatmentSeamPlanReady(
   const verified = planTextureTreatment({
     identity_colors: plan.identity_colors,
     required_faces: requiredFaces,
+    ...(plan.reference_context ? { reference_context: plan.reference_context } : {}),
     regions: plan.regions.map(region => ({
       region: region.region,
       evidence: region.evidence,
@@ -464,6 +589,7 @@ export function requireTextureTreatmentSeamPlanReady(
       pbr_intent: region.pbr_intent,
       identity_colors: region.identity_colors,
       face_targets: region.face_targets,
+      ...(region.reference_surfaces ? { reference_surfaces: region.reference_surfaces } : {}),
     })),
     seam_pairs: plan.seam_pairs,
   });
