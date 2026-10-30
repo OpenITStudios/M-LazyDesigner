@@ -64,17 +64,13 @@ In an authorized executable environment that is actually available, use locked d
 
 Live Blockbench, visual, playback, persistence, installed-plugin, and client-registry claims require matching `LIVE_BLOCKBENCH` evidence.
 
-## CI behavior
+## Current verification and release boundary
 
-During routine development, a `Local` push runs **focused path-filtered checks**: MCP repository/types for relevant source, Windows Desktop locked source/Rust checks when Desktop changes, required MCP conformance for protocol changes, and dependency security for lockfile/security changes. Full MCP verification, integrated Windows NSIS/silent-install, and Release Readiness remain separate manual milestone gates. Skipped checks mean **NOT EXECUTED**, never PASS; verification remains read-only/non-publishing.
+Verification CI is **disabled**. Pushing to `Local` does not run MCP, repository, Desktop, TypeScript, dependency-security or Golden checks. The former verification definitions are inert under `.github/disabled-workflows/`; they cannot establish proof for a new HEAD.
 
-- `Repository Verify` and `Authoring Policy Verify` remain independently available on demand; the full MCP gate also covers their source contracts.
-- `MCP Verify` runs `bun run verify:full` on every `Local` push with exact-SHA build provenance; manual `texture` focus remains available and never runs automatically.
-- `Dependency Security`, `MCP Conformance`, `Desktop Verify` and `Release Readiness / Source Only` run automatically on `Local` pushes without publication or installed native/visual acceptance.
-- `Managed Distribution`, `Head Proof`, `Release Verify`, `Desktop Draft Release`, and all release/packaging/publication workflows remain manual.
-- Tag-based draft releases and Desktop signing still require their existing release/source/security approvals; CI success is not permission to publish.
-- Completed matching-SHA steps alone count as executable proof; skipped or historical runs do not.
-- GitHub registers manual workflows on the default branch. If `main` lacks a Local-only workflow, changing `main` or settings needs separate explicit authority.
+The active `.github/workflows/` contains only explicitly dispatched distribution/release workflows. They are not a replacement verification pipeline, and their presence is not authorization to install, publish, sign or promote `main`. Do not dispatch or re-enable a workflow or change repository settings solely to obtain a green result.
+
+Use a targeted existing verifier only in a genuinely available, authorized executable context. Otherwise record **NOT EXECUTED** and preserve exact-source, native and visual proof boundaries. Current policy: [GITHUB_RULES.md](GITHUB_RULES.md#ci-disabled--active-local-policy-2026-10-20).
 
 ## Generated files
 

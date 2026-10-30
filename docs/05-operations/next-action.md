@@ -14,25 +14,25 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **NEXT:** Reference approval + PNG handoff → exact-head focused source tests → matching-runtime disposable full-object authoring → quality gate → compare accepted cost. No historical task-case reuse.
 
-## Current working environment
+## GitHub boundary and historical local recovery
 
-- 2026-10-27 user handoff: upload all completed work to `OpenITStudios/M-LazyDesigner` / `Local` and continue outside Codex. Baseline `6569aaf2`; re-pin GitHub HEAD. No deployment or app changes.
-- Primary stays dirty at `44b03b52`; source/assets already reconciled, current root-policy edits included. Recovery retains 52 payloads; 438 missing local asset paths remain in Git. Preserve the original checkout.
-- Cached Bun 1.4.3, Node 24.22.0 and Rust 1.99.1 are available. Reuse unchanged dependencies.
-- CI DISABLED: verification definitions remain inert. Do not enable workflows, change main/settings or publish releases. Native installation/asset mutation is not part of source reconciliation.
+- `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.
+- Historical 2026-10-27 machine-local handoff: a primary checkout was dirty at `44b03b52`; 52 recovery payloads and 438 missing Crimson Sentinel paths were recorded. This is **not** proof of the user's present PC state. Do not touch or discard those historical assets.
+- CI DISABLED: verification definitions remain inert. Do not enable workflows, change `main`/settings or publish releases.
 
 ## Current source / installed proof boundary
 
-Geometry through `ec22a6e9` and R5 comparator source are preserved; Bun/typecheck/build and native/visual acceptance have NOT EXECUTED on them. The older managed `7b45bd69` / Desktop 0.1.1 transport/package qualification applies only to that installed source, not to recent Recipe commits. Detailed prior environment, migration, recovery and execution receipts belong to [current-validation.md](current-validation.md). Preserve the dirty primary checkout, source assets and recovery inventory; do not use the user's PC, deploy, restart clients, enable CI or publish releases. Re-pin GitHub HEAD before any future source work.
+Golden output-isolation and Reference provenance corrections are source-authored at `9f98c979`; their focused tests, Bun/typecheck and native acceptance remain NOT EXECUTED. Older installed managed `7b45bd69` / Desktop 0.1.1 evidence qualifies only those older builds. Detailed scoped proof: [current-validation.md](current-validation.md). Protect historical checkout and asset data; do not deploy, enable CI or publish releases.
 
 ## Next REMOTE_GITHUB work
 
-**Asset-flow efficiency is the active task.** Control now reads independent Workspace and Reference concurrently and resolves the current specialist as soon as Reference is ready; readiness waits for all three. UV→Texture uses complete Cube/island/face targets or broad recheck. No additional routing, caching, approvals, Gateway tools or Golden harness. Further work requires measured evidence.
+**Asset-flow efficiency:** Control's independent Workspace/Reference reads and complete UV→Texture recheck targeting remain source-authored. The single Golden runner now protects output destinations and preserves fresh Reference provenance. Further optimization needs measured evidence; do not add routing, caching, approvals, public Gateway tools or another benchmark engine.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 
 ## Deferred capability-specific residue
 
+- Legacy Active Workspace READMEs contain ambiguous or missing lifecycle fields; Control correctly requests orientation rather than inferring approval. Reconcile only the explicitly selected asset against its current native state; never bulk-rewrite historical models or fabricate approval/checkpoint hashes.
 - manage_uv_layout registration and generator-owned API output must change together in a separately scoped LOCAL_CODE activation. Its source-only plan/rollback/pixel-migration helpers do not establish an installed UV workflow. Painted-atlas production repack remains guarded; do not connect unregistered migration code as a compiler repair.
 - LIVE_BLOCKBENCH is not yet established in this reconciliation. LD-Q01 silhouette, LD-Q02 atlas seams, LD-Q03 rotated pivots, LD-Q04 animation restoration, particle playback, saved-model/reference quality and Golden F retain existing proof boundaries. Use the native runbook only with a matching installed build, functioning Gateway and authorized disposable fixture.
 - Windows installer/OS interactions, narrow viewport and real AI token/latency comparisons are separate from source tests. Historical security/dependency results are not current audits. A particular native residue needs its own bounded task; availability of the PC alone is not proof or activation.

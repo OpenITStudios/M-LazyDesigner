@@ -312,9 +312,11 @@ Next: <one actionable next step, unless DONE>
 
 ## 6. VERIFY + FAILURE POLICY — prove only what matters
 
-### Temporary full CI on Local (2026-10-19 user authorization)
+### Historical CI configuration (2026-10-19; superseded 2026-10-20)
 
-Routine `Local` pushes use **focused, path-filtered CI only**: MCP repository/tests and TypeScript, Windows Desktop npm high-severity audit and locked source/Rust checks without NSIS, conformance only for server/protocol changes, and strict dependency security only for dependency/security changes. Release Readiness is manual-only. A skipped check is **NOT EXECUTED**, not PASS. Full MCP and integrated Windows NSIS/silent-install stay manual milestone gates for an exact SHA. No release, native proof or automatic repository writeback.
+The following is preserved **for historical interpretation only**. All verification workflows described below are disabled; no push or manual verification workflow runs under the current `Local` configuration. The active policy is [CI DISABLED](#ci-disabled--active-local-policy-2026-10-20).
+
+Previously, routine `Local` pushes use **focused, path-filtered CI only**: MCP repository/tests and TypeScript, Windows Desktop npm high-severity audit and locked source/Rust checks without NSIS, conformance only for server/protocol changes, and strict dependency security only for dependency/security changes. Release Readiness is manual-only. A skipped check is **NOT EXECUTED**, not PASS. Full MCP and integrated Windows NSIS/silent-install stay manual milestone gates for an exact SHA. No release, native proof or automatic repository writeback.
 
 `Repository Verify`, `Authoring Policy Verify`, `Head Proof`, `Release Verify`, `Managed Distribution` and `Desktop Draft Release` remain manual-only. Release tags, draft releases, signing, publication, installation on user machines, `main`, secrets and administrative settings remain outside this authorization. Do not add `pull_request`, `schedule`, `workflow_run` or tag-triggered verification; do not grant repository write permission to an automatic workflow.
 
