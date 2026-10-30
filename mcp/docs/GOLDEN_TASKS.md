@@ -39,26 +39,27 @@ accepted full-asset Golden run; do not run every test after each asset action.
 - Two native clips: `animation.beacon_courier.idle` (2.4-second loop),
   `animation.beacon_courier.signal` (1.6-second one-shot right shoulder raise
   and return, grounded feet).
-- Fresh reference: `tests/fixtures/golden/full-asset/reference/REFERENCE.json`;
-  proposed four-view visual: `reference/turnaround.svg`.
+- Approved source package: `tests/fixtures/golden/full-asset/reference/REFERENCE.json`;
+  active four-view voxel visual: `reference/beacon-courier-approved.png`.
+  Original `reference/turnaround.svg` is retained as unregistered concept provenance.
 - Immutable blank source: `tests/fixtures/golden/full-asset/seed.bbmodel`.
   It is a source-authored Blockbench 5.x Bedrock JSON candidate, not a native
   verified/imported or prebuilt finished model.
 
-The original SVG concept remains **PENDING** in `REFERENCE.json`.
-A separate 1536×1024 voxel-style visual candidate was **approved by the user
-in ChatGPT on 2026-10-31**, without approving the native model or benchmark
-result. Its expected exact PNG SHA-256 is
-`ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245`.
-See the fixture README for approved visual provenance. The actual PNG file is
-**not yet committed to GitHub**; it is a ChatGPT conversation artifact, not
-an approved package image or a replacement of the existing SVG.
+The new voxel-style visual was **user-approved on 2026-10-31**
+and committed as the exact 1536×1024 PNG in the dedicated fixture. Its
+SHA-256 is `ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245`;
+Git blob identity is `d6d58841a884498f9e9ce76ef5991e18b18d47c5`.
+The original SVG remains in Git as an unregistered earlier concept.
 
-Therefore `REFERENCE.json` correctly remains **PENDING/BLOCKED** and the
-runner must refuse native work until that exact PNG's Git bytes are verified
-by Control, the canonical image record/approval and all stage readiness fields
-are correctly reconciled, and other native authorization prerequisites exist.
-A successful image creation or source test never proves model acceptance.
+`REFERENCE.json` declares the source-level input approval and the
+Geometry/Texture/Animation reference readiness `READY`; it does **not**
+establish any Runtime, geometry, UV, texture, animation or finished-model
+PASS. Golden preflight still checks actual PNG media/bytes, Control
+fingerprint, clean Git, matching Runtime and disposable paths, and the
+final benchmark still requires native save/reopen/export and independent
+human acceptance. Current execution and Cost to Accepted Result are
+`UNVERIFIED` / `UNMEASURED`.
 
 ## Separate file and safety rules
 
@@ -109,7 +110,7 @@ Existing entrypoint (from `mcp/`, in an authorized matching native environment):
 bun run benchmark:golden-session -- golden-full-asset-authoring .cache/golden-sessions /ABSOLUTE/PATH/TO/mcp/tests/fixtures/golden/full-asset/seed.bbmodel
 ```
 
-First approve the current reference and prepare a separate saved working copy.
+Use the current approved source reference and prepare a separate saved working copy.
 The source path above is the **immutable seed**, never the file to edit.
 Run only the focused source contract tests during development:
 

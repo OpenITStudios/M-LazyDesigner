@@ -597,9 +597,9 @@ The only canonical product-level Golden is `golden-full-asset-authoring`,
 defined in `mcp/tests/fixtures/golden-task-cases.json`. Its standalone
 fixture folder is `mcp/tests/fixtures/golden/full-asset/`:
 
-- `reference/turnaround.svg` — original proposed visual turnaround;
-- `reference/REFERENCE.json` — canonical reference, **PENDING** until
-  explicit user approval and supported approved PNG evidence;
+- `reference/turnaround.svg` — original historical concept, unregistered as active input;
+- `reference/beacon-courier-approved.png` — user-approved four-view voxel visual, exact source SHA-256 `ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245`;
+- `reference/REFERENCE.json` — approved input Reference Package declaring `READY` for all stages, subject to Control's fresh source image verification;
 - `seed.bbmodel` — immutable, blank Bedrock format 5.0 source candidate;
 - `README.md` — unique object dimensions, UV/texture/motion and acceptance.
 
@@ -611,7 +611,7 @@ Reference Package using Control's existing read/image-integrity authority.
 `BLOCKED` or non-approved reference prevents even starting native work.
 
 Run the single full workflow on an authorized matching Blockbench build:
-new Reference approval → Geometry/rig → UV PASS → Texture/atlas → explicit
+current approved input Reference preflight → Geometry/rig → UV PASS → Texture/atlas → explicit
 AUTHORING↔Animation handoff → idle and signal animation → native final save,
 reopen, Bedrock exports, fresh comparable visual review and independent
 human acceptance. Use a separate **saved disposable working copy** of the
@@ -629,8 +629,8 @@ Historical six stage-specific tasks are retired as Golden identity. Their
 behavioral regression coverage remains with canonical domain suites. Do not
 create a separate Golden per capability. All full Golden performance claims
 require matching live evidence, human PASS, actual Cost to Accepted Result
-and the same seed/reference in baseline/candidate. Current state: unexecuted,
-reference approval pending. CI stays disabled.
+and the same seed/reference in baseline/candidate. Current state: input reference
+approved; native authoring and acceptance NOT EXECUTED. CI stays disabled.
 
 ## 9. Gateway Stability
 

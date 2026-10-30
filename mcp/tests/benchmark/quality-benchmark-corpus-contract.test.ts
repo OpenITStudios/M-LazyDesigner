@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readReferencePackageProjection } from "../../gateway/control/referencePackage";
 
 type RegressionCase = {
   id: string;
@@ -96,13 +97,37 @@ describe("quality benchmark corpus contracts", () => {
       expect(reference.asset.name).toBe("beacon_courier_bot");
       expect(reference.asset.profile).toBe("MECHANICAL");
       expect(reference.asset.task).toBe("NEW_ASSET");
-      if (reference.approval.visual_authority === "APPROVED") {
-        expect(reference.images.some((image: { file: string; status: string }) =>
-          image.file.endsWith(".png") && image.status === "APPROVED")).toBe(true);
-        expect(reference.readiness.overall).toBe("READY");
-      } else {
-        expect(reference.readiness.overall).not.toBe("READY");
+      expect(reference.approval).toEqual({
+        brief: "APPROVED",
+        visual_authority: "APPROVED",
+        package_generation: "APPROVED",
+      });
+      expect(reference.unknowns.blocking).toEqual([]);
+      expect(reference.images).toHaveLength(1);
+      expect(reference.images[0]).toMatchObject({
+        id: "BEACON_COMPOSITE",
+        file: "beacon-courier-approved.png",
+        role: "APPROVED_VOXEL_TURNAROUND",
+        status: "APPROVED",
+        used_by: ["GEOMETRY", "TEXTURE", "ANIMATION"],
+      });
+      for (const stage of ["overall", "geometry", "texture", "animation"]) {
+        expect(reference.readiness[stage]).toBe("READY");
       }
+      // Control owns image-byte verification. A source-level APPROVED flag
+      // alone must never replace a current actual PNG integrity check.
+      const projection = await readReferencePackageProjection(
+        task.fixture.reference_package_path
+      );
+      expect(projection.available).toBe(true);
+      expect(projection.readiness.overall).toBe("READY");
+      expect(projection.images[0]).toMatchObject({
+        integrity: "VERIFIED",
+        media_type: "image/png",
+        sha256: "ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245",
+        bytes: 1640048,
+        status: "APPROVED",
+      });
       expect(task.acceptance.length).toBeGreaterThanOrEqual(4);
       expect(task.execution_state).toBe("UNMEASURED");
       expect(task).not.toHaveProperty("score");

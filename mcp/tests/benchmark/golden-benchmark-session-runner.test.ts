@@ -71,7 +71,7 @@ describe("golden benchmark session runner", () => {
     }
   });
 
-  test("one complete Golden fixture rejects production paths, stale seed bytes and unapproved references", async () => {
+  test("one complete Golden fixture rejects protected paths and stale seed, admits the approved reference", async () => {
     const root = join(tmpdir(), "golden-test-root");
     const workspace = join(root, "workspace");
     for (const branch of ["active", "saved"]) {
@@ -97,9 +97,9 @@ describe("golden benchmark session runner", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
-    // A generated concept is not an approved reference. No native attempt.
-    await expect(requireGoldenReferenceReady(task))
-      .rejects.toThrow("explicit visual approval");
+    // Approved input reference does not prove native output quality.
+    const referenceFingerprint = await requireGoldenReferenceReady(task);
+    expect(referenceFingerprint).toMatch(/^[a-f0-9]{64}$/);
   });
 
   test("pins the unchanged starting .bbmodel once with SHA-256", async () => {

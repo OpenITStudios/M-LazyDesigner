@@ -17,21 +17,21 @@
     "animation_required": true
   },
   "approval": {
-    "brief": "PENDING",
-    "visual_authority": "PENDING",
-    "package_generation": "PENDING"
+    "brief": "APPROVED",
+    "visual_authority": "APPROVED",
+    "package_generation": "APPROVED"
   },
   "images": [
     {
       "id": "BEACON_COMPOSITE",
-      "file": "turnaround.svg",
-      "role": "CONCEPT_ONLY_UNAPPROVED",
+      "file": "beacon-courier-approved.png",
+      "role": "APPROVED_VOXEL_TURNAROUND",
       "used_by": [
         "GEOMETRY",
         "TEXTURE",
         "ANIMATION"
       ],
-      "status": "PENDING"
+      "status": "APPROVED"
     }
   ],
   "parts": [
@@ -170,21 +170,18 @@
     "front_direction=-z; total visible bounds width 32, height 44, depth 24 Blockbench units.",
     "No design changes after approval unless correction evidence identifies the wrong upstream owner.",
     "No automatic PBR/particle/gameplay requirements; benchmark covers normal visual asset authoring.",
-    "This is a benchmark concept: approval is PENDING and live execution must not be claimed."
+    "User-approved voxel visual reference and package are READY for authoring intake; native Blockbench, final asset quality and benchmark acceptance remain UNVERIFIED."
   ],
   "unknowns": {
-    "blocking": [
-      "Original turnaround concept awaits explicit user visual approval.",
-      "A Bedrock-readable PNG must replace the SVG concept in the images list before native authoring."
-    ],
+    "blocking": [],
     "non_blocking": [
       "Optional texture shading can be refined within approved palette."
     ]
   },
   "readiness": {
-    "overall": "BLOCKED",
-    "geometry": "BLOCKED",
-    "texture": "BLOCKED",
-    "animation": "BLOCKED"
+    "overall": "READY",
+    "geometry": "READY",
+    "texture": "READY",
+    "animation": "READY"
   }
 }

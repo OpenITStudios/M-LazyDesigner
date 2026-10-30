@@ -6,13 +6,13 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **USER DECISION:** Golden must be **one complete object**, not six capability microtasks. Retire the prior six task identities. Use `golden-full-asset-authoring` as one job from approved reference through Geometry/rig, UV, Texture, Animation, final save/reopen/export, human quality and Cost to Accepted Result. Keep affected domain regressions as tests, not more Golden Tasks.
 
-**STANDALONE FIXTURE:** `mcp/tests/fixtures/golden/full-asset/` contains the original SVG concept, blank Bedrock `.bbmodel`, pending `REFERENCE.json` and specs. Keep it outside all user Workspaces. Baseline/candidate use the same immutable seed with isolated working copies and outputs; never reuse historical user assets or add another benchmark engine.
+**STANDALONE FIXTURE:** `mcp/tests/fixtures/golden/full-asset/` contains the approved voxel PNG, its `READY` input Reference Package, historical SVG and blank Bedrock seed. Keep outside all user Workspaces; baseline/candidate use separate disposable copies of the same immutable inputs. No historical model reuse or second benchmark engine.
 
-**VISUAL DECISION (2026-10-31):** User approved the new voxel-style PNG candidate (SHA-256 `ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245`); the PNG bytes are **not in GitHub**. Canonical SVG and `REFERENCE.json` remain **PENDING/BLOCKED**. Golden runner still refuses native execution until the exact PNG, Control integrity, stage readiness and native preflights are satisfied.
+**REFERENCE INPUT (2026-10-31):** User-approved PNG is committed byte-for-byte at SHA-256 `ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245` (Git blob `d6d58841a884498f9e9ce76ef5991e18b18d47c5`). `REFERENCE.json` is declared `READY` for input use. Control must still rehash the PNG at preflight; native results remain unverified.
 
-**PROOF:** New source/fixture is SOURCE_AUTHORED only. Bun/typecheck, native Blockbench import, visual review, animation playback, saved/reopened/exported artifacts, human acceptance and cost measurement **NOT EXECUTED**. Source fixtures cannot claim APPROVED/READY.
+**PROOF:** Git PNG blob identity matches the approved image; source approval/readiness is separate from native quality. Bun/typecheck, Blockbench model import, Geometry/UV/Texture/Animation PASS, save/reopen/export, human asset acceptance and cost **NOT EXECUTED**.
 
-**NEXT:** Transfer exact approved PNG bytes to GitHub, reconcile verified image + Reference Package, then focused source tests → disposable full-object native run → quality/acceptance gate → compare cost. Never use historic assets.
+**NEXT:** Exact-head focused source tests → disposable full-object native run → visual/structural/animation acceptance → compare accepted cost. Current ChatGPT/GitHub session cannot claim native PASS.
 
 ## GitHub boundary and historical local recovery
 

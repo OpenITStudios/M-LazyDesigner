@@ -5,21 +5,23 @@ A **single complete end-to-end** Bedrock asset benchmark. This is new, original 
 ## Files
 
 - `seed.bbmodel` — newly authored **blank** Blockbench Bedrock source; never modify it during a run.
-- `reference/REFERENCE.json` — canonical Reference Package, with explicit **PENDING** approval and BLOCKED readiness.
-- `reference/turnaround.svg` — original four-view concept (front, left, back, signal pose). Concept is not equivalent to approved PNG evidence.
+- `reference/REFERENCE.json` — approved **input Reference Package**, with declared stage-reference readiness `READY` (not a native quality verdict).
+- `reference/beacon-courier-approved.png` — exact user-approved four-view voxel-style visual source for Geometry, Texture and Animation.
+- `reference/turnaround.svg` — separate original concept, retained as historical provenance and not registered as the approved active image.
 - `../../golden-task-cases.json` — single canonical Golden Task ID, stages and acceptance dimensions.
 
-## Visual candidate approval — binary handoff pending
+## Approved input reference and byte provenance
 
-On **2026-10-31**, the user approved the separate ChatGPT-created **voxel-style PNG design** as the visual direction for this Golden Task. The approved candidate is **not** a rasterization of the original `turnaround.svg`; the original SVG is retained unchanged for provenance. Only the preview's pre-approval status banner was updated; the rendered bot, four views, labels, palette and geometry are pixel-identical to the candidate reviewed.
+On **2026-10-31** the user approved the separate ChatGPT-created voxel-style reference. This is **not** a rasterization of the original `turnaround.svg`; the SVG remains unchanged. The reference illustration contains front, left, back and right-arm signal pose, labeled dimensions and palette. Its pre-approval banner was replaced with the approved-visual banner before the final PNG was pinned.
 
-- Candidate filename: `beacon_courier_bot_approved_visual.png` (ChatGPT conversation artifact, **not present in this Git tree**).
-- Expected Git fixture location once byte transfer is supported: `reference/beacon-courier-approved.png`.
-- PNG properties: **1536 × 1024**, RGB, **1,640,048 bytes**.
-- Exact SHA-256: `ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245`.
-- The glowing amber depiction specifies **visual styling**, not an installed emissive/PBR feature.
+- Canonical Git PNG: `reference/beacon-courier-approved.png`.
+- Original ChatGPT artifact: `beacon_courier_bot_approved_visual.png`.
+- Image: **1536 × 1024**, RGB, **1,640,048 bytes**.
+- SHA-256: `ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245`.
+- Git blob SHA-1: `d6d58841a884498f9e9ce76ef5991e18b18d47c5` (byte-identical to the approved source).
+- Amber glow is a **visual pixel-art treatment**, not an installed emissive/PBR promise.
 
-This records a **user visual design decision only**. `reference/REFERENCE.json` still points at the pending SVG, and therefore its approval fields and all readiness fields remain **PENDING/BLOCKED**. Do not set the canonical image to `APPROVED`, set `package_generation` to `APPROVED`, or unblock the Golden runner until the exact PNG bytes are committed, Control's image SHA/integrity is verified, and the package's other readiness prerequisites actually hold. This is not human acceptance of a finished model, native import, animation or export.
+The canonical `reference/REFERENCE.json` now points to the verified-source PNG, with the user's design approval and all three reference stages declared `READY`. The source integrity is independently rechecked by Control at each read and by Golden's preflight. This approval applies **only to the reference used for authoring**; it does not imply a created model, native import, UV PASS, Animation playback, export, or acceptance of any finished asset. Native/quality proof is `NOT EXECUTED`.
 
 ## Object
 
@@ -29,7 +31,7 @@ Animation clips (original design intent): `animation.beacon_courier.idle` loops 
 
 ## Acceptance progression
 
-1. Use the user-approved voxel candidate above. Commit its **exact SHA-matching PNG** to the fixture, then update the declared image file/status and approval/readiness fields in `REFERENCE.json` only after Control can verify the package; do not infer approval from a script.
+1. At the exact checked-out revision, let Control re-verify the committed approved PNG and Reference Package; a declared `READY` status cannot override a mismatched image hash or native preflight.
 2. On a matching current Runtime, independently open a **disposable byte-identical copy** of the blank seed; never author directly in this Git fixture or `workspace/active/` / `workspace/saved/`.
 3. Geometry + rig/pivots → reference views and visual review → Geometry approved or authorized current-revision verification.
 4. Production UV layout → UV PASS → Texture atlas + mapped seam/palette validation → Texture approved.
