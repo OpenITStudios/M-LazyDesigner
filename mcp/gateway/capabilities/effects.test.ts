@@ -73,6 +73,57 @@ describe("resolveGatewayCapabilityEffects", () => {
     expect(resolved.surfaceChanged).toBe(false);
   });
 
+  test("Gateway rejects internally inconsistent Stage/Runtime receipts before adopting affinity", () => {
+    const valid = {
+      phase: "texturing",
+      runtime_surface: "AUTHORING",
+      reason: "Texture correction",
+      resume_from: "current project",
+      readiness_summary: null,
+      surface_changed: false,
+      reload_required: false,
+      action: "continue",
+    };
+    for (const [receipt, expectedCode] of [
+      [{ ...valid, runtime_surface: "ANIMATION" }, "RUNTIME_SURFACE_MISMATCH"],
+      [{ ...valid, surface_changed: true }, "SURFACE_CHANGE_MISMATCH"],
+      [{ ...valid, phase: "animation", runtime_surface: "ANIMATION", surface_changed: false }, "SURFACE_CHANGE_MISMATCH"],
+    ] as const) {
+      const application = resolveGatewayCapabilityEffects(
+        "switch_authoring_phase", receipt, "geometry"
+      );
+      expect(
+        validateGatewayCapabilityEffectReceipt(application, true, { target_phase: receipt.phase })?.code
+      ).toBe(expectedCode);
+      expect(validateGatewayCapabilityEffectReceipt(
+        application, false, { target_phase: receipt.phase }
+      )).toBeNull();
+    }
+
+    const accepted = resolveGatewayCapabilityEffects(
+      "switch_authoring_phase", valid, "geometry"
+    );
+    expect(validateGatewayCapabilityEffectReceipt(
+      accepted, true, { target_phase: "texturing" }
+    )).toBeNull();
+    expect(validateGatewayCapabilityEffectReceipt(
+      accepted, true, { target_phase: "animation" }
+    )?.code).toBe("AUTHORING_TARGET_MISMATCH");
+    expect(validateGatewayCapabilityEffectReceipt(
+      accepted, true, {}
+    )?.code).toBe("AUTHORING_TARGET_MISMATCH");
+    expect(validateGatewayCapabilityEffectReceipt(accepted, true)).toBeNull();
+
+    const noPriorStage = resolveGatewayCapabilityEffects(
+      "switch_authoring_phase",
+      { ...valid, phase: "animation", runtime_surface: "ANIMATION", surface_changed: true },
+      null
+    );
+    expect(validateGatewayCapabilityEffectReceipt(
+      noPriorStage, true, { target_phase: "animation" }
+    )).toBeNull();
+  });
+
   test("ordinary capabilities preserve affinity", () => {
     const resolved = resolveGatewayCapabilityEffects(
       "manage_cubes",

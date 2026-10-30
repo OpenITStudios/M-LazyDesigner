@@ -851,7 +851,8 @@ export class BlockitRuntimeBackend {
         );
         const receiptIssue = validateGatewayCapabilityEffectReceipt(
           application,
-          normalized.isError !== true
+          normalized.isError !== true,
+          args
         );
         if (receiptIssue) {
           await this.closeConnectionUnsafe();

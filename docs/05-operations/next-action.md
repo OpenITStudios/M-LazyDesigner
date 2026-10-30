@@ -22,11 +22,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Current source / installed proof boundary
 
-Golden safety/provenance through `2ed71e93` and focused affected-test routing are authored; Bun/native proofs remain NOT EXECUTED. Older installed managed `7b45bd69` / Desktop 0.1.1 evidence qualifies only those older builds. Detailed scoped proof: [current-validation.md](current-validation.md). Protect historical checkout and asset data; do not deploy, enable CI or publish releases.
+Gateway Stage receipt consistency and Golden/affected-test guards are source-authored; Bun/native proof remains NOT EXECUTED. Prior installed `7b45bd69` / Desktop 0.1.1 evidence is historical. See [current-validation.md](current-validation.md). Protect user assets; no deployment, CI or release.
 
 ## Next REMOTE_GITHUB work
 
-**Asset-flow efficiency:** Control intake/UV rechecks and Golden provenance are source-authored. Changed-Stage handoffs retain header/catalog refresh and avoid double generation invalidation for matching Runtime/process/project; verified same-Stage no-ops reuse the existing transport. Native handoff and accepted-cost proof remain pending. Do not add routing, caching, approvals, public Gateway tools or a second benchmark.
+**P0 integration:** Gateway now requires Stage/Runtime surface/target agreement before accepting a handoff. Existing project binding, header/catalog refresh, same-Stage no-op and generation-change guards remain. Native proof and accepted-result cost are pending; do not add new routing, Gateway tools or a second benchmark.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 

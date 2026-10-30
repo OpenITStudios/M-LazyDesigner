@@ -89,10 +89,11 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(state.pendingStageHandoff).toBeNull();
   });
 
-  test("same-Stage receipts reuse the catalog while changed or contradictory receipts reconnect", async () => {
+  test("same-Stage receipts reuse the catalog; mismatched handoffs fail closed", async () => {
     const fixture = (
       phase: "geometry" | "texturing",
-      surfaceChanged: boolean
+      surfaceChanged: boolean,
+      runtimeSurface: "AUTHORING" | "ANIMATION" = "AUTHORING"
     ) => {
       const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
       const state = backend as any;
@@ -104,7 +105,7 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
           content: [{ type: "text", text: "Stage transition receipt" }],
           structuredContent: {
             phase,
-            runtime_surface: "AUTHORING",
+            runtime_surface: runtimeSurface,
             reason: "continue authoring",
             resume_from: "same project",
             readiness_summary: null,
@@ -163,14 +164,34 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     // A same-Stage receipt claiming a different Runtime surface cannot
     // silently keep the previous catalog or suppress subsequent recovery.
     const contradictory = fixture("geometry", true);
-    const suspicious = await contradictory.backend.invokeCapabilityWithMetadata(
+    await expect(contradictory.backend.invokeCapabilityWithMetadata(
       "switch_authoring_phase", { target_phase: "geometry" }
-    );
+    )).rejects.toMatchObject({
+      code: "BACKEND_UNAVAILABLE",
+      details: { receipt_issue: "SURFACE_CHANGE_MISMATCH" },
+    });
     expect(contradictory.closes()).toBe(1);
     expect(contradictory.state.pendingStageHandoff).toBeNull();
-    expect(suspicious.result.structuredContent).toMatchObject({
-      gateway_catalog_invalidated: true,
+
+    const wrongSurface = fixture("geometry", false, "ANIMATION");
+    await expect(wrongSurface.backend.invokeCapabilityWithMetadata(
+      "switch_authoring_phase", { target_phase: "geometry" }
+    )).rejects.toMatchObject({
+      code: "BACKEND_UNAVAILABLE",
+      details: { receipt_issue: "RUNTIME_SURFACE_MISMATCH" },
     });
+    expect(wrongSurface.closes()).toBe(1);
+    expect(wrongSurface.state.pendingStageHandoff).toBeNull();
+
+    const wrongTarget = fixture("texturing", false);
+    await expect(wrongTarget.backend.invokeCapabilityWithMetadata(
+      "switch_authoring_phase", { target_phase: "animation" }
+    )).rejects.toMatchObject({
+      code: "BACKEND_UNAVAILABLE",
+      details: { receipt_issue: "AUTHORING_TARGET_MISMATCH" },
+    });
+    expect(wrongTarget.state.authoringPhase).toBe("geometry");
+    expect(wrongTarget.closes()).toBe(1);
   });
 
   test("search uses a fresh local catalog without probing Runtime", async () => {
