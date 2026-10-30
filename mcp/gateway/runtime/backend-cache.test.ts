@@ -89,6 +89,90 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(state.pendingStageHandoff).toBeNull();
   });
 
+  test("same-Stage receipts reuse the catalog while changed or contradictory receipts reconnect", async () => {
+    const fixture = (
+      phase: "geometry" | "texturing",
+      surfaceChanged: boolean
+    ) => {
+      const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+      const state = backend as any;
+      const sourceSignature = runtimeSignature("geometry");
+      let closes = 0;
+      const client = {
+        close: async () => { closes++; },
+        callTool: async () => ({
+          content: [{ type: "text", text: "Stage transition receipt" }],
+          structuredContent: {
+            phase,
+            runtime_surface: "AUTHORING",
+            reason: "continue authoring",
+            resume_from: "same project",
+            readiness_summary: null,
+            surface_changed: surfaceChanged,
+            reload_required: false,
+            action: "continue",
+          },
+        }),
+      };
+      state.projectUuid = "project-a";
+      state.authoringPhase = "geometry";
+      state.client = client;
+      state.connectedSignature = sourceSignature;
+      state.catalog = new Map([[
+        "switch_authoring_phase",
+        { name: "switch_authoring_phase", annotations: { readOnlyHint: false } },
+      ]]);
+      state.catalogValidatedAt = Date.now();
+      // Existing transport/affinity tests own the real preflight. This
+      // isolates the backend's decision after one validated tool receipt.
+      state.ensureCatalogUnsafe = async () => {};
+      return { backend, state, client, sourceSignature, closes: () => closes };
+    };
+
+    const unchanged = fixture("geometry", false);
+    const same = await unchanged.backend.invokeCapabilityWithMetadata(
+      "switch_authoring_phase", { target_phase: "geometry" }
+    );
+    expect(unchanged.state.client).toBe(unchanged.client);
+    expect(unchanged.state.catalog.size).toBe(1);
+    expect(unchanged.state.pendingStageHandoff).toBeNull();
+    expect(unchanged.closes()).toBe(0);
+    expect(same.result.structuredContent).toMatchObject({
+      phase: "geometry", surface_changed: false,
+    });
+    expect(same.result.structuredContent).not.toHaveProperty(
+      "gateway_catalog_invalidated"
+    );
+
+    const changed = fixture("texturing", false);
+    const transition = await changed.backend.invokeCapabilityWithMetadata(
+      "switch_authoring_phase", { target_phase: "texturing" }
+    );
+    expect(changed.closes()).toBe(1);
+    expect(changed.state.client).toBeNull();
+    expect(changed.state.catalog.size).toBe(0);
+    expect(changed.state.pendingStageHandoff).toEqual({
+      signature: changed.sourceSignature,
+      projectUuid: "project-a",
+    });
+    expect(transition.result.structuredContent).toMatchObject({
+      phase: "texturing", gateway_catalog_invalidated: true,
+      client_reconnect_required: false,
+    });
+
+    // A same-Stage receipt claiming a different Runtime surface cannot
+    // silently keep the previous catalog or suppress subsequent recovery.
+    const contradictory = fixture("geometry", true);
+    const suspicious = await contradictory.backend.invokeCapabilityWithMetadata(
+      "switch_authoring_phase", { target_phase: "geometry" }
+    );
+    expect(contradictory.closes()).toBe(1);
+    expect(contradictory.state.pendingStageHandoff).toBeNull();
+    expect(suspicious.result.structuredContent).toMatchObject({
+      gateway_catalog_invalidated: true,
+    });
+  });
+
   test("search uses a fresh local catalog without probing Runtime", async () => {
     const backend = new BlockitRuntimeBackend(undefined, undefined, {
       catalogLeaseMs: 5_000,

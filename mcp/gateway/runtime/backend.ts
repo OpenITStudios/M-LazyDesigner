@@ -870,7 +870,10 @@ export class BlockitRuntimeBackend {
 
         const priorConnectedSignature = this.connectedSignature;
         const priorProjectUuid = this.projectUuid;
+        const priorAuthoringPhase = this.authoringPhase;
         let affinityChanged = false;
+        let verifiedSameStage = false;
+        let consistentStageReceipt = false;
 
         if (normalized.isError !== true) {
           if (application.projectUuid) {
@@ -896,8 +899,19 @@ export class BlockitRuntimeBackend {
               );
             }
 
+            // A validated idempotent Stage receipt does not change the
+            // transport's Stage affinity or tool exposure. A contradictory
+            // surface claim must still take the conservative reconnect path.
+            consistentStageReceipt =
+              isRecord(normalized.structuredContent) &&
+              normalized.structuredContent.surface_changed ===
+                application.surfaceChanged;
+            verifiedSameStage =
+              priorAuthoringPhase === application.authoringPhase &&
+              consistentStageReceipt &&
+              application.surfaceChanged === false;
             this.authoringPhase = application.authoringPhase;
-            affinityChanged = true;
+            affinityChanged = !verifiedSameStage;
             managed = {
               ...normalized,
               structuredContent: {
@@ -910,12 +924,17 @@ export class BlockitRuntimeBackend {
             };
           }
 
-          if (application.effects.invalidateCatalog || affinityChanged) {
-            // Stage affinity is captured in transport headers. Reconnect even
-            // for a same-surface focus change; only its generation callback
-            // may be elided after fresh /health and MCP handshake proof.
+          if (
+            (application.effects.invalidateCatalog && !verifiedSameStage) ||
+            affinityChanged
+          ) {
+            // Stage affinity is captured in transport headers. A real
+            // Geometry↔Texturing change still renews them despite sharing
+            // AUTHORING; only a validated same-Stage no-op skips reconnect.
             await this.closeConnectionUnsafe();
-            if (phaseAffinityUpdated && priorConnectedSignature) {
+            if (phaseAffinityUpdated && consistentStageReceipt &&
+                priorAuthoringPhase !== application.authoringPhase &&
+                priorConnectedSignature) {
               this.pendingStageHandoff = {
                 signature: priorConnectedSignature,
                 projectUuid: priorProjectUuid,
@@ -924,7 +943,9 @@ export class BlockitRuntimeBackend {
           }
 
           return {
-            result: normalizeGatewayManagedResult(phaseAffinityUpdated, managed),
+            result: normalizeGatewayManagedResult(
+              phaseAffinityUpdated && !verifiedSameStage, managed
+            ),
             readOnly: tool.annotations?.readOnlyHint === true,
             effectApplication: application,
           };
