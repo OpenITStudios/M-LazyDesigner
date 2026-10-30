@@ -48,12 +48,16 @@ const uvIdentifier = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.trim() === value;
 
 function uvTargetFromCandidates(
-  candidates: readonly Record<string, unknown>[]
+  candidates: readonly Record<string, unknown>[],
+  uvMappingStale: boolean
 ): UvTargetObservation {
   for (const candidate of candidates) {
     const hasReceipt = Object.prototype.hasOwnProperty.call(candidate, "receipt");
     const receipt = hasReceipt ? record(candidate.receipt) : candidate;
-    const attempted = hasReceipt || (receipt !== null && [
+    // A non-UV producer may have a nested "receipt" of its own. Treat it
+    // as UV evidence only when UV_MAPPING is stale or actual UV change fields
+    // are present; otherwise preserve a complete Texture-region receipt.
+    const attempted = (hasReceipt && uvMappingStale) || (receipt !== null && [
       "changed_cube_ids", "changed_island_ids", "changed_faces",
     ].some((field) => Object.prototype.hasOwnProperty.call(receipt, field)));
     if (!attempted) continue;
@@ -126,19 +130,32 @@ function materialRenderTargetFromCandidates(
   candidates: readonly Record<string, unknown>[]
 ): ControlDownstreamRecheck["target"] | undefined {
   for (const candidate of candidates) {
-    const changes = Array.isArray(candidate.changes) ? candidate.changes : [];
-    const faces = changes.flatMap((value) => {
+    if (!Array.isArray(candidate.changes) || candidate.changes.length === 0 ||
+        candidate.changes.length > 384) continue;
+    // A partially serialized face ledger must not narrow a material recheck.
+    const changes = candidate.changes;
+    if (candidate.face_count !== undefined &&
+        (typeof candidate.face_count !== "number" ||
+          !Number.isSafeInteger(candidate.face_count) ||
+          candidate.face_count !== changes.length)) return undefined;
+    const faces: Array<{ cube_uuid: string; face: string | null }> = [];
+    const seen = new Set<string>();
+    for (const value of changes) {
       const change = record(value);
-      return typeof change?.cube_uuid === "string" &&
-        typeof change.face === "string"
-        ? [{ cube_uuid: change.cube_uuid, face: change.face }]
-        : [];
-    });
-    if (!faces.length) continue;
-    return {
-      cube_ids: [...new Set(faces.map((entry) => entry.cube_uuid))],
-      faces,
-    };
+      if (!change || !uvIdentifier(change.cube_uuid) ||
+          typeof change.face !== "string" ||
+          !UV_RECHECK_FACES.has(change.face)) return undefined;
+      const key = JSON.stringify([change.cube_uuid, change.face]);
+      if (seen.has(key)) return undefined;
+      seen.add(key);
+      faces.push({ cube_uuid: change.cube_uuid, face: change.face });
+    }
+    const cubeIds = [...new Set(faces.map((entry) => entry.cube_uuid))];
+    if (candidate.cube_count !== undefined &&
+        (typeof candidate.cube_count !== "number" ||
+          !Number.isSafeInteger(candidate.cube_count) ||
+          candidate.cube_count !== cubeIds.length)) return undefined;
+    return { cube_ids: cubeIds, faces };
   }
   return undefined;
 }
@@ -184,32 +201,43 @@ function animationMotionTargetFromCandidates(
 }
 
 
+const ANIMATION_EFFECT_RECHECK_CHANNELS = new Set([
+  "sound", "particle", "timeline",
+]);
+
 function animationEffectsTargetFromCandidates(
   candidates: readonly Record<string, unknown>[]
 ): ControlDownstreamRecheck["target"] | undefined {
   for (const candidate of candidates) {
     const animation = record(candidate.animation);
-    const results = Array.isArray(candidate.results) ? candidate.results : [];
-    if (typeof animation?.uuid !== "string" || results.length === 0) continue;
+    if (!animation || !uvIdentifier(animation.uuid) ||
+        !Array.isArray(candidate.results) || candidate.results.length === 0 ||
+        candidate.results.length > 384) continue;
+    const results = candidate.results;
+    if (candidate.operation_count !== undefined &&
+        (typeof candidate.operation_count !== "number" ||
+          !Number.isSafeInteger(candidate.operation_count) ||
+          candidate.operation_count !== results.length)) return undefined;
 
-    const channels = [
-      ...new Set(
-        results
-          .map((value) => record(value)?.channel)
-          .filter((value): value is string => typeof value === "string")
-      ),
-    ];
-    const times = results.map((value) => record(value)?.time);
-    // Effects may include time-free removals; a mixed batch must not claim
-    // that its valid-time subset is the complete changed interval.
-    const boundedTimes = times.length > 0 && times.every(
+    // No channel may disappear from a partial or malformed effects batch.
+    // Time-free removals remain valid, but mixed times cannot bound a range.
+    const channels = new Set<string>();
+    const times: unknown[] = [];
+    for (const value of results) {
+      const entry = record(value);
+      if (!entry || typeof entry.channel !== "string" ||
+          !ANIMATION_EFFECT_RECHECK_CHANNELS.has(entry.channel)) return undefined;
+      channels.add(entry.channel);
+      times.push(entry.time);
+    }
+    const boundedTimes = times.every(
       (value): value is number =>
         typeof value === "number" && Number.isFinite(value) && value >= 0
     ) ? times as number[] : [];
 
     return {
       animation_uuid: animation.uuid,
-      ...(channels.length ? { channels } : {}),
+      channels: [...channels],
       ...(boundedTimes.length
         ? { time_range: [
             Math.min(...boundedTimes), Math.max(...boundedTimes),
@@ -307,7 +335,9 @@ export function downstreamRechecksForFreshness(input: {
   const sharedUvTarget = () => {
     if (!uvTargetResolved) {
       uvTargetResolved = true;
-      const observation = uvTargetFromCandidates(currentCandidates());
+      const observation = uvTargetFromCandidates(
+        currentCandidates(), input.stale.includes("UV_MAPPING")
+      );
       uvTarget = observation.target;
       uvAttempted = observation.attempted;
     }

@@ -6,7 +6,7 @@ This file owns current proof interpretation only. Continuation: [next-action.md]
 
 Source baseline before the first Golden correction: `2b24811f89541e3af0fbd5d6c6e3b7270b808d5a` on `Local`. Golden output destinations now reject Workspace/fixture paths and resolved symlink aliases; a Reference fingerprint is retained only when its post-session content matches preflight. The subsequent source-provenance correction requires clean Git HEAD at both session boundaries and withholds provenance on dirty/drifted source. The fixture itself remains PENDING/BLOCKED.
 
-**Proof at this source revision:** exact GitHub source review, Golden guards and focused affected-test routing regressions AUTHORED (including dirty-Git rejection and dependent consumer coverage). Bun, TypeScript, CI, native Blockbench, save/reopen, export, user quality acceptance and Cost to Accepted Result **NOT EXECUTED**. No installed build is qualified for this revision. Verification CI remains disabled.
+**Proof at this source revision:** exact GitHub source review; Golden guards, focused affected-test routing, and fail-closed UV/Texture/Animation recheck regressions AUTHORED. A non-UV nested receipt no longer suppresses a valid Texture-region recheck when UV is not stale; malformed material/effects ledgers cannot return partial narrowed targets. Bun, TypeScript, CI, native Blockbench, save/reopen, export, user quality acceptance and Cost to Accepted Result **NOT EXECUTED**. No installed build is qualified for this revision. Verification CI remains disabled.
 
 ## Historical local and installed qualifications — 2026-10-26
 

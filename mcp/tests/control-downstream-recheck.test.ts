@@ -99,6 +99,62 @@ describe("cross-domain regression recheck planning", () => {
     }
   });
 
+  test("unrelated nested receipts do not discard a verified texture region", () => {
+    const data = {
+      receipt: { operation_count: 1, execution: "applied" },
+      texture: { uuid: "atlas-a" },
+      revision: { after: "revision-2" },
+      affected_rect: [8, 12, 16, 24],
+    };
+    const textureOnly = downstreamRechecksForFreshness({
+      currentDomain: "TEXTURING",
+      stale: ["TEXTURE_APPEARANCE"],
+      result: data,
+    });
+    expect(textureOnly.required[0]?.target).toEqual({
+      texture_uuid: "atlas-a",
+      affected_rect: [8, 12, 16, 24],
+      revision: "revision-2",
+    });
+    const uvAlsoStale = downstreamRechecksForFreshness({
+      currentDomain: "TEXTURING",
+      stale: ["UV_MAPPING", "TEXTURE_APPEARANCE"],
+      result: data,
+    });
+    expect(uvAlsoStale.required.every(entry => entry.target === undefined)).toBe(true);
+  });
+
+  test("partial material face ledgers never narrow a surface recheck", () => {
+    const valid = {
+      changes: [{ cube_uuid: "cube-a", face: "north" }],
+      cube_count: 1,
+      face_count: 1,
+    };
+    for (const invalid of [
+      { changes: [...valid.changes, null], face_count: 2 },
+      { changes: [...valid.changes, { cube_uuid: "cube-b", face: "front" }], face_count: 2 },
+      { changes: [...valid.changes, valid.changes[0]], face_count: 2 },
+      { face_count: 2 },
+      { cube_count: 2 },
+    ]) {
+      const result = downstreamRechecksForFreshness({
+        currentDomain: "TEXTURING",
+        stale: ["MATERIAL_RENDER"],
+        result: { ...valid, ...invalid },
+      });
+      expect(result.required[0]?.action).toBe("REVERIFY_MATERIAL_RENDER");
+      expect(result.required[0]?.target, JSON.stringify(invalid)).toBeUndefined();
+    }
+    expect(downstreamRechecksForFreshness({
+      currentDomain: "TEXTURING",
+      stale: ["MATERIAL_RENDER"],
+      result: valid,
+    }).required[0]?.target).toEqual({
+      cube_ids: ["cube-a"],
+      faces: [{ cube_uuid: "cube-a", face: "north" }],
+    });
+  });
+
   test("an invalid nested UV receipt cannot be replaced by outer texture fields", () => {
     const result = downstreamRechecksForFreshness({
       currentDomain: "TEXTURING",

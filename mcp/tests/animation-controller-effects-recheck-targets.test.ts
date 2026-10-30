@@ -117,6 +117,37 @@ describe("animation controller and effects recheck targets", () => {
       channels: ["timeline"],
     });
   });
+  test("partial effects receipts never claim a complete channel/time target", () => {
+    const valid = {
+      animation: { uuid: "anim-a" },
+      operation_count: 2,
+      results: [
+        { channel: "sound", time: 0.25 },
+        { channel: "particle", time: 0.75 },
+      ],
+    };
+    for (const invalid of [
+      { results: [valid.results[0], null] },
+      { results: [valid.results[0], { channel: "unknown", time: 0.75 }] },
+      { results: [valid.results[0]] },
+      { operation_count: 3 },
+    ]) {
+      const delta = buildControlDelta({
+        capability: "manage_animation_effects",
+        phaseBefore: "animation",
+        phaseAfter: "animation",
+        projectUuid: "project-a",
+        succeeded: true,
+        result: { ...valid, ...invalid },
+      });
+      const effects = delta.downstream_recheck.required.find(
+        entry => entry.scope === "ANIMATION_EFFECTS"
+      );
+      expect(effects?.action).toBe("REVERIFY_ANIMATION_EFFECTS");
+      expect(effects?.target, JSON.stringify(invalid)).toBeUndefined();
+    }
+  });
+
   test("mixed timed and untimed effects retain channel identity without invented range", () => {
     const delta = buildControlDelta({
       capability: "manage_animation_effects",
