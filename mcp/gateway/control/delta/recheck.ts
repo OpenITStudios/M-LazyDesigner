@@ -9,6 +9,7 @@ import type {
   ControlVerificationScope,
 } from "../types";
 import { record, resultCandidates } from "./receipts";
+import { animationVerificationScope, textureVerificationScope } from "./verification";
 
 export type ControlRecheckAction = AssetDependencyRecheckAction;
 
@@ -91,23 +92,11 @@ function textureRegionTargetFromCandidates(
   candidates: readonly Record<string, unknown>[]
 ): ControlDownstreamRecheck["target"] | undefined {
   for (const candidate of candidates) {
-    const texture = record(candidate.texture);
-    const revision = record(candidate.revision);
-    const rect = candidate.affected_rect;
-    if (
-      typeof texture?.uuid === "string" &&
-      typeof revision?.after === "string" &&
-      Array.isArray(rect) &&
-      rect.length === 4 &&
-      rect.every(
-        (value) => typeof value === "number" && Number.isSafeInteger(value)
-      )
-    ) {
-      return {
-        texture_uuid: texture.uuid,
-        affected_rect: rect as [number, number, number, number],
-        revision: revision.after,
-      };
+    // Reuse the same strict identity, revision and right-exclusive rectangle
+    // proof as visual verification; do not invent a narrow downstream review.
+    const scope = textureVerificationScope(candidate);
+    if (scope?.kind === "TEXTURE_REGION") {
+      return targetFromVerificationScope(scope);
     }
   }
   return undefined;
@@ -119,39 +108,21 @@ function animationMotionTargetFromCandidates(
 ): ControlDownstreamRecheck["target"] | undefined {
   for (const candidate of candidates) {
     const animation = record(candidate.animation);
-    const bone = record(candidate.bone);
-    if (typeof animation?.uuid !== "string") continue;
+    if (typeof animation?.uuid !== "string" || !animation.uuid.trim()) continue;
 
-    if (
-      typeof bone?.uuid === "string" &&
-      Array.isArray(candidate.affected_keyframes)
-    ) {
-      const times = candidate.affected_keyframes
-        .map((value) => record(value)?.time)
-        .filter(
-          (value): value is number =>
-            typeof value === "number" && Number.isFinite(value)
-        );
-      if (times.length > 0) {
-        return {
-          animation_uuid: animation.uuid,
-          bone_ids: [bone.uuid],
-          channel:
-            typeof candidate.channel === "string"
-              ? candidate.channel
-              : null,
-          time_range: [Math.min(...times), Math.max(...times)],
-        };
-      }
+    // Verification owns time/identity validation. Never use only the valid
+    // subset of affected keys to claim a complete edit range.
+    const scope = animationVerificationScope(candidate);
+    if (scope?.kind === "ANIMATION_RANGE") {
+      return targetFromVerificationScope(scope);
     }
 
+    // Clip properties have no bone/window: retain the legitimate clip target.
     if (
       candidate.action === "properties" &&
       Array.isArray(candidate.changed_fields)
     ) {
-      return {
-        animation_uuid: animation.uuid,
-      };
+      return { animation_uuid: animation.uuid };
     }
   }
   return undefined;
@@ -173,18 +144,21 @@ function animationEffectsTargetFromCandidates(
           .filter((value): value is string => typeof value === "string")
       ),
     ];
-    const times = results
-      .map((value) => record(value)?.time)
-      .filter(
-        (value): value is number =>
-          typeof value === "number" && Number.isFinite(value)
-      );
+    const times = results.map((value) => record(value)?.time);
+    // Effects may include time-free removals; a mixed batch must not claim
+    // that its valid-time subset is the complete changed interval.
+    const boundedTimes = times.length > 0 && times.every(
+      (value): value is number =>
+        typeof value === "number" && Number.isFinite(value) && value >= 0
+    ) ? times as number[] : [];
 
     return {
       animation_uuid: animation.uuid,
       ...(channels.length ? { channels } : {}),
-      ...(times.length
-        ? { time_range: [Math.min(...times), Math.max(...times)] as [number, number] }
+      ...(boundedTimes.length
+        ? { time_range: [
+            Math.min(...boundedTimes), Math.max(...boundedTimes),
+          ] as [number, number] }
         : {}),
     };
   }

@@ -94,4 +94,54 @@ describe("animation downstream recheck targets", () => {
     );
     expect(motion?.target).toBeUndefined();
   });
+  test("mixed invalid keyframe times refuse partial downstream motion ranges", () => {
+    for (const time of [null, undefined, "query.anim_time", -0.5, NaN, Infinity]) {
+      const delta = buildControlDelta({
+        capability: "manage_keyframes",
+        phaseBefore: "animation",
+        phaseAfter: "animation",
+        projectUuid: "project-a",
+        succeeded: true,
+        result: {
+          action: "edit",
+          animation: { uuid: "anim-a" },
+          bone: { uuid: "bone-a" },
+          channel: "rotation",
+          affected_keyframes: [
+            { uuid: "kf-1", time: 0.25 },
+            { uuid: "kf-unknown", time },
+            { uuid: "kf-3", time: 0.75 },
+          ],
+        },
+      });
+      const motion = delta.downstream_recheck.required.find(
+        (entry) => entry.scope === "ANIMATION_MOTION"
+      );
+      expect(delta.freshness.stale).toContain("ANIMATION_MOTION");
+      expect(motion?.action).toBe("REVERIFY_ANIMATION_MOTION");
+      expect(motion?.target).toBeUndefined();
+      expect(delta.verification_scope).toBeNull();
+    }
+  });
+
+  test("blank clip or bone identity cannot enable narrow motion review", () => {
+    for (const pair of [
+      { animation: { uuid: "" }, bone: { uuid: "bone-a" } },
+      { animation: { uuid: "anim-a" }, bone: { uuid: " " } },
+    ]) {
+      const delta = buildControlDelta({
+        capability: "manage_keyframes",
+        phaseBefore: "animation", phaseAfter: "animation",
+        projectUuid: "project-a", succeeded: true,
+        result: {
+          ...pair, action: "edit", channel: "position",
+          affected_keyframes: [{ time: 0.5 }],
+        },
+      });
+      expect(delta.downstream_recheck.required.find(
+        (entry) => entry.scope === "ANIMATION_MOTION"
+      )?.target).toBeUndefined();
+    }
+  });
+
 });

@@ -32,17 +32,20 @@ export function animationVerificationScope(value: unknown): ControlVerificationS
   const bone = record(candidate.bone);
   const keyframes = candidate.affected_keyframes;
   if (
-    typeof animation?.uuid !== "string" ||
-    typeof bone?.uuid !== "string" ||
-    !Array.isArray(keyframes)
+    typeof animation?.uuid !== "string" || !animation.uuid.trim() ||
+    typeof bone?.uuid !== "string" || !bone.uuid.trim() ||
+    !Array.isArray(keyframes) || keyframes.length === 0
   ) return null;
 
-  const times = keyframes
-    .map((entry) => record(entry)?.time)
-    .filter((time): time is number => typeof time === "number" && Number.isFinite(time));
-  if (times.length === 0) return null;
-  const start = Math.min(...times);
-  const end = Math.max(...times);
+  // A mixed or incomplete native edit cannot justify a narrow time window.
+  // Dropping malformed entries would silently exclude changed keyframes.
+  const times = keyframes.map((entry) => record(entry)?.time);
+  if (times.some((time) =>
+    typeof time !== "number" || !Number.isFinite(time) || time < 0
+  )) return null;
+  const numericTimes = times as number[];
+  const start = Math.min(...numericTimes);
+  const end = Math.max(...numericTimes);
   const midpoint = start + (end - start) / 2;
   return {
     kind: "ANIMATION_RANGE",

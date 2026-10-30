@@ -117,4 +117,29 @@ describe("animation controller and effects recheck targets", () => {
       channels: ["timeline"],
     });
   });
+  test("mixed timed and untimed effects retain channel identity without invented range", () => {
+    const delta = buildControlDelta({
+      capability: "manage_animation_effects",
+      phaseBefore: "animation",
+      phaseAfter: "animation",
+      projectUuid: "project-a",
+      succeeded: true,
+      result: {
+        animation: { uuid: "anim-a" },
+        operation_count: 2,
+        results: [
+          { channel: "sound", time: 0.25, keyframe_uuid: "s" },
+          { channel: "particle", removed: { keyframe_uuid: "p" } },
+        ],
+      },
+    });
+    const effects = delta.downstream_recheck.required.find(
+      (entry) => entry.scope === "ANIMATION_EFFECTS"
+    );
+    expect(effects?.target).toEqual({
+      animation_uuid: "anim-a",
+      channels: ["sound", "particle"],
+    });
+  });
+
 });
