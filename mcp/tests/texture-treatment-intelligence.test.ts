@@ -324,7 +324,26 @@ describe("texture treatment intelligence", () => {
     });
     expect(quarter.orientation?.actual_face).toEqual({ axis: "v", sign: 1 });
     expect(quarter.face_local_physical_pixels).toEqual([4, 8]);
-    expect(quarter.state).toBe("metrics_consistent");
+    // Rotation changes the physical texel axes: [4,8] pixels across a
+    // [4,2]-unit face yields [1,4] px/unit, below the requested [2,2].
+    // Matching motif direction must NOT hide insufficient detail density.
+    expect(quarter.pixels_per_model_unit).toEqual([1, 4]);
+    expect(quarter.state).toBe("review_required");
+    expect(quarter.reasons).toContain("TEXTURE_PATTERN_TEXEL_DENSITY_INSUFFICIENT");
+    const quarterLowerTarget = reviewTexturePatternPhysicalFit({
+      ...base,
+      rotation: 90,
+      detail_intent: {
+        minimum_pixels_per_model_unit: 1,
+        orientation: {
+          atlas: { axis: "u", sign: 1 },
+          expected_face: { axis: "v", sign: 1 },
+        },
+      },
+    });
+    expect(quarterLowerTarget.state).toBe("metrics_consistent");
+    expect(quarterLowerTarget.orientation?.actual_face)
+      .toEqual({ axis: "v", sign: 1 });
   });
 
   test("pattern direction and detail thresholds are explicit, with no material guessing", () => {
