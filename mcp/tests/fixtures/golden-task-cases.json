@@ -1,150 +1,171 @@
 {
   "schema": "lazydesigner-golden-tasks-v1",
   "policy": {
-    "purpose": "Fixed end-to-end tasks for future live Cost to Accepted Result measurement.",
+    "purpose": "Six current workflow scenarios, not prior named assets.",
     "execution_state": "UNMEASURED",
-    "acceptance_rule": "No task is PASS until matching reference evidence, current artifact evidence, and human acceptance exist."
+    "reference_policy": "FRESH_APPROVED_REFERENCE_FOR_EACH_BENCHMARK",
+    "seed_policy": "NEW_DISPOSABLE_BEDROCK_MODEL_ONLY",
+    "historical_project_reuse": "FORBIDDEN",
+    "acceptance_rule": "Live exact-source Runtime, approved reference, saved/reopened/exported artifact evidence and explicit human approval precede Cost to Accepted Result."
   },
   "tasks": [
     {
-      "id": "golden-prop-chair",
+      "id": "golden-rigid-authoring",
       "profile": "PROP_FURNITURE",
-      "request": "Create a Minecraft Bedrock wooden chair from an approved front/side reference with explicit block dimensions.",
+      "request": "Create a newly specified rigid Bedrock visual asset from a fresh approved multi-view reference, with exact dimensions, Geometry, UV Layout, Texture and native finalization.",
+      "seed_kind": "BLANK_DISPOSABLE",
+      "start_stage": "geometry",
       "phases": [
         "geometry",
         "texturing"
       ],
+      "checkpoints": [
+        "GEOMETRY_APPROVED",
+        "UV_LAYOUT_PASS",
+        "TEXTURING_APPROVED",
+        "FINALIZATION_COMPLETE"
+      ],
       "acceptance": [
-        "silhouette",
-        "cross_view_proportion",
-        "part_completeness",
-        "attachment_contact",
-        "texture_identity",
-        "seam_control"
+        "reference_fidelity",
+        "silhouette_proportion",
+        "required_parts_and_contact",
+        "uv_layout_integrity",
+        "mapped_texture_continuity",
+        "save_reopen_export_integrity"
       ],
       "execution_state": "UNMEASURED"
     },
     {
-      "id": "golden-mechanical-lift",
-      "profile": "MECHANICAL",
-      "request": "Create a Bedrock lift with explicit body/door dimensions and native open/close animation.",
-      "phases": [
-        "geometry",
-        "texturing",
-        "animation"
-      ],
-      "acceptance": [
-        "mechanical_structure",
-        "pivot_correctness",
-        "clearance_contact",
-        "texture_identity",
-        "animation_contact",
-        "loop_or_handoff_continuity"
-      ],
-      "execution_state": "UNMEASURED"
-    },
-    {
-      "id": "golden-humanoid-fisherman",
-      "profile": "CHARACTER_MOB",
-      "request": "Create a humanoid fisherman with rod attachment, readable rig, idle loop, and reel action.",
-      "phases": [
-        "geometry",
-        "texturing",
-        "animation"
-      ],
-      "acceptance": [
-        "silhouette",
-        "required_parts",
-        "rig_suitability",
-        "attachment_contact",
-        "texture_identity",
-        "pose_fidelity",
-        "motion_readability"
-      ],
-      "execution_state": "UNMEASURED"
-    },
-    {
-      "id": "golden-organic-flower",
+      "id": "golden-organic-authoring",
       "profile": "ORGANIC_CURVED",
-      "request": "Create an organic flower/foliage asset whose curved silhouette is represented with minimum sufficient Bedrock geometry.",
+      "request": "Create a new organic Bedrock visual form from a fresh approved reference, preserving curves, depth, negative space and minimum sufficient Cuboids through UV and Texturing.",
+      "seed_kind": "BLANK_DISPOSABLE",
+      "start_stage": "geometry",
       "phases": [
         "geometry",
         "texturing"
       ],
+      "checkpoints": [
+        "GEOMETRY_APPROVED",
+        "UV_LAYOUT_PASS",
+        "TEXTURING_APPROVED",
+        "FINALIZATION_COMPLETE"
+      ],
       "acceptance": [
-        "silhouette",
-        "curve_segmentation",
-        "depth_continuity",
+        "reference_fidelity",
+        "organic_silhouette",
+        "depth_and_negative_space",
         "minimum_sufficient_geometry",
-        "palette_correspondence"
+        "uv_layout_integrity",
+        "mapped_palette_correspondence",
+        "save_reopen_export_integrity"
       ],
       "execution_state": "UNMEASURED"
     },
     {
-      "id": "golden-layered-cutout-display",
-      "profile": "GENERIC",
-      "request": "Create a layered/cutout display with intentional planar carriers, alpha boundaries, and no accidental coplanar artifacts.",
-      "phases": [
-        "geometry",
-        "texturing"
-      ],
-      "acceptance": [
-        "layering",
-        "negative_space",
-        "coplanar_risk",
-        "alpha_cutout_boundary",
-        "uv_fidelity"
-      ],
-      "execution_state": "UNMEASURED"
-    },
-    {
-      "id": "golden-pbr-machine",
-      "profile": "MECHANICAL",
-      "request": "Create a compact machine prop with one base atlas plus normal/MER material support.",
-      "phases": [
-        "geometry",
-        "texturing"
-      ],
-      "acceptance": [
-        "structure",
-        "atlas_integrity",
-        "pixel_density",
-        "pbr_channel_correctness",
-        "mapped_surface_continuity"
-      ],
-      "execution_state": "UNMEASURED"
-    },
-    {
-      "id": "golden-particle-smoke",
-      "profile": "GENERIC",
-      "request": "Create a Bedrock smoke particle, bind its texture, attach it to the intended locator, and trigger it from animation.",
+      "id": "golden-articulated-authoring",
+      "profile": "CHARACTER_MOB",
+      "request": "Create a fresh articulated Bedrock entity from an approved new motion reference with rig, UV, Texture, explicit AUTHORING-to-Animation handoff, playback and finalization.",
+      "seed_kind": "BLANK_DISPOSABLE",
+      "start_stage": "geometry",
       "phases": [
         "geometry",
         "texturing",
         "animation"
       ],
+      "checkpoints": [
+        "GEOMETRY_APPROVED",
+        "UV_LAYOUT_PASS",
+        "TEXTURING_APPROVED",
+        "ANIMATION_APPROVED",
+        "FINALIZATION_COMPLETE"
+      ],
       "acceptance": [
-        "locator_binding",
-        "particle_identifier",
-        "texture_binding",
-        "trigger_timing",
-        "in_game_visibility"
+        "reference_fidelity",
+        "rig_hierarchy_pivots",
+        "uv_layout_integrity",
+        "texture_material_identity",
+        "motion_contact_and_timing",
+        "animation_handoff_integrity",
+        "save_reopen_export_integrity"
       ],
       "execution_state": "UNMEASURED"
     },
     {
-      "id": "golden-existing-model-correction",
-      "profile": "PROP_FURNITURE",
-      "request": "Correct one known existing model from reference evidence without rebuilding unaffected geometry or rereading unrelated state.",
+      "id": "golden-geometry-correction",
+      "profile": "MECHANICAL",
+      "request": "Correct a demonstrable structural defect in a new staged reference-backed model at its Geometry owner; preserve unaffected state and recheck only invalidated UV and Texture.",
+      "seed_kind": "STAGED_DISPOSABLE",
+      "start_stage": "geometry",
       "phases": [
         "geometry",
         "texturing"
       ],
+      "checkpoints": [
+        "GEOMETRY_APPROVED",
+        "UV_LAYOUT_PASS",
+        "TEXTURING_APPROVED",
+        "FINALIZATION_COMPLETE"
+      ],
       "acceptance": [
+        "first_wrong_owner",
         "targeted_correction",
         "unaffected_state_preserved",
+        "downstream_uv_texture_recheck",
         "reference_fidelity",
-        "bounded_correction_rounds"
+        "save_reopen_export_integrity"
+      ],
+      "execution_state": "UNMEASURED"
+    },
+    {
+      "id": "golden-texture-correction",
+      "profile": "GENERIC",
+      "request": "Repair one approved-reference palette, atlas or seam defect on a new staged Geometry and UV model without redesigning Geometry or unrelated mapped regions.",
+      "seed_kind": "STAGED_DISPOSABLE",
+      "start_stage": "texturing",
+      "phases": [
+        "texturing"
+      ],
+      "checkpoints": [
+        "GEOMETRY_APPROVED",
+        "UV_LAYOUT_PASS",
+        "TEXTURING_APPROVED",
+        "FINALIZATION_COMPLETE"
+      ],
+      "acceptance": [
+        "reference_fidelity",
+        "texture_target_identity",
+        "mapped_surface_and_seam_fidelity",
+        "uv_evidence_integrity",
+        "approved_geometry_preserved",
+        "bounded_downstream_recheck",
+        "save_reopen_export_integrity"
+      ],
+      "execution_state": "UNMEASURED"
+    },
+    {
+      "id": "golden-animation-correction",
+      "profile": "CHARACTER_MOB",
+      "request": "Repair one action timing/contact defect on a newly staged approved rig with a native animation clip, preserve unrelated clips, playback and persistence.",
+      "seed_kind": "STAGED_DISPOSABLE",
+      "start_stage": "animation",
+      "phases": [
+        "animation"
+      ],
+      "checkpoints": [
+        "GEOMETRY_APPROVED",
+        "UV_LAYOUT_PASS",
+        "TEXTURING_APPROVED",
+        "ANIMATION_APPROVED",
+        "FINALIZATION_COMPLETE"
+      ],
+      "acceptance": [
+        "reference_fidelity",
+        "approved_rig_preserved",
+        "motion_contact_and_order",
+        "unrelated_clips_preserved",
+        "authoring_animation_handoff",
+        "save_reopen_export_integrity"
       ],
       "execution_state": "UNMEASURED"
     }

@@ -1,156 +1,57 @@
 # LazyDesigner Golden Task Benchmark
 
-This file defines the future live benchmark contract for **Cost to Accepted Result**. It does not add a Runtime tool, planner, quality scorer, or automated acceptance authority.
-
-Canonical machine-readable tasks live in `tests/fixtures/golden-task-cases.json`. Real regression incidents live separately in `tests/fixtures/regression-cases.json`.
-
-**Benchmark identity boundary:** `benchmark-zero-waste-golden.ts` and `benchmark-zero-waste-workflow.ts` are synthetic payload/step projections, **not** completed live Golden Tasks. Their `quality_preserved=true` describes checks on fixture fields and modeled verification steps only. Every returned fixture row carries `quality_evidence=SYNTHETIC_SEMANTIC_CHECKS_ONLY`, including when its tests pass. It does not establish visual correctness, human acceptance, actual Codex/model tokens, cost, native Undo, or latency. The accepted-result benchmark below remains the separate live measurement authority.
+**Current source:** `tests/fixtures/golden-task-cases.json`. Source updated 2026-10-30; all cases still UNMEASURED. This reuses the existing benchmark runner, evaluator and comparator.
 
 ## Rule
 
-Every checked-in Golden Task remains `UNMEASURED` until the task is executed against a matching LazyDesigner source/build with:
+Golden Tasks now test **six current authoring decisions**, not old projects. Each live run requires a **new approved Reference Package** and **new disposable Bedrock `.bbmodel` seed**. Historical `workspace/active/` or `workspace/saved/` models, previous production exports and legacy Golden reports may not be reused as inputs/baselines. Do not change or delete that historical user data.
 
-- approved reference evidence and explicit requirements;
-- Blockbench/runtime environment provenance;
-- captured Geometry/Texturing/Animation evidence as applicable;
-- correction history;
-- tool-call observations;
-- human acceptance state.
+| Task | New starting state | Authoring decision |
+| --- | --- | --- |
+| `golden-rigid-authoring` | Empty disposable scene | Geometry → UV → Texture → Finalization |
+| `golden-organic-authoring` | Empty disposable scene | Organic Geometry → UV → Texture → Finalization |
+| `golden-articulated-authoring` | Empty disposable scene | Rig → UV → Texture → Animation and playback |
+| `golden-geometry-correction` | Newly staged model | Fix structural defect; focused dependent UV/Texture recheck |
+| `golden-texture-correction` | Newly staged Geometry + atlas | Repair mapped palette/seam; keep Geometry unchanged |
+| `golden-animation-correction` | Newly staged rig + clip | Repair contact/action order; preserve unrelated motion |
 
-Static tests may validate the benchmark **shape**, but they cannot convert an unmeasured task into PASS.
+Every case requires save/reopen/export evidence. UV Layout belongs to Geometry, Geometry and Texturing share AUTHORING, and only AUTHORING↔Animation changes Runtime surface. PBR, particle and other narrow behaviors retain existing domain tests; they do not automatically need a Golden Task. `astra-live-golden-tasks.json` is a separate call-flow probe, not a source of accepted assets.
+
+## Fresh input admission
+
+1. Prepare a new reference with approved views, dimensions, requirements and SHA-based Reference Package fingerprint; no old asset/reference as a shortcut.
+2. Prepare a saved disposable Bedrock seed **outside the repository Workspace**. New-authoring seeds must be blank; new correction seeds need geometry, plus a texture atlas for Texturing and a pre-existing animation clip for Animation. Benchmark-only blank seeds do not change ordinary production checkpoint policy.
+3. Keep immutable seed bytes and open a separate saved working copy with identical initial SHA. Live preflight checks matching stage, project UUID, native Runtime build and model bytes. The runner rejects direct Workspace paths, including symlink-resolved aliases.
+4. Filesystem/hash checks cannot authenticate the creative origin of a copied model. Reviewer must independently verify the seed and reference were created for this run. A historical model copied to a temp path is still **not allowed**.
+5. Baseline and candidate start from the **same independently revalidated seed and Reference Package**, never from the previous arm's edited output.
 
 ## Accepted-result proof guard
 
-The existing evaluator accepts quality as measured only with
-`LIVE_BLOCKBENCH` scope, a contiguous task/SHA-specific Gateway trace,
-at least one **recorded successful** mutation and verification, unique PASS
-evidence for every required task criterion, and a separate documented
-`human_acceptance` review reference. Failed attempts may stay in the trace.
-Approval must come from a real human review; an LLM, tool receipt or passing
-static validator cannot attest it.
+Keep the existing `benchmark:golden-session` → `finalize:golden-session` → `compare:golden-sessions`. Acceptance requires exact-source LIVE_BLOCKBENCH provenance, new approved reference and Control context, live project UUID, different valid input/output saved-model hashes, contiguous trace with a successful native mutation and **successful final verification after the last mutation**, PASS for every criterion, no contradictory FAIL, actual current visual/native save-reopen/export evidence and **separate documented human acceptance**. Tool receipts, synthetic benchmarks and static tests never prove visual acceptance.
 
-The existing Gateway recorder already emits operation success flags. The
-session draft preserves those flags and adds an **UNVERIFIED** human-review
-criterion. No extra authoring tools, screenshots or routine Codex context are
-introduced.
+## First baseline — fresh scoped correction
 
-### Accepted artifact and final-revision integrity — all eight tasks
+Select **only one relevant task** for the changed source owner, not all six automatically. Example with a newly created correction seed (never a historical project):
 
-An `accepted_result: true` run for **any** of the eight canonical Golden
-Tasks requires the captured immutable starting `input_asset_sha256`, a
-live `input_project_uuid`, and a valid persisted `output_asset_sha256`
-**different from the starting asset bytes**. Previously, the evaluator
-required the persisted output only for `golden-existing-model-correction`;
-the other seven tasks could be marked accepted despite missing final
-artifact evidence. A changed output hash proves persisted bytes changed,
-**not** visual/reference, UV, motion or export acceptance.
+```bash
+cd mcp
+bun run benchmark:golden-session -- golden-geometry-correction .cache/golden-sessions /absolute/path/to/fresh-disposable-seed.bbmodel
+```
 
-The final successful verification event must occur **after the last mutation
-event** (including a failed/uncertain mutation), and the final verification
-event must itself have succeeded. A successful earlier capture cannot
-certify later edits; an unsuccessful later verification cannot be hidden
-behind an earlier success. Any additional `FAIL` acceptance evidence
-precludes an overall accepted result, even if the failed criterion is
-outside the minimum corpus criteria. These are consistency requirements
-on existing trace and review records, not new inspections.
+A session begins UNVERIFIED. Record the approved reference, stage gates, model evidence, human review, time, tool calls and actual usage before finalizing. The current focused **source-only** Golden tests are:
 
-Comparison of two purportedly accepted session reports also requires
-each to carry `LIVE_BLOCKBENCH` proof scope, a canonical task ID and schema,
-valid reference/Control provenance, valid nonnegative metrics, a live input
-project UUID, valid changed persisted output bytes, and identical starting
-model/reference fingerprints across baseline and candidate. Arbitrary
-source-only PASS reports, placeholder task IDs, invalid metrics, and
-missing output artifacts cannot produce claimed efficiency gains.
-When optional usage telemetry is merged into an **accepted** final session,
-it must come from the exact same source SHA and `LIVE_BLOCKBENCH` proof
-scope. SHA-unknown/source-only usage may be retained for incomplete
-diagnostics, never merged into accepted cost metrics. These fields are
-self-reported provenance until a live owner confirms them, so neither
-this validator nor the comparison itself authenticates human acceptance.
-
-The corpus remains **UNMEASURED**. A source-regression test of these gates
-does not create a live model, independently authenticate a human's review,
-or establish eight accepted Golden Tasks.
-
-## First baseline — Existing Model Correction
-
-For `golden-existing-model-correction`, use the **same unchanged starting
-`.bbmodel` bytes** for baseline and candidate, in addition to the same
-approved Reference Package. The existing session runner accepts the absolute
-starting model path as its third positional argument, hashes it **once before
-Gateway starts**, and validates that Blockbench currently has a **saved, separate working copy**
-with identical initial bytes. It reuses the existing read-only live preflight
-and `get_project_info` capability before Gateway starts, recording
-`input_asset_sha256`, `input_project_uuid` and matching Runtime build identity
-in the usual `golden-run-draft.json`. It does not copy, mutate or save a model.
-After the benchmark Gateway child exits, the runner checks that the immutable
-seed still matches the original digest and reads the separate saved `.bbmodel`
-working copy. Only valid JSON containing Blockbench document metadata receives
-an `output_asset_sha256` in the draft. Missing, empty, corrupt or unreadable
-output retains a null output digest and a diagnostic; the trace remains available.
-Absolute local paths do not enter the portable run report.
-
-An accepted correction requires the captured live project identity and a valid
-saved `output_asset_sha256` distinct from `input_asset_sha256`. A later
-comparison rejects missing or different starting model SHA-256 and rejects
-a correction whose output digest is missing, invalid or input-identical.
-Baseline and candidate outputs need not hash identically. This is a
-benchmark-only preflight (including one read-only `get_project_info` call)
-with **zero extra MCP calls or model-context loading during normal authoring**.
-Preserve the immutable seed and open a distinct saved working copy in Blockbench
-before the benchmark; editing the seed or starting from an already-modified
-working copy is rejected. The preflight proves only the starting moment, not
-ongoing project identity, visual improvement, or unaffected-state preservation;
-those still require fresh evidence and human review. A changed saved-file
-digest does not establish native reopen success, UV quality, visual/reference
-fidelity, preservation of unaffected parts, or human acceptance.
+```bash
+bun test tests/benchmark/golden-authoring-run-contract.test.ts tests/benchmark/golden-benchmark-session-runner.test.ts tests/benchmark/golden-session-comparison.test.ts tests/benchmark/golden-session-finalizer.test.ts tests/benchmark/quality-benchmark-corpus-contract.test.ts
+```
 
 ## Required Run Record
 
-A future live run should record at minimum:
-
-    task_id
-    source_sha
-    runtime_build_identity
-    blockbench_version
-    operating_system
-    reference_revision
-    artifact_revision
-    phase verdicts
-    critical defects
-    status_calls
-    search_calls
-    describe_calls
-    identity inspections
-    visual capture batches
-    mutation calls
-    correction rounds
-    redundant readbacks
-    runtime/tool errors
-    total calls to accepted result
-    accepted | not accepted
-
-Do not compute a single aggregate quality score. Critical failures remain explicit categorical defects and cannot be averaged away.
+Retain task ID, source SHA, installed build/environment, approved reference fingerprint, seed/output SHA, live project identity, stage evidence and verdicts, human review, mutation/inspection/verification calls, corrections, timing, token telemetry when actually observed.
 
 ## Comparison Rule
 
-Compare implementation revisions only when task inputs and acceptance criteria are materially equivalent.
-
-For the R5 **within-build** Geometry Knowledge experiment, use
-[Quality Benchmark R5](QUALITY_BENCHMARK.md#r5-source-aligned-geometry-knowledge-pairing-benchmark-only)
-and the benchmark-only `compare:geometry-knowledge` command. This
-specialized filter reuses the Golden comparator but additionally requires
-two separately captured live benchmark sessions with the same seed,
-exact source/build, Control context, known model/telemetry/environment,
-protocol and reference claims;
-the candidate must have one canonical source-hash-checked G1 retrieval
-receipt and the control must have none. Without authenticated exposure
-receipts and human review its output is descriptive **not causal proof**.
-
-An improvement means equal-or-better accepted quality with lower or equal **Cost to Accepted Result**, or a clearly documented quality gain that justifies additional cost.
+Compare only current task IDs with **the same fresh approved reference and immutable starting model**, equivalent acceptance and compatible environment. Quality PASS comes before cost reduction. No aggregate quality score or automatic winner. Geometry Knowledge A/B draws eligible tasks from the canonical corpus phases; do not duplicate the task list.
 
 ## Corpus Intent
 
-The initial eight tasks cover rigid prop/furniture, mechanical geometry + animation, humanoid rig/attachment/motion, organic curved construction, layered/alpha-cutout representation, PBR material authoring, particle + locator + animation integration, and targeted correction of an existing model.
-
-Do not expand the corpus merely to increase case count. Add a task only when it represents a materially different authoring failure mode or production workload.
+The six cases cover fresh rigid, organic and articulated authoring, and bounded Geometry, Texture and Animation correction. Retired object-named task IDs and their historical results are **noncomparable**. Add a case only if a real failure mode is missing from existing tests.

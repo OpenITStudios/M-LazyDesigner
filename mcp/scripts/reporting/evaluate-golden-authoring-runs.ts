@@ -200,20 +200,6 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
   }
 
   if (run.accepted_result === true) {
-    if (run.task_id === "golden-existing-model-correction") {
-      if (!provenance.input_asset_sha256) {
-        throw new Error(`${prefix} accepted correction requires input_asset_sha256 from the starting .bbmodel.`);
-      }
-      if (!provenance.input_project_uuid) {
-        throw new Error(`${prefix} accepted correction requires a live input_project_uuid from Blockbench.`);
-      }
-      if (!provenance.output_asset_sha256) {
-        throw new Error(`${prefix} accepted correction requires output_asset_sha256 from a saved .bbmodel.`);
-      }
-      if (provenance.output_asset_sha256 === provenance.input_asset_sha256) {
-        throw new Error(`${prefix} accepted correction output_asset_sha256 must differ from input_asset_sha256.`);
-      }
-    }
     // Every Golden Task needs a saved and content-addressed final .bbmodel.
     // A tool trace and a manually declared PASS do not prove persistence.
     if (!provenance.output_asset_sha256) {

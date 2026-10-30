@@ -2,17 +2,15 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next to do — cross-repository efficiency (2026-10-30)
+## Primary next to do — fresh Golden Task corpus (2026-10-30)
 
-**USER DECISION:** Optimize end-to-end LazyDesigner using proven sibling-repo patterns without duplicate engines. Existing affected planner supports Git `--auto` and SHA-pinned `--expect-sha` (clean source required); focused Animation regressions retained. CI disabled; no release/native mutation.
+**USER DECISION:** Rebuild stale Golden Task and associated tests without any old named project, workspace production model or historical preview. Canonical owner: `mcp/tests/fixtures/golden-task-cases.json`, procedure `mcp/docs/GOLDEN_TASKS.md`.
 
-**Texture/UV checkpoint:** 112-source K0–K9 audit, 25 decision families and guarded physical texel mapping remain in [Texture knowledge integration](../03-authoring/texture/knowledge-integration.md). `manage_uv_layout` still unregistered. Bun/CI/native/visual/Golden acceptance NOT EXECUTED for latest source; no quality PASS.
+**SOURCE-AUTHORED:** Six fresh or newly staged scenarios cover rigid/organic/articulated full authoring and bounded Geometry/Texture/Animation corrections. Existing runner enforces seed for every task, empty/staged source prerequisites, current Stage and no repository Workspace seed or working copy; Geometry Knowledge pairing now derives eligibility from the canonical task corpus. Updated acceptance tests/docs reuse existing evaluators. No new MCP tools, runner, CI or version suffix.
 
-**Animation K0–K3:** [145 research references](../03-authoring/animation/research-sources.md) and [30-family coverage/4 review cases](../03-authoring/animation/knowledge-coverage.md) curated. One deterministic finite scalar-scale compiler safeguard plus an existing-owner regression authored. All source test runs, native animation playback, export/visual acceptance and real Golden cost baseline **NOT EXECUTED**.
+**PROOF:** Exact-HEAD static preparation; Bun/typecheck, native Blockbench, visual review, human acceptance and Golden cost measurements are **NOT EXECUTED**. Retired asset-named IDs remain historical, not current baselines.
 
-**Animation K4/K5 source:** MotionDynamics and RootMotion reject duplicate timestamps and native pre/post ambiguity; RootMotion also rejects expression gaps, coerced nonnumeric vectors and malformed timestamps, preserving omitted-track diagnostics. Existing-owner regression extended. Exact-SHA Bun/CI/native/visual/Golden **NOT EXECUTED**. No new tools, suites or benchmark tasks.
-
-**Order:** Control intake parallel-read SOURCE-AUTHORED / BUN PENDING; Texture/Animation native acceptance pending; Geometry authoring PAUSED. **Next:** exact-SHA packet/lifecycle verification then native Golden acceptance; no new authoring steps.
+**NEXT:** Execute matching-source focused source contracts when a capable environment exists. Produce one new approved Reference Package + disposable seed, obtain live native + human PASS, then compare accepted-result efficiency. Never revive old projects for test convenience.
 
 ## Current working environment
 

@@ -1,6 +1,7 @@
 import { mkdir, readFile, realpath } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { extname, isAbsolute, join, resolve } from "node:path";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import goldenCorpus from "../../tests/fixtures/golden-task-cases.json";
 import {
   summarizeGatewayBenchmarkTrace,
@@ -13,6 +14,49 @@ import type { BenchmarkTraceEvent } from "../../gateway/runtime/benchmarkTrace";
 import { LiveMcpClient, structuredObject } from "../verify/live-e2e-common";
 
 type GoldenTask = (typeof goldenCorpus.tasks)[number];
+
+const WORKSPACE_ROOT = resolve(fileURLToPath(new URL("../../../workspace/", import.meta.url)));
+
+/** Reject production project data at the benchmark boundary; live caller resolves symlinks. */
+export function assertGoldenDisposablePath(path: string, workspaceRoot = WORKSPACE_ROOT): void {
+  const rel = relative(workspaceRoot, resolve(path));
+  if (!rel || (rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel))) {
+    throw new Error("Golden benchmark refuses repository workspace assets; use a fresh disposable seed.");
+  }
+}
+
+/** One existing runner preflight; do not create another model validator or engine. */
+export function validateGoldenSeedContent(task: GoldenTask, value: unknown): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Golden benchmark seed must be a Blockbench JSON object.");
+  }
+  const record = value as Record<string, unknown>;
+  const entries = (field: string): unknown[] => {
+    const list = record[field];
+    if (list == null) return [];
+    if (!Array.isArray(list)) throw new Error("Golden seed " + field + " must be an array.");
+    return list;
+  };
+  const elements = entries("elements");
+  const outliner = entries("outliner");
+  const textures = entries("textures");
+  const animations = entries("animations");
+  if (task.seed_kind === "BLANK_DISPOSABLE") {
+    if (elements.length || outliner.length || textures.length || animations.length) {
+      throw new Error("Golden fresh-authoring task requires a blank disposable seed.");
+    }
+  } else if (task.seed_kind === "STAGED_DISPOSABLE") {
+    if (!elements.length) throw new Error("Golden correction requires newly staged nonempty Geometry.");
+    if ((task.start_stage === "texturing" || task.start_stage === "animation") && !textures.length) {
+      throw new Error("Golden downstream correction requires a staged texture atlas.");
+    }
+    if (task.start_stage === "animation" && !animations.length) {
+      throw new Error("Golden animation correction requires a staged native animation clip.");
+    }
+  } else {
+    throw new Error("Unknown Golden seed policy.");
+  }
+}
 
 export type GoldenSessionPaths = {
   directory: string;
@@ -175,9 +219,11 @@ export async function fingerprintGoldenSavedOutputModel(
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-async function preflightGoldenStartingModel(seedPath: string): Promise<LiveStartingModelBaseline> {
+async function preflightGoldenStartingModel(seedPath: string, task: GoldenTask): Promise<LiveStartingModelBaseline> {
+  assertGoldenDisposablePath(await realpath(seedPath));
+  validateGoldenSeedContent(task, JSON.parse(await readFile(seedPath, "utf8")));
   const client = new LiveMcpClient({
-    expectedPhase: "geometry",
+    expectedPhase: task.start_stage as "geometry" | "texturing" | "animation",
     requiredTools: ["get_project_info"],
   });
   const { buildIdentity } = await client.preflight();
@@ -188,6 +234,7 @@ async function preflightGoldenStartingModel(seedPath: string): Promise<LiveStart
   const baseline = await verifyGoldenStartingLiveProject(seedPath, projectInfo);
   // The saved path was validated in verifyGoldenStartingLiveProject.
   const workingPath = (projectInfo.project as { save_path: string }).save_path;
+  assertGoldenDisposablePath(await realpath(workingPath));
   return { ...baseline, runtimeBuildIdentity: buildIdentity, seedPath, workingPath };
 }
 
@@ -333,21 +380,16 @@ async function main(): Promise<void> {
   const inputModelPath = process.argv[4];
   if (!taskId) {
     throw new Error(
-      "Usage: bun run benchmark:golden-session -- <golden-task-id> [output-root] [starting-model-input.bbmodel]"
+      "Usage: bun run benchmark:golden-session -- <golden-task-id> [output-root] <fresh-disposable-seed.bbmodel>"
     );
   }
 
   const task = taskById(taskId);
-  // Preflight before Gateway and any mutation. Capture only once for this
-  // benchmark task; normal Codex authoring remains unchanged.
-  // Non-correction drafts may be created without a seed, but cannot become
-  // comparable ACCEPTED runs until a verified starting .bbmodel is supplied.
-  if (task.id === "golden-existing-model-correction" && !inputModelPath) {
-    throw new Error("Golden existing-model correction requires a starting input .bbmodel.");
+  // All current Golden tasks require a fresh source seed. Normal asset authoring is unchanged.
+  if (!inputModelPath) {
+    throw new Error("Every Golden Task requires a fresh disposable starting .bbmodel.");
   }
-  const startingBaseline = inputModelPath
-    ? await preflightGoldenStartingModel(inputModelPath)
-    : null;
+  const startingBaseline = await preflightGoldenStartingModel(inputModelPath, task);
   const sourceSha = exactGitSha();
   const paths = goldenSessionPaths(task.id, outputRoot);
   await mkdir(paths.directory, { recursive: true });

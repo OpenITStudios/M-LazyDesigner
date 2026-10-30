@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import goldenCorpus from "../fixtures/golden-task-cases.json";
 import {
   finalizeGoldenSession,
 } from "../../scripts/reporting/finalize-golden-session";
@@ -9,12 +10,14 @@ import type {
   UsageDocument,
 } from "../../scripts/evaluate/validate-astra-usage";
 
+const correctionTask = goldenCorpus.tasks.find(task => task.id === "golden-geometry-correction")!;
+
 function golden(): GoldenAuthoringDocument {
   return {
     schema: "lazydesigner-golden-authoring-runs-v1",
     runs: [
       {
-        task_id: "golden-existing-model-correction",
+        task_id: "golden-geometry-correction",
         source_sha: "1234567890abcdef1234567890abcdef12345678",
         proof_scope: "LIVE_BLOCKBENCH",
         model: null,
@@ -48,10 +51,9 @@ function golden(): GoldenAuthoringDocument {
           },
         ],
         acceptance_evidence: [
-          { criterion: "targeted_correction", verdict: "UNVERIFIED", evidence_ref: null },
-          { criterion: "unaffected_state_preserved", verdict: "UNVERIFIED", evidence_ref: null },
-          { criterion: "reference_fidelity", verdict: "UNVERIFIED", evidence_ref: null },
-          { criterion: "bounded_correction_rounds", verdict: "UNVERIFIED", evidence_ref: null },
+          ...correctionTask.acceptance.map(criterion => ({
+            criterion, verdict: "UNVERIFIED" as const, evidence_ref: null,
+          })),
           { criterion: "human_acceptance", verdict: "UNVERIFIED", evidence_ref: null },
         ],
       },
@@ -68,7 +70,7 @@ function usage(sourceSha: string): UsageDocument {
     telemetry_source: "codex",
     runs: [
       {
-        task_id: "golden-existing-model-correction",
+        task_id: "golden-geometry-correction",
         variant: "zero_waste",
         quality_verdict: "UNVERIFIED",
         task_success: null,
@@ -149,7 +151,7 @@ describe("golden session finalizer", () => {
     expect(report.metrics).toBeNull();
     expect(report.unresolved).toEqual({
       decision_labels: 1,
-      acceptance_evidence: 5,
+      acceptance_evidence: correctionTask.acceptance.length + 1,
     });
   });
 

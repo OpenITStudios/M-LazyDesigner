@@ -1,4 +1,5 @@
 import casebook from "../../../docs/03-authoring/modelling/decision-cases.md" with { type: "text" };
+import goldenCorpus from "../../tests/fixtures/golden-task-cases.json";
 import {
   describeKnowledgeSource,
   indexMarkdownKnowledge,
@@ -12,14 +13,9 @@ const CASEBOOK_PATH = "docs/03-authoring/modelling/decision-cases.md";
 const SHA256 = /^[0-9a-f]{64}$/;
 const SOURCE_SHA = /^[0-9a-f]{40}$/;
 const MAX_CLAIM_REFS = 8;
-const GEOMETRY_TASKS = new Set([
-  "golden-existing-model-correction",
-  "golden-organic-flower",
-  "golden-mechanical-lift",
-  "golden-humanoid-fisherman",
-  "golden-prop-chair",
-  "golden-layered-cutout-display",
-]);
+const GEOMETRY_TASKS = new Set(
+  goldenCorpus.tasks.filter(task => task.phases.includes("geometry")).map(task => task.id)
+);
 
 /** Benchmark-only sidecar, not persisted Recipe, Runtime or Gateway metadata.
  * The actual captured response bytes and human review are external evidence.

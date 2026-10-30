@@ -150,11 +150,12 @@ Compare implementation changes only against equivalent inputs and acceptance cri
 This is a **future measured run plan**, not source proof or a new evaluation
 engine. G2 retrieval regressions only establish that selected advisory text
 matches a semantic feature and source revision; they do not establish a
-better model. Use the existing Golden Task machinery and six quality
-dimensions above. Initially select `golden-existing-model-correction` for a
-controlled correction, then `golden-humanoid-fisherman`,
-`golden-mechanical-lift`, or `golden-organic-flower` only when a
-specific Geometry case is decision-relevant.
+better model. Use the updated current Golden corpus with **fresh approved
+references** and disposable seed models. Start with `golden-geometry-correction`
+for a bounded Geometry defect, or select `golden-rigid-authoring`,
+`golden-organic-authoring` or `golden-articulated-authoring` only when
+a particular Geometry/rig decision warrants that different profile.
+Prior production models and old named project cases are not current baselines.
 
 - **Pair inputs:** identical approved reference package SHA-256, user
   dimensions, required views and acceptance criteria, identical immutable

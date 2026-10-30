@@ -591,47 +591,41 @@ Do not run destructive acceptance commands against:
 
 If a mutation becomes `OUTCOME_UNKNOWN`, inspect the current Blockbench state before any retry.
 
-## 8. Representative quality fixture
+## 8. Fresh Golden Task acceptance
 
-A committed sample asset is **only a representative test fixture** for LazyDesigner/MCP workflow quality. It is not a product target and **must not create fixture-specific tool behavior**, schema, thresholds, workflow law, or acceptance rules. Another suitable fixture may replace it without changing production Runtime semantics.
+The current task IDs, stages and acceptance criteria are owned by
+`mcp/tests/fixtures/golden-task-cases.json` and described in
+`mcp/docs/GOLDEN_TASKS.md`.
 
-Never mutate the approved fixture source for system testing. Use a disposable copy.
+**Do not use past production projects, previously accepted model files,
+`workspace/active/`, `workspace/saved/`, or historical Golden outputs
+as seed or working models.** Preserve all such user data unchanged.
 
-Visual/reference `PASS` still requires the approved reference plus fresh comparable model evidence. Static metrics or automatic similarity scores cannot create visual PASS.
+Prepare one newly approved Reference Package with exact views and dimensions,
+then create a new disposable Bedrock `.bbmodel` seed **outside repository
+Workspace**. Fresh authoring starts blank; corrections require an independently
+staged, source-backed Geometry/Texture/Animation prerequisite. Keep the seed
+immutable and open a separate saved working copy with identical initial SHA.
 
-### 8A. Saved-model Golden Correction acceptance
+The existing runner checks native project and Runtime identity, actual stage,
+blank/staged content and rejects Workspace input/output paths. It cannot
+cryptographically authenticate the creation history of a copied model, so a
+human reviewer must verify the seed/reference are genuinely new to this run.
 
-For `golden-existing-model-correction`, use one immutable original
-`.bbmodel` seed and one disposable saved working copy with byte-identical
-starting content. Pin the exact `Local` source/build. Verify that the
-**effective client MCP command** starts the benchmark-wrapped Gateway; an
-independent Gateway process with an empty/irrelevant trace is not evidence.
-
-After the benchmark session, inspect `golden-run-draft.json` and its trace:
-`pipeline_provenance.input_asset_sha256` must match the unchanged seed;
-`output_asset_sha256` must represent valid saved working-copy bytes and
-differ from the input digest. Missing/empty/corrupt output, modified seed,
-or an unchanged output must not be promoted to an accepted correction.
-Machine-local paths remain outside the portable report.
-
-Reopen the saved result in installed Blockbench. Confirm the same project,
-relevant geometry/UV/texture/animation state and unaffected model parts.
-Compare fresh model evidence against the approved reference and obtain
-explicit human review. Keep `quality_verdict=UNVERIFIED` and
-`accepted_result=null` until these independent gates pass. A hash difference,
-synthetic fixture PASS or successful tool call is not visual approval.
-
-On the exact-source checkout, the focused benchmark gate is:
+Focused source test command, when exact-source executable proof is available:
 
 ```bash
 cd mcp
-bun test tests/benchmark/golden-benchmark-session-runner.test.ts tests/benchmark/golden-authoring-run-contract.test.ts tests/benchmark/golden-session-comparison.test.ts
-bun run verify:full
+bun test tests/benchmark/golden-authoring-run-contract.test.ts tests/benchmark/golden-benchmark-session-runner.test.ts tests/benchmark/golden-session-comparison.test.ts tests/benchmark/golden-session-finalizer.test.ts tests/benchmark/quality-benchmark-corpus-contract.test.ts
 ```
 
-These commands are instructions, **not** proof that the current HEAD was
-executed. CI remains intentionally disabled; run them only in an authorized
-`LOCAL_CODE` context or an independently authorized verification environment.
+These are source-only tests, not native quality PASS. For live acceptance,
+verify the matching build, stage ownership (UV is Geometry; Geometry and
+Texturing share AUTHORING), explicit Animation handoff when applicable,
+fresh comparable Blockbench reference views, native save/reopen/export,
+unchanged other parts and **actual human approval**. Without these,
+quality remains `UNVERIFIED`; old project reports are noncomparable.
+CI remains intentionally disabled.
 
 ## 9. Gateway Stability
 

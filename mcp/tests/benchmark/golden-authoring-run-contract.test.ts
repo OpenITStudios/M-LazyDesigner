@@ -5,13 +5,14 @@ import {
   validateGoldenAuthoringDocument,
   type GoldenAuthoringDocument,
 } from "../../scripts/reporting/evaluate-golden-authoring-runs";
+const correctionTask = goldenCorpus.tasks.find(task => task.id === "golden-geometry-correction")!;
 
 function acceptedRun(): GoldenAuthoringDocument {
   return {
     schema: "lazydesigner-golden-authoring-runs-v1",
     runs: [
       {
-        task_id: "golden-existing-model-correction",
+        task_id: "golden-geometry-correction",
         source_sha: "1234567890abcdef1234567890abcdef12345678",
         proof_scope: "LIVE_BLOCKBENCH",
         model: "gpt-5.6-sol",
@@ -67,31 +68,10 @@ function acceptedRun(): GoldenAuthoringDocument {
           },
         ],
         acceptance_evidence: [
-          {
-            criterion: "targeted_correction",
-            verdict: "PASS",
-            evidence_ref: "receipt:manage_cubes:1",
-          },
-          {
-            criterion: "unaffected_state_preserved",
-            verdict: "PASS",
-            evidence_ref: "inspect:focused:1",
-          },
-          {
-            criterion: "reference_fidelity",
-            verdict: "PASS",
-            evidence_ref: "visual:front-side:1",
-          },
-          {
-            criterion: "bounded_correction_rounds",
-            verdict: "PASS",
-            evidence_ref: "trace:rounds:1",
-          },
-          {
-            criterion: "human_acceptance",
-            verdict: "PASS",
-            evidence_ref: "user:review:explicit-approval-example",
-          },
+          ...correctionTask.acceptance.map(criterion => ({
+            criterion, verdict: "PASS" as const, evidence_ref: "synthetic:" + criterion,
+          })),
+          { criterion: "human_acceptance", verdict: "PASS", evidence_ref: "synthetic-human-review" },
         ],
       },
     ],
@@ -99,8 +79,8 @@ function acceptedRun(): GoldenAuthoringDocument {
 }
 
 describe("golden authoring accepted-result benchmark", () => {
-  test("all eight Golden Tasks reject accepted claims without distinct persisted output", () => {
-    expect(goldenCorpus.tasks).toHaveLength(8);
+  test("current Golden tasks reject accepted claims without distinct persisted output", () => {
+    expect(goldenCorpus.tasks).toHaveLength(6);
     for (const task of goldenCorpus.tasks) {
       const document = acceptedRun();
       const run = document.runs[0]!;
@@ -246,7 +226,7 @@ describe("golden authoring accepted-result benchmark", () => {
     const missing = acceptedRun();
     missing.runs[0]!.pipeline_provenance.input_asset_sha256 = null;
     expect(() => validateGoldenAuthoringDocument(missing))
-      .toThrow("accepted correction requires input_asset_sha256");
+      .toThrow("accepted result requires starting input_asset_sha256");
 
     const malformed = acceptedRun();
     malformed.runs[0]!.pipeline_provenance.input_asset_sha256 = "not-a-hash";
@@ -258,7 +238,7 @@ describe("golden authoring accepted-result benchmark", () => {
     const missing = acceptedRun();
     missing.runs[0]!.pipeline_provenance.output_asset_sha256 = null;
     expect(() => validateGoldenAuthoringDocument(missing))
-      .toThrow("accepted correction requires output_asset_sha256");
+      .toThrow("accepted result requires output_asset_sha256");
     const invalid = acceptedRun();
     invalid.runs[0]!.pipeline_provenance.output_asset_sha256 = "not-a-hash";
     expect(() => validateGoldenAuthoringDocument(invalid))
@@ -266,14 +246,14 @@ describe("golden authoring accepted-result benchmark", () => {
     const unchanged = acceptedRun();
     unchanged.runs[0]!.pipeline_provenance.output_asset_sha256 = "c".repeat(64);
     expect(() => validateGoldenAuthoringDocument(unchanged))
-      .toThrow("must differ from input_asset_sha256");
+      .toThrow("different from starting input_asset_sha256");
   });
 
   test("rejects accepted corrections without live active-project identity", () => {
     const document = acceptedRun();
     document.runs[0]!.pipeline_provenance.input_project_uuid = null;
     expect(() => validateGoldenAuthoringDocument(document))
-      .toThrow("requires a live input_project_uuid");
+      .toThrow("live input_project_uuid");
 
     document.runs[0]!.pipeline_provenance.input_project_uuid = " ";
     expect(() => validateGoldenAuthoringDocument(document))
@@ -283,10 +263,10 @@ describe("golden authoring accepted-result benchmark", () => {
   test("accepted new-model tasks require a verified starting model", () => {
     const document = acceptedRun();
     const run = document.runs[0]!;
-    run.task_id = "golden-prop-chair";
+    run.task_id = "golden-rigid-authoring";
     run.acceptance_evidence = [
-      "silhouette", "cross_view_proportion", "part_completeness",
-      "attachment_contact", "texture_identity", "seam_control", "human_acceptance",
+      ...goldenCorpus.tasks.find(task => task.id === "golden-rigid-authoring")!.acceptance,
+      "human_acceptance",
     ].map((criterion) => ({
       criterion, verdict: "PASS" as const, evidence_ref: "verified:" + criterion,
     }));
@@ -297,7 +277,7 @@ describe("golden authoring accepted-result benchmark", () => {
     run.pipeline_provenance.input_project_uuid = null;
     expect(() => validateGoldenAuthoringDocument(document))
       .toThrow("live input_project_uuid");
-    run.pipeline_provenance.input_project_uuid = "saved-chair-start";
+    run.pipeline_provenance.input_project_uuid = "saved-current-benchmark-start";
     expect(() => validateGoldenAuthoringDocument(document)).not.toThrow();
   });
 
@@ -339,6 +319,12 @@ describe("golden authoring accepted-result benchmark", () => {
     const doc = acceptedRun();
     doc.runs[0]!.trace[2]!.index = 5;
     expect(() => validateGoldenAuthoringDocument(doc)).toThrow("ordered, contiguous trace");
+  });
+
+  test("retired old project-named IDs are not accepted", () => {
+    const doc = acceptedRun();
+    doc.runs[0]!.task_id = "golden-mechanical-lift";
+    expect(() => validateGoldenAuthoringDocument(doc)).toThrow("not in the golden task corpus");
   });
 
   test("template remains unmeasured and references a real golden task", async () => {

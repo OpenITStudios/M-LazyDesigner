@@ -10,10 +10,12 @@ import {
   fingerprintGoldenSavedOutputModel,
   verifyGoldenStartingLiveProject,
   goldenSessionPaths,
+  assertGoldenDisposablePath,
+  validateGoldenSeedContent,
 } from "../../scripts/reporting/run-golden-benchmark-session";
 
 const task = goldenCorpus.tasks.find(
-  (entry) => entry.id === "golden-existing-model-correction"
+  (entry) => entry.id === "golden-geometry-correction"
 )!;
 
 describe("golden benchmark session runner", () => {
@@ -21,14 +23,37 @@ describe("golden benchmark session runner", () => {
     const paths = goldenSessionPaths(
       task.id,
       ".cache/test-golden",
-      new Date("2026-09-29T00:00:00.000Z")
+      new Date("2026-10-30T00:00:00.000Z")
     );
     expect(paths.directory).toContain(
-      "golden-existing-model-correction-2026-09-29T00-00-00-000Z"
+      "golden-geometry-correction-2026-10-30T00-00-00-000Z"
     );
     expect(paths.trace.endsWith("trace.ndjson")).toBe(true);
     expect(paths.trace_report.endsWith("trace-report.json")).toBe(true);
     expect(paths.golden_run_draft.endsWith("golden-run-draft.json")).toBe(true);
+  });
+
+  test("rejects production assets and stage-invalid fresh seeds", () => {
+    const root = join(tmpdir(), "golden-test-root");
+    const workspace = join(root, "workspace");
+    expect(() => assertGoldenDisposablePath(join(workspace, "active", "old.bbmodel"), workspace))
+      .toThrow("refuses repository workspace assets");
+    expect(() => assertGoldenDisposablePath(join(workspace, "saved", "old.bbmodel"), workspace))
+      .toThrow("refuses repository workspace assets");
+    expect(() => assertGoldenDisposablePath(join(root, ".cache", "seed.bbmodel"), workspace))
+      .not.toThrow();
+    const fresh = goldenCorpus.tasks.find(t => t.id === "golden-rigid-authoring")!;
+    const texture = goldenCorpus.tasks.find(t => t.id === "golden-texture-correction")!;
+    const animation = goldenCorpus.tasks.find(t => t.id === "golden-animation-correction")!;
+    expect(() => validateGoldenSeedContent(fresh, { elements: [], outliner: [], textures: [], animations: [] }))
+      .not.toThrow();
+    expect(() => validateGoldenSeedContent(fresh, { elements: [{}] })).toThrow("blank disposable seed");
+    expect(() => validateGoldenSeedContent(texture, { elements: [] })).toThrow("newly staged");
+    expect(() => validateGoldenSeedContent(texture, { elements: [{}] })).toThrow("staged texture atlas");
+    expect(() => validateGoldenSeedContent(animation, { elements: [{}], textures: [{}] }))
+      .toThrow("staged native animation clip");
+    expect(() => validateGoldenSeedContent(animation, { elements: [{}], textures: [{}], animations: [{}] }))
+      .not.toThrow();
   });
 
   test("pins the unchanged starting .bbmodel once with SHA-256", async () => {
@@ -58,7 +83,7 @@ describe("golden benchmark session runner", () => {
     const dir = await mkdtemp(join(tmpdir(), "lazydesigner-live-correction-"));
     const seed = join(dir, "seed.bbmodel");
     const copy = join(dir, "working.bbmodel");
-    const original = '{"meta":{"format_version":"4.10"},"elements":[{"name":"chair"}]}';
+    const original = '{"meta":{"format_version":"4.10"},"elements":[{"name":"synthetic-part-a"}]}';
     const snapshot = (savePath: string, saved = true, format = "bedrock") => ({
       project: { uuid: "asset-project-1", saved, save_path: savePath },
       format: { id: format },
@@ -77,7 +102,7 @@ describe("golden benchmark session runner", () => {
         .rejects.toThrow("saved, active Bedrock");
       await expect(verifyGoldenStartingLiveProject(seed, snapshot(copy, true, "java_block")))
         .rejects.toThrow("saved, active Bedrock");
-      await writeFile(copy, original.replace("chair", "table"));
+      await writeFile(copy, original.replace("synthetic-part-a", "synthetic-part-b"));
       await expect(verifyGoldenStartingLiveProject(seed, snapshot(copy)))
         .rejects.toThrow("differs from the starting seed bytes");
     } finally {
@@ -89,13 +114,13 @@ describe("golden benchmark session runner", () => {
     const dir = await mkdtemp(join(tmpdir(), "lazydesigner-output-proof-"));
     const seed = join(dir, "seed.bbmodel");
     const saved = join(dir, "working.bbmodel");
-    const original = '{"meta":{"format_version":"4.10"},"elements":[{"name":"chair"}]}';
+    const original = '{"meta":{"format_version":"4.10"},"elements":[{"name":"synthetic-part-a"}]}';
     try {
       await writeFile(seed, original);
       await writeFile(saved, original);
       const input = await fingerprintGoldenInputModel(seed);
       expect(await fingerprintGoldenSavedOutputModel(seed, saved, input)).toBe(input);
-      await writeFile(saved, original.replace("chair", "table"));
+      await writeFile(saved, original.replace("synthetic-part-a", "synthetic-part-b"));
       const output = await fingerprintGoldenSavedOutputModel(seed, saved, input);
       expect(output).not.toBe(input);
       const draft = buildGoldenRunDraft({
@@ -110,7 +135,7 @@ describe("golden benchmark session runner", () => {
       await writeFile(saved, '{"meta":{}}');
       await expect(fingerprintGoldenSavedOutputModel(seed, saved, input))
         .rejects.toThrow("lacks Blockbench document metadata");
-      await writeFile(seed, original.replace("chair", "table"));
+      await writeFile(seed, original.replace("synthetic-part-a", "synthetic-part-b"));
       await expect(fingerprintGoldenSavedOutputModel(seed, saved, input))
         .rejects.toThrow("immutable seed was modified");
     } finally {
@@ -135,7 +160,7 @@ describe("golden benchmark session runner", () => {
   });
 
   test("non-correction task retains pinned starting model fingerprint", () => {
-    const other = goldenCorpus.tasks.find((item) => item.id === "golden-prop-chair")!;
+    const other = goldenCorpus.tasks.find((item) => item.id === "golden-rigid-authoring")!;
     const draft = buildGoldenRunDraft({
       task: other, sourceSha: "f".repeat(40), traceEvents: [], wallTimeMs: 120,
       inputAssetSha256: "b".repeat(64), inputProjectUuid: "saved-disposable-project",
@@ -152,14 +177,14 @@ describe("golden benchmark session runner", () => {
       schema: "lazydesigner-gateway-benchmark-trace-v1" as const,
       sequence: 0, task_id: task.id,
       source_sha: "1234567890abcdef1234567890abcdef12345678",
-      timestamp: "2026-09-29T00:00:00.000Z",
+      timestamp: "2026-10-30T00:00:00.000Z",
       kind: "mutate" as const, capability: "manage_cubes",
       success: true, latency_ms: 10, result_bytes: 100,
       read_only: false, verification_class: "visual",
     };
     for (const wrong of [
       { ...event, source_sha: "a".repeat(40) },
-      { ...event, task_id: "golden-prop-chair" },
+      { ...event, task_id: "golden-rigid-authoring" },
     ]) {
       expect(() => buildGoldenRunDraft({
         task, sourceSha: event.source_sha,
@@ -179,7 +204,7 @@ describe("golden benchmark session runner", () => {
           sequence: 0,
           task_id: task.id,
           source_sha: "1234567890abcdef1234567890abcdef12345678",
-          timestamp: "2026-09-29T00:00:00.000Z",
+          timestamp: "2026-10-30T00:00:00.000Z",
           kind: "inspect",
           capability: "inspect_elements",
           success: true,

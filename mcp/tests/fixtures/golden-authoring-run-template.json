@@ -2,7 +2,7 @@
   "schema": "lazydesigner-golden-authoring-runs-v1",
   "runs": [
     {
-      "task_id": "golden-existing-model-correction",
+      "task_id": "golden-geometry-correction",
       "source_sha": "0000000000000000000000000000000000000000",
       "proof_scope": "LIVE_BLOCKBENCH",
       "model": null,
@@ -22,6 +22,11 @@
       "trace": [],
       "acceptance_evidence": [
         {
+          "criterion": "first_wrong_owner",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
           "criterion": "targeted_correction",
           "verdict": "UNVERIFIED",
           "evidence_ref": null
@@ -32,12 +37,17 @@
           "evidence_ref": null
         },
         {
+          "criterion": "downstream_uv_texture_recheck",
+          "verdict": "UNVERIFIED",
+          "evidence_ref": null
+        },
+        {
           "criterion": "reference_fidelity",
           "verdict": "UNVERIFIED",
           "evidence_ref": null
         },
         {
-          "criterion": "bounded_correction_rounds",
+          "criterion": "save_reopen_export_integrity",
           "verdict": "UNVERIFIED",
           "evidence_ref": null
         },
