@@ -90,6 +90,8 @@ The corrected motion-dynamics owner marks duplicate-time tracks `unavailable: du
 
 **K5 source follow-up:** `rootMotionAnalysis.ts` also silently bridged expression/invalid middle frames and collapsed duplicate-time root keys. `qualityIntelligence.ts` extracted the first native data point even for pre/post keys. Both owners now refuse those unsupported trajectories and preserve bounded `unevaluated_root_track_count` evidence alongside clean roots. Existing `mcp/tests/quality-intelligence.test.ts` owns the new negative and preservation regressions. All diagnostics remain authored-key observations—not interpolated playback, foot contact, visual fidelity or native PASS.
 
+**K5 numeric integrity follow-up:** RootMotion now accepts finite numeric components and strict decimal numeric strings, while refusing coerced `null`, booleans, blank/hex/overflow values, malformed vectors and nonnumeric timestamps. The existing `quality-intelligence.test.ts` regression covers positive and rejection paths; no new tool or test suite.
+
 No authored keys, assets, public tools, Golden tasks or automatic IK are changed. **Bun, typecheck, native and CI verification NOT EXECUTED.**
 
 ## K5 — Existing Animation Golden acceptance only (NOT EXECUTED)

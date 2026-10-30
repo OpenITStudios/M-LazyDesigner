@@ -541,6 +541,56 @@ describe("bounded authoring quality intelligence", () => {
       });
     }
 
+    // JS coercion must not turn missing/boolean/blank/hex positions into a
+    // plausible continuous root path. Preserve numeric decimal literals.
+    const invalidPositions: Array<readonly unknown[] | null> = [
+      [null, 0, 0], [false, 0, 0], [true, 0, 0],
+      ["", 0, 0], ["   ", 0, 0], ["0x10", 0, 0],
+      [undefined, 0, 0], [Number.NaN, 0, 0],
+      ["1e309", 0, 0], null,
+    ];
+    for (const invalidPosition of invalidPositions) {
+      expect(analyzeRootMotionTrack({
+        ...root,
+        keyframes: [
+          root.keyframes[0]!,
+          { time: 0.5, value: invalidPosition as readonly unknown[] },
+          root.keyframes[2]!,
+        ],
+      })).toMatchObject({
+        state: "unavailable",
+        reason: "non_numeric_or_invalid_position_keyframes",
+        ignored_keyframes: 1,
+      });
+    }
+
+    // A typed API does not make malformed native/runtime input trustworthy.
+    for (const badTime of [null, "", "0", false, true]) {
+      expect(analyzeRootMotionTrack({
+        ...root,
+        keyframes: [
+          { time: badTime as unknown as number, value: [0, 0, 0] },
+          { time: 2, value: [16, 0, 0] },
+        ],
+      })).toMatchObject({
+        state: "unavailable",
+        reason: "non_numeric_or_invalid_position_keyframes",
+        ignored_keyframes: 1,
+      });
+    }
+
+    const decimalPositions = analyzeRootMotionTrack({
+      uuid: "decimal", name: "decimal",
+      keyframes: [
+        { time: 0, value: ["0", "+0.0", "-0"] },
+        { time: 0.5, value: ["8", ".0", "0"] },
+        { time: 1, value: ["1.6e1", "0", "0"] },
+      ],
+    });
+    expect(decimalPositions.state).toBe("available");
+    if (decimalPositions.state !== "available") throw new Error("expected numeric decimal root");
+    expect(decimalPositions.displacement_blocks).toEqual([1, 0, 0]);
+
     const combined = analyzeRootMotionTracks([
       expressionGap, sameTime, prePost, missing, root,
     ], { limit: 2 });

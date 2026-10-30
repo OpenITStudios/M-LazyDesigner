@@ -16,9 +16,19 @@ export type RootMotionTrackInput = {
 
 type Vec3 = [number, number, number];
 
+/** Accept only finite numeric values or unambiguous decimal literal strings.
+ * Number(null), Number(false) and Number("") would fabricate a zero position.
+ */
+const DECIMAL_NUMERIC_VALUE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
 function finiteVec3(value: readonly unknown[]): Vec3 | null {
-  if (value.length !== 3) return null;
-  const numbers = value.map(Number);
+  if (!Array.isArray(value) || value.length !== 3) return null;
+  const numbers = value.map((entry) => {
+    if (typeof entry === "number") return entry;
+    if (typeof entry !== "string") return NaN;
+    const literal = entry.trim();
+    return DECIMAL_NUMERIC_VALUE.test(literal) ? Number(literal) : NaN;
+  });
   if (!numbers.every(Number.isFinite)) return null;
   return numbers as Vec3;
 }
@@ -61,7 +71,7 @@ export function analyzeRootMotionTrack(
   }
 
   const numeric = track.keyframes.map((keyframe) => ({
-    time: Number(keyframe.time),
+    time: keyframe.time,
     value: finiteVec3(keyframe.value),
   })).filter(
     (sample): sample is { time: number; value: Vec3 } =>
