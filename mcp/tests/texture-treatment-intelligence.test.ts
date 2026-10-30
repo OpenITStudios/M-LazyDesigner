@@ -111,6 +111,91 @@ describe("texture treatment intelligence", () => {
   });
 
 
+
+  test("source-bound shared UV must not treat different observed marks as the same artwork", () => {
+    const sha = "a".repeat(64);
+    const left = { cube_uuid: "left", face: "north" as const };
+    const right = { cube_uuid: "right", face: "north" as const };
+    const claim = (face: typeof left, regionId = "same_mark") => ({
+      image_id: "FRONT",
+      image_sha256: sha,
+      image_region_id: regionId,
+      part_id: "panel",
+      face: { ...face },
+    });
+    const fixture = (): TextureTreatmentPlanInput => ({
+      required_faces: [left, right],
+      reference_context: {
+        fingerprint: "b".repeat(64),
+        images: [{
+          id: "FRONT", sha256: sha, view: "front",
+          integrity: "VERIFIED", used_by: ["TEXTURE"],
+          regions: [
+            { id: "same_mark", part_id: "panel", evidence_role: "SURFACE_DETAIL",
+              visibility: "DIRECT", box_uv: [0.1, 0.1, 0.3, 0.3], related_part_id: null },
+            { id: "unique_mark", part_id: "panel", evidence_role: "SURFACE_DETAIL",
+              visibility: "DIRECT", box_uv: [0.5, 0.1, 0.7, 0.3], related_part_id: null },
+          ],
+        }],
+      },
+      regions: [
+        {
+          region: "source", evidence: "observed",
+          surface_pattern: "painted_metal", render_profile: "opaque",
+          identity_colors: ["#aabbcc"],
+          face_targets: [{ ...left, treatment: "PAINT" }],
+          reference_surfaces: [claim(left)],
+        },
+        {
+          region: "reused", evidence: "observed",
+          surface_pattern: "painted_metal", render_profile: "opaque",
+          identity_colors: ["#aabbcc"],
+          face_targets: [{ ...right, treatment: "SHARED", shared_with: left }],
+          reference_surfaces: [claim(right)],
+        },
+      ],
+    });
+    const compatible = planTextureTreatment(fixture());
+    expect(compatible.readiness.state).toBe("ready");
+    expect(compatible.reference_surface_evidence).toMatchObject({
+      state: "claim_metadata_matched", matched_claim_count: 2,
+      visual_verdict: "not_evaluated", mutation_authorized: false,
+    });
+    expect(() => requireTextureTreatmentSeamPlanReady(compatible)).not.toThrow();
+
+    // Both image/region claims are individually current and valid, but
+    // represent different visible marks: identical palette is insufficient.
+    const distinct = fixture();
+    distinct.regions[1]!.reference_surfaces![0]!.image_region_id = "unique_mark";
+    const reviewed = planTextureTreatment(distinct);
+    expect(reviewed.reference_surface_evidence.state).toBe("claim_metadata_matched");
+    expect(reviewed.readiness.state).toBe("review_required");
+    expect(reviewed.readiness.unresolved).toContainEqual({
+      region: "reused", reason: "SHARED_UV_REFERENCE_ARTWORK_UNVERIFIED",
+    });
+
+    // One source face unbound never authorizes shared artwork.
+    const sourceMissing = fixture();
+    sourceMissing.regions[0]!.reference_surfaces = [];
+    const missingReview = planTextureTreatment(sourceMissing);
+    expect(missingReview.readiness.unresolved).toContainEqual({
+      region: "reused", reason: "SHARED_UV_REFERENCE_ARTWORK_UNVERIFIED",
+    });
+
+    // Post-planning edits must not inherit previously ready seam handoffs.
+    compatible.regions[1]!.reference_surfaces![0]!.image_region_id = "unique_mark";
+    expect(() => requireTextureTreatmentSeamPlanReady(compatible))
+      .toThrow("post-planning source or continuity intent became unresolved");
+
+    // No reference mode remains a structural planning pass only. Never
+    // reinterpret historical explicit SHARED intents as visual approval.
+    const legacy = fixture();
+    delete legacy.reference_context;
+    legacy.regions[0]!.reference_surfaces = undefined;
+    legacy.regions[1]!.reference_surfaces = undefined;
+    expect(planTextureTreatment(legacy).readiness.state).toBe("ready");
+  });
+
   test("P0 explicit source/face claims fail closed on stale or unsupported reference facts", () => {
     const digest = "b".repeat(64);
     const face = { cube_uuid: "panel", face: "north" as const };

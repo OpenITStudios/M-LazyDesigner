@@ -825,10 +825,21 @@ export function analyzeCrossCubeSeamContinuity(
     SAMPLE_ALIGNMENT_UNVERIFIED: 0,
   };
   let unpaired = 0, ambiguous = 0;
+  let requiredUnpaired = 0, ambiguousRequired = 0;
 
   for (const group of groups) {
-    if (group.length === 1) { unpaired++; continue; }
-    if (group.length !== 2) { ambiguous++; continue; }
+    if (group.length === 1) {
+      unpaired++;
+      if (group[0].continuity_intent === "REQUIRED") requiredUnpaired++;
+      continue;
+    }
+    if (group.length !== 2) {
+      ambiguous++;
+      if (group.some(edge => edge.continuity_intent === "REQUIRED")) {
+        ambiguousRequired++;
+      }
+      continue;
+    }
     const [left, right] = group;
     const reason = crossCubeSkipReason(left, right);
     if (reason) { skips[reason]++; continue; }
@@ -863,6 +874,17 @@ export function analyzeCrossCubeSeamContinuity(
     ambiguous_group_count: ambiguous,
     excluded_pair_count: Object.values(skips).reduce((sum, count) => sum + count, 0),
     exclusions: skips,
+    evidence_gaps: {
+      required_unpaired_edge_count: requiredUnpaired,
+      ambiguous_required_group_count: ambiguousRequired,
+      unknown_continuity_pair_count: skips.CONTINUITY_UNDECLARED,
+      incompatible_cohort_pair_count: skips.SURFACE_OR_MATERIAL_MISMATCH,
+      normal_alignment_unverified_pair_count: skips.NORMAL_ALIGNMENT_UNVERIFIED,
+      sample_alignment_unverified_pair_count: skips.SAMPLE_ALIGNMENT_UNVERIFIED,
+      // These are scoped diagnostics, not proof that the unscanned scene
+      // or an intentionally distinct material boundary has a seam defect.
+      visual_verdict: "not_evaluated" as const,
+    },
     review: {
       candidate_count: review.length,
       high_contrast_count: review.filter((row) => row.high_contrast).length,
@@ -874,7 +896,19 @@ export function analyzeCrossCubeSeamContinuity(
     ranked_examples_truncated: paired.length > exampleLimit,
     gate: {
       state: "advisory" as const,
-      reasons: review.length ? ["CROSS_CUBE_SEAM_REVIEW"] : [],
+      reasons: [
+        ...(review.length ? ["CROSS_CUBE_SEAM_REVIEW"] : []),
+        ...(requiredUnpaired > 0 ? ["CROSS_CUBE_REQUIRED_EDGE_UNPAIRED"] : []),
+        ...(ambiguousRequired > 0 ? ["CROSS_CUBE_REQUIRED_EDGE_AMBIGUOUS"] : []),
+        ...(skips.CONTINUITY_UNDECLARED > 0
+          ? ["CROSS_CUBE_CONTINUITY_UNDECLARED"] : []),
+        ...(skips.SURFACE_OR_MATERIAL_MISMATCH > 0
+          ? ["CROSS_CUBE_COHORT_UNVERIFIED"] : []),
+        ...(skips.NORMAL_ALIGNMENT_UNVERIFIED > 0
+          ? ["CROSS_CUBE_NORMAL_ALIGNMENT_UNVERIFIED"] : []),
+        ...(skips.SAMPLE_ALIGNMENT_UNVERIFIED > 0
+          ? ["CROSS_CUBE_SAMPLE_ALIGNMENT_UNVERIFIED"] : []),
+      ],
     },
     note: "Only caller-declared, identical-material and surface-identity, same-facing world-edge pairs are compared. OPACITY mode assumes zero alpha hides RGB; NON_OPACITY mode retains RGB for color/emissive masks. Confirm render-profile alpha meaning; texture provenance, in-game rendering and unexamined edges remain unverified. This is not a visual verdict.",
   };

@@ -782,6 +782,75 @@ describe("cross-Cube seam continuity diagnostics", () => {
     ...overrides,
   });
 
+
+  test("incomplete required seam evidence remains advisory even when sampled colors match", () => {
+    const good = analyzeCrossCubeSeamContinuity([cross(), adjoining()]);
+    expect(good.compared_pair_count).toBe(1);
+    expect(good.review.candidate_count).toBe(0);
+    expect(good.gate.reasons).toEqual([]);
+    expect(good.visual_verdict).toBe("not_evaluated");
+    expect(good.evidence_gaps.required_unpaired_edge_count).toBe(0);
+
+    // A complete-looking pair cannot hide an independently unpaired REQUIRED
+    // edge in the same bounded diagnostic request.
+    const partial = analyzeCrossCubeSeamContinuity([
+      cross(), adjoining(),
+      cross({ cube_uuid: "unpaired-cube", start: [5, 0, 0], end: [5, 1, 0] }),
+    ]);
+    expect(partial.compared_pair_count).toBe(1);
+    expect(partial.review.candidate_count).toBe(0);
+    expect(partial.evidence_gaps.required_unpaired_edge_count).toBe(1);
+    expect(partial.gate.reasons).toContain("CROSS_CUBE_REQUIRED_EDGE_UNPAIRED");
+    expect(partial.visual_verdict).toBe("not_evaluated");
+
+    const unscoped = analyzeCrossCubeSeamContinuity([
+      cross({ continuity_intent: "UNSPECIFIED" }),
+    ]);
+    expect(unscoped.unpaired_edge_count).toBe(1);
+    expect(unscoped.evidence_gaps.required_unpaired_edge_count).toBe(0);
+    expect(unscoped.gate.reasons).not.toContain("CROSS_CUBE_REQUIRED_EDGE_UNPAIRED");
+    const intentional = analyzeCrossCubeSeamContinuity([
+      cross({ continuity_intent: "INTENTIONAL_BOUNDARY" }),
+    ]);
+    expect(intentional.evidence_gaps.required_unpaired_edge_count).toBe(0);
+    expect(intentional.gate.reasons).toEqual([]);
+  });
+
+  test("ambiguous and ineligible cross-Cube pairs expose missing proof separately from seam defects", () => {
+    const ambiguous = analyzeCrossCubeSeamContinuity([
+      cross(), adjoining(), adjoining({ cube_uuid: "third-cube" }),
+    ]);
+    expect(ambiguous.review.candidate_count).toBe(0);
+    expect(ambiguous.evidence_gaps.ambiguous_required_group_count).toBe(1);
+    expect(ambiguous.gate.reasons).toContain("CROSS_CUBE_REQUIRED_EDGE_AMBIGUOUS");
+
+    const normal = analyzeCrossCubeSeamContinuity([
+      cross(), adjoining({ world_normal: [1, 0, 0] }),
+    ]);
+    expect(normal.evidence_gaps.normal_alignment_unverified_pair_count).toBe(1);
+    expect(normal.gate.reasons).toContain("CROSS_CUBE_NORMAL_ALIGNMENT_UNVERIFIED");
+
+    const samples = analyzeCrossCubeSeamContinuity([
+      cross(), adjoining({ samples: [[20, 20, 20, 255], [20, 20, 20, 255]] }),
+    ]);
+    expect(samples.evidence_gaps.sample_alignment_unverified_pair_count).toBe(1);
+    expect(samples.gate.reasons).toContain("CROSS_CUBE_SAMPLE_ALIGNMENT_UNVERIFIED");
+
+    const cohort = analyzeCrossCubeSeamContinuity([
+      cross(), adjoining({ material_id: "different" }),
+    ]);
+    expect(cohort.evidence_gaps.incompatible_cohort_pair_count).toBe(1);
+    expect(cohort.gate.reasons).toContain("CROSS_CUBE_COHORT_UNVERIFIED");
+
+    // A deliberately different material is not a broken seam and should
+    // remain excluded from the new unresolved-REQUIRED review reasons.
+    const boundary = analyzeCrossCubeSeamContinuity([
+      cross(), adjoining({ continuity_intent: "INTENTIONAL_BOUNDARY", material_id: "iron" }),
+    ]);
+    expect(boundary.exclusions.INTENTIONAL_BOUNDARY).toBe(1);
+    expect(boundary.gate.reasons).toEqual([]);
+  });
+
   test("compares two declared same-facing continuous Cube edges as advisory only", () => {
     const result = analyzeCrossCubeSeamContinuity([
       cross(), adjoining({ samples: [[255, 255, 255, 255], [255, 255, 255, 255], [255, 255, 255, 255]] }),

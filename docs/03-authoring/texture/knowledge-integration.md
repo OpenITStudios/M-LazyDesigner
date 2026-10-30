@@ -390,3 +390,31 @@ face and visual fidelity remain independently unverified.
 tests authored. No Bun/typecheck/CI, installed Blockbench, visual, Bedrock
 export or Golden comparisons executed. No application release, asset,
 UV tool registration or generated API changed.
+
+## K9 follow-on — UV shared-reference identity and Cross-Cube evidence gaps (2026-10-30)
+
+The existing `mcp/lib/texture/treatmentPlan.ts` now compares the full
+source-declared SURFACE_DETAIL observation sets of two exact face owners
+before allowing an explicit `SHARED` treatment to remain structurally ready
+in *opt-in reference-aware mode*. Distinct/missing observations, even with
+matching RGB, pattern, render material and PBR, produce
+`SHARED_UV_REFERENCE_ARTWORK_UNVERIFIED`. An identical evidence set remains
+only a caller-declared metadata match, **not** visually or natively verified
+UV sharing. Legacy callers without reference context are unchanged.
+`requireTextureTreatmentSeamPlanReady` already rebuilds this planner result
+to refuse a post-plan change to either face's claimed artwork. No UV coordinates
+or pixels are modified.
+
+The existing `mcp/lib/texture/seamContinuity.ts` now exposes bounded
+`evidence_gaps` counts and **advisory** gate reasons for unpaired REQUIRED
+edges, ambiguous REQUIRED groups, undeclared continuity, incompatible
+surface/material cohorts, unverified normals and sample alignment.
+Intentional boundaries remain excluded without a false seam defect.
+A successful bounded pair never suppresses other unresolved REQUIRED edges.
+Zero RGB contrast on evaluated samples still does **not** mean whole-model
+clean seams, Bedrock render approval or reference-fidelity PASS.
+
+**Proof ceiling:** source owner changes and focused positive/negative tests
+authored; exact-SHA Bun/typecheck/CI/native/visual/Golden NOT EXECUTED.
+No new Gateway tool, Runtime mutation, UV registration, model artifact,
+extra knowledge database or release.

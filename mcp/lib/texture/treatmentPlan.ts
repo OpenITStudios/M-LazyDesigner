@@ -372,6 +372,31 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
           color !== rhs[index]))) {
       unresolved.push({ region: owner.region, reason: "SHARED_UV_IDENTITY_CONFLICT" });
     }
+
+    // Explicitly SHARED texels cannot encode separate authored marks. In
+    // reference-aware mode require equal sets of source-declared surface
+    // observations for both exact faces before reporting structural readiness.
+    // Equal claims are still caller assertions, NOT native UV equality,
+    // orientation agreement, visual equivalence or painting permission.
+    if (referenceRequested) {
+      const observations = (region: typeof destinationRegion, face: string) =>
+        new Set((region.reference_surfaces ?? [])
+          .filter(claim => faceId(claim.face) === face)
+          .map(claim => JSON.stringify([
+            claim.image_id, claim.image_sha256,
+            claim.image_region_id, claim.part_id,
+          ])));
+      const dstMarks = observations(destinationRegion, id);
+      const srcMarks = observations(sourceRegion, sourceId);
+      if (dstMarks.size === 0 || srcMarks.size === 0 ||
+          dstMarks.size !== srcMarks.size ||
+          [...dstMarks].some(mark => !srcMarks.has(mark))) {
+        unresolved.push({
+          region: owner.region,
+          reason: "SHARED_UV_REFERENCE_ARTWORK_UNVERIFIED",
+        });
+      }
+    }
     if (sourceOwner.treatment.treatment === "INTENTIONAL_TRANSPARENT" &&
         destinationRegion.identity_colors.length > 0) {
       unresolved.push({ region: owner.region, reason: "SHARED_UV_ALPHA_IDENTITY_CONFLICT" });
