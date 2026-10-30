@@ -16,6 +16,7 @@ import {
   validateGoldenSeedContent,
   assertCanonicalGoldenSeed,
   requireGoldenReferenceReady,
+  requireGoldenCleanSource,
 } from "../../scripts/reporting/run-golden-benchmark-session";
 
 const task = goldenCorpus.tasks.find(
@@ -54,6 +55,19 @@ describe("golden benchmark session runner", () => {
         .resolves.toBeUndefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("source provenance refuses staged, modified and untracked Git worktree state", () => {
+    expect(() => requireGoldenCleanSource("")).not.toThrow();
+    for (const status of [
+      " M mcp/server/tools/geometry/cubes.ts",
+      "A  mcp/server/tools/new-capability.ts",
+      "?? mcp/scripts/untracked-experiment.ts",
+    ]) {
+      expect(() => requireGoldenCleanSource(status)).toThrow(
+        "Golden source SHA requires a clean Git worktree"
+      );
     }
   });
 

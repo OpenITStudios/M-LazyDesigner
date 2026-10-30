@@ -80,10 +80,14 @@ Animation evidence matching the current approved visual, Bedrock export and
 save/reopen parity, no critical defect, and separate documented
 `human_acceptance` PASS. Any missing or stale evidence leaves it UNVERIFIED.
 
-The draft retains the approved Reference fingerprint only if an end-of-session
-Control read still matches the initial approval/readiness preflight. When source
-identity or readiness changes, its provenance remains `null` and the result
-remains `UNVERIFIED`. This does not replace visual or human acceptance.
+The runner also requires a **clean Git worktree**, including no staged,
+unstaged or nonignored untracked source, before opening native MCP. It rechecks
+the same Git HEAD and clean source after the session. A change or failed Git
+inspection withholds the trusted Reference fingerprint from the draft.
+The approved Reference fingerprint is retained only if the final Control read
+still matches the initial approval/readiness preflight. Any missing provenance
+leaves the result `UNVERIFIED`; none of these checks replaces native visual
+or human acceptance.
 
 Only **after equal-or-better accepted quality** compare actual time, tool calls,
 redundant readbacks, retries, correction rounds and real token telemetry when

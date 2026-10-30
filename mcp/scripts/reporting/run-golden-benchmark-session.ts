@@ -141,20 +141,35 @@ export type GoldenSessionPaths = {
   golden_run_draft: string;
 };
 
-function exactGitSha(): string {
-  const result = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+function gitSourceText(args: readonly string[]): string {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: MCP_ROOT,
     stdout: "pipe",
     stderr: "pipe",
   });
   if (result.exitCode !== 0) {
     throw new Error(
-      `Could not resolve current Git SHA: ${result.stderr.toString().trim()}`
+      `Golden source Git inspection failed: ${result.stderr.toString().trim()}`
     );
   }
-  const sha = result.stdout.toString().trim();
+  return result.stdout.toString();
+}
+
+/** A commit SHA cannot identify locally modified or untracked executable source. */
+export function requireGoldenCleanSource(status: string): void {
+  if (status.length !== 0) {
+    throw new Error("Golden source SHA requires a clean Git worktree; no benchmark started.");
+  }
+}
+
+function exactGitSha(): string {
+  const sha = gitSourceText(["rev-parse", "--verify", "HEAD"]).trim();
   if (!/^[0-9a-f]{40}$/.test(sha)) {
     throw new Error("Current Git HEAD is not an exact 40-character SHA.");
   }
+  requireGoldenCleanSource(gitSourceText([
+    "status", "--porcelain=v1", "-z", "--untracked-files=all",
+  ]));
   return sha;
 }
 
@@ -429,17 +444,32 @@ async function finalizeSession(input: {
         error instanceof Error ? error.message : String(error));
     }
   }
-  let referencePackageFingerprint: string | null = null;
+  // A trace tagged with HEAD cannot be accepted when source was edited or
+  // HEAD moved during the session. Retain the trace, but withhold trusted
+  // reference provenance until exact source stability is established.
+  let sourceStable = false;
   try {
-    const latest = await requireGoldenReferenceReady(input.task);
-    if (latest === input.approvedReferenceFingerprint) {
-      referencePackageFingerprint = latest;
-    } else {
-      console.error("[LazyDesigner Benchmark] Reference changed during session; provenance withheld.");
+    sourceStable = exactGitSha() === input.sourceSha;
+    if (!sourceStable) {
+      console.error("[LazyDesigner Benchmark] Git HEAD changed during session; provenance withheld.");
     }
   } catch (error) {
-    console.error("[LazyDesigner Benchmark] Reference readiness lost during session:",
+    console.error("[LazyDesigner Benchmark] Source became unverified during session:",
       error instanceof Error ? error.message : String(error));
+  }
+  let referencePackageFingerprint: string | null = null;
+  if (sourceStable) {
+    try {
+      const latest = await requireGoldenReferenceReady(input.task);
+      if (latest === input.approvedReferenceFingerprint) {
+        referencePackageFingerprint = latest;
+      } else {
+        console.error("[LazyDesigner Benchmark] Reference changed during session; provenance withheld.");
+      }
+    } catch (error) {
+      console.error("[LazyDesigner Benchmark] Reference readiness lost during session:",
+        error instanceof Error ? error.message : String(error));
+    }
   }
   const draft = buildGoldenRunDraft({
     task: input.task,
@@ -487,8 +517,10 @@ async function main(): Promise<void> {
   }
   // Refuse pending/unapproved references before connecting to native Runtime.
   const approvedReferenceFingerprint = await requireGoldenReferenceReady(task);
-  const startingBaseline = await preflightGoldenStartingModel(inputModelPath, task);
+  // Fail before any native connection if this worktree cannot be attributed
+  // exactly to one committed source revision.
   const sourceSha = exactGitSha();
+  const startingBaseline = await preflightGoldenStartingModel(inputModelPath, task);
   const paths = goldenSessionPaths(task.id, outputRoot);
   await assertGoldenOutputLocation(paths.directory);
   await mkdir(paths.directory, { recursive: true });
