@@ -430,3 +430,32 @@ Deliberately intentional boundaries remain excluded; they do not create
 false defects. A fully comparable bounded sample stays `advisory_only`,
 not a visual/Bedrock PASS. Existing source-level native mock tests cover
 the mixed pair/required-extra-edge case. Bun/native tests NOT EXECUTED.
+
+
+## P0 follow-on — exact reference color swatches, no automatic material inference (2026-10-30)
+
+The existing `gateway/control/referencePackage.ts::inspectTextureTreatmentReferenceSurfaces`
+accepts an **optional** bounded `color_probes` array (at most 16). Each
+request must name a current treatment region, exact Cube/face, image, visible
+`SURFACE_DETAIL` annotation, palette role (base/shadow/highlight/identity)
+and a normalized point. It must match a predeclared source→face claim.
+All input is snapshotted before asynchronous image readback.
+
+Control reuses its *existing* fingerprint, package-declared APPROVED and
+TEXTURE-stage checks, full on-disk image-byte readback and final second
+reference read. Only after this source is stable and all claimed surface
+metadata matches does the caller inspect a single physical pixel whose
+**center is inside** the actual source region. The same canonical bounded
+PNG parser used by silhouette diagnostics now exposes RGBA data internally;
+no duplicate PNG parser, extra source-image reader or dependency was added.
+Samples return only RGB hex, RGBA, alpha and source/face/role provenance.
+Hidden RGB at alpha zero, unrepresentable pixels, JPEG/WebP and unsupported
+PNG layouts are review-required/unsupported evidence, not guessed colors.
+
+This is a **reference-observed swatch**, not a paint instruction, material
+classification, automatic palette, inferred PBR, or visual fidelity proof.
+The original alpha silhouette contract and no-probe source pathway remain
+unchanged. No Texture or UV mutation, Gateway schema/tool addition, generated
+artifact, CI enablement, new training data or asset release. Targeted
+positive/negative regressions are authored; Bun/typecheck/native/visual
+and Golden acceptance **NOT EXECUTED**.

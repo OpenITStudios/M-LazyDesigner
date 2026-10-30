@@ -15,6 +15,8 @@ import {
   requireTextureTreatmentSeamPlanReady,
   type TextureTreatmentPlanInput,
 } from "../../lib/texture/treatmentPlan";
+import { decodeVerifiedPngRgba } from "../../lib/reference/pngAlphaEvidence";
+import type { TextureTreatmentFace } from "../../lib/texture/treatmentPlan";
 import { fileMetadataSignature } from "./fileSignature";
 
 export type {
@@ -385,6 +387,19 @@ export async function inspectTextureSeamReferenceImageIdentity(input: {
 
 
 /**
+ * Explicit artist/agent-selected color anchor on a known current image region.
+ * The sampled pixel is source evidence, not an approved paint/material choice.
+ */
+export type TextureReferenceColorProbe = Readonly<{
+  treatment_region: string;
+  image_id: string;
+  image_region_id: string;
+  face: TextureTreatmentFace;
+  palette_role: "base" | "shadow" | "highlight" | "identity";
+  normalized_uv: readonly [number, number];
+}>;
+
+/**
  * Control-owned, on-demand reference source → Texture treatment caller.
  * An explicit author-proposed Cube/face mapping is checked against a fresh
  * canonical REFERENCE.json and actual image bytes. The source can attest
@@ -397,6 +412,8 @@ export async function inspectTextureTreatmentReferenceSurfaces(input: {
   reference_package_path: string;
   expected_reference_fingerprint: string;
   treatment_input: TextureTreatmentPlanInput;
+  /** Opt-in, max 16 pixel probes across the explicitly claimed Texture regions. */
+  color_probes?: readonly TextureReferenceColorProbe[];
 }) {
   if (typeof input.expected_reference_fingerprint !== "string" ||
       !/^[a-f0-9]{64}$/.test(input.expected_reference_fingerprint)) {
@@ -410,6 +427,45 @@ export async function inspectTextureTreatmentReferenceSurfaces(input: {
   // Snapshot author-proposed data before the first await; caller mutations
   // during image reads cannot retrospectively change the inspected intent.
   const intent = structuredClone(input.treatment_input);
+  const probes = structuredClone(input.color_probes ?? []);
+  if (!Array.isArray(probes) || probes.length > 16) {
+    throw new Error("TEXTURE_REFERENCE_COLOR_PROBE_BUDGET");
+  }
+  // Exact caller intent is captured before any filesystem await. A sample
+  // must point to an already-declared Image/Region/Cube-face correspondence.
+  const probeKeys = new Set<string>();
+  for (const probe of probes) {
+    if (!probe || !probe.face ||
+        typeof probe.treatment_region !== "string" || !probe.treatment_region.trim() ||
+        typeof probe.image_id !== "string" || !probe.image_id.trim() ||
+        typeof probe.image_region_id !== "string" || !probe.image_region_id.trim() ||
+        !["base", "shadow", "highlight", "identity"].includes(probe.palette_role) ||
+        typeof probe.face.cube_uuid !== "string" || !probe.face.cube_uuid.trim() ||
+        !["north", "south", "east", "west", "up", "down"].includes(probe.face.face) ||
+        !Array.isArray(probe.normalized_uv) || probe.normalized_uv.length !== 2 ||
+        probe.normalized_uv.some(v => typeof v !== "number" || !Number.isFinite(v) ||
+          v < 0 || v >= 1)) {
+      throw new Error("TEXTURE_REFERENCE_COLOR_PROBE_INVALID");
+    }
+    const declaredRegion = intent.regions.find(row =>
+      row.region.trim() === probe.treatment_region);
+    if (!declaredRegion || !declaredRegion.reference_surfaces?.some(claim =>
+        claim.image_id === probe.image_id &&
+        claim.image_region_id === probe.image_region_id &&
+        claim.face.cube_uuid === probe.face.cube_uuid &&
+        claim.face.face === probe.face.face)) {
+      throw new Error("TEXTURE_REFERENCE_COLOR_PROBE_OUT_OF_SCOPE");
+    }
+    const key = JSON.stringify([
+      probe.treatment_region, probe.image_id, probe.image_region_id,
+      probe.face.cube_uuid, probe.face.face, probe.palette_role,
+      ...probe.normalized_uv,
+    ]);
+    if (probeKeys.has(key)) {
+      throw new Error("TEXTURE_REFERENCE_COLOR_PROBE_DUPLICATE");
+    }
+    probeKeys.add(key);
+  }
   if (!Array.isArray(intent.regions) || intent.regions.length < 1 ||
       intent.regions.length > 32 || !Array.isArray(intent.required_faces) ||
       intent.required_faces.length < 1) {
@@ -469,6 +525,111 @@ export async function inspectTextureTreatmentReferenceSurfaces(input: {
     initial: current, final, selected_ids: ids, delivered,
   });
 
+
+  // Only derive an exact observed RGB value when ALL source/face annotations
+  // match the current package projection. No region similarity or material
+  // class is inferred from the image, and RGB under alpha=0 is not evidence.
+  const colors: Array<{
+    treatment_region: string;
+    image_id: string; image_sha256: string;
+    image_region_id: string; part_id: string;
+    face: TextureTreatmentFace; palette_role: TextureReferenceColorProbe["palette_role"];
+    normalized_uv: [number, number]; pixel_xy: [number, number];
+    observed_hex: string; observed_rgba: [number, number, number, number];
+  }> = [];
+  const omissions: Array<{
+    treatment_region: string; image_id: string; reason: string;
+  }> = [];
+  if (probes.length > 0) {
+    if (plan.reference_surface_evidence.state !== "claim_metadata_matched") {
+      for (const probe of probes) {
+        omissions.push({
+          treatment_region: probe.treatment_region,
+          image_id: probe.image_id,
+          reason: "REFERENCE_COLOR_SURFACE_CLAIMS_UNVERIFIED",
+        });
+      }
+    } else {
+      const byImage = new Map(delivered.map(image => [image.id, image]));
+      const byAnnotation = new Map(selected.map(image => [image.id, image]));
+      const decoded = new Map<string, ReturnType<typeof decodeVerifiedPngRgba>>();
+      for (const probe of probes) {
+        const image = byImage.get(probe.image_id);
+        const annotation = byAnnotation.get(probe.image_id)?.regions.find(region =>
+          region.id === probe.image_region_id
+        );
+        const claim = intent.regions.find(region =>
+          region.region.trim() === probe.treatment_region
+        )!.reference_surfaces!.find(row =>
+          row.image_id === probe.image_id &&
+          row.image_region_id === probe.image_region_id &&
+          row.face.cube_uuid === probe.face.cube_uuid &&
+          row.face.face === probe.face.face
+        )!;
+        const skip = (reason: string) => omissions.push({
+          treatment_region: probe.treatment_region,
+          image_id: probe.image_id, reason,
+        });
+        if (!image || !annotation || !annotation.box_uv ||
+            annotation.evidence_role !== "SURFACE_DETAIL" ||
+            annotation.visibility === "OCCLUDED" ||
+            annotation.part_id !== claim.part_id) {
+          skip("REFERENCE_COLOR_SOURCE_REGION_UNVERIFIED");
+          continue;
+        }
+        const [u, v] = probe.normalized_uv;
+        const [left, top, right, bottom] = annotation.box_uv;
+        if (u < left || u >= right || v < top || v >= bottom) {
+          skip("REFERENCE_COLOR_PROBE_OUTSIDE_REGION");
+          continue;
+        }
+        if (image.mime_type !== "image/png") {
+          skip("REFERENCE_COLOR_FORMAT_UNSUPPORTED");
+          continue;
+        }
+        let source = decoded.get(probe.image_id);
+        if (!source) {
+          source = decodeVerifiedPngRgba({
+            png_bytes: Buffer.from(image.data, "base64"),
+            expected_sha256: image.sha256,
+          });
+          decoded.set(probe.image_id, source);
+        }
+        if (source.state !== "AVAILABLE") {
+          skip("REFERENCE_COLOR_PNG_UNVERIFIED:" + source.reason);
+          continue;
+        }
+        const x = Math.floor(u * source.width), y = Math.floor(v * source.height);
+        // The actual selected pixel CENTER must be inside the source
+        // annotation, not merely an arbitrary fractional cursor position.
+        const cx = (x + 0.5) / source.width, cy = (y + 0.5) / source.height;
+        if (cx < left || cx >= right || cy < top || cy >= bottom) {
+          skip("REFERENCE_COLOR_PIXEL_OUTSIDE_REGION");
+          continue;
+        }
+        const index = (y * source.width + x) * 4;
+        const rgba = [
+          source.rgba[index], source.rgba[index + 1],
+          source.rgba[index + 2], source.rgba[index + 3],
+        ] as [number, number, number, number];
+        if (rgba[3] === 0) {
+          skip("REFERENCE_COLOR_TRANSPARENT_PIXEL");
+          continue;
+        }
+        const hex = "#" + rgba.slice(0, 3)
+          .map(channel => channel.toString(16).padStart(2, "0")).join("");
+        colors.push({
+          treatment_region: probe.treatment_region,
+          image_id: probe.image_id, image_sha256: image.sha256,
+          image_region_id: probe.image_region_id, part_id: claim.part_id,
+          face: { ...probe.face }, palette_role: probe.palette_role,
+          normalized_uv: [u, v], pixel_xy: [x, y],
+          observed_hex: hex, observed_rgba: rgba,
+        });
+      }
+    }
+  }
+
   const consistent = plan.reference_surface_evidence.state === "claim_metadata_matched";
   return {
     source: "control_reference_package_texture_surfaces" as const,
@@ -485,6 +646,20 @@ export async function inspectTextureTreatmentReferenceSurfaces(input: {
     })),
     matched_claim_count: plan.reference_surface_evidence.matched_claim_count,
     declared_claim_count: plan.reference_surface_evidence.declared_claim_count,
+    color_evidence: {
+      state: probes.length === 0 ? ("not_requested" as const)
+        : omissions.length > 0 ? ("review_required" as const)
+          : ("sampled_source_pixels" as const),
+      source: "verified_current_reference_png_rgba" as const,
+      requested_count: probes.length,
+      sampled_count: colors.length,
+      samples: colors,
+      omissions,
+      palette_selected: false as const,
+      material_inferred: false as const,
+      painting_authorized: false as const,
+      visual_verdict: "not_evaluated" as const,
+    },
     assertion_provenance: "SOURCE_BYTES_CHECKED_CALLER_FACE_MAPPING_UNVERIFIED" as const,
     native_face_correspondence_attested: false as const,
     human_approval_attested: false as const,

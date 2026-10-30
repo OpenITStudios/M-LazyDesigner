@@ -654,6 +654,94 @@ describe("Control source-backed Texture treatment surface handoff", () => {
     expect(reviewed.source_image_bytes_matched).toBe(true);
   });
 
+  test("bounded pixel-role probes return exact reference RGB, not guessed material or paint commands", async () => {
+    const root = await surfacePackage();
+    const reference = await readReferencePackageProjection(root);
+    const sha = createHash("sha256").update(RED_PNG).digest("hex");
+    const face = { cube_uuid: "panel", face: "north" as const };
+    const probe = {
+      treatment_region: "logo",
+      image_id: "IMG_FRONT",
+      image_region_id: "badge",
+      face, palette_role: "base" as const,
+      normalized_uv: [0.25, 0.25] as [number, number],
+    };
+    const result = await inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: reference.fingerprint!,
+      treatment_input: treatment(sha),
+      color_probes: [probe],
+    });
+    expect(result.color_evidence).toMatchObject({
+      state: "sampled_source_pixels", sampled_count: 1,
+      requested_count: 1, palette_selected: false,
+      material_inferred: false, painting_authorized: false,
+      visual_verdict: "not_evaluated",
+      samples: [{
+        image_sha256: sha, palette_role: "base",
+        image_region_id: "badge", part_id: "decal",
+        pixel_xy: [0, 0], observed_hex: "#ff0000",
+        observed_rgba: [255, 0, 0, 255],
+      }],
+      omissions: [],
+    });
+    expect(JSON.stringify(result)).not.toContain(RED_PNG.toString("base64"));
+    expect(JSON.stringify(result)).not.toContain('"rgba":{"0":');
+
+    const outside = await inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: reference.fingerprint!,
+      treatment_input: treatment(sha),
+      color_probes: [{ ...probe, normalized_uv: [0.75, 0.25] }],
+    });
+    expect(outside.color_evidence).toMatchObject({
+      state: "review_required", sampled_count: 0,
+      omissions: [{ reason: "REFERENCE_COLOR_PROBE_OUTSIDE_REGION" }],
+    });
+    const wrongPart = treatment(sha);
+    wrongPart.regions[0]!.reference_surfaces![0]!.part_id = "different";
+    const untrusted = await inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: reference.fingerprint!,
+      treatment_input: wrongPart,
+      color_probes: [probe],
+    });
+    expect(untrusted.color_evidence).toMatchObject({
+      state: "review_required", sampled_count: 0,
+      omissions: [{ reason: "REFERENCE_COLOR_SURFACE_CLAIMS_UNVERIFIED" }],
+    });
+
+    const wrongFace = { ...probe, face: { cube_uuid: "unrelated", face: "north" as const } };
+    await expect(inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: reference.fingerprint!,
+      treatment_input: treatment(sha),
+      color_probes: [wrongFace],
+    })).rejects.toThrow("TEXTURE_REFERENCE_COLOR_PROBE_OUT_OF_SCOPE");
+    await expect(inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: reference.fingerprint!,
+      treatment_input: treatment(sha),
+      color_probes: [probe, probe],
+    })).rejects.toThrow("TEXTURE_REFERENCE_COLOR_PROBE_DUPLICATE");
+    await expect(inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: reference.fingerprint!,
+      treatment_input: treatment(sha),
+      color_probes: [{ ...probe, normalized_uv: [Number.NaN, 0.25] }],
+    })).rejects.toThrow("TEXTURE_REFERENCE_COLOR_PROBE_INVALID");
+
+    const unchanged = await inspectTextureTreatmentReferenceSurfaces({
+      reference_package_path: root,
+      expected_reference_fingerprint: reference.fingerprint!,
+      treatment_input: treatment(sha),
+    });
+    expect(unchanged.color_evidence).toMatchObject({
+      state: "not_requested", requested_count: 0,
+      sampled_count: 0, samples: [], omissions: [],
+    });
+  });
+
   test("stale source bytes, DRAFT, wrong stage and caller-forged Control context never pass", async () => {
     const sha = createHash("sha256").update(RED_PNG).digest("hex");
     const root = await surfacePackage();

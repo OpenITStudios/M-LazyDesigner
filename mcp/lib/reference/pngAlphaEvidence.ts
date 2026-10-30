@@ -19,6 +19,13 @@ export type PngAlphaEvidence =
   | { state: "AVAILABLE"; sha256: string; mask: SilhouetteMask; reason: null }
   | { state: "UNVERIFIED"; reason: string; sha256: string | null; mask: null };
 
+/** Bounded verified source pixels; only for read-only, explicitly scoped inspection. */
+export type VerifiedPngRgbaEvidence =
+  | { state: "AVAILABLE"; sha256: string; width: number; height: number;
+      rgba: Uint8Array; reason: null }
+  | { state: "UNVERIFIED"; reason: string; sha256: string | null;
+      width: null; height: null; rgba: null };
+
 function checksum(bytes: Uint8Array): number {
   let crc = 0xffffffff;
   for (const byte of bytes) {
@@ -39,9 +46,11 @@ function paeth(a: number, b: number, c: number): number {
  * Unsupported PNG layouts fail closed. This does not infer a subject mask from
  * an opaque photographic background and does not attest camera alignment.
  */
-export function extractVerifiedPngAlpha(input: PngAlphaEvidenceInput): PngAlphaEvidence {
-  const unavailable = (reason: string, sha256: string | null = null): PngAlphaEvidence =>
-    ({ state: "UNVERIFIED", reason, sha256, mask: null });
+export function decodeVerifiedPngRgba(
+  input: Pick<PngAlphaEvidenceInput, "png_bytes" | "expected_sha256">
+): VerifiedPngRgbaEvidence {
+  const unavailable = (reason: string, sha256: string | null = null): VerifiedPngRgbaEvidence =>
+    ({ state: "UNVERIFIED", reason, sha256, width: null, height: null, rgba: null });
   if (!SHA256_HEX.test(input.expected_sha256)) return unavailable("EXPECTED_IMAGE_ID_INVALID");
   const png = Buffer.from(input.png_bytes);
   if (png.length > MAX_PNG_BYTES || png.length < 45 ||
@@ -125,13 +134,28 @@ export function extractVerifiedPngAlpha(input: PngAlphaEvidenceInput): PngAlphaE
     rgba.set(row, y * rowBytes);
     previous = row;
   }
+  return { state: "AVAILABLE", sha256, width, height, rgba, reason: null };
+}
+
+/** Original silhouette contract uses the same verified PNG decoder. */
+export function extractVerifiedPngAlpha(input: PngAlphaEvidenceInput): PngAlphaEvidence {
+  const decoded = decodeVerifiedPngRgba(input);
+  if (decoded.state !== "AVAILABLE") {
+    return {
+      state: "UNVERIFIED", reason: decoded.reason,
+      sha256: decoded.sha256, mask: null,
+    };
+  }
   const derived = deriveAlphaSilhouetteMask({
-    image_sha256: sha256, view: input.view, width, height, rgba,
+    image_sha256: decoded.sha256,
+    view: input.view,
+    width: decoded.width, height: decoded.height,
+    rgba: decoded.rgba,
     provenance: input.provenance,
   });
   return derived.state === "AVAILABLE"
-    ? { state: "AVAILABLE", sha256, mask: derived.mask, reason: null }
-    : unavailable(derived.reason, sha256);
+    ? { state: "AVAILABLE", sha256: decoded.sha256, mask: derived.mask, reason: null }
+    : { state: "UNVERIFIED", reason: derived.reason, sha256: decoded.sha256, mask: null };
 }
 
 /** End-to-end bytes-to-diagnostic bridge; neither producer nor camera is emulated. */

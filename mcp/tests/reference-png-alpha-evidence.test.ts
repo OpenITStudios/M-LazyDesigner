@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { summarizeReferenceAlphaSilhouette } from "@/gateway/control/referenceImageEvidence";
 import {
   compareBoundPngAlphaEvidence,
+  decodeVerifiedPngRgba,
   extractVerifiedPngAlpha,
 } from "@/lib/reference/pngAlphaEvidence";
 
@@ -105,6 +106,36 @@ describe("verified PNG alpha for reference silhouette", () => {
       model_comparison_performed: false,
     });
     expect(JSON.stringify(summary)).not.toContain('"pixels":[');
+  });
+
+  test("verified RGBA sampling shares the strict PNG parser, including fully opaque pixels", () => {
+    for (let filter = 0; filter <= 4; filter++) {
+      const png = pngFromAlpha(["11", "10"], [filter, filter], true);
+      const decoded = decodeVerifiedPngRgba({
+        png_bytes: png, expected_sha256: digest(png),
+      });
+      expect(decoded.state).toBe("AVAILABLE");
+      if (decoded.state !== "AVAILABLE") throw new Error("Expected verified PNG pixels");
+      expect(decoded.width).toBe(2);
+      expect(decoded.height).toBe(2);
+      expect([decoded.rgba[3], decoded.rgba[7], decoded.rgba[11], decoded.rgba[15]])
+        .toEqual([255, 255, 255, 0]);
+    }
+    const opaque = pngFromAlpha(["11", "11"]);
+    const data = decodeVerifiedPngRgba({
+      png_bytes: opaque, expected_sha256: digest(opaque),
+    });
+    expect(data.state).toBe("AVAILABLE");
+    // A wholly opaque PNG has color data even when it has no alpha silhouette.
+    expect(extract(opaque).reason).toBe("OPAQUE_OR_EMPTY_ALPHA_MASK");
+    expect(decodeVerifiedPngRgba({
+      png_bytes: opaque, expected_sha256: "f".repeat(64),
+    }).reason).toBe("PNG_IMAGE_IDENTITY_MISMATCH");
+    const bad = Buffer.from(opaque);
+    bad[40] ^= 1;
+    expect(decodeVerifiedPngRgba({
+      png_bytes: bad, expected_sha256: digest(bad),
+    }).reason).toBe("PNG_CHUNK_CHECKSUM_INVALID");
   });
 
   test("supports every PNG filter and split IDAT without inventing segmentation", () => {
