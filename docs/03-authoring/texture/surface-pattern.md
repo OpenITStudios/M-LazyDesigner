@@ -192,3 +192,16 @@ visual PASS, Minecraft renderer behavior or artist approval. Existing
 source tests include flip, quarter-turn, insufficient density/subpixel,
 missing direction, stale texture UUID and scope refusal; Bun, CI and
 Blockbench-installed visual/Golden acceptance **NOT EXECUTED**.
+
+### Multi-face native evidence readback
+
+The unregistered, read-only pattern inspector now rechecks **every**
+selected face after the full bounded batch, not just immediately after
+each face. It pins Cube identity and exact `from`/`to` positions,
+per-face UV/rotation/material name, selected Texture instance/UUID,
+and native bitmap/UV dimensions. If a later native getter rewrites
+an earlier face or moves a Cube without changing its size, the entire
+batch fails with `TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ`.
+No native scene-wide revision, image appearance or user approval is
+attested by this synchronous readback. Source regression definitions
+cover both UV rewriting and same-size Cube translation; not executed.

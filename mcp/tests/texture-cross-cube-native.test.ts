@@ -295,6 +295,88 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
     });
   });
 
+
+  test("multi-face pattern readback refuses a UV rewrite triggered by a later face", () => {
+    withMockNative(cubes => {
+      const plan = planTextureTreatment({
+        required_faces: [
+          { cube_uuid: "left", face: "north" },
+          { cube_uuid: "right", face: "north" },
+        ],
+        regions: [{
+          region: "cohort", evidence: "observed",
+          surface_pattern: "painted_metal", render_profile: "opaque",
+          face_targets: [
+            { cube_uuid: "left", face: "north", treatment: "PAINT" },
+            { cube_uuid: "right", face: "north", treatment: "PAINT" },
+          ],
+        }],
+      });
+      const intents = [
+        { cube_uuid: "left", face: "north" as const,
+          expected_texture_uuid: "left-texture", minimum_pixels_per_model_unit: 1 },
+        { cube_uuid: "right", face: "north" as const,
+          expected_texture_uuid: "right-texture", minimum_pixels_per_model_unit: 1 },
+      ];
+      // A normal, unchanged two-face read is still only an advisory result.
+      const stable = inspectTreatmentNativePatternPhysicalFit(plan, intents);
+      expect(stable.state).toBe("advisory_metrics_consistent");
+      expect(stable.scoped_face_count).toBe(2);
+      expect(stable.native_scene_revision_attested).toBe(false);
+
+      const secondFace = cubes.right.faces.north;
+      const original = secondFace.getTexture;
+      let changed = false;
+      secondFace.getTexture = () => {
+        if (!changed) {
+          changed = true;
+          cubes.left.faces.north.uv = [0, 0, 1, 2];
+        }
+        return original();
+      };
+      expect(() => inspectTreatmentNativePatternPhysicalFit(plan, intents))
+        .toThrow("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
+      expect(changed).toBe(true);
+    });
+  });
+
+  test("multi-face pattern readback also pins Cube placement, not only box size", () => {
+    withMockNative(cubes => {
+      const plan = planTextureTreatment({
+        required_faces: [
+          { cube_uuid: "left", face: "north" },
+          { cube_uuid: "right", face: "north" },
+        ],
+        regions: [{
+          region: "cohort", evidence: "observed",
+          surface_pattern: "painted_metal", render_profile: "opaque",
+          face_targets: [
+            { cube_uuid: "left", face: "north", treatment: "PAINT" },
+            { cube_uuid: "right", face: "north", treatment: "PAINT" },
+          ],
+        }],
+      });
+      const intents = [
+        { cube_uuid: "left", face: "north" as const,
+          expected_texture_uuid: "left-texture", minimum_pixels_per_model_unit: 1 },
+        { cube_uuid: "right", face: "north" as const,
+          expected_texture_uuid: "right-texture", minimum_pixels_per_model_unit: 1 },
+      ];
+      const getSecond = cubes.right.faces.north.getTexture;
+      let moved = false;
+      cubes.right.faces.north.getTexture = () => {
+        if (!moved) {
+          moved = true;
+          cubes.left.from = [5, 0, 0];
+          cubes.left.to = [7, 2, 2]; // same 2×2×2 size, different location
+        }
+        return getSecond();
+      };
+      expect(() => inspectTreatmentNativePatternPhysicalFit(plan, intents))
+        .toThrow("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
+    });
+  });
+
   test("native pattern reviewer refuses foreign textures and undeclared face ownership", () => {
     withMockNative(() => {
       const plan = planTextureTreatment({

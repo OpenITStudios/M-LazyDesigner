@@ -1244,6 +1244,7 @@ export function inspectTreatmentNativePatternPhysicalFit(
     ] as const)
   ));
   const visited = new Set<string>();
+  const finalFaceReadbacks: Array<() => void> = [];
   const faces = intents.map(intent => {
     if (!intent || typeof intent.cube_uuid !== "string" ||
         !intent.cube_uuid.trim() ||
@@ -1281,11 +1282,15 @@ export function inspectTreatmentNativePatternPhysicalFit(
     if (texture.height !== texture.display_height) {
       throw new Error("TEXTURE_PATTERN_NATIVE_ANIMATED_FRAME_UNVERIFIED");
     }
-    const geometry = cube.from.slice(0, 3).map(
-      (start, axis) => Math.abs(cube.to[axis] - start)
-    );
+    const from = cube.from.slice(0, 3);
+    const to = cube.to.slice(0, 3);
+    const geometry = from.map((start, axis) => Math.abs(to[axis] - start));
     const uv = [...face.uv];
     const rotation = face.rotation;
+    const material = face.material_name;
+    if (typeof material !== "string") {
+      throw new Error("TEXTURE_PATTERN_NATIVE_FACE_UNAVAILABLE");
+    }
     const metrics = {
       width: texture.width,
       displayHeight: texture.display_height,
@@ -1299,19 +1304,36 @@ export function inspectTreatmentNativePatternPhysicalFit(
       uv, rotation, texture_metrics: metrics,
       detail_intent: intent,
     });
-    // Synchronous read: no async paint window, yet still refuse a mutable
-    // native face/atlas contract that changed during the inspection itself.
-    if (face.getTexture() !== texture || face.rotation !== rotation ||
-        face.uv.length !== uv.length ||
-        face.uv.some((v, index) => v !== uv[index]) ||
-        cube.from.slice(0, 3).some((v, index) =>
-          Math.abs(cube.to[index] - v) !== geometry[index]) ||
-        texture.width !== metrics.width ||
-        texture.display_height !== metrics.displayHeight ||
-        texture.getUVWidth() !== metrics.uvWidth ||
-        texture.getUVHeight() !== metrics.uvHeight) {
-      throw new Error("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
-    }
+    // A later face's native read may mutate an earlier Cube, even when this
+    // inspection has no await. Pin *all* inspected faces through final batch
+    // readback; per-face immediate checks alone can mix project revisions.
+    const requireSameNativeFace = () => {
+      if (!Array.isArray(Cube.all) || !Cube.all.includes(cube) ||
+          cubes.get(intent.cube_uuid) !== cube ||
+          cube.faces[intent.face] !== face ||
+          face.enabled === false ||
+          !Array.isArray(face.uv) || face.uv.length !== uv.length ||
+          face.uv.some((value, index) => value !== uv[index]) ||
+          face.rotation !== rotation ||
+          face.material_name !== material ||
+          !Array.isArray(cube.from) || !Array.isArray(cube.to) ||
+          from.some((value, index) => cube.from[index] !== value) ||
+          to.some((value, index) => cube.to[index] !== value) ||
+          !Array.isArray(Texture.all) || !Texture.all.includes(texture) ||
+          (typeof Project !== "undefined" && Array.isArray(Project?.textures) &&
+           !Project.textures.includes(texture)) ||
+          face.getTexture() !== texture ||
+          texture.uuid !== intent.expected_texture_uuid ||
+          texture.height !== texture.display_height ||
+          texture.width !== metrics.width ||
+          texture.display_height !== metrics.displayHeight ||
+          texture.getUVWidth() !== metrics.uvWidth ||
+          texture.getUVHeight() !== metrics.uvHeight) {
+        throw new Error("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
+      }
+    };
+    requireSameNativeFace();
+    finalFaceReadbacks.push(requireSameNativeFace);
     return {
       cube_uuid: intent.cube_uuid, face: intent.face,
       texture_uuid: texture.uuid,
@@ -1319,6 +1341,7 @@ export function inspectTreatmentNativePatternPhysicalFit(
       ...result,
     };
   });
+  for (const recheck of finalFaceReadbacks) recheck();
   return {
     source: "current_blockbench_cube_face_read_only" as const,
     state: faces.some(face => face.state === "review_required")
