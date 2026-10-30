@@ -265,6 +265,14 @@ U9 optional mesh/xatlas investigation         DEFERRED
 
 Current U0-U5 code is read-only planning infrastructure. It does not replace native UV mutation yet.
 
+The source-only UV apply receipt gate for Gateway Graph readiness now requires a
+coherent set of unique moved-island IDs, exact changed-Cube/face coverage,
+finite before/after mapping rectangles and an actual move or 90-degree turn.
+A changed fingerprint alone is insufficient when its scope contradicts the
+native receipt. This protects the ephemeral `uv_layout_current` fact;
+it does **not** assert `UV_LAYOUT_PASS` or register `manage_uv_layout`.
+The source contract still requires matching-SHA execution and native acceptance.
+
 ## U6 — Stack / Symmetry
 
 SOURCE IMPLEMENTED as proposal/evidence logic only. Candidate discovery remains separate from application.

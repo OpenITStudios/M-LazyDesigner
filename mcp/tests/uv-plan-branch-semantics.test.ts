@@ -44,7 +44,13 @@ describe("UV plan/apply branch semantics", () => {
         source_fingerprint_after: "sha256:" + "c".repeat(64),
         changed_island_ids: ["face:cube-a:north"],
         changed_cube_ids: ["cube-a"],
-        moved: [{ island_id: "face:cube-a:north" }],
+        changed_faces: [{ cube_uuid: "cube-a", face: "north" }],
+        moved: [{
+          island_id: "face:cube-a:north",
+          before: { x: 0, y: 0, width: 4, height: 4 },
+          after: { x: 4, y: 0, width: 4, height: 4 },
+          rotated_90: false,
+        }],
       },
     };
     expect(isUvAppliedPlanReceipt(candidate, request)).toBe(true);
@@ -70,6 +76,42 @@ describe("UV plan/apply branch semantics", () => {
       ...request, plan_id: "missing",
     })).toBe(false);
     expect(isUvAppliedPlanReceipt({ receipt: { schema: 1 } }, request)).toBe(false);
+
+    const badReceipts = [
+      { changed_island_ids: ["face:cube-a:north", "face:cube-a:north"] },
+      { changed_island_ids: ["face:cube-b:north"] },
+      { moved: [{ ...candidate.receipt.moved[0], island_id: "different-island" }] },
+      { moved: [...candidate.receipt.moved, candidate.receipt.moved[0]] },
+      { changed_cube_ids: ["cube-a", "cube-a"] },
+      { changed_cube_ids: ["cube-b"] },
+      { changed_faces: [] },
+      { changed_faces: [{ cube_uuid: "cube-b", face: "north" }] },
+      { changed_faces: [{ cube_uuid: "cube-a", face: "front" }] },
+      { changed_faces: [
+        candidate.receipt.changed_faces[0], candidate.receipt.changed_faces[0],
+      ] },
+      { moved: [{ ...candidate.receipt.moved[0],
+        before: { x: 0, y: 0, width: 0, height: 4 } }] },
+      { moved: [{ ...candidate.receipt.moved[0],
+        after: candidate.receipt.moved[0].before }] },
+      { moved: [{ island_id: "face:cube-a:north" }] },
+    ];
+    for (const malformed of badReceipts) {
+      expect(
+        isUvAppliedPlanReceipt({ receipt: { ...candidate.receipt, ...malformed } }, request),
+        JSON.stringify(malformed)
+      ).toBe(false);
+    }
+
+    // A 90-degree native turn on a square region may keep the same bounds;
+    // the explicit rotation is still an authored UV change.
+    expect(isUvAppliedPlanReceipt({
+      receipt: {
+        ...candidate.receipt,
+        moved: [{ ...candidate.receipt.moved[0],
+          after: candidate.receipt.moved[0].before, rotated_90: true }],
+      },
+    }, request)).toBe(true);
   });
 
   test("plan is workflow CONTROL while apply is authored MUTATION", () => {

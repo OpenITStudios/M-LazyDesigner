@@ -303,6 +303,7 @@ export const UV_REGRESSION_TESTS_BY_PATH: Readonly<Record<string, readonly strin
     "mcp/tests/uv-plan-service.test.ts",
   ],
   "mcp/lib/uv/receipt.ts": [
+    "mcp/gateway/capabilities/graph.test.ts",
     "mcp/tests/uv-plan-branch-semantics.test.ts",
     "mcp/tests/uv-transaction-contract.test.ts",
   ],

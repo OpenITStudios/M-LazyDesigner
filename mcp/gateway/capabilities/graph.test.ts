@@ -149,7 +149,13 @@ describe("capability dependency graph", () => {
         source_fingerprint_after: "sha256:" + "c".repeat(64),
         changed_island_ids: ["cube-a:north"],
         changed_cube_ids: ["cube-a"],
-        moved: [{ island_id: "cube-a:north" }],
+        changed_faces: [{ cube_uuid: "cube-a", face: "north" }],
+        moved: [{
+          island_id: "cube-a:north",
+          before: { x: 0, y: 0, width: 2, height: 2 },
+          after: { x: 2, y: 0, width: 2, height: 2 },
+          rotated_90: false,
+        }],
       },
     };
     expect(applyCapabilityGraphOutcome(
@@ -160,6 +166,14 @@ describe("capability dependency graph", () => {
       undefined,
       { receipt: { changed_island_ids: ["cube-a:north"] } },
       { receipt: { ...valid.receipt, source_fingerprint_before: "sha256:" + "d".repeat(64) } },
+      { receipt: { ...valid.receipt, changed_cube_ids: ["cube-b"] } },
+      { receipt: { ...valid.receipt, changed_faces: [] } },
+      { receipt: { ...valid.receipt, moved: [{
+        ...valid.receipt.moved[0], island_id: "cube-b:south",
+      }] } },
+      { receipt: { ...valid.receipt, moved: [{
+        ...valid.receipt.moved[0], after: valid.receipt.moved[0].before,
+      }] } },
     ]) {
       const next = applyCapabilityGraphOutcome(
         prior, "manage_uv_layout", args, true, evidence

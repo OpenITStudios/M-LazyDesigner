@@ -29,6 +29,17 @@ export function isUvUsablePlanReceipt(value: unknown): boolean {
  * cannot assert that UV mapping is current. The native UV transaction owns
  * the postcondition, with request/source binding checked at the Graph edge.
  */
+const uvReceiptRectSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  width: z.number().finite().positive(),
+  height: z.number().finite().positive(),
+});
+
+const uvReceiptFaceSchema = z.enum([
+  "north", "south", "east", "west", "up", "down",
+]);
+
 export const uvAppliedPlanReceiptSchema = z.object({
   receipt: z.object({
     schema: z.literal(1),
@@ -36,7 +47,69 @@ export const uvAppliedPlanReceiptSchema = z.object({
     source_fingerprint_after: z.string().regex(/^sha256:[a-f0-9]{64}$/),
     changed_island_ids: z.array(z.string().min(1)).min(1),
     changed_cube_ids: z.array(z.string().min(1)).min(1),
-    moved: z.array(z.object({ island_id: z.string().min(1) })).min(1),
+    changed_faces: z.array(z.object({
+      cube_uuid: z.string().min(1),
+      face: uvReceiptFaceSchema.nullable(),
+    })).min(1),
+    moved: z.array(z.object({
+      island_id: z.string().min(1),
+      before: uvReceiptRectSchema,
+      after: uvReceiptRectSchema,
+      rotated_90: z.boolean(),
+    })).min(1),
+  }).superRefine((receipt, ctx) => {
+    // The source transaction emits all of these fields from one committed
+    // native plan. Graph readiness must not accept internally contradictory
+    // "successful" receipts when Control's scoped recheck refuses them.
+    const islands = new Set(receipt.changed_island_ids);
+    const moved = new Set(receipt.moved.map((row) => row.island_id));
+    if (
+      islands.size !== receipt.changed_island_ids.length ||
+      moved.size !== receipt.moved.length ||
+      islands.size !== moved.size ||
+      [...islands].some((id) => !id.trim() || !moved.has(id))
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["moved"],
+        message: "UV moved islands must match unique changed island IDs exactly.",
+      });
+    }
+
+    const cubes = new Set(receipt.changed_cube_ids);
+    const faceCubes = new Set(receipt.changed_faces.map((row) => row.cube_uuid));
+    const uniqueFaces = new Set(
+      receipt.changed_faces.map((row) => JSON.stringify([row.cube_uuid, row.face]))
+    );
+    if (
+      cubes.size !== receipt.changed_cube_ids.length ||
+      faceCubes.size !== cubes.size ||
+      uniqueFaces.size !== receipt.changed_faces.length ||
+      [...cubes].some((id) => !id.trim() || !faceCubes.has(id)) ||
+      receipt.changed_faces.some((row) => !row.cube_uuid.trim())
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["changed_faces"],
+        message: "UV changed faces must cover exactly the unique changed cubes.",
+      });
+    }
+
+    // A claimed move with identical before/after rectangles and no rotation
+    // cannot be evidence of an authored mapping change.
+    for (const [index, entry] of receipt.moved.entries()) {
+      if (!entry.rotated_90 &&
+          entry.before.x === entry.after.x &&
+          entry.before.y === entry.after.y &&
+          entry.before.width === entry.after.width &&
+          entry.before.height === entry.after.height) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["moved", index],
+          message: "UV move must change its rectangle or rotate the mapping.",
+        });
+      }
+    }
   }),
 });
 
