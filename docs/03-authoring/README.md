@@ -54,7 +54,7 @@ ANIMATION_CONTEXT
 + lazydesigner-animation Skill
 ```
 
-Load `animation/standard.md` or `validation/visual.md` only when a durable motion/verification rule is materially needed.
+Load `animation/standard.md` or `validation/visual.md` only when a durable motion/verification rule is materially needed. During explicit Animation knowledge development, or only for a decision-critical unresolved family, consult [Animation coverage](animation/knowledge-coverage.md) and the selected record from [research sources](animation/research-sources.md), not the full inventory by default.
 
 ### Finalization
 

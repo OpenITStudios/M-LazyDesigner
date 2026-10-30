@@ -68,9 +68,14 @@ export function compileMotionRecipe(recipe: MotionRecipe): CompiledMotionRecipe 
       if (transform.position) frame.position = validateVec3(transform.position, bone + " position");
       if (transform.rotation) frame.rotation = validateVec3(transform.rotation, bone + " rotation");
       if (transform.scale !== undefined) {
-        frame.scale = typeof transform.scale === "number"
-          ? transform.scale
-          : validateVec3(transform.scale, bone + " scale");
+        if (typeof transform.scale === "number") {
+          if (!Number.isFinite(transform.scale)) {
+            throw new Error(bone + " scale must be finite.");
+          }
+          frame.scale = transform.scale;
+        } else {
+          frame.scale = validateVec3(transform.scale, bone + " scale");
+        }
       }
       if (transform.interpolation) frame.interpolation = transform.interpolation;
       if (frame.position === undefined && frame.rotation === undefined && frame.scale === undefined) continue;

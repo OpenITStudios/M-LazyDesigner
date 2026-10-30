@@ -52,6 +52,12 @@ Controller/state complexity must not be solved by increasing rig density unless 
 
 Attachment/reference Locators move through their animated parent Group/Bone. Current animation authoring targets Group/Bone animators, not Locator elements directly; if a Locator must follow motion, fix its parent ownership in Geometry rather than inventing a separate Locator animation path.
 
+## Research-to-decision adoption (conditional)
+
+For an unresolved motion decision, consult only the relevant F01–F30 entry in [Animation knowledge coverage](knowledge-coverage.md), then the smallest matching source in [the 145-source research index](research-sources.md). **Do not preload the research catalog in normal asset authoring.** Authority stays: current user requirement and approved reference → native editor state and target-version Bedrock specifications → bounded Vanilla/source examples → cross-engine/animation theory as advisory only. An external solver, interpolation, IK/retargeter or motion-matching idea is not an automatic Bedrock capability or permission to change authored content.
+
+The motion recipe compiler must reject nonfinite scalar scale (`NaN`, `Infinity`) before the existing native create plan. Technical numeric validity, a source check and keyframe count never imply contact, interpolation correctness after export, or visual PASS.
+
 ## Motion Design Contract
 
 Before production animation, define only applicable facts:

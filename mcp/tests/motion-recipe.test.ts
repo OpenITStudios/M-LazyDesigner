@@ -19,4 +19,19 @@ describe("motion recipe compiler",()=>{
     expect(requests).toHaveLength(1);
     expect(requests[0].channel).toBe("rotation");
   });
+  test("rejects nonfinite scalar scale before any native create plan", () => {
+    for (const scale of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => compileMotionRecipe({
+        name: "invalid_scale",
+        poses: [{ id: "initial", time: 0, bones: { body: { scale } } }],
+      })).toThrow("body scale must be finite.");
+    }
+    for (const scale of [0, 0.75, -1]) {
+      const compiled = compileMotionRecipe({
+        name: "finite_scale",
+        poses: [{ id: "initial", time: 0, bones: { body: { scale } } }],
+      });
+      expect(compileMotionToCreateAnimation(compiled).bones.body[0]?.scale).toBe(scale);
+    }
+  });
 });

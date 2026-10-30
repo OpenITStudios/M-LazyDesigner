@@ -2,17 +2,15 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next to do — Texture & UV (2026-10-29 chat handoff)
+## Primary next to do — Animation (2026-10-30 user handoff)
 
-**USER DECISION: STOP Geometry; next chat = Texture & UV via ChatGPT + GitHub (`OpenITStudios/M-LazyDesigner`, branch `Local`).** Do not resume Geometry R0–R5, Animation or live benchmarks without a new request.
+**USER DECISION:** Texture/UV knowledge pass source-closed; switch focus to Animation in ChatGPT + remote `OpenITStudios/M-LazyDesigner` / `Local`. Geometry R0–R5 remains paused. No CI enablement, release, installed Blockbench mutation or new Gateway tools.
 
-**Frozen Geometry checkpoint:** G1/G2 + R1–R4 source; R5 paired Golden benchmark source prepared. Last Geometry commit `ec22a6e9d2420f12d116f31bc25ce59491956150`. Bun/typecheck/build, native/visual acceptance NOT EXECUTED; no Geometry quality PASS. Preserve source/proof history.
+**Texture/UV checkpoint:** 112-source K0–K9 audit, 25 decision families and guarded physical texel mapping remain in [Texture knowledge integration](../03-authoring/texture/knowledge-integration.md). `manage_uv_layout` still unregistered. Bun/CI/native/visual/Golden acceptance NOT EXECUTED for latest source; no quality PASS.
 
-**Texture & UV K0–K9 (2026-10-30):** [112 sources](../03-authoring/texture/research-sources.md), [25 decision families](../03-authoring/texture/knowledge-coverage.md), [four pinned cases](../03-authoring/texture/decision-cases.md), K4–K6 review-only Gateway guidance, K7 audit, K8 verifier and [K9 source-closure](../03-authoring/texture/knowledge-integration.md). No automatic UV/Texture mutation; all eight Golden Tasks UNMEASURED. Exact-SHA Bun/typecheck/build/CI/native/visual/human verification NOT EXECUTED.
+**Animation K0–K3:** [145 research references](../03-authoring/animation/research-sources.md) and [30-family coverage/4 review cases](../03-authoring/animation/knowledge-coverage.md) curated. One deterministic finite scalar-scale compiler safeguard plus an existing-owner regression authored. All source test runs, native animation playback, export/visual acceptance and real Golden cost baseline **NOT EXECUTED**.
 
-**P0 Texture/UV source evidence (2026-10-30):** Control pins reference SHA, surface/face claims and ≤16 source RGB probes; palette role review stays advisory. SHARED UV conflicts and partial Cross-Cube seams are explicit. Pattern preflight uses canonical physical texel mapping and signed rotation/flip with caller-supplied direction/density; unregistered native reader **rechecks every selected face after the batch** (UV, position, exact Cube and atlas UUID uniqueness), blocking getter-driven drift and ambiguous bindings. No new Gateway, auto-UV/Painter, material inference or asset writes. Source tests authored; exact-SHA Bun/typecheck/CI/native/visual/Golden NOT EXECUTED. Next: exact-SHA runnable source verification and matched live native/Bedrock acceptance.
-
-**Order:** Texture & UV ACTIVE; Geometry PAUSED; Animation DEFERRED.
+**Order:** Animation ACTIVE; Texture/UV SOURCE-CLOSED / NATIVE PENDING; Geometry PAUSED. **Next:** matching-SHA runnable scalar-scale test when a real Bun toolchain is available; follow with existing Animation live acceptance. Do not repeat K0/K1 research.
 
 ## Current working environment
 
@@ -27,7 +25,7 @@ Geometry through `ec22a6e9` and R5 comparator source are preserved; Bun/typechec
 
 ## Next REMOTE_GITHUB work
 
-**Texture & UV is the selected next work.** Geometry R0–R5 is paused, and all other MCP work stays deferred unless it directly supports Texture/UV.
+**Animation is the selected next work.** Reuse existing Animation owners and quality/live proof contracts. Geometry stays paused and Texture/UV does not reopen automatically.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 
