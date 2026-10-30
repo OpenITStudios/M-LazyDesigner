@@ -6,13 +6,13 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **USER DECISION:** Golden must be **one complete object**, not six capability microtasks. Retire the prior six task identities. Use `golden-full-asset-authoring` as one job from approved reference through Geometry/rig, UV, Texture, Animation, final save/reopen/export, human quality and Cost to Accepted Result. Keep affected domain regressions as tests, not more Golden Tasks.
 
-**STANDALONE FIXTURE:** `mcp/tests/fixtures/golden/full-asset/` contains an original Beacon Courier Bot concept (SVG), source-authored **blank** Bedrock `.bbmodel`, pending `REFERENCE.json` and object specifications. All outside `workspace/active` and `workspace/saved`; existing user projects are never sampled or mutated. Baseline/candidate use the same immutable fixture with separate saved disposable working copies and isolated outputs. No version suffix or second test engine.
+**STANDALONE FIXTURE:** `mcp/tests/fixtures/golden/full-asset/` contains the original SVG concept, blank Bedrock `.bbmodel`, pending `REFERENCE.json` and specs. Keep it outside all user Workspaces. Baseline/candidate use the same immutable seed with isolated working copies and outputs; never reuse historical user assets or add another benchmark engine.
 
-**ADMISSION:** Reference package currently **PENDING/BLOCKED**. Runner uses Control reference read and refuses native execution before explicit visual approval, supported approved PNG and all-stage readiness. It checks canonical blank seed bytes, current Stage, installed Runtime and protected Workspace paths.
+**VISUAL DECISION (2026-10-31):** User approved the new voxel-style PNG candidate (SHA-256 `ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245`); the PNG bytes are **not in GitHub**. Canonical SVG and `REFERENCE.json` remain **PENDING/BLOCKED**. Golden runner still refuses native execution until the exact PNG, Control integrity, stage readiness and native preflights are satisfied.
 
 **PROOF:** New source/fixture is SOURCE_AUTHORED only. Bun/typecheck, native Blockbench import, visual review, animation playback, saved/reopened/exported artifacts, human acceptance and cost measurement **NOT EXECUTED**. Source fixtures cannot claim APPROVED/READY.
 
-**NEXT:** Reference approval + PNG handoff → exact-head focused source tests → matching-runtime disposable full-object authoring → quality gate → compare accepted cost. No historical task-case reuse.
+**NEXT:** Transfer exact approved PNG bytes to GitHub, reconcile verified image + Reference Package, then focused source tests → disposable full-object native run → quality/acceptance gate → compare cost. Never use historic assets.
 
 ## GitHub boundary and historical local recovery
 

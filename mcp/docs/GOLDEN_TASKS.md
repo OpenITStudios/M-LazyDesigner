@@ -45,12 +45,20 @@ accepted full-asset Golden run; do not run every test after each asset action.
   It is a source-authored Blockbench 5.x Bedrock JSON candidate, not a native
   verified/imported or prebuilt finished model.
 
-The visual proposal is **PENDING APPROVAL**, so `REFERENCE.json` stays
-`BLOCKED`; runner preflight refuses native work until an explicitly
-approved PNG, package readiness and stage authorization exist. Do not infer
-approval from creating a visual or a successful source test. The SVG is the
-original editable concept; the image recorded as `PENDING` is not a
-Blockbench-ready PNG.
+The original SVG concept remains **PENDING** in `REFERENCE.json`.
+A separate 1536×1024 voxel-style visual candidate was **approved by the user
+in ChatGPT on 2026-10-31**, without approving the native model or benchmark
+result. Its expected exact PNG SHA-256 is
+`ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245`.
+See the fixture README for approved visual provenance. The actual PNG file is
+**not yet committed to GitHub**; it is a ChatGPT conversation artifact, not
+an approved package image or a replacement of the existing SVG.
+
+Therefore `REFERENCE.json` correctly remains **PENDING/BLOCKED** and the
+runner must refuse native work until that exact PNG's Git bytes are verified
+by Control, the canonical image record/approval and all stage readiness fields
+are correctly reconciled, and other native authorization prerequisites exist.
+A successful image creation or source test never proves model acceptance.
 
 ## Separate file and safety rules
 
