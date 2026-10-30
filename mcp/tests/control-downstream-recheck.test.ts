@@ -77,6 +77,42 @@ describe("cross-domain regression recheck planning", () => {
       });
   });
 
+
+  test("broken UV change lists never borrow a narrow texture rectangle", () => {
+    const result = downstreamRechecksForFreshness({
+      currentDomain: "TEXTURING",
+      stale: ["UV_MAPPING", "TEXTURE_APPEARANCE"],
+      result: {
+        receipt: {
+          changed_cube_ids: ["cube-a", null],
+          changed_island_ids: ["face:cube-a:north"],
+          changed_faces: [{ cube_uuid: "cube-a", face: "north" }],
+        },
+        texture: { uuid: "atlas-a" },
+        revision: { after: "revision-2" },
+        affected_rect: [8, 12, 16, 24],
+      },
+    });
+    for (const scope of ["UV_MAPPING", "TEXTURE_APPEARANCE"]) {
+      expect(result.required.find((item) => item.scope === scope)?.target)
+        .toBeUndefined();
+    }
+  });
+
+  test("an invalid nested UV receipt cannot be replaced by outer texture fields", () => {
+    const result = downstreamRechecksForFreshness({
+      currentDomain: "TEXTURING",
+      stale: ["UV_MAPPING", "TEXTURE_APPEARANCE"],
+      result: {
+        receipt: null,
+        texture: { uuid: "atlas-a" },
+        revision: { after: "revision-2" },
+        affected_rect: [8, 12, 16, 24],
+      },
+    });
+    expect(result.required.every((entry) => entry.target === undefined)).toBe(true);
+  });
+
   test("untargeted scopes do not read or infer any Runtime receipt", () => {
     const result = downstreamRechecksForFreshness({
       currentDomain: "GEOMETRY",

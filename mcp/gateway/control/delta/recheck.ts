@@ -35,36 +35,91 @@ export type ControlDownstreamRecheck = {
   };
 };
 
-function uvTargetFromCandidates(candidates: readonly Record<string, unknown>[]): ControlDownstreamRecheck["target"] | undefined {
+type UvTargetObservation = {
+  target?: ControlDownstreamRecheck["target"];
+  /** Do not substitute a texture rectangle for a malformed UV change set. */
+  attempted: boolean;
+};
+
+const UV_RECHECK_FACES = new Set([
+  "north", "south", "east", "west", "up", "down",
+]);
+const uvIdentifier = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.trim() === value;
+
+function uvTargetFromCandidates(
+  candidates: readonly Record<string, unknown>[]
+): UvTargetObservation {
   for (const candidate of candidates) {
-    const receipt = record(candidate.receipt) ?? candidate;
-    const changedCubeIds = receipt.changed_cube_ids;
-    const changedIslandIds = receipt.changed_island_ids;
+    const hasReceipt = Object.prototype.hasOwnProperty.call(candidate, "receipt");
+    const receipt = hasReceipt ? record(candidate.receipt) : candidate;
+    const attempted = hasReceipt || (receipt !== null && [
+      "changed_cube_ids", "changed_island_ids", "changed_faces",
+    ].some((field) => Object.prototype.hasOwnProperty.call(receipt, field)));
+    if (!attempted) continue;
+    if (!receipt) return { attempted: true };
+
+    const cubes = receipt.changed_cube_ids;
+    const islands = receipt.changed_island_ids;
     const changedFaces = receipt.changed_faces;
-    const cubeIds = Array.isArray(changedCubeIds)
-      ? changedCubeIds.filter((value): value is string => typeof value === "string")
-      : [];
-    const islandIds = Array.isArray(changedIslandIds)
-      ? changedIslandIds.filter((value): value is string => typeof value === "string")
-      : [];
-    const faces = Array.isArray(changedFaces)
-      ? changedFaces.flatMap((value) => {
-          const face = record(value);
-          return typeof face?.cube_uuid === "string" &&
-            (typeof face.face === "string" || face.face === null)
-            ? [{ cube_uuid: face.cube_uuid, face: face.face as string | null }]
-            : [];
-        })
-      : [];
-    if (cubeIds.length || islandIds.length || faces.length) {
-      return {
-        ...(cubeIds.length ? { cube_ids: [...new Set(cubeIds)] } : {}),
-        ...(islandIds.length ? { island_ids: [...new Set(islandIds)] } : {}),
-        ...(faces.length ? { faces } : {}),
-      };
+    // A partial/malformed array is NOT a complete bounded affected set.
+    // Large repacks use the existing broad recheck, not a huge AI payload.
+    if (!Array.isArray(cubes) || cubes.length === 0 || cubes.length > 64 ||
+        !Array.isArray(islands) || islands.length === 0 || islands.length > 128 ||
+        !Array.isArray(changedFaces) || changedFaces.length === 0 ||
+        changedFaces.length > 384 ||
+        !cubes.every(uvIdentifier) || !islands.every(uvIdentifier)) {
+      return { attempted: true };
     }
+    const cubeIds = [...new Set(cubes as string[])];
+    const islandIds = [...new Set(islands as string[])];
+    const cubeSet = new Set(cubeIds);
+    const faces: Array<{ cube_uuid: string; face: string | null }> = [];
+    const seenFaces = new Set<string>();
+    for (const item of changedFaces) {
+      const face = record(item);
+      if (!face || !uvIdentifier(face.cube_uuid) ||
+          (face.face !== null &&
+            (typeof face.face !== "string" || !UV_RECHECK_FACES.has(face.face))) ||
+          !cubeSet.has(face.cube_uuid)) {
+        return { attempted: true };
+      }
+      const normalized = {
+        cube_uuid: face.cube_uuid,
+        face: face.face as string | null,
+      };
+      const key = JSON.stringify([normalized.cube_uuid, normalized.face]);
+      if (!seenFaces.has(key)) {
+        seenFaces.add(key);
+        faces.push(normalized);
+      }
+    }
+    const faceCubes = new Set(faces.map((face) => face.cube_uuid));
+    if (cubeIds.some((id) => !faceCubes.has(id))) {
+      return { attempted: true };
+    }
+    // When the native UV producer supplies moved islands, the scope may
+    // not omit an island or claim one that was not actually moved.
+    if (receipt.moved !== undefined) {
+      const moved = receipt.moved;
+      if (!Array.isArray(moved) || moved.length !== islandIds.length ||
+          moved.some((entry) => !uvIdentifier(record(entry)?.island_id))) {
+        return { attempted: true };
+      }
+      const movedSet = new Set(moved.map((entry) =>
+        (record(entry)!.island_id as string)
+      ));
+      if (movedSet.size !== islandIds.length ||
+          islandIds.some((id) => !movedSet.has(id))) {
+        return { attempted: true };
+      }
+    }
+    return {
+      attempted: true,
+      target: { cube_ids: cubeIds, island_ids: islandIds, faces },
+    };
   }
-  return undefined;
+  return { attempted: false };
 }
 
 function materialRenderTargetFromCandidates(
@@ -248,10 +303,13 @@ export function downstreamRechecksForFreshness(input: {
   // same UV target twice or lose the texture-region fallback.
   let uvTargetResolved = false;
   let uvTarget: ControlDownstreamRecheck["target"] | undefined;
+  let uvAttempted = false;
   const sharedUvTarget = () => {
     if (!uvTargetResolved) {
       uvTargetResolved = true;
-      uvTarget = uvTargetFromCandidates(currentCandidates());
+      const observation = uvTargetFromCandidates(currentCandidates());
+      uvTarget = observation.target;
+      uvAttempted = observation.attempted;
     }
     return uvTarget;
   };
@@ -264,9 +322,10 @@ export function downstreamRechecksForFreshness(input: {
           ? sharedUvTarget()
           : scope === "TEXTURE_APPEARANCE"
             ? sharedUvTarget() ??
-              (input.verificationScope?.kind === "TEXTURE_REGION"
-                ? targetFromVerificationScope(input.verificationScope)
-                : textureRegionTargetFromCandidates(currentCandidates()))
+              (uvAttempted ? undefined
+                : input.verificationScope?.kind === "TEXTURE_REGION"
+                  ? targetFromVerificationScope(input.verificationScope)
+                  : textureRegionTargetFromCandidates(currentCandidates()))
             : scope === "MATERIAL_RENDER"
               ? materialRenderTargetFromCandidates(currentCandidates())
               : scope === "ANIMATION_MOTION"

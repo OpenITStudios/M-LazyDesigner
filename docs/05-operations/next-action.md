@@ -12,7 +12,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **Animation K4/K5 source:** MotionDynamics and RootMotion reject duplicate timestamps and native pre/post ambiguity; RootMotion also rejects expression gaps, coerced nonnumeric vectors and malformed timestamps, preserving omitted-track diagnostics. Existing-owner regression extended. Exact-SHA Bun/CI/native/visual/Golden **NOT EXECUTED**. No new tools, suites or benchmark tasks.
 
-**Order:** Asset-flow recheck integrity SOURCE-AUTHORED / BUN PENDING; Texture/Animation native acceptance pending; Geometry PAUSED. **Next:** exact-SHA focused verification and existing native Golden acceptance; no extra authoring steps.
+**Order:** Geometry/UV→Texture selective recheck SOURCE-AUTHORED / BUN PENDING; Texture/Animation native acceptance pending; Geometry authoring PAUSED. **Next:** exact-SHA focused verification, then native Golden acceptance; no new authoring steps.
 
 ## Current working environment
 
@@ -27,7 +27,7 @@ Geometry through `ec22a6e9` and R5 comparator source are preserved; Bun/typechec
 
 ## Next REMOTE_GITHUB work
 
-**Asset-flow efficiency is the active task.** Existing visual verification now supplies the only accepted bounded Texture/Animation downstream target; incomplete receipts keep rechecks unbounded. Reuse Control, Gateway and Golden acceptance. Further expansion requires measured bottlenecks.
+**Asset-flow efficiency is the active task.** Valid UV changed Cube/island/face sets enable affected Texture rechecks; partial/malformed/oversize UV sets remain unbounded and never borrow unrelated texture rectangles. Existing visual scope remains the only bounded Texture/Animation validator. Reuse Control/Gateway/Golden; further expansion requires measured evidence.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 
