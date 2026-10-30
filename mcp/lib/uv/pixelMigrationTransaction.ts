@@ -147,6 +147,54 @@ function validateCompleteScene(state: UvPixelMigrationScopedState): void {
   canonicalBindings(scope.face_texture_bindings, state);
 }
 
+/**
+ * Migrating RGBA is not a safe way to fix an untextured or orphaned UV
+ * target. A native source may legitimately include disabled/untextured
+ * faces, but every actively moved face must resolve to an enumerated
+ * Texture before any bitmap is copied or native Undo is acquired.
+ */
+function requireMappedMovedUvFaces(
+  plan: UvLayoutPlan,
+  state: UvPixelMigrationScopedState
+): void {
+  const islands = new Map(plan.before.islands.map(island => [island.id, island]));
+  const cubes = new Map(state.uv.cubes.map(cube => [cube.uuid, cube]));
+  const owners = new Map(state.scope.face_texture_bindings.map(binding => [
+    JSON.stringify([binding.cube_uuid, binding.face]),
+    binding.texture_uuid,
+  ]));
+  const atlasIds = new Set(state.scope.all_texture_uuids);
+
+  for (const islandId of plan.moved_island_ids) {
+    const island = islands.get(islandId);
+    const cube = island ? cubes.get(island.source.cube_uuid) : null;
+    if (!island || !cube) {
+      throw new Error("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE: moved UV island " +
+        islandId + " has no current native Cube owner.");
+    }
+
+    let enabled = 0;
+    for (const faceKey of island.source.faces) {
+      const face = cube.faces.find(entry => entry.face === faceKey);
+      if (!face) {
+        throw new Error("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE: moved UV face " +
+          islandId + ":" + faceKey + " is absent from the native inventory.");
+      }
+      if (!face.enabled) continue;
+      enabled += 1;
+      const textureId = owners.get(JSON.stringify([cube.uuid, faceKey]));
+      if (!textureId || !atlasIds.has(textureId)) {
+        throw new Error("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE: moved active face " +
+          islandId + ":" + faceKey + " has no verified Texture owner.");
+      }
+    }
+    if (enabled === 0) {
+      throw new Error("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE: moved UV island " +
+        islandId + " has no active textured face to migrate.");
+    }
+  }
+}
+
 function requireBoundedAtlasInventory(
   atlases: readonly UvMigrationAtlas[]
 ): void {
@@ -269,6 +317,8 @@ export async function applyUvPixelMigrationAtomic(input: {
   requireValidUvLayoutPlan(plan);
 
   const original = snapshot(await adapter.readState());
+  // Require live mapped-face ownership before copying any RGBA or opening Undo.
+  requireMappedMovedUvFaces(plan, original);
   assertUvPlanSourceFresh(expected_source_fingerprint, original.uv);
   expectedRevisionKeys(input.expected_atlas_revisions,
     original.scope.all_texture_uuids);

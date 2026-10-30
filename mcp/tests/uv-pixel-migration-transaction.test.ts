@@ -15,7 +15,7 @@ import {
 } from "@/lib/uv/pixelMigrationTransaction";
 import { computeTextureRevision } from "@/lib/texture/revision";
 
-function fixture() {
+function fixture(includeDisabledFace = false) {
   const cube = {
     uuid: "panel", name: "panel",
     from: [0, 0, 0], to: [2, 2, 1],
@@ -24,7 +24,12 @@ function fixture() {
       face: "north" as const,
       uv: [8, 2, 10, 4] as [number, number, number, number],
       rotation: 0,
-    }],
+    }, ...(includeDisabledFace ? [{
+      face: "south" as const,
+      uv: [0, 0, 1, 1] as [number, number, number, number],
+      rotation: 0,
+      enabled: false,
+    }] : [])],
   };
   const plan = planUvPacking(buildUvLayoutSnapshot(
     [cube], 16, 16, () => ({ padding_pixels: 0 })
@@ -53,6 +58,9 @@ function fixture() {
       all_texture_uuids: ["base", "mer"],
       face_texture_bindings: [
         { cube_uuid: "panel", face: "north", texture_uuid: "base" },
+        ...(includeDisabledFace ? [
+          { cube_uuid: "panel", face: "south", texture_uuid: null },
+        ] : []),
       ],
       uv_owner_scope: "complete_cube_only",
       unsupported_uv_owner_count: 0,
@@ -403,6 +411,31 @@ describe("atomic Texture + UV source transaction contract (adapter-only)", () =>
         .rejects.toThrow("UV_PIXEL_MIGRATION_SCOPE_INCOMPLETE");
       expect(f.harness.calls).toEqual(["read"]);
     }
+  });
+
+  test("moved active UV face with null Texture owner refuses migration before Undo", async () => {
+    const f = fixture();
+    f.harness.state.scope.face_texture_bindings[0].texture_uuid = null;
+    const before = structuredClone(f.harness.state);
+    await expect(applyUvPixelMigrationAtomic(await request(f)))
+      .rejects.toThrow("moved active face");
+    expect(f.harness.calls).toEqual(["read"]);
+    expect(f.harness.state).toEqual(before);
+  });
+
+  test("disabled untextured face outside moved UV scope remains eligible", async () => {
+    const f = fixture(true);
+    expect(f.plan.before.islands).toHaveLength(1);
+    expect(f.harness.state.scope.face_texture_bindings).toHaveLength(2);
+    const result = await applyUvPixelMigrationAtomic(await request(f));
+    expect(result.execution).toBe("committed_by_adapter");
+    expect(f.harness.calls).toEqual([
+      "read", "read", "begin", "textures", "uv", "read", "read", "commit",
+    ]);
+    expect(f.harness.state.scope.face_texture_bindings[1].texture_uuid).toBeNull();
+    expect(f.harness.state.uv.cubes[0].faces.find(face =>
+      face.face === "south"
+    )?.enabled).toBe(false);
   });
 
   test("zero-delta plans refuse before native source reads or Undo", async () => {

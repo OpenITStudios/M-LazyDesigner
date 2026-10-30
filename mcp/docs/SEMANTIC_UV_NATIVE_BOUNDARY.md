@@ -31,6 +31,15 @@ Authoring Recipe
 
 The transaction rejects stale source fingerprints, duplicate face targets, non-finite UVs, out-of-bounds logical UVs, non-integral **physical-pixel** mapping (fractional logical UV can be valid), Box-UV targets, and concurrent Blockbench edits. The semantic placement-to-native compiler now preserves signed U/V corner order and existing 0/90/180/270-degree face rotations, applying a requested 90-degree packing turn relative to the authored rotation. Collapsed or non-finite native source UV is rejected before mutation. Semantic MaxRects placements are in **physical bitmap pixels**, whereas the Blockbench Cube face stores **logical UV units**. The compiler now requires both bitmap and logical dimensions, maps the two axes independently (including rectangular atlas sizing; animated textures require separately verified frame dimensions), and rejects missing scale or non-integer physical placements before a transaction can be built. Static code/regression coverage is not native save/reopen proof.
 
+## Painted-atlas native ownership safety
+
+The unregistered bitmap+UV atomic migration adapter contract refuses moved
+**active** faces whose native Texture ownership is null, absent or unlisted,
+before RGBA candidate generation or Undo. Native untextured/disabled faces
+outside the moved island remain allowed. A complete Cube/Texture/face ledger
+is still mandatory; this guard neither attests native scene completeness nor
+activates a production migration tool.
+
 ## Proof boundary
 
 REMOTE_GITHUB establishes contracts/source ownership only. It does not establish that Blockbench Undo restores every mutated face/rotation exactly, that save/reopen preserves the semantic result, or that visual seams/reference fidelity are accepted. Those remain LIVE_BLOCKBENCH evidence.
