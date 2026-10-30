@@ -793,6 +793,17 @@ export function inspectDeclaredNativeCrossCubeSeams(
   const reviewed = analyzeCrossCubeSeamContinuity(
     sampled, 6, alphaSemantics
   );
+  // One valid paired sample does not make the rest of a REQUIRED declared
+  // surface comparable. Preserve the pure analyzer's bounded gap evidence
+  // through the native read-only review projection.
+  const gaps = reviewed.evidence_gaps;
+  const incompleteSemanticScope =
+    gaps.required_unpaired_edge_count > 0 ||
+    gaps.ambiguous_required_group_count > 0 ||
+    gaps.unknown_continuity_pair_count > 0 ||
+    gaps.incompatible_cohort_pair_count > 0 ||
+    gaps.normal_alignment_unverified_pair_count > 0 ||
+    gaps.sample_alignment_unverified_pair_count > 0;
   return {
     ...reviewed,
     declaration_state: "explicit" as const,
@@ -803,7 +814,7 @@ export function inspectDeclaredNativeCrossCubeSeams(
     binding_mismatch_count: bindingMismatchCount,
     comparison_state: reviewed.compared_pair_count === 0
       ? ("not_evaluated" as const)
-      : omittedCount > 0
+      : omittedCount > 0 || incompleteSemanticScope
         ? ("partial" as const)
         : ("advisory_only" as const),
     // The declaration is caller-supplied, not an approval document.

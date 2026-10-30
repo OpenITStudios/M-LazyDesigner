@@ -418,3 +418,15 @@ clean seams, Bedrock render approval or reference-fidelity PASS.
 authored; exact-SHA Bun/typecheck/CI/native/visual/Golden NOT EXECUTED.
 No new Gateway tool, Runtime mutation, UV registration, model artifact,
 extra knowledge database or release.
+
+### Native diagnostic consumer: partial evidence is not advisory-only completion
+
+The existing `inspectDeclaredNativeCrossCubeSeams` result now uses the
+canonical pure analyzer's evidence-gap counts when projecting its
+`comparison_state`: one valid compared seam plus any separate REQUIRED
+unpaired/ambiguous/unknown or non-comparable declared evidence is `partial`,
+even if every declared edge was sampled and `omitted_declared_edge_count=0`.
+Deliberately intentional boundaries remain excluded; they do not create
+false defects. A fully comparable bounded sample stays `advisory_only`,
+not a visual/Bedrock PASS. Existing source-level native mock tests cover
+the mixed pair/required-extra-edge case. Bun/native tests NOT EXECUTED.

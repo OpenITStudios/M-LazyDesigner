@@ -648,6 +648,42 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
     });
   });
 
+
+  test("native comparison_state stays partial when sampled REQUIRED edges remain unpaired", () => {
+    withMockNative(() => {
+      const full = inspectDeclaredNativeCrossCubeSeams([left, right]);
+      expect(full.compared_pair_count).toBe(1);
+      expect(full.comparison_state).toBe("advisory_only");
+
+      // Two additional declared edges are physically outer boundaries:
+      // both are marked REQUIRED but have no matching Cube edge. Comparing
+      // the main pair does not authorize a false-complete summary.
+      const partial = inspectDeclaredNativeCrossCubeSeams([
+        left, right,
+        { ...left, edge: "left" },
+        { ...right, edge: "right" },
+      ]);
+      expect(partial.sampled_declared_edge_count).toBe(4);
+      expect(partial.omitted_declared_edge_count).toBe(0);
+      expect(partial.compared_pair_count).toBe(1);
+      expect(partial.evidence_gaps.required_unpaired_edge_count).toBe(2);
+      expect(partial.gate.reasons).toContain("CROSS_CUBE_REQUIRED_EDGE_UNPAIRED");
+      expect(partial.comparison_state).toBe("partial");
+      expect(partial.visual_verdict).toBe("not_evaluated");
+      expect(partial.native_sampling_attested).toBe(false);
+
+      // An explicitly intentional external border is not an unresolved
+      // continuity obligation and must not mark the main pair partial.
+      const intentional = inspectDeclaredNativeCrossCubeSeams([
+        left, right,
+        { ...left, edge: "left", continuity_intent: "INTENTIONAL_BOUNDARY" },
+      ]);
+      expect(intentional.compared_pair_count).toBe(1);
+      expect(intentional.evidence_gaps.required_unpaired_edge_count).toBe(0);
+      expect(intentional.comparison_state).toBe("advisory_only");
+    });
+  });
+
   test("native local coordinates must not pair if world rotations/translations separate them", () => {
     withMockNative(cubes => {
       cubes.right.mesh.matrixWorld.elements = translation(8, 0, 0);
