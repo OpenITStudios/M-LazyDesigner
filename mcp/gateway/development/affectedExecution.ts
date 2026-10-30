@@ -493,6 +493,8 @@ function sharedContractTestsForPath(path: string): readonly string[] {
       path === "mcp/gateway/control/packetData.ts" ||
       path === "mcp/gateway/control/packet.ts") {
     return [
+      ...(path === "mcp/gateway/control/packet.ts"
+        ? ["mcp/gateway/control/packet.test.ts"] : []),
       "mcp/gateway/control/workspaceSemantic.test.ts",
       "mcp/tests/asset-health.test.ts",
       "mcp/tests/gateway-control-lifecycle-readiness.test.ts",

@@ -63,8 +63,10 @@ export async function buildControlPacket(
     currentUserDelta?: string | null;
     taskMode?: ControlTaskMode;
     taskIntent?: string | null;
-    /** Internal test seam; the public Gateway schema is unchanged. */
+    /** Internal test seams; public Gateway schema remains unchanged. */
     contextResolver?: typeof contextForAuthoringDomain;
+    workspaceReader?: typeof readWorkspaceProjection;
+    referenceReader?: typeof readReferencePackageProjection;
   } = {}
 ): Promise<ControlPacket> {
   const baseSnapshot = buildControlSnapshot(status);
@@ -74,23 +76,32 @@ export async function buildControlPacket(
       ? resolveDevelopmentIntent(options.taskIntent ?? "")
       : null;
 
-  const workspace =
+  // Independent Workspace and Reference source reads run together. Only the
+  // active specialist depends on the selected Reference profile, so it can
+  // resolve while the Workspace (possibly a native finalization SHA read) is
+  // still pending. All three must finish before readiness/identity is built.
+  const workspacePromise =
     mode === "ASSET_AUTHORING"
-      ? await readWorkspaceProjection(status, options.workspacePath)
-      : emptyWorkspace();
+      ? (options.workspaceReader ?? readWorkspaceProjection)(status, options.workspacePath)
+      : Promise.resolve(emptyWorkspace());
+  const referencePromise =
+    mode === "ASSET_AUTHORING"
+      ? (options.referenceReader ?? readReferencePackageProjection)(options.referencePackagePath)
+      : readReferencePackageProjection(null);
+  const contextPromise =
+    mode === "ASSET_AUTHORING"
+      ? referencePromise.then((reference) =>
+          (options.contextResolver ?? contextForAuthoringDomain)(
+            baseSnapshot.authoring.domain,
+            reference.selected_profile
+          ))
+      : Promise.resolve({
+          required: [], optional: [], unavailable: [] as ContextResolutionIssue[],
+        });
 
-  const reference =
-    mode === "ASSET_AUTHORING"
-      ? await readReferencePackageProjection(options.referencePackagePath)
-      : await readReferencePackageProjection(null);
-
-  const resolvedContext =
-    mode === "ASSET_AUTHORING"
-      ? await (options.contextResolver ?? contextForAuthoringDomain)(
-          baseSnapshot.authoring.domain,
-          reference.selected_profile
-        )
-      : { required: [], optional: [], unavailable: [] as ContextResolutionIssue[] };
+  const [workspace, reference, resolvedContext] = await Promise.all([
+    workspacePromise, referencePromise, contextPromise,
+  ]);
   const contextUnavailable = resolvedContext.unavailable.length > 0;
 
   const snapshot: ControlSnapshot = {

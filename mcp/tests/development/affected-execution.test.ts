@@ -27,6 +27,27 @@ function impact(overrides: Partial<SemanticImpactReport> = {}): SemanticImpactRe
 }
 
 describe("affected execution planner", () => {
+  test("Control packet intake selects its existing focused overlap and readiness tests", () => {
+    const packet = planAffectedExecution({
+      changedPaths: ["mcp/gateway/control/packet.ts"],
+      semanticImpact: impact(),
+    });
+    expect(packet.fallback_full_verify).toBe(false);
+    expect(packet.targeted_tests).toContain("mcp/gateway/control/packet.test.ts");
+    expect(packet.targeted_tests).toContain(
+      "mcp/tests/gateway-control-lifecycle-readiness.test.ts"
+    );
+    expect(packet.checks).toContain("TARGETED_TESTS");
+
+    // A Workspace-only change need not rerun the independent intake overlap
+    // test merely because both are consumed by Control.
+    const workspace = planAffectedExecution({
+      changedPaths: ["mcp/gateway/control/workspace.ts"],
+      semanticImpact: impact(),
+    });
+    expect(workspace.targeted_tests).not.toContain("mcp/gateway/control/packet.test.ts");
+  });
+
   test("Animation knowledge diagnostics reuse existing affected regressions", () => {
     for (const [path, expected] of [
       ["mcp/lib/animation/rootMotionAnalysis.ts", "mcp/tests/quality-intelligence.test.ts"],

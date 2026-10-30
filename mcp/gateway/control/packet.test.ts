@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildControlPacket } from "./packet";
+import { emptyReference } from "./referenceParser";
 import { emptyWorkspace, workspaceSummary } from "./packetData";
 import { workspaceSemanticState } from "./workspace";
 import { projectControlPacketForGateway } from "./gatewayProjection";
@@ -75,6 +76,62 @@ describe("Control packet missing context boundary", () => {
     expect(packet.readiness.context_ready).toBe(true);
   });
 
+
+  test("independent Workspace/Reference reads overlap and the specialist need not wait for Workspace", async () => {
+    const started: string[] = [];
+    let releaseWorkspace: () => void = () => {};
+    let releaseReference: () => void = () => {};
+    const workspaceHold = new Promise<void>((resolve) => { releaseWorkspace = resolve; });
+    const referenceHold = new Promise<void>((resolve) => { releaseReference = resolve; });
+    const pending = buildControlPacket(status, {
+      workspacePath: "/fixture/asset",
+      referencePackagePath: "/fixture/reference",
+      workspaceReader: async (_status, input) => {
+        expect(input).toBe("/fixture/asset");
+        started.push("workspace");
+        await workspaceHold;
+        return { ...emptyWorkspace(), asset: "Chair", fingerprint: "workspace-a" };
+      },
+      referenceReader: async (input) => {
+        expect(input).toBe("/fixture/reference");
+        started.push("reference");
+        await referenceHold;
+        return { ...emptyReference("REFERENCE_PATH_UNAVAILABLE"), asset_name: "Chair" };
+      },
+      contextResolver: async () => {
+        started.push("specialist");
+        return { required: [handle("modelling")], optional: [], unavailable: [] };
+      },
+    });
+
+    try {
+      expect(started).toEqual(["workspace", "reference"]);
+      releaseReference();
+      for (let index = 0; index < 6; index++) await Promise.resolve();
+      expect(started).toEqual(["workspace", "reference", "specialist"]);
+      releaseWorkspace();
+      const packet = await pending;
+      expect(packet.workspace).toMatchObject({ fingerprint: "workspace-a", asset: "Chair" });
+      expect(packet.reference.asset_name).toBe("Chair");
+      expect(packet.context.required).toHaveLength(1);
+      expect(packet.runtime.online).toBe(true);
+    } finally {
+      releaseWorkspace();
+      releaseReference();
+      await pending.catch(() => {});
+    }
+  });
+
+  test("an unexpected source reader fault cannot publish a partial Control packet", async () => {
+    await expect(buildControlPacket(status, {
+      workspaceReader: async () => emptyWorkspace(),
+      referenceReader: async () => { throw new Error("REFERENCE_READER_FAULT"); },
+      contextResolver: async () => {
+        throw new Error("specialist must not run on an invalid reference");
+      },
+    })).rejects.toThrow("REFERENCE_READER_FAULT");
+  });
+
   test("Runtime offline remains OFFLINE despite a separate context failure", async () => {
     const offline = {
       ...status,
@@ -135,6 +192,8 @@ describe("Control packet missing context boundary", () => {
     const packet = await buildControlPacket(status, {
       taskMode: "SYSTEM_DEVELOPMENT",
       contextResolver: async () => { throw new Error("must not load asset context"); },
+      workspaceReader: async () => { throw new Error("must not load Workspace"); },
+      referenceReader: async () => { throw new Error("must not load Reference"); },
     });
     expect(packet.readiness.context_ready).toBe(true);
     expect(packet.context.unavailable).toBeUndefined();
