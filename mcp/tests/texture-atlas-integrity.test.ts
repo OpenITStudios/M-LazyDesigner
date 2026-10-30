@@ -232,6 +232,69 @@ describe("texture atlas integrity", () => {
     expect(unknown.partial_overlap.pair_count).toBe(1);
   });
 
+  test("native orphaned Texture binding cannot pass UV atlas production gate", () => {
+    const g = globalThis as unknown as Record<string, unknown>;
+    const previous = { Project: g.Project, Cube: g.Cube };
+    const texture = {
+      uuid: "native-base",
+      width: 128, height: 128, display_height: 128,
+      getUVWidth: () => 128, getUVHeight: () => 128,
+    };
+    let bindingAvailable = false;
+    const face = {
+      texture: "orphaned-texture-id",
+      enabled: true,
+      uv: [0, 0, 4, 4],
+      rotation: 0,
+      getTexture: () => bindingAvailable ? texture : null,
+    };
+    g.Project = { texture_width: 128, texture_height: 128 };
+    g.Cube = { all: [{
+      uuid: "atlas-binding-cube", name: "atlas-binding-cube",
+      box_uv: false, autouv: 0, mirror_uv: false,
+      size: () => [4, 4, 4],
+      faces: { north: face },
+    }] };
+    try {
+      const unresolved = collectUvAtlasUsages();
+      expect(unresolved).toHaveLength(1);
+      expect(unresolved[0].texture_uuid).toBeNull();
+      const blocked = buildUvAtlasAudit(unresolved, 128, 128);
+      if (blocked.state !== "available") throw new Error("missing audit");
+      expect(blocked.invalid_uv.count).toBe(0);
+      expect(blocked.partial_overlap.pair_count).toBe(0);
+      expect(blocked.production_gate.state).toBe("review_required");
+      expect(blocked.production_gate.reasons).toContain(
+        "TEXTURE_IDENTITY_UNRESOLVED"
+      );
+
+      bindingAvailable = true;
+      const recovered = buildUvAtlasAudit(collectUvAtlasUsages(), 128, 128);
+      if (recovered.state !== "available") throw new Error("missing audit");
+      expect(recovered.production_gate.state).toBe("ready");
+      expect(recovered.production_gate.reasons).not.toContain(
+        "TEXTURE_IDENTITY_UNRESOLVED"
+      );
+
+      const blank = buildUvAtlasAudit([
+        { ...unresolved[0], texture_uuid: "  " },
+      ], 128, 128);
+      if (blank.state !== "available") throw new Error("missing audit");
+      expect(blank.production_gate.reasons).toContain("TEXTURE_IDENTITY_UNRESOLVED");
+
+      // Historical import-only diagnostic fixtures can omit Texture UUID.
+      const { texture_uuid: _unused, ...legacy } = unresolved[0];
+      const compatible = buildUvAtlasAudit([legacy], 128, 128);
+      if (compatible.state !== "available") throw new Error("missing audit");
+      expect(compatible.production_gate.state).toBe("ready");
+    } finally {
+      for (const key of ["Project", "Cube"]) {
+        if (previous[key as keyof typeof previous] === undefined) delete g[key];
+        else g[key] = previous[key as keyof typeof previous];
+      }
+    }
+  });
+
   test("animated UV audit computes V scale from one frame, not the stacked bitmap", () => {
     const g = globalThis as unknown as Record<string, unknown>;
     const previous = { Project: g.Project, Cube: g.Cube };

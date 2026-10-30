@@ -254,6 +254,15 @@ export function buildUvAtlasAudit(
   }
 
   const reasons: string[] = [];
+  // collectUvAtlasUsages always declares a texture_uuid. A null value
+  // therefore means an enabled face's native Texture binding did not resolve:
+  // valid UV coordinates cannot make the missing painted pixels READY.
+  // Undefined is retained for older pure-diagnostic fixtures which do not
+  // supply a native Texture inventory, not as proof of a real binding.
+  if (usages.some(({ texture_uuid }) =>
+    texture_uuid === null ||
+    (typeof texture_uuid === "string" && texture_uuid.trim().length === 0)
+  )) reasons.push("TEXTURE_IDENTITY_UNRESOLVED");
   if (invalidUv.length > 0) reasons.push("INVALID_UV");
   if (outOfBounds.length > 0) reasons.push("OUT_OF_BOUNDS");
   if (nonIntegralPixels.length > 0) reasons.push("NON_INTEGRAL_PIXEL_MAPPING");
