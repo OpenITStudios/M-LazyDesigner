@@ -90,6 +90,8 @@ export type GatewayRuntimeInvocation = {
   readOnly: boolean;
   /** Existing backend health/project preflight identity; no additional status. */
   verifiedProjectUuid: string | null;
+  /** Verified within the serialized preflight, before any native tool call. */
+  phaseBefore: BlockitAuthoringPhaseAffinity | null;
   /** Backend-validated once; reused by Control instead of re-parsing affinity receipts. */
   effectApplication?: GatewayEffectApplication;
 };

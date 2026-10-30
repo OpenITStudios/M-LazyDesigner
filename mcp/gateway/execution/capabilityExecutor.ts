@@ -117,9 +117,6 @@ export class GatewayCapabilityExecutor {
 
       const traceMeta = traceMetaFromContext(context);
       const branch = capabilityBranchFromArguments(args);
-      const phaseBefore = capabilityNeedsPhaseSnapshot(capability)
-        ? (await this.backend.getStatus()).affinity.authoring_phase
-        : null;
 
       if (context?.mcpReq?.signal?.aborted) {
         throw new GatewayBackendError(
@@ -139,6 +136,13 @@ export class GatewayCapabilityExecutor {
             context?.mcpReq?.signal
           );
       const result = localResult ?? runtimeInvocation!.result;
+      // The backend verifies Stage in its serialized preflight. Reuse that
+      // before-state instead of making a separate, possibly stale status
+      // request before the tool enters the Runtime queue. Local providers
+      // do not own Stage mutation and cannot assert a native before-state.
+      const phaseBefore = capabilityNeedsPhaseSnapshot(capability)
+        ? runtimeInvocation?.phaseBefore ?? null
+        : null;
       const readOnly =
         localResult !== null
           ? this.localCapabilities.readOnlyHint(capability) === true

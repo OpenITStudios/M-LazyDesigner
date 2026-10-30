@@ -136,12 +136,16 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
     let invoked = 0;
     const executor = new GatewayCapabilityExecutor(
       {
-        getStatus: async () => ({ affinity: { authoring_phase: "geometry" } }),
+        getStatus: async () => {
+          throw new Error("Handoff must not repeat a pre-execution status call.");
+        },
         invokeCapabilityWithMetadata: async () => {
           invoked++;
           return {
             result: { content: [], structuredContent: receipt },
             readOnly: false,
+            verifiedProjectUuid: "bound-project",
+            phaseBefore: "geometry",
             effectApplication: resolveGatewayCapabilityEffects(
               "switch_authoring_phase", receipt, "geometry"
             ),
@@ -166,6 +170,51 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
       .toBe(before + 1);
   });
 
+  test("handoff derives phase-before from the queued Runtime, not an earlier snapshot", async () => {
+    const session = new GatewaySessionState();
+    session.onVerifiedRuntimeStatus("handoff-project", "texturing");
+    session.replaceFacts({ ...session.facts, texture_available: true });
+    let statusReads = 0;
+    const handoff = {
+      phase: "animation",
+      runtime_surface: "ANIMATION",
+      reason: "move into Animation",
+      resume_from: "texturing checkpoint",
+      readiness_summary: null,
+      surface_changed: true,
+      reload_required: false,
+      action: "continue",
+    };
+    const executor = new GatewayCapabilityExecutor(
+      {
+        getStatus: async () => {
+          statusReads++;
+          throw new Error("Redundant status read");
+        },
+        invokeCapabilityWithMetadata: async () => ({
+          result: { content: [], structuredContent: handoff },
+          readOnly: false,
+          verifiedProjectUuid: "handoff-project",
+          phaseBefore: "texturing",
+          effectApplication: resolveGatewayCapabilityEffects(
+            "switch_authoring_phase", handoff, "texturing"
+          ),
+        }),
+      } as any,
+      { invoke: async () => null } as any,
+      session
+    );
+    const response = await executor.invoke(
+      "switch_authoring_phase", { target_phase: "animation" }
+    ) as any;
+    expect(response.isError).not.toBe(true);
+    expect(statusReads).toBe(0);
+    expect(session.projectUuid).toBe("handoff-project");
+    expect(session.facts).toEqual({ project_bound: true });
+    session.onVerifiedRuntimeStatus("handoff-project", "animation");
+    expect(session.facts.project_bound).toBe(true);
+  });
+
   test("failed switch does not retire proven facts", async () => {
     const session = new GatewaySessionState();
     session.onVerifiedRuntimeStatus("failed-switch-project", "geometry");
@@ -173,7 +222,9 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
     const before = gatewayOrchestrationRecoveryState.snapshot().invalidation_count;
     const executor = new GatewayCapabilityExecutor(
       {
-        getStatus: async () => ({ affinity: { authoring_phase: "geometry" } }),
+        getStatus: async () => {
+          throw new Error("Failed handoff must not perform a separate status read.");
+        },
         invokeCapabilityWithMetadata: async () => ({
           result: {
             content: [{ type: "text", text: "phase refused" }],
@@ -181,6 +232,8 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
             structuredContent: { code: "PHASE_NOT_READY" },
           },
           readOnly: false,
+          verifiedProjectUuid: null,
+          phaseBefore: "geometry",
         }),
       } as any,
       { invoke: async () => null } as any,

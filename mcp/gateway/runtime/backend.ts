@@ -949,6 +949,7 @@ export class BlockitRuntimeBackend {
             ),
             readOnly: tool.annotations?.readOnlyHint === true,
             verifiedProjectUuid: this.projectUuid,
+            phaseBefore: priorAuthoringPhase,
             effectApplication: application,
           };
         }
@@ -957,6 +958,7 @@ export class BlockitRuntimeBackend {
           result: managed,
           readOnly: tool.annotations?.readOnlyHint === true,
           verifiedProjectUuid: null,
+          phaseBefore: priorAuthoringPhase,
           effectApplication: application,
         };
       } catch (error) {

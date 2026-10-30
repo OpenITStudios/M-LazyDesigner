@@ -360,6 +360,7 @@ const GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH: Readonly<Record<string, readonly str
     "mcp/tests/gateway-contract.test.ts",
     "mcp/gateway/capabilities/effects.test.ts",
     "mcp/tests/gateway-precondition-execution.test.ts",
+    "mcp/tests/gateway-control-status-economy.test.ts",
   ],
   "mcp/gateway/control/receipt.ts": [
     "mcp/gateway/capabilities/effects.test.ts",

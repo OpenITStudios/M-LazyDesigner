@@ -45,14 +45,15 @@ describe("LazyDesigner Control status economy", () => {
     expect(describeBlock).not.toContain("current_phase:");
   });
 
-  test("status reads remain explicit for orientation and canonical phase snapshot only", async () => {
+  test("explicit orientation uses status, while handoff reuses the queued Runtime phase", async () => {
     const [registration, executor] = await Promise.all([
       Bun.file("gateway/handlers/registerCoreTools.ts").text(),
       Bun.file("gateway/execution/capabilityExecutor.ts").text(),
     ]);
     expect(registration).toContain("await backend.getStatus()");
     expect(executor).toContain("capabilityNeedsPhaseSnapshot(capability)");
-    expect(executor).toContain("(await this.backend.getStatus())");
+    expect(executor).toContain("runtimeInvocation?.phaseBefore");
+    expect(executor).not.toContain("(await this.backend.getStatus())");
   });
 });
 

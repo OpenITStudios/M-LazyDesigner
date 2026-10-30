@@ -141,6 +141,7 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(same.result.structuredContent).toMatchObject({
       phase: "geometry", surface_changed: false,
     });
+    expect(same.phaseBefore).toBe("geometry");
     expect(same.result.structuredContent).not.toHaveProperty(
       "gateway_catalog_invalidated"
     );
@@ -160,6 +161,7 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
       phase: "texturing", gateway_catalog_invalidated: true,
       client_reconnect_required: false,
     });
+    expect(transition.phaseBefore).toBe("geometry");
 
     // A same-Stage receipt claiming a different Runtime surface cannot
     // silently keep the previous catalog or suppress subsequent recovery.
@@ -216,6 +218,7 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
       "manage_cubes", { operation: "update" }
     );
     expect(result.verifiedProjectUuid).toBe("project-verified");
+    expect(result.phaseBefore).toBe("geometry");
     expect(result.result.isError).not.toBe(true);
   });
 
