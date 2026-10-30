@@ -202,6 +202,9 @@ per-face UV/rotation/material name, selected Texture instance/UUID,
 and native bitmap/UV dimensions. If a later native getter rewrites
 an earlier face or moves a Cube without changing its size, the entire
 batch fails with `TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ`.
-No native scene-wide revision, image appearance or user approval is
+Binding getters are evaluated before checking their own metadata, then
+a metadata-only final sweep checks the entire selected batch again after
+the last getter. This also rejects a last-getter mutation of an earlier
+face. No native scene-wide revision, image appearance or user approval is
 attested by this synchronous readback. Source regression definitions
 cover both UV rewriting and same-size Cube translation; not executed.

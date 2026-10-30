@@ -377,6 +377,62 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
     });
   });
 
+
+  test("pattern readback rejects mutations caused by its own last texture getter", () => {
+    withMockNative(cubes => {
+      const plan = planTextureTreatment({
+        required_faces: [
+          { cube_uuid: "left", face: "north" },
+          { cube_uuid: "right", face: "north" },
+        ],
+        regions: [{
+          region: "cohort", evidence: "observed",
+          surface_pattern: "painted_metal", render_profile: "opaque",
+          face_targets: [
+            { cube_uuid: "left", face: "north", treatment: "PAINT" },
+            { cube_uuid: "right", face: "north", treatment: "PAINT" },
+          ],
+        }],
+      });
+      const leftIntent = { cube_uuid: "left", face: "north" as const,
+        expected_texture_uuid: "left-texture", minimum_pixels_per_model_unit: 1 };
+      const rightIntent = { cube_uuid: "right", face: "north" as const,
+        expected_texture_uuid: "right-texture", minimum_pixels_per_model_unit: 1 };
+
+      // A getter mutating its *own* UV during the first immediate
+      // validation must be caught by the post-getter metadata recheck.
+      const first = cubes.left.faces.north;
+      const getFirst = first.getTexture;
+      let firstCalls = 0;
+      first.getTexture = () => {
+        firstCalls++;
+        if (firstCalls === 2) first.uv = [0, 0, 1, 2];
+        return getFirst();
+      };
+      expect(() => inspectTreatmentNativePatternPhysicalFit(plan, [leftIntent]))
+        .toThrow("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
+      expect(firstCalls).toBe(2);
+
+      // The last getter of the final face can modify an earlier face
+      // *after* its own full final check. The metadata-only sweep after
+      // all getter calls must still detect this.
+      first.getTexture = getFirst;
+      first.uv = [0, 0, 2, 2];
+      const last = cubes.right.faces.north;
+      const getLast = last.getTexture;
+      let lastCalls = 0;
+      last.getTexture = () => {
+        lastCalls++;
+        if (lastCalls === 3) first.uv = [0, 0, 1, 2];
+        return getLast();
+      };
+      expect(() => inspectTreatmentNativePatternPhysicalFit(
+        plan, [leftIntent, rightIntent]
+      )).toThrow("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
+      expect(lastCalls).toBe(3);
+    });
+  });
+
   test("native pattern reviewer refuses foreign textures and undeclared face ownership", () => {
     withMockNative(() => {
       const plan = planTextureTreatment({

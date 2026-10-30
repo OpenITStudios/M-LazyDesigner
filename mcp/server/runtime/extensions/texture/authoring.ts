@@ -1245,6 +1245,7 @@ export function inspectTreatmentNativePatternPhysicalFit(
   ));
   const visited = new Set<string>();
   const finalFaceReadbacks: Array<() => void> = [];
+  const finalMetadataReadbacks: Array<() => void> = [];
   const faces = intents.map(intent => {
     if (!intent || typeof intent.cube_uuid !== "string" ||
         !intent.cube_uuid.trim() ||
@@ -1307,7 +1308,7 @@ export function inspectTreatmentNativePatternPhysicalFit(
     // A later face's native read may mutate an earlier Cube, even when this
     // inspection has no await. Pin *all* inspected faces through final batch
     // readback; per-face immediate checks alone can mix project revisions.
-    const requireSameNativeFace = () => {
+    const requireSameNativeMetadata = () => {
       if (!Array.isArray(Cube.all) || !Cube.all.includes(cube) ||
           cubes.get(intent.cube_uuid) !== cube ||
           cube.faces[intent.face] !== face ||
@@ -1322,7 +1323,6 @@ export function inspectTreatmentNativePatternPhysicalFit(
           !Array.isArray(Texture.all) || !Texture.all.includes(texture) ||
           (typeof Project !== "undefined" && Array.isArray(Project?.textures) &&
            !Project.textures.includes(texture)) ||
-          face.getTexture() !== texture ||
           texture.uuid !== intent.expected_texture_uuid ||
           texture.height !== texture.display_height ||
           texture.width !== metrics.width ||
@@ -1332,8 +1332,18 @@ export function inspectTreatmentNativePatternPhysicalFit(
         throw new Error("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
       }
     };
+    const requireSameNativeFace = () => {
+      // Read the potentially mutable native binding BEFORE checking the
+      // metadata that it may affect, not as a late operand of the check.
+      const resolved = face.getTexture();
+      requireSameNativeMetadata();
+      if (resolved !== texture) {
+        throw new Error("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
+      }
+    };
     requireSameNativeFace();
     finalFaceReadbacks.push(requireSameNativeFace);
+    finalMetadataReadbacks.push(requireSameNativeMetadata);
     return {
       cube_uuid: intent.cube_uuid, face: intent.face,
       texture_uuid: texture.uuid,
@@ -1342,6 +1352,10 @@ export function inspectTreatmentNativePatternPhysicalFit(
     };
   });
   for (const recheck of finalFaceReadbacks) recheck();
+  // The *last* getter could mutate an earlier face after that face's final
+  // binding check. A metadata-only sweep after all native getter calls
+  // closes this observable read-window gap without another source read.
+  for (const recheck of finalMetadataReadbacks) recheck();
   return {
     source: "current_blockbench_cube_face_read_only" as const,
     state: faces.some(face => face.state === "review_required")
