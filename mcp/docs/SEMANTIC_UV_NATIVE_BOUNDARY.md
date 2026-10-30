@@ -36,9 +36,13 @@ The transaction rejects stale source fingerprints, duplicate face targets, non-f
 The unregistered bitmap+UV atomic migration adapter contract refuses moved
 **active** faces whose native Texture ownership is null, absent or unlisted,
 before RGBA candidate generation or Undo. Native untextured/disabled faces
-outside the moved island remain allowed. A complete Cube/Texture/face ledger
-is still mandatory; this guard neither attests native scene completeness nor
-activates a production migration tool.
+outside the moved island remain allowed. The native reader additionally
+requires each resolved face Texture to be the exact project inventory object,
+not a detached copy bearing the same UUID. Legitimate native material/group
+overrides are preserved: raw face.texture does not have to equal the resolved
+rendered atlas. A complete Cube/Texture/face ledger is still mandatory; these
+guards neither attest native scene completeness nor activate a production
+migration tool.
 
 The adapter-only transaction computes expected before/after RGBA revisions
 from immutable snapshots and candidates. After native apply it compares

@@ -144,7 +144,13 @@ function exactFaceTextureBindings(
   cubes: readonly Cube[],
   atlases: readonly NativeAtlas[]
 ): UvPixelMigrationScopedState["scope"]["face_texture_bindings"] {
-  const textureUuids = new Set(atlases.map(texture => texture.uuid));
+  // A copied/foreign Texture object can carry a legitimate project UUID.
+  // Bind resolved faces to the *actual* native inventory object, as the
+  // existing seam inspector does; UUID membership alone is insufficient.
+  const textureByUuid = new Map<string, Texture>(atlases.map(atlas => [
+    atlas.uuid, atlas.texture,
+  ]));
+  const textureUuids = new Set(textureByUuid.keys());
   const bindings: UvPixelMigrationScopedState["scope"]["face_texture_bindings"] = [];
   for (const cube of cubes) {
     for (const key of FACE_KEYS) {
@@ -156,9 +162,9 @@ function exactFaceTextureBindings(
       }
       const texture = face.getTexture();
       const uuid = texture ? texture.uuid : null;
-      if (uuid !== null && !textureUuids.has(uuid)) {
+      if (texture && textureByUuid.get(uuid!) !== texture) {
         throw new Error(
-          "UV_PIXEL_MIGRATION_TEXTURE_SCOPE_INCOMPLETE: face refers to an atlas outside the project."
+          "UV_PIXEL_MIGRATION_TEXTURE_SCOPE_INCOMPLETE: resolved face Texture is not the exact native project atlas."
         );
       }
       // Do not mistake a dangling authored UUID for an intentional untextured

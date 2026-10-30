@@ -248,6 +248,35 @@ describe("unregistered native Texture + UV migration adapter harness", () => {
     });
   });
 
+  test("resolved face Texture requires native object identity, while valid overrides survive", async () => {
+    await withBlockbench(async ({ base, mer, cube, history }) => {
+      const adapter = createBlockbenchUvPixelMigrationAdapter();
+      // A detached clone with a matching UUID is not a Texture owned by
+      // the current native project. Accepting it would move the wrong RGBA.
+      cube.faces.north.getTexture = () => fakeTexture("base");
+      expect(() => adapter.readState()).toThrow(
+        "UV_PIXEL_MIGRATION_TEXTURE_SCOPE_INCOMPLETE"
+      );
+      expect(history).toEqual([]);
+
+      // Raw face.texture is not always the rendered identity: native
+      // material/group overrides may legitimately select another atlas.
+      cube.faces.north.getTexture = () => mer;
+      const resolved = await adapter.readState();
+      expect(cube.faces.north.texture).toBe("base");
+      expect(resolved.scope.face_texture_bindings.find(
+        binding => binding.face === "north"
+      )?.texture_uuid).toBe("mer");
+      expect(resolved.scope.all_texture_uuids).toEqual(["base", "mer"]);
+      expect(history).toEqual([]);
+
+      cube.faces.north.getTexture = () => base;
+      expect((await adapter.readState()).scope.face_texture_bindings.find(
+        binding => binding.face === "north"
+      )?.texture_uuid).toBe("base");
+    });
+  });
+
   test("same-project texture reassignment after initial read cannot commit", async () => {
     await withBlockbench(async ({ cube, history }) => {
       const adapter = createBlockbenchUvPixelMigrationAdapter();
