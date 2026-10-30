@@ -445,6 +445,28 @@ const GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH: Readonly<
 };
 
 
+// Golden reporting source has focused executable regressions. Do not mistake
+// a TypeScript check of an engineering script for its behavior contract.
+const GOLDEN_REPORT_TESTS_BY_PATH: Readonly<Record<string, readonly string[]>> = {
+  "mcp/scripts/reporting/run-golden-benchmark-session.ts": [
+    "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+  ],
+  "mcp/scripts/reporting/evaluate-golden-authoring-runs.ts": [
+    "mcp/tests/benchmark/golden-authoring-run-contract.test.ts",
+    "mcp/tests/benchmark/golden-session-finalizer.test.ts",
+  ],
+  "mcp/scripts/reporting/finalize-golden-session.ts": [
+    "mcp/tests/benchmark/golden-session-finalizer.test.ts",
+    "mcp/tests/benchmark/golden-session-comparison.test.ts",
+  ],
+  "mcp/scripts/reporting/compare-golden-sessions.ts": [
+    "mcp/tests/benchmark/golden-session-comparison.test.ts",
+  ],
+  "mcp/scripts/reporting/summarize-gateway-benchmark-trace.ts": [
+    "mcp/tests/benchmark/gateway-benchmark-trace-report.test.ts",
+  ],
+};
+
 export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly string[]>> = {
   "mcp/tests/fixtures/agent-permission-cases.json": [
     "mcp/tests/repository/agent-permission-preflight.test.ts",
@@ -462,7 +484,25 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
     "mcp/tests/benchmark/golden-authoring-run-contract.test.ts",
   ],
   "mcp/tests/fixtures/golden-task-cases.json": [
+    "mcp/tests/benchmark/golden-authoring-run-contract.test.ts",
     "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+    "mcp/tests/benchmark/golden-session-comparison.test.ts",
+    "mcp/tests/benchmark/golden-session-finalizer.test.ts",
+    "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+  ],
+  "mcp/tests/fixtures/golden/full-asset/seed.bbmodel": [
+    "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+    "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+  ],
+  "mcp/tests/fixtures/golden/full-asset/reference/REFERENCE.json": [
+    "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+    "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+  ],
+  "mcp/tests/fixtures/golden/full-asset/reference/turnaround.svg": [
+    "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+    "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+  ],
+  "mcp/tests/fixtures/golden/full-asset/README.md": [
     "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
   ],
   "mcp/tests/fixtures/native-acceptance-manifest.json": [
@@ -480,6 +520,11 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  const goldenReportTests = GOLDEN_REPORT_TESTS_BY_PATH[path];
+  if (goldenReportTests) return goldenReportTests;
+  if (path === "mcp/docs/GOLDEN_TASKS.md") {
+    return ["mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts"];
+  }
   // Finalization uses the same bound project/Workspace/Control owners;
   // one affected source edit should select the existing complete flow tests.
   if (path === "mcp/server/projectAffinity.ts" ||

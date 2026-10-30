@@ -22,11 +22,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Current source / installed proof boundary
 
-Golden output-isolation and Reference provenance corrections are source-authored at `9f98c979`; their focused tests, Bun/typecheck and native acceptance remain NOT EXECUTED. Older installed managed `7b45bd69` / Desktop 0.1.1 evidence qualifies only those older builds. Detailed scoped proof: [current-validation.md](current-validation.md). Protect historical checkout and asset data; do not deploy, enable CI or publish releases.
+Golden safety/provenance through `2ed71e93` and focused affected-test routing are authored; Bun/native proofs remain NOT EXECUTED. Older installed managed `7b45bd69` / Desktop 0.1.1 evidence qualifies only those older builds. Detailed scoped proof: [current-validation.md](current-validation.md). Protect historical checkout and asset data; do not deploy, enable CI or publish releases.
 
 ## Next REMOTE_GITHUB work
 
-**Asset-flow efficiency:** Control's independent Workspace/Reference reads and complete UV→Texture recheck targeting remain source-authored. The single Golden runner now protects output destinations and preserves fresh Reference provenance. Further optimization needs measured evidence; do not add routing, caching, approvals, public Gateway tools or another benchmark engine.
+**Asset-flow efficiency:** Control's independent Workspace/Reference reads and complete UV→Texture recheck targeting remain source-authored. Golden source/output identity is guarded; affected tests now select direct contracts. Further optimization needs measured evidence; do not add routing, caching, approvals, public Gateway tools or another benchmark engine.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 

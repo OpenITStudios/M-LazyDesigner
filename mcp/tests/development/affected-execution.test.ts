@@ -553,6 +553,53 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("Golden reporting source and documentation select existing direct contract tests", async () => {
+    const owned: Array<[string, string[]]> = [
+      ["mcp/scripts/reporting/run-golden-benchmark-session.ts", [
+        "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+      ]],
+      ["mcp/scripts/reporting/evaluate-golden-authoring-runs.ts", [
+        "mcp/tests/benchmark/golden-authoring-run-contract.test.ts",
+        "mcp/tests/benchmark/golden-session-finalizer.test.ts",
+      ]],
+      ["mcp/scripts/reporting/finalize-golden-session.ts", [
+        "mcp/tests/benchmark/golden-session-finalizer.test.ts",
+        "mcp/tests/benchmark/golden-session-comparison.test.ts",
+      ]],
+      ["mcp/scripts/reporting/compare-golden-sessions.ts", [
+        "mcp/tests/benchmark/golden-session-comparison.test.ts",
+      ]],
+      ["mcp/scripts/reporting/summarize-gateway-benchmark-trace.ts", [
+        "mcp/tests/benchmark/gateway-benchmark-trace-report.test.ts",
+      ]],
+      ["mcp/docs/GOLDEN_TASKS.md", [
+        "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+      ]],
+    ];
+    for (const [path, contracts] of owned) {
+      expect(await Bun.file(path.slice(4)).exists(), path).toBe(true);
+      const plan = planAffectedExecution({
+        changedPaths: [path], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, path).toBe(false);
+      expect(plan.checks, path).toContain("TARGETED_TESTS");
+      expect(plan.targeted_tests, path).toEqual([...contracts].sort());
+      expect(plan.commands, path).not.toContain("bun run verify:full");
+    }
+    const combined = planAffectedExecution({
+      changedPaths: [
+        "mcp/scripts/reporting/run-golden-benchmark-session.ts",
+        "mcp/tests/fixtures/golden-task-cases.json",
+      ],
+      semanticImpact: impact(),
+    });
+    expect(combined.fallback_full_verify).toBe(false);
+    expect(new Set(combined.targeted_tests).size).toBe(combined.targeted_tests.length);
+    expect(combined.targeted_tests).toContain(
+      "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts"
+    );
+  });
+
   test("all current data fixtures select existing consumers; unknown fixtures fail conservatively", async () => {
     const owned: Array<[string, string[]]> = [
       ["mcp/tests/fixtures/agent-permission-cases.json", ["mcp/tests/repository/agent-permission-preflight.test.ts"]],
@@ -560,7 +607,28 @@ describe("affected execution planner", () => {
       ["mcp/tests/fixtures/astra-usage-validation-template.json", ["mcp/tests/astra-usage-validation-contract.test.ts"]],
       ["mcp/tests/fixtures/codex-session-policy-input-template.json", ["mcp/tests/astra-usage-ready-contract.test.ts"]],
       ["mcp/tests/fixtures/golden-authoring-run-template.json", ["mcp/tests/benchmark/golden-authoring-run-contract.test.ts"]],
-      ["mcp/tests/fixtures/golden-task-cases.json", ["mcp/tests/benchmark/golden-benchmark-session-runner.test.ts", "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts"]],
+      ["mcp/tests/fixtures/golden-task-cases.json", [
+        "mcp/tests/benchmark/golden-authoring-run-contract.test.ts",
+        "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+        "mcp/tests/benchmark/golden-session-comparison.test.ts",
+        "mcp/tests/benchmark/golden-session-finalizer.test.ts",
+        "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+      ]],
+      ["mcp/tests/fixtures/golden/full-asset/seed.bbmodel", [
+        "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+        "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+      ]],
+      ["mcp/tests/fixtures/golden/full-asset/reference/REFERENCE.json", [
+        "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+        "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+      ]],
+      ["mcp/tests/fixtures/golden/full-asset/reference/turnaround.svg", [
+        "mcp/tests/benchmark/golden-benchmark-session-runner.test.ts",
+        "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+      ]],
+      ["mcp/tests/fixtures/golden/full-asset/README.md", [
+        "mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts",
+      ]],
       ["mcp/tests/fixtures/native-acceptance-manifest.json", ["mcp/tests/native-acceptance-manifest-contract.test.ts"]],
       ["mcp/tests/fixtures/quality-benchmark-cases.json", ["mcp/tests/benchmark/quality-benchmark-contract.test.ts"]],
       ["mcp/tests/fixtures/regression-cases.json", ["mcp/tests/benchmark/quality-benchmark-corpus-contract.test.ts"]],

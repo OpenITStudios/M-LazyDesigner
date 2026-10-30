@@ -23,6 +23,24 @@ type GoldenTask = {
 };
 
 describe("quality benchmark corpus contracts", () => {
+  test("single Golden documentation matches the current fixture identity", async () => {
+    const corpus = await Bun.file("tests/fixtures/golden-task-cases.json").json() as {
+      tasks: GoldenTask[];
+    };
+    expect(corpus.tasks).toHaveLength(1);
+    const task = corpus.tasks[0]!;
+    const [policy, fixture] = await Promise.all([
+      Bun.file("docs/GOLDEN_TASKS.md").text(),
+      Bun.file("tests/fixtures/golden/full-asset/README.md").text(),
+    ]);
+    expect(policy).toContain("`" + task.id + "`");
+    expect(policy).toContain(task.fixture.seed_path);
+    expect(policy).toContain(task.fixture.reference_package_path);
+    expect(fixture).toContain("Beacon Courier Bot");
+    expect(fixture).toContain("seed.bbmodel");
+    expect(fixture).toContain("reference/REFERENCE.json");
+  });
+
   test("regression corpus names existing test source files, not current-head PASS evidence", async () => {
     const corpus = await Bun.file("tests/fixtures/regression-cases.json").json() as { schema: string; cases: RegressionCase[] };
     expect(corpus.schema).toBe("lazydesigner-regression-corpus-v1");
