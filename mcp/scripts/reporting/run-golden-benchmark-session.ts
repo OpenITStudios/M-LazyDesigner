@@ -1,6 +1,6 @@
 import { mkdir, readFile, realpath } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import goldenCorpus from "../../tests/fixtures/golden-task-cases.json";
 import {
@@ -29,11 +29,40 @@ function fixtureSourcePath(path: string): string {
   return absolute;
 }
 
-/** Reject production project data at the benchmark boundary; live caller resolves symlinks. */
+/** Reject user Workspace and immutable Golden fixtures as session destinations. */
 export function assertGoldenDisposablePath(path: string, workspaceRoot = WORKSPACE_ROOT): void {
-  const rel = relative(workspaceRoot, resolve(path));
-  if (!rel || (rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel))) {
-    throw new Error("Golden benchmark refuses repository workspace assets; use a fresh disposable seed.");
+  const absolute = resolve(path);
+  const inside = (root: string) => {
+    const rel = relative(root, absolute);
+    return !rel || (rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel));
+  };
+  if (inside(workspaceRoot)) {
+    throw new Error("Golden benchmark refuses repository workspace assets; use disposable files.");
+  }
+  if (inside(FIXTURE_ROOT)) {
+    throw new Error("Golden benchmark refuses immutable Golden fixture output paths.");
+  }
+}
+
+/** Resolve the nearest existing ancestor before mkdir to catch output-root symlink aliases. */
+export async function assertGoldenOutputLocation(
+  outputPath: string,
+  workspaceRoot = WORKSPACE_ROOT
+): Promise<void> {
+  let ancestor = resolve(outputPath);
+  const suffix: string[] = [];
+  while (true) {
+    try {
+      const real = await realpath(ancestor);
+      assertGoldenDisposablePath(resolve(real, ...suffix), workspaceRoot);
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const parent = dirname(ancestor);
+      if (parent === ancestor) throw new Error("Golden output root cannot be resolved.");
+      suffix.unshift(basename(ancestor));
+      ancestor = parent;
+    }
   }
 }
 
@@ -154,6 +183,7 @@ export function goldenSessionPaths(
     outputRoot,
     `${taskId}-${safeTimestamp(startedAt)}`
   );
+  assertGoldenDisposablePath(directory);
   return {
     directory,
     trace: join(directory, "trace.ndjson"),
@@ -294,6 +324,7 @@ export function buildGoldenRunDraft(input: {
   outputAssetSha256?: string | null;
   inputProjectUuid?: string | null;
   runtimeBuildIdentity?: string | null;
+  referencePackageFingerprint?: string | null;
 }): GoldenAuthoringDocument {
   if (input.inputProjectUuid != null && !input.inputProjectUuid.trim()) {
     throw new Error("Golden session inputProjectUuid must be a nonempty string.");
@@ -304,6 +335,10 @@ export function buildGoldenRunDraft(input: {
   }
   if (input.outputAssetSha256 != null && !/^[0-9a-f]{64}$/.test(input.outputAssetSha256)) {
     throw new Error("Golden outputAssetSha256 must be a lowercase SHA-256.");
+  }
+  if (input.referencePackageFingerprint != null &&
+      !/^[0-9a-f]{64}$/.test(input.referencePackageFingerprint)) {
+    throw new Error("Golden referencePackageFingerprint must be a lowercase SHA-256 fingerprint.");
   }
   // Never borrow events from another task or source revision.
   for (const event of input.traceEvents) {
@@ -333,7 +368,7 @@ export function buildGoldenRunDraft(input: {
           input_asset_sha256: input.inputAssetSha256 ?? null,
           output_asset_sha256: input.outputAssetSha256 ?? null,
           input_project_uuid: input.inputProjectUuid ?? null,
-          reference_package_fingerprint: null,
+          reference_package_fingerprint: input.referencePackageFingerprint ?? null,
           control_task_context_id: null,
           runtime_build_identity: input.runtimeBuildIdentity ?? null,
           artifact_revision: null,
@@ -368,6 +403,7 @@ async function finalizeSession(input: {
   paths: GoldenSessionPaths;
   startedAtMs: number;
   startingBaseline: LiveStartingModelBaseline | null;
+  approvedReferenceFingerprint: string;
 }): Promise<void> {
   const traceFile = Bun.file(input.paths.trace);
   if (!(await traceFile.exists())) {
@@ -393,6 +429,18 @@ async function finalizeSession(input: {
         error instanceof Error ? error.message : String(error));
     }
   }
+  let referencePackageFingerprint: string | null = null;
+  try {
+    const latest = await requireGoldenReferenceReady(input.task);
+    if (latest === input.approvedReferenceFingerprint) {
+      referencePackageFingerprint = latest;
+    } else {
+      console.error("[LazyDesigner Benchmark] Reference changed during session; provenance withheld.");
+    }
+  } catch (error) {
+    console.error("[LazyDesigner Benchmark] Reference readiness lost during session:",
+      error instanceof Error ? error.message : String(error));
+  }
   const draft = buildGoldenRunDraft({
     task: input.task,
     sourceSha: input.sourceSha,
@@ -402,6 +450,7 @@ async function finalizeSession(input: {
     outputAssetSha256,
     inputProjectUuid: input.startingBaseline?.projectUuid,
     runtimeBuildIdentity: input.startingBaseline?.runtimeBuildIdentity,
+    referencePackageFingerprint,
   });
 
   await Bun.write(
@@ -437,10 +486,11 @@ async function main(): Promise<void> {
     throw new Error("Every Golden Task requires a fresh disposable starting .bbmodel.");
   }
   // Refuse pending/unapproved references before connecting to native Runtime.
-  await requireGoldenReferenceReady(task);
+  const approvedReferenceFingerprint = await requireGoldenReferenceReady(task);
   const startingBaseline = await preflightGoldenStartingModel(inputModelPath, task);
   const sourceSha = exactGitSha();
   const paths = goldenSessionPaths(task.id, outputRoot);
+  await assertGoldenOutputLocation(paths.directory);
   await mkdir(paths.directory, { recursive: true });
 
   const startedAtMs = Date.now();
@@ -472,6 +522,7 @@ async function main(): Promise<void> {
     paths,
     startedAtMs,
     startingBaseline,
+    approvedReferenceFingerprint,
   });
 
   process.exitCode = exitCode;

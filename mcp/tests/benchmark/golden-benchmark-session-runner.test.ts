@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import goldenCorpus from "../fixtures/golden-task-cases.json";
 import {
   buildGoldenRunDraft,
@@ -11,6 +12,7 @@ import {
   verifyGoldenStartingLiveProject,
   goldenSessionPaths,
   assertGoldenDisposablePath,
+  assertGoldenOutputLocation,
   validateGoldenSeedContent,
   assertCanonicalGoldenSeed,
   requireGoldenReferenceReady,
@@ -33,6 +35,26 @@ describe("golden benchmark session runner", () => {
     expect(paths.trace.endsWith("trace.ndjson")).toBe(true);
     expect(paths.trace_report.endsWith("trace-report.json")).toBe(true);
     expect(paths.golden_run_draft.endsWith("golden-run-draft.json")).toBe(true);
+  });
+
+  test("output location rejects Workspace, immutable fixtures and symlink aliases before mkdir", async () => {
+    const active = fileURLToPath(new URL("../../../workspace/active/", import.meta.url));
+    const fixture = fileURLToPath(new URL("../fixtures/golden/full-asset/", import.meta.url));
+    expect(() => goldenSessionPaths(task.id, active)).toThrow("refuses repository workspace assets");
+    expect(() => goldenSessionPaths(task.id, fixture)).toThrow("refuses immutable Golden fixture output paths");
+    const dir = await mkdtemp(join(tmpdir(), "golden-output-safety-"));
+    const workspace = join(dir, "workspace");
+    const alias = join(dir, "workspace-alias");
+    try {
+      await mkdir(workspace);
+      await symlink(workspace, alias, process.platform === "win32" ? "junction" : "dir");
+      await expect(assertGoldenOutputLocation(join(alias, "session"), workspace))
+        .rejects.toThrow("refuses repository workspace assets");
+      await expect(assertGoldenOutputLocation(join(dir, "safe", "session"), workspace))
+        .resolves.toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("one complete Golden fixture rejects production paths, stale seed bytes and unapproved references", async () => {
@@ -151,6 +173,22 @@ describe("golden benchmark session runner", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  test("draft retains a verified Reference fingerprint without claiming approval", () => {
+    const fingerprint = "d".repeat(64);
+    const draft = buildGoldenRunDraft({
+      task, sourceSha: "a".repeat(40), traceEvents: [], wallTimeMs: 100,
+      referencePackageFingerprint: fingerprint,
+    });
+    expect(draft.runs[0]!.pipeline_provenance.reference_package_fingerprint)
+      .toBe(fingerprint);
+    expect(draft.runs[0]!.quality_verdict).toBe("UNVERIFIED");
+    expect(draft.runs[0]!.accepted_result).toBeNull();
+    expect(() => buildGoldenRunDraft({
+      task, sourceSha: "a".repeat(40), traceEvents: [], wallTimeMs: 100,
+      referencePackageFingerprint: "invalid",
+    })).toThrow("referencePackageFingerprint must be a lowercase SHA-256 fingerprint");
   });
 
   test("run draft retains native preflight identity without upgrading quality", () => {

@@ -64,8 +64,9 @@ Blockbench-ready PNG.
   production Workspace, modified seeds and wrong project/stage identity.
 - Keep all working `.bbmodel`, PNG atlas, `.geo.json`, animation export,
   captures and reports in `mcp/.cache/golden-sessions/<session>/` (or another
-  disposable external location). Do not commit live outputs into the fixture,
-  and do not change the normal `workspace/` authoring contract.
+  disposable external location). The runner rejects protected Workspace/fixture
+  output paths and checks output-root symlink ancestry before creating a folder.
+  Do not commit live outputs or change the `workspace/` authoring contract.
 - Use the **same** immutable seed/reference and equivalent input conditions
   for baseline and candidate. Never start the candidate from baseline output.
 
@@ -78,6 +79,11 @@ trace and **final verification after last mutation**, Geometry/UV/Texture/
 Animation evidence matching the current approved visual, Bedrock export and
 save/reopen parity, no critical defect, and separate documented
 `human_acceptance` PASS. Any missing or stale evidence leaves it UNVERIFIED.
+
+The draft retains the approved Reference fingerprint only if an end-of-session
+Control read still matches the initial approval/readiness preflight. When source
+identity or readiness changes, its provenance remains `null` and the result
+remains `UNVERIFIED`. This does not replace visual or human acceptance.
 
 Only **after equal-or-better accepted quality** compare actual time, tool calls,
 redundant readbacks, retries, correction rounds and real token telemetry when

@@ -2,7 +2,13 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
-## Current authority
+## Current source authority — 2026-10-30
+
+Source baseline before this Golden correction: `2b24811f89541e3af0fbd5d6c6e3b7270b808d5a` on `Local`. This change adds fail-closed Golden output destination guards (Workspace, fixture and symlink ancestry) and retains approved Reference provenance only when its post-session fingerprint matches the preflight. The fixture itself remains PENDING/BLOCKED.
+
+**Proof at this source revision:** exact GitHub source review and focused negative regressions AUTHORED; Bun, TypeScript, CI, native Blockbench, save/reopen, export, user quality acceptance and Cost to Accepted Result **NOT EXECUTED**. No installed build is qualified for this revision. Verification CI remains disabled.
+
+## Historical local and installed qualifications — 2026-10-26
 
 2026-10-26: user-authorized LOCAL_CODE work on OpenITStudios/M-LazyDesigner/Local in the dependency-modernization worktree. Primary source remains dirty at 44b03b52. Recovery preserves 52 payloads; two root GIFs moved to canonical references. The 438 pre-existing missing Crimson Sentinel paths remain recoverable from Git.
 
