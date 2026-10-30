@@ -50,7 +50,30 @@ No row is a mandate to add code. The protected native sampling/restoration gap c
 | **A12 mirrored ±180° action** | Explicit mirror Euler sign convention plus target-version/native rotation-path evidence; protect impacts | Auto-guessed rotation signs; straight-line numeric simplification across Euler wrap; "shortest path" asserted from source only |
 | **A15/A16 scalar scale and round-trip** | Reject nonfinite scalar scale before `create_animation`; preserve finite scalar 0, fractional, negative values; compare saved/reopened/exported animation after native execution | `NaN` or ±`Infinity` passed to native tools; keyframe reductions that remove events; treating a typed source fixture as Codec/runtime/visual acceptance |
 
-See the 16 A01–A16 candidate motion scenarios in [research-sources.md](research-sources.md); none is a measured benchmark, and four decision cases do not constitute an end-to-end run.
+The four paired decisions above are selected from the 16 bounded candidate cases below. These are **review/acceptance scenarios**, not new test suites or measured benchmarks.
+
+### Existing Golden/quality acceptance candidates — not executed
+
+| ID | Candidate animation | Failure the review must reject |
+|---|---|---|
+| A01 | Biped walk | Foot sliding, planted stance gaps or ground penetration |
+| A02 | Quadruped walk/trot | Wrong diagonal leg phase or unstable torso |
+| A03 | Attack anticipation and impact | Contact/event before the authored impact pose |
+| A04 | Heavy hammer slam | Missing weight transfer, landing or follow-through |
+| A05 | Flying creature/Allay-like loop | Wing lag, counter-motion or loop phase mismatch |
+| A06 | Mechanical lever/piston | Wrong pivot/axis, travel direction or unintended overshoot |
+| A07 | Rolling entity transformation | Broken silhouette, collision or attachments |
+| A08 | Fishing / moving held object | Hand-to-item grip separation |
+| A09 | Travel-driven Molang gait | Walk animation advancing while motion is stopped |
+| A10 | Idle → walk → idle controller | Wrong entry/exit, abrupt blend or reset |
+| A11 | Cyclic loop seam | Position/velocity discontinuity after repeated playback |
+| A12 | Euler wrap and left/right mirror | Unexpected 360° flip or incorrect handedness |
+| A13 | Native IK bake | Edited unrelated bones or corrupted Undo/Redo/restoration |
+| A14 | Impact sound/particle | Incorrect event timing or missing effect after export |
+| A15 | Save/reopen and Bedrock output | Lost clip, changed interpolation or mismatched semantics |
+| A16 | Numeric key reduction | Critical contact/event removed or changed motion |
+
+Implement a case only through its existing source/test/native owner when a concrete accepted reference and falsifying hypothesis are available. A 16-row inventory does not certify 16 test executions.
 
 ## K3 — Adoption boundary
 
