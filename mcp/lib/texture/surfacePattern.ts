@@ -1,3 +1,11 @@
+import {
+  faceLocalPixelSize,
+  mapFaceLocalPixelToAtlasPixel,
+  mapFaceUvToTexturePixels,
+  type TexturePixelMetrics,
+} from "../uv/facePixelMapping";
+import { facePhysicalSize, type UvPhysicalFaceInput } from "../uv/physicalEvidence";
+
 export const TEXTURE_SURFACE_PATTERN_NAMES = [
   "wood_grain",
   "painted_wood",
@@ -79,4 +87,190 @@ export function getTextureSurfacePatternRecipe(
   pattern: TextureSurfacePattern
 ): TextureSurfacePatternRecipe {
   return TEXTURE_SURFACE_PATTERN_RECIPES[pattern];
+}
+
+
+/**
+ * Caller-chosen pattern direction, expressed in atlas and face-local pixel
+ * coordinates. Signed axes preserve meaningful mirrored/rotated marks.
+ * A caller's intent is not proof of the actual source image's motif axis.
+ */
+export type TexturePatternAxis = Readonly<{
+  axis: "u" | "v";
+  sign: 1 | -1;
+}>;
+export type TexturePatternOrientationIntent = Readonly<{
+  atlas: TexturePatternAxis;
+  expected_face: TexturePatternAxis;
+}>;
+export type TexturePatternDetailIntent = Readonly<{
+  cube_uuid: string;
+  face: UvPhysicalFaceInput["face"];
+  expected_texture_uuid: string;
+  /** Explicit required physical-pixel density; never inferred from pattern name. */
+  minimum_pixels_per_model_unit: number;
+  orientation?: TexturePatternOrientationIntent;
+}>;
+
+export type TexturePatternPhysicalInput = Readonly<{
+  pattern: TextureSurfacePattern;
+  face: UvPhysicalFaceInput["face"];
+  cube_size: readonly number[];
+  uv: readonly number[];
+  rotation: number;
+  texture_metrics: TexturePixelMetrics;
+  detail_intent: Pick<TexturePatternDetailIntent,
+    "minimum_pixels_per_model_unit" | "orientation">;
+}>;
+
+const AXES = ["u", "v"] as const;
+function validAxis(value: unknown): value is TexturePatternAxis {
+  if (!value || typeof value !== "object") return false;
+  const axis = value as Record<string, unknown>;
+  return AXES.includes(axis.axis as "u" | "v") &&
+    (axis.sign === 1 || axis.sign === -1);
+}
+
+function roundMeasured(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
+}
+
+/**
+ * Exact face-UV-grid capacity and signed direction preflight, not a paint or
+ * material decision. Uses canonical face-local pixel→atlas mapping, so signed
+ * UV corners and 90/180/270 face rotation are not silently normalized.
+ */
+export function reviewTexturePatternPhysicalFit(input: TexturePatternPhysicalInput) {
+  if (!TEXTURE_SURFACE_PATTERN_NAMES.includes(input.pattern)) {
+    throw new Error("TEXTURE_PATTERN_UNKNOWN");
+  }
+  const recipe = getTextureSurfacePatternRecipe(input.pattern);
+  const minDensity = input.detail_intent.minimum_pixels_per_model_unit;
+  if (!Number.isFinite(minDensity) || minDensity <= 0 || minDensity > 4096) {
+    throw new Error("TEXTURE_PATTERN_DENSITY_TARGET_INVALID: require an explicit positive physical-pixel target.");
+  }
+  const direction = input.detail_intent.orientation;
+  if (direction !== undefined &&
+      (!direction || !validAxis(direction.atlas) || !validAxis(direction.expected_face))) {
+    throw new Error("TEXTURE_PATTERN_DIRECTION_INTENT_INVALID");
+  }
+
+  const reasons: string[] = [];
+  const physical = facePhysicalSize(input.face, input.cube_size);
+  if (!physical || physical[0] <= 0 || physical[1] <= 0) {
+    reasons.push("TEXTURE_PATTERN_PHYSICAL_FACE_UNVERIFIED");
+  }
+  let pixels: [number, number] | null = null;
+  let density: [number, number] | null = null;
+  let orientation: {
+    expected_face: TexturePatternAxis;
+    actual_face: TexturePatternAxis | null;
+    atlas: TexturePatternAxis;
+    face_rotation: number;
+    uv_flip_u: boolean;
+    uv_flip_v: boolean;
+    state: "consistent_with_declared_mapping" | "review_required";
+  } | null = null;
+
+  try {
+    const mapping = mapFaceUvToTexturePixels(
+      input.uv, input.texture_metrics, "texture pattern physical review"
+    );
+    pixels = faceLocalPixelSize(
+      mapping, input.rotation, "texture pattern physical review"
+    );
+    if (physical && physical[0] > 0 && physical[1] > 0) {
+      density = [
+        roundMeasured(pixels[0] / physical[0]),
+        roundMeasured(pixels[1] / physical[1]),
+      ];
+      // Do not silently downsample source detail when one Cube face axis
+      // cannot support the caller's density target.
+      if (density.some(value => value + 1e-6 < minDensity)) {
+        reasons.push("TEXTURE_PATTERN_TEXEL_DENSITY_INSUFFICIENT");
+      }
+    }
+
+    if (direction) {
+      const origin = mapFaceLocalPixelToAtlasPixel(
+        mapping, input.rotation, 0, 0, "texture pattern direction"
+      );
+      const along: Array<{
+        face_axis: "u" | "v";
+        atlas_axis: "u" | "v";
+        atlas_sign: 1 | -1;
+      }> = [];
+      for (const axis of AXES) {
+        const supported = axis === "u" ? pixels[0] >= 2 : pixels[1] >= 2;
+        if (!supported) continue;
+        const advanced = mapFaceLocalPixelToAtlasPixel(
+          mapping, input.rotation,
+          axis === "u" ? 1 : 0, axis === "v" ? 1 : 0,
+          "texture pattern direction"
+        );
+        const dx = advanced.x - origin.x, dy = advanced.y - origin.y;
+        if (Math.abs(dx) + Math.abs(dy) !== 1) {
+          throw new Error("TEXTURE_PATTERN_DIRECTION_TRANSFORM_UNVERIFIED");
+        }
+        along.push({
+          face_axis: axis,
+          atlas_axis: dx !== 0 ? "u" : "v",
+          atlas_sign: (dx !== 0 ? Math.sign(dx) : Math.sign(dy)) as 1 | -1,
+        });
+      }
+      const match = along.find(entry =>
+        entry.atlas_axis === direction.atlas.axis
+      );
+      const actual = match ? {
+        axis: match.face_axis,
+        sign: (match.atlas_sign === direction.atlas.sign ? 1 : -1) as 1 | -1,
+      } : null;
+      orientation = {
+        expected_face: { ...direction.expected_face },
+        actual_face: actual,
+        atlas: { ...direction.atlas },
+        face_rotation: input.rotation,
+        uv_flip_u: mapping.flip_u,
+        uv_flip_v: mapping.flip_v,
+        state: actual &&
+          actual.axis === direction.expected_face.axis &&
+          actual.sign === direction.expected_face.sign
+          ? "consistent_with_declared_mapping" : "review_required",
+      };
+      if (!actual) {
+        reasons.push("TEXTURE_PATTERN_DIRECTION_TEXELS_INSUFFICIENT");
+      } else if (orientation.state === "review_required") {
+        reasons.push("TEXTURE_PATTERN_DIRECTION_MISMATCH");
+      }
+    }
+  } catch {
+    reasons.push("TEXTURE_PATTERN_FACE_PIXEL_GRID_UNVERIFIED");
+  }
+
+  // Texture pattern words cannot reveal source image stroke orientation.
+  // Directional recipes demand an explicit atlas→face claim; a form-driven
+  // recipe may have no one-dimensional motif axis at all.
+  if (recipe.directionality === "directional" && !direction) {
+    reasons.push("TEXTURE_PATTERN_DIRECTION_INTENT_REQUIRED");
+  }
+
+  return {
+    source: "canonical_face_uv_pixel_mapping" as const,
+    state: reasons.length ? ("review_required" as const)
+      : ("metrics_consistent" as const),
+    surface_pattern: recipe.pattern,
+    pattern_directionality: recipe.directionality,
+    physical_face_model_units: physical,
+    face_local_physical_pixels: pixels,
+    pixels_per_model_unit: density,
+    explicit_minimum_pixels_per_model_unit: minDensity,
+    orientation,
+    reasons,
+    source_pattern_axis_attested: false as const,
+    reference_face_correspondence_attested: false as const,
+    native_scene_revision_attested: false as const,
+    painting_authorized: false as const,
+    uv_mutation_authorized: false as const,
+    visual_verdict: "not_evaluated" as const,
+  };
 }

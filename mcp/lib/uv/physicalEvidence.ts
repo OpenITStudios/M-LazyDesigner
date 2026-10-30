@@ -9,7 +9,8 @@ export type UvPhysicalFaceInput = {
   texture_uuid?: string | null;
 };
 
-function facePhysicalSize(face: UvPhysicalFaceInput["face"], size: readonly number[]): [number, number] | null {
+/** Canonical Cube face physical span in model units, before UV rotation. */
+export function facePhysicalSize(face: UvPhysicalFaceInput["face"], size: readonly number[]): [number, number] | null {
   if (size.length < 3 || size.slice(0, 3).some((value) => !Number.isFinite(value) || value < 0)) return null;
   const [x, y, z] = size.map(Number);
   if (face === "north" || face === "south") return [x, y];

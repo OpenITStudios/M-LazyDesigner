@@ -39,6 +39,10 @@ import {
 } from "@/lib/texture/pbrContent";
 import { analyzeTextureMaterialStatus } from "@/lib/texture/materialStatus";
 import {
+  reviewTexturePatternPhysicalFit,
+  type TexturePatternDetailIntent,
+} from "@/lib/texture/surfacePattern";
+import {
   fullTextureRgba,
   requireUnchangedTextureBitmap,
 } from "@/lib/texture/bitmapRuntime";
@@ -1203,6 +1207,129 @@ function reviewOnlyTreatmentHandoffReceipt(
     material_approval_attested: false as const,
     texture_revision_attested: false as const,
     scene_coverage_attested: false as const,
+    visual_verdict: "not_evaluated" as const,
+  };
+}
+
+
+/**
+ * UNREGISTERED read-only native treatment verification, not a new MCP tool.
+ * Verifies current Cube/face/Texture UUID and actual UV/grid dimensions
+ * against caller-requested density/direction; visual/reference artist intent
+ * and saved/reopened Blockbench output are not attested.
+ */
+export function inspectTreatmentNativePatternPhysicalFit(
+  plan: ReturnType<typeof planTextureTreatment>,
+  intents: readonly TexturePatternDetailIntent[]
+) {
+  requireTextureTreatmentSeamPlanReady(plan);
+  if (!Array.isArray(intents) || intents.length < 1 || intents.length > 32) {
+    throw new Error("TEXTURE_PATTERN_NATIVE_SCOPE_INVALID: require 1..32 explicit face intents.");
+  }
+  if (typeof Cube === "undefined" || typeof Texture === "undefined" ||
+      !Array.isArray(Cube.all) || !Array.isArray(Texture.all)) {
+    throw new Error("TEXTURE_PATTERN_NATIVE_UNAVAILABLE: current Cube/Texture inventory required.");
+  }
+  const cubes = new Map<string, Cube>();
+  for (const cube of Cube.all) {
+    if (typeof cube.uuid !== "string" || !cube.uuid.trim() ||
+        cubes.has(cube.uuid)) {
+      throw new Error("TEXTURE_PATTERN_NATIVE_AMBIGUOUS_CUBE_ID");
+    }
+    cubes.set(cube.uuid, cube);
+  }
+  const treatments = new Map(plan.regions.flatMap(region =>
+    region.face_targets.map(face => [
+      face.cube_uuid + ":" + face.face, region,
+    ] as const)
+  ));
+  const visited = new Set<string>();
+  const faces = intents.map(intent => {
+    if (!intent || typeof intent.cube_uuid !== "string" ||
+        !intent.cube_uuid.trim() ||
+        !FACE_KEYS.includes(intent.face) ||
+        typeof intent.expected_texture_uuid !== "string" ||
+        !intent.expected_texture_uuid.trim()) {
+      throw new Error("TEXTURE_PATTERN_NATIVE_INTENT_INVALID");
+    }
+    const key = intent.cube_uuid + ":" + intent.face;
+    if (visited.has(key)) throw new Error("TEXTURE_PATTERN_NATIVE_DUPLICATE_FACE");
+    visited.add(key);
+    const region = treatments.get(key);
+    if (!region?.surface_pattern) {
+      throw new Error("TEXTURE_PATTERN_NATIVE_OUT_OF_SCOPE: face lacks a declared treatment/pattern.");
+    }
+    const cube = cubes.get(intent.cube_uuid);
+    const face = cube?.faces[intent.face];
+    if (!cube || !face || face.enabled === false ||
+        typeof face.getTexture !== "function") {
+      throw new Error("TEXTURE_PATTERN_NATIVE_FACE_UNAVAILABLE");
+    }
+    const texture = face.getTexture();
+    if (!texture || texture.uuid !== intent.expected_texture_uuid ||
+        !Texture.all.includes(texture) ||
+        (typeof Project !== "undefined" && Array.isArray(Project?.textures) &&
+         !Project.textures.includes(texture))) {
+      throw new Error("TEXTURE_PATTERN_NATIVE_TEXTURE_STALE_OR_FOREIGN");
+    }
+    if (!Array.isArray(cube.from) || !Array.isArray(cube.to) ||
+        cube.from.length < 3 || cube.to.length < 3 ||
+        !cube.from.slice(0, 3).every(Number.isFinite) ||
+        !cube.to.slice(0, 3).every(Number.isFinite)) {
+      throw new Error("TEXTURE_PATTERN_NATIVE_CUBE_GEOMETRY_UNAVAILABLE");
+    }
+    if (texture.height !== texture.display_height) {
+      throw new Error("TEXTURE_PATTERN_NATIVE_ANIMATED_FRAME_UNVERIFIED");
+    }
+    const geometry = cube.from.slice(0, 3).map(
+      (start, axis) => Math.abs(cube.to[axis] - start)
+    );
+    const uv = [...face.uv];
+    const rotation = face.rotation;
+    const metrics = {
+      width: texture.width,
+      displayHeight: texture.display_height,
+      uvWidth: texture.getUVWidth(),
+      uvHeight: texture.getUVHeight(),
+    };
+    const result = reviewTexturePatternPhysicalFit({
+      pattern: region.surface_pattern.pattern,
+      face: intent.face,
+      cube_size: geometry,
+      uv, rotation, texture_metrics: metrics,
+      detail_intent: intent,
+    });
+    // Synchronous read: no async paint window, yet still refuse a mutable
+    // native face/atlas contract that changed during the inspection itself.
+    if (face.getTexture() !== texture || face.rotation !== rotation ||
+        face.uv.length !== uv.length ||
+        face.uv.some((v, index) => v !== uv[index]) ||
+        cube.from.slice(0, 3).some((v, index) =>
+          Math.abs(cube.to[index] - v) !== geometry[index]) ||
+        texture.width !== metrics.width ||
+        texture.display_height !== metrics.displayHeight ||
+        texture.getUVWidth() !== metrics.uvWidth ||
+        texture.getUVHeight() !== metrics.uvHeight) {
+      throw new Error("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
+    }
+    return {
+      cube_uuid: intent.cube_uuid, face: intent.face,
+      texture_uuid: texture.uuid,
+      treatment_region: region.region,
+      ...result,
+    };
+  });
+  return {
+    source: "current_blockbench_cube_face_read_only" as const,
+    state: faces.some(face => face.state === "review_required")
+      ? ("review_required" as const) : ("advisory_metrics_consistent" as const),
+    scoped_face_count: faces.length,
+    faces,
+    native_scene_revision_attested: false as const,
+    source_image_direction_attested: false as const,
+    whole_scene_coverage_attested: false as const,
+    painting_authorized: false as const,
+    uv_mutation_authorized: false as const,
     visual_verdict: "not_evaluated" as const,
   };
 }

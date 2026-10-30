@@ -155,3 +155,40 @@ reference/material cohort
 ```
 
 Pattern recipes never override the existing anti-noise, anti-mixel, alpha, UV, seam, or evidence rules.
+
+
+## Physical texel density and directional mapping preflight (2026-10-30)
+
+`mcp/lib/texture/surfacePattern.ts::reviewTexturePatternPhysicalFit`
+now reuses the existing canonical UV face→physical pixel grid mapping,
+face-local rotation/flip and per-face physical Cube dimension logic. A
+caller supplies the **required pixels per model unit** explicitly; the
+17 qualitative recipes DO NOT invent one uniform minimum for weave, fur,
+grain, metal or other styles. Non-integral/subpixel/out-of-bounds UV
+boundaries, insufficient density and degenerate face sizes remain review
+conditions, never silent upscale/repack actions.
+
+For a directional motif, an explicit positive/negative atlas U/V axis
+and intended positive/negative face-local axis are required. The helper
+computes the real signed mapping across per-face UV reversal and
+0/90/180/270-degree rotation. Unknown motif orientation or too few
+face-local pixels stays `review_required`; the role labels themselves do
+not prove which direction appears in a user's photo.
+
+The existing `mcp/server/runtime/extensions/texture/authoring.ts` now
+provides an **UNREGISTERED read-only** native consumer
+`inspectTreatmentNativePatternPhysicalFit`. It reuses the existing
+canonical complete face-treatment handoff recheck, exact Cube/face UUID
+and `CubeFace.getTexture()` inventory verification. It reads currently
+resolved UV corners, face rotation, texture pixel/UV dimensions and
+Cube physical extents, rejects stale/foreign bindings, and reports
+only a selected bounded face subset. Neither UV coordinates nor atlas
+pixels are changed. No new public Gateway tools or native activation.
+
+`metrics_consistent` certifies only internal numeric UV-grid and
+caller-stated direction/threshold consistency: not a real reference
+image motif/part correspondence, scene revision, texture bitmap content,
+visual PASS, Minecraft renderer behavior or artist approval. Existing
+source tests include flip, quarter-turn, insufficient density/subpixel,
+missing direction, stale texture UUID and scope refusal; Bun, CI and
+Blockbench-installed visual/Golden acceptance **NOT EXECUTED**.

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   inspectDeclaredNativeCrossCubeSeams,
   inspectTreatmentBoundNativeCrossCubeSeams,
+  inspectTreatmentNativePatternPhysicalFit,
   inspectRevisionPinnedNativeCrossCubeSeams,
   inspectRevisionPinnedTreatmentCrossCubeSeams,
   seamContinuityRuntime,
@@ -76,7 +77,10 @@ function fakeCube(
       return;
     },
   };
-  return { uuid, name, faces: { north: face }, mesh };
+  return {
+    uuid, name, from: [0, 0, 0], to: [2, 2, 2],
+    faces: { north: face }, mesh,
+  };
 }
 const left: DeclaredNativeCrossCubeSeamEdge = {
   cube_uuid: "left",
@@ -226,6 +230,102 @@ function observedTreatmentWithCrossCubeSeam() {
 }
 
 describe("explicit cross-Cube native seam samples (unregistered)", () => {
+
+  test("native Texture pattern review reads exact current face pixels and signed motif direction", () => {
+    withMockNative(cubes => {
+      const plan = planTextureTreatment({
+        required_faces: [{ cube_uuid: "left", face: "north" }],
+        regions: [{
+          region: "body", evidence: "observed",
+          surface_pattern: "wood_grain", render_profile: "opaque",
+          face_targets: [{ cube_uuid: "left", face: "north", treatment: "PAINT" }],
+        }],
+      });
+      const intent = {
+        cube_uuid: "left", face: "north" as const,
+        expected_texture_uuid: "left-texture",
+        minimum_pixels_per_model_unit: 1,
+        orientation: {
+          atlas: { axis: "u" as const, sign: 1 as const },
+          expected_face: { axis: "u" as const, sign: 1 as const },
+        },
+      };
+      const result = inspectTreatmentNativePatternPhysicalFit(plan, [intent]);
+      expect(result.state).toBe("advisory_metrics_consistent");
+      expect(result.faces[0]).toMatchObject({
+        texture_uuid: "left-texture",
+        treatment_region: "body",
+        face_local_physical_pixels: [2, 2],
+        pixels_per_model_unit: [1, 1],
+        state: "metrics_consistent",
+        orientation: {
+          actual_face: { axis: "u", sign: 1 },
+          state: "consistent_with_declared_mapping",
+        },
+        source_pattern_axis_attested: false,
+        painting_authorized: false,
+      });
+      expect(result.native_scene_revision_attested).toBe(false);
+      expect(result.visual_verdict).toBe("not_evaluated");
+
+      cubes.left.faces.north.uv = [2, 0, 0, 2];
+      const mirrored = inspectTreatmentNativePatternPhysicalFit(plan, [intent]);
+      expect(mirrored.state).toBe("review_required");
+      expect(mirrored.faces[0].reasons).toContain("TEXTURE_PATTERN_DIRECTION_MISMATCH");
+
+      cubes.left.faces.north.uv = [0, 0, 2, 2];
+      cubes.left.faces.north.rotation = 90;
+      const rotated = inspectTreatmentNativePatternPhysicalFit(plan, [{
+        ...intent,
+        orientation: {
+          atlas: { axis: "u", sign: 1 },
+          expected_face: { axis: "v", sign: 1 },
+        },
+      }]);
+      expect(rotated.faces[0].orientation?.actual_face).toEqual({
+        axis: "v", sign: 1,
+      });
+      expect(rotated.state).toBe("advisory_metrics_consistent");
+
+      const dense = inspectTreatmentNativePatternPhysicalFit(plan, [{
+        ...intent, minimum_pixels_per_model_unit: 2,
+      }]);
+      expect(dense.faces[0].reasons)
+        .toContain("TEXTURE_PATTERN_TEXEL_DENSITY_INSUFFICIENT");
+    });
+  });
+
+  test("native pattern reviewer refuses foreign textures and undeclared face ownership", () => {
+    withMockNative(() => {
+      const plan = planTextureTreatment({
+        required_faces: [{ cube_uuid: "left", face: "north" }],
+        regions: [{
+          region: "body", evidence: "observed",
+          surface_pattern: "wood_grain", render_profile: "opaque",
+          face_targets: [{ cube_uuid: "left", face: "north", treatment: "PAINT" }],
+        }],
+      });
+      const valid = {
+        cube_uuid: "left", face: "north" as const,
+        expected_texture_uuid: "left-texture",
+        minimum_pixels_per_model_unit: 1,
+      };
+      expect(() => inspectTreatmentNativePatternPhysicalFit(plan, [{
+        ...valid, expected_texture_uuid: "stale-texture",
+      }])).toThrow("TEXTURE_PATTERN_NATIVE_TEXTURE_STALE_OR_FOREIGN");
+      expect(() => inspectTreatmentNativePatternPhysicalFit(plan, [{
+        ...valid, cube_uuid: "right",
+      }])).toThrow("TEXTURE_PATTERN_NATIVE_OUT_OF_SCOPE");
+      expect(() => inspectTreatmentNativePatternPhysicalFit(plan, [
+        valid, valid,
+      ])).toThrow("TEXTURE_PATTERN_NATIVE_DUPLICATE_FACE");
+      expect(() => inspectTreatmentNativePatternPhysicalFit(plan, []))
+        .toThrow("TEXTURE_PATTERN_NATIVE_SCOPE_INVALID");
+      expect(inspectTreatmentNativePatternPhysicalFit(plan, [valid])
+        .faces[0].reasons).toContain("TEXTURE_PATTERN_DIRECTION_INTENT_REQUIRED");
+    });
+  });
+
   test("world-transform projection compares only declared same-material edges", () => {
     withMockNative(() => {
       const result = inspectDeclaredNativeCrossCubeSeams([left, right]);

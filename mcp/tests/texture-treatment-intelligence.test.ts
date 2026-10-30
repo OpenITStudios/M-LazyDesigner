@@ -12,6 +12,7 @@ import {
   type TextureTreatmentNativeFaceBinding,
 } from "@/lib/textureTreatmentPlan";
 import { VANILLA_TEXTURE_KNOWLEDGE } from "@/lib/textureVanillaKnowledge";
+import { reviewTexturePatternPhysicalFit } from "@/lib/texture/surfacePattern";
 
 function pixels(alpha: readonly number[]): Uint8ClampedArray {
   const out = new Uint8ClampedArray(alpha.length * 4);
@@ -259,6 +260,117 @@ describe("texture treatment intelligence", () => {
     delete legacy.reference_context; delete legacy.regions[0]!.reference_surfaces;
     expect(planTextureTreatment(legacy).readiness.state).toBe("ready");
     expect(planTextureTreatment(legacy).reference_surface_evidence.state).toBe("not_requested");
+  });
+
+
+  test("pattern face pixel capacity measures exact UV pixels, rotation and signed flips", () => {
+    const base = {
+      pattern: "wood_grain" as const,
+      face: "north" as const,
+      cube_size: [4, 2, 2],
+      uv: [0, 0, 8, 4],
+      rotation: 0,
+      texture_metrics: {
+        width: 16, displayHeight: 16,
+        uvWidth: 16, uvHeight: 16,
+      },
+      detail_intent: {
+        minimum_pixels_per_model_unit: 2,
+        orientation: {
+          atlas: { axis: "u" as const, sign: 1 as const },
+          expected_face: { axis: "u" as const, sign: 1 as const },
+        },
+      },
+    };
+    const matched = reviewTexturePatternPhysicalFit(base);
+    expect(matched.state).toBe("metrics_consistent");
+    expect(matched.face_local_physical_pixels).toEqual([8, 4]);
+    expect(matched.pixels_per_model_unit).toEqual([2, 2]);
+    expect(matched.orientation).toMatchObject({
+      state: "consistent_with_declared_mapping",
+      actual_face: { axis: "u", sign: 1 },
+      uv_flip_u: false,
+      uv_flip_v: false,
+    });
+    expect(matched.source_pattern_axis_attested).toBe(false);
+    expect(matched.painting_authorized).toBe(false);
+    expect(matched.visual_verdict).toBe("not_evaluated");
+
+    const thin = reviewTexturePatternPhysicalFit({
+      ...base,
+      uv: [0, 0, 4, 4],
+    });
+    expect(thin.pixels_per_model_unit).toEqual([1, 2]);
+    expect(thin.reasons).toContain("TEXTURE_PATTERN_TEXEL_DENSITY_INSUFFICIENT");
+    expect(thin.state).toBe("review_required");
+
+    const flipped = reviewTexturePatternPhysicalFit({
+      ...base,
+      uv: [8, 0, 0, 4],
+    });
+    expect(flipped.orientation?.actual_face).toEqual({ axis: "u", sign: -1 });
+    expect(flipped.reasons).toContain("TEXTURE_PATTERN_DIRECTION_MISMATCH");
+
+    const quarter = reviewTexturePatternPhysicalFit({
+      ...base,
+      rotation: 90,
+      detail_intent: {
+        ...base.detail_intent,
+        orientation: {
+          atlas: { axis: "u", sign: 1 },
+          expected_face: { axis: "v", sign: 1 },
+        },
+      },
+    });
+    expect(quarter.orientation?.actual_face).toEqual({ axis: "v", sign: 1 });
+    expect(quarter.face_local_physical_pixels).toEqual([4, 8]);
+    expect(quarter.state).toBe("metrics_consistent");
+  });
+
+  test("pattern direction and detail thresholds are explicit, with no material guessing", () => {
+    const args = {
+      pattern: "fur_cluster" as const,
+      face: "north" as const,
+      cube_size: [2, 2, 2],
+      uv: [0, 0, 2, 2],
+      rotation: 0,
+      texture_metrics: {
+        width: 16, displayHeight: 16,
+        uvWidth: 16, uvHeight: 16,
+      },
+      detail_intent: { minimum_pixels_per_model_unit: 1 },
+    };
+    expect(reviewTexturePatternPhysicalFit(args).reasons)
+      .toContain("TEXTURE_PATTERN_DIRECTION_INTENT_REQUIRED");
+    const unavailable = reviewTexturePatternPhysicalFit({
+      ...args, uv: [0.5, 0, 2, 2],
+    });
+    expect(unavailable.reasons)
+      .toContain("TEXTURE_PATTERN_FACE_PIXEL_GRID_UNVERIFIED");
+    const quiet = reviewTexturePatternPhysicalFit({
+      ...args, pattern: "concrete_speckle",
+    });
+    expect(quiet.state).toBe("metrics_consistent");
+    expect(quiet.orientation).toBeNull();
+    expect(quiet.pattern_directionality).toBe("none");
+    expect(quiet.reference_face_correspondence_attested).toBe(false);
+    expect(() => reviewTexturePatternPhysicalFit({
+      ...args, detail_intent: { minimum_pixels_per_model_unit: 0 },
+    })).toThrow("TEXTURE_PATTERN_DENSITY_TARGET_INVALID");
+
+    const onePixel = reviewTexturePatternPhysicalFit({
+      ...args,
+      uv: [0, 0, 1, 2],
+      detail_intent: {
+        minimum_pixels_per_model_unit: 0.5,
+        orientation: {
+          atlas: { axis: "u", sign: 1 },
+          expected_face: { axis: "u", sign: 1 },
+        },
+      },
+    });
+    expect(onePixel.reasons)
+      .toContain("TEXTURE_PATTERN_DIRECTION_TEXELS_INSUFFICIENT");
   });
 
   test("surface recipes describe pixel language without selecting render behavior", () => {
