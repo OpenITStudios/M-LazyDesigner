@@ -433,6 +433,53 @@ describe("explicit cross-Cube native seam samples (unregistered)", () => {
     });
   });
 
+
+  test("last native getter cannot rename a selected Cube or introduce duplicate identities", () => {
+    for (const mutation of ["rename_cube", "duplicate_cube", "duplicate_atlas"] as const) {
+      withMockNative(cubes => {
+        const plan = planTextureTreatment({
+          required_faces: [
+            { cube_uuid: "left", face: "north" },
+            { cube_uuid: "right", face: "north" },
+          ],
+          regions: [{
+            region: "cohort", evidence: "observed",
+            surface_pattern: "painted_metal", render_profile: "opaque",
+            face_targets: [
+              { cube_uuid: "left", face: "north", treatment: "PAINT" },
+              { cube_uuid: "right", face: "north", treatment: "PAINT" },
+            ],
+          }],
+        });
+        const intents = [
+          { cube_uuid: "left", face: "north" as const,
+            expected_texture_uuid: "left-texture", minimum_pixels_per_model_unit: 1 },
+          { cube_uuid: "right", face: "north" as const,
+            expected_texture_uuid: "right-texture", minimum_pixels_per_model_unit: 1 },
+        ];
+        const atlas = cubes.left.faces.north.getTexture();
+        const getLast = cubes.right.faces.north.getTexture;
+        let calls = 0;
+        cubes.right.faces.north.getTexture = () => {
+          calls++;
+          if (calls === 3) {
+            if (mutation === "rename_cube") cubes.left.uuid = "renamed";
+            if (mutation === "duplicate_cube") {
+              (globalThis as any).Cube.all.push({ ...cubes.left });
+            }
+            if (mutation === "duplicate_atlas") {
+              (globalThis as any).Texture.all.push({ ...atlas });
+            }
+          }
+          return getLast();
+        };
+        expect(() => inspectTreatmentNativePatternPhysicalFit(plan, intents))
+          .toThrow("TEXTURE_PATTERN_NATIVE_FACE_CHANGED_DURING_READ");
+        expect(calls).toBe(3);
+      });
+    }
+  });
+
   test("native pattern reviewer refuses foreign textures and undeclared face ownership", () => {
     withMockNative(() => {
       const plan = planTextureTreatment({

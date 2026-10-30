@@ -208,3 +208,11 @@ the last getter. This also rejects a last-getter mutation of an earlier
 face. No native scene-wide revision, image appearance or user approval is
 attested by this synchronous readback. Source regression definitions
 cover both UV rewriting and same-size Cube translation; not executed.
+
+The final metadata sweep also checks that each sampled Cube retains its
+original UUID and remains the **unique** current owner of that UUID in
+`Cube.all`; the selected Texture UUID must likewise remain unique in
+`Texture.all`. Native getter-driven registry renames/duplicates are
+rejected as stale read-window evidence, never a successful physical
+pattern match. Focused source regressions for these cases are authored,
+but Bun/native verification remains NOT EXECUTED.

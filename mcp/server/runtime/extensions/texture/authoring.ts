@@ -1309,7 +1309,13 @@ export function inspectTreatmentNativePatternPhysicalFit(
     // inspection has no await. Pin *all* inspected faces through final batch
     // readback; per-face immediate checks alone can mix project revisions.
     const requireSameNativeMetadata = () => {
-      if (!Array.isArray(Cube.all) || !Cube.all.includes(cube) ||
+      // Recheck the *current* registry identities, not only the Map built
+      // before native getters ran. A late UUID rename or duplicate Cube
+      // would otherwise inherit an earlier selected Cube binding.
+      if (!Array.isArray(Cube.all) ||
+          cube.uuid !== intent.cube_uuid ||
+          Cube.all.filter(item => item.uuid === intent.cube_uuid).length !== 1 ||
+          !Cube.all.includes(cube) ||
           cubes.get(intent.cube_uuid) !== cube ||
           cube.faces[intent.face] !== face ||
           face.enabled === false ||
@@ -1320,7 +1326,9 @@ export function inspectTreatmentNativePatternPhysicalFit(
           !Array.isArray(cube.from) || !Array.isArray(cube.to) ||
           from.some((value, index) => cube.from[index] !== value) ||
           to.some((value, index) => cube.to[index] !== value) ||
-          !Array.isArray(Texture.all) || !Texture.all.includes(texture) ||
+          !Array.isArray(Texture.all) ||
+          Texture.all.filter(item => item.uuid === intent.expected_texture_uuid).length !== 1 ||
+          !Texture.all.includes(texture) ||
           (typeof Project !== "undefined" && Array.isArray(Project?.textures) &&
            !Project.textures.includes(texture)) ||
           texture.uuid !== intent.expected_texture_uuid ||
