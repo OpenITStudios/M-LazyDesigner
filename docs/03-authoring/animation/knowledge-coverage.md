@@ -86,7 +86,11 @@ Implement a case only through its existing source/test/native owner when a concr
 
 The existing `mcp/lib/animation/motionDynamics.ts` silently kept the last same-time key, and `mcp/server/runtime/extensions/animation/nativeIntelligence.ts` previously extracted `getArray(0)` even for multiple native pre/post data points. This could manufacture numeric movement, velocity and loop continuity from ambiguous motion. This is **not** a claim that actual Blockbench playback is defective.
 
-The corrected owners mark duplicate-time tracks `unavailable: duplicate_keyframe_time` and native 0/2+ data-point tracks `unavailable: non_single_native_data_point`. Valid single-point tracks still produce evidence; mixed clips retain the clean subset plus bounded omissions. The existing `mcp/tests/animation-native-intelligence.test.ts` now owns the positive/negative regression. No authored keys, assets, public tools or automatic IK are changed. **Bun, typecheck, native and CI verification NOT EXECUTED.** Numeric source diagnostics remain non-visual.
+The corrected motion-dynamics owner marks duplicate-time tracks `unavailable: duplicate_keyframe_time` and native 0/2+ data-point tracks `unavailable: non_single_native_data_point`. Valid single-point tracks still produce evidence; mixed clips retain the clean subset plus bounded omissions. Existing `mcp/tests/animation-native-intelligence.test.ts` owns this regression.
+
+**K5 source follow-up:** `rootMotionAnalysis.ts` also silently bridged expression/invalid middle frames and collapsed duplicate-time root keys. `qualityIntelligence.ts` extracted the first native data point even for pre/post keys. Both owners now refuse those unsupported trajectories and preserve bounded `unevaluated_root_track_count` evidence alongside clean roots. Existing `mcp/tests/quality-intelligence.test.ts` owns the new negative and preservation regressions. All diagnostics remain authored-key observations—not interpolated playback, foot contact, visual fidelity or native PASS.
+
+No authored keys, assets, public tools, Golden tasks or automatic IK are changed. **Bun, typecheck, native and CI verification NOT EXECUTED.**
 
 ## K5 — Existing Animation Golden acceptance only (NOT EXECUTED)
 

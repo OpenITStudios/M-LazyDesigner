@@ -486,6 +486,85 @@ describe("bounded authoring quality intelligence", () => {
     expect(result.speed_consistency.state).toBe("stable");
   });
 
+  test("K5 root-motion diagnostics refuse expression gaps and same-time/native discontinuities", async () => {
+    const root = {
+      uuid: "clean", name: "clean",
+      keyframes: [
+        { time: 0, value: [0, 0, 0] },
+        { time: 0.5, value: [8, 0, 0] },
+        { time: 1, value: [16, 0, 0] },
+      ],
+    };
+    const expressionGap = {
+      ...root, uuid: "expression",
+      keyframes: [
+        { time: 0, value: [0, 0, 0] },
+        { time: 0.5, value: ["query.anim_time * 16", 0, 0] },
+        { time: 1, value: [16, 0, 0] },
+      ],
+    };
+    const sameTime = {
+      ...root, uuid: "duplicate",
+      keyframes: [
+        { time: 0, value: [0, 0, 0] },
+        { time: 0.5, value: [8, 0, 0] },
+        { time: 0.5, value: [12, 0, 0] },
+        { time: 1, value: [16, 0, 0] },
+      ],
+    };
+    const prePost = {
+      ...root, uuid: "prepost",
+      keyframes: [
+        { time: 0, value: [0, 0, 0], data_point_count: 1 },
+        { time: 0.5, value: [8, 0, 0], data_point_count: 2 },
+        { time: 1, value: [16, 0, 0], data_point_count: 1 },
+      ],
+    };
+    const missing = {
+      ...root, uuid: "missing",
+      keyframes: [
+        { time: 0, value: [0, 0, 0], data_point_count: 0 },
+        { time: 1, value: [16, 0, 0], data_point_count: 1 },
+      ],
+    };
+    expect(analyzeRootMotionTrack(expressionGap)).toMatchObject({
+      state: "unavailable",
+      reason: "non_numeric_or_invalid_position_keyframes",
+      ignored_keyframes: 1,
+    });
+    expect(analyzeRootMotionTrack(sameTime)).toMatchObject({
+      state: "unavailable", reason: "duplicate_position_keyframe_time",
+    });
+    for (const track of [prePost, missing]) {
+      expect(analyzeRootMotionTrack(track)).toMatchObject({
+        state: "unavailable", reason: "non_single_native_data_point",
+      });
+    }
+
+    const combined = analyzeRootMotionTracks([
+      expressionGap, sameTime, prePost, missing, root,
+    ], { limit: 2 });
+    expect(combined.state).toBe("available");
+    if (combined.state !== "available") throw new Error("expected partial root evidence");
+    expect(combined.primary.track.uuid).toBe("clean");
+    expect(combined.unevaluated_root_track_count).toBe(4);
+    expect(combined.unevaluated_examples).toHaveLength(2);
+    expect(combined.unevaluated_examples_truncated).toBe(true);
+    expect(combined.primary.displacement_blocks).toEqual([1, 0, 0]);
+    expect(analyzeRootMotionTracks([sameTime, expressionGap]).state).toBe("unavailable");
+
+    // The runtime bridge is native-only: retain a narrow owner-level
+    // source assertion, not a fabricated native test or second tool.
+    const source = await Bun.file("server/tools/validation/qualityIntelligence.ts").text();
+    const start = source.indexOf("function rootMotionRuntime(");
+    const end = source.indexOf("function animationQualityRuntime(", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const reader = source.slice(start, end);
+    expect(reader).toContain("data_point_count: dataPointCount");
+    expect(reader).toContain("dataPointCount === 1 ? keyframe.getArray(0)");
+  });
+
   test("root motion chooses the strongest horizontal root and ignores Molang-only tracks", () => {
     const result = analyzeRootMotionTracks([
       {

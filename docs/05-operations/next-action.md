@@ -10,7 +10,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **Animation K0–K3:** [145 research references](../03-authoring/animation/research-sources.md) and [30-family coverage/4 review cases](../03-authoring/animation/knowledge-coverage.md) curated. One deterministic finite scalar-scale compiler safeguard plus an existing-owner regression authored. All source test runs, native animation playback, export/visual acceptance and real Golden cost baseline **NOT EXECUTED**.
 
-**Animation K4:** Existing motion diagnostics now reject duplicate-time and native pre/post keys instead of silently treating an arbitrary numeric value as a complete curve; one focused existing-owner regression authored. See [K4/K5 acceptance matrix](../03-authoring/animation/knowledge-coverage.md). Exact-SHA Bun/CI/native/visual and Golden **NOT EXECUTED**. No new tools or benchmark tasks.
+**Animation K4/K5 source:** MotionDynamics and RootMotion now reject duplicate timestamps and ambiguous native pre/post samples; RootMotion additionally refuses expression gaps and reports omitted tracks. Existing-owner regressions authored. See [K4/K5 acceptance matrix](../03-authoring/animation/knowledge-coverage.md). Exact-SHA Bun/CI/native/visual/Golden **NOT EXECUTED**. No new tools or benchmark tasks.
 
 **Order:** Animation ACTIVE; Texture/UV SOURCE-CLOSED / NATIVE PENDING; Geometry PAUSED. **Next:** run affected source tests on an actual matching Bun worktree when available, then disposable native animation/persistence verification and existing mechanical-lift, fisherman and particle Golden acceptance. Do not redo K0/K1.
 

@@ -4,6 +4,8 @@ export const ROOT_MOTION_TRACK_LIMIT = 3;
 export type RootMotionKeyframeInput = {
   time: number;
   value: readonly unknown[];
+  /** Explicit native readback cardinality; absent in legacy pure callers. */
+  data_point_count?: number;
 };
 
 export type RootMotionTrackInput = {
@@ -42,26 +44,45 @@ export function analyzeRootMotionTrack(
   }
 
   const ignored = track.keyframes.length;
-  const numeric = track.keyframes
-    .map((keyframe) => ({
-      time: Number(keyframe.time),
-      value: finiteVec3(keyframe.value),
-    }))
-    .filter(
-      (sample): sample is { time: number; value: Vec3 } =>
-        Number.isFinite(sample.time) && sample.value !== null
-    )
-    .sort((left, right) => left.time - right.time);
+  const unavailable = (reason: string, numericCount: number, ignoredCount: number) => ({
+    state: "unavailable" as const,
+    reason,
+    track: { uuid: track.uuid, name: track.name },
+    numeric_keyframes: numericCount,
+    ignored_keyframes: ignoredCount,
+  });
 
-  const deduped: Array<{ time: number; value: Vec3 }> = [];
-  for (const sample of numeric) {
-    const previous = deduped[deduped.length - 1];
-    if (previous?.time === sample.time) {
-      deduped[deduped.length - 1] = sample;
-    } else {
-      deduped.push(sample);
-    }
+  // A single getArray(0) cannot certify a native pre/post discontinuity.
+  // Do not create a plausible root path from an unread or two-point key.
+  if (track.keyframes.some((frame) =>
+    frame.data_point_count !== undefined && frame.data_point_count !== 1
+  )) {
+    return unavailable("non_single_native_data_point", 0, ignored);
   }
+
+  const numeric = track.keyframes.map((keyframe) => ({
+    time: Number(keyframe.time),
+    value: finiteVec3(keyframe.value),
+  })).filter(
+    (sample): sample is { time: number; value: Vec3 } =>
+      Number.isFinite(sample.time) && sample.time >= 0 && sample.value !== null
+  ).sort((left, right) => left.time - right.time);
+
+  // Never bridge a Molang expression or malformed middle key: its real
+  // position may differ arbitrarily from the two surrounding numeric poses.
+  if (numeric.length !== ignored) {
+    return unavailable("non_numeric_or_invalid_position_keyframes",
+      numeric.length, ignored - numeric.length);
+  }
+
+  // Duplicate same-time keys may encode a step. Picking the final array
+  // element is not evidence of a continuous authored root trajectory.
+  if (numeric.some((entry, index) =>
+    index > 0 && entry.time === numeric[index - 1]!.time
+  )) {
+    return unavailable("duplicate_position_keyframe_time", numeric.length, 0);
+  }
+  const deduped = numeric;
 
   if (deduped.length < 2) {
     return {
@@ -177,6 +198,7 @@ export function analyzeRootMotionTracks(
       options.unitsPerBlock ?? ROOT_MOTION_BLOCKBENCH_UNITS_PER_BLOCK
     )
   );
+  const unevaluated = analyzed.filter((entry) => entry.state === "unavailable");
   const available = analyzed
     .filter((entry) => entry.state === "available")
     .sort(
@@ -200,6 +222,9 @@ export function analyzeRootMotionTracks(
   return {
     state: "available" as const,
     root_track_count: tracks.length,
+    unevaluated_root_track_count: unevaluated.length,
+    unevaluated_examples: unevaluated.slice(0, limit),
+    unevaluated_examples_truncated: unevaluated.length > limit,
     primary: available[0],
     candidates: available.slice(0, limit),
     candidates_truncated: available.length > limit,

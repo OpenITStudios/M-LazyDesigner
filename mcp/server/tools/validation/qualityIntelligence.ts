@@ -466,10 +466,16 @@ function rootMotionRuntime(structuredContent: Record<string, unknown>) {
     const keyframes = ((animator.position as BBKeyframe[] | undefined) ?? [])
       .slice()
       .sort((left, right) => left.time - right.time)
-      .map((keyframe) => ({
-        time: keyframe.time,
-        value: keyframe.getArray(0) as unknown[],
-      }));
+      .map((keyframe) => {
+        const dataPointCount = Array.isArray(keyframe.data_points)
+          ? keyframe.data_points.length : 0;
+        return {
+          time: keyframe.time,
+          data_point_count: dataPointCount,
+          // An absent/pre-post native key cannot be a single numeric root sample.
+          value: dataPointCount === 1 ? keyframe.getArray(0) as unknown[] : [],
+        };
+      });
     if (keyframes.length === 0) continue;
     tracks.push({ uuid: group.uuid, name: group.name, keyframes });
   }
