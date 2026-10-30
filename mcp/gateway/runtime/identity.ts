@@ -52,3 +52,40 @@ export function createRuntimeSignature(health: unknown): string {
     exposed_tool_count: numberValue(root.exposed_tool_count),
   });
 }
+
+/**
+ * Only an in-band, backend-validated Stage receipt may authorize this
+ * classification. A fresh MCP transport/catalog is still mandatory, but
+ * its new connection is not a new Runtime generation when its /health
+ * process identity is unchanged. Opaque/incomplete signatures fail closed.
+ */
+export function sameRuntimeGenerationAfterPlannedHandoff(
+  previousSignature: string | null,
+  nextSignature: string
+): boolean {
+  if (!previousSignature) return false;
+  let previous: unknown;
+  let next: unknown;
+  try {
+    previous = JSON.parse(previousSignature);
+    next = JSON.parse(nextSignature);
+  } catch {
+    return false;
+  }
+  if (!isRecord(previous) || !isRecord(next)) return false;
+  const hasInstance =
+    (typeof previous.instance_id === "string" && previous.instance_id.trim().length > 0) ||
+    (typeof previous.startup_time === "string" && previous.startup_time.trim().length > 0);
+  if (!hasInstance) return false;
+  const validPhase = (value: unknown) =>
+    value === "geometry" || value === "texturing" || value === "animation";
+  if (!validPhase(previous.authoring_phase) || !validPhase(next.authoring_phase)) return false;
+  for (const count of [previous.exposed_tool_count, next.exposed_tool_count]) {
+    if (typeof count !== "number" || !Number.isSafeInteger(count) || count <= 0) return false;
+  }
+  const stableFields = (value: JsonRecord) =>
+    Object.entries(value)
+      .filter(([key]) => key !== "authoring_phase" && key !== "exposed_tool_count")
+      .sort(([left], [right]) => left.localeCompare(right));
+  return JSON.stringify(stableFields(previous)) === JSON.stringify(stableFields(next));
+}

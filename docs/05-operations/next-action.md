@@ -26,7 +26,7 @@ Golden safety/provenance through `2ed71e93` and focused affected-test routing ar
 
 ## Next REMOTE_GITHUB work
 
-**Asset-flow efficiency:** Control's independent Workspace/Reference reads and complete UV→Texture recheck targeting remain source-authored. Golden source/output identity is guarded; affected tests now select direct contracts. Further optimization needs measured evidence; do not add routing, caching, approvals, public Gateway tools or another benchmark engine.
+**Asset-flow efficiency:** Control intake/UV rechecks and Golden provenance are source-authored. Planned Stage handoffs now avoid double generation invalidation only with same verified Runtime/process and project; transport/catalog refresh is retained. Native handoff and accepted-cost proof remain pending. Do not add routing, caching, approvals, public Gateway tools or a second benchmark.
 
 Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
 

@@ -401,6 +401,11 @@ const GATEWAY_RECOVERY_CONTRACT_TESTS_BY_PATH: Readonly<
   "mcp/gateway/runtime/connectionManager.ts": [
     "mcp/gateway/runtime/connectionManager.test.ts",
   ],
+  "mcp/gateway/runtime/identity.ts": [
+    "mcp/gateway/runtime/affinityPolicy.test.ts",
+    "mcp/gateway/runtime/backend-cache.test.ts",
+    "mcp/tests/health-build-identity.test.ts",
+  ],
   "mcp/gateway/runtime/backend.ts": [
     "mcp/gateway/backend-effects-boundary.test.ts",
     "mcp/gateway/index-boundary.test.ts",

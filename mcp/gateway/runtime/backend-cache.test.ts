@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { BlockitRuntimeBackend } from "./backend";
+import {
+  createRuntimeSignature,
+  sameRuntimeGenerationAfterPlannedHandoff,
+} from "./identity";
 import type { BackendTool } from "../contracts/protocol";
 
 function primeCatalog(backend: BlockitRuntimeBackend, tools: BackendTool[]): void {
@@ -16,6 +20,75 @@ function primeCatalog(backend: BlockitRuntimeBackend, tools: BackendTool[]): voi
 }
 
 describe("BlockitRuntimeBackend catalog fast path", () => {
+  const runtimeSignature = (
+    phase: "geometry" | "texturing" | "animation",
+    overrides: Record<string, unknown> = {}
+  ) => createRuntimeSignature({
+    build_identity: "sha256:" + "a".repeat(64),
+    instance_id: "runtime-process-a",
+    startup_time: "2026-10-30T12:00:00.000Z",
+    product: {
+      id: "lazydesigner",
+      version: "0.1",
+      profile: "bedrock_entity",
+      authoring_phase: phase,
+    },
+    exposed_tool_count: phase === "animation" ? 18 : 47,
+    ...overrides,
+  });
+
+  test("planned Stage reconnect requires the same verifiable Runtime generation", () => {
+    const geometry = runtimeSignature("geometry");
+    const texturing = runtimeSignature("texturing");
+    const animation = runtimeSignature("animation");
+    for (const next of [geometry, texturing, animation]) {
+      expect(sameRuntimeGenerationAfterPlannedHandoff(geometry, next)).toBe(true);
+    }
+    for (const changed of [
+      runtimeSignature("texturing", { instance_id: "runtime-process-b" }),
+      runtimeSignature("texturing", { startup_time: "2026-10-30T12:01:00.000Z" }),
+      runtimeSignature("texturing", { build_identity: "sha256:" + "b".repeat(64) }),
+      runtimeSignature("texturing", { product: {
+        id: "lazydesigner", version: "0.1", profile: "extended",
+        authoring_phase: "texturing",
+      } }),
+      runtimeSignature("texturing", { exposed_tool_count: null }),
+      runtimeSignature("texturing", { instance_id: null, startup_time: null }),
+    ]) {
+      expect(sameRuntimeGenerationAfterPlannedHandoff(geometry, changed)).toBe(false);
+    }
+    const noProcessIdentity = runtimeSignature("geometry", {
+      instance_id: null, startup_time: null,
+    });
+    expect(sameRuntimeGenerationAfterPlannedHandoff(noProcessIdentity, texturing)).toBe(false);
+    expect(sameRuntimeGenerationAfterPlannedHandoff(null, texturing)).toBe(false);
+    expect(sameRuntimeGenerationAfterPlannedHandoff("invalid JSON", texturing)).toBe(false);
+  });
+
+  test("planned Stage handoff is single-use, bound to the project, and cleared by loss", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as unknown as {
+      projectUuid: string | null;
+      pendingStageHandoff: { signature: string; projectUuid: string | null } | null;
+      consumeVerifiedPlannedHandoff: (signature: string) => boolean;
+      closeConnectionUnsafe: () => Promise<void>;
+    };
+    const geometry = runtimeSignature("geometry");
+    const texturing = runtimeSignature("texturing");
+    state.projectUuid = "project-a";
+    state.pendingStageHandoff = { signature: geometry, projectUuid: "project-a" };
+    expect(state.consumeVerifiedPlannedHandoff(texturing)).toBe(true);
+    expect(state.pendingStageHandoff).toBeNull();
+    expect(state.consumeVerifiedPlannedHandoff(texturing)).toBe(false);
+
+    state.pendingStageHandoff = { signature: geometry, projectUuid: "project-a" };
+    state.projectUuid = "project-b";
+    expect(state.consumeVerifiedPlannedHandoff(texturing)).toBe(false);
+    state.pendingStageHandoff = { signature: geometry, projectUuid: "project-b" };
+    await state.closeConnectionUnsafe();
+    expect(state.pendingStageHandoff).toBeNull();
+  });
+
   test("search uses a fresh local catalog without probing Runtime", async () => {
     const backend = new BlockitRuntimeBackend(undefined, undefined, {
       catalogLeaseMs: 5_000,

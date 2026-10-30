@@ -22,6 +22,7 @@ import {
 import {
   DEFAULT_RUNTIME_URL,
   createRuntimeSignature,
+  sameRuntimeGenerationAfterPlannedHandoff,
   verifyRuntimeBuildIdentity,
   normalizeRuntimeUrl,
 } from "./identity";
@@ -81,6 +82,8 @@ export class BlockitRuntimeBackend {
   private client: Client | null = null;
   private connectedProtocolEra: "modern" | "legacy" | null = null;
   private connectedSignature: string | null = null;
+  /** One-shot identity after an accepted Stage receipt; not a second Runtime registry. */
+  private pendingStageHandoff: { signature: string; projectUuid: string | null } | null = null;
   private catalog = new Map<string, BackendTool>();
   private catalogValidatedAt = 0;
   private projectUuid: string | null = null;
@@ -309,6 +312,7 @@ export class BlockitRuntimeBackend {
     this.client = null;
     this.connectedProtocolEra = null;
     this.connectedSignature = null;
+    this.pendingStageHandoff = null;
     this.catalog.clear();
     this.catalogValidatedAt = 0;
     this.lastVerifiedHealthSignature = null;
@@ -394,9 +398,23 @@ export class BlockitRuntimeBackend {
     resolveProjectAffinity(this.projectUuid, confirmed.health, false);
   }
 
+  /**
+   * A verified Stage handoff already invalidated Stage facts once. Consume
+   * its one-shot identity only for the same bound project and same process;
+   * unexpected reconnects still report a new Runtime generation.
+   */
+  private consumeVerifiedPlannedHandoff(nextSignature: string): boolean {
+    const pending = this.pendingStageHandoff;
+    this.pendingStageHandoff = null;
+    return pending !== null &&
+      pending.projectUuid === this.projectUuid &&
+      sameRuntimeGenerationAfterPlannedHandoff(pending.signature, nextSignature);
+  }
+
   private async connectFreshUnsafe(signature: string): Promise<void> {
     const previousSignature = this.connectedSignature;
     const hadReadyRuntime = this.connection.session.hasBeenReady();
+    const sameGenerationPlannedHandoff = this.consumeVerifiedPlannedHandoff(signature);
     await this.closeConnectionUnsafe();
     this.connection.beginConnect();
 
@@ -425,7 +443,7 @@ export class BlockitRuntimeBackend {
       this.catalogValidatedAt = Date.now();
       this.lastError = null;
       this.connection.markReady({ catalogRefreshed: true });
-      if (hadReadyRuntime) {
+      if (hadReadyRuntime && !sameGenerationPlannedHandoff) {
         const snapshot = this.connection.snapshot();
         this.onRuntimeGenerationChange?.({
           previous_signature: previousSignature,
@@ -850,6 +868,8 @@ export class BlockitRuntimeBackend {
           );
         }
 
+        const priorConnectedSignature = this.connectedSignature;
+        const priorProjectUuid = this.projectUuid;
         let affinityChanged = false;
 
         if (normalized.isError !== true) {
@@ -891,7 +911,16 @@ export class BlockitRuntimeBackend {
           }
 
           if (application.effects.invalidateCatalog || affinityChanged) {
+            // Stage affinity is captured in transport headers. Reconnect even
+            // for a same-surface focus change; only its generation callback
+            // may be elided after fresh /health and MCP handshake proof.
             await this.closeConnectionUnsafe();
+            if (phaseAffinityUpdated && priorConnectedSignature) {
+              this.pendingStageHandoff = {
+                signature: priorConnectedSignature,
+                projectUuid: priorProjectUuid,
+              };
+            }
           }
 
           return {
