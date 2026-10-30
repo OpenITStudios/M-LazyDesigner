@@ -16,6 +16,7 @@ import {
   type TextureTreatmentPlanInput,
 } from "../../lib/texture/treatmentPlan";
 import { decodeVerifiedPngRgba } from "../../lib/reference/pngAlphaEvidence";
+import { reviewReferencePaletteRoles } from "../../lib/texture/palette";
 import type { TextureTreatmentFace } from "../../lib/texture/treatmentPlan";
 import { fileMetadataSignature } from "./fileSignature";
 
@@ -630,6 +631,7 @@ export async function inspectTextureTreatmentReferenceSurfaces(input: {
     }
   }
 
+  const paletteReview = reviewReferencePaletteRoles(colors, plan.regions);
   const consistent = plan.reference_surface_evidence.state === "claim_metadata_matched";
   return {
     source: "control_reference_package_texture_surfaces" as const,
@@ -655,6 +657,15 @@ export async function inspectTextureTreatmentReferenceSurfaces(input: {
       sampled_count: colors.length,
       samples: colors,
       omissions,
+      palette_review: {
+        ...paletteReview,
+        // An omitted requested source pixel cannot silently result in a
+        // complete source palette suggestion based on a successful subset.
+        state: probes.length === 0 ? ("not_requested" as const)
+          : omissions.length > 0 ? ("review_required" as const)
+            : paletteReview.state,
+        omitted_probe_count: omissions.length,
+      },
       palette_selected: false as const,
       material_inferred: false as const,
       painting_authorized: false as const,

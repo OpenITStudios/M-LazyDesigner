@@ -459,3 +459,38 @@ unchanged. No Texture or UV mutation, Gateway schema/tool addition, generated
 artifact, CI enablement, new training data or asset release. Targeted
 positive/negative regressions are authored; Bun/typecheck/native/visual
 and Golden acceptance **NOT EXECUTED**.
+
+
+## P0 follow-on — same-source shade-role and identity review (2026-10-30)
+
+The existing `mcp/lib/texture/palette.ts` owns an additional **pure,
+read-only** `reviewReferencePaletteRoles` check consumed only from the
+already-on-demand Control Texture source reader. It groups at most 16
+source-verified RGB swatches by the *exact* reference image SHA-256,
+SURFACE_DETAIL region, semantic part and Cube/face; swatches from another
+image, revision, region or face are never mixed into a false complete ramp.
+
+Only caller-labelled **shadow/base/highlight** source anchors with exactly
+one distinct opaque RGB each and increasing sRGB relative luminance become
+`source_anchor_candidate`. The suggested triple consists **only of the
+three sampled colors**: no intermediate hue guesses, generated HSL values,
+painting or palette-panel mutation. Incomplete, ambiguous, mixed-alpha and
+misordered anchors stay `review_required`; semantic visual art can still
+override the luminance heuristic through reference review, never auto-pass.
+`identity` swatches remain separate from the ramp and are compared only
+with exact authored hex identities; named/unknown color labels cannot be
+silently equated to numeric RGB.
+
+The existing explicitly declared `surface_pattern` and directionality
+are carried as context, never inferred from RGB. Physical texel density,
+motif orientation, renderer compatibility and actual appearance are always
+marked unverified. The pure analyzer does not attest source bytes by itself;
+the Control reader runs it **only after** its existing on-disk image SHA
+and final manifest readback checks. Any omitted requested probe forces
+the overall palette review back to `review_required`, even if some other
+samples look complete.
+
+Existing `generateTexturePalette`, Texture treatment, four-tool Gateway,
+legacy no-probe path, native UV/painting tools and CI policy are unchanged.
+Focused pure and Control source regressions authored; Bun/typecheck/native/
+visual and Golden acceptance **NOT EXECUTED**.

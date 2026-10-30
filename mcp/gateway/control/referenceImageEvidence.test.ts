@@ -685,6 +685,31 @@ describe("Control source-backed Texture treatment surface handoff", () => {
       }],
       omissions: [],
     });
+    expect(result.color_evidence.palette_review).toMatchObject({
+      state: "review_required",
+      omitted_probe_count: 0,
+      scope_count: 1,
+      palette_selected: false,
+      material_inferred: false,
+      painting_authorized: false,
+      visual_verdict: "not_evaluated",
+      scopes: [{
+        scope: { treatment_region: "logo", image_sha256: sha },
+        roles: { base_hex: "#ff0000", shadow_hex: null, highlight_hex: null },
+        ramp: {
+          state: "review_required",
+          exact_observed_colors: null,
+          reasons: ["REFERENCE_RAMP_ANCHORS_INCOMPLETE_OR_AMBIGUOUS"],
+        },
+        surface_pattern: {
+          declared: "painted_metal",
+          directionality: "form_driven",
+          source_material_verified: false,
+          direction_verified: false,
+          physical_texel_density_verified: false,
+        },
+      }],
+    });
     expect(JSON.stringify(result)).not.toContain(RED_PNG.toString("base64"));
     expect(JSON.stringify(result)).not.toContain('"rgba":{"0":');
 
@@ -697,6 +722,8 @@ describe("Control source-backed Texture treatment surface handoff", () => {
     expect(outside.color_evidence).toMatchObject({
       state: "review_required", sampled_count: 0,
       omissions: [{ reason: "REFERENCE_COLOR_PROBE_OUTSIDE_REGION" }],
+      palette_review: { state: "review_required", omitted_probe_count: 1,
+        scope_count: 0, painting_authorized: false },
     });
     const wrongPart = treatment(sha);
     wrongPart.regions[0]!.reference_surfaces![0]!.part_id = "different";
@@ -739,6 +766,7 @@ describe("Control source-backed Texture treatment surface handoff", () => {
     expect(unchanged.color_evidence).toMatchObject({
       state: "not_requested", requested_count: 0,
       sampled_count: 0, samples: [], omissions: [],
+      palette_review: { state: "not_requested", scope_count: 0 },
     });
   });
 
