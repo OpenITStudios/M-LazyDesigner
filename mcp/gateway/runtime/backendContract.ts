@@ -88,6 +88,8 @@ export type GatewayRuntimeCallResult = JsonRecord & {
 export type GatewayRuntimeInvocation = {
   result: GatewayRuntimeCallResult;
   readOnly: boolean;
+  /** Existing backend health/project preflight identity; no additional status. */
+  verifiedProjectUuid: string | null;
   /** Backend-validated once; reused by Control instead of re-parsing affinity receipts. */
   effectApplication?: GatewayEffectApplication;
 };

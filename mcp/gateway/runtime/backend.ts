@@ -948,6 +948,7 @@ export class BlockitRuntimeBackend {
               phaseAffinityUpdated && !verifiedSameStage, managed
             ),
             readOnly: tool.annotations?.readOnlyHint === true,
+            verifiedProjectUuid: this.projectUuid,
             effectApplication: application,
           };
         }
@@ -955,6 +956,7 @@ export class BlockitRuntimeBackend {
         return {
           result: managed,
           readOnly: tool.annotations?.readOnlyHint === true,
+          verifiedProjectUuid: null,
           effectApplication: application,
         };
       } catch (error) {

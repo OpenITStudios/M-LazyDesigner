@@ -194,6 +194,31 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(wrongTarget.closes()).toBe(1);
   });
 
+  test("successful native call carries its existing verified project identity", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    state.projectUuid = "project-verified";
+    state.authoringPhase = "geometry";
+    state.client = {
+      callTool: async () => ({
+        content: [],
+        structuredContent: { execution: "applied" },
+      }),
+    };
+    state.catalog = new Map([[
+      "manage_cubes",
+      { name: "manage_cubes", annotations: { readOnlyHint: false } },
+    ]]);
+    // The independent affinity test owns real health/preflight. Here the
+    // already-verified identity must survive the normal call path.
+    state.ensureCatalogUnsafe = async () => {};
+    const result = await backend.invokeCapabilityWithMetadata(
+      "manage_cubes", { operation: "update" }
+    );
+    expect(result.verifiedProjectUuid).toBe("project-verified");
+    expect(result.result.isError).not.toBe(true);
+  });
+
   test("search uses a fresh local catalog without probing Runtime", async () => {
     const backend = new BlockitRuntimeBackend(undefined, undefined, {
       catalogLeaseMs: 5_000,

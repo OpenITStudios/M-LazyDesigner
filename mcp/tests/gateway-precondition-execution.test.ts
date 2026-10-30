@@ -39,6 +39,75 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
     ]);
   });
 
+  test("direct-first mutations preserve project across a Control cohort without status calls", async () => {
+    const session = new GatewaySessionState();
+    let calls = 0;
+    let statusReads = 0;
+    const executor = new GatewayCapabilityExecutor(
+      {
+        getStatus: async () => {
+          statusReads++;
+          throw new Error("No status required for ordinary mutations.");
+        },
+        invokeCapabilityWithMetadata: async () => {
+          calls++;
+          return {
+            result: { content: [], structuredContent: { execution: "applied" } },
+            readOnly: false,
+            verifiedProjectUuid: "cohort-project",
+          };
+        },
+      } as any,
+      { invoke: async () => null } as any,
+      session
+    );
+    const options = {
+      taskContextId: "single-asset-batch",
+      cohortBoundary: "CONTINUE" as const,
+    };
+    const first = await executor.invoke(
+      "manage_cubes", { operation: "update" }, undefined, options
+    ) as any;
+    const second = await executor.invoke(
+      "manage_cubes", { operation: "batch_update" }, undefined, options
+    ) as any;
+    expect(first.isError).not.toBe(true);
+    expect(second.isError).not.toBe(true);
+    expect(session.projectUuid).toBe("cohort-project");
+    expect(session.facts.project_bound).toBe(true);
+    expect(first.structuredContent.control_delta.project_uuid).toBe("cohort-project");
+    expect(second.structuredContent.control_delta.project_uuid).toBe("cohort-project");
+    expect(first.structuredContent.control_delta.continuation.state_revision).toBe(1);
+    expect(second.structuredContent.control_delta.continuation.state_revision).toBe(2);
+    expect(second.structuredContent.control_delta.continuation.cohort).toMatchObject({
+      task_context_id: "single-asset-batch", deferred: true,
+    });
+    expect(session.controlExecutionState?.revision).toBe(2);
+    expect(statusReads).toBe(0);
+    expect(calls).toBe(2);
+  });
+
+  test("unverified backend project cannot borrow prior session identity for Control Delta", async () => {
+    const session = new GatewaySessionState();
+    session.synchronizeProject("older-project");
+    const executor = new GatewayCapabilityExecutor(
+      {
+        invokeCapabilityWithMetadata: async () => ({
+          result: { content: [], structuredContent: { execution: "applied" } },
+          readOnly: false,
+          verifiedProjectUuid: null,
+        }),
+      } as any,
+      { invoke: async () => null } as any,
+      session
+    );
+    const response = await executor.invoke(
+      "manage_cubes", { operation: "update" }
+    ) as any;
+    expect(response.structuredContent.control_delta.project_uuid).toBeNull();
+    expect(session.controlExecutionState?.project_uuid).toBeNull();
+  });
+
   test("a Runtime generation change invalidates stale prerequisite facts", () => {
     const session = new GatewaySessionState();
     session.synchronizeProject("active-model-a");

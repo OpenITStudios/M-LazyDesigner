@@ -813,6 +813,7 @@ describe("affected execution planner", () => {
         "mcp/gateway/presentation/resultCompaction.test.ts",
         "mcp/tests/gateway-contract.test.ts",
         "mcp/gateway/capabilities/effects.test.ts",
+        "mcp/tests/gateway-precondition-execution.test.ts",
       ]],
       ["mcp/gateway/control/receipt.ts", [
         "mcp/gateway/capabilities/effects.test.ts",
@@ -906,6 +907,7 @@ describe("affected execution planner", () => {
       ["mcp/gateway/runtime/backendContract.ts", [
         "mcp/gateway/backend-effects-boundary.test.ts",
         "mcp/gateway/capabilities/effects.test.ts",
+        "mcp/tests/gateway-precondition-execution.test.ts",
       ]],
     ];
     for (const [path, expected] of cases) {

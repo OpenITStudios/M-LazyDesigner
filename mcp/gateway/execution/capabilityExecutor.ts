@@ -160,11 +160,19 @@ export class GatewayCapabilityExecutor {
         runtimeInvocation?.effectApplication
       );
 
-      if (
-        receipt.projectUuid !== null &&
-        receipt.projectUuid !== this.session.projectUuid
-      ) {
-        this.session.synchronizeProject(receipt.projectUuid);
+      // The serialized Runtime preflight already verified its bound tab.
+      // Project creation supplies a new UUID; ordinary native calls reuse
+      // the backend's verified project. Failed or unverified native outcomes
+      // cannot assert project identity, and require no status reread.
+      const verifiedProjectUuid = succeeded
+        ? receipt.projectUuid ??
+          (runtimeInvocation === null
+            ? this.session.projectUuid
+            : runtimeInvocation.verifiedProjectUuid ?? null)
+        : null;
+      if (verifiedProjectUuid !== null &&
+          verifiedProjectUuid !== this.session.projectUuid) {
+        this.session.synchronizeProject(verifiedProjectUuid);
       }
 
       // The Backend already validated a successful phase-transition receipt.
@@ -192,7 +200,7 @@ export class GatewayCapabilityExecutor {
         branch,
         phaseBefore: receipt.phaseBefore,
         phaseAfter: receipt.phaseAfter,
-        projectUuid: receipt.projectUuid,
+        projectUuid: verifiedProjectUuid,
         succeeded,
         result: result.structuredContent,
       });
