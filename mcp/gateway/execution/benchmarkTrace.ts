@@ -28,6 +28,8 @@ export type BenchmarkTraceEvent = {
   error_code?: string | null;
   /** Opt-in Golden trace only: hashes of actual returned model-view PNGs. */
   capture_evidence?: BenchmarkCaptureEvidence;
+  /** Only the trusted, readback-matched project export receipt; no paths. */
+  artifact_evidence?: BenchmarkArtifactEvidence;
 };
 
 /** Stable content identity, not visual correctness or image-pixel storage. */
@@ -50,6 +52,60 @@ export function benchmarkCaptureEvidenceRef(
     input.diagnostic_missing_texture_highlight,
     input.views.map(row => [row.view, row.png_sha256]),
   ])).digest("hex");
+}
+
+/** A native .bbmodel save receipt, not reopen/visual/export completeness. */
+export type BenchmarkArtifactEvidence = {
+  project_uuid: string;
+  codec_id: "project";
+  save_behavior: "NATIVE_PROJECT_SAVE" | "NATIVE_PROJECT_SAVE_AS";
+  file_integrity_state: "READBACK_MATCHED";
+  compiled_payload_sha256: string;
+  written_file_sha256: string;
+  evidence_ref: string;
+};
+
+export function benchmarkArtifactEvidenceRef(
+  data: Omit<BenchmarkArtifactEvidence, "evidence_ref">
+): string {
+  return "golden-artifact:v1:" + createHash("sha256").update(JSON.stringify([
+    data.project_uuid, data.codec_id, data.save_behavior,
+    data.file_integrity_state, data.compiled_payload_sha256,
+    data.written_file_sha256,
+  ])).digest("hex");
+}
+
+function artifactProofFromResult(
+  result: unknown, fingerprint: string | null
+): BenchmarkArtifactEvidence | null {
+  // Only a reference-pinned Golden trace may carry an acceptance receipt.
+  if (!fingerprint) return null;
+  const structured = recordValue(recordValue(result)?.structuredContent);
+  const codec = recordValue(structured?.codec);
+  const project = recordValue(structured?.project);
+  const path = structured?.wrote_to_path;
+  const compiled = structured?.compiled_payload_sha256;
+  const written = structured?.written_file_sha256;
+  if (codec?.id !== "project" ||
+      !project || typeof project.uuid !== "string" ||
+      !project.uuid.trim() || project.saved !== true ||
+      typeof path !== "string" || !path ||
+      path !== project.save_path ||
+      (structured?.save_behavior !== "NATIVE_PROJECT_SAVE" &&
+       structured?.save_behavior !== "NATIVE_PROJECT_SAVE_AS") ||
+      structured?.file_integrity_state !== "READBACK_MATCHED" ||
+      typeof compiled !== "string" ||
+      !/^sha256:[a-f0-9]{64}$/.test(compiled) ||
+      written !== compiled) return null;
+  const data: Omit<BenchmarkArtifactEvidence, "evidence_ref"> = {
+    project_uuid: project.uuid,
+    codec_id: "project",
+    save_behavior: structured.save_behavior as BenchmarkArtifactEvidence["save_behavior"],
+    file_integrity_state: "READBACK_MATCHED",
+    compiled_payload_sha256: compiled,
+    written_file_sha256: compiled,
+  };
+  return { ...data, evidence_ref: benchmarkArtifactEvidenceRef(data) };
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {
@@ -210,6 +266,12 @@ export class BenchmarkTraceRecorder {
       input.capability === "capture_model_views"
       ? captureProofFromResult(input.result, this.options.referenceFingerprint)
       : null;
+    const savedArtifact = input.success && input.kind === "mutate" &&
+      input.capability === "export_model"
+      ? artifactProofFromResult(
+          input.result, this.options.referenceFingerprint
+        )
+      : null;
     const event: BenchmarkTraceEvent = {
       schema: "lazydesigner-gateway-benchmark-trace-v1",
       sequence: this.sequence++,
@@ -227,6 +289,7 @@ export class BenchmarkTraceRecorder {
       // Persist bounded error identifiers, never diagnostic messages or paths.
       error_code: input.success ? null : safeErrorCode(input.result),
       ...(captured ? { capture_evidence: captured } : {}),
+      ...(savedArtifact ? { artifact_evidence: savedArtifact } : {}),
     };
 
     const path = this.options.path;

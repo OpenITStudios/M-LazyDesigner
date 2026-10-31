@@ -170,6 +170,16 @@ timing and foot contact through time; those need separate native playback
 and user review evidence. No second Golden task, new report schema or
 always-on image hashing is introduced.
 
+**Saved artifact vs. rendered capture:** for the single Golden, require a
+recorded `export_model` native project save receipt with verified file
+readback, and compare its SHA-256 against the runner's saved `.bbmodel`
+hash. This protects against claiming a successful authored result from an
+older saved file or arbitrary `artifact_revision`. The source-side gate
+does not certify actual Blockbench reopen parity, source-vs-model image
+quality, exported Bedrock geometry/animation files or human approval:
+retain those as explicit `save_reopen_export_integrity` and
+`human_acceptance` evidence, never extrapolate from `READBACK_MATCHED`.
+
 **Acceptance:** preserve per-criterion `PASS / FAIL / UNVERIFIED` and the existing independently documented human acceptance. Never collapse mixed critical failures into an aggregate beauty score, assume aesthetic superiority from a perceptual embedding, or trade away Bedrock/UV/save/export correctness for visual preference. Only once quality is accepted/equal-or-better compare cost, time and corrections through the existing runner/finalizer; no fabricated preferences, new JSON fields or extra Gateways. This protocol is **PREPARED, NOT RUN**.
 
 ## G3 Geometry Knowledge A/B — next native acceptance experiment

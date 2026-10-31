@@ -120,6 +120,11 @@ function validateAcceptedReport(
       `${label} accepted Golden comparison requires a valid changed output_asset_sha256.`
     );
   }
+  if (provenance.artifact_revision !== "sha256:" + outputHash) {
+    throw new Error(
+      `${label} accepted Golden comparison requires artifact_revision matching the saved output_asset_sha256.`
+    );
+  }
   if (
     !value.pipeline_provenance ||
     !/^[0-9a-f]{64}$/.test(value.pipeline_provenance.reference_package_fingerprint ?? "") ||

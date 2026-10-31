@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import goldenCorpus from "../fixtures/golden-task-cases.json";
-import { benchmarkCaptureEvidenceRef, type BenchmarkCaptureEvidence } from "../../gateway/execution/benchmarkTrace";
+import {
+  benchmarkCaptureEvidenceRef,
+  benchmarkArtifactEvidenceRef,
+  type BenchmarkCaptureEvidence,
+  type BenchmarkArtifactEvidence,
+} from "../../gateway/execution/benchmarkTrace";
 import {
   summarizeGoldenAuthoringDocument,
   validateGoldenAuthoringDocument,
@@ -27,6 +32,17 @@ function verifiedCaptureFixture(): BenchmarkCaptureEvidence {
 }
 
 
+function verifiedArtifactFixture(): BenchmarkArtifactEvidence {
+  const data: Omit<BenchmarkArtifactEvidence, "evidence_ref"> = {
+    project_uuid: "blockbench-project-correction",
+    codec_id: "project", save_behavior: "NATIVE_PROJECT_SAVE",
+    file_integrity_state: "READBACK_MATCHED",
+    compiled_payload_sha256: "sha256:" + "d".repeat(64),
+    written_file_sha256: "sha256:" + "d".repeat(64),
+  };
+  return { ...data, evidence_ref: benchmarkArtifactEvidenceRef(data) };
+}
+
 function acceptedRun(): GoldenAuthoringDocument {
   return {
     schema: "lazydesigner-golden-authoring-runs-v1",
@@ -43,7 +59,7 @@ function acceptedRun(): GoldenAuthoringDocument {
           reference_package_fingerprint: "a".repeat(64),
           control_task_context_id: "task:1234567890abcdef1234",
           runtime_build_identity: "runtime-build-accepted",
-          artifact_revision: "artifact-revision-accepted",
+          artifact_revision: "sha256:" + "d".repeat(64),
         },
         quality_verdict: "PASS",
         accepted_result: true,
@@ -96,7 +112,12 @@ function acceptedRun(): GoldenAuthoringDocument {
             latency_ms: 180,
           },
           {
-            index: 4,
+            index: 4, kind: "mutate", success: true,
+            capability: "export_model", artifact_evidence: verifiedArtifactFixture(),
+            required_for_decision: true, result_bytes: 500, latency_ms: 250,
+          },
+          {
+            index: 5,
             kind: "verify",
             success: true,
             capability: "capture_model_views",
@@ -147,6 +168,59 @@ describe("golden authoring accepted-result benchmark", () => {
     }
   });
 
+  test("only a matching post-authoring native project-save readback can support accepted artifact identity", () => {
+    const accepted = acceptedRun();
+    expect(() => validateGoldenAuthoringDocument(accepted)).not.toThrow();
+    const wrongRevision = structuredClone(accepted);
+    wrongRevision.runs[0]!.pipeline_provenance.artifact_revision =
+      "sha256:" + "0".repeat(64);
+    expect(() => validateGoldenAuthoringDocument(wrongRevision))
+      .toThrow("artifact_revision must equal the final saved .bbmodel SHA-256");
+
+    const noReceipt = structuredClone(accepted);
+    delete noReceipt.runs[0]!.trace[4]!.artifact_evidence;
+    expect(() => validateGoldenAuthoringDocument(noReceipt))
+      .toThrow("post-authoring native readback-matched project save receipt");
+
+    for (const modify of [
+      (proof: BenchmarkArtifactEvidence) => {
+        proof.project_uuid = "another-live-project";
+      },
+      (proof: BenchmarkArtifactEvidence) => {
+        proof.written_file_sha256 = "sha256:" + "e".repeat(64);
+        proof.compiled_payload_sha256 = proof.written_file_sha256;
+      },
+    ]) {
+      const trial = structuredClone(accepted);
+      const proof = trial.runs[0]!.trace[4]!.artifact_evidence!;
+      modify(proof);
+      const { evidence_ref: _ref, ...payload } = proof;
+      proof.evidence_ref = benchmarkArtifactEvidenceRef(payload);
+      expect(() => validateGoldenAuthoringDocument(trial))
+        .toThrow("post-authoring native readback-matched project save receipt");
+    }
+    const withoutReadback = structuredClone(accepted);
+    withoutReadback.runs[0]!.trace[4]!.artifact_evidence!.file_integrity_state =
+      "SIZE_ONLY" as BenchmarkArtifactEvidence["file_integrity_state"];
+    expect(() => validateGoldenAuthoringDocument(withoutReadback))
+      .toThrow("artifact_evidence is invalid");
+
+    const staleSave = structuredClone(accepted);
+    staleSave.runs[0]!.trace.splice(5, 0, {
+      index: 5, kind: "mutate", success: true,
+      capability: "paint_texture_transaction", required_for_decision: true,
+    });
+    staleSave.runs[0]!.trace.forEach((item, i) => { item.index = i; });
+    expect(() => validateGoldenAuthoringDocument(staleSave))
+      .toThrow("post-authoring native readback-matched project save receipt");
+
+    const draft = structuredClone(accepted);
+    draft.runs[0]!.accepted_result = null;
+    draft.runs[0]!.quality_verdict = "UNVERIFIED";
+    delete draft.runs[0]!.trace[4]!.artifact_evidence;
+    expect(() => validateGoldenAuthoringDocument(draft)).not.toThrow();
+  });
+
   test("final view evidence rejects stale source, wrong project or incomplete returned images", () => {
     const base = acceptedRun();
     expect(() => validateGoldenAuthoringDocument(base)).not.toThrow();
@@ -160,7 +234,7 @@ describe("golden authoring accepted-result benchmark", () => {
     ];
     for (const mutate of modifications) {
       const data = structuredClone(base);
-      const receipt = data.runs[0]!.trace[4]!.capture_evidence!;
+      const receipt = data.runs[0]!.trace[5]!.capture_evidence!;
       mutate(receipt);
       const { evidence_ref: _old, ...content } = receipt;
       receipt.evidence_ref = benchmarkCaptureEvidenceRef(content);
@@ -174,14 +248,14 @@ describe("golden authoring accepted-result benchmark", () => {
     expect(() => validateGoldenAuthoringDocument(stale))
       .toThrow("current final capture evidence_ref");
     const invalidDigest = structuredClone(base);
-    invalidDigest.runs[0]!.trace[4]!.capture_evidence!.views[0]!.png_sha256 =
+    invalidDigest.runs[0]!.trace[5]!.capture_evidence!.views[0]!.png_sha256 =
       "f".repeat(64);
     expect(() => validateGoldenAuthoringDocument(invalidDigest))
       .toThrow("invalid digest binding");
     const draft = structuredClone(base);
     draft.runs[0]!.accepted_result = null;
     draft.runs[0]!.quality_verdict = "UNVERIFIED";
-    delete draft.runs[0]!.trace[4]!.capture_evidence;
+    delete draft.runs[0]!.trace[5]!.capture_evidence;
     expect(() => validateGoldenAuthoringDocument(draft)).not.toThrow();
   });
 
@@ -280,7 +354,7 @@ describe("golden authoring accepted-result benchmark", () => {
   test("reports efficiency only after explicit accepted PASS evidence", () => {
     const summary = summarizeGoldenAuthoringDocument(acceptedRun());
     expect(summary.runs[0]?.metrics_available).toBe(true);
-    expect(summary.runs[0]?.metrics.tool_calls_to_accepted_result).toBe(5);
+    expect(summary.runs[0]?.metrics.tool_calls_to_accepted_result).toBe(6);
     expect(summary.runs[0]?.metrics.redundant_readbacks).toBe(0);
     expect(summary.runs[0]?.metrics.total_tokens).toBe(4200);
     expect(summary.aggregate.accepted_measured_runs).toBe(1);
@@ -307,7 +381,7 @@ describe("golden authoring accepted-result benchmark", () => {
     const document = acceptedRun();
     document.runs[0]!.acceptance_evidence[0]!.evidence_ref = null;
     expect(() => validateGoldenAuthoringDocument(document)).toThrow(
-      "accepted result requires PASS evidence_ref"
+      "accepted reference_fidelity requires the current final capture evidence_ref"
     );
   });
 
@@ -342,7 +416,7 @@ describe("golden authoring accepted-result benchmark", () => {
 
     const summary = summarizeGoldenAuthoringDocument(document);
     expect(summary.runs[0]?.metrics.redundant_readbacks).toBe(1);
-    expect(summary.runs[0]?.metrics.tool_calls_to_accepted_result).toBe(6);
+    expect(summary.runs[0]?.metrics.tool_calls_to_accepted_result).toBe(7);
   });
 
   test("rejects accepted corrections without the exact starting model hash", () => {
@@ -387,12 +461,8 @@ describe("golden authoring accepted-result benchmark", () => {
     const document = acceptedRun();
     const run = document.runs[0]!;
     run.task_id = "golden-full-asset-authoring";
-    run.acceptance_evidence = [
-      ...goldenCorpus.tasks.find(task => task.id === "golden-full-asset-authoring")!.acceptance,
-      "human_acceptance",
-    ].map((criterion) => ({
-      criterion, verdict: "PASS" as const, evidence_ref: "verified:" + criterion,
-    }));
+    // Reuse the canonical accepted fixture's current native/save and visual
+    // receipts; unrelated human-sounding refs would contradict those receipts.
     run.pipeline_provenance.input_asset_sha256 = null;
     expect(() => validateGoldenAuthoringDocument(document))
       .toThrow("accepted result requires starting input_asset_sha256");
@@ -401,6 +471,9 @@ describe("golden authoring accepted-result benchmark", () => {
     expect(() => validateGoldenAuthoringDocument(document))
       .toThrow("live input_project_uuid");
     run.pipeline_provenance.input_project_uuid = "saved-new-benchmark-seed";
+    expect(() => validateGoldenAuthoringDocument(document))
+      .toThrow("post-authoring native readback-matched project save receipt");
+    run.pipeline_provenance.input_project_uuid = "blockbench-project-correction";
     expect(() => validateGoldenAuthoringDocument(document)).not.toThrow();
   });
 
@@ -433,6 +506,9 @@ describe("golden authoring accepted-result benchmark", () => {
       const doc = acceptedRun();
       for (const event of doc.runs[0]!.trace.filter(x => x.kind === kind)) {
         event.success = false;
+        // Failed tool calls cannot carry the prior successful native receipts.
+        delete event.capture_evidence;
+        delete event.artifact_evidence;
       }
       expect(() => validateGoldenAuthoringDocument(doc))
         .toThrow(`recorded successful ${kind === "mutate" ? "mutation" : "verification"} trace`);
@@ -441,7 +517,7 @@ describe("golden authoring accepted-result benchmark", () => {
 
   test("accepted trace must have no missing or reordered events", () => {
     const doc = acceptedRun();
-    doc.runs[0]!.trace[2]!.index = 5;
+    doc.runs[0]!.trace[2]!.index = 10;
     expect(() => validateGoldenAuthoringDocument(doc)).toThrow("ordered, contiguous trace");
   });
 

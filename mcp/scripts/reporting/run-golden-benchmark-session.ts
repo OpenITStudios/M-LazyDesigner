@@ -370,6 +370,7 @@ export function buildGoldenRunDraft(input: {
     result_bytes: event.result_bytes,
     latency_ms: event.latency_ms,
     ...(event.capture_evidence ? { capture_evidence: event.capture_evidence } : {}),
+    ...(event.artifact_evidence ? { artifact_evidence: event.artifact_evidence } : {}),
   }));
 
   return {
@@ -387,7 +388,8 @@ export function buildGoldenRunDraft(input: {
           reference_package_fingerprint: input.referencePackageFingerprint ?? null,
           control_task_context_id: null,
           runtime_build_identity: input.runtimeBuildIdentity ?? null,
-          artifact_revision: null,
+          artifact_revision: input.outputAssetSha256
+            ? "sha256:" + input.outputAssetSha256 : null,
         },
         quality_verdict: "UNVERIFIED",
         accepted_result: null,

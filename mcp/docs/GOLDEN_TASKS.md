@@ -116,6 +116,28 @@ Preserve real image comparison, timed playback, final persistence/export and
 independent `human_acceptance` evidence. If one necessary view is missing
 or the last capture is stale, the run is `UNVERIFIED` rather than PASS.
 
+**Native saved-artifact identity:** before final acceptability, the existing
+`export_model(codec_id="project", path=<disposable working .bbmodel>)` must
+produce a native `NATIVE_PROJECT_SAVE`/`NATIVE_PROJECT_SAVE_AS` receipt
+with `file_integrity_state=READBACK_MATCHED`. The benchmark-only Gateway
+trace records a bounded `golden-artifact:v1:<sha256>` hash receipt from that
+result, without the filesystem path or project bytes. The canonical runner
+also hashes the actual saved working `.bbmodel` at session end. For
+`ACCEPTED`, the export receipt must follow the final Geometry/Texturing/
+Animation authoring mutation and match `output_asset_sha256`; the
+`artifact_revision` must equal `sha256:<output_asset_sha256>`.
+The final shaded capture still follows all mutations. A compile-only,
+size-only, mismatched-path/project, or stale pre-correction export cannot
+stand in for the persisted final model.
+
+This confirms the **saved bytes and native write/readback receipt match**;
+it does **not** prove that Blockbench reopened those bytes, that the
+`.bbmodel`'s decoded contents match the live viewport, or that separate
+Bedrock geometry/animation exports and both clips have passed playback.
+The existing `save_reopen_export_integrity` criterion and independent
+human/native evidence must still establish these facts. Source-only
+fixtures and a valid digest alone leave such claims `UNVERIFIED`.
+
 The runner also requires a **clean Git worktree**, including no staged,
 unstaged or nonignored untracked source, before opening native MCP. It rechecks
 the same Git HEAD and clean source after the session. A change or failed Git

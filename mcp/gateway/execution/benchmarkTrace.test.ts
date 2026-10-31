@@ -104,6 +104,68 @@ describe("Gateway benchmark trace recorder", () => {
     expect(events[1].capture_evidence).toBeUndefined();
   });
 
+  test("native project export receipt is bound to readback-matched bytes without leaking local paths", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "golden-project-export-trace-"));
+    temporaryDirectories.push(dir);
+    const path = join(dir, "trace.ndjson");
+    const recorder = BenchmarkTraceRecorder.fromEnvironment({
+      LAZYDESIGNER_BENCHMARK_TRACE_PATH: path,
+      LAZYDESIGNER_BENCHMARK_TASK_ID: "golden-full-asset-authoring",
+      LAZYDESIGNER_BENCHMARK_SOURCE_SHA: "b".repeat(40),
+      LAZYDESIGNER_BENCHMARK_REFERENCE_FINGERPRINT: "a".repeat(64),
+    });
+    const savePath = "C:/private/golden-disposable.bbmodel";
+    const digest = "sha256:" + "c".repeat(64);
+    const result = {
+      structuredContent: {
+        codec: { id: "project" },
+        save_behavior: "NATIVE_PROJECT_SAVE",
+        file_integrity_state: "READBACK_MATCHED",
+        compiled_payload_sha256: digest,
+        written_file_sha256: digest,
+        wrote_to_path: savePath,
+        project: { uuid: "live-golden-project", saved: true, save_path: savePath },
+      },
+      content: [{ type: "text", text: savePath }],
+    };
+    for (const payload of [
+      result,
+      { ...result, structuredContent: {
+        ...result.structuredContent, file_integrity_state: "SIZE_ONLY",
+      } },
+      { ...result, structuredContent: {
+        ...result.structuredContent, written_file_sha256: "sha256:" + "d".repeat(64),
+      } },
+      { ...result, structuredContent: {
+        ...result.structuredContent, project: {
+          ...result.structuredContent.project, save_path: "C:/private/other.bbmodel",
+        },
+      } },
+    ]) {
+      recorder.record({
+        startedAt: recorder.startedAt(), kind: "mutate",
+        capability: "export_model", success: true, result: payload,
+      });
+    }
+    await recorder.flush();
+    const text = await readFile(path, "utf8");
+    expect(text).not.toContain(savePath);
+    expect(text).not.toContain("private/golden");
+    const events = text.trim().split("\n").map(line => JSON.parse(line));
+    expect(events).toHaveLength(4);
+    expect(events[0].artifact_evidence).toMatchObject({
+      project_uuid: "live-golden-project",
+      codec_id: "project",
+      file_integrity_state: "READBACK_MATCHED",
+      compiled_payload_sha256: digest, written_file_sha256: digest,
+    });
+    expect(events[0].artifact_evidence.evidence_ref)
+      .toMatch(/^golden-artifact:v1:[a-f0-9]{64}$/);
+    for (const event of events.slice(1)) {
+      expect(event.artifact_evidence).toBeUndefined();
+    }
+  });
+
   test("writes ordered metadata only and never persists result contents", async () => {
     const dir = await mkdtemp(join(tmpdir(), "lazydesigner-trace-"));
     temporaryDirectories.push(dir);

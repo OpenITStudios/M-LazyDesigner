@@ -3,7 +3,12 @@ import {
   capabilityOperationClassByName,
   capabilityStageByName,
 } from "../../lib/capabilities/manifest";
-import { benchmarkCaptureEvidenceRef, type BenchmarkCaptureEvidence } from "../../gateway/execution/benchmarkTrace";
+import {
+  benchmarkCaptureEvidenceRef,
+  benchmarkArtifactEvidenceRef,
+  type BenchmarkCaptureEvidence,
+  type BenchmarkArtifactEvidence,
+} from "../../gateway/execution/benchmarkTrace";
 import { MODEL_VIEWS } from "../../lib/reference/visualEvidence";
 
 export type GoldenQualityVerdict = "PASS" | "FAIL" | "UNVERIFIED";
@@ -25,6 +30,8 @@ export type GoldenTraceEvent = {
   result_bytes?: number | null;
   latency_ms?: number | null;
   capture_evidence?: BenchmarkCaptureEvidence;
+  /** Native .bbmodel save receipt, not independent reopen/visual verification. */
+  artifact_evidence?: BenchmarkArtifactEvidence;
 };
 
 export type GoldenAcceptanceEvidence = {
@@ -191,6 +198,30 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
         throw new Error(`${prefix}.trace[${eventIndex}].capture_evidence has invalid digest binding.`);
       }
     }
+    const artifact = event.artifact_evidence;
+    if (artifact !== undefined) {
+      if (!artifact || event.kind !== "mutate" || event.success !== true ||
+          event.capability !== "export_model" ||
+          typeof artifact.project_uuid !== "string" ||
+          !artifact.project_uuid.trim() ||
+          artifact.codec_id !== "project" ||
+          !["NATIVE_PROJECT_SAVE", "NATIVE_PROJECT_SAVE_AS"].includes(
+            artifact.save_behavior
+          ) ||
+          artifact.file_integrity_state !== "READBACK_MATCHED" ||
+          !/^sha256:[a-f0-9]{64}$/.test(artifact.compiled_payload_sha256) ||
+          artifact.compiled_payload_sha256 !== artifact.written_file_sha256) {
+        throw new Error(
+          `${prefix}.trace[${eventIndex}].artifact_evidence is invalid.`
+        );
+      }
+      const { evidence_ref: declared, ...values } = artifact;
+      if (declared !== benchmarkArtifactEvidenceRef(values)) {
+        throw new Error(
+          `${prefix}.trace[${eventIndex}].artifact_evidence has invalid digest binding.`
+        );
+      }
+    }
     if (event.result_bytes !== undefined) {
       requireNonNegativeNullable(event.result_bytes, `${prefix}.trace[${eventIndex}].result_bytes`);
     }
@@ -319,6 +350,38 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
           `${prefix} accepted full-asset result requires a successful ${phase} authoring mutation trace event.`
         );
       }
+    }
+    // The runner's saved .bbmodel hash and the actual native project
+    // export readback must identify exactly the same artifact. Source SHA
+    // and screenshot hashes alone are insufficient for persistence identity.
+    if (provenance.artifact_revision !==
+        "sha256:" + provenance.output_asset_sha256) {
+      throw new Error(
+        `${prefix} accepted artifact_revision must equal the final saved .bbmodel SHA-256.`
+      );
+    }
+    const lastAuthored = run.trace.findLastIndex(event =>
+      event.kind === "mutate" && event.success === true &&
+      typeof event.capability === "string" &&
+      task.phases.some(phase =>
+        capabilityStageByName(event.capability!) === phase &&
+        capabilityOperationClassByName(event.capability!) === "MUTATION"
+      )
+    );
+    const savedIndex = run.trace.findLastIndex(event =>
+      event.kind === "mutate" &&
+      event.capability === "export_model" &&
+      event.artifact_evidence !== undefined
+    );
+    const saved = savedIndex >= 0
+      ? run.trace[savedIndex]!.artifact_evidence : undefined;
+    if (!saved || savedIndex <= lastAuthored ||
+        saved.project_uuid !== provenance.input_project_uuid ||
+        saved.written_file_sha256 !==
+          "sha256:" + provenance.output_asset_sha256) {
+      throw new Error(
+        `${prefix} accepted result requires a post-authoring native readback-matched project save receipt matching output_asset_sha256.`
+      );
     }
     // Opt-in benchmark evidence: the last post-mutation shaded capture must
     // come from the live Golden project and current approved reference.

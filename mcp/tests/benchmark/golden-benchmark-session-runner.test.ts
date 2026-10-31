@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import goldenCorpus from "../fixtures/golden-task-cases.json";
-import { benchmarkCaptureEvidenceRef } from "../../gateway/execution/benchmarkTrace";
+import {
+  benchmarkCaptureEvidenceRef,
+  benchmarkArtifactEvidenceRef,
+} from "../../gateway/execution/benchmarkTrace";
 import {
   buildGoldenRunDraft,
   fingerprintGoldenInputModel,
@@ -175,6 +178,8 @@ describe("golden benchmark session runner", () => {
         inputAssetSha256: input, outputAssetSha256: output,
       });
       expect(draft.runs[0]!.pipeline_provenance.output_asset_sha256).toBe(output);
+    expect(draft.runs[0]!.pipeline_provenance.artifact_revision)
+      .toBe("sha256:" + output);
       expect(draft.runs[0]!.quality_verdict).toBe("UNVERIFIED");
       await writeFile(saved, "broken JSON");
       await expect(fingerprintGoldenSavedOutputModel(seed, saved, input))
@@ -254,6 +259,39 @@ describe("golden benchmark session runner", () => {
         traceEvents: [wrong], wallTimeMs: 100,
       })).toThrow("does not match the selected task_id and source SHA");
     }
+  });
+
+  test("draft retains native project-save receipts but never upgrades acceptance", () => {
+    const payload = {
+      project_uuid: "native-project-1",
+      codec_id: "project" as const,
+      save_behavior: "NATIVE_PROJECT_SAVE" as const,
+      file_integrity_state: "READBACK_MATCHED" as const,
+      compiled_payload_sha256: "sha256:" + "e".repeat(64),
+      written_file_sha256: "sha256:" + "e".repeat(64),
+    };
+    const receipt = {
+      ...payload, evidence_ref: benchmarkArtifactEvidenceRef(payload),
+    };
+    const draft = buildGoldenRunDraft({
+      task, sourceSha: "f".repeat(40), wallTimeMs: 50,
+      traceEvents: [{
+        schema: "lazydesigner-gateway-benchmark-trace-v1",
+        sequence: 0, task_id: task.id, source_sha: "f".repeat(40),
+        timestamp: "2026-10-31T00:00:00.000Z",
+        kind: "mutate", capability: "export_model", success: true,
+        latency_ms: 10, result_bytes: 200,
+        read_only: false, verification_class: "receipt_only",
+        artifact_evidence: receipt,
+      }],
+      inputProjectUuid: "native-project-1",
+      outputAssetSha256: "e".repeat(64),
+    });
+    expect(draft.runs[0]!.trace[0]?.artifact_evidence).toEqual(receipt);
+    expect(draft.runs[0]!.pipeline_provenance.artifact_revision)
+      .toBe("sha256:" + "e".repeat(64));
+    expect(draft.runs[0]!.accepted_result).toBeNull();
+    expect(draft.runs[0]!.quality_verdict).toBe("UNVERIFIED");
   });
 
   test("unverified draft retains actual captured hashes without granting human PASS", () => {

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import goldenCorpus from "../fixtures/golden-task-cases.json";
-import { benchmarkCaptureEvidenceRef, type BenchmarkCaptureEvidence } from "../../gateway/execution/benchmarkTrace";
+import {
+  benchmarkCaptureEvidenceRef,
+  benchmarkArtifactEvidenceRef,
+  type BenchmarkCaptureEvidence,
+  type BenchmarkArtifactEvidence,
+} from "../../gateway/execution/benchmarkTrace";
 import {
   finalizeGoldenSession,
 } from "../../scripts/reporting/finalize-golden-session";
@@ -31,6 +36,17 @@ function captureFixture(): BenchmarkCaptureEvidence {
   return { ...payload, evidence_ref: benchmarkCaptureEvidenceRef(payload) };
 }
 
+
+function artifactFixture(): BenchmarkArtifactEvidence {
+  const data: Omit<BenchmarkArtifactEvidence, "evidence_ref"> = {
+    project_uuid: "golden-fixture-live-project",
+    codec_id: "project", save_behavior: "NATIVE_PROJECT_SAVE",
+    file_integrity_state: "READBACK_MATCHED",
+    compiled_payload_sha256: "sha256:" + "b".repeat(64),
+    written_file_sha256: "sha256:" + "b".repeat(64),
+  };
+  return { ...data, evidence_ref: benchmarkArtifactEvidenceRef(data) };
+}
 
 function golden(): GoldenAuthoringDocument {
   return {
@@ -133,7 +149,7 @@ function acceptedGolden(): GoldenAuthoringDocument {
     reference_package_fingerprint: "c".repeat(64),
     control_task_context_id: "task:1234567890abcdef1234",
     runtime_build_identity: "installed-build-fixture",
-    artifact_revision: "saved-asset-fixture",
+    artifact_revision: "sha256:" + "b".repeat(64),
   };
   run.trace = [
     {
@@ -149,7 +165,12 @@ function acceptedGolden(): GoldenAuthoringDocument {
       capability: "create_animation", required_for_decision: true,
     },
     {
-      index: 3, kind: "verify", success: true,
+      index: 3, kind: "mutate", success: true,
+      capability: "export_model", required_for_decision: true,
+      artifact_evidence: artifactFixture(),
+    },
+    {
+      index: 4, kind: "verify", success: true,
       capability: "capture_model_views", required_for_decision: true,
       capture_evidence: captureFixture(),
     },
@@ -169,8 +190,8 @@ function acceptedUsage(sourceSha: string): UsageDocument {
   doc.runs[0]!.task_success = true;
   doc.runs[0]!.accepted_result = true;
   doc.runs[0]!.calls = {
-    total: 4, search: 0, describe: 0, inspect: 0,
-    mutate: 3, verify: 1, recovery: 0,
+    total: 5, search: 0, describe: 0, inspect: 0,
+    mutate: 4, verify: 1, recovery: 0,
   };
   return doc;
 }
@@ -242,9 +263,9 @@ describe("golden session finalizer", () => {
     expect(report).toMatchObject({
       state: "ACCEPTED", quality_verdict: "PASS",
       proof_scope: "LIVE_BLOCKBENCH",
-      usage: { model: "gpt-5.6-sol", calls_total: 4 },
+      usage: { model: "gpt-5.6-sol", calls_total: 5 },
     });
-    expect(report.metrics?.tool_calls_to_accepted_result).toBe(4);
+    expect(report.metrics?.tool_calls_to_accepted_result).toBe(5);
   });
 
   test("incomplete Golden drafts may retain SHA-unknown telemetry only as diagnostics", () => {

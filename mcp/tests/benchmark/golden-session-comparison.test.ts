@@ -32,7 +32,7 @@ function accepted(sha: string, calls: number): FinalGoldenSessionReport {
       reference_package_fingerprint: "b".repeat(64),
       control_task_context_id: "task:abcdef1234567890abcd",
       runtime_build_identity: "runtime-" + sha.slice(0, 8),
-      artifact_revision: "artifact-" + sha.slice(0, 8),
+      artifact_revision: "sha256:" + "c".repeat(64),
     },
     metrics: {
       tool_calls_to_accepted_result: calls,
@@ -74,6 +74,16 @@ describe("accepted golden session comparison", () => {
     ).toBe(-2);
     expect(report).not.toHaveProperty("score");
     expect(report).not.toHaveProperty("winner");
+  });
+
+  test("accepted comparison rejects artifact_revision not matching the saved output digest", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+    candidate.pipeline_provenance.artifact_revision = "free-text-revision";
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("artifact_revision matching the saved output_asset_sha256");
+    candidate.pipeline_provenance.artifact_revision = "sha256:" + "c".repeat(64);
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate })).not.toThrow();
   });
 
   test("rejects golden metrics conflicting with supplied model usage", () => {
@@ -130,6 +140,7 @@ describe("accepted golden session comparison", () => {
       expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
         .toThrow("requires a valid changed output_asset_sha256");
       candidate.pipeline_provenance.output_asset_sha256 = "d".repeat(64);
+      candidate.pipeline_provenance.artifact_revision = "sha256:" + "d".repeat(64);
       expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
         .not.toThrow();
     }
@@ -172,6 +183,7 @@ describe("accepted golden session comparison", () => {
     expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
       .toThrow("candidate accepted Golden comparison requires a valid changed output_asset_sha256");
     candidate.pipeline_provenance.output_asset_sha256 = "d".repeat(64);
+    candidate.pipeline_provenance.artifact_revision = "sha256:" + "d".repeat(64);
     expect(() => compareAcceptedGoldenSessions({ baseline, candidate })).not.toThrow();
   });
 
