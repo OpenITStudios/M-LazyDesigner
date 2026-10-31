@@ -46,13 +46,20 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 
 ## G-P05 Joint Pivot And Bone Parenting
 
-- **Decision:** when motion ownership is supported, place the part under the correct parent and use the actual joint/hinge pivot.
-- **Apply:** an articulated limb, panel, wing, jaw or linked mechanism is evidenced, with known attachment side/axis.
-- **Reject/defer:** a bone name or mass center alone is used to guess a pivot; unknown hinge side and motion requirement must remain unresolved.
-- **Source evidence:** S1 `rightArm` is parented to `body` with pivot `[-5,22,0]`; S2 `rightWingTip` is parented to `rightWing` with pivot `[-3.5,7,0]`; S5 defines bone parent/pivot semantics. These are factual model relationships, not evidence of any unseen animation pose.
-- **Recipe decision:** separate linked transform owners only when necessary, keep attachment relation and do not author keyframes in Geometry.
-- **Counterexample (hypothetical):** use object-name `door_y` to infer the hinge is always at its minimum-X face.
-- **Proof required:** exact native parent/UUID identity, reference attachment, rest and relevant extreme pose clearance, and native export when required.
+- **Domain / canonical owner:** `GEOMETRY`; [Geometry Standard](standard.md) (`Transform Ownership`, `Pivot / Origin`) with the one selected Modelling profile (e.g. `profiles/mechanical.md` for a primarily mechanical assembly). User requirements and the approved current reference remain higher authority.
+- **Decision:** when an actual articulated part is supported, establish its structural Bone/Group transform owner, parent and physically meaningful joint/hinge pivot; do not infer these from a part name or an unrelated Cube center.
+- **Apply:** current reference and explicit functional requirements establish the moving part, attachment side, relevant axis/direction and parent relationship. A transform owner is justified by articulation, attachment or shared motion, not by a fixed bone-count target.
+- **Reject/defer:** a bone name, `door_y`-style axis token, apparent Cube center or an `ANCHOR` alignment alone is used to guess the hinge. A static decoration/texture seam does not justify an extra moving Bone. Unknown hinge side, articulation or parent remains `UNVERIFIED` for that decision.
+- **Source evidence:** S1's pinned Mojang skeleton has `rightArm` parent `body`, pivot `[-5,22,0]`, and `rightItem` parent `rightArm`; S2's pinned bat has `rightWingTip` parent `rightWing`, pivot `[-3.5,7,0]`. S5's Bedrock schema documents parent and pivot meanings. These are **observed source-file relationships**, not a transferred target pivot or proof of animated clearance.
+- **Positive case (hypothetical):** the approved front and side views identify a hinged panel attached to an exact frame side, its target motion axis and clearance envelope. Preserve the frame/panel part IDs, create the necessary independent transform owner at the evidenced hinge, and verify the native parent/pivot separately from positional attachment.
+- **Counterexample (hypothetical):** set the hinge at minimum X merely because the Cube is named `door_y`; it can rotate around the wrong edge or intersect its frame.
+- **Ambiguous case (hypothetical):** the front image shows a panel but no hinge side, attachment depth or required movement. Keep its supported static mass; defer only hinge/parent/axis decisions rather than placing a guessed Pivot or blocking unrelated Geometry.
+- **Recipe decision:** retain explicitly evidenced attachment and transform ownership. The `ANCHOR` constraint in `mcp/lib/authoringRecipe/geometryAssembly.ts` is **positional only**, and `semantic_group` is a label, **not** a verified native Bone parent. Do not author Animation keyframes during Geometry.
+- **Exact technical consumers:** `mcp/lib/authoringRecipe/geometryAssembly.ts` reports read-only relationship/identity questions; `mcp/lib/rig/semanticRig.ts` can compile a source-specified joint/anchor plan but cannot attest actual native parenting or intended hinge from names. The existing Blockbench hierarchy/pivot tools and Geometry verification retain mutation/acceptance ownership; no extra planner, tool or route.
+- **Required current evidence:** exact reference claim/view ID for hinge side and articulation; part/Cube/Group UUIDs; current parent hierarchy, transforms and pivots; chosen axis, clearance requirements and target Bedrock/Blockbench compatibility. A mere matching source hash is not that evidence.
+- **Proof required:** relevant front/side and rest/open/closed or other extreme poses, exact native parent/pivot readback, attachment and collision/clearance checks, and saved/reopened/exported identity when required. Pure owner tests `mcp/tests/authoring-recipe-assembly.test.ts` and `mcp/tests/semantic-rig.test.ts` cover source semantics only, not native/visual acceptance.
+- **Provenance / usage:** S1/S2 are pinned Mojang-owned sample JSON, consulted for structural facts only; S5 is rolling official documentation. Do not copy sample geometry as a model preset; rights and target-version checks remain independent.
+- **Maturity / claim limit:** **CANDIDATE**. Pinned source-file facts were inspected; source regressions were authored previously but were **NOT EXECUTED** in this audit; matching native pivot, playback/clearance and reference-visual quality remain **UNVERIFIED**.
 
 ## G-P06 Negative Space Versus Painted Shadow
 
