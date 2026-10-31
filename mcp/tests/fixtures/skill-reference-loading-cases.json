@@ -35,12 +35,28 @@
       "reason": "A reference-fidelity and coherent styling propagation decision is active."
     },
     {
+      "id": "texture-intentional-cluster-detail-rest-review",
+      "skill": "lazydesigner-texturing",
+      "prompt": "The approved cloth reference shows readable grouped color clusters and quiet areas, but the mapped atlas looks like uniform grain. Assess a real source crop, UV texel capacity and the current mapped model before deciding on one source-supported texture correction.",
+      "decision": "REQUIRED_ON_TRIGGER",
+      "reference": "references/fidelity-styling-verification.md",
+      "reason": "TX-01 requires the existing reference-grounded representative patch and mapped-surface fidelity review; do not auto-remove intentionally authored dithering or propagate noise by object type."
+    },
+    {
       "id": "animation-motion-fidelity",
       "skill": "lazydesigner-animation",
       "prompt": "The approved creature's attack feels weightless and fails its intended contact pose; compare key poses before propagating corrections.",
       "decision": "REQUIRED_ON_TRIGGER",
       "reference": "references/fidelity-correction-evidence.md",
       "reason": "Reference-driven animation fidelity and correction are active."
+    },
+    {
+      "id": "geometry-identity-focal-thumbnail-review",
+      "skill": "lazydesigner-modelling",
+      "prompt": "The reference has a distinct large head and quiet torso, but the Blockbench model is technically valid yet unclear at its intended game-display size. Compare the actual approved reference and a fresh paired native capture before adding ornaments; distinguish form differences from theatrical lighting.",
+      "decision": "REQUIRED_ON_TRIGGER",
+      "reference": "references/verification.md",
+      "reason": "AD-01/AD-02 are a material reference-versus-model Geometry fidelity decision; existing verification guidance supplies visual authority, paired views and UNVERIFIED handling, not a new capture tool or aesthetic score."
     },
     {
       "id": "geometry-known-coordinates",

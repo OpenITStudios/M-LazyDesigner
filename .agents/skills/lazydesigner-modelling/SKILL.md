@@ -46,6 +46,8 @@ At material model/reference comparison, request `status(reference_package_path=.
 ## Geometry Hot Path
 `reference evidence contract → selected profile guidance → semantic form → representation choice → primary batch → Core View Triad → conditional surface integrity → causal correction → Geometry PASS → UV preflight → user review`.
 
+**AD-01/AD-02 — conditional artistic read, not a new gate:** When the approved image and a fresh comparable model view make *identity or primary silhouette* a material decision, name the source-visible focal mass/landmark and deliberately quiet regions (if any). Before adding secondary Cubes, compare focal hierarchy, primary form and negative space; when intended in-game display scale is known, reuse the same capture as a derived small-display view. Prefer a proportion or identity-bearing whole-form fix over extra surface Cubes. Do not infer an art direction from a model name or prescribe universal focal-point placement or thumbnail size. Never interpret studio lighting, bloom, framing or perspective differences as geometry defects without supported like-for-like evidence. If the issue is Texture-owned, hand it off rather than reshaping Geometry; missing/ambiguous source/view/scale stays `UNVERIFIED`. Reuse the existing `SILHOUETTE_PROPORTION` / `SECONDARY_GEOMETRY_DETAIL` discrepancy and causal correction; no extra default capture, new scorer or compulsory research-document load.
+
 Nontrivial form: **transient Primary Mass Contract**:
 ```text
 mass / evidence views / must-exist reason
