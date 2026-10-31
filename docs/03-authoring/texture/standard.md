@@ -292,6 +292,8 @@ identity colors / notes
 
 `surface_pattern` describes visual pixel language only. `render_profile` describes Minecraft render behavior only. PBR remains optional and explicit. Missing evidence stays unresolved; object/category names never fill it automatically.
 
+**Source-grounded pattern selection:** In a reference-aware treatment plan, an `observed` surface pattern requires one bounded `pattern_observation` tied to an approved source image ID/SHA/region/part. Record what is *actually visible*: grouped pixel shapes, where values fall, which parts carry detail versus rest, and a visible motif direction for directional recipes. Compare those traits to the existing recipe's cluster/value/edge/anti-pattern guidance before choosing; never choose a `painted_metal` or `cloth_weave` preset from an object label alone. The planner verifies only source identity/annotation/face links and that the claim is concrete; it **cannot inspect images or prove the chosen recipe matches pixels**. An explicit user style requirement still outranks a generic catalog; unsupported or ambiguous source traits remain `REVIEW_REQUIRED`. Existing non-reference structural planning remains available, without falsely attributing a user-requested style to a source image.
+
 ## Material-Family Palette Ramps
 
 A production texture uses material-aware ramps, not one global brightness ladder and not one flat color per material.

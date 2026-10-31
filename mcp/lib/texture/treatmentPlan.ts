@@ -29,6 +29,22 @@ export type TextureReferenceSurfaceClaim = {
   image_id: string; image_sha256: string; image_region_id: string;
   part_id: string; face: TextureTreatmentFace;
 };
+/**
+ * Caller-declared visible basis for a surface_pattern, not an inferred
+ * material label or an authenticated review of actual image pixels.
+ */
+export type TexturePatternSourceObservation = {
+  image_id: string;
+  image_sha256: string;
+  image_region_id: string;
+  part_id: string;
+  cluster_shapes: string;
+  value_placement: string;
+  detail_distribution: string;
+  /** For directional patterns: describe the visible source motif axis. */
+  source_direction?: string;
+};
+
 /** Narrow Control image projection; origin/bytes are not authenticated here. */
 export type TextureReferenceSurfaceContext = {
   fingerprint: string;
@@ -100,6 +116,8 @@ export type TextureTreatmentRegionInput = {
   region: string;
   evidence: TextureTreatmentEvidenceState;
   surface_pattern?: TextureSurfacePattern | null;
+  /** Opt-in source evidence when an observed reference chooses the pattern. */
+  pattern_observation?: TexturePatternSourceObservation;
   render_profile?: EntityRenderProfile | null;
   minecraft_material_code?: string | null;
   pbr_intent?: TextureTreatmentPbrIntent;
@@ -165,6 +183,30 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
       : null;
     if (!pattern) unresolved.push({ region: name, reason: "SURFACE_PATTERN_UNRESOLVED" });
 
+    // Observed pixel grammar must describe the actual source crop. This is
+    // only a bounded, caller-declared observation: no image interpretation.
+    const observation = region.pattern_observation;
+    if (observation !== undefined) {
+      const validId = (value: unknown): value is string =>
+        typeof value === "string" && value.trim() === value &&
+        value.length >= 1 && value.length <= 128;
+      const validTrait = (value: unknown): value is string =>
+        typeof value === "string" && value.trim() === value &&
+        value.length >= 12 && value.length <= 240;
+      if (!pattern || !observation ||
+          !validId(observation.image_id) ||
+          !/^[a-f0-9]{64}$/.test(observation.image_sha256) ||
+          !validId(observation.image_region_id) ||
+          !validId(observation.part_id) ||
+          !validTrait(observation.cluster_shapes) ||
+          !validTrait(observation.value_placement) ||
+          !validTrait(observation.detail_distribution) ||
+          (observation.source_direction !== undefined &&
+            !validTrait(observation.source_direction))) {
+        throw new Error("TEXTURE_PATTERN_OBSERVATION_INVALID");
+      }
+    }
+
     let render = null;
     if (region.minecraft_material_code) {
       render = inspectEntityRenderMaterialCode(region.minecraft_material_code);
@@ -198,6 +240,7 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
       region: name,
       evidence: region.evidence,
       surface_pattern: pattern,
+      ...(observation ? { pattern_observation: { ...observation } } : {}),
       render_contract: render,
       pbr_intent: pbrIntent,
       pbr_depth_source:
@@ -225,7 +268,8 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
   // keep their structural planning behavior; even matched claims never grant
   // automatic pixel writes or assert that a reference depicts the target face.
   const referenceRequested = input.reference_context !== undefined ||
-    regions.some(region => region.reference_surfaces !== undefined);
+    regions.some(region => region.reference_surfaces !== undefined ||
+      region.pattern_observation !== undefined);
   let referenceIssues = 0, referenceClaims = 0, referenceMatches = 0;
   const flag = (region: string, reason: string) => {
     unresolved.push({ region, reason }); referenceIssues++;
@@ -311,6 +355,46 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
           flag(region.region, "REFERENCE_SURFACE_FACE_PART_CONFLICT"); continue;
         }
         parts.set(face, claim.part_id); matched.add(face); referenceMatches++;
+      }
+      // Pattern names are advisory recipes, not observations. A
+      // reference-bound selection needs a named visible cluster/value/detail
+      // description anchored to an approved source-image SURFACE_DETAIL crop.
+      // Neither metadata agreement nor human-sounding prose verifies pixels.
+      if (region.surface_pattern) {
+        const observation = region.pattern_observation;
+        if (region.evidence !== "observed") {
+          flag(region.region, "SURFACE_PATTERN_SOURCE_NOT_OBSERVED");
+        } else if (!observation) {
+          flag(region.region, "SURFACE_PATTERN_SOURCE_OBSERVATION_REQUIRED");
+        } else {
+          const image = imageMap.get(observation.image_id);
+          if (!image || image.integrity !== "VERIFIED" ||
+              image.status !== "APPROVED" ||
+              !image.used_by.includes("TEXTURE") ||
+              image.sha256 !== observation.image_sha256 ||
+              !image.view || !MODEL_VIEWS.includes(image.view)) {
+            flag(region.region, "SURFACE_PATTERN_SOURCE_STALE");
+          } else {
+            const annotation = image.regions?.find(
+              item => item.id === observation.image_region_id
+            );
+            if (!annotation || annotation.part_id !== observation.part_id ||
+                annotation.evidence_role !== "SURFACE_DETAIL" ||
+                annotation.visibility === "OCCLUDED" || !annotation.box_uv) {
+              flag(region.region, "SURFACE_PATTERN_SOURCE_REGION_UNVERIFIED");
+            } else if (mustBind.length > 0 && !claims.some(claim =>
+              claim.image_id === observation.image_id &&
+              claim.image_sha256 === observation.image_sha256 &&
+              claim.image_region_id === observation.image_region_id &&
+              claim.part_id === observation.part_id
+            )) {
+              flag(region.region, "SURFACE_PATTERN_SOURCE_FACE_UNBOUND");
+            } else if (region.surface_pattern.directionality === "directional" &&
+                       !observation.source_direction) {
+              flag(region.region, "SURFACE_PATTERN_SOURCE_DIRECTION_REQUIRED");
+            }
+          }
+        }
       }
       if (region.evidence === "observed") for (const face of mustBind) {
         if (!matched.has(face) && !claims.some(c => faceId(c.face) === face))
@@ -620,6 +704,8 @@ export function requireTextureTreatmentSeamPlanReady(
       region: region.region,
       evidence: region.evidence,
       surface_pattern: region.surface_pattern?.pattern,
+      ...(region.pattern_observation
+        ? { pattern_observation: region.pattern_observation } : {}),
       minecraft_material_code:
         region.render_contract?.minecraft_material_code ?? undefined,
       pbr_intent: region.pbr_intent,

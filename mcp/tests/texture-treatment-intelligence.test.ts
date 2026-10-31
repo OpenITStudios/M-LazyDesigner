@@ -124,6 +124,13 @@ describe("texture treatment intelligence", () => {
       part_id: "panel",
       face: { ...face },
     });
+    const patternObservation = (imageRegionId: string) => ({
+      image_id: "FRONT", image_sha256: sha,
+      image_region_id: imageRegionId, part_id: "panel",
+      cluster_shapes: "Large grouped patches with deliberately crisp breaks",
+      value_placement: "Body in dark values with restrained brighter edge marks",
+      detail_distribution: "Small central identity mark; most surface stays quiet",
+    });
     const fixture = (): TextureTreatmentPlanInput => ({
       required_faces: [left, right],
       reference_context: {
@@ -146,6 +153,7 @@ describe("texture treatment intelligence", () => {
           identity_colors: ["#aabbcc"],
           face_targets: [{ ...left, treatment: "PAINT" }],
           reference_surfaces: [claim(left)],
+          pattern_observation: patternObservation("same_mark"),
         },
         {
           region: "reused", evidence: "observed",
@@ -153,6 +161,7 @@ describe("texture treatment intelligence", () => {
           identity_colors: ["#aabbcc"],
           face_targets: [{ ...right, treatment: "SHARED", shared_with: left }],
           reference_surfaces: [claim(right)],
+          pattern_observation: patternObservation("same_mark"),
         },
       ],
     });
@@ -194,6 +203,8 @@ describe("texture treatment intelligence", () => {
     delete legacy.reference_context;
     legacy.regions[0]!.reference_surfaces = undefined;
     legacy.regions[1]!.reference_surfaces = undefined;
+    legacy.regions[0]!.pattern_observation = undefined;
+    legacy.regions[1]!.pattern_observation = undefined;
     expect(planTextureTreatment(legacy).readiness.state).toBe("ready");
   });
 
@@ -213,11 +224,22 @@ describe("texture treatment intelligence", () => {
         face_targets: [{ ...face, treatment: "PAINT" }],
         reference_surfaces: [{ image_id: "FRONT", image_sha256: digest,
           image_region_id: "badge", part_id: "body", face }],
+        pattern_observation: {
+          image_id: "FRONT", image_sha256: digest,
+          image_region_id: "badge", part_id: "body",
+          cluster_shapes: "Large connected paint islands with stepped corners",
+          value_placement: "Dark body planes and narrow lighter painted rims",
+          detail_distribution: "Badge is detailed; surrounding body remains quiet",
+        },
       }],
     });
     const original = fixture();
     const ready = planTextureTreatment(original);
     expect(ready.readiness.state).toBe("ready");
+    expect(ready.regions[0].pattern_observation).toMatchObject({
+      image_region_id: "badge",
+      cluster_shapes: "Large connected paint islands with stepped corners",
+    });
     expect(ready.reference_surface_evidence).toMatchObject({
       state: "claim_metadata_matched", matched_claim_count: 1,
       current_reference_read_attested: false,
@@ -225,6 +247,10 @@ describe("texture treatment intelligence", () => {
       mutation_authorized: false, visual_verdict: "not_evaluated",
     });
     expect(() => requireTextureTreatmentSeamPlanReady(ready)).not.toThrow();
+    original.regions[0]!.pattern_observation!.cluster_shapes =
+      "New textual edit that is not in the returned deep-copied plan";
+    expect(ready.regions[0].pattern_observation?.cluster_shapes)
+      .toBe("Large connected paint islands with stepped corners");
     original.reference_context!.images[0]!.sha256 = "c".repeat(64);
     expect(ready.reference_context?.images[0]?.sha256).toBe(digest);
     const cases: Array<[(v: TextureTreatmentPlanInput) => void, string]> = [
@@ -245,9 +271,48 @@ describe("texture treatment intelligence", () => {
         region: reason === "REFERENCE_SURFACE_CONTEXT_REQUIRED" ? "*" : "badge", reason,
       });
     }
+    // One integrated selection case: art-recipe titles do not establish
+    // that the current reference really shows those cluster/value/details.
+    const patternCases: Array<[(v: TextureTreatmentPlanInput) => void, string]> = [
+      [v => { v.regions[0]!.pattern_observation = undefined; },
+        "SURFACE_PATTERN_SOURCE_OBSERVATION_REQUIRED"],
+      [v => { v.regions[0]!.pattern_observation!.image_sha256 = "c".repeat(64); },
+        "SURFACE_PATTERN_SOURCE_STALE"],
+      [v => { v.regions[0]!.pattern_observation!.part_id = "other_part"; },
+        "SURFACE_PATTERN_SOURCE_REGION_UNVERIFIED"],
+      [v => { v.regions[0]!.reference_surfaces = []; },
+        "SURFACE_PATTERN_SOURCE_FACE_UNBOUND"],
+      [v => { v.regions[0]!.surface_pattern = "wood_grain"; },
+        "SURFACE_PATTERN_SOURCE_DIRECTION_REQUIRED"],
+      [v => { v.regions[0]!.evidence = "inferred"; },
+        "SURFACE_PATTERN_SOURCE_NOT_OBSERVED"],
+    ];
+    for (const [mutate, reason] of patternCases) {
+      const data = fixture(); mutate(data);
+      expect(planTextureTreatment(data).readiness.unresolved).toContainEqual({
+        region: "badge", reason,
+      });
+    }
+    const explicitDirection = fixture();
+    explicitDirection.regions[0]!.surface_pattern = "wood_grain";
+    explicitDirection.regions[0]!.pattern_observation!.source_direction =
+      "Visible elongated clusters follow the panel's horizontal long edge";
+    const directionPlan = planTextureTreatment(explicitDirection);
+    expect(directionPlan.readiness.state).toBe("ready");
+    expect(directionPlan.reference_surface_evidence.visual_verdict).toBe("not_evaluated");
+
+    const vagueObservation = fixture();
+    vagueObservation.regions[0]!.pattern_observation!.cluster_shapes = "metal";
+    expect(() => planTextureTreatment(vagueObservation))
+      .toThrow("TEXTURE_PATTERN_OBSERVATION_INVALID");
+
     const stale = planTextureTreatment(fixture());
     stale.regions[0]!.reference_surfaces![0]!.image_sha256 = "c".repeat(64);
     expect(() => requireTextureTreatmentSeamPlanReady(stale))
+      .toThrow("post-planning source or continuity intent became unresolved");
+    const mutatedObservation = planTextureTreatment(fixture());
+    mutatedObservation.regions[0].pattern_observation!.image_sha256 = "c".repeat(64);
+    expect(() => requireTextureTreatmentSeamPlanReady(mutatedObservation))
       .toThrow("post-planning source or continuity intent became unresolved");
     const duplicate = fixture();
     duplicate.regions[0]!.reference_surfaces = [
@@ -260,6 +325,7 @@ describe("texture treatment intelligence", () => {
     expect(() => planTextureTreatment(foreign)).toThrow("TEXTURE_REFERENCE_CLAIM_OUT_OF_SCOPE");
     const legacy = fixture();
     delete legacy.reference_context; delete legacy.regions[0]!.reference_surfaces;
+    legacy.regions[0]!.pattern_observation = undefined;
     expect(planTextureTreatment(legacy).readiness.state).toBe("ready");
     expect(planTextureTreatment(legacy).reference_surface_evidence.state).toBe("not_requested");
   });
