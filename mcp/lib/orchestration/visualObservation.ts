@@ -160,6 +160,27 @@ const CRITERION_CONTRACT: Readonly<
   },
 };
 
+/** A source-dependent Geometry shape claim must name the actual compared view. */
+const GEOMETRY_VIEW_CRITERIA: ReadonlySet<VisualObservationCriterion> = new Set([
+  "REQUIRED_PART_COMPLETENESS",
+  "UNSUPPORTED_EXTRA_PART",
+  "TOPOLOGY_ATTACHMENT",
+  "SILHOUETTE_PROPORTION",
+  "DEPTH_LAYERING",
+  "NEGATIVE_SPACE_CONTACT",
+  "SECONDARY_GEOMETRY_DETAIL",
+]);
+
+/** A generic Geometry cause must not masquerade as a different structural failure. */
+const SPECIFIC_CAUSE_CRITERIA: Partial<Record<
+  MinecraftCauseFamily, readonly VisualObservationCriterion[]
+>> = {
+  MISSING_REQUIRED_PART: ["REQUIRED_PART_COMPLETENESS"],
+  EXTRA_UNSUPPORTED_PART: ["UNSUPPORTED_EXTRA_PART"],
+  WRONG_ATTACHMENT: ["TOPOLOGY_ATTACHMENT", "NEGATIVE_SPACE_CONTACT"],
+  CONTACT_GAP: ["TOPOLOGY_ATTACHMENT", "NEGATIVE_SPACE_CONTACT"],
+};
+
 function nonEmpty(value: string | null | undefined): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -175,14 +196,24 @@ function knownLabels<T extends string>(
 }
 
 function causeCompatible(
+  criterion: VisualObservationCriterion,
   owner: MinecraftQualityOwner,
   cause: MinecraftCauseFamily
 ): boolean {
   if (cause === "UNKNOWN") return true;
-  if (cause === "MATERIAL_MISMATCH") return owner === "TEXTURE";
-  if (cause === "MOTION_MISMATCH") return owner === "ANIMATION";
-  if (cause === "PIVOT_MISMATCH") return owner === "RIG";
-  return owner === "GEOMETRY" || owner === "RIG";
+  if (owner === "TEXTURE") return cause === "MATERIAL_MISMATCH";
+  if (owner === "ANIMATION") return cause === "MOTION_MISMATCH";
+  if (owner === "RIG") return cause === "PIVOT_MISMATCH";
+  if (owner !== "GEOMETRY") return false;
+
+  const allowed = SPECIFIC_CAUSE_CRITERIA[cause];
+  if (allowed && !allowed.includes(criterion)) return false;
+  // A part-presence claim must not turn a size/position observation into an
+  // add/remove-mass operation, nor should a silhouette claim invent a part.
+  if (criterion === "REQUIRED_PART_COMPLETENESS") return cause === "MISSING_REQUIRED_PART";
+  if (criterion === "UNSUPPORTED_EXTRA_PART") return cause === "EXTRA_UNSUPPORTED_PART";
+  return cause !== "PIVOT_MISMATCH" &&
+    cause !== "MATERIAL_MISMATCH" && cause !== "MOTION_MISMATCH";
 }
 
 /**
@@ -237,8 +268,24 @@ export function compileStructuredVisualObservation(
     };
   }
 
+  // Source and model evidence labels are not interchangeable. For material
+  // Geometry comparisons, require at least one real view identity to be
+  // checked by the reviewing client; this is NOT native image attestation.
+  if (contract.requires_reference && (
+    input.evidence.reference_evidence_ref?.trim() ===
+      input.evidence.current_evidence_ref?.trim() ||
+    (GEOMETRY_VIEW_CRITERIA.has(input.criterion) &&
+      !input.evidence.views?.length)
+  )) {
+    return {
+      state: "UNVERIFIED",
+      discrepancy: null,
+      reason: "OBSERVATION_INVALID",
+    };
+  }
+
   const cause = input.cause_family;
-  if (cause !== undefined && !causeCompatible(contract.owner, cause)) {
+  if (cause !== undefined && !causeCompatible(input.criterion, contract.owner, cause)) {
     return {
       state: "UNVERIFIED",
       discrepancy: null,

@@ -32,6 +32,51 @@ describe("structured visual observation compiler", () => {
     });
   });
 
+  test("reference-grounded Geometry refuses unpaired views and causes that would invent mass", () => {
+    const primary = {
+      code: "FOCAL_FORM",
+      criterion: "SILHOUETTE_PROPORTION" as const,
+      severity: "REVIEW" as const,
+      summary: "The main silhouette lacks the approved focal proportion.",
+      evidence: {
+        current_evidence_ref: "modelcapture:front:rev3",
+        reference_evidence_ref: "approved-source:front:rev1",
+        views: ["front" as const],
+        evidence_targets: ["silhouette" as const],
+      },
+      cause_family: "SIZE_MISMATCH" as const,
+    };
+    expect(compileStructuredVisualObservation(primary)).toMatchObject({
+      state: "SUPPORTED",
+      discrepancy: { owner: "GEOMETRY", cause_family: "SIZE_MISMATCH" },
+    });
+    for (const bad of [
+      { ...primary, evidence: { ...primary.evidence, views: [] } },
+      { ...primary, evidence: { ...primary.evidence, reference_evidence_ref: primary.evidence.current_evidence_ref } },
+      { ...primary, cause_family: "MISSING_REQUIRED_PART" },
+      { ...primary, cause_family: "EXTRA_UNSUPPORTED_PART" },
+      { ...primary, cause_family: "WRONG_ATTACHMENT" },
+      { ...primary, cause_family: "CONTACT_GAP" },
+      { ...primary, cause_family: "PIVOT_MISMATCH" },
+    ]) {
+      expect(compileStructuredVisualObservation(
+        bad as Parameters<typeof compileStructuredVisualObservation>[0]
+      )).toEqual({ state: "UNVERIFIED", discrepancy: null, reason: "OBSERVATION_INVALID" });
+    }
+    // Missing geometry and incorrect attachment have their own criteria.
+    expect(compileStructuredVisualObservation({
+      ...primary, criterion: "REQUIRED_PART_COMPLETENESS", cause_family: "MISSING_REQUIRED_PART",
+    })).toMatchObject({
+      state: "SUPPORTED", discrepancy: { quality_class: "REQUIRED_PART", cause_family: "MISSING_REQUIRED_PART" },
+    });
+    expect(compileStructuredVisualObservation({
+      ...primary, criterion: "TOPOLOGY_ATTACHMENT", cause_family: "POSITION_MISMATCH",
+    }).state).toBe("SUPPORTED");
+    expect(compileStructuredVisualObservation({
+      ...primary, criterion: "SECONDARY_GEOMETRY_DETAIL", cause_family: "UNKNOWN",
+    }).state).toBe("SUPPORTED");
+  });
+
   test("reference-dependent visual claims fail closed without approved reference evidence", () => {
     const result = compileStructuredVisualObservation({
       code: "MARKING_WRONG",

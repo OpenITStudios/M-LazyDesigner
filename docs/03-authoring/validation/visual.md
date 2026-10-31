@@ -66,6 +66,8 @@ REFERENCE 3/4   ↔ MODEL matching front_left_3q/front_right_3q
 
 View identity must be explicit. Ambiguous/mirrored front/back, left/right, or 3/4 pairing leaves the affected claim `UNVERIFIED`; **do not silently compare the closest-looking view**.
 
+**Structured discrepancy intake (source gate, not visual PASS):** Geometry claims about required/extra parts, attachments, silhouette, depth, negative space or secondary form must name at least one actual compared view and distinct reference/model evidence identities before entering the existing `visualObservation` compiler. Treat a mismatched/missing source-view pair as `UNVERIFIED`; the labels alone do not prove the images were inspected or calibrated. Keep cause and criterion aligned: missing/extra part claims are separate from size/position errors; a wrong silhouette is not permission to add filler Cubes, and a contact gap is not a generic surface-detail fix. `UNKNOWN` cause is permitted but routes to more evidence rather than a speculative mutation. The existing Correction Loop and matching native-revision checks remain the only correction/continuation owners.
+
 ## Visual Verdict Contract
 
 Every material visual gate must end in exactly one state:
