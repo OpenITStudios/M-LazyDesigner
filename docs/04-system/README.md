@@ -5,6 +5,7 @@ Owns LazyDesigner system architecture details that are neither product policy no
 ```text
 canonical-vocabulary.md
 ai-context-loading.md
+authoring-knowledge-maturity.md
 authoring-stage-context.md
 tool-execution-paths.md
 tool-efficiency-audit.md
@@ -33,6 +34,9 @@ Which exact term owns a concept, and which legacy names are compatibility-only?
 
 What should the AI load for this task?
 → ai-context-loading.md
+
+Who owns Geometry/Texture/Animation Knowledge, and how is its maturity proven without adding a runtime route?
+→ authoring-knowledge-maturity.md
 
 Which cross-stage context rules are shared without creating another Skill/router?
 → authoring-stage-context.md

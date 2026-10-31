@@ -2,17 +2,19 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next to do — single full-asset Golden Task (2026-10-30)
+## Primary next — Knowledge maturity (2026-10-31)
 
-**USER DECISION:** Golden must be **one complete object**, not six capability microtasks. Retire the prior six task identities. Use `golden-full-asset-authoring` as one job from approved reference through Geometry/rig, UV, Texture, Animation, final save/reopen/export, human quality and Cost to Accepted Result. Keep affected domain regressions as tests, not more Golden Tasks.
+**USER DECISION:** Hold new Geometry/Texture/Animation feature development; retain one Reference Package, one Codex/Gateway/Runtime authoring workflow and one authoritative `.bbmodel`. No choice of runtime routes, per-operation Knowledge gate, second registry/engine, new MCP tool, or feature-driven experiments. Existing baseline execution and safety checks remain intact.
 
-**STANDALONE FIXTURE:** `mcp/tests/fixtures/golden/full-asset/` contains the approved voxel PNG, its `READY` input Reference Package, historical SVG and blank Bedrock seed. Keep outside all user Workspaces; baseline/candidate use separate disposable copies of the same immutable inputs. No historical model reuse or second benchmark engine.
+**KNOWLEDGE OWNER:** [Cross-domain Knowledge ownership and maturity](../04-system/authoring-knowledge-maturity.md). Existing `docs/03-authoring/` standards own semantics; Skills and engine modules are consumers, not second rule owners.
 
-**REFERENCE INPUT (2026-10-31):** User-approved PNG is committed byte-for-byte at SHA-256 `ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245` (Git blob `d6d58841a884498f9e9ce76ef5991e18b18d47c5`). `REFERENCE.json` is declared `READY` for input use. Control must still rehash the PNG at preflight; native results remain unverified.
+**AUDIT:** Geometry: 8 G1 candidate cases; Texture/UV: 4 K3 candidates; Animation: 30 families, 4 paired decisions, 16 scenarios and 145 indexed references. Source presence and revision hashes are not native/visual acceptance. No cases are promoted by this audit.
 
-**PROOF:** Git PNG blob identity matches the approved image; source approval/readiness is separate from native quality. Bun/typecheck, Blockbench model import, Geometry/UV/Texture/Animation PASS, save/reopen/export, human asset acceptance and cost **NOT EXECUTED**.
+**NEXT:** Normalize one current case per domain, trace actual source/rights/consumer/negative evidence and reconcile owner conflicts. Do not expand Engine features or the case corpus. CI verification is disabled on `Local`; Bun/native/Golden proof **NOT EXECUTED**.
 
-**NEXT:** Exact-head focused source tests → disposable full-object native run → visual/structural/animation acceptance → compare accepted cost. Current ChatGPT/GitHub session cannot claim native PASS.
+## Deferred acceptance — one full-asset Golden (not cancelled)
+
+The canonical `golden-full-asset-authoring` reference PNG, `REFERENCE.json` and immutable seed remain owned by [GOLDEN_TASKS.md](../../mcp/docs/GOLDEN_TASKS.md). Reference input is approved, but native Geometry/UV/Texture/Animation, save/reopen/export, human acceptance and Cost to Accepted Result remain **UNVERIFIED / UNMEASURED**. Do not create another Golden; revisit once matching knowledge-quality acceptance is possible.
 
 ## GitHub boundary and historical local recovery
 
@@ -24,7 +26,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 Gateway Stage receipt consistency and Golden/affected-test guards are source-authored; Bun/native proof remains NOT EXECUTED. Prior installed `7b45bd69` / Desktop 0.1.1 evidence is historical. See [current-validation.md](current-validation.md). Protect user assets; no deployment, CI or release.
 
-## Next REMOTE_GITHUB work
+## Deferred Gateway integration context
 
 **P0 integration:** Gateway verifies Stage/surface/target receipts. Rejected successful affinity mutations now require state inspection, not replay. Normal Control Delta uses the backend-verified project UUID for task-cohort continuity. Stage-before now comes from the same queued native preflight, without a separate status probe. Binding, catalog, same-Stage no-op and generation guards remain. Native proof/cost pending; no new routing or benchmark.
 

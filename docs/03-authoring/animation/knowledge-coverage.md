@@ -94,14 +94,14 @@ The corrected motion-dynamics owner marks duplicate-time tracks `unavailable: du
 
 No authored keys, assets, public tools, Golden tasks or automatic IK are changed. **Bun, typecheck, native and CI verification NOT EXECUTED.**
 
-## K5 — Existing Animation Golden acceptance only (NOT EXECUTED)
+## K5 — Animation evidence within the single full-asset Golden (NOT EXECUTED)
 
-Reuse [the Golden corpus](../../../mcp/docs/GOLDEN_TASKS.md), [quality benchmark](../../../mcp/docs/QUALITY_BENCHMARK.md), [native runbook](../../05-operations/local-acceptance-runbook.md) and `mcp/scripts/verify/verify-animation-live.ts`. Do not create 16 extra benchmark tasks from the A01–A16 candidate risk list. The established **eight Golden Tasks remain UNMEASURED**.
+Reuse [the canonical Golden](../../../mcp/docs/GOLDEN_TASKS.md), [quality benchmark](../../../mcp/docs/QUALITY_BENCHMARK.md), [native runbook](../../05-operations/local-acceptance-runbook.md) and `mcp/scripts/verify/verify-animation-live.ts`. The **sole** full-asset Golden is `golden-full-asset-authoring`, currently **UNMEASURED**. The A01–A16 inventory above comprises decision/rejection scenarios, **not** separate Golden assets or the retired historical eight Golden tasks. Focused Animation checks retain their existing source/native owners.
 
-| Existing task | Minimum real-world evidence | Insufficient proxy |
-|---|---|---|
-| `golden-mechanical-lift` | Correct hinge/pivot/clearance in closed, transitional and open poses, entry/exit plus saved/reopened native clip | Numeric rotation or key count alone |
-| `golden-humanoid-fisherman` | Three full idle loops, reel action and recovery, relative hand-to-rod grip, reference-matched weight and save/reopen | One pose or caller-declared contact values |
-| `golden-particle-smoke` | Locator/texture/effect timing plus actual Minecraft witness for `in_game_visibility` | Blockbench preview or asset-only export as gameplay proof |
+| Focused example (not standalone Golden) | Evidence actually required | Insufficient proxy |
+| --- | --- | --- |
+| Mechanical hinge or lever | Parent/pivot/clearance in required poses, native saved/reopened clip | Rotation number or key count |
+| Fishing grip/loop | Exact hand/tool correspondence, complete relevant motion and current reference | Single pose or caller-declared contact |
+| Animation-bound effect | Clip-to-effect timing and the requested export; Minecraft visibility only if explicitly required | Blockbench preview described as in-game evidence |
 
 **Live acceptance sequence:** pin approved reference fingerprint, unchanged starting `.bbmodel`, exact Runtime/build and bone/clip UUIDs; run existing disposable `verify:animation-live` and `verify:persistence-live` in a genuinely available live environment, then capture representative playback, three loops where applicable, saved/exported result and human quality review using the existing Golden session evaluator. Gameplay visibility is a separate external integration dependency, not a normal LazyDesigner authoring deliverable. A run without Blockbench/Minecraft/human evidence stays **NOT EXECUTED / UNVERIFIED**, never PASS. No second scoring or runtime framework.

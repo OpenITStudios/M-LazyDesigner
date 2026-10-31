@@ -1,8 +1,7 @@
 # Texture & UV Knowledge — Detailed Research-to-Acceptance Procedure
 
 **Status: PROCEDURE; K0–K9 source-closed, runnable/native proof NOT EXECUTED**
-(2026-10-30). **Next active phase:** Texture + UV. **Geometry R0–R5: PAUSED.**
-**Animation: DEFERRED.** Source: OpenITStudios/M-LazyDesigner, branch `Local`.
+(2026-10-30). This is a Texture/UV-specific method, **not** the current cross-domain work queue or engine-expansion approval. The current feature HOLD and Knowledge focus are owned by [Next Action](../../05-operations/next-action.md). Source: OpenITStudios/M-LazyDesigner, branch `Local`.
 The latest checkpoint lives in [Next Action](../../05-operations/next-action.md).
 This file owns the detailed **how**, not a new project status ledger, Runtime
 policy, knowledge database, benchmark engine or independent approval chain.

@@ -21,6 +21,8 @@ Control projection = current task/reference/workspace subset
 
 Do not load every authoring document together.
 
+For cross-domain **Knowledge curation, not normal asset authoring**, see [Knowledge ownership and maturity](../04-system/authoring-knowledge-maturity.md). Domain standards and existing case/research files remain the semantic owners; no extra authoring stage or preloaded corpus.
+
 ## Stage Routing
 
 ### Geometry / rig / pivots / UV
