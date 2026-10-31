@@ -235,7 +235,17 @@ function mergeVerificationScope(
     }
     const start = Math.min(left.time_range[0], right.time_range[0]);
     const end = Math.max(left.time_range[1], right.time_range[1]);
-    const midpoint = start + (end - start) / 2;
+    // Each edit window has meaningful start/impact/end samples. Taking only
+    // the midpoint of their union can miss two separate changed intervals.
+    const sampleTimes = [...new Set([
+      ...left.review.sample_times,
+      ...right.review.sample_times,
+      start,
+      end,
+    ])].sort((a, b) => a - b);
+    // Beyond a bounded review budget, do not drop sampled events silently.
+    // The caller must use broader review or split the editing cohort.
+    if (sampleTimes.length > 12) return null;
     return {
       kind: "ANIMATION_RANGE",
       animation_uuid: right.animation_uuid,
@@ -245,7 +255,7 @@ function mergeVerificationScope(
       review: {
         bone_ids: [...new Set([...left.review.bone_ids, ...right.review.bone_ids])],
         range: { start, end },
-        sample_times: [...new Set([start, midpoint, end])],
+        sample_times: sampleTimes,
       },
     };
   }

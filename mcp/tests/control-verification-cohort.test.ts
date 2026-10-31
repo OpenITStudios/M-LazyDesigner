@@ -67,6 +67,25 @@ function textureDelta(
   });
 }
 
+function animationDelta(start: number, end: number) {
+  return buildControlDelta({
+    capability: "manage_animation_timeline",
+    phaseBefore: "animation",
+    phaseAfter: "animation",
+    projectUuid: "project-a",
+    succeeded: true,
+    result: {
+      operation: "keyframes",
+      action: "update",
+      changed: true,
+      animation: { uuid: "animation-a" },
+      bone: { uuid: "bone-a" },
+      channel: "rotation",
+      affected_keyframes: [{ time: start }, { time: end }],
+    },
+  });
+}
+
 describe("Control verification cohort", () => {
   test("default COMPLETE behavior keeps one-call verification semantics", () => {
     const delta = cubeDelta("cube-a", "rotation", -1, 1);
@@ -160,6 +179,53 @@ describe("Control verification cohort", () => {
         evidence_source: "mutation_response",
       },
     });
+  });
+
+  test("separate animation changes retain both impact windows in one verification cohort", () => {
+    const first = reduceControlExecutionState(
+      null, animationDelta(0, 1),
+      { taskContextId: "animation-cohort", cohortBoundary: "CONTINUE" }
+    );
+    expect(first.continuation.next_action.kind).toBe("CONTINUE");
+    const completed = reduceControlExecutionState(
+      first.state, animationDelta(4, 5),
+      { taskContextId: "animation-cohort", cohortBoundary: "COMPLETE" }
+    );
+    expect(completed.continuation.next_action).toMatchObject({
+      kind: "VERIFY_VISUAL",
+      verification_scope: {
+        kind: "ANIMATION_RANGE",
+        time_range: [0, 5],
+        review: {
+          bone_ids: ["bone-a"],
+          range: { start: 0, end: 5 },
+          sample_times: [0, 0.5, 1, 4, 4.5, 5],
+        },
+      },
+    });
+    expect(completed.state.pending_verification).toBeNull();
+  });
+
+  test("large animation cohorts do not claim incomplete bounded visual samples", () => {
+    let previous: ReturnType<typeof reduceControlExecutionState>["state"] | null = null;
+    for (let index = 0; index < 5; index++) {
+      const outcome = reduceControlExecutionState(
+        previous,
+        animationDelta(index * 4, index * 4 + 1),
+        {
+          taskContextId: "animation-cohort",
+          cohortBoundary: index === 4 ? "COMPLETE" : "CONTINUE",
+        }
+      );
+      previous = outcome.state;
+      if (index === 4) {
+        expect(outcome.continuation.next_action).toMatchObject({
+          kind: "VERIFY_VISUAL",
+          verification_scope: null,
+        });
+        expect(outcome.continuation.freshness.stale).toContain("ANIMATION_MOTION");
+      }
+    }
   });
 
   test("unknown visual scope on either cohort side cannot inherit narrow proof", () => {
