@@ -437,7 +437,29 @@ describe("G2 bundled casebook and on-demand Recipe guidance", () => {
       .toEqual(describeKnowledgeSource(canonicalPath, cases));
     const broken = cases.replace("## G-P08 Thin", "## G-P09 Thin");
     expect(buildRecipeGeometryCaseIndex(broken)).toBeNull();
+    // A new G-P09 must not be silently ignored by the existing G1 reader.
+    const extra = cases.replace(
+      "## Source Identity And Rights",
+      "## G-P09 New Candidate Not Reviewed\n\n- **Decision:** PROVISIONAL\n\n## Source Identity And Rights"
+    );
+    expect(extra).not.toBe(cases);
+    expect(buildRecipeGeometryCaseIndex(extra)).toBeNull();
     expect(buildRecipeGeometryCaseIndex("")).toBeNull();
+  });
+
+  test("each of the eight existing Geometry cases remains fully readable after a source update", () => {
+    const index = buildRecipeGeometryCaseIndex(cases)!;
+    expect(index.sections).toHaveLength(8);
+    const read = createRecipeKnowledgeExcerptReader(index);
+    for (const section of index.sections) {
+      const excerpt = read(section);
+      expect(excerpt).not.toBeNull();
+      expect(excerpt?.guidance_truncated).toBe(false);
+      expect(excerpt?.guidance_text).toContain("**Apply:**");
+      expect(excerpt?.guidance_text).toContain("**Reject/defer:**");
+      expect(excerpt?.guidance_source_state)
+        .toBe("CONTENT_HASH_MATCHED_NOT_VISUAL_PROOF");
+    }
   });
 
   test("the selected case includes only the verified bounded section text and its exception", () => {

@@ -8,9 +8,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **KNOWLEDGE OWNER:** [Cross-domain Knowledge ownership and maturity](../04-system/authoring-knowledge-maturity.md). Existing `docs/03-authoring/` standards own semantics; Skills and engine modules are consumers, not second rule owners.
 
-**KNOWLEDGE PILOT:** Single 3D Art Direction owner: `docs/02-reference/art-direction.md`; Pixel Art Style Lock remains separate. G-P02/G-P03/G-P05 gain source-authored problem signals for read-only Recipe selection. TEX-P01/A01 remain candidates; no engine/tool or case promotion.
+**KNOWLEDGE:** Same Art Direction and bounded G1/K3 candidate owners. The cross-domain maintenance contract now defines source-only edits, hashed revision checks, and rebuild/reload for bundled cases; no auto-ingestion, live refresh or promotion.
 
-**NEXT:** Run Bun retrieval tests and source-matched Golden/native visuals and human review when available. Engine HOLD; Bun/native/Golden **NOT EXECUTED**.
+**NEXT:** Focused Bun source tests and existing Golden/native/human visual acceptance when available. Engine HOLD; Bun/native/Golden **NOT EXECUTED**.
 
 ## Deferred acceptance — one full-asset Golden (not cancelled)
 

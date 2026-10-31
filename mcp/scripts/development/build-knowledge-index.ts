@@ -5,11 +5,19 @@ import {
   type KnowledgeSection, type KnowledgeSourceEvidence,
 } from "../../lib/semantic/knowledge";
 
-const DEFAULT_SOURCES = [
+/** Read-only, offline maintenance inventory, not a Runtime case registry,
+ * training dataset, authority to promote sources, or automatic web refresh.
+ * Explicit input paths remain available for narrower or different audits.
+ */
+export const DEFAULT_SOURCES = [
   "prompts/bedrock_entity_workflow.md",
   "../.agents/skills/lazydesigner-modelling/SKILL.md",
   "../.agents/skills/lazydesigner-texturing/SKILL.md",
   "../.agents/skills/lazydesigner-animation/SKILL.md",
+  "../docs/02-reference/art-direction.md",
+  "../docs/03-authoring/modelling/decision-cases.md",
+  "../docs/03-authoring/texture/decision-cases.md",
+  "../docs/03-authoring/animation/knowledge-coverage.md",
 ] as const;
 
 type ParsedPreviousKnowledgeIndex = KnowledgeIndexSnapshot & { integrity_verified: boolean };

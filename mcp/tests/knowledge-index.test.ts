@@ -8,7 +8,7 @@ import {
   knowledgeIndexIntegrityFingerprint,
   selectKnowledgeSections,
 } from "../lib/semantic/knowledge";
-import { parsePreviousKnowledgeIndex } from "../scripts/development/build-knowledge-index";
+import { DEFAULT_SOURCES, parsePreviousKnowledgeIndex } from "../scripts/development/build-knowledge-index";
 
 describe("knowledge section compiler", () => {
   test("creates stable hierarchical ids and ignores fenced headings", () => {
@@ -401,5 +401,50 @@ describe("conditional voxel 3D artist guidance", () => {
         expect(body).toContain("**Problem signals:**");
       }
     }
+  });
+});
+
+describe("routine Knowledge updates retain one canonical indexed source", () => {
+  test("default offline inventory includes current Art Direction and casebook owners", async () => {
+    const expected = [
+      "../docs/02-reference/art-direction.md",
+      "../docs/03-authoring/modelling/decision-cases.md",
+      "../docs/03-authoring/texture/decision-cases.md",
+      "../docs/03-authoring/animation/knowledge-coverage.md",
+    ];
+    expect(new Set(DEFAULT_SOURCES).size).toBe(DEFAULT_SOURCES.length);
+    for (const path of expected) {
+      expect(DEFAULT_SOURCES).toContain(path);
+      const markdown = await Bun.file(path).text();
+      expect(markdown.trim().length).toBeGreaterThan(0);
+      expect(indexMarkdownKnowledge(path, markdown).length).toBeGreaterThan(0);
+    }
+  });
+
+  test("a revised Geometry case changes only its section identity while siblings remain stable", async () => {
+    const path = "docs/03-authoring/modelling/decision-cases.md";
+    const original = await Bun.file("../" + path).text();
+    const start = original.indexOf("## G-P02 Primary Silhouette Mass");
+    const end = original.indexOf("\n## G-P03 ", start);
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const modified = original.slice(0, end) +
+      "\n<!-- source-revision test only; not persisted -->\n" +
+      original.slice(end);
+    const before = indexMarkdownKnowledge(path, original);
+    const after = indexMarkdownKnowledge(path, modified);
+    const sourceBefore = describeKnowledgeSource(path, original);
+    const sourceAfter = describeKnowledgeSource(path, modified);
+    expect(sourceBefore.content_sha256).not.toBe(sourceAfter.content_sha256);
+    const delta = diffKnowledgeIndex(
+      { sections: before, sources: [sourceBefore] },
+      { sections: after, sources: [sourceAfter] }
+    );
+    const sectionId = (prefix: string) =>
+      before.find(section => section.heading.startsWith(prefix))!.id;
+    expect(delta.changed).toContain(sectionId("G-P02 "));
+    expect(delta.unchanged).toContain(sectionId("G-P01 "));
+    expect(delta.unchanged).toContain(sectionId("G-P03 "));
+    expect(delta.affected_sources).toEqual([path]);
   });
 });

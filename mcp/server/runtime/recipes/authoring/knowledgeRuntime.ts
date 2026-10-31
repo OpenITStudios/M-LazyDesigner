@@ -41,8 +41,11 @@ export function buildRecipeGeometryCaseIndex(
       new TextEncoder().encode(markdown).byteLength > MAX_CASE_BYTES) {
     return null;
   }
+  // Reject an unexpected extra G1 case instead of silently dropping a newly
+  // authored G-P09 while reporting the original eight as complete. A ninth
+  // case requires an intentional reader/consumer/test change first.
   const cases = indexMarkdownKnowledge(GEOMETRY_CASE_PATH, markdown)
-    .filter(section => /^G-P0[1-8] /.test(section.heading));
+    .filter(section => /^G-P\d{2} /.test(section.heading));
   if (cases.length !== EXPECTED_CASES.length ||
       !EXPECTED_CASES.every((id, index) =>
         cases[index]?.heading.startsWith(id + " "))) {
