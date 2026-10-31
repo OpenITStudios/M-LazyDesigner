@@ -8,9 +8,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **KNOWLEDGE OWNER:** [Cross-domain Knowledge ownership and maturity](../04-system/authoring-knowledge-maturity.md). Existing `docs/03-authoring/` standards own semantics; Skills and engine modules are consumers, not second rule owners.
 
-**AUDIT:** Geometry: 8 G1 candidate cases; Texture/UV: 4 K3 candidates; Animation: 30 families, 4 paired decisions, 16 scenarios and 145 indexed references. Source presence and revision hashes are not native/visual acceptance. No cases are promoted by this audit.
+**KNOWLEDGE PILOT:** Existing Style Lock now includes provisional 3D voxel art grammar; G-P02, TEX-P01 and A01 gain artistic decision/correction examples. Indexed Markdown and one Reference Package reused; candidate inventories remain 8/4/4. No case promoted.
 
-**NEXT:** Remaining G1/K3/K2 cases reviewed; G-P05 excerpt budget and stale integration claims corrected. Next prove focused source regressions and native/visual quality when available. Engines HOLD; Bun/native/Golden **NOT EXECUTED**.
+**NEXT:** Focused source regressions, then reference-matched native before/after views, atlas, playback and human art review using the existing Golden. Engine HOLD; Bun/native/Golden **NOT EXECUTED**.
 
 ## Deferred acceptance — one full-asset Golden (not cancelled)
 

@@ -84,6 +84,9 @@ describe("K4 on-demand Texture/UV knowledge consumer — no mutation", () => {
     expect(uv.decision_examples.ambiguous_hypothesis).toContain("unseen");
     expect(texture.decision_examples.positive_hypothesis).toContain("painted");
     expect(texture.decision_examples.reject_hypothesis).toContain("clean painted metal");
+    expect(texture.guidance_text).toContain("**Artistic correction (hypothetical; NOT observed):**");
+    expect(texture.mutation_authorized).toBe(false);
+    expect(texture.visual_verdict).toBe("not_evaluated");
     const original = reader.read("UV-P01");
     if (original.state !== "SOURCE_CANDIDATE") throw new Error("K3 case stale");
     expect(Reflect.set(uv.decision_examples, "positive_hypothesis",

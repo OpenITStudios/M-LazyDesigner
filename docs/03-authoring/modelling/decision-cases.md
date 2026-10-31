@@ -19,16 +19,16 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 
 ## G-P02 Primary Silhouette Mass
 
-- **Decision:** place supported primary masses before attempting secondary decorative geometry.
-- **Apply:** head/body/limbs or another dominant mass affects the visible silhouette or overall proportions.
-- **Reject/defer:** a proposed tiny detail does not repair an incorrect primary outline, or visible identity requires a deliberately different stylized proportion.
-- **Source evidence:** S1 separates head, body and limbs; S3 `body` is one `[24,24,64]` principal mass and `head` uses large masses. These are contrasting construction arrangements, **not** approved target ratios for other characters.
-- **Recipe decision:** preserve the user/reference envelope; compare a coherent blockout first, then add only identity-bearing secondary structure.
-- **Counterexample (hypothetical):** increase the number of face cubes on a model with an incorrectly sized torso.
-- **Proof required:** matched silhouette and cross-view ratios, not raw cube count or coordinate-only similarity.
-- **Positive case (hypothetical):** An approved outline establishes head/body/primary masses and their readable identity before decorative parts.
-- **Ambiguous case (hypothetical):** One stylized 3/4 image gives no reliable hidden mass/depth: retain supported blockout, defer hidden detail.
-- **Consumer / limit:** Modelling blockout and current matched model views; Cube count or static bounds cannot certify a silhouette.
+- **Decision:** preserve supported primary silhouette masses and intended-size focal hierarchy before decorative Geometry.
+- **Apply:** approved views or dimensions identify a dominant head/body/backrest and deliberate proportion; a Style Lock contributes only compatible, reference-supported cues.
+- **Reject/defer:** do not impose universal stylized ratios, invent unseen mass or add tiny Cubes to hide a wrong outline; approved subject-specific exaggeration wins.
+- **Source evidence:** S1 separates head/body/limbs; S3 has a [24,24,64] body and large head masses. These contrast construction, not target ratios for another asset.
+- **Recipe decision:** block out supported main masses and negative space; compare the coherent silhouette at relevant size before secondary identity parts.
+- **Counterexample (hypothetical):** add stitches and knobs to a sofa whose primary backrest outline is too low.
+- **Proof required:** actual approved and current model paired views, scale, prioritized visual difference and relevant human critique; bounds/Cube count alone do not pass.
+- **Positive case (hypothetical):** approved tall-back sofa outline reads correctly in a first mass blockout before fabric seams.
+- **Ambiguous case (hypothetical):** one lit 3/4 concept cannot establish hidden depth; preserve visible form, leave unseen Geometry UNVERIFIED.
+- **Consumer / limit:** existing Recipe, Modelling blockout and visual review; source advice only, no preset ratios, invented depth, automatic Cubes or visual PASS.
 
 ## G-P03 Protruding Form Versus Surface Marking
 

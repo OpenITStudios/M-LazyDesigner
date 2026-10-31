@@ -35,6 +35,10 @@ what is still unknown or blocking?
 
 `GEOMETRY.md` must never introduce a fact absent from stronger authority.
 
+## Conditional Voxel 3D Style-Lock Projection
+
+When the current approved image or an established [Voxel 3D Style Bible](../pixel-art/style-lock.md#stylized-minecraft-voxel-3d--conditional-artist-style-bible) makes shape language relevant, project only the evidenced primary/secondary silhouette, focal landmark, negative space or intentional exaggeration into the existing Proportion & Silhouette / Representation Guidance sections. Preserve style_lock_id only if actually established for this asset family. Art direction does not determine hidden depth, numeric dimensions, Cube counts or approved proportions. Mark unknown source views honestly, and never add a second style field, ceremonial section or new REFERENCE.json schema.
+
 ## Canonical Section Order
 
 Use only applicable sections, preserving this order for predictable scanning:

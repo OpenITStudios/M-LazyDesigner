@@ -60,6 +60,21 @@ The four paired decisions above are selected from the 16 bounded candidate cases
 - **A16 key reduction:** `mcp/lib/animation/quality.ts` offers strict-linear numeric candidates only. Missing interpolation/event/contact identity or Euler-wrap proof means no automatic key deletion. A15 numeric validity and A16 reduction are **separate proof scopes**, even when summarized in one K2 row.
 
 
+### A01 — Biped Locomotion: Planted Foot and Weight (Candidate)
+
+- **Domain / canonical owner:** Animation Standard owns movement causality, timing, contact and native verification. This is one conditional artist decision, not a gait preset, second engine or Golden Task.
+- **Decision:** distinguish an observed planted-foot stance and readable weight transfer from merely cycling leg tracks or numerically stationary caller-supplied markers.
+- **Apply:** a current approved walk reference or explicit motion specification supports gait direction, stance/contact intent, support-plane orientation, relevant bone/marker identities and intended display scale. Travel-linked phase is considered only when the motion must stop with travel.
+- **Reject/defer:** do not infer body mass, period, contact plane or stance windows from the word "biped"; a moving hand/tool pair is not a planted foot; do not conceal sliding by reducing keys, altering all speed or inventing a moving target.
+- **Source facts (inspected internally):** mcp/lib/animation/contactEvidence.ts reports bounded caller-supplied contact observations, not live foot locking; rootMotionAnalysis.ts reads authored tracks with explicit unavailable cases. Official ANIM-010 documents a distance-moved query, not the current model's stance or weight. Existing animation-contact-evidence.test.ts covers numeric evidence, not artist-approved playback.
+- **Positive case (hypothetical):** the approved walk shows one foot steady during an identified stance while the opposite leg passes, with torso/hip response consistent with its particular stylization. Compare rest, stance, pass, lift and repeated playback at matched clip phases.
+- **Counterexample (hypothetical):** alternating legs look plausible in a static preview, but the support foot travels with the root and visibly slides along the ground; a good sample-distance number is not motion-quality PASS.
+- **Ambiguous case (hypothetical):** only one pose exists, support plane or marker hierarchy is unknown, sampling spans one frame, or live playback is missing. Preserve UNVERIFIED, not fabricated compensation keyframes.
+- **Required evidence:** exact current approved motion frames/claim IDs; target geometry/rig and bone UUIDs, pivots, ground plane, clip phase and contact-window samples, runtime revision, current matched native playback/captures and persistence/export as applicable.
+- **Artistic critique (hypothetical):** diagnose "foot slides during supported stance" separately from "weight fails to settle". Address the smallest source-supported cause, then compare before/after at identical phase/scale; do not introduce exaggerated torso wobble to hide the defect.
+- **Verification owner / proof:** existing contact/root-motion tools, mcp/tests/animation-contact-evidence.test.ts and live Animation/Golden review; numeric PASS is not a reference-matched visual PASS.
+- **Provenance / rights / maturity:** ANIM-010 official rolling documentation plus internal named source/test owners. No third-party animation data or keyframes are copied. CANDIDATE / UNVERIFIED; Bun, installed Blockbench and human visual acceptance NOT EXECUTED in this source-only pilot.
+
 ### A12 — Mirrored Euler Action, Source-Grounded Decision Case
 
 - **Domain / canonical owner:** `ANIMATION`; [Animation Standard](standard.md) owns motion intent, clip timing, interpolation and verification. This A12 case is conditional clarification, not a second animation policy, motion tool or Golden Task.

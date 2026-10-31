@@ -329,3 +329,70 @@ describe("knowledge section compiler", () => {
     ).toThrow(/Duplicate knowledge section id/);
   });
 });
+
+describe("conditional voxel 3D artist guidance", () => {
+  test("one conditional style grammar remains indexed and projected through the existing handoffs", async () => {
+    const path = "docs/02-reference/pixel-art/style-lock.md";
+    const markdown = await Bun.file("../" + path).text();
+    const sections = indexMarkdownKnowledge(path, markdown);
+    const named = sections.filter(section =>
+      section.heading === "Stylized Minecraft Voxel 3D — Conditional Artist Style Bible"
+    );
+    expect(named).toHaveLength(1);
+    const selected = selectKnowledgeSections({
+      sections, query: "stylized minecraft voxel 3d artist style bible",
+      limit: 1, maxTokenProxy: 1500,
+    });
+    expect(selected.map(section => section.id)).toEqual([named[0]!.id]);
+    expect(markdown).toContain("PROVISIONAL");
+    expect(markdown).toContain("rather than photorealistic rendering");
+
+    const [geometry, texture, animation] = await Promise.all([
+      Bun.file("../docs/02-reference/package/geometry.md").text(),
+      Bun.file("../docs/02-reference/package/texture.md").text(),
+      Bun.file("../docs/02-reference/package/animation.md").text(),
+    ]);
+    expect(geometry).toContain("../pixel-art/style-lock.md#stylized-minecraft-voxel-3d");
+    expect(texture).toContain("style_lock_id + relevant style constraints");
+    expect(animation).toContain("../pixel-art/style-lock.md#stylized-minecraft-voxel-3d");
+    expect(geometry).toContain("hidden depth");
+    expect(animation).toContain("native playback remains unverified");
+  });
+
+  test("three existing domain case owners retain positive, negative, ambiguous and proof boundaries", async () => {
+    const cases = [
+      {
+        path: "docs/03-authoring/modelling/decision-cases.md",
+        heading: "G-P02 Primary Silhouette Mass",
+        fields: ["**Apply:**", "**Reject/defer:**", "**Source evidence:**",
+          "**Positive case (hypothetical):**", "**Ambiguous case (hypothetical):**",
+          "**Proof required:**", "focal hierarchy"],
+      },
+      {
+        path: "docs/03-authoring/texture/decision-cases.md",
+        heading: "TEX-P01 Reference Material Palette Pixel Clusters",
+        fields: ["**Decision:**", "**Positive case (hypothetical):**",
+          "**Reject case (hypothetical):**", "**Ambiguous case (hypothetical):**",
+          "**Artistic correction (hypothetical; NOT observed):**"],
+      },
+      {
+        path: "docs/03-authoring/animation/knowledge-coverage.md",
+        heading: "A01 — Biped Locomotion: Planted Foot and Weight (Candidate)",
+        fields: ["**Apply:**", "**Reject/defer:**", "**Source facts (inspected internally):**",
+          "**Positive case (hypothetical):**", "**Ambiguous case (hypothetical):**",
+          "**Required evidence:**", "CANDIDATE / UNVERIFIED"],
+      },
+    ];
+    for (const entry of cases) {
+      const markdown = await Bun.file("../" + entry.path).text();
+      const sections = indexMarkdownKnowledge(entry.path, markdown);
+      const found = sections.filter(section => section.heading === entry.heading);
+      expect(found).toHaveLength(1);
+      const section = found[0]!;
+      const body = markdown.split(/\r?\n/).slice(section.start_line, section.end_line).join("\n");
+      for (const field of entry.fields) expect(body).toContain(field);
+      expect(section.sha256).toMatch(/^[a-f0-9]{64}$/);
+      if (entry.heading.startsWith("G-P02")) expect(body.length).toBeLessThan(1600);
+    }
+  });
+});
