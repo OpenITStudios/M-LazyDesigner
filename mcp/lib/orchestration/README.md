@@ -17,6 +17,12 @@ This domain answers **when and in what order work should execute and be re-verif
 
 Orchestration may consume pure authoring/recipe/reference contracts, but it must not import Gateway, Runtime executors, or Blockbench tool implementations. Runtime-specific adapters remain outside `lib/`.
 
+## Production invocation boundary
+
+`gateway/control/orchestration.ts` is the active Control continuation reducer; it derives next actions from actual `control_delta` results. The normal four-tool Gateway does **not** expose `CorrectionLoopRegistry` entrypoints. `gateway/session/orchestrationRecoveryState.ts` constructs the internal registry with the default null `applyEvidenceSource`, so its stored loops cannot complete a native Apply acknowledgement through that Gateway instance. Source tests of the internal correction solver are not evidence that Codex's normal `invoke_capability` calls pass through it.
+
+The effective **current** Codex workflow is defined by the active Modelling Skill and conditionally loaded `references/correction.md`, using real Gateway capabilities and their receipts. Do not confuse registry `knownContinuationIds` with public `task_context_id` or Control's `control_delta` continuation. Any future native binding must demonstrate exact Authoring Recipe receipt ownership, project/revision freshness and accepted Golden quality before claiming live automatic correction enforcement.
+
 A correction plan is **not** an executed edit. The canonical
 `CorrectionLoopRegistry` now retains one ephemeral pending proposal without
 changing the active base Recipe or consuming an executed attempt. An authoritative

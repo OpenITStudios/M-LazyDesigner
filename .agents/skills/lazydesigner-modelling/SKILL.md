@@ -58,6 +58,8 @@ transform owner/pivot + negative-space boundary + representation
 No per-Cube plan. New whole-form blockout defaults to Core View Triad `front + left + top`; before detail, recheck affected form/views against latest user correction. Add `back` for rear topology/asymmetry or `front_left_3q` for depth ambiguity requiring source-matched fidelity comparison. Never recapture all five routinely. For bounded edits, inspect affected views only; preserve reference-matched cross-view quality.
 Repeated/symmetric cohorts: derive once → one coherent `manage_cubes` batch; no per-Cube loop.
 
+**Actual production correction route:** The internal `CorrectionLoopRegistry` is **not** a callable Gateway capability. For a reference-driven Geometry defect, compare the actual approved source image against a fresh compatible `capture_model_views`, prioritize the first Geometry-owned cause, and use an existing native capability through `invoke_capability` (usually `manage_cubes` for valid Cube edits, or the relevant hierarchy owner). Follow its receipt and `control_delta`, then review affected stale views only. Do not claim the internal visual-observation compiler or correction solver executed simply because their terms describe the decision. Unknown cause, mismatched views, or a Texture-owned problem → targeted review or upstream/downstream handoff, not guessed Geometry. Known exact edits stay on their direct path; load `references/correction.md` only for an actual correction.
+
 ## Execution Path Preference
 Geometry should mutate native Blockbench objects directly through semantic capabilities. Do not reproduce a human click/drag workflow when the target UUIDs, transforms, hierarchy, or batch intent are already known.
 

@@ -51,6 +51,35 @@ describe("model-fidelity policy text (not generated-model performance)", () => {
     expect(normalized(validation)).toContain("difference-first");
   });
 
+  test("normal Codex Geometry correction uses the callable Gateway route, not an internal solver facade", async () => {
+    const [skill, correction, control, handler, recovery, architecture] = await Promise.all([
+      source("../.agents/skills/lazydesigner-modelling/SKILL.md"),
+      source("../.agents/skills/lazydesigner-modelling/references/correction.md"),
+      source("gateway/control/README.md"),
+      source("gateway/handlers/registerCoreTools.ts"),
+      source("gateway/session/orchestrationRecoveryState.ts"),
+      source("lib/orchestration/README.md"),
+    ]);
+    // Static source-boundary assertions, not live AI/Blockbench performance.
+    expect(skill).toContain("Actual production correction route:");
+    expect(skill).toContain("references/correction.md");
+    expect(correction).toContain("Actual Codex → Gateway correction workflow");
+    for (const key of ["status", "invoke_capability", "manage_cubes", "capture_model_views", "control_delta", "UNKNOWN_OUTCOME"]) {
+      expect(correction).toContain(key === "UNKNOWN_OUTCOME" ? "uncertain/failed outcome" : key);
+    }
+    expect(correction).toContain("IMPROVED | UNCHANGED | REGRESSED");
+    expect(correction).toContain("do not load this section");
+    expect(correction).toContain("not a Gateway input");
+    expect(control).toContain("control_delta");
+    expect(handler).toContain("GATEWAY_TOOLS.invokeCapability");
+    expect(handler).not.toContain("startFromObservations(");
+    expect(handler).not.toContain("planGeometryCorrection(");
+    expect(recovery).toContain("readonly corrections = new CorrectionLoopRegistry()");
+    expect(recovery).not.toContain("readEvidence:");
+    expect(architecture).toContain("default null `applyEvidenceSource`");
+    expect(architecture).toContain("does **not** expose `CorrectionLoopRegistry`");
+  });
+
   test("fidelity hardening adds no scorer, planner, runtime profile, or fixture-specific law", async () => {
     const [profile, cubes, modelling, workflow] = await Promise.all([
       source("lib/capabilities/registrationProfile.ts"),
