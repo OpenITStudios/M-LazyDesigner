@@ -332,7 +332,7 @@ describe("knowledge section compiler", () => {
 
 describe("conditional voxel 3D artist guidance", () => {
   test("one conditional style grammar remains indexed and projected through the existing handoffs", async () => {
-    const path = "docs/02-reference/pixel-art/style-lock.md";
+    const path = "docs/02-reference/art-direction.md";
     const markdown = await Bun.file("../" + path).text();
     const sections = indexMarkdownKnowledge(path, markdown);
     const named = sections.filter(section =>
@@ -352,9 +352,13 @@ describe("conditional voxel 3D artist guidance", () => {
       Bun.file("../docs/02-reference/package/texture.md").text(),
       Bun.file("../docs/02-reference/package/animation.md").text(),
     ]);
-    expect(geometry).toContain("../pixel-art/style-lock.md#stylized-minecraft-voxel-3d");
+    expect(geometry).toContain("../art-direction.md#stylized-minecraft-voxel-3d");
+    expect(texture).toContain("../art-direction.md#stylized-minecraft-voxel-3d");
     expect(texture).toContain("style_lock_id + relevant style constraints");
-    expect(animation).toContain("../pixel-art/style-lock.md#stylized-minecraft-voxel-3d");
+    expect(animation).toContain("../art-direction.md#stylized-minecraft-voxel-3d");
+    const pixel = await Bun.file("../docs/02-reference/pixel-art/style-lock.md").text();
+    expect(pixel).not.toContain("## Stylized Minecraft Voxel 3D — Conditional Artist Style Bible");
+    expect(pixel).toContain("../art-direction.md#stylized-minecraft-voxel-3d");
     expect(geometry).toContain("hidden depth");
     expect(animation).toContain("native playback remains unverified");
   });
@@ -392,7 +396,10 @@ describe("conditional voxel 3D artist guidance", () => {
       const body = markdown.split(/\r?\n/).slice(section.start_line, section.end_line).join("\n");
       for (const field of entry.fields) expect(body).toContain(field);
       expect(section.sha256).toMatch(/^[a-f0-9]{64}$/);
-      if (entry.heading.startsWith("G-P02")) expect(body.length).toBeLessThan(1600);
+      if (entry.heading.startsWith("G-P02")) {
+        expect(body.length).toBeLessThan(1600);
+        expect(body).toContain("**Problem signals:**");
+      }
     }
   });
 });

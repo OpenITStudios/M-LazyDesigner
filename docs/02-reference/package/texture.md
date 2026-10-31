@@ -53,6 +53,10 @@ explicit current user requirement
 
 `TEXTURE.md` must not introduce a new material/color interpretation that is absent from stronger authority.
 
+## Cross-Domain 3D Art Direction
+
+When the approved model target has a shared voxel family grammar, the [canonical Art Direction](../art-direction.md#stylized-minecraft-voxel-3d--conditional-artist-style-bible) may inform only source-supported material/value/pixel rhythm and focal treatment in the existing surface sections. This is distinct from standalone Pixel Art Style Lock: keep `style_lock_id` only when actually established, and do not override approved reference pixels, UV ownership or material/render intent. No additional Reference Package field is introduced.
+
 ## Pixel Art Visual Authority
 
 An approved Pixel Art artifact can be a first-class visual reference for Texturing, but it remains **visual authority**, not mapped implementation state.

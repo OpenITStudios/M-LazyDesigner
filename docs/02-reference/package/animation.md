@@ -41,7 +41,7 @@ If a required pose cannot be achieved because Geometry/rig structure is unsuitab
 
 ## Conditional Voxel 3D Style-Lock Projection
 
-An established [Voxel 3D Style Bible](../pixel-art/style-lock.md#stylized-minecraft-voxel-3d--conditional-artist-style-bible) may contribute source-supported motion personality (for example heavy settling versus quick recovery) to existing Key Poses, Relative Timing or Motion Constraints when it changes the requested clip. It does not supply a default FPS, keyframe count, amplitude, contact window, controller, hierarchy or approval. Preserve missing/contradictory evidence as unknown; native playback remains unverified until actually observed. Do not add a new handoff field or preload the whole Style Lock.
+An established [Voxel 3D Style Bible](../art-direction.md#stylized-minecraft-voxel-3d--conditional-artist-style-bible) may contribute source-supported motion personality (for example heavy settling versus quick recovery) to existing Key Poses, Relative Timing or Motion Constraints when it changes the requested clip. It does not supply a default FPS, keyframe count, amplitude, contact window, controller, hierarchy or approval. Preserve missing/contradictory evidence as unknown; native playback remains unverified until actually observed. Do not add a new handoff field or preload the whole Style Lock.
 
 ## Canonical File Name
 

@@ -8,9 +8,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **KNOWLEDGE OWNER:** [Cross-domain Knowledge ownership and maturity](../04-system/authoring-knowledge-maturity.md). Existing `docs/03-authoring/` standards own semantics; Skills and engine modules are consumers, not second rule owners.
 
-**KNOWLEDGE PILOT:** Existing Style Lock now includes provisional 3D voxel art grammar; G-P02, TEX-P01 and A01 gain artistic decision/correction examples. Indexed Markdown and one Reference Package reused; candidate inventories remain 8/4/4. No case promoted.
+**KNOWLEDGE PILOT:** Single 3D Art Direction owner: `docs/02-reference/art-direction.md`; Pixel Art Style Lock remains separate. G-P02/G-P03/G-P05 gain source-authored problem signals for read-only Recipe selection. TEX-P01/A01 remain candidates; no engine/tool or case promotion.
 
-**NEXT:** Focused source regressions, then reference-matched native before/after views, atlas, playback and human art review using the existing Golden. Engine HOLD; Bun/native/Golden **NOT EXECUTED**.
+**NEXT:** Run Bun retrieval tests and source-matched Golden/native visuals and human review when available. Engine HOLD; Bun/native/Golden **NOT EXECUTED**.
 
 ## Deferred acceptance — one full-asset Golden (not cancelled)
 

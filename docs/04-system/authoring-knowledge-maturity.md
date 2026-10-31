@@ -10,7 +10,8 @@ Keep one canonical semantic owner per rule, one Reference Package for the curren
 
 | Concern | Canonical semantic owner | Consumption/evidence, not a second policy owner |
 | --- | --- | --- |
-| Shared voxel/pixel-art family grammar, not approval of an individual asset | [Existing Pixel Art Style Lock](../02-reference/pixel-art/style-lock.md), with conditional 3D voxel translation | Only approved, decision-changing style constraints are projected to existing Geometry/Texture/Animation handoffs; no second Style Bible, mandatory preload or registry |
+| Cross-domain 3D voxel visual-family grammar, not asset approval | [Reference Art Direction](../02-reference/art-direction.md) | Current approved, decision-changing style facts only; projected into existing Geometry/Texture/Animation reference handoffs, not another Runtime source |
+| Standalone Pixel Art Style Lock and pixel-art-specific grammar | [Pixel Art Style Lock](../02-reference/pixel-art/style-lock.md) | Selected approved appearance facts may inform Texture without becoming Geometry or Animation instructions |
 | Universal Geometry; Geometry-vs-Texture form; hierarchy/pivot; UV Layout and UV PASS | [`modelling/standard.md`](../03-authoring/modelling/standard.md) | One Control-selected [`modelling/profiles/`](../03-authoring/modelling/profiles/) when applicable; Modelling Skill; `mcp/lib/geometry/`, `uv/`, `authoringRecipe/` |
 | Profile-specific modelling decisions | Exactly one matching [`modelling/profiles/`](../03-authoring/modelling/profiles/) file | Reference and confirmed dimensions outrank profile advice |
 | Atlas pixels, colour/material language, alpha/PBR/render and Texture Verify | [`texture/standard.md`](../03-authoring/texture/standard.md), with topic ownership in its `material.md`, `render-profile.md`, `surface-pattern.md` | Texturing Skill, `mcp/lib/texture/` |

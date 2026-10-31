@@ -792,6 +792,86 @@ describe("R1 source-grounded Geometry alternatives before Recipe compilation", (
 });
 
 
+describe("G1 source-authored problem-signal retrieval (review only)", () => {
+  test("everyday English and Indonesian issue phrasing selects only its verified case", () => {
+    const corpus = readBundledRecipeKnowledgeIndex()!;
+    const examples = [
+      ["the sofa backrest looks too flat", "G-P02"],
+      ["sandaran sofa terlalu pendek tidak berkarakter", "G-P02"],
+      ["armor has too many tiny cubes", "G-P03"],
+      ["the door swings from the center instead of its hinge", "G-P05"],
+      ["pintu berputar dari tengah", "G-P05"],
+      ["the sofa backrest uses the wrong fabric texture", null],
+      ["the door has a red painted stripe", null],
+      ["flat", null],
+      ["sofa backrest too flat and door swings from center hinge", null],
+    ] as const;
+    for (const [label, expected] of examples) {
+      const recipe: AuthoringRecipe = {
+        schema: 1, compiler_version: 1,
+        id: "g1-problem-signal", name: "generic modelling request",
+        prototypes: [], patterns: [],
+        feature_intents: [{
+          id: "issue", label, evidence: "PROVISIONAL",
+          visual_role: "THREE_DIMENSIONAL", geometry_reasons: ["SILHOUETTE"],
+        }],
+      };
+      const result = suggestRecipeKnowledge(recipe, corpus, {
+        feature_ids: ["issue"], max_per_feature: 1, max_token_proxy: 500,
+      });
+      const curated = result[0]!.sections.filter(section =>
+        section.source === RECIPE_GEOMETRY_CASE_SOURCE_PATH
+      );
+      expect(curated.map(section => section.heading.slice(0, 5)))
+        .toEqual(expected ? [expected] : []);
+      expect(result[0]!.feature_route).toBe("REVIEW_REQUIRED");
+      expect(compileAuthoringRecipe(recipe).feature_plan?.state)
+        .toBe("review_required");
+      if (expected) {
+        expect(curated[0]?.guidance?.guidance_source_state)
+          .toBe("CONTENT_HASH_MATCHED_NOT_VISUAL_PROOF");
+        expect(curated[0]?.guidance?.guidance_text).toContain("**Apply:**");
+        expect(curated[0]?.guidance?.guidance_truncated).toBe(false);
+      }
+    }
+  });
+
+  test("an unrelated or source-stale case cannot become an alias-approved construction", () => {
+    const path = RECIPE_GEOMETRY_CASE_SOURCE_PATH;
+    const original = readFileSync(
+      new URL("../../docs/03-authoring/modelling/decision-cases.md", import.meta.url),
+      "utf8"
+    );
+    const indexed = buildRecipeGeometryCaseIndex(original)!;
+    const recipe: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "g1-stale-signal",
+      name: "unknown furniture", prototypes: [], patterns: [],
+      feature_intents: [{
+        id: "issue", label: "sandaran sofa terlalu pendek",
+        evidence: "PROVISIONAL", visual_role: "THREE_DIMENSIONAL",
+        geometry_reasons: ["SILHOUETTE"],
+      }],
+    };
+    const corrupted = {
+      ...indexed,
+      source_contents: {
+        [path]: original.replace(
+          "sandaran sofa terlalu pendek", "sandaran sofa berbeda ukuran"
+        ),
+      },
+    };
+    expect(() => suggestRecipeKnowledge(recipe, corrupted, {
+      feature_ids: ["issue"], max_per_feature: 1,
+    })).toThrow("RECIPE_KNOWLEDGE_SOURCE_CONTENT_STALE");
+    const selected = suggestRecipeKnowledge(recipe, indexed, {
+      feature_ids: ["issue"], max_per_feature: 1,
+    });
+    expect(selected[0]?.sections[0]?.heading.startsWith("G-P02")).toBe(true);
+    expect(reviewRecipeKnowledge(recipe, indexed).geometry_proposals
+      .every(proposal => proposal.mutation_authorized === false)).toBe(true);
+  });
+});
+
 describe("G2/R1 case-first budget regression", () => {
   test("a unique G-P03 marking decision survives generic workflow words and 1-slot budget", () => {
     const index = readBundledRecipeKnowledgeIndex()!;

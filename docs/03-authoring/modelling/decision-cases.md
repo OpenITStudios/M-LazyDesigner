@@ -2,6 +2,8 @@
 
 Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eight paired cases are *conditional advisory knowledge*, not templates, pre-approved model geometry, trained AI weights, or native/visual PASS. Each negative case is a hypothetical counterexample unless separately identified as observed. Only the referenced source *properties* have been checked; no matching asset/reference comparison has yet been executed.
 
+**Retrieval:** Optional **Problem signals** on selected G1 cases are curated phrases for finding advisory guidance, never proof of an asset's geometry, source-image observation or permission to mutate. Source/section hashing, applicability and visual acceptance still apply.
+
 **Authority:** [Geometry Standard](standard.md), [Modelling profiles](profiles/README.md), current user requirements, approved images and explicit dimensions. This file holds **case-specific discriminators only**, not a second modelling policy. Select a single case by the current semantic feature; do not preload the complete pilot during normal authoring. The validation owners and Runtime are unchanged. Source identifiers S1–S5 are resolved below; S1–S3 are pinned official geometry files, S4–S5 are live official documentation and **not immutable snapshots**.
 
 ## G-P01 Scale Cross-View Depth
@@ -20,28 +22,30 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 ## G-P02 Primary Silhouette Mass
 
 - **Decision:** preserve supported primary silhouette masses and intended-size focal hierarchy before decorative Geometry.
+- **Problem signals:** sofa backrest too flat; sandaran sofa terlalu pendek; weak main silhouette.
 - **Apply:** approved views or dimensions identify a dominant head/body/backrest and deliberate proportion; a Style Lock contributes only compatible, reference-supported cues.
-- **Reject/defer:** do not impose universal stylized ratios, invent unseen mass or add tiny Cubes to hide a wrong outline; approved subject-specific exaggeration wins.
-- **Source evidence:** S1 separates head/body/limbs; S3 has a [24,24,64] body and large head masses. These contrast construction, not target ratios for another asset.
-- **Recipe decision:** block out supported main masses and negative space; compare the coherent silhouette at relevant size before secondary identity parts.
-- **Counterexample (hypothetical):** add stitches and knobs to a sofa whose primary backrest outline is too low.
-- **Proof required:** actual approved and current model paired views, scale, prioritized visual difference and relevant human critique; bounds/Cube count alone do not pass.
-- **Positive case (hypothetical):** approved tall-back sofa outline reads correctly in a first mass blockout before fabric seams.
-- **Ambiguous case (hypothetical):** one lit 3/4 concept cannot establish hidden depth; preserve visible form, leave unseen Geometry UNVERIFIED.
-- **Consumer / limit:** existing Recipe, Modelling blockout and visual review; source advice only, no preset ratios, invented depth, automatic Cubes or visual PASS.
+- **Reject/defer:** do not impose universal stylized ratios, invent unseen mass or add tiny Cubes to hide a wrong outline; approved exaggeration wins.
+- **Source evidence:** S1 separates head/body/limbs; S3 has a [24,24,64] body and large head masses. These illustrate construction, not target ratios.
+- **Recipe decision:** block out supported main masses and negative space; compare the silhouette at relevant size before secondary details.
+- **Counterexample (hypothetical):** add stitches to a sofa whose main backrest is too low.
+- **Proof required:** approved and current model paired views, scale, visual difference and human critique; Cube count cannot pass.
+- **Positive case (hypothetical):** approved tall-back sofa outline reads correctly before fabric seams.
+- **Ambiguous case (hypothetical):** one 3/4 concept cannot establish hidden depth; preserve visible form, defer unseen Geometry.
+- **Consumer / limit:** existing Recipe, Modelling and visual review; retrieval cues are not reference evidence or authoring approval.
 
 ## G-P03 Protruding Form Versus Surface Marking
 
-- **Decision:** use actual Geometry when a supported feature changes silhouette, material volume, contact or independent motion; send color-only marking to Texture.
-- **Apply:** the approved reference shows a real protruding horn/armor plate/appendage or equivalent 3D role.
-- **Reject/defer:** a stripe, seam, emblem or shading patch has no evidenced 3D contribution; choose `TEXTURE`, not filler cubes.
-- **Source evidence:** S3 `head` contains multiple additional small Cuboids (including `[2,4,6]`), showing separate structural additions; their exact aesthetic role is not established by JSON alone. S4 assigns most surface detail to texture.
-- **Recipe decision:** `THREE_DIMENSIONAL` with grounded geometry reasons -> `GEOMETRY`; supported `SURFACE_DETAIL` without 3D reasons -> `TEXTURE`; unsupported -> `REVIEW_REQUIRED`.
-- **Counterexample (hypothetical):** interpret every bright trim line as a separate protruding Cuboid.
-- **Proof required:** exact reference feature/view claim, independent 3D contribution, current front/side inspection and Texture handoff where applicable.
-- **Positive case (hypothetical):** A visible protruding horn changes outer contour and receives Geometry ownership; a painted stripe remains Texture.
-- **Ambiguous case (hypothetical):** One lit edge could be a raised ridge or a highlight: defer 3D classification until a comparable view or explicit requirement supports it.
-- **Consumer / limit:** `mcp/lib/authoringRecipe/featureDecision.ts` routes explicit source-owned features; it cannot inspect image pixels or approve the choice.
+- **Decision:** use Geometry for supported silhouette/volume/contact/motion; paint a surface-only mark in Texture.
+- **Problem signals:** armor too many tiny cubes; surface cloth markings; decorative trim should be texture; painted stripe versus raised horn.
+- **Apply:** approved reference shows a protruding horn, armor plate or other material 3D contribution.
+- **Reject/defer:** stripe, seam, logo or highlight without 3D purpose stays Texture; missing depth evidence stays REVIEW_REQUIRED.
+- **Source evidence:** S3 contains small head Cuboids, but their visual role is not proven by JSON; S4 distinguishes surface paint.
+- **Recipe decision:** supported THREE_DIMENSIONAL reasons -> GEOMETRY; SURFACE_DETAIL -> TEXTURE; unknown -> REVIEW_REQUIRED.
+- **Counterexample (hypothetical):** model every painted trim line as a Cuboid.
+- **Proof required:** exact source view/feature claim, actual contour/depth, paired model views and Texture handoff.
+- **Positive case (hypothetical):** a horn changes outer contour and needs volume; a painted stripe does not.
+- **Ambiguous case (hypothetical):** a bright edge might be ridge or highlight: defer 3D without a comparable view.
+- **Consumer / limit:** `mcp/lib/authoringRecipe/featureDecision.ts` reads explicit owner/evidence; no image inspection or automatic approval.
 
 ## G-P04 Sloped Form Versus Staircase
 
@@ -59,6 +63,7 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 ## G-P05 Joint Pivot And Bone Parenting
 
 - **Decision:** When articulation is supported, assign the Bone parent and use the actual joint/hinge pivot.
+- **Problem signals:** door swings from center hinge; pintu berputar dari tengah; hinge pivot wrong side; arm pivot.
 - **Apply:** Approved reference/requirement identifies moving part, attachment side, axis and parent; confirm current identities.
 - **Reject/defer:** Name `door_y`, Cube center or Recipe `ANCHOR` cannot prove hinge side/pivot. Unknown motion remains unresolved.
 - **Recipe decision:** `ANCHOR` is positional; `semantic_group` is not native Bone parenting. Preserve transform ownership; no Geometry-stage keyframes.

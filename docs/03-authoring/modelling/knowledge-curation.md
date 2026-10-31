@@ -60,6 +60,7 @@ owner. Each case card should contain only the following fields when applicable:
 | Field | Minimum content |
 | --- | --- |
 | Decision / question | One concrete choice to make; stable semantic feature identity |
+| Problem signals (retrieval only) | A few short natural-language problem phrases, including another language when useful; stored only in the existing case section; they are neither source facts nor automatic Geometry approval |
 | Applicable when | Required context, geometry purpose, target format/version, art direction |
 | Do not apply when | Known exceptions, conflicting reference, unsupported format/rig |
 | Existing rule owner | Link to `standard.md`, selected profile or canonical technical owner |
@@ -68,6 +69,8 @@ owner. Each case card should contain only the following fields when applicable:
 | Preferred action | Representation / transform / correction suggestion within existing Recipe operations |
 | Proof requirement | Structural check plus reference views/poses and native/export checks if relevant |
 | Provenance/status | Origin, author, upstream version/ref, license/use scope, hashes; `CANDIDATE / SOURCE_VERIFIED / NATIVE_VERIFIED / VISUAL_ACCEPTED` with clear proof scope |
+
+Problem signals are optional casebook metadata, not a synonym database or separate authority. Use them only when a lexical-title retrieval gap is demonstrated; distinguish different artistic causes instead of matching broad object names. Select one exact relevant case or abstain when several cases compete. Verify the source/section hash before using aliases; current approved image and feature evidence still decide applicability. Do not add one new case or runtime tool merely to store another phrasing.
 
 The status is **not** a single cumulative approval level. A valid source
 revision and passing technical validator cannot attest visual similarity,

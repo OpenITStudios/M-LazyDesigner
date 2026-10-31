@@ -13,6 +13,9 @@ reference task starts
 need durable evidence/authority rule
 → policy.md
 
+need cross-domain 3D voxel visual-family direction
+→ art-direction.md (only when it changes an approved target decision)
+
 need to generate/edit smooth reference imagery
 → image/README.md
 
@@ -26,7 +29,7 @@ need to build/validate/consume Codex package
 → package/README.md
 ```
 
-`policy.md`, `image/`, `pixel-art/`, `particle/`, and `package/` are conditional owners, not mandatory boot context for every reference request.
+`policy.md`, `art-direction.md`, `image/`, `pixel-art/`, `particle/`, and `package/` are conditional owners, not mandatory boot context for every reference request.
 
 ## Independent capability branches
 

@@ -250,6 +250,8 @@ docs/04-system/authoring-stage-context.md
   → cross-stage / approval / evidence-freshness / convergence / handoff ambiguity
 docs/03-authoring/modelling/standard.md
   → durable geometry-policy question not sufficiently resolved by specialist procedure
+docs/02-reference/art-direction.md
+  → a source-supported 3D shape-language question remains unresolved after the current Reference Package
 docs/03-authoring/workflow.md
   → lifecycle/handoff/readiness ambiguity
 docs/03-authoring/validation/visual.md
@@ -297,6 +299,8 @@ docs/03-authoring/texture/render-profile.md
   → render-profile semantics are material
 docs/03-authoring/texture/surface-pattern.md
   → pattern/continuity problem is material
+docs/02-reference/art-direction.md
+  → unresolved approved voxel family grammar materially affects surface treatment
 docs/03-authoring/validation/visual.md
   → visual verdict ambiguity
 bounded Geometry context
@@ -339,6 +343,8 @@ docs/04-system/authoring-stage-context.md
   → cross-stage / approval / evidence-freshness / convergence / handoff ambiguity
 docs/03-authoring/animation/standard.md
   → durable animation-policy ambiguity
+docs/02-reference/art-direction.md
+  → unresolved approved 3D motion personality changes the clip decision
 docs/03-authoring/validation/visual.md
   → motion/visual verdict ambiguity
 bounded Geometry context
