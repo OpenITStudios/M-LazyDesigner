@@ -32,6 +32,17 @@ and Undo provenance fail closed. If an edit outcome is uncertain, inspect
 native state independently; do not automatically replay or manufacture an
 acknowledgement. A matching receipt is technical evidence, not visual PASS.
 
+For the opt-in `startFromObservations` path, an existing structured
+visual discrepancy remains reviewable when its cause is `UNKNOWN`, but no
+Geometry mutation is planned until a fresh cause-classified observation is
+provided. The current prioritized claim must belong to Geometry, and every
+candidate must target known Geometry discrepancy codes with an explicitly
+matching edit family. A Texture/Animation claim or merely cheap correction
+cannot authorize Geometry edits; the owning specialist must handle it.
+Legacy raw-Recipe correction plans remain compatible. This source-level
+causal gate does **not** authenticate screenshot labels, replace actual visual
+comparison, or claim better artistic results.
+
 Existing convergence tests that historically assumed an edit completed use
 explicit synthetic native receipts. These fixtures do not prove Blockbench
 execution, source compatibility or image-based acceptance.

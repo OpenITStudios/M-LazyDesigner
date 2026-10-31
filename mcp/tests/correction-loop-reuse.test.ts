@@ -2616,6 +2616,107 @@ describe("zero-waste correction loop reuse", () => {
     });
   });
 
+  test("structured visual correction only plans a grounded Geometry target and preserves existing raw corrections", () => {
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
+    const request = {
+      domain: "GEOMETRY" as const,
+      source: "capture_model_views" as const,
+      verification_risk: "LOW" as const,
+      views: ["front" as const],
+      views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
+      size: 256 as const,
+      size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
+      scope_instance_ids: ["arms:0", "arms:1"],
+    };
+    const observed = {
+      code: "FOCAL_WIDTH",
+      criterion: "SILHOUETTE_PROPORTION" as const,
+      severity: "REVIEW" as const,
+      summary: "The focal mass is narrower than the paired source view.",
+      evidence: {
+        current_evidence_ref: "model:front:revision-1",
+        reference_evidence_ref: "source:front:approved",
+        views: ["front" as const],
+        evidence_targets: ["width" as const, "silhouette" as const],
+      },
+    };
+    const candidate = {
+      id: "resize-focal-mass", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["FOCAL_WIDTH"],
+        correction_family: "RESIZE" as const,
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: {
+            kind: "RESIZE_AXIS" as const, axis: "X" as const,
+            mode: "ADD" as const, value: 1, anchor: "MIN" as const,
+          },
+        },
+      },
+    };
+    const started = registry.startFromObservations({
+      recipe_id: "asset-visual-causal", base_recipe: recipe(),
+      verification_request: request,
+      verification_evidence_handle: "verificationevidence:focal-before",
+      observations: [{ ...observed, cause_family: "UNKNOWN" }],
+    });
+    expect(started.unverified).toEqual([]);
+    const handle = started.handle!;
+    expect(registry.planGeometryCorrection(handle, [candidate])).toMatchObject({
+      state: "BLOCKED", attempt: 0, blocked_reason: "VISUAL_CAUSE_UNVERIFIED",
+    });
+    expect(registry.projectContinuation(handle)).toMatchObject({ attempt: 0 });
+
+    // Fresh observation can classify the cause; a guessed target or an
+    // incompatible edit family still cannot consume the visual correction.
+    const updated = registry.updateEvidenceFromObservations(
+      handle, "verificationevidence:focal-classified",
+      [{ ...observed, cause_family: "SIZE_MISMATCH",
+        evidence: { ...observed.evidence, current_evidence_ref: "model:front:revision-2" } }]
+    );
+    expect(updated).toMatchObject({ applied: true, accepted_count: 1, unverified: [] });
+    expect(registry.planGeometryCorrection(handle, [{
+      ...candidate, patch: { ...candidate.patch, target_discrepancy_codes: ["UNRELATED"] },
+    }])).toMatchObject({
+      state: "BLOCKED", attempt: 0, blocked_reason: "VISUAL_CANDIDATE_UNGROUNDED",
+    });
+    expect(registry.planGeometryCorrection(handle, [{
+      ...candidate, patch: { ...candidate.patch, correction_family: "ROTATE" as const },
+    }])).toMatchObject({
+      state: "BLOCKED", attempt: 0, blocked_reason: "VISUAL_CANDIDATE_UNGROUNDED",
+    });
+    expect(registry.planGeometryCorrection(handle, [candidate])).toMatchObject({
+      state: "CORRECTION_READY", attempt: 1,
+      decision_summary: { selected_candidate_id: "resize-focal-mass" },
+    });
+
+    // A more severe material discrepancy must remain with Texturing, even
+    // when a cheaper valid Geometry candidate is available in the same batch.
+    const mixed = registry.startFromObservations({
+      recipe_id: "asset-mixed-owners", base_recipe: recipe(),
+      verification_request: request,
+      verification_evidence_handle: "verificationevidence:mixed",
+      observations: [
+        { ...observed, cause_family: "SIZE_MISMATCH" },
+        {
+          code: "METAL_REGION", criterion: "TEXTURE_MATERIAL_REGION",
+          severity: "BLOCKING", summary: "Material differs from the approved image.",
+          evidence: {
+            current_evidence_ref: "model:mapped:revision-2",
+            reference_evidence_ref: "source:metal:approved",
+            views: ["front"],
+          },
+          cause_family: "MATERIAL_MISMATCH",
+        },
+      ],
+    });
+    expect(mixed.unverified).toEqual([]);
+    expect(registry.planGeometryCorrection(mixed.handle!, [candidate])).toMatchObject({
+      state: "BLOCKED", attempt: 0, blocked_reason: "VISUAL_GEOMETRY_OWNER_MISMATCH",
+    });
+    expect(registry.projectContinuation(mixed.handle!)).toMatchObject({ attempt: 0 });
+  });
+
   test("observation update excludes unsupported claims from fresh correction evidence", () => {
     const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const started = registry.startFromObservations({

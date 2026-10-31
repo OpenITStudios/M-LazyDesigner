@@ -97,6 +97,8 @@ type CorrectionLoopRecord = {
   verification_request: VerificationEvidenceRequest;
   verification_evidence_handle: VerificationEvidenceHandle;
   discrepancies: VerificationDiscrepancy[];
+  /** Only the structured image-observation entrypoint opts into cause-first mutation. */
+  observation_origin?: "STRUCTURED_VISUAL";
   attempt: 0 | 1 | 2;
   evidence_fingerprint: string;
   last_attempt_evidence_fingerprint: string | null;
@@ -162,6 +164,9 @@ type CorrectionLoopDecision = {
     | "CORRECTION_FAMILY_MISMATCH"
     | "CAUSAL_REPAIR_MISMATCH"
     | "CAUSE_REQUIRES_OWNER_ROUTE"
+    | "VISUAL_GEOMETRY_OWNER_MISMATCH"
+    | "VISUAL_CAUSE_UNVERIFIED"
+    | "VISUAL_CANDIDATE_UNGROUNDED"
     | "QUALITY_PLATEAU_NO_GAIN"
     | "BLOCKING_PLATEAU_REQUIRES_NEW_EVIDENCE"
     | "EVIDENCE_RECOVERY_REQUIRED"
@@ -285,6 +290,7 @@ export class CorrectionLoopRegistry {
     input: Omit<
       CorrectionLoopRecord,
       | "discrepancies"
+      | "observation_origin"
       | "attempt"
       | "evidence_fingerprint"
       | "last_attempt_evidence_fingerprint"
@@ -323,6 +329,7 @@ export class CorrectionLoopRegistry {
       handle: this.start({
         ...recordInput,
         discrepancies: compiled.supported,
+        observation_origin: "STRUCTURED_VISUAL",
       }),
       unverified: compiled.unverified,
     };
@@ -969,6 +976,40 @@ export class CorrectionLoopRegistry {
     const prioritized = prioritizeMinecraftDiscrepancies(record.discrepancies);
     const focus = prioritized[0] ?? null;
     const diagnosis = focus ? diagnoseMinecraftDiscrepancy(focus) : null;
+
+    // Only structured visual observations use this stricter causal contract.
+    // Raw/explicit numeric Recipe workflows retain their existing behavior.
+    // An image-derived discrepancy alone cannot authorize a Cube mutation:
+    // the current winning claim must have a known Geometry cause, and every
+    // offered candidate must name the diagnosed code and matching edit family.
+    if (record.observation_origin === "STRUCTURED_VISUAL") {
+      const blocked = (reason: NonNullable<CorrectionLoopDecision["blocked_reason"]>): CorrectionLoopDecision => ({
+        handle, state: "BLOCKED", attempt: record.attempt,
+        verification_request: structuredClone(record.verification_request),
+        blocked_reason: reason,
+      });
+      if (record.verification_request.domain !== "GEOMETRY" ||
+          diagnosis?.owner !== "GEOMETRY") {
+        return blocked("VISUAL_GEOMETRY_OWNER_MISMATCH");
+      }
+      if (!diagnosis.evidence_backed) {
+        return blocked("VISUAL_CAUSE_UNVERIFIED");
+      }
+      const byCode = new Map(record.discrepancies.map((item) => [item.code, item]));
+      for (const candidate of candidates) {
+        const codes = candidate.patch.target_discrepancy_codes;
+        const family = candidate.patch.correction_family;
+        if (!codes?.length || !family || codes.some((code) => {
+          const claim = byCode.get(code);
+          if (!claim) return true;
+          const supported = diagnoseMinecraftDiscrepancy(claim);
+          return !supported.evidence_backed || supported.owner !== "GEOMETRY" ||
+            supported.repair_route !== family;
+        })) {
+          return blocked("VISUAL_CANDIDATE_UNGROUNDED");
+        }
+      }
+    }
 
     const targetedFocus = (candidate: CorrectionCandidate<GeometryCorrectionPatch>) => {
       const codes = candidate.patch.target_discrepancy_codes;
