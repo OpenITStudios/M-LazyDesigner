@@ -36,8 +36,9 @@ For the opt-in `startFromObservations` path, an existing structured
 visual discrepancy remains reviewable when its cause is `UNKNOWN`, but no
 Geometry mutation is planned until a fresh cause-classified observation is
 provided. The current prioritized claim must belong to Geometry, and every
-candidate must target known Geometry discrepancy codes with an explicitly
-matching edit family. A Texture/Animation claim or merely cheap correction
+candidate must target the **current prioritized** Geometry discrepancy with
+an explicitly matching edit family. Lower-priority cheap detail edits cannot
+replace that focal correction. A Texture/Animation claim or merely cheap correction
 cannot authorize Geometry edits; the owning specialist must handle it.
 Legacy raw-Recipe correction plans remain compatible. This source-level
 causal gate does **not** authenticate screenshot labels, replace actual visual

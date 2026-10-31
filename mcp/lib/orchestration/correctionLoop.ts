@@ -989,7 +989,7 @@ export class CorrectionLoopRegistry {
         blocked_reason: reason,
       });
       if (record.verification_request.domain !== "GEOMETRY" ||
-          diagnosis?.owner !== "GEOMETRY") {
+          !diagnosis || diagnosis.owner !== "GEOMETRY") {
         return blocked("VISUAL_GEOMETRY_OWNER_MISMATCH");
       }
       if (!diagnosis.evidence_backed) {
@@ -999,7 +999,7 @@ export class CorrectionLoopRegistry {
       for (const candidate of candidates) {
         const codes = candidate.patch.target_discrepancy_codes;
         const family = candidate.patch.correction_family;
-        if (!codes?.length || !family || codes.some((code) => {
+        if (!codes?.length || !codes.includes(focus.code) || !family || codes.some((code) => {
           const claim = byCode.get(code);
           if (!claim) return true;
           const supported = diagnoseMinecraftDiscrepancy(claim);

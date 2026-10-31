@@ -2655,7 +2655,7 @@ describe("zero-waste correction loop reuse", () => {
       },
     };
     const started = registry.startFromObservations({
-      recipe_id: "asset-visual-causal", base_recipe: recipe(),
+      recipe_id: "asset", base_recipe: recipe(),
       verification_request: request,
       verification_evidence_handle: "verificationevidence:focal-before",
       observations: [{ ...observed, cause_family: "UNKNOWN" }],
@@ -2685,6 +2685,39 @@ describe("zero-waste correction loop reuse", () => {
     }])).toMatchObject({
       state: "BLOCKED", attempt: 0, blocked_reason: "VISUAL_CANDIDATE_UNGROUNDED",
     });
+    // An independently diagnosed but lower-priority detail is not a
+    // substitute for the current focal-form problem just because it is cheap.
+    const second = registry.startFromObservations({
+      recipe_id: "asset", base_recipe: recipe(),
+      verification_request: request,
+      verification_evidence_handle: "verificationevidence:focus-before",
+      observations: [
+        { ...observed, cause_family: "SIZE_MISMATCH" },
+        {
+          code: "TRIM_LOCATION", criterion: "SECONDARY_GEOMETRY_DETAIL",
+          severity: "INFO", summary: "A small trim is slightly displaced.",
+          evidence: {
+            current_evidence_ref: "model:front:revision-1",
+            reference_evidence_ref: "source:trim:approved", views: ["front"],
+          },
+          cause_family: "POSITION_MISMATCH",
+        },
+      ],
+    });
+    expect(second.unverified).toEqual([]);
+    expect(registry.planGeometryCorrection(second.handle!, [{
+      ...candidate, id: "cheap-trim",
+      patch: {
+        ...candidate.patch, target_discrepancy_codes: ["TRIM_LOCATION"],
+        correction_family: "TRANSLATE",
+        intent: { target: { semantic_group: "upper_arm" },
+          operation: { kind: "TRANSLATE", delta: [0.25, 0, 0] } },
+      },
+    }])).toMatchObject({
+      state: "BLOCKED", attempt: 0, blocked_reason: "VISUAL_CANDIDATE_UNGROUNDED",
+    });
+    expect(registry.projectContinuation(second.handle!)).toMatchObject({ attempt: 0 });
+
     expect(registry.planGeometryCorrection(handle, [candidate])).toMatchObject({
       state: "CORRECTION_READY", attempt: 1,
       decision_summary: { selected_candidate_id: "resize-focal-mass" },
@@ -2693,7 +2726,7 @@ describe("zero-waste correction loop reuse", () => {
     // A more severe material discrepancy must remain with Texturing, even
     // when a cheaper valid Geometry candidate is available in the same batch.
     const mixed = registry.startFromObservations({
-      recipe_id: "asset-mixed-owners", base_recipe: recipe(),
+      recipe_id: "asset", base_recipe: recipe(),
       verification_request: request,
       verification_evidence_handle: "verificationevidence:mixed",
       observations: [
@@ -2720,7 +2753,7 @@ describe("zero-waste correction loop reuse", () => {
   test("observation update excludes unsupported claims from fresh correction evidence", () => {
     const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const started = registry.startFromObservations({
-      recipe_id: "asset-observed-update",
+      recipe_id: "asset",
       base_recipe: recipe(),
       verification_request: {
         domain: "GEOMETRY",
