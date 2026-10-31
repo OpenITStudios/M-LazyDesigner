@@ -838,6 +838,52 @@ export function analyzeStaticCubeMergeCandidates(
   };
 }
 
+/**
+ * Turn actual create-cohort structural observations into at most one
+ * source-comparison question, BEFORE native Undo. Exact source pixels are not
+ * inspected here. There is no aesthetic score, auto-deletion or new planner.
+ */
+export function prioritizeGeometryConstructionReview(input: {
+  containment: ReturnType<typeof analyzeStaticCubeContainment>;
+  projection: ReturnType<typeof analyzeStaticMarginalProjection>;
+  merges: ReturnType<typeof analyzeStaticCubeMergeCandidates>;
+}) {
+  const partial = input.containment.state === "partial" ||
+    input.projection.state === "partial" ||
+    input.merges.state === "partial";
+  const enclosed = input.containment.contained_candidate_count > 0
+    ? input.containment.examples.map(entry => entry.cube_uuid) : [];
+  const noOutline = input.projection.no_new_projected_outline_count > 0
+    ? input.projection.examples.filter(entry =>
+        entry.outcome === "NO_ADDITIONAL_PROJECTED_OUTLINE"
+      ).map(entry => entry.cube_uuid) : [];
+  const focus = enclosed.length > 0 ? "ENCLOSED_MASS_REVIEW" as const
+    : noOutline.length > 0 ? "NO_NEW_OUTLINE_REVIEW" as const : null;
+  // An inconclusive scan, a valid protruding mass, or simple adjacent pieces
+  // must not trigger an invented artistic problem.
+  if (!focus) return null;
+
+  const candidateIds = [...new Set(focus === "ENCLOSED_MASS_REVIEW"
+    ? enclosed : noOutline)].slice(0, GEOMETRY_SURFACE_EXAMPLE_LIMIT);
+  const total = focus === "ENCLOSED_MASS_REVIEW"
+    ? input.containment.contained_candidate_count
+    : input.projection.no_new_projected_outline_count;
+  return {
+    focus,
+    source_pairing_required: true as const,
+    evidence_scope: "PARENT_LOCAL_REST_POSE_ONLY" as const,
+    evidence_state: partial ? "partial" as const : "available" as const,
+    candidate_cube_uuids: candidateIds,
+    candidate_count: total,
+    omitted_candidate_count: Math.max(0, total - candidateIds.length),
+    next_decision: focus === "ENCLOSED_MASS_REVIEW"
+      ? "Check reference-visible role, contact, rig, material and opacity before adding or removing Geometry; an interior Cube may be intentional."
+      : "Before adding secondary Cubes, compare approved source and fresh mapped front/side views: needed depth/contact/layer, primary proportion correction, or Texture-owned detail?",
+    visual_verdict: "not_evaluated" as const,
+    geometry_mutation_authorized: false as const,
+  };
+}
+
 type Axis = 0 | 1 | 2;
 type FaceName = "west" | "east" | "down" | "up" | "north" | "south";
 

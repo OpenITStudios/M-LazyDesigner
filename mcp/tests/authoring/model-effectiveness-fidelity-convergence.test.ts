@@ -91,6 +91,11 @@ describe("model-fidelity policy text (not generated-model performance)", () => {
       expect(profile).not.toContain(forbidden);
       expect(cubes).not.toContain(forbidden);
     }
+    // The existing native create branch, not a Recipe-only helper, must
+    // deliver priority form feedback to the same Codex specialist.
+    expect(cubes).toContain("prioritizeGeometryConstructionReview(contributionPreflight)");
+    expect(cubes).toContain("primary_form_followup:");
+    expect(modelling).toContain("geometry_contribution_review.primary_form_followup");
     expect(normalized(modelling)).not.toContain("zebra");
     expect(normalized(workflow)).not.toContain("zebra");
     expect(normalized(modelling)).toContain("similarity scores cannot justify `pass`");

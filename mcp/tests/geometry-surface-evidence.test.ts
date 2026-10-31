@@ -7,6 +7,7 @@ import {
   analyzeStaticCubeContainment,
   analyzeStaticMarginalProjection,
   analyzeStaticCubeMergeCandidates,
+  prioritizeGeometryConstructionReview,
 } from "@/lib/geometrySurfaceEvidence";
 
 const cube = (uuid: string, from: number[], to: number[], rotation = [0, 0, 0]) => ({
@@ -153,6 +154,53 @@ test("bounded containment results are input-order invariant and show partial sca
   expect(capped.checked_target_count).toBe(1);
   expect(capped.unvisited_target_count).toBeGreaterThan(0);
   expect(capped.examples_truncated).toBe(true);
+});
+
+test("live Cube cohort reports one source-paired form question rather than manufacturing details", () => {
+  const review = (cubes: Array<ReturnType<typeof cube> & { parent_id: string; origin?: number[] }>,
+    target_cube_ids: string[]) => {
+    const scope = { target_cube_ids };
+    return prioritizeGeometryConstructionReview({
+      containment: analyzeStaticCubeContainment(cubes, scope),
+      projection: analyzeStaticMarginalProjection(cubes, scope),
+      merges: analyzeStaticCubeMergeCandidates(cubes, scope),
+    });
+  };
+  const body = { ...cube("body", [0, 0, 0], [8, 8, 8]), parent_id: "root" };
+  const inner = { ...cube("inside", [2, 2, 2], [4, 4, 4]), parent_id: "root" };
+  expect(review([body, inner], ["inside"])).toMatchObject({
+    focus: "ENCLOSED_MASS_REVIEW", candidate_cube_uuids: ["inside"],
+    candidate_count: 1, omitted_candidate_count: 0,
+    evidence_state: "available", source_pairing_required: true,
+    visual_verdict: "not_evaluated", geometry_mutation_authorized: false,
+  });
+
+  // Multiple sibling masses may collectively cover an extra panel's
+  // outlines without a single containing Cube.
+  const left = { ...cube("left", [0, 0, 0], [2, 4, 1]), parent_id: "root" };
+  const right = { ...cube("right", [2, 0, 0], [4, 4, 1]), parent_id: "root" };
+  const panel = { ...cube("panel", [0, 0, 0], [4, 4, 1]), parent_id: "root" };
+  const covered = review([left, right, panel], ["panel"]);
+  expect(covered).toMatchObject({
+    focus: "NO_NEW_OUTLINE_REVIEW", candidate_cube_uuids: ["panel"],
+    geometry_mutation_authorized: false,
+  });
+  expect(covered?.next_decision).toContain("primary proportion correction");
+
+  // Distinct authored silhouette should not trigger more review work.
+  const horn = { ...cube("horn", [8, 5, 3], [10, 7, 5]), parent_id: "root" };
+  expect(review([body, horn], ["horn"])).toBeNull();
+  // Adjacent pieces, potentially necessary independently for material/rig,
+  // are not automatically interpreted as artistically redundant.
+  const outerWithPivot = { ...body, origin: [0, 0, 0] };
+  const adjacent = { ...cube("adjacent", [8, 0, 0], [10, 8, 8]),
+    parent_id: "root", origin: [0, 0, 0] };
+  expect(review([outerWithPivot, adjacent], ["adjacent"])).toBeNull();
+  // Unsupported rotations must not silently turn an unknown outline into
+  // a confident negative assessment or forced follow-up.
+  const rotated = { ...cube("rotated", [2, 0, 0], [4, 5, 3], [0, 45, 0]),
+    parent_id: "root" };
+  expect(review([body, rotated], ["rotated"])).toBeNull();
 });
 
 test("multi-Cube projected coverage detects zero marginal outline without a containing Cube", () => {

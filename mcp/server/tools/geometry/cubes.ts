@@ -35,6 +35,7 @@ import {
   analyzeStaticCubeContainment,
   analyzeStaticMarginalProjection,
   analyzeStaticCubeMergeCandidates,
+  prioritizeGeometryConstructionReview,
   type SurfaceEvidenceCube,
 } from "@/lib/geometry/surfaceEvidence";
 
@@ -735,6 +736,11 @@ export function registerCubesTools() {
         projection: analyzeStaticMarginalProjection(source, scope),
         merges: analyzeStaticCubeMergeCandidates(source, scope),
       };
+      // Feed one source-comparison question back to Codex from actual
+      // structural construction evidence; no automatic shape edits.
+      const primaryFormReview = contributionPreflight
+        ? prioritizeGeometryConstructionReview(contributionPreflight)
+        : null;
       const autoPackBoxUv = !customFaceUvs && Project?.box_uv === true;
       let plannedBoxUvOffsets: [number, number][] | null = null;
       let deferredBoxUvTemplate = false;
@@ -873,6 +879,12 @@ export function registerCubesTools() {
                   cube_uuids: entry.cube_uuids.map(realId) as [string, string],
                 })),
               },
+              ...(primaryFormReview ? {
+                primary_form_followup: {
+                  ...primaryFormReview,
+                  candidate_cube_uuids: primaryFormReview.candidate_cube_uuids.map(realId),
+                },
+              } : {}),
             };
           })(),
         } : {}),
