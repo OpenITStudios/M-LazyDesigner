@@ -53,6 +53,12 @@ describe("texture design reasoning", () => {
     expect(texturing).toContain("IDENTITY PASS");
     expect(texturing).toContain("SECONDARY DETAIL PASS");
     expect(texturing).toContain("VERIFY");
+    // Pattern planning is a source-only helper; production Codex still uses
+    // the existing Gateway capabilities and current mapped-view evidence.
+    expect(texturing).toContain("not a callable Gateway capability");
+    expect(texturing).toContain("pattern_observation");
+    expect(texturing).toContain("invoke_capability");
+    expect(texturing).toContain("capture_model_views");
   });
 
   test("texturing specialist closes a face coverage ledger before visual approval", async () => {
