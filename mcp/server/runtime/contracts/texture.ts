@@ -9,6 +9,7 @@ import { resolveCoreTexture } from "@/lib/core/identity";
 import { imageContent } from "@/lib/protocol/imageContent";
 import {
   buildTextureEvidenceSnapshot,
+  buildTextureCraftEvidence,
   focusedGetTextureParameters,
 } from "@/lib/texture/evidence";
 import {
@@ -241,6 +242,7 @@ async function getFocusedTextureEvidence(request: z.infer<typeof focusedGetTextu
     uv_width: sourceIdentity.uv_width,
     uv_height: sourceIdentity.uv_height,
   });
+  const craft = buildTextureCraftEvidence(snapshot);
   const png = rgbaToPngDataUrl(
     snapshot.rgba,
     snapshot.region.width,
@@ -252,6 +254,7 @@ async function getFocusedTextureEvidence(request: z.infer<typeof focusedGetTextu
     ...image,
     structuredContent: {
       ...metadata,
+      ...craft,
       texture: sourceIdentity,
     },
   };

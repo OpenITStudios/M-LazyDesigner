@@ -130,7 +130,7 @@ describe("texture treatment intelligence", () => {
         fingerprint: "b".repeat(64),
         images: [{
           id: "FRONT", sha256: sha, view: "front",
-          integrity: "VERIFIED", used_by: ["TEXTURE"],
+          integrity: "VERIFIED", status: "APPROVED", used_by: ["TEXTURE"],
           regions: [
             { id: "same_mark", part_id: "panel", evidence_role: "SURFACE_DETAIL",
               visibility: "DIRECT", box_uv: [0.1, 0.1, 0.3, 0.3], related_part_id: null },
@@ -204,7 +204,7 @@ describe("texture treatment intelligence", () => {
       required_faces: [face],
       reference_context: { fingerprint: "a".repeat(64), images: [{
         id: "FRONT", sha256: digest, view: "front",
-        integrity: "VERIFIED", used_by: ["TEXTURE"],
+        integrity: "VERIFIED", status: "APPROVED", used_by: ["TEXTURE"],
         regions: [{ id: "badge", part_id: "body", evidence_role: "SURFACE_DETAIL",
           visibility: "DIRECT", box_uv: [0.2, 0.2, 0.6, 0.6], related_part_id: null }],
       }] },
@@ -231,6 +231,8 @@ describe("texture treatment intelligence", () => {
       [v => { v.regions[0]!.reference_surfaces![0]!.image_sha256 = "c".repeat(64); }, "REFERENCE_SURFACE_SOURCE_STALE"],
       [v => { v.regions[0]!.reference_surfaces![0]!.part_id = "wrong"; }, "REFERENCE_SURFACE_PART_MISMATCH"],
       [v => { v.reference_context!.images[0]!.view = null; }, "REFERENCE_SURFACE_VIEW_UNRESOLVED"],
+      [v => { v.reference_context!.images[0]!.status = "DRAFT"; }, "REFERENCE_SURFACE_SOURCE_NOT_APPROVED"],
+      [v => { v.reference_context!.images[0]!.status = null; }, "REFERENCE_SURFACE_SOURCE_NOT_APPROVED"],
       [v => { v.reference_context!.images[0]!.regions![0]!.evidence_role = "PRIMARY_VOLUME"; }, "REFERENCE_SURFACE_NOT_VISIBLE_DETAIL"],
       [v => { v.reference_context!.images[0]!.regions![0]!.visibility = "OCCLUDED";
         v.reference_context!.images[0]!.regions![0]!.box_uv = null; }, "REFERENCE_SURFACE_NOT_VISIBLE_DETAIL"],

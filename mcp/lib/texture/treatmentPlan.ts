@@ -34,6 +34,8 @@ export type TextureReferenceSurfaceContext = {
   fingerprint: string;
   images: readonly (ReferenceRegionImage & {
     integrity: "VERIFIED" | "MISSING" | "INVALID";
+    /** A declared Reference Package state; absent is never approved. */
+    status?: string | null;
     used_by: readonly string[];
   })[];
 };
@@ -242,12 +244,16 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
       referenceContext = { fingerprint: context.fingerprint, images: context.images.map(image => {
         if (!image || typeof image.id !== "string" || !image.id.trim() ||
             image.id.length > 96 || imageIds.has(image.id) ||
-            !Array.isArray(image.used_by)) throw new Error("TEXTURE_REFERENCE_CONTEXT_INVALID");
+            !Array.isArray(image.used_by) ||
+            (image.status !== undefined && image.status !== null &&
+              typeof image.status !== "string"))
+          throw new Error("TEXTURE_REFERENCE_CONTEXT_INVALID");
         imageIds.add(image.id);
         const parsed = parseReferenceImageRegions(image.regions);
         if (parsed === null) throw new Error("TEXTURE_REFERENCE_CONTEXT_INVALID");
         return { id: image.id, sha256: image.sha256 ?? null,
-          integrity: image.integrity, view: image.view ?? null,
+          integrity: image.integrity, status: image.status ?? null,
+          view: image.view ?? null,
           used_by: [...image.used_by], regions: parsed };
       }) };
     }
@@ -281,6 +287,11 @@ export function planTextureTreatment(input: TextureTreatmentPlanInput) {
             !/^[a-f0-9]{64}$/i.test(claim.image_sha256) ||
             claim.image_sha256 !== image.sha256) {
           flag(region.region, "REFERENCE_SURFACE_SOURCE_STALE"); continue;
+        }
+        // Same ID/SHA is not source-image review, but DRAFT or missing
+        // Reference Package authority cannot even support a metadata match.
+        if (image.status !== "APPROVED") {
+          flag(region.region, "REFERENCE_SURFACE_SOURCE_NOT_APPROVED"); continue;
         }
         if (!image.view || !MODEL_VIEWS.includes(image.view)) {
           flag(region.region, "REFERENCE_SURFACE_VIEW_UNRESOLVED"); continue;

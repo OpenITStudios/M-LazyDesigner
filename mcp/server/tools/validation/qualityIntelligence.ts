@@ -619,6 +619,13 @@ function wireTool(
 
     const additions: Record<string, unknown> = {};
     for (const augmentation of augmentations) {
+      // get_texture's canonical Runtime adapter already reports diagnostics
+      // from its exact verified PNG crop. Resampling native pixels here could
+      // mix revisions; retain fallback reads only for non-enriched callers.
+      if (toolName === "get_texture" &&
+          Object.prototype.hasOwnProperty.call(structured, augmentation.field)) {
+        continue;
+      }
       additions[augmentation.field] = augmentation.read(
         structured,
         invocationContext

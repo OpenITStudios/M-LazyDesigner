@@ -7,7 +7,7 @@ import {
   PAINT_TEXTURE_TRANSACTION_TOOL_NAME,
   requirePaintTransactionV1Target,
 } from "@/lib/paintTransactionPolicy";
-import { buildTextureEvidenceSnapshot } from "@/lib/textureEvidence";
+import { buildTextureEvidenceSnapshot, buildTextureCraftEvidence } from "@/lib/textureEvidence";
 import { buildTextureEvidenceDeliveryMetadata } from "@/lib/textureEvidenceDelivery";
 import { planBedrockGeometryWrite } from "@/lib/bedrockExportIntegrity";
 import { requireDirectBedrockGeometryWriteV1 } from "@/lib/bedrockExportWritePolicy";
@@ -83,6 +83,56 @@ describe("texture runtime wiring policy", () => {
     expect(JSON.stringify(metadata)).not.toContain("rgba");
   });
 
+
+
+  test("pixel craft and palette remain bound to the exact PNG crop and full-bitmap revision", async () => {
+    const rgba = new Uint8ClampedArray([
+      40, 40, 40, 255, 40, 40, 40, 255, 255, 0, 0, 255, 0, 0, 255, 255,
+      40, 40, 40, 255, 40, 40, 40, 255, 0, 0, 255, 255, 255, 0, 0, 255,
+    ]);
+    const region = { x: 2, y: 0, width: 2, height: 2 };
+    const current = await buildTextureEvidenceSnapshot(rgba, 4, 2, { region });
+    const diagnostics = buildTextureCraftEvidence(current);
+    for (const evidence of [diagnostics.color_profile, diagnostics.pixel_craft]) {
+      expect(evidence).toMatchObject({
+        evidence_revision: current.revision,
+        source_region: region,
+        evidence_scope: "REQUESTED_PNG_REGION",
+      });
+    }
+    expect(diagnostics.pixel_craft.state).toBe("available");
+    expect(diagnostics.pixel_craft.local_transitions?.quantized_color_transition_ratio).toBe(1);
+    expect(diagnostics.pixel_craft.visual_verdict).toBe("not_evaluated");
+    expect(diagnostics.color_profile.palette.map(item => item.hex).sort())
+      .toEqual(["#0000ff", "#ff0000"]);
+    expect(JSON.stringify(diagnostics)).not.toContain('"rgba"');
+
+    // The selected region is identical but the full atlas changed elsewhere:
+    // do not reuse its old revision or imply all materials were inspected.
+    const modified = rgba.slice();
+    modified[0] = 41;
+    const next = await buildTextureEvidenceSnapshot(modified, 4, 2, { region });
+    const changed = buildTextureCraftEvidence(next);
+    expect(Array.from(next.rgba)).toEqual(Array.from(current.rgba));
+    expect(changed.pixel_craft.evidence_revision)
+      .not.toBe(diagnostics.pixel_craft.evidence_revision);
+    expect(changed.pixel_craft.color_clusters).toEqual(diagnostics.pixel_craft.color_clusters);
+    expect(() => buildTextureCraftEvidence({
+      ...current, rgba: new Uint8ClampedArray(4),
+    })).toThrow("TEXTURE_CRAFT_SNAPSHOT_REGION_MISMATCH");
+
+    const adapter = await Bun.file("server/runtime/contracts/texture.ts").text();
+    const guard = adapter.indexOf("requireUnchangedTextureBitmap(");
+    const craft = adapter.indexOf("const craft = buildTextureCraftEvidence(snapshot);");
+    const png = adapter.indexOf("const png = rgbaToPngDataUrl(");
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(craft).toBeGreaterThan(guard);
+    expect(png).toBeGreaterThan(craft);
+    expect(adapter).toContain("...craft,");
+    const wrapper = await Bun.file("server/tools/validation/qualityIntelligence.ts").text();
+    expect(wrapper).toContain('toolName === "get_texture"');
+    expect(wrapper).toContain("Object.prototype.hasOwnProperty.call(structured, augmentation.field)");
+  });
 
   test("focused animated PNG readback binds absolute bitmap region to one frame-local UV map", async () => {
     const pixels = new Uint8ClampedArray(2 * 6 * 4);

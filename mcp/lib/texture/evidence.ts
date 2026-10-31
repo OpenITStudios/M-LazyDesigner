@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { analyzeTextureColorProfile } from "@/lib/texture/colorProfile";
+import { analyzeTexturePixelCraft } from "@/lib/texture/pixelCraft";
 import { textureIdOptionalSchema } from "@/lib/zodObjects";
 import { ENTITY_RENDER_PROFILE_NAMES } from "@/lib/texture/renderProfile";
 import {
@@ -178,5 +180,37 @@ export async function buildTextureEvidenceSnapshot(
     region,
     byte_length: rgba.byteLength,
     rgba,
+  };
+}
+
+
+/**
+ * Read-only palette/cluster diagnostics from the SAME verified decoded-RGBA
+ * crop that supplies get_texture's PNG. The full-atlas revision is passed
+ * through unchanged; neither output compares source art or grants visual PASS.
+ */
+export function buildTextureCraftEvidence(
+  snapshot: Pick<Awaited<ReturnType<typeof buildTextureEvidenceSnapshot>>,
+    "revision" | "region" | "rgba">
+) {
+  const revision = textureRevisionSchema.parse(snapshot.revision);
+  const region = textureEvidenceRegionSchema.parse(snapshot.region);
+  if (snapshot.rgba.byteLength !== region.width * region.height * 4) {
+    throw new Error("TEXTURE_CRAFT_SNAPSHOT_REGION_MISMATCH");
+  }
+  const provenance = {
+    evidence_revision: revision,
+    source_region: { ...region },
+    evidence_scope: "REQUESTED_PNG_REGION" as const,
+  };
+  return {
+    color_profile: {
+      ...analyzeTextureColorProfile(snapshot.rgba, region.width, region.height),
+      ...provenance,
+    },
+    pixel_craft: {
+      ...analyzeTexturePixelCraft(snapshot.rgba, region.width, region.height),
+      ...provenance,
+    },
   };
 }
