@@ -155,6 +155,21 @@ This **extends the existing single full-asset Golden Task** rather than creating
 
 **One-task review worksheet:** use the Golden's actual approved source and current-revision source-matched captures: **front neutral** for recognizable silhouette/focal identity; **left neutral** for depth and negative-space/contact; **back neutral** for the vent/back-facing materials; **right-arm signal pose** for pose readability, clearance and feet contact. Review mapped material clusters/identity in the actual applicable shaded views, not an unwrapped atlas or an isolated hero render. When an approved reference has no directly comparable image for one requested viewpoint or time, record `UNVERIFIED` for that visual inference and separately retain any current technical evidence. For each comparison, note A/B or tie/unknown, the actual matched view/pose, current output artifact revision, lighting/crop/display conditions, and a concrete identity-bearing reason. Keep the referee's free-form notes and evidence links with the existing `human_acceptance`/`reference_fidelity` evidence references; **no additional Golden JSON fields, separate scoring service, or fabricated reviewer votes**. Do not claim independent consensus from one judge. Both accepted `PASS` is a minimum quality floor for cost deltas, not proof that the candidate is artistically superior.
 
+**Evidence identity for the one Golden:** Record the exact benchmark trace
+`golden-capture:v1:<sha256>` handle as the existing visual `evidence_ref`
+for each of the four static visual criteria. The handle comes only from the
+PNG bytes the Gateway actually returned, with the approved reference fingerprint,
+live project identity, `-z` front direction and shaded front/left/back.
+The evaluator rejects an earlier/other-project/other-reference capture even
+when a manually typed PASS label looks valid. Human review still examines
+the actual reference and matching native images at comparable pose, crop,
+camera and brightness. A hash is a content identifier, **not** a style score,
+a proof of image similarity, an attestation of saved-file pixel parity or
+an independent reviewer vote. A still image does not prove the idle/signal
+timing and foot contact through time; those need separate native playback
+and user review evidence. No second Golden task, new report schema or
+always-on image hashing is introduced.
+
 **Acceptance:** preserve per-criterion `PASS / FAIL / UNVERIFIED` and the existing independently documented human acceptance. Never collapse mixed critical failures into an aggregate beauty score, assume aesthetic superiority from a perceptual embedding, or trade away Bedrock/UV/save/export correctness for visual preference. Only once quality is accepted/equal-or-better compare cost, time and corrections through the existing runner/finalizer; no fabricated preferences, new JSON fields or extra Gateways. This protocol is **PREPARED, NOT RUN**.
 
 ## G3 Geometry Knowledge A/B — next native acceptance experiment

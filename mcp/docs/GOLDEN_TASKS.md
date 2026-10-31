@@ -91,6 +91,31 @@ save/reopen parity, no critical defect, and separate documented
 
 **Full-asset trace completeness:** an accepted run must contain at least one successful **authoring mutation** in each required phase (Geometry, Texturing and Animation) as classified by the canonical capability manifest. A successful `manage_cubes` and one screenshot cannot stand in for a finished Texturing/Animation job; selection/control operations do not count as craft. This is a low-cost check of the already-recorded Gateway trace, not three new test tasks, a pixel-level verifier or an aesthetic verdict. Save/reopen/export still require their existing independent evidence; valid stage calls do not prove they happened, and native/manual work outside the Gateway cannot be falsely counted as an automated Codex authoring trace.
 
+**Final capture provenance:** the benchmark-only Gateway trace now records
+`capture_evidence` for a successful `capture_model_views`: SHA-256 hashes of
+the **actual PNG bytes returned to Codex**, ordered by view, plus project UUID,
+object front direction, shading/diagnostic state and the current approved
+Reference Package fingerprint already checked by the runner. It stores no
+image bytes, prompts, reference paths or model files, and requires no
+additional screenshots. A generic trace with no pinned approved reference
+cannot supply this receipt.
+
+An accepted Golden requires a final **post-mutation** shaded,
+non-diagnostic `-z`-front capture that contains **front, left and back**
+from the same live project and reference. The existing `evidence_ref` fields
+for `reference_fidelity`, `silhouette_proportion`,
+`required_parts_and_negative_space` and `mapped_texture_and_palette`
+must cite the **same latest** `golden-capture:v1:<sha256>` handle recorded
+in its trace. These are separate human-reviewed criteria reusing one view
+batch, not four new capture calls or a synthetic image-quality score.
+
+A correctly bound hash verifies returned PNG identity and request ordering,
+**not** visual correspondence, independent approval, native save/reopen
+parity, the pixel appearance of the saved asset, or animation timing.
+Preserve real image comparison, timed playback, final persistence/export and
+independent `human_acceptance` evidence. If one necessary view is missing
+or the last capture is stale, the run is `UNVERIFIED` rather than PASS.
+
 The runner also requires a **clean Git worktree**, including no staged,
 unstaged or nonignored untracked source, before opening native MCP. It rechecks
 the same Git HEAD and clean source after the session. A change or failed Git

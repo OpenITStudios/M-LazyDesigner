@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { BenchmarkTraceRecorder } from "./benchmarkTrace";
 
 const temporaryDirectories: string[] = [];
@@ -42,6 +43,65 @@ describe("Gateway benchmark trace recorder", () => {
         LAZYDESIGNER_BENCHMARK_SOURCE_SHA: "not-a-sha",
       })
     ).toThrow("exact 40-character Git SHA");
+  });
+
+  test("captures only returned PNG byte digests and rejects mismatched view labels", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "golden-capture-trace-"));
+    temporaryDirectories.push(dir);
+    const path = join(dir, "trace.ndjson");
+    const fingerprint = "a".repeat(64);
+    const recorder = BenchmarkTraceRecorder.fromEnvironment({
+      LAZYDESIGNER_BENCHMARK_TRACE_PATH: path,
+      LAZYDESIGNER_BENCHMARK_TASK_ID: "golden-full-asset-authoring",
+      LAZYDESIGNER_BENCHMARK_SOURCE_SHA: "b".repeat(40),
+      LAZYDESIGNER_BENCHMARK_REFERENCE_FINGERPRINT: fingerprint,
+    });
+    const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
+    const payload = png.toString("base64");
+    const good = {
+      content: [
+        { type: "text", text: "VIEW front" },
+        { type: "image", mimeType: "image/png", data: payload },
+      ],
+      structuredContent: {
+        project: { uuid: "disposable-golden" },
+        front_direction: "-z",
+        render_evidence: {
+          shading: true, diagnostic_missing_texture_highlight: false,
+        },
+        captures: [{ view: "front", png_bytes: png.length }],
+      },
+      secret: "PRIVATE/PATH/reference.png",
+    };
+    recorder.record({
+      startedAt: recorder.startedAt(), kind: "verify",
+      capability: "capture_model_views", success: true, result: good,
+    });
+    recorder.record({
+      startedAt: recorder.startedAt(), kind: "verify",
+      capability: "capture_model_views", success: true,
+      result: { ...good, content: [
+        { type: "text", text: "VIEW back" }, good.content[1],
+      ] },
+    });
+    await recorder.flush();
+    const text = await readFile(path, "utf8");
+    expect(text).not.toContain("PRIVATE/PATH");
+    expect(text).not.toContain(payload);
+    const events = text.trim().split("\n").map(row => JSON.parse(row));
+    expect(events).toHaveLength(2);
+    expect(events[0].capture_evidence).toMatchObject({
+      reference_package_fingerprint: fingerprint,
+      project_uuid: "disposable-golden",
+      front_direction: "-z", shading: true,
+      views: [{
+        view: "front",
+        png_sha256: createHash("sha256").update(png).digest("hex"),
+      }],
+    });
+    expect(events[0].capture_evidence.evidence_ref)
+      .toMatch(/^golden-capture:v1:[a-f0-9]{64}$/);
+    expect(events[1].capture_evidence).toBeUndefined();
   });
 
   test("writes ordered metadata only and never persists result contents", async () => {

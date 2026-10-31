@@ -3,6 +3,8 @@ import {
   capabilityOperationClassByName,
   capabilityStageByName,
 } from "../../lib/capabilities/manifest";
+import { benchmarkCaptureEvidenceRef, type BenchmarkCaptureEvidence } from "../../gateway/execution/benchmarkTrace";
+import { MODEL_VIEWS } from "../../lib/reference/visualEvidence";
 
 export type GoldenQualityVerdict = "PASS" | "FAIL" | "UNVERIFIED";
 export type GoldenTraceKind =
@@ -22,6 +24,7 @@ export type GoldenTraceEvent = {
   required_for_decision: boolean | null;
   result_bytes?: number | null;
   latency_ms?: number | null;
+  capture_evidence?: BenchmarkCaptureEvidence;
 };
 
 export type GoldenAcceptanceEvidence = {
@@ -166,6 +169,28 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
         `${prefix}.trace[${eventIndex}].required_for_decision must be boolean or null.`
       );
     }
+    const proof = event.capture_evidence;
+    if (proof !== undefined) {
+      if (!proof || event.kind !== "verify" || event.success !== true ||
+          event.capability !== "capture_model_views" ||
+          typeof proof.project_uuid !== "string" || !proof.project_uuid.trim() ||
+          !/^[0-9a-f]{64}$/.test(proof.reference_package_fingerprint) ||
+          !["-z", "+z"].includes(proof.front_direction) ||
+          typeof proof.shading !== "boolean" ||
+          typeof proof.diagnostic_missing_texture_highlight !== "boolean" ||
+          !Array.isArray(proof.views) ||
+          proof.views.length === 0 || proof.views.length > 5 ||
+          proof.views.some(row => !row || typeof row.view !== "string" ||
+            !(MODEL_VIEWS as readonly string[]).includes(row.view) ||
+            !/^[0-9a-f]{64}$/.test(row.png_sha256)) ||
+          new Set(proof.views.map(row => row.view)).size !== proof.views.length) {
+        throw new Error(`${prefix}.trace[${eventIndex}].capture_evidence is invalid.`);
+      }
+      const { evidence_ref: handle, ...values } = proof;
+      if (benchmarkCaptureEvidenceRef(values) !== handle) {
+        throw new Error(`${prefix}.trace[${eventIndex}].capture_evidence has invalid digest binding.`);
+      }
+    }
     if (event.result_bytes !== undefined) {
       requireNonNegativeNullable(event.result_bytes, `${prefix}.trace[${eventIndex}].result_bytes`);
     }
@@ -292,6 +317,36 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
       )) {
         throw new Error(
           `${prefix} accepted full-asset result requires a successful ${phase} authoring mutation trace event.`
+        );
+      }
+    }
+    // Opt-in benchmark evidence: the last post-mutation shaded capture must
+    // come from the live Golden project and current approved reference.
+    // It identifies returned PNGs; it never replaces human visual acceptance.
+    const finalCapture = run.trace[lastVerificationIndex]?.capture_evidence;
+    if (!finalCapture ||
+        finalCapture.project_uuid !== provenance.input_project_uuid ||
+        finalCapture.reference_package_fingerprint !==
+          provenance.reference_package_fingerprint ||
+        finalCapture.front_direction !== "-z" ||
+        finalCapture.shading !== true ||
+        finalCapture.diagnostic_missing_texture_highlight !== false ||
+        !["front", "left", "back"].every(view =>
+          finalCapture.views.some(item => item.view === view))) {
+      throw new Error(
+        `${prefix} accepted result requires final current-project, reference-bound shaded front/left/back capture evidence.`
+      );
+    }
+    // Four independent static visual verdicts reuse the same current
+    // content-addressed capture receipt, not an older-view screenshot.
+    for (const criterion of [
+      "reference_fidelity", "silhouette_proportion",
+      "required_parts_and_negative_space", "mapped_texture_and_palette",
+    ]) {
+      if (evidenceByCriterion.get(criterion)?.evidence_ref !==
+          finalCapture.evidence_ref) {
+        throw new Error(
+          `${prefix} accepted ${criterion} requires the current final capture evidence_ref.`
         );
       }
     }

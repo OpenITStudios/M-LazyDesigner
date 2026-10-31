@@ -369,6 +369,7 @@ export function buildGoldenRunDraft(input: {
     required_for_decision: null,
     result_bytes: event.result_bytes,
     latency_ms: event.latency_ms,
+    ...(event.capture_evidence ? { capture_evidence: event.capture_evidence } : {}),
   }));
 
   return {
@@ -535,6 +536,7 @@ async function main(): Promise<void> {
       LAZYDESIGNER_BENCHMARK_TRACE_PATH: paths.trace,
       LAZYDESIGNER_BENCHMARK_TASK_ID: task.id,
       LAZYDESIGNER_BENCHMARK_SOURCE_SHA: sourceSha,
+      LAZYDESIGNER_BENCHMARK_REFERENCE_FINGERPRINT: approvedReferenceFingerprint,
     },
   });
 

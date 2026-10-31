@@ -1,11 +1,31 @@
 import { describe, expect, test } from "bun:test";
 import goldenCorpus from "../fixtures/golden-task-cases.json";
+import { benchmarkCaptureEvidenceRef, type BenchmarkCaptureEvidence } from "../../gateway/execution/benchmarkTrace";
 import {
   summarizeGoldenAuthoringDocument,
   validateGoldenAuthoringDocument,
   type GoldenAuthoringDocument,
 } from "../../scripts/reporting/evaluate-golden-authoring-runs";
 const fullTask = goldenCorpus.tasks[0]!;
+const STATIC_VISUAL = new Set([
+  "reference_fidelity", "silhouette_proportion",
+  "required_parts_and_negative_space", "mapped_texture_and_palette",
+]);
+function verifiedCaptureFixture(): BenchmarkCaptureEvidence {
+  const value: Omit<BenchmarkCaptureEvidence, "evidence_ref"> = {
+    project_uuid: "blockbench-project-correction",
+    reference_package_fingerprint: "a".repeat(64),
+    front_direction: "-z", shading: true,
+    diagnostic_missing_texture_highlight: false,
+    views: [
+      { view: "front", png_sha256: "1".repeat(64) },
+      { view: "left", png_sha256: "2".repeat(64) },
+      { view: "back", png_sha256: "3".repeat(64) },
+    ],
+  };
+  return { ...value, evidence_ref: benchmarkCaptureEvidenceRef(value) };
+}
+
 
 function acceptedRun(): GoldenAuthoringDocument {
   return {
@@ -80,6 +100,7 @@ function acceptedRun(): GoldenAuthoringDocument {
             kind: "verify",
             success: true,
             capability: "capture_model_views",
+            capture_evidence: verifiedCaptureFixture(),
             required_for_decision: true,
             result_bytes: 2400,
             latency_ms: 350,
@@ -87,7 +108,9 @@ function acceptedRun(): GoldenAuthoringDocument {
         ],
         acceptance_evidence: [
           ...fullTask.acceptance.map(criterion => ({
-            criterion, verdict: "PASS" as const, evidence_ref: "synthetic:" + criterion,
+            criterion, verdict: "PASS" as const,
+            evidence_ref: STATIC_VISUAL.has(criterion)
+              ? verifiedCaptureFixture().evidence_ref : "synthetic:" + criterion,
           })),
           { criterion: "human_acceptance", verdict: "PASS", evidence_ref: "synthetic-human-review" },
         ],
@@ -107,7 +130,9 @@ describe("golden authoring accepted-result benchmark", () => {
         criterion => ({
           criterion,
           verdict: "PASS" as const,
-          evidence_ref: "example-human-asserted:" + criterion,
+          evidence_ref: STATIC_VISUAL.has(criterion)
+            ? verifiedCaptureFixture().evidence_ref
+            : "example-human-asserted:" + criterion,
         })
       );
       run.pipeline_provenance.output_asset_sha256 = null;
@@ -120,6 +145,44 @@ describe("golden authoring accepted-result benchmark", () => {
       run.pipeline_provenance.output_asset_sha256 = "d".repeat(64);
       expect(() => validateGoldenAuthoringDocument(document)).not.toThrow();
     }
+  });
+
+  test("final view evidence rejects stale source, wrong project or incomplete returned images", () => {
+    const base = acceptedRun();
+    expect(() => validateGoldenAuthoringDocument(base)).not.toThrow();
+    const modifications: Array<(receipt: BenchmarkCaptureEvidence) => void> = [
+      proof => { proof.project_uuid = "wrong-project"; },
+      proof => { proof.reference_package_fingerprint = "9".repeat(64); },
+      proof => { proof.views.pop(); },
+      proof => { proof.front_direction = "+z"; },
+      proof => { proof.shading = false; },
+      proof => { proof.diagnostic_missing_texture_highlight = true; },
+    ];
+    for (const mutate of modifications) {
+      const data = structuredClone(base);
+      const receipt = data.runs[0]!.trace[4]!.capture_evidence!;
+      mutate(receipt);
+      const { evidence_ref: _old, ...content } = receipt;
+      receipt.evidence_ref = benchmarkCaptureEvidenceRef(content);
+      expect(() => validateGoldenAuthoringDocument(data))
+        .toThrow("final current-project");
+    }
+    const stale = structuredClone(base);
+    stale.runs[0]!.acceptance_evidence.find(x =>
+      x.criterion === "mapped_texture_and_palette"
+    )!.evidence_ref = "golden-capture:v1:" + "0".repeat(64);
+    expect(() => validateGoldenAuthoringDocument(stale))
+      .toThrow("current final capture evidence_ref");
+    const invalidDigest = structuredClone(base);
+    invalidDigest.runs[0]!.trace[4]!.capture_evidence!.views[0]!.png_sha256 =
+      "f".repeat(64);
+    expect(() => validateGoldenAuthoringDocument(invalidDigest))
+      .toThrow("invalid digest binding");
+    const draft = structuredClone(base);
+    draft.runs[0]!.accepted_result = null;
+    draft.runs[0]!.quality_verdict = "UNVERIFIED";
+    delete draft.runs[0]!.trace[4]!.capture_evidence;
+    expect(() => validateGoldenAuthoringDocument(draft)).not.toThrow();
   });
 
   test("one complete Golden cannot accept empty Texture or Animation work as synthetic PASS", () => {
@@ -171,6 +234,14 @@ describe("golden authoring accepted-result benchmark", () => {
     expect(() => validateGoldenAuthoringDocument(document))
       .toThrow("successful final verification after the last mutation");
     document.runs[0]!.trace.at(-1)!.success = true;
+    const fresh = verifiedCaptureFixture();
+    fresh.views[0]!.png_sha256 = "4".repeat(64);
+    const { evidence_ref: _prior, ...data } = fresh;
+    fresh.evidence_ref = benchmarkCaptureEvidenceRef(data);
+    document.runs[0]!.trace.at(-1)!.capture_evidence = fresh;
+    for (const entry of document.runs[0]!.acceptance_evidence) {
+      if (STATIC_VISUAL.has(entry.criterion)) entry.evidence_ref = fresh.evidence_ref;
+    }
     expect(() => validateGoldenAuthoringDocument(document)).not.toThrow();
   });
 

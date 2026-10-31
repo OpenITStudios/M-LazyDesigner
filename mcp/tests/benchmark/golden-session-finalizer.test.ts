@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import goldenCorpus from "../fixtures/golden-task-cases.json";
+import { benchmarkCaptureEvidenceRef, type BenchmarkCaptureEvidence } from "../../gateway/execution/benchmarkTrace";
 import {
   finalizeGoldenSession,
 } from "../../scripts/reporting/finalize-golden-session";
@@ -11,6 +12,25 @@ import type {
 } from "../../scripts/evaluate/validate-astra-usage";
 
 const fullTask = goldenCorpus.tasks[0]!;
+const STATIC_VISUAL = new Set([
+  "reference_fidelity", "silhouette_proportion",
+  "required_parts_and_negative_space", "mapped_texture_and_palette",
+]);
+function captureFixture(): BenchmarkCaptureEvidence {
+  const payload: Omit<BenchmarkCaptureEvidence, "evidence_ref"> = {
+    project_uuid: "golden-fixture-live-project",
+    reference_package_fingerprint: "c".repeat(64),
+    front_direction: "-z", shading: true,
+    diagnostic_missing_texture_highlight: false,
+    views: [
+      { view: "front", png_sha256: "1".repeat(64) },
+      { view: "left", png_sha256: "2".repeat(64) },
+      { view: "back", png_sha256: "3".repeat(64) },
+    ],
+  };
+  return { ...payload, evidence_ref: benchmarkCaptureEvidenceRef(payload) };
+}
+
 
 function golden(): GoldenAuthoringDocument {
   return {
@@ -131,11 +151,14 @@ function acceptedGolden(): GoldenAuthoringDocument {
     {
       index: 3, kind: "verify", success: true,
       capability: "capture_model_views", required_for_decision: true,
+      capture_evidence: captureFixture(),
     },
   ];
   run.acceptance_evidence = run.acceptance_evidence.map(entry => ({
     ...entry, verdict: "PASS" as const,
-    evidence_ref: "human-asserted-fixture:" + entry.criterion,
+    evidence_ref: STATIC_VISUAL.has(entry.criterion)
+      ? captureFixture().evidence_ref
+      : "human-asserted-fixture:" + entry.criterion,
   }));
   return doc;
 }

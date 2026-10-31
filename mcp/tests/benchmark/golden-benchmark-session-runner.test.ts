@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import goldenCorpus from "../fixtures/golden-task-cases.json";
+import { benchmarkCaptureEvidenceRef } from "../../gateway/execution/benchmarkTrace";
 import {
   buildGoldenRunDraft,
   fingerprintGoldenInputModel,
@@ -253,6 +254,44 @@ describe("golden benchmark session runner", () => {
         traceEvents: [wrong], wallTimeMs: 100,
       })).toThrow("does not match the selected task_id and source SHA");
     }
+  });
+
+  test("unverified draft retains actual captured hashes without granting human PASS", () => {
+    const proof = {
+      project_uuid: "new-disposable",
+      reference_package_fingerprint: "d".repeat(64),
+      front_direction: "-z" as const,
+      shading: true,
+      diagnostic_missing_texture_highlight: false,
+      views: [
+        { view: "front", png_sha256: "1".repeat(64) },
+        { view: "left", png_sha256: "2".repeat(64) },
+        { view: "back", png_sha256: "3".repeat(64) },
+      ],
+    };
+    const capture_evidence = {
+      ...proof, evidence_ref: benchmarkCaptureEvidenceRef(proof),
+    };
+    const draft = buildGoldenRunDraft({
+      task, sourceSha: "f".repeat(40),
+      wallTimeMs: 100,
+      traceEvents: [{
+        schema: "lazydesigner-gateway-benchmark-trace-v1",
+        sequence: 0, task_id: task.id, source_sha: "f".repeat(40),
+        timestamp: "2026-10-31T00:00:00.000Z",
+        kind: "verify", capability: "capture_model_views", success: true,
+        latency_ms: 20, result_bytes: 120, read_only: true,
+        verification_class: "visual", capture_evidence,
+      }],
+      referencePackageFingerprint: "d".repeat(64),
+      inputProjectUuid: "new-disposable",
+    });
+    expect(draft.runs[0]!.trace[0]?.capture_evidence).toEqual(capture_evidence);
+    expect(draft.runs[0]!.accepted_result).toBeNull();
+    expect(draft.runs[0]!.quality_verdict).toBe("UNVERIFIED");
+    expect(draft.runs[0]!.acceptance_evidence.every(
+      item => item.evidence_ref === null
+    )).toBe(true);
   });
 
   test("draft never claims quality or decision necessity automatically", () => {
