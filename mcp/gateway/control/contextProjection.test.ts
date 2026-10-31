@@ -373,6 +373,41 @@ describe("Control stage semantic projection", () => {
       }],
     });
     expect(JSON.stringify(summary)).not.toContain("cube_uuid");
+    // Earlier source order previously filled every slot with one material
+    // part; now an independently observed side-view material must survive
+    // even when the first source image has many annotations.
+    const diversified: ControlReferenceProjection = {
+      ...source,
+      images: [
+        ...source.images,
+        {
+          id: "tex-side", file: "tex-side.png", role: "MATERIAL_TEXTURE",
+          used_by: ["TEXTURE"], status: "APPROVED",
+          integrity: "VERIFIED", view: "left", sha256: "c".repeat(64),
+          regions: [{
+            id: "side-emblem", part_id: "arm_emblem",
+            evidence_role: "SURFACE_DETAIL", visibility: "DIRECT",
+            box_uv: [0.1, 0.2, 0.4, 0.6], related_part_id: null,
+          }],
+        },
+      ],
+    };
+    const balanced = decisionPacketForAuthoringDomain("TEXTURING", diversified)
+      .texture_surface_regions!;
+    expect(balanced).toMatchObject({
+      source_state: "PACKAGE_METADATA_ONLY",
+      total_count: 10, returned_count: 6, omitted_count: 4,
+      visual_verdict: "not_evaluated",
+    });
+    expect(balanced.regions.map((row) => row.image_id)).toContain("tex-side");
+    expect(balanced.regions.map((row) => row.part_id)).toContain("arm_emblem");
+    expect(balanced.regions[0]?.image_region_id).toBe("mark_0");
+    expect(JSON.stringify(balanced)).not.toContain("cube_uuid");
+    // Source bbox pixels are explicitly not mapped Atlas UV or paint targets.
+    expect(balanced.regions.find((row) => row.part_id === "arm_emblem")?.box_uv)
+      .toEqual([0.1, 0.2, 0.4, 0.6]);
+
+
     expect(buildControlStageContext({
       domain: "GEOMETRY", reference: source, workspace,
     }).decision_packet.texture_surface_regions).toBeUndefined();

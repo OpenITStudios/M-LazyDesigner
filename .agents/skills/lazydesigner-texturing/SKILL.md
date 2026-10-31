@@ -28,6 +28,8 @@ Keep texture intent, asset/profile, Geometry APPROVED + UV Layout PASS, material
 
 If a decision-critical item is missing, request only that exact context through Control. Do not broaden into full-profile/reference loading as reassurance.
 
+**Material source-image evidence (conditional):** `decision_packet.texture_surface_regions` offers up to six approved, hash-bound **source image** annotations; `box_uv` is normalized in the reference picture, **not** the Blockbench UV atlas or a paint coordinate. Treat `omitted_count > 0` as incomplete discovery, not permission to ignore other surfaces. At a material/identity decision, use the relevant active-stage image IDs with `status(reference_package_path=..., include_reference_images=true, reference_image_ids=...)` **only if the actual approved images are not already in the active review context**. The source metadata alone does not provide material RGB, mapping or visual PASS. Pair the real images with current `get_texture`, mapped `capture_model_views`, and exact Cube-face UV only when the region-to-face identity needs resolution. See the conditional `references/fidelity-styling-verification.md`, not an always-loaded reference corpus.
+
 ## Pixel Art Reference Intake
 
 Pixel Art is conditional reference evidence, never a second Texturing workflow. When an approved Pixel Art artifact exists, consume only its compact visual handoff: identity, target grid/scale, authoritative palette/material/marking/alpha/orientation/style constraints, provenance, and blockers.
@@ -57,7 +59,7 @@ PBR/material semantics → manage_material / manage_material_instances
 render/preview → declared profile + mapped-model evidence; explicit file integration → manage_render_profile
 ```
 Unknown → `search_capabilities(limit=4)`. No confirmation rereads.
-**Pin atlas UUID and pass `texture_id` when multiple textures are loaded.**
+**Pass the exact native argument name:** production `get_texture` uses `texture` (optional `region` and full-bitmap `expected_revision` after the existing Runtime texture-contract wiring), while `paint_texture_transaction` uses `texture_id` and requires `expected_revision`. With multiple loaded textures, always supply the intended UUID in the correct field; describe only an uncertain schema. A focused region is a bitmap-pixel crop, not a source-image `box_uv` or mapped face target.
 
 ## Execution Path Preference
 Choose the cheapest executor that preserves the required visual behavior. Do not route through a native UI/Painter state merely because it resembles how a human would perform the edit.

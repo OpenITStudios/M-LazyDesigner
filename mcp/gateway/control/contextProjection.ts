@@ -302,10 +302,9 @@ export function semanticFactsForAuthoringDomain(
 function compactTextureSurfaceRegions(
   reference: ControlReferenceProjection
 ): NonNullable<ControlStageDecisionPacket["texture_surface_regions"]> | null {
-  const regions: NonNullable<
+  const candidates: NonNullable<
     ControlStageDecisionPacket["texture_surface_regions"]
   >["regions"] = [];
-  let total = 0;
   for (const image of reference.images) {
     if (image.integrity !== "VERIFIED" || image.status !== "APPROVED" ||
         !image.used_by.includes("TEXTURE") ||
@@ -314,9 +313,7 @@ function compactTextureSurfaceRegions(
     for (const annotation of image.regions ?? []) {
       if (annotation.evidence_role !== "SURFACE_DETAIL" ||
           annotation.visibility === "OCCLUDED" || !annotation.box_uv) continue;
-      total++;
-      if (regions.length >= 6) continue;
-      regions.push({
+      candidates.push({
         image_id: image.id,
         image_sha256: image.sha256,
         view: image.view,
@@ -327,11 +324,41 @@ function compactTextureSurfaceRegions(
       });
     }
   }
-  return total ? {
+
+  // Six hints is a context budget, not permission for the first annotated
+  // part to consume every slot. Prefer independent view/part/image coverage,
+  // retaining source order for ties. These are source image coordinates and
+  // never automatic face/UV correspondence or an artistic importance score.
+  const remaining = [...candidates];
+  const regions: typeof candidates = [];
+  const seenViews = new Set<string>();
+  const seenParts = new Set<string>();
+  const seenImages = new Set<string>();
+  while (regions.length < 6 && remaining.length > 0) {
+    const priority = [
+      (row: (typeof candidates)[number]) =>
+        !seenViews.has(row.view) && !seenParts.has(row.part_id),
+      (row: (typeof candidates)[number]) =>
+        !seenImages.has(row.image_id) && !seenParts.has(row.part_id),
+      (row: (typeof candidates)[number]) => !seenParts.has(row.part_id),
+      (row: (typeof candidates)[number]) => !seenViews.has(row.view),
+      (row: (typeof candidates)[number]) => !seenImages.has(row.image_id),
+    ];
+    const index = priority
+      .map((predicate) => remaining.findIndex(predicate))
+      .find((candidateIndex) => candidateIndex >= 0) ?? 0;
+    const [selected] = remaining.splice(index, 1);
+    if (!selected) break;
+    regions.push(selected);
+    seenViews.add(selected.view);
+    seenParts.add(selected.part_id);
+    seenImages.add(selected.image_id);
+  }
+  return candidates.length ? {
     source_state: "PACKAGE_METADATA_ONLY",
-    total_count: total,
+    total_count: candidates.length,
     returned_count: regions.length,
-    omitted_count: total - regions.length,
+    omitted_count: candidates.length - regions.length,
     regions,
     visual_verdict: "not_evaluated",
   } : null;

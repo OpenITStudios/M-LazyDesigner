@@ -6,11 +6,13 @@ async function source(path: string): Promise<string> {
 
 describe("texture visual convergence contract", () => {
   test("active guidance requires fresh atlas and mapped model-view evidence", async () => {
-    const [skill, workflow, texture, camera] = await Promise.all([
+    const [skill, workflow, texture, camera, nativeAdapter, runtimeExtensions] = await Promise.all([
       Promise.all([source("../.agents/skills/lazydesigner-texturing/SKILL.md"), source("../.agents/skills/lazydesigner-texturing/references/fidelity-styling-verification.md")]).then((parts) => parts.join("\n")),
       source("prompts/bedrock_entity_workflow.md"),
       source("server/tools/texture/read.ts"),
       source("server/tools/inspection/camera.ts"),
+      source("server/runtime/contracts/texture.ts"),
+      source("server/runtime/extensions.ts"),
     ]);
 
     for (const text of [skill, workflow]) {
@@ -27,6 +29,18 @@ describe("texture visual convergence contract", () => {
     const getTexture = texture;
     expect(getTexture).toContain("imageContent");
     expect(getTexture).toContain("getDataURL()");
+    // Actual caller schema is supplied by the registered Runtime extension,
+    // not the base read.ts facade; no new capability or test surface.
+    expect(nativeAdapter).toContain("getDefinition.parameterSchema = focusedGetTextureParameters");
+    expect(nativeAdapter).toContain("getFocusedTextureEvidence");
+    expect(runtimeExtensions).toContain("apply: wireTextureRuntimeContracts");
+    expect(skill).toContain("normalized in the reference picture");
+    expect(skill).toContain("omitted_count > 0");
+    expect(skill).toContain("status(reference_package_path=..., include_reference_images=true, reference_image_ids=...)");
+    expect(skill).toContain("paint_texture_transaction");
+    expect(skill).toContain("expected_revision");
+    expect(skill).toContain("`get_texture` uses `texture`");
+    expect(skill).toContain("`paint_texture_transaction` uses `texture_id`");
 
     const captureStart = camera.indexOf("createTool(cameraToolDocs[3].name");
     const capture = camera.slice(captureStart);

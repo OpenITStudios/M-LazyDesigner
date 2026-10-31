@@ -66,6 +66,16 @@ consumers using alpha as an emissive/color mask, explicitly select
 profile, neither mode establishes a material or visual PASS; one-sided
 opacity holes and alpha-mask differences remain advisory evidence.
 
+### Exact reference pixels → native mapped-material verification
+
+Control's `texture_surface_regions` is a **bounded source annotation index**, not a detected mask, material palette, native Cube-face UUID or texture UV. It may omit other parts/views when more than six candidates exist. Never paint the first six regions as if they were the entire object; choose the smallest source-confirmed material/identity discrepancy.
+
+- If the approved source image pixels are absent from the current multimodal comparison, request only the relevant current Texturing-stage images via `status(reference_package_path=..., include_reference_images=true, reference_image_ids=[...])`. The returned image bytes, declared view and SHA identify that source revision; the package's `APPROVED` label alone cannot attest visual similarity or rights.
+- A source `box_uv=[left,top,right,bottom]` is in **normalized source-image space**. Do not feed those four numbers to an atlas crop, `paint_texture_transaction`, or `manage_uv_layout`. Use existing `inspect_elements(mode=detail)` for exact face/texture ownership only when unknown, with the current UV layout and revision.
+- The installed Runtime's existing `get_texture` extension accepts `texture`, optional `region={x,y,width,height}`, and `expected_revision`; it supplies a fresh full-bitmap revision and a region PNG when selected. `paint_texture_transaction` instead uses `texture_id` plus required full-bitmap `expected_revision`. An animated atlas crop uses absolute bitmap pixels; one-frame UV is frame-local, while a cross-frame crop cannot be treated as one logical UV rectangle.
+- Compare **three distinct pieces of evidence** when making a visual decision: the approved source pixels, the selected current atlas region or affected-region receipt PNG, and a fresh shaded `capture_model_views` image showing the actual mapped faces. Source metadata, a clean pixel-craft diagnostic, and an atlas PNG alone cannot establish mapped appearance. A studio-lit concept illustration is not authority to bake its lights into every face.
+- For a bounded paint mutation, prefer the returned `affected_region_png` and its revision/extent from `paint_texture_transaction` to an immediate redundant `get_texture` read. Re-read only if the desired face/extent is not covered, the revision is stale, the render/alpha semantics changed or the mapped model view is still needed; never confuse the changed atlas pixel crop with a model-view visual PASS.
+
 ## Correction Convergence
 One visible cause owns one correction round. Reuse the latest atlas UUID, mapped-face state, mutation receipt, and fresh comparable capture when they already answer the next decision.
 
