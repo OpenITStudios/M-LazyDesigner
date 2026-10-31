@@ -121,7 +121,15 @@ function acceptedGolden(): GoldenAuthoringDocument {
       capability: "manage_cubes", required_for_decision: true,
     },
     {
-      index: 1, kind: "verify", success: true,
+      index: 1, kind: "mutate", success: true,
+      capability: "paint_texture_transaction", required_for_decision: true,
+    },
+    {
+      index: 2, kind: "mutate", success: true,
+      capability: "create_animation", required_for_decision: true,
+    },
+    {
+      index: 3, kind: "verify", success: true,
       capability: "capture_model_views", required_for_decision: true,
     },
   ];
@@ -138,8 +146,8 @@ function acceptedUsage(sourceSha: string): UsageDocument {
   doc.runs[0]!.task_success = true;
   doc.runs[0]!.accepted_result = true;
   doc.runs[0]!.calls = {
-    total: 2, search: 0, describe: 0, inspect: 0,
-    mutate: 1, verify: 1, recovery: 0,
+    total: 4, search: 0, describe: 0, inspect: 0,
+    mutate: 3, verify: 1, recovery: 0,
   };
   return doc;
 }
@@ -211,9 +219,9 @@ describe("golden session finalizer", () => {
     expect(report).toMatchObject({
       state: "ACCEPTED", quality_verdict: "PASS",
       proof_scope: "LIVE_BLOCKBENCH",
-      usage: { model: "gpt-5.6-sol", calls_total: 2 },
+      usage: { model: "gpt-5.6-sol", calls_total: 4 },
     });
-    expect(report.metrics?.tool_calls_to_accepted_result).toBe(2);
+    expect(report.metrics?.tool_calls_to_accepted_result).toBe(4);
   });
 
   test("incomplete Golden drafts may retain SHA-unknown telemetry only as diagnostics", () => {

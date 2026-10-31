@@ -1,4 +1,8 @@
 import goldenCorpus from "../../tests/fixtures/golden-task-cases.json";
+import {
+  capabilityOperationClassByName,
+  capabilityStageByName,
+} from "../../lib/capabilities/manifest";
 
 export type GoldenQualityVerdict = "PASS" | "FAIL" | "UNVERIFIED";
 export type GoldenTraceKind =
@@ -272,6 +276,24 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
       throw new Error(
         `${prefix} accepted result requires a successful final verification after the last mutation.`
       );
+    }
+    // A complete authored object must actually visit its required phases.
+    // Previously a lone Cube mutation + front capture could be labelled a
+    // fully accepted Geometry/Texture/Animation result by synthetic evidence
+    // strings alone. Reuse the canonical tool manifest, not another tool map.
+    // This proves only trace coverage; each real visual/natively persisted
+    // result still needs independent current-revision criterion evidence.
+    for (const phase of task.phases) {
+      if (!run.trace.some(event =>
+        event.kind === "mutate" && event.success === true &&
+        typeof event.capability === "string" &&
+        capabilityStageByName(event.capability) === phase &&
+        capabilityOperationClassByName(event.capability) === "MUTATION"
+      )) {
+        throw new Error(
+          `${prefix} accepted full-asset result requires a successful ${phase} authoring mutation trace event.`
+        );
+      }
     }
     const humanAcceptance = evidenceByCriterion.get("human_acceptance");
     if (humanAcceptance?.verdict !== "PASS" || !humanAcceptance.evidence_ref) {

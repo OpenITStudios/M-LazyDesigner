@@ -89,6 +89,8 @@ Animation evidence matching the current approved visual, Bedrock export and
 save/reopen parity, no critical defect, and separate documented
 `human_acceptance` PASS. Any missing or stale evidence leaves it UNVERIFIED.
 
+**Full-asset trace completeness:** an accepted run must contain at least one successful **authoring mutation** in each required phase (Geometry, Texturing and Animation) as classified by the canonical capability manifest. A successful `manage_cubes` and one screenshot cannot stand in for a finished Texturing/Animation job; selection/control operations do not count as craft. This is a low-cost check of the already-recorded Gateway trace, not three new test tasks, a pixel-level verifier or an aesthetic verdict. Save/reopen/export still require their existing independent evidence; valid stage calls do not prove they happened, and native/manual work outside the Gateway cannot be falsely counted as an automated Codex authoring trace.
+
 The runner also requires a **clean Git worktree**, including no staged,
 unstaged or nonignored untracked source, before opening native MCP. It rechecks
 the same Git HEAD and clean source after the session. A change or failed Git

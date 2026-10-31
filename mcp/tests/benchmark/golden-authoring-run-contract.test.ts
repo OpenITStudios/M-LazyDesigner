@@ -59,6 +59,24 @@ function acceptedRun(): GoldenAuthoringDocument {
           },
           {
             index: 2,
+            kind: "mutate",
+            success: true,
+            capability: "paint_texture_transaction",
+            required_for_decision: true,
+            result_bytes: 1200,
+            latency_ms: 180,
+          },
+          {
+            index: 3,
+            kind: "mutate",
+            success: true,
+            capability: "create_animation",
+            required_for_decision: true,
+            result_bytes: 1200,
+            latency_ms: 180,
+          },
+          {
+            index: 4,
             kind: "verify",
             success: true,
             capability: "capture_model_views",
@@ -104,28 +122,62 @@ describe("golden authoring accepted-result benchmark", () => {
     }
   });
 
+  test("one complete Golden cannot accept empty Texture or Animation work as synthetic PASS", () => {
+    const baseline = acceptedRun();
+    expect(() => validateGoldenAuthoringDocument(baseline)).not.toThrow();
+    for (const [stage, capability] of [
+      ["geometry", "manage_cubes"],
+      ["texturing", "paint_texture_transaction"],
+      ["animation", "create_animation"],
+    ] as const) {
+      const missing = structuredClone(baseline);
+      const event = missing.runs[0]!.trace.find(entry =>
+        entry.kind === "mutate" && entry.capability === capability
+      )!;
+      event.success = false;
+      expect(() => validateGoldenAuthoringDocument(missing))
+        .toThrow(`successful ${stage} authoring mutation trace event`);
+    }
+    // A Stage-labelled state/selection control operation cannot replace
+    // artistic texture authoring, even if its trace calls itself a mutate.
+    const onlySelection = structuredClone(baseline);
+    onlySelection.runs[0]!.trace[2]!.capability = "texture_selection";
+    expect(() => validateGoldenAuthoringDocument(onlySelection))
+      .toThrow("successful texturing authoring mutation trace event");
+    // An unknown operation name cannot impersonate a known stage.
+    onlySelection.runs[0]!.trace[2]!.capability = "generative_texture_magic";
+    expect(() => validateGoldenAuthoringDocument(onlySelection))
+      .toThrow("successful texturing authoring mutation trace event");
+    // Draft reports never claim PASS and remain valid without phase traces.
+    const draft = structuredClone(baseline);
+    draft.runs[0]!.accepted_result = null;
+    draft.runs[0]!.quality_verdict = "UNVERIFIED";
+    draft.runs[0]!.trace = [];
+    expect(() => validateGoldenAuthoringDocument(draft)).not.toThrow();
+  });
+
   test("an earlier successful verification cannot accept a newer mutation", () => {
     const document = acceptedRun();
     document.runs[0]!.trace.push({
-      index: 3, kind: "mutate", success: true,
+      index: document.runs[0]!.trace.length, kind: "mutate", success: true,
       capability: "manage_cubes", required_for_decision: true,
     });
     expect(() => validateGoldenAuthoringDocument(document))
       .toThrow("successful final verification after the last mutation");
     document.runs[0]!.trace.push({
-      index: 4, kind: "verify", success: false,
+      index: document.runs[0]!.trace.length, kind: "verify", success: false,
       capability: "capture_model_views", required_for_decision: true,
     });
     expect(() => validateGoldenAuthoringDocument(document))
       .toThrow("successful final verification after the last mutation");
-    document.runs[0]!.trace[4]!.success = true;
+    document.runs[0]!.trace.at(-1)!.success = true;
     expect(() => validateGoldenAuthoringDocument(document)).not.toThrow();
   });
 
   test("a failed final verification invalidates an earlier successful check even without later mutations", () => {
     const document = acceptedRun();
     document.runs[0]!.trace.push({
-      index: 3, kind: "verify", success: false,
+      index: document.runs[0]!.trace.length, kind: "verify", success: false,
       capability: "capture_model_views", required_for_decision: true,
     });
     expect(() => validateGoldenAuthoringDocument(document))
@@ -135,7 +187,7 @@ describe("golden authoring accepted-result benchmark", () => {
   test("an unsuccessful or unknown last mutation still requires a fresh verification", () => {
     const document = acceptedRun();
     document.runs[0]!.trace.push({
-      index: 3, kind: "mutate", success: false,
+      index: document.runs[0]!.trace.length, kind: "mutate", success: false,
       capability: "manage_cubes", required_for_decision: true,
     });
     expect(() => validateGoldenAuthoringDocument(document))
@@ -157,7 +209,7 @@ describe("golden authoring accepted-result benchmark", () => {
   test("reports efficiency only after explicit accepted PASS evidence", () => {
     const summary = summarizeGoldenAuthoringDocument(acceptedRun());
     expect(summary.runs[0]?.metrics_available).toBe(true);
-    expect(summary.runs[0]?.metrics.tool_calls_to_accepted_result).toBe(3);
+    expect(summary.runs[0]?.metrics.tool_calls_to_accepted_result).toBe(5);
     expect(summary.runs[0]?.metrics.redundant_readbacks).toBe(0);
     expect(summary.runs[0]?.metrics.total_tokens).toBe(4200);
     expect(summary.aggregate.accepted_measured_runs).toBe(1);
@@ -208,7 +260,7 @@ describe("golden authoring accepted-result benchmark", () => {
   test("counts non-decision inspection as redundant readback only after acceptance", () => {
     const document = acceptedRun();
     document.runs[0]!.trace.push({
-      index: 3,
+      index: document.runs[0]!.trace.length,
       kind: "inspect",
       success: true,
       capability: "inspect_elements",
@@ -219,7 +271,7 @@ describe("golden authoring accepted-result benchmark", () => {
 
     const summary = summarizeGoldenAuthoringDocument(document);
     expect(summary.runs[0]?.metrics.redundant_readbacks).toBe(1);
-    expect(summary.runs[0]?.metrics.tool_calls_to_accepted_result).toBe(4);
+    expect(summary.runs[0]?.metrics.tool_calls_to_accepted_result).toBe(6);
   });
 
   test("rejects accepted corrections without the exact starting model hash", () => {
@@ -308,8 +360,9 @@ describe("golden authoring accepted-result benchmark", () => {
   test("requires successful mutation and verification observations", () => {
     for (const kind of ["mutate", "verify"] as const) {
       const doc = acceptedRun();
-      const event = doc.runs[0]!.trace.find(x => x.kind === kind)!;
-      event.success = false;
+      for (const event of doc.runs[0]!.trace.filter(x => x.kind === kind)) {
+        event.success = false;
+      }
       expect(() => validateGoldenAuthoringDocument(doc))
         .toThrow(`recorded successful ${kind === "mutate" ? "mutation" : "verification"} trace`);
     }
