@@ -101,7 +101,10 @@ describe("texture runtime wiring policy", () => {
       });
     }
     expect(diagnostics.pixel_craft.state).toBe("available");
-    expect(diagnostics.pixel_craft.local_transitions?.quantized_color_transition_ratio).toBe(1);
+    if (diagnostics.pixel_craft.state !== "available") {
+      throw new Error("Expected region-scoped pixel craft evidence.");
+    }
+    expect(diagnostics.pixel_craft.local_transitions.quantized_color_transition_ratio).toBe(1);
     expect(diagnostics.pixel_craft.visual_verdict).toBe("not_evaluated");
     expect(diagnostics.color_profile.palette.map(item => item.hex).sort())
       .toEqual(["#0000ff", "#ff0000"]);
@@ -113,6 +116,9 @@ describe("texture runtime wiring policy", () => {
     modified[0] = 41;
     const next = await buildTextureEvidenceSnapshot(modified, 4, 2, { region });
     const changed = buildTextureCraftEvidence(next);
+    if (changed.pixel_craft.state !== "available") {
+      throw new Error("Expected current region-scoped pixel craft evidence.");
+    }
     expect(Array.from(next.rgba)).toEqual(Array.from(current.rgba));
     expect(changed.pixel_craft.evidence_revision)
       .not.toBe(diagnostics.pixel_craft.evidence_revision);
