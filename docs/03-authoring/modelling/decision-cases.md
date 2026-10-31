@@ -13,6 +13,9 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 - **Recipe decision:** retain dimensional constraints and primary-mass identity, but require current reference claim IDs before realizing specific placements.
 - **Counterexample (hypothetical):** infer 4-unit depth solely because another skeleton example has that value.
 - **Proof required:** reference-paired front/side/top as applicable, confirmed scale, Geometry bounds and current visual comparison; source facts alone cannot award PASS.
+- **Positive case (hypothetical):** Confirmed scale and compatible front/side views establish an asset-specific depth without copying a sample ratio.
+- **Ambiguous case (hypothetical):** Perspective-only camera scale or inconsistent views leave depth UNVERIFIED; no guessed back volume.
+- **Consumer / limit:** Reference Package constraints plus existing Geometry bounds/Recipe checks; neither a source JSON nor a name reconstructs missing depth.
 
 ## G-P02 Primary Silhouette Mass
 
@@ -23,6 +26,9 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 - **Recipe decision:** preserve the user/reference envelope; compare a coherent blockout first, then add only identity-bearing secondary structure.
 - **Counterexample (hypothetical):** increase the number of face cubes on a model with an incorrectly sized torso.
 - **Proof required:** matched silhouette and cross-view ratios, not raw cube count or coordinate-only similarity.
+- **Positive case (hypothetical):** An approved outline establishes head/body/primary masses and their readable identity before decorative parts.
+- **Ambiguous case (hypothetical):** One stylized 3/4 image gives no reliable hidden mass/depth: retain supported blockout, defer hidden detail.
+- **Consumer / limit:** Modelling blockout and current matched model views; Cube count or static bounds cannot certify a silhouette.
 
 ## G-P03 Protruding Form Versus Surface Marking
 
@@ -33,6 +39,9 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 - **Recipe decision:** `THREE_DIMENSIONAL` with grounded geometry reasons -> `GEOMETRY`; supported `SURFACE_DETAIL` without 3D reasons -> `TEXTURE`; unsupported -> `REVIEW_REQUIRED`.
 - **Counterexample (hypothetical):** interpret every bright trim line as a separate protruding Cuboid.
 - **Proof required:** exact reference feature/view claim, independent 3D contribution, current front/side inspection and Texture handoff where applicable.
+- **Positive case (hypothetical):** A visible protruding horn changes outer contour and receives Geometry ownership; a painted stripe remains Texture.
+- **Ambiguous case (hypothetical):** One lit edge could be a raised ridge or a highlight: defer 3D classification until a comparable view or explicit requirement supports it.
+- **Consumer / limit:** `mcp/lib/authoringRecipe/featureDecision.ts` routes explicit source-owned features; it cannot inspect image pixels or approve the choice.
 
 ## G-P04 Sloped Form Versus Staircase
 
@@ -43,23 +52,23 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 - **Recipe decision:** compare single-rotated and bounded-segment options; escalate only for material silhouette/contact difference.
 - **Counterexample (hypothetical):** replace a deliberately stepped architectural feature with a smoothed diagonal.
 - **Proof required:** side and 3/4 reference correspondence, pivot/orientation check and export compatibility.
+- **Positive case (hypothetical):** Approved side/3/4 views show a genuine rigid slope; one valid rotated Cuboid preserves its contour.
+- **Ambiguous case (hypothetical):** A stylized staircase, hidden contour, unknown joint or incompatible transform means no automatic one-Cube simplification.
+- **Consumer / limit:** `mcp/lib/authoringRecipe/geometryCurves.ts` reviews supplied curve samples only; no inferred source shape or automated silhouette verdict.
 
 ## G-P05 Joint Pivot And Bone Parenting
 
-- **Domain / canonical owner:** `GEOMETRY`; [Geometry Standard](standard.md) (`Transform Ownership`, `Pivot / Origin`) with the one selected Modelling profile (e.g. `profiles/mechanical.md` for a primarily mechanical assembly). User requirements and the approved current reference remain higher authority.
-- **Decision:** when an actual articulated part is supported, establish its structural Bone/Group transform owner, parent and physically meaningful joint/hinge pivot; do not infer these from a part name or an unrelated Cube center.
-- **Apply:** current reference and explicit functional requirements establish the moving part, attachment side, relevant axis/direction and parent relationship. A transform owner is justified by articulation, attachment or shared motion, not by a fixed bone-count target.
-- **Reject/defer:** a bone name, `door_y`-style axis token, apparent Cube center or an `ANCHOR` alignment alone is used to guess the hinge. A static decoration/texture seam does not justify an extra moving Bone. Unknown hinge side, articulation or parent remains `UNVERIFIED` for that decision.
-- **Source evidence:** S1's pinned Mojang skeleton has `rightArm` parent `body`, pivot `[-5,22,0]`, and `rightItem` parent `rightArm`; S2's pinned bat has `rightWingTip` parent `rightWing`, pivot `[-3.5,7,0]`. S5's Bedrock schema documents parent and pivot meanings. These are **observed source-file relationships**, not a transferred target pivot or proof of animated clearance.
-- **Positive case (hypothetical):** the approved front and side views identify a hinged panel attached to an exact frame side, its target motion axis and clearance envelope. Preserve the frame/panel part IDs, create the necessary independent transform owner at the evidenced hinge, and verify the native parent/pivot separately from positional attachment.
-- **Counterexample (hypothetical):** set the hinge at minimum X merely because the Cube is named `door_y`; it can rotate around the wrong edge or intersect its frame.
-- **Ambiguous case (hypothetical):** the front image shows a panel but no hinge side, attachment depth or required movement. Keep its supported static mass; defer only hinge/parent/axis decisions rather than placing a guessed Pivot or blocking unrelated Geometry.
-- **Recipe decision:** retain explicitly evidenced attachment and transform ownership. The `ANCHOR` constraint in `mcp/lib/authoringRecipe/geometryAssembly.ts` is **positional only**, and `semantic_group` is a label, **not** a verified native Bone parent. Do not author Animation keyframes during Geometry.
-- **Exact technical consumers:** `mcp/lib/authoringRecipe/geometryAssembly.ts` reports read-only relationship/identity questions; `mcp/lib/rig/semanticRig.ts` can compile a source-specified joint/anchor plan but cannot attest actual native parenting or intended hinge from names. The existing Blockbench hierarchy/pivot tools and Geometry verification retain mutation/acceptance ownership; no extra planner, tool or route.
-- **Required current evidence:** exact reference claim/view ID for hinge side and articulation; part/Cube/Group UUIDs; current parent hierarchy, transforms and pivots; chosen axis, clearance requirements and target Bedrock/Blockbench compatibility. A mere matching source hash is not that evidence.
-- **Proof required:** relevant front/side and rest/open/closed or other extreme poses, exact native parent/pivot readback, attachment and collision/clearance checks, and saved/reopened/exported identity when required. Pure owner tests `mcp/tests/authoring-recipe-assembly.test.ts` and `mcp/tests/semantic-rig.test.ts` cover source semantics only, not native/visual acceptance.
-- **Provenance / usage:** S1/S2 are pinned Mojang-owned sample JSON, consulted for structural facts only; S5 is rolling official documentation. Do not copy sample geometry as a model preset; rights and target-version checks remain independent.
-- **Maturity / claim limit:** **CANDIDATE**. Pinned source-file facts were inspected; source regressions were authored previously but were **NOT EXECUTED** in this audit; matching native pivot, playback/clearance and reference-visual quality remain **UNVERIFIED**.
+- **Decision:** When articulation is supported, assign the Bone parent and use the actual joint/hinge pivot.
+- **Apply:** Approved reference/requirement identifies moving part, attachment side, axis and parent; confirm current identities.
+- **Reject/defer:** Name `door_y`, Cube center or Recipe `ANCHOR` cannot prove hinge side/pivot. Unknown motion remains unresolved.
+- **Recipe decision:** `ANCHOR` is positional; `semantic_group` is not native Bone parenting. Preserve transform ownership; no Geometry-stage keyframes.
+- **Proof required:** Inspect native parent/pivot IDs, reference-matched attachment, rest/extreme pose clearance and required export.
+- **Source evidence:** S1 skeleton `rightArm` parent `body`, pivot `[-5,22,0]`; S2 bat `rightWingTip` parent `rightWing`, pivot `[-3.5,7,0]`; S5 Bone schema.
+- **Positive case (hypothetical):** Confirmed hinge side/axis supports a panel Bone at the evidenced joint.
+- **Counterexample (hypothetical):** Guessing a minimum-X hinge from `door_y` rotates around the wrong edge.
+- **Ambiguous case (hypothetical):** Hinge/motion unseen: retain supported static shape; defer only joint/pivot.
+- **Owner / consumer:** `standard.md`; `geometryAssembly.ts` read-only relations, `rig/semanticRig.ts` declared rig plan; native hierarchy tool executes.
+- **Provenance / status:** S1/S2 pinned Mojang samples, S5 rolling schema; **CANDIDATE**. Bun/native/visual acceptance **NOT EXECUTED**.
 
 ## G-P06 Negative Space Versus Painted Shadow
 
@@ -70,6 +79,9 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 - **Recipe decision:** when source evidence confirms an opening, plan the boundary/structure; otherwise request a relevant side/back view.
 - **Counterexample (hypothetical):** cut a hole into a chest plate because its texture shows a deep dark stripe.
 - **Proof required:** source-compatible multi-view/occlusion evidence and relevant native contact/surface review.
+- **Positive case (hypothetical):** Front and side/back evidence confirms an opening with a true visible boundary and required clearance.
+- **Ambiguous case (hypothetical):** A dark recess in one shaded view may be paint, occlusion or real depth; preserve uncertainty instead of cutting Geometry.
+- **Consumer / limit:** `mcp/lib/geometry/surfaceEvidence.ts` reports bounded geometry observations, not an authenticated through-hole/visual PASS.
 
 ## G-P07 Symmetry Versus Intentional Asymmetry
 
@@ -80,6 +92,9 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 - **Recipe decision:** declare symmetry relationship only with current feature evidence; `uv_policy`, `texture_policy`, and `rig_policy` remain independently reviewed.
 - **Counterexample (hypothetical):** mirror an armored right arm onto a bare left arm, or assume UV mirror automatically creates an opposite Cube.
 - **Proof required:** current left/right reference views, pair identities, shape/UV/rig comparison and asymmetry exception handling.
+- **Positive case (hypothetical):** Reference-matched left/right supports equivalent masses while keeping separate part IDs and independently reviewed UV/rig.
+- **Ambiguous case (hypothetical):** Unseen opposite surface, decals or unequal functional joints make mirroring unverified until paired evidence exists.
+- **Consumer / limit:** `mcp/lib/authoringRecipe/symmetry.ts` plans declared relationships; Bedrock UV `mirror` never duplicates a Bone/Cube.
 
 ## G-P08 Thin Plane And UV Compatibility
 
@@ -90,6 +105,9 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 - **Recipe decision:** preserve functionally necessary thin Geometry; use explicit Per-face UV when required, never automatically thicken a plane or discard a small 3D feature.
 - **Counterexample (hypothetical):** apply a sub-unit Box UV rule to reject every zero-thickness foliage or wing carrier.
 - **Proof required:** exact cube spans and UV mode, native template/face-pixel mapping, mapped texture and reference-based visual confirmation.
+- **Positive case (hypothetical):** Zero-span wing uses Per-face UV when needed.
+- **Ambiguous case (hypothetical):** Unknown UV mode or thickness: defer flattening/paint.
+- **Consumer / limit:** `mcp/lib/geometry/cubeSpan.ts` guards positive sub-unit Box UV only.
 
 ## Source Identity And Rights
 
@@ -117,9 +135,10 @@ hypothetical rejection cases, but **no actual external positive/negative
 visual acceptance experiment has run**. They remain `SOURCE-GROUNDED_CANDIDATE`
 and cannot directly authorize any Recipe mutation. Use the existing
 `mcp/lib/semantic/knowledge.ts` and `mcp/lib/authoringRecipe/` for
-targeted retrieval and decision testing. Runtime currently indexes only its
-bundled Bedrock workflow: these cards are **NOT yet installed Runtime
-knowledge**. G1 proof requires deterministic source regression execution
-on the exact commit; G2 requires wired verified on-demand retrieval without
-generated-manifest hand editing; G3 requires live Blockbench and visual
-comparison against identical approved references.
+targeted retrieval and decision testing. The Runtime source already **Bun-embeds all eight G1 cases** with the existing
+Bedrock workflow for **opt-in Recipe planning/inspection**, using
+`mcp/server/runtime/recipes/authoring/knowledgeRuntime.ts` and bounded
+source/section-hash guidance. This is G2 **source-level integration**, not
+proof of an installed or visually correct model. Executed regression/Bun,
+native Blockbench and same-reference G3 visual/quality acceptance remain
+**NOT EXECUTED / UNVERIFIED**; no candidate is promoted.

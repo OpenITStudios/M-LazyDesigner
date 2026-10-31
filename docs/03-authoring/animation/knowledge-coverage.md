@@ -51,6 +51,14 @@ No row is a mandate to add code. The protected native sampling/restoration gap c
 | **A15/A16 scalar scale and round-trip** | Reject nonfinite scalar scale before `create_animation`; preserve finite scalar 0, fractional, negative values; compare saved/reopened/exported animation after native execution | `NaN` or ±`Infinity` passed to native tools; keyframe reductions that remove events; treating a typed source fixture as Codec/runtime/visual acceptance |
 
 The four paired decisions above are selected from the 16 bounded candidate cases below. These are **review/acceptance scenarios**, not new test suites or measured benchmarks.
+ 
+**Remaining K2 ambiguity and consumer boundaries (all CANDIDATE / source-only):**
+
+- **A01 locomotion stance:** `mcp/lib/animation/contactEvidence.ts` checks **caller-supplied** world-marker samples; `rootMotionAnalysis.ts` can observe authored root tracks. Without attested sampling window, support plane and current playback, stance/foot locking remains UNVERIFIED. `pair` motion cannot stand in for a planted foot.
+- **A08 moving fishing grip:** The same `contactEvidence.ts` distinguishes a moving hand/tool `pair` from world-fixed/planted contact. Unknown rod/hand marker identities, hierarchy or clip phase require REVIEW; a correct caller-supplied distance does not prove live attachment.
+- **A15 scalar and round-trip:** `mcp/lib/animation/motionRecipe.ts` rejects nonfinite scale, but a valid compiled number does **not** certify saved/reopened/exported clip semantics; preserve the existing native verification owner and exact current revision.
+- **A16 key reduction:** `mcp/lib/animation/quality.ts` offers strict-linear numeric candidates only. Missing interpolation/event/contact identity or Euler-wrap proof means no automatic key deletion. A15 numeric validity and A16 reduction are **separate proof scopes**, even when summarized in one K2 row.
+
 
 ### A12 — Mirrored Euler Action, Source-Grounded Decision Case
 

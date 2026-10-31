@@ -10,7 +10,7 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **AUDIT:** Geometry: 8 G1 candidate cases; Texture/UV: 4 K3 candidates; Animation: 30 families, 4 paired decisions, 16 scenarios and 145 indexed references. Source presence and revision hashes are not native/visual acceptance. No cases are promoted by this audit.
 
-**NEXT:** G-P05, TEX-P01 and A12 now have source-grounded positive/reject/ambiguous and consumer/proof boundaries. Compare remaining cases against these pilots; fix only substantive gaps. Engine features remain HOLD; CI disabled, Bun/native/Golden **NOT EXECUTED**.
+**NEXT:** Remaining G1/K3/K2 cases reviewed; G-P05 excerpt budget and stale integration claims corrected. Next prove focused source regressions and native/visual quality when available. Engines HOLD; Bun/native/Golden **NOT EXECUTED**.
 
 ## Deferred acceptance — one full-asset Golden (not cancelled)
 
