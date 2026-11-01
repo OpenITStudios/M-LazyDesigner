@@ -524,3 +524,35 @@ An external [Eann Rodriguez — Phoenix Guardian](https://blockbenchworkshop.com
 
 Original-source motion readability and temporal art quality remain UNKNOWN across these external sources. Do not promote the Desert Dog or any marketplace listing as a universal animation master or infer train/redistribution rights from public accessibility. Research only, no internal generator test, Golden Assets or engine changes.
 
+
+## Working Art-Craft Knowledge v0.6 — Selective emotional-state motions and non-humanoid research contrasts (2026-11-01; RESEARCH SYNTHESIS)
+
+Evidence is the original creator listing and clip-name metadata. No public workshop animation was played in the 3D viewer, no creator GIF was successfully decoded, no externally authored animation file or keyframe curves were inspected, and no installed Blockbench/native result exists. Source titles and community comments document *intent or reaction*, not verified timing, acting quality or contact. This does not request generator testing or Golden Assets.
+
+### AK-18 — A narrative state can selectively modify some actions without cloning the whole clip library
+
+**Distinct question from AK-14:** AK-14 studies carrying an item during different physical movement modes (Allay idle/fly). Here the focus is **the same character's emotional or combat state**: should every action have a duplicate state version, or only actions whose *visible performance* changes meaningfully?
+
+**Original source fact:** [Chieftain by nyxaris](https://blockbenchworkshop.com/model/nyxaris/chieftain) lists 10 clips: idle, walk, run, attack, slam, roar, plus idle enraged, attack enraged, slam enraged and roar enraged. Thus the published inventory **selectively** duplicates four named action categories under enraged but does NOT list separate enraged walk/run clips. The source states Modded entity format, 57 elements, 17 bones and two textures. Neither its animation data nor playback was inspected; the inventory alone cannot reveal whether the enraged actions actually change amplitude, pose, speed, material, contact or effects.
+
+**Independent contrast:** [Skeleton Lord by anim](https://blockbenchworkshop.com/model/anim/skeleton-lord) lists statue, statue nocrystals, idle, walk/left/right, run, spell and knockback in a Generic project. These labels suggest theatrical/presentation and combat/action categories, not a guaranteed character state machine, transformation or smooth animation. A viewer's praise of expressive animations is a community impression only.
+
+**Research interpretation:** Different emotional/theatrical states may benefit from distinct key poses, rests, recoil or accessory emphasis **only when** the approved reference supports their different visible intent. There need not be a full Cartesian product of all movement verbs x all emotional states. Reusing an unchanged locomotion cycle can sometimes be appropriate; a highly characterized frenzy might demand a new gait. The decisive criterion is the **visible story**, not the inventory count.
+
+**APPLY:** User-approved character actually has normal/enraged, statue/awakened, calm/hostile or other discernible motion states; specific gestures are documented as perceptually different.
+
+**REJECT / UNKNOWN:** Automatically duplicate every clip for each state, infer a rage speed multiplier or controller transition from labels alone, force combat scripts or gameplay AI into visual asset authoring, or assert an expressive 3D performance from a comment. Source playback, bone transforms and exact timing remain UNOBSERVED.
+
+**Owner:** Existing Animation motion intent, AK-01 causal acting, AK-05 clip labels, AK-14 mode-specific poses; the newly distinct question is selective *emotional state × action* differentiation. No new animation controller, gameplay behavior, variant engine or production preset.
+
+### Cross-family motion study — strengthen AK-03 and AK-06 without inflating case count
+
+| Original source | Confirmed author/metadata description | Research boundary for the actual observed motion |
+| --- | --- | --- |
+| [ACTG Australasian Swamphen](https://actg.itch.io/australasian-swamphen) | One adult and one chick model, each advertising Idle, Walking and Flying; CC0 and creator disclosure that no generative AI was used | Same named modes may need different age-specific stride/flap proportions, but no original curves, body-frame movement or motion quality directly viewed |
+| [ACTG Ocean Bed nine-model pack](https://blockbenchworkshop.com/pack/atcg/ocean-bed) | Flatworms, sea spider, sea cucumber and brittle star; each listing says animated, CC0 per model | Source gallery demonstrates breadth of body plans, NOT accurate inferred crawling/undulation. A worm cannot be judged by biped foot-plant questions without real source motion |
+| [ACTG Sea Spider](https://blockbenchworkshop.com/model/atcg/sea-spider) | Modded entity model, 48 elements, 53 bones, one 128x128 texture, idle and move listed | A more numerous skeleton than cubes is possible in declared metadata, but without source relationships no leg-gait mechanism or playback style can be inferred. No standard for limbs-per-bone |
+| [claypandaoff Amethyst and Astral Seahorses](https://blockbenchworkshop.com/model/claypandaoff/amethyst-seahorse) | Both Bedrock, 98 elements, 19 bones, 4 named actions for swim/rest/float/hurt/death and matching catalog counts | Cosmetic variants may advertise the same action *categories*. Equal names and counts do not prove clips are byte-identical, artistically equivalent or naturally fluid |
+
+**Format and legal separation:** ACTG examples are artist-published CC0; Workshop model format may be Generic/Modded and not native Bedrock. Chieftain is Modded, Skeleton Lord Generic, paid Seahorses claim Bedrock; names are not independent format-conformance proof. ArtsByKev Sketchfab professional pieces explicitly carry NoAI restrictions, so do not import those models/frames into any AI workflow. All observations in this section are **reference research only**. Neither user’s current generator nor any Golden Asset was tested.
+

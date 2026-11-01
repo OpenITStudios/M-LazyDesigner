@@ -546,3 +546,32 @@ Goblin Chef: published artist text describes **small 3D detail + eraser-defined 
 
 **No new TK card because these findings sharpen existing TK-03, TK-06, TK-09 and TK-15 rather than establishing a separate unresolved painting decision.** This is intentionally disciplined Knowledge curation, not a lack of research.
 
+
+## Q. Working Art-Craft Knowledge v0.6 — Aesthetic variation without confusing the underlying texture source (2026-11-01; RESEARCH SYNTHESIS)
+
+This cohort compares original single-work promotional thumbnails from [claypandaoff](https://blockbenchworkshop.com/model/claypandaoff/amethyst-seahorse), [anim](https://blockbenchworkshop.com/model/anim/skeleton-lord) and [nyxaris](https://blockbenchworkshop.com/model/nyxaris/chieftain). Actual screenshots were viewed, not raw PNG pixels/UV. Catalog texture metadata is not a source atlas and page-level usage licenses are independent of authoring technique. Keep Texture standards and existing TK-01..TK-15 unchanged.
+
+### TK-16 — A convincing cosmetic variant preserves material contrast relationships, not merely hue distance
+
+**Distinct question:** When two fantasy creatures share a near-identical visible silhouette, what makes alternate texture themes readable as *intentional variations of the same subject* rather than arbitrary color shifts?
+
+**Observed artist example:** [Amethyst Seahorse](https://blockbenchworkshop.com/model/claypandaoff/amethyst-seahorse) and [Astral Seahorse](https://blockbenchworkshop.com/model/claypandaoff/astral-seahorse) have essentially matching visible body segmentation, snout and curled tail at the published thumbnail camera. Amethyst uses warmer lavender/violet planes and cream/pale band highlights; Astral uses cooler blue-violet/cyan-accented planes. In both static images, the snout, front plates, eye and distinct tail segments remain identifiable (IMAGE). Source files/bitmap RGB not inspected; there is no evidence that one is the other's source-pixel hue shift or that their UV islands are identical. Both list one 64x64 texture under a commercial Standard license, not permission to copy an atlas.
+
+**Working artist interpretation:** A successful *approved cosmetic* alternative may change hue families while retaining recognizable light/dark separation and material reading at meaningful identity regions. Exact per-pixel ramps may legitimately differ for metal, stone, shell, skin or crystals. Repeated silhouette does not imply a duty to create a second distinct bone hierarchy. A variant that changes age/role/appendages may require Geometry as well and cannot be judged by palette alone.
+
+**APPLY:** Approved user request is a skin/material/theme alternative for a known form; observed focal features and mapped materials remain visually identifiable at their intended scale.
+
+**REJECT / UNKNOWN:** Force a whole-atlas RGB hue rotation with no regard for face/material boundaries; assume the two creator source textures are the same PNG with different HSL; force unique geometry for each cosmetic colorway; rank the purple version higher solely for saturation. Exact source color, UV, seam, PBR and rendering remain UNKNOWN. Existing TK-02 color relationships, TK-03 material identity and TK-05 pack language remain in charge; TK-16 isolates the *intentional cosmetic-theme transition* question.
+
+### Source-specific visual comparisons — refine existing knowledge, not new cards
+
+- [Skeleton Lord](https://blockbenchworkshop.com/model/anim/skeleton-lord): IMAGE shows bright magenta crystals/head accents amid pale skull/teeth, olive cloth and near-black structural gaps. **Observed hierarchy**, not sampled pigment: the strongest color is localized rather than uniformly distributed over all surfaces. A viewer comment praising expressiveness is a person's reaction, not actual observed time-varying motion. Five catalog textures and one listed 256x256 size do not establish five distinct material maps or exact style sophistication.
+- [Chieftain](https://blockbenchworkshop.com/model/nyxaris/chieftain): IMAGE shows variegated green skin, ivory tusks/horns and deep brown straps/hair. A coarse green pixel rhythm appears across large head and upper body; compared with the user's textured Warchief, its material articulation/armor complexity differs. It is a **contrast** in texture density and style rather than evidence of a defect in its original source pixels. Two advertised textures of 256x128 do not imply alpha/PBR, dual outfits or universal high quality.
+- [Fairlins](https://blockbenchworkshop.com/model/anim/fairlins): IMAGE shows flat lilac/pink outfit areas with few strong accents, appropriate to tiny cute villagers. Treat simplicity as style-specific visual rest, not inherently underpainting. The reported five 32x32 textures cannot identify whether they represent variations, separate materials or other project organization without reading actual source.
+
+### Research rights boundary refined by original creator terms
+
+[ACTG Australasian Swamphen](https://actg.itch.io/australasian-swamphen) claims CC0 for an adult/chick source pack; workshop [Ocean Bed](https://blockbenchworkshop.com/pack/atcg/ocean-bed) reports CC0 per item. These are candidates for later lawful *source studying*, but no source ZIP/PNG was acquired here. Workshop commercial [Amethyst Seahorse](https://blockbenchworkshop.com/model/claypandaoff/amethyst-seahorse) explicitly forbids resharing its files and limits its Standard use; public thumbnails are citation references only. On [ArtsByKev's Sketchfab professional examples](https://sketchfab.com/3d-models/end-behemoth-animated-blockbench-model-563bf10892ce484081c0248465c8801e), the **NoAI** notice forbids using the asset as generative-AI data/input; the research does not ingest that model or its textures. A software/project MIT license, uploader license badge, creator artwork copyright and any site acquisition terms are not interchangeable.
+
+**Honest appearance boundary:** Source-page static art can support focal-color, silhouette and theme comparisons, but cannot certify original 64x64/256x128 atlas contents, UV ownership, actual face pixel continuity, motion-time flicker, shader/pigment provenance or performance in Blockbench/Bedrock. No new paint algorithm, texture loader, test or Golden Asset.
+
