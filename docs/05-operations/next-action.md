@@ -2,14 +2,30 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — curated Knowledge adoption (2026-11-01)
+## Primary next — Autonomous Advanced Geometry (2026-11-01)
 
-**USER DECISION:** End research discovery. Convert 56 GK/TK/AK source notes into bounded, useful Geometry, Texture and Animation authoring decisions. Do not use Golden Assets. No new runtime engine, database, public Gateway tool, source-art ingestion, auto-mutation or universal style preset.
+**USER DECISION:** AI-first, zero-touch Geometry within the existing
+LazyDesigner plugin and Gateway. Do not create a separate plugin, a new
+public Gateway surface, a second Recipe engine, or mandatory human UI.
 
-**SOURCE DELIVERY:** P0 activation now includes Control stage Knowledge focus for explicitly SUPPORTED material/emission and motion facts: up to two Texturing pointers (TEX-P01/P03) or one Animation Standard pointer, alongside the earlier bounded Geometry Recipe relevance-first selection. The active specialist reads selected guidance only for an unresolved decision, then checks source/native reference fidelity before correcting. No per-Cube/pixel/keyframe lookup, external data ingestion, new engine or automatic mutation.
+**SOURCE SLICE R3a:** Planar Curve/Taper samples now compile to an existing
+Recipe candidate via authoringRecipe/geometryCurveConstruction.ts. The
+existing service planCurveConstruction[Stored] can use the same plan/apply
+and native Undo adapter. Hand-authored features/relations remain protected.
+Unsupported 3D, unowned evidence and Box UV subunits fail closed.
+R3a does not yet expose a registered AI Runtime capability.
 
-**EVIDENCE:** Pinned Local source ownership and existing bounded case/standard readers reviewed. Source-only positive/negative, truncated-facts and projection regression cases authored; static wiring/size checks performed. Bun/CI NOT EXECUTED (CI disabled), and installed Blockbench/actual visual or animation improvement UNVERIFIED. Deployed plugin requires normal build/reload for source changes; no user-PC prerequisite, release or Golden Assets.
+**PROOF:** Source plus 7 targeted regression scenarios authored. Bun,
+TypeScript/build, CI (disabled), installed Blockbench, native Undo,
+save/reopen, Bedrock export and reference fidelity NOT EXECUTED.
 
+**NEXT:** Validate the source in a capable environment; then expose a
+bounded construct_geometry operation through existing Runtime/Gateway
+and run a disposable Blockbench/Bedrock fixture. Do not promote source
+compilation to visual quality or user approval.
+
+**PRIOR KNOWLEDGE:** Curated Geometry/Texture/Animation decisions remain
+source-linked advisory guidance only, with no mandatory research preload.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

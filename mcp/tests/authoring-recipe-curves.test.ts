@@ -8,6 +8,7 @@ import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureD
 import { reviewRecipeKnowledge } from "@/lib/authoringRecipe/knowledgePlanning";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
+import { buildPlanarCurveRecipeCandidate } from "@/lib/authoringRecipe/geometryCurveConstruction";
 import { readBundledRecipeKnowledgeIndex } from "@/server/runtime/recipes/authoring/knowledgeRuntime";
 
 function recipe(): AuthoringRecipe {
@@ -260,5 +261,142 @@ describe("R3 explicit curved/organic strategy alternatives", () => {
     const ordinary = await service.plan(input, input);
     expect(ordinary.recipe_knowledge?.geometry_proposals[0]?.curve_review)
       .toBeUndefined();
+  });
+});
+
+
+describe("R3a opt-in planar Curve to native Recipe construction", () => {
+  const draft = (): AuthoringRecipe => ({
+    ...recipe(), prototypes: [], patterns: [],
+  });
+
+  test("straight source samples combine into one exact Cube plan without input mutation", () => {
+    const input = draft(), original = structuredClone(input);
+    const result = buildPlanarCurveRecipeCandidate(input, straight());
+    const placements = compileAuthoringRecipe(result.next_recipe).placements;
+    expect(result.summary).toMatchObject({
+      state: "SOURCE_COMPILED_NATIVE_UNVERIFIED",
+      construction: "SINGLE_CUBOID", segment_count: 1,
+      native_mutation_executed: false, reference_content_attested: false,
+    });
+    expect(placements).toHaveLength(1);
+    expect(placements[0]).toMatchObject({
+      from: [-1, -1, 0], to: [1, 1, 8], origin: [0, 0, 4],
+      rotation: [0, 0, 0],
+    });
+    expect(input).toEqual(original);
+  });
+
+  test("planar bend and stepped taper become two concrete rotated Cuboids", () => {
+    const result = buildPlanarCurveRecipeCandidate(draft(), curved());
+    const placements = compileAuthoringRecipe(result.next_recipe).placements;
+    expect(placements).toHaveLength(2);
+    expect(placements[0]!.rotation).toEqual([0, 0, 0]);
+    expect(placements[1]!.rotation.filter(v => v !== 0)).toHaveLength(1);
+    expect(Math.abs(placements[1]!.rotation[1])).toBeCloseTo(45);
+    expect(placements[1]!.origin).toEqual([1.5, 0, 5.5]);
+    expect(result.summary.source_claim_ids).toEqual(["reference:side","reference:top"]);
+    expect(result.summary.rig_review_required).toBe(true);
+    expect(placements.every(p => p.to.every((v,i) => v > p.from[i]!))).toBe(true);
+  });
+
+  test("articulation retains separate segments and requires a rig review", () => {
+    const observation = straight();
+    observation.samples[0]!.joint_after = true;
+    const result = buildPlanarCurveRecipeCandidate(draft(), observation);
+    expect(result.summary.segment_count).toBe(2);
+    expect(result.summary.rig_review_required).toBe(true);
+  });
+
+  test("replacement is explicit, retains sample-pair identities and preserves other features", () => {
+    const initial = buildPlanarCurveRecipeCandidate(draft(), curved());
+    const withOther: AuthoringRecipe = {
+      ...initial.next_recipe,
+      prototypes: [...initial.next_recipe.prototypes, {id:"other",name:"other",size:[2,2,2]}],
+      patterns: [...initial.next_recipe.patterns, {
+        kind:"LINEAR",id:"other-pattern",prototype_id:"other",count:1,
+        axis:"X",spacing:0,start:[20,0,0],feature_id:"other-feature",
+      }],
+      feature_intents: [...initial.next_recipe.feature_intents!, {
+        id:"other-feature",label:"Other structure",visual_role:"THREE_DIMENSIONAL",
+        evidence:"SUPPORTED",evidence_refs:["reference:side"],geometry_reasons:["VOLUME"],
+      }],
+    };
+    const prior = structuredClone(withOther);
+    const adjusted = curved();
+    adjusted.samples[1]!.center = [0,0,5];
+    expect(() => buildPlanarCurveRecipeCandidate(withOther,adjusted))
+      .toThrow("RECIPE_CURVE_CONSTRUCTION_EXPLICIT_REPLACEMENT_REQUIRED");
+    const replaced = buildPlanarCurveRecipeCandidate(withOther, adjusted, {
+      replace_generated: true,
+    });
+    const formerIds = withOther.patterns.slice(0,2).map(p => p.id);
+    expect(replaced.next_recipe.patterns[0]!.id).toBe("other-pattern");
+    expect(replaced.next_recipe.patterns.slice(1).map(p=>p.id)).toEqual(formerIds);
+    expect(withOther).toEqual(prior);
+    expect(compileAuthoringRecipe(replaced.next_recipe).placements).toHaveLength(3);
+  });
+
+  test("unsupported 3D, unknown claim, backtracking, and subunit Box UV reject", () => {
+    const nonplanar = curved();
+    nonplanar.samples[2]!.center = [3,2,7];
+    expect(() => buildPlanarCurveRecipeCandidate(draft(),nonplanar))
+      .toThrow("RECIPE_CURVE_CONSTRUCTION_NONPLANAR");
+    const unknown = curved();
+    unknown.samples[1]!.evidence_ref = "reference:unverified";
+    expect(() => buildPlanarCurveRecipeCandidate(draft(),unknown))
+      .toThrow("RECIPE_CURVE_CONSTRUCTION_REFERENCE_REQUIRED");
+    const backtrack = straight();
+    backtrack.samples[2]!.center = [0,0,1];
+    expect(() => buildPlanarCurveRecipeCandidate(draft(),backtrack))
+      .toThrow("RECIPE_CURVE_CONSTRUCTION_BACKTRACK_REVIEW_REQUIRED");
+    const thin = curved();
+    thin.samples[1]!.cross_section = [0.4,0.4];
+    thin.samples[2]!.cross_section = [0.4,0.4];
+    expect(() => buildPlanarCurveRecipeCandidate(draft(),thin))
+      .toThrow(/sub-unit Box UV/);
+  });
+
+  test("hand-authored features and declared constraints cannot be overwritten", () => {
+    expect(() => buildPlanarCurveRecipeCandidate(recipe(),curved()))
+      .toThrow("RECIPE_CURVE_CONSTRUCTION_EXISTING_FEATURE_PROTECTED");
+    const generated = buildPlanarCurveRecipeCandidate(draft(),curved()).next_recipe;
+    const related: AuthoringRecipe = {
+      ...generated,
+      constraints: [{
+        kind:"ANCHOR",id:"relationship",
+        source_instance_id:generated.patterns[0]!.id+":0",
+        target_instance_id:generated.patterns[1]!.id+":0",
+        axes:["X"],source_anchor:["CENTER","CENTER","CENTER"],
+        target_anchor:["CENTER","CENTER","CENTER"],
+      }],
+    };
+    expect(() => buildPlanarCurveRecipeCandidate(related,curved(),{
+      replace_generated:true,
+    })).toThrow("RECIPE_CURVE_CONSTRUCTION_DECLARED_RELATION_PROTECTED");
+  });
+
+  test("existing Recipe service plans the candidate without native Undo", async () => {
+    const previous: AuthoringRecipe = {
+      schema:1, compiler_version:1, id:"curve-review",name:"Curved appendage",
+      prototypes:[],patterns:[],feature_intents:[],
+    };
+    const next: AuthoringRecipe = {
+      ...previous, feature_intents: structuredClone(recipe().feature_intents),
+    };
+    const service = createAuthoringRecipeService({
+      readOwned: () => ({schema:1,recipe_id:previous.id,cubes:[]}),
+      readStoredRecipe: () => previous,
+      readKnowledgeIndex: () => null,
+      createApplyAdapter: () => { throw new Error("Native apply not run by source test."); },
+    });
+    const planned = await service.planCurveConstruction(previous,next,curved());
+    expect(planned.plan_id).toBeTruthy();
+    expect(planned.curve_construction.segment_count).toBe(2);
+    expect(planned.curve_construction.native_mutation_executed).toBe(false);
+    expect(service.registrySize()).toBe(1);
+    const stored = await service.planCurveConstructionStored(next,curved());
+    expect(stored.curve_construction.segment_count).toBe(2);
+    expect(service.registrySize()).toBe(2);
   });
 });

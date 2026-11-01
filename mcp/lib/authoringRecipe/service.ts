@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import type { RecipeKnowledgeSnapshot } from "@/lib/authoringRecipe/knowledge";
 import type { GeometryCurveObservation } from "@/lib/authoringRecipe/geometryCurves";
+import { buildPlanarCurveRecipeCandidate } from "@/lib/authoringRecipe/geometryCurveConstruction";
 import { collectRecipeKnowledge, featureIdForRecipeInstance } from "@/lib/authoringRecipe/knowledgePlanning";
 import { reviewRecipeGeometryFidelity } from "@/lib/authoringRecipe/geometryFidelity";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
@@ -93,6 +94,17 @@ export function createAuthoringRecipeService(
       ...(featurePlan ? { feature_plan: featurePlan } : {}),
       ...(recipeKnowledge ? { recipe_knowledge: recipeKnowledge } : {}),
     };
+  };
+
+  const planCurvePair = async (
+    previousRecipe: AuthoringRecipe,
+    nextRecipe: AuthoringRecipe,
+    observation: GeometryCurveObservation,
+    options: { replace_generated?: boolean } = {}
+  ) => {
+    const candidate = buildPlanarCurveRecipeCandidate(nextRecipe, observation, options);
+    const planned = await planPair(previousRecipe, candidate.next_recipe, [observation]);
+    return { ...planned, curve_construction: candidate.summary };
   };
 
   /**
@@ -476,6 +488,17 @@ export function createAuthoringRecipeService(
 
   return {
     plan: planPair,
+    planCurveConstruction: planCurvePair,
+    async planCurveConstructionStored(
+      nextRecipe: AuthoringRecipe,
+      observation: GeometryCurveObservation,
+      options: { replace_generated?: boolean } = {}
+    ) {
+      if (!dependencies.readStoredRecipe) throw new Error("RECIPE_STORE_UNAVAILABLE");
+      const previousRecipe = await dependencies.readStoredRecipe(nextRecipe.id);
+      if (!previousRecipe) throw new Error("RECIPE_NOT_STORED: " + nextRecipe.id);
+      return planCurvePair(previousRecipe, nextRecipe, observation, options);
+    },
     async planStored(
       nextRecipe: AuthoringRecipe,
       curveObservations?: readonly GeometryCurveObservation[]

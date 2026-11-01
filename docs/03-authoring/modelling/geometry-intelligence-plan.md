@@ -201,6 +201,32 @@ R3 regression source authored; Bun/build/native/visual NOT EXECUTED.
   extreme pose where relevant. Reject micro-segmentation without distinct
   silhouette/volume/motion benefit.
 
+### R3a — Opt-in planar Curve candidate compilation (2026-11-01; SOURCE ONLY)
+
+The first executable-schema geometry slice connects caller-declared planar
+Curve samples to existing Recipe v1 and its existing plan/apply lifecycle:
+
+- authoringRecipe/geometryCurveConstruction.ts translates validated centerline
+  samples and rectangular sections to a single Cuboid or a stepped, tapered
+  cohort. Each segment uses one native Cube prototype, at most one rotation
+  axis (up to 45 degrees), an explicit center pivot, stable sample-pair IDs,
+  and the existing LINEAR(count=1) pattern form.
+- createAuthoringRecipeService.planCurveConstruction and
+  planCurveConstructionStored pass the produced next Recipe through the
+  canonical incremental plan registry. A separate existing apply operation
+  remains the ONLY native mutation/Undo path; no second engine or MCP route.
+- Explicit replacement protects hand-authored feature patterns, unrelated
+  geometry, declared Anchor/Symmetry relations, foreign ownership and
+  duplicate identities. Unknown claims, nonplanar/3-axis rotations,
+  backtracking and Box UV subunit candidates fail before any mutation.
+- Articulation requirements remain a rig review, not invented Bones.
+  Geometry/source IDs do not attest image content or visual fidelity.
+
+R3a is compiled *source* construction, NOT a deployed AI-facing advanced
+tool or a proven Blockbench operation. Bun/typecheck/build, native Undo,
+save/reopen, Bedrock codec/export and reference-matched appearance remain
+NOT EXECUTED. Next integration is an AI-facing capability on the existing
+Runtime/Gateway surface after source and native preflight proof.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses
