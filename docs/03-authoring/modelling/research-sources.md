@@ -112,3 +112,19 @@ One accepted study must demonstrate a decision-changing contrast:
 **when it applies, when it does not, and which existing Recipe operation
 can consume the distinction**. If a source adds no new behavior beyond
 `standard.md` or G-P01–G-P08, retain its link as background only.
+
+## E. Curated premium voxel art examples (2026-11-01; research-only)
+
+Work-level selection, NOT bulk marketplace admission, source model copying, or an executable authoring rule. Evidence: PAGE = publisher's page read; IMAGE = actual static artwork visually inspected; PREVIEW = only search thumbnail. A rendered image cannot prove hidden Cubes, pivots, UV, 3D topology, original texture, animation, dimensions or native Blockbench compatibility.
+
+| Case | Source and inspection | Visual fact and existing owner / exception |
+| --- | --- | --- |
+| GV-01 | [Bepoo Goblin Warchief](https://bepoo.netlify.app/models), [portfolio artwork](https://bepoo.netlify.app/assets/optimized/3dmodel-goblin_warchief.webp) (PAGE+IMAGE) | Large paired bone ornaments, prominent axe, face/crest and tall torn rear banner create a distinctive front/back readable silhouette. Research comparison to existing G-P02 main masses, G-P03 protruding-form decision. Not evidence for Cube count, hidden depth or pivots |
+| GV-02 | [Bepoo Zombies](https://bepoo.netlify.app/assets/optimized/3dmodel-zombies.webp) (PAGE+IMAGE) | Related undead designs use recognizable shared anatomy with role-specific equipment, heads and body variations. Study when variant identity needs geometry instead of palette changes; no side/back/rig proof |
+| GV-03 | [Quinten Bench MEGAMECH 5001](https://quintenbench.wixsite.com/rizaan/overlords) (PAGE+IMAGE) | Massive legs, mechanical armament, armor masses and crew cockpit have a visible scale/functional hierarchy. Mechanical-profile candidate; cinematic lighting may hide neutral-view complexity |
+| GV-04 | [Bepoo Haunted Furnitures](https://bepoo.netlify.app/assets/optimized/3dmodel-haunted_furnitures.webp) (PAGE+IMAGE) | Board, bookshelf, television, covered furniture and doll communicate recognizable functions with differing complexity. Prop-furniture profile candidate; no demand for boss-level geometry or inferred concealed faces |
+| GV-05 | [AnyVoice Yeti artwork](https://x.com/AnyVoice_/status/1829225842922188869) (PREVIEW) | Horns, wide body and high-contrast extremities communicate identity with fewer shapes. A complex creature does not have to be ornate. Original page/native asset NOT INSPECTED |
+
+Positive research probe: a selected model retains its source-supported silhouette and focal accessory when compared with an approved multi-view reference at equal neutral scale. Negative: micro-Cubes hide broad errors or painted shapes replace clearly volumetric required forms. Ambiguous: one cinematic view, incompatible scale, occlusion or unknown depth; abstain. **Separate visual families:** battle-worn fantasy, mechanical, prop/furniture, simplified creature. No universal proportions or detail density. Existing standards/profiles/G-P01–G-P08 remain authoritative; nothing promoted.
+
+Rights: creator-owned artwork is link/citation only. No license for source-model/texture copying, dataset ingestion, mass scraping or AI training established. No actual .bbmodel, native test or human visual acceptance.

@@ -234,3 +234,21 @@ This is an **evidence enrichment of existing** [TEX-P01](decision-cases.md#tex-p
 - **Cannot claim now:** art/texture rights, source-code reuse rights not individually checked, generic multi-view inference fidelity, production-ready knowledge decisions, executed regression PASS, native Undo/rollback or visual Bedrock acceptance.
 - **No new engine, model weights, training dataset, source registry, Runtime tools, CI enablement or release.** `manage_uv_layout` remains **UNREGISTERED**. Geometry is frozen; Animation deferred.
 - **Next K2:** remove already-covered behavior from the prospective implementation backlog, prioritize P0/P1 decisions with a specific wrong consumer, source-level provenance and paired negative cases. Load only selected sources for K3, not all records in a normal authoring hot path.
+
+## I. Selected voxel material/style studies (2026-11-01; research-only)
+
+These cases record observations from static publisher artwork, NOT raw atlas pixels, measured UVs, exact color values, shader channel evidence or approved art direction for any current asset.
+
+| Case | Source/evidence | Observed contrast / research question |
+| --- | --- | --- |
+| TV-01 | [Bepoo Warchief](https://bepoo.netlify.app/assets/optimized/3dmodel-goblin_warchief.webp) (PAGE+IMAGE) | Pale bone, dark gray armor, muted metal trim, vivid red banner and hair occupy material/focal regions. Does the *approved* reference call for localized contrasts rather than equal detail everywhere? |
+| TV-02 | [Bepoo Zombies](https://bepoo.netlify.app/assets/optimized/3dmodel-zombies.webp) (PAGE+IMAGE) | Cohesive undead skin palettes coexist with class-specific equipment and bright accents. Do not overwrite unique marks with one generic hue shift |
+| TV-03 | [Bepoo Haunted Furniture](https://bepoo.netlify.app/assets/optimized/3dmodel-haunted_furnitures.webp) (PAGE+IMAGE) | Wood, paper/books, dark electronics and pale covering have different surface treatment. Reject a single random noise pattern applied to every material |
+| TV-04 | [Quinten MEGAMECH](https://quintenbench.wixsite.com/rizaan/overlords) (PAGE+IMAGE) | Dark industrial body and bright functional core produce focal contrast; render lighting is not evidence of actual emissive or PBR maps |
+| TV-05 | [Saint11 — Cluster Sketching](https://saint11.art/pixel_art_articles/article2/) (primary PAGE) | Start with large connected color regions then refine small details. The author explicitly permits useful individual-pixel exceptions; never impose arbitrary pixel quotas |
+| TV-06 | [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) (official PAGE) | Documents purposeful color ramps, hue shift, banding/noise, model-vs-texture and scale. Vanilla-centric rules are NOT automatically universal for stylized fantasy |
+| TV-07 | [Amonde Goblin Boss](https://mcmodels.net/products/13290/goblin-boss) (PAGE+PREVIEW) | Product claims 16x and consistent Goblin Mobs theme; bright/cartoon family should not be merged into dark Warchief family. Marketing resolution does not prove craft quality |
+
+Candidate contrast for current TEX-P01–TEX-P03: POSITIVE material separation, deliberate color clusters, focal accents and mapped-face readability; NEGATIVE undirected speckle/dither, banding, uniform detail distribution, mixed effective pixel scales or painting over geometry defects; AMBIGUOUS when only lit promotional image is available. Compare neutral matching views and original mapped atlas before any promotion. Source RGB, UV seam integrity, full PBR and native visual PASS remain UNKNOWN.
+
+Third-party source images and model textures are copyright-restricted reference links only; no rights to copy, harvest, redistribute or train. No new runtime style system, Skill/standard/casebook update or executable proof.

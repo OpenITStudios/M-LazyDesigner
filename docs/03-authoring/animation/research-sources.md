@@ -212,3 +212,18 @@ Use this as an **on-demand source pointer** for the selected Animation decision,
 - MIT animation libraries still require retaining attribution when actual code is reused; check every dataset/model/marketplace item license independently. Public access is not commercial training permission.
 - Official current Bedrock schema and native Blockbench/target-version evidence outrank external game engines, old mirrors, and speculative research.
 - Only a concrete version-sensitive defect or reference-bound decision justifies adding a regression or changing an existing owner. No second source manager or always-loaded AI corpus.
+
+## 2026-11-01 curated professional motion examples (research-only; separate from 145 original source pointers)
+
+Evidence is PAGE only: indexed named clips, durations and descriptions were examined. **No original GIF frames decoded, interactive 3D animation played, source .bbmodel inspected, installed Blockbench playback or motion-quality verdict.**
+
+| Case | Source-page fact | Targeted research; what is not proven |
+| --- | --- | --- |
+| AV-01 | [Bepoo Animation Showcase](https://bepoo.netlify.app/animations): labels for walk/run, cobra and spider walk, hurt/death, action and environmental animations | Compare separate biped, quadruped/creature, one-shot and mechanical motion grammar *after actual playback*. Index labels do not establish quality, foot contact or timing |
+| AV-02 | [Nérysia Ice Dragon](https://models.nerysia.net/en/modeles/dragon-de-glace): publisher lists 26 clips with idle 4s, walk 1.6s, fly 1.15s, takeoff 1.6s, land 1.4s; 53 bones and 2048×2048 texture | Evaluate distinct fly/walk/takeoff/land/breath/rest poses and transitions when an actual clip is accessible. Clip counts, durations and texture dimensions are NOT quality targets or Bedrock proof |
+| AV-03 | [Amonde Goblin Boss](https://mcmodels.net/products/13290/goblin-boss): listing names idle, walk, fastwalk, attack1–5, death; describes combo, stomp, leap and shout | Review contact, anticipation, impact and recovery for each action; marketing text is NOT evidence of a good animation |
+| AV-04 | [Official Blockbench Animation guide](https://blockbench.net/wiki/guides/bedrock-modeling/) and [Microsoft Creator Guide](https://learn.microsoft.com/en-us/minecraft/creator/documents/entitymodelingandanimation?view=minecraft-bedrock-stable) | Supported bone/timeline/keyframe/export mechanics; technical validity does not guarantee motion weight or artistic quality |
+
+For one *approved existing asset* compare source vs live native playback at matching poses and view: start, extreme, contact/impact, recovery, cycle boundary, attachment and foot/world contact. Positive and rejected clips must be actually observed; if source motion is inaccessible record UNKNOWN, do not invent timing/keyframes. Reuse current A01–A16 Animation cases and one existing Golden; no new engine or case-reader.
+
+Source models, animation data and thumbnails remain third-party property; no asset-use/training license is inferred. ModelEngine/MythicMobs support does not imply Bedrock-native playback.
