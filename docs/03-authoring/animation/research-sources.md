@@ -283,3 +283,75 @@ Study families should remain separate: flying, swimming, many-legged stepping, h
 
 **No Golden Assets, generator tests, newly required playback tests, new Animation engine, casebook promotion, or production rule changes.** Third-party animation curves and model files are link-only, not acquired training data.
 
+
+## Working Art-Craft Knowledge v0.1 — Animation (2026-11-01; RESEARCH SYNTHESIS)
+
+**Purpose:** Convert published animation principles and curated creator clip *intent* into reusable artistic questions, preserving honest proof status. The 145-source reference inventory and existing A01–A16 research cases retain their current identities. This is **not** a new motion engine, runtime clip recipe, validated playback, Golden Asset, or recommendation to test the generator.
+
+**Evidence vocabulary:** PRIMARY_TEACHING = actual professional animator/article consulted; CLIP_LABEL = source creator/publisher lists named motion but frames not played; SOURCE_MEDIA_LOCATED = original clip URL exists, frames not analyzed; INFERENCE = plausible application rather than verified creator technique; UNOBSERVED = no view of actual performance.
+
+### AK-01 — Motion causality: intention, preparation, action, response
+
+**Primary teaching:** [Animation Mentor / Chris Hurtt, Anticipation](https://www.animationmentor.com/blog/anticipation-the-12-basic-principles-of-animation/) explains that an anticipation may be subtle or broad, and must be causally aligned with the following action. Starting a hit reaction before contact can accidentally communicate a false impact order (PRIMARY_TEACHING).
+
+**Creator-study leads:** [Minotaur by eanncrod](https://blockbenchworkshop.com/model/eanncrod/minotaur) lists calm/hostile idle and hammer actions; [Goblin Boss by Amonde](https://mcmodels.net/products/13290/goblin-boss) describes attacks/stomps/leaps. These establish *intended types*, not observed animation quality (CLIP_LABEL).
+
+**Working interpretation (INFERENCE):** Read a staged action as intent or cue → motion commitment → meaningful impact/transition → recovery/hold when applicable. The particular pose sequence depends on the reference and action; no fixed number of stages or keyframes is appropriate.
+
+**Apply:** A current animated character must communicate a distinct high-impact action, reaction or emotional change.
+
+**Reject/defer:** Artificial pre-motion before every idle twitch, impossible reaction order, forced extravagant winding-up for quiet actions, or declaring excellent contact merely from a vendor clip list. No original keyframes or actual weapon contact were observed. Existing owner: Animation standard / existing action-weight research.
+
+### AK-02 — Weight comes from readable timing relationships, not “slow = heavy”
+
+**Primary teaching:** [Animation Mentor / Dave Burgess, Timing](https://www.animationmentor.com/blog/timing-the-12-basic-principles-of-animation/) discusses exposure/hold duration and transition spacing as tools for giving poses clarity and perceived weight; large characters and small quick characters can need different rhythms (PRIMARY_TEACHING). His historical film-frame examples are **not** numerical presets for Minecraft.
+
+**Working interpretation (INFERENCE):** Perceived mass can come from anticipation and acceleration, delayed secondary parts, the timing of a main pose, and recovery—rather than uniformly scaling the clip's speed. “Slow every keyframe by a fixed factor” can undermine impact or make a heavy action feel weak.
+
+**Use:** Artist reference implies a weight difference, for example a large hammer-bearing golem compared with a tiny expressive mascot.
+
+**Reject/defer:** One fixed FPS, clip duration, hold count or easing curve; assuming smooth interpolation always improves acting. Exact rig motion and keyframe timing remain UNOBSERVED.
+
+### AK-03 — Locomotion depends on how the body is supported and propelled
+
+**Evidence:** [Bepoo Animation Showcase](https://bepoo.netlify.app/animations) separates walking, running, many-legged cyborg-spider movement, cobra/worm motion and floating creature actions (CLIP_LABEL); [Ender Whale](https://blockbenchworkshop.com/model/logan_kant/ender-whale) lists drift/swim/roll/dive/emerge; [Kintsugi](https://blockbenchworkshop.com/model/eanncrod/kintsugi) lists hover/fly/turn/land-related actions (CLIP_LABEL).
+
+**Working interpretation (INFERENCE):** Legged walking, ground-crawling/undulation, hovering, swimming and flying present *different body-axis, contact and propulsion questions*. Some contact modes need stable grounded support; others need a convincing suspended body phase or fin/tail timing. A simple shared sine oscillator is not sufficient evidence of equivalent character movement.
+
+**Apply:** Only after the asset's actual rig, movement intent and approved original motion reference identify its mode.
+
+**Reject/defer:** Prescribing planted feet to a hovering creature, one global limb phase to spider and biped, or transferring listed 1.6-second walking durations from a dragon seller to every model. Actual clips were not played.
+
+### AK-04 — Expressive props, secondary parts and attachment continuity
+
+**Evidence:** [Raccoon Trader](https://blockbenchworkshop.com/model/logan_kant/raccoon-trader) lists backpack open/close/eat and expressive actions; [Crab Sailor](https://blockbenchworkshop.com/model/logan_kant/crab-sailor) lists drink/hat toss; [Minotaur](https://blockbenchworkshop.com/model/eanncrod/minotaur) lists hammer attacks; [Bepoo](https://bepoo.netlify.app/animations) lists chainsaw and door/environment interactions (CLIP_LABEL).
+
+**Working interpretation:** An accessory can carry part of the animation's story, but its motion depends on the *attachment relationship*: carried object, hinged prop, throwable item and fixed environmental mechanism are not equivalent. Distinguish action intent, movement pivot, contact and release/reattach events.
+
+**Use:** A source action visibly or explicitly involves a particular attached or independently moving part.
+
+**Reject/defer:** Arbitrary reparenting/locator invention from names alone, claiming a throw has correctly timed release without viewing it, or imposing humanoid hand-contact on a quadruped. Bone, pivot and timed contact are UNKNOWN here.
+
+### AK-05 — State vocabulary is not measured motion quality
+
+**Source facts:** [Kintsugi](https://blockbenchworkshop.com/model/eanncrod/kintsugi) lists 28 named clips and 24 bones, [Minotaur](https://blockbenchworkshop.com/model/eanncrod/minotaur) lists 8 and 20, and [Soggy Sanctuary Moist Golem](https://blockbenchworkshop.com/model/fukuda1320/moist-golem-new-version) lists a small set of movements (CLIP_LABEL). [Blockbench Animation Expressions](https://blockbench.net/wiki/guides/animation-expressions/) documents technical expression handling with format-specific behavior, not artist quality.
+
+**Working interpretation:** Categorizing idle, attack, injured, transition, recovery and locomotion is a useful way to *describe what an animation set needs to communicate*. Number of clips, bones, proprietary engine integrations or available expression syntax cannot prove readable poses, correct deformation or smooth transition.
+
+**Use:** Recording creator intent and unresolved research questions, not selecting a fixed “professional” clip-count target.
+
+**Reject/defer:** Treating a marketing list as observed performance, conflating Bedrock/GeckoLib/ModelEngine/Generic file formats, or prescribing mandatory clips to every static object.
+
+### AK-06 — Motion source observability is part of honest Knowledge
+
+**Source distinction:** The [Bepoo showcase](https://bepoo.netlify.app/animations) exposes original GIF URLs (SOURCE_MEDIA_LOCATED), whereas Blockbench Workshop pages may provide embedded interactive previews and clip names (CLIP_LABEL). In this research session those GIF frames/interactive clips were **not played or analyzed**.
+
+**Working interpretation:** Knowledge can confidently record the existence and intended category of a clip, but may not record its actual foot sliding, secondary overlap, smoothness, weight, latency, contact pose, frame count or artistic merit without genuine original-motion observation.
+
+**Use:** Any time a research note turns a source URL/title into a claim about *how the animation moves*.
+
+**Reject/defer:** Silently inventing source poses, rig keyframe contents or human acceptance from advertised descriptions, static posters, clip URLs, or a tool/model count.
+
+### Animation synthesis — hypotheses to retain for further reading
+
+For any original animation study, ask (without running the LazyDesigner generator): what action is communicated; what change precedes it; where does its meaning/weight sit in time; what actually touches, follows, hangs or releases; what movement family is it; and which observations were genuinely watched rather than advertised? Do not turn this into a mandatory new authoring flow, timing preset, Motion Recipe engine, or a request for Golden or incremental testing. Every original-clip performance claim above remains UNOBSERVED.

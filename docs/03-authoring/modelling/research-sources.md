@@ -193,3 +193,75 @@ Work-level curation: original artwork is judged separately from whether an artis
 
 The Workshop uploader labels works with item-specific CC BY, CC BY-SA or CC0, but uploader license/ownership attestation is not a comprehensive rights audit. No source model, 3D geometry, original atlas, UV layout, rig, animation frame or permission for training/redistribution was obtained. No automatic Knowledge promotion or generator testing.
 
+
+## H. Working Art-Craft Knowledge v0.1 — Geometry (2026-11-01; RESEARCH SYNTHESIS)
+
+**Purpose:** Preserve what research is teaching us about premium stylized voxel *decisions*, rather than accumulating links or converting them into unearned production requirements. This is the existing Modelling research owner, **not** a new router, parser casebook, AI training corpus, automatic model preset, canonical Geometry standard or claim that LazyDesigner already produces better models. Observed original editorial/design statements below are distinct from inferences drawn from third-party promotional artwork. Asset-specific user reference and current approved form always outrank this notebook. No Golden Asset, generator test or native test is requested.
+
+**Evidence vocabulary:** PRIMARY_GUIDE = artist/editor first-party written design guidance read; ART_IMAGE = visual reading of an identifiable creator's published static image; LISTING = product-page image/metadata, not original project; INFERENCE = transfer hypothesis needing case-specific visual evidence; UNKNOWN = information genuinely unavailable. None of these labels proves source model topology, native Bedrock operation, artist approval or AI-training permission.
+
+### GK-01 — Identity-bearing masses, not uniform ornament
+
+**Question:** Where does extra 3D form add recognizability, and where does it only add clutter?
+
+**Source observation:** The [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) places recognizable whole shape in model geometry and most smaller surface detail in texture, warning not to simplify beyond recognition (PRIMARY_GUIDE). [Hytale art direction, Thomas Frick](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale) describes iconic and recognizable forms built by selectively preserving and removing geometry (PRIMARY_GUIDE; Hytale's technical restrictions are not Bedrock rules). A [Bepoo Goblin Warchief](https://bepoo.netlify.app/models) art sheet emphasizes a crest/head, oversized paired trophies, axe and back banner; [DepartmentQDE's Yeti](https://mcmodels.net/products/15711/yeti-bosss) emphasizes heavy torso/arms and horns (ART_IMAGE/LISTING).
+
+**Working interpretation (INFERENCE):** First identify the *subject, role and primary focal feature*; supporting masses should amplify that story. More silhouette-changing geometry is not automatically better, and reducing necessary forms solely for fewer Cubes is not better either.
+
+**Use when:** A current approved asset reference clearly demonstrates one or several identity-bearing masses, protrusions or silhouette gaps.
+
+**Reject/defer when:** Extra spikes/plates obscure the subject, a small peripheral mark is only surface color, or hidden depth is unknown. Do not prescribe 1–3 focal parts, Cube quotas or anatomical ratios.
+
+**Unresolved:** Current source-specific front/side/rear, rig attachment, real dimensions and native edited model are required before any individual geometry decision is considered confirmed. Existing owner: modelling standard, selected profile, existing G-P02/G-P03; no new case inserted.
+
+### GK-02 — Functional negative space is a first-class shape
+
+**Question:** When is an empty region actually geometry, rather than a dark painted patch?
+
+**Observed examples:** [Cozy Bamboo Furniture](https://mcmodels.net/products/15738/cozy-bamboo-furniture-dyeable) shows chairs, partitions and furniture frames whose gaps express intended use (ART_IMAGE/LISTING); a [Goblin Warchief](https://bepoo.netlify.app/models) uses separations between trophies, limbs and weapon for readable silhouette. The [Blockbench guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) also distinguishes real form from textured surface detail (PRIMARY_GUIDE).
+
+**Working interpretation:** An opening between chair legs, a handle clearance, a weapon fork or a genuine mouth cavity affects view-dependent silhouette, passage, overlap or articulation; it cannot automatically be substituted with dark pigment. A scratch, seam or inset-looking color patch that does not change relevant space may stay in Texture.
+
+**Use:** Approved views indicate actual spatial separation or a functional clearance whose shape matters.
+
+**Reject/defer:** The reference is a front-only image, or the apparent gap may be a shadow/transparent overlay; depth/through-hole remains UNKNOWN. Do not cut new holes or add hollow geometry from one promotional angle. Existing owners: G-P06 / prop-furniture and the Geometry-vs-Texture boundary.
+
+### GK-03 — Shape dialect belongs to the subject and visual family
+
+**Question:** Can the same simplification/detail pattern be applied to every visually strong asset?
+
+**Observed contrast:** [Experience Golem](https://mcmodels.net/products/8804/experience-golem-boss) uses rigid angular masses and a weighty hammer; [Slime Boss](https://mcmodels.net/products/15960/slime-bosss) conveys a soft creature through stacked masses and extending tendrils; [Bepoo Haunted Furnitures](https://bepoo.netlify.app/models) contains distinct practical object silhouettes. In the [Blockbench guide](https://blockbench.net/wiki/guides/minecraft-style-guide/), even Vanilla proportions are deliberately stylized for legibility, with exceptions to literal real-world scale (ART_IMAGE/LISTING + PRIMARY_GUIDE).
+
+**Working interpretation:** Geometry simplification is *relative to its visual dialect*: rigid heavy boss, soft creature, cute trader, ornamental blade and functional stool may all be well-authored with different mass layering and part density.
+
+**Use:** Comparing multiple examples within the same approved style family and equivalent presentation purpose.
+
+**Reject/defer:** Importing a grim boss's blade/spike density into cozy furniture, or judging a successful simple prop as low-quality because it has fewer elements. Do not claim every work by one artist is exemplary. Existing owner: one selected modelling profile; shared approved art direction remains separate.
+
+### GK-04 — Variation consistency must not erase role identity
+
+**Question:** How do multiple models feel like one pack without turning into recolors?
+
+**Observed examples:** [Bepoo Zombies](https://bepoo.netlify.app/models) display role-specific heads, equipment and silhouettes within an undead visual family (ART_IMAGE). [Banathes Pumpkin Pack](https://mcmodels.net/products/10456/pumpkin-pack) uses a repeated pumpkin/leaf/vine motif across differently shaped bosses, minions and equipment (LISTING).
+
+**Working interpretation:** Separate *shared family tokens* (recurring silhouette motifs, characteristic material regions, scale of detailing) from *identity-specific parts* (weapon, head, appendage count, visible role equipment). Shape may vary even while materials and recognizable motifs remain related.
+
+**Use:** Actual approved user reference is a multi-asset family with both repeated motifs and different roles.
+
+**Reject/defer:** Duplicating all silhouette geometry or mirroring intentional asymmetry for pack uniformity; treating a collage as precise per-asset proportion measurements. Existing owner: selected modelling profile and user-approved family reference, not a universal preset.
+
+### GK-05 — Thumbnail brilliance and native structural evidence are separate
+
+**Question:** Can striking marketing artwork prove that its underlying model has excellent geometry?
+
+**Observed contrast:** [Kintsugi by eanncrod](https://blockbenchworkshop.com/model/eanncrod/kintsugi) explicitly advertises a Bedrock-format model with 38 elements, 24 bones and 28 animations (LISTING/META), but its dark-on-dark thumbnail provides weaker visible silhouette evidence. [Naldo's Anglerfish](https://x.com/Naldo_Nerdlo/status/1331197958193377280) offers multiple model views and a visible texture-sheet image (ART_IMAGE; creator post accessibility varies), but not inspected Cube topology or part pivots.
+
+**Working interpretation:** Track two independent properties: (A) how convincing/legible the presented art is and (B) what structural data is actually accessible. Neither a big atlas nor a high element count demonstrates artistic superiority. A compelling image alone does not reveal actual Bedrock topology.
+
+**Use:** Selecting original creator works for further learning; a work may be strong artistic evidence with low structural access or technically rich but visually ambiguous.
+
+**Reject/defer:** Inferring Cube layouts, exact pivots, neutral-view render quality, geometry counts or full 360-degree consistency from a single thumbnail. Rights and source-version identity still need to be considered.
+
+### Geometry synthesis — reusable research questions, not an authoring algorithm
+
+For the *particular approved reference*, identify: (a) identity-bearing overall silhouette; (b) functions requiring true volume or negative space; (c) which related family grammar is actually supported; (d) which details are surface-only; (e) view and source ambiguity. **Do not convert these questions into compulsory runtime steps, new MCP calls, universal Cube budgets, or presumed approvals.** These research notes are preserved for comparison with future independent sources; no current model or production source has been changed.

@@ -319,3 +319,77 @@ Cross-artwork research conclusion: **pixel density and number of shades are poor
 
 Rights remain source-specific and uncleared for copying, harvesting, redistribution or AI training. No source PNG, per-face UV, renderer material state or neutral light mapping was inspected. No production Texture rule, automatic treatment, engine or test introduced.
 
+
+## L. Working Art-Craft Knowledge v0.1 — Texture (2026-11-01; RESEARCH SYNTHESIS)
+
+**Purpose:** Preserve transferable *questions and distinctions* about high-quality authored voxel surfaces, rather than accumulate catalog links or manufacture a generic texture preset. This research sits in the existing Texture source owner, not the active styling standard, Pixel Art Style Lock, new runtime knowledge system or generator. No painted atlas, original third-party texture, Golden Asset or source-model test was produced.
+
+**Evidence classes:** PRIMARY_TECHNIQUE = first-party artist tutorial read; IMAGE = actual rendered artwork inspected at its available quality; LISTING = vendor image/metadata; HYPOTHESIS = conditional cross-source inference; UNKNOWN = no actual source pixels or UV. A promotional render never establishes raw RGB, uv-to-face mapping, actual PBR/emission or production texture rights.
+
+### TK-01 — Cluster intention beats automatic texture noise
+
+**Primary technique:** [Saint11, Cluster Sketching and Painting](https://saint11.art/pixel_art_articles/article2/) starts from connected color regions, refines their shapes and fixes irregular jaggies. The author explains that isolated single pixels often introduce noise but can deliberately depict eyes, texture and sharp details (PRIMARY_TECHNIQUE). [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) warns that random noise, banding and unnecessary dithering can obscure the form in its Vanilla-compatible context.
+
+**Observed artist contrasts:** [Cozy Bamboo Furniture](https://mcmodels.net/products/15738/cozy-bamboo-furniture-dyeable) visibly separates woven frame and quieter upholstery areas; [Eann Kintsugi](https://blockbenchworkshop.com/model/eanncrod/kintsugi) uses thin accent cracks rather than equally dense marks everywhere (IMAGE/LISTING).
+
+**Working interpretation (HYPOTHESIS):** Distinguish *connected value/color regions with a visual job* from incidental high-frequency marks. The job might be volume, wear, material grain or identity. “Remove all tiny clusters” is NOT a valid universal instruction.
+
+**Apply:** A source supports materially meaningful color groups and the current face actually has sufficient physical pixel area.
+
+**Reject/defer:** Blind speckle on every face, blanket de-noising that destroys eye pixels, or importing strict hard-pixel constraints into an intentionally painterly style. Unknown source atlas or insufficient view resolution cannot establish whether an isolated pixel is intentional. Existing owner: Texture standard and surface-pattern; earlier TEX-P01 remains separate.
+
+### TK-02 — A color ramp is a relationship, not an RGB formula
+
+**Primary technique:** [SLYNYRD / Raymond Schlitter, Pixelblog #1](https://www.slynyrd.com/blog/2018/1/10/pixelblog-1-color-palettes) constructs value/saturation/hue-related ramps and explicitly describes his step sizes and saturation peaks as artistic preferences, not universal rules. [Blockbench's style guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) describes midtone-first shadow/highlight passes and hue shifting in a Minecraft context (PRIMARY_TECHNIQUE).
+
+**Visual contrasts:** Dark armor/bone/red banner from [Bepoo Goblin Warchief](https://bepoo.netlify.app/models), icy blue/purple [Yeti Boss](https://mcmodels.net/products/15711/yeti-bosss), and tan/teal [Bamboo Furniture](https://mcmodels.net/products/15738/cozy-bamboo-furniture-dyeable) achieve different relationships rather than one fixed universal palette (IMAGE/LISTING).
+
+**Working interpretation:** Ask which material dominates, which midtone provides identity, where shadows shift in hue and how accents should contrast at the intended display scale. Preserve material/family coherence without turning hue shift degrees, shade counts or individual sample RGB values into hard-coded constants.
+
+**Apply:** Approved color references have recognizable relative value/color groups; actual atlas painting is allowed only after corresponding face/part evidence is known.
+
+**Reject/defer:** Taking display-render colors as PNG samples, automatically increasing saturation on every material, claiming a fixed number of shades is inherently premium, or imposing a generic ramp where one intentionally flat value is part of the art style.
+
+### TK-03 — The same pixel pattern is not the same material
+
+**Observed work comparisons:** [Bepoo Haunted Furnitures](https://bepoo.netlify.app/models) visibly differentiates wood, paper, electronics and pale fabric; [Experience Golem](https://mcmodels.net/products/8804/experience-golem-boss) and [Slime Boss](https://mcmodels.net/products/15960/slime-bosss) both feature greens but communicate distinctly rigid and viscous subjects; [Bamboo Furniture](https://mcmodels.net/products/15738/cozy-bamboo-furniture-dyeable) uses coherent motifs across structurally different props (IMAGE/LISTING).
+
+**Working interpretation:** Material identity depends on selected edge treatment, directional marks, contrast distribution, amount of visual rest and local accent placement—not merely the nominal hue or the label “wood/stone/slime”.
+
+**Apply:** Approved reference supports a recognizable substance difference and the surface is mapped to the correct part/material region.
+
+**Reject/defer:** Identical random-grain algorithms on metal, cloth and stone; assuming transparency or normal/PBR/emissive channels merely because painted slime or energy looks glossy. Any exact texture recipe remains UNKNOWN without source face/UV information. Existing owner: surface-pattern and existing Texture/UV standard.
+
+### TK-04 — Texturing dialects can contradict each other and still be good
+
+**First-party contrast:** The [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) specifies hard-edged deliberate pixel treatment for Vanilla-style work and warns that the guide is not universally applicable to non-Vanilla art. [Hytale art director Thomas Frick](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale) describes an intentionally hybrid stylized voxel + hand-painted texture language, including selective soft brush shading and lighting cues painted into surfaces. Hytale's renderer and numeric texture constraints are explicitly engine-specific (PRIMARY_TECHNIQUE).
+
+**Working interpretation:** Strict hard-edge pixel art, illustrative voxel painting and stylized textured fantasy are **different eligible visual languages**. User-shared reference images establish the desired direction for a given asset; a source’s craft can be learned without adopting that source’s engine renderer, pixel density rule or exact brush.
+
+**Apply:** When several artworks are being compared, first group them by the actual desired style family before judging cluster softness, material shading and pixel scale.
+
+**Reject/defer:** Global prohibition on soft brush, global preference for anti-aliasing, or Hytale-specific 32/64-pixel density prescriptions for Minecraft Bedrock. Do not conflate a content style distinction with a separate Runtime route.
+
+### TK-05 — Color/motif continuity across an asset pack is not one atlas
+
+**Observed examples:** [Pumpkin Pack](https://mcmodels.net/products/10456/pumpkin-pack), [Soggy Sanctuary Stuffs](https://blockbenchworkshop.com/pack/fukuda1320/soggy-sanctuary-stuffs) and [Cozy Bamboo Furniture](https://mcmodels.net/products/15738/cozy-bamboo-furniture-dyeable) visibly repeat identity colors and shapes across different object classes (IMAGE/LISTING). [Soggy Sanctuary Urn](https://blockbenchworkshop.com/model/fukuda1320/soggy-sanctuary-urn) lists multiple textures despite few elements, whereas other objects report different texture counts. Publisher data is not a native atlas readback.
+
+**Working interpretation:** A style family can share color relationships, detail rhythm and material conventions without sharing UV regions, exact bitmap dimensions, or even a uniform resolution. Pack identity and technical atlas identity are different concepts.
+
+**Apply:** Studying an approved collection of visually related assets; ask which colors/marks signal shared world identity and which features belong to an individual object.
+
+**Reject/defer:** A global palette file imposed on unrelated props, automatic UV stacking because motifs look similar, or forcing the same number of textures and pixels per model. Existing owners: approved reference family / Texture standard, with actual atlas ownership unchanged.
+
+### TK-06 — Paint, light, VFX and PBR are separate appearance sources
+
+**Primary source:** [Hytale art direction](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale) describes painted shadows/highlights plus renderer effects while deliberately eschewing standard PBR for that game. Minecraft Bedrock and Blockbench have separate native rendering and PBR boundaries described in current Texture standards (PRIMARY_TECHNIQUE + existing repo policy). Marketing art such as [Ruin Sentinel](https://mcmodels.net/products/17484/the-ruin-sentinel) features bright colored linework and strong glow, but that alone is not the raw main atlas.
+
+**Working interpretation:** Attribute an observed effect to its actual evidence owner only: base-color pixels, material/alpha/PBR map, animation/VFX, lighting/render, or UNKNOWN. Artist previews can reveal intended look without revealing technical implementation.
+
+**Apply:** When a premium preview shows apparent glowing energy, shadows, glass or transparent slime, keep appearance as a *visual intention* until source material information exists.
+
+**Reject/defer:** Inferring MER/PBR, emission mask, alpha blending or painted exact cyan from bloom or screenshots, or automatically enabling expensive texture treatment because a screenshot looks polished.
+
+### Texture synthesis — conditional knowledge, not a paint recipe
+
+Learning order: distinguish style family and intended material; identify large color/value groups and focal accents; ask which surface marks actually carry shape/material information; separate UV and real base-color data from renderer appearance; mark all missing pixel/face evidence UNKNOWN. This is a **research interpretation**, not an instruction to generate an atlas or call new tools. No actual source-pixel fidelity or improved LazyDesigner output has been established.
