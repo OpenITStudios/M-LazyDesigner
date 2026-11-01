@@ -6,9 +6,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **USER DECISION:** End research discovery. Convert 56 GK/TK/AK source notes into bounded, useful Geometry, Texture and Animation authoring decisions. Do not use Golden Assets. No new runtime engine, database, public Gateway tool, source-art ingestion, auto-mutation or universal style preset.
 
-**SOURCE DELIVERY:** Seven conditional Art Direction decisions are linked to existing Geometry eight-case and Texture four-case readers, the Animation Standard, and three active specialists. A maintenance-only, once-per-ID source disposition crosswalk explicitly accounts for 56 GK/TK/AK notes and 15 CX dossiers (including evidence-only safeguards). This is not another authoring stage or executable data store.
+**SOURCE DELIVERY:** Knowledge reading is current-first: operational decision use, three domain owners, once-per-ID crosswalk, update rules, then closed source dossiers. All 56 GK/TK/AK notes, 15 CX dossiers, seven VC decisions and existing Geometry/Texture casebook inventories are preserved. Raw source notes, specialist Skills, casebook bytes and Runtime behavior remain unchanged.
 
-**EVIDENCE:** Remote source inspection and deterministic crosswalk coverage/disposition checks completed; focused Bun regression is authored but NOT EXECUTED (CI disabled). Installed Blockbench/visual improvement remain UNVERIFIED. Deployed plugin needs normal existing build/deploy/reload for bundled casebook edits; no user-PC prerequisite, release or Golden task authorized.
+**EVIDENCE:** Source-level reorder, link/heading inventory and 71-ID crosswalk coverage checked. Focused regression adjusted for the new section order; Bun NOT EXECUTED (CI disabled). Installed Blockbench/visual quality remain UNVERIFIED; previous embedded casebook changes still need normal build/deploy/reload to become live. No user-PC prerequisite, release or Golden task.
 
 ## GitHub boundary and historical local recovery
 

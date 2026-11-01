@@ -66,7 +66,15 @@ describe("canonical authoring Skill ownership", () => {
     const marker = "## Visual Craft Source Disposition Crosswalk — maintenance only";
     const start = maturity.indexOf(marker);
     expect(start).toBeGreaterThan(0);
-    const dossierIds = [...maturity.slice(0, start).matchAll(/^\| (CX-\d{2}) /gm)]
+    // Navigation is current-first; source dossiers remain in the closed archive.
+    const currentStart = maturity.indexOf("## Current state — curated Knowledge made operational, not certified");
+    const readingStart = maturity.indexOf("## Reading map — choose only what you need");
+    const archiveStart = maturity.indexOf("## Historical research archive — closed 2026-11-01");
+    expect(currentStart).toBeGreaterThan(0);
+    expect(currentStart).toBeLessThan(readingStart);
+    expect(readingStart).toBeLessThan(start);
+    expect(start).toBeLessThan(archiveStart);
+    const dossierIds = [...maturity.matchAll(/^\| (CX-\d{2}) /gm)]
       .map(match => match[1]!);
     expect(dossierIds).toHaveLength(15);
     const crosswalk = maturity.slice(start).split("\n## ")[0]!;
