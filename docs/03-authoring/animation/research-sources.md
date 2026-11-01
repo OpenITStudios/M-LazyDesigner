@@ -413,3 +413,39 @@ Adds four research distinctions beyond AK-01–AK-06. This is **not** motion gen
 ### Dated access boundary and next research evidence
 
 As of this research pass, the [Bepoo animation index](https://bepoo.netlify.app/animations) exposes individual GIF links but attempting to read GIF media through the available web viewer returned unsupported-content responses. A [Raccoon Trader](https://blockbenchworkshop.com/model/logan_kant/raccoon-trader) download request returned HTTP 401 through the public browser; the page's uploader-declared CC0 license was read, **not** the actual file contents. We therefore have no authority to describe observed GIF poses, measured timing, exact attachment bones, imported material or actual model topology. Continue original primary-source learning while keeping motion-level observations honestly UNOBSERVED; no internal generator tests or Golden Assets are involved.
+
+## Working Art-Craft Knowledge v0.3 — Readability over time, gear and loop continuity (2026-11-01; RESEARCH SYNTHESIS)
+
+This is research on artist decisions, NOT direct observation of commercial Blockbench animation frames or native 3D testing. Primary sources include a first-person pixel-art animator's article (2D, not Bedrock) and Mojang/Blockbench authored text (3D). 2D-to-3D art transfer is a hypothesis, never copied keyframes or a numeric preset.
+
+### AK-11 — Per-frame visual detail can compete with readable continuous action
+
+**Direct artist teaching:** [Raymond Schlitter / SLYNYRD — Pixelblog 58](https://www.slynyrd.com/blog/2025/10/2/pixelblog-58-top-down-character-animation-part-3) reports animating a simplified movement template before detailed character art, preserving sword/shield side in multiple viewing directions, and then simplifying clusters/colors where visual flicker made motion difficult to read. This is his own 2D sprite experience; his original animated frames were not independently played here.
+
+**Distinct artistic hypothesis:** A voxel character's head, accessories, armor and painted marks may be readable in a still hero render but visually noisy in fast rotation. Texture/shape fidelity in *each individual frame* does not automatically guarantee an intelligible motion sequence.
+
+**APPLY:** Original motion actually has changing angles, fast movement or moving overlays and source or authored frames are available for direct research observation.
+
+**REJECT/UNKNOWN:** Delete all micro-details, force artificial symmetry, or assert a 3D model flickers based solely on clip metadata. This concept extends Animation readability and cross-references static pixel craft TK-01/TK-12; no automatic denoiser or test introduced.
+
+### AK-12 — Equipped gear can change the body's motion language
+
+**Primary art accounts:** In [SLYNYRD Pixelblog 58](https://www.slynyrd.com/blog/2025/10/2/pixelblog-58-top-down-character-animation-part-3), sword/shield equipment remains in the intended hands and changes arm-swing extent compared with unequipped motion. [Mojang — Creating a Goblin Chef](https://learn.microsoft.com/en-us/minecraft/creator/documents/makerseriesmakingthegoblinchef?view=minecraft-bedrock-stable) describes choosing arm/head/leg rotation range and speed to express personality, then refining easing and overlapping movements. Neither source provides reusable exact Bedrock curves here.
+
+**New question versus AK-04:** Attaching a shield/hammer/fishing rod to the correct bone is *structural correctness*. A stance or gait that visually implies carrying its apparent size/weight is *artistic performance*. An item can alter arm swing, balance, pose intention and recovery without requiring a new physical simulation.
+
+**APPLY:** Approved animation reference clearly shows equipped tools and a specific supported bodily response.
+
+**REJECT/UNKNOWN:** Slow down every held item by the same factor, assume exact physical kilograms or universal inertia based on screenshots, copy 2D frame timings into Bedrock, or introduce item gameplay damage logic. Existing AK-02 weight, AK-04 attachment and GK-06 hierarchy retain their owners.
+
+### AK-13 — A Looping/Once label says little about the perceived transition
+
+**Source evidence:** [sylvain_35 — Creature Animation Workflow](https://blockbenchworkshop.com/tutorial/sylvain_35/animating-a-jumping-horse) describes aligning start and end pose in the artist's own looping horse animation, while offsetting paired limbs and tails. [Bepoo Animation Showcase](https://bepoo.netlify.app/animations) labels clips Looping, Hold or Once, but its GIF content was unavailable to our reader. [Blockbench Overview & Tips](https://blockbench.net/wiki/guides/blockbench-overview-tips/) explains timeline/frame controls; they do not certify a visually smooth loop.
+
+**Distinct hypothesis:** A loop can match start/end pose yet look discontinuous if body travel, motion direction, velocity or secondary tail phase is inconsistent. A one-shot hit/death intentionally ends differently. The type flag and the artistic seam are separate claims.
+
+**APPLY:** Real source playback or poses are observable for a continuously repeating motion.
+
+**REJECT/UNKNOWN:** Force every clip to loop, blindly mirror asymmetric motion, prescribe fixed durations, or claim successful loop blending from metadata alone. No third-party GIF frames were decoded, no native Bedrock playback observed, and no new Runtime curve handling is proposed.
+
+**Research limits:** Source statements and creator clip labels are documented, not copied animation data. Gameplay state logic, physics, native quality and permission to reproduce/training remain outside these notes. No Golden Assets, generator testing or implementation.

@@ -455,3 +455,39 @@ This section extends TK-01–TK-06 with four more distinct art-craft decisions f
 ### Cross-domain material lesson
 
 The relevant artistic unit is *the mapped, visible material region*, not a PNG filename, color ramp alone or glittering render. Face shape (Geometry), physical UV/pixels (Texture/UV), material identity (Texture Styling), and visible light/VFX (render/animation) must not silently exchange authority. This research remains source-observational and has no native model, atlas or performance proof.
+
+## N. Working Art-Craft Knowledge v0.3 — Visibility, edges and repetition (2026-11-01; RESEARCH SYNTHESIS)
+
+These studies enrich artistic reasoning but are not paint recipes, exact source atlas samples, UV code, new Texture rules or model-generation tests. First-party editor documentation and named pixel artists' own written tutorials provide the observed statements; proposed adaptation to a specific Bedrock model is conditional.
+
+### TK-11 — An occluded-at-rest face may be exposed and artistically significant
+
+**Primary evidence:** [Minecraft Creator — Entity Modeling and Animation](https://learn.microsoft.com/en-us/minecraft/creator/documents/entitymodelingandanimation?view=minecraft-bedrock-stable) explicitly describes hiding cubes to paint otherwise occluded surfaces that can be revealed when the entity moves. Bedrock bone/UV data is a separate source of truth from the displayed hero pose.
+
+**New art question:** Which actually mapped face becomes visible after the source-supported jaw, arm, wing, door or accessory changes pose? A genuinely revealed face may need consistent base color, material language and identity paint even if not visible at rest. This is NOT a requirement to lavish equal detail on every invisible face.
+
+**APPLY:** Specific face/part and supported visibility change are established in current approved model/reference.
+
+**REJECT/UNKNOWN:** An unseen back in a marketing image is guessed, all inner surfaces are filled from generic presets, exact UV islands are inferred from the screenshot, or static props receive arbitrary hidden paint. GK-09 owns form/occlusion, current Texture/UV standards own mapped pixels.
+
+### TK-12 — Selective hand-authored anti-aliasing is not generic blur or UV filtering
+
+**Original artist source:** [Saint11, Anti-Alias and Banding](https://saint11.art/pixel_art_articles/article5/) separates intended drawn contour from pixel-grid approximation. Intermediate-value pixels can clarify particular long stepped slopes, while overuse can make edges blurry; repeated parallel shade strips can create banding. The author explicitly allows style- and resolution-specific exceptions. [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) has a deliberately Vanilla-limited hard-pixel aesthetic.
+
+**New decision hypothesis:** A deliberate crisp voxel step, a painterly soft transition, an edge needing a controlled halftone, an accidental UV seam and a texture-filtering artifact have **different causes**. An author can decide which individual pixels belong to an edge without universally requesting antialiased output or smooth sampling.
+
+**APPLY:** Native authored pixel grid and target visual family are actually known and a particular outline or color transition is being interpreted.
+
+**REJECT/UNKNOWN:** Blur all edges, remove all jaggies, equate bilinear sampler filtering with painted half-tones, or impose Vanilla no-soft-edge rules onto a user-approved painterly style. No source atlas or actual texture filtering settings of marketplace models were inspected. Cross-reference TK-01 clusters and TK-04 style dialect; no new painter tool.
+
+### TK-13 — Tileable environment texture versus unique entity atlas identity
+
+**First-party source:** [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) distinguishes block textures that must connect across adjacent repeated blocks from unique mapped entity faces. It illustrates a 3-by-3 arrangement as a teaching example of detecting conspicuous repetition; [Microsoft Blockbench introduction](https://learn.microsoft.com/en-us/minecraft/creator/documents/blockbench?view=minecraft-bedrock-stable) describes cube-face UV mapping.
+
+**New art question:** Is the approved surface expected to repeat across a floor/wall or preserve unique face marks such as eyes, one-of-a-kind armor scratches and weapon emblems? Tileability and individuality are not quality rankings: each has a distinct artistic function. A shared pack palette does not prove all models share the same UV islands.
+
+**APPLY:** The asset's surface is explicitly repeatable or intentionally face-unique and actual texture ownership is known.
+
+**REJECT/UNKNOWN:** Repeating a unique face as a tile, making a brick seamless by duplicating the whole character's atlas, or declaring a one-off emblem defective because it cannot tile. The example 3-by-3 image is source pedagogy, **not a request for any LazyDesigner testing**.
+
+**Rights/proof:** Sources were read as teaching materials. No original PNG/UV material from another creator was downloaded or licensed for copying or training; source pixels, effective physical texel size and native appearance remain unverified.

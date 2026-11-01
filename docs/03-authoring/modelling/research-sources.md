@@ -305,3 +305,29 @@ This section EXTENDS GK-01–GK-05 with two genuinely distinct research question
 ### Interpretation discipline for GK-06/GK-07
 
 Source facts from official Minecraft/Blockbench descriptions outrank Generic/Hytale mechanics **for Bedrock compatibility**, while the user's actual artwork outranks external aesthetic tastes. Do not infer that a correct bone tree or authentic geological material yields a visually premium result. These notes add conditional artist reasoning; implementation remains deferred.
+
+## J. Working Art-Craft Knowledge v0.3 — Design intent and motion-exposed geometry (2026-11-01; RESEARCH SYNTHESIS)
+
+These are conditional *research interpretations*, distinct from the existing Geometry standard and the machine-indexed G-P cases. Source level is explicitly stated. Research does not automatically authorize asset copying, a different 3D format, a generator test, Golden Assets, or engine work.
+
+### GK-08 — Intentional creative interpretation versus unsupported reference deviation
+
+**Observed primary professional sources:** [Mojang / Peter Sheff — Creating a Goblin Chef](https://learn.microsoft.com/en-us/minecraft/creator/documents/makerseriesmakingthegoblinchef?view=minecraft-bedrock-stable) describes ideation, fitting broad body-part shapes, then adding small personality details. It notes that an unintended modeling shape can become a defining characteristic rather than requiring an exact copy. [Minecraft Maker Series introduction](https://www.minecraft.net/pl-pl/creator/article/minecraft-maker-series-episode-1--making-goblin-chef) confirms the professional three-part modeling/texture/animation context. [Riot Games Character Art](https://www.riotgames.com/en/artedu/character-art) independently identifies believable proportions, likeness, in-game-scale readability and character fantasy as goals when translating concept art into 3D. These are first-party written teachings, **not** inspected original project/animation files.
+
+**New decision hypothesis:** The useful target is recognizable *intent and identity* supported by the approved reference, not absolute pixel-wise identity to an artist's 2D illustration. Hidden depth and minor creative modeling choices sometimes require interpretation. That flexibility must be distinguished from inventing a new role, missing essential accessory or overriding the user's locked form. This differs from existing GK-01 because it addresses **when variation from a source is legitimate**, not just which mass is important.
+
+**APPLY:** When the user authorizes stylized interpretation, source silhouette/role survives, and a specific unavailable 3D detail requires a documented decision.
+
+**REJECT/DEFER:** Source dimensions/turnaround exact, user asks same shape, an unobserved back is simply fabricated, or "happy accident" is used to justify an arbitrary random Cube. Unknown depth stays UNKNOWN. Existing owner: Geometry form/scale and user Reference Package; no automatic creative-deviation toggle.
+
+### GK-09 — Articulated models have pose-dependent geometric visibility
+
+**Primary first-party evidence:** [Minecraft Creator — Entity Modeling and Animation](https://learn.microsoft.com/en-us/minecraft/creator/documents/entitymodelingandanimation?view=minecraft-bedrock-stable) explains animation bones and pivots and advises temporarily hiding cubes while painting surfaces that may become visible later in animation. [Blockbench Overview & Tips](https://blockbench.net/wiki/guides/blockbench-overview-tips/) explains bone parenting and pivot placement.
+
+**New decision hypothesis:** A resting three-quarter image can conceal inner jaw faces, back of shields, underarm surfaces, wing roots and gap clearances later revealed by actual supported articulation. Visibility is a relation of shape, occlusion, parent/pose and viewer; the geometry and painting responsibilities must agree. The source does **not** establish the exact unseen faces or joints of a third-party boss.
+
+**APPLY:** An approved asset's actual articulated part has a supported movement envelope exposing a real face or gap.
+
+**REJECT/DEFER:** Static objects, unobserved pose, imaginary hinge, guaranteed hidden faces or demands to model every interior regardless of use. Unknown source topology and pivots remain UNKNOWN. GK-06 owns hierarchy; GK-09 owns visual consequences of pose. TK-11 below owns corresponding surface paint.
+
+**Research boundary:** No original third-party geometry, model file, animation playback or rights to reproduce the Goblin Chef design were obtained. No new rule, casebook, engine or test.
