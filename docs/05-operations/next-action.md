@@ -7,10 +7,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 **USER DECISION:** Mature AI-first Geometry source; no tests,
 build/Bun, CI, native QA, release, separate plugin or mandatory UI.
 
-**R3a–R3o:** 13 legacy shapes unchanged. Math v1/v2 retained;
-v3 Geometry Construction Language rejects collapsed REVOLVE voids,
-reports errors with part/Cuboid identity, keeps previous ring/spline
-topology and exact voxel coverage; original Recipe/Undo; <=64 Cubes.
+**R3a–R3p:** 13 shapes plus math v1–v3 unchanged. Opt-in v4
+INSTANCE reuses source-local math parts, optional reflection and signed
+linear Recipe pattern repeat; ANCHOR sees full array envelope.
+Source IDs, expanded 64-Cube budget and existing Recipe/Undo retained.
 
 **R3j:** Canonical Recipe v1 optionally persists original high-level
 `advanced_geometry_source` parameters per feature for AI editing
@@ -27,9 +27,9 @@ with generator-owned API docs. Do not hand-edit generated artifacts.
 **PROOF:** Source only. No tests/build/CI, native save/reopen,
 Bedrock export or visual QA; plugin deployment not claimed.
 
-**NEXT CODE:** Continue independent Geometry source hardening;
-generator-coupled Runtime registration/API docs remains blocked without
-Bun. Build/typecheck/tests/native/visual proof are deliberately deferred.
+**NEXT CODE:** Continue independent mathematical source improvements
+and source-safe semantic composition. Public Runtime/API generator work
+remains blocked without Bun. No build, typecheck, tests or native QA.
 Do not invent an alternative registration/quality engine.
 ## GitHub boundary and historical local recovery
 

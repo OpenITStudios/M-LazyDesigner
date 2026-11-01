@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * New mathematical/topological behaviour is opt-in under v3, not a
- * silent change to previously persisted shape placements.
+ * Numerical fixes introduced in v3 stay stable; structural instancing
+ * is opt-in under v4 without changing persisted v1-v3 shape placements.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -70,6 +70,36 @@ export const geometryMathPartSchema = z.discriminatedUnion("method", [
   }).strict(),
 ]);
 
+/**
+ * V4 geometric instancing reuses a previously declared semantic part's
+ * source-local Cuboids. The optional reflection flips its local shape
+ * around its own axis-aligned bounding-box centre; the instance's 'at'
+ * is independent of the source's placement. Optional signed linear
+ * repetition reuses canonical Recipe LINEAR pattern expansion; not a
+ * second placement engine. No UV, Bone, joint or negative-determinant
+ * transform is implicitly authored.
+ */
+export const geometryMathInstancePartSchema = z.object({
+  ...partBase,
+  method: z.literal("INSTANCE"),
+  source_part_id: id,
+  reflect_axis: axis.optional(),
+  repeat: z.object({
+    axis,
+    count: z.number().int().min(2).max(16),
+    // Signed distance: negative means repetition toward the negative axis.
+    spacing: z.number().finite().min(-32).max(32).refine(
+      value => Math.abs(value) >= 1,
+      "Repeated instances need nonzero model-unit spacing."
+    ),
+  }).strict().optional(),
+}).strict();
+
+export const geometryMathPartV4Schema = z.union([
+  geometryMathPartSchema,
+  geometryMathInstancePartSchema,
+]);
+
 const anchor = z.enum(["MIN", "CENTER", "MAX"]);
 export const geometryMathAnchorSchema = z.object({
   kind: z.literal("ANCHOR"),
@@ -94,6 +124,10 @@ const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
 };
+const programV4Fields = {
+  ...programFields,
+  parts: z.array(geometryMathPartV4Schema).min(1).max(8),
+};
 
 /**
  * The source version selects numerical semantics; it is never defaulted.
@@ -103,6 +137,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(1), ...programFields }).strict(),
   z.object({ version: z.literal(2), ...programFields }).strict(),
   z.object({ version: z.literal(3), ...programFields }).strict(),
+  z.object({ version: z.literal(4), ...programV4Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -122,9 +157,22 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       });
     }
   });
+  if (program.version === 4) {
+    program.parts.forEach((part, index) => {
+      if (part.method !== "INSTANCE") return;
+      if (!known.has(part.source_part_id) ||
+        part.source_part_id === part.id) {
+        ctx.addIssue({
+          code: "custom", path: ["parts", index, "source_part_id"],
+          message: "INSTANCE must reference another known semantic part.",
+        });
+      }
+    });
+  }
 });
 
 export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
+export type GeometryMathPartV4 = z.infer<typeof geometryMathPartV4Schema>;
 export type GeometryMathProgram = z.infer<typeof geometryMathProgramSchema>;
 export type GeometryMathVersion = GeometryMathProgram["version"];
 export type GeometryMathAnchor = z.infer<typeof geometryMathAnchorSchema>;

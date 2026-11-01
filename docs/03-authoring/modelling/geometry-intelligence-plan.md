@@ -614,6 +614,51 @@ Pending executable proof: v1/v2 reconstruction equivalence, v3
 disappearing cavity rejection, unaffected valid closed/annular profiles,
 error context, and native Undo/export/visual acceptance.
 
+### R3p — Versioned semantic instancing and canonical repetition (2026-11-02; SOURCE ONLY)
+
+AI-first composition should reuse a verified semantic construction
+without copying its polygon points, curve knots or per-Cuboid coordinates.
+V4 extends the existing Geometry Construction Language with opt-in
+`INSTANCE` parts. Each instance names `source_part_id` within the SAME
+program, and owns a distinct `id` and `at`. Its geometry is copied by
+value in local model coordinates; source world placement is not inherited.
+An optional `reflect_axis` mirrors source-local Cube bounds about the
+source bounding-box midplane. This is a geometry-only transform, not
+Texture UV mirroring, a Bone/pivot, rigging or global scene symmetry.
+
+The already-owned `geometryMathProgram.ts` resolves instance dependency
+DAGs lazily by part ID, memoizes source-local geometry, and rejects unknown,
+self-referential or cyclic part graphs. Exact codepoint ID ordering is
+used in v4 just as in v3; v1/v2 legacy locale behaviour is retained.
+Mathematical kernels and the canonical Recipe compiler remain unchanged.
+The strict v4 schema is a union of v1–v3 native mathematical methods and
+one `INSTANCE` source reference, not a new object-preset catalogue.
+
+V4 instances may request a single signed linear array via `repeat`
+(`axis`, `count` 2–16 including original, `spacing` ±1…±32).
+The existing Recipe LINEAR pattern expander creates all copies; the
+feature's 64-native-Cube budget counts the actual expanded instances.
+The semantic part's solved bounding box includes the entire array
+extent, including negative-axis repetition, so existing Recipe ANCHOR
+alignment uses the correct target envelope. A repeated instance cannot
+be re-instanced because nested arrays cannot be silently flattened.
+
+Old Geometry Construction Language v1/v2/v3 continues to reject
+`INSTANCE` and does NOT change generated Recipe IDs/placements, error
+behaviour, math versions or stored source. Native Project Group, current
+Recipe Store, incremental plan/apply and Undo remain canonical.
+AI source handles are caller declarations rather than image attestation.
+No build, typecheck, tests, CI, native QA or visual/export acceptance
+were performed. Public `construct_geometry` registration still
+requires the original Bun API generator, so no partial hand-authored
+Runtime registration or generated artifacts are committed.
+
+Future explicit source proof cases (not executed): out-of-order source
+IDs, mirrored asymmetric profile, repeated ± spacing, anchor-to-array
+bounds, nested ordinary instance chains, missing/cyclic references,
+unreferencable repeated source, and 64-Cube expanded-budget overflow;
+then native save/Undo/texture/export and exact v1–v3 compatibility.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

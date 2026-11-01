@@ -386,6 +386,62 @@ authorize mutation, fabricate reference evidence, or imply visual PASS.
 No tests/build/CI/native QA were run; public `construct_geometry`
 remains pending canonical generated API documentation.
 
+### R3p — Semantic part reuse, reflection and linear composition (source only)
+
+The opt-in `kind:"program"` supports an explicit `program.version=4`.
+V1–v3 program inputs and compiled Cuboid cohorts retain their previous
+semantics: neither their strict part schema nor their source sorting,
+Curve/REVOLVE maths or Native Recipe path is silently modified.
+
+V4 adds ONE declarative method, `INSTANCE`:
+
+```json
+{
+  "version": 4,
+  "parts": [
+    { "id": "leg_left", "method": "BOX", "at": [-5, 0, 0], "size": [2, 8, 2] },
+    { "id": "leg_right", "method": "INSTANCE", "at": [5, 0, 0],
+      "source_part_id": "leg_left" },
+    { "id": "repeated_braces", "method": "INSTANCE", "at": [0, 0, 2],
+      "source_part_id": "leg_left",
+      "repeat": { "axis": "Z", "count": 3, "spacing": 4 } }
+  ],
+  "anchors": []
+}
+```
+
+An `INSTANCE` borrows a sibling semantic part's LOCAL Cuboid geometry
+without inheriting its `at` position, native Group, Bone, UV, Texture
+or Animation. `reflect_axis: "X" | "Y" | "Z"` optionally mirrors local
+axis-aligned Cuboids about the referenced shape's local bounding-box
+midplane; no negative native scale or implicit UV mirroring occurs.
+Definitions may appear in any order. A bounded, memoized dependency
+resolver follows chained instancing, rejects unknown targets and cycles,
+and never re-evaluates the underlying profile/curve unnecessarily.
+
+Optional signed `repeat` is allowed on an INSTANCE (2–16 total
+occurrences, finite spacing of at least one model unit in either
+direction). It uses the original Recipe LINEAR pattern expansion with
+the existing native identity/Undo, rather than a separate placement
+engine. The canonical Recipe ANCHOR solver sees the FULL array envelope,
+not only the first copy, so a downstream part can align to the array.
+A repeated instance cannot itself become another INSTANCE source:
+nested/compound arrays would require an explicit separate contract.
+Expanded native instances, not only prototypes, count toward the
+original 64-Cube-per-program budget.
+
+V4 retains v3 curve mathematics, profile void checking, REVOLVE radial
+topology preflight and full voxel coverage checks. The original source
+program and exact feature/instance identities persist inside the ONE
+Authoring Recipe owner; revisions preserve unrelated native cohorts.
+No unapproved object preset, alternate engine, new Gateway tool,
+runtime evaluator, registry or database is introduced.
+
+Code/source only. Bun, typecheck, build, tests, CI, native Blockbench,
+save/reopen/export and reference/visual QA were NOT EXECUTED.
+Public `construct_geometry` remains unregistered until generated
+API/docs and Runtime registration can be authored atomically.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

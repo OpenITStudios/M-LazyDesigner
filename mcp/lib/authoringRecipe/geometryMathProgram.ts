@@ -9,6 +9,7 @@ import type { AdvancedGeometryFeature } from "./geometrySchema";
 import {
   geometryMathProgramSchema,
   type GeometryMathPart,
+  type GeometryMathPartV4,
   type GeometryMathVersion,
 } from "./geometryMathLanguage";
 import { MATH_PROGRAM_MAX_CUBOIDS,
@@ -19,7 +20,7 @@ import { revolveMathProfile } from "./geometryMathRevolve";
 import { solveRecipeConstraints } from "./constraints";
 
 /**
- * Bridges a declarative Geometry Construction Language v1 program into the
+ * Bridges a versioned Geometry Construction Language program into the
  * EXISTING Recipe v1 Cube prototypes and patterns. It owns no independent
  * state, native editor operation, MCP capability or history.
  */
@@ -33,12 +34,16 @@ type BoxFactory = (
   from: RecipeVec3, to: RecipeVec3
 ) => Pieces;
 
+type InstanceRepeat = NonNullable<Extract<
+  GeometryMathPartV4, { method: "INSTANCE" }
+>["repeat"]>;
 type LocalPart = {
   id: string;
   at: RecipeVec3;
   boxes: MathCuboid[];
   min: RecipeVec3;
   max: RecipeVec3;
+  repeat?: InstanceRepeat;
 };
 
 function realizePart(
@@ -82,7 +87,7 @@ function compareSourceIds(
   // Locale-dependent collation can reorder Recipe patterns and therefore
   // compiled placement/transaction fingerprints on other machines.
   // V1/V2 retain their historical order; v3 uses stable codepoint order.
-  return version === 3
+  return version >= 3
     ? (left < right ? -1 : left > right ? 1 : 0)
     : left.localeCompare(right);
 }
@@ -105,39 +110,144 @@ function canonicalConstraints(
   }));
 }
 
+/**
+ * Structural instancing is an opt-in v4 source operation, not a second
+ * native Recipe engine. A referenced part is resolved once (including
+ * its own INSTANCE dependencies), then its immutable local geometry is
+ * reused by value under a new semantic part ID and independent placement.
+ *
+ * Reflection uses the source-local bounding-box midplane and preserves
+ * axis-aligned native Cuboid spans. No source 'at', Group, UV mirroring,
+ * Bone/pivot or animation data is inherited or manufactured.
+ */
+function realizeV4Parts(parts: readonly GeometryMathPartV4[]): LocalPart[] {
+  const definitions = new Map(parts.map(part => [part.id, part] as const));
+  const completed = new Map<string, LocalPart>();
+  const visiting = new Set<string>();
+
+  const resolve = (partId: string): LocalPart => {
+    const cached = completed.get(partId);
+    if (cached) return cached;
+    if (visiting.has(partId)) {
+      throw new Error(
+        "GEOMETRY_MATH_INSTANCE_CYCLE: " +
+        [...visiting, partId].join(" -> ")
+      );
+    }
+    const definition = definitions.get(partId);
+    if (!definition) {
+      throw new Error(
+        "GEOMETRY_MATH_INSTANCE_SOURCE_MISSING: " + partId
+      );
+    }
+    visiting.add(partId);
+    try {
+      let boxes: MathCuboid[];
+      let repeat: InstanceRepeat | undefined;
+      if (definition.method === "INSTANCE") {
+        const original = resolve(definition.source_part_id);
+        // Cloning an already repeated assembly would otherwise silently
+        // discard its array. Nested repetition requires a separate,
+        // explicitly bounded composition contract.
+        if (original.repeat !== undefined) {
+          throw new Error(
+            "GEOMETRY_MATH_INSTANCE_REPEATED_SOURCE_UNSUPPORTED"
+          );
+        }
+        repeat = definition.repeat;
+        const reflectedAxis = definition.reflect_axis === undefined
+          ? -1 : ["X", "Y", "Z"].indexOf(definition.reflect_axis);
+        if (definition.reflect_axis !== undefined && reflectedAxis < 0) {
+          throw new Error("GEOMETRY_MATH_INSTANCE_REFLECTION_AXIS_INVALID");
+        }
+        boxes = original.boxes.map(box => {
+          const from = [...box.from] as RecipeVec3;
+          const to = [...box.to] as RecipeVec3;
+          if (reflectedAxis >= 0) {
+            const planeTwice = original.min[reflectedAxis]! +
+              original.max[reflectedAxis]!;
+            from[reflectedAxis] = planeTwice - box.to[reflectedAxis]!;
+            to[reflectedAxis] = planeTwice - box.from[reflectedAxis]!;
+          }
+          return { id: box.id, from, to };
+        });
+      } else {
+        boxes = realizePart(definition, 4);
+      }
+      const { min, max } = minMax(boxes);
+      if (repeat !== undefined) {
+        const axis = ["X", "Y", "Z"].indexOf(repeat.axis);
+        const shift = (repeat.count - 1) * repeat.spacing;
+        if (axis < 0 || !Number.isFinite(shift)) {
+          throw new Error("GEOMETRY_MATH_INSTANCE_REPEAT_INVALID");
+        }
+        // ANCHOR sees the full repeated assembly bounds, while each
+        // member remains an original Recipe LINEAR pattern instance.
+        if (shift < 0) min[axis] = min[axis]! + shift;
+        else max[axis] = max[axis]! + shift;
+      }
+      const result: LocalPart = {
+        id: definition.id,
+        at: [...definition.at] as RecipeVec3,
+        boxes, min, max,
+        ...(repeat ? { repeat } : {}),
+      };
+      completed.set(partId, result);
+      return result;
+    } catch (error) {
+      // Preserve the machine-readable error prefix while identifying the
+      // exact semantic instance chain for a bounded AI repair.
+      if (!(error instanceof Error)) throw error;
+      throw new Error(
+        error.message + " [part=" + definition.id +
+        ";method=" + definition.method + ";math_version=4]",
+        { cause: error }
+      );
+    } finally {
+      visiting.delete(partId);
+    }
+  };
+
+  return [...parts]
+    .sort((a, b) => compareSourceIds(a.id, b.id, 4))
+    .map(part => resolve(part.id));
+}
+
 export function buildGeometryMathProgramPieces(
   feature: ProgramFeature, makeBox: BoxFactory
 ): Pieces {
   // Re-validate at the builder boundary as callers may be internal. Reusing
   // this single strict schema also validates persisted source on inspection.
   const program = geometryMathProgramSchema.parse(feature.program);
-  const parts: LocalPart[] = [...program.parts]
-    .sort((left, right) => compareSourceIds(
-      left.id, right.id, program.version
-    ))
-    .map(part => {
-      try {
-        const boxes = realizePart(part, program.version);
-        const { min, max } = minMax(boxes);
-        return {
-          id: part.id,
-          at: [...part.at] as RecipeVec3,
-          boxes, min, max,
-        };
-      } catch (error) {
-        // Exact native error codes stay at the front; version 3 attaches
-        // the bounded semantic part identity so AI can repair the correct
-        // method without reauthoring unrelated parts. Preserve the cause.
-        if (program.version !== 3 || !(error instanceof Error)) throw error;
-        throw new Error(
-          error.message + " [part=" + part.id +
-          ";method=" + part.method + ";math_version=3]",
-          { cause: error }
-        );
-      }
-    });
+  const parts: LocalPart[] = program.version === 4
+    ? realizeV4Parts(program.parts)
+    : [...program.parts]
+      .sort((left, right) => compareSourceIds(
+        left.id, right.id, program.version
+      ))
+      .map(part => {
+        try {
+          const boxes = realizePart(part, program.version);
+          const { min, max } = minMax(boxes);
+          return {
+            id: part.id,
+            at: [...part.at] as RecipeVec3,
+            boxes, min, max,
+          };
+        } catch (error) {
+          // Keep exact v1/v2 errors and v3 part identity unchanged.
+          if (program.version !== 3 || !(error instanceof Error)) throw error;
+          throw new Error(
+            error.message + " [part=" + part.id +
+            ";method=" + part.method + ";math_version=3]",
+            { cause: error }
+          );
+        }
+      });
 
-  const count = parts.reduce((sum, part) => sum + part.boxes.length, 0);
+  const count = parts.reduce((sum, part) =>
+    sum + part.boxes.length * (part.repeat?.count ?? 1), 0
+  );
   if (count < 1 || count > MATH_PROGRAM_MAX_CUBOIDS) {
     throw new Error(
       "GEOMETRY_MATH_PROGRAM_NATIVE_BUDGET: " +
@@ -193,13 +303,26 @@ export function buildGeometryMathProgramPieces(
         const built = makeBox(
           patternId, name, feature.id, from, to
         );
+        if (part.repeat) {
+          const pattern = built.patterns[0];
+          // The existing Recipe LINEAR expander and native transaction
+          // execute the repetition; no duplicate Cuboid placement loop.
+          if (built.patterns.length !== 1 ||
+            !pattern || pattern.kind !== "LINEAR" ||
+            pattern.count !== 1 || built.prototypes.length !== 1) {
+            throw new Error("GEOMETRY_MATH_INSTANCE_NATIVE_PATTERN_UNEXPECTED");
+          }
+          pattern.count = part.repeat.count;
+          pattern.axis = part.repeat.axis;
+          pattern.spacing = part.repeat.spacing;
+        }
         output.prototypes.push(...built.prototypes);
         output.patterns.push(...built.patterns);
       } catch (error) {
-        if (program.version !== 3 || !(error instanceof Error)) throw error;
+        if (program.version < 3 || !(error instanceof Error)) throw error;
         throw new Error(
           error.message + " [part=" + part.id +
-          ";cube=" + box.id + ";math_version=3]",
+          ";cube=" + box.id + ";math_version=" + program.version + "]",
           { cause: error }
         );
       }

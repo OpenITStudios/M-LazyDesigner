@@ -197,9 +197,9 @@ export function revolveMathProfile(
       inner: a.inner_radius + (b.inner_radius - a.inner_radius) * t,
     };
   };
-  // Topology-preserving annular preflight is v3-only. V1/V2 must reproduce
-  // their previously authored Cube placements exactly.
-  if (version === 3) validateV3AnnularSections(
+  // Version 3 and later preserve annular topology. V1/V2 retain
+  // their original output for exact saved-Recipe reconstruction.
+  if (version >= 3) validateV3AnnularSections(
     majorRadius, top, sectionAt
   );
   return partitionMathVoxelVolume(low, size, (x, y, z) => {
