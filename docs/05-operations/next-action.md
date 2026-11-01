@@ -6,9 +6,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **USER DECISION:** End research discovery. Convert 56 GK/TK/AK source notes into bounded, useful Geometry, Texture and Animation authoring decisions. Do not use Golden Assets. No new runtime engine, database, public Gateway tool, source-art ingestion, auto-mutation or universal style preset.
 
-**SOURCE DELIVERY:** Knowledge reading is current-first: operational decision use, three domain owners, once-per-ID crosswalk, update rules, then closed source dossiers. All 56 GK/TK/AK notes, 15 CX dossiers, seven VC decisions and existing Geometry/Texture casebook inventories are preserved. Raw source notes, specialist Skills, casebook bytes and Runtime behavior remain unchanged.
+**SOURCE DELIVERY:** P0 Recipe Knowledge activation prioritizes source-hashed, usable case matches and existing explicitly linked features ahead of alphabetical filler when selecting the same maximum eight implicit planning features. Explicit selected-feature inspections remain unchanged; suggestions are still advisory and cannot authorize native edits. The seven VC decisions, 71 research/source entries, three specialist instructions and Texture/Animation boundaries remain unchanged.
 
-**EVIDENCE:** Source-level reorder, link/heading inventory and 71-ID crosswalk coverage checked. Focused regression adjusted for the new section order; Bun NOT EXECUTED (CI disabled). Installed Blockbench/visual quality remain UNVERIFIED; previous embedded casebook changes still need normal build/deploy/reload to become live. No user-PC prerequisite, release or Golden task.
+**EVIDENCE:** Current Local source path reviewed; existing selector and bounded Recipe-planning consumer updated with positive/negative/explicit-scope regression expectations. Bun tests NOT EXECUTED (CI disabled); no installed Blockbench, native output or visual quality proof. Previous bundled casebook changes still require normal build/deploy/reload. No user-PC prerequisite, Golden task or release.
 
 ## GitHub boundary and historical local recovery
 

@@ -39,8 +39,6 @@ export function reviewRecipeKnowledge(
   knowledgeIndex: RecipeKnowledgeSnapshot,
   options: RecipeKnowledgeSelectionOptions = {}
 ) {
-  const featureIds = options.feature_ids ??
-    [...(recipe.feature_intents ?? [])].map(feature => feature.id).sort().slice(0, 8);
   const total = recipe.feature_intents?.length ?? 0;
   const binding = resolveRecipeKnowledgeLinks(
     recipe, knowledgeIndex, options.compatible_with
@@ -50,7 +48,8 @@ export function reviewRecipeKnowledge(
   const suggestions = binding.state === "REVIEW_REQUIRED" ? [] :
     suggestRecipeKnowledge(recipe, knowledgeIndex, {
       max_per_feature: 2, max_token_proxy: 500,
-      ...options, feature_ids: featureIds,
+      ...options,
+      ...(options.feature_ids === undefined ? { auto_focus_limit: 8 } : {}),
     });
   const geometryProposals = proposeGeometryConstruction(
     recipe, knowledgeIndex, binding, suggestions, options.curve_observations
@@ -63,7 +62,8 @@ export function reviewRecipeKnowledge(
       ? { guidance_blocked_reason: "RECIPE_KNOWLEDGE_LINK_REVIEW_REQUIRED" as const }
       : {}),
     total_feature_count: total,
-    omitted_feature_count: Math.max(0, total - featureIds.length),
+    omitted_feature_count: Math.max(0, total -
+      (options.feature_ids?.length ?? Math.min(total, 8))),
     execution_boundary: "SOURCE_PLANNING_ONLY_NO_NATIVE_MUTATION_OR_VISUAL_PROOF" as const,
   };
 }

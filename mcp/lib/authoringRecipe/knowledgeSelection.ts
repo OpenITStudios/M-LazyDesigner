@@ -1,4 +1,4 @@
-import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import type { AuthoringRecipe, RecipeFeatureIntent } from "@/lib/authoringRecipe/contracts";
 import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
 import {
   indexRecipeKnowledge,
@@ -19,6 +19,8 @@ export type RecipeKnowledgeSelectionOptions = {
   compatible_with?: KnowledgeCompatibility;
   max_per_feature?: number;
   max_token_proxy?: number;
+  /** Bounded, relevance-first implicit Recipe planning; direct callers remain unchanged. */
+  auto_focus_limit?: number;
   /** Exact bounded semantic feature selection for native Recipe inspection. */
   feature_ids?: readonly string[];
   /** Optional explicit curve samples from current source evidence, never inferred. */
@@ -115,7 +117,10 @@ export function suggestRecipeKnowledge(
   if (!Number.isInteger(limit) || limit < 1 || limit > 4 ||
       !Number.isInteger(tokenBudget) || tokenBudget < 20 || tokenBudget > 2_000 ||
       (options.query !== undefined &&
-        (typeof options.query !== "string" || options.query.length > 256))) {
+        (typeof options.query !== "string" || options.query.length > 256)) ||
+      (options.auto_focus_limit !== undefined &&
+        (!Number.isInteger(options.auto_focus_limit) ||
+         options.auto_focus_limit < 1 || options.auto_focus_limit > 8))) {
     throw new Error("RECIPE_KNOWLEDGE_SELECTION_BUDGET_INVALID");
   }
   const requested = options.feature_ids;
@@ -142,25 +147,18 @@ export function suggestRecipeKnowledge(
   if (requested?.some(id => !knownIds.has(id))) {
     throw new Error("RECIPE_KNOWLEDGE_SELECTION_FEATURE_UNKNOWN");
   }
-  const selected = requested === undefined
-    ? features
-    : features.filter(feature => requested.includes(feature.id));
   const decisions = planRecipeFeatureRepresentations(features).decisions;
   const routes = new Map(decisions.map(decision => [decision.id, decision.route]));
-  return [...selected].sort((a,b) => a.id.localeCompare(b.id)).map(feature => {
-    // Match one exact authored case title first; if it is absent or tied,
-    // consult the same verified casebook's optional problem signals.
-    // Reject competing case matches and keep all advice non-executable.
+
+  // One source-hashed case matcher is shared by implicit priority and selected
+  // guidance. This does not treat a title or source match as approved artwork.
+  const caseMatches = new Map<string, (KnowledgeSection & { score: number }) | null>();
+  const matchingCase = (feature: RecipeFeatureIntent) => {
+    if (caseMatches.has(feature.id)) return caseMatches.get(feature.id)!;
     const titles = selectKnowledgeSections({
-      sections: caseTitles,
-      query: feature.label,
-      limit: 8,
-      maxTokenProxy: 8_000,
+      sections: caseTitles, query: feature.label, limit: 8, maxTokenProxy: 8_000,
     });
-    // A shared title token ("painted", "form", "pivot") is insufficient:
-    // prefer two distinct, issue-specific title terms or one exact curated
-    // problem signal. This does not reject a source-supported action; it only
-    // abstains from optional advice when the current feature text is vague.
+    // Parent headings, generic nouns and ambiguous matches never choose a case.
     const labelTerms = new Set(problemWords(feature.label));
     const strongTitles = titles.filter(section =>
       problemWords(section.heading).filter(word => labelTerms.has(word)).length >= 2
@@ -169,8 +167,38 @@ export function suggestRecipeKnowledge(
       (strongTitles.length === 1 ||
         strongTitles[0]!.score > strongTitles[1]!.score)
       ? strongTitles[0]! : null;
-    const matchedCase = matchedTitle ??
+    const matched = matchedTitle ??
       findUniqueProblemSignalCase(caseTitles, feature.label, readExcerpt);
+    caseMatches.set(feature.id, matched);
+    return matched;
+  };
+
+  // Only implicit Recipe planning opts in. Explicit feature IDs and existing
+  // direct readers retain their semantics. Rank verified, fitting, distinct
+  // cases ahead of alphabetic filler; pinned links are the strongest owner.
+  // Never expand the eight-feature planning budget or read research notebooks.
+  const linked = new Set((recipe.knowledge_links ?? []).map(link => link.feature_id));
+  const selected = requested !== undefined
+    ? features.filter(feature => requested.includes(feature.id))
+    : options.auto_focus_limit === undefined ? features
+    : features.map(feature => {
+      const matched = matchingCase(feature);
+      const excerpt = matched &&
+        Number.isFinite(matched.token_proxy) &&
+        matched.token_proxy >= 0 && matched.token_proxy <= tokenBudget
+        ? readExcerpt(matched) : null;
+      return {
+        feature,
+        priority: (linked.has(feature.id) ? 2 : 0) +
+          (excerpt && !excerpt.guidance_truncated ? 1 : 0),
+      };
+    }).sort((a, b) => b.priority - a.priority ||
+      a.feature.id.localeCompare(b.feature.id))
+      .slice(0, options.auto_focus_limit)
+      .map(entry => entry.feature);
+
+  return [...selected].sort((a,b) => a.id.localeCompare(b.id)).map(feature => {
+    const matchedCase = matchingCase(feature);
     const query = [
       feature.label, recipe.name, (feature.geometry_reasons ?? []).join(" "),
       options.query ?? "",

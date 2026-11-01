@@ -621,6 +621,92 @@ describe("G2 retrieval discrimination before the G3 Geometry quality benchmark",
         .toBe("review_required");
     }
   });
+
+  test("implicit planning prioritizes late, source-matched craft questions without changing the Recipe", () => {
+    const corpus = readBundledRecipeKnowledgeIndex()!;
+    const draft: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "p0-focus", name: "model review",
+      prototypes: [], patterns: [],
+      feature_intents: [
+        ...Array.from({ length: 10 }, (_, i) => ({
+          id: "a" + String(i).padStart(2, "0"),
+          label: "decorative panel " + i,
+          visual_role: "THREE_DIMENSIONAL" as const,
+          evidence: "PROVISIONAL" as const,
+          geometry_reasons: ["SILHOUETTE" as const],
+        })),
+        {
+          id: "z-form", label: "boss focal silhouette unclear",
+          visual_role: "THREE_DIMENSIONAL", evidence: "PROVISIONAL",
+          geometry_reasons: ["SILHOUETTE"],
+        },
+        {
+          id: "z-joint", label: "arm pivot",
+          visual_role: "THREE_DIMENSIONAL", evidence: "PROVISIONAL",
+          geometry_reasons: ["MOTION"],
+        },
+      ],
+    };
+    const unchanged = structuredClone(draft);
+    const active = reviewRecipeKnowledge(draft, corpus);
+    expect(active.suggestions).toHaveLength(8);
+    expect(active.total_feature_count).toBe(12);
+    expect(active.omitted_feature_count).toBe(4);
+    for (const [featureId, caseId] of [
+      ["z-form", "G-P02"], ["z-joint", "G-P05"],
+    ] as const) {
+      const suggestion = active.suggestions.find(item => item.feature_id === featureId)!;
+      expect(suggestion.sections.filter(section =>
+        section.source === RECIPE_GEOMETRY_CASE_SOURCE_PATH)
+        .map(section => section.heading.slice(0, 5))).toEqual([caseId]);
+      expect(suggestion.feature_route).toBe("REVIEW_REQUIRED");
+      expect(active.geometry_proposals.find(item =>
+        item.feature_id === featureId)).toMatchObject({
+          verdict: "MORE_REFERENCE_EVIDENCE_REQUIRED",
+          mutation_authorized: false,
+          visual_verdict: "NOT_EVALUATED",
+        });
+    }
+    expect(active.suggestions.some(item => item.feature_id === "a09")).toBe(false);
+    expect(draft).toEqual(unchanged);
+    expect(draft.knowledge_links).toBeUndefined();
+
+    // Explicit scoped inspection remains authoritative over implicit focus.
+    const scoped = reviewRecipeKnowledge(draft, corpus, { feature_ids: ["a09"] });
+    expect(scoped.suggestions.map(item => item.feature_id)).toEqual(["a09"]);
+    expect(scoped.omitted_feature_count).toBe(11);
+    expect(() => suggestRecipeKnowledge(draft, corpus, {
+      auto_focus_limit: 9,
+    })).toThrow("RECIPE_KNOWLEDGE_SELECTION_BUDGET_INVALID");
+  });
+
+  test("unrelated words do not promote ambiguous features into implicit priority", () => {
+    const corpus = readBundledRecipeKnowledgeIndex()!;
+    const weak: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "p0-abstain", name: "creature",
+      prototypes: [], patterns: [],
+      feature_intents: [
+        ...Array.from({ length: 9 }, (_, i) => ({
+          id: "a" + String(i).padStart(2, "0"),
+          label: "decorative panel " + i,
+          visual_role: "THREE_DIMENSIONAL" as const,
+          evidence: "PROVISIONAL" as const,
+          geometry_reasons: ["SILHOUETTE" as const],
+        })),
+        {
+          id: "z-unknown", label: "dragon tail",
+          visual_role: "THREE_DIMENSIONAL", evidence: "CONFLICTING",
+          geometry_reasons: ["MOTION"],
+        },
+      ],
+    };
+    const plan = reviewRecipeKnowledge(weak, corpus);
+    expect(plan.suggestions).toHaveLength(8);
+    expect(plan.suggestions.some(item => item.feature_id === "z-unknown")).toBe(false);
+    expect(plan.omitted_feature_count).toBe(2);
+    expect(compileAuthoringRecipe(weak).feature_plan?.state)
+      .toBe("review_required");
+  });
 });
 
 
