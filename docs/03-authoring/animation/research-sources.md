@@ -556,3 +556,24 @@ Evidence is the original creator listing and clip-name metadata. No public works
 
 **Format and legal separation:** ACTG examples are artist-published CC0; Workshop model format may be Generic/Modded and not native Bedrock. Chieftain is Modded, Skeleton Lord Generic, paid Seahorses claim Bedrock; names are not independent format-conformance proof. ArtsByKev Sketchfab professional pieces explicitly carry NoAI restrictions, so do not import those models/frames into any AI workflow. All observations in this section are **reference research only**. Neither user’s current generator nor any Golden Asset was tested.
 
+
+## Working Art-Craft Knowledge v0.7 — Keyed acting plus alternate form and contextual secondary response (2026-11-01; RESEARCH SYNTHESIS)
+
+The original [Sculptor animation JSON](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/resources/assets/mowziesmobs/animations/sculptor.animation.json), [geometry](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/resources/assets/mowziesmobs/geo/sculptor.geo.json) and [visual-control code](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/java/com/bobmowzie/mowziesmobs/client/model/entity/ModelSculptor.java) were source-inspected at one pinned revision. Data/implementation facts are established; physical playback, beauty, acting quality, contacts and Bedrock-native compatibility are NOT verified.
+
+### AK-19 — One actor may draw on several independent authored sources of visual motion
+
+**Distinct question:** Do serialized main clips, alternate hand/face shapes, and reactive beard/cloth movement share one mechanism? Not necessarily. Source separation is an important way to understand what contributes to the on-screen performance; it is not by itself an instruction to implement more systems.
+
+**SOURCE_INSPECTED:** The Sculptor animation file contains **25 records** with labels such as idle, talk, laugh, guard, hurt, multiple attacks, test-pass/fail, death and separate record names containing rig test/dynamics test/old. Some are looped or held. The Java model separately uses hand controller values to show either closed or open geometry; references a beard chain and applies skirt corrections based on current body/leg relationships; and adds small procedural motion to brows, cloth and other parts. Thus authored keyframe records do not carry every visual state or secondary response by themselves. The presence of a named animation record does NOT mean it is necessarily used in normal gameplay or visually successful.
+
+**Independent comparison:** The [Blockbench official Face Rig](https://blockbench.net/wiki/guides/animation-expressions/) documents variable-based selection of alternative expression groups, a related authoring concept but implemented differently from Mowzie's Java logic. The [original Frostmaw Java source](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/java/com/bobmowzie/mowziesmobs/client/model/entity/ModelFrostmaw.java) also uses an older AdvancedModelRenderer approach, demonstrating that professional output need not imply one canonical source-code or export method.
+
+**INFERENCE for artist study:** Analyze the acting as multiple causal contributions: main pose/clip, deliberately different part shape, motion of flexible secondary structures and appropriate action effects. A loose beard or skirt should be responsive to the character's actual supported pose and material; a rigid stone armor plate should not automatically wiggle. This extends AK-09 phase relationships and AK-18 emotional states with source-verified evidence of multiple motion ownership mechanisms.
+
+**APPLY:** Approved reference requires meaningful discrete grip/expression plus supporting cloth/beard motion, the actual target format is known, and the current visible character needs those distinctions.
+
+**REJECT/UNKNOWN:** Assume this Java skirt correction, matrices or dynamic beard physics are available as native Minecraft Bedrock features; apply sine to every bone; add unnecessary controllers to simple static props; count old/test-named records as accepted motion clips; infer actual anticipation, hand contact or smoothness from source alone. No user model generation, golden benchmark, local/native test or engine development.
+
+**Rights/limits:** Mowzie's pinned license restricts copying its IP; source model, textures, motion keys and code are not redistributed or used as a dataset. This is a link-only high-level research synthesis. Existing Animation standard and specialist remain the only relevant production owners.
+

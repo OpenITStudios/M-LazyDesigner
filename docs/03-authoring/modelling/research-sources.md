@@ -437,3 +437,22 @@ The source file [Desert Dog bbmodel at pinned three-blockbench revision](https:/
 
 **What remains UNKNOWN:** all external .bbmodel files above, actual authored face pixels, back and side views beyond the pictured thumbnail, exact textures, full animation playback, human artistic acceptance and right to ingest copyrighted/NoAI works as generative AI inputs. No tests or engine work. The user's approved Warchief-like high-detail art remains the visual authority; third-party examples add *comparisons*, not replacements.
 
+
+## N. Working Art-Craft Knowledge v0.7 — Alternate forms on one expressive character (2026-11-01; RESEARCH SYNTHESIS)
+
+**Evidence:** The original Mowzie's Mobs Sculptor geometry, animation records and Java model controller were inspected at commit 7aa17309337cbd4102efc418cba12a4983b1540c. The project is All Rights Reserved; the observations below are factual, abstracted research only. Public source code is not permission to copy the character into a new model or training dataset. The file belongs to a Java/GeckoLib-derived implementation, NOT Minecraft Bedrock native output.
+
+### GK-14 — One semantic body part can switch between distinct visible forms
+
+**Original evidence (SOURCE INSPECTED):** [Sculptor geometry](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/resources/assets/mowziesmobs/geo/sculptor.geo.json) contains 136 named bones and 103 cuboids with a declared 128x64 atlas size. Each hand includes both open-hand and closed-hand geometry as alternative descendants of the same hand. [ModelSculptor.java](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/java/com/bobmowzie/mowziesmobs/client/model/entity/ModelSculptor.java) uses hand-controller values to selectively hide or show each alternative. Other named chains include beard, brows, clothing, accessories, a separately rooted gauntlet and control-only nodes with no Cube.
+
+**Independent editor documentation:** [Blockbench Animation Expressions — Face Rig](https://blockbench.net/wiki/guides/animation-expressions/) illustrates alternative mouth/eye shape groups and variable-driven selection. This demonstrates a similar ARTISTIC representational decision but does not establish that Generic editor, Java GeckoLib and Bedrock export behavior are interchangeable.
+
+**Distinct art-craft hypothesis:** A meaningful gesture or expression can require a discrete 3D silhouette change, not only rotation of one rigid part or painting a new expression on its existing face. Keep separate (1) the semantic part, (2) its alternate geometry states, (3) their appearance/UV requirements, and (4) when the desired motion chooses each state. A very simple asset may instead use one painted face or joint: alternatives are not universally better.
+
+**APPLY:** Source-supported open/closed hand, mouth, eye or accessory state alters identity, readability or grip geometry and the target format supports the intended representation.
+
+**REJECT/UNKNOWN:** Duplicating every Cube for every state; copying Mowzie part names or visibility code; deducing alternate meshes from a product title or screenshot; assuming all control bones have geometry; treating 136 bones as a premium-quality target. No actual Sculptor animation frames, texture PNG or native Bedrock export was inspected. Existing Modelling hierarchy and form ownership remain unchanged; cross-link TK-17 and AK-19.
+
+**Related contrast, not another card:** [Frostmaw source](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/java/com/bobmowzie/mowziesmobs/client/model/entity/ModelFrostmaw.java) uses an older Java AdvancedModelRenderer authoring path, while Sculptor uses Geo JSON with custom model logic. The two visible fantasy characters do not imply the same source format or bone-count conventions. No model or geometry data copied into LazyDesigner.
+

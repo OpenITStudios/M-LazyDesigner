@@ -575,3 +575,20 @@ This cohort compares original single-work promotional thumbnails from [claypanda
 
 **Honest appearance boundary:** Source-page static art can support focal-color, silhouette and theme comparisons, but cannot certify original 64x64/256x128 atlas contents, UV ownership, actual face pixel continuity, motion-time flicker, shader/pigment provenance or performance in Blockbench/Bedrock. No new paint algorithm, texture loader, test or Golden Asset.
 
+
+## R. Working Art-Craft Knowledge v0.7 — Appearance continuity across shape-state switches (2026-11-01; RESEARCH SYNTHESIS)
+
+**Source:** Pinned Mowzie's Mobs Sculptor geometry and Java model source were read, as well as the official [Blockbench Face Rig guide](https://blockbench.net/wiki/guides/animation-expressions/). The Sculptor's original texture PNG was NOT opened or sampled. Copyright: [Mowzie's License.txt](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/License.txt) is All Rights Reserved; no copyrighted pixels/asset file or code are brought into this repository.
+
+### TK-17 — A replaced visible carrier may need a related, not necessarily identical, material identity
+
+**Original source facts:** [Sculptor geometry](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/resources/assets/mowziesmobs/geo/sculptor.geo.json) provides distinct alternate hand Cubes and the original model's declared texture dimensions of 128x64. [ModelSculptor.java](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/java/com/bobmowzie/mowziesmobs/client/model/entity/ModelSculptor.java) references a base Sculptor texture and switches open/closed geometry visibility at runtime. The [Face Rig guide](https://blockbench.net/wiki/guides/animation-expressions/) presents different mouth/eye shapes on different groups. These confirm alternative appearance CARRIERS, not the real bitmaps or how good the finished painted transitions look.
+
+**New artistic question:** During a justified hand, eye or mouth-state switch, which visual identities should remain consistent (skin, eye shape language, readable focal contrast) and which must change for the intended expression? Material continuity across separately mapped faces need not imply one shared UV island, one PNG for every alternate state or identical colors on every expression.
+
+**APPLY:** A current approved character/reference contains genuine alternate shape states, the mapped faces and intended material relation are known, and visual continuity/controlled contrast matters to the story.
+
+**REJECT/UNKNOWN:** Blindly mirroring UV between differently shaped hands; assuming the alternate closed fist uses the same painted pixels; generating a new atlas for every facial pose; declaring perceived temporal continuity from source JSON without the rendered animation. This is distinct from TK-14 static detail carriers and TK-16 cosmetic recolors, while current UV/Texture owners stay authoritative.
+
+**Evidence-sensitive material caution, extending TK-06:** The original repository lists both Sculptor base texture and a separately named highlight image. The inspected Java model selects the base texture; a separate client event calls the highlight image a Sculptor BLOCK glow resource. File-name similarity alone does NOT establish an emissive character texture or a second base atlas. Public [Mowzie's Mobs credits](https://www.curseforge.com/minecraft/mc-mods/mowzies-mobs) name a distinct Sculptor texture contributor, reinforcing independent artist/source rights. No original source PNG, UV-to-face paint or native rendered quality was established.
+
