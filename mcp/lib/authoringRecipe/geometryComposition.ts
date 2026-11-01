@@ -135,8 +135,81 @@ export function requireAdvancedGeometryChangeScope(
   ) || !unchanged(
     sortById((previous.feature_intents ?? []).filter(feature => !selected.has(feature.id))),
     sortById((candidate.feature_intents ?? []).filter(feature => !selected.has(feature.id)))
+  ) || !unchanged(
+    sortById((previous.advanced_geometry_source ?? []).filter(feature =>
+      !selected.has(feature.id)
+    )),
+    sortById((candidate.advanced_geometry_source ?? []).filter(feature =>
+      !selected.has(feature.id)
+    ))
   )) {
     throw new Error("ADVANCED_GEOMETRY_UNRELATED_FEATURE_CHANGED");
+  }
+}
+
+/**
+ * A persisted shape parameter is useful to AI only while it still reproduces
+ * the saved Recipe feature cohort. Do not silently treat source labels as
+ * geometry identity after manual edits, partial imports or template changes.
+ *
+ * This is exact Recipe/source equivalence, NOT visual/reference approval.
+ * Legacy Recipes may continue without source parameters.
+ */
+export function reviewStoredAdvancedGeometrySource(recipe: AuthoringRecipe): {
+  state: "AVAILABLE_MATCHED_SOURCE" | "LEGACY_SOURCE_UNAVAILABLE" | "SOURCE_RECIPE_MISMATCH";
+  source_features: AdvancedGeometryFeature[];
+  visual_verdict: "NOT_EVALUATED";
+} {
+  const sources = recipe.advanced_geometry_source;
+  const empty = (state:
+    "LEGACY_SOURCE_UNAVAILABLE" | "SOURCE_RECIPE_MISMATCH") => ({
+    state,
+    source_features: [] as AdvancedGeometryFeature[],
+    visual_verdict: "NOT_EVALUATED" as const,
+  });
+  if (!sources) return empty("LEGACY_SOURCE_UNAVAILABLE");
+  try {
+    if (!Array.isArray(sources) || sources.length === 0 ||
+      sources.length > MAX_FEATURES ||
+      new Set(sources.map(source => source.id)).size !== sources.length) {
+      return empty("SOURCE_RECIPE_MISMATCH");
+    }
+    const expected = buildAdvancedGeometryRecipeCandidate({
+      schema: recipe.schema,
+      compiler_version: recipe.compiler_version,
+      id: recipe.id,
+      name: recipe.name,
+      prototypes: [],
+      patterns: [],
+    }, sources).next_recipe;
+    const selected = new Set(sources.map(source => source.id));
+    const ownerByPattern = new Map(
+      recipe.patterns.map(pattern => [pattern.id, pattern.feature_id] as const)
+    );
+    const sortPlacement = (value: ReturnType<typeof compileAuthoringRecipe>) =>
+      value.placements.map(placement => placement)
+        .sort((left, right) => left.id.localeCompare(right.id));
+    const actual = sortPlacement(compileAuthoringRecipe(recipe))
+      .filter(placement => selected.has(ownerByPattern.get(
+        placement.source_pattern_id
+      ) ?? ""));
+    const expectedPlacements = sortPlacement(compileAuthoringRecipe(expected));
+    const actualFeatures = (recipe.feature_intents ?? [])
+      .filter(feature => selected.has(feature.id))
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const expectedFeatures = (expected.feature_intents ?? [])
+      .sort((left, right) => left.id.localeCompare(right.id));
+    if (JSON.stringify(actual) !== JSON.stringify(expectedPlacements) ||
+      JSON.stringify(actualFeatures) !== JSON.stringify(expectedFeatures)) {
+      return empty("SOURCE_RECIPE_MISMATCH");
+    }
+    return {
+      state: "AVAILABLE_MATCHED_SOURCE",
+      source_features: structuredClone(sources),
+      visual_verdict: "NOT_EVALUATED",
+    };
+  } catch {
+    return empty("SOURCE_RECIPE_MISMATCH");
   }
 }
 
@@ -151,6 +224,12 @@ export function buildAdvancedGeometryRecipeCandidate(
 ): { next_recipe: AuthoringRecipe; summary: AdvancedGeometrySummary } {
   if (!Array.isArray(features) || features.length < 1 || features.length > MAX_FEATURES) {
     throw new Error("ADVANCED_GEOMETRY_FEATURE_BUDGET_INVALID");
+  }
+  const priorShapeSources = source.advanced_geometry_source ?? [];
+  if (!Array.isArray(priorShapeSources) ||
+    priorShapeSources.length > MAX_FEATURES ||
+    new Set(priorShapeSources.map(feature => feature.id)).size !== priorShapeSources.length) {
+    throw new Error("ADVANCED_GEOMETRY_STORED_SOURCE_INVALID");
   }
   const ids = features.map(feature => requireIdentity(feature.id, "feature"));
   if (new Set(ids).size !== ids.length) {
@@ -216,6 +295,18 @@ export function buildAdvancedGeometryRecipeCandidate(
       rig_review_required: (feature.geometry_reasons ?? []).includes("MOTION"),
     });
   }
+  // Preserve editable source for unrelated shapes and update only the
+  // requested cohorts. `replace_generated` is an invocation permission, not a
+  // persisted shape parameter; never serialize it into the project source.
+  const selectedShapeIds = new Set(features.map(feature => feature.id));
+  const authoredShapeSources = features.map(feature => {
+    const { replace_generated: _permission, ...parameters } = feature;
+    return structuredClone(parameters) as AdvancedGeometryFeature;
+  });
+  next.advanced_geometry_source = [
+    ...priorShapeSources.filter(feature => !selectedShapeIds.has(feature.id)),
+    ...authoredShapeSources,
+  ].sort((left, right) => left.id.localeCompare(right.id));
   const compiled = compileAuthoringRecipe(next);
   // Compare only newly requested feature cohorts. Other authored Cubes
   // can legitimately have coincident coordinates under distinct Bones.

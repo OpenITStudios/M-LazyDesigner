@@ -1,3 +1,5 @@
+import type { AdvancedGeometryFeature } from "./geometrySchema";
+
 export const AUTHORING_RECIPE_SCHEMA_VERSION = 1 as const;
 export const AUTHORING_RECIPE_COMPILER_VERSION = 1 as const;
 
@@ -168,6 +170,13 @@ export type AuthoringRecipe = {
   patterns: RecipePattern[];
   /** Optional all-feature routing; legacy recipes keep their original behavior. */
   feature_intents?: RecipeFeatureIntent[];
+  /**
+   * Optional source parameters for generated Advanced Geometry features.
+   * This is the canonical editable high-level shape source, not an extra
+   * Recipe engine or verified image observation. Legacy Recipes omit it.
+   * A revision changes only the selected feature IDs.
+   */
+  advanced_geometry_source?: AdvancedGeometryFeature[];
   /** Optional pinned knowledge; separate from image/source evidence refs. */
   knowledge_links?: RecipeKnowledgeLink[];
   constraints?: RecipeConstraint[];

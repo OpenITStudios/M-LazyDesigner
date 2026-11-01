@@ -219,6 +219,44 @@ Runtime capability, and no installed/native/visual acceptance is claimed.
 
 User requested code-first development: tests, Bun, CI and Blockbench
 verification are intentionally deferred until code integration matures.
+### R3j — Durable high-level shape source and bounded revision impact (code only)
+
+Advanced Geometry is no longer only a compiled Cube collection. Its
+existing Authoring Recipe v1 now includes an OPTIONAL
+`advanced_geometry_source` array of the exact high-level feature
+parameters (Curve samples, Cuboid bounds, Frame/Hollow Box thickness,
+voxel Cylinder radius, Arch rise and Repeat pattern). The array is
+canonically sorted and updated **only for the selected feature IDs**.
+The command-only `replace_generated` flag is never persisted as a
+shape property. Older/other Recipe documents remain compatible and
+can omit the optional source field.
+
+`store.ts` validates source count, strict feature schema, unique IDs,
+Recipe owner and authored native patterns before serializing the
+same bounded Project Recipe store. No new DB, per-model JSON file,
+revision registry or second serializer is introduced.
+
+`reviewStoredAdvancedGeometrySource` reconstructs the declared
+features through the EXISTING shape compiler without native edits,
+then checks exact compiled placement/feature ownership equality.
+AI inspect exposes `source_features` only if the parameters match
+the persisted Recipe geometry. Mismatches are a review blocker;
+legacy source-less Recipes remain readable but do not invent
+original feature parameters. This is structural source evidence,
+NOT visual/reference or Bedrock export certification.
+
+The native Geometry plan/apply path now returns a bounded
+`impact` summary from the canonical incremental rebuild: created,
+updated, removed, preserved and metadata-only instance counts,
+source-owned examples (max eight each), and explicit UV, Texture and
+Animation invalidation. Impact is read-only until apply. It is
+not a numeric visual-quality score or permission to override
+unsupported textured feature revisions.
+
+Public `construct_geometry` registration still requires one coherent
+source + generated API delivery; the current GitHub-only environment
+cannot run the Bun generator. No tests/build/native QA were run
+per the active user instruction.
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

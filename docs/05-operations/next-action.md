@@ -5,31 +5,31 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 ## Primary next — Advanced Geometry CODE-FIRST (2026-11-01)
 
 **USER DECISION:** Mature AI-first Geometry source; no tests,
-build/Bun, CI, native QA, release, separate plugin or required UI.
+build/Bun, CI, native QA, release, separate plugin or mandatory UI.
 
-**R3a–R3g:** Strict AI inspect/plan/apply contract and source-scoped
-Recipe geometry: Cuboid, Frame, Repeat, Curve/Taper. Existing
-Bedrock Cube/Group and same-Undo Recipe metadata are the only
-native construction and persistence owners. Editable .bbmodel keeps
-the Project Recipe custom source via `export:true`.
+**R3a–R3i:** Bedrock Cuboid/Frame/Repeat/Curve/Hollow Box/Arch/
+Voxel Cylinder shapes; internal inspect/plan/apply with source+scene
+revision checks. Native Cubes, parent Group, same Undo and existing
+Project Recipe store remain the ONLY authoring/persistence owners.
 
-**R3h:** Hollow Box and Voxel Arch; pure shape mathematics in
-`geometryShapeBuilders.ts` rather than a second Recipe engine.
-**R3i:** Voxel Cylinder/Tube for wheel/pipe/column shapes, row-run
-Cube compression, 4-connected wall and enclosed-hole guards.
-Stable generated pattern IDs support bounded Recipe revisions.
+**R3j:** Canonical Recipe v1 optionally persists original high-level
+`advanced_geometry_source` parameters per feature for AI editing
+after save/reopen. New plans update selected shapes only; store
+validates source identities/pattern ownership. AI inspect returns
+parameter source only if recompiled geometry still matches stored
+Recipe. Plan/apply also return bounded incremental impact counts
+and UV/Texture/Animation invalidation; no visual PASS inference.
 
-**PUBLIC AI:** `construct_geometry` is not registered. Source
-and official generator-owned API docs must be authored together.
-No Bun or network available in this GitHub-only execution context;
-do not hand-edit generated artifacts or commit half a registration.
+**PUBLIC AI:** `construct_geometry` remains UNREGISTERED. A real
+generator-capable Bun workspace is required for atomic registration
+with generator-owned API docs. Do not hand-edit generated artifacts.
 
-**PROOF:** Source only; no tests/typecheck/build, CI, installed
-Blockbench, native save/reopen, Bedrock export or visual QA.
+**PROOF:** Source only. No tests/build/CI, native save/reopen,
+Bedrock export or visual QA; plugin deployment not claimed.
 
-**NEXT CODE:** Complete canonical Runtime registration plus API
-generator output in an executable workspace. Expand only source-safe
-Geometry before QA authorization; do not create a second engine.
+**NEXT CODE:** Close canonical Runtime registration + generated docs
+in an executable workspace; then reference-driven corrections.
+Do not invent an alternative registration/quality engine.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

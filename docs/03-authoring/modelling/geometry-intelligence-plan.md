@@ -421,6 +421,32 @@ mutation mechanism. Revision and native authoring stay in the canonical
 Recipe compiler/transaction. Visual smoothness, target-reference
 correspondence and Bedrock export remain UNVERIFIED. Per user decision,
 no tests, typecheck, Bun/CI or native QA were executed.
+### R3j — Durable parameter source & change impact (2026-11-01; CODE ONLY)
+
+To make AI-driven future revisions reconstructable after `.bbmodel`
+save/reopen, existing `AuthoringRecipe` v1 now has optional
+`advanced_geometry_source` (bounded actual shape parameters). This is
+part of the canonical Project Recipe store and native Undo history,
+not another saved data stream, model manager, or new Runtime.
+
+Creation stores the feature inputs without transient replacement
+permission. Revision updates only requested features and preserves
+unrelated parameters, Cube UUIDs and Recipe ownership. The store
+validates exact schema, IDs, feature/pattern associations and count.
+Read-only inspection recomposes the stored source with the existing
+compiler and exposes feature parameters only if their geometry and
+declared feature metadata match the saved Recipe. Unavailable legacy
+or conflicting sources are reported explicitly, not guessed.
+
+AI preview/apply now return bounded counts of created/changed/removed/
+preserved Cube instances and the existing semantic UV/Texture/Animation
+invalidation scopes. These summaries are source-plan diagnostics only;
+they neither authorize textured replacements nor prove visual quality.
+
+No new public `construct_geometry` route is registered: canonical
+generated API docs require the original Bun generator and must not be
+hand-authored. Per user instruction, no tests, builds, CI, native
+Blockbench, save/reopen or Bedrock export verification were run.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

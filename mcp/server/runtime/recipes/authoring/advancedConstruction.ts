@@ -4,11 +4,15 @@ import { createHash } from "node:crypto";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import {
   buildAdvancedGeometryRecipeCandidate,
+  reviewStoredAdvancedGeometrySource,
   type AdvancedGeometryFeature,
 } from "@/lib/authoringRecipe/geometryComposition";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { requireAdvancedGeometryChangeScope } from "@/lib/authoringRecipe/geometryComposition";
-import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
+import {
+  planIncrementalRecipeRebuild,
+  type IncrementalRecipeRebuildPlan,
+} from "@/lib/authoringRecipe/incremental";
 import { assertAuthoringRecipeNativeMatchesCompiled } from "@/lib/authoringRecipe/nativeState";
 import {
   applyAuthoringRecipeIncrementalAtomic,
@@ -71,12 +75,39 @@ type AuthoredCube = {
   instance_id: string;
 };
 
+export type AdvancedGeometryImpactSummary = {
+  state: "SOURCE_DELTA_NOT_VISUALLY_VERIFIED";
+  before_cube_count: number;
+  after_cube_count: number;
+  created_cube_count: number;
+  updated_cube_count: number;
+  removed_cube_count: number;
+  preserved_cube_count: number;
+  metadata_only_cube_count: number;
+  affected_cube_count: number;
+  affected_feature_ids: string[];
+  created_examples: string[];
+  updated_examples: string[];
+  removed_examples: string[];
+  examples_truncated: boolean;
+  /** These are invalidations, NOT independent visual/UV/rig PASS findings. */
+  invalidates: {
+    geometry_structure: true;
+    uv_mapping: true;
+    texture_appearance: true;
+    animation_motion: true;
+  };
+  visual_verdict: "NOT_EVALUATED";
+  reference_content_attested: false;
+};
+
 type NativeConstructionPlan = {
   mode: "create" | "revise";
   recipe: AuthoringRecipe;
   previous_recipe: AuthoringRecipe;
   elements: AuthoredCube[];
   removed_instance_ids: string[];
+  impact: AdvancedGeometryImpactSummary;
   summary: ReturnType<typeof buildAdvancedGeometryRecipeCandidate>["summary"];
 };
 
@@ -199,6 +230,51 @@ function requireRecipeParentScope(
 }
 
 /**
+ * Project the exact existing incremental rebuild into one bounded summary
+ * suitable for an AI to decide whether to apply the current plan.
+ * Counts are derived from Recipe instance identity, not guessed from
+ * Cube names, visual similarity or assumed operation success.
+ */
+function summarizeAdvancedGeometryImpact(
+  rebuild: IncrementalRecipeRebuildPlan,
+  features: readonly AdvancedGeometryFeature[]
+): AdvancedGeometryImpactSummary {
+  const byReason = (reason: "ADDED" | "CHANGED" | "REMOVED") =>
+    rebuild.reasons.filter(item => item.reason === reason)
+      .map(item => item.instance_id);
+  const created = byReason("ADDED");
+  const updated = byReason("CHANGED");
+  const removed = byReason("REMOVED");
+  const maxExamples = 8;
+  return {
+    state: "SOURCE_DELTA_NOT_VISUALLY_VERIFIED",
+    before_cube_count: rebuild.metrics.previous_cube_count,
+    after_cube_count: rebuild.metrics.next_cube_count,
+    created_cube_count: created.length,
+    updated_cube_count: updated.length,
+    removed_cube_count: removed.length,
+    preserved_cube_count: rebuild.metrics.preserved_count,
+    metadata_only_cube_count: rebuild.metrics.metadata_only_count,
+    affected_cube_count: rebuild.metrics.native_affected_count,
+    affected_feature_ids: features.map(feature => feature.id).sort(),
+    created_examples: created.slice(0, maxExamples),
+    updated_examples: updated.slice(0, maxExamples),
+    removed_examples: removed.slice(0, maxExamples),
+    examples_truncated:
+      created.length > maxExamples || updated.length > maxExamples ||
+      removed.length > maxExamples,
+    invalidates: {
+      geometry_structure: true,
+      uv_mapping: true,
+      texture_appearance: true,
+      animation_motion: true,
+    },
+    visual_verdict: "NOT_EVALUATED",
+    reference_content_attested: false,
+  };
+}
+
+/**
  * Revisions are feature-scoped: a Recipe can contain many features, but the
  * request must name its exact stored ID and select only existing feature IDs.
  * No semantic-name matching, renaming or cross-owner replacement.
@@ -219,6 +295,12 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
     const stored = findAuthoringRecipeInStore(storedDocument, recipeId);
     if (!stored) {
       throw new Error("ADVANCED_GEOMETRY_RECIPE_NOT_STORED: inspect the exact Recipe ID.");
+    }
+    const sourceReview = reviewStoredAdvancedGeometrySource(stored);
+    if (sourceReview.state === "SOURCE_RECIPE_MISMATCH") {
+      throw new Error(
+        "ADVANCED_GEOMETRY_SAVED_SOURCE_DRIFT: do not revise until the stored parameters and Cube Recipe agree."
+      );
     }
     const selected = new Set((stored.feature_intents ?? []).map(feature => feature.id));
     if (input.features.some(feature => !selected.has(feature.id))) {
@@ -315,6 +397,7 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
     previous_recipe,
     elements,
     removed_instance_ids: [...rebuild.remove_instance_ids],
+    impact: summarizeAdvancedGeometryImpact(rebuild, features),
     summary: planned.summary,
   };
 }
@@ -370,8 +453,10 @@ export function inspectAdvancedGeometryNative(input: {
   }
   const recipes = candidates.map(recipe => {
     const native = readBlockbenchAuthoringRecipeOwnedState(recipe.id);
+    const parameterReview = reviewStoredAdvancedGeometrySource(recipe);
     let structural_state: "MATCHED_SOURCE_ONLY" | "REVIEW_REQUIRED" =
-      "MATCHED_SOURCE_ONLY";
+      parameterReview.state === "SOURCE_RECIPE_MISMATCH"
+        ? "REVIEW_REQUIRED" : "MATCHED_SOURCE_ONLY";
     try {
       assertAuthoringRecipeNativeMatchesCompiled(native, recipe);
       if (native.cubes.length === 0) {
@@ -391,6 +476,11 @@ export function inspectAdvancedGeometryNative(input: {
       name: recipe.name,
       feature_ids: (recipe.feature_intents ?? []).map(feature => feature.id),
       feature_labels: (recipe.feature_intents ?? []).map(feature => feature.label),
+      source_parameter_state: parameterReview.state,
+      // Exact original parametric inputs are provided only when they still
+      // reproduce the stored Recipe. AI can revise without asking the user to
+      // reconstruct the initial Curve path or hollow wall dimensions.
+      source_features: parameterReview.source_features,
       cube_count: native.cubes.length,
       parent_group_uuid,
       structural_state,
@@ -423,6 +513,7 @@ export function previewAdvancedGeometryNative(input: AdvancedNativeConstructionI
     ...plan,
     mode: prepared.mode,
     summary: prepared.summary,
+    impact: prepared.impact,
     recipe_id: prepared.recipe.id,
     affected_cubes: prepared.elements,
     remove_instance_ids: prepared.removed_instance_ids,
@@ -496,6 +587,7 @@ export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInp
     source_plan_id: current.plan_id,
     recipe_id: prepared.recipe.id,
     summary: prepared.summary,
+    impact: prepared.impact,
     source_instance_order: prepared.elements.map(element => ({
       feature_id: element.feature_id,
       instance_id: element.instance_id,

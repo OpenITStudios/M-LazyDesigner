@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
+import { advancedGeometryFeatureSchema } from "@/lib/authoringRecipe/geometrySchema";
 
 export const AUTHORING_RECIPE_STORE_SCHEMA = 1 as const;
 export const AUTHORING_RECIPE_STORE_MAX_RECIPES = 64;
@@ -24,7 +25,30 @@ function validateStore(document: AuthoringRecipeStoreDocument): AuthoringRecipeS
   if (ids.some((id) => !id) || new Set(ids).size !== ids.length) {
     throw new Error("Authoring recipe store requires unique non-empty recipe IDs.");
   }
-  for (const recipe of document.recipes) compileAuthoringRecipe(recipe);
+  for (const recipe of document.recipes) {
+    compileAuthoringRecipe(recipe);
+    if (recipe.advanced_geometry_source !== undefined) {
+      const sources = recipe.advanced_geometry_source;
+      if (!recipe.id.startsWith("advgeo:") || !Array.isArray(sources) ||
+        sources.length < 1 || sources.length > 8) {
+        throw new Error("RECIPE_ADVANCED_SOURCE_SCOPE_INVALID");
+      }
+      const ids = new Set<string>();
+      const namedFeatures = new Set((recipe.feature_intents ?? []).map(entry => entry.id));
+      const patternOwners = new Set(recipe.patterns.map(entry => entry.feature_id));
+      for (const source of sources) {
+        const parsed = advancedGeometryFeatureSchema.safeParse(source);
+        if (!parsed.success ||
+          ids.has(parsed.data?.id ?? "") ||
+          !namedFeatures.has(parsed.data!.id) ||
+          !patternOwners.has(parsed.data!.id) ||
+          parsed.data!.replace_generated === true) {
+          throw new Error("RECIPE_ADVANCED_SOURCE_INVALID: every source must own an existing 3D feature and native Recipe pattern.");
+        }
+        ids.add(parsed.data!.id);
+      }
+    }
+  }
   return {
     schema: AUTHORING_RECIPE_STORE_SCHEMA,
     recipes: [...document.recipes]
