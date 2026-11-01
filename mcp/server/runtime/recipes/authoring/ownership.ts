@@ -180,7 +180,10 @@ export function registerAuthoringRecipeOwnershipProperties(): void {
     PROJECT_RECIPE_STORE_PROPERTY,
     {
       default: "",
-      export: false,
+      // ModelProject properties with export:false are intentionally skipped
+      // by Blockbench's native bbmodel codec. This is editable project
+      // source data, NOT Bedrock geometry export; it must survive save/reopen.
+      export: true,
     }
   ) as unknown as DeletableProperty;
   registerRecipeHistoryListeners();

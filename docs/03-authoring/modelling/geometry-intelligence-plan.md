@@ -349,6 +349,37 @@ revisions use the existing stored-Recipe and affected-only planning;
 reusing the create operation for an existing Recipe refuses instead of
 silently overwriting any authored data. No separate project store or
 history is introduced, and no tests/native/visual evidence is claimed.
+### R3g — Stored-Recipe feature revision and `.bbmodel` persistence (2026-11-01; CODE ONLY)
+
+Advanced Geometry internal plan/apply now accepts a `mode` of `create` or
+`revise`. In revision mode, the AI must provide the **exact Recipe ID**
+returned by the original creation. Only existing, generated feature
+identities are editable. The source-aware composer replaces those
+feature patterns while preserving unrelated Recipe structure, stable
+sample-pair instance IDs and exact parent Group ownership.
+
+Planning calculates the existing incremental rebuild delta and refuses
+no-op or over-budget revisions. Native apply re-checks the full scene
+revision and recipe store, protects the original parent Group and
+prevents modification/removal of already texture-mapped Cube faces
+without a dedicated UV remap plan. Existing UUIDs survive where their
+Recipe instance IDs remain unchanged; newly required Cuboids use the
+same canonical native transaction and exact Group owner. This is
+**not** unrestricted autonomous post-texture geometry editing.
+
+Upstream Blockbench v5.2.2 source inspection identified a persistence
+defect: the `bbmodel` codec skips ModelProject properties registered
+with `export:false`. The existing namespaced Project Recipe-store
+property is now registered with `export:true` so it can be serialized
+into editable `.bbmodel` sources. Native Bedrock geometry export uses
+its own target format; this change is to Blockbench project data, not
+an authorization to emit arbitrary Recipe metadata as Minecraft geo.
+Existing Cube Recipe ownership properties remain unchanged because
+Cube getSaveCopy() copies properties independently of that Project gate.
+
+**Proof ceiling:** upstream source semantics and repository contracts
+inspected; no build, tests, native save/reopen, Bedrock export or
+reference visual acceptance were executed, as the user requested.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

@@ -17,7 +17,7 @@ import {
   parseAuthoringRecipeStore,
 } from "@/lib/authoringRecipe/store";
 import { readBlockbenchAuthoringRecipeOwnedState, createBlockbenchAuthoringRecipeApplyAdapter } from "./runtime";
-import { previewAdvancedGeometryNative, createAdvancedGeometryNative } from "./advancedConstruction";
+import { inspectAdvancedGeometryNative, previewAdvancedGeometryNative, createAdvancedGeometryNative } from "./advancedConstruction";
 import { advancedGeometryCommandSchema, type AdvancedGeometryCommand } from "@/lib/authoringRecipe/geometrySchema";
 import {
   readAuthoringRecipeStoreProperty,
@@ -424,12 +424,16 @@ export function createBlockbenchAuthoringRecipeService() {
   // executor and project identity. No second MCP server or native Undo path.
   return {
     ...existing,
+    inspectAdvancedGeometryNative,
     previewAdvancedGeometryNative,
     createAdvancedGeometryNative,
-    // A single command owner for future Runtime registration: AI chooses
-    // plan/apply, but never bypasses the canonical native executor or Stage.
+    // One command owner: AI can inspect exact Recipe identity, then plan a
+    // feature-scoped create or revision, then apply against current scene.
     async constructGeometry(command: AdvancedGeometryCommand) {
       const validated = advancedGeometryCommandSchema.parse(command);
+      if (validated.operation === "inspect") {
+        return inspectAdvancedGeometryNative(validated);
+      }
       return validated.operation === "plan"
         ? previewAdvancedGeometryNative(validated)
         : await createAdvancedGeometryNative(validated);

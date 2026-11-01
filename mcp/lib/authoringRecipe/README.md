@@ -701,6 +701,36 @@ transition described below; generated Cubes carry Recipe/instance IDs.
 No new runtime database, mutation framework or duplicate Cube engine is
 introduced. Public `construct_geometry` routing is still pending
 canonical generator-owned API documentation. No tests/QA were run.
+## AI-first inspect/create/revise Geometry command (source only)
+
+The internal `constructGeometry` command now supports read-only `inspect`
+of exact saved Advanced Geometry Recipes, source-only `plan` and
+source-fingerprint-protected `apply`. AI can discover an exact saved
+`recipe_id`, existing feature identities and native parent Group UUID
+without guessing identifiers or asking a user to identify a Cube.
+
+The plan/apply inputs have a `mode`: `create` (default) or `revise`.
+A revision requires `target_recipe_id` and an existing saved Recipe.
+Only selected existing generated features can be changed. Previous
+Recipe state, unrelated features, constraints and parent identity
+are preserved. The canonical incremental rebuild retains native Cube
+UUIDs for unchanged instance IDs; affected/removed instances use the
+same owned native Undo transaction and metadata source revision.
+
+Revisions refuse unsupported source identities, no-op changes, over-budget
+native deltas, a moved parent Group, and texture-mapped affected Cubes
+whose UV ownership cannot yet be safely remapped. Native scene and
+plan fingerprints must remain unchanged between planning and applying.
+
+**Critical persistence correction:** Blockbench's bbmodel codec
+explicitly skips ModelProject custom properties with `export:false`.
+The canonical Project Recipe store is therefore now registered with
+`export:true` for editable .bbmodel persistence; Bedrock geometry export
+is a separate codec. Cube Recipe ownership properties already survive
+getSaveCopy without changing their previous flags.
+
+This is source-only authoring logic, not a registered AI-facing Runtime
+tool or native quality proof. QA/build/generation remain deferred.
 ## Project Recipe source persistence and native Undo coherence (code only)
 
 The canonical `AuthoringRecipeService` now supplies both previous and next

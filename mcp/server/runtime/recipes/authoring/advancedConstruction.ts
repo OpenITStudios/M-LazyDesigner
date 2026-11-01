@@ -7,6 +7,9 @@ import {
   type AdvancedGeometryFeature,
 } from "@/lib/authoringRecipe/geometryComposition";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
+import { requireAdvancedGeometryChangeScope } from "@/lib/authoringRecipe/geometryComposition";
+import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
+import { assertAuthoringRecipeNativeMatchesCompiled } from "@/lib/authoringRecipe/nativeState";
 import {
   applyAuthoringRecipeIncrementalAtomic,
 } from "@/lib/authoringRecipe/transaction";
@@ -25,6 +28,7 @@ import { readAuthoringRecipeStoreProperty } from "./ownership";
 import {
   advancedGeometryNativeInputSchema,
   advancedGeometryApplyInputSchema,
+  advancedGeometryInspectionSchema,
 } from "@/lib/authoringRecipe/geometrySchema";
 import { getActiveMcpAuthoringStage } from
   "@/lib/capabilities/authoringStage";
@@ -37,13 +41,16 @@ import { getActiveMcpAuthoringStage } from
 const MAX_SINGLE_NATIVE_BATCH = 64;
 const MAX_SCENE_CUBES = 4096;
 const MAX_SCENE_GROUPS = 1024;
-const SOURCE_CONTRACT = 1;
+const SOURCE_CONTRACT = 2;
 
 export type AdvancedNativeConstructionInput = {
   /** Exact UUID returned by the current Project tool; never inferred. */
   expected_project_uuid: string;
   /** Existing Blockbench Group/Bone UUID; create one using the native tool first. */
   parent_group_uuid: string;
+  /** Revise reuses the saved Recipe and preserves unrelated features. */
+  mode?: "create" | "revise";
+  target_recipe_id?: string;
   features: AdvancedGeometryFeature[];
 };
 
@@ -65,9 +72,11 @@ type AuthoredCube = {
 };
 
 type NativeConstructionPlan = {
+  mode: "create" | "revise";
   recipe: AuthoringRecipe;
   previous_recipe: AuthoringRecipe;
   elements: AuthoredCube[];
+  removed_instance_ids: string[];
   summary: ReturnType<typeof buildAdvancedGeometryRecipeCandidate>["summary"];
 };
 
@@ -172,54 +181,128 @@ function sceneFingerprint(input: AdvancedNativeConstructionInput): string {
   return "sha256:" + digest;
 }
 
+function requireRecipeParentScope(
+  recipeId: string,
+  parentGroupUuid: string,
+  previousRecipe: AuthoringRecipe
+): void {
+  const native = readBlockbenchAuthoringRecipeOwnedState(recipeId);
+  assertAuthoringRecipeNativeMatchesCompiled(native, previousRecipe);
+  for (const cube of native.cubes) {
+    const path = cube.parent_path;
+    if (!Array.isArray(path) || path.at(-1) !== parentGroupUuid) {
+      throw new Error(
+        "ADVANCED_GEOMETRY_NATIVE_PARENT_CHANGED: Recipe-owned Cube moved outside its original Group."
+      );
+    }
+  }
+}
+
+/**
+ * Revisions are feature-scoped: a Recipe can contain many features, but the
+ * request must name its exact stored ID and select only existing feature IDs.
+ * No semantic-name matching, renaming or cross-owner replacement.
+ */
 function prepareNativeConstruction(input: AdvancedNativeConstructionInput): NativeConstructionPlan {
   requireBedrockProject(input);
-  if (input.features.some(feature => feature.replace_generated === true)) {
-    throw new Error(
-      "ADVANCED_GEOMETRY_CREATE_ONLY: use a separately verified Recipe revision to replace geometry."
-    );
-  }
-  // A cohort identity depends on the Project, native parent and semantic
-  // feature IDs, not their current dimensions. It is stable across revisions.
-  const recipe_id = "advgeo:" + createHash("sha256").update(JSON.stringify({
-    project_uuid: input.expected_project_uuid,
-    parent_group_uuid: input.parent_group_uuid,
-    features: input.features.map(feature => feature.id).sort(),
-  })).digest("hex").slice(0, 48);
+  const mode = input.mode ?? "create";
   const storedDocument = parseAuthoringRecipeStore(
     readAuthoringRecipeStoreProperty(Project)
   );
-  if (findAuthoringRecipeInStore(storedDocument, recipe_id)) {
+  let previous_recipe: AuthoringRecipe;
+  let features: AdvancedGeometryFeature[];
+  if (mode === "revise") {
+    const recipeId = input.target_recipe_id;
+    if (!recipeId) {
+      throw new Error("ADVANCED_GEOMETRY_REVISION_ID_REQUIRED");
+    }
+    const stored = findAuthoringRecipeInStore(storedDocument, recipeId);
+    if (!stored) {
+      throw new Error("ADVANCED_GEOMETRY_RECIPE_NOT_STORED: inspect the exact Recipe ID.");
+    }
+    const selected = new Set((stored.feature_intents ?? []).map(feature => feature.id));
+    if (input.features.some(feature => !selected.has(feature.id))) {
+      throw new Error(
+        "ADVANCED_GEOMETRY_REVISION_FEATURE_NOT_OWNED: add new features in a separately planned cohort."
+      );
+    }
+    requireRecipeParentScope(stored.id, input.parent_group_uuid, stored);
+    previous_recipe = stored;
+    features = input.features.map(feature => ({...feature, replace_generated: true}));
+  } else {
+    if (input.target_recipe_id !== undefined ||
+      input.features.some(feature => feature.replace_generated === true)) {
+      throw new Error("ADVANCED_GEOMETRY_CREATE_ONLY: use revise for existing features.");
+    }
+    const recipeId = "advgeo:" + createHash("sha256").update(JSON.stringify({
+      project_uuid: input.expected_project_uuid,
+      parent_group_uuid: input.parent_group_uuid,
+      features: input.features.map(feature => feature.id).sort(),
+    })).digest("hex").slice(0, 48);
+    if (findAuthoringRecipeInStore(storedDocument, recipeId)) {
+      throw new Error("ADVANCED_GEOMETRY_RECIPE_EXISTS: use revise, never replay create.");
+    }
+    previous_recipe = {
+      schema: 1, compiler_version: 1,
+      id: recipeId, name: "Advanced geometry create candidate",
+      prototypes: [], patterns: [],
+    };
+    features = input.features;
+  }
+
+  const planned = buildAdvancedGeometryRecipeCandidate(previous_recipe, features);
+  if (mode === "revise") {
+    requireAdvancedGeometryChangeScope(previous_recipe, planned.next_recipe, features);
+  }
+  const rebuild = planIncrementalRecipeRebuild(previous_recipe, planned.next_recipe);
+  const nativeAffected = rebuild.upserts.length + rebuild.remove_instance_ids.length;
+  if (nativeAffected < 1) {
     throw new Error(
-      "ADVANCED_GEOMETRY_RECIPE_EXISTS: use the existing Recipe revision path, not create."
+      "ADVANCED_GEOMETRY_NO_GEOMETRY_DELTA: an unchanged feature needs no native Undo."
     );
   }
-  const source: AuthoringRecipe = {
-    schema: 1, compiler_version: 1,
-    id: recipe_id,
-    name: "Advanced geometry create candidate",
-    prototypes: [], patterns: [],
-  };
-  const planned = buildAdvancedGeometryRecipeCandidate(source, input.features);
-  const compiled = compileAuthoringRecipe(planned.next_recipe);
-  if (compiled.placements.length < 1 ||
-    compiled.placements.length > MAX_SINGLE_NATIVE_BATCH) {
-    throw new Error("ADVANCED_GEOMETRY_NATIVE_BATCH_BUDGET: max 64 new Cubes.");
+  if (nativeAffected > MAX_SINGLE_NATIVE_BATCH) {
+    throw new Error("ADVANCED_GEOMETRY_NATIVE_BATCH_BUDGET: max 64 changed Cubes.");
   }
-  const featureByPattern = new Map(
-    planned.next_recipe.patterns.map(pattern =>
-      [pattern.id, pattern.feature_id] as const
-    )
-  );
-  const elements: AuthoredCube[] = compiled.placements.map(placement => {
-    const feature_id = featureByPattern.get(placement.source_pattern_id);
-    if (!feature_id) throw new Error("ADVANCED_GEOMETRY_FEATURE_OWNER_UNRESOLVED");
+
+  if (mode === "revise") {
+    // Changing painted faces or UV-owned geometry without a new UV plan
+    // would silently distort Texture. Only untextured cohorts are editable
+    // through this first autonomous revision path.
+    const modifiedIds = new Set([
+      ...rebuild.upserts.map(placement => placement.id),
+      ...rebuild.remove_instance_ids,
+    ]);
+    const authored = readBlockbenchAuthoringRecipeOwnedState(previous_recipe.id);
+    const affectedNativeIds = new Set(authored.cubes
+      .filter(cube => modifiedIds.has(cube.instance_id))
+      .map(cube => cube.uuid));
+    for (const cube of Cube.all ?? []) {
+      if (!affectedNativeIds.has(cube.uuid)) continue;
+      const faces = cube.faces ?? {};
+      if (Object.values(faces).some(face =>
+        face && face.enabled !== false &&
+        face.texture !== null && face.texture !== undefined &&
+        face.texture !== false)) {
+        throw new Error(
+          "ADVANCED_GEOMETRY_TEXTURED_REVISION_REQUIRES_UV_REMAP: preserve existing Texture; revise before UV/paint."
+        );
+      }
+    }
+  }
+
+  const patternOwner = new Map(planned.next_recipe.patterns.map(pattern =>
+    [pattern.id, pattern.feature_id] as const
+  ));
+  const elements: AuthoredCube[] = rebuild.upserts.map(placement => {
+    const featureId = patternOwner.get(placement.source_pattern_id);
+    if (!featureId) throw new Error("ADVANCED_GEOMETRY_FEATURE_OWNER_UNRESOLVED");
     return {
       name: placement.name,
       from: placement.from, to: placement.to,
       origin: placement.origin, rotation: placement.rotation,
       inflate: placement.inflate,
-      feature_id,
+      feature_id: featureId,
       instance_id: placement.id,
     };
   });
@@ -227,9 +310,11 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
     throw new Error("ADVANCED_GEOMETRY_DUPLICATE_NATIVE_NAME");
   }
   return {
+    mode,
     recipe: planned.next_recipe,
-    previous_recipe: source,
+    previous_recipe,
     elements,
+    removed_instance_ids: [...rebuild.remove_instance_ids],
     summary: planned.summary,
   };
 }
@@ -244,11 +329,82 @@ function boundPlan(
     project_uuid: input.expected_project_uuid,
     parent_group_uuid: input.parent_group_uuid,
     scene_revision,
+    mode: prepared.mode,
     features: input.features,
     recipe_id: prepared.recipe.id,
     elements: prepared.elements,
+    removed_instance_ids: prepared.removed_instance_ids,
   })).digest("hex");
   return { plan_id, scene_revision };
+}
+
+/**
+ * AI-first discovery of exact saved Advanced Geometry Recipe identities.
+ * Structural matching is not a visual or exporter proof. This returns only
+ * selected owner state and the feature IDs needed for a precise revision.
+ */
+export function inspectAdvancedGeometryNative(input: {
+  expected_project_uuid: string;
+  target_recipe_id?: string;
+}) {
+  const request = advancedGeometryInspectionSchema.parse({
+    operation: "inspect",
+    ...input,
+  });
+  if (typeof Project === "undefined" || !Project ||
+    Project.uuid !== request.expected_project_uuid ||
+    typeof Format === "undefined" || Format.id !== "bedrock") {
+    throw new Error("ADVANCED_GEOMETRY_INSPECT_PROJECT_MISMATCH");
+  }
+  if (typeof Undo === "undefined" || Undo.current_save) {
+    throw new Error("ADVANCED_GEOMETRY_INSPECT_EDIT_IN_PROGRESS");
+  }
+  const store = parseAuthoringRecipeStore(readAuthoringRecipeStoreProperty(Project));
+  const candidates = store.recipes.filter(recipe =>
+    recipe.id.startsWith("advgeo:") &&
+    (request.target_recipe_id === undefined ||
+     recipe.id === request.target_recipe_id)
+  );
+  if (request.target_recipe_id !== undefined && candidates.length !== 1) {
+    throw new Error("ADVANCED_GEOMETRY_RECIPE_NOT_STORED");
+  }
+  const recipes = candidates.map(recipe => {
+    const native = readBlockbenchAuthoringRecipeOwnedState(recipe.id);
+    let structural_state: "MATCHED_SOURCE_ONLY" | "REVIEW_REQUIRED" =
+      "MATCHED_SOURCE_ONLY";
+    try {
+      assertAuthoringRecipeNativeMatchesCompiled(native, recipe);
+      if (native.cubes.length === 0) {
+        structural_state = "REVIEW_REQUIRED";
+      }
+    } catch {
+      structural_state = "REVIEW_REQUIRED";
+    }
+    const parents = [...new Set(native.cubes.map(cube =>
+      cube.parent_path?.at(-1) ?? null
+    ))];
+    const parent_group_uuid = parents.length === 1 && parents[0] !== null
+      ? parents[0] : null;
+    if (!parent_group_uuid) structural_state = "REVIEW_REQUIRED";
+    return {
+      recipe_id: recipe.id,
+      name: recipe.name,
+      feature_ids: (recipe.feature_intents ?? []).map(feature => feature.id),
+      feature_labels: (recipe.feature_intents ?? []).map(feature => feature.label),
+      cube_count: native.cubes.length,
+      parent_group_uuid,
+      structural_state,
+      // Matching source and native geometry does not attest visual fidelity.
+      visual_verdict: "NOT_EVALUATED" as const,
+    };
+  });
+  return {
+    project_uuid: request.expected_project_uuid,
+    recipes,
+    count: recipes.length,
+    operation: "inspect" as const,
+    reference_content_attested: false as const,
+  };
 }
 
 /**
@@ -265,9 +421,11 @@ export function previewAdvancedGeometryNative(input: AdvancedNativeConstructionI
     project_uuid: input.expected_project_uuid,
     parent_group_uuid: input.parent_group_uuid,
     ...plan,
+    mode: prepared.mode,
     summary: prepared.summary,
     recipe_id: prepared.recipe.id,
-    cubes: prepared.elements,
+    affected_cubes: prepared.elements,
+    remove_instance_ids: prepared.removed_instance_ids,
     applied: false as const,
     reference_content_attested: false as const,
     visual_verdict: "NOT_EVALUATED" as const,
@@ -293,18 +451,28 @@ export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInp
     );
   }
   const group = requireBedrockProject(input);
+  const beforeNative = readBlockbenchAuthoringRecipeOwnedState(prepared.recipe.id);
+  if (prepared.mode === "create" && beforeNative.cubes.length !== 0) {
+    throw new Error(
+      "ADVANCED_GEOMETRY_EXISTING_RECIPE_OWNERSHIP: inspect before constructing."
+    );
+  }
+  const ownedByInstance = new Map(beforeNative.cubes.map(cube =>
+    [cube.instance_id, cube.uuid] as const
+  ));
+  const modifiedOrRemoved = new Set([
+    ...prepared.elements.map(element => element.instance_id),
+    ...prepared.removed_instance_ids,
+  ]);
+  const replaceableUuids = new Set([...modifiedOrRemoved]
+    .map(id => ownedByInstance.get(id))
+    .filter((uuid): uuid is string => typeof uuid === "string"));
   const existingNames = new Set((Cube.all ?? [])
-    .filter(cube => cube.parent === group)
+    .filter(cube => cube.parent === group && !replaceableUuids.has(cube.uuid))
     .map(cube => cube.name));
   if (prepared.elements.some(element => existingNames.has(element.name))) {
     throw new Error(
-      "ADVANCED_GEOMETRY_NATIVE_NAME_EXISTS: inspect current UUIDs before another create."
-    );
-  }
-  const beforeNative = readBlockbenchAuthoringRecipeOwnedState(prepared.recipe.id);
-  if (beforeNative.cubes.length !== 0) {
-    throw new Error(
-      "ADVANCED_GEOMETRY_EXISTING_RECIPE_OWNERSHIP: inspect before constructing."
+      "ADVANCED_GEOMETRY_NATIVE_NAME_EXISTS: another element owns this name."
     );
   }
   // Reuse the ONE canonical parametric Recipe transaction, including its
@@ -322,6 +490,7 @@ export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInp
     status: execution === "applied"
       ? ("RECIPE_NATIVE_APPLY_REPORTED_VISUAL_UNVERIFIED" as const)
       : ("RECIPE_NATIVE_RESULT_UNCERTAIN_DO_NOT_RETRY" as const),
+    mode: prepared.mode,
     project_uuid: input.expected_project_uuid,
     group_uuid: group.uuid,
     source_plan_id: current.plan_id,
@@ -332,6 +501,7 @@ export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInp
       instance_id: element.instance_id,
       authored_name: element.name,
     })),
+    removed_instance_ids: prepared.removed_instance_ids,
     native_receipt,
     visual_verdict: "NOT_EVALUATED" as const,
     bedrock_export_verified: false as const,
