@@ -6,9 +6,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **USER DECISION:** End research discovery. Convert 56 GK/TK/AK source notes into bounded, useful Geometry, Texture and Animation authoring decisions. Do not use Golden Assets. No new runtime engine, database, public Gateway tool, source-art ingestion, auto-mutation or universal style preset.
 
-**SOURCE DELIVERY:** Existing [Art Direction](../02-reference/art-direction.md) owns seven conditional visual craft decisions. Existing source-hashed Geometry eight-case and Texture four-case readers have updated descriptions; Animation Standard and active Modelling/Texturing/Animation Skills reference those same owners. Only the current approved Reference Package and native Bedrock facts may determine actual shape, paint and motion.
+**SOURCE DELIVERY:** Seven conditional Art Direction decisions are linked to existing Geometry eight-case and Texture four-case readers, the Animation Standard, and three active specialists. A maintenance-only, once-per-ID source disposition crosswalk explicitly accounts for 56 GK/TK/AK notes and 15 CX dossiers (including evidence-only safeguards). This is not another authoring stage or executable data store.
 
-**EVIDENCE:** GitHub source and focused regression expectations are authored. CI disabled; Bun/native/model quality NOT EXECUTED. Installed plugin requires existing build/deploy/reload to receive changed casebook bytes. No release or user-local PC task authorized.
+**EVIDENCE:** Remote source inspection and deterministic crosswalk coverage/disposition checks completed; focused Bun regression is authored but NOT EXECUTED (CI disabled). Installed Blockbench/visual improvement remain UNVERIFIED. Deployed plugin needs normal existing build/deploy/reload for bundled casebook edits; no user-PC prerequisite, release or Golden task authorized.
 
 ## GitHub boundary and historical local recovery
 

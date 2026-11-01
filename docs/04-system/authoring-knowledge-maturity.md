@@ -175,6 +175,25 @@ This is a compact editorial continuation of the three existing research owners, 
 
 **Rollback and stale context:** Git commits retain change history. Old explicit knowledge links are intentionally invalidated when source/section bytes change; re-ground the affected decision rather than silently reverting to obsolete advice or retrying uncertain native mutations. There is no automatic external-source ingestion or model-weight learning.
 
+## Visual Craft Source Disposition Crosswalk — maintenance only
+
+**Scope:** Exactly one primary editorial disposition for each of the 16 Geometry (GK), 19 Texture (TK), 21 Animation (AK) research notes and 15 cross-domain (CX) dossiers. `VC-*` means a note supports the *question* in an existing conditional Art Direction row, **not** that its proposed artistic effect is proven, approved for the asset or automatically executed. `EVIDENCE_ONLY` retains cautions that must never become a universal preset. A CX dossier can inform other rows too; the single listed home prevents duplicate counting rather than restricting its source meaning.
+
+| Primary disposition | Geometry notes | Texture notes | Animation notes | Cross-domain dossiers | Selective authoring implication / rejection boundary |
+| --- | --- | --- | --- | --- | --- |
+| VC-FORM | GK-01, GK-02, GK-10 | TK-14 | — | CX-01 | Approved comparable views show a focal mass, true gap or protruding detail; select Geometry G-P02/03/06. Paint cannot replace actual depth. |
+| VC-MATERIAL | GK-07 | TK-01, TK-02, TK-03, TK-07, TK-08, TK-09, TK-10 | — | — | Real mapped material/texel evidence may refine TEX-P01 clusters and contrast. Reject automatic speckles, RGB recipes and universal shade counts. |
+| VC-STYLE | GK-03, GK-08 | TK-04, TK-05, TK-12, TK-13 | — | CX-06, CX-14 | Use only approved visual-family language and comparable set evidence; no marketplace-wide, Vanilla or photorealism preset. |
+| VC-VARIANT | GK-04, GK-13, GK-16 | TK-15, TK-16 | AK-21 | CX-08, CX-09, CX-13 | Distinguish recolor from source-supported shape/role change; keep unique UV identity and reuse motion only where compatible (G-P07/UV-P01). |
+| VC-MOTION | GK-06, GK-09, GK-11, GK-15 | TK-11 | AK-01, AK-02, AK-03, AK-04, AK-07, AK-08, AK-09, AK-11, AK-12, AK-13, AK-14, AK-15, AK-16, AK-17, AK-20 | CX-02, CX-03, CX-04, CX-12 | Choose supported rig parent/pivot and exposed paint first, then relevant Animation Standard motion mode. No copied timings or cross-engine solver. |
+| VC-EXPRESSION | GK-14 | TK-17 | AK-18, AK-19 | CX-07, CX-10 | Only reference-supported alternate mouth/hand/state requires Geometry/Texture/Animation handoff; do not duplicate all clips. |
+| VC-EMISSION | — | TK-06, TK-19 | — | CX-15 | Separate base-color, selected emission, renderer binding and optional PBR (TEX-P03); preview bloom or bright RGB is not native glow. |
+| EVIDENCE_ONLY | GK-05, GK-12 | TK-18 | AK-05, AK-06, AK-10 | CX-05, CX-11 | Provenance/format/observability cautions only. Titles, catalog counts, Generic/Java rigs, canvas metadata and marketing images do not authorize production changes. |
+
+**Consumption boundary:** This crosswalk is editorial accountability in the existing Knowledge maturity owner, **not** a second runtime registry, index, casebook, Skill, prompt or dataset. Do not load it during ordinary Cube, paint or keyframe work. The current approved Reference Package, native state, existing casebook readers and domain standards select whether one of the seven decisions is relevant. Missing evidence remains `UNKNOWN` / `REVIEW_REQUIRED`; no crosswalk row authorizes mutation, universal style copying or visual PASS.
+
+**Maintenance:** When a source note/dossier changes, revise its original `research-sources.md` / CX dossier first, then update exactly its primary disposition here *only if its supported question changes*. For an actual change of authoring behavior, update the existing Art Direction/case/standard and affected specialist consumer in the same logical change. The regression in `mcp/tests/repository/authoring-skill-owner-integrity.test.ts` checks source-heading coverage and duplicates; it does not assess native quality. No new Golden Assets.
+
 ## Current state — curated Knowledge made operational, not certified
 
 The research-discovery phase is complete by user decision. The 56 GK/TK/AK notes and 15 CX dossiers remain source-linked evidence, NOT 56 executable presets or a new training database. The existing [Art Direction](../02-reference/art-direction.md) now holds a conditional Visual Craft Matrix. Existing Geometry G-P01–08 and Texture UV-P01/TEX-P01–03 casebooks are read by their existing source-hashed selectors/resources; the Animation Standard and the three active specialist Skills carry matching domain decisions. The approved Reference Package and Bedrock source evidence always outrank external research.
