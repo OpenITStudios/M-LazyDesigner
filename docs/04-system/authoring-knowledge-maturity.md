@@ -47,6 +47,22 @@ Every reusable card must identify: **stable ID**, domain and exact question; **a
 
 An unknown or incompatible requirement blocks **only the dependent decision**. Current approved user reference and native state outrank research examples. Candidate descriptions never authorize automated mutations.
 
+## Active research-first method — 2026-11-01 user decision
+
+**Research remains open: no incremental generator testing.** This supersedes the earlier pattern of collecting a handful of examples and immediately requesting tests. **Golden Assets/Golden Tasks are rejected for this Knowledge initiative**: never use, propose or schedule them as a test, a readiness gate, or the default step after research. Do not request source-by-source or small-batch Bun/native/visual tests. Keep the existing production safety guards intact for unrelated, separately authorized engineering work.
+
+**Work in substantial research cohorts, not one citation → one test:**
+
+1. **Broad discovery.** Search artist portfolios, professional voxel creators, curated galleries, model catalogs and suitable 3D/animation demonstrations across humanoids, creatures, machines, furniture/props, vehicles and other relevant families. Select individual visually excellent works, not entire marketplaces. Record low-quality counterexamples where informative. Neither popularity, price, ornament quantity nor render glow establishes craftsmanship.
+2. **Deep primary artwork analysis.** Inspect original multi-view images where available; identify silhouette, mass hierarchy, characteristic geometry, negative space, intentional surface clusters, value/color ramps, material contrast, scale, visual rest and where details belong. Inspect UV/source pixels and genuine motion only if legitimately accessible; otherwise record UNKNOWN, not fabricated precision.
+3. **Cross-work synthesis.** Compare multiple creators, styles, object classes and contrasting examples. Separate broadly reusable artist decisions from style-specific exceptions. Never impose gritty fantasy complexity onto clean furniture or simplify creatures merely to match Vanilla.
+4. **Knowledge distribution.** Write sourced observations, counterexamples, uncertainties, license/use boundaries and hypotheses into the current three `research-sources.md` owners for Geometry, Texture and Animation. Research notes are not automatically normative standards, Skill changes, new casebook sections, a dataset or Runtime behavior.
+5. **Research consolidation.** Only when a meaningful corpus covers the relevant style/object families and important visual questions with independent examples, contrasts, reasons to reject poor work, and clearly stated remaining gaps, prepare a joint synthesis. There is no arbitrary item quota or claim of exhaustive coverage of the internet. Additional discovery should diminish in decision-changing value before the phase is considered mature.
+
+**Evidence/efficiency:** during research verify source authenticity, actual inspection depth, rights, duplicates and what was visibly observed. These are editorial checks, **not execution tests**. Save coherent research batches instead of repeatedly asking for generation or validation. Bun, native model generation, animation playback and visual improvement claims stay UNVERIFIED where not actually executed.
+
+**Transition is separate:** after the user has reviewed the consolidated research, any move to production Knowledge integration and any later evaluation method requires a new explicit decision. Never silently reintroduce Golden Assets as that evaluation method.
+
 ## Routine Knowledge updates — single source, explicit adoption
 
 **Goal:** allow frequent additions and corrections without a second database, autonomous web harvesting, new MCP tool, mandatory per-operation Knowledge lookup or a parallel authoring path. A source URL, curated case and validated production rule are **different proof claims**.
@@ -60,13 +76,13 @@ An unknown or incompatible requirement blocks **only the dependent decision**. C
 | Case, exception, or natural-language problem signal | Existing domain `decision-cases.md` (Animation uses its current case owner) | Preserve stable IDs, heading and parsed field labels. New words select *candidates*, not source-image claims or permission to mutate. |
 | Successful visual/native revision | Owned asset/reference evidence, plus the canonical case/standard only if generalizable | Retain actual before/after, comparable view/clip, current SHA/asset revision and reviewer conclusion; only matching proof permits promotion. |
 
-**Normal update procedure (for ChatGPT/Codex maintainers, never a required user-PC task):**
+**Later adoption/update procedure (inactive for source-only research, and only after separate authorization; never a required user-PC task):**
 
 1. **Pin and classify:** read the current `Local` HEAD, then the nearest owner. Identify exactly one changed fact, rule or case. Separate `OBSERVED / INFERRED / HYPOTHETICAL / UNKNOWN`. A changing public webpage is not necessarily an applicable new rule.
 2. **Deduplicate and verify:** check whether the current decision already has an owner; prefer correcting it over adding another case. Record the upstream URL, publisher, actually inspected version/hash if available, target compatibility and permissions. Never copy proprietary 3D/texture data simply because it is online.
 3. **Edit only the owner:** preserve published case IDs/heading paths and required parser labels. Keep a bounded `APPLY / REJECT / UNKNOWN` boundary and positive/negative/ambiguous examples. Add `Problem signals` only for a demonstrated phrasing miss, not as a global synonym list. A policy change and its affected consumer belong in one logical commit.
 4. **Review source delta:** the existing `mcp/scripts/development/build-knowledge-index.ts` generates a **read-only** SHA-256 source/section inventory. Its default inputs include current core casebooks and shared Art Direction; for other documents supply exact paths. The `--previous <file>` option compares against an earlier diagnostic index generated from the **same paths**. A generated index is neither canonical policy nor a runtime registry.
-5. **Verify the affected behavior:** use the existing source/reader tests (G1 casebook, Texture/UV case reader, source-hash staleness, positive/negative/ambiguous retrieval). Use `verify:affected` in an actually capable Bun workspace, not the whole suite by ritual. Preserve `UNVERIFIED` when executable or visual proof is unavailable.
+5. **Verify only separately authorized behavior changes:** where an actual casebook consumer or code update is approved, use relevant existing checks. Pure research-source additions do NOT trigger `verify:affected`, Bun/native evaluation, model generation or any Golden task. Preserve `UNVERIFIED` when executable or visual proof is unavailable.
 6. **Refresh the consumer correctly:** edits to docs/profiles/Art Direction require reloading the relevant AI context when needed; a remembered source ID/hash is not loaded content. **Geometry and Texture casebooks are bundled into Runtime at build time**: after changing either, its development watcher requests a rebuild, but a deployed installation still needs build/deploy/reload and client-context refresh. A GitHub commit is **not** an automatic live update.
 7. **Accept only grounded outcomes:** static source integrity does not demonstrate a usable native model. Before upgrading a rule to `PROVEN_FOR_SCOPE`, check exact target version, installed Blockbench behavior, the real matched approved reference, and human art acceptance where material. Missing proof leaves the candidate unchanged.
 
@@ -76,11 +92,11 @@ An unknown or incompatible requirement blocks **only the dependent decision**. C
 
 **Rollback and stale context:** Git commits retain change history. Old explicit knowledge links are intentionally invalidated when source/section bytes change; re-ground the affected decision rather than silently reverting to obsolete advice or retrying uncertain native mutations. There is no automatic external-source ingestion or model-weight learning.
 
-## Next bounded work, without feature expansion
+## Current next — deepen and consolidate research (no implementation)
 
-1. Compare the actual Geometry, Texture and Animation case cohorts against these fields; note only missing, contradictory or duplicated ownership.
-2. Normalize **one existing case per domain** in its original owner first, preserving IDs and actual provenance. Inspect its real consumer and negative/ambiguous behavior before generalizing.
-3. Reuse focused existing tests; label unexecuted Bun/native/visual claims accurately. The [single full-asset Golden Task](../../mcp/docs/GOLDEN_TASKS.md) is `golden-full-asset-authoring`, not 16 or eight new micro-Goldens.
-4. Promote no case and modify no Engine until source-level consistency and the relevant quality evidence exist. Stop corpus expansion when a new case does not materially change a decision or prevent a demonstrated failure.
+1. Expand discovery to multiple skilled creators and individual quality-selected works beyond the first Bepoo/marketplace examples.
+2. Examine original available views, material/pixel techniques and genuine motion evidence deeply, including negative/ambiguous comparisons and style-specific exceptions.
+3. Synthesize findings across existing Geometry, Texture and Animation research owners, deduplicate observations and document open questions.
+4. Present one substantial cross-domain research assessment before any Knowledge adoption. **No Golden Assets, no per-reference tests, no engine development and no premature rule promotion.** Future evaluation is not automatically scheduled and requires a separately agreed non-Golden method.
 
-**Quality before efficiency:** compare time, calls and context cost only for equal-or-better *accepted* outcomes.
+**Research efficiency:** prioritize depth, useful comparison and fewer fragmented handoffs over a quick transition to tests.

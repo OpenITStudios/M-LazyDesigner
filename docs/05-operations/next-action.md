@@ -2,19 +2,15 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — Knowledge maturity (2026-10-31)
+## Primary next — deep Knowledge research (2026-11-01)
 
-**USER DECISION:** Hold new Geometry/Texture/Animation feature development; retain one Reference Package, one Codex/Gateway/Runtime authoring workflow and one authoritative `.bbmodel`. No choice of runtime routes, per-operation Knowledge gate, second registry/engine, new MCP tool, or feature-driven experiments. Existing baseline execution and safety checks remain intact.
+**USER DECISION:** Research-first. The earlier practice of collecting a few references then requesting testing is rejected. **Golden Assets are not to be used, suggested or scheduled for this Knowledge work**, including after research as an automatic next step. No per-source Bun/native/visual testing, model generation, premature Knowledge promotion or engine work. Retain one Reference Package, existing Codex/Gateway/Runtime flow and one authoritative `.bbmodel`. Existing product safety guards remain intact.
 
-**KNOWLEDGE OWNER:** [Cross-domain Knowledge ownership and maturity](../04-system/authoring-knowledge-maturity.md). Existing `docs/03-authoring/` standards own semantics; Skills and engine modules are consumers, not second rule owners.
+**KNOWLEDGE OWNER:** [Cross-domain Knowledge ownership and maturity](../04-system/authoring-knowledge-maturity.md). Three domain `research-sources.md` files own source observations; existing standards and Skills remain current production owners. No second registry/engine/router/MCP tool.
 
-**KNOWLEDGE:** Same Art Direction and bounded G1/K3 candidate owners. The cross-domain maintenance contract now defines source-only edits, hashed revision checks, and rebuild/reload for bundled cases; no auto-ingestion, live refresh or promotion.
+**ACTIVE WORK:** (1) wide research across individual high-quality artworks and styles; (2) deep image/shape/material/motion analysis with stated evidence limits and rights; (3) cross-creator comparisons, exclusions and contradictory examples; (4) structured Geometry/Texture/Animation synthesis; (5) consolidated coverage/gap review. Do work in coherent cohorts rather than micro-updates.
 
-**NEXT:** Focused Bun source tests and existing Golden/native/human visual acceptance when available. Engine HOLD; Bun/native/Golden **NOT EXECUTED**.
-
-## Deferred acceptance — one full-asset Golden (not cancelled)
-
-The canonical `golden-full-asset-authoring` reference PNG, `REFERENCE.json` and immutable seed remain owned by [GOLDEN_TASKS.md](../../mcp/docs/GOLDEN_TASKS.md). Reference input is approved, but native Geometry/UV/Texture/Animation, save/reopen/export, human acceptance and Cost to Accepted Result remain **UNVERIFIED / UNMEASURED**. Do not create another Golden; revisit once matching knowledge-quality acceptance is possible.
+**RESEARCH BOUNDARY:** Source credibility, copyright, deduplication and truthful observation are checked during research. This is not generator testing. Golden/fixture-based evaluation remains excluded; any later adoption or evaluation is a separate user decision with a different agreed method. Bun/native/visual improvements remain **NOT VERIFIED**. No Golden artifacts or history are deleted.
 
 ## GitHub boundary and historical local recovery
 
@@ -24,7 +20,7 @@ The canonical `golden-full-asset-authoring` reference PNG, `REFERENCE.json` and 
 
 ## Current source / installed proof boundary
 
-Gateway Stage receipt consistency and Golden/affected-test guards are source-authored; Bun/native proof remains NOT EXECUTED. Prior installed `7b45bd69` / Desktop 0.1.1 evidence is historical. See [current-validation.md](current-validation.md). Protect user assets; no deployment, CI or release.
+Gateway Stage receipt consistency and historical Golden/affected-test guards are source-authored, but NOT active Knowledge research work; Bun/native proof remains NOT EXECUTED. Prior installed `7b45bd69` / Desktop 0.1.1 evidence is historical. See [current-validation.md](current-validation.md). Protect user assets; no deployment, CI or release.
 
 ## Deferred Gateway integration context
 

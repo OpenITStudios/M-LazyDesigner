@@ -40,7 +40,7 @@ Source classes:
 | S07 | [PartNet](https://partnet.cs.stanford.edu/) | Hierarchical part names, parent-child composition and part-instance distinctions | Reference structured facts + Modelling profiles | `RESEARCH_CONCEPT`; published dataset is not permission to copy/ingest |
 | S08 | [Houdini Sweep](https://www.sidefx.com/docs/houdini/nodes/sop/sweep.html) | Centerline, varying cross-section, orientation/twist and sampling | `authoringRecipe/patterns.ts` with existing Cube construction | `RESEARCH_CONCEPT`; **do not** promise mesh Sweep in Bedrock; require source-grounded segmented Cuboid approximation |
 | S09 | [Fine-to-Coarse Cuboid Abstraction](https://doi.org/10.1111/cgf.70344) (2026) | Multi-resolution primitive candidates and cost-vs-shape-fidelity tradeoff | `geometry/modelQuality.ts`, `surfaceEvidence.ts` and Recipe alternatives | `RESEARCH_CONCEPT`; no fixed Cube target, AI weights or automatic simplification |
-| S10 | [Orca img2blockbench](https://github.com/orca-gamedev/img2blockbench/tree/315fff912f83a9923e954ff6c596c00dc9832fa3) | Direct Cuboid vs mesh-guided approaches, reproducible output artifacts and audit ideas | Existing Recipe + Golden benchmark | `EXTERNAL_EXAMPLE`; repository code MIT but reported metrics are **not** LazyDesigner measurements, asset rights separate |
+| S10 | [Orca img2blockbench](https://github.com/orca-gamedev/img2blockbench/tree/315fff912f83a9923e954ff6c596c00dc9832fa3) | Direct Cuboid vs mesh-guided approaches, reproducible output artifacts and audit ideas | Existing Recipe conceptual comparison only; no Knowledge benchmark during research | `EXTERNAL_EXAMPLE`; repository code MIT but reported metrics are **not** LazyDesigner measurements, asset rights separate |
 
 All P0 entries are **selected for study/adaptation**, not automatically
 validated production rules. The first four are highest priority because
@@ -58,9 +58,9 @@ These first-party pages were inspected for the **stated artistic reasoning**, no
 
 **AD-01 — Focal hierarchy (hypothesis).** On an approved current reference, name one observable identity-bearing focal feature *only when the image actually supports it*. Before secondary Geometry or mapped Texture detail, compare whether the current model preserves the same visual emphasis in a compatible neutral presentation. Positive candidate: a dominant head/crest/crystal is still readable while nonfocal surfaces remain quieter. Reject: adding evenly distributed spikes or bright trim merely to make every part detailed; refuse to infer intrinsic focal color from cinematic bloom. Ambiguous: one dramatic source image, occlusion or incompatible pose/camera → `UNVERIFIED`. Owner: existing Geometry primary-form review / Texture material-region review; no automatic recipe, symmetry or paint mutation.
 
-**AD-02 — Practical-scale silhouette (hypothesis).** Inspect the current shaded view at a realistic intended viewing scale, with an equivalent-scale reference when available, **in addition to** the native full-resolution check. Positive candidate: the required primary silhouette and identity landmarks remain distinguishable. Reject: a large render looks intricate but the target becomes unrecognizable at actual presentation size. Ambiguous: unknown target scale, different framing/camera, intentional stylized contour or missing actual reference image → `UNVERIFIED`. Owner: [Visual Validation](../validation/visual.md); not a fixed pixel-size limit, visual score, new Runtime capture tool or additional Golden task.
+**AD-02 — Practical-scale silhouette (hypothesis).** Inspect the current shaded view at a realistic intended viewing scale, with an equivalent-scale reference when available, **in addition to** the native full-resolution check. Positive candidate: the required primary silhouette and identity landmarks remain distinguishable. Reject: a large render looks intricate but the target becomes unrecognizable at actual presentation size. Ambiguous: unknown target scale, different framing/camera, intentional stylized contour or missing actual reference image → `UNVERIFIED`. Owner: [Visual Validation](../validation/visual.md); not a fixed pixel-size limit, visual score, new Runtime capture tool or research-to-test trigger.
 
-**Promotion requirements:** real source/model paired images and exact revisions; one positive, negative and ambiguous case for each decision; then compare accepted results through the existing Golden benchmark. These advisory cases are **not** extra G-P01–G-P08 index sections and are not installed source knowledge for normal Gateway/Codex clients. Review counts and art appeal remain unmeasured.
+**Research-only requirement:** study multiple quality-selected works, capture what is observed versus inferred or UNKNOWN, and synthesize positive/negative/ambiguous artistic principles before proposing new rules. No source/model generation, native check or Golden benchmark is required or requested during research; any future adoption or non-Golden evaluation needs separate authorization. These advisory cases are **not** extra G-P01–G-P08 index sections and are not installed source knowledge for normal Gateway/Codex clients. Review counts and art appeal remain unmeasured.
 
 ## B. Secondary concepts to evaluate after a demonstrated gap (P1)
 
@@ -104,9 +104,7 @@ security policy or Validation verdicts.
 
 ## D. Promotion/STOP
 
-`DISCOVERED → SOURCE_REVIEWED → DECISION_CANDIDATE → DETERMINISTIC_REGRESSION_AUTHORED → EXECUTED_SOURCE_PROOF → NATIVE/VISUAL_REVIEW`
-is a **tracking sequence**, not a new runtime approval state machine or
-persisted registry. Source review is not verified model quality.
+Active research is `DISCOVERED → ARTWORK_REVIEWED → CROSS_WORK_SYNTHESIS → DOMAIN_RESEARCH_NOTES → COVERAGE_REVIEW`; this is an editorial description, not a Runtime state machine or new registry. No incremental testing. Source review is not verified model quality. Future code/native adoption is separately authorized and cannot silently reintroduce Golden Assets.
 Do not curate similar papers merely to increase source counts.
 One accepted study must demonstrate a decision-changing contrast:
 **when it applies, when it does not, and which existing Recipe operation
