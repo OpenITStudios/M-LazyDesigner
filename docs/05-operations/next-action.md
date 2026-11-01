@@ -2,15 +2,13 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — deep Knowledge research (2026-11-01)
+## Primary next — curated Knowledge adoption (2026-11-01)
 
-**USER DECISION:** Research-first. The earlier practice of collecting a few references then requesting testing is rejected. **Golden Assets are not to be used, suggested or scheduled for this Knowledge work**, including after research as an automatic next step. No per-source Bun/native/visual testing, model generation, premature Knowledge promotion or engine work. Retain one Reference Package, existing Codex/Gateway/Runtime flow and one authoritative `.bbmodel`. Existing product safety guards remain intact.
+**USER DECISION:** End research discovery. Convert 56 GK/TK/AK source notes into bounded, useful Geometry, Texture and Animation authoring decisions. Do not use Golden Assets. No new runtime engine, database, public Gateway tool, source-art ingestion, auto-mutation or universal style preset.
 
-**KNOWLEDGE OWNER:** [Cross-domain Knowledge ownership and maturity](../04-system/authoring-knowledge-maturity.md). Three domain `research-sources.md` files own source observations; existing standards and Skills remain current production owners. No second registry/engine/router/MCP tool.
+**SOURCE DELIVERY:** Existing [Art Direction](../02-reference/art-direction.md) owns seven conditional visual craft decisions. Existing source-hashed Geometry eight-case and Texture four-case readers have updated descriptions; Animation Standard and active Modelling/Texturing/Animation Skills reference those same owners. Only the current approved Reference Package and native Bedrock facts may determine actual shape, paint and motion.
 
-**ACTIVE WORK:** (1) wide research across individual high-quality artworks and styles; (2) deep image/shape/material/motion analysis with stated evidence limits and rights; (3) cross-creator comparisons, exclusions and contradictory examples; (4) structured Geometry/Texture/Animation synthesis; (5) consolidated coverage/gap review. Do work in coherent cohorts rather than micro-updates.
-
-**RESEARCH BOUNDARY:** Source credibility, copyright, deduplication and truthful observation are checked during research. This is not generator testing. Golden/fixture-based evaluation remains excluded; any later adoption or evaluation is a separate user decision with a different agreed method. Bun/native/visual improvements remain **NOT VERIFIED**. No Golden artifacts or history are deleted.
+**EVIDENCE:** GitHub source and focused regression expectations are authored. CI disabled; Bun/native/model quality NOT EXECUTED. Installed plugin requires existing build/deploy/reload to receive changed casebook bytes. No release or user-local PC task authorized.
 
 ## GitHub boundary and historical local recovery
 

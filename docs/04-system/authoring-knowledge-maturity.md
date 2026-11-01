@@ -47,9 +47,9 @@ Every reusable card must identify: **stable ID**, domain and exact question; **a
 
 An unknown or incompatible requirement blocks **only the dependent decision**. Current approved user reference and native state outrank research examples. Candidate descriptions never authorize automated mutations.
 
-## Active research-first method — 2026-11-01 user decision
+## Completed research-first method — historical, closed 2026-11-01
 
-**Research remains open: no incremental generator testing.** This supersedes the earlier pattern of collecting a handful of examples and immediately requesting tests. **Golden Assets/Golden Tasks are rejected for this Knowledge initiative**: never use, propose or schedule them as a test, a readiness gate, or the default step after research. Do not request source-by-source or small-batch Bun/native/visual tests. Keep the existing production safety guards intact for unrelated, separately authorized engineering work.
+**The user closed discovery on 2026-11-01.** The following remains the historical research method, not the active work queue. No incremental generator testing was authorized in the research phase. This supersedes the earlier pattern of collecting a handful of examples and immediately requesting tests. **Golden Assets/Golden Tasks are rejected for this Knowledge initiative**: never use, propose or schedule them as a test, a readiness gate, or the default step after research. Do not request source-by-source or small-batch Bun/native/visual tests. Keep the existing production safety guards intact for unrelated, separately authorized engineering work.
 
 **Work in substantial research cohorts, not one citation → one test:**
 
@@ -175,11 +175,8 @@ This is a compact editorial continuation of the three existing research owners, 
 
 **Rollback and stale context:** Git commits retain change history. Old explicit knowledge links are intentionally invalidated when source/section bytes change; re-ground the affected decision rather than silently reverting to obsolete advice or retrying uncertain native mutations. There is no automatic external-source ingestion or model-weight learning.
 
-## Current next — deepen and consolidate research (no implementation)
+## Current state — curated Knowledge made operational, not certified
 
-1. Expand discovery to multiple skilled creators and individual quality-selected works beyond the first Bepoo/marketplace examples.
-2. Examine original available views, material/pixel techniques and genuine motion evidence deeply, including negative/ambiguous comparisons and style-specific exceptions.
-3. Synthesize findings across existing Geometry, Texture and Animation research owners, deduplicate observations and document open questions.
-4. Present one substantial cross-domain research assessment before any Knowledge adoption. **No Golden Assets, no per-reference tests, no engine development and no premature rule promotion.** Future evaluation is not automatically scheduled and requires a separately agreed non-Golden method.
+The research-discovery phase is complete by user decision. The 56 GK/TK/AK notes and 15 CX dossiers remain source-linked evidence, NOT 56 executable presets or a new training database. The existing [Art Direction](../02-reference/art-direction.md) now holds a conditional Visual Craft Matrix. Existing Geometry G-P01–08 and Texture UV-P01/TEX-P01–03 casebooks are read by their existing source-hashed selectors/resources; the Animation Standard and the three active specialist Skills carry matching domain decisions. The approved Reference Package and Bedrock source evidence always outrank external research.
 
-**Research efficiency:** prioritize depth, useful comparison and fewer fragmented handoffs over a quick transition to tests.
+**Limits:** Case selection does not authorize mutation, infer colors/dimensions, approve reference-match quality or convert Java/Generic examples into Bedrock behavior. No new engine, MCP tool, registry, mandatory lookup or Golden Assets. The GitHub source change requires normal Runtime build/redeploy/reload for bundled casebook availability. CI is disabled, focused source regressions are authored but not run, and installed visual/animation improvement is NOT VERIFIED. No user-PC prerequisite.

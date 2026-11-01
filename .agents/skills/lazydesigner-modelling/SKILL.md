@@ -46,7 +46,7 @@ Before a reference-driven new-form batch, ensure actual approved image pixels ar
 ## Geometry Hot Path
 `reference evidence contract → selected profile guidance → semantic form → representation choice → primary batch → Core View Triad → conditional surface integrity → causal correction → Geometry PASS → UV preflight → user review`.
 
-**AD-01/AD-02 — conditional artistic read, not a new gate:** With an approved image and comparable model view, identify source-visible focal mass, deliberate quiet regions, focal hierarchy, primary silhouette and negative space. At known game display scale, reuse capture for small-display review. Correct identity/proportion before adding secondary Cubes; do not infer from names or mistake studio lighting/bloom/perspective for Geometry defects. Texture-owned differences hand off; missing compatible views or scale stays `UNVERIFIED`. Reuse `SILHOUETTE_PROPORTION` / `SECONDARY_GEOMETRY_DETAIL` and causal correction, without a new scorer or default capture.
+**Visual craft (conditional, existing G-P cases):** Prioritize reference-supported main identity and gaps before tiny Cubes (G-P02/03/06). Actual articulated spans, pivots and thin carriers remain source-owned (G-P05/08); only evidence-backed variants change form (G-P07). Use docs/02-reference/art-direction.md only when a specific style-family decision is unresolved; marketing glow or titles never prove geometry. Reuse the ordinary reference/correction route; unknown stays UNVERIFIED, no new score or per-Cube lookup.
 
 Nontrivial form: **transient Primary Mass Contract**:
 ```text

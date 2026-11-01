@@ -105,6 +105,8 @@ Reuse existing semantic owners first. More clips/controllers do not justify hier
 
 Locators are not direct animation targets in the current authoring path; a moving Locator inherits motion from the correct parent Group/Bone. Wrong parent ownership is a Geometry blocker.
 
+**Operational art-craft:** For a source-supported motion decision, consult the matching Artist-Craft Motion Decisions row in docs/03-authoring/animation/standard.md. Distinguish grounded/flying, impact/recovery, held equipment, alternate hand/face state and flexible parts based on current approved evidence. No Generic/Java presets or lookup before ordinary known keys.
+
 ## Motion Design Contract
 
 Before keys, define only applicable motion causes:

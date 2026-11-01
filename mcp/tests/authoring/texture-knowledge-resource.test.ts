@@ -76,6 +76,17 @@ describe("K4 on-demand Texture/UV knowledge consumer — no mutation", () => {
     const reader = createTextureUvCaseReader(await readCasebook());
     const uv = reader.read("UV-P01");
     const texture = reader.read("TEX-P01");
+    expect(texture.state).toBe("SOURCE_CANDIDATE");
+    if (texture.state === "SOURCE_CANDIDATE") {
+      expect(texture.guidance_text).toContain("VC-MATERIAL");
+      expect(texture.mutation_authorized).toBe(false);
+    }
+    const emission = reader.read("TEX-P03");
+    expect(emission.state).toBe("SOURCE_CANDIDATE");
+    if (emission.state === "SOURCE_CANDIDATE") {
+      expect(emission.guidance_text).toContain("VC-EMISSION");
+      expect(emission.mutation_authorized).toBe(false);
+    }
     if (uv.state !== "SOURCE_CANDIDATE" ||
         texture.state !== "SOURCE_CANDIDATE") {
       throw new Error("K3 source case unavailable");

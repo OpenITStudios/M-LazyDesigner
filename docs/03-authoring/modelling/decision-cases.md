@@ -21,8 +21,8 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 
 ## G-P02 Primary Silhouette Mass
 
-- **Decision:** preserve supported primary silhouette masses and intended-size focal hierarchy before decorative Geometry.
-- **Problem signals:** sofa backrest too flat; sandaran sofa terlalu pendek; weak main silhouette.
+- **Decision:** preserve supported primary silhouette masses and intended-size focal hierarchy before decorative Geometry (VC-FORM, GK-01).
+- **Problem signals:** sofa backrest too flat; sandaran sofa terlalu pendek; weak main silhouette; boss focal silhouette unclear.
 - **Apply:** approved views or dimensions identify a dominant head/body/backrest and deliberate proportion; a Style Lock contributes only compatible, reference-supported cues.
 - **Reject/defer:** do not impose universal stylized ratios, invent unseen mass or add tiny Cubes to hide a wrong outline; approved exaggeration wins.
 - **Source evidence:** S1 separates head/body/limbs; S3 has a [24,24,64] body and large head masses. These illustrate construction, not target ratios.
@@ -36,7 +36,8 @@ Status: **SOURCE-FACTS-VERIFIED / DECISIONS PROVISIONAL**, 2026-10-29. These eig
 ## G-P03 Protruding Form Versus Surface Marking
 
 - **Decision:** use Geometry for supported silhouette/volume/contact/motion; paint a surface-only mark in Texture.
-- **Problem signals:** armor too many tiny cubes; surface cloth markings; decorative trim should be texture; painted stripe versus raised horn.
+- **Craft cue (conditional):** raised bone/jaw/plate versus painted wear is decided by real source contour, not detail count (VC-FORM, GK-10).
+- **Problem signals:** armor too many tiny cubes; surface cloth markings; decorative trim should be texture; painted stripe versus raised horn; raised armor mistaken for paint.
 - **Apply:** approved reference shows a protruding horn, armor plate or other material 3D contribution.
 - **Reject/defer:** stripe, seam, logo or highlight without 3D purpose stays Texture; missing depth evidence stays REVIEW_REQUIRED.
 - **Source evidence:** S3 contains small head Cuboids, but their visual role is not proven by JSON; S4 distinguishes surface paint.

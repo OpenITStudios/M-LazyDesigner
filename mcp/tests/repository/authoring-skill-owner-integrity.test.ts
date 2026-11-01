@@ -26,6 +26,25 @@ describe("canonical authoring Skill ownership", () => {
     }
   });
 
+  test("domain specialists keep selected craft in canonical source owners", async () => {
+    const [direction, geometry, texture, animation, modellingSkill, texturingSkill, animationSkill] = await Promise.all([
+      source("../docs/02-reference/art-direction.md"),
+      source("../docs/03-authoring/modelling/decision-cases.md"),
+      source("../docs/03-authoring/texture/decision-cases.md"),
+      source("../docs/03-authoring/animation/standard.md"),
+      source("../.agents/skills/lazydesigner-modelling/SKILL.md"),
+      source("../.agents/skills/lazydesigner-texturing/SKILL.md"),
+      source("../.agents/skills/lazydesigner-animation/SKILL.md"),
+    ]);
+    for (const id of ["VC-FORM","VC-MATERIAL","VC-STYLE","VC-VARIANT","VC-MOTION","VC-EXPRESSION","VC-EMISSION"]) expect(direction).toContain(id);
+    expect(geometry).toContain("VC-FORM");
+    expect(texture).toContain("VC-EMISSION");
+    expect(animation).toContain("Artist-Craft Motion Decisions");
+    expect(modellingSkill).toContain("existing G-P cases");
+    expect(texturingSkill).toContain("case-tex-p01");
+    expect(animationSkill).toContain("Artist-Craft Motion Decisions");
+  });
+
   test("particle authoring remains a bounded Animation specialist route", async () => {
     const [registration, animation] = await Promise.all([
       source("server/runtime/registration.ts"),

@@ -58,6 +58,21 @@ For an unresolved motion decision, consult only the relevant F01–F30 entry in 
 
 The motion recipe compiler must reject nonfinite scalar scale (`NaN`, `Infinity`) before the existing native create plan. Technical numeric validity, a source check and keyframe count never imply contact, interpolation correctness after export, or visual PASS.
 
+## Artist-Craft Motion Decisions — selectively adopted advisory data
+
+These source-derived decisions are part of the existing Animation Standard; they are not new motion presets, a second engine or native proof. Current approved motion evidence and target Bedrock format outrank external Generic/GeckoLib examples.
+
+| Supported current situation | Conditional artistic decision | Reject/defer |
+| --- | --- | --- |
+| Walking/running with ground contact | Differentiate stance/swing, root travel and run/walk intent (AK-03/08/16/17) | Force grounded feet on flying/swimming or one cadence |
+| Floating, swimming or multi-segment wing/tail | Main body driver with justified flexible span response and phase (AK-09/20) | Copy fixed lag/angles from another rig |
+| Attack, jump, impact, death/recovery | Source-matched anticipation, important pose, contact and settle; loop versus one-shot (AK-01/02/07/13/16) | Clip density or marketing name as artistic quality |
+| Equipped character or expression change | Correct attachment and purposeful body stance; alternate visual hand/mouth state requires Geometry and Texture ownership (AK-04/12/19) | Invent kilograms, Java controller, or duplicate all clips |
+| Normal/enraged, statue/awake or injured | Separate only actions whose visual character genuinely differs (AK-14/18/21) | Multiply every action by each state or invent gameplay triggers |
+| Effects/secondary parts in motion | Maintain perceptual focal readability and source-supported effect order (AK-11/19) | Screenshot glow or file metadata assumed to prove actual playback |
+
+Use one relevant row during the existing active Animation stage. Unknown pivot/paint ownership returns to the correct existing stage instead of creating an Animation workaround. [Research sources](research-sources.md) remain evidence, not automatically executable content. No Golden Assets or mandatory tests.
+
 ## Motion Design Contract
 
 Before production animation, define only applicable facts:
