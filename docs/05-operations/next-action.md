@@ -2,30 +2,32 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — Autonomous Advanced Geometry (2026-11-01)
+## Primary next — Advanced Geometry CODE-FIRST (2026-11-01)
 
-**USER DECISION:** AI-first, zero-touch Geometry within the existing
-LazyDesigner plugin and Gateway. Do not create a separate plugin, a new
-public Gateway surface, a second Recipe engine, or mandatory human UI.
+**USER DECISION:** Build mature AI-first Geometry source and Blockbench
+plugin capability as one coherent product before running incremental tests.
+NO Bun, CI, test creation/edits, native QA, release or UI-only prototypes
+for this pass. Existing public four-tool Gateway must remain unchanged.
 
-**SOURCE SLICE R3a:** Planar Curve/Taper samples now compile to an existing
-Recipe candidate via authoringRecipe/geometryCurveConstruction.ts. The
-existing service planCurveConstruction[Stored] can use the same plan/apply
-and native Undo adapter. Hand-authored features/relations remain protected.
-Unsupported 3D, unowned evidence and Box UV subunits fail closed.
-R3a does not yet expose a registered AI Runtime capability.
+**R3a source:** Planar Curve/Taper becomes compileable Recipe v1 with
+sample-pair identities and deliberate single/segmented Cuboids.
 
-**PROOF:** Source plus 7 targeted regression scenarios authored. Bun,
-TypeScript/build, CI (disabled), installed Blockbench, native Undo,
-save/reopen, Bedrock export and reference fidelity NOT EXECUTED.
+**R3b source:** New `authoringRecipe/geometryComposition.ts` produces
+CUBOID, hollow FRAME, LINEAR/GRID/RADIAL REPEAT and planar CURVE
+features. Existing `service.planAdvancedGeometry[Stored]` accepts the
+composed candidate through original Recipe plan/apply/Undo path; source
+isolation guards hand-authored unrelated geometry and linked constraints.
+This is code only: NO public `construct_geometry` route yet.
 
-**NEXT:** Validate the source in a capable environment; then expose a
-bounded construct_geometry operation through existing Runtime/Gateway
-and run a disposable Blockbench/Bedrock fixture. Do not promote source
-compilation to visual quality or user approval.
+**PROOF:** Exact pinned Local owners reviewed and source authored.
+Build/typecheck, tests, CI (disabled), installed Blockbench, native Undo,
+save/reopen, Bedrock export, reference-matched quality NOT EXECUTED.
 
-**PRIOR KNOWLEDGE:** Curated Geometry/Texture/Animation decisions remain
-source-linked advisory guidance only, with no mandatory research preload.
+**NEXT (CODE):** Finish AI-facing runtime `construct_geometry` integration
+and canonical generator-owned schema/docs as one coherent delivery;
+complete safe native create/revision and model/persistence ownership
+before declaring the AI can invoke the advanced suite. Tests remain
+deferred until the feature code is mature and user reopens QA.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

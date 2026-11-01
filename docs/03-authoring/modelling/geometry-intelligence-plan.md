@@ -227,6 +227,38 @@ tool or a proven Blockbench operation. Bun/typecheck/build, native Undo,
 save/reopen, Bedrock codec/export and reference-matched appearance remain
 NOT EXECUTED. Next integration is an AI-facing capability on the existing
 Runtime/Gateway surface after source and native preflight proof.
+### R3b — AI-first multi-feature Geometry composition (2026-11-01; CODE ONLY)
+
+`authoringRecipe/geometryComposition.ts` compiles multiple declared
+feature shapes into the **existing** Recipe v1 without creating a competing
+shape engine, plugin, UI, asset store or new public Gateway route. It reuses
+R3a Curve construction and the original Recipe compiler/plan/Undo owner.
+
+Available source-level shape intents:
+- CUBOID: finite 3D bounds, explicit or center pivot, one-axis rotation.
+- FRAME: four non-overlapping border members around a real rectangular
+  opening, with a chosen normal axis.
+- REPEAT: bounded LINEAR, GRID or RADIAL instances via the existing pattern
+  expander; radial centers account for Cuboid half-extents.
+- CURVE: source-linked planar centerline, stepped section changes and
+  deterministic sample-pair IDs via existing R3a.
+
+The builder rejects invalid references/IDs, unsupported rotations,
+out-of-scope feature changes, hand-authored cohorts, linked
+Anchor/Symmetry revisions, subunit Box UV spans and identical overlapping
+placements. Explicit generated-feature replacement retains unrelated
+prototypes and pattern ownership. Opt-in
+`createAuthoringRecipeService.planAdvancedGeometry[Stored]` consumes the
+candidate through existing `planPair` and its incremental Recipe lifecycle.
+Source handles DO NOT attest image content. Rig and artistic fidelity
+remain separate validation requirements.
+
+**User decision for this development pass:** code-first; do not run,
+author, or modify tests yet. No CI, generator, installed plugin, Native Undo,
+save/reopen, visual/Bedrock validation or release was executed. The public
+`construct_geometry` registration is deferred until canonical generated
+outputs and Runtime contracts can be delivered coherently. This code is
+not yet an AI-invokable Blockbench capability.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

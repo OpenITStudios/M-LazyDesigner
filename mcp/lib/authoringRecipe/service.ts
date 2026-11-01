@@ -3,6 +3,7 @@ import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import type { RecipeKnowledgeSnapshot } from "@/lib/authoringRecipe/knowledge";
 import type { GeometryCurveObservation } from "@/lib/authoringRecipe/geometryCurves";
 import { buildPlanarCurveRecipeCandidate } from "@/lib/authoringRecipe/geometryCurveConstruction";
+import { buildAdvancedGeometryRecipeCandidate, requireAdvancedGeometryChangeScope, type AdvancedGeometryFeature } from "@/lib/authoringRecipe/geometryComposition";
 import { collectRecipeKnowledge, featureIdForRecipeInstance } from "@/lib/authoringRecipe/knowledgePlanning";
 import { reviewRecipeGeometryFidelity } from "@/lib/authoringRecipe/geometryFidelity";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
@@ -105,6 +106,18 @@ export function createAuthoringRecipeService(
     const candidate = buildPlanarCurveRecipeCandidate(nextRecipe, observation, options);
     const planned = await planPair(previousRecipe, candidate.next_recipe, [observation]);
     return { ...planned, curve_construction: candidate.summary };
+  };
+
+  /** Compose multiple explicitly sourced shape intents before one existing Recipe plan. */
+  const planAdvancedGeometryPair = async (
+    previousRecipe: AuthoringRecipe,
+    nextRecipe: AuthoringRecipe,
+    features: readonly AdvancedGeometryFeature[]
+  ) => {
+    requireAdvancedGeometryChangeScope(previousRecipe, nextRecipe, features);
+    const construction = buildAdvancedGeometryRecipeCandidate(nextRecipe, features);
+    const planned = await planPair(previousRecipe, construction.next_recipe);
+    return { ...planned, geometry_construction: construction.summary };
   };
 
   /**
@@ -488,6 +501,20 @@ export function createAuthoringRecipeService(
 
   return {
     plan: planPair,
+    planAdvancedGeometry: planAdvancedGeometryPair,
+    async planAdvancedGeometryStored(
+      nextRecipe: AuthoringRecipe,
+      features: readonly AdvancedGeometryFeature[]
+    ) {
+      if (!dependencies.readStoredRecipe) {
+        throw new Error("RECIPE_STORE_UNAVAILABLE: cannot plan advanced geometry without the canonical store.");
+      }
+      const previousRecipe = await dependencies.readStoredRecipe(nextRecipe.id);
+      if (!previousRecipe) {
+        throw new Error("RECIPE_NOT_STORED: no previous Recipe exists for " + nextRecipe.id);
+      }
+      return planAdvancedGeometryPair(previousRecipe, nextRecipe, features);
+    },
     planCurveConstruction: planCurvePair,
     async planCurveConstructionStored(
       nextRecipe: AuthoringRecipe,

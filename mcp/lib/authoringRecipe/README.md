@@ -133,6 +133,24 @@ Gateway tool. A normal Recipe omitting these observations is unchanged.
 Focused R3 source tests are authored; Bun/typecheck/build/native/visual
 acceptance are NOT EXECUTED.
 
+### Advanced shape composition (source-only, not yet public Runtime)
+
+`geometryComposition.ts` composes up to eight explicitly sourced shape
+features into the existing Recipe schema: CUBOID, hollow FRAME, repeated
+LINEAR/GRID/RADIAL Cuboids and planar CURVE/TAPER built with the R3a
+constructor. The feature compiler uses existing prototype/pattern/feature
+ownership, accepts explicit generated-cohort replacement only, protects
+unrelated Recipe entries, rejects conflicting ANCHOR/SYMMETRY ownership,
+requires Box UV-representable spans, and refuses exact duplicate Cubes.
+Native Cube positions are Recipe compilation output, not a visual PASS.
+
+`createAuthoringRecipeService.planAdvancedGeometry` (and Stored variant)
+uses the original `planPair`, plan registry and canonical subsequent
+`apply` transaction. No second persistent Recipe store, direct native
+mutation, public Gateway tool or mandatory Blockbench panel is introduced.
+The SOURCE implementation is intentionally not yet invokable by AI clients.
+Testing, builds, generated docs, native acceptance and source-based visual
+correspondence were deliberately deferred at the user's request.
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
