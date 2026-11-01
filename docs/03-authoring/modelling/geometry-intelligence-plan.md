@@ -380,6 +380,28 @@ Cube getSaveCopy() copies properties independently of that Project gate.
 **Proof ceiling:** upstream source semantics and repository contracts
 inspected; no build, tests, native save/reopen, Bedrock export or
 reference visual acceptance were executed, as the user requested.
+### R3h — Native-Cuboid negative space and voxel arch (2026-11-01; CODE ONLY)
+
+Two additional shape intents are implemented in the strict Geometry
+input schema and existing Authoring Recipe compiler:
+
+- `hollow_box`: six possible opening directions, one absent outer face,
+  five nonintersecting Cuboid wall panels and a bounded inner cavity.
+  Validated wall and cavity spans retain meaningful 3D negative space.
+- `arch`: XY/ZY opening with +Y vertical, explicit crown and curved
+  rise, and one voxel-aligned Cuboid per bounded odd horizontal column.
+  A conservative nearest-crown endpoint sampling rule prevents a Cube
+  from intruding into its declared arched opening. Axis-aligned geometry
+  avoids unsupported multi-axis Cube rotations and poly_mesh exports.
+
+These pure computations now live in the focused
+`authoringRecipe/geometryShapeBuilders.ts`; the existing
+`geometryComposition.ts` retains identity, feature routing and
+Recipe source ownership only. Both new shapes reuse the existing
+`buildAdvancedGeometryRecipeCandidate` → Recipe compiler → plan/apply
+native transaction. They are not a parallel modeling or persistence
+engine, and do not add a new public API tool. No tests or live QA
+were run per user instruction; image resemblance/export are unverified.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

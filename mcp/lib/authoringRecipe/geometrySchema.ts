@@ -88,6 +88,30 @@ export const advancedGeometryFeatureSchema = z.discriminatedUnion("kind", [
   }).strict(),
   z.object({
     ...featureBase,
+    kind: z.literal("hollow_box"),
+    center: geometryVec3Schema,
+    size: geometryVec3Schema,
+    wall: z.number().finite().min(1)
+      .describe("Wall thickness in Blockbench model units; at least one unit."),
+    open_face: z.enum(["POS_X", "NEG_X", "POS_Y", "NEG_Y", "POS_Z", "NEG_Z"])
+      .describe("Open side of the box in exact model coordinates."),
+  }).strict(),
+  z.object({
+    ...featureBase,
+    kind: z.literal("arch"),
+    center: geometryVec3Schema,
+    size: geometryVec3Schema,
+    wall: z.number().finite().min(1)
+      .describe("Border thickness of the arched opening."),
+    rise: z.number().finite().min(1)
+      .describe("Additional opening height from the side to the center."),
+    span_axis: z.enum(["X", "Z"])
+      .describe("Horizontal axis of the arched opening; vertical is +Y."),
+    columns: z.number().int().min(3).max(31).optional()
+      .describe("Optional odd number of voxel columns; omitted chooses a bounded count from width."),
+  }).strict(),
+  z.object({
+    ...featureBase,
     kind: z.literal("curve"),
     samples: z.array(curveSampleSchema).min(2).max(12),
   }).strict(),

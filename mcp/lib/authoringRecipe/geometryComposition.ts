@@ -1,18 +1,18 @@
 import type {
   AuthoringRecipe,
-  RecipeCubePrototype,
   RecipeFeatureIntent,
-  RecipePattern,
-  RecipeVec3,
 } from "./contracts";
 import type { AdvancedGeometryFeature } from "./geometrySchema";
 export type { AdvancedGeometryFeature } from "./geometrySchema";
 import { buildPlanarCurveRecipeCandidate } from "./geometryCurveConstruction";
 import { compileAuthoringRecipe } from "./compiler";
 import {
-  requireBoxUvRepresentableSpan,
-  validateCubeGeometrySpan,
-} from "@/lib/geometry/cubeSpan";
+  buildGeometryShapePieces,
+  requireIdentity,
+  MAX_FEATURES,
+  MAX_FEATURE_CUBES,
+  MAX_TOTAL_CUBES,
+} from "./geometryShapeBuilders";
 
 export type AdvancedGeometrySummary = {
   scope: "SOURCE_ONLY_NOT_VISUALLY_ATTESTED";
@@ -29,181 +29,6 @@ export type AdvancedGeometrySummary = {
   visual_verdict: "NOT_EVALUATED";
 };
 
-const AXES = ["X", "Y", "Z"] as const;
-const MAX_FEATURES = 8;
-const MAX_FEATURE_CUBES = 128;
-const MAX_TOTAL_CUBES = 256;
-
-function requireFiniteVector(value: readonly number[], label: string): RecipeVec3 {
-  if (!Array.isArray(value) || value.length !== 3 ||
-    value.some(item => typeof item !== "number" || !Number.isFinite(item))) {
-    throw new Error("ADVANCED_GEOMETRY_VECTOR_INVALID: " + label);
-  }
-  return [value[0]!, value[1]!, value[2]!];
-}
-
-function requirePositiveSize(value: readonly number[], label: string): RecipeVec3 {
-  const vector = requireFiniteVector(value, label);
-  if (vector.some(item => item < 1)) {
-    throw new Error("ADVANCED_GEOMETRY_BOX_UV_SIZE_REVIEW: " +
-      label + " requires positive axes >= 1 for inherited Box UV.");
-  }
-  return vector;
-}
-
-function requireRotation(value: readonly number[] | undefined): RecipeVec3 {
-  const rotation = requireFiniteVector(value ?? [0, 0, 0], "rotation");
-  if (rotation.some(item => Math.abs(item) > 45) ||
-    rotation.filter(item => item !== 0).length > 1) {
-    throw new Error("ADVANCED_GEOMETRY_ROTATION_REVIEW: use at most one native axis within ±45 degrees.");
-  }
-  return rotation;
-}
-
-function requireIdentity(value: string, label: string): string {
-  if (typeof value !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(value)) {
-    throw new Error("ADVANCED_GEOMETRY_ID_INVALID: " + label);
-  }
-  return value;
-}
-
-function requireCount(count: number, label: string): number {
-  if (!Number.isInteger(count) || count < 1 || count > MAX_FEATURE_CUBES) {
-    throw new Error("ADVANCED_GEOMETRY_COUNT_INVALID: " + label);
-  }
-  return count;
-}
-
-type Pieces = {
-  prototypes: RecipeCubePrototype[];
-  patterns: RecipePattern[];
-};
-
-function makeBox(
-  id: string,
-  name: string,
-  featureId: string,
-  fromRaw: RecipeVec3,
-  toRaw: RecipeVec3,
-  rotationRaw?: RecipeVec3,
-  pivotRaw?: RecipeVec3
-): Pieces {
-  const from = requireFiniteVector(fromRaw, "from");
-  const to = requireFiniteVector(toRaw, "to");
-  validateCubeGeometrySpan(from, to, 0, id);
-  requireBoxUvRepresentableSpan(from, to, id);
-  const size = requirePositiveSize(to.map((value, index) =>
-    value - from[index]!) as RecipeVec3, "size");
-  const rotation = requireRotation(rotationRaw);
-  const pivot = pivotRaw === undefined
-    ? from.map((value, index) => value + size[index]! / 2) as RecipeVec3
-    : requireFiniteVector(pivotRaw, "pivot");
-  const relativeOrigin = pivot.map((value, index) =>
-    value - from[index]!) as RecipeVec3;
-  return {
-    prototypes: [{ id, name, size, rotation, origin: relativeOrigin }],
-    patterns: [{
-      kind: "LINEAR", id, feature_id: featureId,
-      prototype_id: id, count: 1, axis: "Z", spacing: 0, start: from,
-    }],
-  };
-}
-
-function buildFrame(feature: Extract<AdvancedGeometryFeature, { kind: "frame" }>): Pieces {
-  const center = requireFiniteVector(feature.center, "frame center");
-  const size = requirePositiveSize(feature.size, "frame size");
-  const border = feature.border;
-  if (!Number.isFinite(border) || border < 1) {
-    throw new Error("ADVANCED_GEOMETRY_FRAME_BORDER_INVALID");
-  }
-  const normal = AXES.indexOf(feature.normal_axis);
-  if (normal < 0) throw new Error("ADVANCED_GEOMETRY_FRAME_AXIS_INVALID");
-  const [a, b] = [0, 1, 2].filter(axis => axis !== normal);
-  if (size[a!]! <= 2 * border || size[b!]! <= 2 * border) {
-    throw new Error("ADVANCED_GEOMETRY_FRAME_OPENING_REQUIRED");
-  }
-  const low = center.map((value, index) => value - size[index]! / 2);
-  const high = center.map((value, index) => value + size[index]! / 2);
-  const piece = (label: string, aMin: number, aMax: number, bMin: number, bMax: number) => {
-    const from = [...low] as RecipeVec3;
-    const to = [...high] as RecipeVec3;
-    from[a!] = aMin; to[a!] = aMax;
-    from[b!] = bMin; to[b!] = bMax;
-    return makeBox("shape:frame:" + feature.id + ":" + label,
-      feature.label + "_" + label, feature.id, from, to);
-  };
-  const parts = [
-    piece("left", low[a!]!, low[a!]! + border, low[b!]!, high[b!]!),
-    piece("right", high[a!]! - border, high[a!]!, low[b!]!, high[b!]!),
-    piece("bottom", low[a!]! + border, high[a!]! - border, low[b!]!, low[b!]! + border),
-    piece("top", low[a!]! + border, high[a!]! - border, high[b!]! - border, high[b!]!),
-  ];
-  return {
-    prototypes: parts.flatMap(part => part.prototypes),
-    patterns: parts.flatMap(part => part.patterns),
-  };
-}
-
-function buildRepeat(feature: Extract<AdvancedGeometryFeature, { kind: "repeat" }>): Pieces {
-  const size = requirePositiveSize(feature.size, "repeated size");
-  const rotation = requireRotation(feature.rotation);
-  const id = "shape:repeat:" + feature.id;
-  const shape = feature.pattern;
-  let pattern: RecipePattern;
-  switch (shape.kind) {
-    case "LINEAR": {
-      requireCount(shape.count, "linear count");
-      if (!Number.isFinite(shape.spacing)) {
-        throw new Error("ADVANCED_GEOMETRY_SPACING_INVALID");
-      }
-      pattern = {
-        kind: "LINEAR", id, prototype_id: id, feature_id: feature.id,
-        count: shape.count, axis: shape.axis, spacing: shape.spacing,
-        start: requireFiniteVector(shape.start, "linear start"),
-      };
-      break;
-    }
-    case "GRID": {
-      const count = requireCount(shape.counts[0] * shape.counts[1], "grid count");
-      if (!Number.isInteger(shape.counts[0]) || !Number.isInteger(shape.counts[1]) ||
-        count !== shape.counts[0] * shape.counts[1] ||
-        shape.axes[0] === shape.axes[1] ||
-        shape.spacing.some(value => !Number.isFinite(value))) {
-        throw new Error("ADVANCED_GEOMETRY_GRID_INVALID");
-      }
-      pattern = {
-        kind: "GRID", id, prototype_id: id, feature_id: feature.id,
-        counts: [...shape.counts], axes: [...shape.axes],
-        spacing: [...shape.spacing],
-        start: requireFiniteVector(shape.start, "grid start"),
-      };
-      break;
-    }
-    case "RADIAL": {
-      requireCount(shape.count, "radial count");
-      if (!Number.isFinite(shape.radius) || shape.radius <= 0) {
-        throw new Error("ADVANCED_GEOMETRY_RADIUS_INVALID");
-      }
-      pattern = {
-        kind: "RADIAL", id, prototype_id: id, feature_id: feature.id,
-        count: shape.count, axis: shape.axis, radius: shape.radius,
-        center: requireFiniteVector(shape.center, "radial center").map(
-          (value, index) => value - size[index]! / 2
-        ) as RecipeVec3,
-        rotate_with_pattern: false,
-      };
-      break;
-    }
-  }
-  return {
-    prototypes: [{
-      id, name: feature.label, size, rotation,
-      origin: size.map(value => value / 2) as RecipeVec3,
-    }],
-    patterns: [pattern],
-  };
-}
-
 function protectCurrentFeature(
   recipe: AuthoringRecipe,
   feature: AdvancedGeometryFeature
@@ -213,7 +38,8 @@ function protectCurrentFeature(
     : "shape:" + feature.kind + ":" + feature.id + ":";
   const existing = recipe.patterns.filter(pattern => pattern.feature_id === feature.id);
   const isOwnedId = (id: string) =>
-    feature.kind === "curve" || feature.kind === "frame"
+    feature.kind === "curve" || feature.kind === "frame" ||
+    feature.kind === "hollow_box" || feature.kind === "arch"
       ? id.startsWith(prefix)
       : id === prefix.slice(0, -1);
   if (existing.some(pattern =>
@@ -373,15 +199,7 @@ export function buildAdvancedGeometryRecipeCandidate(
     }
     next = protectCurrentFeature(next, feature);
     const before = next.patterns.length;
-    let pieces: Pieces;
-    if (feature.kind === "cuboid") {
-      pieces = makeBox("shape:cuboid:" + feature.id, feature.label,
-        feature.id, feature.from, feature.to, feature.rotation, feature.pivot);
-    } else if (feature.kind === "frame") {
-      pieces = buildFrame(feature);
-    } else {
-      pieces = buildRepeat(feature);
-    }
+    const pieces = buildGeometryShapePieces(feature);
     next.prototypes.push(...pieces.prototypes);
     next.patterns.push(...pieces.patterns);
     const compiled = compileAuthoringRecipe(next);

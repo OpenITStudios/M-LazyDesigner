@@ -151,6 +151,27 @@ mutation, public Gateway tool or mandatory Blockbench panel is introduced.
 The SOURCE implementation is intentionally not yet invokable by AI clients.
 Testing, builds, generated docs, native acceptance and source-based visual
 correspondence were deliberately deferred at the user's request.
+### Geometry composition: hollow box and stepped arch (R3h, code only)
+
+`geometryShapeBuilders.ts` is the focused, pure mathematical owner for
+native-Cuboid shape construction; `geometryComposition.ts` remains the
+feature and Recipe-ownership orchestrator. The same strict schema now
+accepts `hollow_box` and `arch` alongside Cuboid, Frame, Repeat and Curve.
+
+- `hollow_box`: a caller-chosen open axis/face, five disjoint wall panels
+  (side pairs and one opposite back) and a real negative-space cavity.
+  All positive wall and interior spans require at least one model unit.
+- `arch`: a vertical, voxel-stepped semicircular doorway opening in XY
+  or ZY, with bounded odd column count, crown thickness and an explicit
+  rise. Each column's bottom samples the nearest crown point within
+  the column so its Cube cannot obstruct the intended arch opening.
+  Column IDs remain stable at a fixed column count.
+
+All shapes become existing Recipe v1 Cube prototypes and patterns.
+No separate mesh engine, new persistent registry, new public Gateway tool,
+new Blockbench UI, or manually authored generated API docs were added.
+Source implementation is untested by user instruction; native/visual
+quality and Bedrock export remain UNVERIFIED.
 ### Geometry command contract and native plan/apply source binding (code only)
 
 `geometrySchema.ts` owns one strict import-safe Zod contract for Cuboid,
