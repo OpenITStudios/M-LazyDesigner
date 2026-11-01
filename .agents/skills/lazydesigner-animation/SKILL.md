@@ -31,6 +31,8 @@ Keep only motion-relevant context: current animation request, approved checkpoin
 
 If a decision-critical motion relationship is missing, request only that exact context through Control. Never broaden into full-profile discovery as reassurance.
 
+**Knowledge focus (only when present):** `decision_packet.knowledge_focus` may identify `VC-MOTION` for one explicitly supported motion `source_fact_id`. If the artistic motion choice is unresolved, consult the matching *Artist-Craft Motion Decisions* row in the existing Animation Standard, then compare the approved motion/poses, attachment and contact evidence with representative native preview times before editing. A reference-package claim does not prove an observed gait, exact timing, playback or animation quality. Prefer the known direct keyframe path when motion is already specified; never preload AK research or invent a universal speed/phase. At correction review, judge pose/contact/loop fidelity and new regressions, not clip count or keyframe density.
+
 ## Boundary
 
 Animation owns motion, not structural rig mutation. Blocker → `HANDOFF_REQUIRED`, `target_phase: geometry` + readiness → `switch_authoring_phase` → resume same task through Gateway; if motion structure is unsuitable, handoff Geometry first. Before keys, representative extreme poses preserve contact/clearance. Do not search for `bone_rigging`.

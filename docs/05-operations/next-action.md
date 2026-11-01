@@ -6,9 +6,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 **USER DECISION:** End research discovery. Convert 56 GK/TK/AK source notes into bounded, useful Geometry, Texture and Animation authoring decisions. Do not use Golden Assets. No new runtime engine, database, public Gateway tool, source-art ingestion, auto-mutation or universal style preset.
 
-**SOURCE DELIVERY:** P0 Recipe Knowledge activation prioritizes source-hashed, usable case matches and existing explicitly linked features ahead of alphabetical filler when selecting the same maximum eight implicit planning features. Explicit selected-feature inspections remain unchanged; suggestions are still advisory and cannot authorize native edits. The seven VC decisions, 71 research/source entries, three specialist instructions and Texture/Animation boundaries remain unchanged.
+**SOURCE DELIVERY:** P0 activation now includes Control stage Knowledge focus for explicitly SUPPORTED material/emission and motion facts: up to two Texturing pointers (TEX-P01/P03) or one Animation Standard pointer, alongside the earlier bounded Geometry Recipe relevance-first selection. The active specialist reads selected guidance only for an unresolved decision, then checks source/native reference fidelity before correcting. No per-Cube/pixel/keyframe lookup, external data ingestion, new engine or automatic mutation.
 
-**EVIDENCE:** Current Local source path reviewed; existing selector and bounded Recipe-planning consumer updated with positive/negative/explicit-scope regression expectations. Bun tests NOT EXECUTED (CI disabled); no installed Blockbench, native output or visual quality proof. Previous bundled casebook changes still require normal build/deploy/reload. No user-PC prerequisite, Golden task or release.
+**EVIDENCE:** Pinned Local source ownership and existing bounded case/standard readers reviewed. Source-only positive/negative, truncated-facts and projection regression cases authored; static wiring/size checks performed. Bun/CI NOT EXECUTED (CI disabled), and installed Blockbench/actual visual or animation improvement UNVERIFIED. Deployed plugin requires normal build/reload for source changes; no user-PC prerequisite, release or Golden Assets.
 
 ## GitHub boundary and historical local recovery
 

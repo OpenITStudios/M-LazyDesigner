@@ -225,6 +225,113 @@ describe("Control stage semantic projection", () => {
     });
   });
 
+  test("supported reference facts activate bounded Texture and Animation craft reviews", () => {
+    const input: ControlReferenceProjection = {
+      ...reference,
+      semantic_facts: {
+        ...reference.semantic_facts!,
+        materials: [
+          { id: "coat", surface_character: "soft cloth", evidence: "SUPPORTED" },
+          { id: "eyes", emissive: true, evidence: "SUPPORTED" },
+          { id: "noise", surface: "metal", evidence: "PROVISIONAL" },
+        ],
+        animation_guidance: [
+          {
+            name: "walk", evidence: "SUPPORTED",
+            participants: ["front_leg"], key_poses: ["contact", "passing"],
+          },
+          {
+            name: "idle", evidence: "UNAVAILABLE",
+            participants: ["front_leg"], key_poses: ["start"],
+          },
+        ],
+      },
+    };
+    const texture = decisionPacketForAuthoringDomain("TEXTURING", input);
+    expect(texture.knowledge_focus).toEqual([
+      {
+        decision_id: "VC-MATERIAL", source_fact_id: "coat",
+        consult: "texture-authoring://case-tex-p01",
+        review: "MAPPED_MATERIAL_REFERENCE",
+        source_state: "REFERENCE_PACKAGE_CLAIM_ONLY",
+        mutation_authorized: false, visual_verdict: "not_evaluated",
+      },
+      {
+        decision_id: "VC-EMISSION", source_fact_id: "eyes",
+        consult: "texture-authoring://case-tex-p03",
+        review: "EMISSIVE_BINDING_AND_BASE_COLOR",
+        source_state: "REFERENCE_PACKAGE_CLAIM_ONLY",
+        mutation_authorized: false, visual_verdict: "not_evaluated",
+      },
+    ]);
+    expect(decisionPacketForAuthoringDomain("ANIMATION", input)
+      .knowledge_focus).toEqual([{
+        decision_id: "VC-MOTION", source_fact_id: "walk",
+        consult: "docs/03-authoring/animation/standard.md#artist-craft-motion-decisions--selectively-adopted-advisory-data",
+        review: "POSE_CONTACT_REFERENCE",
+        source_state: "REFERENCE_PACKAGE_CLAIM_ONLY",
+        mutation_authorized: false, visual_verdict: "not_evaluated",
+      }]);
+    expect(decisionPacketForAuthoringDomain("GEOMETRY", input)
+      .knowledge_focus).toBeUndefined();
+    const stage = buildControlStageContext({
+      domain: "TEXTURING", reference: input, workspace,
+    });
+    expect(projectControlStageContextWithHeadroom(stage, 16384).context
+      .decision_packet?.knowledge_focus?.[0]?.decision_id).toBe("VC-MATERIAL");
+    // Do not copy full source descriptions or unbounded cohort instructions.
+    expect(JSON.stringify(texture.knowledge_focus)).not.toContain("soft cloth");
+    expect(JSON.stringify(texture.knowledge_focus)).not.toContain("noise");
+  });
+
+  test("unknown, unsupported and truncated source facts never trigger art-craft advice", () => {
+    expect(decisionPacketForAuthoringDomain("TEXTURING", reference)
+      .knowledge_focus).toBeUndefined();
+    expect(decisionPacketForAuthoringDomain("ANIMATION", reference)
+      .knowledge_focus).toBeUndefined();
+    const unsupported: ControlReferenceProjection = {
+      ...reference,
+      semantic_facts: {
+        ...reference.semantic_facts!,
+        materials: [
+          { id: "eye", emissive: "true", evidence: "SUPPORTED" },
+          { id: "copper", surface: "metal", evidence: "CONFLICTING" },
+          { id: "wood", surface: "grain", evidence: "PROVISIONAL" },
+          { id: "invalid\\nname", surface: "paint", evidence: "SUPPORTED" },
+        ],
+        animation_guidance: [
+          { name: "walk", participants: ["leg"], key_poses: ["contact"] },
+          { name: "run", evidence: "SUPPORTED", participants: ["leg"] },
+          { name: "fly", evidence: "PROVISIONAL",
+            participants: ["wing"], key_poses: ["up", "down"] },
+        ],
+      },
+    };
+    expect(decisionPacketForAuthoringDomain("TEXTURING", unsupported)
+      .knowledge_focus).toBeUndefined();
+    expect(decisionPacketForAuthoringDomain("ANIMATION", unsupported)
+      .knowledge_focus).toBeUndefined();
+    const truncated: ControlReferenceProjection = {
+      ...reference,
+      truncated_sections: ["materials", "animation_guidance"],
+      semantic_facts: {
+        ...reference.semantic_facts!,
+        materials: [{ id: "metal", surface: "clean", evidence: "SUPPORTED" }],
+        animation_guidance: [{
+          name: "attack", evidence: "SUPPORTED",
+          participants: ["arm"], contact_events: ["impact"],
+        }],
+      },
+    };
+    expect(decisionPacketForAuthoringDomain("TEXTURING", truncated)
+      .knowledge_focus).toBeUndefined();
+    expect(decisionPacketForAuthoringDomain("ANIMATION", truncated)
+      .knowledge_focus).toBeUndefined();
+    expect(buildControlStageContext({
+      domain: "TEXTURING", reference: truncated, workspace,
+    }).reference_recovery?.omitted_sections).toContain("materials");
+  });
+
   test("geometry fingerprint ignores texture-only fact changes", () => {
     const base = stageReferenceSemanticFingerprint("GEOMETRY", reference);
     const textureChanged: ControlReferenceProjection = {

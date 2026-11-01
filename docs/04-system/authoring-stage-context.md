@@ -42,6 +42,8 @@ Texture   → material cohorts, atlas/UV identity, markings, alpha/emissive/PBR 
 Animation → moving parts, hierarchy/pivots, axes, contact/clearance, pose/keyframe guidance
 ```
 
+**Selective Knowledge activation:** The existing Control `decision_packet.knowledge_focus` optionally points to at most two Texturing decisions (`VC-MATERIAL` with `TEX-P01`, `VC-EMISSION` with `TEX-P03`) or one Animation `VC-MOTION` decision. It is emitted only for bounded, explicitly `SUPPORTED` reference material/motion facts, and suppressed when that semantic section is truncated. This is a pointer to the already-owned on-demand case or Animation Standard, not a new engine, policy registry or context load. The active specialist consults it only if the corresponding decision is unresolved, verifies source/reference/native suitability, and uses existing capabilities for any separately justified action. `REFERENCE_PACKAGE_CLAIM_ONLY` never proves actual mapped paint, render binding, contact, visual fidelity or permission to mutate; absent focus does not mean approval or absence of risk. Geometry Recipe's separate source-hashed candidate path remains unchanged.
+
 Do not load a full modelling profile or full reference package as reassurance. Request only the missing decision-changing relationship. A narrow secondary profile fact may be loaded when it materially changes the current decision.
 
 ## Authority

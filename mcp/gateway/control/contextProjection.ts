@@ -32,7 +32,24 @@ export type ControlStageSemanticFacts = {
   constraints: string[];
 };
 
+export type ControlStageKnowledgeFocus = {
+  decision_id: "VC-MATERIAL" | "VC-EMISSION" | "VC-MOTION";
+  /** Exact current Reference Package material ID or motion name; not a model UUID. */
+  source_fact_id: string;
+  consult:
+    | "texture-authoring://case-tex-p01"
+    | "texture-authoring://case-tex-p03"
+    | "docs/03-authoring/animation/standard.md#artist-craft-motion-decisions--selectively-adopted-advisory-data";
+  review: "MAPPED_MATERIAL_REFERENCE" | "EMISSIVE_BINDING_AND_BASE_COLOR" |
+    "POSE_CONTACT_REFERENCE";
+  source_state: "REFERENCE_PACKAGE_CLAIM_ONLY";
+  mutation_authorized: false;
+  visual_verdict: "not_evaluated";
+};
+
 export type ControlStageDecisionPacket = {
+  /** At most two source-triggered review pointers; never executable authoring. */
+  knowledge_focus?: ControlStageKnowledgeFocus[];
   parts?: ControlReferenceStructuredFact[];
   articulation?: ControlReferenceStructuredFact[];
   materials?: ControlReferenceStructuredFact[];
@@ -364,12 +381,79 @@ function compactTextureSurfaceRegions(
   } : null;
 }
 
+/** Source-grounded attention hints only: never infer visual quality or enable
+ * model/paint/animation edits. Decision semantics stay in Art Direction and the
+ * three existing domain owners. Do not scan the research archive on hot paths.
+ */
+function relevantKnowledgeFocus(
+  domain: ControlAuthoringDomain | null,
+  reference: ControlReferenceProjection,
+  facts: ControlStageSemanticFacts
+): ControlStageKnowledgeFocus[] {
+  // A truncated stage section may hide a stronger contrary fact. Recover the
+  // canonical source first instead of presenting its visible rows as complete.
+  const truncated = new Set(reference.truncated_sections ?? []);
+  const sourceId = (value: unknown): string | null => {
+    if (typeof value !== "string") return null;
+    const id = value.trim();
+    return /^[A-Za-z0-9][A-Za-z0-9 _.-]{0,79}$/.test(id) ? id : null;
+  };
+  const supported = (fact: ControlReferenceStructuredFact) =>
+    fact.evidence === "SUPPORTED";
+  const hint = (
+    decision_id: ControlStageKnowledgeFocus["decision_id"],
+    source_fact_id: string,
+    consult: ControlStageKnowledgeFocus["consult"],
+    review: ControlStageKnowledgeFocus["review"]
+  ): ControlStageKnowledgeFocus => ({
+    decision_id, source_fact_id, consult, review,
+    source_state: "REFERENCE_PACKAGE_CLAIM_ONLY",
+    mutation_authorized: false,
+    visual_verdict: "not_evaluated",
+  });
+
+  if (domain === "TEXTURING" && !truncated.has("materials")) {
+    const materials = facts.materials.filter(fact =>
+      supported(fact) && sourceId(fact.id) !== null);
+    const styled = materials.find(fact =>
+      ["base_color", "surface", "surface_character"].some(field =>
+        typeof fact[field] === "string" &&
+        (fact[field] as string).trim().length > 0));
+    const luminous = materials.find(fact => fact.emissive === true);
+    const result: ControlStageKnowledgeFocus[] = [];
+    if (styled) result.push(hint(
+      "VC-MATERIAL", sourceId(styled.id)!,
+      "texture-authoring://case-tex-p01", "MAPPED_MATERIAL_REFERENCE"
+    ));
+    if (luminous) result.push(hint(
+      "VC-EMISSION", sourceId(luminous.id)!,
+      "texture-authoring://case-tex-p03", "EMISSIVE_BINDING_AND_BASE_COLOR"
+    ));
+    return result; // At most one cue per decision, never every material/face.
+  }
+  if (domain === "ANIMATION" && !truncated.has("animation_guidance")) {
+    const motion = facts.animation_guidance.find(fact =>
+      supported(fact) && sourceId(fact.name) !== null &&
+      Array.isArray(fact.participants) && fact.participants.length > 0 &&
+      (Array.isArray(fact.key_poses) && fact.key_poses.length > 0 ||
+       Array.isArray(fact.contact_events) && fact.contact_events.length > 0));
+    return motion ? [hint(
+      "VC-MOTION", sourceId(motion.name)!,
+      "docs/03-authoring/animation/standard.md#artist-craft-motion-decisions--selectively-adopted-advisory-data",
+      "POSE_CONTACT_REFERENCE"
+    )] : [];
+  }
+  return [];
+}
+
 export function decisionPacketForAuthoringDomain(
   domain: ControlAuthoringDomain | null,
   reference: ControlReferenceProjection
 ): ControlStageDecisionPacket {
   const facts = semanticFactsForAuthoringDomain(domain, reference);
   const packet: ControlStageDecisionPacket = {};
+  const focus = relevantKnowledgeFocus(domain, reference, facts);
+  if (focus.length > 0) packet.knowledge_focus = focus;
 
   if (domain === "GEOMETRY") {
     const parts = compactFacts(facts.parts, GEOMETRY_PART_KEYS);
