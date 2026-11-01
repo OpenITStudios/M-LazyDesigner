@@ -4,30 +4,27 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Primary next — Advanced Geometry CODE-FIRST (2026-11-01)
 
-**USER DECISION:** Build mature AI-first Geometry source and Blockbench
-plugin capability as one coherent product before running incremental tests.
-NO Bun, CI, test creation/edits, native QA, release or UI-only prototypes
-for this pass. Existing public four-tool Gateway must remain unchanged.
+**USER DECISION:** Mature AI-first Geometry code before incremental
+tests. Do NOT run/write tests, Bun/CI, native QA or release now.
+Preserve the existing four-tool Gateway and single LazyDesigner plugin.
 
-**R3a source:** Planar Curve/Taper becomes compileable Recipe v1 with
-sample-pair identities and deliberate single/segmented Cuboids.
+**R3a:** Planar Curve/Taper compiles into native-schema Recipe v1.
+**R3b:** CUBOID, FRAME, REPEAT (LINEAR/GRID/RADIAL), CURVE composition
+through existing `authoringRecipe/geometryComposition.ts` and
+`service.planAdvancedGeometry[Stored]`, with isolation of unrelated
+Geometry and existing Recipe plan/apply.
+**R3c:** Internal Blockbench `advancedConstruction.ts` exposes
+preview/create adapters using exact Project + Group identity and the
+original `manage_cubes(create)` executor/Undo. At most 64 Cubes in one
+create; replay ambiguity refused. No second store or native engine.
 
-**R3b source:** New `authoringRecipe/geometryComposition.ts` produces
-CUBOID, hollow FRAME, LINEAR/GRID/RADIAL REPEAT and planar CURVE
-features. Existing `service.planAdvancedGeometry[Stored]` accepts the
-composed candidate through original Recipe plan/apply/Undo path; source
-isolation guards hand-authored unrelated geometry and linked constraints.
-This is code only: NO public `construct_geometry` route yet.
+**PROOF:** Source authored and committed. Build/typecheck, CI, tests,
+Blockbench, save/reopen, Bedrock export and visual fidelity NOT EXECUTED.
 
-**PROOF:** Exact pinned Local owners reviewed and source authored.
-Build/typecheck, tests, CI (disabled), installed Blockbench, native Undo,
-save/reopen, Bedrock export, reference-matched quality NOT EXECUTED.
-
-**NEXT (CODE):** Finish AI-facing runtime `construct_geometry` integration
-and canonical generator-owned schema/docs as one coherent delivery;
-complete safe native create/revision and model/persistence ownership
-before declaring the AI can invoke the advanced suite. Tests remain
-deferred until the feature code is mature and user reopens QA.
+**NEXT (CODE):** Finish the callable `construct_geometry` Runtime route
+and canonical generator-owned API output together; then implement
+safe authored revision/persistence. No public AI tool exists yet.
+Testing remains postponed until the feature code is mature.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

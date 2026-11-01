@@ -17,6 +17,7 @@ import {
   parseAuthoringRecipeStore,
 } from "@/lib/authoringRecipe/store";
 import { readBlockbenchAuthoringRecipeOwnedState, createBlockbenchAuthoringRecipeApplyAdapter } from "./runtime";
+import { previewAdvancedGeometryNative, createAdvancedGeometryNative } from "./advancedConstruction";
 import {
   readAuthoringRecipeStoreProperty,
 } from "./ownership";
@@ -401,7 +402,7 @@ export function readBlockbenchRecipeCoincidenceSurface(
 }
 
 export function createBlockbenchAuthoringRecipeService() {
-  return createAuthoringRecipeService({
+  const existing = createAuthoringRecipeService({
     readOwned: readBlockbenchAuthoringRecipeOwnedState,
     readCoincidenceSurface: readBlockbenchRecipeCoincidenceSurface,
     readKnowledgeIndex: readBundledRecipeKnowledgeIndex,
@@ -418,6 +419,13 @@ export function createBlockbenchAuthoringRecipeService() {
     },
     createApplyAdapter: createBlockbenchAuthoringRecipeApplyAdapter,
   });
+  // Internal advanced authoring consumers share the existing Runtime, Cuboid
+  // executor and project identity. No second MCP server or native Undo path.
+  return {
+    ...existing,
+    previewAdvancedGeometryNative,
+    createAdvancedGeometryNative,
+  };
 }
 
 /**

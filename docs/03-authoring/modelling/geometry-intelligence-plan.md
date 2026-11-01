@@ -259,6 +259,29 @@ save/reopen, visual/Bedrock validation or release was executed. The public
 `construct_geometry` registration is deferred until canonical generated
 outputs and Runtime contracts can be delivered coherently. This code is
 not yet an AI-invokable Blockbench capability.
+### R3c — Internal Blockbench native creation adapter (2026-11-01; CODE ONLY)
+
+`server/runtime/recipes/authoring/advancedConstruction.ts` provides
+internal `previewAdvancedGeometryNative` and `createAdvancedGeometryNative`
+entrypoints. The existing Blockbench Authoring Recipe service exports
+these functions without a new public tool, listener, engine or UI.
+
+- Both demand the exact current Project UUID, Bedrock Entity format, and
+  an existing parent Group UUID. Unknown/ambiguous parent and in-progress
+  native Undo fail before mutation.
+- The same pure composition translates to bounded Cube placement requests
+  (maximum 64 in one atomic create). Native creation delegates to the
+  registered `manage_cubes(operation=create)` executor, preserving its
+  Cube/Box UV preflight, parent identity and native Undo owner.
+- Source names are feature-scoped, and existing names under the target
+  Group block uncertain create replay. No direct-edit or cross-session
+  Recipe persistence is fabricated by this create-only adapter.
+- Receipts preserve source-instance correspondence but make no claim that
+  the reference was inspected, or that Bedrock export/visual fidelity PASS.
+
+**User instruction:** coding only; no tests, Bun, TS/build, CI, native
+Blockbench or release verification. The public AI `construct_geometry`
+route and generated schema/docs remain intentionally unregistered.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses
