@@ -612,3 +612,31 @@ The original [Sculptor animation JSON](https://github.com/BobMowzie/MowziesMobs-
 
 **Rights/proof:** CC0 attribution statement, pinned file SHA and source facts are recorded; no third-party animation curves, image bitmaps or model files copied into the project. Original playback and perceived motion quality remain UNOBSERVED. No Golden Assets or generator tests.
 
+
+## Working Art-Craft Knowledge v0.9 — Animation source, export and witnessed performance are separate evidence (2026-11-01; RESEARCH SYNTHESIS)
+
+This research cohort deliberately **does not add a new AK identifier**, because the distinct decisions are already owned by AK-06 (actual observability), AK-10 (format-specific representation) and AK-20 (authored keys versus active movement). New first-party editor/presentation sources improve their provenance and interpretation rather than create a duplicate Runtime or casebook.
+
+### Refined AK-06 — An animation's presence in a source page is not an observed temporal performance
+
+The [official Blockbench Rendering Models guide](https://blockbench.net/wiki/guides/model-rendering/) says glTF export can preserve model hierarchy and animations for compatible renderers, but the artist still configures the lighting, camera and later materials/effects in those renderers. The [Blockbench Splash Art Contest](https://contests.blockbench.net/) separately describes an original Blockbench modeling and texturing stage followed by external rendering and post. These are source-backed **pipeline distinctions**, not animation quality evidence.
+
+The original 2026-11-01 research on Loy's [Dragon project](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/creatures/211029_dragon.bbmodel) already found a flying clip labeled as 2 seconds with some serialized keys later than its duration; that is authored-file evidence, not observed 2-second motion. Similarly, professionally presented community models may advertise an idle, fly, attack or death clip without an accessible original file or real-viewer playback. A visually compelling static still cannot resolve that gap.
+
+### Refined AK-10 — The authored motion's artistic identity is not guaranteed by transfer technology
+
+An artist can design the geometry in Blockbench, texture in Blockbench or another paint editor, compose motion in the built-in timeline or a separate compatible 3D animation program, and stage the presentation with a distinct renderer. Which tool or format made the motion is **provenance**, not a measure of how intentional the character acting is. glTF's ability to retain animation does not establish that it matches an original Bedrock MoLang/Animation Controller setup or artist's intended timing after translation. No 3D application was operated here.
+
+**Practical editorial evidence labels (not new runtime states):**
+- SOURCE_AUTHORING — original rig/clip data and exact revision directly read;
+- SOURCE_PREVIEW — an actual artist's playback frames/video personally observed (NONE ADDED IN THIS PASS);
+- PRESENTATION_IMAGE — a still frame or post-processed beauty render only;
+- FORMAT_CLAIM — listing or editor's documented import/export support;
+- NATIVE_BEDROCK — installed native target proof (NONE IN THIS RESEARCH).
+
+Do not turn this list into a universal QA score, mandatory authoring context module or model generation gate. Rather than adding another AK case, attach the correct evidence label to each actual cited work.
+
+### What remains absent
+
+Neither a creator GIF sequence nor a 3D animated viewer clip was decoded or played in this pass; no source-driven 3D scene was rendered, no perceptual loop, foot-contact, cloth-follow, easing or expression fidelity was observed. Therefore no new factual claim of professional animation quality is justified, and none of the artist's keyframes or motion data was imported into the repo. Continued research should prioritize genuinely viewable, appropriately licensed creator footage, not tests of the user's generator. No Golden Assets, engine modifications or implementation.
+

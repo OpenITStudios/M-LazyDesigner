@@ -619,3 +619,37 @@ This cohort compares original single-work promotional thumbnails from [claypanda
 
 **Rights and storage:** Original creator states CC0 for these authored assets; references and small factual findings only were committed here. No upstream PNG image bytes, original bbmodel models, or animation curves were imported into LazyDesigner or an AI training store. No new paint tool, UV packing behavior, default resolution or testing was introduced.
 
+
+## T. Working Art-Craft Knowledge v0.9 — Selective emission and appearance provenance (2026-11-01; RESEARCH SYNTHESIS)
+
+This stage adds one distinct artist decision to existing TK-06 (paint/light/VFX/PBR provenance). The new question is **where** an authored emission selection belongs when some visible surface regions glow, rather than whether a screenshot's brightness proves an emission map exists. Primary first-party tutorial text was inspected; a published model's actual emission/PNG was not obtained. Neither Blender/Sketchfab instructions nor web screenshot appearance are automatically Minecraft Bedrock material rules.
+
+### TK-19 — Preserve base-color identity while selectively designating actual luminous regions
+
+**Visual question:** When a source asks for glowing eyes, embedded runes, an energy-crystal core or a magical weapon, should the entire original color bitmap glow or only the relevant visual accents? How does the artist keep the model's pigment and material hierarchy intelligible when the lighting effect is absent?
+
+**Primary technique evidence (OFFICIAL DOCUMENT):** [Blockbench — Emissive Textures in Renders](https://blockbench.net/wiki/guides/emissive-textures-renders/) demonstrates distinct pathways:
+- In the tutorial's Blender workflow, emission is assigned through material/node configuration for the selected object or region, with material separation when necessary.
+- In its Sketchfab example, a copied base texture is used to author an emission selection independently from the preserved original color. The workflow uses Blockbench emissive preview and exports an emission map for Sketchfab, where emission, bloom, sampling and other render appearance are configured separately.
+- The guide emphasizes that these are **example export/render methods**, not the only ways to render emission, and the author can restore the original base texture before making the final rendered presentation.
+
+These are documented workflow facts, NOT proof that this source tutorial's maps, power-of-two requirements or Sketchfab render settings are Bedrock Texture Set semantics.
+
+**Work-level artistic comparisons:** The [Red Dragon by Sam McLaughlin](https://sketchfab.com/3d-models/red-dragon-d839a351b20a47f893e58378bd09e827) image uses bold red/orange contrast on wing fabric/membrane and darker supports; this alone does **not** prove any wing emission. A prior [Piglin Boss by AnyVoice](https://x.com/AnyVoice_/status/1846532038267981839) preview has small cyan eyes/crystal accents against much darker costume: a plausible localized focal-glow *visual idea*, not an inspected original emissive bitmap or permission to reuse colors. The official tutorial explains why image-only appearance should not be translated blindly into an emission map.
+
+**Art-craft hypothesis:** First establish the semantic purpose of a bright region in the approved reference: is it ordinary pigment, reflected light, independently glowing material, VFX, or uncertain? Only when actual self-emission is required, preserve the original base-color artwork and consider a **separate, semantically bounded emission selection** in the target-supported authoring path. Emission should reinforce the intended identity and not wash out every material edge or replace missing silhouette detail.
+
+**APPLY:** User-approved current source explicitly needs a self-luminous region, the real mapped faces/material support it, and current Bedrock/Blockbench output format and render-profile contract permit the desired behavior.
+
+**REJECT/UNKNOWN:** Treat all yellow/cyan/high-value pixels as emitters; sample preview bloom as actual base-color RGB; apply a black/white mask at every bright contour; generate a new PBR/MER system from an external Sketchfab tutorial; assume flat painted orange wings emit merely because they are warm; overwrite original texture to produce a promotional look. No original third-party emission or alpha PNG, UV ownership or native rendered outcome was inspected.
+
+**Ownership:** Current Texture standard owns authored pixels, material/alpha/PBR boundaries and Render Profile; TK-06 owns effect-source attribution, TK-19 adds *deliberate focal emission selection with preserved base color*. This is research only, not a new engine feature, new texture pack path or automatic painter command.
+
+### T1. Other new examples deepen existing TK cards rather than multiplying IDs
+
+- **TK-03 material-specific color treatment:** The creator-published Red Dragon preview distinguishes warm wing membrane from dark ribbing and darker body, consistent with purposeful *material-relative* value groups. Original atlas source was not accessible, so no exact pixel sampling, hue ramp or 3D UV claim.
+- **TK-05 pack-cohesion without identical atlases:** The Ice equipment set repeats cool crystalline language while changing the frame and handle geometry according to each tool. No evidence establishes whether all items share an atlas or whether their emissive materials are identical.
+- **TK-06 presentation versus pigment:** [Blockbench Rendering Models](https://blockbench.net/wiki/guides/model-rendering/) and the official [Splash Art Contest pipeline](https://contests.blockbench.net/) explicitly allow external rendering and post-processing. A composite promotional render is evidence of final art direction and presentation, not independent proof of pure source PNG craftsmanship.
+
+**Rights/quality boundary:** Original published artwork remains the artist's. Public indexing and first-party page publication are citation-only, not rights for model copying, automated scraping, ingestion or training. A separate NoAI-tagged creator project found during discovery was intentionally **not adopted as generative-AI source material**. This study adds research knowledge, not user assets, a Golden task, native painting or a generator test.
+

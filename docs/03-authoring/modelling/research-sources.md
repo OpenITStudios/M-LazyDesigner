@@ -491,3 +491,30 @@ The source files have format_version 4.5 and place detailed group objects recurs
 
 **Rights, confidence and artistic selection:** The source is explicitly CC0 per its creator, but this study only records work-specific structural facts, not a redistributed model/image set. Original image textures were viewed for authoring evidence, yet no textured 3D rotation or actual GIF motion was played. Therefore Loy Dragon is a technically inspectable creative source, NOT an automatically accepted premium visual master to replace the user's Warchief-style references.
 
+
+## P. Working Art-Craft Knowledge v0.9 — Premium creature and equipment-family contrasts (2026-11-01; RESEARCH SYNTHESIS)
+
+**Purpose:** Enrich existing GK-01 (identity masses), GK-04 (multi-role family) and GK-05 (preview versus source proof) with fresh **per-work** professional art evidence. No duplicate Geometry decision ID is added; a new creator or product does not by itself establish a novel rule. SOURCE PAGE = original artist account on Sketchfab indexed/read; IMAGE = one original creator-published static preview was examined; MODEL/ANIMATION BYTES = NOT ACCESSED. No artwork, textures, render, model data, or animation curves are copied to this repo.
+
+### P1. Two high-value creator artworks and one role inventory
+
+| Work and first-party source | Observed subject/quality-bearing distinctions | Appropriate lesson versus unsuitable extrapolation |
+| --- | --- | --- |
+| [Sam McLaughlin / Red Dragon](https://sketchfab.com/3d-models/red-dragon-d839a351b20a47f893e58378bd09e827) (PAGE + one original IMAGE) | Strong stepped snout, open tooth-bearing jaws and distinct eye area dominate the head. Dense dark red/scarlet structural ribbing contrasts with broad warm orange wing membranes; long limbs and separated wing framework prevent every part having the same visual density. Artist-authored Blockbench presentation; a single three-quarter image, not inspected source file | Strong candidate for premium stylized dragon *form/texture coordination*. The image shows where fine-scale detail concentrates versus where larger material planes remain readable. It does NOT reveal real UV, mirrored geometry, actual editor Cubes, color atlas RGB, animation behavior or whether lighting is baked |
+| [Sam McLaughlin / Ice Set Booster Pack](https://sketchfab.com/3d-models/ice-set-booster-pack-66e862992d0245a2a88f324e79d85c49) and [Main Ice Tool Set](https://sketchfab.com/3d-models/main-ice-tool-set-1a8ffd77e9c54049a32715f89cba22b1) (original product PAGE + Booster IMAGE) | Axes, hammer, shield, bow/other fantasy equipment use distinct silhouette families yet repeat cool pale-blue crystalline edges and darker warm-brown/dark-metal shafts or bindings. Shield and polearm focal form is different from small axe without losing icy set identity | Work-level evidence for *GK-04 shared motif versus functional part shape*; not a fixed crystal size, number of Cubes or special weapon geometry that must appear in all model packs. Dark showcase lighting limits small-detail judging |
+| [Sam McLaughlin / Piglin Warband](https://sketchfab.com/3d-models/piglin-warband-8ec69eebb296438cb36529c6fdcf544b) (publisher PAGE; original work image NOT verified separately in this pass) | Creator describes engineers, spearmen, swordsmen, siege ladders and miners made for a Minecraft Marketplace map. This confirms an intentional *role-based family inventory*, not each model's actual individual silhouette or pixel treatment | Supports planning meaningful identity questions among parts, held gear and silhouette role, but without a source-matched preview for each character it cannot establish exactly how their geometry or art quality differs; do not invent seen anatomy from role labels |
+
+### P2. Research synthesis against the user's darker fantasy reference family
+
+**Art observation:** A good high-detail boss does not need uniform detail. The visible Red Dragon image concentrates sculpted/painted accents near jaws, horn/wing supports and face while using larger wing color planes. The equipment collection coordinates material motifs between different shapes. These complement the user's Goblin Warchief and zombie-group source images without claiming that these unrelated creators use the same technical UV, proportions, shader or craft pipeline.
+
+**Quality-selectivity question, not an engine gate:** For any individual candidate, ask whether a viewer can still distinguish (a) primary subject and role, (b) its few identity-bearing masses, (c) material differences, (d) the intended focal area, and (e) quiet surfaces at realistic display size. This question refines existing GK-01/04/05. A product's price, number of faces or preview lighting does not award visual PASS. Do not promote all works from one studio as equally premium.
+
+**Limits / rights:** The first-party Sketchfab listings describe professional or Minecraft-marketplace work but do not grant access to original asset copying, training or redistribution. The interactive viewers could not be fully operated in this research context, so all inferences about unseen angles, back faces, rigs, clips and motion remain UNKNOWN. No user asset, Goldens, generator verification, Bedrock or Runtime code changed.
+
+### P3. Distinguish staged excellence from underlying editable visual truth
+
+The official [Blockbench Rendering Models guide](https://blockbench.net/wiki/guides/model-rendering/) explains that exported models may be lit/reframed in Blender, Sketchfab or Light Tracer; camera, shadows, environments and backgrounds affect the final presentation. The [Blockbench Splash Contests](https://contests.blockbench.net/) state an explicit Model → Texture → Render pipeline with optional post-processing. Thus an exceptional final illustration may show genuine artistic composition while leaving a different question unanswered: how convincing the isolated editable asset looks under an ordinary neutral view.
+
+The **research-only** source assessment therefore records presentation and asset-craft confidence separately. This already belongs to GK-05, and no extra casebook or score system is justified.
+
