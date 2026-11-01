@@ -1,5 +1,6 @@
 import type { RecipeCubePrototype, RecipePattern, RecipeVec3 } from "./contracts";
 import type { AdvancedGeometryFeature } from "./geometrySchema";
+import { buildGeometryPresetPieces } from "./geometryPresetBuilders";
 import { requireBoxUvRepresentableSpan, validateCubeGeometrySpan } from "@/lib/geometry/cubeSpan";
 
 /**
@@ -477,5 +478,13 @@ export function buildGeometryShapePieces(
   if (feature.kind === "hollow_box") return buildHollowBox(feature);
   if (feature.kind === "arch") return buildSteppedArch(feature);
   if (feature.kind === "voxel_cylinder") return buildVoxelCylinder(feature);
+  if (feature.kind === "staircase" ||
+      feature.kind === "pitched_roof" ||
+      feature.kind === "beveled_box" ||
+      feature.kind === "voxel_ellipsoid" ||
+      feature.kind === "voxel_cone" ||
+      feature.kind === "voxel_torus") {
+    return buildGeometryPresetPieces(feature, makeBox);
+  }
   return buildRepeat(feature);
 }

@@ -37,12 +37,11 @@ function protectCurrentFeature(
     ? "curve:" + feature.id + ":"
     : "shape:" + feature.kind + ":" + feature.id + ":";
   const existing = recipe.patterns.filter(pattern => pattern.feature_id === feature.id);
+  // Cuboid/Repeat own one pattern; other source-owned methods emit parts.
   const isOwnedId = (id: string) =>
-    feature.kind === "curve" || feature.kind === "frame" ||
-    feature.kind === "hollow_box" || feature.kind === "arch" ||
-    feature.kind === "voxel_cylinder"
-      ? id.startsWith(prefix)
-      : id === prefix.slice(0, -1);
+    feature.kind === "cuboid" || feature.kind === "repeat"
+      ? id === prefix.slice(0, -1)
+      : id.startsWith(prefix);
   if (existing.some(pattern =>
     !isOwnedId(pattern.id) ||
     (feature.kind !== "curve" && pattern.prototype_id !== pattern.id))) {

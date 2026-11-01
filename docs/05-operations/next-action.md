@@ -7,10 +7,9 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 **USER DECISION:** Mature AI-first Geometry source; no tests,
 build/Bun, CI, native QA, release, separate plugin or mandatory UI.
 
-**R3a–R3i:** Bedrock Cuboid/Frame/Repeat/Curve/Hollow Box/Arch/
-Voxel Cylinder shapes; internal inspect/plan/apply with source+scene
-revision checks. Native Cubes, parent Group, same Undo and existing
-Project Recipe store remain the ONLY authoring/persistence owners.
+**R3a–R3k:** Cuboid/Frame/Repeat/Curve/Hollow Box/Arch/Tube plus
+Stairs/Roof/Bevel/Ellipsoid/Cone/Torus templates. Existing inspect/plan/
+apply, Cube/Group, Recipe store, source revisions and Undo are reused.
 
 **R3j:** Canonical Recipe v1 optionally persists original high-level
 `advanced_geometry_source` parameters per feature for AI editing

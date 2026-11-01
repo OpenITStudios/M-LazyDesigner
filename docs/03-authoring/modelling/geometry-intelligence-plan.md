@@ -447,6 +447,30 @@ No new public `construct_geometry` route is registered: canonical
 generated API docs require the original Bun generator and must not be
 hand-authored. Per user instruction, no tests, builds, CI, native
 Blockbench, save/reopen or Bedrock export verification were run.
+### R3k — Parametric construction templates (2026-11-01, CODE ONLY)
+
+Six source-owned templates reuse the Advanced Geometry schema, Recipe v1
+compiler, incremental plan/apply, Group ownership and native Undo:
+
+- staircase: solid stepped ±X/±Z ascents
+- pitched_roof: symmetric SOLID or connected SHELL gable roofs
+- beveled_box: actual XZ corner cuts extruded along Y
+- voxel_ellipsoid: oval/sphere or upper-Y dome/hemisphere
+- voxel_cone: solid cone or frustum along X/Y/Z
+- voxel_torus: doughnut/wheel with central negative space
+
+geometryPresetBuilders.ts owns pure mathematics. Bounded greedy voxel
+partition merges cells into disjoint Cuboids, checks face connectivity,
+and rejects templates exceeding the 64-Cube native-batch ceiling.
+Existing Recipe ownership and stored high-level parameters remain
+the only source for feature-scoped revision. No separate plugin, engine,
+database or generated API output is introduced. This is construction,
+not reference-matched visual quality or animation/UV proof.
+
+Public construct_geometry registration stays unregistered pending canonical
+Bun generator output. No tests, build, CI, installed Blockbench QA,
+save/reopen, or Bedrock export were executed by user decision.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

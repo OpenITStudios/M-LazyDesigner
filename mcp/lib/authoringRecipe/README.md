@@ -257,6 +257,23 @@ Public `construct_geometry` registration still requires one coherent
 source + generated API delivery; the current GitHub-only environment
 cannot run the Bun generator. No tests/build/native QA were run
 per the active user instruction.
+### R3k — Six reusable advanced shape methods (code only)
+
+geometryPresetBuilders.ts extends AdvancedGeometryFeature with staircase,
+pitched_roof, beveled_box, voxel_ellipsoid (full/upper dome), voxel_cone
+(cone/frustum), and voxel_torus (wheel/ring). Explicit dimensions,
+orientations and semantic feature IDs compile to original Recipe v1
+Cube prototypes/patterns, with existing incremental revision and Undo.
+
+A bounded X→Z→Y greedy voxel partition merges occupied cells into disjoint
+native Cuboids and checks six-neighbour connectivity. More than 64
+native Cubes per shape are refused; stair/roof use deliberate strips.
+These opt-in templates are modelling methods, NOT asset-specific presets,
+reference appearance PASS or substitutes for UV/pivot/rig review.
+
+Public construct_geometry registration, generator-owned API/docs, build,
+native Blockbench and export proof remain outstanding. Tests/CI were not run.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
