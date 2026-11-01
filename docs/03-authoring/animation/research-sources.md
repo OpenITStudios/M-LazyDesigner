@@ -487,3 +487,40 @@ The exact file content, named bones, key times and event presence were inspected
 ### v0.4 qualitative research evidence boundary
 
 Source-inspected JSON supports specific rig, UV and authoring facts; artist-process articles support human craft descriptions; marketing images and nonplayed GIF labels support neither original keyframes nor definitive performance quality. Keep the evidence levels separate, preserve the upstream revision and rights, and continue first-party creator research. These source examples do not establish a visual quality ranking between Vanilla Allay/Warden and the user's premium voxel reference styles.
+
+## Working Art-Craft Knowledge v0.5 — Source-inspected locomotion architecture (2026-11-01; RESEARCH SYNTHESIS)
+
+The original [Desert Dog bbmodel example](https://github.com/Hoodgail/three-blockbench/blob/9f7bfa2152c5496ee879b53fa65badefb14e9a61/examples/models/desert_dog.bbmodel) was parsed at this exact revision. The source contains 23 distinct named animation records, 16 looping and 7 once clips, with 5,859 keyframe records in total across the set. This is actual data inspection, **not playback**; the file identifies Generic/Free format, not Bedrock. The clip count, large authored keyframe volume and distinct loop types are not artistic quality rankings. Original model ownership and applicable use rights were not verified for reuse beyond observation.
+
+### AK-16 — Sustained movement and transitional actions have different time obligations
+
+**New distinction:** A continuous locomotion mode and the action that *enters or exits it* can occupy separate authoring clips, even on the same skeleton. This is not fully captured by AK-13's question of whether a single loop's boundary is perceptually smooth.
+
+**Actual original source facts:** Desert Dog declares walk_forward (loop, 1.0s), run_forward (loop, 0.6s), jump_start (once, 0.4s), airborne_loop (loop, 0.8s), fall (once, 0.45s), land (once, 0.32s) and recover (once, 0.45s), plus sprint_start and sprint_stop as once. These numbers describe *this project's authoring*, not ideal durations for creatures. The source does not prove the clips have been joined coherently or performed well.
+
+**Artist reasoning:** A cyclic state can maintain a stable repeating cadence, while a transition can show a unique preparation, impact or settle pose. The intended *entry/exit pose and motion direction* is a distinct concept from the repeated motion's internal keyframe distribution; a slow fade alone does not guarantee an expressive transition.
+
+**APPLY:** Current approved source actually includes different continuous movement modes and meaningful starts/stops, landing or recovery as independent actions; original motion/reference supports their distinction.
+
+**REJECT / UNKNOWN:** Mandatory jump_start/fall/land/recover clips for every project, importing the exact timing above into Bedrock, or asserting one publisher's long animation list proves professional motion. Source shows only named records/keys, not visually verified smoothness or runtime state-machine correctness.
+
+**Owner:** Existing Animation standard's clip intent, looping, timing and controller *visual composition* boundaries, cross-referenced to AK-05 (names alone) and AK-13 (within-clip seam). No new state engine or gameplay implementation.
+
+### AK-17 — Direction-sensitive motion can be authored deliberately instead of inferred from one gait
+
+**Direct project facts:** In addition to walk_forward/run_forward, Desert Dog contains walk_backward, run_backward, walk_left/right, run_left/right, four diagonal strafe clips, and turn_left/right. All are authored as separate looping records in one Generic model. The model's 27 groups include front/back leg and paw segments, ears and tail bones, so multiple direction-specific clips can refer to a shared anatomy without creating a different geometry asset.
+
+**Research interpretation:** A moving creature's facing direction, travel direction and turn action may be aesthetically different. Distinct authored directional animation can make sense if a body has weight transfer, gait and head/body orientation that are intentionally asymmetric; other artworks can reuse or mirror a gait successfully. This is not proof that the Desert Dog's directions actually look distinct or good, since original playback was NOT observed.
+
+**APPLY:** User-approved game/visual brief genuinely needs distinct strafing, retreat, sidestepping or turning with supported reference and compatible target rig.
+
+**REJECT / UNKNOWN:** Always synthesize 13 directional gaits, require matching source durations, assume mirrored clips are automatically wrong, use Generic animation controls as Bedrock gameplay state logic, or infer foot contact correctness from animation names/key counts.
+
+**Owner:** Existing AK-03 locomotion family and AK-14 context-specific pose relationships; AK-17 adds the direction-specific authorship decision, not a universal directional clip preset.
+
+### Original-source credibility versus visible motion
+
+An external [Eann Rodriguez — Phoenix Guardian](https://blockbenchworkshop.com/model/eanncrod/phoenix-guardian) lists ten clips including dash, charge, melee and idle/moving, whereas [Visage Of Malice](https://blockbenchworkshop.com/model/eanncrod/visage-of-malice) lists thirteen names including crouch, stalk, pounce and horn rush. Their workshop model downloads returned HTTP 401 to the research reader, so actual keyframe/source data and playback are **UNOBSERVED**. The fact that files are advertised as downloadable, animated or Bedrock-format is not sufficient to claim SOURCE_INSPECTED. [Swuei's creator portfolio](https://swuei.github.io/Portfolio/index.html) likewise mentions animated Fish Tank and Scribing Table but provides no examined original frames here.
+
+Original-source motion readability and temporal art quality remain UNKNOWN across these external sources. Do not promote the Desert Dog or any marketplace listing as a universal animation master or infer train/redistribution rights from public accessibility. Research only, no internal generator test, Golden Assets or engine changes.
+
