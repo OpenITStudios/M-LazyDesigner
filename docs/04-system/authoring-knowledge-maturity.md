@@ -63,15 +63,15 @@ An unknown or incompatible requirement blocks **only the dependent decision**. C
 
 **Transition is separate:** after the user has reviewed the consolidated research, any move to production Knowledge integration and any later evaluation method requires a new explicit decision. Never silently reintroduce Golden Assets as that evaluation method.
 
-## Research-derived Craft Knowledge — source index v0.1 (2026-11-01)
+## Research-derived Craft Knowledge — source index v0.2 (2026-11-01)
 
-The user authorized continuing wide research **while preserving actual learned artistic distinctions**. The first research synthesis is now written into the **three existing domain source owners**, not in a fourth database, new active standard, Skill, Recipe, Runtime registry or generated asset:
+The user authorized continuing wide research **while preserving actual learned artistic distinctions**. Successive research syntheses are preserved in the **three existing domain source owners**, not in a fourth database, new active standard, Skill, Recipe, Runtime registry or generated asset:
 
 | Domain notebook | Research knowledge identifiers | What is preserved |
 | --- | --- | --- |
-| [Geometry research sources](../03-authoring/modelling/research-sources.md) — “Working Art-Craft Knowledge v0.1” | GK-01–GK-05 | Primary silhouette identity; functional negative space; subject-specific shape dialect; multi-asset variation; difference between image strength and structural evidence |
-| [Texture/UV research sources](../03-authoring/texture/research-sources.md) — “Working Art-Craft Knowledge v0.1” | TK-01–TK-06 | Intentional pixel clusters with exceptions; relational color ramps; material-specific visual grammar; hard-pixel versus painterly styles; pack continuity; paint-versus-render/PBR attribution |
-| [Animation research sources](../03-authoring/animation/research-sources.md) — “Working Art-Craft Knowledge v0.1” | AK-01–AK-06 | Causal pose storytelling; timing and weight; locomotion support/propulsion; attachment semantics; clip-count and format limits; distinction between accessible clip names and actually observed motion |
+| [Geometry research sources](../03-authoring/modelling/research-sources.md) — “Working Art-Craft Knowledge v0.1–v0.2” | GK-01–GK-07 | Primary silhouette identity; negative space; shape dialect; asset-family variation; source-image versus topology limits; articulation-aware grouping; formation-informed volume |
+| [Texture/UV research sources](../03-authoring/texture/research-sources.md) — “Working Art-Craft Knowledge v0.1–v0.2” | TK-01–TK-10 | Intentional pixel clusters and ramps; material-specific grammar; visual-family differences; pack continuity; render/paint distinction; face-aware shading, material origins, meaningful UV/texel allocation and shade-count exceptions |
+| [Animation research sources](../03-authoring/animation/research-sources.md) — “Working Art-Craft Knowledge v0.1–v0.2” | AK-01–AK-10 | Causal poses, timing/weight, locomotion and attachments, observability; major-pose blocking, stance versus swing, secondary phase lag, and rig/interpolation format boundaries |
 
 **Maturity:** RESEARCH SYNTHESIS / conditional artist hypotheses. PRIMARY_GUIDE or PRIMARY_TEACHING means a published source was genuinely read; visually inferred transfers are never native/source-model verified. Third-party art rights remain source-specific and do not authorize copying or AI training. No generated model, original atlas, live clip, human acceptance, runtime behavior or improvement has been established. Preserve IDs for research continuity, but these are **not** the machine-indexed G-P/TEX-P/A-case IDs and must not be added to casebook selection until a separate user decision. During the current research phase, there is no Golden Asset, generator regression/test request, new engine, mandatory retrieval or production-rule promotion.
 

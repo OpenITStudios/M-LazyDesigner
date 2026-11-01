@@ -265,3 +265,43 @@ The Workshop uploader labels works with item-specific CC BY, CC BY-SA or CC0, bu
 ### Geometry synthesis — reusable research questions, not an authoring algorithm
 
 For the *particular approved reference*, identify: (a) identity-bearing overall silhouette; (b) functions requiring true volume or negative space; (c) which related family grammar is actually supported; (d) which details are surface-only; (e) view and source ambiguity. **Do not convert these questions into compulsory runtime steps, new MCP calls, universal Cube budgets, or presumed approvals.** These research notes are preserved for comparison with future independent sources; no current model or production source has been changed.
+
+## I. Working Art-Craft Knowledge v0.2 — Process-aware Geometry (2026-11-01; RESEARCH SYNTHESIS)
+
+This section EXTENDS GK-01–GK-05 with two genuinely distinct research questions. It does not rewrite the already-owned Geometry standard, hierarchy implementation, normal authoring Skill, or any production casebook. Sources below were read at the identified original pages on 2026-11-01; the observed claims are about published authoring principles, not inspected original third-party model data. No Golden Assets, model-generation tests, native execution or local toolchain requirements.
+
+### GK-06 — Construct the hierarchy around supported articulation, not arbitrary model groups
+
+**Problem / artistic decision.** Two shapes can look identical in a still image but imply different animation structure: a hinged jaw versus a painted open mouth, shoulder armor that follows the upper arm versus a freely rotating chest ornament, a handheld hammer versus a fixed body feature. Part and parent identity affect what motions can later be expressed without tearing or drifting.
+
+**Primary source evidence.** [Minecraft Creator / Getting Started with Blockbench](https://learn.microsoft.com/en-us/minecraft/creator/documents/blockbench?view=minecraft-bedrock-stable) explicitly places authored cubes in named groups/bones and explains that such bones are the foundation of animation. It recommends completing the main cube structure before heavy painting, since large geometry edits can force rework of textures. [Blockbench Bedrock Modeling and Animation](https://blockbench.net/wiki/guides/bedrock-modeling/) describes bone-owned animation in the specific Bedrock workflow. [Hytale's original art director](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale) separately explains a Hytale-specific naming convention and simple primitive hierarchy for that engine: conceptually instructive, not portable identifiers.
+
+**Format-conflict source.** [Blockbench Workshop / legoego19, Armature Basics Part 1](https://blockbenchworkshop.com/tutorial/legoego19/armatures-1o1-tips-and-tricks) demonstrates *Generic Model* armatures, deformation/weight paint, left/right naming and bone orientation. The tutorial itself says the armature feature is Generic-specific. This is **not** native Bedrock cuboid bone hierarchy and must not be silently transformed into a Bedrock armature feature request.
+
+**Art-craft hypothesis.** Interpret an approved reference's moving **semantic part** and attachment relationships *at the same time* as its visible shape; distinguish mass ownership, rotating articulation, and purely painted features. Avoid premature hierarchy complexity for unobserved motion. The relevant geometry is not a mesh optimization or generic skeletal skinning project.
+
+**APPLY:** Original reference/asset brief actually requires mouth, limb, wing, hinged ornament or weapon articulation, and the corresponding parent/rotation relation can be justified by observed design or confirmed requirements.
+
+**REJECT / UNKNOWN:** No source motion or attachment reference; arbitrary per-Cube bones; assuming Hytale bone names or Generic armature weight painting work in Bedrock; naming bones from a promotional poster without pivot/axis evidence. Exact pivot, bone ancestry, constraints and export remain UNKNOWN until source/native evidence exists.
+
+**Owner / relationship:** Existing Modelling hierarchy, pivot, attachment and profile sections; conditional interpretation linked to GK-01/GK-02, not a new stage/recipe or duplicate rule owner.
+
+### GK-07 — Material origin can influence shape grammar, not just surface color
+
+**Problem / artistic decision.** Two rocks can share a gray/brown palette but require different large contours; oxidized cliff stone, broken masonry, soft organic slime and dense armor convey different structural origins and wear.
+
+**Primary artist source.** [SLYNYRD / Raymond Schlitter, Pixelblog #13: Rocks](https://www.slynyrd.com/blog/2019/1/22/pixelblog-13-rocks) advises understanding rock formation, environmental geography, and shape as well as palette. His large rock sprites may start with angular contour outlines; smaller rocks may start from solid color blobs. The choice is context- and scale-dependent, not a universal outline rule. [Saint11, Basic Shading](https://saint11.art/pixel_art_articles/article4/) similarly treats different planar and rounded forms as distinct light/shading problems.
+
+**Curated comparison (image evidence only).** [Experience Golem](https://mcmodels.net/products/8804/experience-golem-boss) reads as rigid angular mass; [Slime Boss](https://mcmodels.net/products/15960/slime-bosss) suggests soft body and tendrils even though both families use large green blocky volumes. A [Soggy Sanctuary stone/urn set](https://blockbenchworkshop.com/pack/fukuda1320/soggy-sanctuary-stuffs) relies on an aged-stone/moss grammar across functional objects. No actual rock geology, internal geometry or material shader is established from artwork.
+
+**Art-craft hypothesis.** A material/subject identity can have a *form dialect*: slab-like facets, load-bearing arches, chips/holes, rounded soft volumes, thin organic appendages or rigid plate breaks. Geometry and Texture must describe compatible causes, not a fixed procedural material preset.
+
+**APPLY:** The source actually shows a characteristic mass/edge pattern and a material/formation context; choosing volume rather than a painted mark changes the recognizable object or functional contact.
+
+**REJECT / UNKNOWN:** Automatically adding cracks/spikes/voids from the word rock; treating the author's 2D sprite process as a direct 3D cuboid construction algorithm; forcing realistic geology into stylized fantasy; inferring physical deformation of a still slime image. Source-specific depth and geometry remain UNKNOWN.
+
+**Owner / relationship:** Existing selected modelling profile, material-specific visual reference and Geometry-vs-Texture split; TK-08 separately owns the *paint* consequences. Cross-domain synthesis is a relation, not a new routing path.
+
+### Interpretation discipline for GK-06/GK-07
+
+Source facts from official Minecraft/Blockbench descriptions outrank Generic/Hytale mechanics **for Bedrock compatibility**, while the user's actual artwork outranks external aesthetic tastes. Do not infer that a correct bone tree or authentic geological material yields a visually premium result. These notes add conditional artist reasoning; implementation remains deferred.

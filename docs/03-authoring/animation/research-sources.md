@@ -355,3 +355,61 @@ Study families should remain separate: flying, swimming, many-legged stepping, h
 ### Animation synthesis — hypotheses to retain for further reading
 
 For any original animation study, ask (without running the LazyDesigner generator): what action is communicated; what change precedes it; where does its meaning/weight sit in time; what actually touches, follows, hangs or releases; what movement family is it; and which observations were genuinely watched rather than advertised? Do not turn this into a mandatory new authoring flow, timing preset, Motion Recipe engine, or a request for Golden or incremental testing. Every original-clip performance claim above remains UNOBSERVED.
+
+## Working Art-Craft Knowledge v0.2 — Artist process and original motion mechanics (2026-11-01; RESEARCH SYNTHESIS)
+
+Adds four research distinctions beyond AK-01–AK-06. This is **not** motion generation, Golden benchmarking, instrumented playback, a new rig/IK engine or a required work plan for asset authoring. Source types: ORIGINAL_ARTIST_TUTORIAL = the creator's own described personal method; FIRST_PARTY_EDITOR = Blockbench documentation; ENGINEERING_ARTICLE = published animation/IK research concept, not executed Bedrock code; CLIP_UNOBSERVED = creator clip files/images were not successfully played or decoded.
+
+### AK-07 — Block a meaningful motion with major masses before secondary details
+
+**Source studied.** [sylvain_35 / Creature Animation Workflow: Jumping Horse](https://blockbenchworkshop.com/tutorial/sylvain_35/animating-a-jumping-horse), published July 28, 2026 (ORIGINAL_ARTIST_TUTORIAL), describes an explicit progression: positioning/root travel, main body/bone poses for takeoff and air time, in-betweens/legs, then secondary movement. The artist intentionally ignores tail/eyes/ears at first and calls this *personal practice*, not an industry standard; their simple example **omits anticipation** even though the article discusses when it may help.
+
+**Research distinction:** A meaningful start/end/extreme pose can be readable before small part animations are added. If the core action is wrong, abundant secondary keys cannot repair it. Artists may use pose-to-pose or straight-ahead work depending on context; the first is not mandatory for every hand-authored act.
+
+**APPLY:** Investigating an action with clear semantic phases (jump, strike, recoil, landing, collapse) and genuine source motion evidence.
+
+**REJECT / UNKNOWN:** Making every idle/door-open a four- or six-stage pose template; adding mandatory crouch/anticipation to every jump; claiming the author's example proves reference-specific weight or Bedrock export success. No original clip frames were played during this research.
+
+**Ownership:** AK-01 causality and existing Animation action/weight standard; process literacy only, not a Runtime planner.
+
+### AK-08 — A foot-contact phase is not merely a low foot height
+
+**Artist source.** The same [jumping horse tutorial](https://blockbenchworkshop.com/tutorial/sylvain_35/animating-a-jumping-horse) breaks walking feet into first contact, ground/passing-under-body, last contact and airborne passing, with different airborne phases for running. It warns that mirrored early limb poses can initially look mechanical and discusses slide/ground clipping.
+
+**Engineering concept source.** [Daniel Holden, Inverse Kinematics and Foot Locking](https://www.theorangeduck.com/page/inverse-kinematics-foot-locking), July 2026, explicitly distinguishes the *world-space velocity* of the toe from merely its height during a contact interval, explains contact annotation, an IK target and alternative offline correction. This paper/blog is NOT a simple Minecraft keyframe recipe and its code/rig assumptions are not verified for Bedrock.
+
+**Research interpretation:** Stance means support/relative world contact over a period, and swing means recovery for the next step; artist timing and root/body translation affect visible slipping. A pose where a foot only touches the plane in one frame does not prove grounded motion through that stance interval. No automatic numerical threshold should be inferred.
+
+**APPLY:** Original reference actually shows supported legged locomotion, with a meaningful floor and identifiable contact/release periods.
+
+**REJECT / UNKNOWN:** Treating hovering, swimming, flying, dangling limbs or deliberately sliding movement as defective planted feet; mechanically installing IK and assuming all target rigs expose toe joints; claiming toe-velocity measurements without frame data. No engine or collision code is authorized. 
+
+**Ownership:** Existing Animation locomotion/contact knowledge and AK-03 movement-family distinction.
+
+### AK-09 — Secondary motion is a time relationship, not amplitude applied everywhere
+
+**Primary authored process.** [sylvain_35's jumping horse tutorial](https://blockbenchworkshop.com/tutorial/sylvain_35/animating-a-jumping-horse) describes offsetting mirrored limb phases and manually delaying ear and chained-tail response relative to parent motion. It distinguishes an anchored heavier tail base from a lighter trailing tip and notes that same-phase mirrored motion first looked stiff. These are *self-reported artist decisions*, not independently reconstructed keyframe curves.
+
+**Research interpretation:** A loose horn tassel, cloak hem, tail tip, antenna or ear can make a character feel alive because its motion follows a cause and has a different phase, not because every child rotates farther than its parent. Some symmetric mechanical operations legitimately synchronize paired elements, and some rigid armor should not lag at all.
+
+**APPLY:** Approved original character/material suggests genuinely flexible secondary appendages with supported attachment/pivot hierarchy.
+
+**REJECT / UNKNOWN:** Universal phase offsets, noisy random oscillation of all bones, rotating heavy horns or armor like cloth, or always making the second limb lag. No exact delay, amplitude, bend count or keyframe timing was observed from source files.
+
+**Ownership:** Existing AK-02 weight, AK-04 attachments and Animation secondary-chain guidance, not a new motion library.
+
+### AK-10 — Interpolation and rig format are not interchangeable artistic mechanisms
+
+**First-party references.** [Blockbench Animation Expressions](https://blockbench.net/wiki/guides/animation-expressions/) documents editor expressions, preview variables, dynamic animation time updates and baking limits for glTF/FBX; Minecraft Bedrock supports its applicable MoLang expression subset. [Blockbench format comparison](https://blockbench.net/wiki/blockbench/formats/) distinguishes Bedrock and GeckoLib/Generic model features. [legoego19, Armature Basics Part 1](https://blockbenchworkshop.com/tutorial/legoego19/armatures-1o1-tips-and-tricks) uses Generic-only armatures and weight painting, **not** the native Bedrock Cube-bone representation. [sylvain_35](https://blockbenchworkshop.com/tutorial/sylvain_35/animating-a-jumping-horse) reports smoothing chosen for their own horse/floaty action after blocking poses, not a mandatory interpolation for all motion.
+
+**Research interpretation:** The presence of sine functions, blend weights, smooth interpolation, many bones or face deformation is a technical possibility, not proof that a specific character's acting reads well. A deliberately sharp hit, impact or mechanical stop may require a different temporal curve from a drifting whale. A Generic deformable armature example cannot be copied as a Bedrock animation feature.
+
+**APPLY:** Comparing native technical affordances for *exact target format* separately from a source clip's artistic intent.
+
+**REJECT / UNKNOWN:** Claiming all smooth keys are aesthetically superior; automatically translating Generic armature weight paint to Bedrock; treating offline expression baking as equivalent to dynamic runtime behavior; importing Java ModelEngine combat scripting into visual-asset authoring. Actual clip curves and exported native behavior remain UNOBSERVED.
+
+**Ownership:** Existing Animation standard and compatibility authority. Cross-reference GK-06 for Geometry/bone ownership; no parallel technical contract.
+
+### Dated access boundary and next research evidence
+
+As of this research pass, the [Bepoo animation index](https://bepoo.netlify.app/animations) exposes individual GIF links but attempting to read GIF media through the available web viewer returned unsupported-content responses. A [Raccoon Trader](https://blockbenchworkshop.com/model/logan_kant/raccoon-trader) download request returned HTTP 401 through the public browser; the page's uploader-declared CC0 license was read, **not** the actual file contents. We therefore have no authority to describe observed GIF poses, measured timing, exact attachment bones, imported material or actual model topology. Continue original primary-source learning while keeping motion-level observations honestly UNOBSERVED; no internal generator tests or Golden Assets are involved.

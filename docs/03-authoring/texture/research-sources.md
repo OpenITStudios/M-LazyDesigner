@@ -393,3 +393,65 @@ Rights remain source-specific and uncleared for copying, harvesting, redistribut
 ### Texture synthesis — conditional knowledge, not a paint recipe
 
 Learning order: distinguish style family and intended material; identify large color/value groups and focal accents; ask which surface marks actually carry shape/material information; separate UV and real base-color data from renderer appearance; mark all missing pixel/face evidence UNKNOWN. This is a **research interpretation**, not an instruction to generate an atlas or call new tools. No actual source-pixel fidelity or improved LazyDesigner output has been established.
+
+## M. Working Art-Craft Knowledge v0.2 — Lighting, material origin and perceived pixel scale (2026-11-01; RESEARCH SYNTHESIS)
+
+This section extends TK-01–TK-06 with four more distinct art-craft decisions from newly read primary artist sources. The source material is not a portable reference atlas, a machine-training dataset, a new paint command or a verified premium texture. No production rule/engine or Golden Asset changes.
+
+### TK-07 — Face-aware light and shadow placement
+
+**Visual problem.** A flat side of a Cube is often painted with the same center-bright/dark-rim gradient as a rounded cheek, making every material look puffy. Conversely, treating a deliberately rounded mass as one perfectly flat color can suppress its form.
+
+**Primary artist source.** [Saint11, Basic Shading](https://saint11.art/pixel_art_articles/article4/) distinguishes planar faces from curved volumes; he tends to keep flat faces relatively uniform, lets curved forms use directional ramps, and describes reflected, cast and specular illumination separately. He identifies pillow shading and excessive softening as form-misreading mistakes. [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) separately describes banding, noisy paint, pillow and pancake shading under its Vanilla-style boundary. [Blockbench Workshop / capu0410, Light Logic](https://blockbenchworkshop.com/tutorial/capu0410/pixel-art-shading-light-logic-clean-colors) reinforces one consistent imagined directional light and warns about concentric pillow shading; it is a short community teaching example, not a universal material law.
+
+**Working decision:** First ask whether this is a large flat plane, bevel, rounded/stepped volume, deep cavity or decorative surface. Place coherent light/dark regions according to shape and intended light, not a symmetric border recipe. Aged fabric wear, line accents or deliberately painted ambient occlusion can be separate from directional illumination.
+
+**APPLY:** Source views or explicit desired lighting support a readable plane orientation; the mapped face and current art family are known.
+
+**REJECT / UNKNOWN:** Enforce flat face color everywhere, always add a one-pixel highlight to every edge, fake emission from a lit screenshot, or apply a fixed top-left direction when the approved source has a different light rig. Hytale's baked light conventions are not Bedrock rendering requirements. Original source atlas/normal direction remains UNKNOWN.
+
+**Ownership:** Texture standard's value/form treatment plus existing surface-pattern/material distinction; this is an artistic consideration, not native light simulation.
+
+### TK-08 — Material history, wear and shape should tell compatible stories
+
+**Visual problem.** A collection of generic random dots cannot reliably express oxidized stone, carved masonry, splintered timber or woven upholstery because each material suggests different edges, fractures, folds and directional grain.
+
+**Primary source.** [SLYNYRD, Pixelblog #13: Rocks](https://www.slynyrd.com/blog/2019/1/22/pixelblog-13-rocks) ties the look of rock to type, natural/environmental context, coherent contour and deliberate rendering; simply changing a rock's palette does not always make its shape appropriate. [Saint11's cluster method](https://saint11.art/pixel_art_articles/article2/) describes contiguous deliberate color areas and purposeful exceptions to one-pixel noise. [Hytale's artist direction](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale) treats textures as illustrations that supply surface volume with intentional painted highlights and ambient shadows, avoiding both overwhelming grain and arbitrary flatness (Hytale-specific examples, not Bedrock policy).
+
+**Working decision:** For a source-supported material, identify its cause/formation, the direction of its texture marks, the character of broken/worn edges, and the quiet regions necessary to preserve readability. Geometry and Texture may carry complementary evidence of the same material history.
+
+**APPLY:** The actual visual reference includes visible fracture direction, wood grain, woven repetition or worn corners; no invented material lore is needed.
+
+**REJECT / UNKNOWN:** One crack generator/identical dither on all materials, random uniform metal scratches, forced aged texture on a clean new prop, and interpreting cinematic bloom as painted luminous pigment. Exact pixels, physical texel capacity and sampled atlas are still UNKNOWN.
+
+**Ownership:** TK-03 expands material distinction; GK-07 owns source-supported *volume*, and Texture/surface-pattern owns authored *paint*. Do not create a second shared recipe owner.
+
+### TK-09 — Texel detail should follow what must be read, not the published atlas dimension
+
+**Visual problem.** A huge atlas can still fail to communicate a tiny eye or ornament at intended display distance, and a smaller atlas can still make a simple object work. Nominal texture size is not face-level pixel evidence.
+
+**Direct primary source.** [Hytale original art-direction article](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale) explains why its artists assign higher character/attachment density than world props: faces, cosmetics and held items are read closer and convey emotion. The published 64/32 px-per-Hytale-unit distinction, texture multiples of 32, and permitted node stretch band are **specific to Hytale's renderer/editor** and not transferable Minecraft Bedrock standards. [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) describes Minecraft-specific UV scale consistency and warns about mixed effective pixel sizes. [Microsoft Blockbench primer](https://learn.microsoft.com/en-us/minecraft/creator/documents/blockbench?view=minecraft-bedrock-stable) explains each Cube face maps to particular atlas regions.
+
+**Research interpretation:** Separate (A) source total atlas width/height, (B) actual mapped region per semantic face, (C) resulting physical pixel scale, and (D) the user's expected viewing distance and identity-bearing detail. These are **different** properties. No Hytale numeric rule becomes a Bedrock resolution target.
+
+**APPLY:** Source model or reference actually demands a close-up facial/ornament feature, and real face UV/texture information exists to judge whether its mapped pixel budget can depict it.
+
+**REJECT / UNKNOWN:** Promote a 1024x1024 marketing atlas over a 64x64 art piece on resolution alone; enlarge every surface indiscriminately; interpret glossy interpolation as more detail; infer UV reuse from repeated colors in screenshots. Actual atlas and source-to-face mapping remain UNKNOWN in current catalog-only examples.
+
+**Ownership:** Existing UV physical-evidence and Texture material/style owners; not a new algorithm or texel-density preset.
+
+### TK-10 — A tutorial's shade-count heuristic is not a universal art-quality law
+
+**Primary tension.** [Blockbench Workshop / capu0410, Pixel Art Shading](https://blockbenchworkshop.com/tutorial/capu0410/pixel-art-shading-light-logic-clean-colors) recommends a beginner-facing maximum of **four shades per color** to prevent muddy shading. [SLYNYRD, Pixelblog #1](https://www.slynyrd.com/blog/2018/1/10/pixelblog-1-color-palettes) explicitly presents his own saturation/hue progression as one personal method rather than a mandatory formula; [Hytale art director](https://hytale.com/news/2025/12/an-introduction-to-making-models-for-hytale) uses selectively soft painterly shading as part of a different visual dialect.
+
+**What is genuinely learned:** Limited shades may help preserve clarity on a tiny icon, but a hard maximum of four would wrongly constrain premium textured fantasy, carefully painted organic volumes or close-up expressive features. More shades alone also do not guarantee good art.
+
+**APPLY:** Treat palette restraint as a *question* about whether extra swatches add new visible information at the actual target size, within that artwork's style family.
+
+**REJECT / UNKNOWN:** Prescribe four-shade/three-shade global limits, mandatory hue shift degree, mandatory midtone saturation peak or banned soft brush across all models. Compare the source's own goals and camera scale before drawing any judgment.
+
+**Ownership:** Existing TK-02/TK-04 artist color/style hypotheses, not a newly mandated art profile.
+
+### Cross-domain material lesson
+
+The relevant artistic unit is *the mapped, visible material region*, not a PNG filename, color ramp alone or glittering render. Face shape (Geometry), physical UV/pixels (Texture/UV), material identity (Texture Styling), and visible light/VFX (render/animation) must not silently exchange authority. This research remains source-observational and has no native model, atlas or performance proof.
