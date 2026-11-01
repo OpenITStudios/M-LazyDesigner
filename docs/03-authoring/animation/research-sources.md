@@ -577,3 +577,38 @@ The original [Sculptor animation JSON](https://github.com/BobMowzie/MowziesMobs-
 
 **Rights/limits:** Mowzie's pinned license restricts copying its IP; source model, textures, motion keys and code are not redistributed or used as a dataset. This is a link-only high-level research synthesis. Existing Animation standard and specialist remain the only relevant production owners.
 
+
+## Working Art-Craft Knowledge v0.8 — Source-authored appendage phase and inherited character motion (2026-11-01; RESEARCH SYNTHESIS)
+
+**Evidence:** Original [Loy's Goodies Dragon](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/creatures/211029_dragon.bbmodel), [Female Template](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/characters/230422_female_template.bbmodel), and [Rana](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/characters/230515_rana.bbmodel) animation arrays were read directly at pinned commit afbb7695b09de0ed8ee3aa97732ff7c3d367520c. These are Blockbench 4.5 Generic/Animated Java sources. No original walk/run GIF frames were successfully played and no native Minecraft output was observed. Clip intent, written keys and performance quality are different claims.
+
+### AK-20 — Parent span and secondary span can carry related but phase-shifted motion
+
+**Distinct motion question:** A broad wing's base and its subsidiary segment may need different rotation phase to convey softness, force or follow-through. This is more specific than AK-09's general secondary-motion principle: the actual original artist's wing hierarchy plus authored keyframe positions are visible in one source.
+
+**Actual source evidence:** Dragon's flying clip is labeled loop with nominal length **2.0 seconds** and animators addressing separate left/right wing parent and child groups. Left/right parents have opposite-signed wing rotations with authored key times including 0.0, 0.4 and 1.3 seconds; their respective child groups also have opposing rotations, with first large change around **0.55 seconds**, followed by later values. Tail and body have their own channels. Thus this author explicitly distinguishes primary and subsidiary wing contributions instead of treating the entire large membrane as one rigid board; the opposite signs support a mirrored pair in authored coordinates. All numeric values are examples from *this file* only.
+
+**Independent counterexample:** [Mojang Allay](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/animations/allay.animation.json) animates its separately-boned simple thin left/right wing carriers. This confirms different representational choices can express flapping; it does not rank one better or justify porting either exact phase to a new creature.
+
+**APPLY:** Approved source/artist intent has a large articulated wing, fin, tentacle or tail with supported inner/outer movement rather than a rigid plate.
+
+**REJECT/UNKNOWN:** Automatically insert a fixed 0.15-second lag for every wing, require a fixed number of nested joints, infer aero-physics from static PNG, or claim this Generic clip visibly achieves excellent flight without playback.
+
+**Critical source-integrity caveat (observed, NOT a test failure):** In Dragon flying, **19 serialized keyframe records have timecodes beyond its declared 2.0-second clip length**, the latest at 3.4 seconds. Other original character clips also include some out-of-range keys. This shows why raw authoring-data presence does not establish actual played trajectory or a perfectly clean final result. The authored editor/format may ignore, preserve or otherwise treat these off-range keys; no supported live behavior was observed. Do not automatically label the file broken or silently treat all serialized keys as active in the 2-second loop.
+
+### AK-21 — Character variations can reuse recognizable clip identities while expanding the action set
+
+**Distinct from AK-14/18:** These cases concern mode-/emotion-specific poses. This observation is about *continuity of the source rig and authored clip identity between two related projects*, without claiming the animation contents remain identical.
+
+**Original comparison:** Female Template has 5 named clips, Rana 9; both share handsdown, sit, fist, walk and run. The original source records contain common animator UUIDs within those clips (for example, **18 shared animator identifiers** for each character's walk and run), while Rana adds test, backpack, frog and frogdance clip names. Rana's structural ancestry also shares 54 group UUIDs and 38 Cube UUIDs with the template, with new backpack, jacket and related geometry. This is stronger than inferring a shared rig from two vendor pictures, but cannot prove matching key values, compatible in-game controllers or successful outfit deformation.
+
+**Working artist interpretation:** When an approved family is based on a common expressive skeleton, core locomotion/gesture identity may be retained while variant-specific props or acting get their own motion coverage. The important criterion is that the *visible personality and new equipment* remain coherent; both preserving too much and reinventing everything can be inappropriate.
+
+**APPLY:** Multiple assets legitimately share a base body/rig and the variant adds an accessory, facial/state or movement role with source-supported changes.
+
+**REJECT/UNKNOWN:** Reuse animations wholesale solely because the names match; treat common UUIDs as proof of byte-identical animation or human acceptance; mandatory extra clips for every skin; copy original creator characters/keyframes into a new commercial asset simply because public; transfer Generic/Animated Java motion as Bedrock runtime behavior without evidence.
+
+**Historical file version caution:** The [official Blockbench .bbmodel documentation](https://blockbench.net/wiki/docs/bbmodel/) explains version 5.0 changes to outliner/group storage and coordinate direction of keyframe values. Never compare authored time/rotation axes across Generic 4.5 and newer Bedrock projects as if the container semantics were identical. This is a research provenance boundary, NOT a request to build a converter or test harness.
+
+**Rights/proof:** CC0 attribution statement, pinned file SHA and source facts are recorded; no third-party animation curves, image bitmaps or model files copied into the project. Original playback and perceived motion quality remain UNOBSERVED. No Golden Assets or generator tests.
+

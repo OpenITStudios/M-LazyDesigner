@@ -456,3 +456,38 @@ The source file [Desert Dog bbmodel at pinned three-blockbench revision](https:/
 
 **Related contrast, not another card:** [Frostmaw source](https://github.com/BobMowzie/MowziesMobs-Public/blob/7aa17309337cbd4102efc418cba12a4983b1540c/src/main/java/com/bobmowzie/mowziesmobs/client/model/entity/ModelFrostmaw.java) uses an older Java AdvancedModelRenderer authoring path, while Sculptor uses Geo JSON with custom model logic. The two visible fantasy characters do not imply the same source format or bone-count conventions. No model or geometry data copied into LazyDesigner.
 
+
+## O. Working Art-Craft Knowledge v0.8 — Original CC0 dragon and character-family structure (2026-11-01; RESEARCH SYNTHESIS)
+
+**Evidence:** Original author [Loy's Goodies](https://github.com/SL0ANE/Loy-s-Goodies/tree/afbb7695b09de0ed8ee3aa97732ff7c3d367520c) explicitly publishes authored Blockbench assets under [CC0](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/LICENSE). At this pinned revision the actual three project JSON files, embedded PNGs and animation metadata were inspected: [Dragon](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/creatures/211029_dragon.bbmodel), [Female Template](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/characters/230422_female_template.bbmodel), and [Rana](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/characters/230515_rana.bbmodel). Each declares Blockbench meta.model_format = free and meta.format_version = 4.5 (Generic), NOT native Bedrock. Source rights are more clearly declared than commercial marketplace art; that does not establish visual premium quality or original native gameplay behavior.
+
+### GK-15 — A large organic appendage can separate structural span from moving span
+
+**Different from GK-11:** GK-11 contrasts volume, plane and bone-only carriers. The question here is how a single visually coherent *large wing or appendage* partitions its surface into primary and secondary movable regions, rather than whether it is a plane or solid.
+
+**Source-inspected facts:** Dragon has 149 Cube elements and 66 nested outliner groups, with one top-level body group. Left and right wings each have an articulated parent wing group holding four Cubes and a nested child holding six Cubes; the parent part references front.png while its child wing surface references wing.png in this source. The tail and neck also contain subordinate groups, distinct from the wings. The precise geometry and grouping were read from the original project, not inferred from an image. [Mojang Allay geo](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/models/entity/allay.geo.json) provides an independent counterexample: each of its wings is a single thin-plane Cube in its own bone, not a multi-part fan. Neither one is a universal recipe for beautiful wings.
+
+**Artistic interpretation:** Primary span supports the major silhouette and locomotion impulse; subsidiary panels or tips can introduce flexibility, directional contour, or readable secondary response when the actual approved reference needs it. A giant dragon wing and a tiny fairy wing need not use comparable numbers of Cubes or joints.
+
+**APPLY:** The current approved visual reference and motion concept show an independently responding inner/outer span, visibly segmented appendage, or strong reason to distinguish support from flexible area.
+
+**REJECT/UNKNOWN:** Construct a complex 10-Cube wing for every flying mob, add imaginary feathers/ribs, insist every nested group must be keyed, or assume Generic structure can be exported unchanged as Bedrock. No original rendered Dragon motion was played; its exact art quality, face visibility and texture suitability remain unverified. Existing Geometry hierarchy/representation and selected creature profile remain authoritative.
+
+### GK-16 — A character family may retain stable part identities while adding new morphology
+
+**Different from GK-13:** GK-13 distinguishes cosmetic recolor from life-stage redesign using preview images. This case uses **actual shared authoring identities** rather than relying on matching thumbnails or counts.
+
+**Original-source comparison:** Female Template contains 53 Cubes and 69 nested outliner groups. Rana contains 111 Cubes and 117 groups. Exactly **54 group UUIDs and 38 Cube UUIDs** appear in both original files, including the main/upper/neck/head/face hierarchy. Rana additionally contains backpack, backpack-bend, jacket-side and jacket-back group structures and related texture assignments. The three-project source study therefore supports a reused *semantic base rig identity* with additional object-specific geometry; it does not prove all shared elements have byte-identical sizes, pivots or final artistic styling.
+
+**Research interpretation:** Multi-model identity can retain major head/body/limb semantics and familiar animation ownership while adding outfit, accessory, and expression-specific carriers. Explicit reuse of source IDs is strong evidence of continuity in this corpus, but duplication or preserving IDs is NOT a quality goal by itself.
+
+**APPLY:** A user-approved family actually needs a recognizably common character base, and new character distinctions are supported by separate original views or asset instructions.
+
+**REJECT/UNKNOWN:** Assume character variants are merely skins when new gear or silhouette changes; force unchanged bone IDs on entirely different species; copy these specific character shapes/names; equate shared UUIDs with artist approval or valid Bedrock rigs. Connection: current Geometry family identity, GK-06 hierarchy, GK-13 morphology variants; AK-21 addresses what was reused in animation.
+
+### Historical source-document interpretation — editorial evidence, not an engine request
+
+The source files have format_version 4.5 and place detailed group objects recursively **inside outliner**, with no top-level groups array. The [official Blockbench .bbmodel guide](https://blockbench.net/wiki/docs/bbmodel/) documents the 5.0 change: group data moved into a separate groups array while outliner retained hierarchy, and authoring-space keyframe value orientation changed. Thus a naive top-level groups-array count of zero on this historical source would be a false report of no rig. The 66/69/117 group counts above come from the **actual nested outliner**, not a new parser or proof of Bedrock compatibility. Original creator states most assets target Minecraft Java mapmaking / Animated Java, not Bedrock export. No code, runtime or tests were changed.
+
+**Rights, confidence and artistic selection:** The source is explicitly CC0 per its creator, but this study only records work-specific structural facts, not a redistributed model/image set. Original image textures were viewed for authoring evidence, yet no textured 3D rotation or actual GIF motion was played. Therefore Loy Dragon is a technically inspectable creative source, NOT an automatically accepted premium visual master to replace the user's Warchief-style references.
+

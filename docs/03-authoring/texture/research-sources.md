@@ -592,3 +592,30 @@ This cohort compares original single-work promotional thumbnails from [claypanda
 
 **Evidence-sensitive material caution, extending TK-06:** The original repository lists both Sculptor base texture and a separately named highlight image. The inspected Java model selects the base texture; a separate client event calls the highlight image a Sculptor BLOCK glow resource. File-name similarity alone does NOT establish an emissive character texture or a second base atlas. Public [Mowzie's Mobs credits](https://www.curseforge.com/minecraft/mc-mods/mowzies-mobs) name a distinct Sculptor texture contributor, reinforcing independent artist/source rights. No original source PNG, UV-to-face paint or native rendered quality was established.
 
+
+## S. Working Art-Craft Knowledge v0.8 — Multiple original texture images and independent part-scale identities (2026-11-01; RESEARCH SYNTHESIS)
+
+**Source evidence:** Original CC0 [Loy's Goodies Dragon](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/creatures/211029_dragon.bbmodel), [Female Template](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/characters/230422_female_template.bbmodel), and [Rana](https://github.com/SL0ANE/Loy-s-Goodies/blob/afbb7695b09de0ed8ee3aa97732ff7c3d367520c/models/generic-model/characters/230515_rana.bbmodel) were parsed. Embedded base64 PNG images were actually opened for *research observation* without adding them to the LazyDesigner repository. Actual source image dimensions were obtained from each PNG header, not guessed from a promotional render.
+
+### TK-18 — Project canvas metadata, individual image resolution and semantic texture assignments are distinct
+
+**Distinct from TK-09/TK-15:** TK-09 asks which viewed detail deserves physical texel space; TK-15 concerns shared UV between independent bones. This note asks how one project can simultaneously contain a global resolution, multiple actual PNG sizes and different semantic part regions, without confusing any of those with material fidelity or a mandatory final atlas policy.
+
+**First-party file facts:**
+- Dragon meta.format_version 4.5 / model_format free declares project resolution 16x16 yet includes **eight embedded source PNGs**, seven physically 128x128 and one front-leg PNG physically 64x64. Their filenames and per-face texture indices distinguish head, front, wing, neck, body, front leg, back leg and tail regions. There are 894 Cube-face records, distributed over eight texture-index values; this is NOT 894 unique painted islands. Actual head, wing and body PNGs were visually inspected in isolation.
+- Female Template declares project resolution 64x64 and has a 64x64 main PNG plus a **16x16 mouth PNG**, with 312 face entries mapped to the first texture and six to the mouth.
+- Rana likewise declares 64x64 at project level, while its actual separate embedded PNGs are mouth 16x16, main color 64x64 and backpack 32x32. Its 666 Cube faces refer to mouth/main/backpack texture entries in differing amounts (6, 600, 60 respectively).
+- The [Blockbench original format guide](https://blockbench.net/wiki/docs/bbmodel/) explicitly records a 4.9 change introducing per-texture UV sizes in relevant Generic formats and a 5.0 hierarchy migration. These three 4.5 snapshots lack modern uv_width/uv_height per-texture metadata; a project-wide value alone cannot establish actual original bitmap size or effective face-level pixel density.
+
+**Observed art assets (limited):** The Dragon wing PNG shows a burgundy/purple membrane region beside narrower blue-gray strip regions; the body/head sheets use darker blue-gray value regions with sparse warm/pale details. The two character samples have a separate tiny mouth image, and Rana has a distinct small backpack image. These are actual isolated PNG visual facts, **not** a face-by-face rendered quality assessment or evidence of exact perceived pixel scale.
+
+**Artistic interpretation:** Give each visually meaningful material/part a clear appearance responsibility. A separate expression or backpack image can change independently from a base skin, while large appendage membranes may require visual separation from structural ribs. This is *not* evidence that eight PNGs are inherently more artistic than one: source format, performance, source UV and user-approved aesthetic decide the appropriate mapping. The current LazyDesigner Bedrock single-base-atlas policy remains untouched; the Generic authoring project's multi-image support is a comparison, not a new engine/export requirement.
+
+**APPLY:** Comparing real, inspectable source bitmap and per-face references to understand part-specific painted treatment or why a visible object needs differently allocated pixel detail.
+
+**REJECT/UNKNOWN:** Treat Dragon global 16x16 as proof that every original PNG is 16x16; impose 128x128 on Bedrock from a Generic example; assume face count equals visible pixels or unique islands; claim original PNG palettes look premium in 3D without a rendered model; automatically split every face into a separate file. The actual 3D painted appearance at viewing scale, seams, material alpha and native Bedrock export are unverified.
+
+**Deepening existing notes without new duplicate IDs:** TK-17's alternate-form continuity is independently supported by Female/Rana keeping a dedicated mouth PNG while the main outfit and Rana backpack use separate images. This is a source-structure observation, NOT proof of animated facial expressions or seamless transitions, which require direct motion observation.
+
+**Rights and storage:** Original creator states CC0 for these authored assets; references and small factual findings only were committed here. No upstream PNG image bytes, original bbmodel models, or animation curves were imported into LazyDesigner or an AI training store. No new paint tool, UV packing behavior, default resolution or testing was introduced.
+
