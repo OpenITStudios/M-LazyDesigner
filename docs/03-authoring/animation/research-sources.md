@@ -449,3 +449,41 @@ This is research on artist decisions, NOT direct observation of commercial Block
 **REJECT/UNKNOWN:** Force every clip to loop, blindly mirror asymmetric motion, prescribe fixed durations, or claim successful loop blending from metadata alone. No third-party GIF frames were decoded, no native Bedrock playback observed, and no new Runtime curve handling is proposed.
 
 **Research limits:** Source statements and creator clip labels are documented, not copied animation data. Gameplay state logic, physics, native quality and permission to reproduce/training remain outside these notes. No Golden Assets, generator testing or implementation.
+
+## Working Art-Craft Knowledge v0.4 — Source-grounded motion responsibilities within one entity (2026-11-01; RESEARCH SYNTHESIS)
+
+Original Mojang animation JSON was inspected at bedrock-samples SHA 15701fa9c13923f12662984c32c124327e40e3d3. Unlike the previous animated-marketplace clips where only names were accessible, the bone channels and authored key times are **SOURCE INSPECTED**. However no original clip was played in installed Blockbench or Minecraft, so expressive success, interpolation appearance, motion contact and human artistic approval remain UNVERIFIED. These are research examples, not default duration, interpolation or key-count targets.
+
+### AK-14 — One character uses different motion poses for the same activity under different modes
+
+**Direct source:** [Allay geometry](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/models/entity/allay.geo.json) includes independently animated left/right wing bones plus an empty rightItem attachment bone. [Allay animation source](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/animations/allay.animation.json) contains distinct looping idle and fly clips, alongside hold_item and hold_item_fly. These two held-item actions affect both arm bones and the same rightItem anchor, but have different arm rotations at the authored initial position (approximately -40 degrees vs -67.5 degrees in source). On the 2-second idle wing channel, key times are 0/0.5/1/1.5/2, while the fly wing channel adds quarter-second intervals 0/0.25/…/2. [Allay client resource mapping](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/entity/allay.entity.json) ties the named clips to the one authored entity and named controller links. These exact SOURCE facts were inspected, not reconstructed from a video.
+
+**Distinct artistic question:** Keeping an item attached at the correct point is not sufficient: the same identity and equipment may demand a *different pose relationship* when hovering, resting or actively flying. The number of key times is a source-specific response to those modes, not a quality score. Source names/values show intended differences, but whether the actual transitions feel graceful requires separate playback evidence.
+
+**APPLY:** Current approved character has genuinely different movement/interaction modes with a visual reference that supports a pose change and known rig/attachment ownership.
+
+**REJECT/UNKNOWN:** Cloning one idle/flight arm stance across all states; inventing a universal -40-degree angle, doubling every wing key count for professional quality, assuming an Allay-specific trident variable should exist in other formats, or claiming measured wing smoothness from JSON alone. This is research, not a request for native playback or a new StateMachine/Controller API. Existing AK-12 equipment performance and AK-05 clip vocabulary are extended by *source-verified mode interaction*.
+
+### AK-15 — Signature feature geometry may animate only for its own narrative action
+
+**Direct source:** [Warden geometry](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/models/entity/warden.geo.json) names separate zero-thickness ribcage plates parented to body and tendril planes parented to head. [Warden animation JSON](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/animations/warden.animation.json) distinguishes:
+- shiver: a looping tendril rotation expressed by variables, with a clicking sound key;
+- sonic_boom: a 3-second authored action in which left/right ribcage planes are rotated in opposite Y directions (in this revision reaching negative/positive 125 degrees at 1.875s, held to 2.5s, then returning by 2.6667s), while head/body/arms also animate;
+- roar: a separate 4.2-second action involving head/arms/tendrils and a roar sound key at 1.25s;
+- attack: a shorter 0.33333-second body/head/arm action;
+- emerge: a longer source action that includes authored particle and sound keys.
+The exact file content, named bones, key times and event presence were inspected; particle/rendered appearance and audio synchrony were NOT actually played or evaluated.
+
+**Independent design-intent source:** [Minecraft — Meet the Warden](https://www.minecraft.net/en-us/article/meet-warden) quotes designer Brandon Pearce describing its evolution from a blind, sound-responsive stalking idea into a stealth/fear entity, rather than a conventional defeat-the-boss combat pattern. This is first-party *gameplay/creative concept*, not a transcript of the animators' actual decisions. The presence of tendrils and differentiated shiver/sonic/roar channels is confirmed separately by the source files.
+
+**Research interpretation:** A feature can be a recognizable static silhouette element yet also become a focused visual action carrier for one particular event. This is more precise than universally animating every accessory or assigning the same idle phase to every appendage. The motion of broad torso/arms and special ribs/tendrils may serve different storytelling roles. It does not demonstrate how the live Warden actually looks, only source-design intent and authored data.
+
+**APPLY:** An approved asset has a distinctive body/weapon/armor part whose particular movement communicates a named action and correct source-supported attachment.
+
+**REJECT/UNKNOWN:** Automatically animate decorative horns, armor straps or every plate with global sine, reuse Warden sonic-rib angles or duration in unrelated bosses, infer exact gameplay triggers or collision from animation assets, or call a sound/particle key proof of successfully synchronized audiovisual playback. No behavior-pack/gameplay code belongs in normal LazyDesigner asset Knowledge.
+
+**Ownership:** Existing Animation motion-intent, secondary chain, action timing and visual effect cues; GK-11 identifies the geometric carrier and TK-15 the separate UV relation. No new animation reader, engine, Golden or validation workflow.
+
+### v0.4 qualitative research evidence boundary
+
+Source-inspected JSON supports specific rig, UV and authoring facts; artist-process articles support human craft descriptions; marketing images and nonplayed GIF labels support neither original keyframes nor definitive performance quality. Keep the evidence levels separate, preserve the upstream revision and rights, and continue first-party creator research. These source examples do not establish a visual quality ranking between Vanilla Allay/Warden and the user's premium voxel reference styles.

@@ -331,3 +331,43 @@ These are conditional *research interpretations*, distinct from the existing Geo
 **REJECT/DEFER:** Static objects, unobserved pose, imaginary hinge, guaranteed hidden faces or demands to model every interior regardless of use. Unknown source topology and pivots remain UNKNOWN. GK-06 owns hierarchy; GK-09 owns visual consequences of pose. TK-11 below owns corresponding surface paint.
 
 **Research boundary:** No original third-party geometry, model file, animation playback or rights to reproduce the Goblin Chef design were obtained. No new rule, casebook, engine or test.
+
+## K. Working Art-Craft Knowledge v0.4 — End-to-end artist process and inspectable Bedrock structure (2026-11-01; RESEARCH SYNTHESIS)
+
+**Research method:** This stage studies one complete *artist-described* creative process (Peter Sheff's Goblin Chef) against two separate Mojang *source-file* examples (Allay and Warden). The models are not interchangeable: Goblin Chef's article explains craft, while Allay/Warden JSON exposes actual Cubes and bones without showing their source texture PNG or proving rendered quality. Official Minecraft content is technical/concept evidence, NOT a mandated style template for the user's premium fantasy voxel assets. No source geometry, texture, animations, video or third-party IP is copied into this repository.
+
+**Evidence vocabulary:** PRIMARY_PROCESS_TEXT = read the original published artist tutorial, not its embedded video; PINNED_NATIVE_SOURCE = original JSON actually read at the exact Mojang bedrock-samples SHA; FIRST_PARTY_CREATIVE_INTERVIEW = the game designer's quoted intent, not the 3D artist's private production process; RESEARCH_INFERENCE = a bounded visual/artistic interpretation. An actual static/runtime visual result remains UNVERIFIED.
+
+### GK-10 — Detail refinement can cross the Geometry–Texture boundary without losing ownership
+
+**Distinct question:** Should all geometric decisions become immutable as soon as texture painting begins, or can a texture pass legitimately reveal a missing shape?
+
+**Observed first-party process:** [Peter Sheff, Creating a Goblin Chef](https://learn.microsoft.com/en-us/minecraft/creator/documents/makerseriesmakingthegoblinchef?view=minecraft-bedrock-stable) describes major forms for the head/limbs/body during modeling; the *texturing* part then explicitly adds more smaller Blocks to enrich visual detail, paints broad colors, uses the Eraser to depict apron straps and ear contours, and adds targeted eyebrow/spatula shading. This establishes that the artist's published process is not a rigid no-geometry-after-modeling sequence (PRIMARY_PROCESS_TEXT). [Microsoft Getting Started with Blockbench](https://learn.microsoft.com/en-us/minecraft/creator/documents/blockbench?view=minecraft-bedrock-stable) still recommends broadly establishing major geometry before texture because large shape changes cause paint rework. These statements are compatible, not contradictory.
+
+**Research interpretation:** Keep large silhouette and parts coherent early, then decide during surface study whether a newly noticed feature is genuinely volumetric, a thin cutout carrier, or painted detail. A legitimate late small form adjustment does not mean unrestricted reconstruction; it should be confined to the specific distinguishing feature and its actual UV/rig implications. The current LazyDesigner AUTHORING surface already semantically separates Geometry and Texture without needing a new stage or tool.
+
+**APPLY when:** The user's approved reference visibly requires protrusion, overlap, thickness, or an articulating subpart which flat pigment cannot express, even if discovered while analyzing texture.
+
+**REJECT/UNKNOWN when:** Replacing every scratch, stitch or shadow with tiny cubes; adding speculative hidden objects; revising large geometry without checking how it would invalidate mapped surfaces; treating this human tutorial as a command for the agent to automatically restructure existing assets. The Goblin Chef video, original project, exact UV and the artist's full revision history were NOT inspected.
+
+**Owner:** Existing Geometry-vs-Texture and primary/secondary Geometry rules, linked to TK-14. Research synthesis only; no new Recipe/Runtime or production edit.
+
+### GK-11 — Visual part carriers can be solids, thin planes or bone-only anchors
+
+**Distinct question:** Does every semantically meaningful moving part have to own a visible thick cube?
+
+**Pinned native observations:** [Allay Geometry](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/models/entity/allay.geo.json) describes a 32x32 texture canvas. The head and body use volumetric cuboids; each separate left/right wing is a cube with one zero-length size axis (0,5,8), while the rightItem bone has a parent/transform but **no cube**. The look_at bone holds head-face geometry, and left/right arms have their own bone and UV positions. [Warden Geometry](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/models/entity/warden.geo.json) uses a 128x128 canvas and distinct zero-thickness right/left ribcage plates and head-attached tendril planes, beside bulky solid body, head, arms and legs (PINNED_NATIVE_SOURCE). These are authored original Mojang examples at a fixed SHA, not hypothetical marketing metadata.
+
+**Artist-level interpretation (RESEARCH_INFERENCE):** Choose a carrier according to required *spatial role*: solid for real volume, thin/planar for suitable silhouette/texture features, and an empty semantic anchor for an attachment or transform. The fact that a part moves does not require it to have a visible cube; conversely a plane cannot be assumed to model a full cavity or physical thick surface. The separate bone/transform is evidence of what can articulate, not proof that a source asset's appearance matches a new user reference.
+
+**APPLY when:** Approved current reference identifies a flat fin, wing, rib strip, held-item attachment or joint semantics, and the selected Bedrock format actually supports the chosen representation.
+
+**REJECT/UNKNOWN when:** A thin plane is substituted for genuine thickness/contact, every empty bone is deleted as “waste,” generic armature skinning is inferred from Bedrock bones, or a Warden/Allay part shape is copied into an unrelated fantasy boss. Do not infer transparency, two-sided rendering, back-face paint, or texture pigment from the geometry JSON alone.
+
+**Owner:** Existing Geometry representation ladder, pivot/attachment and profile rules; TK-15 covers the distinct UV question and AK-14/15 the motion relation. None are new universal presets.
+
+### Cross-case artistic provenance and rights
+
+[Meet the Warden](https://www.minecraft.net/en-us/article/meet-warden) quotes the game's designer that the creative goal evolved from a blind piglin/sound-reactive stalker toward a stealth/fear experience; earlier concepts included statue-like forms and a folding 1x1-tunnel idea, while blindness remained. The interview is **conceptual/game-design intent**, not proof of any specific 3D artist's sculpting technique or final runtime model evaluation. Official Warden JSON instead establishes which tendril/rib/limb parts exist and can rotate; its animation source is analyzed under AK-15. This distinction prevents confusing lore, marketing image, source geometry, and actual visual acceptance.
+
+Mojang bedrock-samples LICENSE.md at the same pinned SHA states copyright Mojang AB / Minecraft EULA. Use source links and small factual observations only. No asset-file distribution, third-party geometry copying, texture ingestion or AI training permission is inferred. Hytale/GeckoLib/miscellaneous artist examples remain different technical formats. Research continues without internal testing.

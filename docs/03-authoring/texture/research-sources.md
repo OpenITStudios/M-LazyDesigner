@@ -491,3 +491,35 @@ These studies enrich artistic reasoning but are not paint recipes, exact source 
 **REJECT/UNKNOWN:** Repeating a unique face as a tile, making a brick seamless by duplicating the whole character's atlas, or declaring a one-off emblem defective because it cannot tile. The example 3-by-3 image is source pedagogy, **not a request for any LazyDesigner testing**.
 
 **Rights/proof:** Sources were read as teaching materials. No original PNG/UV material from another creator was downloaded or licensed for copying or training; source pixels, effective physical texel size and native appearance remain unverified.
+
+## O. Working Art-Craft Knowledge v0.4 — Appearance carriers and source-level UV identities (2026-11-01; RESEARCH SYNTHESIS)
+
+**Evidence:** Mojang's published Goblin Chef text was read; Allay and Warden original geometry JSON were inspected at bedrock-samples revision 15701fa9c13923f12662984c32c124327e40e3d3. Source-specific canvas dimensions/UV entries are actual file facts, but the original pixel PNG was NOT viewed or sampled and the model was not rendered or opened in Blockbench. Do not treat the Vanilla source style as a mandatory artistic benchmark for premium voxel fantasy.
+
+### TK-14 — A visible fine detail has competing appearance carriers
+
+**Distinct decision:** If an object needs thin straps, a shaped ear, an eyebrow shadow or a physically raised buckle, should it be modeled with a tiny Cube, produced by authored alpha/edge paint or represented by color/shading on an existing surface?
+
+**Primary source:** [Mojang 3D artist Peter Sheff, Creating a Goblin Chef — Part 2](https://learn.microsoft.com/en-us/minecraft/creator/documents/makerseriesmakingthegoblinchef?view=minecraft-bedrock-stable) describes adding smaller blocks during the texture phase, painting large colors before small, using the Eraser to define apron straps/ear shapes, and painted shadows under an eyebrow and on a spatula. [Blockbench Minecraft Style Guide](https://blockbench.net/wiki/guides/minecraft-style-guide/) independently distinguishes shape-defining geometry from mapped surface detail and shows that alpha/planes may represent features in its Minecraft-oriented art style. These are **artist and editor methods**, not a measurement of what a specific final Goblin Chef pixel actually looks like in source PNG.
+
+**Working interpretation:** A requested detail has a *visible purpose*, then a representation choice: (A) real 3D volume/occlusion; (B) alpha-shaped or thin mapped carrier where that is valid; (C) pigment/shading for marks that do not change required silhouette. Small geometry detail discovered during texture planning is possible, but it changes the Geometry owner and perhaps UV layout. Use the already existing domain boundaries; do not create a “late geometry repair engine.”
+
+**APPLY:** Current approved art/reference and accessible face/part evidence distinguish a true 3D protrusion from a visually painted mark.
+
+**REJECT/UNKNOWN:** Tiny protruding horns replaced with dark pixels, every cloth fold modeled in microcubes, unsupported alpha assumptions, inferring the original Goblin Chef atlas from a tutorial sentence, or copying its exact palette/detail design. Geometry source and raw texture pixels for Goblin Chef not inspected. Owner relation: GK-10 and existing Geometry-vs-Texture, Surface Pattern, Alpha and UV authorities.
+
+### TK-15 — Shared atlas pixels and distinct rig parts can coexist
+
+**Distinct question:** Does a left/right animated part have to occupy two different bitmap areas, or does repeated color automatically mean shared UV?
+
+**Direct pinned Geometry evidence:** [Mojang Allay geo](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/models/entity/allay.geo.json) defines separate left_wing/right_wing cubes with the same starting UV coordinate [16,14] and separate bone pivots, while the left/right arms use different offsets [23,6] and [23,0] on a 32x32 canvas. [Mojang Warden geo](https://github.com/Mojang/bedrock-samples/blob/15701fa9c13923f12662984c32c124327e40e3d3/resource_pack/models/entity/warden.geo.json) uses two ribcage planes at UV [90,11] with a mirror flag on the left ribcage, on a 128x128 atlas. The exact original JSON was examined; the actual bitmap/sampled RGB and unseen faces were not (PINNED_NATIVE_SOURCE).
+
+**Working interpretation:** Atlas-pixel ownership and bone-transform ownership are **orthogonal**: two separate moving parts can reference the same painted UV region, and another pair can use independent regions or explicit mirroring. This supplies concrete native evidence to previously documented UV-P01 and TK-05 without asserting either strategy universally optimal. It does NOT prove wing side coloring, seam quality or symmetric identity without the corresponding PNG.
+
+**APPLY:** Reuse/mirror only when the current approved art truly expects equivalent surface treatment and the actual source/native UV+face orientation is known; preserve unique regions where wear, eye/badge identity, directional pigment or asymmetry requires them.
+
+**REJECT/UNKNOWN:** Merging two different painted arms because they have the same silhouette; assuming each bone needs a unique texture island; counting duplicated UV offsets as automatically wasteful; judging visual quality by 32-versus-128 canvas dimensions. No new atlas-packing tool, UV mutation, cloned texture art or shader/PBR assumptions.
+
+### One-character appearance chain — currently known vs unknown
+
+Goblin Chef: published artist text describes **small 3D detail + eraser-defined cutout appearance + color/shadow painting**, but there is no raw file to resolve exact UV mapping. Allay/Warden: real JSON proves **spatial carriers + UV offsets + bone ownership**, but actual bitmap content and physical pixel appearance remain unexamined. Therefore do not claim that a web render provides exact sampled color, UV seam correctness, texture compression, emissive behavior or final visual quality. These are complementary research strengths, not interchangeable observations. Rights follow Mojang EULA; no downloaded/source PNG or new production rules.
