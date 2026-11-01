@@ -151,6 +151,33 @@ mutation, public Gateway tool or mandatory Blockbench panel is introduced.
 The SOURCE implementation is intentionally not yet invokable by AI clients.
 Testing, builds, generated docs, native acceptance and source-based visual
 correspondence were deliberately deferred at the user's request.
+### Geometry command contract and native plan/apply source binding (code only)
+
+`geometrySchema.ts` owns one strict import-safe Zod contract for Cuboid,
+Frame, Repeat and Curve feature intents, explicit reference handles,
+bounded counts and native `plan`/`apply` input envelopes. This removes
+duplicated feature type declarations from `geometryComposition.ts`.
+
+The existing Blockbench Recipe service now exposes one internal
+`constructGeometry` command dispatcher. A plan creates a deterministic
+`geometryplan:<sha256>` handle bound to the exact Project UUID, parent
+Group UUID, parsed features, compiled Cuboids and source revision.
+`advancedConstruction.ts` obtains the source revision from bounded,
+read-only native Project/Group/Cube/UV/Undo state. The subsequent apply
+recomputes the same plan and refuses drift, a foreign Stage/surface,
+missing parent, open native Undo and duplicate native names before
+delegating to the existing `manage_cubes(create)` executor.
+
+AI can call plan/apply internally without an independent registry or
+human-controlled panel. This is intentionally **create-only**: native
+cross-session Recipe persistence and stable parametric replacement must
+preserve Blockbench Undo metadata, not write unsynchronized Project
+properties after an edit. Source handles are claims, never attested
+reference images. `construct_geometry` is NOT registered as a public
+Runtime capability, and no installed/native/visual acceptance is claimed.
+
+User requested code-first development: tests, Bun, CI and Blockbench
+verification are intentionally deferred until code integration matures.
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

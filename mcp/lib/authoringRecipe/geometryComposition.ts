@@ -2,63 +2,17 @@ import type {
   AuthoringRecipe,
   RecipeCubePrototype,
   RecipeFeatureIntent,
-  RecipeGeometryReason,
   RecipePattern,
   RecipeVec3,
 } from "./contracts";
-import type { GeometryCurveObservation } from "./geometryCurves";
+import type { AdvancedGeometryFeature } from "./geometrySchema";
+export type { AdvancedGeometryFeature } from "./geometrySchema";
 import { buildPlanarCurveRecipeCandidate } from "./geometryCurveConstruction";
 import { compileAuthoringRecipe } from "./compiler";
 import {
   requireBoxUvRepresentableSpan,
   validateCubeGeometrySpan,
 } from "@/lib/geometry/cubeSpan";
-
-type CubeInput = {
-  kind: "cuboid";
-  from: RecipeVec3;
-  to: RecipeVec3;
-  pivot?: RecipeVec3;
-  rotation?: RecipeVec3;
-};
-type FrameInput = {
-  kind: "frame";
-  center: RecipeVec3;
-  size: RecipeVec3;
-  /** Thickness of the four border members, in Blockbench model units. */
-  border: number;
-  /** Direction perpendicular to the frame's open face. */
-  normal_axis: "X" | "Y" | "Z";
-};
-type RepeatInput = {
-  kind: "repeat";
-  size: RecipeVec3;
-  rotation?: RecipeVec3;
-  pattern:
-    | { kind: "LINEAR"; axis: "X" | "Y" | "Z"; start: RecipeVec3; spacing: number; count: number }
-    | { kind: "GRID"; axes: ["X" | "Y" | "Z", "X" | "Y" | "Z"]; start: RecipeVec3; spacing: [number, number]; counts: [number, number] }
-    | { kind: "RADIAL"; axis: "X" | "Y" | "Z"; center: RecipeVec3; radius: number; count: number };
-};
-type CurveInput = {
-  kind: "curve";
-  samples: GeometryCurveObservation["samples"];
-};
-
-type GeometryFeatureBase = {
-  id: string;
-  label: string;
-  /** IDs of actual caller-supplied reference/view/user requirement claims. */
-  evidence_refs: string[];
-  geometry_reasons?: RecipeGeometryReason[];
-  /** Explicit replacement only for generated, unlinked pattern cohorts. */
-  replace_generated?: boolean;
-};
-
-export type AdvancedGeometryFeature =
-  | (GeometryFeatureBase & CubeInput)
-  | (GeometryFeatureBase & FrameInput)
-  | (GeometryFeatureBase & RepeatInput)
-  | (GeometryFeatureBase & CurveInput);
 
 export type AdvancedGeometrySummary = {
   scope: "SOURCE_ONLY_NOT_VISUALLY_ATTESTED";

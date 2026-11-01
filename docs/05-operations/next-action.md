@@ -4,27 +4,33 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Primary next — Advanced Geometry CODE-FIRST (2026-11-01)
 
-**USER DECISION:** Mature AI-first Geometry code before incremental
-tests. Do NOT run/write tests, Bun/CI, native QA or release now.
-Preserve the existing four-tool Gateway and single LazyDesigner plugin.
+**USER DECISION:** Complete AI-first plugin code before tests. Do not
+run/edit tests, Bun/CI, native QA or release. Preserve one plugin,
+existing Gateway four-tool public surface, Recipe engine and Undo.
 
-**R3a:** Planar Curve/Taper compiles into native-schema Recipe v1.
-**R3b:** CUBOID, FRAME, REPEAT (LINEAR/GRID/RADIAL), CURVE composition
-through existing `authoringRecipe/geometryComposition.ts` and
-`service.planAdvancedGeometry[Stored]`, with isolation of unrelated
-Geometry and existing Recipe plan/apply.
-**R3c:** Internal Blockbench `advancedConstruction.ts` exposes
-preview/create adapters using exact Project + Group identity and the
-original `manage_cubes(create)` executor/Undo. At most 64 Cubes in one
-create; replay ambiguity refused. No second store or native engine.
+**R3a–R3c source:** Planar Curve/Taper + Cuboid, Frame, Repeat,
+Geometry composition and internal Blockbench create adapter reuse
+the existing Recipe compiler and `manage_cubes(create)` executor.
 
-**PROOF:** Source authored and committed. Build/typecheck, CI, tests,
-Blockbench, save/reopen, Bedrock export and visual fidelity NOT EXECUTED.
+**R3d source:** New `geometrySchema.ts` declares strict AI inputs.
+Internal `constructGeometry` dispatches plan/apply. Plan returns a
+SHA-256 handle tied to the parsed features and native scene revision;
+apply rechecks Project, Group, Stage, Undo and scene before a single
+native batch. Stale or ambiguous results never trigger auto-retry.
 
-**NEXT (CODE):** Finish the callable `construct_geometry` Runtime route
-and canonical generator-owned API output together; then implement
-safe authored revision/persistence. No public AI tool exists yet.
-Testing remains postponed until the feature code is mature.
+**CURRENT LIMIT:** This path is create-only. Public
+`construct_geometry` is not yet registered, because generator-owned
+API docs and registration must be delivered together. Parametric
+edit/revision needs Undo-consistent Recipe persistence (Blockbench
+does not natively snapshot every Project custom property).
+
+**PROOF:** Source authored only. No tests, build/typecheck, Bun/CI,
+native save/reopen, Bedrock export or visual acceptance executed.
+
+**NEXT (CODE):** Complete canonical AI Runtime registration and
+generated artifact ownership together; design transactional
+Recipe metadata persistence and safe edit of feature cohorts.
+QA remains postponed until user explicitly reopens validation.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

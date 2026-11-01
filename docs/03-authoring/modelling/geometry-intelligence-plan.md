@@ -282,6 +282,31 @@ these functions without a new public tool, listener, engine or UI.
 **User instruction:** coding only; no tests, Bun, TS/build, CI, native
 Blockbench or release verification. The public AI `construct_geometry`
 route and generated schema/docs remain intentionally unregistered.
+### R3d — Internal AI plan/apply contract (2026-11-01; CODE ONLY)
+
+`authoringRecipe/geometrySchema.ts` defines strict, import-safe feature
+intents and the `plan`/`apply` discriminated input contract. The plugin's
+existing Recipe service composes one internal `constructGeometry`
+dispatcher using `advancedConstruction.ts` without new public tools.
+
+Native preview now returns an exact plan SHA-256 and scene revision based
+on Project/format, target Group, relevant Project UV settings, the bounded
+native Group/Cube/face-UV inventory and current Undo index. Apply
+re-evaluates source, rejects stale/different plan content, enforces the
+existing AUTHORING Stage and enabled `manage_cubes`, rejects duplicate
+names and delegates exactly one batch to its canonical native executor.
+Runtime output distinguishes reported application from an uncertain
+native receipt; visual/Bedrock export remains explicitly unverified.
+
+**Deliberate restriction:** this is create-only. Project Recipe custom
+property persistence is NOT currently part of the native Undo snapshot
+contract, so metadata must not be updated out of band. Parametric edit
+and safe cross-session Recipe persistence are a separate code slice.
+
+Per explicit user instruction no test files, generators, Bun/CI, build,
+Blockbench execution, export or visual acceptance were performed.
+Public `construct_geometry` registration/docs must remain atomic with
+canonical generator-owned API output. Do not hand-edit derived docs.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

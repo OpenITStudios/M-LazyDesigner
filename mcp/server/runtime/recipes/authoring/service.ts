@@ -18,6 +18,7 @@ import {
 } from "@/lib/authoringRecipe/store";
 import { readBlockbenchAuthoringRecipeOwnedState, createBlockbenchAuthoringRecipeApplyAdapter } from "./runtime";
 import { previewAdvancedGeometryNative, createAdvancedGeometryNative } from "./advancedConstruction";
+import { advancedGeometryCommandSchema, type AdvancedGeometryCommand } from "@/lib/authoringRecipe/geometrySchema";
 import {
   readAuthoringRecipeStoreProperty,
 } from "./ownership";
@@ -425,6 +426,14 @@ export function createBlockbenchAuthoringRecipeService() {
     ...existing,
     previewAdvancedGeometryNative,
     createAdvancedGeometryNative,
+    // A single command owner for future Runtime registration: AI chooses
+    // plan/apply, but never bypasses the canonical native executor or Stage.
+    async constructGeometry(command: AdvancedGeometryCommand) {
+      const validated = advancedGeometryCommandSchema.parse(command);
+      return validated.operation === "plan"
+        ? previewAdvancedGeometryNative(validated)
+        : await createAdvancedGeometryNative(validated);
+    },
   };
 }
 
