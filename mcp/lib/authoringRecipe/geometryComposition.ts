@@ -39,7 +39,8 @@ function protectCurrentFeature(
   const existing = recipe.patterns.filter(pattern => pattern.feature_id === feature.id);
   const isOwnedId = (id: string) =>
     feature.kind === "curve" || feature.kind === "frame" ||
-    feature.kind === "hollow_box" || feature.kind === "arch"
+    feature.kind === "hollow_box" || feature.kind === "arch" ||
+    feature.kind === "voxel_cylinder"
       ? id.startsWith(prefix)
       : id === prefix.slice(0, -1);
   if (existing.some(pattern =>

@@ -4,33 +4,32 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Primary next — Advanced Geometry CODE-FIRST (2026-11-01)
 
-**USER DECISION:** Mature the AI-first geometry feature source before
-tests; do not run tests, build/Bun, CI, native QA or release. Keep
-one LazyDesigner plugin, one Recipe engine and existing Gateway tools.
+**USER DECISION:** Mature AI-first Geometry source; no tests,
+build/Bun, CI, native QA, release, separate plugin or required UI.
 
-**R3a–R3g:** Cuboid, Frame, Repeat, Curve/Taper composition; strict AI
-inspect/plan/apply; source-/scene-bound Revision; existing native
-Cube/Group Undo with Project Recipe source coherence. Existing
-Recipe store is kept in editable bbmodel metadata, not a second DB.
+**R3a–R3g:** Strict AI inspect/plan/apply contract and source-scoped
+Recipe geometry: Cuboid, Frame, Repeat, Curve/Taper. Existing
+Bedrock Cube/Group and same-Undo Recipe metadata are the only
+native construction and persistence owners. Editable .bbmodel keeps
+the Project Recipe custom source via `export:true`.
 
-**R3h:** `geometryShapeBuilders.ts` now owns deterministic pure
-shape construction. New `hollow_box` provides a bounded five-panel
-open cavity and `arch` provides a voxel-stepped XY/ZY opening with
-one-unit crown/column guards. `geometryComposition.ts` remains the
-feature/Recipe coordinator; no duplicate runtime or new plugin.
+**R3h:** Hollow Box and Voxel Arch; pure shape mathematics in
+`geometryShapeBuilders.ts` rather than a second Recipe engine.
+**R3i:** Voxel Cylinder/Tube for wheel/pipe/column shapes, row-run
+Cube compression, 4-connected wall and enclosed-hole guards.
+Stable generated pattern IDs support bounded Recipe revisions.
 
-**PUBLIC CAPABILITY:** `construct_geometry` is STILL UNREGISTERED.
-Repo requires tool source and official generator-owned API docs to
-ship together; current GitHub-only context has no Bun/toolchain.
-Do not hand-author generated docs or move an incomplete registration.
+**PUBLIC AI:** `construct_geometry` is not registered. Source
+and official generator-owned API docs must be authored together.
+No Bun or network available in this GitHub-only execution context;
+do not hand-edit generated artifacts or commit half a registration.
 
-**PROOF:** Source only. No tests, typecheck/build/CI, native
-save/reopen, Bedrock export or visual acceptance; not installed.
+**PROOF:** Source only; no tests/typecheck/build, CI, installed
+Blockbench, native save/reopen, Bedrock export or visual QA.
 
-**NEXT CODE:** Close canonical Runtime tool registration and API
-generator outputs in a capable source-authoring workspace. Continue
-protected AI reference-driven corrections without creating a second
-quality engine. QA remains deferred until user reopens it.
+**NEXT CODE:** Complete canonical Runtime registration plus API
+generator output in an executable workspace. Expand only source-safe
+Geometry before QA authorization; do not create a second engine.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

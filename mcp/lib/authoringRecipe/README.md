@@ -172,6 +172,26 @@ No separate mesh engine, new persistent registry, new public Gateway tool,
 new Blockbench UI, or manually authored generated API docs were added.
 Source implementation is untested by user instruction; native/visual
 quality and Bedrock export remain UNVERIFIED.
+### R3i — Voxel cylinder / tube with connected hollow cross-section (code only)
+
+`geometryShapeBuilders.ts` now owns the pure `voxel_cylinder` feature
+from the existing strict AI schema. Axis X/Y/Z, center, whole-unit
+outer radius (2–16), optional inner radius and axial length are
+explicit caller parameters, not inferred from image pixels.
+
+The builder samples a one-unit voxel cross-section and compresses each
+contiguous occupied row-run into one native Cuboid. It emits no freeform
+mesh, no one-Cube-per-cell output and no overlapping run volume.
+A bounded 4-neighbour flood rejects disconnected solid walls; for a
+tube, an exterior flood rejects a missing or exterior-connected hole.
+All authored axes must retain Box UV-compatible spans.
+
+Patterns have stable source-scoped `shape:voxel_cylinder` IDs and reuse
+the original Recipe compiler, incremental rebuild, plan/apply and native
+Undo; no new runtime engine or public Gateway tool is introduced.
+Whether the voxelized silhouette matches a target reference requires
+later native/reference visual review. By user instruction no tests,
+Bun, CI, installed Blockbench or export verification were executed.
 ### Geometry command contract and native plan/apply source binding (code only)
 
 `geometrySchema.ts` owns one strict import-safe Zod contract for Cuboid,

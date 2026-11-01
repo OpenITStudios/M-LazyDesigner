@@ -402,6 +402,25 @@ Recipe source ownership only. Both new shapes reuse the existing
 native transaction. They are not a parallel modeling or persistence
 engine, and do not add a new public API tool. No tests or live QA
 were run per user instruction; image resemblance/export are unverified.
+### R3i — Voxel Cylinder / Tube (2026-11-01; CODE ONLY)
+
+The source-owned `voxel_cylinder` shape builds a bounded circular
+voxel cross-section (model axes X/Y/Z; integer radius 2–16,
+optional inner radius) and extrudes it along an explicit axial length.
+Consecutive occupied cells in the same row form one Cuboid run; every
+run stays disjoint in voxel volume and maintains stable pattern IDs.
+
+Before construction, the pure helper checks 4-neighbour connectivity
+and, for tubes, that the interior void is enclosed rather than linked
+to the outer boundary. Invalid thin, disconnected annuli are rejected
+instead of producing floating corners. No `poly_mesh`, mesh converter,
+second Recipe engine, persistent queue or new Gateway tool is added.
+
+This augments the existing AI source contract and owns no separate
+mutation mechanism. Revision and native authoring stay in the canonical
+Recipe compiler/transaction. Visual smoothness, target-reference
+correspondence and Bedrock export remain UNVERIFIED. Per user decision,
+no tests, typecheck, Bun/CI or native QA were executed.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

@@ -112,6 +112,19 @@ export const advancedGeometryFeatureSchema = z.discriminatedUnion("kind", [
   }).strict(),
   z.object({
     ...featureBase,
+    kind: z.literal("voxel_cylinder"),
+    center: geometryVec3Schema,
+    axis: geometryAxisSchema
+      .describe("Axis of the cylinder or tube; cross-section is voxelized."),
+    radius: z.number().int().min(2).max(16)
+      .describe("Outer radius in whole Blockbench model units."),
+    inner_radius: z.number().int().min(0).max(15).default(0)
+      .describe("Zero produces a solid cylinder; positive produces a hollow tube."),
+    length: z.number().finite().min(1)
+      .describe("Positive axial length in Blockbench model units."),
+  }).strict(),
+  z.object({
+    ...featureBase,
     kind: z.literal("curve"),
     samples: z.array(curveSampleSchema).min(2).max(12),
   }).strict(),

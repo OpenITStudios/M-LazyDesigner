@@ -263,6 +263,149 @@ function buildSteppedArch(
   };
 }
 
+/**
+ * Deterministic one-unit voxel approximation of a solid cylinder or tube.
+ * Every occupied cross-section cell belongs to exactly one row-run Cuboid,
+ * avoiding overlapping volume and unnecessary one-Cube-per-voxel output.
+ *
+ * This is a low-poly/voxel silhouette decision, not a smooth native mesh.
+ * The 4-connected mass and enclosed hole are explicitly checked before
+ * emitting a candidate. Unconnected one-cell annuli fail closed instead of
+ * becoming visually broken floating corner pieces.
+ */
+function buildVoxelCylinder(
+  feature: Extract<AdvancedGeometryFeature, { kind: "voxel_cylinder" }>
+): Pieces {
+  const center = requireFiniteVector(feature.center, "voxel cylinder center");
+  const axis = AXES.indexOf(feature.axis);
+  const radius = feature.radius;
+  const innerRadius = feature.inner_radius ?? 0;
+  const length = feature.length;
+  if (axis < 0 || !Number.isInteger(radius) || radius < 2 || radius > 16 ||
+    !Number.isInteger(innerRadius) || innerRadius < 0 ||
+    innerRadius >= radius || !Number.isFinite(length) || length < 1) {
+    throw new Error("ADVANCED_GEOMETRY_VOXEL_CYLINDER_PARAMETERS_INVALID");
+  }
+  const axes = [0, 1, 2].filter(index => index !== axis);
+  const [uAxis, vAxis] = axes;
+  const diameter = radius * 2;
+  const outerSquared = radius * radius;
+  const innerSquared = innerRadius * innerRadius;
+
+  const cells: boolean[][] = [];
+  let occupiedCount = 0;
+  for (let row = 0; row < diameter; row++) {
+    const occupied: boolean[] = [];
+    for (let column = 0; column < diameter; column++) {
+      const u = column - radius + 0.5;
+      const v = row - radius + 0.5;
+      const squared = u * u + v * v;
+      const filled = squared <= outerSquared &&
+        (innerRadius === 0 || squared > innerSquared);
+      occupied.push(filled);
+      if (filled) occupiedCount++;
+    }
+    cells.push(occupied);
+  }
+  if (occupiedCount === 0) {
+    throw new Error("ADVANCED_GEOMETRY_VOXEL_CYLINDER_EMPTY");
+  }
+
+  // Four-neighbour topology in the voxel cross-section. Diagonal contact
+  // alone is not a reliable material connection for a Blockbench model.
+  const neighbours = (point: number): number[] => {
+    const row = Math.floor(point / diameter);
+    const column = point % diameter;
+    const result: number[] = [];
+    if (column > 0) result.push(point - 1);
+    if (column + 1 < diameter) result.push(point + 1);
+    if (row > 0) result.push(point - diameter);
+    if (row + 1 < diameter) result.push(point + diameter);
+    return result;
+  };
+  const traversable = (point: number, filled: boolean) =>
+    cells[Math.floor(point / diameter)]![point % diameter] === filled;
+  const flood = (seeds: readonly number[], filled: boolean): Set<number> => {
+    const visited = new Set<number>();
+    const queue: number[] = [];
+    for (const point of seeds) {
+      if (!visited.has(point) && traversable(point, filled)) {
+        visited.add(point);
+        queue.push(point);
+      }
+    }
+    for (let cursor = 0; cursor < queue.length; cursor++) {
+      for (const neighbour of neighbours(queue[cursor]!)) {
+        if (visited.has(neighbour) || !traversable(neighbour, filled)) continue;
+        visited.add(neighbour);
+        queue.push(neighbour);
+      }
+    }
+    return visited;
+  };
+  const firstFilled = cells.flat().indexOf(true);
+  if (flood([firstFilled], true).size !== occupiedCount) {
+    throw new Error(
+      "ADVANCED_GEOMETRY_VOXEL_CYLINDER_DISCONNECTED: " +
+      "widen the tube wall or reduce inner_radius."
+    );
+  }
+  if (innerRadius > 0) {
+    const outsideSeeds: number[] = [];
+    for (let index = 0; index < diameter * diameter; index++) {
+      const row = Math.floor(index / diameter);
+      const column = index % diameter;
+      if (row === 0 || column === 0 ||
+        row === diameter - 1 || column === diameter - 1) {
+        outsideSeeds.push(index);
+      }
+    }
+    const outside = flood(outsideSeeds, false);
+    const innerVoid = cells.flat().reduce((count, filled, index) =>
+      count + (!filled && !outside.has(index) ? 1 : 0), 0);
+    if (innerVoid === 0) {
+      throw new Error(
+        "ADVANCED_GEOMETRY_VOXEL_CYLINDER_HOLE_NOT_ENCLOSED: " +
+        "choose a wider wall or a smaller inner_radius."
+      );
+    }
+  }
+
+  const result: Pieces = { prototypes: [], patterns: [] };
+  for (let row = 0; row < diameter; row++) {
+    let start: number | null = null;
+    let run = 0;
+    for (let column = 0; column <= diameter; column++) {
+      const occupied = column < diameter && cells[row]![column] === true;
+      if (occupied && start === null) start = column;
+      if (occupied || start === null) continue;
+      const from = center.map((value, index) =>
+        value - (index === axis ? length / 2 : radius)
+      ) as RecipeVec3;
+      const to = center.map((value, index) =>
+        value + (index === axis ? length / 2 : radius)
+      ) as RecipeVec3;
+      from[uAxis!] = center[uAxis!] - radius + start;
+      to[uAxis!] = center[uAxis!] - radius + column;
+      from[vAxis!] = center[vAxis!] - radius + row;
+      to[vAxis!] = center[vAxis!] - radius + row + 1;
+      const id = "shape:voxel_cylinder:" + feature.id +
+        ":row_" + row + ":run_" + run;
+      const piece = makeBox(id, feature.label + "_row_" + row +
+        "_run_" + run, feature.id, from, to);
+      result.prototypes.push(...piece.prototypes);
+      result.patterns.push(...piece.patterns);
+      start = null;
+      run++;
+    }
+  }
+  if (result.patterns.length === 0 ||
+    result.patterns.length > MAX_FEATURE_CUBES) {
+    throw new Error("ADVANCED_GEOMETRY_VOXEL_CYLINDER_BUDGET_EXCEEDED");
+  }
+  return result;
+}
+
 function buildRepeat(feature: Extract<AdvancedGeometryFeature, { kind: "repeat" }>): Pieces {
   const size = requirePositiveSize(feature.size, "repeated size");
   const rotation = requireRotation(feature.rotation);
@@ -333,5 +476,6 @@ export function buildGeometryShapePieces(
   if (feature.kind === "frame") return buildFrame(feature);
   if (feature.kind === "hollow_box") return buildHollowBox(feature);
   if (feature.kind === "arch") return buildSteppedArch(feature);
+  if (feature.kind === "voxel_cylinder") return buildVoxelCylinder(feature);
   return buildRepeat(feature);
 }
