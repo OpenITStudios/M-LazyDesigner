@@ -54,7 +54,7 @@ function realizePart(
   }
   if (part.method === "EXTRUDE") return extrudeMathProfile(part, version);
   if (part.method === "SWEEP") return sweepMathVolume(part, version);
-  if (part.method === "REVOLVE") return revolveMathProfile(part);
+  if (part.method === "REVOLVE") return revolveMathProfile(part, version);
   // The union exhausts its known methods. Never silently choose a fallback.
   throw new Error("GEOMETRY_MATH_UNSUPPORTED_METHOD");
 }
@@ -76,11 +76,23 @@ function minMax(boxes: readonly MathCuboid[]): {
   return { min, max };
 }
 
+function compareSourceIds(
+  left: string, right: string, version: GeometryMathVersion
+): number {
+  // Locale-dependent collation can reorder Recipe patterns and therefore
+  // compiled placement/transaction fingerprints on other machines.
+  // V1/V2 retain their historical order; v3 uses stable codepoint order.
+  return version === 3
+    ? (left < right ? -1 : left > right ? 1 : 0)
+    : left.localeCompare(right);
+}
+
 function canonicalConstraints(
-  anchors: NonNullable<ProgramFeature["program"]["anchors"]>
+  anchors: NonNullable<ProgramFeature["program"]["anchors"]>,
+  version: GeometryMathVersion
 ): RecipeConstraint[] {
   return [...anchors]
-    .sort((left, right) => left.id.localeCompare(right.id))
+    .sort((left, right) => compareSourceIds(left.id, right.id, version))
     .map(anchor => ({
     kind: "ANCHOR",
     id: anchor.id,
@@ -100,7 +112,9 @@ export function buildGeometryMathProgramPieces(
   // this single strict schema also validates persisted source on inspection.
   const program = geometryMathProgramSchema.parse(feature.program);
   const parts: LocalPart[] = [...program.parts]
-    .sort((left, right) => left.id.localeCompare(right.id))
+    .sort((left, right) => compareSourceIds(
+      left.id, right.id, program.version
+    ))
     .map(part => {
       const boxes = realizePart(part, program.version);
       const { min, max } = minMax(boxes);
@@ -137,7 +151,9 @@ export function buildGeometryMathProgramPieces(
     rotation: [0, 0, 0], scale: [1, 1, 1],
   }));
   const solved = solveRecipeConstraints(
-    initial, prototypes, canonicalConstraints(program.anchors ?? [])
+    initial, prototypes, canonicalConstraints(
+      program.anchors ?? [], program.version
+    )
   );
   const byId = new Map(solved.map(instance => [
     instance.id, instance.translation,

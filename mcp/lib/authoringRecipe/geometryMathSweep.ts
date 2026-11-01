@@ -279,7 +279,8 @@ export function sweepMathVolume(
   part: Sweep, version: GeometryMathVersion
 ): MathCuboid[] {
   const samples = sampleSweep(part, version);
-  const segments = version === 2 ? prepareSphereSegments(samples) : null;
+  // V2+ share the exact varying-radius sphere union; v1 remains legacy.
+  const segments = version !== 1 ? prepareSphereSegments(samples) : null;
   const maxRadius = Math.max(...samples.map(s => s.radius));
   const low: RecipeVec3 = [0, 1, 2].map(axis =>
     Math.floor(Math.min(...samples.map(s => s.position[axis]!)) -

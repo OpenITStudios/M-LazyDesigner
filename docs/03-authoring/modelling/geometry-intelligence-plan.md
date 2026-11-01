@@ -551,6 +551,39 @@ ANCHOR conflict/cycle; native UV/Undo/save/reopen and Bedrock export.
 Do not claim that these pending checks or a source-only audit imply
 runtime/native or visual acceptance.
 
+### R3n — Radial topology, exact coverage and reproducibility (2026-11-02; CODE ONLY)
+
+Further audit located three related blind spots in R3m:
+
+1. REVOLVE only checked entire 3D material connectivity. A rasterized
+   annulus can have disconnected 2D wall sections despite being linked
+   to a neighbouring 3D layer, or leak through diagonally connected
+   background. For an explicit `program.version=3`, each non-solid
+   axial section now checks four-connected material and an eight-connected
+   background, rejecting disconnected rings, side leaks and extra
+   interior cavities. Intentionally solid axial caps remain allowed.
+2. A volume-count equality test cannot by itself prove the correct cells
+   were covered. The existing bounded greedy voxel partition now
+   verifies exact equivalence of input occupancy and consumed-cell
+   bitmaps, without changing Cuboid geometry for valid shapes.
+3. Runtime locale may reorder semantic part/ANCHOR names in a persisted
+   Recipe. V3 uses source-ID codepoint order; v1/v2 keep their old
+   `localeCompare` ordering for exact source reconstruction.
+
+Keep v1/v2 numerical and source identities intact: do not retrofit
+the REVOLVE preflight or new sort order into historical program versions.
+The compiler still creates ordinary Recipe v1 Cuboids with the same
+stale-plan, native Group ownership and Undo semantics; no new Gateway
+tool, state store, shape-preset registry or runtime scripting.
+
+**Pending proof, NOT EXECUTED:** v1/v2 placement equivalence, v3 solid
+body and valid annular ring, disconnected thin ring, diagonal radial
+leak, capped-vs-through cavities, voxel coverage equivalence, locale
+ordering, conflicted ANCHOR, typed schema, Bun build, and real native
+save/reopen/Undo/Bedrock export/visual checks. A rejected source candidate
+is not proof of a successful native model. Public `construct_geometry`
+registration remains generator-coupled and deferred.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

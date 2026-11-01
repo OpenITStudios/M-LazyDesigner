@@ -142,9 +142,14 @@ export function partitionMathVoxelVolume(
       }
     }
   }
-  if (assignedCells !== count) {
+  // Equal volume alone does not prove equal coverage: losing one cell
+  // while filling a different one preserves counts. Compare the full
+  // occupancy bitmap to the partition ownership bitmap exactly.
+  if (assignedCells !== count ||
+    cells.some((filled, index) => filled !== taken[index])) {
     throw new Error(
-      "GEOMETRY_MATH_VOXEL_VOLUME_NOT_CONSERVED: partition lost or duplicated occupied cells."
+      "GEOMETRY_MATH_VOXEL_COVERAGE_NOT_CONSERVED: " +
+      "native Cuboid partition does not exactly cover occupied source cells."
     );
   }
   return boxes;

@@ -1,9 +1,141 @@
 import type { RecipeVec3 } from "./contracts";
-import type { GeometryMathPart } from "./geometryMathLanguage";
+import type { GeometryMathPart, GeometryMathVersion } from "./geometryMathLanguage";
 import { partitionMathVoxelVolume, type MathCuboid } from "./geometryMathVoxel";
 
 type Revolution = Extract<GeometryMathPart, { method: "REVOLVE" }>;
 const AXES = ["X", "Y", "Z"] as const;
+
+/**
+ * Version 3 annular-section topology preflight. The one-unit rasterizer may
+ * leave a continuous mathematical annulus as four disconnected strips or
+ * open its hollow centre to the exterior through a diagonal voxel gap.
+ * A general 3D solid connectivity check cannot detect either per-section
+ * failure if another axial layer reconnects the fragments.
+ *
+ * For four-connected material cells, use eight-connected background so
+ * diagonal openings count as leakage (conservative digital topology).
+ * V1/V2 output is unchanged: this preflight is exclusive to v3.
+ */
+function validateV3AnnularSections(
+  majorRadius: number,
+  totalHeight: number,
+  sectionAt: (height: number) => { outer: number; inner: number }
+): void {
+  const diameter = majorRadius * 2;
+  const cellCount = diameter * diameter;
+  const encode = (x: number, z: number) => z * diameter + x;
+  const connected = (
+    start: number,
+    mask: Uint8Array,
+    diagonal: boolean
+  ): Uint8Array => {
+    const seen = new Uint8Array(cellCount);
+    if (!mask[start]) return seen;
+    const queue = [start];
+    seen[start] = 1;
+    for (let cursor = 0; cursor < queue.length; cursor++) {
+      const cell = queue[cursor]!;
+      const x = cell % diameter, z = Math.floor(cell / diameter);
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dz === 0) continue;
+          if (!diagonal && Math.abs(dx) + Math.abs(dz) !== 1) continue;
+          const nx = x + dx, nz = z + dz;
+          if (nx < 0 || nz < 0 || nx >= diameter || nz >= diameter) continue;
+          const next = encode(nx, nz);
+          if (mask[next] && !seen[next]) {
+            seen[next] = 1;
+            queue.push(next);
+          }
+        }
+      }
+    }
+    return seen;
+  };
+
+  for (let axialLayer = 0; axialLayer < totalHeight; axialLayer++) {
+    const { outer, inner } = sectionAt(axialLayer + 0.5);
+    if (![outer, inner].every(Number.isFinite) ||
+      outer - inner < 1 - 1e-9) {
+      throw new Error("GEOMETRY_MATH_REVOLVE_SECTION_INVALID");
+    }
+    if (inner <= 0) continue;
+    const solid = new Uint8Array(cellCount);
+    const blank = new Uint8Array(cellCount);
+    const intendedHole = new Uint8Array(cellCount);
+    let solidCount = 0;
+    for (let z = 0; z < diameter; z++) {
+      for (let x = 0; x < diameter; x++) {
+        const rho = Math.hypot(
+          x - majorRadius + 0.5, z - majorRadius + 0.5
+        );
+        const index = encode(x, z);
+        solid[index] = Number(rho <= outer && rho >= inner);
+        blank[index] = Number(!solid[index]);
+        intendedHole[index] = Number(rho < inner);
+        solidCount += solid[index]!;
+      }
+    }
+    if (solidCount === 0) {
+      throw new Error("GEOMETRY_MATH_REVOLVE_EMPTY_ANNULUS");
+    }
+
+    // Local section must form one face-connected ring; axial neighbours
+    // cannot be relied on to repair missing radial contact.
+    const firstSolid = solid.indexOf(1);
+    const materialSeen = connected(firstSolid, solid, false);
+    if (materialSeen.reduce((sum, n) => sum + n, 0) !== solidCount) {
+      throw new Error("GEOMETRY_MATH_REVOLVE_DISCONNECTED_RING");
+    }
+
+    const firstHole = intendedHole.indexOf(1);
+    // A taper from a solid cap into a hollow may legitimately start with
+    // subpixel radii that cannot yet contain even one voxel-centre sample.
+    if (firstHole < 0) continue;
+
+    // All exterior background can be reached through eight-neighbour
+    // paths from the boundary. Reuse the same neighbourhood for the
+    // interior-component test to reject diagonal leakage/merging.
+    const exterior = new Uint8Array(cellCount);
+    const queue: number[] = [];
+    for (let z = 0; z < diameter; z++) {
+      for (let x = 0; x < diameter; x++) {
+        if (x !== 0 && z !== 0 && x !== diameter - 1 &&
+          z !== diameter - 1) continue;
+        const cell = encode(x, z);
+        if (blank[cell] && !exterior[cell]) {
+          queue.push(cell);
+          exterior[cell] = 1;
+        }
+      }
+    }
+    for (let cursor = 0; cursor < queue.length; cursor++) {
+      const cell = queue[cursor]!;
+      const x = cell % diameter, z = Math.floor(cell / diameter);
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dz === 0) continue;
+          const nx = x + dx, nz = z + dz;
+          if (nx < 0 || nz < 0 || nx >= diameter || nz >= diameter) continue;
+          const next = encode(nx, nz);
+          if (blank[next] && !exterior[next]) {
+            exterior[next] = 1;
+            queue.push(next);
+          }
+        }
+      }
+    }
+    const cavity = connected(firstHole, blank, true);
+    for (let cell = 0; cell < cellCount; cell++) {
+      if (intendedHole[cell] && (exterior[cell] || !cavity[cell])) {
+        throw new Error("GEOMETRY_MATH_REVOLVE_RADIAL_HOLE_LEAK");
+      }
+      if (blank[cell] && !exterior[cell] && !cavity[cell]) {
+        throw new Error("GEOMETRY_MATH_REVOLVE_EXTRA_CAVITY");
+      }
+    }
+  }
+}
 
 /**
  * Source-profile revolution. Cross-sections are interpolated linearly in
@@ -11,7 +143,9 @@ const AXES = ["X", "Y", "Z"] as const;
  * Annular sections may create a through-channel, which must survive native
  * voxel realization and its face-connectivity guard.
  */
-export function revolveMathProfile(part: Revolution): MathCuboid[] {
+export function revolveMathProfile(
+  part: Revolution, version: GeometryMathVersion
+): MathCuboid[] {
   const sections = part.sections;
   if (sections[0]?.height !== 0) {
     throw new Error("GEOMETRY_MATH_REVOLVE_START_AT_ZERO");
@@ -52,6 +186,11 @@ export function revolveMathProfile(part: Revolution): MathCuboid[] {
       inner: a.inner_radius + (b.inner_radius - a.inner_radius) * t,
     };
   };
+  // Topology-preserving annular preflight is v3-only. V1/V2 must reproduce
+  // their previously authored Cube placements exactly.
+  if (version === 3) validateV3AnnularSections(
+    majorRadius, top, sectionAt
+  );
   return partitionMathVoxelVolume(low, size, (x, y, z) => {
     const cell = [x, y, z];
     const axial = cell[axis]! + 0.5;

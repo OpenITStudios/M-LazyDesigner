@@ -7,11 +7,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 **USER DECISION:** Mature AI-first Geometry source; no tests,
 build/Bun, CI, native QA, release, separate plugin or mandatory UI.
 
-**R3a–R3m:** Prior 13 shapes unchanged. Opt-in `kind=program`
-BOX/EXTRUDE/SWEEP/REVOLVE and existing ANCHOR solver. Math v1
-source reconstructions stay pinned; opt-in v2 corrects variable-radius
-SWEEP, rigorously bounds spline chord error, rejects diagonal hole leaks.
-Voxel conservation and original Recipe/Undo are retained; <=64 Cubes.
+**R3a–R3n:** 13 existing shapes unchanged. Opt-in `kind=program`
+BOX/EXTRUDE/SWEEP/REVOLVE + original ANCHOR. Math v1/v2 retained;
+v3 adds radial hole/contact checks and stable source-ID ordering.
+Voxels preserve exact coverage; original Recipe/Undo; <=64 Cubes.
 
 **R3j:** Canonical Recipe v1 optionally persists original high-level
 `advanced_geometry_source` parameters per feature for AI editing
@@ -28,9 +27,8 @@ with generator-owned API docs. Do not hand-edit generated artifacts.
 **PROOF:** Source only. No tests/build/CI, native save/reopen,
 Bedrock export or visual QA; plugin deployment not claimed.
 
-**NEXT CODE:** Canonical `construct_geometry` Runtime registration +
-generator-owned API docs in a capable environment; then v1/v2 native
-roundtrip/Undo/export and reference-based visual correction.
+**NEXT CODE:** Generator-coupled public Runtime registration + API
+docs, then v1/v2/v3 source-equivalence and native/visual acceptance.
 Do not invent an alternative registration/quality engine.
 ## GitHub boundary and historical local recovery
 

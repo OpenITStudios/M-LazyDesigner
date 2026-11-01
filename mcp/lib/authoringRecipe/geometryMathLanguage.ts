@@ -6,8 +6,9 @@ import { z } from "zod";
  * Cubes, persistence, native Project/Group affinity and Undo.
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
- * v1 is frozen: mathematically corrected constructions use v2 without
- * silently changing any persisted v1 Recipe placements.
+ * v1 and v2 are frozen for stored Recipe reconstruction.
+ * New mathematical/topological behaviour is opt-in under v3, not a
+ * silent change to previously persisted shape placements.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -96,11 +97,12 @@ const programFields = {
 
 /**
  * The source version selects numerical semantics; it is never defaulted.
- * V1 remains readable/reconstructable after v2 correctness hardening.
+ * All previous source versions remain readable and reconstructable.
  */
 export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(1), ...programFields }).strict(),
   z.object({ version: z.literal(2), ...programFields }).strict(),
+  z.object({ version: z.literal(3), ...programFields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {

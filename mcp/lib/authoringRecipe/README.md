@@ -341,6 +341,32 @@ radius, curve deviations, diagonal void leakage, multiple holes, volume
 conservation, ANCHOR conflicts, UV safety, Undo and save/reopen. Never
 mistake source review or presence of these criteria for a passed test.
 
+### R3n — Versioned annular topology and deterministic source (source only)
+
+Exact `program.version=3` is opt-in; stored v1/v2 programs remain on
+their existing reconstruction paths. The v3 REVOLVE preflight examines
+each annular axial raster section, requiring 4-connected material,
+a single represented radial cavity and an 8-connected background that
+does not leak through diagonal corner gaps. A 3D mass connected across
+multiple layers can still have an invalid radial section, so the local
+cross-section check is needed in addition to normal Recipe/voxel
+connectivity. V3 rejects that candidate; it does not silently fill holes
+or thicken walls. Solid caps and intentionally sub-unit transitions
+are not invented as a through-channel.
+
+V3 orders semantic part and ANCHOR IDs using stable codepoint comparison,
+not environment-dependent locale collation. The v1/v2 ordering remains
+untouched to preserve historical Recipe placement source. The existing
+voxel partition now compares the complete occupied-cell bitmap to the
+greedy Cuboid-ownership bitmap, in addition to total occupied volume;
+this assertion does not alter valid placement output.
+
+No second shape database, mesh engine, global optimizer, registration
+layer or native Undo mechanism was introduced. Public
+`construct_geometry` remains unregistered. This is source-only
+hardening; Bun/typecheck, behavioral tests, installed Blockbench, native
+save/reopen/export and reference/visual QA were NOT EXECUTED.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
