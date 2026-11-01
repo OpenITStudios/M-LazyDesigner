@@ -17,7 +17,9 @@ import {
 const AXES = ["X", "Y", "Z"] as const;
 const EPSILON = 1e-10;
 
-export function loftMathVolume(part: GeometryMathLoftPart): MathCuboid[] {
+export function loftMathVolume(
+  part: GeometryMathLoftPart, version: 5 | 6 = 5
+): MathCuboid[] {
   const sections = part.sections;
   if (sections[0]?.height !== 0) {
     throw new Error("GEOMETRY_MATH_LOFT_START_AT_ZERO");
@@ -91,10 +93,19 @@ export function loftMathVolume(part: GeometryMathLoftPart): MathCuboid[] {
     const section = atHeight(axial + 0.5);
     const u = low[perpendicular[0]!]! + cell[perpendicular[0]!]! + 0.5;
     const v = low[perpendicular[1]!]! + cell[perpendicular[1]!]! + 0.5;
-    const inside = Math.abs(u - section.center[0]) <=
-      section.size[0] / 2 + EPSILON &&
-      Math.abs(v - section.center[1]) <=
-      section.size[1] / 2 + EPSILON;
+    // V5 remains source-frozen, including its inclusive two-sided raster
+    // boundaries. V6 uses half-open cells to avoid double-filling both
+    // voxel centres on a width-one, integer-centred profile boundary.
+    // This is deterministic 1-unit quantization, NOT exact CAD geometry.
+    const inside = version === 5
+      ? Math.abs(u - section.center[0]) <=
+          section.size[0] / 2 + EPSILON &&
+        Math.abs(v - section.center[1]) <=
+          section.size[1] / 2 + EPSILON
+      : u >= section.center[0] - section.size[0] / 2 - EPSILON &&
+        u < section.center[0] + section.size[0] / 2 - EPSILON &&
+        v >= section.center[1] - section.size[1] / 2 - EPSILON &&
+        v < section.center[1] + section.size[1] / 2 - EPSILON;
     if (inside) layers[axial] = 1;
     return inside;
   });

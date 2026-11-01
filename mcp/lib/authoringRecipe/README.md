@@ -497,6 +497,65 @@ were executed. Public `construct_geometry` registration remains
 deferred until canonical Bun generator-owned API docs can be authored
 atomically with it.
 
+### R3r — Exact orthogonal orientation and face-aware connections (SOURCE ONLY)
+
+Explicit `program.version=6` extends the existing Geometry Construction
+Language and the same Authoring Recipe compiler; versions 1–5 retain
+their exact declared operations and historical native-Cuboid output.
+
+- `ORIENT`: reuse a source-local semantic part with an explicit
+  `quarter_turn: {axis: "X"|"Y"|"Z", steps: 1|2|3}`.
+  `geometryMathOrthogonal.ts` transforms each original Cuboid about
+  the source part's local bounds centre through exact signed axis swaps,
+  avoiding arbitrary trigonometric Cube rotation or negative native
+  scale. Optional reflection occurs BEFORE rotation; optional signed
+  LINEAR repeat and original ANCHOR relationships are retained.
+  The result is new local geometry, not automatic UV mirror, Bone
+  pivot, world-space rotation, rig or texture transfer.
+- `LOFT` v6: keeps the existing section language and uses half-open
+  voxel-centre classification at the upper profile edge. This prevents
+  an odd-width integer-centred section from filling BOTH unit-voxel
+  columns at its boundaries. Unit-voxel quantization and remaining
+  positional approximation are explicit; it is not lossless CAD.
+  The old v5 inclusive-boundary rasterization is retained unchanged.
+- `CONNECT` v6: after existing ANCHOR solves sources, each endpoint
+  requires exactly ONE named MIN/MAX face axis, zero offset along that
+  normal, and a point lying on a real source Cuboid face rather than
+  an empty bounding-envelope coordinate. The outgoing path must depart
+  the start face; the incoming path must enter the target from outside
+  its corresponding face. Existing SWEEP, voxel and 3D contact guards
+  still own realization. These are source/structural checks only:
+  neither collision-free routing nor reference/visual/UV approval.
+
+Illustrative source snippet (not executed):
+
+```json
+{
+  "version": 6,
+  "parts": [
+    {"id":"blade","method":"LOFT","at":[0,0,0],"axis":"Y",
+     "sections":[
+       {"height":0,"center":[0,0],"size":[4,2]},
+       {"height":8,"center":[0,0],"size":[2,2]}
+     ]},
+    {"id":"blade_side","method":"ORIENT","source_part_id":"blade",
+     "at":[10,0,0],"quarter_turn":{"axis":"Z","steps":1}}
+  ]
+}
+```
+
+This extension adds one mathematics-only orthogonal helper under the
+existing domain, not an alternate tool, solver, database or native
+transaction. Eight semantic parts and <=64 expanded native Cuboids
+per program remain enforced. Profile source is caller-asserted, not
+verified image evidence. Existing geometry v1–v5 and every R3 legacy
+shape remain source-compatible.
+
+Bun/typecheck/build/tests/CI, live Blockbench, Undo/save-reopen,
+Bedrock export and visual/reference QA were NOT EXECUTED by user
+CODE-FIRST restriction. Public `construct_geometry` still awaits
+canonical generator-coupled registration and generated API docs.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

@@ -10,7 +10,7 @@ import {
   geometryMathProgramSchema,
   type GeometryMathPart,
   type GeometryMathPartV4,
-  type GeometryMathPartV5,
+  type GeometryMathPartV6,
   type GeometryMathConnectorPart,
   type GeometryMathVersion,
 } from "./geometryMathLanguage";
@@ -20,6 +20,7 @@ import { extrudeMathProfile } from "./geometryMathProfile";
 import { sweepMathVolume } from "./geometryMathSweep";
 import { revolveMathProfile } from "./geometryMathRevolve";
 import { loftMathVolume } from "./geometryMathLoft";
+import { rotateMathCuboidsQuarterTurns } from "./geometryMathOrthogonal";
 import {
   buildMathConnector,
   type GeometryConnectorSource,
@@ -45,7 +46,7 @@ type InstanceRepeat = NonNullable<Extract<
   GeometryMathPartV4, { method: "INSTANCE" }
 >["repeat"]>;
 type GeometryMathConstructiblePart = Exclude<
-  GeometryMathPartV5, { method: "CONNECT" }
+  GeometryMathPartV6, { method: "CONNECT" }
 >;
 type LocalPart = {
   id: string;
@@ -132,7 +133,7 @@ function canonicalConstraints(
  */
 function realizeStructuredParts(
   parts: readonly GeometryMathConstructiblePart[],
-  version: 4 | 5
+  version: 4 | 5 | 6
 ): LocalPart[] {
   const definitions = new Map(parts.map(part => [part.id, part] as const));
   const completed = new Map<string, LocalPart>();
@@ -157,7 +158,8 @@ function realizeStructuredParts(
     try {
       let boxes: MathCuboid[];
       let repeat: InstanceRepeat | undefined;
-      if (definition.method === "INSTANCE") {
+      if (definition.method === "INSTANCE" ||
+        definition.method === "ORIENT") {
         const original = resolve(definition.source_part_id);
         // Cloning an already repeated assembly would otherwise silently
         // discard its array. Nested repetition requires a separate,
@@ -184,8 +186,16 @@ function realizeStructuredParts(
           }
           return { id: box.id, from, to };
         });
+        if (definition.method === "ORIENT") {
+          // Reflection (when requested) precedes the exact quarter turn.
+          // Both operate on local Cube geometry, not Blockbench pivots.
+          boxes = rotateMathCuboidsQuarterTurns(
+            boxes, original.min, original.max,
+            definition.quarter_turn.axis, definition.quarter_turn.steps
+          );
+        }
       } else if (definition.method === "LOFT") {
-        boxes = loftMathVolume(definition);
+        boxes = loftMathVolume(definition, version === 6 ? 6 : 5);
       } else {
         boxes = realizePart(definition, version);
       }
@@ -234,13 +244,20 @@ export function buildGeometryMathProgramPieces(
   // Re-validate at the builder boundary as callers may be internal. Reusing
   // this single strict schema also validates persisted source on inspection.
   const program = geometryMathProgramSchema.parse(feature.program);
-  const parts: LocalPart[] = program.version === 5
+  const parts: LocalPart[] = program.version === 6
     ? realizeStructuredParts(
       program.parts.filter((part):
         part is GeometryMathConstructiblePart =>
         part.method !== "CONNECT"),
-      5
+      6
     )
+    : program.version === 5
+      ? realizeStructuredParts(
+        program.parts.filter((part):
+          part is GeometryMathConstructiblePart =>
+          part.method !== "CONNECT"),
+        5
+      )
     : program.version === 4
       ? realizeStructuredParts(program.parts, 4)
       : [...program.parts]
@@ -279,7 +296,7 @@ export function buildGeometryMathProgramPieces(
     }
   };
   // Check the ordinary source cohort BEFORE solving, for every version.
-  // V5 checks AGAIN after deriving connectors from solved parts. An
+  // V5+ checks AGAIN after deriving connectors from solved parts. An
   // over-budget instance/LOFT must not allocate connector voxel volumes.
   requireNativeBudget(parts);
 
@@ -309,7 +326,7 @@ export function buildGeometryMathProgramPieces(
     instance.id, instance.translation,
   ] as const));
 
-  if (program.version === 5) {
+  if (program.version === 5 || program.version === 6) {
     // A CONNECT references geometrically realized, ANCHOR-solved parts,
     // not arbitrary scene selections or an unverified bounding-box point.
     const sources = new Map<string, GeometryConnectorSource>();
@@ -336,10 +353,14 @@ export function buildGeometryMathProgramPieces(
     const connectors = program.parts.filter((part):
       part is GeometryMathConnectorPart =>
       part.method === "CONNECT"
-    ).sort((left, right) => compareSourceIds(left.id, right.id, 5));
+    ).sort((left, right) => compareSourceIds(
+      left.id, right.id, program.version
+    ));
     for (const connector of connectors) {
       try {
-        const boxes = buildMathConnector(connector, sources);
+        const boxes = buildMathConnector(
+          connector, sources, program.version
+        );
         const { min, max } = minMax(boxes);
         parts.push({
           id: connector.id,
@@ -353,12 +374,12 @@ export function buildGeometryMathProgramPieces(
         if (!(error instanceof Error)) throw error;
         throw new Error(
           error.message + " [part=" + connector.id +
-          ";method=CONNECT;math_version=5]",
+          ";method=CONNECT;math_version=" + program.version + "]",
           { cause: error }
         );
       }
     }
-    parts.sort((a, b) => compareSourceIds(a.id, b.id, 5));
+    parts.sort((a, b) => compareSourceIds(a.id, b.id, program.version));
     requireNativeBudget(parts);
   }
   const output: Pieces = { prototypes: [], patterns: [] };

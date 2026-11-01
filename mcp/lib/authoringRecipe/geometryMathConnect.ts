@@ -67,8 +67,13 @@ function within(point: RecipeVec3, box: {
 
 function resolveEndpoint(
   endpoint: ConnectorEndpoint,
-  sources: ReadonlyMap<string, GeometryConnectorSource>
-): { point: RecipeVec3; boxes: ReturnType<typeof sourceBoxes> } {
+  sources: ReadonlyMap<string, GeometryConnectorSource>,
+  version: 5 | 6
+): {
+  point: RecipeVec3;
+  boxes: ReturnType<typeof sourceBoxes>;
+  normal: RecipeVec3 | null;
+} {
   const source = sources.get(endpoint.part_id);
   if (!source) {
     throw new Error(
@@ -92,7 +97,42 @@ function resolveEndpoint(
       "GEOMETRY_MATH_CONNECT_ENDPOINT_NOT_ON_SOURCE: " + source.id
     );
   }
-  return { point, boxes };
+  if (version === 5) {
+    return { point, boxes, normal: null };
+  }
+  // V6 face-aware attachment must have ONE unambiguous outward normal
+  // and the endpoint must lie on that actual source Cuboid face.
+  const faces = endpoint.anchor.flatMap((a, index) =>
+    a === "CENTER" ? [] : [{
+      index, sign: a === "MAX" ? 1 : -1,
+    }]
+  );
+  if (faces.length !== 1) {
+    throw new Error(
+      "GEOMETRY_MATH_CONNECT_FACE_NORMAL_AMBIGUOUS: " + source.id
+    );
+  }
+  const { index: axis, sign } = faces[0]!;
+  if (Math.abs(endpoint.offset?.[axis] ?? 0) > EPSILON) {
+    throw new Error(
+      "GEOMETRY_MATH_CONNECT_NORMAL_OFFSET_UNSUPPORTED: " + source.id
+    );
+  }
+  const onActualFace = boxes.some(box =>
+    Math.abs(point[axis]! -
+      (sign > 0 ? box.to[axis]! : box.from[axis]!)) <= EPSILON &&
+    [0, 1, 2].every(i => i === axis ||
+      (point[i]! >= box.from[i]! - EPSILON &&
+       point[i]! <= box.to[i]! + EPSILON))
+  );
+  if (!onActualFace) {
+    throw new Error(
+      "GEOMETRY_MATH_CONNECT_SURFACE_FACE_MISSING: " + source.id
+    );
+  }
+  const normal: RecipeVec3 = [0, 0, 0];
+  normal[axis] = sign;
+  return { point, boxes, normal };
 }
 
 function connectedNativeVolume(
@@ -126,10 +166,11 @@ function connectedNativeVolume(
  */
 export function buildMathConnector(
   part: GeometryMathConnectorPart,
-  sources: ReadonlyMap<string, GeometryConnectorSource>
+  sources: ReadonlyMap<string, GeometryConnectorSource>,
+  version: 5 | 6 = 5
 ): MathCuboid[] {
-  const start = resolveEndpoint(part.start, sources);
-  const end = resolveEndpoint(part.end, sources);
+  const start = resolveEndpoint(part.start, sources, version);
+  const end = resolveEndpoint(part.end, sources, version);
   const separation = Math.hypot(...[0, 1, 2].map(axis =>
     end.point[axis]! - start.point[axis]!
   ));
@@ -150,6 +191,26 @@ export function buildMathConnector(
   }
   knots.push({ position: end.point, radius: part.radius[1] });
 
+  if (version === 6) {
+    // The outgoing path must depart the start's exposed outward face,
+    // then approach the end from outside its exposed face. This excludes
+    // connectors that secretly tunnel through the wrong side of a part.
+    const startVector = [0, 1, 2].map(i =>
+      knots[1]!.position[i]! - start.point[i]!
+    );
+    const endVector = [0, 1, 2].map(i =>
+      end.point[i]! - knots[knots.length - 2]!.position[i]!
+    );
+    const dot = (a: readonly number[], b: readonly number[]) =>
+      a.reduce((sum, value, axis) => sum + value * b[axis]!, 0);
+    if (dot(startVector, start.normal!) <= EPSILON ||
+      dot(endVector, end.normal!) >= -EPSILON) {
+      throw new Error(
+        "GEOMETRY_MATH_CONNECT_SURFACE_ORIENTATION_MISMATCH: " + part.id
+      );
+    }
+  }
+
   // The language schema is the authority for finite radii, monotonic
   // waypoint fractions and bounded knot count; the original SWEEP kernel
   // validates path degeneracy and preserves connected voxel occupancy.
@@ -161,7 +222,7 @@ export function buildMathConnector(
     knots,
     max_chord_error: part.max_chord_error,
   };
-  const boxes = sweepMathVolume(sweep, 5);
+  const boxes = sweepMathVolume(sweep, version);
   if (!connectedNativeVolume(boxes, start.boxes) ||
     !connectedNativeVolume(boxes, end.boxes)) {
     throw new Error(

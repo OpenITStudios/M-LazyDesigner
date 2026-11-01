@@ -704,6 +704,52 @@ negative signed repeats, invalid endpoints/loops, Cuboid budget;
 native Blockbench save/reopen/Undo, UV/export and visual reference.
 NO build/typecheck/unit tests/CI/native execution occurred.
 
+### R3r — Orthogonal part frames and exposed-face connector orientation (2026-11-02, CODE ONLY)
+
+Source-only review identified that v5 LOFT uses inclusive boundaries:
+a centred width-one section can occupy two voxel columns. Correcting
+v5 in place would silently recompile persisted Cuboid cohorts, so the
+strict new `program.version=6` is opt-in and its previous source
+versions stay untouched.
+
+One canonical pure helper `geometryMathOrthogonal.ts` applies 90-degree
+right-handed X/Y/Z quarter turns through signed coordinate swaps about
+the source-local part bounds centre. New `ORIENT` is an explicit
+source-owning INSTANCE-like operation with optional pre-rotation
+reflection, independent placement and existing Recipe LINEAR repeat.
+It reuses the same dependency DAG, ANCHOR solver, stable source identities,
+Cuboid validation, 64-native-instance budget and Recipe plan/apply/Undo.
+No native Cube rotation angles or negative scale are introduced.
+
+V6 LOFT uses half-open upper-boundary voxel-centre sampling. This
+removes double inclusion at exact opposing boundaries while preserving
+explicit unit-voxel approximation (not precise continuous-surface
+construction or proof of proportional fidelity). V5 retains the old
+inclusive-cell semantics and does not undergo implicit migration.
+
+V6 CONNECT uses the same previous endpoint schema but narrows its
+eligible semantics: exactly one MIN/MAX axis selects the outward
+normal of a real source Cuboid face; a normal-direction offset is
+rejected. Its first path tangent must depart outward and its final
+tangent must approach the target against its outward normal.
+Existing source-part solved positions, bounded SWEEP and positive-face/
+volume contact preflights remain authoritative. This is not a new
+automatic obstacle-aware path planner, Bone joint, UV transform or
+visual/reference acceptance.
+
+The new v6 program source stays in canonical
+`advanced_geometry_source`; no extra MCP Gateway tool, state store,
+workflow, generated API edit or plugin has been added. Registration
+of the internal `construct_geometry` remains generator-coupled.
+Code-only completion does not imply compile or native acceptance.
+
+Unexecuted future proof cases: v1–v5 exact reconstruction; each
+X/Y/Z quarter-turn, asymmetric reflected rotation, chained orientations,
+ANCHOR and signed-repeat; v5/v6 thin LOFT tie-break; exposed-face
+connector orientation, interior/corner rejection and waypoint tangents;
+64-Cube and valid Bedrock UV, Undo and export checks.
+No build/typecheck/tests/CI/native Blockbench/visual QA was run.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

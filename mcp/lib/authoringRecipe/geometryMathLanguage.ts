@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * Mathematical v1-v3 and instancing v4 are source-frozen. V5 adds
- * explicit LOFT/CONNECT methods without migrating existing Recipes.
+ * V1-v5 source semantics stay frozen. V6 adds opt-in orthogonal
+ * orientation and face-aware connector checks without migration.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -188,6 +188,34 @@ export const geometryMathPartV5Schema = z.union([
   geometryMathConnectorPartSchema,
 ]);
 
+
+/**
+ * V6: exact 90-degree axis-aligned orientation of source-local Cuboids.
+ * No new native rotation or arbitrary matrix/eval surface.
+ */
+export const geometryMathOrientedInstanceSchema = z.object({
+  ...partBase,
+  method: z.literal("ORIENT"),
+  source_part_id: id,
+  quarter_turn: z.object({
+    axis,
+    steps: z.number().int().min(1).max(3),
+  }).strict(),
+  reflect_axis: axis.optional(),
+  repeat: z.object({
+    axis,
+    count: z.number().int().min(2).max(16),
+    spacing: z.number().finite().min(-32).max(32).refine(
+      value => Math.abs(value) >= 1,
+      "Repeated instances require nonzero model-unit spacing."
+    ),
+  }).strict().optional(),
+}).strict();
+
+export const geometryMathPartV6Schema = z.union([
+  geometryMathPartV5Schema,
+  geometryMathOrientedInstanceSchema,
+]);
 const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
@@ -200,6 +228,10 @@ const programV5Fields = {
   ...programFields,
   parts: z.array(geometryMathPartV5Schema).min(1).max(8),
 };
+const programV6Fields = {
+  ...programFields,
+  parts: z.array(geometryMathPartV6Schema).min(1).max(8),
+};
 
 /**
  * The source version selects numerical semantics; it is never defaulted.
@@ -211,6 +243,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(3), ...programFields }).strict(),
   z.object({ version: z.literal(4), ...programV4Fields }).strict(),
   z.object({ version: z.literal(5), ...programV5Fields }).strict(),
+  z.object({ version: z.literal(6), ...programV6Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -232,7 +265,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   });
   if (program.version >= 4) {
     program.parts.forEach((part, index) => {
-      if (part.method !== "INSTANCE") return;
+      if (part.method !== "INSTANCE" && part.method !== "ORIENT") return;
       if (!known.has(part.source_part_id) ||
         part.source_part_id === part.id) {
         ctx.addIssue({
@@ -242,7 +275,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
-  if (program.version === 5) {
+  if (program.version >= 5) {
     const connectors = new Set(program.parts.filter(part =>
       part.method === "CONNECT"
     ).map(part => part.id));
@@ -253,7 +286,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       });
     }
     program.parts.forEach((part, index) => {
-      if (part.method === "INSTANCE" &&
+      if ((part.method === "INSTANCE" || part.method === "ORIENT") &&
         connectors.has(part.source_part_id)) {
         ctx.addIssue({
           code: "custom", path: ["parts", index, "source_part_id"],
@@ -286,6 +319,9 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
 export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
 export type GeometryMathPartV4 = z.infer<typeof geometryMathPartV4Schema>;
 export type GeometryMathPartV5 = z.infer<typeof geometryMathPartV5Schema>;
+export type GeometryMathPartV6 = z.infer<typeof geometryMathPartV6Schema>;
+export type GeometryMathOrientedInstance =
+  z.infer<typeof geometryMathOrientedInstanceSchema>;
 export type GeometryMathLoftPart = z.infer<typeof geometryMathLoftPartSchema>;
 export type GeometryMathConnectorPart = z.infer<typeof geometryMathConnectorPartSchema>;
 export type GeometryMathProgram = z.infer<typeof geometryMathProgramSchema>;
