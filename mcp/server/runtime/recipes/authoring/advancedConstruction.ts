@@ -8,17 +8,31 @@ import {
 } from "@/lib/authoringRecipe/geometryComposition";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import {
+  applyAuthoringRecipeIncrementalAtomic,
+} from "@/lib/authoringRecipe/transaction";
+import {
+  fingerprintAuthoringRecipeNativeSnapshot,
+} from "@/lib/authoringRecipe/nativeState";
+import {
+  parseAuthoringRecipeStore,
+  findAuthoringRecipeInStore,
+} from "@/lib/authoringRecipe/store";
+import {
+  createBlockbenchAuthoringRecipeApplyAdapter,
+  readBlockbenchAuthoringRecipeOwnedState,
+} from "./runtime";
+import { readAuthoringRecipeStoreProperty } from "./ownership";
+import {
   advancedGeometryNativeInputSchema,
   advancedGeometryApplyInputSchema,
 } from "@/lib/authoringRecipe/geometrySchema";
-import { getActiveMcpAuthoringStage, getMcpRuntimeSurface } from
+import { getActiveMcpAuthoringStage } from
   "@/lib/capabilities/authoringStage";
-import { getAllToolDefinitions, tools } from "@/lib/factories";
 
 /**
- * Native construction runs through the existing manage_cubes executor.
- * Its registered authoring-Stage surface, validation and Undo remain authority.
- * This adapter does not register a parallel MCP server or persist a plan store.
+ * Native construction runs through the canonical Authoring Recipe compiler
+ * and native Blockbench Undo adapter, including Project Recipe persistence.
+ * No second MCP server, Scene registry or parallel mutation engine is created.
  */
 const MAX_SINGLE_NATIVE_BATCH = 64;
 const MAX_SCENE_CUBES = 4096;
@@ -51,6 +65,8 @@ type AuthoredCube = {
 };
 
 type NativeConstructionPlan = {
+  recipe: AuthoringRecipe;
+  previous_recipe: AuthoringRecipe;
   elements: AuthoredCube[];
   summary: ReturnType<typeof buildAdvancedGeometryRecipeCandidate>["summary"];
 };
@@ -68,11 +84,9 @@ function requireBedrockProject(input: AdvancedNativeConstructionInput): Group {
     !Number.isSafeInteger(Undo.index)) {
     throw new Error("ADVANCED_GEOMETRY_NATIVE_EDIT_IN_PROGRESS");
   }
-  const stage = getActiveMcpAuthoringStage();
-  if (getMcpRuntimeSurface(stage) !== "AUTHORING" ||
-    tools.manage_cubes?.enabled !== true) {
+  if (getActiveMcpAuthoringStage() !== "geometry") {
     throw new Error(
-      "ADVANCED_GEOMETRY_AUTHORING_SURFACE_REQUIRED: use the existing stage handoff."
+      "ADVANCED_GEOMETRY_STAGE_REQUIRED: switch to the existing Geometry specialist."
     );
   }
   if (typeof Group === "undefined" || !Array.isArray(Group.all)) {
@@ -148,6 +162,7 @@ function sceneFingerprint(input: AdvancedNativeConstructionInput): string {
     project: Project.uuid,
     format: Format.id,
     target: target.uuid,
+    recipe_store: readAuthoringRecipeStoreProperty(Project) ?? "",
     box_uv: Project.box_uv,
     texture_width: Project.texture_width,
     texture_height: Project.texture_height,
@@ -164,9 +179,24 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
       "ADVANCED_GEOMETRY_CREATE_ONLY: use a separately verified Recipe revision to replace geometry."
     );
   }
+  // A cohort identity depends on the Project, native parent and semantic
+  // feature IDs, not their current dimensions. It is stable across revisions.
+  const recipe_id = "advgeo:" + createHash("sha256").update(JSON.stringify({
+    project_uuid: input.expected_project_uuid,
+    parent_group_uuid: input.parent_group_uuid,
+    features: input.features.map(feature => feature.id).sort(),
+  })).digest("hex").slice(0, 48);
+  const storedDocument = parseAuthoringRecipeStore(
+    readAuthoringRecipeStoreProperty(Project)
+  );
+  if (findAuthoringRecipeInStore(storedDocument, recipe_id)) {
+    throw new Error(
+      "ADVANCED_GEOMETRY_RECIPE_EXISTS: use the existing Recipe revision path, not create."
+    );
+  }
   const source: AuthoringRecipe = {
     schema: 1, compiler_version: 1,
-    id: "native-advanced-" + input.expected_project_uuid.slice(0, 36),
+    id: recipe_id,
     name: "Advanced geometry create candidate",
     prototypes: [], patterns: [],
   };
@@ -185,7 +215,7 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
     const feature_id = featureByPattern.get(placement.source_pattern_id);
     if (!feature_id) throw new Error("ADVANCED_GEOMETRY_FEATURE_OWNER_UNRESOLVED");
     return {
-      name: feature_id + "_" + placement.name,
+      name: placement.name,
       from: placement.from, to: placement.to,
       origin: placement.origin, rotation: placement.rotation,
       inflate: placement.inflate,
@@ -196,7 +226,12 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
   if (new Set(elements.map(element => element.name)).size !== elements.length) {
     throw new Error("ADVANCED_GEOMETRY_DUPLICATE_NATIVE_NAME");
   }
-  return { elements, summary: planned.summary };
+  return {
+    recipe: planned.next_recipe,
+    previous_recipe: source,
+    elements,
+    summary: planned.summary,
+  };
 }
 
 function boundPlan(
@@ -210,6 +245,7 @@ function boundPlan(
     parent_group_uuid: input.parent_group_uuid,
     scene_revision,
     features: input.features,
+    recipe_id: prepared.recipe.id,
     elements: prepared.elements,
   })).digest("hex");
   return { plan_id, scene_revision };
@@ -230,6 +266,7 @@ export function previewAdvancedGeometryNative(input: AdvancedNativeConstructionI
     parent_group_uuid: input.parent_group_uuid,
     ...plan,
     summary: prepared.summary,
+    recipe_id: prepared.recipe.id,
     cubes: prepared.elements,
     applied: false as const,
     reference_content_attested: false as const,
@@ -239,8 +276,8 @@ export function previewAdvancedGeometryNative(input: AdvancedNativeConstructionI
 
 /**
  * Recompute plan and compare a fresh scene snapshot before the only native
- * mutation. No attempt is made to retry after an uncertain successful call.
- * Retain the canonical executor's schema validation, UV checks and one Undo.
+ * mutation. Never retry an uncertain committed operation. Existing Recipe
+ * compiler, bounded store and native Undo own Cube creation and metadata.
  */
 export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInput) {
   const normalized = advancedGeometryApplyInputSchema.parse(input);
@@ -264,33 +301,31 @@ export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInp
       "ADVANCED_GEOMETRY_NATIVE_NAME_EXISTS: inspect current UUIDs before another create."
     );
   }
-  const executor = getAllToolDefinitions().manage_cubes;
-  if (!executor || typeof executor.execute !== "function") {
-    throw new Error("ADVANCED_GEOMETRY_NATIVE_EXECUTOR_UNAVAILABLE");
+  const beforeNative = readBlockbenchAuthoringRecipeOwnedState(prepared.recipe.id);
+  if (beforeNative.cubes.length !== 0) {
+    throw new Error(
+      "ADVANCED_GEOMETRY_EXISTING_RECIPE_OWNERSHIP: inspect before constructing."
+    );
   }
-  const candidate = {
-    operation: "create" as const,
-    group: group.uuid,
-    faces: true as const,
-    elements: prepared.elements.map(({ feature_id, instance_id, ...cube }) => cube),
-  };
-  const validated = executor.parameterSchema.parse(candidate);
-  // No await occurs between exact revision comparison and the authoritative
-  // native executor. The outer Runtime still serializes mutating invocations.
-  const native_receipt = await executor.execute(validated);
-  const detail = (native_receipt && typeof native_receipt === "object" &&
-    "structuredContent" in native_receipt)
-    ? native_receipt.structuredContent : null;
-  const execution = detail && typeof detail === "object" &&
-    "execution" in detail ? detail.execution : null;
+  // Reuse the ONE canonical parametric Recipe transaction, including its
+  // native Cube identity, scoped Undo and Undo-coherent Project Recipe source.
+  // No separate manage_cubes write or after-the-fact metadata stamping.
+  const native_receipt = await applyAuthoringRecipeIncrementalAtomic(
+    prepared.previous_recipe,
+    prepared.recipe,
+    fingerprintAuthoringRecipeNativeSnapshot(beforeNative),
+    createBlockbenchAuthoringRecipeApplyAdapter(prepared.recipe.id, group.uuid)
+  );
+  const execution = native_receipt.execution;
   // Never assume that returning a receipt proves visual/Bedrock acceptance.
   return {
     status: execution === "applied"
-      ? ("NATIVE_CREATE_REPORTED_VISUAL_UNVERIFIED" as const)
-      : ("NATIVE_RESULT_UNCERTAIN_DO_NOT_RETRY" as const),
+      ? ("RECIPE_NATIVE_APPLY_REPORTED_VISUAL_UNVERIFIED" as const)
+      : ("RECIPE_NATIVE_RESULT_UNCERTAIN_DO_NOT_RETRY" as const),
     project_uuid: input.expected_project_uuid,
     group_uuid: group.uuid,
     source_plan_id: current.plan_id,
+    recipe_id: prepared.recipe.id,
     summary: prepared.summary,
     source_instance_order: prepared.elements.map(element => ({
       feature_id: element.feature_id,

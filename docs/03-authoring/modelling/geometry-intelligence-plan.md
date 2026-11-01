@@ -269,10 +269,11 @@ these functions without a new public tool, listener, engine or UI.
 - Both demand the exact current Project UUID, Bedrock Entity format, and
   an existing parent Group UUID. Unknown/ambiguous parent and in-progress
   native Undo fail before mutation.
-- The same pure composition translates to bounded Cube placement requests
-  (maximum 64 in one atomic create). Native creation delegates to the
-  registered `manage_cubes(operation=create)` executor, preserving its
-  Cube/Box UV preflight, parent identity and native Undo owner.
+- The same pure composition produces a bounded Authoring Recipe (maximum
+  64 Cube instances per create). Native creation now invokes the existing
+  `applyAuthoringRecipeIncrementalAtomic` and its Blockbench adapter with
+  an exact parent Group UUID, preserving stable Recipe instance identity,
+  Cube/Box UV preflight and the one native Undo owner.
 - Source names are feature-scoped, and existing names under the target
   Group block uncertain create replay. No direct-edit or cross-session
   Recipe persistence is fabricated by this create-only adapter.
@@ -331,6 +332,23 @@ Older pure adapters may continue without this optional native hook.
 live Blockbench Undo/Redo, save/reopen or visual/export proof was run.
 This is not permission to publish the new `construct_geometry`
 capability without canonical generated API output.
+### R3f — Recipe-owned first creation under exact Group (2026-11-01; CODE ONLY)
+
+The internal create adapter no longer applies newly generated Cuboids
+through an untracked direct Cube call. It derives one stable Recipe ID
+from exact Project UUID, parent Group UUID and semantic feature IDs,
+refuses a conflicting saved Recipe, and uses the existing Recipe compiler
+and `applyAuthoringRecipeIncrementalAtomic` for source-owned creation.
+New Cuboids receive the exact Recipe instance ownership metadata and
+are inserted under the already-verified native parent Group UUID.
+Recipe-store preflight/commit is handled by R3e's canonical
+same-Undo native metadata bridge.
+
+The bounded scene and plan fingerprints remain mandatory. Future
+revisions use the existing stored-Recipe and affected-only planning;
+reusing the create operation for an existing Recipe refuses instead of
+silently overwriting any authored data. No separate project store or
+history is introduced, and no tests/native/visual evidence is claimed.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

@@ -146,7 +146,10 @@ function currentProjectRecipeStoreString(): string {
   return raw;
 }
 
-export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): AuthoringRecipeApplyAdapter {
+export function createBlockbenchAuthoringRecipeApplyAdapter(
+  recipeId: string,
+  createParentGroupUuid?: string
+): AuthoringRecipeApplyAdapter {
   let pendingStore: PendingRecipeStoreRevision | null = null;
   let created: Cube[] = [];
   let existingAtBegin: Cube[] = [];
@@ -206,6 +209,12 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
       };
     },
     preflightUpserts: (placements, before) => {
+      if (createParentGroupUuid !== undefined &&
+        (typeof Group === "undefined" ||
+          !Group.all.some(group => group.uuid === createParentGroupUuid &&
+            group.export !== false && group.visibility !== false))) {
+        throw new Error("RECIPE_NATIVE_CREATE_PARENT_REQUIRED");
+      }
       const byInstance = new Map(before.cubes.map((cube) => [cube.instance_id, cube]));
       for (const placement of placements) {
         validateCubeGeometrySpan(
@@ -261,6 +270,14 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
       if (recipeOwnedCubes(recipeId).some((cube) => readAuthoringRecipeCubeOwnership(cube)?.instance_id === placement.id)) {
         throw new Error("Parametric recipe create target already exists: " + placement.id + ".");
       }
+      const cubeParent = createParentGroupUuid === undefined
+        ? "root"
+        : (typeof Group !== "undefined" && Group.all.find(group =>
+            group.uuid === createParentGroupUuid && group.export !== false &&
+            group.visibility !== false));
+      if (!cubeParent) {
+        throw new Error("RECIPE_NATIVE_CREATE_PARENT_CHANGED");
+      }
       const cube = new Cube({
         autouv: 1,
         name: placement.name,
@@ -270,7 +287,7 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
         rotation: [...placement.rotation] as [number,number,number],
         inflate: placement.inflate,
       }).init();
-      cube.addTo("root");
+      cube.addTo(cubeParent);
       extendPlacement(cube,placement,recipeId);
       cube.mapAutoUV();
       created.push(cube);

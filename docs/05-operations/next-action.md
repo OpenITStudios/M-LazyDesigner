@@ -4,29 +4,32 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Primary next — Advanced Geometry CODE-FIRST (2026-11-01)
 
-**USER DECISION:** Code first, no tests or native QA until feature code
-is mature. Keep one LazyDesigner plugin/Recipe engine, the four Gateway
-tools and existing Blockbench-native Undo; no manual UI requirement.
+**USER DECISION:** Complete AI-first plugin code before tests.
+Do not run/write tests, Bun/CI, native QA or release. Preserve one
+LazyDesigner plugin, existing Gateway tools, Recipe engine and Undo.
 
-**R3a–R3d source:** Curve, Cuboid, Frame and Repeat Recipe composition;
-strict AI shape schema; internal `constructGeometry` plan/apply with
-exact Project/Group, source- and scene-revision checks; native create-only
-executor. No public AI `construct_geometry` tool registered yet.
+**R3a–R3d:** Geometry composition (Curve, Cuboid, Frame, Repeat),
+strict AI schema and internal `constructGeometry` plan/apply with
+Project/Group/scene revision binding. Public `construct_geometry`
+is not registered yet.
 
-**R3e source:** Existing Recipe transactions now preflight and serialize
-the Project's canonical Recipe store. On a native Cube commit, store
-before/after metadata is stamped on the same Blockbench Undo save;
-native undo/redo listeners reconcile only matching Project and source.
-Metadata-only native updates without attributable Undo fail closed.
-Cross-session Recipe store is still the existing ModelProject property.
+**R3e:** Project Recipe metadata source is preflighted and synchronized
+through the original native Undo/Redo history entry, with exact-source
+fail-closed checks and no second store.
 
-**PROOF:** Source-only code; no Bun/build/CI, tests, installed Blockbench,
-Undo/Redo execution, save/reopen, export or visual proof. CI disabled.
+**R3f:** Advanced native first create now uses the existing
+`applyAuthoringRecipeIncrementalAtomic` rather than an untracked Cube
+create. Stable Recipe ID is derived from Project/Group/feature IDs;
+new Cubes are Recipe-owned and attached to the exact parent Group.
+An existing Recipe must use revision planning, not a repeated create.
 
-**NEXT CODE:** Finish an AI-facing registered `construct_geometry`
-capability with canonical generated API artifacts in one coherent
-delivery. Keep the native transaction/metadata identity invariant.
-Do not hand-edit generated docs; no new tests until user reopens QA.
+**PROOF:** Source-only code, not tested or built. CI disabled; no
+installed Blockbench, save/reopen, Bedrock export or visual proof.
+
+**NEXT CODE:** Finish AI-facing `construct_geometry` registration with
+canonical generator-produced API docs in one complete delivery.
+Then expand safe stored-Recipe revision and multi-feature correction.
+No hand edits to generated docs. QA remains deferred.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

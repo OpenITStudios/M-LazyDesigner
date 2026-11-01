@@ -685,6 +685,22 @@ surface read-window protections remain in place.
 This closes two exact integration holes without any new checker, registry,
 Gateway route, native Apply transaction, or installed Blockbench claim.
 
+## Advanced Geometry creates canonical Recipe-owned Cubes (code only)
+
+The internal `advancedConstruction.ts` create path builds a deterministic
+Recipe from Project identity, parent Group UUID and semantic feature IDs.
+Creation of a second cohort with the same Recipe identity is refused;
+the stored-Recipe planning path owns later parametric revisions.
+The native adapter accepts an optional exact parent Group UUID for
+new Cubes while retaining the original root default for legacy callers.
+
+Advanced first creation now calls the existing
+`applyAuthoringRecipeIncrementalAtomic` with that parent-aware native
+adapter. This is the same native Undo and Project Recipe metadata
+transition described below; generated Cubes carry Recipe/instance IDs.
+No new runtime database, mutation framework or duplicate Cube engine is
+introduced. Public `construct_geometry` routing is still pending
+canonical generator-owned API documentation. No tests/QA were run.
 ## Project Recipe source persistence and native Undo coherence (code only)
 
 The canonical `AuthoringRecipeService` now supplies both previous and next
