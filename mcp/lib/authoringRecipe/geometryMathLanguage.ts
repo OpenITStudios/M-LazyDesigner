@@ -6,7 +6,8 @@ import { z } from "zod";
  * Cubes, persistence, native Project/Group affinity and Undo.
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
- * v1 is frozen: changes to raster/solver semantics require a new version.
+ * v1 is frozen: mathematically corrected constructions use v2 without
+ * silently changing any persisted v1 Recipe placements.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -88,11 +89,19 @@ export const geometryMathAnchorSchema = z.object({
  * derives the translation of the whole part using the canonical Recipe
  * ANCHOR solver. Different axes may use independent anchors if consistent.
  */
-export const geometryMathProgramSchema = z.object({
-  version: z.literal(1),
+const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
-}).strict().superRefine((program, ctx) => {
+};
+
+/**
+ * The source version selects numerical semantics; it is never defaulted.
+ * V1 remains readable/reconstructable after v2 correctness hardening.
+ */
+export const geometryMathProgramSchema = z.discriminatedUnion("version", [
+  z.object({ version: z.literal(1), ...programFields }).strict(),
+  z.object({ version: z.literal(2), ...programFields }).strict(),
+]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
     ctx.addIssue({ code: "custom", message: "Duplicate semantic part IDs.", path: ["parts"] });
@@ -115,4 +124,5 @@ export const geometryMathProgramSchema = z.object({
 
 export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
 export type GeometryMathProgram = z.infer<typeof geometryMathProgramSchema>;
+export type GeometryMathVersion = GeometryMathProgram["version"];
 export type GeometryMathAnchor = z.infer<typeof geometryMathAnchorSchema>;

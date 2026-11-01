@@ -1,5 +1,5 @@
 import type { RecipeVec3 } from "./contracts";
-import type { GeometryMathPart } from "./geometryMathLanguage";
+import type { GeometryMathPart, GeometryMathVersion } from "./geometryMathLanguage";
 import { partitionMathVoxelVolume, type MathCuboid } from "./geometryMathVoxel";
 
 type Extrusion = Extract<GeometryMathPart, { method: "EXTRUDE" }>;
@@ -109,11 +109,30 @@ function validateProfile(outer: Polygon, holes: readonly Polygon[]): void {
 function requireRasterHolesEnclosed(
   outer: Polygon,
   holes: readonly Polygon[],
-  uMin: number, vMin: number, width: number, height: number
+  uMin: number, vMin: number, width: number, height: number,
+  version: GeometryMathVersion
 ): void {
   const outside = new Uint8Array(width * height);
   const blank = new Uint8Array(width * height);
   const index = (x: number, y: number) => y * width + x;
+  // V1 preserves its original four-neighbour background connectivity.
+  // V2 pairs four-connected solids with an eight-connected background, so
+  // diagonal corner leaks are not silently treated as enclosed cavities.
+  const backgroundNeighbours = (cell: number): number[] => {
+    const x = cell % width, y = Math.floor(cell / width);
+    const neighbours: number[] = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        if (version === 1 && Math.abs(dx) + Math.abs(dy) !== 1) continue;
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+          neighbours.push(index(nx, ny));
+        }
+      }
+    }
+    return neighbours;
+  };
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const point: Point = [uMin + x + 0.5, vMin + y + 0.5];
@@ -134,20 +153,14 @@ function requireRasterHolesEnclosed(
   }
   for (let cursor = 0; cursor < queue.length; cursor++) {
     const cell = queue[cursor]!;
-    const x = cell % width, y = Math.floor(cell / width);
-    for (const next of [
-      x > 0 ? cell - 1 : -1,
-      x + 1 < width ? cell + 1 : -1,
-      y > 0 ? cell - width : -1,
-      y + 1 < height ? cell + width : -1,
-    ]) {
-      if (next < 0 || !blank[next] || outside[next]) continue;
+    for (const next of backgroundNeighbours(cell)) {
+      if (!blank[next] || outside[next]) continue;
       outside[next] = 1;
       queue.push(next);
     }
   }
-  // Label enclosed 4-neighbour void components, not just their size.
-  // Separate authored holes must remain separate after rasterization.
+  // Use the SAME versioned background topology for enclosed void labels.
+  // V2 rejects holes that are connected diagonally or leak at corners.
   const component = new Int16Array(width * height);
   let componentCount = 0;
   for (let cell = 0; cell < blank.length; cell++) {
@@ -157,14 +170,8 @@ function requireRasterHolesEnclosed(
     component[cell] = label;
     for (let cursor = 0; cursor < enclosed.length; cursor++) {
       const current = enclosed[cursor]!;
-      const x = current % width, y = Math.floor(current / width);
-      for (const next of [
-        x > 0 ? current - 1 : -1,
-        x + 1 < width ? current + 1 : -1,
-        y > 0 ? current - width : -1,
-        y + 1 < height ? current + width : -1,
-      ]) {
-        if (next < 0 || outside[next] || !blank[next] || component[next]) continue;
+      for (const next of backgroundNeighbours(current)) {
+        if (outside[next] || !blank[next] || component[next]) continue;
         component[next] = label;
         enclosed.push(next);
       }
@@ -199,7 +206,9 @@ function requireRasterHolesEnclosed(
   }
 }
 
-export function extrudeMathProfile(part: Extrusion): MathCuboid[] {
+export function extrudeMathProfile(
+  part: Extrusion, version: GeometryMathVersion
+): MathCuboid[] {
   const holes = part.holes ?? [];
   validateProfile(part.outline, holes);
   const uMin = Math.min(...part.outline.map(p => p[0]));
@@ -210,7 +219,9 @@ export function extrudeMathProfile(part: Extrusion): MathCuboid[] {
   if (width < 1 || height < 1 || width > 64 || height > 64) {
     throw new Error("GEOMETRY_MATH_PROFILE_BOUNDS_INVALID");
   }
-  requireRasterHolesEnclosed(part.outline, holes, uMin, vMin, width, height);
+  requireRasterHolesEnclosed(
+    part.outline, holes, uMin, vMin, width, height, version
+  );
   const axes = part.plane === "XY" ? [0, 1, 2] :
     part.plane === "XZ" ? [0, 2, 1] : [1, 2, 0];
   const [u, v, n] = axes;

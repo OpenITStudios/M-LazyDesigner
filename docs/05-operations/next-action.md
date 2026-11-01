@@ -7,11 +7,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 **USER DECISION:** Mature AI-first Geometry source; no tests,
 build/Bun, CI, native QA, release, separate plugin or mandatory UI.
 
-**R3a–R3l:** Prior 13 shapes remain compatible. New opt-in
-versioned Geometry Construction Language `kind=program` combines
-BOX/EXTRUDE/SWEEP/REVOLVE and reuses existing ANCHOR solver for
-up to eight semantic parts. Bounded connected voxel partition (64 native
-Cubes max), strict source/geometry ownership, no new engine/DB.
+**R3a–R3m:** Prior 13 shapes unchanged. Opt-in `kind=program`
+BOX/EXTRUDE/SWEEP/REVOLVE and existing ANCHOR solver. Math v1
+source reconstructions stay pinned; opt-in v2 corrects variable-radius
+SWEEP, rigorously bounds spline chord error, rejects diagonal hole leaks.
+Voxel conservation and original Recipe/Undo are retained; <=64 Cubes.
 
 **R3j:** Canonical Recipe v1 optionally persists original high-level
 `advanced_geometry_source` parameters per feature for AI editing
@@ -28,9 +28,9 @@ with generator-owned API docs. Do not hand-edit generated artifacts.
 **PROOF:** Source only. No tests/build/CI, native save/reopen,
 Bedrock export or visual QA; plugin deployment not claimed.
 
-**NEXT CODE:** Register existing `construct_geometry` Runtime feature
-and atomically generate canonical Bun API docs in a capable workspace;
-then reference-driven native correction and acceptance.
+**NEXT CODE:** Canonical `construct_geometry` Runtime registration +
+generator-owned API docs in a capable environment; then v1/v2 native
+roundtrip/Undo/export and reference-based visual correction.
 Do not invent an alternative registration/quality engine.
 ## GitHub boundary and historical local recovery
 

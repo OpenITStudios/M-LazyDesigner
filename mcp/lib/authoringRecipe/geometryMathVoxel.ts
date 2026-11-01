@@ -87,6 +87,7 @@ export function partitionMathVoxelVolume(
     return cells[i] === 1 && taken[i] === 0;
   };
   const boxes: MathCuboid[] = [];
+  let assignedCells = 0;
   for (let y = 0; y < ny; y++) {
     for (let z = 0; z < nz; z++) {
       for (let x = 0; x < nx; x++) {
@@ -118,6 +119,9 @@ export function partitionMathVoxelVolume(
             for (let xx = x; xx < endX; xx++) taken[offset(xx, yy, zz)] = 1;
           }
         }
+        // Conservation is a structural invariant, not a visual quality
+        // score. Every occupied cell belongs to exactly one disjoint box.
+        assignedCells += (endX - x) * (endY - y) * (endZ - z);
         const from: RecipeVec3 = [
           low[0] + x, low[1] + y, low[2] + z,
         ];
@@ -137,6 +141,11 @@ export function partitionMathVoxelVolume(
         }
       }
     }
+  }
+  if (assignedCells !== count) {
+    throw new Error(
+      "GEOMETRY_MATH_VOXEL_VOLUME_NOT_CONSERVED: partition lost or duplicated occupied cells."
+    );
   }
   return boxes;
 }

@@ -513,6 +513,44 @@ the canonical Bun-generated API contract can be updated atomically.
 Tests/CI/build, native save/reopen/Undo and reference/Bedrock visual
 verification were NOT executed.
 
+### R3m — Mathematics hardening before executable QA (2026-11-02; SOURCE ONLY)
+
+Audit found a real variable-radius SWEEP error: comparing the distance
+to the nearest point on a centerline against the radius *at that nearest
+point* is not the union of variable-radius spheres. E.g. the point
+`(0,2,0)` relative to a segment with centerline `(0,0,0)`→`(2,0,0)`
+and radii `1→3` lies inside the second sphere but is discarded by the
+old nearest-point method. The new v2 method minimizes the quadratic
+distance-minus-radius-squared over the complete segment.
+
+A cubic spline's midpoint/quarter-sample deviations are not rigorous
+worst-case bounds. V2 recovers four cubic Bézier controls from the
+centripetal Catmull–Rom segment and bounds the entire curve's distance
+to its chord with control-point-to-segment distances. Bound exhaustion
+fails closed; the result remains a bounded piecewise-Cube approximation.
+
+Profile hollows previously used four-neighbour void connectivity, which
+can overlook diagonal corner leakage. V2 pairs four-connected occupied
+profile cells with eight-connected background and requires holes to stay
+distinct, enclosed and represented. Native 3D voxel partition now checks
+exact occupied-cell conservation as a structural invariant, not a
+reference or visual-quality score.
+
+**Recipe compatibility:** `geometryMathProgramSchema` now has an exact,
+mandatory `version: 1 | 2`. V1 compiler semantics are preserved for
+existing persisted `advanced_geometry_source` values; new, corrected
+mathematics are opt-in as v2. No in-place migration, default-version
+substitution, second Recipe compiler, GPU/mesh source, additional Gateway
+route, or new native mutation path is introduced.
+
+**Future executable proof matrix** (NOT EXECUTED here): v1 byte/placement
+equivalence; v2 radius-endpoint counterexample; symmetric linear path;
+high-curvature/S-cubic error tolerance; diagonal leak and multi-hole
+preservation; deterministic voxel conservation; source/Recipe round-trip;
+ANCHOR conflict/cycle; native UV/Undo/save/reopen and Bedrock export.
+Do not claim that these pending checks or a source-only audit imply
+runtime/native or visual acceptance.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

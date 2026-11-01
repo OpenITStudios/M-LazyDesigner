@@ -9,6 +9,7 @@ import type { AdvancedGeometryFeature } from "./geometrySchema";
 import {
   geometryMathProgramSchema,
   type GeometryMathPart,
+  type GeometryMathVersion,
 } from "./geometryMathLanguage";
 import { MATH_PROGRAM_MAX_CUBOIDS,
   type MathCuboid } from "./geometryMathVoxel";
@@ -40,7 +41,9 @@ type LocalPart = {
   max: RecipeVec3;
 };
 
-function realizePart(part: GeometryMathPart): MathCuboid[] {
+function realizePart(
+  part: GeometryMathPart, version: GeometryMathVersion
+): MathCuboid[] {
   if (part.method === "BOX") {
     const half = part.size.map(value => value / 2) as RecipeVec3;
     return [{
@@ -49,8 +52,8 @@ function realizePart(part: GeometryMathPart): MathCuboid[] {
       to: half,
     }];
   }
-  if (part.method === "EXTRUDE") return extrudeMathProfile(part);
-  if (part.method === "SWEEP") return sweepMathVolume(part);
+  if (part.method === "EXTRUDE") return extrudeMathProfile(part, version);
+  if (part.method === "SWEEP") return sweepMathVolume(part, version);
   if (part.method === "REVOLVE") return revolveMathProfile(part);
   // The union exhausts its known methods. Never silently choose a fallback.
   throw new Error("GEOMETRY_MATH_UNSUPPORTED_METHOD");
@@ -99,7 +102,7 @@ export function buildGeometryMathProgramPieces(
   const parts: LocalPart[] = [...program.parts]
     .sort((left, right) => left.id.localeCompare(right.id))
     .map(part => {
-      const boxes = realizePart(part);
+      const boxes = realizePart(part, program.version);
       const { min, max } = minMax(boxes);
       return {
         id: part.id,

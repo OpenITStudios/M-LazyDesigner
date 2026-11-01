@@ -305,6 +305,42 @@ new public MCP tool or visual/export PASS is implied. Public
 `construct_geometry` and its canonical generated API/docs remain
 unregistered. Bun/native/tests/CI/visual proof NOT EXECUTED.
 
+### R3m — Mathematical correctness and source-compatibility audit (source only)
+
+The Geometry Construction Language now accepts `program.version=1|2`.
+**V1 is retained for stored Recipe reconstruction**: its historical
+nearest-point variable-radius SWEEP approximation, quarter-sample cubic
+error heuristic and four-neighbour profile void connectivity remain
+selectable only by the explicit persisted version. No saved source,
+Cuboid IDs or other R3a–R3k shape constructors are migrated implicitly.
+
+**V2 fixes correctness** without adding object presets, a new registry,
+public tool or native engine:
+
+- SWEEP occupancy minimizes the exact quadratic
+  `|p-(a+t*d)|² - (r0+t*(r1-r0))²` over `t ∈ [0,1]`, instead of
+  treating the radius at the Euclidean nearest chord point as correct.
+- Centripetal cubic segments use a conservative chord deviation bound
+  derived from their four cubic Bézier controls. Uniform linear knot
+  radius remains explicit; no automatic cross-section twist or mesh.
+- EXTRUDE uses eight-connected empty-space checks against
+  four-connected occupied raster profiles, rejecting diagonal hole leaks.
+- The shared bounded 3D greedy partition explicitly checks occupied
+  voxel-count conservation and rejects uncertain volume.
+
+The candidate volume is still a one-unit voxel approximation and
+native Blockbench Cuboid scene quality is **NOT visually attested**.
+The profile and source handles are claims, not verified reference images.
+The exact-version plan/apply and Recipe Store remain the sole mutation and
+persistence owners; public `construct_geometry` registration still needs
+canonical Bun-generated docs.
+
+Next evidence (NOT YET EXECUTED): compare exact v1 native placements
+against pre-audit source, then v2 positive/negative cases for varying
+radius, curve deviations, diagonal void leakage, multiple holes, volume
+conservation, ANCHOR conflicts, UV safety, Undo and save/reopen. Never
+mistake source review or presence of these criteria for a passed test.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
