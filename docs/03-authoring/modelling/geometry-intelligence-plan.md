@@ -659,6 +659,51 @@ bounds, nested ordinary instance chains, missing/cyclic references,
 unreferencable repeated source, and 64-Cube expanded-budget overflow;
 then native save/Undo/texture/export and exact v1–v3 compatibility.
 
+### R3q — Profile-based LOFT and semantic CONNECT (2026-11-02; SOURCE ONLY)
+
+The canonical Geometry Construction Language gained opt-in
+`program.version=5` for two complementary construction classes
+without a new manager, renderer, mutation engine, database or tool.
+
+`LOFT` receives 2–12 explicit axis-aligned rectangular sections
+with relative axial height, perpendicular centre and cross-section
+dimensions. A pure module `geometryMathLoft.ts` interpolates
+piecewise-linear profiles and uses existing connected voxel partition
+to native Cuboids. Voxel resolution is exactly one model unit;
+unrepresented axial layers, broken solids and limits fail before Undo.
+This cannot provide a smooth mesh or infer unsupported reference depth.
+
+`CONNECT` references two existing non-CONNECT semantic parts rather
+than independently guessing world coordinates. The original Recipe
+ANCHOR solver positions ordinary/INSTANCE/LOFT sources first. A new
+pure `geometryMathConnect.ts` then computes explicit bbox anchors,
+optional offsets and source-local native Cuboid contact; converts the
+declared endpoints and up to four ordered fractional waypoints to the
+existing `sweepMathVolume`; and requires actual generated
+face-area/interior contact with both source cohorts. This guarantees
+only a bounded structural relationship, never reference fidelity,
+rig attachment, Texture UV mirroring or visual PASS.
+
+CONNECT is intentionally excluded from the ordinary ANCHOR dependency
+solver, CONNECT-to-CONNECT graph and INSTANCE source. Source pointers
+to a repeated part account for actual signed LINEAR positions.
+One total 64-native-Cuboid budget includes the derived connectors and
+expanded repeated copies. Part IDs, feature ownership and existing
+canonical Recipe source/Undo remain unchanged.
+
+Old versions 1–4 do not accept LOFT/CONNECT, nor are their
+algorithms, generated IDs or persistence silently migrated. The
+existing public Gateway stays four tools and internal
+`construct_geometry` remains UNREGISTERED pending atomically
+generator-owned Bun API/docs, not manually authored snapshots.
+
+Deferred acceptance, NOT EXECUTED under user CODE-FIRST policy:
+v1–v4 saved-source identity, LOFT taper/offset and axial-loss cases;
+BOX/LOFT/INSTANCE connector contact, empty bounding-box corner;
+negative signed repeats, invalid endpoints/loops, Cuboid budget;
+native Blockbench save/reopen/Undo, UV/export and visual reference.
+NO build/typecheck/unit tests/CI/native execution occurred.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

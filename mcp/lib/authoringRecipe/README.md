@@ -442,6 +442,61 @@ save/reopen/export and reference/visual QA were NOT EXECUTED.
 Public `construct_geometry` remains unregistered until generated
 API/docs and Runtime registration can be authored atomically.
 
+### R3q — Explicit v5 LOFT + CONNECT composition (code only)
+
+Geometry Construction Language now accepts `program.version=5`.
+Existing versions 1–4 and the 13 pre-existing shapes retain their
+original semantics, source IDs and Recipe reconstruction. V5 is inside
+the *same* `kind:"program"`, not a new MCP tool or persistence owner.
+
+- `LOFT`: supply X/Y/Z axis and ordered profile stations
+  `{height, center:[u,v], size:[width,depth]}`. Local cross-sections
+  are interpolated piecewise linearly, then realized as connected,
+  bounded native Cuboids by the original 3D voxel partition. Lost
+  axial layers, disconnected bodies and oversized sources fail closed.
+  This is voxel approximation, not a free-surface mesh.
+- `CONNECT`: name two existing semantic parts and explicit
+  MIN/CENTER/MAX bounding-box face anchors, endpoint radii,
+  interpolation and optional ordered fractional-offset waypoints.
+  Solve the ordinary source parts with the existing Recipe ANCHOR
+  solver first. Then evaluate each endpoint against actual source
+  Cuboid volume, derive a path and invoke the ORIGINAL SWEEP kernel
+  for variable-radius, native-Cuboid construction. The connector
+  must also have face-area or volume contact with each source:
+  empty bounding-box corners cannot authorize phantom connections.
+- Source instances and signed canonical LINEAR repetitions remain
+  available to `LOFT`/ordinary parts, with repeated source envelope
+  and actual members reflected in connector contact checks.
+  `CONNECT` is derived output: it is NOT a valid source for
+  INSTANCE, a downstream CONNECT, or ordinary Recipe ANCHOR.
+  This is a deliberate current solver boundary, not guessed support.
+
+One optional semantic source for straight assembly:
+```json
+{
+  "version":5,
+  "parts":[
+    {"id":"left","method":"BOX","at":[0,0,0],"size":[4,4,4]},
+    {"id":"right","method":"INSTANCE","source_part_id":"left","at":[10,0,0]},
+    {"id":"brace","method":"CONNECT",
+     "start":{"part_id":"left","anchor":["MAX","CENTER","CENTER"]},
+     "end":{"part_id":"right","anchor":["MIN","CENTER","CENTER"]},
+     "radius":[1,1],"interpolation":"LINEAR","max_chord_error":0.5}
+  ]
+}
+```
+
+V5 source remains in original `advanced_geometry_source`; total
+expanded program output stays within 64 native Cuboids and existing
+Recipe plan/apply, parent identity, source freshness and Undo.
+Source reference handles are not image attestation, and geometric
+contact is not visual, Bone, UV or export approval.
+
+NO Bun, TypeScript, build, tests, CI, native Blockbench or visual QA
+were executed. Public `construct_geometry` registration remains
+deferred until canonical Bun generator-owned API docs can be authored
+atomically with it.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

@@ -10,6 +10,8 @@ import {
   geometryMathProgramSchema,
   type GeometryMathPart,
   type GeometryMathPartV4,
+  type GeometryMathPartV5,
+  type GeometryMathConnectorPart,
   type GeometryMathVersion,
 } from "./geometryMathLanguage";
 import { MATH_PROGRAM_MAX_CUBOIDS,
@@ -17,6 +19,11 @@ import { MATH_PROGRAM_MAX_CUBOIDS,
 import { extrudeMathProfile } from "./geometryMathProfile";
 import { sweepMathVolume } from "./geometryMathSweep";
 import { revolveMathProfile } from "./geometryMathRevolve";
+import { loftMathVolume } from "./geometryMathLoft";
+import {
+  buildMathConnector,
+  type GeometryConnectorSource,
+} from "./geometryMathConnect";
 import { solveRecipeConstraints } from "./constraints";
 
 /**
@@ -37,6 +44,9 @@ type BoxFactory = (
 type InstanceRepeat = NonNullable<Extract<
   GeometryMathPartV4, { method: "INSTANCE" }
 >["repeat"]>;
+type GeometryMathConstructiblePart = Exclude<
+  GeometryMathPartV5, { method: "CONNECT" }
+>;
 type LocalPart = {
   id: string;
   at: RecipeVec3;
@@ -111,7 +121,7 @@ function canonicalConstraints(
 }
 
 /**
- * Structural instancing is an opt-in v4 source operation, not a second
+ * Structural instancing (v4+) is a source operation, not a second
  * native Recipe engine. A referenced part is resolved once (including
  * its own INSTANCE dependencies), then its immutable local geometry is
  * reused by value under a new semantic part ID and independent placement.
@@ -120,7 +130,10 @@ function canonicalConstraints(
  * axis-aligned native Cuboid spans. No source 'at', Group, UV mirroring,
  * Bone/pivot or animation data is inherited or manufactured.
  */
-function realizeV4Parts(parts: readonly GeometryMathPartV4[]): LocalPart[] {
+function realizeStructuredParts(
+  parts: readonly GeometryMathConstructiblePart[],
+  version: 4 | 5
+): LocalPart[] {
   const definitions = new Map(parts.map(part => [part.id, part] as const));
   const completed = new Map<string, LocalPart>();
   const visiting = new Set<string>();
@@ -171,8 +184,10 @@ function realizeV4Parts(parts: readonly GeometryMathPartV4[]): LocalPart[] {
           }
           return { id: box.id, from, to };
         });
+      } else if (definition.method === "LOFT") {
+        boxes = loftMathVolume(definition);
       } else {
-        boxes = realizePart(definition, 4);
+        boxes = realizePart(definition, version);
       }
       const { min, max } = minMax(boxes);
       if (repeat !== undefined) {
@@ -200,7 +215,7 @@ function realizeV4Parts(parts: readonly GeometryMathPartV4[]): LocalPart[] {
       if (!(error instanceof Error)) throw error;
       throw new Error(
         error.message + " [part=" + definition.id +
-        ";method=" + definition.method + ";math_version=4]",
+        ";method=" + definition.method + ";math_version=" + version + "]",
         { cause: error }
       );
     } finally {
@@ -209,7 +224,7 @@ function realizeV4Parts(parts: readonly GeometryMathPartV4[]): LocalPart[] {
   };
 
   return [...parts]
-    .sort((a, b) => compareSourceIds(a.id, b.id, 4))
+    .sort((a, b) => compareSourceIds(a.id, b.id, version))
     .map(part => resolve(part.id));
 }
 
@@ -219,41 +234,54 @@ export function buildGeometryMathProgramPieces(
   // Re-validate at the builder boundary as callers may be internal. Reusing
   // this single strict schema also validates persisted source on inspection.
   const program = geometryMathProgramSchema.parse(feature.program);
-  const parts: LocalPart[] = program.version === 4
-    ? realizeV4Parts(program.parts)
-    : [...program.parts]
-      .sort((left, right) => compareSourceIds(
-        left.id, right.id, program.version
-      ))
-      .map(part => {
-        try {
-          const boxes = realizePart(part, program.version);
-          const { min, max } = minMax(boxes);
-          return {
-            id: part.id,
-            at: [...part.at] as RecipeVec3,
-            boxes, min, max,
-          };
-        } catch (error) {
-          // Keep exact v1/v2 errors and v3 part identity unchanged.
-          if (program.version !== 3 || !(error instanceof Error)) throw error;
-          throw new Error(
-            error.message + " [part=" + part.id +
-            ";method=" + part.method + ";math_version=3]",
-            { cause: error }
-          );
-        }
-      });
+  const parts: LocalPart[] = program.version === 5
+    ? realizeStructuredParts(
+      program.parts.filter((part):
+        part is GeometryMathConstructiblePart =>
+        part.method !== "CONNECT"),
+      5
+    )
+    : program.version === 4
+      ? realizeStructuredParts(program.parts, 4)
+      : [...program.parts]
+        .sort((left, right) => compareSourceIds(
+          left.id, right.id, program.version
+        ))
+        .map(part => {
+          try {
+            const boxes = realizePart(part, program.version);
+            const { min, max } = minMax(boxes);
+            return {
+              id: part.id,
+              at: [...part.at] as RecipeVec3,
+              boxes, min, max,
+            };
+          } catch (error) {
+            // Keep exact v1/v2 errors and v3 part identity unchanged.
+            if (program.version !== 3 || !(error instanceof Error)) throw error;
+            throw new Error(
+              error.message + " [part=" + part.id +
+              ";method=" + part.method + ";math_version=3]",
+              { cause: error }
+            );
+          }
+        });
 
-  const count = parts.reduce((sum, part) =>
-    sum + part.boxes.length * (part.repeat?.count ?? 1), 0
-  );
-  if (count < 1 || count > MATH_PROGRAM_MAX_CUBOIDS) {
-    throw new Error(
-      "GEOMETRY_MATH_PROGRAM_NATIVE_BUDGET: " +
-      "combine fewer details or simplify the source, max 64 Cuboids."
+  const requireNativeBudget = (scope: readonly LocalPart[]): void => {
+    const count = scope.reduce((sum, part) =>
+      sum + part.boxes.length * (part.repeat?.count ?? 1), 0
     );
-  }
+    if (count < 1 || count > MATH_PROGRAM_MAX_CUBOIDS) {
+      throw new Error(
+        "GEOMETRY_MATH_PROGRAM_NATIVE_BUDGET: " +
+        "combine fewer details or simplify the source, max 64 Cuboids."
+      );
+    }
+  };
+  // Check the ordinary source cohort BEFORE solving, for every version.
+  // V5 checks AGAIN after deriving connectors from solved parts. An
+  // over-budget instance/LOFT must not allocate connector voxel volumes.
+  requireNativeBudget(parts);
 
   // A semantic part is represented temporarily by its full axis-aligned
   // bounds. The existing Recipe ANCHOR solver then solves the dependency
@@ -280,6 +308,59 @@ export function buildGeometryMathProgramPieces(
   const byId = new Map(solved.map(instance => [
     instance.id, instance.translation,
   ] as const));
+
+  if (program.version === 5) {
+    // A CONNECT references geometrically realized, ANCHOR-solved parts,
+    // not arbitrary scene selections or an unverified bounding-box point.
+    const sources = new Map<string, GeometryConnectorSource>();
+    for (const part of parts) {
+      const worldMin = byId.get(part.id);
+      if (!worldMin) {
+        throw new Error("GEOMETRY_MATH_CONNECT_SOURCE_UNSOLVED: " + part.id);
+      }
+      const translation: RecipeVec3 = [0, 1, 2].map(axis =>
+        worldMin[axis]! - part.min[axis]!
+      ) as RecipeVec3;
+      const worldMax: RecipeVec3 = [0, 1, 2].map(axis =>
+        worldMin[axis]! + part.max[axis]! - part.min[axis]!
+      ) as RecipeVec3;
+      sources.set(part.id, {
+        id: part.id,
+        world_min: [...worldMin] as RecipeVec3,
+        world_max: worldMax,
+        translation,
+        local_boxes: part.boxes,
+        ...(part.repeat ? { repeat: part.repeat } : {}),
+      });
+    }
+    const connectors = program.parts.filter((part):
+      part is GeometryMathConnectorPart =>
+      part.method === "CONNECT"
+    ).sort((left, right) => compareSourceIds(left.id, right.id, 5));
+    for (const connector of connectors) {
+      try {
+        const boxes = buildMathConnector(connector, sources);
+        const { min, max } = minMax(boxes);
+        parts.push({
+          id: connector.id,
+          at: [0, 0, 0],
+          boxes, min, max,
+        });
+        // The connector has already been realized in solved model-space.
+        // Its own anchor is unavailable by schema; no secondary solver.
+        byId.set(connector.id, [...min] as RecipeVec3);
+      } catch (error) {
+        if (!(error instanceof Error)) throw error;
+        throw new Error(
+          error.message + " [part=" + connector.id +
+          ";method=CONNECT;math_version=5]",
+          { cause: error }
+        );
+      }
+    }
+    parts.sort((a, b) => compareSourceIds(a.id, b.id, 5));
+    requireNativeBudget(parts);
+  }
   const output: Pieces = { prototypes: [], patterns: [] };
 
   for (const part of parts) {
