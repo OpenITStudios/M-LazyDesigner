@@ -307,6 +307,30 @@ Per explicit user instruction no test files, generators, Bun/CI, build,
 Blockbench execution, export or visual acceptance were performed.
 Public `construct_geometry` registration/docs must remain atomic with
 canonical generator-owned API output. Do not hand-edit derived docs.
+### R3e — Same-native-Undo Recipe source persistence (2026-11-01; CODE ONLY)
+
+The existing Recipe transaction now passes exact previous/next Recipe
+source revisions to its canonical Blockbench apply adapter. Before
+opening Undo, the native adapter compares the Project's stored Recipe
+against the previous source and pre-serializes the next document using
+the existing bounded Recipe store. No second Recipe registry is added.
+
+At commit, both before/after Project Recipe metadata are attached to the
+same native `Undo.current_save` that owns the Cube changes. Its history
+entry is the sole undo authority. Existing plugin ownership setup
+registers Blockbench undo/redo listeners to reconcile that metadata
+only for exact Project identity and expected source bytes; unload
+removes listeners. Cancel/revert also protect the current source.
+
+Native geometry changing without an available metadata listener, a
+missing/stale previous Recipe, or an unsupported metadata-only change
+fails closed rather than silently desynchronizing authoring state.
+Older pure adapters may continue without this optional native hook.
+
+**Proof ceiling:** code authored only. No Bun, TS build, tests,
+live Blockbench Undo/Redo, save/reopen or visual/export proof was run.
+This is not permission to publish the new `construct_geometry`
+capability without canonical generated API output.
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

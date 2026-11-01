@@ -18,6 +18,13 @@ export type RecipeNativeUndoProvenance = {
 
 export type AuthoringRecipeApplyAdapter = {
   readOwned(recipeId: string): Promise<AuthoringRecipeNativeSnapshot> | AuthoringRecipeNativeSnapshot;
+  /**
+   * Validate the current canonical Project Recipe source and pre-serialize
+   * its exact next revision before starting a native Cube/Undo transaction.
+   * Optional so non-Blockbench adapters keep the original contract.
+   */
+  preflightRecipeSource?(previousRecipe: AuthoringRecipe, nextRecipe: AuthoringRecipe):
+    Promise<void> | void;
   /** Read-only, all-upsert preflight; must complete before native Undo. */
   preflightUpserts?(
     placements: readonly CompiledCubePlacement[],
@@ -44,6 +51,8 @@ export type AuthoringRecipeApplyAdapter = {
     recipe_id: string;
     native_source_fingerprint_before: string;
     native_source_fingerprint_after: string;
+    previous_recipe: AuthoringRecipe;
+    next_recipe: AuthoringRecipe;
   }): Promise<RecipeNativeUndoProvenance | void> | RecipeNativeUndoProvenance | void;
   cancelUndo?(): Promise<void> | void;
   /** Exact-top native edit only. Implemented by the Blockbench adapter. */
@@ -94,6 +103,14 @@ export async function applyAuthoringRecipeIncrementalAtomic(
   }
   assertAuthoringRecipeNativeMatchesCompiled(before,previousRecipe);
 
+  if (rebuild.metrics.native_affected_count === 0 &&
+    rebuild.previous_recipe_fingerprint !== rebuild.next_recipe_fingerprint &&
+    adapter.preflightRecipeSource) {
+    // Project custom properties are not themselves part of native Undo.
+    // Do not update persisted Recipe metadata without an attributable native
+    // transaction. Legacy pure adapters retain their historical behavior.
+    throw new Error("RECIPE_METADATA_ONLY_NATIVE_UNDO_REQUIRED");
+  }
   if (rebuild.metrics.native_affected_count === 0) {
     const semanticChanged =
       rebuild.metadata_only_instance_ids.length > 0 ||
@@ -130,6 +147,7 @@ export async function applyAuthoringRecipeIncrementalAtomic(
   ])].sort();
   const created: string[] = [];
   const updated: string[] = [];
+  await adapter.preflightRecipeSource?.(previousRecipe, nextRecipe);
   if (adapter.preflightUpserts) {
     await adapter.preflightUpserts(rebuild.upserts, structuredClone(before));
     const checked = await adapter.readOwned(previousRecipe.id);
@@ -199,6 +217,8 @@ export async function applyAuthoringRecipeIncrementalAtomic(
       recipe_id: nextRecipe.id,
       native_source_fingerprint_before: actualBeforeFingerprint,
       native_source_fingerprint_after: afterFingerprint,
+      previous_recipe: previousRecipe,
+      next_recipe: nextRecipe,
     });
     if (provenance) receipt.native_undo_provenance = provenance;
     return receipt;

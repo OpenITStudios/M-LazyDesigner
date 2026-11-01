@@ -4,33 +4,29 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 
 ## Primary next — Advanced Geometry CODE-FIRST (2026-11-01)
 
-**USER DECISION:** Complete AI-first plugin code before tests. Do not
-run/edit tests, Bun/CI, native QA or release. Preserve one plugin,
-existing Gateway four-tool public surface, Recipe engine and Undo.
+**USER DECISION:** Code first, no tests or native QA until feature code
+is mature. Keep one LazyDesigner plugin/Recipe engine, the four Gateway
+tools and existing Blockbench-native Undo; no manual UI requirement.
 
-**R3a–R3c source:** Planar Curve/Taper + Cuboid, Frame, Repeat,
-Geometry composition and internal Blockbench create adapter reuse
-the existing Recipe compiler and `manage_cubes(create)` executor.
+**R3a–R3d source:** Curve, Cuboid, Frame and Repeat Recipe composition;
+strict AI shape schema; internal `constructGeometry` plan/apply with
+exact Project/Group, source- and scene-revision checks; native create-only
+executor. No public AI `construct_geometry` tool registered yet.
 
-**R3d source:** New `geometrySchema.ts` declares strict AI inputs.
-Internal `constructGeometry` dispatches plan/apply. Plan returns a
-SHA-256 handle tied to the parsed features and native scene revision;
-apply rechecks Project, Group, Stage, Undo and scene before a single
-native batch. Stale or ambiguous results never trigger auto-retry.
+**R3e source:** Existing Recipe transactions now preflight and serialize
+the Project's canonical Recipe store. On a native Cube commit, store
+before/after metadata is stamped on the same Blockbench Undo save;
+native undo/redo listeners reconcile only matching Project and source.
+Metadata-only native updates without attributable Undo fail closed.
+Cross-session Recipe store is still the existing ModelProject property.
 
-**CURRENT LIMIT:** This path is create-only. Public
-`construct_geometry` is not yet registered, because generator-owned
-API docs and registration must be delivered together. Parametric
-edit/revision needs Undo-consistent Recipe persistence (Blockbench
-does not natively snapshot every Project custom property).
+**PROOF:** Source-only code; no Bun/build/CI, tests, installed Blockbench,
+Undo/Redo execution, save/reopen, export or visual proof. CI disabled.
 
-**PROOF:** Source authored only. No tests, build/typecheck, Bun/CI,
-native save/reopen, Bedrock export or visual acceptance executed.
-
-**NEXT (CODE):** Complete canonical AI Runtime registration and
-generated artifact ownership together; design transactional
-Recipe metadata persistence and safe edit of feature cohorts.
-QA remains postponed until user explicitly reopens validation.
+**NEXT CODE:** Finish an AI-facing registered `construct_geometry`
+capability with canonical generated API artifacts in one coherent
+delivery. Keep the native transaction/metadata identity invariant.
+Do not hand-edit generated docs; no new tests until user reopens QA.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

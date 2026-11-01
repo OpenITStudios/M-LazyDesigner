@@ -7,6 +7,13 @@ import {
   type RecipeNativeParentGroup,
 } from "@/lib/authoringRecipe/nativeState";
 import type { RecipeNativeUndoProvenance } from "@/lib/authoringRecipe/transaction";
+import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import {
+  findAuthoringRecipeInStore,
+  parseAuthoringRecipeStore,
+  serializeAuthoringRecipeStore,
+  upsertAuthoringRecipeStore,
+} from "@/lib/authoringRecipe/store";
 import type { CompiledCubePlacement } from "@/lib/authoringRecipe/contracts";
 import type { AuthoringRecipeApplyAdapter } from "@/lib/authoringRecipe/transaction";
 import {
@@ -17,6 +24,11 @@ import type { AuthoringRecipeNativeSnapshot } from "@/lib/authoringRecipe/native
 import {
   authoringRecipeOwnershipPatch,
   readAuthoringRecipeCubeOwnership,
+  readAuthoringRecipeStoreProperty,
+  attachRecipeStoreUndoMark,
+  readRecipeStoreUndoMark,
+  isRecipeStoreUndoSynchronized,
+  PROJECT_RECIPE_STORE_PROPERTY,
 } from "./ownership";
 
 /**
@@ -115,7 +127,27 @@ function extendPlacement(cube: Cube, placement: CompiledCubePlacement, recipeId:
   } as any);
 }
 
+type PendingRecipeStoreRevision = {
+  project_uuid: string;
+  before: string;
+  after: string;
+  previous_recipe: AuthoringRecipe;
+  next_recipe: AuthoringRecipe;
+};
+
+/** Native ModelProject Property owner, not an independent recipe database. */
+function currentProjectRecipeStoreString(): string {
+  requireProject();
+  const raw = readAuthoringRecipeStoreProperty(Project);
+  if (raw === undefined || raw === null) return "";
+  if (typeof raw !== "string") {
+    throw new Error("RECIPE_STORE_NATIVE_PROPERTY_INVALID");
+  }
+  return raw;
+}
+
 export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): AuthoringRecipeApplyAdapter {
+  let pendingStore: PendingRecipeStoreRevision | null = null;
   let created: Cube[] = [];
   let existingAtBegin: Cube[] = [];
   let activeUndoSave: unknown | null = null;
@@ -134,6 +166,44 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
     readOwned: (requestedRecipeId) => {
       if (requestedRecipeId !== recipeId) throw new Error("Parametric recipe adapter recipe identity mismatch.");
       return readBlockbenchAuthoringRecipeOwnedState(recipeId);
+    },
+    preflightRecipeSource: (previousRecipe, nextRecipe) => {
+      requireProject();
+      if (!isRecipeStoreUndoSynchronized()) {
+        throw new Error("RECIPE_STORE_NATIVE_UNDO_SYNC_UNAVAILABLE");
+      }
+      if (previousRecipe.id !== recipeId || nextRecipe.id !== recipeId) {
+        throw new Error("RECIPE_STORE_RECIPE_ID_MISMATCH");
+      }
+      const before = currentProjectRecipeStoreString();
+      const document = parseAuthoringRecipeStore(before);
+      const previousStored = findAuthoringRecipeInStore(document, recipeId);
+      if (previousStored === null) {
+        // The first adoption may start from an explicitly empty Recipe
+        // with no Cuboids, constraints, feature claims or symmetry.
+        if (previousRecipe.prototypes.length ||
+          previousRecipe.patterns.length ||
+          (previousRecipe.feature_intents ?? []).length ||
+          (previousRecipe.constraints ?? []).length ||
+          (previousRecipe.symmetry ?? []).length ||
+          (previousRecipe.knowledge_links ?? []).length) {
+          throw new Error("RECIPE_STORE_ADOPTION_EXISTING_SOURCE_REQUIRED");
+        }
+      } else if (JSON.stringify(previousStored) !== JSON.stringify(previousRecipe)) {
+        throw new Error("RECIPE_STORE_SOURCE_CHANGED: re-plan against the saved Recipe.");
+      }
+      const after = serializeAuthoringRecipeStore(
+        upsertAuthoringRecipeStore(document, nextRecipe)
+      );
+      if (after === before) {
+        throw new Error("RECIPE_STORE_SOURCE_NOOP: native mutation has no source revision.");
+      }
+      pendingStore = {
+        project_uuid: Project.uuid,
+        before, after,
+        previous_recipe: structuredClone(previousRecipe),
+        next_recipe: structuredClone(nextRecipe),
+      };
     },
     preflightUpserts: (placements, before) => {
       const byInstance = new Map(before.cubes.map((cube) => [cube.instance_id, cube]));
@@ -158,6 +228,10 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
       }
     },
     beginUndo: (affectedInstanceIds) => {
+      if (!pendingStore || !Project || Project.uuid !== pendingStore.project_uuid ||
+          currentProjectRecipeStoreString() !== pendingStore.before) {
+        throw new Error("RECIPE_STORE_PREFLIGHT_STALE: plan the current source again.");
+      }
       if (Undo.current_save) throw new Error("Finish the current Blockbench edit before applying a parametric recipe.");
       created = [];
       const affected = new Set(affectedInstanceIds);
@@ -227,6 +301,13 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
       if (binding.recipe_id !== recipeId) {
         throw new Error("RECIPE_NATIVE_UNDO_RECIPE_MISMATCH");
       }
+      const store = pendingStore;
+      if (!store || store.project_uuid !== Project.uuid ||
+        JSON.stringify(store.previous_recipe) !== JSON.stringify(binding.previous_recipe) ||
+        JSON.stringify(store.next_recipe) !== JSON.stringify(binding.next_recipe) ||
+        currentProjectRecipeStoreString() !== store.before) {
+        throw new Error("RECIPE_STORE_COMMIT_SOURCE_STALE");
+      }
       const actualAfter = fingerprintAuthoringRecipeNativeSnapshot(
         readBlockbenchAuthoringRecipeOwnedState(recipeId)
       );
@@ -241,15 +322,20 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
         native_source_fingerprint_before: binding.native_source_fingerprint_before,
         native_source_fingerprint_after: binding.native_source_fingerprint_after,
       };
-      // Stamp the live BEFORE save *before* finishEdit. This is the exact
-      // object Blockbench places in history[index].before on native commit;
-      // nothing needs to mutate or throw after finishEdit succeeds.
+      // Prepare both native geometry Undo provenance and Recipe metadata
+      // in the very same Blockbench history entry, never a second stack.
       Object.defineProperty(Undo.current_save as object, RECIPE_UNDO_PROVENANCE, {
         value: provenance, writable: false, configurable: false,
       });
-      // Update dependent rendered state *before* committing the native edit.
-      // After finishEdit succeeds we must not risk another throwing operation.
+      attachRecipeStoreUndoMark(Undo.current_save as object, {
+        project_uuid: store.project_uuid, recipe_id: recipeId,
+        before: store.before, after: store.after,
+      });
+      // Canvas must be updated before the final native commit. Metadata
+      // is written after all fallible precommit checks and before finishEdit.
       Canvas.updateAll();
+      (Project as unknown as Record<string, unknown>)[PROJECT_RECIPE_STORE_PROPERTY] =
+        store.after;
       // UndoSystem.save.load() removes elements present in the opposite
       // snapshot but not this one. Include surviving updated Cubes and new
       // Cubes in the post-save; omit deleted Cubes so redo removes them.
@@ -267,6 +353,7 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
       projectUuidAtBegin = null;
       created = [];
       existingAtBegin = [];
+      pendingStore = null;
       return {
         token,
         project_uuid: provenance.project_uuid,
@@ -277,13 +364,32 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
       // Native Blockbench 5.2 cancelEdit(true) replays this transaction's
       // before-save. Do NOT cancel another tool's active edit.
       requireOwnedUndo();
+      let metadataIssue: Error | null = null;
+      if (pendingStore) {
+        try {
+          const current = currentProjectRecipeStoreString();
+          if (current !== pendingStore.before && current !== pendingStore.after) {
+            throw new Error("RECIPE_STORE_ROLLBACK_SOURCE_CHANGED");
+          }
+          if (current === pendingStore.after) {
+            (Project as unknown as Record<string, unknown>)[PROJECT_RECIPE_STORE_PROPERTY] =
+              pendingStore.before;
+          }
+        } catch (error) {
+          metadataIssue = error instanceof Error ? error : new Error(String(error));
+        }
+      }
+      // Attempt the attributed native cancellation even if Recipe metadata
+      // changed unexpectedly. Never erase foreign metadata to force success.
       Undo.cancelEdit(true);
       activeUndoSave = null;
       undoIndexAtBegin = null;
       projectUuidAtBegin = null;
       created = [];
       existingAtBegin = [];
+      pendingStore = null;
       Canvas.updateAll();
+      if (metadataIssue) throw metadataIssue;
     },
     revertCommittedUndo: (binding) => {
       requireProject();
@@ -297,6 +403,12 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
       }
       const last = Undo.history[Undo.index - 1] as MarkedUndoEntry | undefined;
       const mark = last?.before?.[RECIPE_UNDO_PROVENANCE];
+      const sourceMark = readRecipeStoreUndoMark(last?.before);
+      if (sourceMark && (sourceMark.project_uuid !== Project.uuid ||
+        sourceMark.recipe_id !== recipeId ||
+        currentProjectRecipeStoreString() !== sourceMark.after)) {
+        throw new Error("RECIPE_STORE_UNDO_SOURCE_CHANGED");
+      }
       if (last?.action !== "LazyDesigner parametric recipe" || !mark ||
           mark.token !== binding.provenance.token ||
           mark.recipe_id !== recipeId ||
@@ -313,6 +425,9 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(recipeId: string): A
       }
       Undo.undo();
       const restored = readBlockbenchAuthoringRecipeOwnedState(recipeId);
+      if (sourceMark && currentProjectRecipeStoreString() !== sourceMark.before) {
+        throw new Error("RECIPE_STORE_UNDO_RESTORE_UNVERIFIED");
+      }
       if (Undo.index !== binding.provenance.undo_index - 1 ||
           fingerprintAuthoringRecipeNativeSnapshot(restored) !==
             binding.native_source_fingerprint_before) {

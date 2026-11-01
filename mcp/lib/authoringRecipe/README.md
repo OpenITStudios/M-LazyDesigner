@@ -685,6 +685,32 @@ surface read-window protections remain in place.
 This closes two exact integration holes without any new checker, registry,
 Gateway route, native Apply transaction, or installed Blockbench claim.
 
+## Project Recipe source persistence and native Undo coherence (code only)
+
+The canonical `AuthoringRecipeService` now supplies both previous and next
+Recipe revisions to the SAME native `commitUndo` that applies Cube changes.
+The Blockbench adapter preflights the current Project Recipe store before
+native `Undo.initEdit`, validates the exact stored previous Recipe, and
+serializes the next Recipe using the existing bounded `store.ts` owner.
+First adoption permits only a genuinely empty previous Recipe; it does
+not silently overwrite already-owned/hand-authored geometry.
+
+Before `Undo.finishEdit`, the adapter stamps a namespaced metadata
+before/after marker on the ORIGINAL native `Undo.current_save` and writes
+the new Project Recipe property after all fallible precommit checks.
+The existing ownership registration adds native `undo`/`redo` listeners
+which restore the Project Recipe property only when the exact current
+source matches the expected history side and Project UUID. Hot-reload
+teardown removes those listeners. Nothing is stored in a second undo
+registry or database. Cancellation restores the original property
+before cancelling the owned native edit.
+
+Metadata-only source mutation without a native Undo is rejected by the
+Blockbench adapter rather than being reported as a persisted success.
+An external edit or history listener failure withholds automatic
+reconciliation; callers must inspect native state and re-plan.
+Native save/reopen and plugin reload behavior remain UNVERIFIED until
+the user reopens QA. This is source wiring, not certified Undo behavior.
 ## Native Group ancestry and stale-plan safety
 
 The native Recipe Cube snapshot includes both a root-to-parent Group UUID
