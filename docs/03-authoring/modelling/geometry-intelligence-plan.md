@@ -584,6 +584,36 @@ save/reopen/Undo/Bedrock export/visual checks. A rejected source candidate
 is not proof of a successful native model. Public `construct_geometry`
 registration remains generator-coupled and deferred.
 
+### R3o — V3 source-intent fidelity and AI-targeted failure context (2026-11-02; CODE ONLY)
+
+The version-3 REVOLVE mathematical source can request a nonzero inner
+radius yet its entire opening disappears at one-unit raster resolution.
+For example, a height-1 transition from `inner_radius=0` to `1`
+samples a mid-layer radius of 0.5, which contains no voxel-center
+samples even though the authored endpoint declares a cavity. The
+existing v3 annular-section proof previously skipped these slices.
+It now rejects the source with
+`GEOMETRY_MATH_REVOLVE_HOLE_NOT_REPRESENTED` when no axial layer
+realizes the requested hollow. This is not an automatic thickening,
+adaptive downsampling or new through-hole default: source and native
+topology must remain distinguishable.
+
+The existing `geometryMathProgram.ts` now attaches bounded
+`part`/`method` and individual Cuboid source identity to v3
+construction errors while keeping canonical error codes as their prefix
+and retaining the original error as the `cause`. This lets an AI
+repair the selected semantic part rather than rewriting a Recipe from
+an opaque multi-part error. For reproducibility, v1/v2 output and
+original error strings are left unchanged; v3 placement algorithms
+are also unchanged for previously valid source.
+
+No new parser, engine, version, database, MCP Gateway tool or native
+mutation path. Code is SOURCE ONLY: no Bun, typecheck, build, tests, CI,
+installed Blockbench, save/reopen/export or visual proof executed.
+Pending executable proof: v1/v2 reconstruction equivalence, v3
+disappearing cavity rejection, unaffected valid closed/annular profiles,
+error context, and native Undo/export/visual acceptance.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

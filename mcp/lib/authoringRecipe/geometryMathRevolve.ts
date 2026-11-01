@@ -53,6 +53,8 @@ function validateV3AnnularSections(
     return seen;
   };
 
+  let authoredHoleRequested = false;
+  let representedHoleLayers = 0;
   for (let axialLayer = 0; axialLayer < totalHeight; axialLayer++) {
     const { outer, inner } = sectionAt(axialLayer + 0.5);
     if (![outer, inner].every(Number.isFinite) ||
@@ -60,6 +62,7 @@ function validateV3AnnularSections(
       throw new Error("GEOMETRY_MATH_REVOLVE_SECTION_INVALID");
     }
     if (inner <= 0) continue;
+    authoredHoleRequested = true;
     const solid = new Uint8Array(cellCount);
     const blank = new Uint8Array(cellCount);
     const intendedHole = new Uint8Array(cellCount);
@@ -92,6 +95,7 @@ function validateV3AnnularSections(
     // A taper from a solid cap into a hollow may legitimately start with
     // subpixel radii that cannot yet contain even one voxel-centre sample.
     if (firstHole < 0) continue;
+    representedHoleLayers++;
 
     // All exterior background can be reached through eight-neighbour
     // paths from the boundary. Reuse the same neighbourhood for the
@@ -134,6 +138,13 @@ function validateV3AnnularSections(
         throw new Error("GEOMETRY_MATH_REVOLVE_EXTRA_CAVITY");
       }
     }
+  }
+  // Integer model-unit voxelization can eliminate a genuine axial hollow
+  // entirely (for example, a short solid-to-hollow taper sampled only at
+  // a sub-voxel inner radius). Never claim the requested cavity survives
+  // if not even one axial raster slice contains a void cell.
+  if (authoredHoleRequested && representedHoleLayers === 0) {
+    throw new Error("GEOMETRY_MATH_REVOLVE_HOLE_NOT_REPRESENTED");
   }
 }
 

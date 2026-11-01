@@ -116,13 +116,25 @@ export function buildGeometryMathProgramPieces(
       left.id, right.id, program.version
     ))
     .map(part => {
-      const boxes = realizePart(part, program.version);
-      const { min, max } = minMax(boxes);
-      return {
-        id: part.id,
-        at: [...part.at] as RecipeVec3,
-        boxes, min, max,
-      };
+      try {
+        const boxes = realizePart(part, program.version);
+        const { min, max } = minMax(boxes);
+        return {
+          id: part.id,
+          at: [...part.at] as RecipeVec3,
+          boxes, min, max,
+        };
+      } catch (error) {
+        // Exact native error codes stay at the front; version 3 attaches
+        // the bounded semantic part identity so AI can repair the correct
+        // method without reauthoring unrelated parts. Preserve the cause.
+        if (program.version !== 3 || !(error instanceof Error)) throw error;
+        throw new Error(
+          error.message + " [part=" + part.id +
+          ";method=" + part.method + ";math_version=3]",
+          { cause: error }
+        );
+      }
     });
 
   const count = parts.reduce((sum, part) => sum + part.boxes.length, 0);
@@ -177,11 +189,20 @@ export function buildGeometryMathProgramPieces(
       const name = [
         feature.label.slice(0, 42), part.id.slice(0, 28), box.id,
       ].join("_");
-      const built = makeBox(
-        patternId, name, feature.id, from, to
-      );
-      output.prototypes.push(...built.prototypes);
-      output.patterns.push(...built.patterns);
+      try {
+        const built = makeBox(
+          patternId, name, feature.id, from, to
+        );
+        output.prototypes.push(...built.prototypes);
+        output.patterns.push(...built.patterns);
+      } catch (error) {
+        if (program.version !== 3 || !(error instanceof Error)) throw error;
+        throw new Error(
+          error.message + " [part=" + part.id +
+          ";cube=" + box.id + ";math_version=3]",
+          { cause: error }
+        );
+      }
     }
   }
   return output;

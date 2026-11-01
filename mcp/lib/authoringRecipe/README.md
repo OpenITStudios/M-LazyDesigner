@@ -367,6 +367,25 @@ layer or native Undo mechanism was introduced. Public
 hardening; Bun/typecheck, behavioral tests, installed Blockbench, native
 save/reopen/export and reference/visual QA were NOT EXECUTED.
 
+### R3o — Lost-hollow rejection and recoverable errors
+
+V3 `REVOLVE` now rejects a declared positive inner radius if all
+axial raster samples eliminate the requested opening. The source-only
+failure `GEOMETRY_MATH_REVOLVE_HOLE_NOT_REPRESENTED` replaces silent
+solid output; callers must supply a representable profile, not silently
+modify shape dimensions or pretend a cavity survives. This applies to
+version 3 only. Legacy math v1/v2 remains reconstructable.
+
+V3 Geometry Construction Language failures now retain their original
+error-code prefix and append the exact bounded semantic `part` /
+`method` (or `part` / source Cuboid ID) where the error occurred.
+Original errors remain chained as `cause`. AI can correct the affected
+part without guessing which of up to eight parts failed. This does NOT
+authorize mutation, fabricate reference evidence, or imply visual PASS.
+
+No tests/build/CI/native QA were run; public `construct_geometry`
+remains pending canonical generated API documentation.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
