@@ -1,6 +1,7 @@
 import type { RecipeCubePrototype, RecipePattern, RecipeVec3 } from "./contracts";
 import type { AdvancedGeometryFeature } from "./geometrySchema";
 import { buildGeometryPresetPieces } from "./geometryPresetBuilders";
+import { buildGeometryMathProgramPieces } from "./geometryMathProgram";
 import { requireBoxUvRepresentableSpan, validateCubeGeometrySpan } from "@/lib/geometry/cubeSpan";
 
 /**
@@ -485,6 +486,9 @@ export function buildGeometryShapePieces(
       feature.kind === "voxel_cone" ||
       feature.kind === "voxel_torus") {
     return buildGeometryPresetPieces(feature, makeBox);
+  }
+  if (feature.kind === "program") {
+    return buildGeometryMathProgramPieces(feature, makeBox);
   }
   return buildRepeat(feature);
 }

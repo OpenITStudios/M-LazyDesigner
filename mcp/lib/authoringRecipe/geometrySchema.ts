@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { geometryMathProgramSchema } from "./geometryMathLanguage";
 
 /**
  * Shared, import-safe AI/native contract for the existing advanced Geometry
@@ -184,6 +185,11 @@ export const advancedGeometryFeatureSchema = z.discriminatedUnion("kind", [
     axis: geometryAxisSchema.describe("Normal of the torus ring plane."),
     major_radius: z.number().int().min(3).max(8),
     tube_radius: z.number().int().min(1).max(3),
+  }).strict(),
+  z.object({
+    ...featureBase,
+    kind: z.literal("program"),
+    program: geometryMathProgramSchema,
   }).strict(),
   z.object({
     ...featureBase,

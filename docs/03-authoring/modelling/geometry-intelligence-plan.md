@@ -471,6 +471,48 @@ Public construct_geometry registration stays unregistered pending canonical
 Bun generator output. No tests, build, CI, installed Blockbench QA,
 save/reopen, or Bedrock export were executed by user decision.
 
+### R3l — Geometry Construction Language v1 + reusable math solvers (2026-11-01; SOURCE ONLY)
+
+Mathematically grounded construction is now available as one opt-in
+`advancedGeometryFeatureSchema.kind="program"` feature, with an exact
+`program.version=1` semantic contract. Four strict, bounded part methods
+are supported: BOX, EXTRUDE (simple 2D profile, optional verified raster
+holes), SWEEP (linear or centripetal Catmull–Rom path, adaptive chord
+sampling, changing circular radius), and REVOLVE (axial radial-profile
+stations with optional through-hole). All source parameters are stored
+in the existing `advanced_geometry_source` Recipe field. They are
+declared geometry, NOT independently authenticated image measurements.
+
+`geometryMathLanguage.ts` owns the Zod contract. Math-only modules
+`geometryMathProfile.ts`, `geometryMathSweep.ts`,
+`geometryMathRevolve.ts` and `geometryMathVoxel.ts` compute bounded
+native-Cuboid candidates with deterministic one-unit voxelization,
+face-connected occupancy, greedy 3D rectangular partition and <=64 Cuboids
+per *whole construction program*. Polygon self-intersection, touching/
+leaking/nonrepresented profile holes, path degeneracy, sampling budgets,
+invalid radial stations and disconnected masses fail before native Undo.
+No arbitrary code execution, mesh, auto-approving reference matcher,
+unspecified rounding or algorithmic fallbacks are allowed.
+
+`geometryMathProgram.ts` composes the exact part candidates and reuses
+the EXISTING `solveRecipeConstraints` ANCHOR solver as a temporary semantic
+part-level bounding-box dependency graph. It preserves explicit IDs,
+rejects cycles, missing targets and conflicting per-axis claims, and
+compiles to the original Recipe v1 prototypes/patterns. Local attachment
+is positional only; it does NOT fabricate Blockbench Bones or rig pivots.
+No second state owner, registration surface, native mutation engine or
+additional MCP tool was created.
+
+V1 math/partition semantics are intentionally frozen. Existing R3a–R3k
+shape algorithms and saved Recipe output are untouched; any future math
+behavior change needs an explicit versioned migration and equivalence
+review rather than silent changes to source-owned Cube identity. Source
+inspect/revise and stale scene/plan guards remain in original owners.
+The public `construct_geometry` capability remains unregistered until
+the canonical Bun-generated API contract can be updated atomically.
+Tests/CI/build, native save/reopen/Undo and reference/Bedrock visual
+verification were NOT executed.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

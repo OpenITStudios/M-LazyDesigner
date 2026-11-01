@@ -7,9 +7,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 **USER DECISION:** Mature AI-first Geometry source; no tests,
 build/Bun, CI, native QA, release, separate plugin or mandatory UI.
 
-**R3a–R3k:** Cuboid/Frame/Repeat/Curve/Hollow Box/Arch/Tube plus
-Stairs/Roof/Bevel/Ellipsoid/Cone/Torus templates. Existing inspect/plan/
-apply, Cube/Group, Recipe store, source revisions and Undo are reused.
+**R3a–R3l:** Prior 13 shapes remain compatible. New opt-in
+versioned Geometry Construction Language `kind=program` combines
+BOX/EXTRUDE/SWEEP/REVOLVE and reuses existing ANCHOR solver for
+up to eight semantic parts. Bounded connected voxel partition (64 native
+Cubes max), strict source/geometry ownership, no new engine/DB.
 
 **R3j:** Canonical Recipe v1 optionally persists original high-level
 `advanced_geometry_source` parameters per feature for AI editing
@@ -26,8 +28,9 @@ with generator-owned API docs. Do not hand-edit generated artifacts.
 **PROOF:** Source only. No tests/build/CI, native save/reopen,
 Bedrock export or visual QA; plugin deployment not claimed.
 
-**NEXT CODE:** Close canonical Runtime registration + generated docs
-in an executable workspace; then reference-driven corrections.
+**NEXT CODE:** Register existing `construct_geometry` Runtime feature
+and atomically generate canonical Bun API docs in a capable workspace;
+then reference-driven native correction and acceptance.
 Do not invent an alternative registration/quality engine.
 ## GitHub boundary and historical local recovery
 

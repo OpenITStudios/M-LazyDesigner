@@ -274,6 +274,37 @@ reference appearance PASS or substitutes for UV/pivot/rig review.
 Public construct_geometry registration, generator-owned API/docs, build,
 native Blockbench and export proof remain outstanding. Tests/CI were not run.
 
+### R3l — One Geometry Construction Language, not more object presets
+
+One opt-in `kind: "program"` feature adds a versioned `program.version=1`
+under the EXISTING advanced Geometry schema. It combines up to eight
+semantic parts with strict BOX, EXTRUDE, SWEEP and REVOLVE methods, and
+up to sixteen `ANCHOR` relations. A part is a construction unit, not
+a guessed native Cube, separate Bone, or hand-authored asset preset.
+
+Each method produces source-local native Cuboid candidates: extruded
+simple polygon with optional fully-enclosed raster holes; round
+variable-radius swept centerline with optional centripetal Catmull–Rom
+interpolation/adaptive chord sampling; and axial radial-profile revolution
+with optional interior channel. One-unit voxel occupancy uses bounded
+connected-mass checks and deterministic disjoint greedy rectangular
+partition. The whole program is bounded to 64 native Cube instances
+for current Advanced Geometry apply compatibility.
+
+`geometryMathProgram.ts` uses original Recipe `solveRecipeConstraints`
+to place semantic-part bounds under user-declared `ANCHOR` relations,
+rejecting conflicting axes and cycles. Final construction is ordinary
+Recipe v1 patterns/compile/incremental/native Undo with source parameters
+persisted through the existing `advanced_geometry_source`. Existing
+R3a–R3k shapes are NOT recompiled through the new engine: v1 source
+semantics are pinned to avoid silently changing saved Cube cohorts.
+
+The input reference IDs remain caller claims only. No reference
+recognition, automatic proportion invention, UV-repaint, Bone parenting,
+new public MCP tool or visual/export PASS is implied. Public
+`construct_geometry` and its canonical generated API/docs remain
+unregistered. Bun/native/tests/CI/visual proof NOT EXECUTED.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
