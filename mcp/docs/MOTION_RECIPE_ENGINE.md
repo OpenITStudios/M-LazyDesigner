@@ -330,6 +330,39 @@ correct Euler rotations or safe keyframe baking. The returned review states
 No additional public Gateway tool or Runtime input, native timeline
 mutation, generated API edits or release is introduced.
 
+### Pole-guided knee bend and world quaternion hints (2026-11-03)
+
+The optional planted-contact IK chain can now declare `bend_pole_world` as a
+**world-space point** and optionally `max_swing_degrees` (default 120;
+explicit range 0..170). The canonical `rig/fabrik.ts` owner now provides
+`planTwoBonePoleSwing` for the exact hip/knee/ankle three-joint case.
+After canonical FABRIK reachability, it chooses a pole-facing knee point
+analytically on the intersection circle of fixed thigh and shin lengths.
+It rejects source knees bending away from the declared pole, nearly straight
+or otherwise ambiguous bend planes, unreachable or stretched endpoints,
+changed segment lengths and oversized orientation changes. The original
+FABRIK path remains unchanged when no pole is requested.
+
+For each source segment, the planner reports a normalized shortest-arc
+world-space quaternion delta in **THREE [x,y,z,w]** order and a rotation
+angle. Quaternions align observed and proposed segment directions but do
+not determine local bone rotations, twist, native pre-rotation compensation,
+BoneAnimator Euler order or Bedrock export conventions. Hence the result is
+`SOURCE_ONLY_POLE_SWING_HINT`, not an executable Euler keyframe. A rejected
+pose remains `CONTACT_IK_POLE_ORIENTATION_UNSAFE` with an explicit
+`orientation_blocker`. The existing preview-to-contact composer optionally
+forwards the same pole and swing limit, with no added public tool or request
+schema.
+
+This step can prevent a mathematically reachable foot from being treated
+as correction-ready when the knee would snap to the wrong bend side.
+It does NOT prove installed Blockbench behavior or natural motion; all native
+rotation authoring and visual acceptance flags remain false.
+
+Reference concepts: Three.js Quaternion.setFromUnitVectors and its normalized
+[x,y,z,w] convention; FABRIK (Aristidou and Lasenby, 2011) produces joint
+positions, not final local bone rotations.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

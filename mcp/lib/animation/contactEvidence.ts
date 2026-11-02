@@ -1,4 +1,4 @@
-import { solveFabrikChain } from "@/lib/rig/fabrik";
+import { solveFabrikChain, planTwoBonePoleSwing } from "@/lib/rig/fabrik";
 import type { ExplicitContactMarkerBinding } from "./contactMarkerBinding";
 
 export type Vec3 = readonly [number, number, number];
@@ -32,6 +32,10 @@ export type DeclaredContactIkChain = {
   locator_uuid: string;
   joint_group_uuids: readonly string[];
   frames: readonly { time: number; joint_world_positions: readonly Vec3[] }[];
+  /** Optional declared world POINT selecting the knee bend direction. */
+  bend_pole_world?: Vec3;
+  /** Optional bound for source-only segment swings, default 120 degrees. */
+  max_swing_degrees?: number;
 };
 
 export type ContactConstraintInput = {
@@ -96,7 +100,8 @@ function planDeclaredContactIkReachability(
   slipEligible: boolean
 ) {
   type Candidate = { time: number; target_world: Vec3; correction_world: Vec3;
-    solved_chain_world: Vec3[]; residual_world: number };
+    solved_chain_world: Vec3[]; residual_world: number;
+    orientation_hint?: ReturnType<typeof planTwoBonePoleSwing>; };
   const unavailable = (reason: string) => ({
     state: "unavailable" as const, reason,
     frames: [] as Candidate[], frame_count: 0,
@@ -119,6 +124,11 @@ function planDeclaredContactIkReachability(
       ids.length < 2 || ids.length > CONTACT_IK_MAX_JOINTS ||
       ids.some((id) => !validId(id)) || new Set(ids).size !== ids.length) {
     return unavailable("CONTACT_IK_CHAIN_IDENTITY_INVALID");
+  }
+  // Angle bounds without an explicit pole cannot choose a bend plane.
+  if (chain.max_swing_degrees !== undefined &&
+      chain.bend_pole_world === undefined) {
+    return unavailable("CONTACT_IK_BEND_POLE_REQUIRED");
   }
   const frames = chain.frames;
   if (!Array.isArray(frames) || frames.length !== samples.length ||
@@ -183,12 +193,29 @@ function planDeclaredContactIkReachability(
         solved.points.some((point)=>!validVec3(point))) {
       return unavailable("CONTACT_IK_UNREACHABLE");
     }
+    // Optional explicit knee pole selects a non-flipped analytic bend and
+    // computes two normalized WORLD-space shortest-arc quaternions.
+    // Native local bone Euler conversion/keyframe mutation is not inferred.
+    const orientation = chain.bend_pole_world !== undefined
+      ? planTwoBonePoleSwing(
+          ordered[i].joint_world_positions, solved.points,
+          chain.bend_pole_world,
+          { max_swing_degrees: chain.max_swing_degrees }
+        ) : null;
+    if (orientation && orientation.state !== "SOURCE_ONLY_POLE_SWING_HINT") {
+      return {
+        ...unavailable("CONTACT_IK_POLE_ORIENTATION_UNSAFE"),
+        orientation_blocker: orientation.reason,
+      };
+    }
+    const correctedPoints = orientation ? orientation.corrected_points : solved.points;
     proposals.push({
       time:samples[i].time,target_world:[...anchor],
       correction_world:correction,
-      solved_chain_world:solved.points.map((point)=>
+      solved_chain_world:correctedPoints.map((point)=>
         [...point] as [number,number,number]),
       residual_world:solved.residual,
+      ...(orientation ? { orientation_hint: orientation } : {}),
     });
   }
   return {
@@ -811,6 +838,9 @@ export type ExplicitPlantedPreviewIkInput = {
   support_plane: ContactSupportPlane;
   tolerance: number;
   fixed_contact_world: Vec3;
+  /** Optional declared world POINT for source-only two-bone knee bending. */
+  bend_pole_world?: Vec3;
+  max_swing_degrees?: number;
 };
 
 export function reviewExplicitPlantedContactIkFromPreview(
@@ -882,10 +912,20 @@ export function reviewExplicitPlantedContactIkFromPreview(
       window.max_gap_seconds <= TIME_EPSILON ||
       !plane || !validPlane(plane) ||
       !Number.isFinite(input.tolerance) || input.tolerance <= 0 ||
-      !validVec3(input.fixed_contact_world)) {
+      !validVec3(input.fixed_contact_world) ||
+      (input.bend_pole_world !== undefined &&
+        !validVec3(input.bend_pole_world)) ||
+      (input.max_swing_degrees !== undefined &&
+        (!Number.isFinite(input.max_swing_degrees) ||
+         input.max_swing_degrees <= 0 ||
+         input.max_swing_degrees > 170))) {
     return unavailable("CONTACT_PREVIEW_STANCE_OR_PLANE_INVALID");
   }
 
+  if (input.max_swing_degrees !== undefined &&
+      input.bend_pole_world === undefined) {
+    return unavailable("CONTACT_PREVIEW_BEND_POLE_REQUIRED");
+  }
   const sampled: Array<{
     time: number;
     marker: Vec3;
@@ -963,6 +1003,12 @@ export function reviewExplicitPlantedContactIkFromPreview(
         time: item.time,
         joint_world_positions: item.joints,
       })),
+      ...(input.bend_pole_world !== undefined ? {
+        bend_pole_world: [...input.bend_pole_world] as [number,number,number],
+      } : {}),
+      ...(input.max_swing_degrees !== undefined ? {
+        max_swing_degrees: input.max_swing_degrees,
+      } : {}),
     },
   };
   const contactReview = analyzeAnimationContactEvidence({ constraints: [contact] });

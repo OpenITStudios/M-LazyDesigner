@@ -58,3 +58,155 @@ export function solveFabrikChain(points: readonly RigVec3[], target: RigVec3, op
   const residual = distance(solved.at(-1)!, target);
   return { points: solved, reached: residual <= tolerance, iterations, residual, stretched: false };
 }
+
+
+export type RigQuaternionXYWZ = readonly [number, number, number, number];
+
+/**
+ * Source-only two-bone pole correction plus shortest-arc WORLD-space swings.
+ *
+ * The pole is a world POINT, not an inferred bone axis. FABRIK produces joint
+ * positions; this routine chooses the non-flipped analytic knee position for
+ * a 3-joint chain, then reports quaternion *hints* for the two outgoing
+ * segments. They are neither Blockbench local Euler angles nor safe keyframes:
+ * original world bone orientations, parent inverse transforms, pre-rotation,
+ * twist and native codec conversion are still unobserved.
+ */
+export function planTwoBonePoleSwing(
+  observed: readonly RigVec3[],
+  solved: readonly RigVec3[],
+  bendPoleWorld: RigVec3,
+  options: { max_swing_degrees?: number } = {}
+) {
+  const unavailable = (reason: string) => ({
+    state: "unavailable" as const, reason,
+    native_rotation_authorized: false as const,
+    local_euler_attested: false as const,
+    visual_verdict: "not_evaluated" as const,
+  });
+  const finitePoint = (v: unknown): v is RigVec3 =>
+    Array.isArray(v) && v.length === 3 &&
+    v.every((n) => typeof n === "number" && Number.isFinite(n));
+  const maxSwing = options.max_swing_degrees ?? 120;
+  if (!Array.isArray(observed) || !Array.isArray(solved) ||
+      observed.length !== 3 || solved.length !== 3 ||
+      [...observed, ...solved, bendPoleWorld].some((v) => !finitePoint(v)) ||
+      !Number.isFinite(maxSwing) || maxSwing <= 0 || maxSwing > 170) {
+    return unavailable("FABRIK_POLE_INPUT_INVALID");
+  }
+  const dot = (a: RigVec3, b: RigVec3) =>
+    a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  const cross = (a: RigVec3, b: RigVec3): [number,number,number] =>
+    [a[1]*b[2]-a[2]*b[1],
+     a[2]*b[0]-a[0]*b[2],
+     a[0]*b[1]-a[1]*b[0]];
+  const finite = (a: RigVec3) => a.every(Number.isFinite);
+  const normalized = (v: RigVec3): [number,number,number] | null => {
+    const magnitude=length(v);
+    return Number.isFinite(magnitude) && magnitude > 1e-8
+      ? scale(v,1/magnitude) : null;
+  };
+  const originalLengths=[distance(observed[0],observed[1]),
+    distance(observed[1],observed[2])];
+  if (originalLengths.some((len) => !Number.isFinite(len) || len<=1e-6) ||
+      distance(observed[0],solved[0])>1e-6 ||
+      originalLengths.some((len,i) =>
+        !Number.isFinite(distance(solved[i],solved[i+1])) ||
+        Math.abs(len-distance(solved[i],solved[i+1]))>
+          Math.max(1e-5,len*1e-4)
+      )) return unavailable("FABRIK_POLE_CHAIN_LENGTH_OR_ROOT_CHANGED");
+  const [firstLength,secondLength]=originalLengths;
+  const hip=solved[0],ankle=solved[2];
+  const hipToAnkle=sub(ankle,hip), span=length(hipToAnkle);
+  if (!Number.isFinite(span) || span<=1e-6 ||
+      span>=firstLength+secondLength-1e-6 ||
+      span<=Math.abs(firstLength-secondLength)+1e-6) {
+    return unavailable("FABRIK_POLE_TARGET_SINGULAR_OR_UNREACHABLE");
+  }
+  const line=normalized(hipToAnkle);
+  const originalLine=normalized(sub(observed[2],observed[0]));
+  if (!line || !originalLine) return unavailable("FABRIK_POLE_BEND_AXIS_UNDEFINED");
+  const poleOffset=sub(bendPoleWorld,hip);
+  const originalPole=sub(bendPoleWorld,observed[0]);
+  const polePerp=sub(poleOffset,scale(line,dot(poleOffset,line)));
+  const sourcePolePerp=sub(originalPole,scale(originalLine,dot(originalPole,originalLine)));
+  const sourceKneeOffset=sub(observed[1],observed[0]);
+  const sourceKneePerp=sub(sourceKneeOffset,
+    scale(originalLine,dot(sourceKneeOffset,originalLine)));
+  const poleUnit=normalized(polePerp);
+  const sourcePoleUnit=normalized(sourcePolePerp);
+  const sourceKneeUnit=normalized(sourceKneePerp);
+  if (!poleUnit || !sourcePoleUnit || !sourceKneeUnit ||
+      length(sourceKneePerp)<=firstLength*1e-4) {
+    return unavailable("FABRIK_POLE_BEND_PLANE_AMBIGUOUS");
+  }
+  const alignment=dot(sourceKneeUnit,sourcePoleUnit);
+  if (!Number.isFinite(alignment) || alignment<=0.1) {
+    return unavailable("FABRIK_POLE_SOURCE_BEND_OPPOSITE_OR_AMBIGUOUS");
+  }
+  const along=(span*span+firstLength*firstLength-secondLength*secondLength)/(2*span);
+  const heightSquared=firstLength*firstLength-along*along;
+  if (!Number.isFinite(heightSquared) ||
+      heightSquared<=1e-10*firstLength*firstLength) {
+    return unavailable("FABRIK_POLE_TARGET_SINGULAR_OR_UNREACHABLE");
+  }
+  const knee=add(add(hip,scale(line,along)),scale(poleUnit,Math.sqrt(heightSquared)));
+  const corrected: [RigVec3,RigVec3,RigVec3]=[
+    [...hip] as [number,number,number],
+    [...knee],
+    [...ankle] as [number,number,number],
+  ];
+  if (!corrected.every(finite) ||
+      Math.abs(distance(corrected[0],corrected[1])-firstLength)>1e-6 ||
+      Math.abs(distance(corrected[1],corrected[2])-secondLength)>1e-6) {
+    return unavailable("FABRIK_POLE_CORRECTION_NONFINITE_OR_STRETCHED");
+  }
+  const swings: Array<{
+    segment_index: number;
+    world_delta_quaternion_xyzw: [number,number,number,number];
+    angle_degrees: number;
+  }> = [];
+  for (let i=0;i<2;i++) {
+    const sourceUnit=normalized(sub(observed[i+1],observed[i]));
+    const targetUnit=normalized(sub(corrected[i+1],corrected[i]));
+    if (!sourceUnit || !targetUnit) return unavailable("FABRIK_SWING_DIRECTION_UNDEFINED");
+    const similarity=Math.max(-1,Math.min(1,dot(sourceUnit,targetUnit)));
+    if (similarity<=-0.999999) {
+      // 180-degree shortest arc has no unique axis without an observed
+      // joint orientation; do not invent a native knee rotation.
+      return unavailable("FABRIK_SWING_ANTIPARALLEL_AMBIGUOUS");
+    }
+    const directionCross=cross(sourceUnit,targetUnit);
+    const raw=[...directionCross,1+similarity];
+    const norm=Math.hypot(...raw);
+    if (!Number.isFinite(norm) || norm<=1e-9) {
+      return unavailable("FABRIK_SWING_NUMERIC_UNSTABLE");
+    }
+    const q=raw.map((n)=>n/norm) as [number,number,number,number];
+    const degrees=2*Math.acos(Math.max(0,Math.min(1,q[3])))*180/Math.PI;
+    if (!q.every(Number.isFinite) || !Number.isFinite(degrees)) {
+      return unavailable("FABRIK_SWING_NUMERIC_UNSTABLE");
+    }
+    if (degrees>maxSwing+1e-7) {
+      return unavailable("FABRIK_SWING_LIMIT_EXCEEDED");
+    }
+    swings.push({
+      segment_index:i,
+      world_delta_quaternion_xyzw:q,
+      angle_degrees:degrees,
+    });
+  }
+  return {
+    state:"SOURCE_ONLY_POLE_SWING_HINT" as const,
+    reason:null,
+    corrected_points:corrected.map((point)=>[...point] as [number,number,number]),
+    segment_swings:swings,
+    source_bend_pole_alignment:alignment,
+    bend_pole_world:[...bendPoleWorld] as [number,number,number],
+    max_allowed_swing_degrees:maxSwing,
+    quaternion_convention:"THREE_XYZW_WORLD_SHORTEST_ARC" as const,
+    native_rotation_authorized:false as const,
+    local_euler_attested:false as const,
+    visual_verdict:"not_evaluated" as const,
+  };
+}

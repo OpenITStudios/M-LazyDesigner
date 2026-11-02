@@ -1137,3 +1137,79 @@ test("source preview rejects a valid joint inventory whose ankle no longer meets
     native_ik_bake_authorized: false,
   });
 });
+
+
+test("explicit contact optional bend pole produces only source world-swing hints", () => {
+  const clip = explicitContactIk(), source = JSON.stringify(clip);
+  clip.ik_chain!.bend_pole_world = [0, 0, 1];
+  const plan = candidate(clip);
+  expect(plan?.state).toBe("SOURCE_ONLY_REACHABLE");
+  if (!plan || plan.state !== "SOURCE_ONLY_REACHABLE") {
+    throw new Error("Expected a source-only IK candidate");
+  }
+  expect(plan.frames).toHaveLength(3);
+  for (const frame of plan.frames) {
+    expect(frame.orientation_hint?.state).toBe("SOURCE_ONLY_POLE_SWING_HINT");
+    if (frame.orientation_hint?.state !== "SOURCE_ONLY_POLE_SWING_HINT") {
+      throw new Error("Source-only swing hint missing");
+    }
+    expect(frame.orientation_hint.segment_swings).toHaveLength(2);
+    expect(frame.orientation_hint.native_rotation_authorized).toBe(false);
+    expect(frame.orientation_hint.local_euler_attested).toBe(false);
+    expect(frame.solved_chain_world[1][2]).toBeGreaterThan(0);
+  }
+  expect(plan.native_ik_bake_authorized).toBe(false);
+  expect(JSON.stringify(explicitContactIk())).toBe(source);
+});
+
+test("planted-contact IK blocks backwards, ambiguous, and excessive declared knee swings", () => {
+  const clone = () => JSON.parse(JSON.stringify(explicitContactIk())) as any;
+  let input = clone();
+  input.ik_chain.bend_pole_world = [0, 0, -1];
+  expect(candidate(input)).toMatchObject({
+    state: "unavailable", reason: "CONTACT_IK_POLE_ORIENTATION_UNSAFE",
+    orientation_blocker: "FABRIK_POLE_SOURCE_BEND_OPPOSITE_OR_AMBIGUOUS",
+  });
+  input = clone();
+  input.ik_chain.bend_pole_world = [0, 0.8, 0];
+  expect(candidate(input)).toMatchObject({
+    state: "unavailable", reason: "CONTACT_IK_POLE_ORIENTATION_UNSAFE",
+    orientation_blocker: "FABRIK_POLE_BEND_PLANE_AMBIGUOUS",
+  });
+  input = clone();
+  input.ik_chain.bend_pole_world = [0, 0, 1];
+  input.ik_chain.max_swing_degrees = 1;
+  expect(candidate(input)).toMatchObject({
+    state: "unavailable", reason: "CONTACT_IK_POLE_ORIENTATION_UNSAFE",
+    orientation_blocker: "FABRIK_SWING_LIMIT_EXCEEDED",
+    native_ik_bake_authorized: false,
+  });
+});
+
+test("explicit preview-to-contact link forwards pole intent without native Euler/Undo authority", () => {
+  const fixture = explicitPreviewContactFixture(), before = JSON.stringify(fixture);
+  const result = reviewExplicitPlantedContactIkFromPreview({
+    ...fixture,
+    bend_pole_world: [0, 0, 1],
+  });
+  expect(result.state).toBe("SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW");
+  if (result.state !== "SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW") {
+    throw new Error("Expected preview source-only IK");
+  }
+  expect(result.contact_evidence.ik_reachability_candidate?.frames[2]
+    .orientation_hint?.state).toBe("SOURCE_ONLY_POLE_SWING_HINT");
+  expect(result.native_ik_bake_authorized).toBe(false);
+  expect(JSON.stringify(fixture)).toBe(before);
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, max_swing_degrees: 40,
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_BEND_POLE_REQUIRED",
+  });
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, bend_pole_world: [0, 0, -1],
+  })).toMatchObject({
+    state: "UNVERIFIED",
+    reason: "CONTACT_PREVIEW_IK_PROPOSAL_UNAVAILABLE",
+    ik_blocker: "CONTACT_IK_POLE_ORIENTATION_UNSAFE",
+  });
+});
