@@ -128,7 +128,7 @@ describe("texture compute request and pipeline", () => {
     const result = applyTextureComputePipeline(source, 5, 2, request.steps,
       scope.target_rect, protection.target_mask);
     expect(result.receipt.changed_pixels).toBe(4);
-    for (const offset of [1, 4, 3, 8, 9]) {
+    for (const offset of [1, 6, 3, 4, 8, 9]) {
       expect([...result.pixels.slice(offset * 4, offset * 4 + 4)])
         .toEqual([...source.slice(offset * 4, offset * 4 + 4)]);
     }
@@ -173,8 +173,10 @@ describe("texture compute request and pipeline", () => {
       .toThrow("protected_face_regions");
     expect(() => parse({ ...base, protected_face_regions: [
       { ...region, cube_uuid: "foreign" }] })).toThrow("FACE_PROTECTION_TARGET_NOT_SELECTED");
-    expect(() => parse({ ...base, face_targets: undefined }))
-      .toThrow("protected_face_regions require face_targets");
+    expect(() => parse({
+      ramp: base.ramp, source_hue_color: base.source_hue_color,
+      protected_face_regions: [region],
+    })).toThrow("protected_face_regions require face_targets");
     expect(() => parse({ ...base, target_rect: { x: 0, y: 0, width: 1, height: 1 } }))
       .toThrow("mutually exclusive");
     expect(() => parse({ ...base, protected_face_regions: [

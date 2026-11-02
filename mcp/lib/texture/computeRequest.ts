@@ -361,7 +361,7 @@ export function parseTextureComputeRequest(
       if (hasFaces) faceTargets = faceTargetsSchema.parse(args.face_targets);
       if (hasProtected) protectedRegions = protectedFaceRegionsSchema.parse(args.protected_face_regions);
     } catch (error) {
-      throw new Error("compute[0] target_rect/face_targets is invalid: " +
+      throw new Error("compute[0] target_rect/face_targets/protected_face_regions is invalid: " +
         (error instanceof Error ? error.message : String(error)));
     }
     const operationArgs = { ...args };
