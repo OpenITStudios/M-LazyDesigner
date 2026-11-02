@@ -321,4 +321,68 @@ describe("semantic motion -> existing Gateway create_animation route", () => {
     expect(bridge.execution_evidence.controller_activation_attested).toBe(false);
     expect(bridge.gateway_arguments).not.toHaveProperty("task_context_id");
   });
+
+
+  test("rejects a critical CONTACT role with no authored key on its primary bone", () => {
+    const clip = recipe();
+    Reflect.deleteProperty(clip.poses[1]!.bones, "body");
+    const userIntent = intent();
+    const before = JSON.stringify({ clip, userIntent });
+    expect(() => compileSemanticMotionToGatewayInvocation(clip, userIntent))
+      .toThrow("SEMANTIC_MOTION_PRIMARY_ROLE_UNKEYED");
+    expect(JSON.stringify({ clip, userIntent })).toBe(before);
+  });
+
+  test("rejects a CONTACT primary pose deleted by native linear compaction", () => {
+    const clip = recipe();
+    Object.assign(clip.poses[2]!.bones.body, { rotation: [30, 0, 0] });
+    // Body rotation becomes [0,15,30] at [0,0.5,1]; native create
+    // removes the exact middle key even though semantic CONTACT names it.
+    expect(() => compileSemanticMotionToGatewayInvocation(clip, intent()))
+      .toThrow("SEMANTIC_MOTION_PRIMARY_ROLE_COMPACTED");
+  });
+
+  test("reports source-only retained primary poses without native quality claims", () => {
+    const bridge = compileSemanticMotionToGatewayInvocation(recipe(), intent());
+    expect(bridge.semantic_context.primary_role_key_retention).toMatchObject({
+      state: "SOURCE_ONLY_PRIMARY_KEYS_RETAINED",
+      checked_role_count: 3,
+      native_import_attested: false,
+      visual_verdict: "not_evaluated",
+    });
+    expect(bridge.execution_evidence).toMatchObject({
+      state: "SOURCE_PLAN_NOT_EXECUTED",
+      native_runtime_attested: false,
+      contact_attested: false,
+    });
+    expect(bridge.gateway_arguments.arguments).not.toHaveProperty("primary_role_key_retention");
+  });
+
+  test("supports a declared secondary primary bone when it retains the critical key", () => {
+    const clip = recipe();
+    Object.assign(clip.poses[2]!.bones.body, { rotation: [30, 0, 0] });
+    for (const [index, frame] of clip.poses.entries()) {
+      Object.assign(frame.bones, {
+        hand: { rotation: [index === 1 ? 7 : 0, 0, 0] },
+      });
+    }
+    const userIntent = { ...intent(), primary_bones: ["body", "hand"] };
+    const bridge = compileSemanticMotionToGatewayInvocation(clip, userIntent);
+    expect(bridge.semantic_context.primary_role_key_retention.checked_role_count).toBe(3);
+  });
+
+  test("does not invent primary movement for a passive HOLD phase", () => {
+    const clip = recipe();
+    Reflect.deleteProperty(clip.poses[1]!.bones, "body");
+    const userIntent = {
+      ...intent(),
+      pose_roles: [
+        { pose_id: "windup", role: "ANTICIPATION" as const },
+        { pose_id: "strike", role: "HOLD" as const },
+        { pose_id: "reset", role: "RECOVERY" as const },
+      ],
+    };
+    const bridge = compileSemanticMotionToGatewayInvocation(clip, userIntent);
+    expect(bridge.semantic_context.primary_role_key_retention.checked_role_count).toBe(2);
+  });
 });

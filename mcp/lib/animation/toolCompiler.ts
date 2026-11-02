@@ -264,6 +264,52 @@ export function compileSemanticMotionToGatewayInvocation(
     throw new Error("SEMANTIC_MOTION_EMPTY_CLIP: at least one keyed bone is required.");
   }
 
+  // Native create_animation compactLinearCreationKeyframes() is applied
+  // before Bedrock import. A labelled action/contact/locomotion pose must
+  // not silently lose every explicitly keyed primary-bone anchor. This
+  // check observes SOURCE key retention only, never playback or fidelity.
+  const criticalRoles = new Set<SemanticMotionPoseRole>([
+    "ANTICIPATION", "ACTION", "CONTACT", "FOLLOW_THROUGH",
+    "RECOVERY", "STANCE", "SWING",
+  ]);
+  const retainedTimeByPrimaryBone = new Map<string, ReadonlySet<number>>();
+  for (const bone of plan.semantic_motion_contract.primary_bones) {
+    const frames = plan.create_animation.bones[bone] ?? [];
+    const retained = compactLinearCreationKeyframes(frames).frames;
+    retainedTimeByPrimaryBone.set(
+      bone, new Set(retained.map((frame) => frame.time))
+    );
+  }
+  let checkedPrimaryRoleCount = 0;
+  for (const { pose_id, role, time } of plan.semantic_motion_contract.pose_roles) {
+    if (!criticalRoles.has(role)) continue;
+    const primaryWithKeys = plan.semantic_motion_contract.primary_bones.filter(
+      (bone) => (plan.create_animation.bones[bone] ?? []).some(
+        (frame) => frame.time === time &&
+          (frame.position !== undefined ||
+           frame.rotation !== undefined ||
+           frame.scale !== undefined)
+      )
+    );
+    if (primaryWithKeys.length === 0) {
+      throw new Error(
+        "SEMANTIC_MOTION_PRIMARY_ROLE_UNKEYED: " + role + " pose " +
+        pose_id + " at " + time +
+        " has no authored primary-bone transform at that time."
+      );
+    }
+    if (!primaryWithKeys.some(
+      (bone) => retainedTimeByPrimaryBone.get(bone)?.has(time)
+    )) {
+      throw new Error(
+        "SEMANTIC_MOTION_PRIMARY_ROLE_COMPACTED: " + role + " pose " +
+        pose_id + " at " + time +
+        " would lose all primary-bone keys during native linear compaction."
+      );
+    }
+    checkedPrimaryRoleCount += 1;
+  }
+
   const args = plan.create_animation;
   return {
     gateway_tool: "invoke_capability" as const,
@@ -277,6 +323,12 @@ export function compileSemanticMotionToGatewayInvocation(
     semantic_context: {
       ...plan.semantic_motion_contract,
       local_contact: plan.local_contact_contract,
+      primary_role_key_retention: {
+        state: "SOURCE_ONLY_PRIMARY_KEYS_RETAINED" as const,
+        checked_role_count: checkedPrimaryRoleCount,
+        native_import_attested: false as const,
+        visual_verdict: "not_evaluated" as const,
+      },
     },
     execution_evidence: {
       state: "SOURCE_PLAN_NOT_EXECUTED" as const,

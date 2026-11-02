@@ -94,6 +94,18 @@ checked against the existing `createAnimationParameters` schema in the
 focused compiler contract test; no public tool, request field, route or
 generator-owned artifact is introduced.
 
+High-impact declared phases (`ANTICIPATION`, `ACTION`, `CONTACT`,
+`FOLLOW_THROUGH`, `RECOVERY`, `STANCE`, `SWING`) now require at
+least one corresponding keyed primary-bone transform at the exact
+source pose time, and at least one such primary key must survive the
+existing native strictly-linear creation compactor. The Gateway-plan
+compiler refuses `SEMANTIC_MOTION_PRIMARY_ROLE_UNKEYED` or
+`SEMANTIC_MOTION_PRIMARY_ROLE_COMPACTED` instead of silently claiming
+an authored event anchor that the actual native tool would not keep.
+Passive `SETUP`, `HOLD`, and `LOOP_SEAM` roles do not automatically
+imply a keyed primary-body motion. The plan reports only
+`SOURCE_ONLY_PRIMARY_KEYS_RETAINED`, never a native/visual PASS.
+
 The returned semantic context and SOURCE_PLAN_NOT_EXECUTED evidence are
 *not transmitted as native tool arguments*. The gateway still owns project,
 Stage, affinity and authorization, and Runtime owns real mutation/Undo.
