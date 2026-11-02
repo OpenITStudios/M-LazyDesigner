@@ -1052,25 +1052,25 @@ tests/CI, installed Blockbench or visual QA was performed.
 AI Form Signature is a **bounded, read-only projection**, not another
 stored authoring state, shape-style classifier, schema version, generator,
 approval gate or batch-by-Cube ceremony. The existing canonical Recipe
-owns \`feature_intents\`, geometric purposes, reference claim handles,
-and optional \`advanced_geometry_source\` parameters.
+owns `feature_intents`, geometric purposes, reference claim handles,
+and optional `advanced_geometry_source` parameters.
 
-\`authoringRecipe/formSignature.ts\` projects the current feature route from
-the existing \`featureDecision.ts\` decision owner. It exposes declared
+`authoringRecipe/formSignature.ts` projects the current feature route from
+the existing `featureDecision.ts` decision owner. It exposes declared
 geometry purposes and limited parameter/part/relationship IDs only when
 an actual caller supplies freshly compiled candidate source or a checked
 saved-Recipe/native match. Missing parameters never become inferred
 silhouettes, anatomy, part importance or implicit variation ranges.
-\`design_role: NOT_DECLARED\` and
-\`variation_policy: NO_DECLARED_VARIATION_BOUNDS\` are intentionally
+`design_role: NOT_DECLARED` and
+`variation_policy: NO_DECLARED_VARIATION_BOUNDS` are intentionally
 honest; source metadata, label or a method such as SWEEP cannot establish
 premium artistic fidelity.
 
-Existing \`knowledgePlanning.ts\` returns this compact projection even
+Existing `knowledgePlanning.ts` returns this compact projection even
 when the Knowledge index is unavailable, without adding retrieval or
-native calls. Existing \`advancedConstruction.ts\` inspect/plan responses
+native calls. Existing `advancedConstruction.ts` inspect/plan responses
 also include the bounded projection. Native scene/source mismatch
-withholds parametric source methods. Public \`construct_geometry\` remains
+withholds parametric source methods. Public `construct_geometry` remains
 unregistered; this source change does NOT promote a native capability.
 
 Each response is capped at eight feature signatures, reports omitted or
