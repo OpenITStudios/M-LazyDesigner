@@ -17,7 +17,7 @@ export const CURRENT_POSE_LOCATOR_LIMIT = 16;
  * Marker purpose is deliberately UNASSIGNED: an attached Locator is not
  * automatically a planted foot, grip, impact target, or end effector.
  */
-function readDirectLocatorCandidates(group: Group) {
+export function readDirectLocatorCandidates(group: Group) {
   const scope = "DIRECT_CHILD_NATIVE_LOCATORS_ONLY" as const;
   const role = "UNASSIGNED_CONTACT_INTENT" as const;
   const unavailable = (reason: string) => ({

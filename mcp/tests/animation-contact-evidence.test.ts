@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { analyzeAnimationContactEvidence } from "@/lib/animationContactEvidence";
+import {
+  analyzeAnimationContactEvidence,
+  analyzeObservedAnimationLocatorTrajectories,
+  type ObservedAnimationLocatorFrame,
+} from "@/lib/animationContactEvidence";
 
 function requireAvailable<T extends { state: string }>(result: T): asserts result is T & { state: "available" } {
   if (result.state !== "available") throw new Error(`expected available contact evidence, got ${result.state}`);
@@ -626,4 +630,79 @@ test("sub-microsecond contact timestamps cannot create false motion evidence", (
   expect(result.invalid_examples[0]?.reason).toBe("DUPLICATE_SAMPLE_TIMESTAMPS");
   expect(result.constraint_count).toBe(0);
   expect(result.pass_constraint_count).toBe(0);
+});
+
+
+test("sampled Locator trajectory is geometric evidence, not a foot-contact verdict", () => {
+  const frames: ObservedAnimationLocatorFrame[] = [
+    { project_uuid: "project-A", animation_uuid: "clip-A", time_seconds: 0, markers: [
+      { locator_uuid: "marker-A", parent_group_uuid: "leg-A", world_position: [0, 1, 0] },
+      { locator_uuid: "marker-B", parent_group_uuid: "arm-A", world_position: [3, 1, 0] },
+    ] },
+    { project_uuid: "project-A", animation_uuid: "clip-A", time_seconds: 0.5, markers: [
+      { locator_uuid: "marker-B", parent_group_uuid: "arm-A", world_position: [3, 1, 0] },
+      { locator_uuid: "marker-A", parent_group_uuid: "leg-A", world_position: [0.5, 1, 0] },
+    ] },
+    { project_uuid: "project-A", animation_uuid: "clip-A", time_seconds: 1, markers: [
+      { locator_uuid: "marker-A", parent_group_uuid: "leg-A", world_position: [1, 1, 0] },
+      { locator_uuid: "marker-B", parent_group_uuid: "arm-A", world_position: [3, 1, 0] },
+    ] },
+  ];
+  const before = JSON.stringify(frames);
+  const out = analyzeObservedAnimationLocatorTrajectories(frames);
+  expect(out.state).toBe("available");
+  if (out.state !== "available") throw new Error("Expected available trajectory.");
+  expect(out.evaluated_locator_count).toBe(2);
+  expect(out.trajectories).toEqual([
+    { locator_uuid: "marker-A", parent_group_uuid: "leg-A",
+      sample_count: 3, max_world_drift_from_start: 1,
+      start_to_end_distance: 1, world_path_length: 1 },
+    { locator_uuid: "marker-B", parent_group_uuid: "arm-A",
+      sample_count: 3, max_world_drift_from_start: 0,
+      start_to_end_distance: 0, world_path_length: 0 },
+  ]);
+  expect(out.contact_roles_assigned).toBe(false);
+  expect(out.physical_contact_verified).toBe(false);
+  expect(out.native_preview_restoration_attested).toBe(false);
+  expect(out.ik_correction_authorized).toBe(false);
+  expect(out.visual_verdict).toBe("not_evaluated");
+  expect(JSON.stringify(frames)).toBe(before);
+  expect(analyzeObservedAnimationLocatorTrajectories([...frames].reverse()))
+    .toEqual(out);
+});
+
+test("world-space trajectory refuses inconsistent native marker coverage and project drift", () => {
+  const good: ObservedAnimationLocatorFrame[] = [
+    { project_uuid: "project", animation_uuid: "clip", time_seconds: 0,
+      markers: [{ locator_uuid: "marker", parent_group_uuid: "leg",
+        world_position: [0, 0, 0] }] },
+    { project_uuid: "project", animation_uuid: "clip", time_seconds: 1,
+      markers: [{ locator_uuid: "marker", parent_group_uuid: "leg",
+        world_position: [1, 0, 0] }] },
+  ];
+  const cloned = () => JSON.parse(JSON.stringify(good)) as Array<{
+    project_uuid: string; animation_uuid: string; time_seconds: number;
+    markers: Array<{ locator_uuid: string; parent_group_uuid: string;
+      world_position: [number, number, number] }>;
+  }>;
+  let frames = cloned();
+  frames[1].markers = [];
+  expect(analyzeObservedAnimationLocatorTrajectories(frames).state).toBe("unavailable");
+  frames = cloned();
+  frames[1].project_uuid = "other";
+  expect(analyzeObservedAnimationLocatorTrajectories(frames).state).toBe("unavailable");
+  frames = cloned();
+  frames[1].markers[0].parent_group_uuid = "other";
+  expect(analyzeObservedAnimationLocatorTrajectories(frames).state).toBe("unavailable");
+  frames = cloned();
+  frames[1].markers[0].world_position = [Number.NaN, 0, 0];
+  expect(analyzeObservedAnimationLocatorTrajectories(frames).state).toBe("unavailable");
+  frames = cloned();
+  frames[1].time_seconds = 0;
+  expect(analyzeObservedAnimationLocatorTrajectories(frames).state).toBe("unavailable");
+  frames = cloned();
+  frames[1].markers.push({ ...frames[1].markers[0] });
+  expect(analyzeObservedAnimationLocatorTrajectories(frames).state).toBe("unavailable");
+  expect(analyzeObservedAnimationLocatorTrajectories(good.slice(0, 1)).state)
+    .toBe("unavailable");
 });

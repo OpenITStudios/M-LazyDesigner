@@ -193,6 +193,36 @@ actual newly imported clip snapping and verifies source/import/export timecodes
 inside Undo. This preflight does not activate direct semantic Runtime input,
 nonlinear post-create edits, physical contact, or visual motion QA.
 
+## Read-only Locator trajectory evidence in existing Animation preview (2026-11-03)
+
+The existing `capture_model_views(animation_preview)` Runtime now reuses
+`currentPose.ts::readDirectLocatorCandidates` during the **already
+requested** screenshot callbacks, for up to five sample times and sixteen
+native Locators. Successful image captures may return an optional
+`locator_trajectory_review` showing observed world-space travel distance,
+displacement from the first sample and the exact Locator/parent UUIDs.
+No new public request fields, capability registration, global contact
+sampler, controller or additional Timeline writes are introduced.
+
+A whole-session non-reentrant guard now prevents overlapping multi-time
+capture calls within this Runtime, closing the gap where each native
+`animationPreviewPort()` had a new identity and the helper's per-port
+WeakSet could not protect against concurrent requests. All exit paths,
+including failure to resolve an Animation, release the session guard.
+
+**Trust boundary:** The existing temporary preview helper restores known
+editor flags/timeline with best-effort cleanup, but full Blockbench preview
+surfaces (MoLang state, effects, external listeners, transformed geometry,
+audio, texture frames) have not been independently verified. The Locator
+review is therefore a *read-only observation of a current preview callback*
+with `native_preview_restoration_attested=false`, not accepted sample/pose
+fidelity. Missing/hidden/ambiguous Locator identities or incomplete
+frames produce `unavailable`, never a synthetic zero-motion result.
+A moving marker is not automatically a planted foot, and a stationary
+marker is not physical-contact evidence. No IK write or correction is
+authorized. Explicit contact roles/stance windows, a fully isolated native
+harness and visual Golden proof remain required before foot locking.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

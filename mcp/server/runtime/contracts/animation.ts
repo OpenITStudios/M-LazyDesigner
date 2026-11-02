@@ -10,6 +10,14 @@ import {
 import { resolveCoreAnimation } from "@/lib/core/identity";
 import { withTemporaryAnimationPreview } from "@/lib/animation/previewState";
 import {
+  readDirectLocatorCandidates,
+  CURRENT_POSE_LOCATOR_LIMIT,
+} from "../../tools/animation/currentPose";
+import {
+  analyzeObservedAnimationLocatorTrajectories,
+  type ObservedAnimationLocatorFrame,
+} from "@/lib/animation/contactEvidence";
+import {
   analyzeGeometryPoseSequence,
   GEOMETRY_WORLD_OBB_SAMPLE_LIMIT,
   type GeometryPoseObbSnapshot,
@@ -187,6 +195,11 @@ export const optimizedAnimationTimelineParameters = z.union([
 
 let animationRuntimeContractsWired = false;
 
+// Whole-capture session guard. withTemporaryAnimationPreview() only protects
+// one port object, while animationPreviewPort() creates a new port per sample.
+// Without a session guard, concurrent multi-time capture calls can interleave.
+let activeAnimationPreviewCapture = false;
+
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -346,6 +359,73 @@ function observeNativeAnimationGeometryPose(
   };
 }
 
+
+/**
+ * Same-frame, read-only Locator positions via the existing passive native
+ * reader. The optional trajectory output does NOT infer a foot/grip role.
+ * Sampling takes place only after the underlying image capture succeeded;
+ * full native preview state restoration remains unverified.
+ */
+function observeNativeAnimationLocatorFrame(
+  animation: BBAnimation,
+  time: number
+): ObservedAnimationLocatorFrame {
+  if (typeof Project === "undefined" || !Project ||
+      typeof Project.uuid !== "string" || !Project.uuid.trim() ||
+      typeof Group === "undefined" || !Array.isArray(Group.all) ||
+      typeof Locator === "undefined" || !Array.isArray(Locator.all) ||
+      typeof AnimationItem === "undefined" ||
+      typeof Timeline === "undefined" ||
+      AnimationItem.selected !== animation ||
+      Timeline.playing !== false || Timeline.time !== time) {
+    throw new Error("ANIMATION_LOCATOR_PREVIEW_CONTEXT_UNVERIFIED");
+  }
+  const projectUuid = Project.uuid;
+  const nativeLocators = Locator.all;
+  if (nativeLocators.length > CURRENT_POSE_LOCATOR_LIMIT) {
+    throw new Error("ANIMATION_LOCATOR_GLOBAL_BUDGET_EXCEEDED");
+  }
+  const ownerGroups = Group.all.filter((group: Group) =>
+    nativeLocators.some((locator: Locator) => locator.parent === group)
+  );
+  const seen = new Set<string>();
+  const markers: ObservedAnimationLocatorFrame["markers"][number][] = [];
+  for (const group of ownerGroups) {
+    const result = readDirectLocatorCandidates(group);
+    if (result.state === "UNVERIFIED" ||
+        result.observed_count !== result.count) {
+      throw new Error("ANIMATION_LOCATOR_WORLD_READ_INCOMPLETE");
+    }
+    for (const marker of result.candidates) {
+      if (marker.state !== "OBSERVED" ||
+          !marker.world_position ||
+          seen.has(marker.uuid)) {
+        throw new Error("ANIMATION_LOCATOR_IDENTITY_OR_WORLD_UNVERIFIED");
+      }
+      seen.add(marker.uuid);
+      markers.push({
+        locator_uuid: marker.uuid,
+        parent_group_uuid: group.uuid,
+        world_position: [...marker.world_position] as [number,number,number],
+      });
+    }
+  }
+  // Root/unparented or ambiguously-parented Locators are not invented as
+  // complete observations; fail the diagnostic, not the image capture.
+  if (markers.length !== nativeLocators.length ||
+      !Project || Project.uuid !== projectUuid ||
+      AnimationItem.selected !== animation ||
+      Timeline.time !== time) {
+    throw new Error("ANIMATION_LOCATOR_INVENTORY_OR_CONTEXT_CHANGED");
+  }
+  return {
+    project_uuid: projectUuid,
+    animation_uuid: animation.uuid,
+    time_seconds: time,
+    markers: markers.sort((a,b) => a.locator_uuid.localeCompare(b.locator_uuid)),
+  };
+}
+
 async function captureAnimationSamples(
   definition: RuntimeToolDefinition,
   request: z.infer<typeof animationAwareCaptureModelViewsParameters>,
@@ -355,6 +435,11 @@ async function captureAnimationSamples(
   if (!preview) {
     return definition.execute(request as unknown as Record<string, unknown>, context);
   }
+  if (activeAnimationPreviewCapture) {
+    throw new Error("ANIMATION_PREVIEW_CAPTURE_ALREADY_ACTIVE");
+  }
+  activeAnimationPreviewCapture = true;
+  try {
 
   const animation = resolveCoreAnimation(preview.animation_id, {
     allowSelected: false,
@@ -381,6 +466,8 @@ async function captureAnimationSamples(
   const compareGeometry = preview.times.length >= 2;
   const geometrySnapshots: GeometryPoseObbSnapshot[] = [];
   const geometryReadFailures: string[] = [];
+  const locatorFrames: ObservedAnimationLocatorFrame[] = [];
+  const locatorReadFailures: string[] = [];
 
   for (const time of preview.times) {
     const observed = await withTemporaryAnimationPreview(
@@ -405,7 +492,17 @@ async function captureAnimationSamples(
             geometryFailure = error instanceof Error ? error.message : String(error);
           }
         }
-        return { result, structured, geometry, geometryFailure };
+        let locatorFrame: ObservedAnimationLocatorFrame | null = null;
+        let locatorFailure: string | null = null;
+        if (compareGeometry) {
+          try {
+            locatorFrame = observeNativeAnimationLocatorFrame(animation, time);
+          } catch (error) {
+            locatorFailure = error instanceof Error ? error.message : String(error);
+          }
+        }
+        return { result, structured, geometry, geometryFailure,
+          locatorFrame, locatorFailure };
       }
     );
 
@@ -415,6 +512,8 @@ async function captureAnimationSamples(
     samples.push({ time, captures });
     if (observed.geometry) geometrySnapshots.push(observed.geometry);
     if (observed.geometryFailure) geometryReadFailures.push(observed.geometryFailure);
+    if (observed.locatorFrame) locatorFrames.push(observed.locatorFrame);
+    if (observed.locatorFailure) locatorReadFailures.push(observed.locatorFailure);
     if (Object.keys(commonStructured).length === 0) {
       const { captures: _captures, count: _count, ...rest } = observed.structured;
       commonStructured = rest;
@@ -455,6 +554,27 @@ async function captureAnimationSamples(
     }
   }
 
+  // Pure role-free displacement diagnostics; a marker moving in world-space
+  // is not a planted foot or a verified contact violation.
+  const locatorTrajectoryReview = compareGeometry
+    ? locatorReadFailures.length > 0 || locatorFrames.length !== preview.times.length
+      ? {
+          state: "unavailable" as const,
+          reason: "native_locator_observation_incomplete",
+          requested_frame_count: preview.times.length,
+          observed_frame_count: locatorFrames.length,
+          failure_count: locatorReadFailures.length,
+          physical_contact_verified: false as const,
+          native_preview_restoration_attested: false as const,
+          ik_correction_authorized: false as const,
+          visual_verdict: "not_evaluated" as const,
+        }
+      : {
+          ...analyzeObservedAnimationLocatorTrajectories(locatorFrames),
+          observation_source: "current_native_preview_callback_unverified_restoration" as const,
+        }
+    : null;
+
   return {
     content,
     structuredContent: {
@@ -473,8 +593,12 @@ async function captureAnimationSamples(
       },
       samples,
       ...(geometryPoseReview ? { geometry_pose_review: geometryPoseReview } : {}),
+      ...(locatorTrajectoryReview ? { locator_trajectory_review: locatorTrajectoryReview } : {}),
     },
   };
+  } finally {
+    activeAnimationPreviewCapture = false;
+  }
 }
 
 function keyframesForChannel(

@@ -365,3 +365,148 @@ export function analyzeAnimationContactEvidence(input: {
     note: "Contact distances, planted foot drift (including support-plane sliding versus lift when declared), optional time-window coverage and support-plane penetration are numeric caller-supplied diagnostics only. Hypothetical stationary-anchor offsets require an explicit support plane, bounded marker clearance throughout stance and complete sampling coverage; they are caller-declared world-marker deltas, NOT native bone/local keyframes and must not be auto-applied. A passing distance tolerance does not prove believable weight, timing, deformation or visual quality; PASS never attests native sampling, IK or scene behavior, and reference-grounded native playback remains required.",
   };
 }
+
+
+/**
+ * Diagnostic only: native preview callback may provide finite world-space
+ * Locator coordinates, but no Locator is a foot/grip/contact until the caller
+ * explicitly binds its role and supplies a complete contact window.
+ *
+ * This pure reducer does not sample Blockbench, infer contact, invoke IK,
+ * mutate bones or certify restored preview state.
+ */
+export type ObservedAnimationLocatorFrame = {
+  project_uuid: string;
+  animation_uuid: string;
+  time_seconds: number;
+  markers: readonly {
+    locator_uuid: string;
+    parent_group_uuid: string;
+    world_position: Vec3;
+  }[];
+};
+
+export const ANIMATION_LOCATOR_TRAJECTORY_MAX_FRAMES = 5;
+export const ANIMATION_LOCATOR_TRAJECTORY_MAX_MARKERS = 16;
+
+export function analyzeObservedAnimationLocatorTrajectories(
+  frames: readonly ObservedAnimationLocatorFrame[]
+) {
+  const unavailable = (reason: string) => ({
+    state: "unavailable" as const,
+    reason,
+    frame_count: Array.isArray(frames) ? frames.length : 0,
+    evaluated_locator_count: 0,
+    contact_roles_assigned: false as const,
+    physical_contact_verified: false as const,
+    native_preview_restoration_attested: false as const,
+    ik_correction_authorized: false as const,
+    visual_verdict: "not_evaluated" as const,
+    trajectories: [] as Array<{
+      locator_uuid: string;
+      parent_group_uuid: string;
+      sample_count: number;
+      max_world_drift_from_start: number;
+      start_to_end_distance: number;
+      world_path_length: number;
+    }>,
+  });
+  if (!Array.isArray(frames) || frames.length < 2 ||
+      frames.length > ANIMATION_LOCATOR_TRAJECTORY_MAX_FRAMES) {
+    return unavailable("LOCATOR_TRAJECTORY_FRAME_WINDOW_INVALID");
+  }
+  const ordered = [...frames].sort((a, b) => a.time_seconds - b.time_seconds);
+  const first = ordered[0];
+  if (!first || typeof first.project_uuid !== "string" || !first.project_uuid.trim() ||
+      typeof first.animation_uuid !== "string" || !first.animation_uuid.trim() ||
+      !Array.isArray(first.markers) || first.markers.length === 0) {
+    return unavailable("LOCATOR_TRAJECTORY_IDENTITY_OR_MARKERS_MISSING");
+  }
+  if (first.markers.length > ANIMATION_LOCATOR_TRAJECTORY_MAX_MARKERS) {
+    return unavailable("LOCATOR_TRAJECTORY_MARKER_BUDGET_EXCEEDED");
+  }
+  const expected = new Map<string, {
+    parent_group_uuid: string;
+    world_position: Vec3;
+  }>();
+  for (const frame of ordered) {
+    if (!frame || frame.project_uuid !== first.project_uuid ||
+        frame.animation_uuid !== first.animation_uuid ||
+        !Number.isFinite(frame.time_seconds) || frame.time_seconds < 0 ||
+        !Array.isArray(frame.markers) ||
+        frame.markers.length !== first.markers.length) {
+      return unavailable("LOCATOR_TRAJECTORY_FRAME_IDENTITY_OR_COVERAGE_CHANGED");
+    }
+    const seen = new Set<string>();
+    for (const marker of frame.markers) {
+      if (!marker || typeof marker.locator_uuid !== "string" ||
+          !marker.locator_uuid.trim() ||
+          typeof marker.parent_group_uuid !== "string" ||
+          !marker.parent_group_uuid.trim() ||
+          !Array.isArray(marker.world_position) ||
+          marker.world_position.length !== 3 ||
+          !marker.world_position.every((value) =>
+            typeof value === "number" && Number.isFinite(value)
+          ) || seen.has(marker.locator_uuid)) {
+        return unavailable("LOCATOR_TRAJECTORY_AMBIGUOUS_OR_NONFINITE_MARKER");
+      }
+      seen.add(marker.locator_uuid);
+      if (frame === first) {
+        expected.set(marker.locator_uuid, {
+          parent_group_uuid: marker.parent_group_uuid,
+          world_position: marker.world_position,
+        });
+      } else if (
+        expected.get(marker.locator_uuid)?.parent_group_uuid !== marker.parent_group_uuid
+      ) {
+        return unavailable("LOCATOR_TRAJECTORY_MARKER_OR_PARENT_CHANGED");
+      }
+    }
+    if (frame !== first && [...expected.keys()].some((id) => !seen.has(id))) {
+      return unavailable("LOCATOR_TRAJECTORY_MARKER_OR_PARENT_CHANGED");
+    }
+  }
+  if (ordered.some((frame, index) =>
+    index > 0 && frame.time_seconds <= ordered[index - 1].time_seconds
+  )) return unavailable("LOCATOR_TRAJECTORY_TIMES_NOT_DISTINCT");
+
+  const distance = (a: Vec3, b: Vec3) =>
+    Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const trajectories = [...expected.entries()].map(([locator_uuid, metadata]) => {
+    const points = ordered.map((frame) =>
+      frame.markers.find((marker) => marker.locator_uuid === locator_uuid)!.world_position
+    );
+    let path = 0;
+    for (let i = 1; i < points.length; i++) {
+      path += distance(points[i - 1], points[i]);
+    }
+    return {
+      locator_uuid,
+      parent_group_uuid: metadata.parent_group_uuid,
+      sample_count: points.length,
+      max_world_drift_from_start: Math.max(...points.map((point) =>
+        distance(point, points[0])
+      )),
+      start_to_end_distance: distance(points[0], points[points.length - 1]),
+      world_path_length: path,
+    };
+  }).sort((a,b) => a.locator_uuid.localeCompare(b.locator_uuid));
+  return {
+    state: "available" as const,
+    reason: null,
+    project_uuid: first.project_uuid,
+    animation_uuid: first.animation_uuid,
+    frame_count: ordered.length,
+    evaluated_locator_count: trajectories.length,
+    contact_roles_assigned: false as const,
+    physical_contact_verified: false as const,
+    native_preview_restoration_attested: false as const,
+    ik_correction_authorized: false as const,
+    visual_verdict: "not_evaluated" as const,
+    trajectories,
+    note: "Read-only world-space Locator displacement at sampled preview callbacks. " +
+      "No contact role, support plane, stance window, independent native restoration, " +
+      "IK correction, or visual fidelity was verified. Nonzero drift is not a foot-slip " +
+      "verdict; a stationary Locator is not proof of valid physical contact.",
+  };
+}

@@ -162,6 +162,33 @@ describe("Animation runtime efficiency contracts", () => {
     expect(parsed).not.toHaveProperty("geometry_pose_review");
   });
 
+  test("multi-time locator QA uses the existing passive reader and forbids overlapping capture sessions", async () => {
+    const source = await Bun.file("server/runtime/contracts/animation.ts").text();
+    const reader = source.slice(
+      source.indexOf("function observeNativeAnimationLocatorFrame("),
+      source.indexOf("async function captureAnimationSamples(")
+    );
+    const operation = source.slice(
+      source.indexOf("async function captureAnimationSamples("),
+      source.indexOf("function keyframesForChannel(")
+    );
+    expect(reader).toContain("readDirectLocatorCandidates(group)");
+    expect(reader).toContain("CURRENT_POSE_LOCATOR_LIMIT");
+    expect(reader).toContain("ANIMATION_LOCATOR_INVENTORY_OR_CONTEXT_CHANGED");
+    expect(reader).not.toContain("Undo.initEdit");
+    expect(reader).not.toContain("Timeline.setTime(");
+    expect(operation).toContain('ANIMATION_PREVIEW_CAPTURE_ALREADY_ACTIVE');
+    expect(operation.indexOf("activeAnimationPreviewCapture = true"))
+      .toBeLessThan(operation.indexOf("withTemporaryAnimationPreview("));
+    expect(operation).toContain("} finally {\n    activeAnimationPreviewCapture = false;");
+    expect(operation.indexOf("requireCompleteAnimationCaptureSample("))
+      .toBeLessThan(operation.indexOf("observeNativeAnimationLocatorFrame("));
+    expect(operation).toContain("analyzeObservedAnimationLocatorTrajectories(locatorFrames)");
+    expect(operation).toContain("locator_trajectory_review: locatorTrajectoryReview");
+    expect(operation).toContain("native_preview_restoration_attested: false");
+    expect(operation).not.toContain("Undo.initEdit");
+  });
+
   test("focused Animation inspection can narrow one bone by channel and time range", () => {
     const accepted = focusedInspectAnimationParameters.parse({
       animation_id: "anim-walk",
