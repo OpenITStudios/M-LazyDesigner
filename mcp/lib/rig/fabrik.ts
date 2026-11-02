@@ -60,7 +60,7 @@ export function solveFabrikChain(points: readonly RigVec3[], target: RigVec3, op
 }
 
 
-export type RigQuaternionXYWZ = readonly [number, number, number, number];
+export type RigQuaternionXYZW = readonly [number, number, number, number];
 
 /**
  * Source-only two-bone pole correction plus shortest-arc WORLD-space swings.
@@ -163,7 +163,7 @@ export function planTwoBonePoleSwing(
   }
   const swings: Array<{
     segment_index: number;
-    world_delta_quaternion_xyzw: [number,number,number,number];
+    world_delta_quaternion_xyzw: RigQuaternionXYZW;
     angle_degrees: number;
   }> = [];
   for (let i=0;i<2;i++) {

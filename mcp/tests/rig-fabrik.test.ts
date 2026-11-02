@@ -23,6 +23,7 @@ describe("source-only FABRIK pole-guided joint swing hints", () => {
     const target = [0.2, 0, 0] as const;
     const candidate = solveFabrikChain(original, target);
     expect(candidate.reached).toBe(true);
+    const sourceBefore = JSON.stringify({ original, candidate });
     const plan = planTwoBonePoleSwing(
       original, candidate.points, [0, 0, 1]
     );
@@ -41,7 +42,26 @@ describe("source-only FABRIK pole-guided joint swing hints", () => {
       expect(Math.hypot(...hint.world_delta_quaternion_xyzw)).toBeCloseTo(1, 9);
       expect(hint.angle_degrees).toBeLessThan(120);
       expect(hint.world_delta_quaternion_xyzw[3]).toBeGreaterThanOrEqual(0);
+
+      // Verify that this quaternion actually rotates the observed
+      // world-space bone direction onto the pole-corrected direction.
+      const direction = original[i+1].map((v,j) => v-original[i][j]);
+      const intended = plan.corrected_points[i+1].map(
+        (v,j) => v-plan.corrected_points[i][j]
+      );
+      const [qx,qy,qz,qw] = hint.world_delta_quaternion_xyzw;
+      const cross = (a: readonly number[],b: readonly number[]) => [
+        a[1]*b[2]-a[2]*b[1],
+        a[2]*b[0]-a[0]*b[2],
+        a[0]*b[1]-a[1]*b[0],
+      ];
+      const t = cross([qx,qy,qz],direction).map((v)=>2*v);
+      const corrective = cross([qx,qy,qz],t);
+      const rotated = direction.map((v,j)=>v+qw*t[j]+corrective[j]);
+      expect(Math.hypot(...rotated.map((v,j)=>v-intended[j])))
+        .toBeLessThan(1e-6);
     }
+    expect(JSON.stringify({ original, candidate })).toBe(sourceBefore);
     expect(plan.native_rotation_authorized).toBe(false);
     expect(plan.local_euler_attested).toBe(false);
     expect(plan.visual_verdict).toBe("not_evaluated");
