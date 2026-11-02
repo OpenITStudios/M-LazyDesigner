@@ -895,6 +895,48 @@ BOX dimensions, resulting FACE_ANCHOR alignment, CLEARANCE contact,
 saved Recipe/Undo, native UV/export and visual reference review.
 Bun, typecheck/build/tests/CI/native Blockbench were NOT run.
 
+### R3v — Bounded dimensional acceptance for proportional construction (2026-11-02; CODE ONLY)
+
+The v9 `DIMENSION_LINK` can derive numerically valid BOX sizes from
+other component envelopes but does not, by itself, guarantee declared
+proportions or minimum/maximum component spans. Adding more shape
+presets or a subjective "beauty score" would not solve that problem.
+
+Strict opt-in `program.version=10` adds one small declarative
+`dimension_constraints` list (maximum 16), with two pure relationship
+kinds: `SPAN_BOUNDS` on a part's chosen X/Y/Z extent, and
+`RATIO_BOUNDS` on a unitless ratio of two chosen semantic part extents.
+The latter uses explicit bounded rational lower/upper constants
+(0–32 numerator, 1–32 denominator), allowing strict equalities or
+ranges without floating source inputs. Schema checks known part IDs,
+valid and ascending bounds, and global relation ID uniqueness across
+ANCHOR, FACE_ANCHOR, CLEARANCE, DIMENSION_LINK and the new assertions.
+
+`geometryMathDimensionConstraints.ts` is a pure, bounded read-only
+acceptance function called from the EXISTING `geometryMathProgram.ts`
+after the prior dimension/INSTANCE resolver, Recipe ANCHOR solver,
+FACE_ANCHOR geometry, and optional derived CONNECT/CLEARANCE. All
+calculations use the same final source-local part AABBs, including
+signed LINEAR envelope extents and generated connectors. Exact ratio
+comparison uses finite cross products; no new graph, resizing solver,
+optimizer, local runtime registry or persistence path is introduced.
+A failing user-declared ratio or span aborts source construction rather
+than guessing a correction. The native 64-Cuboid budget is unchanged.
+
+v1–v9 Recipe output semantics are frozen, with v10 opt-in only.
+AABB extents measure envelopes, NOT physical occupancy in repeat gaps.
+These declared constraints are not reference-backed by themselves and
+do NOT certify asset beauty, Minecraft scale, UV, animation, or export.
+No new Gateway tool, editor mutation owner or generated API was added.
+
+**Pending future proof (NOT EXECUTED):** v1–v9 exact source equivalence;
+dimension-link-to-SPAN and chained RATIO acceptance; equal and inverted
+rational bounds; missing parts and duplicate relation IDs; v10
+CONNECT/INSTANCE/ORIENT and signed repeat scopes; precision at inclusive
+limits, nonpositive source extents, 64-Cube budget, native Recipe
+Undo/save/reopen and art-reference review. No Bun, typecheck, tests,
+build, CI, Blockbench or visual/native QA was run.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

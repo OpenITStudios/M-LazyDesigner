@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * Versions 1–8 remain source-frozen. V9 adds opt-in mathematical
- * dimension relationships between semantic parts; no silent migration.
+ * Versions 1–9 remain source-frozen. V10 adds opt-in dimension
+ * acceptance relations; no silent mutation of older Recipe placements.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -273,6 +273,43 @@ export const geometryMathDimensionLinkSchema = z.object({
   delta: z.number().int().min(-16).max(16).optional(),
 }).strict();
 
+/**
+ * V10: explicit, bounded dimensional acceptance — NOT a new placement,
+ * native resizing, CAD optimiser or visual-quality score. A checked
+ * envelope may include the gaps between signed LINEAR repeat copies;
+ * source-local AABB extents are not equivalent to occupied mass.
+ *
+ * RATIO_BOUNDS compares numerator part extent / denominator part extent.
+ * Bounds are nonnegative exact rational constants, expressed as
+ * positive integer denominators to avoid floating-input ambiguity.
+ */
+const geometryMathBoundRatioSchema = z.object({
+  numerator: z.number().int().min(0).max(32),
+  denominator: z.number().int().min(1).max(32),
+}).strict();
+
+export const geometryMathDimensionConstraintSchema =
+  z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("SPAN_BOUNDS"),
+      id,
+      part_id: id,
+      axis,
+      min_span: z.number().finite().min(0).max(64),
+      max_span: z.number().finite().min(0).max(64),
+    }).strict(),
+    z.object({
+      kind: z.literal("RATIO_BOUNDS"),
+      id,
+      numerator_part_id: id,
+      numerator_axis: axis,
+      denominator_part_id: id,
+      denominator_axis: axis,
+      min_ratio: geometryMathBoundRatioSchema,
+      max_ratio: geometryMathBoundRatioSchema,
+    }).strict(),
+  ]);
+
 const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
@@ -301,6 +338,11 @@ const programV9Fields = {
   ...programV8Fields,
   dimension_links: z.array(geometryMathDimensionLinkSchema).max(16).optional(),
 };
+const programV10Fields = {
+  ...programV9Fields,
+  dimension_constraints: z.array(geometryMathDimensionConstraintSchema)
+    .max(16).optional(),
+};
 
 /**
  * The source version selects numerical semantics; it is never defaulted.
@@ -316,6 +358,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(7), ...programV7Fields }).strict(),
   z.object({ version: z.literal(8), ...programV8Fields }).strict(),
   z.object({ version: z.literal(9), ...programV9Fields }).strict(),
+  z.object({ version: z.literal(10), ...programV10Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -430,20 +473,25 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
-  if (program.version === 8 || program.version === 9) {
+  if (program.version === 8 || program.version === 9 ||
+    program.version === 10) {
     const relations = program.clearances ?? [];
     const claimedIds = [
       ...anchors.map(link => link.id),
       ...(program.face_anchors ?? []).map(link => link.id),
       ...relations.map(link => link.id),
-      ...(program.version === 9 ? (program.dimension_links ?? []).map(
-        link => link.id
-      ) : []),
+      ...((program.version === 9 || program.version === 10)
+        ? (program.dimension_links ?? []).map(link => link.id)
+        : []),
+      ...(program.version === 10
+        ? (program.dimension_constraints ?? []).map(link => link.id)
+        : []),
     ];
     if (new Set(claimedIds).size !== claimedIds.length) {
       ctx.addIssue({
         code: "custom",
-        path: program.version === 9 ? ["dimension_links"] : ["clearances"],
+        path: program.version === 10 ? ["dimension_constraints"] :
+          program.version === 9 ? ["dimension_links"] : ["clearances"],
         message: "All geometry relation IDs must be unique.",
       });
     }
@@ -457,7 +505,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
-  if (program.version === 9) {
+  if (program.version === 9 || program.version === 10) {
     const definitions = new Map(program.parts.map(part => [
       part.id, part
     ] as const));
@@ -484,6 +532,43 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       claims.add(slot);
     });
   }
+  if (program.version === 10) {
+    (program.dimension_constraints ?? []).forEach((relation, index) => {
+      if (relation.kind === "SPAN_BOUNDS") {
+        if (!known.has(relation.part_id)) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["dimension_constraints", index, "part_id"],
+            message: "SPAN_BOUNDS references an unknown semantic part.",
+          });
+        }
+        if (relation.min_span > relation.max_span) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["dimension_constraints", index, "min_span"],
+            message: "SPAN_BOUNDS lower bound exceeds the upper bound.",
+          });
+        }
+        return;
+      }
+      if (!known.has(relation.numerator_part_id) ||
+        !known.has(relation.denominator_part_id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["dimension_constraints", index],
+          message: "RATIO_BOUNDS requires known numerator and denominator parts.",
+        });
+      }
+      if (relation.min_ratio.numerator * relation.max_ratio.denominator >
+        relation.max_ratio.numerator * relation.min_ratio.denominator) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["dimension_constraints", index, "min_ratio"],
+          message: "RATIO_BOUNDS lower rational bound exceeds its upper bound.",
+        });
+      }
+    });
+  }
 });
 
 export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
@@ -501,5 +586,7 @@ export type GeometryMathClearance =
   z.infer<typeof geometryMathClearanceSchema>;
 export type GeometryMathDimensionLink =
   z.infer<typeof geometryMathDimensionLinkSchema>;
+export type GeometryMathDimensionConstraint =
+  z.infer<typeof geometryMathDimensionConstraintSchema>;
 export type GeometryMathVersion = GeometryMathProgram["version"];
 export type GeometryMathAnchor = z.infer<typeof geometryMathAnchorSchema>;

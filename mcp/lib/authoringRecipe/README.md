@@ -746,6 +746,70 @@ DB, new plugin or generated API-doc snapshot was created. Public
 NO Bun, build, typecheck, unit/integration tests, CI, installed
 Blockbench, save/reopen, Undo, export or visual QA was executed.
 
+### R3v — Source-owned dimensional acceptance, not automatic beauty scoring (CODE ONLY)
+
+Explicit `program.version=10` adds at most 16 optional
+`dimension_constraints` alongside existing `dimension_links` in the
+same `kind:"program"` and original `advanced_geometry_source`.
+Earlier v1–v9 source semantics, local Cube IDs, compiler and native
+Recipe ownership remain unmodified.
+
+`SPAN_BOUNDS` constrains one part's source-local axis-aligned bounding
+extent to a finite inclusive `min_span..max_span` (0–64 model units).
+`RATIO_BOUNDS` constrains `extent(A,axisA)/extent(B,axisB)`
+between inclusive lower and upper **exact rational constants**.
+Bounds have nonnegative integer numerators 0–32 and positive integer
+denominators 1–32; malformed or inverted ranges reject before any
+native authoring. A zero-extent denominator is never silently accepted.
+
+Example: an AI declares that an 8-unit seat within a 12-unit frame
+must retain between 2/3 and 3/4 of the frame's width. The same
+constraint applies after a v9-style `DIMENSION_LINK` recomputes size:
+
+```json
+{
+  "version":10,
+  "parts":[
+    {"id":"frame","method":"BOX","at":[0,0,0],"size":[12,4,4]},
+    {"id":"seat","method":"BOX","at":[0,0,0],"size":[1,2,4]}
+  ],
+  "dimension_links":[{
+    "id":"seat_width","target_part_id":"seat","target_axis":"X",
+    "source_part_id":"frame","source_axis":"X",
+    "numerator":2,"denominator":3
+  }],
+  "dimension_constraints":[
+    {"kind":"SPAN_BOUNDS","id":"seat_min_width",
+     "part_id":"seat","axis":"X","min_span":8,"max_span":10},
+    {"kind":"RATIO_BOUNDS","id":"seat_frame_ratio",
+     "numerator_part_id":"seat","numerator_axis":"X",
+     "denominator_part_id":"frame","denominator_axis":"X",
+     "min_ratio":{"numerator":2,"denominator":3},
+     "max_ratio":{"numerator":3,"denominator":4}}
+  ]
+}
+```
+
+`geometryMathDimensionConstraints.ts` checks the exact bounded
+part envelopes after the existing semantic resolution, original Recipe
+ANCHOR/FACE_ANCHOR solve and any derived CONNECT generation, but before
+the ordinary native Cuboid factory. Ratios use finite cross-multiplication
+rather than dividing by an uncertain measurement. Failures identify the
+declared constraint ID/part without altering geometry, guessing shape
+parameters, clamping ratios or creating another solver.
+
+Source envelopes for signed LINEAR repeats include the intentionally
+empty gaps between copies. Neither these checks nor any v10 result
+establishes reference-image measurement, player-scale fitness, optimal
+artistic proportion, UV/rig correctness or global scene collision safety.
+The existing <=64 expanded-Cube budget, one Recipe store, incremental
+native Group/Undo and stable four public Gateway tools remain.
+
+Code authored only. NO Bun, TypeScript typecheck, build, unit tests,
+CI, native Blockbench, save/reopen/export or visual QA was executed.
+Public `construct_geometry` remains UNREGISTERED pending canonical
+generator-coupled Runtime/API changes.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

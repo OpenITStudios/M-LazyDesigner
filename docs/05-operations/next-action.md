@@ -7,10 +7,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 **USER DECISION:** Mature AI-first Geometry source; no tests,
 build/Bun, CI, native QA, release, separate plugin or mandatory UI.
 
-**R3a–R3u:** Legacy 13 shapes plus math v1–v8 preserved.
-Opt-in v9 DIMENSION_LINK derives BOX axis sizes from source-local
-semantic bounds with exact bounded rational links, one owner per
-axis, and shared INSTANCE dependency-cycle guard. Original
+**R3a–R3v:** Legacy 13 shapes and math v1–v9 preserved.
+Opt-in v10 SPAN_BOUNDS/RATIO_BOUNDS guard user-declared
+dimensions and proportions after dimension/INSTANCE/CONNECT
+construction; no automatic rescaling or beauty score. Original
 Recipe/Undo and <=64 expanded Cube budget remain.
 
 **R3j:** Canonical Recipe v1 optionally persists original high-level

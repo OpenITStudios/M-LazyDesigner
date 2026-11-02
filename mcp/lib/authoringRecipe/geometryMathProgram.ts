@@ -25,6 +25,9 @@ import { rotateMathCuboidsQuarterTurns } from "./geometryMathOrthogonal";
 import { prepareGeometryFaceAnchors } from "./geometryMathFaceAnchors";
 import { requireGeometryMathClearances } from "./geometryMathClearance";
 import {
+  requireGeometryDimensionConstraints,
+} from "./geometryMathDimensionConstraints";
+import {
   buildMathConnector,
   type GeometryConnectorSource,
 } from "./geometryMathConnect";
@@ -136,7 +139,7 @@ function canonicalConstraints(
  */
 function realizeStructuredParts(
   parts: readonly GeometryMathConstructiblePart[],
-  version: 4 | 5 | 6 | 7 | 8 | 9,
+  version: 4 | 5 | 6 | 7 | 8 | 9 | 10,
   dimensionLinks: readonly GeometryMathDimensionLink[] = []
 ): LocalPart[] {
   const definitions = new Map(parts.map(part => [part.id, part] as const));
@@ -163,7 +166,7 @@ function realizeStructuredParts(
     if (cached) return cached;
     if (visiting.has(partId)) {
       throw new Error(
-        (version === 9
+        (version === 9 || version === 10
           ? "GEOMETRY_MATH_DIMENSION_OR_INSTANCE_CYCLE: "
           : "GEOMETRY_MATH_INSTANCE_CYCLE: ") +
         [...visiting, partId].join(" -> ")
@@ -217,7 +220,8 @@ function realizeStructuredParts(
         }
       } else if (definition.method === "LOFT") {
         boxes = loftMathVolume(definition, version >= 6 ? 6 : 5);
-      } else if (version === 9 && definition.method === "BOX") {
+      } else if ((version === 9 || version === 10) &&
+        definition.method === "BOX") {
         // Each linked BOX axis is derived from a source-local enclosing
         // extent, including a declared LINEAR assembly envelope.
         // No arbitrary expression, implicit scaling of native Cube
@@ -302,8 +306,15 @@ export function buildGeometryMathProgramPieces(
   // Re-validate at the builder boundary as callers may be internal. Reusing
   // this single strict schema also validates persisted source on inspection.
   const program = geometryMathProgramSchema.parse(feature.program);
-  const parts: LocalPart[] = program.version === 9
+  const parts: LocalPart[] = program.version === 10
     ? realizeStructuredParts(
+      program.parts.filter((part):
+        part is GeometryMathConstructiblePart =>
+        part.method !== "CONNECT"),
+      10, program.dimension_links ?? []
+    )
+    : program.version === 9
+      ? realizeStructuredParts(
       program.parts.filter((part):
         part is GeometryMathConstructiblePart =>
         part.method !== "CONNECT"),
@@ -399,7 +410,8 @@ export function buildGeometryMathProgramPieces(
   // V7+ exact source-local Cube faces become ordinary Recipe ANCHOR
   // constraints. The single canonical solver/Undo owner is unchanged.
   const faceAnchors = (program.version === 7 ||
-    program.version === 8 || program.version === 9)
+    program.version === 8 || program.version === 9 ||
+    program.version === 10)
     ? prepareGeometryFaceAnchors(parts, program.face_anchors ?? [])
     : null;
   const standardConstraints = canonicalConstraints(
@@ -462,7 +474,8 @@ export function buildGeometryMathProgramPieces(
         // The connector has already been realized in solved model-space.
         // Its own anchor is unavailable by schema; no secondary solver.
         byId.set(connector.id, [...min] as RecipeVec3);
-        if (program.version === 8 || program.version === 9) {
+        if (program.version === 8 || program.version === 9 ||
+          program.version === 10) {
           // Derived CONNECT coordinates are already in model space.
           // A zero translation makes them comparable with solved parts
           // without interpreting them as ANCHOR dependencies.
@@ -485,7 +498,8 @@ export function buildGeometryMathProgramPieces(
     }
     parts.sort((a, b) => compareSourceIds(a.id, b.id, program.version));
     requireNativeBudget(parts);
-    if (program.version === 8 || program.version === 9) {
+    if (program.version === 8 || program.version === 9 ||
+      program.version === 10) {
       // V8+ face contact must not permit *other* Cuboids of the same
       // two semantic parts to interpenetrate. Explicit CLEARANCE pairs
       // may also require a Euclidean distance from 0–8 model units.
@@ -497,6 +511,20 @@ export function buildGeometryMathProgramPieces(
         program.face_anchors ?? []
       );
     }
+  }
+  if (program.version === 10) {
+    // Bounds are those of the fully constructed program, including
+    // dimension-derived BOX sizes, signed LINEAR repetition and the
+    // optional post-ANCHOR CONNECT cohort. This is a read-only source
+    // acceptance gate before the SAME native Recipe Cuboid factory.
+    requireGeometryDimensionConstraints(
+      parts.map(part => ({
+        id: part.id,
+        min: part.min,
+        max: part.max,
+      })),
+      program.dimension_constraints ?? []
+    );
   }
   const output: Pieces = { prototypes: [], patterns: [] };
 
