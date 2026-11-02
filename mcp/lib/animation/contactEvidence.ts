@@ -673,3 +673,122 @@ export function analyzeObservedAnimationLocatorTrajectories(
       "verdict; a stationary Locator is not proof of valid physical contact.",
   };
 }
+
+/**
+ * Source-only, bounded inventory of real editor-preview Group world origins.
+ * Geometry is captured by the existing native reader inside an authorized
+ * screenshot callback, but complete Blockbench editor restoration is NOT
+ * independently attested; it cannot authorize an IK bake or infer contact.
+ */
+export type ObservedAnimationJointOriginFrame = {
+  project_uuid: string;
+  animation_uuid: string;
+  time_seconds: number;
+  groups: readonly {
+    group_uuid: string;
+    parent_group_uuid: string | null;
+    world_position: Vec3;
+  }[];
+};
+
+export const ANIMATION_JOINT_ORIGIN_MAX_GROUPS = 16;
+
+export function analyzeObservedAnimationJointOriginFrames(
+  frames: readonly ObservedAnimationJointOriginFrame[]
+) {
+  type Sample = {
+    time_seconds: number;
+    groups: Array<{
+      group_uuid: string;
+      parent_group_uuid: string | null;
+      world_position: [number, number, number];
+    }>;
+  };
+  const unavailable = (reason: string) => ({
+    state: "unavailable" as const,
+    reason,
+    observed_frame_count: Array.isArray(frames) ? frames.length : 0,
+    observed_group_count: 0,
+    frames: [] as Sample[],
+    pose_time_synchronization_attested: false as const,
+    native_preview_restoration_attested: false as const,
+    native_ik_bake_authorized: false as const,
+    contact_roles_inferred: false as const,
+    visual_verdict: "not_evaluated" as const,
+  });
+  if (!Array.isArray(frames) || frames.length < 2 ||
+      frames.length > ANIMATION_LOCATOR_TRAJECTORY_MAX_FRAMES ||
+      frames.some((frame) =>
+        !frame || !Number.isFinite(frame.time_seconds) ||
+        frame.time_seconds < 0 || !Array.isArray(frame.groups)
+      )) return unavailable("ANIMATION_JOINT_FRAME_SELECTION_INVALID");
+
+  const sorted = [...frames].sort((a,b) => a.time_seconds-b.time_seconds);
+  const first = sorted[0];
+  const validId = (id: unknown) => typeof id === "string" &&
+    id.length > 0 && id.length <= 160 && id === id.trim();
+  if (!validId(first.project_uuid) || !validId(first.animation_uuid) ||
+      first.groups.length < 2 ||
+      first.groups.length > ANIMATION_JOINT_ORIGIN_MAX_GROUPS) {
+    return unavailable("ANIMATION_JOINT_IDENTITY_OR_BUDGET_INVALID");
+  }
+  const expected = new Map<string, string | null>();
+  for (const frame of sorted) {
+    if (frame.project_uuid !== first.project_uuid ||
+        frame.animation_uuid !== first.animation_uuid ||
+        frame.groups.length !== first.groups.length) {
+      return unavailable("ANIMATION_JOINT_FRAME_IDENTITY_OR_COVERAGE_CHANGED");
+    }
+    const seen = new Set<string>();
+    for (const group of frame.groups) {
+      if (!group || !validId(group.group_uuid) ||
+          (group.parent_group_uuid !== null && !validId(group.parent_group_uuid)) ||
+          group.group_uuid === group.parent_group_uuid ||
+          !Array.isArray(group.world_position) ||
+          group.world_position.length !== 3 ||
+          !group.world_position.every((value) =>
+            typeof value === "number" && Number.isFinite(value)
+          ) || seen.has(group.group_uuid)) {
+        return unavailable("ANIMATION_JOINT_GROUP_INVALID_OR_DUPLICATE");
+      }
+      seen.add(group.group_uuid);
+      if (frame === first) {
+        expected.set(group.group_uuid, group.parent_group_uuid);
+      } else if (!expected.has(group.group_uuid) ||
+          expected.get(group.group_uuid) !== group.parent_group_uuid) {
+        return unavailable("ANIMATION_JOINT_HIERARCHY_CHANGED");
+      }
+    }
+    if (frame.groups.some((group) =>
+      group.parent_group_uuid !== null && !seen.has(group.parent_group_uuid)
+    )) return unavailable("ANIMATION_JOINT_ANCESTRY_INCOMPLETE");
+  }
+  if (sorted.some((frame, index) =>
+    index > 0 &&
+    frame.time_seconds - sorted[index-1].time_seconds <= TIME_EPSILON
+  )) return unavailable("ANIMATION_JOINT_TIME_GRID_INVALID");
+
+  const copied: Sample[] = sorted.map((frame) => ({
+    time_seconds: frame.time_seconds,
+    groups: frame.groups.map((group) => ({
+      group_uuid: group.group_uuid,
+      parent_group_uuid: group.parent_group_uuid,
+      world_position: [...group.world_position] as [number, number, number],
+    })).sort((a,b) => a.group_uuid.localeCompare(b.group_uuid)),
+  }));
+  return {
+    state: "SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS" as const,
+    reason: null,
+    project_uuid: first.project_uuid,
+    animation_uuid: first.animation_uuid,
+    observed_frame_count: copied.length,
+    observed_group_count: expected.size,
+    frames: copied,
+    observation_scope: "CURRENT_NATIVE_PREVIEW_CALLBACK_READ_ONLY" as const,
+    pose_time_synchronization_attested: false as const,
+    native_preview_restoration_attested: false as const,
+    native_ik_bake_authorized: false as const,
+    contact_roles_inferred: false as const,
+    visual_verdict: "not_evaluated" as const,
+  };
+}

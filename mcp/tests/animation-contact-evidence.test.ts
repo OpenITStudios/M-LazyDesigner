@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 import {
   analyzeAnimationContactEvidence,
   analyzeObservedAnimationLocatorTrajectories,
+  analyzeObservedAnimationJointOriginFrames,
   type ObservedAnimationLocatorFrame,
+  type ObservedAnimationJointOriginFrame,
   type ContactConstraintInput,
 } from "@/lib/animationContactEvidence";
 
@@ -814,4 +816,88 @@ test("contact analysis without an IK chain remains unchanged; incomplete stance 
   expect(candidate(incomplete)).toMatchObject({
     state:"unavailable",reason:"CONTACT_IK_NO_ELIGIBLE_PLANTED_SLIP",
   });
+});
+
+function observedJointPreview(): ObservedAnimationJointOriginFrame[] {
+  return [0, 0.5, 1].map((time_seconds, i) => ({
+    project_uuid: "proj", animation_uuid: "clip", time_seconds,
+    groups: [
+      { group_uuid: "ankle", parent_group_uuid: "knee",
+        world_position: [i * 0.1, 0, 0] },
+      { group_uuid: "hip", parent_group_uuid: null,
+        world_position: [0, 0.8, 0] },
+      { group_uuid: "knee", parent_group_uuid: "hip",
+        world_position: [i * 0.05, 0.4, 0.2] },
+    ],
+  }));
+}
+
+test("joint world origins retain exact source UUID ancestry and time-aligned world positions", () => {
+  const source = observedJointPreview();
+  const before = JSON.stringify(source);
+  const review = analyzeObservedAnimationJointOriginFrames(source);
+  expect(review.state).toBe("SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS");
+  if (review.state !== "SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS") {
+    throw new Error("Expected bounded preview joint origins");
+  }
+  expect(review.observed_frame_count).toBe(3);
+  expect(review.observed_group_count).toBe(3);
+  expect(review.frames.map((frame) => frame.time_seconds)).toEqual([0, 0.5, 1]);
+  expect(review.frames[2].groups.map((group) => group.group_uuid))
+    .toEqual(["ankle", "hip", "knee"]);
+  expect(review.frames[2].groups[0].world_position).toEqual([0.2, 0, 0]);
+  expect(review.native_ik_bake_authorized).toBe(false);
+  expect(review.native_preview_restoration_attested).toBe(false);
+  expect(review.pose_time_synchronization_attested).toBe(false);
+  expect(review.contact_roles_inferred).toBe(false);
+  expect(JSON.stringify(source)).toBe(before);
+  expect(analyzeObservedAnimationJointOriginFrames([...source].reverse()))
+    .toEqual(review);
+});
+
+test("joint preview rejects parent changes, missing ancestors, duplicate UUIDs and invalid world origins", () => {
+  const cloned = () => JSON.parse(JSON.stringify(observedJointPreview())) as any;
+  let x = cloned();
+  x[1].groups[1].parent_group_uuid = "other";
+  expect(analyzeObservedAnimationJointOriginFrames(x)).toMatchObject({
+    state: "unavailable", reason: "ANIMATION_JOINT_ANCESTRY_INCOMPLETE",
+  });
+  x = cloned();
+  x[1].groups.pop();
+  expect(analyzeObservedAnimationJointOriginFrames(x)).toMatchObject({
+    state: "unavailable", reason: "ANIMATION_JOINT_FRAME_IDENTITY_OR_COVERAGE_CHANGED",
+  });
+  x = cloned();
+  x[1].groups[1].group_uuid = "ankle";
+  expect(analyzeObservedAnimationJointOriginFrames(x)).toMatchObject({
+    state: "unavailable", reason: "ANIMATION_JOINT_GROUP_INVALID_OR_DUPLICATE",
+  });
+  x = cloned();
+  x[1].groups[0].world_position[1] = Number.NaN;
+  expect(analyzeObservedAnimationJointOriginFrames(x)).toMatchObject({
+    state: "unavailable", reason: "ANIMATION_JOINT_GROUP_INVALID_OR_DUPLICATE",
+  });
+  x = cloned();
+  x[1].time_seconds = 1e-9;
+  expect(analyzeObservedAnimationJointOriginFrames(x)).toMatchObject({
+    state: "unavailable", reason: "ANIMATION_JOINT_TIME_GRID_INVALID",
+  });
+  x = cloned();
+  x[1] = null;
+  expect(analyzeObservedAnimationJointOriginFrames(x)).toMatchObject({
+    state: "unavailable", reason: "ANIMATION_JOINT_FRAME_SELECTION_INVALID",
+  });
+});
+
+test("joint preview copies source coordinates and never invents IK-keyframe authority", () => {
+  const source = observedJointPreview();
+  const review = analyzeObservedAnimationJointOriginFrames(source);
+  expect(review.state).toBe("SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS");
+  if (review.state !== "SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS") {
+    throw new Error("Expected joint origins");
+  }
+  source[0].groups[0].world_position[0] = 99;
+  expect(review.frames[0].groups[0].world_position[0]).toBe(0);
+  expect(review.native_ik_bake_authorized).toBe(false);
+  expect(review.visual_verdict).toBe("not_evaluated");
 });

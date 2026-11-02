@@ -262,6 +262,32 @@ flags remain false. There is no new public Gateway or Runtime schema, no Undo
 mutation, generator edit, deployment or CI change. The next proof requires
 native state-isolated joint sampling and visual Golden acceptance.
 
+### Native-preview joint origin snapshots (2026-11-03)
+
+The existing `capture_model_views(animation_preview)` callback can now
+collect up to sixteen **actual Group world origins** for the exact Locator
+parent-to-ancestor chains already visible in that native preview. The reader
+reuses `currentPose.ts::readCurrentBonePoseSnapshot` and its native
+animation/project/time/selection, world-matrix and hierarchy read fences.
+It does not sample a new frame, infer bone roles or create IK controllers.
+
+After two to five requested capture times, the existing contact-evidence
+owner validates exact Group UUIDs, parent/ancestor coverage and consistent
+identity across all frames. The bounded `joint_origin_review` contains
+detached timestamped world positions, allowing a future explicitly chosen
+contact chain to reference current preview geometry. Missing/ambiguous
+identity, unseen ancestors, invalid coordinates, unsupported scope or
+incomplete frames produce `unavailable` for the optional diagnostic; an
+otherwise successful screenshot capture is retained.
+
+These are read-only **current preview** observations. They do not establish
+full native state restoration, independent pose/time synchronization,
+user-approved foot contact, known locator-to-joint offsets, source
+`ik_chain` readiness, correction rotations or native IK authorization.
+The new evidence explicitly sets these proof flags to false. The existing
+four public Gateway tools, request schema, Undo and generated API artifacts
+remain unchanged.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

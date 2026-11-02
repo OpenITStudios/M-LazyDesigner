@@ -11,11 +11,15 @@ import { resolveCoreAnimation } from "@/lib/core/identity";
 import { withTemporaryAnimationPreview } from "@/lib/animation/previewState";
 import {
   readDirectLocatorCandidates,
+  readCurrentBonePoseSnapshot,
   CURRENT_POSE_LOCATOR_LIMIT,
 } from "../../tools/animation/currentPose";
 import {
   analyzeObservedAnimationLocatorTrajectories,
+  analyzeObservedAnimationJointOriginFrames,
+  ANIMATION_JOINT_ORIGIN_MAX_GROUPS,
   type ObservedAnimationLocatorFrame,
+  type ObservedAnimationJointOriginFrame,
 } from "@/lib/animation/contactEvidence";
 import {
   analyzeGeometryPoseSequence,
@@ -426,6 +430,91 @@ function observeNativeAnimationLocatorFrame(
   };
 }
 
+
+/**
+ * Passive Group origins for the exact known Locator-to-ancestor hierarchy.
+ * This uses the existing readCurrentBonePoseSnapshot identity/read fence.
+ * No random Group selection, animation re-evaluation, contact-role guessing,
+ * Timeline write, Undo edit or native IK correction is performed.
+ */
+function observeNativeAnimationJointOriginFrame(
+  animation: BBAnimation,
+  time: number,
+  locatorFrame: ObservedAnimationLocatorFrame
+): ObservedAnimationJointOriginFrame {
+  if (typeof Group === "undefined" || !Array.isArray(Group.all) ||
+      typeof Project === "undefined" || !Project ||
+      Project.uuid !== locatorFrame.project_uuid ||
+      animation.uuid !== locatorFrame.animation_uuid ||
+      time !== locatorFrame.time_seconds ||
+      locatorFrame.markers.length === 0) {
+    throw new Error("ANIMATION_JOINT_ORIGIN_CONTEXT_UNVERIFIED");
+  }
+  const byUuid = new Map<string, Group>();
+  for (const group of Group.all) {
+    if (typeof group.uuid !== "string" || !group.uuid.trim() ||
+        byUuid.has(group.uuid)) {
+      throw new Error("ANIMATION_JOINT_GROUP_UUID_AMBIGUOUS");
+    }
+    byUuid.set(group.uuid, group);
+  }
+  const selected = new Map<string, Group>();
+  for (const marker of locatorFrame.markers) {
+    let group = byUuid.get(marker.parent_group_uuid);
+    if (!group) throw new Error("ANIMATION_JOINT_LOCATOR_PARENT_MISSING");
+    const seenAncestors = new Set<string>();
+    while (group) {
+      if (seenAncestors.has(group.uuid)) {
+        throw new Error("ANIMATION_JOINT_CYCLIC_HIERARCHY");
+      }
+      seenAncestors.add(group.uuid);
+      selected.set(group.uuid, group);
+      if (selected.size > ANIMATION_JOINT_ORIGIN_MAX_GROUPS) {
+        throw new Error("ANIMATION_JOINT_ORIGIN_BUDGET_EXCEEDED");
+      }
+      const parent: unknown = group.parent;
+      if (parent === null || parent === "root") break;
+      if (!(parent instanceof Group) || !Group.all.includes(parent)) {
+        throw new Error("ANIMATION_JOINT_ANCESTRY_UNVERIFIED");
+      }
+      group = parent;
+    }
+  }
+  const groups: ObservedAnimationJointOriginFrame["groups"][number][] = [];
+  for (const group of selected.values()) {
+    const snapshot = readCurrentBonePoseSnapshot(animation, group);
+    if (snapshot.state !== "OBSERVED" ||
+        snapshot.project_uuid !== locatorFrame.project_uuid ||
+        snapshot.animation_uuid !== animation.uuid ||
+        snapshot.group_uuid !== group.uuid ||
+        snapshot.timeline_time_observed !== time ||
+        !Array.isArray(snapshot.bone_origin_world) ||
+        snapshot.bone_origin_world.some((v) => !Number.isFinite(v))) {
+      throw new Error("ANIMATION_JOINT_NATIVE_WORLD_SNAPSHOT_UNVERIFIED");
+    }
+    const parent = group.parent instanceof Group ? group.parent : null;
+    groups.push({
+      group_uuid: group.uuid,
+      parent_group_uuid: parent?.uuid ?? null,
+      world_position: [...snapshot.bone_origin_world] as [number,number,number],
+    });
+  }
+  if (typeof Project === "undefined" || !Project ||
+      Project.uuid !== locatorFrame.project_uuid ||
+      typeof AnimationItem === "undefined" ||
+      AnimationItem.selected !== animation ||
+      typeof Timeline === "undefined" || Timeline.time !== time ||
+      groups.length !== selected.size) {
+    throw new Error("ANIMATION_JOINT_ORIGIN_READ_CONTEXT_CHANGED");
+  }
+  return {
+    project_uuid: locatorFrame.project_uuid,
+    animation_uuid: animation.uuid,
+    time_seconds: time,
+    groups: groups.sort((a,b) => a.group_uuid.localeCompare(b.group_uuid)),
+  };
+}
+
 async function captureAnimationSamples(
   definition: RuntimeToolDefinition,
   request: z.infer<typeof animationAwareCaptureModelViewsParameters>,
@@ -468,6 +557,8 @@ async function captureAnimationSamples(
   const geometryReadFailures: string[] = [];
   const locatorFrames: ObservedAnimationLocatorFrame[] = [];
   const locatorReadFailures: string[] = [];
+  const jointOriginFrames: ObservedAnimationJointOriginFrame[] = [];
+  const jointOriginReadFailures: string[] = [];
 
   for (const time of preview.times) {
     const observed = await withTemporaryAnimationPreview(
@@ -501,8 +592,20 @@ async function captureAnimationSamples(
             locatorFailure = error instanceof Error ? error.message : String(error);
           }
         }
+        let jointOriginFrame: ObservedAnimationJointOriginFrame | null = null;
+        let jointOriginFailure: string | null = null;
+        if (locatorFrame) {
+          try {
+            jointOriginFrame = observeNativeAnimationJointOriginFrame(
+              animation, time, locatorFrame
+            );
+          } catch (error) {
+            jointOriginFailure = error instanceof Error
+              ? error.message : String(error);
+          }
+        }
         return { result, structured, geometry, geometryFailure,
-          locatorFrame, locatorFailure };
+          locatorFrame, locatorFailure, jointOriginFrame, jointOriginFailure };
       }
     );
 
@@ -514,6 +617,8 @@ async function captureAnimationSamples(
     if (observed.geometryFailure) geometryReadFailures.push(observed.geometryFailure);
     if (observed.locatorFrame) locatorFrames.push(observed.locatorFrame);
     if (observed.locatorFailure) locatorReadFailures.push(observed.locatorFailure);
+    if (observed.jointOriginFrame) jointOriginFrames.push(observed.jointOriginFrame);
+    if (observed.jointOriginFailure) jointOriginReadFailures.push(observed.jointOriginFailure);
     if (Object.keys(commonStructured).length === 0) {
       const { captures: _captures, count: _count, ...rest } = observed.structured;
       commonStructured = rest;
@@ -575,6 +680,25 @@ async function captureAnimationSamples(
         }
     : null;
 
+  // Optional joint origins are independent of image/Locator success. Never
+  // promote these preview callbacks to full-state-isolated IK evidence.
+  const jointOriginReview = compareGeometry
+    ? jointOriginReadFailures.length > 0 ||
+        jointOriginFrames.length !== preview.times.length
+      ? {
+          state: "unavailable" as const,
+          reason: "native_joint_origin_observation_incomplete",
+          requested_frame_count: preview.times.length,
+          observed_frame_count: jointOriginFrames.length,
+          failure_count: jointOriginReadFailures.length,
+          native_preview_restoration_attested: false as const,
+          native_ik_bake_authorized: false as const,
+          contact_roles_inferred: false as const,
+          visual_verdict: "not_evaluated" as const,
+        }
+      : analyzeObservedAnimationJointOriginFrames(jointOriginFrames)
+    : null;
+
   return {
     content,
     structuredContent: {
@@ -596,6 +720,7 @@ async function captureAnimationSamples(
       samples,
       ...(geometryPoseReview ? { geometry_pose_review: geometryPoseReview } : {}),
       ...(locatorTrajectoryReview ? { locator_trajectory_review: locatorTrajectoryReview } : {}),
+      ...(jointOriginReview ? { joint_origin_review: jointOriginReview } : {}),
     },
   };
   } finally {

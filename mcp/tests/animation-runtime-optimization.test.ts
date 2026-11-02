@@ -189,6 +189,28 @@ describe("Animation runtime efficiency contracts", () => {
     expect(operation).not.toContain("Undo.initEdit");
   });
 
+
+  test("native animation screenshot can reuse passive Group pose reader for bounded joint ancestry", async () => {
+    const source = await Bun.file("server/runtime/contracts/animation.ts").text();
+    const start = source.indexOf("function observeNativeAnimationJointOriginFrame(");
+    const captureStart = source.indexOf("async function captureAnimationSamples(", start);
+    const reader = source.slice(start, captureStart);
+    const operation = source.slice(captureStart, source.indexOf("function keyframesForChannel("));
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(captureStart).toBeGreaterThan(start);
+    expect(reader).toContain("readCurrentBonePoseSnapshot(animation, group)");
+    expect(reader).toContain("ANIMATION_JOINT_ORIGIN_MAX_GROUPS");
+    expect(reader).toContain("ANIMATION_JOINT_ANCESTRY_UNVERIFIED");
+    expect(reader).not.toContain("Timeline.setTime(");
+    expect(reader).not.toContain("Undo.initEdit");
+    expect(operation.indexOf("requireCompleteAnimationCaptureSample("))
+      .toBeLessThan(operation.indexOf("observeNativeAnimationJointOriginFrame("));
+    expect(operation).toContain("analyzeObservedAnimationJointOriginFrames(jointOriginFrames)");
+    expect(operation).toContain("joint_origin_review: jointOriginReview");
+    expect(operation).toContain("native_joint_origin_observation_incomplete");
+    expect(operation).toContain("native_ik_bake_authorized: false");
+  });
+
   test("focused Animation inspection can narrow one bone by channel and time range", () => {
     const accepted = focusedInspectAnimationParameters.parse({
       animation_id: "anim-walk",
