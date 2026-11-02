@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { compileMotionRecipe } from "@/lib/animation/motionRecipe";
+import { compileSpringSecondaryMotion } from "@/lib/animation/springMotion";
 import { createAnimationParameters } from "@/server/tools/animation";
 import { GATEWAY_TOOLS } from "@/gateway/contracts/protocol";
 import {
   compileMotionToCreateAnimation,
   compileMotionToCreateAnimationPlan,
+  compileMotionWithSpringToCreateAnimationPlan,
   compileMotionWithLocalContactsToCreateAnimationPlan,
   compileSemanticMotionToCreateAnimationPlan,
   compileSemanticMotionToGatewayInvocation,
@@ -384,5 +386,115 @@ describe("semantic motion -> existing Gateway create_animation route", () => {
     };
     const bridge = compileSemanticMotionToGatewayInvocation(clip, userIntent);
     expect(bridge.semantic_context.primary_role_key_retention.checked_role_count).toBe(2);
+  });
+});
+
+
+describe("native-safe spring follow-through and semantic Gateway plans", () => {
+  const source = () => ({
+    name: "animation.test.spring",
+    duration: 1,
+    poses: [
+      { id: "ready", time: 0, bones: { body: { rotation: [20, 0, 0] as [number, number, number] } } },
+      { id: "contact", time: 0.5, bones: { body: { rotation: [50, 0, 0] as [number, number, number] } } },
+      { id: "recover", time: 1, bones: { body: { rotation: [20, 0, 0] as [number, number, number] } } },
+    ],
+  });
+  const spring = () => ({
+    parent_bone: "body", child_bone: "cape", channel: "rotation" as const,
+    drive_mode: "parent_delta" as const, sample_rate: 24,
+  });
+  const intent = () => ({
+    archetype: "ACTION" as const, activation: "PREVIEW_ONLY" as const,
+    primary_bones: ["body"],
+    pose_roles: [
+      { pose_id: "ready", role: "ANTICIPATION" as const },
+      { pose_id: "contact", role: "CONTACT" as const },
+      { pose_id: "recover", role: "RECOVERY" as const },
+    ],
+  });
+
+  test("neutral relative spring lags parent and uses linear native-safe sampled keys", () => {
+    const clip = source(), before = JSON.stringify(clip);
+    const sampled = compileMotionRecipe(compileSpringSecondaryMotion(clip, [spring()]));
+    const follower = sampled.bones.cape;
+    expect(follower[0]).toMatchObject({ time: 0, rotation: [0, 0, 0] });
+    expect(follower.at(-1)?.time).toBe(1);
+    expect(follower.some((frame) => frame.time > 0.5 && (frame.rotation?.[0] ?? 0) > 0.01))
+      .toBe(true);
+    expect(follower.every((frame) => frame.interpolation === undefined)).toBe(true);
+    expect(JSON.stringify(clip)).toBe(before);
+    const plan = compileMotionWithSpringToCreateAnimationPlan(clip, [spring()]);
+    expect(plan.post_create_keyframe_edits).toHaveLength(0);
+    expect(createAnimationParameters.safeParse(plan.create_animation).success).toBe(true);
+  });
+
+  test("semantic gateway bridge includes secondary follow-through without new native arguments", () => {
+    const input = source(), declared = { ...intent(), spring_links: [spring()] };
+    const before = JSON.stringify({ input, declared });
+    const bridge = compileSemanticMotionToGatewayInvocation(input, declared);
+    expect(bridge.gateway_tool).toBe("invoke_capability");
+    expect(bridge.gateway_arguments.capability).toBe("create_animation");
+    expect(Object.keys(bridge.gateway_arguments.arguments).sort())
+      .toEqual(["animation_length", "bones", "loop", "name"]);
+    expect(bridge.gateway_arguments.arguments.bones.cape.length).toBeGreaterThan(3);
+    expect(createAnimationParameters.safeParse(bridge.gateway_arguments.arguments).success)
+      .toBe(true);
+    expect(bridge.semantic_context.spring_follow_through).toMatchObject({
+      state: "SOURCE_ONLY_LINEAR_BAKE",
+      requested_link_count: 1,
+      relative_drive_count: 1,
+      native_playback_attested: false,
+      visual_verdict: "not_evaluated",
+    });
+    expect(bridge.execution_evidence).toMatchObject({
+      state: "SOURCE_PLAN_NOT_EXECUTED", playback_attested: false,
+    });
+    expect(JSON.stringify({ input, declared })).toBe(before);
+    expect(compileSemanticMotionToGatewayInvocation(input, declared)).toEqual(bridge);
+  });
+
+  test("legacy absolute follower still works without requiring spring drive mode", () => {
+    const legacy = compileMotionRecipe(compileSpringSecondaryMotion(source(), [{
+      parent_bone: "body", child_bone: "cape", channel: "rotation",
+    }]));
+    expect((legacy.bones.cape[0].rotation?.[0] ?? 0)).toBeGreaterThan(0);
+    expect(legacy.bones.cape.every((frame) => frame.interpolation === undefined)).toBe(true);
+  });
+
+  test("protects primary/contact bones and refuses existing or duplicate follower ownership", () => {
+    expect(() => compileSemanticMotionToGatewayInvocation(source(), {
+      ...intent(), spring_links: [{ ...spring(), child_bone: "body" }],
+    })).toThrow("SEMANTIC_MOTION_SPRING_PROTECTED_BONE");
+    expect(() => compileSemanticMotionToGatewayInvocation(source(), {
+      ...intent(),
+      local_contacts: [{ bone: "cape", channel: "position", start: 0.2, end: 0.8, value: [0, 0, 0] }],
+      spring_links: [spring()],
+    })).toThrow("SEMANTIC_MOTION_SPRING_PROTECTED_BONE");
+    const authored = source();
+    Object.assign(authored.poses[1]!.bones, { cape: { rotation: [2, 0, 0] } });
+    expect(() => compileSpringSecondaryMotion(authored, [spring()]))
+      .toThrow("SPRING_CHILD_TRACK_ALREADY_AUTHORED");
+    expect(() => compileSpringSecondaryMotion(source(), [spring(), spring()]))
+      .toThrow("SPRING_CHILD_OWNERSHIP_DUPLICATE");
+  });
+
+  test("refuses ambiguous Euler wrap and invalid sample sequences before native plan", () => {
+    const turning = source();
+    Object.assign(turning.poses[0]!.bones.body, { rotation: [179, 0, 0] });
+    Object.assign(turning.poses[1]!.bones.body, { rotation: [-179, 0, 0] });
+    expect(() => compileSpringSecondaryMotion(turning, [spring()]))
+      .toThrow("SPRING_ROTATION_WRAP_UNRESOLVED");
+    const duplicate = source();
+    duplicate.poses[1]!.time = 0;
+    expect(() => compileSpringSecondaryMotion(duplicate, [spring()]))
+      .toThrow("SPRING_PARENT_SAMPLES_INVALID");
+  });
+
+  test("includes an exact final key when sampled duration is off the selected rate grid", () => {
+    const baked = compileMotionRecipe(compileSpringSecondaryMotion(source(), [{
+      ...spring(), max_duration: 0.7,
+    }]));
+    expect(baked.bones.cape.at(-1)?.time).toBe(0.7);
   });
 });

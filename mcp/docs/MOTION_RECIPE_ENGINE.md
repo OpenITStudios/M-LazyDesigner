@@ -116,6 +116,37 @@ Full direct semantic input as a native `create_animation` branch remains a
 separate generator-coupled implementation unit; never hand-edit
 `mcp/docs/api.json` or `mcp/docs/index.html` to simulate schema generation.
 
+## Source-only native-safe spring follow-through (2026-11-03)
+
+The canonical `springMotion.ts` follower now supports explicit
+`drive_mode: "parent_delta"`, using parent transform displacement from its
+first authored sample. This starts a secondary bone at neutral offset instead
+of interpreting an absolute parent rotation/position as a child rest pose.
+The old `absolute` drive remains the default for source compatibility.
+
+Spring responses are numerically sampled and exported as *linear* keyframes
+with no Bezier metadata; a sequence of already-baked samples must not
+silently acquire a different native Bezier trajectory or require a second
+unverified post-create snapping/Undo edit. The final bounded sample is kept
+even when `max_duration * sample_rate` is fractional. Parent timelines must
+be finite/strictly increasing; `parent_delta` rotation rejects inferred
+Euler arcs exceeding 180 degrees without explicit source intermediate poses.
+Already-authored child channels and duplicate child ownership fail closed.
+
+`SemanticMotionIntent.spring_links` is opt-in (maximum 8 links) in the
+*existing source-only compiler*; it refuses springs targeting semantic
+primary bones or local-contact bones. The source-only Gateway envelope may
+now carry sampled secondary transforms inside its existing, schema-valid
+`create_animation.bones` argument. `spring_follow_through` metadata stays
+outside native arguments and reports `SOURCE_ONLY_LINEAR_BAKE`, never
+native playback, contact or visual acceptance.
+
+**Limit:** This is a sampled response in authored bone-local transform space,
+not world-space cloth physics, contact-aware IK, guaranteed loop seam,
+Bedrock native interpolation equivalence, or an installed animation-quality
+PASS. Direct `semantic_motion` Runtime inputs still need canonical generated
+API artifacts, Bun source gates and separate Blockbench proof.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

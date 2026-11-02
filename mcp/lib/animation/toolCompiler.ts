@@ -136,6 +136,8 @@ export type SemanticMotionIntent = {
   primary_bones: readonly string[];
   pose_roles: readonly { pose_id: string; role: SemanticMotionPoseRole }[];
   local_contacts?: readonly ContactConstraint[];
+  /** Opt-in source-only spring followers; does not change native tool schema. */
+  spring_links?: readonly SpringMotionLink[];
 };
 
 /**
@@ -194,8 +196,23 @@ export function compileSemanticMotionToCreateAnimationPlan(
     };
   }).sort((a, b) => a.time - b.time);
 
+  // Spring followers may enhance secondary parts, but must not re-author
+  // an authoritative primary pose or a local contact target.
+  if (intent.spring_links !== undefined &&
+      (!Array.isArray(intent.spring_links) || intent.spring_links.length > 8)) {
+    throw new Error("SEMANTIC_MOTION_SPRING_BUDGET_EXCEEDED");
+  }
+  const springs = intent.spring_links ?? [];
+  const heldBones = new Set((intent.local_contacts ?? []).map((contact) => contact.bone));
+  if (springs.some((link) => !link || typeof link.child_bone !== "string" ||
+      intent.primary_bones.includes(link.child_bone) || heldBones.has(link.child_bone))) {
+    throw new Error("SEMANTIC_MOTION_SPRING_PROTECTED_BONE: a spring cannot own primary/contact bones.");
+  }
+  const withSprings = springs.length > 0
+    ? compileSpringSecondaryMotion(recipe, springs)
+    : recipe;
   const plan = compileMotionWithLocalContactsToCreateAnimationPlan(
-    recipe, intent.local_contacts ?? []
+    withSprings, intent.local_contacts ?? []
   );
   return {
     ...plan,
@@ -206,6 +223,15 @@ export function compileSemanticMotionToCreateAnimationPlan(
       primary_bones: [...intent.primary_bones],
       pose_roles: roles,
       source_pose_count: recipe.poses.length,
+      spring_follow_through: {
+        state: springs.length > 0
+          ? "SOURCE_ONLY_LINEAR_BAKE" as const
+          : "NOT_REQUESTED" as const,
+        requested_link_count: springs.length,
+        relative_drive_count: springs.filter((link) => link.drive_mode === "parent_delta").length,
+        native_playback_attested: false as const,
+        visual_verdict: "not_evaluated" as const,
+      },
       physical_contact_verified: false as const,
       motion_fidelity_verified: false as const,
       gameplay_activation_assumed: false as const,

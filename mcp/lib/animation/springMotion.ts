@@ -7,6 +7,8 @@ export type SpringMotionLink={
   stiffness?:number;
   damping?:number;
   gain?:number;
+  /** Legacy absolute follower is the default; parent_delta starts from neutral. */
+  drive_mode?:"absolute"|"parent_delta";
   sample_rate?:number;
   max_duration?:number;
 };
@@ -45,12 +47,20 @@ export function compileSpringSecondaryMotion(recipe:MotionRecipe,links:readonly 
   const duration=recipe.duration??Math.max(...recipe.poses.map((pose)=>pose.time));
   const base=recipe.poses.map((pose)=>({...pose,bones:{...pose.bones}}));
   const additions:MotionPose[]=[];
+  const claimedChildren=new Set<string>();
   for(const link of links){
     if(!link.parent_bone.trim()||!link.child_bone.trim()) throw new Error("Spring motion requires parent and child bone names.");
     if(link.parent_bone===link.child_bone) throw new Error("Spring motion parent and child bone must differ.");
     const stiffness=link.stiffness??36;
     const damping=link.damping??10;
     const gain=link.gain??0.35;
+    const driveMode=link.drive_mode??"absolute";
+    if(driveMode!=="absolute"&&driveMode!=="parent_delta") throw new Error("SPRING_DRIVE_MODE_UNSUPPORTED");
+    if(claimedChildren.has(link.child_bone)) throw new Error("SPRING_CHILD_OWNERSHIP_DUPLICATE");
+    claimedChildren.add(link.child_bone);
+    if(recipe.poses.some((pose)=>pose.bones[link.child_bone]?.[link.channel]!==undefined)){
+      throw new Error("SPRING_CHILD_TRACK_ALREADY_AUTHORED: refuse to overwrite an existing child channel.");
+    }
     const sampleRate=link.sample_rate??12;
     const maxDuration=Math.min(link.max_duration??duration,duration);
     if(![stiffness,damping,gain,sampleRate,maxDuration].every(Number.isFinite)||stiffness<=0||damping<0||gain<0||sampleRate<2||sampleRate>60||maxDuration<0){
@@ -63,20 +73,41 @@ export function compileSpringSecondaryMotion(recipe:MotionRecipe,links:readonly 
     }
     const samples=buildParentSamples(recipe,link.parent_bone,link.channel);
     if(samples.length===0) throw new Error("Spring motion parent channel has no authored source samples.");
-    let x:Vec3=[0,0,0],v:Vec3=[0,0,0];
-    const steps=Math.floor(maxDuration*sampleRate)+1;
-    if(steps>2400) throw new Error("Spring motion sample budget exceeded.");
-    for(let step=0;step<steps;step+=1){
-      const time=Math.min(maxDuration,step*dt);
-      const target=scale(sampleParent(samples,time),gain);
+    if(samples.some((sample,index)=>
+      !Number.isFinite(sample.time)||sample.time<0||
+      !sample.value.every(Number.isFinite)||
+      (index>0&&sample.time<=samples[index-1].time)
+    )) throw new Error("SPRING_PARENT_SAMPLES_INVALID: expected strictly increasing finite samples.");
+    // Euler turns over 180 degrees have no safe inferred rotation direction.
+    // Require explicit intermediate source poses instead of a 358-degree jump.
+    if(driveMode==="parent_delta"&&link.channel==="rotation"&&
+      samples.some((sample,index)=>index>0&&sample.value.some((value,axis)=>
+        Math.abs(value-samples[index-1].value[axis])>180
+      ))) throw new Error("SPRING_ROTATION_WRAP_UNRESOLVED");
+    const parentOrigin=samples[0].value;
+    let x:Vec3=[0,0,0],v:Vec3=[0,0,0],previousTime=0;
+    const steps=Math.ceil(maxDuration*sampleRate);
+    if(steps+1>2400) throw new Error("Spring motion sample budget exceeded.");
+    for(let step=0;step<=steps;step+=1){
+      const time=Math.min(maxDuration,step/sampleRate);
+      // Preserve the original absolute follower's first integration step.
+      // Relative followers start exactly at zero displacement/velocity.
+      const stepDt=step===0?(driveMode==="absolute"?dt:0):time-previousTime;
+      const parentSample=sampleParent(samples,time);
+      const driver=driveMode==="parent_delta"?sub(parentSample,parentOrigin):parentSample;
+      const target=scale(driver,gain);
       const acceleration=sub(scale(sub(target,x),stiffness),scale(v,damping));
-      v=add(v,scale(acceleration,dt));
-      x=add(x,scale(v,dt));
+      v=add(v,scale(acceleration,stepDt));
+      x=add(x,scale(v,stepDt));
       if(![...x,...v].every(Number.isFinite)) throw new Error("SPRING_NUMERIC_DIVERGENCE: non-finite spring state.");
+      // The response is already numerically sampled. Native create_animation
+      // authors linear tracks; nonlinear Bezier edits would require a second,
+      // unverified Grid/Undo mutation and could change the baked trajectory.
       const transform=link.channel==="rotation"
-        ? {rotation:[...x] as MotionVec3,interpolation:"bezier" as const}
-        : {position:[...x] as MotionVec3,interpolation:"bezier" as const};
+        ? {rotation:[...x] as MotionVec3}
+        : {position:[...x] as MotionVec3};
       additions.push({id:"spring:"+link.child_bone+":"+step,time,bones:{[link.child_bone]:transform}});
+      previousTime=time;
     }
   }
   const byTime=new Map<number,MotionPose>();
