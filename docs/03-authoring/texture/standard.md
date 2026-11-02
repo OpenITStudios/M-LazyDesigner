@@ -324,7 +324,18 @@ selective `gradient_map` / `generated_gradient_map` compute now accepts
 It adjusts shade relationships while respecting exact protected RGBs and
 alpha, not general image recognition. If source and protected colors
 overlap, source anchors do not exist on the selected face, or a logo and
-material share the same RGB, stop and require a better source/region mask.
+material share the same RGB, use an **explicitly observed face-local
+identity region** instead of an RGB-only guard, or stop for review.
+The existing selective gradient request accepts optional
+`compute[0].args.protected_face_regions` only together with
+`face_targets` and `source_hue_color`. Each item specifies exact
+`cube_uuid`, `face`, and `rect:{x,y,width,height}` in **physical
+face-local pixels** (not atlas pixels/reference-image normalized bounds).
+The native face inventory and signed/rotated UV mapper subtract these
+pixels from the editable face mask. Invalid, overlapping, off-face, shared
+UV, full-coverage or stale-native requests fail closed; one Undo and the
+existing bitmap revision guard remain authoritative. This is an exact
+protection region, **not automatic logo detection or source-image proof**.
 An atlas/compute receipt is not visual approval; check one mapped material
 before broad propagation. Existing generic palette/painting paths remain
 unchanged when no source/protection anchors are provided.

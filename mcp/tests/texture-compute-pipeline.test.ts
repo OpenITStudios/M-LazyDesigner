@@ -12,6 +12,7 @@ import {
 } from "@/lib/textureComputeRequest";
 import {
   planFaceScopedTextureSelection,
+  planProtectedFaceLocalRegions,
   type NativeFaceFootprint,
 } from "@/lib/texture/selectionPlanning";
 
@@ -88,6 +89,147 @@ describe("texture compute request and pipeline", () => {
     expect(rgba(6)).toEqual([0x50,0,0,0]); // hidden RGB and alpha
     expect(result.receipt.changed_pixels).toBe(3);
     expect(result.receipt.execution.region.mask_scope).toBe("exact_cube_faces");
+  });
+
+
+  test("face-local identity mask protects a logo sharing the material RGB", () => {
+    const faces = [
+      { cube_uuid: "body", face: "north" as const, enabled: true,
+        texture_uuid: "atlas", native_material_name: "metal",
+        rect: [0, 0, 3, 2] as const, uv: [0, 0, 3, 2], rotation: 0 },
+      { cube_uuid: "other", face: "north" as const, enabled: true,
+        texture_uuid: "atlas", native_material_name: "metal",
+        rect: [3, 0, 5, 2] as const, uv: [3, 0, 5, 2], rotation: 0 },
+    ];
+    const request = parseTextureComputeRequest([{
+      operation: "gradient_map",
+      args: { ramp: ["#16441e", "#c1f4c4"], mode: "nearest",
+        source_hue_color: "#a00000",
+        face_targets: [{ cube_uuid: "body", face: "north" }],
+        protected_face_regions: [{ cube_uuid: "body", face: "north",
+          rect: { x: 1, y: 0, width: 1, height: 2 } }] },
+    }]);
+    const scope = planFaceScopedTextureSelection({
+      texture_uuid: "atlas", bitmap_width: 5, bitmap_height: 2,
+      faces, face_targets: request.face_targets!,
+    });
+    const protection = planProtectedFaceLocalRegions({
+      texture_uuid: "atlas", bitmap_width: 5, bitmap_height: 2,
+      logical_uv_width: 5, logical_uv_height: 2,
+      native_faces: faces, face_targets: request.face_targets!,
+      selection: scope, protected_regions: request.protected_face_regions!,
+    });
+    expect([...scope.target_mask]).toEqual([1, 1, 1, 1, 1, 1]);
+    expect([...protection.target_mask]).toEqual([1, 0, 1, 1, 0, 1]);
+    expect(protection).toMatchObject({ protected_pixels: 2, editable_pixels: 4 });
+    const source = new Uint8ClampedArray(
+      Array.from({ length: 10 }, () => [160, 0, 0, 255]).flat()
+    );
+    const result = applyTextureComputePipeline(source, 5, 2, request.steps,
+      scope.target_rect, protection.target_mask);
+    expect(result.receipt.changed_pixels).toBe(4);
+    for (const offset of [1, 4, 3, 8, 9]) {
+      expect([...result.pixels.slice(offset * 4, offset * 4 + 4)])
+        .toEqual([...source.slice(offset * 4, offset * 4 + 4)]);
+    }
+    expect([...result.pixels.slice(0, 4)]).not.toEqual([...source.slice(0, 4)]);
+  });
+
+  test("protected face-local pixels follow signed and quarter-turned native UV", () => {
+    const face = {
+      cube_uuid: "plate", face: "north" as const, enabled: true,
+      texture_uuid: "atlas", native_material_name: "painted",
+      rect: [2, 1, 6, 3] as const, uv: [6, 1, 2, 3], rotation: 90,
+    };
+    const scope = planFaceScopedTextureSelection({
+      texture_uuid: "atlas", bitmap_width: 8, bitmap_height: 4,
+      faces: [face], face_targets: [{ cube_uuid: "plate", face: "north" }],
+    });
+    const protection = planProtectedFaceLocalRegions({
+      texture_uuid: "atlas", bitmap_width: 8, bitmap_height: 4,
+      logical_uv_width: 8, logical_uv_height: 4,
+      native_faces: [face],
+      face_targets: [{ cube_uuid: "plate", face: "north" }],
+      selection: scope,
+      protected_regions: [{ cube_uuid: "plate", face: "north",
+        rect: { x: 0, y: 0, width: 1, height: 2 } }],
+    });
+    // rotation 90 + flipped U maps face-local (0,0),(0,1) to (5,2),(4,2).
+    expect([...protection.target_mask]).toEqual([1,1,1,1, 1,1,0,0]);
+    expect(protection).toMatchObject({ protected_pixels: 2, editable_pixels: 6 });
+  });
+
+  test("protected-face parser refuses foreign, duplicated and unscoped identity regions", () => {
+    const region = { cube_uuid: "body", face: "north",
+      rect: { x: 0, y: 0, width: 1, height: 1 } };
+    const base = { ramp: ["#16441e", "#c1f4c4"],
+      source_hue_color: "#a00000",
+      face_targets: [{ cube_uuid: "body", face: "north" }],
+      protected_face_regions: [region] };
+    const parse = (args: Record<string, unknown>) =>
+      parseTextureComputeRequest([{ operation: "gradient_map", args }]);
+    expect(() => parse(base)).not.toThrow();
+    expect(() => parse({ ...base, protected_face_regions: [region, region] }))
+      .toThrow("protected_face_regions");
+    expect(() => parse({ ...base, protected_face_regions: [
+      { ...region, cube_uuid: "foreign" }] })).toThrow("FACE_PROTECTION_TARGET_NOT_SELECTED");
+    expect(() => parse({ ...base, face_targets: undefined }))
+      .toThrow("protected_face_regions require face_targets");
+    expect(() => parse({ ...base, target_rect: { x: 0, y: 0, width: 1, height: 1 } }))
+      .toThrow("mutually exclusive");
+    expect(() => parse({ ...base, protected_face_regions: [
+      { ...region, rect: { x: -1, y: 0, width: 1, height: 1 } }] }))
+      .toThrow("protected_face_regions");
+    expect(() => parseTextureComputeRequest([
+      { operation: "gradient_map", args: {
+        ramp: ["#16441e", "#c1f4c4"],
+        source_hue_color: "#a00000",
+        face_targets: base.face_targets,
+      } },
+      { operation: "posterize", args: { levels: 3, protected_face_regions: [region] } },
+    ])).toThrow("only on compute[0]");
+  });
+
+  test("protected-face selection fails closed on unsafe native owners or masks", () => {
+    const base = {
+      cube_uuid: "body", face: "north" as const, enabled: true,
+      texture_uuid: "atlas", native_material_name: "metal",
+      rect: [0, 0, 2, 2] as const, uv: [0, 0, 2, 2], rotation: 0,
+    };
+    const selected = [{ cube_uuid: "body", face: "north" as const }];
+    const scope = planFaceScopedTextureSelection({
+      texture_uuid: "atlas", bitmap_width: 4, bitmap_height: 2,
+      faces: [base], face_targets: selected,
+    });
+    const region = { cube_uuid: "body", face: "north" as const,
+      rect: { x: 0, y: 0, width: 1, height: 1 } };
+    const run = (overrides: Record<string, unknown> = {}) =>
+      planProtectedFaceLocalRegions({
+        texture_uuid: "atlas", bitmap_width: 4, bitmap_height: 2,
+        logical_uv_width: 4, logical_uv_height: 2,
+        native_faces: [base], face_targets: selected,
+        selection: scope, protected_regions: [region],
+        ...overrides,
+      });
+    expect(() => run({ protected_regions: [{ ...region,
+      rect: { x: 2, y: 0, width: 1, height: 1 } }] }))
+      .toThrow("FACE_PROTECTION_LOCAL_BOUNDS");
+    expect(() => run({ protected_regions: [region, region] }))
+      .toThrow("FACE_PROTECTION_OVERLAPPING_REGIONS");
+    expect(() => run({ protected_regions: [{ ...region,
+      rect: { x: 0, y: 0, width: 2, height: 2 } }] }))
+      .toThrow("FACE_PROTECTION_EXHAUSTS_TARGET");
+    expect(() => run({ native_faces: [{ ...base, uv: [0, 0, 1, 2] }] }))
+      .toThrow("FACE_PROTECTION_NATIVE_UV_RECT_MISMATCH");
+    const stacked = { ...base, cube_uuid: "other" };
+    const stackedSelection = planFaceScopedTextureSelection({
+      texture_uuid: "atlas", bitmap_width: 4, bitmap_height: 2,
+      faces: [base, stacked],
+      face_targets: [...selected, { cube_uuid: "other", face: "north" }],
+    });
+    expect(() => run({ native_faces: [base, stacked],
+      face_targets: [...selected, { cube_uuid: "other", face: "north" }],
+      selection: stackedSelection })).toThrow("FACE_PROTECTION_SHARED_UV_REVIEW_REQUIRED");
   });
 
   test("material source/protection samples must be physically present in selected faces", () => {

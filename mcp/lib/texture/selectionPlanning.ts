@@ -34,6 +34,11 @@ export function ellipseSelectionPredicate(
 }
 
 import type { TextureTreatmentFace } from "@/lib/texture/treatmentPlan";
+import {
+  faceLocalPixelSize,
+  mapFaceLocalPixelToAtlasPixel,
+  mapFaceUvToTexturePixels,
+} from "@/lib/uv/facePixelMapping";
 
 export type NativeFaceFootprint = TextureTreatmentFace & {
   enabled: boolean;
@@ -168,5 +173,141 @@ export function planFaceScopedTextureSelection(input: {
     native_material_name: material!,
     material_identity: material === "" ? ("unnamed_default" as const) : ("native_named" as const),
     note: "Exact UV-face ownership; unnamed native materials do not attest semantic material identity.",
+  };
+}
+
+
+// Face-local identity masks reuse the same native face/UV authority as scoped
+// recoloring. No separate paint executor, persisted mask, or inferred artwork.
+export type ProtectedFaceLocalRegion = TextureTreatmentFace & {
+  rect: Readonly<{ x: number; y: number; width: number; height: number }>;
+};
+
+export type NativeFaceUvFootprint = NativeFaceFootprint & {
+  uv: readonly number[] | null;
+  rotation: number | null;
+};
+
+/**
+ * Remove explicit protected face-local texels from a previously validated
+ * native face selection. This protects an emblem even when its exact RGB is
+ * identical to the editable material. It does NOT recognize the emblem.
+ */
+export function planProtectedFaceLocalRegions(input: {
+  texture_uuid: string;
+  bitmap_width: number;
+  bitmap_height: number;
+  logical_uv_width: number;
+  logical_uv_height: number;
+  native_faces: readonly NativeFaceUvFootprint[];
+  face_targets: readonly TextureTreatmentFace[];
+  selection: Readonly<{
+    target_rect: { x: number; y: number; width: number; height: number };
+    target_mask: Uint8Array;
+  }>;
+  protected_regions: readonly ProtectedFaceLocalRegion[];
+}): { target_mask: Uint8Array; protected_pixels: number; editable_pixels: number } {
+  const regions = input.protected_regions;
+  const selection = input.selection;
+  const target = selection.target_rect;
+  if (!Array.isArray(regions) || regions.length < 1 || regions.length > 32 ||
+      !Array.isArray(input.native_faces) ||
+      !Array.isArray(input.face_targets) ||
+      input.face_targets.length < 1 || input.face_targets.length > FACE_SCOPE_TARGET_LIMIT ||
+      !Number.isSafeInteger(target.x) || target.x < 0 ||
+      !Number.isSafeInteger(target.y) || target.y < 0 ||
+      !Number.isSafeInteger(target.width) || target.width <= 0 ||
+      !Number.isSafeInteger(target.height) || target.height <= 0 ||
+      !(selection.target_mask instanceof Uint8Array) ||
+      selection.target_mask.length !== target.width * target.height) {
+    throw new Error("FACE_PROTECTION_SCOPE_INVALID");
+  }
+  const selected = new Set(input.face_targets.map(faceId));
+  if (selected.size !== input.face_targets.length) {
+    throw new Error("FACE_PROTECTION_TARGET_AMBIGUOUS");
+  }
+  const natives = new Map<string, NativeFaceUvFootprint>();
+  for (const face of input.native_faces) {
+    const id = faceId(face);
+    if (natives.has(id)) throw new Error("FACE_PROTECTION_NATIVE_IDENTITY_AMBIGUOUS");
+    natives.set(id, face);
+  }
+  const mask = new Uint8Array(selection.target_mask);
+  let protectedPixels = 0;
+  let declaredPixels = 0;
+  const metrics = {
+    width: input.bitmap_width,
+    displayHeight: input.bitmap_height,
+    uvWidth: input.logical_uv_width,
+    uvHeight: input.logical_uv_height,
+  };
+  for (const region of regions) {
+    const id = faceId(region);
+    const face = natives.get(id);
+    if (!selected.has(id) || !face?.enabled ||
+        face.texture_uuid !== input.texture_uuid ||
+        !face.uv || face.rotation === null || !face.rect) {
+      throw new Error("FACE_PROTECTION_TARGET_UNRESOLVED: " + id);
+    }
+    // One pixel can represent several selected faces with stacked UVs.
+    // A face-specific identity mark cannot then be protected independently.
+    for (const otherId of selected) {
+      if (otherId === id) continue;
+      const other = natives.get(otherId);
+      if (!other?.rect || uvOverlaps(face.rect, other.rect)) {
+        throw new Error("FACE_PROTECTION_SHARED_UV_REVIEW_REQUIRED: " + id);
+      }
+    }
+    const mapping = mapFaceUvToTexturePixels(face.uv, metrics, id);
+    const [faceWidth, faceHeight] = faceLocalPixelSize(mapping, face.rotation, id);
+    if (!sameUvRect(mapping.rect, face.rect)) {
+      throw new Error("FACE_PROTECTION_NATIVE_UV_RECT_MISMATCH: " + id);
+    }
+    const rect = region.rect;
+    if (!rect || !Number.isSafeInteger(rect.x) || rect.x < 0 ||
+        !Number.isSafeInteger(rect.y) || rect.y < 0 ||
+        !Number.isSafeInteger(rect.width) || rect.width <= 0 ||
+        !Number.isSafeInteger(rect.height) || rect.height <= 0 ||
+        rect.x + rect.width > faceWidth ||
+        rect.y + rect.height > faceHeight) {
+      throw new Error("FACE_PROTECTION_LOCAL_BOUNDS: " + id);
+    }
+    declaredPixels += rect.width * rect.height;
+    if (!Number.isSafeInteger(declaredPixels) || declaredPixels > 8192) {
+      throw new Error("FACE_PROTECTION_PIXEL_BUDGET");
+    }
+    for (let y = rect.y; y < rect.y + rect.height; y++) {
+      for (let x = rect.x; x < rect.x + rect.width; x++) {
+        const atlas = mapFaceLocalPixelToAtlasPixel(mapping, face.rotation, x, y, id);
+        const localX = atlas.x - target.x;
+        const localY = atlas.y - target.y;
+        if (localX < 0 || localY < 0 ||
+            localX >= target.width || localY >= target.height) {
+          throw new Error("FACE_PROTECTION_OUTSIDE_SELECTED_FACES: " + id);
+        }
+        const index = localY * target.width + localX;
+        if (selection.target_mask[index] !== 1) {
+          throw new Error("FACE_PROTECTION_OUTSIDE_SELECTED_FACES: " + id);
+        }
+        if (mask[index] !== 1) {
+          throw new Error("FACE_PROTECTION_OVERLAPPING_REGIONS: " + id);
+        }
+        mask[index] = 0;
+        protectedPixels++;
+      }
+    }
+  }
+  let editablePixels = 0;
+  for (const bit of mask) {
+    if (bit !== 0 && bit !== 1) throw new Error("FACE_PROTECTION_SCOPE_INVALID");
+    editablePixels += bit;
+  }
+  if (editablePixels === 0) {
+    throw new Error("FACE_PROTECTION_EXHAUSTS_TARGET");
+  }
+  return {
+    target_mask: mask,
+    protected_pixels: protectedPixels,
+    editable_pixels: editablePixels,
   };
 }

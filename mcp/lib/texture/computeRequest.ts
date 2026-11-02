@@ -30,6 +30,16 @@ const targetRectSchema = z
   })
   .strict();
 
+// Protected rectangles are physical pixels in a face's displayed local
+// orientation, not atlas coordinates or normalized reference-image boxes.
+const protectedFaceRegionSchema = faceTargetSchema.extend({
+  rect: targetRectSchema,
+}).strict();
+const protectedFaceRegionsSchema = z.array(protectedFaceRegionSchema).min(1).max(32)
+  .refine((items) => new Set(items.map((f) =>
+    [f.cube_uuid, f.face, f.rect.x, f.rect.y, f.rect.width, f.rect.height].join(":")
+  )).size === items.length, "protected_face_regions must be distinct.");
+
 const autoLevelsArgs = z.object({
   low_clip_percent: z.number().min(0).max(49).optional(),
   high_clip_percent: z.number().min(0).max(49).optional(),
@@ -321,6 +331,7 @@ export type ParsedTextureComputeRequest = {
   steps: TextureComputeStep[];
   target_rect: TextureComputeRect | null;
   face_targets: z.infer<typeof faceTargetSchema>[] | null;
+  protected_face_regions: z.infer<typeof protectedFaceRegionSchema>[] | null;
 };
 
 /**
@@ -332,13 +343,15 @@ export function parseTextureComputeRequest(
 ): ParsedTextureComputeRequest {
   let targetRect: TextureComputeRect | null = null;
   let faceTargets: z.infer<typeof faceTargetSchema>[] | null = null;
+  let protectedRegions: z.infer<typeof protectedFaceRegionSchema>[] | null = null;
   const normalized = raw.map((step, index): RawStep => {
     const args = step.args ?? {};
     const hasRect = Object.prototype.hasOwnProperty.call(args, "target_rect");
     const hasFaces = Object.prototype.hasOwnProperty.call(args, "face_targets");
-    if (!hasRect && !hasFaces) return step;
+    const hasProtected = Object.prototype.hasOwnProperty.call(args, "protected_face_regions");
+    if (!hasRect && !hasFaces && !hasProtected) return step;
     if (index !== 0) {
-      throw new Error("Texture compute target_rect/face_targets must be declared only on compute[0].args.");
+      throw new Error("Texture compute target_rect/face_targets/protected_face_regions must be declared only on compute[0].args.");
     }
     if (hasRect && hasFaces) {
       throw new Error("Texture compute target_rect and face_targets are mutually exclusive.");
@@ -346,6 +359,7 @@ export function parseTextureComputeRequest(
     try {
       if (hasRect) targetRect = targetRectSchema.parse(args.target_rect);
       if (hasFaces) faceTargets = faceTargetsSchema.parse(args.face_targets);
+      if (hasProtected) protectedRegions = protectedFaceRegionsSchema.parse(args.protected_face_regions);
     } catch (error) {
       throw new Error("compute[0] target_rect/face_targets is invalid: " +
         (error instanceof Error ? error.message : String(error)));
@@ -353,6 +367,7 @@ export function parseTextureComputeRequest(
     const operationArgs = { ...args };
     delete operationArgs.target_rect;
     delete operationArgs.face_targets;
+    delete operationArgs.protected_face_regions;
     return { ...step, args: operationArgs };
   });
   const steps = parseTextureComputeSteps(normalized);
@@ -368,5 +383,16 @@ export function parseTextureComputeRequest(
       "Selective hue-family recoloring requires exactly one gradient step with an explicit target_rect or face_targets."
     );
   }
-  return { steps, target_rect: targetRect, face_targets: faceTargets };
+  if (protectedRegions) {
+    if (!faceTargets || !selectiveHue || steps.length !== 1) {
+      throw new Error("protected_face_regions require face_targets and one selective gradient step with source_hue_color.");
+    }
+    const selected = new Set(faceTargets.map((face) => face.cube_uuid + ":" + face.face));
+    if (protectedRegions.some((region) =>
+      !selected.has(region.cube_uuid + ":" + region.face))) {
+      throw new Error("FACE_PROTECTION_TARGET_NOT_SELECTED");
+    }
+  }
+  return { steps, target_rect: targetRect, face_targets: faceTargets,
+    protected_face_regions: protectedRegions };
 }

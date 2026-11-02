@@ -103,8 +103,18 @@ source/protected RGB to be present on current visible pixels in the exact
 target mask; no cross-face swatches, stale palette claims, or automatic
 style recognition. Protected RGBs must not overlap the source hue swatch
 or source ramp. This preserves exact RGB marks only, **not** semantic
-identity when an editable pixel and a logo share identical RGB. In that
-case use separately proven pixel selection or `REVIEW_REQUIRED`.
+identity when an editable pixel and a logo share identical RGB. For that
+case, **only if the identity region is verified on the current mapped face**,
+use `protected_face_regions:[{cube_uuid,face,rect:{x,y,width,height}}]`
+inside the same `compute[0].args` with `face_targets`, one selective
+gradient and `source_hue_color`. Rectangles use face-local **physical
+pixels**; rotation, flipped UV and atlas mapping come from current native
+Blockbench state. The mask preserves those exact texels even when they
+share an RGB with the editable material. Do not invent an emblem rectangle
+from a part name, normalized source-image crop or arbitrary atlas guess.
+Unobserved identity regions remain `REVIEW_REQUIRED`; shared/stacked UV
+cannot promise independent protection. Do not combine with `target_rect`.
+This protection does not certify an image-to-face visual correspondence.
 The existing native transaction retains texture/UV ownership, bitmap
 revision and Undo. Missing/ambiguous source roles remain on the existing
 direct editor/review path; do not fabricate three shades. Alpha, neutral

@@ -20,6 +20,14 @@ Stage/UV, source and injected native-state inputs authored.
 native Blockbench/Undo, save/export, Golden visual QA NOT EXECUTED.
 Verification CI disabled.
 
+**INDEPENDENT SELECTIVE RECOLOR:** Exact face-local `protected_face_regions`
+are now source-authored on the registered `paint_texture_transaction.compute`
+gradient path. Same-RGB logo pixels can be excluded from the current native
+face mask without a parallel painter; signed/rotated UV, shared-UV ambiguity,
+bitmap revision and one Undo remain guarded. Positive/negative Bun cases
+AUTHORED, NOT EXECUTED; no visual recognition or installed proof is claimed.
+This does not activate the compact cluster request or UV layout planner.
+
 **LIMIT:** Compact request/preflight INTERNAL/UNREGISTERED.
 Activation needs generated existing capability schema/docs and secure
 serialized Control→Runtime source authority. Do not hand-edit

@@ -7,6 +7,7 @@ import { imageContent } from "@/lib/protocol/imageContent";
 import { resolvePaintTexture } from "@/lib/texture/selection";
 import {
   planFaceScopedTextureSelection,
+  planProtectedFaceLocalRegions,
   type NativeFaceFootprint,
 } from "@/lib/texture/selectionPlanning";
 import type { TextureTreatmentFace } from "@/lib/texture/treatmentPlan";
@@ -436,6 +437,20 @@ async function executePaintTextureTransaction(
               texture, before.width, before.height, computeRequest.face_targets
             )
           : null;
+        const protection = computeRequest?.protected_face_regions && faceScope &&
+          computeRequest.face_targets
+          ? planProtectedFaceLocalRegions({
+              texture_uuid: texture.uuid,
+              bitmap_width: before.width,
+              bitmap_height: before.height,
+              logical_uv_width: texture.getUVWidth(),
+              logical_uv_height: texture.getUVHeight(),
+              native_faces: faceScope.native_faces,
+              face_targets: computeRequest.face_targets,
+              selection: faceScope,
+              protected_regions: computeRequest.protected_face_regions,
+            })
+          : null;
         const computeResult = computeRequest
           ? applyTextureComputePipeline(
               before.pixels,
@@ -443,7 +458,7 @@ async function executePaintTextureTransaction(
               before.height,
               computeRequest.steps,
               faceScope?.target_rect ?? computeRequest.target_rect ?? undefined,
-              faceScope?.target_mask
+              protection?.target_mask ?? faceScope?.target_mask
             )
           : null;
         const applied = computeResult
@@ -655,6 +670,10 @@ async function executePaintTextureTransaction(
                     scope: "explicit_cube_faces" as const,
                     face_count: faceScope.face_count,
                     covered_pixels: faceScope.covered_pixels,
+                    ...(protection ? {
+                      protected_pixels: protection.protected_pixels,
+                      editable_pixels: protection.editable_pixels,
+                    } : {}),
                     native_material_name: faceScope.native_material_name,
                     material_identity: faceScope.material_identity,
                     note: faceScope.note,
