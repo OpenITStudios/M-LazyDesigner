@@ -653,7 +653,7 @@ test("sampled Locator trajectory is geometric evidence, not a foot-contact verdi
   expect(out.state).toBe("available");
   if (out.state !== "available") throw new Error("Expected available trajectory.");
   expect(out.evaluated_locator_count).toBe(2);
-  expect(out.trajectories).toEqual([
+  expect(out.trajectories).toMatchObject([
     { locator_uuid: "marker-A", parent_group_uuid: "leg-A",
       sample_count: 3, max_world_drift_from_start: 1,
       start_to_end_distance: 1, world_path_length: 1 },
@@ -705,4 +705,38 @@ test("world-space trajectory refuses inconsistent native marker coverage and pro
   expect(analyzeObservedAnimationLocatorTrajectories(frames).state).toBe("unavailable");
   expect(analyzeObservedAnimationLocatorTrajectories(good.slice(0, 1)).state)
     .toBe("unavailable");
+});
+
+
+test("time-aligned Locator samples preserve mid-cycle movement and detach input objects", () => {
+  const frames = [0, 0.5, 1].map((time_seconds, index) => ({
+    project_uuid: "p", animation_uuid: "a", time_seconds,
+    markers: [{ locator_uuid: "foot", parent_group_uuid: "leg",
+      world_position: [index === 1 ? 2 : 0, 0, 0] as [number, number, number] }],
+  }));
+  const result = analyzeObservedAnimationLocatorTrajectories(frames);
+  expect(result.state).toBe("available");
+  if (result.state !== "available") throw new Error("expected available");
+  expect(result.trajectories[0].start_to_end_distance).toBe(0);
+  expect(result.trajectories[0].world_path_length).toBe(4);
+  expect(result.trajectories[0].max_segment_speed).toBe(4);
+  expect(result.trajectories[0].samples.map((item) => item.world_position[0]))
+    .toEqual([0, 2, 0]);
+  frames[1].markers[0].world_position[0] = 100;
+  expect(result.trajectories[0].samples[1].world_position[0]).toBe(2);
+  expect(result.physical_contact_verified).toBe(false);
+});
+
+test("nonfinite Locator displacement, invalid frames and tiny time gaps fail closed", () => {
+  const frame = (time_seconds: number, x: number) => ({
+    project_uuid: "p", animation_uuid: "a", time_seconds,
+    markers: [{ locator_uuid: "foot", parent_group_uuid: "leg",
+      world_position: [x, 0, 0] as [number, number, number] }],
+  });
+  expect(analyzeObservedAnimationLocatorTrajectories([frame(0,-1e308),frame(1,1e308)]))
+    .toMatchObject({state:"unavailable",reason:"LOCATOR_TRAJECTORY_METRICS_NONFINITE"});
+  expect(analyzeObservedAnimationLocatorTrajectories([frame(0,0),frame(1e-9,1)]))
+    .toMatchObject({state:"unavailable",reason:"LOCATOR_TRAJECTORY_TIMES_NOT_DISTINCT"});
+  expect(analyzeObservedAnimationLocatorTrajectories([frame(0,0),null as any]))
+    .toMatchObject({state:"unavailable",reason:"LOCATOR_TRAJECTORY_FRAME_IDENTITY_OR_COVERAGE_CHANGED"});
 });

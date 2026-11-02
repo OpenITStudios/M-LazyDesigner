@@ -195,6 +195,25 @@ export async function withTemporaryAnimationPreview<
     }
   }
 
+  // Read back known Timeline/selection/playing state even when native
+  // setters returned without throwing. This does not prove restoration of
+  // MoLang, particles, sound, textures, geometry, or unknown extensions.
+  if (setupStarted && restoreFailures.length === 0) {
+    attemptRestore(() => {
+      if (port.getSelectedAnimation() !== previousSelected ||
+          port.timeline.time !== previousTime ||
+          port.timeline.playing !== previousTimelinePlaying ||
+          port.animations.length !== flags.length ||
+          flags.some(({ animation, selected, playing }, index) =>
+            port.animations[index] !== animation ||
+            animation.selected !== selected || animation.playing !== playing
+          )) {
+        throw new Error("ANIMATION_PREVIEW_KNOWN_STATE_MISMATCH: known " +
+          "editor state differs after restoration.");
+      }
+    });
+  }
+
   if (operationFailed && restoreFailures.length > 0) {
     throw new AggregateError(
       [operationFailure, ...restoreFailures],

@@ -223,6 +223,26 @@ marker is not physical-contact evidence. No IK write or correction is
 authorized. Explicit contact roles/stance windows, a fully isolated native
 harness and visual Golden proof remain required before foot locking.
 
+### Time-aligned Locator evidence and known preview-state readback (2026-11-03)
+
+The existing world-space Locator diagnostic now preserves bounded per-frame
+world positions and maximum observed segment speed. Five preview times times
+sixteen Locators remain the upper sampling budget. Equal clip endpoints
+can no longer conceal sampled intermediate movement. Invalid frame objects,
+sub-resolution timestamps and arithmetic overflow produce an unavailable
+diagnostic rather than invented stillness or JSON-invalid values.
+
+The existing temporary preview owner now reads back known Timeline time,
+playing/selection flags and selected clip after its restoration attempts.
+Silent setter no-ops or redraw drift fail with
+`ANIMATION_PREVIEW_KNOWN_STATE_MISMATCH`. The receipt scopes
+`persistent_timeline_state_restored` to
+`KNOWN_TIMELINE_SELECTION_FLAGS_ONLY`, with explicit
+`full_native_state_restoration_attested=false`. This does not establish
+MoLang/audio/effect/texture/geometry/external-listener restoration or
+authorize contact-aware IK mutation. Four Gateway tools and all public
+request schemas stay unchanged.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

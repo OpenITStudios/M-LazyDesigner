@@ -409,12 +409,17 @@ export function analyzeObservedAnimationLocatorTrajectories(
       max_world_drift_from_start: number;
       start_to_end_distance: number;
       world_path_length: number;
+      max_segment_speed: number;
+      samples: Array<{ time_seconds: number; world_position: Vec3 }>;
     }>,
   });
   if (!Array.isArray(frames) || frames.length < 2 ||
       frames.length > ANIMATION_LOCATOR_TRAJECTORY_MAX_FRAMES) {
     return unavailable("LOCATOR_TRAJECTORY_FRAME_WINDOW_INVALID");
   }
+  if (frames.some((frame) =>
+    !frame || typeof frame !== "object" || !Number.isFinite(frame.time_seconds)
+  )) return unavailable("LOCATOR_TRAJECTORY_FRAME_IDENTITY_OR_COVERAGE_CHANGED");
   const ordered = [...frames].sort((a, b) => a.time_seconds - b.time_seconds);
   const first = ordered[0];
   if (!first || typeof first.project_uuid !== "string" || !first.project_uuid.trim() ||
@@ -467,30 +472,47 @@ export function analyzeObservedAnimationLocatorTrajectories(
     }
   }
   if (ordered.some((frame, index) =>
-    index > 0 && frame.time_seconds <= ordered[index - 1].time_seconds
+    index > 0 && frame.time_seconds - ordered[index - 1].time_seconds <= TIME_EPSILON
   )) return unavailable("LOCATOR_TRAJECTORY_TIMES_NOT_DISTINCT");
 
   const distance = (a: Vec3, b: Vec3) =>
     Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
   const trajectories = [...expected.entries()].map(([locator_uuid, metadata]) => {
-    const points = ordered.map((frame) =>
-      frame.markers.find((marker) => marker.locator_uuid === locator_uuid)!.world_position
-    );
-    let path = 0;
-    for (let i = 1; i < points.length; i++) {
-      path += distance(points[i - 1], points[i]);
+    // Read-only, bounded value snapshots; do not retain native THREE objects.
+    const samples = ordered.map((frame) => ({
+      time_seconds: frame.time_seconds,
+      world_position: [...frame.markers.find((marker) =>
+        marker.locator_uuid === locator_uuid
+      )!.world_position] as [number, number, number],
+    }));
+    let path = 0, maxSegmentSpeed = 0;
+    for (let i = 1; i < samples.length; i++) {
+      const segment = distance(samples[i - 1].world_position, samples[i].world_position);
+      path += segment;
+      maxSegmentSpeed = Math.max(
+        maxSegmentSpeed, segment / (samples[i].time_seconds - samples[i - 1].time_seconds)
+      );
     }
     return {
       locator_uuid,
       parent_group_uuid: metadata.parent_group_uuid,
-      sample_count: points.length,
-      max_world_drift_from_start: Math.max(...points.map((point) =>
-        distance(point, points[0])
+      sample_count: samples.length,
+      max_world_drift_from_start: Math.max(...samples.map((sample) =>
+        distance(sample.world_position, samples[0].world_position)
       )),
-      start_to_end_distance: distance(points[0], points[points.length - 1]),
+      start_to_end_distance: distance(
+        samples[0].world_position, samples[samples.length - 1].world_position
+      ),
       world_path_length: path,
+      max_segment_speed: maxSegmentSpeed,
+      samples,
     };
-  }).sort((a,b) => a.locator_uuid.localeCompare(b.locator_uuid));
+  }).sort((a, b) => a.locator_uuid.localeCompare(b.locator_uuid));
+  // Valid finite coordinates can still overflow derived distances/speeds.
+  if (trajectories.some((item) =>
+    ![item.max_world_drift_from_start, item.start_to_end_distance,
+      item.world_path_length, item.max_segment_speed].every(Number.isFinite)
+  )) return unavailable("LOCATOR_TRAJECTORY_METRICS_NONFINITE");
   return {
     state: "available" as const,
     reason: null,

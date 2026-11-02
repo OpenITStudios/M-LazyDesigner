@@ -338,3 +338,39 @@ describe("bounded preview interleaving safety", () => {
     expect(first.timeline.time).toBe(4);
   });
 });
+
+
+describe("known preview state readback", () => {
+  test("refuses a silent selected animation restore no-op", async () => {
+    const state = fixture(true);
+    const setSelected = state.port.setSelectedAnimation;
+    state.port.setSelectedAnimation = (item) => {
+      if (item !== state.idle) setSelected(item);
+    };
+    await expect(withTemporaryAnimationPreview(state.port,state.walk,0.3,()=>"image"))
+      .rejects.toThrow("ANIMATION_PREVIEW_KNOWN_STATE_MISMATCH");
+    expect(state.timeline.time).toBe(4);
+    expect(state.effectsSuspended()).toBe(false);
+  });
+  test("rejects a silent Timeline restore failure and releases guard", async () => {
+    const state = fixture(true), setTime = state.timeline.setTime;
+    state.timeline.setTime = (time) => {
+      if (time !== 4) setTime.call(state.timeline,time);
+    };
+    await expect(withTemporaryAnimationPreview(state.port,state.walk,0.3,()=>"image"))
+      .rejects.toThrow("ANIMATION_PREVIEW_KNOWN_STATE_MISMATCH");
+    state.timeline.setTime = setTime;
+    await expect(withTemporaryAnimationPreview(state.port,state.walk,0.5,()=>"next"))
+      .resolves.toBe("next");
+    expect(state.effectsSuspended()).toBe(false);
+  });
+  test("rejects preview redraw which changes known playing flags", async () => {
+    const state = fixture(true);
+    state.port.preview = () => {
+      if (state.timeline.time === 4) state.walk.playing = true;
+    };
+    await expect(withTemporaryAnimationPreview(state.port,state.walk,0.3,()=>"image"))
+      .rejects.toThrow("ANIMATION_PREVIEW_KNOWN_STATE_MISMATCH");
+    expect(state.effectsSuspended()).toBe(false);
+  });
+});

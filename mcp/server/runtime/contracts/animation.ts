@@ -455,7 +455,7 @@ async function captureAnimationSamples(
   const content: unknown[] = [
     {
       type: "text" as const,
-      text: `Captured ${preview.times.length} bounded pose sample(s) from animation "${animation.name}" without changing the active editor camera or persistent timeline state.`,
+      text: `Captured ${preview.times.length} bounded pose sample(s) from animation "${animation.name}". Known Timeline/selection readback checked; full native restoration not attested.`,
     },
   ];
   const samples: Array<{
@@ -590,6 +590,8 @@ async function captureAnimationSamples(
         times: [...preview.times],
         sample_count: samples.length,
         persistent_timeline_state_restored: true,
+        restoration_verification_scope: "KNOWN_TIMELINE_SELECTION_FLAGS_ONLY",
+        full_native_state_restoration_attested: false,
       },
       samples,
       ...(geometryPoseReview ? { geometry_pose_review: geometryPoseReview } : {}),
