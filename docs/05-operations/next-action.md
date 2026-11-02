@@ -2,56 +2,34 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — Advanced Geometry CODE-FIRST (2026-11-01)
+## Primary next — Texturing assistance (2026-11-02)
 
-**USER DECISION:** Mature AI-first Geometry source; no tests,
-build/Bun, CI, native QA, release, separate plugin or mandatory UI.
+**USER DECISION:** Pause Geometry. Improve reference-grounded voxel
+texturing quality and MCP usability; keep the current Gateway, Paint
+transaction, native Undo, and optional human UI.
 
-**R3a–R3x:** Legacy 13 shapes and math v1–v11 retained.
-Opt-in v12 uncertainty_targets and bounded calibration ranges
-propagate possible physical/player sizes; only ALL declared values
-within explicit native tolerance pass. SOME requires review;
-source handles remain claims, not reference proof. Same Recipe/Undo
-and <=64 expanded Cube budget.
+**SOURCE:** Opt-in `list_textures` coverage/full now publishes a bounded,
+read-only index of current native Cube/part and material labels through
+`lib/texture/semanticTargets.ts` and one Runtime adapter. Unique,
+complete groups can suggest exact `face_targets`; ambiguity, missing
+textures, mixed materials/atlases and truncated groups withhold them.
+Candidates are not material classification, UV PASS or authorization.
+The existing face-scoped selective gradient-map transaction retains
+revision/UV/ownership checks and one Undo. Texturing Skill governs use.
 
-**R3j:** Canonical Recipe v1 optionally persists original high-level
-`advanced_geometry_source` parameters per feature for AI editing
-after save/reopen. New plans update selected shapes only; store
-validates source identities/pattern ownership. AI inspect returns
-parameter source only if recompiled geometry still matches stored
-Recipe. Plan/apply also return bounded incremental impact counts
-and UV/Texture/Animation invalidation; no visual PASS inference.
+**PROOF:** GitHub source and negative regression tests authored.
+Bun/typecheck/build/CI/native Blockbench/visual/export/human quality
+NOT EXECUTED. Verification CI is disabled.
 
-**R3y:** Form Signature now projects bounded, explicit Recipe feature
-purposes and, when candidate or saved native/source identity matches,
-semantic method/part/relationship IDs. No standalone style system,
-implicit variation or visual identity attestation; existing Knowledge
-planning receives the source-only projection even when its index is absent.
+**NEXT:** Improve palette-to-pixel fidelity and focused mapped-view
+correction through existing owners. Validate actual reference and
+native face identity before any broad repaint. No release.
 
-**R3z:** Opt-in Geometry Construction Language v13 adds a declared
-anisotropic PROFILE_SWEEP with ellipse/rectangle sections, explicit up
-axis and station-by-station taper/twist. Pure piecewise frames and the
-existing one-unit voxel/Cuboid partition enforce bounded topology;
-no new object presets, random variation or visual claims.
+**GEOMETRY FROZEN:** v12–v14 source checkpoint
+`addfb6a008b9af8baf0417ff23435046df7285d4` remains in Git;
+`construct_geometry` is UNREGISTERED pending canonical Bun generator,
+generated API and native acceptance. Do not reopen within Texturing.
 
-**R3aa:** Opt-in Geometry program v14 declares explicit per-station
-variation bounds and monotonic profile invariants. Canonical Recipe
-feature revision accepts only whitelisted in-range scalar deltas
-against the previous stored source. Form Signature exposes bounded
-permission handles; no random variants, new solver or beauty score.
-
-**PUBLIC AI:** `construct_geometry` remains UNREGISTERED. A real
-generator-capable Bun workspace is required for atomic registration
-with generator-owned API docs. Do not hand-edit generated artifacts.
-
-**PROOF:** Source only. No tests/build/CI, native save/reopen,
-Bedrock export or visual QA; plugin deployment not claimed.
-
-**NEXT:** Review source-only v14 variation and its declared geometry
-invariants for any evidence-backed gaps; do not add randomization,
-new presets or a second solver. Native acceptance remains open;
-public `construct_geometry` still needs canonical Bun generation.
-No build, tests, CI, Blockbench or visual QA under CODE-FIRST.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

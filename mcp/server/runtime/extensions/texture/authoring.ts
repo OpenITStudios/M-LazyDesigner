@@ -1,6 +1,7 @@
 /// <reference types="three" />
 /// <reference types="blockbench-types" />
 import textureUvCasebook from "../../../../../docs/03-authoring/texture/decision-cases.md" with { type: "text" };
+import { inspectNativeTextureSemanticTargets } from "./semanticTargets";
 import {
   createTextureUvCaseReader,
   suggestTextureUvTechnicalKnowledge,
@@ -1698,6 +1699,9 @@ function wireTextureReads(): void {
             }
           : {}),
         ...(knowledgeGuidance ? { knowledge_guidance: knowledgeGuidance } : {}),
+        ...(scope === "coverage" || scope === "full"
+          ? { semantic_target_candidates: inspectNativeTextureSemanticTargets() }
+          : {}),
         diagnostic_io: textureDiagnosticReadMetrics(invocationContext),
       },
     };

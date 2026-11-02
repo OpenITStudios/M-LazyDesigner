@@ -63,6 +63,47 @@ render/preview → declared profile + mapped-model evidence; explicit file integ
 Unknown → `search_capabilities(limit=4)`. No confirmation rereads.
 **Pass the exact native argument name:** production `get_texture` uses `texture` (optional `region` and full-bitmap `expected_revision` after the existing Runtime texture-contract wiring), while `paint_texture_transaction` uses `texture_id` and requires `expected_revision`. With multiple loaded textures, always supply the intended UUID in the correct field; describe only an uncertain schema. A focused region is a bitmap-pixel crop, not a source-image `box_uv` or mapped face target.
 
+## Native Semantic Target Discovery / Material-Aware Recolor
+
+For a user request naming a **part or material** rather than a Cube UUID,
+reuse current exact targets if known. Otherwise use the existing
+`list_textures(diagnostics=true, diagnostic_scope="coverage")` once and inspect
+`semantic_target_candidates`. It is a bounded, opt-in navigation index of
+current **native Cube names and material labels**, not image recognition or
+source-approved artistic material classification. Never invent a semantic
+alias, fuzzy-select the first match, or treat `face_targets_candidate` as
+Texture/UV/visual PASS. Match the user's intended **kind** (`part` versus
+`native_material`) and exact label; use its `face_targets` only if the
+entire named cohort is returned and no review reason exists. On collision,
+mixed atlas/material, unresolved binding, incomplete response or missing
+target, inspect only the specific native faces via `inspect_elements` and
+resolve with current reference/authoring intent. Do not turn a truncated
+list into a partial repaint.
+
+For a **recolor while preserving shading**, require an explicit intended
+material cohort, actual current atlas source-hue swatch and approved target
+palette (or user-specified target). Keep shadow/base/highlight roles in value
+order, retain authored identity marks, and use the existing one-step
+`paint_texture_transaction.compute` with `gradient_map` (observed ramp) or
+`generated_gradient_map` (explicit intended base/ramp), plus
+`source_hue_color` and the complete `face_targets` in
+`compute[0].args`. Never combine `face_targets` with `target_rect`, append
+unrelated compute steps or silently recolor an entire atlas. The registered
+transaction rechecks resolved native texture/material/UV ownership, exact
+pixel mask, bitmap revision and Undo. If an eye, logo or other identity mark
+shares the source hue **within the selected face**, hue + face scope cannot
+protect it: do not promise preservation; use a narrower proven pixel
+selection or return `REVIEW_REQUIRED`. Transparent/neutral or unknown
+source colors must not be treated as chromatic material proof.
+
+Apply the smallest representative material area, inspect the affected
+PNG and mapped 3D view, then propagate the *same verified intent* to a
+compatible cohort. Use current receipts/control_delta; do not reread every
+pixel or rerun full diagnostics after a bounded successful transaction.
+The label index and compute receipt prove neither stylistic fidelity nor
+human acceptance. If no scoped recolor is needed, preserve the existing
+direct exact-pixel/painter path.
+
 ## Execution Path Preference
 Choose the cheapest executor that preserves the required visual behavior. Do not route through a native UI/Painter state merely because it resembles how a human would perform the edit.
 

@@ -31,6 +31,30 @@ Do not reintroduce a second mutation implementation in the Runtime extension lay
 
 `authoring.ts` may wrap `manage_material` only to augment the returned authoring status/workflow receipt after calling the original executor. It must not plan or apply PBR membership mutations.
 
+## Semantic part/material label discovery (opt-in, read-only)
+
+`list_textures(diagnostics=true, diagnostic_scope="coverage"|"full")`
+now includes `semantic_target_candidates` from the current Bedrock Cube,
+Outliner and resolved native Texture inventories. The pure bounded owner is
+`lib/texture/semanticTargets.ts`; the native adapter is
+`runtime/extensions/texture/semanticTargets.ts`. This does not register a
+new tool, change the default inventory-only response or scan atlas pixels.
+
+Groups expose exact native material names or Cube part names and may contain
+`face_targets` only when the *entire named cohort* fits the bounded response,
+uses one existing Texture and is unambiguous under explicit name normalization.
+Duplicate part labels, mixed materials/textures, missing bindings, name
+collisions and oversized/truncated groups are `review_required` with
+`face_targets=null`. Unnamed default materials remain unknown artistic
+identities, never inferred from color or label.
+
+These are navigation candidates, **not paint authorization or visual proof**.
+The actual chosen `face_targets` must still pass the existing
+`paint_texture_transaction` native UV/owner/revision checks. A shared-hue
+logo on the same selected face is not protected simply by face targeting;
+inspect source/mapped pixels before recoloring. The user-facing Texturing
+Skill owns the minimal direct routing and one-cohort verification policy.
+
 ## Seam diagnostic scope and omissions
 
 `list_textures(diagnostics=true, diagnostic_scope="seam"|"full")`
