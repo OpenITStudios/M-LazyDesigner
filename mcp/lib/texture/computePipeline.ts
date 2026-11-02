@@ -9,6 +9,7 @@ import {
   gradientMapRgba,
   palettizeErrorDiffusionRgba,
   palettizeRgba,
+  parseHexRgba,
   posterizeLightnessRgba,
   type AutoLevelsOptions,
   type DirectionalShadeOptions,
@@ -776,6 +777,66 @@ function applyStep(
   }
 }
 
+/**
+ * For opted-in material ramp composition, require each declared source
+ * shadow/base/highlight and identity protection RGB to exist in the *same*
+ * current bitmap and exact selected physical texels. A swatch from another
+ * face, stale reference or unrelated atlas cannot silently authorize paint.
+ * This is a pixel-presence proof, not visual/reference identity approval.
+ */
+function requireMaterialSourceSwatches(
+  source: Uint8ClampedArray,
+  sourceWidth: number,
+  target: TextureComputeRect,
+  targetMask: Uint8Array | undefined,
+  steps: readonly TextureComputeStep[]
+): void {
+  const selected = steps.filter(step =>
+    (step.operation === "gradient_map" ||
+      step.operation === "generated_gradient_map") &&
+    (step.options?.sourceRamp !== undefined ||
+     step.options?.protectedColors !== undefined)
+  );
+  if (!selected.length) return;
+  if (steps.length !== 1 || selected.length !== 1) {
+    throw new Error("MATERIAL_RAMP_REQUIRES_SINGLE_SCOPED_GRADIENT");
+  }
+  const step = selected[0];
+  if (step.operation !== "gradient_map" &&
+      step.operation !== "generated_gradient_map") {
+    throw new Error("MATERIAL_RAMP_REQUIRES_GRADIENT");
+  }
+  const options = step.options;
+  if (!options?.sourceHueColor) {
+    throw new Error("MATERIAL_RAMP_SOURCE_HUE_REQUIRED");
+  }
+  const rgbKey = (r: number, g: number, b: number): number =>
+    (r << 16) | (g << 8) | b;
+  const required = new Set([
+    options.sourceHueColor,
+    ...(options.sourceRamp ?? []),
+    ...(options.protectedColors ?? []),
+  ].map(hex => {
+    const rgba = parseHexRgba(hex);
+    return rgbKey(rgba[0], rgba[1], rgba[2]);
+  }));
+  for (let y = 0; y < target.height && required.size > 0; y++) {
+    for (let x = 0; x < target.width; x++) {
+      if (targetMask && targetMask[y * target.width + x] !== 1) continue;
+      const offset = ((target.y + y) * sourceWidth + target.x + x) * 4;
+      if (source[offset + 3] === 0) continue;
+      required.delete(rgbKey(source[offset], source[offset + 1],
+        source[offset + 2]));
+      if (required.size === 0) break;
+    }
+  }
+  if (required.size > 0) {
+    throw new Error(
+      "MATERIAL_SOURCE_SWATCH_NOT_FOUND: a declared source or protected identity RGB is absent from the exact selected visible atlas pixels."
+    );
+  }
+}
+
 export function applyTextureComputePipeline(
   source: Uint8ClampedArray,
   width: number,
@@ -804,6 +865,14 @@ export function applyTextureComputePipeline(
   if (selectiveHue && (!targetRect || steps.length !== 1)) {
     throw new Error("Selective hue-family recoloring requires exactly one gradient step and explicit target_rect.");
   }
+  if (steps.some(step =>
+    (step.operation === "gradient_map" ||
+      step.operation === "generated_gradient_map") &&
+    (step.options?.sourceRamp !== undefined ||
+     step.options?.protectedColors !== undefined)
+  ) && (!targetRect || !selectiveHue || steps.length !== 1)) {
+    throw new Error("MATERIAL_RAMP_REQUIRES_SINGLE_SCOPED_GRADIENT");
+  }
   const plan = optimizeTextureComputeSteps(steps);
   const target = targetRect
     ? requireTextureComputeRect(targetRect, width, height)
@@ -822,6 +891,7 @@ export function applyTextureComputePipeline(
   }
   if (targetRect) {
     for (const step of plan.steps) requireRoiSafeStep(step);
+    requireMaterialSourceSwatches(source, width, target, targetMask, plan.steps);
   }
   const halo = targetRect
     ? plan.steps.reduce(

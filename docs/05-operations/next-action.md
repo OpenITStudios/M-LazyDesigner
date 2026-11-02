@@ -2,33 +2,31 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — Texturing assistance (2026-11-02)
+## Primary next — Texturing material fidelity (2026-11-02)
 
-**USER DECISION:** Pause Geometry. Improve reference-grounded voxel
-texturing quality and MCP usability; keep the current Gateway, Paint
-transaction, native Undo, and optional human UI.
+**DECISION:** Freeze Geometry; improve existing Texturing/MCP.
+No new texture engine, Gateway capability, mandatory UI or release.
 
-**SOURCE:** Opt-in `list_textures` coverage/full now publishes a bounded,
-read-only index of current native Cube/part and material labels through
-`lib/texture/semanticTargets.ts` and one Runtime adapter. Unique,
-complete groups can suggest exact `face_targets`; ambiguity, missing
-textures, mixed materials/atlases and truncated groups withhold them.
-Candidates are not material classification, UV PASS or authorization.
-The existing face-scoped selective gradient-map transaction retains
-revision/UV/ownership checks and one Undo. Texturing Skill governs use.
+**SOURCE:** Opt-in coverage/full `list_textures` diagnostics produce
+read-only native part/material face candidates; ambiguous or partial
+groups cannot authorize painting. Existing face-scoped gradient
+compute optionally accepts exact source-atlas `source_ramp` (shadow,
+base, highlight) and `protected_colors` (identity RGB). Piecewise
+Oklab mapping preserves source shade relationships. Preflight checks
+all declared RGBs on current selected visible texels. Existing alpha,
+generic gradient, UV/material/revision/Undo safeguards stay unchanged.
+Reference palette != source-atlas palette. No visual PASS inferred.
 
-**PROOF:** GitHub source and negative regression tests authored.
-Bun/typecheck/build/CI/native Blockbench/visual/export/human quality
-NOT EXECUTED. Verification CI is disabled.
+**PROOF:** Source/regression AUTHORED. Bun/typecheck/build/CI,
+installed Blockbench, save/export, Golden/user quality NOT EXECUTED.
+Verification CI disabled.
 
-**NEXT:** Improve palette-to-pixel fidelity and focused mapped-view
-correction through existing owners. Validate actual reference and
-native face identity before any broad repaint. No release.
+**NEXT:** Source-grounded cluster placement and affected-view correction.
+Native/visual quality separately requires matching live environment.
 
-**GEOMETRY FROZEN:** v12–v14 source checkpoint
-`addfb6a008b9af8baf0417ff23435046df7285d4` remains in Git;
-`construct_geometry` is UNREGISTERED pending canonical Bun generator,
-generated API and native acceptance. Do not reopen within Texturing.
+**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED; v12-v14 history
+at `addfb6a008b9af8baf0417ff23435046df7285d4`; generator/native
+proof remains a distinct deferred task.
 
 ## GitHub boundary and historical local recovery
 

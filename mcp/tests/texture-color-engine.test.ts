@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   autoLevelsRgba,
+  createGradientMapColorTransform,
   createTextureColorComputeContext,
   directionalShadeRgba,
   extractPaletteMedianCut,
@@ -24,6 +25,35 @@ function lightness(hex: string): number {
 }
 
 describe("texture color intelligence core", () => {
+  test("source-ramp direct and prepared pointwise painting agree, protecting authored identity colors", () => {
+    const source = [
+      parseHexRgba("#500000"),
+      parseHexRgba("#a00000"),
+      parseHexRgba("#f00000"),
+      parseHexRgba("#b00000"),
+      parseHexRgba("#0000ff"),
+      [0x50, 0, 0, 0] as [number,number,number,number],
+    ];
+    const input = new Uint8ClampedArray(source.flat());
+    const ramp = ["#103020", "#34834d", "#b7f6c4"];
+    const options = {
+      mode: "blend" as const,
+      sourceHueColor: "#a00000",
+      sourceRamp: ["#500000", "#a00000", "#f00000"] as const,
+      protectedColors: ["#b00000"],
+    };
+    const direct = gradientMapRgba(input, 6, 1, ramp, options);
+    const transform = createGradientMapColorTransform(ramp, options);
+    const prepared = source.flatMap(color => transform(color as [number,number,number,number]));
+    expect(Array.from(direct)).toEqual(prepared);
+    expect(Array.from(direct.slice(12, 16))).toEqual([0xb0,0,0,255]);
+    expect(Array.from(direct.slice(16, 24))).toEqual(Array.from(input.slice(16,24)));
+    expect(rgbaToOklab(Array.from(direct.slice(0,4)) as [number,number,number,number]).L)
+      .toBeLessThan(rgbaToOklab(Array.from(direct.slice(4,8)) as [number,number,number,number]).L);
+    expect(rgbaToOklab(Array.from(direct.slice(4,8)) as [number,number,number,number]).L)
+      .toBeLessThan(rgbaToOklab(Array.from(direct.slice(8,12)) as [number,number,number,number]).L);
+  });
+
   test("scalar Oklab hot paths preserve blended gradient determinism", () => {
     const pixels = new Uint8ClampedArray(
       Array.from({ length: 16 }, (_, index) => {

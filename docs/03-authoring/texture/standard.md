@@ -311,6 +311,24 @@ identity/accent color
 
 Reason about **value and hue**. Brightness-only ramps often look procedural and lifeless.
 
+## Reference-Grounded Material Remap (opt-in)
+
+When recoloring existing painted material, distinguish **target/reference**
+shadow/base/highlight from the three **source-atlas** shade samples. Current
+atlas RGBs must be found on exact selected visible texels, in increasing
+Oklab lightness; the target ramp is the approved style choice. The existing
+selective `gradient_map` / `generated_gradient_map` compute now accepts
+`source_ramp` (three current-atlas shades) and `protected_colors` (up to
+16 current-atlas identity-mark RGBs) only with explicit
+`source_hue_color` and bounded `target_rect` or `face_targets`.
+It adjusts shade relationships while respecting exact protected RGBs and
+alpha, not general image recognition. If source and protected colors
+overlap, source anchors do not exist on the selected face, or a logo and
+material share the same RGB, stop and require a better source/region mask.
+An atlas/compute receipt is not visual approval; check one mapped material
+before broad propagation. Existing generic palette/painting paths remain
+unchanged when no source/protection anchors are provided.
+
 ## BASE PASS
 
 The base pass establishes primary/secondary colors, material zones, accent/focal colors, and basic value separation.

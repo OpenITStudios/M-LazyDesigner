@@ -44,6 +44,122 @@ describe("texture compute request and pipeline", () => {
   });
 
 
+  test("opt-in source material anchors preserve shadow/base/highlight and exact identity pixels", () => {
+    const material = ["#500000", "#a00000", "#f00000"] as const;
+    const ramp = ["#103020", "#34834d", "#b7f6c4"] as const;
+    const input = new Uint8ClampedArray([
+      0x50, 0, 0, 255,  0xa0, 0, 0, 255,  0xf0, 0, 0, 255,
+      0xb0, 0, 0, 255,  0, 0, 255, 255,
+      0xa0, 0, 0, 255,  0x50, 0, 0, 0,
+    ]);
+    const faces = [
+      {cube_uuid:"armor",face:"north" as const,enabled:true,texture_uuid:"atlas",
+        native_material_name:"armor",rect:[0,0,5,1] as const},
+      {cube_uuid:"eye",face:"north" as const,enabled:true,texture_uuid:"atlas",
+        native_material_name:"eye",rect:[5,0,7,1] as const},
+    ];
+    const request = parseTextureComputeRequest([{
+      operation:"gradient_map",
+      args:{
+        ramp:[...ramp], mode:"nearest",
+        source_hue_color:"#a00000",
+        source_ramp:[...material],
+        protected_colors:["#b00000"],
+        face_targets:[{cube_uuid:"armor",face:"north"}],
+      },
+    }]);
+    const scope = planFaceScopedTextureSelection({
+      texture_uuid:"atlas",bitmap_width:7,bitmap_height:1,
+      faces,face_targets:request.face_targets!,
+    });
+    const result = applyTextureComputePipeline(input,7,1,request.steps,
+      scope.target_rect,scope.target_mask);
+    const rgba = (i:number) => Array.from(result.pixels.slice(i*4,i*4+4));
+    const rgb = (hex:string) => [
+      parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),
+      parseInt(hex.slice(5,7),16),255,
+    ];
+    expect(rgba(0)).toEqual(rgb(ramp[0]));
+    expect(rgba(1)).toEqual(rgb(ramp[1]));
+    expect(rgba(2)).toEqual(rgb(ramp[2]));
+    expect(rgba(3)).toEqual([0xb0,0,0,255]); // same-hue identity mark
+    expect(rgba(4)).toEqual([0,0,255,255]); // unrelated material
+    expect(rgba(5)).toEqual([0xa0,0,0,255]); // different face
+    expect(rgba(6)).toEqual([0x50,0,0,0]); // hidden RGB and alpha
+    expect(result.receipt.changed_pixels).toBe(3);
+    expect(result.receipt.execution.region.mask_scope).toBe("exact_cube_faces");
+  });
+
+  test("material source/protection samples must be physically present in selected faces", () => {
+    const source = new Uint8ClampedArray([
+      0x50,0,0,255,  0xa0,0,0,255,  0xf0,0,0,255,
+      0xb0,0,0,255,
+    ]);
+    const request = parseTextureComputeRequest([{
+      operation:"gradient_map",
+      args:{
+        ramp:["#103020","#34834d","#b7f6c4"],mode:"nearest",
+        source_hue_color:"#a00000",
+        source_ramp:["#500000","#a00000","#f00000"],
+        protected_colors:["#b00000"],
+        target_rect:{x:0,y:0,width:4,height:1},
+      },
+    }]);
+    const step = request.steps;
+    // Every sample exists in the atlas, but the selected face/mask lacks
+    // the highlight and identity. No inferred palette or partial mutation.
+    expect(() => applyTextureComputePipeline(source,4,1,step,
+      request.target_rect!,new Uint8Array([1,1,0,0])))
+      .toThrow("MATERIAL_SOURCE_SWATCH_NOT_FOUND");
+    expect(() => applyTextureComputePipeline(source,4,1,step,
+      request.target_rect!,new Uint8Array([1,1,1,0])))
+      .toThrow("MATERIAL_SOURCE_SWATCH_NOT_FOUND");
+    expect(Array.from(source)).toEqual([
+      0x50,0,0,255,  0xa0,0,0,255,  0xf0,0,0,255,
+      0xb0,0,0,255,
+    ]);
+  });
+
+  test("source-bound material composition refuses ambiguous or conflicting palette instructions", () => {
+    const step = (args:Record<string,unknown>) => parseTextureComputeRequest([{
+      operation:"gradient_map",args:{
+        ramp:["#103020","#34834d","#b7f6c4"],
+        target_rect:{x:0,y:0,width:4,height:1},...args,
+      },
+    }]);
+    expect(() => step({source_ramp:["#500000","#a00000","#f00000"]}))
+      .toThrow("require source_hue_color");
+    expect(() => step({source_hue_color:"#a00000",
+      source_ramp:["#500000","#f00000"]}))
+      .toThrow();
+    expect(() => step({source_hue_color:"#a00000",
+      protected_colors:["#b00000","#B00000"]}))
+      .toThrow();
+    const source = new Uint8ClampedArray([
+      0x50,0,0,255, 0xa0,0,0,255, 0xf0,0,0,255, 0xb0,0,0,255,
+    ]);
+    const doMap = (source_ramp:string[],protected_colors:string[]) => {
+      const req=step({source_hue_color:"#a00000",source_ramp,
+        protected_colors,mode:"nearest"});
+      return applyTextureComputePipeline(source,4,1,req.steps,req.target_rect!);
+    };
+    expect(() => doMap(["#f00000","#a00000","#500000"],["#b00000"]))
+      .toThrow("MATERIAL_RAMP_VALUE_ORDER");
+    expect(() => doMap(["#500000","#a00000","#f00000"],["#a00000"]))
+      .toThrow("MATERIAL_RAMP_PROTECTED_COLLISION");
+    expect(() => doMap(["#500000","#a00000","#f00000"],["#f00000"]))
+      .toThrow("MATERIAL_RAMP_PROTECTED_COLLISION");
+    expect(() => doMap(["#500000","#a00000","#f00000"],["#bb0000"]))
+      .toThrow("MATERIAL_SOURCE_SWATCH_NOT_FOUND");
+    expect(() => parseTextureComputeRequest([{
+      operation:"gradient_map",args:{
+        ramp:["#103020","#34834d","#b7f6c4"],
+        source_hue_color:"#a00000",
+        source_ramp:["#500000","#a00000","#f00000"],
+      },
+    }])).toThrow("explicit target_rect or face_targets");
+  });
+
   test("selective hue-family recolor is bounded to an explicit ROI and preserves unrelated pixels", () => {
     const source = new Uint8ClampedArray([
       64, 0, 0, 255, 200, 0, 0, 255, 0, 0, 255, 255,

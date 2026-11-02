@@ -33,6 +33,10 @@ export type GradientMapOptions = {
   sourceHueColor?: string;
   hueToleranceDegrees?: number;
   minimumChroma?: number;
+  /** Exact current-atlas shadow/base/highlight swatches, never target/reference guesses. */
+  sourceRamp?: readonly [string, string, string];
+  /** Exact current-atlas RGBs to protect within the selected native face scope. */
+  protectedColors?: readonly string[];
 };
 
 export type PalettizeOptions = {
@@ -705,6 +709,92 @@ function requirePreservingHueRamp(
   }
 }
 
+/**
+ * Optional material-aware remap: preserve the authored shadow/base/highlight
+ * *relationships* instead of treating absolute Oklab lightness as the whole
+ * material's dynamic range. No automatic style/material/identity inference.
+ */
+type GradientMaterialAnchors = {
+  lightness: readonly [number, number, number] | null;
+  protectedRgb: ReadonlySet<number>;
+};
+
+const MATERIAL_COLOR_HEX = /^#[0-9a-fA-F]{6}$/;
+
+function rgb24(red: number, green: number, blue: number): number {
+  return (red << 16) | (green << 8) | blue;
+}
+
+function prepareGradientMaterialAnchors(
+  options: GradientMapOptions,
+  selection: GradientHueSelection | null,
+  context?: TextureColorComputeContext
+): GradientMaterialAnchors | null {
+  if (options.sourceRamp === undefined && options.protectedColors === undefined) {
+    return null;
+  }
+  if (!selection || !options.sourceHueColor) {
+    throw new Error("MATERIAL_RAMP_SOURCE_HUE_REQUIRED: material anchors need a scoped source hue.");
+  }
+  let lightness: readonly [number, number, number] | null = null;
+  const sourceColors = new Set<number>();
+  if (options.sourceRamp !== undefined) {
+    const anchors = options.sourceRamp;
+    if (!Array.isArray(anchors) || anchors.length !== 3 ||
+        anchors.some(color => typeof color !== "string" || !MATERIAL_COLOR_HEX.test(color))) {
+      throw new Error("MATERIAL_RAMP_ANCHORS_INVALID: exactly three opaque current-atlas RGB swatches required.");
+    }
+    const labs = anchors.map(color => {
+      const rgba = parseHexRgba(color);
+      sourceColors.add(rgb24(rgba[0], rgba[1], rgba[2]));
+      return oklabFor(rgba, context);
+    });
+    if (labs.some(lab => !gradientHueSelected(lab, selection))) {
+      throw new Error("MATERIAL_RAMP_SOURCE_HUE_MISMATCH: anchors must belong to the selected chromatic family.");
+    }
+    if (!(labs[0].L + 1e-4 < labs[1].L &&
+          labs[1].L + 1e-4 < labs[2].L)) {
+      throw new Error("MATERIAL_RAMP_VALUE_ORDER: source shadow, base and highlight need strictly increasing Oklab lightness.");
+    }
+    lightness = [labs[0].L, labs[1].L, labs[2].L];
+  }
+  const protectedColors = options.protectedColors ?? [];
+  if (!Array.isArray(protectedColors) ||
+      options.protectedColors !== undefined &&
+        (protectedColors.length < 1 || protectedColors.length > 16) ||
+      protectedColors.some(color => typeof color !== "string" || !MATERIAL_COLOR_HEX.test(color))) {
+    throw new Error("MATERIAL_PROTECTED_COLORS_INVALID: require 1..16 opaque RGB swatches.");
+  }
+  const protectedRgb = new Set<number>();
+  for (const color of protectedColors) {
+    const rgba = parseHexRgba(color);
+    const key = rgb24(rgba[0], rgba[1], rgba[2]);
+    if (protectedRgb.has(key)) {
+      throw new Error("MATERIAL_PROTECTED_COLORS_DUPLICATE");
+    }
+    protectedRgb.add(key);
+  }
+  const hue = parseHexRgba(options.sourceHueColor);
+  if (protectedRgb.has(rgb24(hue[0], hue[1], hue[2])) ||
+      [...protectedRgb].some(color => sourceColors.has(color))) {
+    throw new Error("MATERIAL_RAMP_PROTECTED_COLLISION: the same RGB cannot be an editable anchor and a protected identity mark.");
+  }
+  return { lightness, protectedRgb };
+}
+
+function gradientPositionForMaterial(
+  lightness: number,
+  rampLength: number,
+  material: GradientMaterialAnchors | null
+): ReturnType<typeof rampPosition> {
+  if (!material?.lightness) return rampPosition(lightness, rampLength);
+  const [shadow, base, highlight] = material.lightness;
+  const normalized = lightness <= base
+    ? 0.5 * clamp01((lightness - shadow) / (base - shadow))
+    : 0.5 + 0.5 * clamp01((lightness - base) / (highlight - base));
+  return rampPosition(normalized, rampLength);
+}
+
 export function gradientMapRgba(
   pixels: Uint8ClampedArray,
   width: number,
@@ -731,6 +821,7 @@ export function gradientMapRgba(
   const labs = prepared.labs;
   const selection = prepareGradientHueSelection(options, context);
   requirePreservingHueRamp(labs, selection);
+  const material = prepareGradientMaterialAnchors(options, selection, context);
   const mode = options.mode ?? (selection ? "blend" : "nearest");
   const matrix = options.matrix ?? "bayer4";
   const ditherMatrix = mode === "ordered" ? matrixInfo(matrix) : null;
@@ -748,9 +839,10 @@ export function gradientMapRgba(
         pixels[offset + 2],
         alpha,
       ];
+      if (material?.protectedRgb.has(rgb24(source[0], source[1], source[2]))) continue;
       const sourceLab = oklabFor(source, context);
       if (!gradientHueSelected(sourceLab, selection)) continue;
-      const position = rampPosition(sourceLab.L, ramp.length);
+      const position = gradientPositionForMaterial(sourceLab.L, ramp.length, material);
       let mapped: Rgba;
 
       if (mode === "nearest") {
@@ -1206,11 +1298,13 @@ export function createGradientMapColorTransform(
   }
   const prepared = preparePalette(ramp, context);
   requirePreservingHueRamp(prepared.labs, selection);
+  const material = prepareGradientMaterialAnchors(options, selection, context);
   return (source: Rgba): Rgba => {
-    if (source[3] === 0) return source;
+    if (source[3] === 0 ||
+        material?.protectedRgb.has(rgb24(source[0], source[1], source[2]))) return source;
     const sourceLab = oklabFor(source, context);
     if (!gradientHueSelected(sourceLab, selection)) return source;
-    const position = rampPosition(sourceLab.L, prepared.colors.length);
+    const position = gradientPositionForMaterial(sourceLab.L, prepared.colors.length, material);
     if (mode === "nearest") {
       const mapped =
         prepared.colors[

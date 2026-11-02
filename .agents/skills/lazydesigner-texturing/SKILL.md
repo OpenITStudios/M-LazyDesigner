@@ -81,20 +81,34 @@ resolve with current reference/authoring intent. Do not turn a truncated
 list into a partial repaint.
 
 For a **recolor while preserving shading**, require an explicit intended
-material cohort, actual current atlas source-hue swatch and approved target
-palette (or user-specified target). Keep shadow/base/highlight roles in value
-order, retain authored identity marks, and use the existing one-step
-`paint_texture_transaction.compute` with `gradient_map` (observed ramp) or
-`generated_gradient_map` (explicit intended base/ramp), plus
-`source_hue_color` and the complete `face_targets` in
-`compute[0].args`. Never combine `face_targets` with `target_rect`, append
-unrelated compute steps or silently recolor an entire atlas. The registered
-transaction rechecks resolved native texture/material/UV ownership, exact
-pixel mask, bitmap revision and Undo. If an eye, logo or other identity mark
-shares the source hue **within the selected face**, hue + face scope cannot
-protect it: do not promise preservation; use a narrower proven pixel
-selection or return `REVIEW_REQUIRED`. Transparent/neutral or unknown
-source colors must not be treated as chromatic material proof.
+material cohort, a sampled *current atlas* source-hue swatch and an approved
+target palette (or user-specified colors). Use the existing one-step
+`paint_texture_transaction.compute` with `gradient_map` (authored target
+ramp) or `generated_gradient_map` (declared target base/ramp), plus
+`source_hue_color` and the complete `face_targets` in `compute[0].args`.
+Never combine `face_targets` with `target_rect`, append unrelated compute
+steps or silently recolor an entire atlas.
+
+**Opt-in source-bound material-to-pixel ramp:** When *three exact, visible*
+current-atlas samples can be identified as source shadow/base/highlight in
+strict Oklab lightness order, pass them as `source_ramp` alongside the
+source-hue selector. This maps the existing material's own value range to
+the authored target ramp instead of flattening it through global 0..1
+lightness. The target `ramp` may come from a reviewed approved reference;
+the `source_ramp` must **never** be copied from reference image colors unless
+those RGBs also exist on the actual target atlas. For explicitly observed
+identity/logo colors on the same face, pass up to 16 distinct exact RGBs
+as `protected_colors`. The compute preflight requires every declared
+source/protected RGB to be present on current visible pixels in the exact
+target mask; no cross-face swatches, stale palette claims, or automatic
+style recognition. Protected RGBs must not overlap the source hue swatch
+or source ramp. This preserves exact RGB marks only, **not** semantic
+identity when an editable pixel and a logo share identical RGB. In that
+case use separately proven pixel selection or `REVIEW_REQUIRED`.
+The existing native transaction retains texture/UV ownership, bitmap
+revision and Undo. Missing/ambiguous source roles remain on the existing
+direct editor/review path; do not fabricate three shades. Alpha, neutral
+colors and artistic texture completion are separate evidence.
 
 Apply the smallest representative material area, inspect the affected
 PNG and mapped 3D view, then propagate the *same verified intent* to a

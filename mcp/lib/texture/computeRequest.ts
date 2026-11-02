@@ -57,10 +57,19 @@ const posterizeArgs = z.object({
   strength: z.number().min(0).max(1).optional(),
 }).strict();
 
+const opaqueRgbSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/,
+  "Material swatches must be opaque #RRGGBB.");
+
 const hueSelectionArgs = {
   source_hue_color: requiredHexColorSchema.optional(),
   hue_tolerance_degrees: z.number().finite().min(5).max(60).optional(),
   minimum_chroma: z.number().finite().min(0.015).max(0.3).optional(),
+  // Opt-in material-to-pixel relationship; source swatches must be sampled
+  // from the current atlas within the actual selected face/ROI.
+  source_ramp: z.tuple([opaqueRgbSchema, opaqueRgbSchema, opaqueRgbSchema]).optional(),
+  protected_colors: z.array(opaqueRgbSchema).min(1).max(16)
+    .refine(colors => new Set(colors.map(color => color.toLowerCase())).size === colors.length,
+      "Protected material colors must be distinct.").optional(),
 };
 
 const gradientArgs = z.object({
@@ -121,11 +130,14 @@ function gradientOptions(
     source_hue_color?: string;
     hue_tolerance_degrees?: number;
     minimum_chroma?: number;
+    source_ramp?: readonly [string, string, string];
+    protected_colors?: readonly string[];
   }
 ) {
   if (!value.source_hue_color &&
-      (value.hue_tolerance_degrees !== undefined || value.minimum_chroma !== undefined)) {
-    throw new Error("Hue-family tolerance/chroma requires source_hue_color.");
+      (value.hue_tolerance_degrees !== undefined || value.minimum_chroma !== undefined ||
+       value.source_ramp !== undefined || value.protected_colors !== undefined)) {
+    throw new Error("Material-to-pixel source_ramp/protected_colors and hue-family settings require source_hue_color.");
   }
   return {
     ...(value.mode === undefined ? {} : { mode: value.mode }),
@@ -133,6 +145,8 @@ function gradientOptions(
     ...(value.source_hue_color === undefined ? {} : { sourceHueColor: value.source_hue_color }),
     ...(value.hue_tolerance_degrees === undefined ? {} : { hueToleranceDegrees: value.hue_tolerance_degrees }),
     ...(value.minimum_chroma === undefined ? {} : { minimumChroma: value.minimum_chroma }),
+    ...(value.source_ramp === undefined ? {} : { sourceRamp: value.source_ramp }),
+    ...(value.protected_colors === undefined ? {} : { protectedColors: value.protected_colors }),
   };
 }
 
