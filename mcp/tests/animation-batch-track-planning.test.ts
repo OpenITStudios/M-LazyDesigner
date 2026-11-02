@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   requireValidPlannedBatchTrackTimes,
   requireNativeCreationTimingIntegrity,
+  planNativeCreationSnapping,
   planBatchScaleOverwriteTargets,
   selectBatchKeyframes,
 } from "../lib/animation/batchPlanning";
@@ -207,5 +208,109 @@ describe("native Bedrock AnimationCodec timing integrity", () => {
     ]);
     expect(result.checked_keyframe_count).toBe(0);
     expect(result.native_playback_attested).toBe(false);
+  });
+});
+
+
+describe("new-clip native export snapping negotiation", () => {
+  const track = (
+    channel: "position" | "rotation" | "scale" | "sound" | "particle",
+    source_times: number[],
+    bone_id = "body"
+  ) => ({ bone_id, channel, source_times });
+
+  test("preserves an already compatible native snapping setting", () => {
+    const input = [
+      track("rotation", [0, 0.05, 0.5, 1]),
+      track("sound", [0, 0.5], "effects"),
+    ];
+    const source = JSON.stringify(input);
+    expect(planNativeCreationSnapping(input, 20)).toMatchObject({
+      state: "KEEP_NATIVE",
+      baseline_snapping_fps: 20,
+      applied_snapping_fps: 20,
+      effective_export_fps: 20,
+      source_key_count: 6,
+      scope: "NEW_NATIVE_CLIP_ONLY",
+      native_playback_attested: false,
+      visual_verdict: "not_evaluated",
+    });
+    expect(JSON.stringify(input)).toBe(source);
+  });
+
+  test("negotiates a new-clip FPS that preserves 1/30-second keys instead of dropping them", () => {
+    expect(planNativeCreationSnapping([
+      track("position", [0, 1 / 30, 1]),
+    ], 20)).toMatchObject({
+      state: "ADJUST_NEW_CLIP",
+      baseline_snapping_fps: 20,
+      applied_snapping_fps: 30,
+      effective_export_fps: 30,
+      source_key_count: 3,
+    });
+  });
+
+  test("finds an allowed rate for eighth-second contact boundaries", () => {
+    const resolution = planNativeCreationSnapping([
+      track("position", [0, 0.125, 0.875, 1]),
+    ], 20);
+    expect(resolution.state).toBe("ADJUST_NEW_CLIP");
+    expect(resolution.applied_snapping_fps).toBe(16);
+  });
+
+  test("treats a legacy 500 FPS setting as effective 120 for native export", () => {
+    const resolution = planNativeCreationSnapping([
+      track("rotation", [0, 1 / 120, 1]),
+    ], 500);
+    expect(resolution).toMatchObject({
+      state: "KEEP_NATIVE",
+      baseline_snapping_fps: 500,
+      applied_snapping_fps: 500,
+      effective_export_fps: 120,
+    });
+  });
+
+  test("refuses an unrepresentable time rather than silently snapping it", () => {
+    expect(() => planNativeCreationSnapping([
+      track("position", [0, 0.002345, 1]),
+    ], 20)).toThrow("ANIMATION_NATIVE_SNAPPING_UNREPRESENTABLE");
+  });
+
+  test("allows equal timestamps across different bones/channels but not one track collision", () => {
+    expect(() => planNativeCreationSnapping([
+      track("position", [0, 0.5]),
+      track("rotation", [0, 0.5]),
+      track("position", [0, 0.5], "arm"),
+    ], 20)).not.toThrow();
+    expect(() => planNativeCreationSnapping([
+      track("position", [0.5, 0.50005]),
+    ], 20)).toThrow("ANIMATION_NATIVE_SNAPPING_SOURCE_COLLISION");
+  });
+
+  test("refuses invalid baseline FPS, source timestamps and malformed tracks", () => {
+    for (const fps of [0, 9, 501, Number.NaN, 20.5]) {
+      expect(() => planNativeCreationSnapping([], fps))
+        .toThrow("ANIMATION_NATIVE_SNAPPING_BASELINE_INVALID");
+    }
+    expect(() => planNativeCreationSnapping([
+      track("rotation", [Number.NaN]),
+    ], 20)).toThrow("ANIMATION_NATIVE_SNAPPING_SOURCE_TIME_INVALID");
+    expect(() => planNativeCreationSnapping([
+      track("rotation", [-1]),
+    ], 20)).toThrow("ANIMATION_NATIVE_SNAPPING_SOURCE_TIME_INVALID");
+    expect(() => planNativeCreationSnapping([
+      track("rotation", [10001]),
+    ], 20)).toThrow("ANIMATION_NATIVE_SNAPPING_SOURCE_TIME_INVALID");
+  });
+
+  test("keeps empty source tracks but never implies playback has been observed", () => {
+    expect(planNativeCreationSnapping([], 20)).toMatchObject({
+      state: "KEEP_NATIVE",
+      source_key_count: 0,
+      native_playback_attested: false,
+    });
+    expect(planNativeCreationSnapping([
+      track("particle", [], "effects"),
+    ], 20).source_key_count).toBe(0);
   });
 });

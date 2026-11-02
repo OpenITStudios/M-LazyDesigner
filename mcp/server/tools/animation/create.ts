@@ -9,7 +9,9 @@ import { finiteAnimationVector3Schema } from "./shared";
 import { compactLinearCreationKeyframes } from "@/lib/animation/quality";
 import {
   nativeKeyframeTimesCollide,
+  planNativeCreationSnapping,
   requireNativeCreationTimingIntegrity,
+  type NativeCreationSnappingTrack,
   type NativeCreationTimingTrack,
 } from "@/lib/animation/batchPlanning";
 
@@ -488,6 +490,33 @@ export function registerCreateAnimationTool(): void {
         const removedChannelKeys = compactedBoneEntries.reduce(
           (sum, entry) => sum + entry.compaction.removed_channel_key_count, 0
         );
+
+        // The source plan is built before any Undo mutation. Only keys
+        // surviving native numeric compaction are relevant to timecode parity.
+        // Different bones/channels may share a time; one native track may not
+        // collapse distinct authored values onto the same export frame.
+        const snappingSourceTracks: NativeCreationSnappingTrack[] = [];
+        for (const { group, compaction } of compactedBoneEntries) {
+          for (const channel of ["position", "rotation", "scale"] as const) {
+            snappingSourceTracks.push({
+              bone_id: group.uuid,
+              channel,
+              source_times: compaction.frames
+                .filter((frame) => frame[channel] !== undefined)
+                .map((frame) => frame.time),
+            });
+          }
+        }
+        for (const channel of ["sound", "particle"] as const) {
+          snappingSourceTracks.push({
+            bone_id: "effects",
+            channel,
+            source_times: Object.keys(
+              channel === "sound" ? sound_effects ?? {} : particle_effects ?? {}
+            ).map(Number),
+          });
+        }
+
         const animationData = {
           loop,
           ...(animation_length !== undefined && { animation_length }),
@@ -563,6 +592,23 @@ export function registerCreateAnimationTool(): void {
             }
           });
   
+          // Only change the snapping rate of this newly created clip while
+          // its existing creation Undo edit is open. This is not a preview,
+          // a global timeline change or a second mutation transaction.
+          // Native getTimecodeString() below independently checks the result.
+          const snappingResolution = planNativeCreationSnapping(
+            snappingSourceTracks, createdAnimation.snapping
+          );
+          if (snappingResolution.state === "ADJUST_NEW_CLIP") {
+            createdAnimation.snapping = snappingResolution.applied_snapping_fps;
+            if (createdAnimation.snapping !== snappingResolution.applied_snapping_fps) {
+              throw new Error(
+                "ANIMATION_NATIVE_SNAPPING_UPDATE_NOT_PERSISTED: the new " +
+                "clip did not retain its negotiated export grid."
+              );
+            }
+          }
+
           // Verify real native codec keyframe inventory and its own Bedrock
           // serialization timecodes while the creation Undo is still open.
           // A timestamp shifted by editor snapping must never be accepted
@@ -614,7 +660,10 @@ export function registerCreateAnimationTool(): void {
               exported_times: nativeKeys.map(exportedTimeOf),
             });
           }
-          const nativeTiming = requireNativeCreationTimingIntegrity(nativeTimingTracks);
+          const nativeTiming = {
+            ...requireNativeCreationTimingIntegrity(nativeTimingTracks),
+            snapping_resolution: snappingResolution,
+          };
 
           createdAnimation.select();
           if (AnimationItem.selected !== createdAnimation) {

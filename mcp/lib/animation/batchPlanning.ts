@@ -387,3 +387,116 @@ export function requireNativeCreationTimingIntegrity(
     visual_verdict: "not_evaluated" as const,
   };
 }
+
+
+/**
+ * Resolve the native export grid of a NEW clip without moving authored keys.
+ *
+ * Upstream Blockbench uses Timeline.snapTime(time, animation) with an
+ * effective FPS clamped to 1..120; imported Animation.snapping is a 10..500
+ * integer setting. We may adjust ONLY the newly imported clip's snapping,
+ * inside its existing Undo transaction, then require the actual native
+ * getTimecodeString() values to pass the independent readback gate.
+ *
+ * This pure source planner does not mutate Blockbench, infer visual quality,
+ * sample IK, or claim that any imported/editor state is verified.
+ */
+export type NativeCreationSnappingTrack = Pick<
+  NativeCreationTimingTrack, "bone_id" | "channel" | "source_times"
+>;
+
+export const NATIVE_CREATION_MAX_EFFECTIVE_FPS = 120;
+
+export function planNativeCreationSnapping(
+  tracks: readonly NativeCreationSnappingTrack[],
+  importedSnapping: number
+) {
+  if (!Number.isInteger(importedSnapping) ||
+      importedSnapping < 10 || importedSnapping > 500) {
+    throw new Error("ANIMATION_NATIVE_SNAPPING_BASELINE_INVALID");
+  }
+  if (!Array.isArray(tracks)) {
+    throw new Error("ANIMATION_NATIVE_SNAPPING_TRACKS_INVALID");
+  }
+
+  const sourceTimes = new Set<number>();
+  const sortedTracks: number[][] = [];
+  let sourceKeyCount = 0;
+  for (const track of tracks) {
+    if (!track || typeof track.bone_id !== "string" ||
+        !track.bone_id.trim() ||
+        !["position", "rotation", "scale", "sound", "particle"].includes(track.channel) ||
+        !Array.isArray(track.source_times)) {
+      throw new Error("ANIMATION_NATIVE_SNAPPING_TRACK_INVALID");
+    }
+    const ordered = [...track.source_times].sort((a, b) => a - b);
+    for (let index = 0; index < ordered.length; index += 1) {
+      const time = ordered[index];
+      if (!Number.isFinite(time) || time < 0 || time > 10000) {
+        throw new Error("ANIMATION_NATIVE_SNAPPING_SOURCE_TIME_INVALID");
+      }
+      if (index > 0 && nativeKeyframeTimesCollide(ordered[index - 1], time)) {
+        throw new Error("ANIMATION_NATIVE_SNAPPING_SOURCE_COLLISION");
+      }
+      sourceTimes.add(time);
+    }
+    sortedTracks.push(ordered);
+    sourceKeyCount += ordered.length;
+  }
+
+  const preservesTimes = (fps: number): boolean => {
+    const snapped = (time: number) => Math.round(time * fps) / fps;
+    for (const time of sourceTimes) {
+      if (Math.abs(time - snapped(time)) > NATIVE_CREATION_TIMING_TOLERANCE) {
+        return false;
+      }
+    }
+    for (const ordered of sortedTracks) {
+      for (let index = 1; index < ordered.length; index += 1) {
+        if (nativeKeyframeTimesCollide(
+          snapped(ordered[index - 1]), snapped(ordered[index])
+        )) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  const baselineEffectiveFps = Math.min(
+    importedSnapping, NATIVE_CREATION_MAX_EFFECTIVE_FPS
+  );
+  let selectedFps = importedSnapping;
+  let state: "KEEP_NATIVE" | "ADJUST_NEW_CLIP" = "KEEP_NATIVE";
+  if (!preservesTimes(baselineEffectiveFps)) {
+    let candidate: number | null = null;
+    for (let fps = 10; fps <= NATIVE_CREATION_MAX_EFFECTIVE_FPS; fps += 1) {
+      if (preservesTimes(fps)) {
+        candidate = fps;
+        break;
+      }
+    }
+    if (candidate === null) {
+      throw new Error(
+        "ANIMATION_NATIVE_SNAPPING_UNREPRESENTABLE: no supported " +
+        "10..120 FPS export grid preserves all authored source times. " +
+        "Adjust source keyframe times before creating a clip."
+      );
+    }
+    selectedFps = candidate;
+    state = "ADJUST_NEW_CLIP";
+  }
+
+  return {
+    state,
+    baseline_snapping_fps: importedSnapping,
+    applied_snapping_fps: selectedFps,
+    effective_export_fps: Math.min(
+      selectedFps, NATIVE_CREATION_MAX_EFFECTIVE_FPS
+    ),
+    source_key_count: sourceKeyCount,
+    scope: "NEW_NATIVE_CLIP_ONLY" as const,
+    native_playback_attested: false as const,
+    visual_verdict: "not_evaluated" as const,
+  };
+}

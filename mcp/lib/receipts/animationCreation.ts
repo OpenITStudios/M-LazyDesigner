@@ -25,7 +25,37 @@ export const animationCreationReceiptSchema = z.object({
     native_export_timecodes_required: z.literal(true),
     native_playback_attested: z.literal(false),
     visual_verdict: z.literal("not_evaluated"),
-  }).strict().optional(),
+    // Older native timing receipts have no snapping_resolution; preserve them.
+    snapping_resolution: z.object({
+      state: z.enum(["KEEP_NATIVE", "ADJUST_NEW_CLIP"]),
+      baseline_snapping_fps: z.number().int().min(10).max(500),
+      applied_snapping_fps: z.number().int().min(10).max(500),
+      effective_export_fps: z.number().int().min(10).max(120),
+      source_key_count: z.number().int().nonnegative(),
+      scope: z.literal("NEW_NATIVE_CLIP_ONLY"),
+      native_playback_attested: z.literal(false),
+      visual_verdict: z.literal("not_evaluated"),
+    }).strict().superRefine((resolution, ctx) => {
+      const changed = resolution.baseline_snapping_fps !== resolution.applied_snapping_fps;
+      if ((resolution.state === "ADJUST_NEW_CLIP") !== changed ||
+          resolution.effective_export_fps !==
+            Math.min(resolution.applied_snapping_fps, 120) ||
+          (changed && resolution.applied_snapping_fps > 120)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Native snapping receipt contradicts the applied new-clip export grid.",
+        });
+      }
+    }).optional(),
+  }).strict().superRefine((timing, ctx) => {
+    if (timing.snapping_resolution &&
+        timing.snapping_resolution.source_key_count !== timing.checked_keyframe_count) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Native snapping key count contradicts independently checked timecode keys.",
+      });
+    }
+  }).optional(),
   // Backwards compatible: older native creation receipts omit this field.
   // Source timing is never evidence of played frames, physics, or visual PASS.
   source_timing: z.object({

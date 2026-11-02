@@ -93,6 +93,66 @@ describe("create_animation native creation evidence", () => {
     }
   });
 
+  test("validates native snapping negotiation while retaining earlier receipts", () => {
+    const baseTiming = {
+      state: "CODEC_TIMES_MATCHED",
+      checked_track_count: 5,
+      checked_keyframe_count: 3,
+      tolerance_seconds: 0.0001,
+      native_timing_readback_required: true,
+      native_export_timecodes_required: true,
+      native_playback_attested: false,
+      visual_verdict: "not_evaluated",
+    };
+    const adjusted = {
+      state: "ADJUST_NEW_CLIP",
+      baseline_snapping_fps: 20,
+      applied_snapping_fps: 30,
+      effective_export_fps: 30,
+      source_key_count: 3,
+      scope: "NEW_NATIVE_CLIP_ONLY",
+      native_playback_attested: false,
+      visual_verdict: "not_evaluated",
+    };
+    const receipt = {
+      ...native,
+      native_timing: { ...baseTiming, snapping_resolution: adjusted },
+    };
+    expect(isAnimationCreationReceipt(receipt)).toBe(true);
+    expect(isAnimationCreationReceipt({
+      ...native, native_timing: baseTiming,
+    })).toBe(true);
+    expect(isAnimationCreationReceipt(native)).toBe(true);
+
+    for (const forged of [
+      { ...adjusted, native_playback_attested: true },
+      { ...adjusted, state: "KEEP_NATIVE" },
+      { ...adjusted, applied_snapping_fps: 500 },
+      { ...adjusted, effective_export_fps: 120 },
+      { ...adjusted, source_key_count: 2 },
+      { ...adjusted, scope: "ALL_ANIMATIONS" },
+      { ...adjusted, visual_verdict: "PASS" },
+    ]) {
+      expect(isAnimationCreationReceipt({
+        ...native, native_timing: {
+          ...baseTiming, snapping_resolution: forged,
+        },
+      })).toBe(false);
+    }
+    const keep = {
+      ...adjusted,
+      state: "KEEP_NATIVE",
+      baseline_snapping_fps: 500,
+      applied_snapping_fps: 500,
+      effective_export_fps: 120,
+    };
+    expect(isAnimationCreationReceipt({
+      ...native, native_timing: {
+        ...baseTiming, snapping_resolution: keep,
+      },
+    })).toBe(true);
+  });
+
   test("producer gets an AnimationCodec instance before building final state", async () => {
     const source = await Bun.file("server/tools/animation/create.ts").text();
     expect(source).toContain("createdAnimation.uuid");

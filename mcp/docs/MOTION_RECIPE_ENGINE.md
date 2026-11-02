@@ -155,6 +155,44 @@ must supply a schema-valid `create_animation` invocation through the
 already-authorized Gateway. Direct semantic schema expansion remains a
 separate generator-coupled task.
 
+## Native frame-grid negotiation for newly created clips
+
+The existing registered `create_animation` executor now performs a **bounded
+new-clip-only FPS negotiation** using source times after the existing numeric
+linear compactor. Upstream Blockbench `Timeline.snapTime(time, animation)`
+uses at most 120 effective FPS even when the Animation's stored snapping
+setting permits 10–500 FPS. Silent timecode rounding can therefore turn an
+otherwise correct authored animation into a different exported motion.
+
+The canonical planner is
+`lib/animation/batchPlanning.ts::planNativeCreationSnapping`:
+
+- Preserve the imported new clip's snapping when every keyframe and effect
+  timestamp already fits its effective 10–120 FPS export grid.
+- Otherwise find the lowest supported integer FPS in 10–120 that preserves
+  all source key times within the native 0.0001-second replacement tolerance.
+  Verify timestamps separately for each bone/channel, allowing equal times
+  across different tracks but never same-track collisions.
+- If no supported grid fits, refuse `ANIMATION_NATIVE_SNAPPING_UNREPRESENTABLE`
+  and use the existing pre-commit rollback. Never silently move keyframes,
+  change an existing clip, or modify the global Timeline setting.
+- Apply a selected rate **only to the newly imported Animation** within its
+  existing Undo edit, before invoking native `getTimecodeString()` for real
+  source/import/export time parity. The prior independent timing guard still
+  rejects a bad native readback.
+
+The resulting `native_timing.snapping_resolution` receipt is optional for
+backward compatibility and records source key count, old/applied FPS,
+effective export FPS and `NEW_NATIVE_CLIP_ONLY` scope. It is independently
+validated against the native timing keyframe count. Neither an adjusted
+snapping value nor `CODEC_TIMES_MATCHED` proves playback, true contact,
+native IK, export persistence or visual acceptance.
+
+This is a functional improvement to the already registered native
+creation path; it does **not** add the direct `semantic_motion` input schema.
+That generator-coupled capability remains blocked until the canonical
+Bun generator and full repository dependencies are available.
+
 ## Native creation failure and Undo authority
 
 The registered `create_animation` implementation now separates three

@@ -188,7 +188,7 @@ describe("native create_animation codec timing gate", () => {
   test("compares actual imported tracks and native timecodes before completing Undo", async () => {
     const source = await Bun.file("server/tools/animation/create.ts").text();
     const load = source.indexOf("const codecCreatedAnimations = codec.loadFile(");
-    const timing = source.indexOf("const nativeTiming = requireNativeCreationTimingIntegrity(");
+    const timing = source.indexOf("requireNativeCreationTimingIntegrity(nativeTimingTracks)");
     const select = source.indexOf("createdAnimation.select()");
     const finish = source.indexOf('Undo.finishEdit("Create animation"');
     expect(load).toBeGreaterThan(0);
@@ -323,5 +323,41 @@ describe("native create_animation outcome-aware rollback", () => {
     expect(completed).toBeGreaterThan(commit);
     expect(history).toBeGreaterThan(completed);
     expect(src).toContain("return settleFailedAnimationCreation(error, {");
+  });
+});
+
+
+describe("native new-clip snapping integration", () => {
+  test("selects source-preserving snapping after native import but before timecode readback and Undo", async () => {
+    const source = await Bun.file("server/tools/animation/create.ts").text();
+    const sourcePlan = source.indexOf("const snappingSourceTracks:");
+    const undoStart = source.indexOf("Undo.initEdit({ animations: [] })");
+    const codecLoad = source.indexOf("const codecCreatedAnimations = codec.loadFile(");
+    const resolution = source.indexOf("const snappingResolution = planNativeCreationSnapping(");
+    const adjust = source.indexOf("createdAnimation.snapping = snappingResolution.applied_snapping_fps;");
+    const nativeReadback = source.indexOf("const nativeTimingTracks:");
+    const finish = source.indexOf('Undo.finishEdit("Create animation"');
+    expect(sourcePlan).toBeGreaterThan(0);
+    expect(sourcePlan).toBeLessThan(undoStart);
+    expect(codecLoad).toBeGreaterThan(undoStart);
+    expect(resolution).toBeGreaterThan(codecLoad);
+    expect(adjust).toBeGreaterThan(resolution);
+    expect(nativeReadback).toBeGreaterThan(adjust);
+    expect(finish).toBeGreaterThan(nativeReadback);
+    expect(source).toContain("snapping_resolution: snappingResolution");
+    expect(source).toContain("ANIMATION_NATIVE_SNAPPING_UPDATE_NOT_PERSISTED");
+    expect(source).toContain("requireNativeCreationTimingIntegrity(nativeTimingTracks)");
+  });
+
+  test("does not alter global timeline, other clips or public animation input fields", async () => {
+    const source = await Bun.file("server/tools/animation/create.ts").text();
+    expect(createAnimationParameters.shape).not.toHaveProperty("snapping");
+    expect(createAnimationParameters.shape).not.toHaveProperty("semantic_motion");
+    expect(source).not.toContain("Timeline.setTime(");
+    expect(source).not.toContain("Animator.preview(");
+    expect(source).not.toContain("sampleIK(");
+    expect(source).toContain('state === "ADJUST_NEW_CLIP"');
+    expect(source).toContain("createdAnimation.snapping = snappingResolution.applied_snapping_fps;");
+    expect(source).not.toContain("Project.animations.forEach(");
   });
 });
