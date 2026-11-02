@@ -860,6 +860,11 @@ test("joint preview rejects parent changes, missing ancestors, duplicate UUIDs a
   let x = cloned();
   x[1].groups[1].parent_group_uuid = "other";
   expect(analyzeObservedAnimationJointOriginFrames(x)).toMatchObject({
+    state: "unavailable", reason: "ANIMATION_JOINT_HIERARCHY_CHANGED",
+  });
+  x = cloned();
+  x[0].groups[1].parent_group_uuid = "other";
+  expect(analyzeObservedAnimationJointOriginFrames(x)).toMatchObject({
     state: "unavailable", reason: "ANIMATION_JOINT_ANCESTRY_INCOMPLETE",
   });
   x = cloned();
@@ -896,7 +901,9 @@ test("joint preview copies source coordinates and never invents IK-keyframe auth
   if (review.state !== "SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS") {
     throw new Error("Expected joint origins");
   }
-  source[0].groups[0].world_position[0] = 99;
+  // The fixture type exposes readonly world coordinates; this deliberately
+  // mutates its backing array to verify returned snapshots are detached.
+  (source[0].groups[0].world_position as [number, number, number])[0] = 99;
   expect(review.frames[0].groups[0].world_position[0]).toBe(0);
   expect(review.native_ik_bake_authorized).toBe(false);
   expect(review.visual_verdict).toBe("not_evaluated");
