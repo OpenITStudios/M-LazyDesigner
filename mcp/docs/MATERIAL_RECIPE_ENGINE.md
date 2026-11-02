@@ -93,6 +93,31 @@ Undo, within `Texture.edit`, and before finishing Undo/optional PNG
 publication. The ordinary public `paint_texture_transaction` schema,
 compute routing, exact-operations behavior and Gateway remain unchanged.
 
+### Trusted Reference Package evidence (Control-owned)
+
+`gateway/control/clusterReferenceEvidence.ts` now exports
+`createCurrentClusterReferenceVerifier` and
+`verifyCurrentClusterReferenceClaims`. These use the **existing**
+`readReferencePackageProjection`, `readReferenceImageEvidence` and
+`requireStableSeamReferenceImageRead` source-byte guards. For at most
+16 declared Cube faces and four images, they verify a current Reference
+Package fingerprint, the actual approved PNG SHA-256, the declared TEXTURE
+stage, and visible `SURFACE_DETAIL` source-region/part annotations.
+Duplicate/foreign faces, absent annotation, draft/occluded source and
+changed file/manifest bytes fail closed. The native internal bridge now
+passes Cube-face identities *with* each source claim; bare image SHA
+alone cannot stand in for the declared surface.
+
+These checks only authenticate **source identity and visible annotation
+metadata**. They cannot prove that caller-authored pixel clusters actually
+match the source crop, that the region depicts the target Cube face,
+or that a human approved the proposed paint. A trusted Control owner
+may inject the verifier into the internal native entrypoint **only when**
+an authorized serialized Runtime route exists. The private executor
+rechecks source bytes after painting but before native Undo completion;
+a mismatch aborts via existing rollback. This is not exposed to
+the AI through the Gateway today; no new public schema has been authored.
+
 **Availability boundary:** The internal entrypoint is not currently
 reachable through `invoke_capability`; a trusted authoring owner must
 serialize its invocation and authenticate actual approved reference image

@@ -30,6 +30,7 @@ import { parseTextureComputeRequest } from "@/lib/texture/computeRequest";
 import {
   compileReferencePixelClusterPaint,
   type ClusterCompositionInput,
+  type ClusterFaceAuthoring,
   type ClusterNativeFace,
 } from "@/lib/texture/clusterComposition";
 import { requireCurrentClusterNativeBindings } from "@/lib/texture/clusterNativeBindings";
@@ -398,7 +399,8 @@ export function captureNativeFaceRecolorScope(
  */
 async function executePaintTextureTransaction(
   { texture_id, expected_revision, operations, compute, ambient_occlusion, output }: PaintTransactionRequest,
-  nativeClusterGuard?: () => void
+  nativeClusterGuard?: () => void,
+  referencePreCommitGuard?: () => Promise<void>
 ) {
         // Internal cluster authoring can supply a source-pinned native
         // binding guard. Ordinary public transactions remain unchanged.
@@ -563,10 +565,12 @@ async function executePaintTextureTransaction(
             );
           }
 
-          // The postcondition digest above is asynchronous. Recheck the
-          // verified full bitmap immediately before filesystem publication
-          // and Undo.finishEdit; a newer native frame edit must not inherit
-          // this transaction's old receipt or output PNG.
+          // On internal cluster work only, reverify the actual source file
+          // after painting but before committing the native Undo. A changed
+          // Reference Package aborts this transaction and rolls back paint.
+          await referencePreCommitGuard?.();
+          // Both reference reads and pixel hashing are asynchronous.
+          // Recheck native full bitmap before publishing PNG / finishing Undo.
           requireUnchangedTextureBitmap(
             actualAfter,
             fullTextureRgba(texture),
@@ -679,16 +683,21 @@ export async function executeNativeBoundClusterComposition(
   untrustedInput: ClusterCompositionInput,
   // Trusted Control/Reference owner, not a caller-supplied approval boolean.
   verifyApprovedReference: (
-    claims: readonly ClusterCompositionInput["faces"][number]["source_claim"][]
+    faces: readonly Pick<ClusterFaceAuthoring, "cube_uuid" | "face" | "source_claim">[]
   ) => Promise<void>
 ) {
   if (typeof verifyApprovedReference !== "function") {
     throw new Error("CLUSTER_APPROVED_REFERENCE_VERIFIER_REQUIRED");
   }
   const input = structuredClone(untrustedInput);
-  const claims = input.faces.map(face => face.source_claim);
-  // Verify actual current package/image bytes and part correspondence, not
-  // merely a SHA-shaped string in the caller's declared cluster recipe.
+  const claims = input.faces.map(face => ({
+    cube_uuid: face.cube_uuid,
+    face: face.face,
+    source_claim: { ...face.source_claim },
+  }));
+  // Verify current reference bytes and the declared source-part annotation
+  // for each nominated Cube face, never merely a SHA-shaped string.
+  // This does NOT prove the image visually depicts that actual 3D face.
   await verifyApprovedReference(claims);
   const texture = resolvePaintTexture(input.texture_uuid);
   const requested = input.faces.map(face => ({
@@ -735,7 +744,8 @@ export async function executeNativeBoundClusterComposition(
   // in native Texture.edit, and before Undo.finishEdit/PNG publication.
   const result = await executePaintTextureTransaction(
     compiled.transaction,
-    assertNativeBindingUnchanged
+    assertNativeBindingUnchanged,
+    () => verifyApprovedReference(claims)
   );
   return result;
 }

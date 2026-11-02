@@ -199,7 +199,15 @@ describe("source-declared clusters are bound to one current native Cube inventor
     expect(src).toContain("export async function executeNativeBoundClusterComposition(");
     expect(src).toContain("requireCurrentClusterNativeBindings(input, {");
     expect(src).toContain("CLUSTER_APPROVED_REFERENCE_VERIFIER_REQUIRED");
+    expect(src).toContain("source_claim: { ...face.source_claim }");
+    expect(src).toContain("cube_uuid: face.cube_uuid");
+    expect(src).toContain("face: face.face");
     expect((src.match(/await verifyApprovedReference\(claims\)/g)??[]).length).toBe(2);
+    expect(src).toContain("() => verifyApprovedReference(claims)");
+    const referencePreCommit = src.indexOf("await referencePreCommitGuard?.();");
+    const undoFinish = src.indexOf('Undo.finishEdit("Paint texture transaction")');
+    expect(referencePreCommit).toBeGreaterThan(0);
+    expect(undoFinish).toBeGreaterThan(referencePreCommit);
     expect((src.match(/nativeClusterGuard\?\.\(\)/g)??[]).length).toBe(4);
     expect(src).toContain("Undo.cancelEdit(true)");
     expect(src).not.toContain("registerPaintClusterTool");

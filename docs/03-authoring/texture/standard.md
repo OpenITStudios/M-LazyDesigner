@@ -398,6 +398,15 @@ the pinned native snapshot before Undo, within the texture-edit callback
 and before completion. No public MCP schema, extra executor or separate
 Undo implementation was added.
 
+Control now has a matching read-only Reference Package verifier in
+`mcp/gateway/control/clusterReferenceEvidence.ts`. It validates the
+actual current approved Texture image bytes and visible source-region/part
+annotation for each declared Cube/face. Package `APPROVED` is metadata,
+not independently authenticated human approval, and the verifier cannot
+recognize or confirm the proposed cluster shape. Do not treat its
+source-byte receipt as automatic artistic acceptability or native
+face-to-image correspondence.
+
 This bridge is source-authored but **not exposed through the current
 Gateway**. It needs a trusted serialized authoring caller and real
 approved-reference-byte/face-correspondence authentication before

@@ -2,36 +2,37 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — Native-bound texture correction (2026-11-02)
+## Primary next — Verified Texturing reference source (2026-11-02)
 
-**DECISION:** Freeze Geometry. Reuse Texturing, Gateway, native Undo;
-no new public tool, CI, UI, paint engine or release.
+**DECISION:** Keep Geometry frozen. Reuse the existing Texturing,
+Gateway, paint transaction, UV guards and Undo. No new MCP tool,
+CI, mandatory UI or release.
 
-**SOURCE:** Existing face-label candidates, Oklab recolor and cluster
-compiler remain. New `existing_painted_patch` modifies only exact
-opaque before-RGB-gated local pixels without a face-wide base fill.
-Internal `executeNativeBoundClusterComposition` reuses the SAME
-`paint_texture_transaction` executor and requires trusted approved
-reference-byte verification. It compares all Cube/face/UV/material/
-Texture bindings to source and checks the native snapshot before,
-inside and after editing. Existing bitmap revision/Undo remain.
-Stale/foreign/shared UV, source-color/alpha mismatch or incomplete
-inventory fails closed.
+**SOURCE:** Existing native semantic targets, source-bound Oklab
+recolor, face-local clusters, opaque correction and native binding
+guard remain. New `gateway/control/clusterReferenceEvidence.ts`
+uses canonical current REFERENCE.json fingerprint, PNG byte SHA-256,
+TEXTURE stage, package-declared APPROVED status, visible
+SURFACE_DETAIL region and exact part/face claims. The internal
+native entrypoint now passes Cube UUID/face with each claimed
+image region and rechecks source before native Undo finishes. Status remains
+internal; no automatic art correspondence is inferred.
 
-**PROOF:** Source/tests AUTHORED. Bun/typecheck/build/CI, live
-approved source, native Blockbench/Undo, save/export, mapped views,
-Golden visual/user quality NOT EXECUTED. CI disabled.
+**PROOF:** GitHub source and mock regressions authored. Bun,
+typecheck, build, CI, installed Blockbench, save/export and Golden
+model-view/human visual QA NOT EXECUTED. Verification CI disabled.
 
-**LIMIT:** Internal bridge is NOT a public MCP capability and
-cannot be invoked through current Gateway. No visual PASS inferred.
-Trusted Runtime serialization/source authorization remains required.
+**LIMIT:** Control checks source integrity, not whether proposed pixel
+cluster shapes visually match the image or a Cube face. Native
+cluster entrypoint is NOT registered through Gateway; public MCP
+schema/generated API not modified. Do not bypass the proper
+generated capability path to claim a usable automatic tool.
 
-**NEXT:** Connect internal native path only through a properly
-generated/authorized capability contract, then review affected
-`get_texture` and shaded `capture_model_views` evidence as a cohort;
-avoid per-pixel QA loops.
+**NEXT:** Canonical generator-capable integration of the trusted
+Control evidence + serialized Runtime call. Then end-to-end native
+QA and affected-view corrections without per-pixel test loops.
 
-**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED, v12–14
+**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED; v12–14
 checkpoint `addfb6a008b9af8baf0417ff23435046df7285d4`.
 
 ## GitHub boundary and historical local recovery

@@ -197,6 +197,20 @@ invoke ordinary unguarded exact operations on a guessed face. Use
 registered normal Paint tools only for already known-safe exact
 edits until this internal bridge is given an authorized client route.
 
+**Reference-byte verification for source clusters (Control/internal):**
+`gateway/control/createCurrentClusterReferenceVerifier` uses the
+canonical Reference Package image identity, actual PNG byte SHA-256,
+stage `TEXTURE`, package-declared `APPROVED` status and visible
+`SURFACE_DETAIL` part/region annotations. It must receive the exact
+Cube UUID/face with each source claim; never pass only a user-supplied
+SHA or infer crop-to-face alignment from a matching name. This verifier
+is internal, not a callable Gateway capability, and checks source
+metadata rather than artist-drawn cluster correspondence. An
+unverified image/crop or changed package halts source-based automatic
+painting; the internal one-Undo path also rechecks this source just
+before native commit and rolls back on a mismatch. Independent
+known-safe pixel editing remains available.
+
 After one coherent material batch, use the existing
 `get_texture(region, expected_revision)` / affected PNG and relevant
 `capture_model_views` shaded views. A correction must be based on an
