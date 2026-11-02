@@ -2,38 +2,35 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — Verified Texturing reference source (2026-11-02)
+## Primary next — Compact cluster authoring (2026-11-02)
 
-**DECISION:** Keep Geometry frozen. Reuse the existing Texturing,
-Gateway, paint transaction, UV guards and Undo. No new MCP tool,
-CI, mandatory UI or release.
+**DECISION:** Freeze Geometry. Keep one Paint/Undo owner, four Gateway
+tools; no new UI, CI or release.
 
-**SOURCE:** Existing native semantic targets, source-bound Oklab
-recolor, face-local clusters, opaque correction and native binding
-guard remain. New `gateway/control/clusterReferenceEvidence.ts`
-uses canonical current REFERENCE.json fingerprint, PNG byte SHA-256,
-TEXTURE stage, package-declared APPROVED status, visible
-SURFACE_DETAIL region and exact part/face claims. The internal
-native entrypoint now passes Cube UUID/face with each claimed
-image region and rechecks source before native Undo finishes. Status remains
-internal; no automatic art correspondence is inferred.
+**SOURCE:** Existing face-bound cluster compiler, Oklab recolor,
+native Cube/UV/material guards and Control Reference PNG proof remain.
+NEW strict `lib/texture/clusterAuthoringRequest.ts` accepts only
+texture ID/revision, face claims, palette, local cluster shapes and
+source mode. Native `executeNativeBoundClusterAuthoringRequest`
+reads actual Blockbench bitmap/UUID/UV/face inventory and delegates to
+the same guarded one-Undo executor. Caller-supplied bitmap/UV/material
+inventory fails closed. Positive/negative regressions authored.
 
-**PROOF:** GitHub source and mock regressions authored. Bun,
-typecheck, build, CI, installed Blockbench, save/export and Golden
-model-view/human visual QA NOT EXECUTED. Verification CI disabled.
+**PROOF:** GitHub source/tests AUTHORED. Bun/typecheck/generator/CI,
+installed Blockbench, save/export and Golden user visual QA NOT
+EXECUTED. CI disabled.
 
-**LIMIT:** Control checks source integrity, not whether proposed pixel
-cluster shapes visually match the image or a Cube face. Native
-cluster entrypoint is NOT registered through Gateway; public MCP
-schema/generated API not modified. Do not bypass the proper
-generated capability path to claim a usable automatic tool.
+**LIMIT:** Compact request INTERNAL/UNREGISTERED. Public
+`paint_texture_transaction` branch requires Bun-generated API/docs
+plus serialized Control→Runtime authority. No generated-file edits or
+false activation. Source metadata does not prove image/face art match.
 
-**NEXT:** Canonical generator-capable integration of the trusted
-Control evidence + serialized Runtime call. Then end-to-end native
-QA and affected-view corrections without per-pixel test loops.
+**NEXT:** Canonical generated branch + trusted cross-process source
+preflight in an actual capable workspace, then focused source gate
+and native/visual acceptance separately. No user-PC prerequisite.
 
-**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED; v12–14
-checkpoint `addfb6a008b9af8baf0417ff23435046df7285d4`.
+**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED;
+v12–14 `addfb6a008b9af8baf0417ff23435046df7285d4`.
 
 ## GitHub boundary and historical local recovery
 

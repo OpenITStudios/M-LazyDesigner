@@ -34,6 +34,10 @@ import {
   type ClusterNativeFace,
 } from "@/lib/texture/clusterComposition";
 import { requireCurrentClusterNativeBindings } from "@/lib/texture/clusterNativeBindings";
+import {
+  materializeNativeClusterCompositionInput,
+  nativeClusterAuthoringRequestSchema,
+} from "@/lib/texture/clusterAuthoringRequest";
 import type { PaintTransactionRequest } from "@/lib/texture/paintTransaction";
 import {
   cropRgbaRect,
@@ -670,6 +674,54 @@ async function executePaintTextureTransaction(
           },
         };
 
+}
+
+/**
+ * Compact internal entry for author-facing cluster intent. Crucially the
+ * caller does NOT provide raw bitmap bytes, logical UV metrics, native
+ * Cube-face inventories, material names or ownership claims. All such fields
+ * are captured synchronously by the existing trusted native Runtime owner.
+ *
+ * Unregistered: a public paint branch cannot be activated until its
+ * generator-owned schema/docs and serialized Control→Runtime authority
+ * have been implemented together. The verifier is trusted host-injected,
+ * never a value supplied in the MCP request.
+ */
+export async function executeNativeBoundClusterAuthoringRequest(
+  raw: unknown,
+  verifyApprovedReference:
+    Parameters<typeof executeNativeBoundClusterComposition>[1]
+) {
+  if (typeof verifyApprovedReference !== "function") {
+    throw new Error("CLUSTER_APPROVED_REFERENCE_VERIFIER_REQUIRED");
+  }
+  const request = nativeClusterAuthoringRequestSchema.parse(raw);
+  const texture = resolvePaintTexture(request.texture_id);
+  // Full bitmap and all native face bindings come from this installed
+  // Blockbench project; no caller-owned scene snapshot is accepted.
+  const current = fullTextureRgba(texture);
+  const scope = captureNativeFaceRecolorScope(
+    texture,
+    current.width,
+    current.height,
+    request.faces.map(face => ({
+      cube_uuid: face.cube_uuid,
+      face: face.face,
+    }))
+  );
+  const nativeInput = materializeNativeClusterCompositionInput(request, {
+    texture_uuid: texture.uuid,
+    bitmap: current.pixels,
+    bitmap_width: current.width,
+    bitmap_height: current.height,
+    logical_uv_width: texture.getUVWidth(),
+    logical_uv_height: texture.getUVHeight(),
+    native_faces: scope.native_faces,
+  });
+  return executeNativeBoundClusterComposition(
+    nativeInput,
+    verifyApprovedReference
+  );
 }
 
 /**

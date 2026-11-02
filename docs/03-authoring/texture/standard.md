@@ -398,6 +398,17 @@ the pinned native snapshot before Undo, within the texture-edit callback
 and before completion. No public MCP schema, extra executor or separate
 Undo implementation was added.
 
+A compact source-side authoring request now exists at
+`mcp/lib/texture/clusterAuthoringRequest.ts`: callers declare only
+the intended texture ID/revision, palette, source-backed face-local
+clusters and quiet areas. Runtime constructs the bitmap and native
+Cube/UV/material inventory from Blockbench itself, through
+`executeNativeBoundClusterAuthoringRequest`; external native-state
+payloads are rejected. This interface remains **internal and
+unregistered**, not a user-visible MCP capability or a guarantee of
+reference fidelity. The existing public exact-pixel transaction is
+still the correct route for independently known atlas pixels.
+
 Control now has a matching read-only Reference Package verifier in
 `mcp/gateway/control/clusterReferenceEvidence.ts`. It validates the
 actual current approved Texture image bytes and visible source-region/part

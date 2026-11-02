@@ -5,6 +5,14 @@
 export {
   compileReferencePixelClusterPaint,
 } from "./clusterComposition";
+export {
+  nativeClusterAuthoringRequestSchema,
+  materializeNativeClusterCompositionInput,
+} from "./clusterAuthoringRequest";
+export type {
+  NativeClusterAuthoringRequest,
+  ResolvedNativeClusterSource,
+} from "./clusterAuthoringRequest";
 export type {
   ClusterCompositionInput,
   ClusterNativeFace,

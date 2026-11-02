@@ -197,6 +197,23 @@ invoke ordinary unguarded exact operations on a guessed face. Use
 registered normal Paint tools only for already known-safe exact
 edits until this internal bridge is given an authorized client route.
 
+**Compact cluster request (internal integration preparation):**
+`lib/texture/clusterAuthoringRequest.ts` owns one strict, compact
+request shape: `texture_id`, `expected_revision`, `source_mode`,
+`palette`, and named `faces` carrying reference claims, face-local
+clusters and optional quiet zones. It forbids caller-invented
+`bitmap`, `native_faces`, and UV metrics; the native
+`executeNativeBoundClusterAuthoringRequest` reads those from
+the live connected Blockbench scene and delegates to the one guarded
+native transaction. On `existing_painted_patch`, exact old RGB
+preconditions are mandatory for each cluster. Unknown colors, UVs,
+reference observations or source approval require review, not guesses.
+This is **source-level internal only** until canonical generated MCP
+schema plus serialized Control evidence are connected. Do not send
+this request through current `invoke_capability`: it is not registered.
+The existing public `paint_texture_transaction.operations` remains
+usable for independently verified **absolute atlas pixel** edits.
+
 **Reference-byte verification for source clusters (Control/internal):**
 `gateway/control/createCurrentClusterReferenceVerifier` uses the
 canonical Reference Package image identity, actual PNG byte SHA-256,

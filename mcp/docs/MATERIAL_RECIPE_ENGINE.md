@@ -93,6 +93,41 @@ Undo, within `Texture.edit`, and before finishing Undo/optional PNG
 publication. The ordinary public `paint_texture_transaction` schema,
 compute routing, exact-operations behavior and Gateway remain unchanged.
 
+### Compact internal cluster authoring request (no public registration)
+
+`lib/texture/clusterAuthoringRequest.ts` now owns a strict, bounded
+`nativeClusterAuthoringRequestSchema` for the author's **intent only**:
+
+```text
+texture_id + expected_revision + source_mode
++ palette { base, shadow?, highlight?, accent?, identity?, detail? }
++ faces[{ cube_uuid, face, source_claim, clusters, quiet_zones? }]
+```
+
+A cluster declares a source observation, an explicit color role and
+face-local `rect` or contiguous row `runs`. For an already-painted
+correction, each cluster **must** supply current opaque
+`expected_source_colors`; this is forbidden for blank/flat templates.
+The schema rejects duplicate targets, missing role colors, invented
+extra inputs, ambiguous source observations and oversized batches.
+It does not certify the visual match to a reference.
+
+The existing native `executeNativeBoundClusterAuthoringRequest` is a
+source-level bridge: it obtains decoded RGBA, the full Cube-face inventory,
+the resolved Texture UUID, UV dimensions and rotation from actual
+Blockbench, then delegates to `executeNativeBoundClusterComposition`
+and its one-Undo guarded transaction. The author **never transmits
+the bitmap, UV rectangles, or native material inventory**. This avoids
+large AI payloads and false native claims.
+
+This internal route is deliberately **unregistered**; its presence does
+not add a fifth public Gateway tool or make the compact request callable
+through `invoke_capability`. Activating an existing Runtime capability
+branch is generator-coupled: its Zod source/ToolSpec, generated API docs
+and Control-to-Runtime serialized source authority must be updated as
+one coherent delivery by the canonical Bun generators. Do not hand-edit
+`docs/api.json`, `docs/index.html`, or generated prompt manifests.
+
 ### Trusted Reference Package evidence (Control-owned)
 
 `gateway/control/clusterReferenceEvidence.ts` now exports
