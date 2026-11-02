@@ -430,6 +430,14 @@ payloads are rejected. This interface remains **internal and
 unregistered**, not a user-visible MCP capability or a guarantee of
 reference fidelity. The existing public exact-pixel transaction is
 still the correct route for independently known atlas pixels.
+The internal cluster entry must receive the trusted Control-bound
+project UUID **outside** the artist request, and require exactly one
+active native `ModelProject` tab in the effective serialized Texturing
+Stage. Check the same tab object after asynchronous Reference Package
+reads and throughout the existing native mutation/Undo guards. A
+second tab with identical UUID, UV and pixels cannot inherit authority.
+This safeguard does not authorize painting, certify image-to-face
+correspondence, or register the cluster workflow through Gateway.
 
 The Control-owned, read-only
 `mcp/gateway/control/clusterAuthoringPreflight.ts` checks the

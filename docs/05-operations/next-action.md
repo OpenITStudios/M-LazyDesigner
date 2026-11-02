@@ -20,14 +20,15 @@ Stage/UV, source and injected native-state inputs authored.
 native Blockbench/Undo, save/export, Golden visual QA NOT EXECUTED.
 Verification CI disabled.
 
-**RECOLOR:** `protected_face_regions` guard identity texels;
-`source_ramp_from_selected_pixels:true` samples selected shades
-around a declared base. Same Undo. Tests AUTHORED, NOT EXECUTED.
+**RECOLOR:** Face-local protection and source-ramp sampling source-authored.
 
-**LIMIT:** Compact request/preflight INTERNAL/UNREGISTERED.
-Activation needs generated existing capability schema/docs and secure
-serialized Control→Runtime source authority. Do not hand-edit
-generated files or infer artistic image-face match.
+**CLUSTER PROJECT BINDING:** Internal native entry requires trusted
+Control UUID, unique Blockbench tab object and scoped Texturing
+Stage through Undo. Regression definitions authored, NOT EXECUTED.
+
+**LIMIT:** Cluster workflow UNREGISTERED. Activation needs canonical
+generated capability API and secure serialized Control→Runtime source
+authority. No inference of visual/reference-to-face correspondence.
 
 **NEXT:** Canonical generator-capable branch integration, source gate,
 then distinct native/visual acceptance. No user-PC prerequisite.

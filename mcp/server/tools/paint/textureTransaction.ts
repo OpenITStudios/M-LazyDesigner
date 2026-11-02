@@ -2,6 +2,7 @@
 
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { recordCurrentCapabilitySemanticHistoryEffect } from "@/lib/authoring/semanticHistory";
+import { getCurrentMcpRequestStage } from "@/server/runtime/phaseControl";
 import { bakeNativeCubeAo } from "@/lib/geometry/cubeAoRuntime";
 import { imageContent } from "@/lib/protocol/imageContent";
 import { resolvePaintTexture } from "@/lib/texture/selection";
@@ -696,6 +697,38 @@ async function executePaintTextureTransaction(
 }
 
 /**
+ * The expected project UUID is host-injected from trusted Control context,
+ * never supplied by the artist's compact request. The native tab object must
+ * be unique even if another copied Blockbench project has identical UUID/UV.
+ */
+export function requireCurrentNativeClusterProject(
+  expectedProjectUuid: string
+): ModelProject {
+  if (typeof expectedProjectUuid !== "string" ||
+      expectedProjectUuid.length < 1 || expectedProjectUuid.length > 128 ||
+      expectedProjectUuid.trim() !== expectedProjectUuid) {
+    throw new Error("CLUSTER_CONTROL_PROJECT_ID_REQUIRED");
+  }
+  if (getCurrentMcpRequestStage() !== "texturing") {
+    throw new Error("CLUSTER_NATIVE_TEXTURING_STAGE_REQUIRED");
+  }
+  if (typeof ModelProject === "undefined" ||
+      !Array.isArray(ModelProject.all) ||
+      typeof Project === "undefined" || !Project) {
+    throw new Error("CLUSTER_NATIVE_PROJECT_UNAVAILABLE");
+  }
+  const project = Project as ModelProject;
+  const matches = ModelProject.all.filter(candidate =>
+    candidate.uuid === expectedProjectUuid
+  );
+  if (project.uuid !== expectedProjectUuid ||
+      matches.length !== 1 || matches[0] !== project) {
+    throw new Error("CLUSTER_NATIVE_PROJECT_AFFINITY_MISMATCH");
+  }
+  return project;
+}
+
+/**
  * Compact internal entry for author-facing cluster intent. Crucially the
  * caller does NOT provide raw bitmap bytes, logical UV metrics, native
  * Cube-face inventories, material names or ownership claims. All such fields
@@ -709,12 +742,15 @@ async function executePaintTextureTransaction(
 export async function executeNativeBoundClusterAuthoringRequest(
   raw: unknown,
   verifyApprovedReference:
-    Parameters<typeof executeNativeBoundClusterComposition>[1]
+    Parameters<typeof executeNativeBoundClusterComposition>[1],
+  /** From trusted Control's bound project_uuid, not author request JSON. */
+  expectedProjectUuid: string
 ) {
   if (typeof verifyApprovedReference !== "function") {
     throw new Error("CLUSTER_APPROVED_REFERENCE_VERIFIER_REQUIRED");
   }
   const request = nativeClusterAuthoringRequestSchema.parse(raw);
+  requireCurrentNativeClusterProject(expectedProjectUuid);
   const texture = resolvePaintTexture(request.texture_id);
   // Full bitmap and all native face bindings come from this installed
   // Blockbench project; no caller-owned scene snapshot is accepted.
@@ -739,7 +775,8 @@ export async function executeNativeBoundClusterAuthoringRequest(
   });
   return executeNativeBoundClusterComposition(
     nativeInput,
-    verifyApprovedReference
+    verifyApprovedReference,
+    expectedProjectUuid
   );
 }
 
@@ -755,11 +792,19 @@ export async function executeNativeBoundClusterComposition(
   // Trusted Control/Reference owner, not a caller-supplied approval boolean.
   verifyApprovedReference: (
     faces: readonly Pick<ClusterFaceAuthoring, "cube_uuid" | "face" | "source_claim">[]
-  ) => Promise<void>
+  ) => Promise<void>,
+  /** Native authority, injected from bound Control by a trusted host. */
+  expectedProjectUuid: string
 ) {
   if (typeof verifyApprovedReference !== "function") {
     throw new Error("CLUSTER_APPROVED_REFERENCE_VERIFIER_REQUIRED");
   }
+  const pinnedProject = requireCurrentNativeClusterProject(expectedProjectUuid);
+  const assertProjectUnchanged = () => {
+    if (requireCurrentNativeClusterProject(expectedProjectUuid) !== pinnedProject) {
+      throw new Error("CLUSTER_NATIVE_PROJECT_OBJECT_CHANGED");
+    }
+  };
   const input = structuredClone(untrustedInput);
   const claims = input.faces.map(face => ({
     cube_uuid: face.cube_uuid,
@@ -770,6 +815,8 @@ export async function executeNativeBoundClusterComposition(
   // for each nominated Cube face, never merely a SHA-shaped string.
   // This does NOT prove the image visually depicts that actual 3D face.
   await verifyApprovedReference(claims);
+  // Reference I/O may await; reject a switched tab even with identical UUID.
+  assertProjectUnchanged();
   const texture = resolvePaintTexture(input.texture_uuid);
   const requested = input.faces.map(face => ({
     cube_uuid: face.cube_uuid,
@@ -788,6 +835,7 @@ export async function executeNativeBoundClusterComposition(
   });
   const originalNativeFingerprint = original.native_snapshot;
   const assertNativeBindingUnchanged = () => {
+    assertProjectUnchanged();
     // A detached/replaced native Texture object with the same UUID is stale.
     if (resolvePaintTexture(input.texture_uuid) !== texture) {
       throw new Error("CLUSTER_NATIVE_TEXTURE_OBJECT_CHANGED");

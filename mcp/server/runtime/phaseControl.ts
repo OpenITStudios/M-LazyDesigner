@@ -46,6 +46,14 @@ export function setMcpStageSwitchHandler(
   stageSwitchHandler = handler;
 }
 
+/** Effective Stage for the serialized Runtime invocation. A scoped Gateway
+ * request owns its own Stage without changing Blockbench's global setting. */
+export function getCurrentMcpRequestStage(): McpAuthoringStage {
+  return requestStage?.scoped
+    ? requestStage.stage
+    : getActiveMcpAuthoringStage();
+}
+
 export function requestMcpStageSwitch(stage: McpAuthoringStage): void {
   if (!stageSwitchHandler) {
     throw new Error("Runtime Stage/Surface switching is unavailable; reload LazyDesigner.");

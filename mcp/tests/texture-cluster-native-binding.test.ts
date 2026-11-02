@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { ClusterCompositionInput, ClusterNativeFace } from "@/lib/texture/clusterComposition";
+import { runWithMcpStageRequest } from "@/server/runtime/phaseControl";
 import { requireCurrentClusterNativeBindings } from "@/lib/texture/clusterNativeBindings";
 import {
   captureNativeFaceRecolorScope,
   executeNativeBoundClusterComposition,
+  requireCurrentNativeClusterProject,
 } from "@/server/tools/paint/textureTransaction";
 
 const SIDES = ["north", "south", "east", "west", "up", "down"] as const;
@@ -48,6 +50,41 @@ function current(
     texture_uuid: TEX, bitmap_width:8, bitmap_height:8,
     logical_uv_width:8, logical_uv_height:8, native_faces,
   };
+}
+
+
+/** Mock only the native project registry; no live texture mutation occurs. */
+async function withBoundClusterProject<T>(run: (scope: {
+  project: { uuid: string };
+  replace: (next: { uuid: string }) => void;
+  setOpen: (projects: readonly { uuid: string }[]) => void;
+}) => Promise<T>): Promise<T> {
+  const globals = globalThis as Record<string, unknown>;
+  const keys = ["Project", "ModelProject"];
+  const previous = new Map(keys.map(key =>
+    [key, Object.getOwnPropertyDescriptor(globals, key)]
+  ));
+  const project = { uuid: "control-bound-project" };
+  const registry = { all: [project] };
+  Object.assign(globals, { Project: project, ModelProject: registry });
+  try {
+    return await runWithMcpStageRequest("texturing", true, () =>
+      run({
+        project,
+        replace(next) {
+          registry.all = [next];
+          globals.Project = next;
+        },
+        setOpen(projects) { registry.all = [...projects]; },
+      })
+    );
+  } finally {
+    for (const key of keys) {
+      const descriptor = previous.get(key);
+      if (descriptor) Object.defineProperty(globals, key, descriptor);
+      else delete globals[key];
+    }
+  }
 }
 
 describe("source-declared clusters are bound to one current native Cube inventory", () => {
@@ -180,15 +217,70 @@ describe("source-declared clusters are bound to one current native Cube inventor
     }
   });
 
-  test("native application refuses missing or rejected approved-source-byte verification before touching Blockbench",async()=>{
+  test("native authoring refuses missing or rejected trusted Reference Package evidence",async()=>{
     await expect(executeNativeBoundClusterComposition(
       {faces:[]} as unknown as ClusterCompositionInput,
-      undefined as unknown as (claims:readonly any[])=>Promise<void>
+      undefined as unknown as (claims:readonly any[])=>Promise<void>,
+      "control-bound-project"
     )).rejects.toThrow("CLUSTER_APPROVED_REFERENCE_VERIFIER_REQUIRED");
-    await expect(executeNativeBoundClusterComposition(
-      {faces:[{source_claim:{image_id:"front"}}]} as unknown as ClusterCompositionInput,
-      async()=>{throw new Error("REFERENCE_PACKAGE_NOT_APPROVED")}
-    )).rejects.toThrow("REFERENCE_PACKAGE_NOT_APPROVED");
+    await withBoundClusterProject(async () => {
+      await expect(executeNativeBoundClusterComposition(
+        {faces:[{source_claim:{image_id:"front"}}]} as unknown as ClusterCompositionInput,
+        async()=>{throw new Error("REFERENCE_PACKAGE_NOT_APPROVED")},
+        "control-bound-project"
+      )).rejects.toThrow("REFERENCE_PACKAGE_NOT_APPROVED");
+    });
+  });
+
+  test("requires bound Control UUID and the effective Texturing request Stage",async()=>{
+    await withBoundClusterProject(async ({project}) => {
+      expect(requireCurrentNativeClusterProject(project.uuid)).toBe(project);
+      expect(()=>requireCurrentNativeClusterProject("foreign-project"))
+        .toThrow("CLUSTER_NATIVE_PROJECT_AFFINITY_MISMATCH");
+      expect(()=>requireCurrentNativeClusterProject(" "))
+        .toThrow("CLUSTER_CONTROL_PROJECT_ID_REQUIRED");
+      await runWithMcpStageRequest("geometry", true, async () => {
+        expect(()=>requireCurrentNativeClusterProject(project.uuid))
+          .toThrow("CLUSTER_NATIVE_TEXTURING_STAGE_REQUIRED");
+      });
+      expect(requireCurrentNativeClusterProject(project.uuid)).toBe(project);
+    });
+  });
+
+  test("refuses duplicate same-UUID tabs and an orphan current project",async()=>{
+    await withBoundClusterProject(async ({project,replace,setOpen}) => {
+      setOpen([project,{uuid:project.uuid}]);
+      expect(()=>requireCurrentNativeClusterProject(project.uuid))
+        .toThrow("CLUSTER_NATIVE_PROJECT_AFFINITY_MISMATCH");
+      setOpen([]);
+      expect(()=>requireCurrentNativeClusterProject(project.uuid))
+        .toThrow("CLUSTER_NATIVE_PROJECT_AFFINITY_MISMATCH");
+      const replacement={uuid:project.uuid};
+      replace(replacement);
+      expect(requireCurrentNativeClusterProject(project.uuid)).toBe(replacement);
+    });
+  });
+
+  test("same-UUID tab switch during reference read aborts before a texture mutation",async()=>{
+    await withBoundClusterProject(async ({project,replace}) => {
+      const claim={
+        cube_uuid:"armor", face:"north", source_claim:{
+          image_id:"front", image_sha256:"a".repeat(64),
+          image_region_id:"chest", part_id:"armor",
+          observation_id:"visible-shadow",
+        },
+      };
+      let referenceCalls=0;
+      await expect(executeNativeBoundClusterComposition(
+        {faces:[claim]} as unknown as ClusterCompositionInput,
+        async () => {
+          referenceCalls++;
+          replace({uuid:project.uuid}); // identical UUID, distinct tab object
+        },
+        project.uuid
+      )).rejects.toThrow("CLUSTER_NATIVE_PROJECT_OBJECT_CHANGED");
+      expect(referenceCalls).toBe(1);
+    });
   });
 
   test("single executor retains native guards before/within/after the one-Undo edit",async()=>{
