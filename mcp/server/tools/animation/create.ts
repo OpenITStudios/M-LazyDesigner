@@ -7,7 +7,11 @@ import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_STABLE } from "@/lib/constants";
 import { finiteAnimationVector3Schema } from "./shared";
 import { compactLinearCreationKeyframes } from "@/lib/animation/quality";
-import { nativeKeyframeTimesCollide } from "@/lib/animation/batchPlanning";
+import {
+  nativeKeyframeTimesCollide,
+  requireNativeCreationTimingIntegrity,
+  type NativeCreationTimingTrack,
+} from "@/lib/animation/batchPlanning";
 
 const bedrockParticleEffectSchema = z.object({
   effect: z
@@ -497,6 +501,59 @@ export function registerCreateAnimationTool(): void {
             }
           });
   
+          // Verify real native codec keyframe inventory and its own Bedrock
+          // serialization timecodes while the creation Undo is still open.
+          // A timestamp shifted by editor snapping must never be accepted
+          // as exact authored timing or silently overwrite another key.
+          type NativeCreatedKey = {
+            time: number;
+            getTimecodeString?: () => string;
+          };
+          const exportedTimeOf = (keyframe: NativeCreatedKey): number => {
+            if (!keyframe || typeof keyframe.getTimecodeString !== "function") {
+              throw new Error("ANIMATION_NATIVE_TIMING_TIMECODE_UNAVAILABLE");
+            }
+            const timecode = keyframe.getTimecodeString();
+            if (!/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(timecode)) {
+              throw new Error("ANIMATION_NATIVE_TIMING_TIMECODE_INVALID");
+            }
+            return Number(timecode);
+          };
+          const nativeTimingTracks: NativeCreationTimingTrack[] = [];
+          for (const { group, compaction } of compactedBoneEntries) {
+            const nativeAnimator = createdAnimation.animators[group.uuid] as BoneAnimator;
+            const nativeChannels = nativeAnimator as unknown as
+              Partial<Record<"position" | "rotation" | "scale", NativeCreatedKey[]>>;
+            for (const channel of ["position", "rotation", "scale"] as const) {
+              const nativeKeys = nativeChannels[channel] ?? [];
+              nativeTimingTracks.push({
+                bone_id: group.uuid,
+                channel,
+                source_times: compaction.frames
+                  .filter((frame) => frame[channel] !== undefined)
+                  .map((frame) => frame.time),
+                imported_times: nativeKeys.map((frame) => frame.time),
+                exported_times: nativeKeys.map(exportedTimeOf),
+              });
+            }
+          }
+          const nativeEffects = createdAnimation.animators.effects as unknown as
+            Partial<Record<"sound" | "particle", NativeCreatedKey[]>> | undefined;
+          for (const channel of ["sound", "particle"] as const) {
+            const effectTimes = Object.keys(
+              channel === "sound" ? sound_effects ?? {} : particle_effects ?? {}
+            ).map(Number);
+            const nativeKeys = nativeEffects?.[channel] ?? [];
+            nativeTimingTracks.push({
+              bone_id: "effects",
+              channel,
+              source_times: effectTimes,
+              imported_times: nativeKeys.map((frame) => frame.time),
+              exported_times: nativeKeys.map(exportedTimeOf),
+            });
+          }
+          const nativeTiming = requireNativeCreationTimingIntegrity(nativeTimingTracks);
+
           createdAnimation.select();
           if (AnimationItem.selected !== createdAnimation) {
             throw new Error(
@@ -536,6 +593,7 @@ export function registerCreateAnimationTool(): void {
             },
             requested_name: requestedAnimationName,
             source_timing: sourceTiming,
+            native_timing: nativeTiming,
             requested_bone_count: Object.keys(bones).length,
             linear_key_compaction: {
               removed_channel_key_count: removedChannelKeys,

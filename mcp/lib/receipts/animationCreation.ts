@@ -14,6 +14,18 @@ export const animationCreationReceiptSchema = z.object({
   requested_bone_count: z.number().int().nonnegative(),
   requested_particle_effect_count: z.number().int().nonnegative(),
   requested_sound_effect_count: z.number().int().nonnegative(),
+  // Optional for compatibility with already-installed pre-hardening plugins.
+  // Only successful native import + exact native timecode readback produces it.
+  native_timing: z.object({
+    state: z.literal("CODEC_TIMES_MATCHED"),
+    checked_track_count: z.number().int().nonnegative(),
+    checked_keyframe_count: z.number().int().nonnegative(),
+    tolerance_seconds: z.literal(0.0001),
+    native_timing_readback_required: z.literal(true),
+    native_export_timecodes_required: z.literal(true),
+    native_playback_attested: z.literal(false),
+    visual_verdict: z.literal("not_evaluated"),
+  }).strict().optional(),
   // Backwards compatible: older native creation receipts omit this field.
   // Source timing is never evidence of played frames, physics, or visual PASS.
   source_timing: z.object({

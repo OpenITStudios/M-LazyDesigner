@@ -66,6 +66,33 @@ describe("create_animation native creation evidence", () => {
     expect(isAnimationCreationReceipt(native)).toBe(true);
   });
 
+  test("validates native codec timecode evidence without claiming playback", () => {
+    const nativeTiming = {
+      state: "CODEC_TIMES_MATCHED",
+      checked_track_count: 5,
+      checked_keyframe_count: 8,
+      tolerance_seconds: 0.0001,
+      native_timing_readback_required: true,
+      native_export_timecodes_required: true,
+      native_playback_attested: false,
+      visual_verdict: "not_evaluated",
+    };
+    expect(isAnimationCreationReceipt({ ...native, native_timing: nativeTiming })).toBe(true);
+    expect(isAnimationCreationReceipt(native)).toBe(true);
+    for (const changed of [
+      { native_playback_attested: true },
+      { native_timing_readback_required: false },
+      { state: "VISUAL_PASS" },
+      { visual_verdict: "PASS" },
+      { tolerance_seconds: 1 },
+      { checked_keyframe_count: -1 },
+    ]) {
+      expect(isAnimationCreationReceipt({
+        ...native, native_timing: { ...nativeTiming, ...changed },
+      })).toBe(false);
+    }
+  });
+
   test("producer gets an AnimationCodec instance before building final state", async () => {
     const source = await Bun.file("server/tools/animation/create.ts").text();
     expect(source).toContain("createdAnimation.uuid");

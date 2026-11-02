@@ -104,6 +104,45 @@ Full direct semantic input as a native `create_animation` branch remains a
 separate generator-coupled implementation unit; never hand-edit
 `mcp/docs/api.json` or `mcp/docs/index.html` to simulate schema generation.
 
+## Native codec timing parity (registered create path)
+
+The already-registered `create_animation` Runtime now checks all requested
+position/rotation/scale keys and initial sound/particle timestamp tracks
+*after* the Blockbench Bedrock AnimationCodec creates the Animation and
+*before* completing its Undo transaction:
+
+```text
+authored transform/effect timecodes
+→ existing exact-linear compaction
+→ native Bedrock AnimationCodec import
+→ actual native key inventory
+→ native Keyframe.getTimecodeString() for export
+→ track-scoped import/export time parity
+→ finish existing Undo, or rollback on mismatch
+```
+
+`mcp/lib/animation/batchPlanning.ts` owns the pure fail-closed parity
+comparison. It rejects lost/extra source keys, nonfinite native evidence,
+unexpected import drift, export-grid rounding over the native 0.0001-second
+identity tolerance, and same-track serialized key collisions. Distinct
+bones/channels may still share identical times. Reuse the real native
+`getTimecodeString()` output rather than predicting FPS from a source
+placeholder or silently snapping the user's requested times.
+
+A successful native call returns optional `native_timing` receipt with
+`CODEC_TIMES_MATCHED`. This is evidence of matching imported/source and
+export timecodes only, **not** live pose evaluation, physical contact, correct
+interpolation or playback, saved/reopened persistence, or user acceptance.
+Historical installed creation receipts lacking the new field remain valid.
+
+This guard strengthens the existing native creation path for compiled
+Semantic Motion plans with no new public tool, new input schema, generated
+API files, or parallel executor. It does **not** make semantic input
+automatically accepted by Runtime: the existing source-only planner still
+must supply a schema-valid `create_animation` invocation through the
+already-authorized Gateway. Direct semantic schema expansion remains a
+separate generator-coupled task.
+
 ## Hardening rules
 
 - do not guess mirrored Euler rotation signs;

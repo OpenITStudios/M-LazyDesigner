@@ -179,3 +179,32 @@ describe("create_animation source timeline coverage receipt", () => {
     expect(source).toContain("source_timing: sourceTiming");
   });
 });
+
+
+describe("native create_animation codec timing gate", () => {
+  test("compares actual imported tracks and native timecodes before completing Undo", async () => {
+    const source = await Bun.file("server/tools/animation/create.ts").text();
+    const load = source.indexOf("const codecCreatedAnimations = codec.loadFile(");
+    const timing = source.indexOf("const nativeTiming = requireNativeCreationTimingIntegrity(");
+    const select = source.indexOf("createdAnimation.select()");
+    const finish = source.indexOf('Undo.finishEdit("Create animation"');
+    expect(load).toBeGreaterThan(0);
+    expect(timing).toBeGreaterThan(load);
+    expect(select).toBeGreaterThan(timing);
+    expect(finish).toBeGreaterThan(select);
+    expect(source).toContain("getTimecodeString()");
+    expect(source).toContain("native_timing: nativeTiming");
+    expect(source).toContain("Undo.cancelEdit(true)");
+    expect(source).toContain("animation.remove(false, false)");
+  });
+
+  test("native creation retains the same public schema and exactly one codec mutation", async () => {
+    const source = await Bun.file("server/tools/animation/create.ts").text();
+    expect(createAnimationParameters.shape).toHaveProperty("bones");
+    expect(createAnimationParameters.shape).not.toHaveProperty("semantic_motion");
+    expect(source.match(/codec\.loadFile\(/g)?.length).toBe(1);
+    expect(source).not.toContain("risky_eval");
+    expect(source).not.toContain("Animator.preview()");
+    expect(source).not.toContain("sampleIK()");
+  });
+});

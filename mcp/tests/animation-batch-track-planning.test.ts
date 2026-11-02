@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   requireValidPlannedBatchTrackTimes,
+  requireNativeCreationTimingIntegrity,
   planBatchScaleOverwriteTargets,
   selectBatchKeyframes,
 } from "../lib/animation/batchPlanning";
@@ -132,5 +133,79 @@ describe("track-aware keyframe batch scale preflight", () => {
     expect(block).toContain("animations: [animation]");
     expect(block).not.toContain("Undo.addKeyframeCasualties(replacedKeyframes)");
     expect(block).toContain("Undo.cancelEdit(true);");
+  });
+});
+
+
+describe("native Bedrock AnimationCodec timing integrity", () => {
+  const track = (
+    source_times: number[],
+    imported_times: number[],
+    exported_times: number[],
+    channel: "rotation" | "position" | "scale" | "sound" | "particle" = "rotation"
+  ) => ({
+    bone_id: channel === "sound" ? "effects" : "body",
+    channel, source_times, imported_times, exported_times,
+  });
+
+  test("accepts independent channel tracks and bounded formatted frame fractions", () => {
+    const result = requireNativeCreationTimingIntegrity([
+      track([0, 1 / 30, 1], [0, 1 / 30, 1], [0, 0.0333, 1]),
+      track([0, 1], [0, 1], [0, 1], "position"),
+      track([0.5], [0.5], [0.5], "sound"),
+    ]);
+    expect(result).toMatchObject({
+      state: "CODEC_TIMES_MATCHED",
+      checked_track_count: 3,
+      checked_keyframe_count: 6,
+      native_timing_readback_required: true,
+      native_export_timecodes_required: true,
+      native_playback_attested: false,
+      visual_verdict: "not_evaluated",
+    });
+  });
+
+  test("rejects the importer dropping a requested native key", () => {
+    expect(() => requireNativeCreationTimingIntegrity([
+      track([0, 0.5, 1], [0, 1], [0, 1]),
+    ])).toThrow("ANIMATION_NATIVE_TIMING_KEY_LOSS");
+  });
+
+  test("rejects an imported time that differs from original authored time", () => {
+    expect(() => requireNativeCreationTimingIntegrity([
+      track([0, 0.5], [0, 0.45], [0, 0.45]),
+    ])).toThrow("ANIMATION_NATIVE_TIMING_IMPORT_DRIFT");
+  });
+
+  test("rejects silent time-grid rounding before native Bedrock export", () => {
+    expect(() => requireNativeCreationTimingIntegrity([
+      track([0, 0.37, 1], [0, 0.37, 1], [0, 0.35, 1]),
+    ])).toThrow("ANIMATION_NATIVE_TIMING_EXPORT_SNAP");
+  });
+
+  test("prioritizes same-track export collision over ordinary rounding drift", () => {
+    expect(() => requireNativeCreationTimingIntegrity([
+      track([0, 0.05], [0, 0.05], [0, 0]),
+    ])).toThrow("ANIMATION_NATIVE_TIMING_EXPORT_COLLISION");
+  });
+
+  test("checks an effect track independently and rejects invalid evidence", () => {
+    expect(() => requireNativeCreationTimingIntegrity([
+      track([0.15], [0.15], [0.1], "sound"),
+    ])).toThrow("ANIMATION_NATIVE_TIMING_EXPORT_SNAP");
+    expect(() => requireNativeCreationTimingIntegrity([
+      track([0], [Number.NaN], [0], "particle"),
+    ])).toThrow("ANIMATION_NATIVE_TIMING_NONFINITE");
+    expect(() => requireNativeCreationTimingIntegrity([
+      track([0.25], [0.25], [-1], "scale"),
+    ])).toThrow("ANIMATION_NATIVE_TIMING_NONFINITE");
+  });
+
+  test("allows empty independent transform channels but no fabricated native proof", () => {
+    const result = requireNativeCreationTimingIntegrity([
+      track([], [], [], "position"),
+    ]);
+    expect(result.checked_keyframe_count).toBe(0);
+    expect(result.native_playback_attested).toBe(false);
   });
 });
