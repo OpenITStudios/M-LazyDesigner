@@ -3,6 +3,8 @@ import {
   analyzeAnimationContactEvidence,
   analyzeObservedAnimationLocatorTrajectories,
   analyzeObservedAnimationJointOriginFrames,
+  reviewExplicitPlantedContactIkFromPreview,
+  type ExplicitPlantedPreviewIkInput,
   type ObservedAnimationLocatorFrame,
   type ObservedAnimationJointOriginFrame,
   type ContactConstraintInput,
@@ -907,4 +909,156 @@ test("joint preview copies source coordinates and never invents IK-keyframe auth
   expect(review.frames[0].groups[0].world_position[0]).toBe(0);
   expect(review.native_ik_bake_authorized).toBe(false);
   expect(review.visual_verdict).toBe("not_evaluated");
+});
+
+
+function explicitPreviewContactFixture(): ExplicitPlantedPreviewIkInput {
+  const contact = explicitContactIk();
+  const chain = contact.ik_chain!;
+  const locatorFrames: ObservedAnimationLocatorFrame[] = contact.samples.map((sample) => ({
+    project_uuid: chain.project_uuid,
+    animation_uuid: chain.animation_uuid,
+    time_seconds: sample.time,
+    markers: [{
+      locator_uuid: chain.locator_uuid,
+      parent_group_uuid: "ankle",
+      world_position: sample.marker,
+    }],
+  }));
+  const jointFrames: ObservedAnimationJointOriginFrame[] = chain.frames.map((frame) => ({
+    project_uuid: chain.project_uuid,
+    animation_uuid: chain.animation_uuid,
+    time_seconds: frame.time,
+    groups: chain.joint_group_uuids.map((uuid, index) => ({
+      group_uuid: uuid,
+      parent_group_uuid: index === 0 ? null : chain.joint_group_uuids[index-1],
+      world_position: frame.joint_world_positions[index],
+    })),
+  }));
+  return {
+    binding: {
+      id: contact.id,
+      role: "FOOT_PLANT",
+      intent_authority: "DECLARED_USER_INTENT",
+      evidence_ref: "declared:foot-stance",
+      project_uuid: chain.project_uuid,
+      animation_uuid: chain.animation_uuid,
+      group_uuid: "ankle",
+      locator_uuid: chain.locator_uuid,
+    },
+    locator_review: analyzeObservedAnimationLocatorTrajectories(locatorFrames),
+    joint_review: analyzeObservedAnimationJointOriginFrames(jointFrames),
+    joint_group_uuids: [...chain.joint_group_uuids],
+    stance_window: contact.sampling_window!,
+    support_plane: contact.support_plane!,
+    tolerance: contact.tolerance,
+    fixed_contact_world: [0, 0, 0],
+  };
+}
+
+test("explicit preview observations feed the existing planted-contact FABRIK analyzer without native claims", () => {
+  const input = explicitPreviewContactFixture(), before = JSON.stringify(input);
+  const result = reviewExplicitPlantedContactIkFromPreview(input);
+  expect(result.state).toBe("SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW");
+  if (result.state !== "SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW") {
+    throw new Error("Expected source-only stitched contact review");
+  }
+  expect(result.sampled_times).toEqual([0, 0.5, 1]);
+  expect(result.stance_sample_count).toBe(3);
+  expect(result.contact_evidence.planted_drift_violation).toBe(true);
+  expect(result.contact_evidence.slip_correction_hypothesis.state).toBe("candidate");
+  expect(result.contact_evidence.ik_reachability_candidate?.state)
+    .toBe("SOURCE_ONLY_REACHABLE");
+  expect(result.native_preview_restoration_attested).toBe(false);
+  expect(result.native_pose_time_synchronization_attested).toBe(false);
+  expect(result.native_ik_bake_authorized).toBe(false);
+  expect(result.physical_contact_verified).toBe(false);
+  expect(result.visual_verdict).toBe("not_evaluated");
+  expect(JSON.stringify(input)).toBe(before);
+});
+
+test("explicit preview contact refuses invented foot roles and cross-project snapshots", () => {
+  const fixture = explicitPreviewContactFixture();
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, binding: { ...fixture.binding, role: "HAND_GRIP" },
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_EXPLICIT_FOOT_BINDING_REQUIRED",
+  });
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, binding: { ...fixture.binding, animation_uuid: "other" },
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_PROJECT_OR_SAMPLE_COHORT_MISMATCH",
+  });
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, binding: { ...fixture.binding, locator_uuid: "unknown" },
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_LOCATOR_PARENT_OR_SAMPLES_MISSING",
+  });
+});
+
+test("explicit stance uses exact captured times and rejects gaps, shifted anchors and reversed chains", () => {
+  const fixture = explicitPreviewContactFixture();
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, stance_window: { start: 0.1, end: 1, max_gap_seconds: 0.5 },
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_STANCE_WINDOW_NOT_COVERED",
+  });
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, stance_window: { start: 0, end: 1, max_gap_seconds: 0.25 },
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_STANCE_WINDOW_NOT_COVERED",
+  });
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, fixed_contact_world: [1, 0, 0],
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_FIXED_ANCHOR_DISAGREES",
+  });
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, joint_group_uuids: ["ankle", "knee", "hip"],
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_JOINT_CHAIN_IDENTITY_INVALID",
+  });
+});
+
+test("explicit stance can use a bounded subset without inventing intermediate preview frames", () => {
+  const fixture = explicitPreviewContactFixture();
+  const result = reviewExplicitPlantedContactIkFromPreview({
+    ...fixture,
+    stance_window: { start: 0.5, end: 1, max_gap_seconds: 0.5 },
+    fixed_contact_world: [0.1, 0, 0],
+  });
+  expect(result.state).toBe("SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW");
+  if (result.state !== "SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW") {
+    throw new Error("Expected two-frame stance subset");
+  }
+  expect(result.sampled_times).toEqual([0.5, 1]);
+  expect(result.contact_evidence.ik_reachability_candidate?.state)
+    .toBe("SOURCE_ONLY_REACHABLE");
+});
+
+test("explicit preview review keeps incomplete and mismatched source cohorts unverified", () => {
+  const fixture = explicitPreviewContactFixture();
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture,
+    joint_review: analyzeObservedAnimationJointOriginFrames([]),
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_NATIVE_OBSERVATIONS_INCOMPLETE",
+  });
+  const joint = fixture.joint_review;
+  if (joint.state !== "SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS") {
+    throw new Error("Expected source joint review fixture");
+  }
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture,
+    joint_review: { ...joint, frames: joint.frames.slice(1) },
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_PROJECT_OR_SAMPLE_COHORT_MISMATCH",
+  });
+  const wrong = [...joint.frames];
+  wrong[1] = { ...wrong[1], time_seconds: 0.6 };
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, joint_review: { ...joint, frames: wrong },
+  })).toMatchObject({
+    state: "UNVERIFIED", reason: "CONTACT_PREVIEW_JOINT_LOCATOR_CLOCK_MISMATCH",
+  });
 });

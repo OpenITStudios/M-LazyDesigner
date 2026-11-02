@@ -288,6 +288,38 @@ The new evidence explicitly sets these proof flags to false. The existing
 four public Gateway tools, request schema, Undo and generated API artifacts
 remain unchanged.
 
+### Explicit FOOT_PLANT linkage from preview evidence (2026-11-03)
+
+The canonical `lib/animation/contactEvidence.ts` now composes the existing
+`locator_trajectory_review` and `joint_origin_review` into a **source-only**
+stance/IK candidate through `reviewExplicitPlantedContactIkFromPreview`.
+The caller must supply an explicitly declared `FOOT_PLANT` binding with exact
+project, animation, Group and Locator UUIDs, an ordered parent-child joint
+chain, a support plane, fixed world contact anchor, positive tolerance and
+an explicit stance window. No joint or foot role is inferred from a name.
+
+The planner requires both review cohorts to identify the same clip/project,
+the same frame times and complete Locator/Group coverage. The chosen joint
+chain must match the observed hierarchy and end at the bound Locator's parent
+Group. It accepts only actual captured times within the declared stance:
+endpoints and maximum gaps must be represented, without interpolation or
+invented samples. The fixed anchor must agree with the first captured marker
+projected onto the declared support plane; a different target is refused
+rather than silently moved.
+
+Valid input reuses `analyzeAnimationContactEvidence` and the existing
+FABRIK contact feasibility path. Output retains the numeric contact findings
+and optional proposed world-space joint positions. Invalid roles, stale
+project/clip identity, incomplete timing, misplaced markers, mismatched
+parents and unsupported anchors return `UNVERIFIED`, not an authored clip.
+
+**Proof boundary:** the preview summaries do not certify native pose/time
+synchronization, complete editor restoration, physical contact, user approval,
+correct Euler rotations or safe keyframe baking. The returned review states
+`native_ik_bake_authorized=false` and `visual_verdict=not_evaluated`.
+No additional public Gateway tool or Runtime input, native timeline
+mutation, generated API edits or release is introduced.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

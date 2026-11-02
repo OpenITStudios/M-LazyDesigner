@@ -1,4 +1,5 @@
 import { solveFabrikChain } from "@/lib/rig/fabrik";
+import type { ExplicitContactMarkerBinding } from "./contactMarkerBinding";
 
 export type Vec3 = readonly [number, number, number];
 
@@ -790,5 +791,208 @@ export function analyzeObservedAnimationJointOriginFrames(
     native_ik_bake_authorized: false as const,
     contact_roles_inferred: false as const,
     visual_verdict: "not_evaluated" as const,
+  };
+}
+
+/**
+ * Connect existing role-free Locator and Group preview diagnostics to one
+ * explicitly declared FOOT_PLANT stance and its existing FABRIK preflight.
+ *
+ * Neither review independently attests actual native pose evaluation or full
+ * Blockbench restoration. This is only a source-only diagnostic/IK proposal;
+ * it never calls native Runtime, starts Undo, or writes rotation keyframes.
+ */
+export type ExplicitPlantedPreviewIkInput = {
+  binding: ExplicitContactMarkerBinding;
+  locator_review: ReturnType<typeof analyzeObservedAnimationLocatorTrajectories>;
+  joint_review: ReturnType<typeof analyzeObservedAnimationJointOriginFrames>;
+  joint_group_uuids: readonly string[];
+  stance_window: ContactSamplingWindow;
+  support_plane: ContactSupportPlane;
+  tolerance: number;
+  fixed_contact_world: Vec3;
+};
+
+export function reviewExplicitPlantedContactIkFromPreview(
+  input: ExplicitPlantedPreviewIkInput
+) {
+  const unavailable = (reason: string) => ({
+    state: "UNVERIFIED" as const,
+    reason,
+    stance_sample_count: 0,
+    native_preview_restoration_attested: false as const,
+    native_pose_time_synchronization_attested: false as const,
+    native_ik_bake_authorized: false as const,
+    physical_contact_verified: false as const,
+    visual_verdict: "not_evaluated" as const,
+  });
+  if (!input || typeof input !== "object") return unavailable("CONTACT_PREVIEW_INPUT_INVALID");
+  const validId = (id: unknown): id is string =>
+    typeof id === "string" && id.trim() === id &&
+    id.length > 0 && id.length <= 160;
+  const binding = input.binding;
+  if (!binding || !validId(binding.id) || !validId(binding.evidence_ref) ||
+      !validId(binding.project_uuid) || !validId(binding.animation_uuid) ||
+      !validId(binding.group_uuid) || !validId(binding.locator_uuid) ||
+      binding.role !== "FOOT_PLANT" ||
+      !["DECLARED_USER_INTENT", "DECLARED_REFERENCE_INTENT"]
+        .includes(binding.intent_authority)) {
+    return unavailable("CONTACT_PREVIEW_EXPLICIT_FOOT_BINDING_REQUIRED");
+  }
+
+  const locator = input.locator_review, joint = input.joint_review;
+  if (!locator || locator.state !== "available" ||
+      !joint || joint.state !== "SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS") {
+    return unavailable("CONTACT_PREVIEW_NATIVE_OBSERVATIONS_INCOMPLETE");
+  }
+  if (locator.native_preview_restoration_attested !== false ||
+      joint.native_preview_restoration_attested !== false ||
+      joint.pose_time_synchronization_attested !== false ||
+      joint.native_ik_bake_authorized !== false ||
+      locator.project_uuid !== joint.project_uuid ||
+      locator.animation_uuid !== joint.animation_uuid ||
+      locator.project_uuid !== binding.project_uuid ||
+      locator.animation_uuid !== binding.animation_uuid ||
+      locator.frame_count !== joint.observed_frame_count ||
+      locator.frame_count < 2 ||
+      locator.frame_count > ANIMATION_LOCATOR_TRAJECTORY_MAX_FRAMES ||
+      locator.trajectories.length !== locator.evaluated_locator_count ||
+      joint.frames.length !== joint.observed_frame_count) {
+    return unavailable("CONTACT_PREVIEW_PROJECT_OR_SAMPLE_COHORT_MISMATCH");
+  }
+  const matches = locator.trajectories.filter(
+    (candidate) => candidate.locator_uuid === binding.locator_uuid
+  );
+  if (matches.length !== 1 || matches[0].parent_group_uuid !== binding.group_uuid ||
+      matches[0].samples.length !== joint.frames.length) {
+    return unavailable("CONTACT_PREVIEW_LOCATOR_PARENT_OR_SAMPLES_MISSING");
+  }
+  const ids = input.joint_group_uuids;
+  if (!Array.isArray(ids) || ids.length < 2 ||
+      ids.length > CONTACT_IK_MAX_JOINTS ||
+      ids.some((id) => !validId(id)) ||
+      new Set(ids).size !== ids.length ||
+      ids[ids.length - 1] !== binding.group_uuid) {
+    return unavailable("CONTACT_PREVIEW_JOINT_CHAIN_IDENTITY_INVALID");
+  }
+  const window = input.stance_window;
+  const plane = input.support_plane;
+  if (!window || !validWindow(window) ||
+      !Number.isFinite(window.max_gap_seconds) ||
+      window.max_gap_seconds <= TIME_EPSILON ||
+      !plane || !validPlane(plane) ||
+      !Number.isFinite(input.tolerance) || input.tolerance <= 0 ||
+      !validVec3(input.fixed_contact_world)) {
+    return unavailable("CONTACT_PREVIEW_STANCE_OR_PLANE_INVALID");
+  }
+
+  const sampled: Array<{
+    time: number;
+    marker: Vec3;
+    joints: Vec3[];
+  }> = [];
+  const trajectory = matches[0];
+  for (let i = 0; i < joint.frames.length; i++) {
+    const marker = trajectory.samples[i];
+    const frame = joint.frames[i];
+    if (frame.time_seconds !== marker.time_seconds ||
+        !Number.isFinite(frame.time_seconds) ||
+        !validVec3(marker.world_position) ||
+        !Array.isArray(frame.groups)) {
+      return unavailable("CONTACT_PREVIEW_JOINT_LOCATOR_CLOCK_MISMATCH");
+    }
+    const groups = new Map(frame.groups.map(
+      (group) => [group.group_uuid, group] as const
+    ));
+    const joints: Vec3[] = [];
+    for (let j = 0; j < ids.length; j++) {
+      const current = groups.get(ids[j]);
+      if (!current || (j > 0 && current.parent_group_uuid !== ids[j-1]) ||
+          !validVec3(current.world_position)) {
+        return unavailable("CONTACT_PREVIEW_JOINT_ANCESTRY_UNVERIFIED");
+      }
+      joints.push([...current.world_position] as [number,number,number]);
+    }
+    if (frame.time_seconds >= window.start && frame.time_seconds <= window.end) {
+      sampled.push({
+        time: frame.time_seconds,
+        marker: [...marker.world_position] as [number,number,number],
+        joints,
+      });
+    }
+  }
+  if (sampled.length < 2 || sampled.length > CONTACT_IK_MAX_SAMPLES ||
+      Math.abs(sampled[0].time - window.start) > TIME_EPSILON ||
+      Math.abs(sampled[sampled.length-1].time - window.end) > TIME_EPSILON ||
+      sampled.some((item,i) => i > 0 &&
+        (item.time - sampled[i-1].time <= TIME_EPSILON ||
+         item.time - sampled[i-1].time > window.max_gap_seconds + TIME_EPSILON)
+      )) {
+    return unavailable("CONTACT_PREVIEW_STANCE_WINDOW_NOT_COVERED");
+  }
+
+  // The current FABRIK contact owner anchors at the first marker projected
+  // onto the declared plane. Reject other target definitions rather than
+  // silently substituting a different user-declared fixed contact.
+  const axis = plane.axis === "X" ? 0 : plane.axis === "Y" ? 1 : 2;
+  const firstAnchor = [...sampled[0].marker] as [number,number,number];
+  firstAnchor[axis] = plane.coordinate;
+  if (Math.hypot(...firstAnchor.map((value,i) =>
+        value - input.fixed_contact_world[i]
+      )) > TIME_EPSILON) {
+    return unavailable("CONTACT_PREVIEW_FIXED_ANCHOR_DISAGREES");
+  }
+
+  const contact: ContactConstraintInput = {
+    id: binding.id,
+    mode: "planted",
+    tolerance: input.tolerance,
+    sampling_window: { ...window },
+    support_plane: { ...plane },
+    samples: sampled.map((item) => ({
+      time: item.time,
+      marker: item.marker,
+      target: [...input.fixed_contact_world] as [number,number,number],
+    })),
+    ik_chain: {
+      project_uuid: binding.project_uuid,
+      animation_uuid: binding.animation_uuid,
+      locator_uuid: binding.locator_uuid,
+      joint_group_uuids: [...ids],
+      frames: sampled.map((item) => ({
+        time: item.time,
+        joint_world_positions: item.joints,
+      })),
+    },
+  };
+  const contactReview = analyzeAnimationContactEvidence({ constraints: [contact] });
+  if (contactReview.state !== "available" ||
+      contactReview.invalid_constraint_count !== 0 ||
+      contactReview.constraints.length !== 1) {
+    return unavailable("CONTACT_PREVIEW_NUMERIC_CONTACT_REVIEW_INVALID");
+  }
+  return {
+    state: "SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW" as const,
+    reason: null,
+    project_uuid: binding.project_uuid,
+    animation_uuid: binding.animation_uuid,
+    locator_uuid: binding.locator_uuid,
+    explicit_role: binding.role,
+    declared_intent_authority: binding.intent_authority,
+    declared_evidence_ref: binding.evidence_ref,
+    joint_group_uuids: [...ids],
+    sampled_times: sampled.map((item) => item.time),
+    stance_sample_count: sampled.length,
+    stance_window: { ...window },
+    contact_evidence: contactReview.constraints[0],
+    native_preview_restoration_attested: false as const,
+    native_pose_time_synchronization_attested: false as const,
+    native_ik_bake_authorized: false as const,
+    physical_contact_verified: false as const,
+    visual_verdict: "not_evaluated" as const,
+    note: "Explicit FOOT_PLANT intent links two caller-supplied, source-only " +
+      "preview diagnostics and the existing numeric contact/FABRIK preflight. " +
+      "No native restoration, contact physics, visual acceptance or keyframe " +
+      "mutation is demonstrated.",
   };
 }
