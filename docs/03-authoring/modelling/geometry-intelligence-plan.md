@@ -937,6 +937,61 @@ limits, nonpositive source extents, 64-Cube budget, native Recipe
 Undo/save/reopen and art-reference review. No Bun, typecheck, tests,
 build, CI, Blockbench or visual/native QA was run.
 
+### R3w — Model-unit/physical/player calibration and traced measurements (2026-11-02; CODE ONLY)
+
+Canonical modelling `standard.md` states 16 native units per
+Minecraft block. That does NOT establish a physical real-world
+metres-per-block factor or the height of a particular player model.
+Previously, v9 DIMENSION_LINK and v10 BOUNDS allowed excellent
+source-local ratios but had no source contract for units,
+calibration or measurement provenance.
+
+V11 adds strict `scale_context` and optional `measured_dimensions`
+and `scale_targets` to the EXISTING versioned high-level
+`kind:"program"` schema. Physical calibration requires an explicit
+`meters_per_block` and PLAYER_HEIGHTS requires an explicit
+`player_height_blocks` declaration; no default real-world scale,
+silent 1m/block, 1.8-block player or automatic scaling is introduced.
+
+`MEASURED_DIMENSION` owns at most one axis of an existing BOX.
+It converts a caller-declared value in MODEL_UNITS/BLOCKS/
+METERS/CENTIMETERS/PLAYER_HEIGHTS to an exact integer native
+BOX dimension from 1 to 32 model units. It shares the existing
+semantic resolver with DIMENSION_LINK/INSTANCE, with an explicit
+schema conflict when two derivation methods claim the same BOX
+axis. Source cannot be rounded or clamped to invent a feasible
+shape. Existing ANCHOR/FACE_ANCHOR/CONNECT/CLEARANCE follow the
+derived geometry through ONE canonical Authoring Recipe pipeline.
+
+`SCALE_TARGET` is an acceptance-only declared extent range, checked
+on actual final semantic-part envelopes after normal construction and
+before the native Cuboid factory. It never treats gaps of a signed
+LINEAR repeated assembly as occupied material or uses centre
+distance as a dimensional substitute.
+
+All calibration and measurement entries carry explicit provenance:
+`DECLARED_SPEC` is only a caller declaration; `REFERENCE_CLAIM`
+must bind an exact source_ref in the enclosing Geometry feature's
+`evidence_refs`, without fabricating image/file content or verified
+measurement. Unbound sources abort before math construction.
+Nothing may independently promote a source handle to external
+reference certification, art review, player-scale PASS, native
+UV/rig correctness or Bedrock export acceptance.
+
+V1–v10 Recipe source and mathematical algorithms remain untouched.
+No second parser, full CAD scale solver, automatic world rescaling,
+tool/registry, persistent DB, extra plugin or non-generator API edit.
+The original native Cube Group/Undo, incremental source matching and
+64-native-instance budget remain authoritative.
+
+Future **unexecuted** acceptance: v1–v10 source equivalence;
+16 units/block; physical calibration required; centimetre/metre
+conversion; declared player height; absent/unbound/duplicate provenance;
+noninteger measured BOX spans, two axis owners; scale target checks
+after DIMENSION_LINK/ORIENT/repeat/CONNECT; persistence, native
+Undo/export/visual size versus approved reference. NO Bun, build,
+typecheck, tests, CI or live Blockbench was run in this code-first task.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

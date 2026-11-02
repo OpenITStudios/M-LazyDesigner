@@ -7,11 +7,11 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 **USER DECISION:** Mature AI-first Geometry source; no tests,
 build/Bun, CI, native QA, release, separate plugin or mandatory UI.
 
-**R3a–R3v:** Legacy 13 shapes and math v1–v9 preserved.
-Opt-in v10 SPAN_BOUNDS/RATIO_BOUNDS guard user-declared
-dimensions and proportions after dimension/INSTANCE/CONNECT
-construction; no automatic rescaling or beauty score. Original
-Recipe/Undo and <=64 expanded Cube budget remain.
+**R3a–R3w:** Legacy 13 shapes and math v1–v10 preserved.
+Opt-in v11 scale_context, MEASURED_DIMENSION and SCALE_TARGET
+use explicit 16 units/block, optional declared physical/player
+calibration, bounded native BOX sizes and exact source-ref claims.
+One Recipe/Undo and <=64 expanded Cube budget remain.
 
 **R3j:** Canonical Recipe v1 optionally persists original high-level
 `advanced_geometry_source` parameters per feature for AI editing

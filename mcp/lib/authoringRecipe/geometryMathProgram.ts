@@ -14,6 +14,8 @@ import {
   type GeometryMathConnectorPart,
   type GeometryMathVersion,
   type GeometryMathDimensionLink,
+  type GeometryMathMeasuredDimension,
+  type GeometryMathScaleContext,
 } from "./geometryMathLanguage";
 import { MATH_PROGRAM_MAX_CUBOIDS,
   type MathCuboid } from "./geometryMathVoxel";
@@ -27,6 +29,11 @@ import { requireGeometryMathClearances } from "./geometryMathClearance";
 import {
   requireGeometryDimensionConstraints,
 } from "./geometryMathDimensionConstraints";
+import {
+  requireGeometryScaleClaimsBound,
+  requireGeometryScaleTargets,
+  resolveGeometryMeasuredBoxSize,
+} from "./geometryMathMeasurement";
 import {
   buildMathConnector,
   type GeometryConnectorSource,
@@ -139,8 +146,10 @@ function canonicalConstraints(
  */
 function realizeStructuredParts(
   parts: readonly GeometryMathConstructiblePart[],
-  version: 4 | 5 | 6 | 7 | 8 | 9 | 10,
-  dimensionLinks: readonly GeometryMathDimensionLink[] = []
+  version: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11,
+  dimensionLinks: readonly GeometryMathDimensionLink[] = [],
+  measuredDimensions: readonly GeometryMathMeasuredDimension[] = [],
+  scaleContext?: GeometryMathScaleContext
 ): LocalPart[] {
   const definitions = new Map(parts.map(part => [part.id, part] as const));
   // Dimension relationships are an input to the existing part resolver.
@@ -166,7 +175,7 @@ function realizeStructuredParts(
     if (cached) return cached;
     if (visiting.has(partId)) {
       throw new Error(
-        (version === 9 || version === 10
+        (version === 9 || version === 10 || version === 11
           ? "GEOMETRY_MATH_DIMENSION_OR_INSTANCE_CYCLE: "
           : "GEOMETRY_MATH_INSTANCE_CYCLE: ") +
         [...visiting, partId].join(" -> ")
@@ -220,8 +229,8 @@ function realizeStructuredParts(
         }
       } else if (definition.method === "LOFT") {
         boxes = loftMathVolume(definition, version >= 6 ? 6 : 5);
-      } else if ((version === 9 || version === 10) &&
-        definition.method === "BOX") {
+      } else if ((version === 9 || version === 10 ||
+        version === 11) && definition.method === "BOX") {
         // Each linked BOX axis is derived from a source-local enclosing
         // extent, including a declared LINEAR assembly envelope.
         // No arbitrary expression, implicit scaling of native Cube
@@ -257,7 +266,12 @@ function realizeStructuredParts(
           }
           size[targetAxis] = unit;
         }
-        boxes = realizePart({ ...definition, size }, version);
+        const finalSize = version === 11
+          ? resolveGeometryMeasuredBoxSize(
+            definition.id, size, scaleContext!, measuredDimensions
+          )
+          : size;
+        boxes = realizePart({ ...definition, size: finalSize }, version);
       } else {
         boxes = realizePart(definition, version);
       }
@@ -306,7 +320,26 @@ export function buildGeometryMathProgramPieces(
   // Re-validate at the builder boundary as callers may be internal. Reusing
   // this single strict schema also validates persisted source on inspection.
   const program = geometryMathProgramSchema.parse(feature.program);
-  const parts: LocalPart[] = program.version === 10
+  if (program.version === 11) {
+    // Check measurement provenance handles before any costly Cuboid/voxel
+    // realization. A bound handle is STILL a claim, not reference proof.
+    requireGeometryScaleClaimsBound(
+      program.scale_context,
+      program.scale_targets ?? [],
+      feature.evidence_refs,
+      program.measured_dimensions ?? []
+    );
+  }
+  const parts: LocalPart[] = program.version === 11
+    ? realizeStructuredParts(
+      program.parts.filter((part):
+        part is GeometryMathConstructiblePart =>
+        part.method !== "CONNECT"),
+      11, program.dimension_links ?? [],
+      program.measured_dimensions ?? [],
+      program.scale_context
+    )
+    : program.version === 10
     ? realizeStructuredParts(
       program.parts.filter((part):
         part is GeometryMathConstructiblePart =>
@@ -411,7 +444,7 @@ export function buildGeometryMathProgramPieces(
   // constraints. The single canonical solver/Undo owner is unchanged.
   const faceAnchors = (program.version === 7 ||
     program.version === 8 || program.version === 9 ||
-    program.version === 10)
+    program.version === 10 || program.version === 11)
     ? prepareGeometryFaceAnchors(parts, program.face_anchors ?? [])
     : null;
   const standardConstraints = canonicalConstraints(
@@ -475,7 +508,7 @@ export function buildGeometryMathProgramPieces(
         // Its own anchor is unavailable by schema; no secondary solver.
         byId.set(connector.id, [...min] as RecipeVec3);
         if (program.version === 8 || program.version === 9 ||
-          program.version === 10) {
+          program.version === 10 || program.version === 11) {
           // Derived CONNECT coordinates are already in model space.
           // A zero translation makes them comparable with solved parts
           // without interpreting them as ANCHOR dependencies.
@@ -499,7 +532,7 @@ export function buildGeometryMathProgramPieces(
     parts.sort((a, b) => compareSourceIds(a.id, b.id, program.version));
     requireNativeBudget(parts);
     if (program.version === 8 || program.version === 9 ||
-      program.version === 10) {
+      program.version === 10 || program.version === 11) {
       // V8+ face contact must not permit *other* Cuboids of the same
       // two semantic parts to interpenetrate. Explicit CLEARANCE pairs
       // may also require a Euclidean distance from 0–8 model units.
@@ -512,7 +545,7 @@ export function buildGeometryMathProgramPieces(
       );
     }
   }
-  if (program.version === 10) {
+  if (program.version === 10 || program.version === 11) {
     // Bounds are those of the fully constructed program, including
     // dimension-derived BOX sizes, signed LINEAR repetition and the
     // optional post-ANCHOR CONNECT cohort. This is a read-only source
@@ -524,6 +557,19 @@ export function buildGeometryMathProgramPieces(
         max: part.max,
       })),
       program.dimension_constraints ?? []
+    );
+  }
+  if (program.version === 11) {
+    // Source-owned scale targets are acceptance-only. They cannot mutate
+    // any Cube, auto-resize the model, or assert external reference proof.
+    requireGeometryScaleTargets(
+      parts.map(part => ({
+        id: part.id,
+        min: part.min,
+        max: part.max,
+      })),
+      program.scale_context,
+      program.scale_targets ?? []
     );
   }
   const output: Pieces = { prototypes: [], patterns: [] };

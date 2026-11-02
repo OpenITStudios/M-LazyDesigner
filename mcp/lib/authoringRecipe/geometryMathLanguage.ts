@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * Versions 1–9 remain source-frozen. V10 adds opt-in dimension
- * acceptance relations; no silent mutation of older Recipe placements.
+ * Versions 1–10 remain source-frozen. V11 introduces explicit,
+ * provenance-bound scale claims without guessing physical conversions.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -310,6 +310,69 @@ export const geometryMathDimensionConstraintSchema =
     }).strict(),
   ]);
 
+/**
+ * V11: explicit source-declared measurement calibration. The underlying
+ * modelling rule is 16 native model units per Minecraft block, but no
+ * physical meters-per-block or player-height calibration is inferred.
+ * An evidence handle is a CLAIM, never proof that a reference was read.
+ */
+export const geometryMathMeasurementEvidenceSchema =
+  z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("DECLARED_SPEC") }).strict(),
+    z.object({
+      kind: z.literal("REFERENCE_CLAIM"),
+      source_ref: z.string().trim().min(1).max(160),
+    }).strict(),
+  ]);
+
+const geometryMathScaleCalibrationSchema = z.object({
+  value: z.number().finite().positive(),
+  evidence: geometryMathMeasurementEvidenceSchema,
+}).strict();
+
+export const geometryMathScaleContextSchema = z.object({
+  model_units_per_block: z.literal(16),
+  // No default: physical-world equivalence is application-specific.
+  meters_per_block: geometryMathScaleCalibrationSchema
+    .refine(item => item.value >= 0.01 && item.value <= 100,
+      "Physical calibration requires 0.01..100 declared meters/block.")
+    .optional(),
+  // Height can be authored for a player model/hitbox style; no
+  // automatic 1.8-block, avatar or real-world human-height assumption.
+  player_height_blocks: geometryMathScaleCalibrationSchema
+    .refine(item => item.value >= 0.5 && item.value <= 4,
+      "Player height requires a declared 0.5..4 blocks.")
+    .optional(),
+}).strict();
+
+const geometryMathScaleUnitSchema = z.enum([
+  "MODEL_UNITS", "BLOCKS", "METERS", "CENTIMETERS", "PLAYER_HEIGHTS",
+]);
+
+export const geometryMathScaleTargetSchema = z.object({
+  id,
+  part_id: id,
+  axis,
+  unit: geometryMathScaleUnitSchema,
+  min_value: z.number().finite().min(0).max(4096),
+  max_value: z.number().finite().min(0).max(4096),
+  evidence: geometryMathMeasurementEvidenceSchema,
+}).strict();
+
+/**
+ * A declared measured dimension may OWN one BOX axis in v11.
+ * Replaces only that authored size; the construction stays native Cuboids.
+ * No rounding, measurement inference or implicit choice of metres/block.
+ */
+export const geometryMathMeasuredDimensionSchema = z.object({
+  id,
+  target_part_id: id,
+  target_axis: axis,
+  unit: geometryMathScaleUnitSchema,
+  value: z.number().finite().positive().max(4096),
+  evidence: geometryMathMeasurementEvidenceSchema,
+}).strict();
+
 const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
@@ -343,6 +406,13 @@ const programV10Fields = {
   dimension_constraints: z.array(geometryMathDimensionConstraintSchema)
     .max(16).optional(),
 };
+const programV11Fields = {
+  ...programV10Fields,
+  scale_context: geometryMathScaleContextSchema,
+  scale_targets: z.array(geometryMathScaleTargetSchema).max(16).optional(),
+  measured_dimensions: z.array(geometryMathMeasuredDimensionSchema)
+    .max(16).optional(),
+};
 
 /**
  * The source version selects numerical semantics; it is never defaulted.
@@ -359,6 +429,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(8), ...programV8Fields }).strict(),
   z.object({ version: z.literal(9), ...programV9Fields }).strict(),
   z.object({ version: z.literal(10), ...programV10Fields }).strict(),
+  z.object({ version: z.literal(11), ...programV11Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -430,7 +501,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
     });
   }
   if (program.version === 7 || program.version === 8 ||
-    program.version === 9) {
+    program.version === 9 || program.version === 11) {
     const connectors = new Set(program.parts.filter(part =>
       part.method === "CONNECT"
     ).map(part => part.id));
@@ -474,23 +545,30 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
     });
   }
   if (program.version === 8 || program.version === 9 ||
-    program.version === 10) {
+    program.version === 10 || program.version === 11) {
     const relations = program.clearances ?? [];
     const claimedIds = [
       ...anchors.map(link => link.id),
       ...(program.face_anchors ?? []).map(link => link.id),
       ...relations.map(link => link.id),
-      ...((program.version === 9 || program.version === 10)
+      ...((program.version === 9 || program.version === 10 ||
+        program.version === 11)
         ? (program.dimension_links ?? []).map(link => link.id)
         : []),
-      ...(program.version === 10
+      ...((program.version === 10 || program.version === 11)
         ? (program.dimension_constraints ?? []).map(link => link.id)
         : []),
+      ...(program.version === 11
+        ? [
+          ...(program.scale_targets ?? []).map(item => item.id),
+          ...(program.measured_dimensions ?? []).map(item => item.id),
+        ] : []),
     ];
     if (new Set(claimedIds).size !== claimedIds.length) {
       ctx.addIssue({
         code: "custom",
-        path: program.version === 10 ? ["dimension_constraints"] :
+        path: program.version === 11 ? ["scale_targets"] :
+          program.version === 10 ? ["dimension_constraints"] :
           program.version === 9 ? ["dimension_links"] : ["clearances"],
         message: "All geometry relation IDs must be unique.",
       });
@@ -505,7 +583,8 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
-  if (program.version === 9 || program.version === 10) {
+  if (program.version === 9 || program.version === 10 ||
+    program.version === 11) {
     const definitions = new Map(program.parts.map(part => [
       part.id, part
     ] as const));
@@ -532,7 +611,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       claims.add(slot);
     });
   }
-  if (program.version === 10) {
+  if (program.version === 10 || program.version === 11) {
     (program.dimension_constraints ?? []).forEach((relation, index) => {
       if (relation.kind === "SPAN_BOUNDS") {
         if (!known.has(relation.part_id)) {
@@ -569,6 +648,83 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
+  if (program.version === 11) {
+    const targets = program.scale_targets ?? [];
+    const owners = new Set<string>();
+    targets.forEach((target, index) => {
+      if (!known.has(target.part_id)) {
+        ctx.addIssue({
+          code: "custom", path: ["scale_targets", index, "part_id"],
+          message: "SCALE_TARGET references an unknown semantic part.",
+        });
+      }
+      const owner = target.part_id + ":" + target.axis;
+      if (owners.has(owner)) {
+        ctx.addIssue({
+          code: "custom", path: ["scale_targets", index],
+          message: "One SCALE_TARGET owner per part/axis is permitted.",
+        });
+      }
+      owners.add(owner);
+      if (target.min_value > target.max_value) {
+        ctx.addIssue({
+          code: "custom", path: ["scale_targets", index, "min_value"],
+          message: "SCALE_TARGET lower bound exceeds upper bound.",
+        });
+      }
+      if ((target.unit === "METERS" || target.unit === "CENTIMETERS") &&
+        !program.scale_context.meters_per_block) {
+        ctx.addIssue({
+          code: "custom", path: ["scale_targets", index, "unit"],
+          message: "Physical units require explicit meters_per_block calibration.",
+        });
+      }
+      if (target.unit === "PLAYER_HEIGHTS" &&
+        !program.scale_context.player_height_blocks) {
+        ctx.addIssue({
+          code: "custom", path: ["scale_targets", index, "unit"],
+          message: "Player-relative units require explicit player_height_blocks calibration.",
+        });
+      }
+    });
+    const definitions = new Map(program.parts.map(part => [
+      part.id, part
+    ] as const));
+    const claimedAxes = new Set((program.dimension_links ?? []).map(link =>
+      link.target_part_id + ":" + link.target_axis
+    ));
+    for (const [index, item] of (program.measured_dimensions ?? []).entries()) {
+      const part = definitions.get(item.target_part_id);
+      if (!part || part.method !== "BOX") {
+        ctx.addIssue({
+          code: "custom", path: ["measured_dimensions", index, "target_part_id"],
+          message: "MEASURED_DIMENSION may own an existing BOX axis only.",
+        });
+      }
+      const owner = item.target_part_id + ":" + item.target_axis;
+      if (claimedAxes.has(owner)) {
+        ctx.addIssue({
+          code: "custom", path: ["measured_dimensions", index],
+          message: "A BOX axis cannot have both a DIMENSION_LINK and MEASURED_DIMENSION.",
+        });
+      }
+      claimedAxes.add(owner);
+      if ((item.unit === "METERS" || item.unit === "CENTIMETERS") &&
+        !program.scale_context.meters_per_block) {
+        ctx.addIssue({
+          code: "custom", path: ["measured_dimensions", index, "unit"],
+          message: "Physical measured dimensions require explicit meters_per_block.",
+        });
+      }
+      if (item.unit === "PLAYER_HEIGHTS" &&
+        !program.scale_context.player_height_blocks) {
+        ctx.addIssue({
+          code: "custom", path: ["measured_dimensions", index, "unit"],
+          message: "Player-relative measured dimensions require explicit player_height_blocks.",
+        });
+      }
+    }
+  }
 });
 
 export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
@@ -588,5 +744,13 @@ export type GeometryMathDimensionLink =
   z.infer<typeof geometryMathDimensionLinkSchema>;
 export type GeometryMathDimensionConstraint =
   z.infer<typeof geometryMathDimensionConstraintSchema>;
+export type GeometryMathMeasurementEvidence =
+  z.infer<typeof geometryMathMeasurementEvidenceSchema>;
+export type GeometryMathScaleContext =
+  z.infer<typeof geometryMathScaleContextSchema>;
+export type GeometryMathScaleTarget =
+  z.infer<typeof geometryMathScaleTargetSchema>;
+export type GeometryMathMeasuredDimension =
+  z.infer<typeof geometryMathMeasuredDimensionSchema>;
 export type GeometryMathVersion = GeometryMathProgram["version"];
 export type GeometryMathAnchor = z.infer<typeof geometryMathAnchorSchema>;

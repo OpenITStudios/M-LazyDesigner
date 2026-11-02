@@ -810,6 +810,84 @@ CI, native Blockbench, save/reopen/export or visual QA was executed.
 Public `construct_geometry` remains UNREGISTERED pending canonical
 generator-coupled Runtime/API changes.
 
+### R3w — Explicit measurement authority and scale-aware construction (SOURCE ONLY)
+
+Strict opt-in `kind:"program"` `program.version=11` adds one bounded,
+source-declared measurement context while retaining EVERY v1–v10
+construction algorithm and original Authoring Recipe compiler/Undo.
+
+`scale_context.model_units_per_block` is exactly 16 (repository's
+native Minecraft modelling convention). **No universal real-world
+metres-per-block is assumed.** `meters_per_block` is optional and
+must be explicitly declared for METERS/CENTIMETERS; similarly an
+optional `player_height_blocks` must be explicitly declared before
+PLAYER_HEIGHTS. These calibrations have their own claimed provenance.
+Neither setting automatically alters the whole model or redefines
+the project Coordinate Frame, and no player height defaults to 1.8.
+
+`measured_dimensions` is an optional list of at most 16 explicitly
+sourced measurements that **owns individual BOX axes**. Values may
+be expressed in MODEL_UNITS, BLOCKS, METERS, CENTIMETERS or
+PLAYER_HEIGHTS. The pure `geometryMathMeasurement.ts` converts an
+explicit value into native units before existing BOX construction.
+Only exact (within floating arithmetic noise), positive integer
+sizes 1–32 units are allowed; fractional, overlarge and uncalibrated
+dimensions fail closed. A BOX axis may have one MEASURED_DIMENSION
+or one previous DIMENSION_LINK, never both. Other BOX axes retain
+the originally declared source size.
+
+`scale_targets` (max 16) independently checks a final part's
+X/Y/Z envelope against an explicit inclusive `min_value` and
+`max_value` in the chosen unit, after DIMENSION_LINK, INSTANCE,
+ANCHOR/FACE_ANCHOR and derived CONNECT. It is acceptance-only:
+it never moves, scales or revises Cuboids. Repeat envelopes include
+intentionally empty space between copies.
+
+Example: one explicitly declared 1 metre/block calibration turns a
+0.5-metre authored seat height into 8 native model units. This is a
+**hypothetical design scale**, not a universal Minecraft measurement.
+
+```json
+{
+  "version":11,
+  "parts":[
+    {"id":"seat","method":"BOX","at":[0,0,0],"size":[8,1,8]}
+  ],
+  "scale_context":{
+    "model_units_per_block":16,
+    "meters_per_block":{"value":1,"evidence":{"kind":"DECLARED_SPEC"}},
+    "player_height_blocks":{"value":1.8,"evidence":{"kind":"DECLARED_SPEC"}}
+  },
+  "measured_dimensions":[{
+    "id":"seat_height","target_part_id":"seat","target_axis":"Y",
+    "unit":"METERS","value":0.5,"evidence":{"kind":"DECLARED_SPEC"}
+  }],
+  "scale_targets":[{
+    "id":"seat_width_player_ratio","part_id":"seat","axis":"X",
+    "unit":"PLAYER_HEIGHTS","min_value":0.25,"max_value":0.35,
+    "evidence":{"kind":"DECLARED_SPEC"}
+  }]
+}
+```
+
+Every measurement/calibration carries an explicit `evidence`:
+`DECLARED_SPEC` means *caller-declared*, NOT certified/approved by
+the user; `REFERENCE_CLAIM` must supply `source_ref` that exactly
+matches an existing outer-feature `evidence_refs` handle. Binding
+a handle is only a provenance-identity check, not evidence that any
+image/spec sheet was fetched, read, metrically calibrated or validated.
+Unknown refs fail before voxel and native Cube construction.
+
+All measured source parameters persist in the same
+`advanced_geometry_source`. Existing 13 shapes, v1–v10 source
+semantics, Recipe-native Group/Undo and <=64 expanded Cube budget
+remain. No new Gateway tool, DB, external measurement service,
+native format, automatic model scaler or hand-edited generated API.
+Public `construct_geometry` is still UNREGISTERED.
+
+**Not executed:** Bun, typecheck, build, tests/CI, live Blockbench,
+native Undo/save/reopen/Bedrock export or visual/reference acceptance.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
