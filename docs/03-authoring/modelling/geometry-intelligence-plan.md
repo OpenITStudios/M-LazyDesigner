@@ -1084,16 +1084,16 @@ authored. Bun/build/tests/CI/Blockbench/visual proof NOT EXECUTED.
 
 ### R3z — Opt-in v13 PROFILE_SWEEP morphology (2026-11-02; CODE ONLY)
 
-**Source owner:** \`geometryMathLanguage.ts\` is the strict versioned
-Geometry program; \`geometryMathProfileSweep.ts\` is a single import-safe
-pure kernel; \`geometryMathProgram.ts\` only composes this method into the
+**Source owner:** `geometryMathLanguage.ts` is the strict versioned
+Geometry program; `geometryMathProfileSweep.ts` is a single import-safe
+pure kernel; `geometryMathProgram.ts` only composes this method into the
 existing Recipe Cuboid factory. No presets, parallel planner, stored style
 database, randomizer, plugin UI, or independent Undo/quality engine.
 
-**Typed input:** \`program.version=13\` accepts a \`PROFILE_SWEEP\` semantic
-part with 2–8 authored stations \`(position, half_width, half_height,
-twist_degrees)\`, an explicit initial \`up_axis\` and cross section
-\`ELLIPSE | RECTANGLE\`. Positions are source-local model units. Station
+**Typed input:** `program.version=13` accepts a `PROFILE_SWEEP` semantic
+part with 2–8 authored stations `(position, half_width, half_height,
+twist_degrees)`, an explicit initial `up_axis` and cross section
+`ELLIPSE | RECTANGLE`. Positions are source-local model units. Station
 span must be at least one unit; half-extents must lie within 1–8 units.
 Version 13 preserves prior v11 scale declarations and optionally v12
 uncertainty checks without inventing an unrelated uncertainty target.
@@ -1106,7 +1106,7 @@ frames. Cross-section sizes and twist vary linearly within each authored
 straight segment; each piece has strict flat axial end caps. The overall
 source solid is the union of segmentwise generalized prisms, sampled at
 one-model-unit voxel centres and partitioned by the *existing*
-\`partitionMathVoxelVolume\` implementation. This is not an exact CAD
+`partitionMathVoxelVolume` implementation. This is not an exact CAD
 loft, a continuous smooth curve, mesh skinning, or visually verified
 geometry. There is no implicit smoothing, noise, style transfer or
 guess of reference depth.

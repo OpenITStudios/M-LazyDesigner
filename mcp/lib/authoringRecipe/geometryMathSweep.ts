@@ -272,8 +272,9 @@ function insideSphereSweep(
 /**
  * Isotropic variable-radius sweep: exact membership of the piecewise-linear
  * union of varying-radius spheres, with conservative cubic chord sampling.
- * Circular sections need no moving frame; anisotropic sections require an
- * explicit rotation-minimizing frame contract in a future version.
+ * This frozen SWEEP method stays isotropic for all existing source
+ * versions. Opt-in v13 PROFILE_SWEEP owns transported anisotropic sections
+ * in geometryMathProfileSweep.ts; never alter this legacy solid implicitly.
  */
 export function sweepMathVolume(
   part: Sweep, version: GeometryMathVersion
