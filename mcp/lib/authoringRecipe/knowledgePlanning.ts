@@ -1,4 +1,5 @@
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
+import { projectRecipeFormSignatures } from "@/lib/authoringRecipe/formSignature";
 import type { RecipeKnowledgeSnapshot } from "@/lib/authoringRecipe/knowledge";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { resolveRecipeKnowledgeLinks } from "@/lib/authoringRecipe/knowledge";
@@ -58,6 +59,9 @@ export function reviewRecipeKnowledge(
     knowledge: binding,
     suggestions,
     geometry_proposals: geometryProposals,
+    form_signatures: projectRecipeFormSignatures(recipe, {
+      feature_ids: options.feature_ids,
+    }),
     ...(binding.state === "REVIEW_REQUIRED"
       ? { guidance_blocked_reason: "RECIPE_KNOWLEDGE_LINK_REVIEW_REQUIRED" as const }
       : {}),
@@ -108,6 +112,9 @@ export async function collectRecipeKnowledge(
       knowledge: null,
       suggestions: [],
       geometry_proposals: [] as GeometryConstructionProposal[],
+      form_signatures: projectRecipeFormSignatures(recipe, {
+        feature_ids: featureIds,
+      }),
       execution_boundary: "SOURCE_PLANNING_ONLY_NO_NATIVE_MUTATION_OR_VISUAL_PROOF" as const,
     };
   }

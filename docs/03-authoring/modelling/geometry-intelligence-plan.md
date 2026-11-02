@@ -1047,6 +1047,41 @@ target, signed LINEAR envelope, CONNECT outputs, native save/reopen/
 Undo, UV/export and reference scale review. No Bun/typecheck/build,
 tests/CI, installed Blockbench or visual QA was performed.
 
+### R3y — Source-derived Form Signature (2026-11-02; CODE ONLY)
+
+AI Form Signature is a **bounded, read-only projection**, not another
+stored authoring state, shape-style classifier, schema version, generator,
+approval gate or batch-by-Cube ceremony. The existing canonical Recipe
+owns \`feature_intents\`, geometric purposes, reference claim handles,
+and optional \`advanced_geometry_source\` parameters.
+
+\`authoringRecipe/formSignature.ts\` projects the current feature route from
+the existing \`featureDecision.ts\` decision owner. It exposes declared
+geometry purposes and limited parameter/part/relationship IDs only when
+an actual caller supplies freshly compiled candidate source or a checked
+saved-Recipe/native match. Missing parameters never become inferred
+silhouettes, anatomy, part importance or implicit variation ranges.
+\`design_role: NOT_DECLARED\` and
+\`variation_policy: NO_DECLARED_VARIATION_BOUNDS\` are intentionally
+honest; source metadata, label or a method such as SWEEP cannot establish
+premium artistic fidelity.
+
+Existing \`knowledgePlanning.ts\` returns this compact projection even
+when the Knowledge index is unavailable, without adding retrieval or
+native calls. Existing \`advancedConstruction.ts\` inspect/plan responses
+also include the bounded projection. Native scene/source mismatch
+withholds parametric source methods. Public \`construct_geometry\` remains
+unregistered; this source change does NOT promote a native capability.
+
+Each response is capped at eight feature signatures, reports omitted or
+unknown focus IDs, preserves declared UUID/part identifiers, and does not
+mutate a Recipe, create Cubes, authorize variation or claim visual PASS.
+Future real variation bounds must be declared and checked by the canonical
+Recipe and Geometry Math owners, not guessed from a style tag.
+
+**Source proof:** Owner and consumer wiring plus focused regression source
+authored. Bun/build/tests/CI/Blockbench/visual proof NOT EXECUTED.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

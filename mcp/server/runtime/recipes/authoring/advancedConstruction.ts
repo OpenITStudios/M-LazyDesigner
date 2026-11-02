@@ -1,6 +1,7 @@
 /// <reference types="blockbench-types" />
 
 import { createHash } from "node:crypto";
+import { projectRecipeFormSignatures } from "@/lib/authoringRecipe/formSignature";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import {
   buildAdvancedGeometryRecipeCandidate,
@@ -549,6 +550,11 @@ export function inspectAdvancedGeometryNative(input: {
       // reproduce the stored Recipe. AI can revise without asking the user to
       // reconstruct the initial Curve path or hollow wall dimensions.
       source_features: parameterReview.source_features,
+      form_signatures: projectRecipeFormSignatures(recipe, {
+        // Do not reveal shape-method authority if the native scene has drifted.
+        source_cohorts: structural_state === "MATCHED_SOURCE_ONLY"
+          ? parameterReview.source_features : undefined,
+      }),
       cube_count: native.cubes.length,
       parent_group_uuid,
       structural_state,
@@ -582,6 +588,10 @@ export function previewAdvancedGeometryNative(input: AdvancedNativeConstructionI
     mode: prepared.mode,
     summary: prepared.summary,
     impact: prepared.impact,
+    form_signatures: projectRecipeFormSignatures(prepared.recipe, {
+      // Freshly compiled candidate parameters; not installed/native proof.
+      source_cohorts: prepared.recipe.advanced_geometry_source,
+    }),
     recipe_id: prepared.recipe.id,
     affected_cubes: prepared.elements,
     remove_instance_ids: prepared.removed_instance_ids,

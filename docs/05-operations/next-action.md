@@ -22,6 +22,12 @@ parameter source only if recompiled geometry still matches stored
 Recipe. Plan/apply also return bounded incremental impact counts
 and UV/Texture/Animation invalidation; no visual PASS inference.
 
+**R3y:** Form Signature now projects bounded, explicit Recipe feature
+purposes and, when candidate or saved native/source identity matches,
+semantic method/part/relationship IDs. No standalone style system,
+implicit variation or visual identity attestation; existing Knowledge
+planning receives the source-only projection even when its index is absent.
+
 **PUBLIC AI:** `construct_geometry` remains UNREGISTERED. A real
 generator-capable Bun workspace is required for atomic registration
 with generator-owned API docs. Do not hand-edit generated artifacts.
@@ -29,11 +35,12 @@ with generator-owned API docs. Do not hand-edit generated artifacts.
 **PROOF:** Source only. No tests/build/CI, native save/reopen,
 Bedrock export or visual QA; plugin deployment not claimed.
 
-**NEXT:** Geometry transaction source hardening now covers begin,
-edit, commit, cancel and rollback; native acceptance remains open.
-Public `construct_geometry` still needs canonical Bun generation.
+**NEXT:** Design the opt-in, source-bound morphology parameter contract
+(SWEEP/LOFT section shape and safe variation), without guessing visual
+identity or rewriting math v1–v12. Native acceptance remains open;
+public `construct_geometry` still needs canonical Bun generation.
 No build, tests, CI, Blockbench or visual QA under CODE-FIRST.
-Do not create a parallel Geometry/Undo engine.
+Do not create a parallel Geometry/Undo/quality engine.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.
