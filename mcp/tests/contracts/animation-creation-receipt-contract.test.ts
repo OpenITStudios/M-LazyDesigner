@@ -36,6 +36,36 @@ describe("create_animation native creation evidence", () => {
     }
   });
 
+  test("optional source-only timing evidence cannot impersonate playback acceptance", () => {
+    const timing = {
+      state: "REVIEW_SOURCE_TIMES_AFTER_DECLARED_DURATION",
+      declared_duration_seconds: 1,
+      latest_transform_time_seconds: 1.25,
+      latest_effect_time_seconds: 0,
+      authored_transform_frame_count: 2,
+      after_duration_transform_frame_count: 1,
+      after_duration_effect_timestamp_count: 0,
+      source_only: true,
+      native_timeline_sampling_performed: false,
+      visual_verdict: "not_evaluated",
+    };
+    expect(isAnimationCreationReceipt({ ...native, source_timing: timing })).toBe(true);
+    for (const unsafe of [
+      { ...timing, native_timeline_sampling_performed: true },
+      { ...timing, visual_verdict: "PASS" },
+      { ...timing, source_only: false },
+      { ...timing, state: "WITHIN_DECLARED_DURATION" },
+      { ...timing, declared_duration_seconds: null },
+      { ...timing, after_duration_transform_frame_count: -1 },
+    ]) {
+      expect(isAnimationCreationReceipt({
+        ...native, source_timing: unsafe,
+      })).toBe(false);
+    }
+    // Historical receipts remain valid while runtime deployment catches up.
+    expect(isAnimationCreationReceipt(native)).toBe(true);
+  });
+
   test("producer gets an AnimationCodec instance before building final state", async () => {
     const source = await Bun.file("server/tools/animation/create.ts").text();
     expect(source).toContain("createdAnimation.uuid");

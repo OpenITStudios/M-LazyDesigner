@@ -14,6 +14,36 @@ export const animationCreationReceiptSchema = z.object({
   requested_bone_count: z.number().int().nonnegative(),
   requested_particle_effect_count: z.number().int().nonnegative(),
   requested_sound_effect_count: z.number().int().nonnegative(),
+  // Backwards compatible: older native creation receipts omit this field.
+  // Source timing is never evidence of played frames, physics, or visual PASS.
+  source_timing: z.object({
+    state: z.enum([
+      "NO_EXPLICIT_DURATION",
+      "REVIEW_SOURCE_TIMES_AFTER_DECLARED_DURATION",
+      "WITHIN_DECLARED_DURATION",
+    ]),
+    declared_duration_seconds: z.number().finite().nonnegative().nullable(),
+    latest_transform_time_seconds: z.number().finite().nonnegative(),
+    latest_effect_time_seconds: z.number().finite().nonnegative(),
+    authored_transform_frame_count: z.number().int().nonnegative(),
+    after_duration_transform_frame_count: z.number().int().nonnegative(),
+    after_duration_effect_timestamp_count: z.number().int().nonnegative(),
+    source_only: z.literal(true),
+    native_timeline_sampling_performed: z.literal(false),
+    visual_verdict: z.literal("not_evaluated"),
+  }).superRefine((evidence, ctx) => {
+    const hasLength = evidence.declared_duration_seconds !== null;
+    const afterLength = evidence.after_duration_transform_frame_count +
+      evidence.after_duration_effect_timestamp_count;
+    if ((evidence.state === "NO_EXPLICIT_DURATION") !== !hasLength ||
+        (hasLength && (evidence.state === "REVIEW_SOURCE_TIMES_AFTER_DECLARED_DURATION") !==
+          (afterLength > 0))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Source timing status contradicts declared duration or authored frame counts.",
+      });
+    }
+  }).optional(),
 });
 
 export function isAnimationCreationReceipt(value: unknown): boolean {

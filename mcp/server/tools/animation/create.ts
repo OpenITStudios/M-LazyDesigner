@@ -241,6 +241,68 @@ export const createAnimationToolDoc: ToolSpec = {
   status: STATUS_STABLE,
 };
 
+/**
+ * Source-authored timeline coverage, not observed Blockbench playback.
+ * Called by the existing create_animation runtime from validated input.
+ * Out-of-duration keys are reported (not silently deleted or rejected).
+ */
+export function describeAuthoredAnimationCreationTiming(input: {
+  animation_length?: number;
+  bones: Readonly<Record<string, readonly {
+    time: number;
+    position?: readonly number[];
+    rotation?: readonly number[];
+    scale?: number | readonly number[];
+  }[]>>;
+  effect_times: readonly number[];
+}) {
+  if ((input.animation_length !== undefined &&
+       (!Number.isFinite(input.animation_length) || input.animation_length < 0)) ||
+      !Array.isArray(input.effect_times) ||
+      input.effect_times.some((time) => !Number.isFinite(time) || time < 0)) {
+    throw new Error("Invalid source duration or effect timestamp.");
+  }
+  let transformCount = 0;
+  let latestTransformTime = 0;
+  let outOfDurationTransformCount = 0;
+  for (const frames of Object.values(input.bones)) {
+    for (const frame of frames) {
+      if (!Number.isFinite(frame.time) || frame.time < 0) {
+        throw new Error("Invalid source transform timestamp.");
+      }
+      if (frame.position === undefined &&
+          frame.rotation === undefined && frame.scale === undefined) continue;
+      transformCount++;
+      latestTransformTime = Math.max(latestTransformTime, frame.time);
+      if (input.animation_length !== undefined &&
+          frame.time > input.animation_length) outOfDurationTransformCount++;
+    }
+  }
+  const latestEffectTime = input.effect_times.reduce(
+    (maximum, time) => Math.max(maximum, time), 0
+  );
+  const outOfDurationEffectCount = input.animation_length === undefined
+    ? 0
+    : input.effect_times.filter((time) => time > input.animation_length!).length;
+  const overrun = outOfDurationTransformCount + outOfDurationEffectCount;
+  return {
+    state: input.animation_length === undefined
+      ? ("NO_EXPLICIT_DURATION" as const)
+      : overrun > 0
+        ? ("REVIEW_SOURCE_TIMES_AFTER_DECLARED_DURATION" as const)
+        : ("WITHIN_DECLARED_DURATION" as const),
+    declared_duration_seconds: input.animation_length ?? null,
+    latest_transform_time_seconds: latestTransformTime,
+    latest_effect_time_seconds: latestEffectTime,
+    authored_transform_frame_count: transformCount,
+    after_duration_transform_frame_count: outOfDurationTransformCount,
+    after_duration_effect_timestamp_count: outOfDurationEffectCount,
+    source_only: true as const,
+    native_timeline_sampling_performed: false as const,
+    visual_verdict: "not_evaluated" as const,
+  };
+}
+
 export function normalizeBedrockAnimationName(name: string): string {
   return name.startsWith("animation.") ? name : `animation.${name}`;
 }
@@ -348,6 +410,11 @@ export function registerCreateAnimationTool(): void {
           ...Object.keys(particle_effects ?? {}),
           ...Object.keys(sound_effects ?? {}),
         ].map(Number);
+        const sourceTiming = describeAuthoredAnimationCreationTiming({
+          animation_length,
+          bones,
+          effect_times: protectedEventTimes,
+        });
         const compactedBoneEntries = resolvedBoneEntries.map((entry) => ({
           ...entry,
           compaction: compactLinearCreationKeyframes(
@@ -468,6 +535,7 @@ export function registerCreateAnimationTool(): void {
               snapping: createdAnimation.snapping,
             },
             requested_name: requestedAnimationName,
+            source_timing: sourceTiming,
             requested_bone_count: Object.keys(bones).length,
             linear_key_compaction: {
               removed_channel_key_count: removedChannelKeys,

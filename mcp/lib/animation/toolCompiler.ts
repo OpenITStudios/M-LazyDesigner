@@ -6,6 +6,7 @@ import {
 } from "@/lib/animation/motionRecipe";
 import { compileSecondaryMotion, type SecondaryMotionLink } from "@/lib/animation/secondaryMotion";
 import { applyContactConstraints, type ContactConstraint } from "@/lib/animation/contactConstraints";
+import { compactLinearCreationKeyframes } from "@/lib/animation/quality";
 import { compileSpringSecondaryMotion, type SpringMotionLink } from "@/lib/animation/springMotion";
 
 function createAnimationPayload(recipe:CompiledMotionRecipe){
@@ -41,6 +42,35 @@ export function compileMotionToKeyframeRequests(recipe:CompiledMotionRecipe,affe
   return requests;
 }
 export function compileMotionToCreateAnimationPlan(recipe:CompiledMotionRecipe){
+  // The native create_animation implementation strictly compacts numeric
+  // linear keys before codec import. A later interpolation edit must not
+  // target an eliminated key or change a curve after adjacent keys vanished.
+  for (const [bone, frames] of Object.entries(recipe.bones)) {
+    const compacted = compactLinearCreationKeyframes(frames);
+    for (const channel of ["position", "rotation", "scale"] as const) {
+      if (compacted.removed_by_channel[channel] === 0) continue;
+      const edited = frames.filter((frame) =>
+        frame[channel] !== undefined && frame.interpolation !== undefined
+      );
+      if (edited.length === 0) continue;
+      const survivingTimes = new Set(compacted.frames
+        .filter((frame) => frame[channel] !== undefined)
+        .map((frame) => frame.time));
+      const missingEditTarget = edited.some((frame) =>
+        !survivingTimes.has(frame.time)
+      );
+      const nonlinearEdit = edited.some((frame) =>
+        frame.interpolation !== "linear"
+      );
+      if (missingEditTarget || nonlinearEdit) {
+        throw new Error(
+          "MOTION_INTERPOLATION_COMPACTION_CONFLICT: create_animation may " +
+          "remove source " + bone + "." + channel +
+          " keys needed for interpolation edits. No unsafe native plan was produced."
+        );
+      }
+    }
+  }
   const postCreateEdits:KeyframeToolRequest[]=[];
   for(const [bone,frames] of Object.entries(recipe.bones)){
     for(const channel of ["position","rotation","scale"] as const){

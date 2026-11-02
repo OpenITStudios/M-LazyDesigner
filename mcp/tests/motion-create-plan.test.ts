@@ -114,3 +114,91 @@ describe("semantic motion and source-declared contact compilation", () => {
     )).toBe(true);
   });
 });
+
+
+describe("native compaction and interpolation preservation", () => {
+  const rot = (id: string, time: number, degrees: number, interpolation?: "linear" | "catmullrom" | "bezier" | "step") => ({
+    id, time, bones: { arm: {
+      rotation: [degrees, 0, 0] as [number, number, number],
+      ...(interpolation ? { interpolation } : {}),
+    } },
+  });
+
+  test("rejects explicit edited key lost to native collinear compaction", () => {
+    const recipe = compileMotionRecipe({
+      name: "lost_step",
+      poses: [
+        rot("start", 0, 0),
+        rot("middle", 0.5, 5, "step"),
+        rot("end", 1, 10),
+      ],
+    });
+    expect(() => compileMotionToCreateAnimationPlan(recipe))
+      .toThrow("MOTION_INTERPOLATION_COMPACTION_CONFLICT");
+  });
+
+  test("rejects nonlinear endpoint interpolation if native removed intervening keys", () => {
+    const recipe = compileMotionRecipe({
+      name: "curve_shape",
+      poses: [
+        rot("start", 0, 0),
+        rot("middle", 0.5, 5),
+        rot("end", 1, 10, "catmullrom"),
+      ],
+    });
+    expect(() => compileMotionToCreateAnimationPlan(recipe))
+      .toThrow("MOTION_INTERPOLATION_COMPACTION_CONFLICT");
+  });
+
+  test("preserves a noncollinear authored curve with exact post-create target", () => {
+    const recipe = compileMotionRecipe({
+      name: "preserved_curve",
+      poses: [
+        rot("start", 0, 0),
+        rot("middle", 0.5, 7, "catmullrom"),
+        rot("end", 1, 10),
+      ],
+    });
+    const plan = compileMotionToCreateAnimationPlan(recipe);
+    expect(plan.create_animation.bones.arm).toHaveLength(3);
+    expect(plan.post_create_keyframe_edits[0]).toMatchObject({
+      action: "edit", channel: "rotation",
+      keyframes: [{ time: 0.5, interpolation: "catmullrom" }],
+    });
+  });
+
+  test("does not block linear-compacted unedited channels of the same bone", () => {
+    const recipe = compileMotionRecipe({
+      name: "channel_independence",
+      poses: [
+        { id: "a", time: 0, bones: { arm: {
+          rotation: [0, 0, 0], position: [0, 0, 0],
+        } } },
+        { id: "b", time: 0.5, bones: { arm: {
+          rotation: [7, 0, 0], position: [5, 0, 0],
+          interpolation: "catmullrom",
+        } } },
+        { id: "c", time: 1, bones: { arm: {
+          rotation: [10, 0, 0], position: [10, 0, 0],
+        } } },
+      ],
+    });
+    // The interpolation belongs to both authored channels at time 0.5.
+    // Even though rotation is noncollinear, compacting position would
+    // change its intended Catmull-Rom curve, so the plan must fail closed.
+    expect(() => compileMotionToCreateAnimationPlan(recipe))
+      .toThrow("MOTION_INTERPOLATION_COMPACTION_CONFLICT");
+  });
+
+  test("preserves legacy compaction-friendly numeric creation with no interpolation edits", () => {
+    const recipe = compileMotionRecipe({
+      name: "numeric_linear",
+      poses: [
+        rot("a", 0, 0), rot("b", 0.5, 5), rot("c", 1, 10),
+      ],
+    });
+    const plan = compileMotionToCreateAnimationPlan(recipe);
+    expect(plan.create_animation.bones.arm).toHaveLength(3);
+    expect(plan.post_create_keyframe_edits).toHaveLength(0);
+  });
+});

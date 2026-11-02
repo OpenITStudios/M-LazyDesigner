@@ -1,7 +1,7 @@
 # Motion Recipe Engine
 
 Status: REMOTE SOURCE BOUNDED / LIVE PROOF PENDING
-Updated: 2026-09-21
+Updated: 2026-11-02
 Branch: Local
 
 ## Goal
@@ -48,6 +48,16 @@ Current planning owners: `lib/animation/motionRecipe.ts`,
   compact strictly redundant linear transform keys without changing
   equivalent numeric motion; do not interpret saved anchor identity
   as preserved merely because it appeared in the source plan.
+- Native `create_animation` now returns a compact `source_timing` receipt:
+  source-authored transform/effect timestamps beyond an explicitly requested
+  clip duration are REVIEW candidates, not silently deleted or described as
+  actual playback. No added input fields or public capabilities.
+- `compileMotionToCreateAnimationPlan` refuses interpolation edits whose
+  required channel keys would be removed by the existing strictly-linear
+  native creation compactor. Even when the edited endpoint survives, a
+  nonlinear curve cannot be safely reconstructed after intermediate keys
+  were compacted. A source-only plan is withheld instead of retrying snapped
+  post-create mutations.
 - No automatic post-create contact-anchor upsert is issued because
   `manage_keyframes` snaps to the currently active native animation grid.
   Exact clock ownership and observed playback are required before
@@ -55,9 +65,11 @@ Current planning owners: `lib/animation/motionRecipe.ts`,
 - A local hold is NOT world-space foot locking, end-effector IK, physics,
   verified visual contact, or native pose sampling. Existing contactEvidence
   and the protected native restoration contract remain authoritative.
-- `withTemporaryAnimationPreview` now attempts independent restoration steps
-  even if one editor setter fails; this does not authorize the protected
-  native Blockbench timeline sampler.
+- `withTemporaryAnimationPreview` now attempts independent restoration
+  steps after one editor setter fails and rejects overlapping async previews
+  through the same port. Port-local seriality does not attest other Blockbench
+  extensions, effect state, native full-surface restoration, or authorize the
+  protected native Blockbench timeline sampler.
 
 ## Hardening rules
 

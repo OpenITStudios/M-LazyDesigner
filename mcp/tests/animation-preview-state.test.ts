@@ -285,3 +285,56 @@ describe("temporary preview independent restoration", () => {
     expect(state.previewCalls()).toBe(2);
   });
 });
+
+
+describe("bounded preview interleaving safety", () => {
+  test("rejects concurrent observations on one port before changing selection", async () => {
+    const state = fixture(true);
+    let release!: (value: string) => void;
+    const delayed = new Promise<string>((resolve) => { release = resolve; });
+    const pending = withTemporaryAnimationPreview(
+      state.port, state.walk, 0.25, () => delayed
+    );
+    expect(state.timeline.time).toBe(0.25);
+    expect(state.selected()).toBe(state.walk);
+    await expect(withTemporaryAnimationPreview(
+      state.port, state.walk, 0.5, () => "should not run"
+    )).rejects.toThrow("already active for this port");
+    expect(state.timeline.time).toBe(0.25);
+    release("sampled");
+    await expect(pending).resolves.toBe("sampled");
+    expect(state.timeline.time).toBe(4);
+    expect(state.selected()).toBe(state.idle);
+    expect(state.effectsSuspended()).toBe(false);
+  });
+
+  test("releases the guard after an observation failure", async () => {
+    const state = fixture(true);
+    await expect(withTemporaryAnimationPreview(
+      state.port, state.walk, 0.25, () => {
+        throw new Error("observation unavailable");
+      }
+    )).rejects.toThrow("observation unavailable");
+    await expect(withTemporaryAnimationPreview(
+      state.port, state.walk, 0.5, () => "recovered"
+    )).resolves.toBe("recovered");
+    expect(state.timeline.time).toBe(4);
+    expect(state.effectsSuspended()).toBe(false);
+  });
+
+  test("independent ports retain independent temporary observation scopes", async () => {
+    const first = fixture(true), second = fixture(true);
+    let release!: (value: number) => void;
+    const delayed = new Promise<number>((resolve) => { release = resolve; });
+    const pending = withTemporaryAnimationPreview(
+      first.port, first.walk, 0.25, () => delayed
+    );
+    await expect(withTemporaryAnimationPreview(
+      second.port, second.walk, 0.75, () => 42
+    )).resolves.toBe(42);
+    expect(second.timeline.time).toBe(4);
+    release(7);
+    await expect(pending).resolves.toBe(7);
+    expect(first.timeline.time).toBe(4);
+  });
+});

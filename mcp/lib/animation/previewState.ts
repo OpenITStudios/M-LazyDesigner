@@ -51,6 +51,11 @@ function restoreTimelinePlaying(
 
 export const TEMPORARY_ANIMATION_POSE_SAMPLE_LIMIT = 8;
 
+// A single port must not interleave two async temporary preview sessions.
+// This protects the local helper, not global Blockbench preview state: other
+// ports or unknown extensions can still mutate native editor surfaces.
+const ACTIVE_TEMPORARY_PREVIEW_PORTS = new WeakSet<object>();
+
 /**
  * Sequential bounded preview observations, reusing the existing transactional
  * save/restore helper for EVERY sample. This does not attest that Blockbench
@@ -106,6 +111,11 @@ export async function withTemporaryAnimationPreview<
     );
   }
 
+  if (ACTIVE_TEMPORARY_PREVIEW_PORTS.has(port)) {
+    throw new Error("Temporary animation preview already active for this port.");
+  }
+  ACTIVE_TEMPORARY_PREVIEW_PORTS.add(port);
+  try {
   const flags: AnimationFlagSnapshot<TAnimation>[] = port.animations.map(
     (animation) => ({
       animation,
@@ -205,4 +215,7 @@ export async function withTemporaryAnimationPreview<
   }
 
   return result;
+  } finally {
+    ACTIVE_TEMPORARY_PREVIEW_PORTS.delete(port);
+  }
 }
