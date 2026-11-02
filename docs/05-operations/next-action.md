@@ -29,10 +29,11 @@ with generator-owned API docs. Do not hand-edit generated artifacts.
 **PROOF:** Source only. No tests/build/CI, native save/reopen,
 Bedrock export or visual QA; plugin deployment not claimed.
 
-**NEXT CODE:** Continue source-only Geometry code; Runtime/API
-registration is Bun-generator-coupled. No build, typecheck, tests,
-CI, native Blockbench or visual QA until user changes the instruction.
-Do not invent an alternative registration/quality engine.
+**NEXT:** Geometry transaction source hardening now covers begin,
+edit, commit, cancel and rollback; native acceptance remains open.
+Public `construct_geometry` still needs canonical Bun generation.
+No build, tests, CI, Blockbench or visual QA under CODE-FIRST.
+Do not create a parallel Geometry/Undo engine.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.
