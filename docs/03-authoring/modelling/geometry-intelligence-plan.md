@@ -841,6 +841,60 @@ vs strict overlap, min-gap positive Euclidean distance, repeated
 LINEAR copies, CONNECT source pairs, reversed relation order,
 stable relation IDs, and unchanged surrounding scene objects.
 
+### R3u — Typed dimension inheritance (2026-11-02, CODE ONLY)
+
+Prior version-8 composition could solve relative positions, exposed
+Cube-face contacts, collision clearances and repeated/oriented parts,
+but all primitive BOX dimensions remained disconnected constants.
+This forces an AI to rewrite many source sizes after one object's
+proportion changes.
+
+Strict opt-in `program.version=9` introduces at most 16 declarative
+`dimension_links` in the existing math source contract. Each entry
+identifies a single target BOX axis, existing non-CONNECT source
+part/axis, positive rational multiplier (bounded integer numerator
+and denominator), and optional signed integer delta. Exact source
+extent is computed from the source-local constructed envelope, not
+from screen pixels, unsupported reference inference, or an arbitrary
+string expression. Every target-axis has exactly one source owner;
+duplicate IDs with ANCHOR/FACE_ANCHOR/CLEARANCE are rejected.
+
+The canonical `geometryMathProgram.ts` *already* owns memoized
+semantic-part dependency resolution for INSTANCE and ORIENT. V9
+routes dimension inheritance through that SAME resolution graph,
+so chained dimensions, forward references and mixed cycles resolve
+deterministically or reject with a bounded dependency error. The
+existing `realizePart` native BOX builder receives the calculated
+positive integer dimensions, without new native scaling, fractional
+Cube geometry, rounding/clamping, a second solver or a global CAD
+constraint engine.
+
+Numerical contract:
+`target_size_axis = source_bbox_extent_axis * numerator /
+denominator + delta`. Accept only finite results within 1–32
+representable model units and within a small float tolerance of
+an actual integer (arithmetic-noise protection, not snap-to-grid).
+Source extents include the full LINEAR repeat envelope, not the
+sum of occupied material lengths across disjoint copies.
+A target source BOX axis that has no link keeps its authored size.
+
+V9 remains opt-in: the original math v1–v8 source/compiled paths,
+legacy shape families, LOFT/CONNECT, ORIENT, signed repeats, positional
+ANCHOR, FACE_ANCHOR and CLEARANCE are not rewritten. All later
+placement and collision checks run on newly derived dimensions
+through the SAME canonical Recipe v1 compiler, incremental mutation
+and native Group/Undo owner. No new public Gateway tool, database,
+generator artifact or plugin was introduced.
+
+**Deferred executable proof, NOT EXECUTED**: v1–v8 exact source
+reconstruction, Box-to-Box ratio chains and renamed part order,
+dimension from LOFT or oriented/reflected instance envelope,
+negative LINEAR repeat extent, cyclic dimension/INSTANCE graphs,
+two links to same axis, unrepresentable fractions, overbudget native
+BOX dimensions, resulting FACE_ANCHOR alignment, CLEARANCE contact,
+saved Recipe/Undo, native UV/export and visual reference review.
+Bun, typecheck/build/tests/CI/native Blockbench were NOT run.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

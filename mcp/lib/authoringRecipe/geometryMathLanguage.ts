@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * Versions 1–7 remain source-frozen. V8 adds explicit inter-part
- * volume clearances and stricter FACE_ANCHOR pair separation, opt-in.
+ * Versions 1–8 remain source-frozen. V9 adds opt-in mathematical
+ * dimension relationships between semantic parts; no silent migration.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -253,6 +253,26 @@ export const geometryMathClearanceSchema = z.object({
   minimum_gap: z.number().finite().min(0).max(8).optional(),
 }).strict();
 
+/**
+ * V9 DIMENSION_LINK binds one target BOX dimension to an existing
+ * semantic part's source-local bounding-box extent, not to texture,
+ * screen measurements, or an arbitrary evaluated expression.
+ *
+ * Derived extent = source extent * numerator / denominator + delta.
+ * The result MUST be an exact representable integer model-unit size
+ * within native BOX UV limits. No implicit rounding or clamping.
+ */
+export const geometryMathDimensionLinkSchema = z.object({
+  id,
+  target_part_id: id,
+  target_axis: axis,
+  source_part_id: id,
+  source_axis: axis,
+  numerator: z.number().int().min(1).max(16),
+  denominator: z.number().int().min(1).max(16),
+  delta: z.number().int().min(-16).max(16).optional(),
+}).strict();
+
 const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
@@ -277,6 +297,10 @@ const programV8Fields = {
   ...programV7Fields,
   clearances: z.array(geometryMathClearanceSchema).max(16).optional(),
 };
+const programV9Fields = {
+  ...programV8Fields,
+  dimension_links: z.array(geometryMathDimensionLinkSchema).max(16).optional(),
+};
 
 /**
  * The source version selects numerical semantics; it is never defaulted.
@@ -291,6 +315,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(6), ...programV6Fields }).strict(),
   z.object({ version: z.literal(7), ...programV7Fields }).strict(),
   z.object({ version: z.literal(8), ...programV8Fields }).strict(),
+  z.object({ version: z.literal(9), ...programV9Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -361,7 +386,8 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
-  if (program.version >= 7) {
+  if (program.version === 7 || program.version === 8 ||
+    program.version === 9) {
     const connectors = new Set(program.parts.filter(part =>
       part.method === "CONNECT"
     ).map(part => part.id));
@@ -404,16 +430,20 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
-  if (program.version === 8) {
+  if (program.version === 8 || program.version === 9) {
     const relations = program.clearances ?? [];
     const claimedIds = [
       ...anchors.map(link => link.id),
       ...(program.face_anchors ?? []).map(link => link.id),
       ...relations.map(link => link.id),
+      ...(program.version === 9 ? (program.dimension_links ?? []).map(
+        link => link.id
+      ) : []),
     ];
     if (new Set(claimedIds).size !== claimedIds.length) {
       ctx.addIssue({
-        code: "custom", path: ["clearances"],
+        code: "custom",
+        path: program.version === 9 ? ["dimension_links"] : ["clearances"],
         message: "All geometry relation IDs must be unique.",
       });
     }
@@ -425,6 +455,33 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
           message: "CLEARANCE requires two distinct known semantic parts.",
         });
       }
+    });
+  }
+  if (program.version === 9) {
+    const definitions = new Map(program.parts.map(part => [
+      part.id, part
+    ] as const));
+    const claims = new Set<string>();
+    (program.dimension_links ?? []).forEach((link, index) => {
+      const source = definitions.get(link.source_part_id);
+      const target = definitions.get(link.target_part_id);
+      if (!source || !target || source.method === "CONNECT" ||
+        target.method !== "BOX" || source.id === target.id) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["dimension_links", index],
+          message: "DIMENSION_LINK requires distinct known source and BOX target parts; CONNECT is not a dimension source.",
+        });
+      }
+      const slot = link.target_part_id + ":" + link.target_axis;
+      if (claims.has(slot)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["dimension_links", index],
+          message: "A BOX target dimension may have exactly one dimension owner.",
+        });
+      }
+      claims.add(slot);
     });
   }
 });
@@ -442,5 +499,7 @@ export type GeometryMathFaceAnchor =
   z.infer<typeof geometryMathFaceAnchorSchema>;
 export type GeometryMathClearance =
   z.infer<typeof geometryMathClearanceSchema>;
+export type GeometryMathDimensionLink =
+  z.infer<typeof geometryMathDimensionLinkSchema>;
 export type GeometryMathVersion = GeometryMathProgram["version"];
 export type GeometryMathAnchor = z.infer<typeof geometryMathAnchorSchema>;

@@ -677,6 +677,75 @@ API docs and runtime registration.
 Build/typecheck/tests/CI, installed Blockbench, save/reopen, native
 Undo/export and reference/visual QA were **NOT EXECUTED**.
 
+### R3u — Mathematical dimension links between semantic parts (SOURCE ONLY)
+
+Opt-in `program.version=9` introduces `dimension_links` to the
+existing `kind:"program"` source schema and canonical Recipe owner.
+Older math v1–v8 and all 13 legacy shape families retain their
+original source and compiled-Cuboid semantics.
+
+A DIMENSION_LINK binds exactly one axis of a target `BOX` to the
+actual local bounding-box extent of another semantic part (BOX,
+EXTRUDE, SWEEP, REVOLVE, LOFT, INSTANCE or ORIENT; not CONNECT).
+Links may form a bounded dependency chain, including references
+forward in the input. The existing memoized part resolver that owns
+INSTANCE/ORIENT geometry now resolves dimensions as well; it rejects
+a mixed instancing/dimension cycle rather than iterating or
+guessing an order. No new solver, editor or measurement database.
+
+Source syntax:
+```json
+{
+  "version":9,
+  "parts":[
+    {"id":"frame","method":"BOX","at":[0,0,0],"size":[8,6,2]},
+    {"id":"brace","method":"BOX","at":[0,0,0],"size":[1,2,2]},
+    {"id":"peg","method":"BOX","at":[0,0,0],"size":[1,1,1]}
+  ],
+  "dimension_links":[
+    {"id":"brace_width","target_part_id":"brace","target_axis":"X",
+     "source_part_id":"frame","source_axis":"X",
+     "numerator":1,"denominator":1,"delta":-2},
+    {"id":"peg_width","target_part_id":"peg","target_axis":"X",
+     "source_part_id":"brace","source_axis":"X",
+     "numerator":1,"denominator":2}
+  ]
+}
+```
+The declared `brace.size[0]` and `peg.size[0]` are fallback
+source values; the corresponding linked axes take their derived
+values (6 and 3 model units in this illustrative case). Other axes
+remain authored. A changed `frame` width deterministically
+updates dependent widths before original ANCHOR/FACE_ANCHOR solves.
+This example is authored source, **not executed Blockbench output**.
+
+For each link, the derived dimension is
+`source_extent * numerator / denominator + delta`.
+The ratio uses bounded positive integer numerator/denominator (1–16);
+the optional signed integer delta is -16…16. Results must be
+representable positive integers in 1–32 model units for inherited
+native Box UV. Non-integer, negative, oversized and nonfinite values
+fail explicitly. No implicit rounding/clamping, arbitrary formula,
+recursive optimization or Blender-like general CAD solver.
+
+Source extent means the axis-aligned bounds of the source's *entire*
+semantic part, including the outer envelope of signed LINEAR repeats.
+It does NOT imply that gaps between repeat copies are solid material,
+or that image dimensions were measured independently. One
+DIMENSION_LINK per target BOX axis is permitted; all new relation IDs
+are unique among ANCHOR/FACE_ANCHOR/CLEARANCE/DIMENSION_LINK. Linked
+BOX source geometry is still realized through the same native Recipe
+prototype/pattern builder after versioned mathematical construction.
+
+The original >=64-Cube guard, single `advanced_geometry_source`,
+source-matching inspection, dependency and ownership protections,
+native Cube Group and Undo remain in use. No separate MCP capability,
+DB, new plugin or generated API-doc snapshot was created. Public
+`construct_geometry` remains UNREGISTERED.
+
+NO Bun, build, typecheck, unit/integration tests, CI, installed
+Blockbench, save/reopen, Undo, export or visual QA was executed.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

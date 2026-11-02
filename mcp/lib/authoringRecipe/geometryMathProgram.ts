@@ -13,6 +13,7 @@ import {
   type GeometryMathPartV6,
   type GeometryMathConnectorPart,
   type GeometryMathVersion,
+  type GeometryMathDimensionLink,
 } from "./geometryMathLanguage";
 import { MATH_PROGRAM_MAX_CUBOIDS,
   type MathCuboid } from "./geometryMathVoxel";
@@ -135,9 +136,25 @@ function canonicalConstraints(
  */
 function realizeStructuredParts(
   parts: readonly GeometryMathConstructiblePart[],
-  version: 4 | 5 | 6 | 7 | 8
+  version: 4 | 5 | 6 | 7 | 8 | 9,
+  dimensionLinks: readonly GeometryMathDimensionLink[] = []
 ): LocalPart[] {
   const definitions = new Map(parts.map(part => [part.id, part] as const));
+  // Dimension relationships are an input to the existing part resolver.
+  // Dependency edges share the same visiting/cycle guard with INSTANCE
+  // source references; no second graph/constraint solver is introduced.
+  const dimensionsByTarget = new Map<string, GeometryMathDimensionLink[]>();
+  for (const link of dimensionLinks) {
+    const rows = dimensionsByTarget.get(link.target_part_id) ?? [];
+    rows.push(link);
+    dimensionsByTarget.set(link.target_part_id, rows);
+  }
+  for (const rows of dimensionsByTarget.values()) {
+    rows.sort((a, b) =>
+      a.target_axis < b.target_axis ? -1 :
+      a.target_axis > b.target_axis ? 1 : 0
+    );
+  }
   const completed = new Map<string, LocalPart>();
   const visiting = new Set<string>();
 
@@ -146,7 +163,9 @@ function realizeStructuredParts(
     if (cached) return cached;
     if (visiting.has(partId)) {
       throw new Error(
-        "GEOMETRY_MATH_INSTANCE_CYCLE: " +
+        (version === 9
+          ? "GEOMETRY_MATH_DIMENSION_OR_INSTANCE_CYCLE: "
+          : "GEOMETRY_MATH_INSTANCE_CYCLE: ") +
         [...visiting, partId].join(" -> ")
       );
     }
@@ -198,6 +217,43 @@ function realizeStructuredParts(
         }
       } else if (definition.method === "LOFT") {
         boxes = loftMathVolume(definition, version >= 6 ? 6 : 5);
+      } else if (version === 9 && definition.method === "BOX") {
+        // Each linked BOX axis is derived from a source-local enclosing
+        // extent, including a declared LINEAR assembly envelope.
+        // No arbitrary expression, implicit scaling of native Cube
+        // transforms, clamping or silent fraction-to-voxel rounding.
+        const size = [...definition.size] as RecipeVec3;
+        for (const link of dimensionsByTarget.get(definition.id) ?? []) {
+          const source = resolve(link.source_part_id);
+          const sourceAxis = "XYZ".indexOf(link.source_axis);
+          const targetAxis = "XYZ".indexOf(link.target_axis);
+          if (sourceAxis < 0 || targetAxis < 0) {
+            throw new Error("GEOMETRY_MATH_DIMENSION_AXIS_INVALID: " + link.id);
+          }
+          const sourceExtent = source.max[sourceAxis]! -
+            source.min[sourceAxis]!;
+          const measured = sourceExtent * link.numerator /
+            link.denominator + (link.delta ?? 0);
+          if (!Number.isFinite(measured) || !Number.isFinite(sourceExtent) ||
+            sourceExtent <= 0) {
+            throw new Error("GEOMETRY_MATH_DIMENSION_NONFINITE: " + link.id);
+          }
+          // Limited FP tolerance only removes harmless multiplication
+          // noise. A true half-unit cannot be silently rounded.
+          const unit = Math.round(measured);
+          if (Math.abs(measured - unit) > 1e-9) {
+            throw new Error(
+              "GEOMETRY_MATH_DIMENSION_NONINTEGER: " + link.id
+            );
+          }
+          if (!Number.isSafeInteger(unit) || unit < 1 || unit > 32) {
+            throw new Error(
+              "GEOMETRY_MATH_DIMENSION_NATIVE_SPAN_INVALID: " + link.id
+            );
+          }
+          size[targetAxis] = unit;
+        }
+        boxes = realizePart({ ...definition, size }, version);
       } else {
         boxes = realizePart(definition, version);
       }
@@ -246,8 +302,15 @@ export function buildGeometryMathProgramPieces(
   // Re-validate at the builder boundary as callers may be internal. Reusing
   // this single strict schema also validates persisted source on inspection.
   const program = geometryMathProgramSchema.parse(feature.program);
-  const parts: LocalPart[] = program.version === 8
+  const parts: LocalPart[] = program.version === 9
     ? realizeStructuredParts(
+      program.parts.filter((part):
+        part is GeometryMathConstructiblePart =>
+        part.method !== "CONNECT"),
+      9, program.dimension_links ?? []
+    )
+    : program.version === 8
+      ? realizeStructuredParts(
       program.parts.filter((part):
         part is GeometryMathConstructiblePart =>
         part.method !== "CONNECT"),
@@ -335,7 +398,8 @@ export function buildGeometryMathProgramPieces(
   }));
   // V7+ exact source-local Cube faces become ordinary Recipe ANCHOR
   // constraints. The single canonical solver/Undo owner is unchanged.
-  const faceAnchors = program.version >= 7
+  const faceAnchors = (program.version === 7 ||
+    program.version === 8 || program.version === 9)
     ? prepareGeometryFaceAnchors(parts, program.face_anchors ?? [])
     : null;
   const standardConstraints = canonicalConstraints(
@@ -398,7 +462,7 @@ export function buildGeometryMathProgramPieces(
         // The connector has already been realized in solved model-space.
         // Its own anchor is unavailable by schema; no secondary solver.
         byId.set(connector.id, [...min] as RecipeVec3);
-        if (program.version === 8) {
+        if (program.version === 8 || program.version === 9) {
           // Derived CONNECT coordinates are already in model space.
           // A zero translation makes them comparable with solved parts
           // without interpreting them as ANCHOR dependencies.
@@ -421,8 +485,8 @@ export function buildGeometryMathProgramPieces(
     }
     parts.sort((a, b) => compareSourceIds(a.id, b.id, program.version));
     requireNativeBudget(parts);
-    if (program.version === 8) {
-      // A v8 face contact should not permit *other* Cuboids of the same
+    if (program.version === 8 || program.version === 9) {
+      // V8+ face contact must not permit *other* Cuboids of the same
       // two semantic parts to interpenetrate. Explicit CLEARANCE pairs
       // may also require a Euclidean distance from 0–8 model units.
       // Checks occur after canonical ANCHOR and derived CONNECT only;
