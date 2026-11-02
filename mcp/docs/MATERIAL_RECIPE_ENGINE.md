@@ -53,6 +53,40 @@ record schema, so no new public Gateway capability or generated schema
 surface is introduced. Selection ambiguity and source claims remain
 with the current Texturing Skill and source/native evidence owners.
 
+## Reference-declared pixel cluster composition (source compiler)
+
+`lib/texture/clusterComposition.ts`, reached through existing
+`lib/texture/sourceComposer.ts`, compiles a bounded source-material
+recipe containing:
+
+- one current atlas UUID and exact decoded-RGBA revision;
+- a current complete Cube-face/Texture inventory, signed physical UV,
+  native rotation and declared source-image/region/part/observation;
+- base, shadow, highlight, accent/identity/detail colors explicitly
+  chosen from the approved art direction;
+- face-local connected `rect` / row-span shapes plus intentionally
+  quiet regions, with no procedural noise or speculative strokes.
+
+Its output is a proposed
+`paint_texture_transaction({texture_id,expected_revision,operations})`
+with `fill_rect` base and exact `set_pixels` clusters. Current existing
+`paintTransaction` planner and pure executor produce a source preview
+and verify no changed texel lies outside selected face ownership.
+Templates must be transparent or uniformly opaque; it refuses detailed,
+partially transparent, overlapping/shared-UV, stale revision, missing
+binding or unbounded work. Source palette/cluster traits remain
+**caller declarations**, not verified pixels from the approved source
+image. A successful pure compilation neither means the Runtime
+rechecked native face ownership nor grants paint or visual approval.
+
+**Deployment gap:** This source helper is deliberately NOT a new MCP
+capability. Existing exact-operations mutation checks current bitmap
+revision and Undo, but not independently the face-to-UV map passed to
+the source compiler. A matching native binding recheck at execution
+time is needed before any automatic end-to-end cluster application.
+Do not bypass that gap by treating `status=compiled` as authorized.
+The normal direct known-pixel/paint-tool paths remain usable.
+
 ## Native ownership
 
 ```text

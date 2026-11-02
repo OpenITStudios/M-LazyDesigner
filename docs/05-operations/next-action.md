@@ -2,31 +2,34 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — Texturing material fidelity (2026-11-02)
+## Primary next — Source-bound voxel clusters (2026-11-02)
 
-**DECISION:** Freeze Geometry; improve existing Texturing/MCP.
-No new texture engine, Gateway capability, mandatory UI or release.
+**DECISION:** Freeze Geometry. Extend existing Texturing only;
+no new Gateway, paint engine, UI, CI or release.
 
-**SOURCE:** Opt-in coverage/full `list_textures` diagnostics produce
-read-only native part/material face candidates; ambiguous or partial
-groups cannot authorize painting. Existing face-scoped gradient
-compute optionally accepts exact source-atlas `source_ramp` (shadow,
-base, highlight) and `protected_colors` (identity RGB). Piecewise
-Oklab mapping preserves source shade relationships. Preflight checks
-all declared RGBs on current selected visible texels. Existing alpha,
-generic gradient, UV/material/revision/Undo safeguards stay unchanged.
-Reference palette != source-atlas palette. No visual PASS inferred.
+**SOURCE:** Existing native face-label candidates and Oklab
+shade/identity recolor remain. New
+`lib/texture/clusterComposition.ts` compiles explicitly authored
+connected shadow/highlight/identity/detail/quiet shapes through signed/
+rotated face UV mapping. It produces bounded existing
+`paint_texture_transaction.operations` plus pure preview from one
+verified atlas revision. Rejects stale/detailed/alpha templates, shared
+UV, incomplete inventory, missing binding, overlapping/disconnected
+clusters, quiet-zone detail, and out-of-scope pixel edits. No noise.
 
-**PROOF:** Source/regression AUTHORED. Bun/typecheck/build/CI,
-installed Blockbench, save/export, Golden/user quality NOT EXECUTED.
-Verification CI disabled.
+**PROOF:** GitHub source/test definitions AUTHORED. Bun/typecheck/build/
+CI, native Blockbench, reference image correspondence, save/export
+and real Golden visual/human results NOT EXECUTED. CI disabled.
 
-**NEXT:** Source-grounded cluster placement and affected-view correction.
-Native/visual quality separately requires matching live environment.
+**LIMIT:** The pure compiler is not a callable MCP tool. Image claims
+and current native face bindings remain unverified; automatic painting
+requires native binding recheck, never source receipt alone.
 
-**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED; v12-v14 history
-at `addfb6a008b9af8baf0417ff23435046df7285d4`; generator/native
-proof remains a distinct deferred task.
+**NEXT:** Native recheck and affected mapped-view correction before
+claiming end-to-end automatic voxel texturing.
+
+**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED, v12–14 source
+checkpoint `addfb6a008b9af8baf0417ff23435046df7285d4`.
 
 ## GitHub boundary and historical local recovery
 

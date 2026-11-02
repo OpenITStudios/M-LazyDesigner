@@ -1,3 +1,18 @@
+/** Canonical source-side entry for opt-in face-local cluster composition.
+ * The return value is a proposed existing paint transaction, not an
+ * auto-registered Gateway tool or permission to mutate native texture.
+ */
+export {
+  compileReferencePixelClusterPaint,
+} from "./clusterComposition";
+export type {
+  ClusterCompositionInput,
+  ClusterNativeFace,
+  ClusterFaceAuthoring,
+  ReferencePixelCluster,
+  ClusterPalette,
+} from "./clusterComposition";
+
 import type { MaterialRecipe } from "@/lib/texture/materialRecipe";
 import { renderMaterialRecipe } from "@/lib/texture/materialRecipe";
 import { edgeMask } from "@/lib/texture/masks";

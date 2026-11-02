@@ -168,6 +168,30 @@ Latest user correction before broad paint: verify one mapped material/seam, then
 **Operational craft cases (conditional):** Existing on-demand texture-authoring://case-tex-p01 addresses material clusters, case-uv-p01 UV identity, case-tex-p02 intended seams, and case-tex-p03 explicit emission. They return advisory candidates, not pixels or permission to mutate. Load docs/02-reference/art-direction.md only if the relevant visual family remains unclear; no blanket noise or glow.
 **TX-01 — source-grounded intentional pixel craft:** At a *material/identity styling decision*, use the actual approved source crop, current mapped Cube faces, physical texel density and Shading-ON model view to choose deliberate base/shadow/light **clusters**, focal accents and intentionally quiet surfaces. This refines the existing `TEX-P01` / `planTextureTreatment` / `surface_pattern` decisions; it is not a default noise, outline or dither pass. Do not distribute scratches, random speckle or identical high-contrast edge highlights across every material simply to create complexity. Preserve deliberate dithering, sparse glints or noise when visibly required by the approved style. A cinematographically lit reference is not proof that lighting should be painted into the atlas. If a focal-form mismatch is Geometry-owned, return the bounded defect upstream; if source regions or texel support are unknown, use `REVIEW_REQUIRED`, not auto-paint. Diagnose pixel fragmentation only as advisory evidence, not a beauty score. Apply the existing representative-patch → mapped-view comparison before cohort propagation; known exact RGBA edits stay on their direct fast path.
 
+**Pixel cluster composition (CODE-FIRST internal; not a Gateway capability):**
+For a new blank/flat atlas, choose deliberate **face-local connected**
+shadow, highlight, accent, identity and detail clusters from an actually
+reviewed approved reference crop. Track real image SHA/region/part/observation
+identity, current native Cube/face UV rotation/flip, physical pixel grid,
+base color and explicitly intentional quiet zones. Avoid deriving layouts
+from a material label or blanket noise. The internal
+`sourceComposer.compileReferencePixelClusterPaint` can compile bounded
+rectangles/row-spans to existing `paint_texture_transaction.operations`
+in a code-capable source workflow, but it is **not** registered through
+`invoke_capability`. Do not advertise it as callable MCP or silently
+invoke the resulting transaction. Its status
+`source_compiled_needs_native_revalidation` is a hard proof boundary:
+the compiled candidate's source/reference claims and Cube inventory are
+caller-provided; current live Cube/face/UV/material identity must be
+revalidated before exact pixel operations are authorized, because the
+registered exact-operations transaction checks bitmap revision but does
+not independently attest face ownership. If that revalidation route is
+not available, use ordinary existing Paint tools with exact known native
+targets or mark the cluster candidate `REVIEW_REQUIRED`.
+Strictly avoid prior detailed/alpha-dependent atlas overwrites and
+shared UV conflict. Verify affected PNG plus mapped views only after a
+coherent material cohort, not after every pixel.
+
 Face Coverage Ledger: `UNPAINTED | BASE_ONLY | STYLED | INTENTIONAL_FLAT | INTENTIONAL_TRANSPARENT | SHARED`. For a bounded material-treatment cohort with known faces, use the existing `planTextureTreatment` owner with `required_faces` plus `regions[].face_targets` to account for each Cube UUID + face before styling; `PAINT` is intent, not completed artwork. Missing soles/inner faces block treatment-plan readiness; shared faces require explicit source ownership. Region-only `ready` remains material readiness, never whole-model coverage. Use `optimization_opportunities.coverage.face_review_ledger.examples` for exact Cube UUID + face targets: fix scan omissions first, then reference-relevant flat/transparent faces, then mapped visual verification. Its bounded examples deliberately cover undersides/back-facing directions and report truncation; `varied` is NOT a styled verdict. Only mark `INTENTIONAL_FLAT`, `INTENTIONAL_TRANSPARENT` or `SHARED` after grounded material/reference/UV ownership evidence, never from a heuristic label.
 `list_textures.optimization_opportunities.coverage.gate`: `incomplete|partial` / `FACE_ACCOUNTING_INCOMPLETE` → no completion; one `list_textures`/pass; `ready` ≠ visual PASS.
 `states.varied` ≠ `STYLED`; `review.solid_color_faces` locates flat candidates, not failures.

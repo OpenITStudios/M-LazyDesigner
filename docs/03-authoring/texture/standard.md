@@ -359,6 +359,42 @@ Apply the selected `surface_pattern` recipe to each material cohort only after B
 
 Examples include `wood_grain`, `painted_metal`, `stone_cluster`, `cloth_weave`, `clean_glass`, `rubber_matte`, `fur_cluster`, and `emissive_panel`. Reference evidence overrides the generic recipe.
 
+## Reference-Bound Pixel Clusters (source-side, opt-in)
+
+When an approved image actually specifies the distribution of colored
+masses, an exact face-local *cluster recipe* may express a base fill plus
+connected rectangular/row-span shapes for shadow, highlight, accent, identity
+and deliberately localized detail. The canonical source-side compiler is
+`mcp/lib/texture/clusterComposition.ts`, exposed through the existing
+`sourceComposer.ts` module. It maps true face-local physical pixels using
+the existing signed/rotated Blockbench UV mapper and emits
+`paint_texture_transaction.operations` (`fill_rect` + `set_pixels`);
+it does not create a second painting engine, public Gateway capability or
+pixel-art style preset.
+
+This source path is for **explicitly declared** image/part/observation
+claims and current atlas/face information. Claims are not authenticated
+reference pixels: a caller must inspect the approved crop and verify real
+source-to-face identity. Require the complete native face inventory, one
+bitmap revision, exact physical UV grid and no shared/partially overlapping
+paint ownership. Only a fully transparent target or explicitly replaceable
+uniform opaque template is permitted; partial alpha and already detailed
+faces refuse rather than overwriting artwork. Quiet zones prohibit
+unrequested secondary detail; disconnected clusters and conflicting roles
+refuse, while small intentional glints can be separate observed clusters.
+No random surface noise, brightness-implied metalness or automatic identity
+inference is introduced.
+
+The compiler's result is `source_compiled_needs_native_revalidation`,
+**not** paint authorization: source SHA/face metadata alone cannot guarantee
+that Cube/UV/material bindings remain unchanged in installed Blockbench.
+Before invoking the existing exact-pixel transaction, verify current native
+bindings and full atlas revision in the actual connected Runtime; the
+existing exact-operations branch does not itself re-attest face UV
+ownership. Then inspect affected atlas and shaded mapped-model views.
+Without that live bridge, the compiler is an internal source tool,
+not a direct Gateway action or a texture-completion claim.
+
 ## IDENTITY PASS
 
 Identity-critical features include required markings, facial features, emblems, wraps, seams, panel lines, symbols, and recognizability-critical color breaks.
