@@ -595,3 +595,95 @@ describe("periodic spring source-cycle continuity", () => {
     expect(legacy.bones.cape[0].rotation).not.toEqual(legacy.bones.cape.at(-1)?.rotation);
   });
 });
+
+
+describe("semantic motion source-to-native clock preflight", () => {
+  const origin = () => ({
+    name: "animation.test.clock",
+    duration: 1,
+    poses: [
+      { id: "ready", time: 0, bones: { body: { rotation: [0, 0, 0] as [number,number,number] } } },
+      { id: "contact", time: 0.5, bones: { body: { rotation: [15, 0, 0] as [number,number,number] } } },
+      { id: "recover", time: 1, bones: { body: { rotation: [0, 0, 0] as [number,number,number] } } },
+    ],
+  });
+  const spring = (fps: number, child: string) => ({
+    parent_bone: "body", child_bone: child, channel: "rotation" as const,
+    drive_mode: "parent_delta" as const, sample_rate: fps,
+  });
+  const intent = () => ({
+    archetype: "ACTION" as const,
+    activation: "PREVIEW_ONLY" as const,
+    primary_bones: ["body"],
+    pose_roles: [
+      { pose_id: "ready", role: "ANTICIPATION" as const },
+      { pose_id: "contact", role: "CONTACT" as const },
+      { pose_id: "recover", role: "RECOVERY" as const },
+    ],
+  });
+
+  test("rejects incompatible independent spring frame rates before any Gateway request", () => {
+    const recipe = origin(), declared = {
+      ...intent(), spring_links: [spring(24, "cape"), spring(25, "tail")],
+    };
+    const original = JSON.stringify({ recipe, declared });
+    expect(() => compileSemanticMotionToGatewayInvocation(recipe, declared))
+      .toThrow("ANIMATION_NATIVE_SNAPPING_UNREPRESENTABLE");
+    expect(JSON.stringify({ recipe, declared })).toBe(original);
+  });
+
+  test("accepts two follower clocks sharing one supported 120 FPS grid", () => {
+    const recipe = origin(), declared = {
+      ...intent(), spring_links: [spring(24, "cape"), spring(30, "tail")],
+    };
+    const planned = compileSemanticMotionToGatewayInvocation(recipe, declared);
+    expect(planned.semantic_context.source_frame_grid_preflight).toMatchObject({
+      state: "SOURCE_ONLY_GRID_REPRESENTABLE",
+      candidate_effective_fps: 120,
+      imported_native_snapping_observed: false,
+      native_snapping_applied: false,
+      native_export_timecodes_verified: false,
+      native_playback_attested: false,
+    });
+    expect(planned.semantic_context.source_frame_grid_preflight.retained_source_channel_key_count)
+      .toBeGreaterThan(5);
+    expect(createAnimationParameters.safeParse(planned.gateway_arguments.arguments).success)
+      .toBe(true);
+    expect(planned.gateway_arguments.arguments).not.toHaveProperty("source_frame_grid_preflight");
+    expect(planned.execution_evidence.state).toBe("SOURCE_PLAN_NOT_EXECUTED");
+    expect(planned.execution_evidence.playback_attested).toBe(false);
+  });
+
+  test("ordinary pose and source-held contact clocks retain a valid grid plan", () => {
+    const src = origin();
+    for (const pose of src.poses) {
+      Object.assign(pose.bones.body, { position: [0, 0, 0] });
+    }
+    const planned = compileSemanticMotionToGatewayInvocation(src, {
+      ...intent(),
+      local_contacts: [{
+        bone: "body", channel: "position" as const, start: 0.2, end: 0.8,
+        value: [0, 0, 0] as [number, number, number],
+      }],
+    });
+    expect(planned.semantic_context.source_frame_grid_preflight).toMatchObject({
+      state: "SOURCE_ONLY_GRID_REPRESENTABLE",
+      candidate_effective_fps: 10,
+      native_export_timecodes_verified: false,
+    });
+  });
+
+  test("two explicit sub-frame channel clocks remain unsafe even without springs", () => {
+    const src = origin();
+    src.poses.push(
+      { id: "clock24", time: 1 / 24, bones: { body: { rotation: [1, 0, 0] } } },
+      { id: "clock25", time: 1 / 25, bones: { body: { rotation: [2, 0, 0] } } },
+    );
+    // Different values on the SAME channel are still source-valid, but
+    // their clocks cannot be faithfully exported on any 10..120 FPS grid.
+    expect(() => compileSemanticMotionToGatewayInvocation(src, {
+      ...intent(),
+      pose_roles: [{ pose_id: "contact", role: "CONTACT" }],
+    })).toThrow("ANIMATION_NATIVE_SNAPPING_UNREPRESENTABLE");
+  });
+});

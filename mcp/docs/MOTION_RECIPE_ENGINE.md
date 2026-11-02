@@ -170,6 +170,29 @@ The existing linear native creation/timecode guards remain authoritative.
 Verify repeated live playback (not only frame 0 and the final frame) before
 claiming reduced visible snapping.
 
+### Semantic plan frame-grid preflight (2026-11-03)
+
+Before returning an existing `invoke_capability(create_animation)` envelope, the
+source-only semantic compiler now reuses native
+`planNativeCreationSnapping` to check all surviving transform key times
+after the exact same linear compaction applied by the native creation path.
+The 10 FPS baseline is a **search seed only**; no imported Animation FPS,
+Blockbench project, editor state or native timecode is read or modified.
+
+A 24 FPS cape and 25 FPS tail cannot share a supported exact 10..120 FPS
+export clock and are rejected with
+`ANIMATION_NATIVE_SNAPPING_UNREPRESENTABLE` *before* any invocation.
+Compatible 24/30 FPS followers may use a source candidate of 120 FPS.
+The returned `semantic_context.source_frame_grid_preflight` is source-only,
+reports the **candidate** FPS and retained key count, and explicitly records
+that native snapping, export timecodes and playback are NOT verified.
+
+The executable `create_animation` payload remains unchanged and carries
+no semantic metadata; native creation still independently negotiates the
+actual newly imported clip snapping and verifies source/import/export timecodes
+inside Undo. This preflight does not activate direct semantic Runtime input,
+nonlinear post-create edits, physical contact, or visual motion QA.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

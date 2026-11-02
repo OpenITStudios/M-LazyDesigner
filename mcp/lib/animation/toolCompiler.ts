@@ -7,6 +7,10 @@ import {
 import { compileSecondaryMotion, type SecondaryMotionLink } from "@/lib/animation/secondaryMotion";
 import { applyContactConstraints, type ContactConstraint } from "@/lib/animation/contactConstraints";
 import { compactLinearCreationKeyframes } from "@/lib/animation/quality";
+import {
+  planNativeCreationSnapping,
+  type NativeCreationSnappingTrack,
+} from "@/lib/animation/batchPlanning";
 import { compileSpringSecondaryMotion, type SpringMotionLink } from "@/lib/animation/springMotion";
 
 function createAnimationPayload(recipe:CompiledMotionRecipe){
@@ -336,6 +340,26 @@ export function compileSemanticMotionToGatewayInvocation(
     checkedPrimaryRoleCount += 1;
   }
 
+  // The native create tool can adjust a NEW clip's snapping grid, but only
+  // when a single supported effective 10..120 FPS grid preserves *every*
+  // source-compacted channel time. Fail here before invoking Gateway/Undo,
+  // especially for otherwise-valid mixed-rate secondary spring followers.
+  // Imported snapping is unavailable at source planning time; 10 FPS is
+  // only the deterministic search seed, never an observed native setting.
+  const sourceTimingTracks: NativeCreationSnappingTrack[] = [];
+  for (const [bone, frames] of Object.entries(plan.create_animation.bones)) {
+    const retained = compactLinearCreationKeyframes(frames).frames;
+    for (const channel of ["position", "rotation", "scale"] as const) {
+      sourceTimingTracks.push({
+        bone_id: bone,
+        channel,
+        source_times: retained.filter((frame) => frame[channel] !== undefined)
+          .map((frame) => frame.time),
+      });
+    }
+  }
+  const sourceFrameGrid = planNativeCreationSnapping(sourceTimingTracks, 10);
+
   const args = plan.create_animation;
   return {
     gateway_tool: "invoke_capability" as const,
@@ -349,6 +373,15 @@ export function compileSemanticMotionToGatewayInvocation(
     semantic_context: {
       ...plan.semantic_motion_contract,
       local_contact: plan.local_contact_contract,
+      source_frame_grid_preflight: {
+        state: "SOURCE_ONLY_GRID_REPRESENTABLE" as const,
+        candidate_effective_fps: sourceFrameGrid.effective_export_fps,
+        retained_source_channel_key_count: sourceFrameGrid.source_key_count,
+        imported_native_snapping_observed: false as const,
+        native_snapping_applied: false as const,
+        native_export_timecodes_verified: false as const,
+        native_playback_attested: false as const,
+      },
       primary_role_key_retention: {
         state: "SOURCE_ONLY_PRIMARY_KEYS_RETAINED" as const,
         checked_role_count: checkedPrimaryRoleCount,
