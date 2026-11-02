@@ -1136,8 +1136,8 @@ The strict source `program.version=14` inherits v13 PROFILE_SWEEP,
 existing attachment, dimension, scale and optional uncertainty contracts.
 It requires at least one `variation_bounds` declaration naming a real
 semantic part, station index and `half_width`, `half_height` or
-`twist_degrees` property, finite exclusive-min/max bounds and a declared
-measurement evidence type. All other parameters are LOCKED by omission.
+`twist_degrees` property, finite strictly ordered bounds (min < max; permitted values
+include the endpoints) and a declared measurement evidence type. All other parameters are LOCKED by omission.
 Optional `variation_invariants` enforce an authored monotonic station
 width/height direction (e.g. non-increasing taper) without guessing an
 identity-specific silhouette or creating global art scores.

@@ -201,6 +201,26 @@ describe("R3aa v14 source-constrained feature variation", () => {
       .toBe(false);
   });
 
+  test("existing dimension acceptance still blocks an allowed but oversized taper", () => {
+    const start = seed();
+    if (start.kind !== "program" || start.program.version !== 14) {
+      throw new Error("fixture");
+    }
+    start.program.dimension_constraints = [{
+      kind: "SPAN_BOUNDS", id: "preserve-height",
+      part_id: "shaft", axis: "Y", min_span: 0, max_span: 6,
+    }];
+    const original = create(start);
+    const varied = edit(original.advanced_geometry_source![0]!, feature => {
+      if (feature.program.version !== 14) throw new Error("fixture");
+      const shaft = feature.program.parts[0]!;
+      if (shaft.method !== "PROFILE_SWEEP") throw new Error("fixture");
+      shaft.stations[0]!.half_width = 4; // allowed interval, prohibited full span
+    });
+    expect(() => revise(varied, original))
+      .toThrow("GEOMETRY_MATH_SPAN_BOUNDS_VIOLATION");
+  });
+
   test("v13 frozen sources still compile and cannot declare v14 variation metadata", () => {
     const legacy = edit(seed(), feature => {
       feature.program = {
