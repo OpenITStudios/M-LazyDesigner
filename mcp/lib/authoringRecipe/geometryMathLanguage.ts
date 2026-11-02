@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * Versions 1–10 remain source-frozen. V11 introduces explicit,
- * provenance-bound scale claims without guessing physical conversions.
+ * Versions 1–11 remain source-frozen. V12 accepts bounded uncertainty
+ * claims and requires robust interval checks, never inferred units.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -373,6 +373,37 @@ export const geometryMathMeasuredDimensionSchema = z.object({
   evidence: geometryMathMeasurementEvidenceSchema,
 }).strict();
 
+/**
+ * V12 models UNVERIFIED measurement/calibration uncertainty as a closed
+ * declared interval. It does not alter native scale or infer missing
+ * reference values. All units, calibrations and evidence are explicit.
+ */
+const uncertaintyCalibration = (lower: number, upper: number) =>
+  z.object({
+    min_value: z.number().finite().min(lower).max(upper),
+    max_value: z.number().finite().min(lower).max(upper),
+    evidence: geometryMathMeasurementEvidenceSchema,
+  }).strict().refine(value => value.min_value <= value.max_value,
+    "Uncertainty calibration interval must be ordered.");
+
+export const geometryMathCalibrationUncertaintySchema = z.object({
+  meters_per_block: uncertaintyCalibration(0.01, 100).optional(),
+  player_height_blocks: uncertaintyCalibration(0.5, 4).optional(),
+}).strict();
+
+export const geometryMathUncertaintyTargetSchema = z.object({
+  id,
+  part_id: id,
+  axis,
+  unit: geometryMathScaleUnitSchema,
+  min_value: z.number().finite().min(0).max(4096),
+  max_value: z.number().finite().min(0).max(4096),
+  // Error permitted between source-declared possible geometry and a
+  // native voxel envelope. No unapproved implicit pixel tolerance.
+  tolerance_model_units: z.number().finite().min(0).max(16),
+  evidence: geometryMathMeasurementEvidenceSchema,
+}).strict();
+
 const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
@@ -413,6 +444,15 @@ const programV11Fields = {
   measured_dimensions: z.array(geometryMathMeasuredDimensionSchema)
     .max(16).optional(),
 };
+const programV12Fields = {
+  ...programV11Fields,
+  // At least one declared uncertain target must be assessed; the v12
+  // schema is NOT a wrapper for a no-op uncertainty declaration.
+  uncertainty_targets: z.array(geometryMathUncertaintyTargetSchema)
+    .min(1).max(16),
+  calibration_uncertainty:
+    geometryMathCalibrationUncertaintySchema.optional(),
+};
 
 /**
  * The source version selects numerical semantics; it is never defaulted.
@@ -430,6 +470,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(9), ...programV9Fields }).strict(),
   z.object({ version: z.literal(10), ...programV10Fields }).strict(),
   z.object({ version: z.literal(11), ...programV11Fields }).strict(),
+  z.object({ version: z.literal(12), ...programV12Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -501,7 +542,8 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
     });
   }
   if (program.version === 7 || program.version === 8 ||
-    program.version === 9 || program.version === 11) {
+    program.version === 9 || program.version === 11 ||
+    program.version === 12) {
     const connectors = new Set(program.parts.filter(part =>
       part.method === "CONNECT"
     ).map(part => part.id));
@@ -545,29 +587,35 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
     });
   }
   if (program.version === 8 || program.version === 9 ||
-    program.version === 10 || program.version === 11) {
+    program.version === 10 || program.version === 11 ||
+    program.version === 12) {
     const relations = program.clearances ?? [];
     const claimedIds = [
       ...anchors.map(link => link.id),
       ...(program.face_anchors ?? []).map(link => link.id),
       ...relations.map(link => link.id),
       ...((program.version === 9 || program.version === 10 ||
-        program.version === 11)
+        program.version === 11 || program.version === 12)
         ? (program.dimension_links ?? []).map(link => link.id)
         : []),
-      ...((program.version === 10 || program.version === 11)
+      ...((program.version === 10 || program.version === 11 ||
+        program.version === 12)
         ? (program.dimension_constraints ?? []).map(link => link.id)
         : []),
-      ...(program.version === 11
+      ...((program.version === 11 || program.version === 12)
         ? [
           ...(program.scale_targets ?? []).map(item => item.id),
           ...(program.measured_dimensions ?? []).map(item => item.id),
         ] : []),
+      ...(program.version === 12
+        ? program.uncertainty_targets.map(item => item.id)
+        : []),
     ];
     if (new Set(claimedIds).size !== claimedIds.length) {
       ctx.addIssue({
         code: "custom",
-        path: program.version === 11 ? ["scale_targets"] :
+        path: program.version === 12 ? ["uncertainty_targets"] :
+          program.version === 11 ? ["scale_targets"] :
           program.version === 10 ? ["dimension_constraints"] :
           program.version === 9 ? ["dimension_links"] : ["clearances"],
         message: "All geometry relation IDs must be unique.",
@@ -584,7 +632,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
     });
   }
   if (program.version === 9 || program.version === 10 ||
-    program.version === 11) {
+    program.version === 11 || program.version === 12) {
     const definitions = new Map(program.parts.map(part => [
       part.id, part
     ] as const));
@@ -611,7 +659,8 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       claims.add(slot);
     });
   }
-  if (program.version === 10 || program.version === 11) {
+  if (program.version === 10 || program.version === 11 ||
+    program.version === 12) {
     (program.dimension_constraints ?? []).forEach((relation, index) => {
       if (relation.kind === "SPAN_BOUNDS") {
         if (!known.has(relation.part_id)) {
@@ -648,7 +697,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
-  if (program.version === 11) {
+  if (program.version === 11 || program.version === 12) {
     const targets = program.scale_targets ?? [];
     const owners = new Set<string>();
     targets.forEach((target, index) => {
@@ -725,6 +774,95 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     }
   }
+  if (program.version === 12) {
+    const declared = program.uncertainty_targets;
+    const units = program.scale_context;
+    const bounds = program.calibration_uncertainty;
+    // Source-owned confidence intervals must include the declared
+    // nominal calibration that v11 measured BOX dimensions use.
+    for (const kind of ["meters_per_block", "player_height_blocks"] as const) {
+      const interval = bounds?.[kind];
+      if (!interval) continue;
+      const nominal = units[kind]?.value;
+      if (nominal === undefined ||
+        nominal < interval.min_value ||
+        nominal > interval.max_value) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["calibration_uncertainty", kind],
+          message: "Calibration range requires a nominal value within its declared bounds.",
+        });
+      }
+    }
+    const owners = new Set<string>();
+    declared.forEach((target, index) => {
+      if (!known.has(target.part_id)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["uncertainty_targets", index, "part_id"],
+          message: "Uncertainty target references an unknown semantic part.",
+        });
+      }
+      const owner = target.part_id + ":" + target.axis;
+      if (owners.has(owner)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["uncertainty_targets", index],
+          message: "Only one uncertainty range may own a part/axis.",
+        });
+      }
+      owners.add(owner);
+      if (target.min_value > target.max_value) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["uncertainty_targets", index, "min_value"],
+          message: "Uncertainty target lower bound exceeds upper bound.",
+        });
+      }
+      if ((target.unit === "METERS" || target.unit === "CENTIMETERS") &&
+        !units.meters_per_block) {
+        ctx.addIssue({
+          code: "custom", path: ["uncertainty_targets", index, "unit"],
+          message: "Physical uncertainty needs explicit meters_per_block calibration.",
+        });
+      }
+      if (target.unit === "PLAYER_HEIGHTS" &&
+        !units.player_height_blocks) {
+        ctx.addIssue({
+          code: "custom", path: ["uncertainty_targets", index, "unit"],
+          message: "Player-height uncertainty needs explicit player-height calibration.",
+        });
+      }
+    });
+    // When the conversion of an explicitly authored BOX dimension is
+    // uncertain, its native output must be compared to a declared range
+    // and tolerance, not silently treated as metrically definitive.
+    (program.measured_dimensions ?? []).forEach((measurement, index) => {
+      const factor = measurement.unit === "METERS" ||
+        measurement.unit === "CENTIMETERS"
+        ? bounds?.meters_per_block
+        : measurement.unit === "PLAYER_HEIGHTS"
+          ? bounds?.player_height_blocks : undefined;
+      if (!factor || factor.min_value === factor.max_value) return;
+      const linked = declared.find(target =>
+        target.part_id === measurement.target_part_id &&
+        target.axis === measurement.target_axis
+      );
+      // A different unit could hide a genuinely uncertain physical
+      // conversion behind a trivially passing MODEL_UNITS target.
+      // Require an interval in the SAME source unit, containing the
+      // nominal measurement, before the robust native-volume preflight.
+      if (!linked || linked.unit !== measurement.unit ||
+        measurement.value < linked.min_value ||
+        measurement.value > linked.max_value) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["measured_dimensions", index],
+          message: "Uncertain measured BOX dimensions require a same-unit uncertainty target on that axis whose interval includes the nominal measurement.",
+        });
+      }
+    });
+  }
 });
 
 export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
@@ -752,5 +890,9 @@ export type GeometryMathScaleTarget =
   z.infer<typeof geometryMathScaleTargetSchema>;
 export type GeometryMathMeasuredDimension =
   z.infer<typeof geometryMathMeasuredDimensionSchema>;
+export type GeometryMathCalibrationUncertainty =
+  z.infer<typeof geometryMathCalibrationUncertaintySchema>;
+export type GeometryMathUncertaintyTarget =
+  z.infer<typeof geometryMathUncertaintyTargetSchema>;
 export type GeometryMathVersion = GeometryMathProgram["version"];
 export type GeometryMathAnchor = z.infer<typeof geometryMathAnchorSchema>;

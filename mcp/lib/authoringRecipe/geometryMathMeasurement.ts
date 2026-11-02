@@ -3,6 +3,8 @@ import type {
   GeometryMathMeasuredDimension,
   GeometryMathScaleContext,
   GeometryMathScaleTarget,
+  GeometryMathUncertaintyTarget,
+  GeometryMathCalibrationUncertainty,
 } from "./geometryMathLanguage";
 import type {
   GeometryDimensionBounds,
@@ -39,13 +41,16 @@ export function requireGeometryScaleClaimsBound(
   context: GeometryMathScaleContext,
   targets: readonly GeometryMathScaleTarget[],
   evidenceRefs: readonly string[],
-  measuredDimensions: readonly GeometryMathMeasuredDimension[] = []
+  measuredDimensions: readonly GeometryMathMeasuredDimension[] = [],
+  uncertaintyTargets: readonly GeometryMathUncertaintyTarget[] = [],
+  calibrationUncertainty?: GeometryMathCalibrationUncertainty
 ): void {
   if (context.model_units_per_block !== MODEL_UNITS_PER_BLOCK) {
     throw new Error("GEOMETRY_MATH_SCALE_MODEL_UNIT_POLICY_INVALID");
   }
   if (targets.length > MAX_TARGETS ||
-    measuredDimensions.length > MAX_TARGETS) {
+    measuredDimensions.length > MAX_TARGETS ||
+    uncertaintyTargets.length > MAX_TARGETS) {
     throw new Error("GEOMETRY_MATH_SCALE_TARGET_BUDGET_EXCEEDED");
   }
   const available = new Set(evidenceRefs);
@@ -56,6 +61,11 @@ export function requireGeometryScaleClaimsBound(
       ? [context.player_height_blocks.evidence] : []),
     ...targets.map(target => target.evidence),
     ...measuredDimensions.map(target => target.evidence),
+    ...uncertaintyTargets.map(target => target.evidence),
+    ...(calibrationUncertainty?.meters_per_block
+      ? [calibrationUncertainty.meters_per_block.evidence] : []),
+    ...(calibrationUncertainty?.player_height_blocks
+      ? [calibrationUncertainty.player_height_blocks.evidence] : []),
   ];
   for (const claim of claims) {
     if (claim.kind !== "REFERENCE_CLAIM") continue;

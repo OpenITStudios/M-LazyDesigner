@@ -992,6 +992,61 @@ after DIMENSION_LINK/ORIENT/repeat/CONNECT; persistence, native
 Undo/export/visual size versus approved reference. NO Bun, build,
 typecheck, tests, CI or live Blockbench was run in this code-first task.
 
+### R3x — Calibrated interval arithmetic without false reference certainty (2026-11-02; CODE ONLY)
+
+V11 only accepted single nominal physical/player calibration values.
+Such values are adequate when the design specification explicitly
+fixes scale, but not when an image, drawing or estimated measurement
+admits a range of plausible sizes. A source handle is also not proof
+that external measurements were retrieved or checked.
+
+V12 provides explicit `uncertainty_targets` and optional ranges
+around the existing v11 nominal `meters_per_block` and
+`player_height_blocks`. Calibration uncertainty MUST enclose its
+nominal. Each 0–4096 unit target interval carries model-axis identity,
+source unit, bounded explicit native-unit tolerance and caller-declared
+or source-handle-linked evidence. Missing calibrations, duplicate
+part/axis ownership, inverted intervals, and unbound source claims
+fail before native Cuboids. If an uncertain calibration is used to
+construct a measured BOX axis, a matching uncertain target must use
+the same measurement unit, own that exact part/axis, and enclose
+the nominal value. Otherwise an unrelated MODEL_UNITS target could
+evade the physical calibration uncertainty.
+
+The pure `geometryMathUncertainty.ts` performs monotone interval
+conversion, not Monte Carlo sampling or a new geometry solver:
+for physical meters, lower native bound is
+`16 * measured_min / meters_per_block_max` and upper is
+`16 * measured_max / meters_per_block_min`. For player-relative
+values use `16 * player_height_min/max`, respectively.
+Blocks and model units have exact native factors. Every derived
+native interval is checked finite/nonnegative and compared against
+the ACTUAL built semantic part's source-local axis envelope.
+
+Result states are `ALL_DECLARED_VALUES_FIT` (every declared
+candidate is within the explicit tolerance),
+`SOME_DECLARED_VALUES_FIT` (only a nonempty intersection, so
+review REQUIRED), and `NO_DECLARED_VALUES_FIT` (incompatible).
+Only ALL passes. Critically, even ALL means SOURCE-CONTRACT-consistent,
+not verified real-world measurement or visual/player-scale approval.
+The read-only assessment may be reused by an AI for precise revision
+advice, while plan/apply fails closed on SOME or NONE.
+
+Old mathematical source v1–v11 and all preexisting shape methods,
+native Cube IDs, v11 nominal measured dimension conversions,
+original ANCHOR/FACE_ANCHOR/CLEARANCE constraints, single Recipe Store
+and Undo remain unchanged; v12 is explicitly opt-in and does not
+invent new material geometry. No new Gateway tool, database,
+independent evaluator service or generated Runtime/API snapshot.
+
+Future proof, NOT EXECUTED: v1–v11 saved-source equivalence;
+minimum/maximum calibration propagation, cm/m and player-height
+bounds, all/some/no interval classifications, tolerance boundaries,
+misbound REFERENCE_CLAIM, uncertain measured BOX lacking matching
+target, signed LINEAR envelope, CONNECT outputs, native save/reopen/
+Undo, UV/export and reference scale review. No Bun/typecheck/build,
+tests/CI, installed Blockbench or visual QA was performed.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

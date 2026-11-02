@@ -888,6 +888,86 @@ Public `construct_geometry` is still UNREGISTERED.
 **Not executed:** Bun, typecheck, build, tests/CI, live Blockbench,
 native Undo/save/reopen/Bedrock export or visual/reference acceptance.
 
+### R3x — Interval measurement uncertainty and fail-closed scale decisions (SOURCE ONLY)
+
+Opt-in `kind:"program"` `program.version=12` adds
+`uncertainty_targets` (1–16 declarations) and optional
+`calibration_uncertainty` to the existing v11 Measurement & Scale
+contract. Math source versions v1–v11 remain unchanged: no implicit
+calibration, material mutation, Box resizing or reference approval.
+
+Each target declares `part_id`, X/Y/Z `axis`, `unit`, a
+`min_value..max_value` closed interval, an EXPLICIT
+`tolerance_model_units` (0–16) and evidence. Range bounds are
+caller-declared possibilities, **not statistically computed
+confidence levels or verified observations**. For physical units,
+conversion propagates BOTH calibration bounds (metres-per-block),
+and player-relative units propagate declared player-height bounds.
+Any optional calibration interval must contain the nominal value
+used by existing v11 measured BOX construction. No metres-per-block
+or player height can be guessed from pixels or general knowledge.
+
+The new pure `geometryMathUncertainty.ts` returns one of three
+read-only states per target: `ALL_DECLARED_VALUES_FIT`,
+`SOME_DECLARED_VALUES_FIT` or `NO_DECLARED_VALUES_FIT`.
+**Only ALL may pass the source preflight**, and even ALL means
+compatibility with stated intervals/tolerance, NEVER a verified
+reference or asset approval. SOME throws a dedicated
+`GEOMETRY_MATH_UNCERTAINTY_REVIEW_REQUIRED` error; NONE reports
+`GEOMETRY_MATH_UNCERTAINTY_INCOMPATIBLE`. No branch auto-selects
+a best-case measurement or enlarges tolerance without new source.
+
+Example: model height 8 units, caller-declared 0.5 m nominal with
+1 metre/block nominal calibration and a 0.95–1.05 metre/block
+uncertainty range. Source dimensions 0.48–0.52 m propagate to
+about 7.31–8.76 model units. An explicit 1-unit native tolerance
+covers that FULL declared interval; a tighter tolerance may fail.
+
+```json
+{
+  "version":12,
+  "parts":[
+    {"id":"seat","method":"BOX","at":[0,0,0],"size":[8,8,8]}
+  ],
+  "scale_context":{
+    "model_units_per_block":16,
+    "meters_per_block":{"value":1,"evidence":{"kind":"DECLARED_SPEC"}}
+  },
+  "measured_dimensions":[{
+    "id":"height_nominal","target_part_id":"seat","target_axis":"Y",
+    "unit":"METERS","value":0.5,"evidence":{"kind":"DECLARED_SPEC"}
+  }],
+  "calibration_uncertainty":{
+    "meters_per_block":{"min_value":0.95,"max_value":1.05,
+      "evidence":{"kind":"DECLARED_SPEC"}}
+  },
+  "uncertainty_targets":[{
+    "id":"height_interval","part_id":"seat","axis":"Y",
+    "unit":"METERS","min_value":0.48,"max_value":0.52,
+    "tolerance_model_units":1,"evidence":{"kind":"DECLARED_SPEC"}
+  }]
+}
+```
+
+For uncertain calibration in a v12 `MEASURED_DIMENSION`,
+a corresponding uncertainty target on the same BOX part/axis and in
+the SAME measurement unit is REQUIRED; its interval must contain
+the nominal measured value. A MODEL_UNITS-only target cannot hide
+uncertainty in metres or player-height conversion.
+Provenance for every interval/calibration must bind through the same
+outer-feature `evidence_refs` check as v11 (a matching
+`REFERENCE_CLAIM` remains unverified reference content).
+Original dimensions/ANCHOR/FACE_ANCHOR, CLEARANCE, LOFT, ORIENT,
+signed LINEAR repeats, derived CONNECT, single Recipe v1 compiler
+and 64-expanded-native-Cube budget remain the only owners.
+No second solver, persistent store, provider API or new Gateway tool.
+
+**Proof boundary:** source-only implementation. No Bun, typecheck,
+build, tests/CI, installed Blockbench, native Undo/save/reopen,
+Bedrock export or visual/source verification was executed.
+Public `construct_geometry` remains UNREGISTERED pending canonical
+generator-owned Runtime/API documentation.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
