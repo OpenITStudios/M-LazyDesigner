@@ -1232,7 +1232,7 @@ test("native mesh orientation is optional and copied in observed joint frames", 
   expect(review.mesh_world_orientation_state)
     .toBe("SOURCE_ONLY_MESH_WORLD_QUATERNIONS");
   expect(review.frames_with_complete_orientations).toBe(3);
-  (oriented[0].groups[0].world_quaternion_xyzw as number[])[0]=0.8;
+  (oriented[0].groups[0].world_quaternion_xyzw as [number,number,number,number])[0]=0.8;
   expect(review.frames[0].groups[0].world_quaternion_xyzw).toEqual([0,0,0,1]);
   const malformed=analyzeObservedAnimationJointOriginFrames(oriented);
   expect(malformed).toMatchObject({
