@@ -28,6 +28,12 @@ semantic method/part/relationship IDs. No standalone style system,
 implicit variation or visual identity attestation; existing Knowledge
 planning receives the source-only projection even when its index is absent.
 
+**R3z:** Opt-in Geometry Construction Language v13 adds a declared
+anisotropic PROFILE_SWEEP with ellipse/rectangle sections, explicit up
+axis and station-by-station taper/twist. Pure piecewise frames and the
+existing one-unit voxel/Cuboid partition enforce bounded topology;
+no new object presets, random variation or visual claims.
+
 **PUBLIC AI:** `construct_geometry` remains UNREGISTERED. A real
 generator-capable Bun workspace is required for atomic registration
 with generator-owned API docs. Do not hand-edit generated artifacts.
@@ -35,12 +41,12 @@ with generator-owned API docs. Do not hand-edit generated artifacts.
 **PROOF:** Source only. No tests/build/CI, native save/reopen,
 Bedrock export or visual QA; plugin deployment not claimed.
 
-**NEXT:** Design the opt-in, source-bound morphology parameter contract
-(SWEEP/LOFT section shape and safe variation), without guessing visual
-identity or rewriting math v1–v12. Native acceptance remains open;
-public `construct_geometry` still needs canonical Bun generation.
-No build, tests, CI, Blockbench or visual QA under CODE-FIRST.
-Do not create a parallel Geometry/Undo/quality engine.
+**NEXT:** Harden and extend v13 geometry with explicit, source-bound
+variation constraints only when a specific semantic feature requires them.
+Do not add randomization, CAD/mesh exporters, or a second solver.
+Native acceptance remains open; public `construct_geometry` still needs
+canonical Bun generation. No build, tests, CI, Blockbench or visual QA
+under CODE-FIRST.
 ## GitHub boundary and historical local recovery
 
 - `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.

@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * Versions 1–11 remain source-frozen. V12 accepts bounded uncertainty
- * claims and requires robust interval checks, never inferred units.
+ * Versions 1–12 remain source-frozen. V12 requires bounded uncertainty
+ * claims; V13 optionally retains those checks and adds typed profile sweeps.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -216,6 +216,48 @@ export const geometryMathPartV6Schema = z.union([
   geometryMathPartV5Schema,
   geometryMathOrientedInstanceSchema,
 ]);
+/**
+ * V13: one typed morphology operation, NOT a library of object presets.
+ * A user/reference-authored polyline carries anisotropic cross-sections.
+ * An explicit initial frame axis prevents silent arbitrary roll. Twist is
+ * measured in degrees about the transported tangent; it is NOT an animated
+ * Bone transform or a native mesh. Existing v1–v12 inputs remain frozen.
+ */
+export const geometryMathProfileSweepPartSchema = z.object({
+  ...partBase,
+  method: z.literal("PROFILE_SWEEP"),
+  cross_section: z.enum(["ELLIPSE", "RECTANGLE"]),
+  up_axis: axis,
+  stations: z.array(z.object({
+    position: z.tuple([
+      z.number().finite().min(-64).max(64),
+      z.number().finite().min(-64).max(64),
+      z.number().finite().min(-64).max(64),
+    ]),
+    half_width: z.number().finite().min(1).max(8),
+    half_height: z.number().finite().min(1).max(8),
+    twist_degrees: z.number().finite().min(-180).max(180).default(0),
+  }).strict()).min(2).max(8),
+}).strict().superRefine((part, ctx) => {
+  for (let index = 1; index < part.stations.length; index++) {
+    const a = part.stations[index - 1]!.position;
+    const b = part.stations[index]!.position;
+    const span = Math.hypot(
+      b[0] - a[0], b[1] - a[1], b[2] - a[2]
+    );
+    if (span < 1) {
+      ctx.addIssue({
+        code: "custom", path: ["stations", index, "position"],
+        message: "PROFILE_SWEEP stations require at least one model unit separation.",
+      });
+    }
+  }
+});
+export const geometryMathPartV13Schema = z.union([
+  geometryMathPartV6Schema,
+  geometryMathProfileSweepPartSchema,
+]);
+
 /**
  * V7 positional FACE_ANCHOR: select one actual Cuboid face in each of two
  * existing semantic parts and solve the placement with the canonical Recipe
@@ -454,6 +496,17 @@ const programV12Fields = {
     geometryMathCalibrationUncertaintySchema.optional(),
 };
 
+const programV13Fields = {
+  ...programV11Fields,
+  parts: z.array(geometryMathPartV13Schema).min(1).max(8),
+  // Unlike frozen v12, v13 morphology is usable without manufacturing an
+  // uncertainty target. When declared, v12's strict interval rules still
+  // apply. A calibration interval without a target is not meaningful.
+  uncertainty_targets: z.array(geometryMathUncertaintyTargetSchema)
+    .min(1).max(16).optional(),
+  calibration_uncertainty: geometryMathCalibrationUncertaintySchema.optional(),
+};
+
 /**
  * The source version selects numerical semantics; it is never defaulted.
  * All previous source versions remain readable and reconstructable.
@@ -471,6 +524,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(10), ...programV10Fields }).strict(),
   z.object({ version: z.literal(11), ...programV11Fields }).strict(),
   z.object({ version: z.literal(12), ...programV12Fields }).strict(),
+  z.object({ version: z.literal(13), ...programV13Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -543,7 +597,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   }
   if (program.version === 7 || program.version === 8 ||
     program.version === 9 || program.version === 11 ||
-    program.version === 12) {
+    program.version === 12 || program.version === 13) {
     const connectors = new Set(program.parts.filter(part =>
       part.method === "CONNECT"
     ).map(part => part.id));
@@ -588,33 +642,36 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   }
   if (program.version === 8 || program.version === 9 ||
     program.version === 10 || program.version === 11 ||
-    program.version === 12) {
+    program.version === 12 || program.version === 13) {
     const relations = program.clearances ?? [];
     const claimedIds = [
       ...anchors.map(link => link.id),
       ...(program.face_anchors ?? []).map(link => link.id),
       ...relations.map(link => link.id),
       ...((program.version === 9 || program.version === 10 ||
-        program.version === 11 || program.version === 12)
+        program.version === 11 || program.version === 12 ||
+        program.version === 13)
         ? (program.dimension_links ?? []).map(link => link.id)
         : []),
       ...((program.version === 10 || program.version === 11 ||
-        program.version === 12)
+        program.version === 12 || program.version === 13)
         ? (program.dimension_constraints ?? []).map(link => link.id)
         : []),
-      ...((program.version === 11 || program.version === 12)
+      ...((program.version === 11 || program.version === 12 ||
+        program.version === 13)
         ? [
           ...(program.scale_targets ?? []).map(item => item.id),
           ...(program.measured_dimensions ?? []).map(item => item.id),
         ] : []),
-      ...(program.version === 12
-        ? program.uncertainty_targets.map(item => item.id)
+      ...((program.version === 12 || program.version === 13)
+        ? (program.uncertainty_targets ?? []).map(item => item.id)
         : []),
     ];
     if (new Set(claimedIds).size !== claimedIds.length) {
       ctx.addIssue({
         code: "custom",
-        path: program.version === 12 ? ["uncertainty_targets"] :
+        path: program.version === 12 || program.version === 13
+          ? ["uncertainty_targets"] :
           program.version === 11 ? ["scale_targets"] :
           program.version === 10 ? ["dimension_constraints"] :
           program.version === 9 ? ["dimension_links"] : ["clearances"],
@@ -632,7 +689,8 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
     });
   }
   if (program.version === 9 || program.version === 10 ||
-    program.version === 11 || program.version === 12) {
+    program.version === 11 || program.version === 12 ||
+    program.version === 13) {
     const definitions = new Map(program.parts.map(part => [
       part.id, part
     ] as const));
@@ -660,7 +718,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
     });
   }
   if (program.version === 10 || program.version === 11 ||
-    program.version === 12) {
+    program.version === 12 || program.version === 13) {
     (program.dimension_constraints ?? []).forEach((relation, index) => {
       if (relation.kind === "SPAN_BOUNDS") {
         if (!known.has(relation.part_id)) {
@@ -697,7 +755,8 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
-  if (program.version === 11 || program.version === 12) {
+  if (program.version === 11 || program.version === 12 ||
+    program.version === 13) {
     const targets = program.scale_targets ?? [];
     const owners = new Set<string>();
     targets.forEach((target, index) => {
@@ -774,8 +833,13 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     }
   }
-  if (program.version === 12) {
-    const declared = program.uncertainty_targets;
+  if (program.version === 12 || program.version === 13) {
+    const declared = program.uncertainty_targets ?? [];
+    if (program.version === 13 && declared.length === 0 &&
+      program.calibration_uncertainty) {
+      ctx.addIssue({ code: "custom", path: ["calibration_uncertainty"],
+        message: "A calibration uncertainty range requires an uncertainty target." });
+    }
     const units = program.scale_context;
     const bounds = program.calibration_uncertainty;
     // Source-owned confidence intervals must include the declared
@@ -869,6 +933,9 @@ export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
 export type GeometryMathPartV4 = z.infer<typeof geometryMathPartV4Schema>;
 export type GeometryMathPartV5 = z.infer<typeof geometryMathPartV5Schema>;
 export type GeometryMathPartV6 = z.infer<typeof geometryMathPartV6Schema>;
+export type GeometryMathPartV13 = z.infer<typeof geometryMathPartV13Schema>;
+export type GeometryMathProfileSweepPart =
+  z.infer<typeof geometryMathProfileSweepPartSchema>;
 export type GeometryMathOrientedInstance =
   z.infer<typeof geometryMathOrientedInstanceSchema>;
 export type GeometryMathLoftPart = z.infer<typeof geometryMathLoftPartSchema>;
