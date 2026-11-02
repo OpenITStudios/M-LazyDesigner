@@ -3,6 +3,7 @@ import {
   analyzeAnimationContactEvidence,
   analyzeObservedAnimationLocatorTrajectories,
   type ObservedAnimationLocatorFrame,
+  type ContactConstraintInput,
 } from "@/lib/animationContactEvidence";
 
 function requireAvailable<T extends { state: string }>(result: T): asserts result is T & { state: "available" } {
@@ -739,4 +740,78 @@ test("nonfinite Locator displacement, invalid frames and tiny time gaps fail clo
     .toMatchObject({state:"unavailable",reason:"LOCATOR_TRAJECTORY_TIMES_NOT_DISTINCT"});
   expect(analyzeObservedAnimationLocatorTrajectories([frame(0,0),null as any]))
     .toMatchObject({state:"unavailable",reason:"LOCATOR_TRAJECTORY_FRAME_IDENTITY_OR_COVERAGE_CHANGED"});
+});
+
+
+function explicitContactIk(): ContactConstraintInput {
+  const xs=[0,0.1,0.2];
+  const v=(x:number,y:number,z:number)=>[x,y,z] as [number,number,number];
+  return {
+    id:"foot",mode:"planted",tolerance:0.05,
+    sampling_window:{start:0,end:1,max_gap_seconds:0.5},
+    support_plane:{axis:"Y",coordinate:0,allowed_side:"POSITIVE",penetration_tolerance:0},
+    samples:xs.map((x,i)=>({time:i/2,marker:v(x,0,0),target:v(0,0,0)})),
+    ik_chain:{
+      project_uuid:"project",animation_uuid:"clip",locator_uuid:"foot-locator",
+      joint_group_uuids:["hip","knee","ankle"],
+      frames:xs.map((x,i)=>({time:i/2,joint_world_positions:[
+        v(x,0.8,0),v(x,0.4,0.3),v(x,0,0),
+      ]})),
+    },
+  };
+}
+function candidate(c:ContactConstraintInput) {
+  const report=analyzeAnimationContactEvidence({constraints:[c]});
+  requireAvailable(report);
+  return report.constraints[0].ik_reachability_candidate;
+}
+
+test("declared planted contact yields reachable source-only FABRIK proposals",()=>{
+  const c=explicitContactIk(),before=JSON.stringify(c);
+  const result=candidate(c);
+  expect(result?.state).toBe("SOURCE_ONLY_REACHABLE");
+  if(!result||result.state!=="SOURCE_ONLY_REACHABLE")throw new Error("IK candidate missing");
+  expect(result.frame_count).toBe(3);
+  expect(result.max_residual_world).toBeLessThan(1e-3);
+  expect(result.frames[2].correction_world).toEqual([-0.2,0,0]);
+  expect(result.frames[2].solved_chain_world).toHaveLength(3);
+  expect(result.native_ik_bake_authorized).toBe(false);
+  expect(result.native_sampling_attested).toBe(false);
+  expect(result.physical_contact_verified).toBe(false);
+  expect(JSON.stringify(c)).toBe(before);
+});
+
+test("IK proposal refuses bone stretch, incomplete coverage, displaced Locator",()=>{
+  const fresh=()=>JSON.parse(JSON.stringify(explicitContactIk())) as any;
+  let input=fresh();
+  input.ik_chain.frames[1].joint_world_positions[1]=[0.1,0.4,1.3];
+  expect(candidate(input)).toMatchObject({state:"unavailable",reason:"CONTACT_IK_BONE_LENGTH_CHANGED"});
+  input=fresh();input.ik_chain.frames.pop();
+  expect(candidate(input)).toMatchObject({state:"unavailable",reason:"CONTACT_IK_SAMPLE_COVERAGE_INVALID"});
+  input=fresh();input.ik_chain.frames[1].joint_world_positions[2]=[0.12,0,0];
+  expect(candidate(input)).toMatchObject({state:"unavailable",reason:"CONTACT_IK_MARKER_JOINT_MISMATCH"});
+});
+
+test("IK proposal rejects a target beyond the unchanged chain reach",()=>{
+  const input=JSON.parse(JSON.stringify(explicitContactIk())) as any;
+  for(const f of input.ik_chain.frames) {
+    f.joint_world_positions[0][1]=2;
+    f.joint_world_positions[1][1]=1.5;
+    f.joint_world_positions[1][2]=0;
+  }
+  expect(candidate(input)).toMatchObject({
+    state:"unavailable",reason:"CONTACT_IK_UNREACHABLE",
+    native_ik_bake_authorized:false,
+  });
+});
+
+test("contact analysis without an IK chain remains unchanged; incomplete stance blocks IK",()=>{
+  const c=explicitContactIk();
+  delete c.ik_chain;
+  expect(candidate(c)).toBeUndefined();
+  const incomplete=explicitContactIk();
+  incomplete.sampling_window={start:0,end:1,max_gap_seconds:0.1};
+  expect(candidate(incomplete)).toMatchObject({
+    state:"unavailable",reason:"CONTACT_IK_NO_ELIGIBLE_PLANTED_SLIP",
+  });
 });

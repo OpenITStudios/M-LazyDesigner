@@ -1,3 +1,5 @@
+import { solveFabrikChain } from "@/lib/rig/fabrik";
+
 export type Vec3 = readonly [number, number, number];
 
 export type ContactSample = {
@@ -21,6 +23,16 @@ export type ContactSupportPlane = {
   penetration_tolerance: number;
 };
 
+
+/** Explicit caller-supplied joint positions; does not attest native origins. */
+export type DeclaredContactIkChain = {
+  project_uuid: string;
+  animation_uuid: string;
+  locator_uuid: string;
+  joint_group_uuids: readonly string[];
+  frames: readonly { time: number; joint_world_positions: readonly Vec3[] }[];
+};
+
 export type ContactConstraintInput = {
   id: string;
   mode: "pair" | "fixed" | "planted";
@@ -28,6 +40,8 @@ export type ContactConstraintInput = {
   samples: readonly ContactSample[];
   sampling_window?: ContactSamplingWindow;
   support_plane?: ContactSupportPlane;
+  /** Optional source-only planted-contact IK feasibility. */
+  ik_chain?: DeclaredContactIkChain;
 };
 
 const TIME_EPSILON = 1e-6;
@@ -70,6 +84,126 @@ function planePenetration(marker: Vec3, plane: ContactSupportPlane): number {
   return Math.max(0, -sign * (marker[axis] - plane.coordinate));
 }
 
+
+export const CONTACT_IK_MAX_SAMPLES = 8;
+export const CONTACT_IK_MAX_JOINTS = 8;
+
+/** Read-only world-space kinematic proposal; never a native IK mutation. */
+function planDeclaredContactIkReachability(
+  constraint: ContactConstraintInput,
+  samples: readonly ContactSample[],
+  slipEligible: boolean
+) {
+  type Candidate = { time: number; target_world: Vec3; correction_world: Vec3;
+    solved_chain_world: Vec3[]; residual_world: number };
+  const unavailable = (reason: string) => ({
+    state: "unavailable" as const, reason,
+    frames: [] as Candidate[], frame_count: 0,
+    native_sampling_attested: false as const,
+    native_ik_bake_authorized: false as const,
+    physical_contact_verified: false as const,
+    visual_verdict: "not_evaluated" as const,
+  });
+  const chain = constraint.ik_chain;
+  if (!chain) return unavailable("CONTACT_IK_CHAIN_UNAVAILABLE");
+  if (!slipEligible || constraint.mode !== "planted" ||
+      !constraint.sampling_window || !constraint.support_plane) {
+    return unavailable("CONTACT_IK_NO_ELIGIBLE_PLANTED_SLIP");
+  }
+  const validId = (id: unknown) => typeof id === "string" &&
+    id.trim() === id && id.length > 0 && id.length <= 160;
+  const ids = chain.joint_group_uuids;
+  if (!validId(chain.project_uuid) || !validId(chain.animation_uuid) ||
+      !validId(chain.locator_uuid) || !Array.isArray(ids) ||
+      ids.length < 2 || ids.length > CONTACT_IK_MAX_JOINTS ||
+      ids.some((id) => !validId(id)) || new Set(ids).size !== ids.length) {
+    return unavailable("CONTACT_IK_CHAIN_IDENTITY_INVALID");
+  }
+  const frames = chain.frames;
+  if (!Array.isArray(frames) || frames.length !== samples.length ||
+      frames.length < 2 || frames.length > CONTACT_IK_MAX_SAMPLES) {
+    return unavailable("CONTACT_IK_SAMPLE_COVERAGE_INVALID");
+  }
+  if (frames.some((frame) => !frame || !Number.isFinite(frame.time) ||
+      !Array.isArray(frame.joint_world_positions) ||
+      frame.joint_world_positions.length !== ids.length ||
+      frame.joint_world_positions.some((joint) => !validVec3(joint)))) {
+    return unavailable("CONTACT_IK_JOINT_GEOMETRY_INVALID");
+  }
+  const ordered = [...frames].sort((a,b) => a.time - b.time);
+  if (ordered.some((frame,i) => frame.time !== samples[i].time)) {
+    return unavailable("CONTACT_IK_TIME_MISMATCH");
+  }
+  const dist = (a: Vec3,b: Vec3) =>
+    Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+  const lengths = ordered[0].joint_world_positions.slice(1).map(
+    (joint,i) => dist(ordered[0].joint_world_positions[i],joint)
+  );
+  if (lengths.some((length) => !Number.isFinite(length) || length <= 1e-6)) {
+    return unavailable("CONTACT_IK_CHAIN_SEGMENT_INVALID");
+  }
+  for (let i=0;i<ordered.length;i++) {
+    const joints=ordered[i].joint_world_positions;
+    if (dist(joints[joints.length-1],samples[i].marker)>1e-3) {
+      return unavailable("CONTACT_IK_MARKER_JOINT_MISMATCH");
+    }
+    for (let j=1;j<joints.length;j++) {
+      const current=dist(joints[j-1],joints[j]), baseline=lengths[j-1];
+      if (!Number.isFinite(current) ||
+          Math.abs(current-baseline)>Math.max(1e-4,baseline*1e-4)) {
+        return unavailable("CONTACT_IK_BONE_LENGTH_CHANGED");
+      }
+    }
+  }
+  const plane=constraint.support_plane;
+  const axis=plane.axis==="X"?0:plane.axis==="Y"?1:2;
+  const anchor=[...samples[0].marker] as [number,number,number];
+  anchor[axis]=plane.coordinate;
+  if (!validVec3(anchor) || samples.some((sample) =>
+    !Number.isFinite(dist(sample.target,anchor)) ||
+    dist(sample.target,anchor)>constraint.tolerance
+  )) return unavailable("CONTACT_IK_TARGET_NOT_FIXED");
+  const tolerance=Math.min(1e-3,Math.max(1e-5,constraint.tolerance/4));
+  const proposals: Candidate[]=[];
+  for (let i=0;i<ordered.length;i++) {
+    const correction=anchor.map((v,j)=>v-samples[i].marker[j])
+      as [number,number,number];
+    if (!validVec3(correction)) return unavailable("CONTACT_IK_TARGET_INVALID");
+    let solved: ReturnType<typeof solveFabrikChain>;
+    try {
+      solved=solveFabrikChain(ordered[i].joint_world_positions,anchor,{
+        tolerance,max_iterations:64,
+      });
+    } catch {
+      return unavailable("CONTACT_IK_SOLVER_FAILED");
+    }
+    if (!solved.reached || !Number.isFinite(solved.residual) ||
+        solved.residual>tolerance ||
+        solved.points.some((point)=>!validVec3(point))) {
+      return unavailable("CONTACT_IK_UNREACHABLE");
+    }
+    proposals.push({
+      time:samples[i].time,target_world:[...anchor],
+      correction_world:correction,
+      solved_chain_world:solved.points.map((point)=>
+        [...point] as [number,number,number]),
+      residual_world:solved.residual,
+    });
+  }
+  return {
+    state:"SOURCE_ONLY_REACHABLE" as const,reason:null,
+    project_uuid:chain.project_uuid,animation_uuid:chain.animation_uuid,
+    locator_uuid:chain.locator_uuid,joint_group_uuids:[...ids],
+    frame_count:proposals.length,frames:proposals,
+    max_residual_world:Math.max(...proposals.map((f)=>f.residual_world)),
+    input_provenance:"CALLER_DECLARED_NOT_NATIVE_ATTESTED" as const,
+    native_sampling_attested:false as const,
+    native_ik_bake_authorized:false as const,
+    physical_contact_verified:false as const,
+    visual_verdict:"not_evaluated" as const,
+  };
+}
+
 /**
  * Read-only contact evidence for already sampled world-space markers.
  * Values are caller supplied; no sampled timing, native transform, IK,
@@ -101,6 +235,7 @@ export function analyzeAnimationContactEvidence(input: {
     max_support_normal_displacement: number | null;
     max_support_plane_clearance: number | null;
     support_tangential_drift_violation: boolean | null;
+    ik_reachability_candidate?: ReturnType<typeof planDeclaredContactIkReachability>;
     slip_correction_hypothesis: {
       state: "candidate" | "blocked" | "not_applicable";
       blocker: "SUPPORT_PLANE_REQUIRED" | "COMPLETE_SAMPLING_WINDOW_REQUIRED" |
@@ -305,6 +440,11 @@ export function analyzeAnimationContactEvidence(input: {
       : slipBlocker
         ? "blocked" as const : "not_applicable" as const;
 
+    const ikCandidate = constraint.ik_chain !== undefined
+      ? planDeclaredContactIkReachability(
+          constraint, samples, slipCorrectionState === "candidate"
+        )
+      : null;
     results.push({
       id: constraint.id,
       mode: constraint.mode,
@@ -329,6 +469,7 @@ export function analyzeAnimationContactEvidence(input: {
         samples: slipOffsets.slice(0, exampleLimit),
         samples_truncated: slipOffsets.length > exampleLimit,
       },
+      ...(ikCandidate ? { ik_reachability_candidate: ikCandidate } : {}),
       planted_drift_violation: sliding,
       max_marker_step_speed: constraint.mode === "planted" && samples.length >= 2 ? round(maxSpeed) : null,
       sampling_coverage: coverage,

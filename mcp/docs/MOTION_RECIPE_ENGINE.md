@@ -243,6 +243,25 @@ MoLang/audio/effect/texture/geometry/external-listener restoration or
 authorize contact-aware IK mutation. Four Gateway tools and all public
 request schemas stay unchanged.
 
+## Optional source-only planted-contact IK reachability (2026-11-03)
+
+`analyzeAnimationContactEvidence` now optionally accepts caller-declared
+`ik_chain` joint world coordinates and exact Group/Locator/clip identity
+for an explicitly planted contact. It reuses the canonical FABRIK solver,
+with bounded 2..8 joints and 2..8 exact-time samples, to assess whether a
+stationary stance anchor is reachable without changing bone lengths.
+The planner rejects incomplete stance coverage, missing support planes,
+unfixed targets, inconsistent joint lengths, unmatched Locator/end-effector
+positions, and unreachable targets; it never guesses bone names or contacts.
+
+`ik_reachability_candidate.state=SOURCE_ONLY_REACHABLE` provides candidate
+joint world positions, residuals and correction offsets only. It is NOT
+Blockbench native sampling, an Euler-angle animation, authorized IK bake,
+physical foot lock or visual PASS. All native/physical/visual authorization
+flags remain false. There is no new public Gateway or Runtime schema, no Undo
+mutation, generator edit, deployment or CI change. The next proof requires
+native state-isolated joint sampling and visual Golden acceptance.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested
