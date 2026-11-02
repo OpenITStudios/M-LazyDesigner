@@ -148,7 +148,8 @@ function currentProjectRecipeStoreString(): string {
 
 export function createBlockbenchAuthoringRecipeApplyAdapter(
   recipeId: string,
-  createParentGroupUuid?: string
+  createParentGroupUuid?: string,
+  assertCurrentSceneBeforeUndo?: () => void
 ): AuthoringRecipeApplyAdapter {
   let pendingStore: PendingRecipeStoreRevision | null = null;
   let created: Cube[] = [];
@@ -251,6 +252,10 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
       existingAtBegin = existing;
       const undoIndex = Undo.index;
       projectUuidAtBegin = Project.uuid;
+      // For a source-bound Geometry plan, detect late scene/ownership/UV
+      // drift AFTER asynchronous Recipe preflights and BEFORE opening Undo.
+      // The optional callback is synchronous; no await may intervene.
+      assertCurrentSceneBeforeUndo?.();
       Undo.initEdit({
         elements: existing,
         outliner: true,
@@ -262,6 +267,7 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
     },
     upsert: (placement, existingUuid, requestedRecipeId) => {
       if (requestedRecipeId !== recipeId) throw new Error("Parametric recipe upsert identity mismatch.");
+      requireOwnedUndo();
       if (existingUuid) {
         const cube = resolveOwnedCube(recipeId, placement.id, existingUuid);
         extendPlacement(cube,placement,recipeId);
@@ -295,6 +301,7 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
     },
     remove: (instanceId, uuid, requestedRecipeId) => {
       if (requestedRecipeId !== recipeId) throw new Error("Parametric recipe removal identity mismatch.");
+      requireOwnedUndo();
       resolveOwnedCube(recipeId,instanceId,uuid).remove();
     },
     verifyBeforeCommit: ({ affectedInstanceIds }) => {

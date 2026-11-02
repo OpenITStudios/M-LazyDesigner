@@ -28,7 +28,10 @@ import {
   createBlockbenchAuthoringRecipeApplyAdapter,
   readBlockbenchAuthoringRecipeOwnedState,
 } from "./runtime";
-import { readAuthoringRecipeStoreProperty } from "./ownership";
+import {
+  readAuthoringRecipeCubeOwnership,
+  readAuthoringRecipeStoreProperty,
+} from "./ownership";
 import {
   advancedGeometryNativeInputSchema,
   advancedGeometryApplyInputSchema,
@@ -208,6 +211,8 @@ function sceneFingerprint(input: AdvancedNativeConstructionInput): string {
   const faces = ["north", "south", "east", "west", "up", "down"] as const;
   const cubes = Cube.all.map(cube => ({
     uuid: cube.uuid,
+    // UUID and geometry alone cannot detect a Recipe ownership reassignment.
+    ownership: readAuthoringRecipeCubeOwnership(cube),
     name: cube.name,
     parent: groupIdentity(cube.parent),
     from: readFiniteVector(cube.from, "Cube from"),
@@ -583,6 +588,7 @@ export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInp
     );
   }
   const group = requireBedrockProject(input);
+  const projectAtPlan = Project;
   const beforeNative = readBlockbenchAuthoringRecipeOwnedState(prepared.recipe.id);
   if (prepared.mode === "create" && beforeNative.cubes.length !== 0) {
     throw new Error(
@@ -614,7 +620,24 @@ export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInp
     prepared.previous_recipe,
     prepared.recipe,
     fingerprintAuthoringRecipeNativeSnapshot(beforeNative),
-    createBlockbenchAuthoringRecipeApplyAdapter(prepared.recipe.id, group.uuid)
+    createBlockbenchAuthoringRecipeApplyAdapter(
+      prepared.recipe.id, group.uuid,
+      () => {
+        // Recipe preflights may yield before beginUndo. Recheck in the
+        // same synchronous turn immediately preceding native Undo.initEdit.
+        // The identical UUID alone cannot prove the Project/Group object
+        // was not replaced while the plan was pending.
+        if (Project !== projectAtPlan || typeof Group === "undefined" ||
+            !Array.isArray(Group.all) || !Group.all.includes(group)) {
+          throw new Error("ADVANCED_GEOMETRY_NATIVE_IDENTITY_CHANGED_BEFORE_UNDO");
+        }
+        if (sceneFingerprint(normalized) !== scene_revision) {
+          throw new Error(
+            "ADVANCED_GEOMETRY_SCENE_CHANGED_BEFORE_UNDO: inspect current scene and plan again."
+          );
+        }
+      }
+    )
   );
   const execution = native_receipt.execution;
   // Never assume that returning a receipt proves visual/Bedrock acceptance.
