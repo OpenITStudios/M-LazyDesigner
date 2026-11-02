@@ -31,7 +31,11 @@ export type GeometryConnectorSource = {
 
 type ConnectorEndpoint = GeometryMathConnectorPart["start"];
 
-function sourceBoxes(
+/**
+ * Canonical source-local Cube/copy enumeration for geometry relations.
+ * Kept byte-equivalent to v5–v7 CONNECT's original repeat offsets.
+ */
+export function expandGeometrySourceBoxes(
   part: GeometryConnectorSource
 ): Array<{ from: RecipeVec3; to: RecipeVec3 }> {
   const result: Array<{ from: RecipeVec3; to: RecipeVec3 }> = [];
@@ -91,7 +95,7 @@ function resolveEndpoint(
   if (point.some(value => !Number.isFinite(value))) {
     throw new Error("GEOMETRY_MATH_CONNECT_ENDPOINT_NONFINITE");
   }
-  const boxes = sourceBoxes(source);
+  const boxes = expandGeometrySourceBoxes(source);
   if (!boxes.some(box => within(point, box))) {
     throw new Error(
       "GEOMETRY_MATH_CONNECT_ENDPOINT_NOT_ON_SOURCE: " + source.id

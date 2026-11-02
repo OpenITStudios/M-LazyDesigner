@@ -796,6 +796,51 @@ missing/ambiguous Cube IDs, buried faces, opposed-normal checks,
 normal-offset rejection, conflicting and cyclic mixed anchors,
 edge-only contact, native UV/Undo/save/Bedrock and visual acceptance.
 
+### R3t — Explicit source-pair clearance and non-interpenetrating face mounts (2026-11-02; CODE ONLY)
+
+Audit after R3s found an important blind spot: `FACE_ANCHOR` checked
+that its two selected native Cuboid faces coincide with positive-area
+contact, but did not exclude *other* Cuboids of those two semantic parts
+from passing through each other. A plate could be correctly mounted
+at the selected face while other source material intersects.
+
+V8 introduces `geometryMathClearanceSchema` under one explicitly
+versioned `kind:"program"` source, with up to 16 declared
+`{id, part_a_id, part_b_id, minimum_gap?}` pairs. `minimum_gap = 0`
+forbids strict 3D volume overlap but allows touching; `> 0` requires
+the true shortest Euclidean distance between the source's expanded
+axis-aligned Cuboid volumes. Both signed LINEAR copies and derived
+CONNECT parts are included when explicitly selected. Relations
+are checked after original `solveRecipeConstraints`, v8
+`FACE_ANCHOR` verification and any CONNECT realization, never
+by modifying the solver, dragging native Cubes or guessing from images.
+
+The pure `geometryMathClearance.ts` reuses CONNECT's native Cube-copy
+enumeration, computing pairwise AABB intersection/gap without voxel
+sampling, global scene discovery or a secondary optimizer. Every v8
+FACE_ANCHOR pair automatically rejects strictly positive volume overlap
+of its complete two part cohorts. This preserves the stronger guarantee
+“selected face contact *and* no other geometry penetrates” at the
+declared pair level. Other scene objects/relations remain explicitly
+out of scope. Intentional interpenetration should use a separately
+declared construction method; older authored v7 Geometry is untouched.
+
+The source schema enforces valid distinct part references, bounded
+gaps, and globally unique relation IDs across existing ANCHOR,
+FACE_ANCHOR and CLEARANCE lists. All resulting Cuboids remain
+in the original Recipe source, 64 expanded-Cube plan, incremental
+native parent/Undo and saved source-owner route. Original public
+Gateway remains four tools; no separate database, shape preset,
+generated API artifact or released plugin is introduced.
+
+This is SOURCE ONLY. No build/typecheck/tests/CI, live Blockbench,
+native Undo/save-reopen/Bedrock export or image/reference visual
+acceptance executed. Required future proof includes v1–v7 output
+equivalence, face mount with hidden whole-part penetration, touching
+vs strict overlap, min-gap positive Euclidean distance, repeated
+LINEAR copies, CONNECT source pairs, reversed relation order,
+stable relation IDs, and unchanged surrounding scene objects.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

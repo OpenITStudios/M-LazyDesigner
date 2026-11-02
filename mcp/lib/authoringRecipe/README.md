@@ -614,6 +614,69 @@ export or visual/reference verification executed. Public
 `construct_geometry` remains UNREGISTERED pending atomic canonical
 API generation with Runtime registration.
 
+### R3t — V8 inter-part CLEARANCE and full FACE_ANCHOR pair protection (SOURCE ONLY)
+
+Opt-in `program.version=8` retains all previous v1–v7 source
+schemas, source-local Cube IDs and Recipe compiler semantics. This
+extension adds bounded, explicit `clearances` to the SAME high-level
+`kind:"program"` stored source; it does NOT create a second placement
+solver, collision engine, manager, database or public MCP tool.
+
+- `CLEARANCE`: select two distinct existing semantic part IDs and an
+  optional `minimum_gap` (0–8 Blockbench model units, default 0).
+  `0` permits face/edge/corner contact but rejects positive-volume
+  interpenetration; a positive value requires the nearest Euclidean
+  distance between *actual native Cuboid volumes* to be at least the
+  declared gap. An envelope-to-envelope or part-centre distance is
+  NOT a valid substitute. Both signed LINEAR repeats and derived
+  CONNECT geometry are evaluated at their final Recipe positions.
+- All v8 `FACE_ANCHOR` pairs implicitly require zero-interpenetration
+  between the two entire semantic-part cohorts, not just their selected
+  face Cuboids. Their existing exact selected-face, exposed-surface
+  and positive-area contact checks still apply.
+- The source-first `geometryMathClearance.ts` reuses the exact
+  `expandGeometrySourceBoxes` enumeration that CONNECT uses for
+  repeated native Cuboids; it scans only declared part pairs after
+  the canonical Recipe ANCHOR solver and optional derived CONNECT
+  generation. Failed relations return stable error-code prefixes
+  plus relation IDs and affected part IDs. The checks do NOT move
+  any Cube or infer clearance requirements from images.
+- `clearances` is capped at 16, and its IDs are unique across
+  standard ANCHOR, FACE_ANCHOR and CLEARANCE relations. Source IDs,
+  original v7 relation syntax and native 64-Cube program budget remain.
+
+Example (source illustration only, NOT a Blockbench result):
+
+```json
+{
+  "version":8,
+  "parts":[
+    {"id":"base","method":"BOX","at":[0,0,0],"size":[8,4,8]},
+    {"id":"plate","method":"BOX","at":[0,0,0],"size":[2,2,2]}
+  ],
+  "face_anchors":[{
+    "kind":"FACE_ANCHOR","id":"plate_mount",
+    "moving":{"part_id":"plate","cube_id":"box","face":"NEG_Y"},
+    "fixed":{"part_id":"base","cube_id":"box","face":"POS_Y"}
+  }],
+  "clearances":[{
+    "id":"no_plate_base_penetration",
+    "part_a_id":"plate","part_b_id":"base","minimum_gap":0
+  }]
+}
+```
+
+IMPORTANT: this is *declared-pair, source-only* Cuboid intersection and
+distance; unlisted pairs and other existing scene/Project objects are
+not scanned. Touching is not a guarantee of UV compatibility, native
+Bone/hinge ownership, rig behaviour, overall visual similarity or
+collision-free animation. v1–v7 output is unchanged by design; public
+`construct_geometry` remains UNREGISTERED pending canonical generated
+API docs and runtime registration.
+
+Build/typecheck/tests/CI, installed Blockbench, save/reopen, native
+Undo/export and reference/visual QA were **NOT EXECUTED**.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

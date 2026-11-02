@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * V1-v6 source semantics stay frozen. V7 adds exact Cube FACE_ANCHOR
- * placement through the original Recipe constraint solver, opt-in only.
+ * Versions 1–7 remain source-frozen. V8 adds explicit inter-part
+ * volume clearances and stricter FACE_ANCHOR pair separation, opt-in.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -240,6 +240,19 @@ export const geometryMathFaceAnchorSchema = z.object({
   tangent_offset: vec3.optional(),
 }).strict();
 
+/**
+ * V8: exact placed-Cuboid clearance, never a whole-scene collision claim.
+ * minimum_gap=0 permits touching, but forbids strictly positive overlap
+ * on all three axes. A positive gap is Euclidean AABB-to-AABB distance
+ * in model units, not centre distance or bounding-envelope separation.
+ */
+export const geometryMathClearanceSchema = z.object({
+  id,
+  part_a_id: id,
+  part_b_id: id,
+  minimum_gap: z.number().finite().min(0).max(8).optional(),
+}).strict();
+
 const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
@@ -260,6 +273,10 @@ const programV7Fields = {
   ...programV6Fields,
   face_anchors: z.array(geometryMathFaceAnchorSchema).max(12).optional(),
 };
+const programV8Fields = {
+  ...programV7Fields,
+  clearances: z.array(geometryMathClearanceSchema).max(16).optional(),
+};
 
 /**
  * The source version selects numerical semantics; it is never defaulted.
@@ -273,6 +290,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(5), ...programV5Fields }).strict(),
   z.object({ version: z.literal(6), ...programV6Fields }).strict(),
   z.object({ version: z.literal(7), ...programV7Fields }).strict(),
+  z.object({ version: z.literal(8), ...programV8Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -343,7 +361,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
-  if (program.version === 7) {
+  if (program.version >= 7) {
     const connectors = new Set(program.parts.filter(part =>
       part.method === "CONNECT"
     ).map(part => part.id));
@@ -386,6 +404,29 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
+  if (program.version === 8) {
+    const relations = program.clearances ?? [];
+    const claimedIds = [
+      ...anchors.map(link => link.id),
+      ...(program.face_anchors ?? []).map(link => link.id),
+      ...relations.map(link => link.id),
+    ];
+    if (new Set(claimedIds).size !== claimedIds.length) {
+      ctx.addIssue({
+        code: "custom", path: ["clearances"],
+        message: "All geometry relation IDs must be unique.",
+      });
+    }
+    relations.forEach((link, index) => {
+      if (!known.has(link.part_a_id) || !known.has(link.part_b_id) ||
+        link.part_a_id === link.part_b_id) {
+        ctx.addIssue({
+          code: "custom", path: ["clearances", index],
+          message: "CLEARANCE requires two distinct known semantic parts.",
+        });
+      }
+    });
+  }
 });
 
 export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
@@ -399,5 +440,7 @@ export type GeometryMathConnectorPart = z.infer<typeof geometryMathConnectorPart
 export type GeometryMathProgram = z.infer<typeof geometryMathProgramSchema>;
 export type GeometryMathFaceAnchor =
   z.infer<typeof geometryMathFaceAnchorSchema>;
+export type GeometryMathClearance =
+  z.infer<typeof geometryMathClearanceSchema>;
 export type GeometryMathVersion = GeometryMathProgram["version"];
 export type GeometryMathAnchor = z.infer<typeof geometryMathAnchorSchema>;

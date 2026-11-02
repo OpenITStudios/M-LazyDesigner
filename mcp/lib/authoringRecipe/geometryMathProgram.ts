@@ -22,6 +22,7 @@ import { revolveMathProfile } from "./geometryMathRevolve";
 import { loftMathVolume } from "./geometryMathLoft";
 import { rotateMathCuboidsQuarterTurns } from "./geometryMathOrthogonal";
 import { prepareGeometryFaceAnchors } from "./geometryMathFaceAnchors";
+import { requireGeometryMathClearances } from "./geometryMathClearance";
 import {
   buildMathConnector,
   type GeometryConnectorSource,
@@ -134,7 +135,7 @@ function canonicalConstraints(
  */
 function realizeStructuredParts(
   parts: readonly GeometryMathConstructiblePart[],
-  version: 4 | 5 | 6 | 7
+  version: 4 | 5 | 6 | 7 | 8
 ): LocalPart[] {
   const definitions = new Map(parts.map(part => [part.id, part] as const));
   const completed = new Map<string, LocalPart>();
@@ -245,8 +246,15 @@ export function buildGeometryMathProgramPieces(
   // Re-validate at the builder boundary as callers may be internal. Reusing
   // this single strict schema also validates persisted source on inspection.
   const program = geometryMathProgramSchema.parse(feature.program);
-  const parts: LocalPart[] = program.version === 7
+  const parts: LocalPart[] = program.version === 8
     ? realizeStructuredParts(
+      program.parts.filter((part):
+        part is GeometryMathConstructiblePart =>
+        part.method !== "CONNECT"),
+      8
+    )
+    : program.version === 7
+      ? realizeStructuredParts(
       program.parts.filter((part):
         part is GeometryMathConstructiblePart =>
         part.method !== "CONNECT"),
@@ -325,9 +333,9 @@ export function buildGeometryMathProgramPieces(
       value + part.at[axis]!) as RecipeVec3,
     rotation: [0, 0, 0], scale: [1, 1, 1],
   }));
-  // V7 only: exact source-local Cube faces become regular Recipe ANCHOR
-  // constraints on semantic-part envelopes. Solver ownership is unchanged.
-  const faceAnchors = program.version === 7
+  // V7+ exact source-local Cube faces become ordinary Recipe ANCHOR
+  // constraints. The single canonical solver/Undo owner is unchanged.
+  const faceAnchors = program.version >= 7
     ? prepareGeometryFaceAnchors(parts, program.face_anchors ?? [])
     : null;
   const standardConstraints = canonicalConstraints(
@@ -346,8 +354,7 @@ export function buildGeometryMathProgramPieces(
   // dependencies have resolved. No second constraint solver or native pass.
   faceAnchors?.verify(byId);
 
-  if (program.version === 5 || program.version === 6 ||
-    program.version === 7) {
+  if (program.version >= 5) {
     // A CONNECT references geometrically realized, ANCHOR-solved parts,
     // not arbitrary scene selections or an unverified bounding-box point.
     const sources = new Map<string, GeometryConnectorSource>();
@@ -391,6 +398,18 @@ export function buildGeometryMathProgramPieces(
         // The connector has already been realized in solved model-space.
         // Its own anchor is unavailable by schema; no secondary solver.
         byId.set(connector.id, [...min] as RecipeVec3);
+        if (program.version === 8) {
+          // Derived CONNECT coordinates are already in model space.
+          // A zero translation makes them comparable with solved parts
+          // without interpreting them as ANCHOR dependencies.
+          sources.set(connector.id, {
+            id: connector.id,
+            world_min: [...min] as RecipeVec3,
+            world_max: [...max] as RecipeVec3,
+            translation: [0, 0, 0],
+            local_boxes: boxes,
+          });
+        }
       } catch (error) {
         if (!(error instanceof Error)) throw error;
         throw new Error(
@@ -402,6 +421,18 @@ export function buildGeometryMathProgramPieces(
     }
     parts.sort((a, b) => compareSourceIds(a.id, b.id, program.version));
     requireNativeBudget(parts);
+    if (program.version === 8) {
+      // A v8 face contact should not permit *other* Cuboids of the same
+      // two semantic parts to interpenetrate. Explicit CLEARANCE pairs
+      // may also require a Euclidean distance from 0–8 model units.
+      // Checks occur after canonical ANCHOR and derived CONNECT only;
+      // no auto-moving parts or global-scene clearance claims.
+      requireGeometryMathClearances(
+        sources,
+        program.clearances ?? [],
+        program.face_anchors ?? []
+      );
+    }
   }
   const output: Pieces = { prototypes: [], patterns: [] };
 

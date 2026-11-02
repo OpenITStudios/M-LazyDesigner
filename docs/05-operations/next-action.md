@@ -7,11 +7,10 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 **USER DECISION:** Mature AI-first Geometry source; no tests,
 build/Bun, CI, native QA, release, separate plugin or mandatory UI.
 
-**R3a–R3s:** Legacy 13 shapes and math v1–v6 unchanged.
-Opt-in v7 FACE_ANCHOR aligns exact exposed source-Cube faces of
-semantic parts and explicit repeat copies via the original Recipe
-ANCHOR solver; checks post-solve positive-area contact. Original
-Recipe/Undo and <=64 expanded Cubes retained.
+**R3a–R3t:** Legacy 13 shapes + math v1–v7 preserved.
+Opt-in v8 CLEARANCE checks declared part pairs at solved Cube/copy
+positions, including signed LINEAR and CONNECT output; v8 FACE_ANCHOR
+also forbids full-part volume penetration. One Recipe/Undo, <=64 Cubes.
 
 **R3j:** Canonical Recipe v1 optionally persists original high-level
 `advanced_geometry_source` parameters per feature for AI editing
