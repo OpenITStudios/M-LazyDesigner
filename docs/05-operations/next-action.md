@@ -2,33 +2,36 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — Source-bound voxel clusters (2026-11-02)
+## Primary next — Native-bound texture correction (2026-11-02)
 
-**DECISION:** Freeze Geometry. Extend existing Texturing only;
-no new Gateway, paint engine, UI, CI or release.
+**DECISION:** Freeze Geometry. Reuse Texturing, Gateway, native Undo;
+no new public tool, CI, UI, paint engine or release.
 
-**SOURCE:** Existing native face-label candidates and Oklab
-shade/identity recolor remain. New
-`lib/texture/clusterComposition.ts` compiles explicitly authored
-connected shadow/highlight/identity/detail/quiet shapes through signed/
-rotated face UV mapping. It produces bounded existing
-`paint_texture_transaction.operations` plus pure preview from one
-verified atlas revision. Rejects stale/detailed/alpha templates, shared
-UV, incomplete inventory, missing binding, overlapping/disconnected
-clusters, quiet-zone detail, and out-of-scope pixel edits. No noise.
+**SOURCE:** Existing face-label candidates, Oklab recolor and cluster
+compiler remain. New `existing_painted_patch` modifies only exact
+opaque before-RGB-gated local pixels without a face-wide base fill.
+Internal `executeNativeBoundClusterComposition` reuses the SAME
+`paint_texture_transaction` executor and requires trusted approved
+reference-byte verification. It compares all Cube/face/UV/material/
+Texture bindings to source and checks the native snapshot before,
+inside and after editing. Existing bitmap revision/Undo remain.
+Stale/foreign/shared UV, source-color/alpha mismatch or incomplete
+inventory fails closed.
 
-**PROOF:** GitHub source/test definitions AUTHORED. Bun/typecheck/build/
-CI, native Blockbench, reference image correspondence, save/export
-and real Golden visual/human results NOT EXECUTED. CI disabled.
+**PROOF:** Source/tests AUTHORED. Bun/typecheck/build/CI, live
+approved source, native Blockbench/Undo, save/export, mapped views,
+Golden visual/user quality NOT EXECUTED. CI disabled.
 
-**LIMIT:** The pure compiler is not a callable MCP tool. Image claims
-and current native face bindings remain unverified; automatic painting
-requires native binding recheck, never source receipt alone.
+**LIMIT:** Internal bridge is NOT a public MCP capability and
+cannot be invoked through current Gateway. No visual PASS inferred.
+Trusted Runtime serialization/source authorization remains required.
 
-**NEXT:** Native recheck and affected mapped-view correction before
-claiming end-to-end automatic voxel texturing.
+**NEXT:** Connect internal native path only through a properly
+generated/authorized capability contract, then review affected
+`get_texture` and shaded `capture_model_views` evidence as a cohort;
+avoid per-pixel QA loops.
 
-**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED, v12–14 source
+**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED, v12–14
 checkpoint `addfb6a008b9af8baf0417ff23435046df7285d4`.
 
 ## GitHub boundary and historical local recovery

@@ -278,6 +278,95 @@ describe("reference-declared face-local pixel cluster composer", () => {
     })).rejects.toThrow("CLUSTER_INTENT_INVALID");
   });
 
+  test("focused correction changes only verified opaque atlas pixels, never base-filling the face",async()=>{
+    const bitmap=new Uint8ClampedArray(
+      Array.from({length:64},()=>[0x74,0x5b,0x48,255]).flat());
+    // A specific identity pixel on the same mapped face must stay untouched.
+    bitmap[(1*8+1)*4]=0xf2;
+    bitmap[(1*8+1)*4+1]=0xbb;
+    bitmap[(1*8+1)*4+2]=0x39;
+    const original=[...bitmap];
+    const source=await fixture({
+      source_mode:"existing_painted_patch",
+      faces:[{
+        ...facePlan(),
+        clusters:[{
+          cluster_id:"highlight_fix",role:"highlight" as const,
+          source_observation_id:"observed_clusters",
+          shape:{kind:"rect" as const,x:0,y:0,width:2,height:1},
+          expected_source_colors:["#745b48"],
+        }],
+        quiet_zones:[],
+      }],
+    },bitmap);
+    const plan=await compileReferencePixelClusterPaint(source);
+    expect(plan.authoring_mode).toBe("focused_correction");
+    expect(plan.transaction.operations).toHaveLength(1);
+    expect(plan.transaction.operations[0].operation).toBe("set_pixels");
+    expect(plan.summary.changed_pixels).toBe(2);
+    const after=applyPaintTransactionRgba(bitmap,8,8,
+      plan.transaction.operations).pixels;
+    expect(colorAt(after,3,3)).toEqual([0xc6,0xa2,0x7c,255]);
+    expect(colorAt(after,1,1)).toEqual([0xf2,0xbb,0x39,255]);
+    expect(colorAt(after,7,7)).toEqual([0x74,0x5b,0x48,255]);
+    expect([...bitmap]).toEqual(original);
+  });
+
+  test("focused correction refuses absent/incorrect before colors and partially transparent writes",async()=>{
+    const bitmap=new Uint8ClampedArray(
+      Array.from({length:64},()=>[0x74,0x5b,0x48,255]).flat());
+    const mk=(colors?:readonly string[])=>({
+      ...facePlan(),quiet_zones:[],
+      clusters:[{
+        cluster_id:"fix",role:"highlight" as const,
+        source_observation_id:"observed_clusters",
+        shape:{kind:"rect" as const,x:0,y:0,width:1,height:1},
+        ...(colors?{expected_source_colors:colors}:{}),
+      }],
+    });
+    const run=async(colors?:readonly string[],pix=bitmap)=>compileReferencePixelClusterPaint(
+      await fixture({source_mode:"existing_painted_patch",faces:[mk(colors)]},pix));
+    await expect(run()).rejects.toThrow("CLUSTER_PATCH_EXPECTED_COLORS_REQUIRED");
+    await expect(run(["#000000"])).rejects.toThrow("CLUSTER_PATCH_SOURCE_COLOR_CHANGED");
+    await expect(run(["#745b48","#112233"])).rejects.toThrow("CLUSTER_PATCH_UNUSED_EXPECTED_COLOR");
+    await expect(run(["#745B48","#745b48"])).rejects.toThrow("CLUSTER_PATCH_EXPECTED_COLORS_REQUIRED");
+    const transparent=new Uint8ClampedArray(bitmap);
+    transparent[(3*8+3)*4+3]=128;
+    await expect(run(["#745b48"],transparent)).rejects.toThrow("CLUSTER_PATCH_ALPHA_UNSUPPORTED");
+    await expect(compileReferencePixelClusterPaint(await fixture({
+      faces:[mk(["#745b48"])],
+    }))).rejects.toThrow("CLUSTER_PATCH_PRECONDITION_WRONG_MODE");
+  });
+
+  test("focused correction refuses speculative detail in quiet zone and no-op paints",async()=>{
+    const bitmap=new Uint8ClampedArray(
+      Array.from({length:64},()=>[0x74,0x5b,0x48,255]).flat());
+    const bad={
+      ...facePlan(),quiet_zones:[
+        {kind:"rect" as const,x:0,y:0,width:1,height:1},
+      ],
+      clusters:[{
+        cluster_id:"detail_speculative",role:"detail" as const,
+        source_observation_id:"observed_clusters",
+        shape:{kind:"rect" as const,x:0,y:0,width:1,height:1},
+        expected_source_colors:["#745b48"],
+      }],
+    };
+    const src=await fixture({source_mode:"existing_painted_patch",faces:[bad]},bitmap);
+    await expect(compileReferencePixelClusterPaint(src))
+      .rejects.toThrow("CLUSTER_QUIET_ZONE_DETAIL");
+    const noOp={...bad,quiet_zones:[],clusters:[{
+      ...bad.clusters[0],role:"shadow" as const,
+    }]};
+    const same=await fixture({
+      source_mode:"existing_painted_patch",
+      faces:[noOp],
+      palette:{...src.palette,shadow:"#745b48"},
+    },bitmap);
+    await expect(compileReferencePixelClusterPaint(same))
+      .rejects.toThrow("CLUSTER_PAINT_NO_CHANGE");
+  });
+
   test("no-op flat template is rejected rather than committing an empty Undo", async () => {
     const bitmap = new Uint8ClampedArray(
       Array.from({length:64},()=>[96,96,96,255]).flat());

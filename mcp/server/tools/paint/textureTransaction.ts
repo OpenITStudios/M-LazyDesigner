@@ -28,6 +28,13 @@ import { computeTextureRevision } from "@/lib/texture/revision";
 import { applyTextureComputePipeline } from "@/lib/texture/computePipeline";
 import { parseTextureComputeRequest } from "@/lib/texture/computeRequest";
 import {
+  compileReferencePixelClusterPaint,
+  type ClusterCompositionInput,
+  type ClusterNativeFace,
+} from "@/lib/texture/clusterComposition";
+import { requireCurrentClusterNativeBindings } from "@/lib/texture/clusterNativeBindings";
+import type { PaintTransactionRequest } from "@/lib/texture/paintTransaction";
+import {
   cropRgbaRect,
   fullTextureRgba,
   requireUnchangedTextureBitmap,
@@ -288,7 +295,7 @@ function finalizeTexturePngWrite(
 const FACE_RECOLOR_KEYS = ["north","south","east","west","up","down"] as const;
 
 /** Read-only native owner snapshot, recomputed after asynchronous planning. */
-function captureNativeFaceRecolorScope(
+export function captureNativeFaceRecolorScope(
   texture: Texture, width: number, height: number,
   targets: readonly TextureTreatmentFace[]
 ) {
@@ -327,6 +334,7 @@ function captureNativeFaceRecolorScope(
     uvWidth:texture.getUVWidth(), uvHeight:texture.getUVHeight(),
   };
   const footprints: NativeFaceFootprint[]=[];
+  const nativeFaces: ClusterNativeFace[]=[];
   const snapshot: unknown[]=[];
   const ids=new Set<string>();
   for(const cube of [...Cube.all].sort((a,b)=>a.uuid.localeCompare(b.uuid))) {
@@ -364,6 +372,12 @@ function captureNativeFaceRecolorScope(
       }
       footprints.push({cube_uuid:cube.uuid,face:key,enabled,
         texture_uuid:bound?.uuid??null,native_material_name:material,rect});
+      nativeFaces.push({
+        cube_uuid:cube.uuid, face:key, enabled,
+        texture_uuid:bound?.uuid??null, native_material_name:material, rect,
+        uv:enabled&&bound===texture?[...face.uv]:null,
+        rotation:enabled&&bound===texture?face.rotation:null,
+      });
       snapshot.push([cube.uuid,key,enabled,bound?.uuid??null,
         face.texture,material,face.uv,face.rotation]);
     }
@@ -372,18 +386,23 @@ function captureNativeFaceRecolorScope(
     texture_uuid:texture.uuid,bitmap_width:width,bitmap_height:height,
     faces:footprints,face_targets:targets,
   });
-  return {...plan,native_snapshot:JSON.stringify([
+  return {...plan,native_faces:nativeFaces,native_snapshot:JSON.stringify([
     texture.uuid,width,height,scale.uvWidth,scale.uvHeight,snapshot,
   ])};
 }
 
-export function registerPaintTextureTransactionTool(): void {
-  createTool(
-    paintTextureTransactionToolDocs.name,
-    {
-      ...paintTextureTransactionToolDocs,
-      parameters: paintTransactionParameters,
-      async execute({ texture_id, expected_revision, operations, compute, ambient_occlusion, output }) {
+/**
+ * Canonical one-Undo native bitmap executor. Internal native cluster requests
+ * reuse this SAME executor with an additional synchronous binding guard;
+ * the registered MCP contract and tool schema remain unchanged.
+ */
+async function executePaintTextureTransaction(
+  { texture_id, expected_revision, operations, compute, ambient_occlusion, output }: PaintTransactionRequest,
+  nativeClusterGuard?: () => void
+) {
+        // Internal cluster authoring can supply a source-pinned native
+        // binding guard. Ordinary public transactions remain unchanged.
+        nativeClusterGuard?.();
         const texture = resolvePaintTexture(texture_id);
         requirePaintTransactionV1Target({
           texture_uuid: texture.uuid,
@@ -484,6 +503,7 @@ export function registerPaintTextureTransactionTool(): void {
           }
         };
         requireCurrentFaceScope();
+        nativeClusterGuard?.();
 
         const undoAspects: UndoAspects = {
           bitmap: true,
@@ -496,6 +516,7 @@ export function registerPaintTextureTransactionTool(): void {
               canvas: HTMLCanvasElement,
               env: BlockbenchRuntimeTextureEditEnvironment
             ) => {
+              nativeClusterGuard?.();
               const activeOffset =
                 Array.isArray(env.offset) && env.offset.length === 2
                   ? env.offset
@@ -552,6 +573,7 @@ export function registerPaintTextureTransactionTool(): void {
             "Paint transaction bitmap changed after postcondition verification. Refusing stale PNG publication and Undo completion."
           );
           requireCurrentFaceScope();
+          nativeClusterGuard?.();
           if (preparedOutput && outputBytes) {
             commitTexturePngWrite(preparedOutput.fs, preparedOutput.state, outputBytes);
           }
@@ -643,6 +665,89 @@ export function registerPaintTextureTransactionTool(): void {
             output: outputReceipt,
           },
         };
+
+}
+
+/**
+ * INTERNAL, NOT A REGISTERED MCP CAPABILITY.
+ * The host must serialize this call in the existing authoring Runtime, and
+ * authenticate the selected approved Reference Package/crop before calling.
+ * Native-binding safety is enforced through the entire existing transaction,
+ * not by a preflight a separate AI request could race past.
+ */
+export async function executeNativeBoundClusterComposition(
+  untrustedInput: ClusterCompositionInput,
+  // Trusted Control/Reference owner, not a caller-supplied approval boolean.
+  verifyApprovedReference: (
+    claims: readonly ClusterCompositionInput["faces"][number]["source_claim"][]
+  ) => Promise<void>
+) {
+  if (typeof verifyApprovedReference !== "function") {
+    throw new Error("CLUSTER_APPROVED_REFERENCE_VERIFIER_REQUIRED");
+  }
+  const input = structuredClone(untrustedInput);
+  const claims = input.faces.map(face => face.source_claim);
+  // Verify actual current package/image bytes and part correspondence, not
+  // merely a SHA-shaped string in the caller's declared cluster recipe.
+  await verifyApprovedReference(claims);
+  const texture = resolvePaintTexture(input.texture_uuid);
+  const requested = input.faces.map(face => ({
+    cube_uuid: face.cube_uuid,
+    face: face.face,
+  }));
+  const original = captureNativeFaceRecolorScope(
+    texture, input.bitmap_width, input.bitmap_height, requested
+  );
+  requireCurrentClusterNativeBindings(input, {
+    texture_uuid: texture.uuid,
+    bitmap_width: input.bitmap_width,
+    bitmap_height: input.bitmap_height,
+    logical_uv_width: texture.getUVWidth(),
+    logical_uv_height: texture.getUVHeight(),
+    native_faces: original.native_faces,
+  });
+  const originalNativeFingerprint = original.native_snapshot;
+  const assertNativeBindingUnchanged = () => {
+    // A detached/replaced native Texture object with the same UUID is stale.
+    if (resolvePaintTexture(input.texture_uuid) !== texture) {
+      throw new Error("CLUSTER_NATIVE_TEXTURE_OBJECT_CHANGED");
+    }
+    const current = captureNativeFaceRecolorScope(
+      texture, input.bitmap_width, input.bitmap_height, requested
+    );
+    requireCurrentClusterNativeBindings(input, {
+      texture_uuid: texture.uuid,
+      bitmap_width: input.bitmap_width,
+      bitmap_height: input.bitmap_height,
+      logical_uv_width: texture.getUVWidth(),
+      logical_uv_height: texture.getUVHeight(),
+      native_faces: current.native_faces,
+    });
+    if (current.native_snapshot !== originalNativeFingerprint) {
+      throw new Error("CLUSTER_NATIVE_BINDING_CHANGED_DURING_COMPOSITION");
+    }
+  };
+  const compiled = await compileReferencePixelClusterPaint(input);
+  // A reference source might change during the asynchronous bitmap hash.
+  await verifyApprovedReference(claims);
+  assertNativeBindingUnchanged();
+  // existing executor revalidates full bitmap revision before edit,
+  // in native Texture.edit, and before Undo.finishEdit/PNG publication.
+  const result = await executePaintTextureTransaction(
+    compiled.transaction,
+    assertNativeBindingUnchanged
+  );
+  return result;
+}
+
+export function registerPaintTextureTransactionTool(): void {
+  createTool(
+    paintTextureTransactionToolDocs.name,
+    {
+      ...paintTextureTransactionToolDocs,
+      parameters: paintTransactionParameters,
+      async execute(args) {
+        return executePaintTextureTransaction(args);
       },
     },
     paintTextureTransactionToolDocs.status

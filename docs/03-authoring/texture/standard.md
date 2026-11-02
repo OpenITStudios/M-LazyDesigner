@@ -377,23 +377,37 @@ claims and current atlas/face information. Claims are not authenticated
 reference pixels: a caller must inspect the approved crop and verify real
 source-to-face identity. Require the complete native face inventory, one
 bitmap revision, exact physical UV grid and no shared/partially overlapping
-paint ownership. Only a fully transparent target or explicitly replaceable
-uniform opaque template is permitted; partial alpha and already detailed
-faces refuse rather than overwriting artwork. Quiet zones prohibit
-unrequested secondary detail; disconnected clusters and conflicting roles
-refuse, while small intentional glints can be separate observed clusters.
+paint ownership. Full base fills permit only fully transparent or explicitly replaceable
+uniform opaque template faces. Separately, `existing_painted_patch`
+permits a narrowly declared correction on a detailed atlas **without**
+a base fill, provided every selected pixel is opaque and exactly matches
+the caller-declared before-RGB set for its cluster. Other colors, alpha
+and untouched material remain byte-identical. Quiet zones prohibit
+unrequested detail; disconnected clusters and conflicting roles refuse.
+Small glints can be separate observed clusters.
 No random surface noise, brightness-implied metalness or automatic identity
 inference is introduced.
 
 The compiler's result is `source_compiled_needs_native_revalidation`,
 **not** paint authorization: source SHA/face metadata alone cannot guarantee
-that Cube/UV/material bindings remain unchanged in installed Blockbench.
-Before invoking the existing exact-pixel transaction, verify current native
-bindings and full atlas revision in the actual connected Runtime; the
-existing exact-operations branch does not itself re-attest face UV
-ownership. Then inspect affected atlas and shaded mapped-model views.
-Without that live bridge, the compiler is an internal source tool,
-not a direct Gateway action or a texture-completion claim.
+that Cube/UV/material bindings remain unchanged. An internal native
+bridge now exists in the canonical `paint/textureTransaction.ts` owner:
+it reuses the existing transaction executor, validates the full current
+face/UV/material/texture inventory against the source plan, then rechecks
+the pinned native snapshot before Undo, within the texture-edit callback
+and before completion. No public MCP schema, extra executor or separate
+Undo implementation was added.
+
+This bridge is source-authored but **not exposed through the current
+Gateway**. It needs a trusted serialized authoring caller and real
+approved-reference-byte/face-correspondence authentication before
+automatic execution can be offered to users. Ordinary exact-operations
+requests without that internal guard still verify bitmap revision but
+do **not** attest source-plan face ownership. Do not bypass this
+boundary or equate a successful native mutation with stylistic PASS.
+Check the affected atlas crop and shaded mapped-model views after a
+coherent batch; for a correction, only rewrite the observed causal
+pixels and keep unrelated approved artwork unchanged.
 
 ## IDENTITY PASS
 

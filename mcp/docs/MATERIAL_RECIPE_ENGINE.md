@@ -67,25 +67,39 @@ recipe containing:
 - face-local connected `rect` / row-span shapes plus intentionally
   quiet regions, with no procedural noise or speculative strokes.
 
-Its output is a proposed
-`paint_texture_transaction({texture_id,expected_revision,operations})`
-with `fill_rect` base and exact `set_pixels` clusters. Current existing
-`paintTransaction` planner and pure executor produce a source preview
-and verify no changed texel lies outside selected face ownership.
-Templates must be transparent or uniformly opaque; it refuses detailed,
-partially transparent, overlapping/shared-UV, stale revision, missing
-binding or unbounded work. Source palette/cluster traits remain
-**caller declarations**, not verified pixels from the approved source
-image. A successful pure compilation neither means the Runtime
-rechecked native face ownership nor grants paint or visual approval.
+The internal composer has two strictly distinct outcomes:
 
-**Deployment gap:** This source helper is deliberately NOT a new MCP
-capability. Existing exact-operations mutation checks current bitmap
-revision and Undo, but not independently the face-to-UV map passed to
-the source compiler. A matching native binding recheck at execution
-time is needed before any automatic end-to-end cluster application.
-Do not bypass that gap by treating `status=compiled` as authorized.
-The normal direct known-pixel/paint-tool paths remain usable.
+- **Initial paint:** blank-transparent or uniform-opaque templates only;
+  exact `fill_rect` base plus face-local `set_pixels` clusters.
+- **Focused correction:** `source_mode=existing_painted_patch` on an
+  existing atlas; only exact `set_pixels`, with each cluster declaring up
+  to eight existing opaque `expected_source_colors`. Current source RGBs
+  must match every selected pixel, or no correction is compiled. All
+  other pixels and the existing alpha remain unchanged.
+
+Both reuse the same `paintTransaction` planner and bitmap oracle,
+detect off-face writes, reject contradictory clusters and shared/overlapping
+UV owners, and pin the exact full RGBA revision. They are not visual
+recognition: source-palette and image/face claims are caller declarations.
+
+**Native revalidation now source-authored:** The existing
+`server/tools/paint/textureTransaction.ts` contains one shared native
+transaction executor and an **internal, unregistered**
+`executeNativeBoundClusterComposition` entrypoint. The internal path
+reuses existing native face-scope inspection, checks the entire declared
+Cube-face/UV/material/Texture inventory against the live scene, compiles
+the source operation plan and checks a native snapshot repeatedly before
+Undo, within `Texture.edit`, and before finishing Undo/optional PNG
+publication. The ordinary public `paint_texture_transaction` schema,
+compute routing, exact-operations behavior and Gateway remain unchanged.
+
+**Availability boundary:** The internal entrypoint is not currently
+reachable through `invoke_capability`; a trusted authoring owner must
+serialize its invocation and authenticate actual approved reference image
+bytes plus face correspondence. Never pass an unguarded source plan to the
+ordinary public exact-operations branch and call it face-validated.
+A native comparison or mutation receipt is not visual acceptance.
+The normal direct known-pixel/paint-tool paths remain available.
 
 ## Native ownership
 

@@ -55,6 +55,8 @@ export type ReferencePixelCluster = Readonly<{
   shape: ClusterShape;
   /** A concrete, face-bound source observation, not a style guess. */
   source_observation_id: string;
+  /** For local corrections only: exact current opaque RGBs that may change. */
+  expected_source_colors?: readonly string[];
 }>;
 
 export type ClusterFaceAuthoring = Readonly<TextureTreatmentFace & {
@@ -96,7 +98,8 @@ export type ClusterCompositionInput = Readonly<{
    * Uniform = all selected pixels must be the same opaque RGB.
    * Never overwrite an already-detailed atlas by default.
    */
-  source_mode: "transparent_template" | "uniform_opaque_template";
+  source_mode: "transparent_template" | "uniform_opaque_template" |
+    "existing_painted_patch";
 }>;
 
 const COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -254,7 +257,8 @@ export async function compileReferencePixelClusterPaint(
       !Array.isArray(input.faces) || input.faces.length < 1 ||
       input.faces.length > MAX_FACES ||
       (input.source_mode !== "transparent_template" &&
-       input.source_mode !== "uniform_opaque_template")) {
+       input.source_mode !== "uniform_opaque_template" &&
+       input.source_mode !== "existing_painted_patch")) {
     throw new Error("CLUSTER_INVENTORY_OR_MODE_INVALID");
   }
   requirePalette(input.palette);
@@ -362,9 +366,9 @@ export async function compileReferencePixelClusterPaint(
     throw new Error("CLUSTER_PIXEL_BUDGET");
   }
 
-  // A source template must be either transparent or genuinely flat before
-  // overwriting it. Partial alpha, previously detailed painting and hidden
-  // shared texels are out of scope for this initial cluster authoring path.
+  // Full base-fills are confined to transparent or genuinely flat templates.
+  // Focused correction never floods a previously authored face: each patch
+  // pixel must instead satisfy an exact, opaque current-RGB precondition.
   let firstOpaqueRgb: string | null = null;
   for (let row = 0; row < scope.target_rect.height; row++) {
     for (let col = 0; col < scope.target_rect.width; col++) {
@@ -374,7 +378,7 @@ export async function compileReferencePixelClusterPaint(
       const alpha = sourceBitmap[offset + 3];
       if (input.source_mode === "transparent_template") {
         if (alpha !== 0) throw new Error("CLUSTER_SOURCE_NOT_TRANSPARENT");
-      } else {
+      } else if (input.source_mode === "uniform_opaque_template") {
         if (alpha !== 255) throw new Error("CLUSTER_SOURCE_NOT_OPAQUE");
         const rgb = [sourceBitmap[offset], sourceBitmap[offset + 1],
           sourceBitmap[offset + 2]].join(":");
@@ -431,6 +435,19 @@ export async function compileReferencePixelClusterPaint(
       }
       const pixels = shapePixels(cluster.shape, localWidth, localHeight,
         key + "." + cluster.cluster_id);
+      const patch = input.source_mode === "existing_painted_patch";
+      const allowedBefore = cluster.expected_source_colors;
+      if (patch &&
+          (!Array.isArray(allowedBefore) || allowedBefore.length < 1 ||
+           allowedBefore.length > 8 ||
+           allowedBefore.some(rgb => typeof rgb !== "string" || !COLOR.test(rgb)) ||
+           new Set(allowedBefore.map(rgb => rgb.toLowerCase())).size !== allowedBefore.length)) {
+        throw new Error("CLUSTER_PATCH_EXPECTED_COLORS_REQUIRED: " + key);
+      }
+      if (!patch && allowedBefore !== undefined) {
+        throw new Error("CLUSTER_PATCH_PRECONDITION_WRONG_MODE: " + key);
+      }
+      const observedBefore = new Set<string>();
       for (const pixel of pixels) {
         if (owned.has(pixel)) {
           throw new Error("CLUSTER_OVERLAPPING_INTENTS: " + key);
@@ -446,6 +463,20 @@ export async function compileReferencePixelClusterPaint(
         const atlas = mapFaceLocalPixelToAtlasPixel(
           current, binding.rotation!, localX, localY, key
         );
+        if (patch) {
+          const offset = (atlas.y * width + atlas.x) * 4;
+          if (sourceBitmap[offset + 3] !== 255) {
+            throw new Error("CLUSTER_PATCH_ALPHA_UNSUPPORTED: " + key);
+          }
+          const currentRgb = "#" +
+            [sourceBitmap[offset], sourceBitmap[offset + 1],
+             sourceBitmap[offset + 2]]
+              .map(v => v.toString(16).padStart(2, "0")).join("");
+          if (!allowedBefore!.some(rgb => rgb.toLowerCase() === currentRgb)) {
+            throw new Error("CLUSTER_PATCH_SOURCE_COLOR_CHANGED: " + key);
+          }
+          observedBefore.add(currentRgb);
+        }
         let group = colorGroups.get(color.toLowerCase());
         if (!group) {
           group = { color, coordinates: [] };
@@ -453,14 +484,20 @@ export async function compileReferencePixelClusterPaint(
         }
         group.coordinates.push(atlas);
       }
+      if (patch && allowedBefore!.some(rgb =>
+        !observedBefore.has(rgb.toLowerCase()))) {
+        throw new Error("CLUSTER_PATCH_UNUSED_EXPECTED_COLOR: " + key);
+      }
     }
-    const [left, top, right, bottom] = current.rect;
-    operations.push({
-      operation: "fill_rect",
-      color: input.palette.base,
-      rect: { x: left, y: top, width: right - left,
-        height: bottom - top },
-    });
+    if (input.source_mode !== "existing_painted_patch") {
+      const [left, top, right, bottom] = current.rect;
+      operations.push({
+        operation: "fill_rect",
+        color: input.palette.base,
+        rect: { x: left, y: top, width: right - left,
+          height: bottom - top },
+      });
+    }
     for (const group of colorGroups.values()) {
       operations.push({
         operation: "set_pixels", color: group.color,
@@ -508,6 +545,8 @@ export async function compileReferencePixelClusterPaint(
   const changedRect = [minX, minY, maxX + 1, maxY + 1] as const;
   return {
     state: "source_compiled_needs_native_revalidation" as const,
+    authoring_mode: input.source_mode === "existing_painted_patch"
+      ? ("focused_correction" as const) : ("initial_cluster_paint" as const),
     transaction: {
       texture_id: input.texture_uuid,
       expected_revision: actualRevision,
@@ -531,6 +570,6 @@ export async function compileReferencePixelClusterPaint(
       mutation_authorized: false as const,
       visual_verdict: "not_evaluated" as const,
     },
-    note: "Source plan only. Recheck current Cube/UV/material bindings in the live project before passing operations to paint_texture_transaction; that tool's exact-operations branch verifies bitmap revision but does NOT independently attest face ownership.",
+    note: "Source plan only. Current reference/face claims are not authenticated by this compiler. Native-bound execution must validate current Cube/UV/material bindings inside the existing one-Undo transaction; do not invoke the ordinary unguarded exact-operations branch for these plans.",
   };
 }
