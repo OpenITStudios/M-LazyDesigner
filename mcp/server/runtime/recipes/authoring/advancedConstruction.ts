@@ -454,9 +454,11 @@ export function inspectAdvancedGeometryNative(input: {
   const recipes = candidates.map(recipe => {
     const native = readBlockbenchAuthoringRecipeOwnedState(recipe.id);
     const parameterReview = reviewStoredAdvancedGeometrySource(recipe);
+    // Native/Recipe equality cannot reconstruct missing legacy parameters.
+    // Only an actual verified source/Recipe match may claim MATCHED_SOURCE_ONLY.
     let structural_state: "MATCHED_SOURCE_ONLY" | "REVIEW_REQUIRED" =
-      parameterReview.state === "SOURCE_RECIPE_MISMATCH"
-        ? "REVIEW_REQUIRED" : "MATCHED_SOURCE_ONLY";
+      parameterReview.state === "AVAILABLE_MATCHED_SOURCE"
+        ? "MATCHED_SOURCE_ONLY" : "REVIEW_REQUIRED";
     try {
       assertAuthoringRecipeNativeMatchesCompiled(native, recipe);
       if (native.cubes.length === 0) {
