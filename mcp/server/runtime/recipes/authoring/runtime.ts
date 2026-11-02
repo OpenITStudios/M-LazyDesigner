@@ -6,7 +6,10 @@ import {
   snapshotRecipeNativeParentHierarchy,
   type RecipeNativeParentGroup,
 } from "@/lib/authoringRecipe/nativeState";
-import type { RecipeNativeUndoProvenance } from "@/lib/authoringRecipe/transaction";
+import {
+  RecipeNativeOutcomeUnknownError,
+  type RecipeNativeUndoProvenance,
+} from "@/lib/authoringRecipe/transaction";
 import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import {
   findAuthoringRecipeInStore,
@@ -146,10 +149,16 @@ function currentProjectRecipeStoreString(): string {
   return raw;
 }
 
+type RecipeNativeSceneGuards = {
+  beforeUndo(): void;
+  beforeCommit(): void;
+  afterRollback(): void;
+};
+
 export function createBlockbenchAuthoringRecipeApplyAdapter(
   recipeId: string,
   createParentGroupUuid?: string,
-  assertCurrentSceneBeforeUndo?: () => void
+  sceneGuards?: RecipeNativeSceneGuards
 ): AuthoringRecipeApplyAdapter {
   let pendingStore: PendingRecipeStoreRevision | null = null;
   let created: Cube[] = [];
@@ -252,15 +261,27 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
       existingAtBegin = existing;
       const undoIndex = Undo.index;
       projectUuidAtBegin = Project.uuid;
-      // For a source-bound Geometry plan, detect late scene/ownership/UV
-      // drift AFTER asynchronous Recipe preflights and BEFORE opening Undo.
-      // The optional callback is synchronous; no await may intervene.
-      assertCurrentSceneBeforeUndo?.();
-      Undo.initEdit({
-        elements: existing,
-        outliner: true,
-        collections: [],
-      });
+      sceneGuards?.beforeUndo(); // Synchronous: no await before Undo.initEdit.
+      const aspects = { elements: existing, outliner: true, collections: [] };
+      try {
+        Undo.initEdit(aspects);
+      } catch (error) {
+        // In Blockbench 5.2.1 current_save is assigned before init_edit
+        // callbacks. The same aspects object proves THIS partial edit.
+        const save = Undo.current_save as
+          | ({ aspects?: unknown } & object) | undefined;
+        if (!save || save.aspects !== aspects ||
+            !Project || Project.uuid !== projectUuidAtBegin ||
+            Undo.index !== undoIndex) {
+          throw new RecipeNativeOutcomeUnknownError(
+            "RECIPE_NATIVE_BEGIN_UNDO_UNATTRIBUTED: inspect editor; do not retry.",
+            error
+          );
+        }
+        activeUndoSave = Undo.current_save;
+        undoIndexAtBegin = undoIndex;
+        throw error; // Caller cancels only this attributable active edit.
+      }
       activeUndoSave = Undo.current_save ?? null;
       undoIndexAtBegin = undoIndex;
       requireOwnedUndo();
@@ -358,6 +379,10 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
       // Canvas must be updated before the final native commit. Metadata
       // is written after all fallible precommit checks and before finishEdit.
       Canvas.updateAll();
+      // Canvas callbacks may mutate unrelated state or steal Undo ownership.
+      requireOwnedUndo();
+      sceneGuards?.beforeCommit();
+      requireOwnedUndo();
       (Project as unknown as Record<string, unknown>)[PROJECT_RECIPE_STORE_PROPERTY] =
         store.after;
       // UndoSystem.save.load() removes elements present in the opposite
@@ -367,11 +392,37 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
       const surviving = existingAtBegin.filter((cube) =>
         (Cube.all ?? []).includes(cube)
       );
-      Undo.finishEdit("LazyDesigner parametric recipe", {
-        elements: [...surviving, ...created],
-        outliner: true,
-        collections: [],
-      });
+      let committedUndoIndex: number;
+      try {
+        Undo.finishEdit("LazyDesigner parametric recipe", {
+          elements: [...surviving, ...created],
+          outliner: true,
+          collections: [],
+        });
+        // Upstream calls finish_edit and finished_edit around the history
+        // write. Only real top history and its two source marks are proof.
+        const entry = Undo.history[Undo.index - 1] as MarkedUndoEntry | undefined;
+        const nativeMark = entry?.before?.[RECIPE_UNDO_PROVENANCE];
+        const storeMark = readRecipeStoreUndoMark(entry?.before);
+        if (Undo.current_save || Undo.index !== Undo.history.length ||
+            entry?.action !== "LazyDesigner parametric recipe" ||
+            entry.before !== activeUndoSave || !nativeMark ||
+            nativeMark.token !== token || nativeMark.recipe_id !== recipeId ||
+            nativeMark.project_uuid !== provenance.project_uuid ||
+            !storeMark || storeMark.project_uuid !== store.project_uuid ||
+            storeMark.recipe_id !== recipeId ||
+            storeMark.before !== store.before ||
+            storeMark.after !== store.after ||
+            currentProjectRecipeStoreString() !== store.after) {
+          throw new Error("Native Undo/Recipe commit attestation mismatched.");
+        }
+        committedUndoIndex = Undo.index;
+      } catch (error) {
+        throw new RecipeNativeOutcomeUnknownError(
+          "RECIPE_NATIVE_COMMIT_OUTCOME_UNKNOWN: inspect history and Recipe store; do not retry.",
+          error
+        );
+      }
       activeUndoSave = null;
       undoIndexAtBegin = null;
       projectUuidAtBegin = null;
@@ -381,13 +432,31 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
       return {
         token,
         project_uuid: provenance.project_uuid,
-        undo_index: Undo.index,
+        undo_index: committedUndoIndex,
       } satisfies RecipeNativeUndoProvenance;
     },
     cancelUndo: () => {
-      // Native Blockbench 5.2 cancelEdit(true) replays this transaction's
-      // before-save. Do NOT cancel another tool's active edit.
+      // A failed begin may have never opened an owned Undo. No foreign cancel.
+      if (!activeUndoSave) {
+        if (Undo.current_save) {
+          throw new Error("RECIPE_NATIVE_UNDO_NOT_OWNED: foreign edit exists.");
+        }
+        if (pendingStore && (!Project ||
+            Project.uuid !== pendingStore.project_uuid ||
+            currentProjectRecipeStoreString() !== pendingStore.before)) {
+          throw new Error("RECIPE_STORE_ROLLBACK_SOURCE_CHANGED");
+        }
+        pendingStore = null;
+        created = [];
+        existingAtBegin = [];
+        undoIndexAtBegin = null;
+        projectUuidAtBegin = null;
+        sceneGuards?.afterRollback();
+        return;
+      }
+      // Only Blockbench's attributed native save may be cancelled.
       requireOwnedUndo();
+      const undoIndexBeforeCancel = undoIndexAtBegin;
       let metadataIssue: Error | null = null;
       if (pendingStore) {
         try {
@@ -406,6 +475,9 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
       // Attempt the attributed native cancellation even if Recipe metadata
       // changed unexpectedly. Never erase foreign metadata to force success.
       Undo.cancelEdit(true);
+      if (Undo.current_save || Undo.index !== undoIndexBeforeCancel) {
+        throw new Error("RECIPE_NATIVE_UNDO_CANCEL_UNVERIFIED");
+      }
       activeUndoSave = null;
       undoIndexAtBegin = null;
       projectUuidAtBegin = null;
@@ -413,6 +485,7 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
       existingAtBegin = [];
       pendingStore = null;
       Canvas.updateAll();
+      sceneGuards?.afterRollback();
       if (metadataIssue) throw metadataIssue;
     },
     revertCommittedUndo: (binding) => {
@@ -428,9 +501,10 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
       const last = Undo.history[Undo.index - 1] as MarkedUndoEntry | undefined;
       const mark = last?.before?.[RECIPE_UNDO_PROVENANCE];
       const sourceMark = readRecipeStoreUndoMark(last?.before);
-      if (sourceMark && (sourceMark.project_uuid !== Project.uuid ||
+      // Restoring geometry without paired Recipe source would be unsafe.
+      if (!sourceMark || sourceMark.project_uuid !== Project.uuid ||
         sourceMark.recipe_id !== recipeId ||
-        currentProjectRecipeStoreString() !== sourceMark.after)) {
+        currentProjectRecipeStoreString() !== sourceMark.after) {
         throw new Error("RECIPE_STORE_UNDO_SOURCE_CHANGED");
       }
       if (last?.action !== "LazyDesigner parametric recipe" || !mark ||
@@ -449,7 +523,7 @@ export function createBlockbenchAuthoringRecipeApplyAdapter(
       }
       Undo.undo();
       const restored = readBlockbenchAuthoringRecipeOwnedState(recipeId);
-      if (sourceMark && currentProjectRecipeStoreString() !== sourceMark.before) {
+      if (currentProjectRecipeStoreString() !== sourceMark.before) {
         throw new Error("RECIPE_STORE_UNDO_RESTORE_UNVERIFIED");
       }
       if (Undo.index !== binding.provenance.undo_index - 1 ||

@@ -16,6 +16,16 @@ export type RecipeNativeUndoProvenance = {
   undo_index: number;
 };
 
+/** An editor commit or rollback may have changed state before throwing. */
+export class RecipeNativeOutcomeUnknownError extends Error {
+  readonly code = "OUTCOME_UNKNOWN";
+  readonly safeToRetry = false;
+  constructor(message: string, cause?: unknown) {
+    super(message, { cause });
+    this.name = "RecipeNativeOutcomeUnknownError";
+  }
+}
+
 export type AuthoringRecipeApplyAdapter = {
   readOwned(recipeId: string): Promise<AuthoringRecipeNativeSnapshot> | AuthoringRecipeNativeSnapshot;
   /**
@@ -155,8 +165,10 @@ export async function applyAuthoringRecipeIncrementalAtomic(
       throw new Error("RECIPE_PREFLIGHT_STATE_CHANGED: geometry changed before Undo.");
     }
   }
-  await adapter.beginUndo?.(affectedIds);
+  // A native initEdit may open a save before an event callback throws.
+  // Include that partial begin in the original guarded cancellation path.
   try {
+    await adapter.beginUndo?.(affectedIds);
     for (const instanceId of rebuild.remove_instance_ids) {
       const existing = beforeByInstance.get(instanceId);
       if (!existing) throw new Error("RECIPE_APPLY_PRECONDITION_FAILED: removal target " + instanceId + " is missing.");
@@ -223,8 +235,11 @@ export async function applyAuthoringRecipeIncrementalAtomic(
     if (provenance) receipt.native_undo_provenance = provenance;
     return receipt;
   } catch (error) {
-    // Always attempt cancellation even if a custom restore hook failed.
-    // Never use an unscoped Undo.undo(): it could revert unrelated work.
+    // finishEdit may have recorded history before its callback failed.
+    // Never automatically cancel, restore or replay an uncertain commit.
+    if (error instanceof RecipeNativeOutcomeUnknownError) throw error;
+    // For pre-commit errors attempt only an attributed native cancellation.
+    // Never use unscoped Undo.undo(): it could revert unrelated work.
     const rollbackFailures: string[] = [];
     try {
       await adapter.restore?.(before);
@@ -245,9 +260,10 @@ export async function applyAuthoringRecipeIncrementalAtomic(
       rollbackFailures.push("readback: " + String(failure));
     }
     if (rollbackFailures.length) {
-      throw new Error(
-        "RECIPE_APPLY_ROLLBACK_UNVERIFIED: " + rollbackFailures.join("; "),
-        { cause: error }
+      throw new RecipeNativeOutcomeUnknownError(
+        "RECIPE_APPLY_ROLLBACK_UNVERIFIED: " + rollbackFailures.join("; ") +
+        "; inspect native scene and Recipe source before any retry.",
+        error
       );
     }
     throw error;

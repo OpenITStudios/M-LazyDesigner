@@ -114,7 +114,10 @@ type NativeConstructionPlan = {
   summary: ReturnType<typeof buildAdvancedGeometryRecipeCandidate>["summary"];
 };
 
-function requireBedrockProject(input: AdvancedNativeConstructionInput): Group {
+function requireBedrockProject(
+  input: AdvancedNativeConstructionInput,
+  allowAttributedUndo = false
+): Group {
   if (typeof Project === "undefined" || !Project ||
     typeof Project.uuid !== "string" ||
     Project.uuid !== input.expected_project_uuid) {
@@ -123,7 +126,8 @@ function requireBedrockProject(input: AdvancedNativeConstructionInput): Group {
   if (typeof Format === "undefined" || Format?.id !== "bedrock") {
     throw new Error("ADVANCED_GEOMETRY_FORMAT_UNSUPPORTED: Bedrock Entity only.");
   }
-  if (typeof Undo === "undefined" || Undo.current_save ||
+  if (typeof Undo === "undefined" ||
+    (!allowAttributedUndo && Undo.current_save) ||
     !Number.isSafeInteger(Undo.index)) {
     throw new Error("ADVANCED_GEOMETRY_NATIVE_EDIT_IN_PROGRESS");
   }
@@ -167,8 +171,16 @@ function readFiniteVector(value: readonly number[], label: string): number[] {
   return [...value];
 }
 
-function sceneFingerprint(input: AdvancedNativeConstructionInput): string {
-  const target = requireBedrockProject(input);
+type SceneFingerprintScope = {
+  allowAttributedUndo?: boolean;
+  excludeOwned?: { recipe_id: string; instance_ids: ReadonlySet<string> };
+};
+
+function sceneFingerprint(
+  input: AdvancedNativeConstructionInput,
+  scope: SceneFingerprintScope = {}
+): string {
+  const target = requireBedrockProject(input, scope.allowAttributedUndo === true);
   if (typeof Cube === "undefined" ||
     !Array.isArray(Cube.all) ||
     Cube.all.length > MAX_SCENE_CUBES ||
@@ -209,10 +221,19 @@ function sceneFingerprint(input: AdvancedNativeConstructionInput): string {
     };
   }).sort((a, b) => a.uuid.localeCompare(b.uuid));
   const faces = ["north", "south", "east", "west", "up", "down"] as const;
-  const cubes = Cube.all.map(cube => ({
+  const cubes = Cube.all.flatMap(cube => {
+    const ownership = readAuthoringRecipeCubeOwnership(cube);
+    // Exempt exactly the changed Recipe cohort; keep all unrelated scene
+    // objects, Cube authored UV, material and Group state in the digest.
+    if (scope.excludeOwned && ownership?.recipe_id ===
+        scope.excludeOwned.recipe_id &&
+        scope.excludeOwned.instance_ids.has(ownership.instance_id)) {
+      return [];
+    }
+    return [{
     uuid: cube.uuid,
     // UUID and geometry alone cannot detect a Recipe ownership reassignment.
-    ownership: readAuthoringRecipeCubeOwnership(cube),
+    ownership,
     name: cube.name,
     parent: groupIdentity(cube.parent),
     from: readFiniteVector(cube.from, "Cube from"),
@@ -234,7 +255,8 @@ function sceneFingerprint(input: AdvancedNativeConstructionInput): string {
         face.material_name ?? "",
       ] : [key, "missing"];
     }),
-  })).sort((a, b) => a.uuid.localeCompare(b.uuid));
+    }];
+  }).sort((a, b) => a.uuid.localeCompare(b.uuid));
   const digest = createHash("sha256").update(JSON.stringify({
     contract: SOURCE_CONTRACT,
     project: Project.uuid,
@@ -602,6 +624,12 @@ export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInp
     ...prepared.elements.map(element => element.instance_id),
     ...prepared.removed_instance_ids,
   ]);
+  const untouchedSceneRevision = sceneFingerprint(normalized, {
+    excludeOwned: {
+      recipe_id: prepared.recipe.id,
+      instance_ids: modifiedOrRemoved,
+    },
+  });
   const replaceableUuids = new Set([...modifiedOrRemoved]
     .map(id => ownedByInstance.get(id))
     .filter((uuid): uuid is string => typeof uuid === "string"));
@@ -621,21 +649,44 @@ export async function createAdvancedGeometryNative(input: AdvancedNativeApplyInp
     prepared.recipe,
     fingerprintAuthoringRecipeNativeSnapshot(beforeNative),
     createBlockbenchAuthoringRecipeApplyAdapter(
-      prepared.recipe.id, group.uuid,
-      () => {
-        // Recipe preflights may yield before beginUndo. Recheck in the
-        // same synchronous turn immediately preceding native Undo.initEdit.
-        // The identical UUID alone cannot prove the Project/Group object
-        // was not replaced while the plan was pending.
-        if (Project !== projectAtPlan || typeof Group === "undefined" ||
-            !Array.isArray(Group.all) || !Group.all.includes(group)) {
-          throw new Error("ADVANCED_GEOMETRY_NATIVE_IDENTITY_CHANGED_BEFORE_UNDO");
-        }
-        if (sceneFingerprint(normalized) !== scene_revision) {
-          throw new Error(
-            "ADVANCED_GEOMETRY_SCENE_CHANGED_BEFORE_UNDO: inspect current scene and plan again."
-          );
-        }
+      prepared.recipe.id, group.uuid, {
+        beforeUndo: () => {
+          // After asynchronous preflight and directly before Undo.initEdit.
+          if (Project !== projectAtPlan || typeof Group === "undefined" ||
+              !Array.isArray(Group.all) || !Group.all.includes(group)) {
+            throw new Error("ADVANCED_GEOMETRY_NATIVE_IDENTITY_CHANGED_BEFORE_UNDO");
+          }
+          if (sceneFingerprint(normalized) !== scene_revision) {
+            throw new Error(
+              "ADVANCED_GEOMETRY_SCENE_CHANGED_BEFORE_UNDO: replan current scene."
+            );
+          }
+        },
+        beforeCommit: () => {
+          if (Project !== projectAtPlan || typeof Group === "undefined" ||
+              !Array.isArray(Group.all) || !Group.all.includes(group)) {
+            throw new Error("ADVANCED_GEOMETRY_NATIVE_IDENTITY_CHANGED_DURING_UNDO");
+          }
+          const actual = sceneFingerprint(normalized, {
+            allowAttributedUndo: true,
+            excludeOwned: {
+              recipe_id: prepared.recipe.id,
+              instance_ids: modifiedOrRemoved,
+            },
+          });
+          if (actual !== untouchedSceneRevision) {
+            throw new Error("ADVANCED_GEOMETRY_UNRELATED_SCENE_CHANGED_DURING_UNDO");
+          }
+        },
+        afterRollback: () => {
+          // A rollback is verified only when the COMPLETE scene, source
+          // and Undo index equal their original state.
+          if (Project !== projectAtPlan || typeof Group === "undefined" ||
+              !Array.isArray(Group.all) || !Group.all.includes(group) ||
+              sceneFingerprint(normalized) !== scene_revision) {
+            throw new Error("ADVANCED_GEOMETRY_ROLLBACK_SCENE_UNVERIFIED");
+          }
+        },
       }
     )
   );
