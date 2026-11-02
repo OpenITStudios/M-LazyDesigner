@@ -147,6 +147,29 @@ Bedrock native interpolation equivalence, or an installed animation-quality
 PASS. Direct `semantic_motion` Runtime inputs still need canonical generated
 API artifacts, Bun source gates and separate Blockbench proof.
 
+### Optional periodic spring seam solver (2026-11-03)
+
+For genuinely cyclic secondary parts, `SpringMotionLink.loop_strategy="periodic"`
+explicitly opts into steady-state spring sampling. Each source parent must
+have matching finite first/last channel values at exact `0` and clip duration
+and must be declared as a looping recipe. Partial spring duration, fractional
+spring sample-rate, unresolved Euler wrap and missing closing keys are refused.
+
+The source-only solver integrates at most 32 complete periods until both
+spring position and velocity converge. It then samples one more entire
+cycle, checks the resulting state, and sets the final *authored transform*
+to the converged initial transform within a bounded numeric tolerance.
+The default `legacy_reset` mode retains pre-existing spring behavior
+for callers who have not opted into this new contract; no global
+animation correction or native timeline mutation is performed.
+
+This protects a **source-baked endpoint seam**, not a guarantee of
+native frame-time fidelity, continuous piecewise-linear derivative,
+physical cloth simulation, visual loop smoothness, or Minecraft playback.
+The existing linear native creation/timecode guards remain authoritative.
+Verify repeated live playback (not only frame 0 and the final frame) before
+claiming reduced visible snapping.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

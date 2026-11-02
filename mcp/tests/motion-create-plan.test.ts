@@ -498,3 +498,100 @@ describe("native-safe spring follow-through and semantic Gateway plans", () => {
     expect(baked.bones.cape.at(-1)?.time).toBe(0.7);
   });
 });
+
+
+describe("periodic spring source-cycle continuity", () => {
+  const cyclic = () => ({
+    name: "animation.test.cyclic_cape", loop: true, duration: 1,
+    poses: [
+      { id: "start", time: 0, bones: { body: { rotation: [20, 0, 0] as [number,number,number] } } },
+      { id: "peak", time: 0.5, bones: { body: { rotation: [50, 0, 0] as [number,number,number] } } },
+      { id: "seam", time: 1, bones: { body: { rotation: [20, 0, 0] as [number,number,number] } } },
+    ],
+  });
+  const follower = () => ({
+    parent_bone: "body", child_bone: "cape", channel: "rotation" as const,
+    drive_mode: "parent_delta" as const, loop_strategy: "periodic" as const,
+    sample_rate: 24, damping: 10, stiffness: 36,
+  });
+
+  test("converged cyclic spring starts at its steady-state response, not a zeroed transient", () => {
+    const input = cyclic(), before = JSON.stringify(input);
+    const result = compileMotionRecipe(compileSpringSecondaryMotion(input, [follower()]));
+    const frames = result.bones.cape;
+    expect(frames[0].time).toBe(0);
+    expect(frames.at(-1)?.time).toBe(1);
+    expect(Math.abs(frames[0].rotation![0])).toBeGreaterThan(0.01);
+    expect(frames.at(-1)?.rotation).toEqual(frames[0].rotation);
+    expect(frames.every((frame) => frame.interpolation === undefined)).toBe(true);
+    expect(JSON.stringify(input)).toBe(before);
+    expect(compileSpringSecondaryMotion(input, [follower()]))
+      .toEqual(compileSpringSecondaryMotion(input, [follower()]));
+  });
+
+  test("the existing semantic Gateway bridge accepts cyclic linear-baked followers", () => {
+    const plan = compileSemanticMotionToGatewayInvocation(cyclic(), {
+      archetype: "IDLE", activation: "PREVIEW_ONLY", primary_bones: ["body"],
+      pose_roles: [
+        { pose_id: "peak", role: "ACTION" },
+        { pose_id: "seam", role: "LOOP_SEAM" },
+      ],
+      spring_links: [follower()],
+    });
+    const nativeArgs = plan.gateway_arguments.arguments;
+    expect(createAnimationParameters.safeParse(nativeArgs).success).toBe(true);
+    expect(nativeArgs.loop).toBe(true);
+    expect(nativeArgs.bones.cape[0].rotation)
+      .toEqual(nativeArgs.bones.cape.at(-1)?.rotation);
+    expect(plan.semantic_context.spring_follow_through)
+      .toMatchObject({ state: "SOURCE_ONLY_LINEAR_BAKE", native_playback_attested: false });
+    expect(plan.execution_evidence.playback_attested).toBe(false);
+  });
+
+  test("missing or different parent loop endpoints are not silently glued", () => {
+    const open = cyclic();
+    Object.assign(open.poses[2]!.bones.body, { rotation: [25, 0, 0] });
+    expect(() => compileSpringSecondaryMotion(open, [follower()]))
+      .toThrow("SPRING_PERIODIC_SOURCE_SEAM_UNVERIFIED");
+    const missing = cyclic();
+    Reflect.deleteProperty(missing.poses[2]!.bones, "body");
+    expect(() => compileSpringSecondaryMotion(missing, [follower()]))
+      .toThrow("SPRING_PERIODIC_SOURCE_SEAM_UNVERIFIED");
+  });
+
+  test("periodic requires a full authored loop and integer sampling clock", () => {
+    expect(() => compileSpringSecondaryMotion({ ...cyclic(), loop: false }, [follower()]))
+      .toThrow("SPRING_PERIODIC_REQUIRES_AUTHORED_LOOP");
+    expect(() => compileSpringSecondaryMotion(cyclic(), [
+      { ...follower(), max_duration: 0.7 },
+    ])).toThrow("SPRING_PERIODIC_SOURCE_SEAM_UNVERIFIED");
+    expect(() => compileSpringSecondaryMotion(cyclic(), [
+      { ...follower(), sample_rate: 24.5 },
+    ])).toThrow("SPRING_PERIODIC_SOURCE_SEAM_UNVERIFIED");
+  });
+
+  test("undamped/nonconvergent cyclic spring refuses to claim a seamless bake", () => {
+    expect(() => compileSpringSecondaryMotion(cyclic(), [
+      { ...follower(), damping: 0 },
+    ])).toThrow("SPRING_PERIODIC_STATE_NOT_CONVERGED");
+  });
+
+  test("periodic absolute followers also reject ambiguous Euler wraps", () => {
+    const wrapping = cyclic();
+    Object.assign(wrapping.poses[0]!.bones.body, { rotation: [179, 0, 0] });
+    Object.assign(wrapping.poses[1]!.bones.body, { rotation: [-179, 0, 0] });
+    Object.assign(wrapping.poses[2]!.bones.body, { rotation: [179, 0, 0] });
+    expect(() => compileSpringSecondaryMotion(wrapping, [
+      { ...follower(), drive_mode: "absolute" },
+    ])).toThrow("SPRING_ROTATION_WRAP_UNRESOLVED");
+  });
+
+  test("legacy reset behavior remains the default and does not imply periodic proof", () => {
+    const legacy = compileMotionRecipe(compileSpringSecondaryMotion(cyclic(), [
+      { parent_bone: "body", child_bone: "cape", channel: "rotation" },
+    ]));
+    expect(legacy.bones.cape[0].time).toBe(0);
+    expect(legacy.bones.cape.every((frame) => frame.interpolation === undefined)).toBe(true);
+    expect(legacy.bones.cape[0].rotation).not.toEqual(legacy.bones.cape.at(-1)?.rotation);
+  });
+});
