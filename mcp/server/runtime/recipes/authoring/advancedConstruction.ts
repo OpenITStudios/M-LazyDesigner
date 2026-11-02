@@ -136,12 +136,20 @@ function requireBedrockProject(input: AdvancedNativeConstructionInput): Group {
     !input.parent_group_uuid.trim()) {
     throw new Error("ADVANCED_GEOMETRY_EXACT_PARENT_UUID_REQUIRED");
   }
-  const group = Group.all.find(item => item.uuid === input.parent_group_uuid);
-  if (!group) {
+  // A UUID must identify exactly one native parent, not merely the first
+  // matching Group in an ambiguous scene. Never guess a mutation target.
+  const matchingGroups = Group.all.filter(item =>
+    item.uuid === input.parent_group_uuid
+  );
+  if (matchingGroups.length === 0) {
     throw new Error(
       "ADVANCED_GEOMETRY_PARENT_BONE_REQUIRED: inspect or create the exact Group."
     );
   }
+  if (matchingGroups.length !== 1) {
+    throw new Error("ADVANCED_GEOMETRY_PARENT_UUID_AMBIGUOUS");
+  }
+  const group = matchingGroups[0]!;
   if (group.export === false || group.visibility === false) {
     throw new Error("ADVANCED_GEOMETRY_PARENT_NOT_EXPORTABLE");
   }
@@ -164,17 +172,39 @@ function sceneFingerprint(input: AdvancedNativeConstructionInput): string {
     Group.all.length > MAX_SCENE_GROUPS) {
     throw new Error("ADVANCED_GEOMETRY_SCENE_INVENTORY_BUDGET");
   }
+  // A scene SHA cannot establish stable identity if multiple native objects
+  // claim the same UUID. Fail before planning/applying to the wrong object.
+  const groupUuids = Group.all.map(group => group.uuid);
+  const cubeUuids = Cube.all.map(cube => cube.uuid);
+  if (groupUuids.some(id => typeof id !== "string" || !id.trim()) ||
+    cubeUuids.some(id => typeof id !== "string" || !id.trim()) ||
+    new Set(groupUuids).size !== groupUuids.length ||
+    new Set(cubeUuids).size !== cubeUuids.length) {
+    throw new Error("ADVANCED_GEOMETRY_SCENE_UUID_AMBIGUOUS");
+  }
   const groupIdentity = (value: unknown) =>
     value instanceof Group ? value.uuid : value === "root" ? "root" : null;
-  const groups = Group.all.map(group => ({
-    uuid: group.uuid,
-    name: group.name,
-    parent: groupIdentity(group.parent),
-    origin: readFiniteVector(group.origin, "Group origin"),
-    rotation: readFiniteVector(group.rotation, "Group rotation"),
-    visible: group.visibility !== false,
-    export: group.export !== false,
-  })).sort((a, b) => a.uuid.localeCompare(b.uuid));
+  const groups = Group.all.map(group => {
+    // The native parent hierarchy snapshots these authored properties.
+    // Include them in the plan revision so UV/rig changes cannot hide
+    // behind otherwise identical Group coordinates and identities.
+    const authored = group as unknown as {
+      mirror_uv?: unknown; reset?: unknown; bedrock_binding?: unknown;
+    };
+    return {
+      uuid: group.uuid,
+      name: group.name,
+      parent: groupIdentity(group.parent),
+      origin: readFiniteVector(group.origin, "Group origin"),
+      rotation: readFiniteVector(group.rotation, "Group rotation"),
+      visible: group.visibility !== false,
+      export: group.export !== false,
+      mirror_uv: authored.mirror_uv === true,
+      reset: authored.reset === true,
+      bedrock_binding: typeof authored.bedrock_binding === "string"
+        ? authored.bedrock_binding : null,
+    };
+  }).sort((a, b) => a.uuid.localeCompare(b.uuid));
   const faces = ["north", "south", "east", "west", "up", "down"] as const;
   const cubes = Cube.all.map(cube => ({
     uuid: cube.uuid,
@@ -188,12 +218,15 @@ function sceneFingerprint(input: AdvancedNativeConstructionInput): string {
     visible: cube.visibility !== false,
     export: cube.export !== false,
     box_uv: cube.box_uv === true,
+    autouv: cube.autouv ?? null,
+    mirror_uv: cube.mirror_uv === true,
     uv_offset: cube.uv_offset ?? null,
     mapped_faces: faces.map(key => {
       const face = cube.faces?.[key];
       return face ? [
         key, face.enabled !== false, face.texture ?? null,
         face.uv ?? null, face.rotation ?? 0,
+        face.material_name ?? "",
       ] : [key, "missing"];
     }),
   })).sort((a, b) => a.uuid.localeCompare(b.uuid));
@@ -348,9 +381,10 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
   }
 
   if (mode === "revise") {
-    // Changing painted faces or UV-owned geometry without a new UV plan
-    // would silently distort Texture. Only untextured cohorts are editable
-    // through this first autonomous revision path.
+    // Changing textured/material-bound or manually UV-mapped Geometry
+    // without a remap could silently damage Texture or a future visible
+    // face. Disabled faces still own authored Texture state; only genuinely
+    // untextured, non-manually mapped cohorts may take this revision path.
     const modifiedIds = new Set([
       ...rebuild.upserts.map(placement => placement.id),
       ...rebuild.remove_instance_ids,
@@ -362,12 +396,17 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
     for (const cube of Cube.all ?? []) {
       if (!affectedNativeIds.has(cube.uuid)) continue;
       const faces = cube.faces ?? {};
-      if (Object.values(faces).some(face =>
-        face && face.enabled !== false &&
-        face.texture !== null && face.texture !== undefined &&
-        face.texture !== false)) {
+      const hasOwnedSurface = Object.values(faces).some(face =>
+        face && (
+          (face.texture !== null && face.texture !== undefined &&
+            face.texture !== false) ||
+          (face.material_name !== null && face.material_name !== undefined &&
+            face.material_name !== "")
+        )
+      );
+      if (hasOwnedSurface || cube.autouv === 0) {
         throw new Error(
-          "ADVANCED_GEOMETRY_TEXTURED_REVISION_REQUIRES_UV_REMAP: preserve existing Texture; revise before UV/paint."
+          "ADVANCED_GEOMETRY_TEXTURED_REVISION_REQUIRES_UV_REMAP: preserve existing Texture/material/UV ownership; revise before UV/paint."
         );
       }
     }
