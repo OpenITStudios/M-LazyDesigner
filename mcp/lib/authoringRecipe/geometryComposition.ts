@@ -6,6 +6,7 @@ import type { AdvancedGeometryFeature } from "./geometrySchema";
 export type { AdvancedGeometryFeature } from "./geometrySchema";
 import { buildPlanarCurveRecipeCandidate } from "./geometryCurveConstruction";
 import { compileAuthoringRecipe } from "./compiler";
+import { requireGeometryBoundedRevision } from "./geometryMathVariation";
 import {
   buildGeometryShapePieces,
   requireIdentity,
@@ -237,6 +238,12 @@ export function buildAdvancedGeometryRecipeCandidate(
   let next = structuredClone(source);
   const rows: AdvancedGeometrySummary["shape_families"] = [];
   for (const feature of features) {
+    // Explicit v14 variation bounds protect already-saved feature identity.
+    // Reuse the canonical Recipe revision path, not a separate solver or tool.
+    requireGeometryBoundedRevision(
+      priorShapeSources.find(source => source.id === feature.id),
+      feature
+    );
     if (typeof feature.label !== "string" || !feature.label.trim() ||
       feature.label.length > 128 ||
       !Array.isArray(feature.evidence_refs) ||

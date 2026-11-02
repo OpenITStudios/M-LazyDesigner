@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * Versions 1–12 remain source-frozen. V12 requires bounded uncertainty
- * claims; V13 optionally retains those checks and adds typed profile sweeps.
+ * Versions 1–13 remain source-frozen. V14 preserves profile construction
+ * and adds source-declared bounds for guarded feature-local revisions.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -446,6 +446,28 @@ export const geometryMathUncertaintyTargetSchema = z.object({
   evidence: geometryMathMeasurementEvidenceSchema,
 }).strict();
 
+/**
+ * V14 variation is an explicit change authority, not a randomizer.
+ * Omitted station properties are LOCKED by default. Parameter permissions
+ * are durable only inside this canonical high-level Recipe source.
+ */
+export const geometryMathVariationBoundSchema = z.object({
+  id,
+  part_id: id,
+  station_index: z.number().int().min(0).max(7),
+  parameter: z.enum(["half_width", "half_height", "twist_degrees"]),
+  min_value: z.number().finite().min(-180).max(180),
+  max_value: z.number().finite().min(-180).max(180),
+  evidence: geometryMathMeasurementEvidenceSchema,
+}).strict();
+export const geometryMathVariationInvariantSchema = z.object({
+  kind: z.literal("MONOTONIC_STATIONS"),
+  id,
+  part_id: id,
+  parameter: z.enum(["half_width", "half_height"]),
+  direction: z.enum(["NON_INCREASING", "NON_DECREASING"]),
+}).strict();
+
 const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
@@ -507,6 +529,13 @@ const programV13Fields = {
   calibration_uncertainty: geometryMathCalibrationUncertaintySchema.optional(),
 };
 
+const programV14Fields = {
+  ...programV13Fields,
+  variation_bounds: z.array(geometryMathVariationBoundSchema).min(1).max(16),
+  variation_invariants: z.array(geometryMathVariationInvariantSchema)
+    .max(8).optional(),
+};
+
 /**
  * The source version selects numerical semantics; it is never defaulted.
  * All previous source versions remain readable and reconstructable.
@@ -525,6 +554,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(11), ...programV11Fields }).strict(),
   z.object({ version: z.literal(12), ...programV12Fields }).strict(),
   z.object({ version: z.literal(13), ...programV13Fields }).strict(),
+  z.object({ version: z.literal(14), ...programV14Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -597,7 +627,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   }
   if (program.version === 7 || program.version === 8 ||
     program.version === 9 || program.version === 11 ||
-    program.version === 12 || program.version === 13) {
+    program.version === 12 || program.version === 13 || program.version === 14) {
     const connectors = new Set(program.parts.filter(part =>
       part.method === "CONNECT"
     ).map(part => part.id));
@@ -642,7 +672,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   }
   if (program.version === 8 || program.version === 9 ||
     program.version === 10 || program.version === 11 ||
-    program.version === 12 || program.version === 13) {
+    program.version === 12 || program.version === 13 || program.version === 14) {
     const relations = program.clearances ?? [];
     const claimedIds = [
       ...anchors.map(link => link.id),
@@ -650,27 +680,32 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       ...relations.map(link => link.id),
       ...((program.version === 9 || program.version === 10 ||
         program.version === 11 || program.version === 12 ||
-        program.version === 13)
+        program.version === 13 || program.version === 14)
         ? (program.dimension_links ?? []).map(link => link.id)
         : []),
       ...((program.version === 10 || program.version === 11 ||
-        program.version === 12 || program.version === 13)
+        program.version === 12 || program.version === 13 || program.version === 14)
         ? (program.dimension_constraints ?? []).map(link => link.id)
         : []),
       ...((program.version === 11 || program.version === 12 ||
-        program.version === 13)
+        program.version === 13 || program.version === 14)
         ? [
           ...(program.scale_targets ?? []).map(item => item.id),
           ...(program.measured_dimensions ?? []).map(item => item.id),
         ] : []),
-      ...((program.version === 12 || program.version === 13)
+      ...((program.version === 12 || program.version === 13 || program.version === 14)
         ? (program.uncertainty_targets ?? []).map(item => item.id)
         : []),
+      ...(program.version === 14
+        ? [
+          ...program.variation_bounds.map(item => item.id),
+          ...(program.variation_invariants ?? []).map(item => item.id),
+        ] : []),
     ];
     if (new Set(claimedIds).size !== claimedIds.length) {
       ctx.addIssue({
         code: "custom",
-        path: program.version === 12 || program.version === 13
+        path: program.version === 12 || program.version === 13 || program.version === 14
           ? ["uncertainty_targets"] :
           program.version === 11 ? ["scale_targets"] :
           program.version === 10 ? ["dimension_constraints"] :
@@ -690,7 +725,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   }
   if (program.version === 9 || program.version === 10 ||
     program.version === 11 || program.version === 12 ||
-    program.version === 13) {
+    program.version === 13 || program.version === 14) {
     const definitions = new Map(program.parts.map(part => [
       part.id, part
     ] as const));
@@ -718,7 +753,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
     });
   }
   if (program.version === 10 || program.version === 11 ||
-    program.version === 12 || program.version === 13) {
+    program.version === 12 || program.version === 13 || program.version === 14) {
     (program.dimension_constraints ?? []).forEach((relation, index) => {
       if (relation.kind === "SPAN_BOUNDS") {
         if (!known.has(relation.part_id)) {
@@ -756,7 +791,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
     });
   }
   if (program.version === 11 || program.version === 12 ||
-    program.version === 13) {
+    program.version === 13 || program.version === 14) {
     const targets = program.scale_targets ?? [];
     const owners = new Set<string>();
     targets.forEach((target, index) => {
@@ -833,9 +868,10 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     }
   }
-  if (program.version === 12 || program.version === 13) {
+  if (program.version === 12 || program.version === 13 || program.version === 14) {
     const declared = program.uncertainty_targets ?? [];
-    if (program.version === 13 && declared.length === 0 &&
+    if ((program.version === 13 || program.version === 14) &&
+      declared.length === 0 &&
       program.calibration_uncertainty) {
       ctx.addIssue({ code: "custom", path: ["calibration_uncertainty"],
         message: "A calibration uncertainty range requires an uncertainty target." });
@@ -927,6 +963,79 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
+  if (program.version === 14) {
+    const parts = new Map(program.parts.map(part => [part.id, part] as const));
+    const selectors = new Set<string>();
+    for (const [index, bound] of program.variation_bounds.entries()) {
+      const part = parts.get(bound.part_id);
+      if (!part || part.method !== "PROFILE_SWEEP" ||
+        !part.stations[bound.station_index]) {
+        ctx.addIssue({
+          code: "custom", path: ["variation_bounds", index],
+          message: "Variation requires a known PROFILE_SWEEP station.",
+        });
+        continue;
+      }
+      const key = bound.part_id + ":" + bound.station_index + ":" +
+        bound.parameter;
+      if (selectors.has(key)) {
+        ctx.addIssue({
+          code: "custom", path: ["variation_bounds", index],
+          message: "One explicit owner per station parameter.",
+        });
+      }
+      selectors.add(key);
+      const lo = bound.parameter === "twist_degrees" ? -180 : 1;
+      const hi = bound.parameter === "twist_degrees" ? 180 : 8;
+      if (bound.min_value < lo || bound.max_value > hi ||
+        bound.min_value >= bound.max_value) {
+        ctx.addIssue({
+          code: "custom", path: ["variation_bounds", index],
+          message: "Variation interval must be nonempty and fit the native parameter limits.",
+        });
+      }
+      const authored = part.stations[bound.station_index]![bound.parameter];
+      if (authored < bound.min_value || authored > bound.max_value) {
+        ctx.addIssue({
+          code: "custom", path: ["variation_bounds", index],
+          message: "The currently authored station parameter must fit its declared interval.",
+        });
+      }
+    }
+    const invariants = new Set<string>();
+    for (const [index, rule] of (program.variation_invariants ?? []).entries()) {
+      const part = parts.get(rule.part_id);
+      if (!part || part.method !== "PROFILE_SWEEP") {
+        ctx.addIssue({
+          code: "custom", path: ["variation_invariants", index],
+          message: "Variation invariant requires a known PROFILE_SWEEP part.",
+        });
+        continue;
+      }
+      const selector = rule.part_id + ":" + rule.parameter;
+      if (invariants.has(selector)) {
+        ctx.addIssue({
+          code: "custom", path: ["variation_invariants", index],
+          message: "A profile parameter has one monotonic direction.",
+        });
+      }
+      invariants.add(selector);
+      for (let i = 1; i < part.stations.length; i++) {
+        const prev = part.stations[i - 1]![rule.parameter];
+        const current = part.stations[i]![rule.parameter];
+        const invalid = rule.direction === "NON_INCREASING"
+          ? current > prev + 1e-9
+          : current < prev - 1e-9;
+        if (invalid) {
+          ctx.addIssue({
+            code: "custom", path: ["variation_invariants", index],
+            message: "Authored station profile violates its explicit monotonic constraint.",
+          });
+          break;
+        }
+      }
+    }
+  }
 });
 
 export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
@@ -934,6 +1043,11 @@ export type GeometryMathPartV4 = z.infer<typeof geometryMathPartV4Schema>;
 export type GeometryMathPartV5 = z.infer<typeof geometryMathPartV5Schema>;
 export type GeometryMathPartV6 = z.infer<typeof geometryMathPartV6Schema>;
 export type GeometryMathPartV13 = z.infer<typeof geometryMathPartV13Schema>;
+export type GeometryMathPartV14 = z.infer<typeof geometryMathPartV13Schema>;
+export type GeometryMathVariationBound =
+  z.infer<typeof geometryMathVariationBoundSchema>;
+export type GeometryMathVariationInvariant =
+  z.infer<typeof geometryMathVariationInvariantSchema>;
 export type GeometryMathProfileSweepPart =
   z.infer<typeof geometryMathProfileSweepPartSchema>;
 export type GeometryMathOrientedInstance =

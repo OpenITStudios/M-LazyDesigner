@@ -26,13 +26,24 @@ export type RecipeFormSignature = {
   declared_3d_contributions: RecipeGeometryReason[];
   /** Neither primary rank nor an artistic identity is inferable from a label. */
   design_role: "NOT_DECLARED";
-  variation_policy: "NO_DECLARED_VARIATION_BOUNDS";
+  variation_policy: "NO_DECLARED_VARIATION_BOUNDS" |
+    "SOURCE_DECLARED_BOUNDS_UNVERIFIED";
   /** Only a checked Recipe source/candidate may be supplied by the caller. */
   parameter_source: {
     kind: AdvancedGeometryFeature["kind"];
     parts: Array<{ id: string; method: string; references: string[] }>;
     contract_ids: string[];
     omitted_contract_count: number;
+    variation_bounds?: Array<{
+      id: string;
+      part_id: string;
+      station_index: number;
+      parameter: "half_width" | "half_height" | "twist_degrees";
+      min_value: number;
+      max_value: number;
+      evidence: "DECLARED_SPEC" | "REFERENCE_CLAIM";
+    }>;
+    omitted_variation_bound_count?: number;
   } | null;
 };
 
@@ -66,6 +77,10 @@ function describeParameterSource(
   if ("uncertainty_targets" in program) {
     add("UNCERTAINTY_TARGET", program.uncertainty_targets);
   }
+  if (program.version === 14) {
+    add("VARIATION_BOUND", program.variation_bounds);
+    add("VARIATION_INVARIANT", program.variation_invariants);
+  }
   contracts.sort();
   return {
     kind: "program",
@@ -78,6 +93,20 @@ function describeParameterSource(
     })).sort((a, b) => a.id.localeCompare(b.id)),
     contract_ids: contracts.slice(0, MAX_VISIBLE_SOURCE_CONTRACTS),
     omitted_contract_count: Math.max(0, contracts.length - MAX_VISIBLE_SOURCE_CONTRACTS),
+    ...(program.version === 14 ? {
+      variation_bounds: program.variation_bounds
+        .slice(0, MAX_VISIBLE_SOURCE_CONTRACTS).map(bound => ({
+          id: bound.id,
+          part_id: bound.part_id,
+          station_index: bound.station_index,
+          parameter: bound.parameter,
+          min_value: bound.min_value,
+          max_value: bound.max_value,
+          evidence: bound.evidence.kind,
+        })),
+      omitted_variation_bound_count: Math.max(0,
+        program.variation_bounds.length - MAX_VISIBLE_SOURCE_CONTRACTS),
+    } : {}),
   };
 }
 
@@ -120,7 +149,10 @@ export function projectRecipeFormSignatures(
         evidence_refs: [...(intent.evidence_refs ?? [])],
         declared_3d_contributions: [...decision.geometry_reasons],
         design_role: "NOT_DECLARED",
-        variation_policy: "NO_DECLARED_VARIATION_BOUNDS",
+        variation_policy: source?.kind === "program" &&
+          source.program.version === 14
+          ? "SOURCE_DECLARED_BOUNDS_UNVERIFIED"
+          : "NO_DECLARED_VARIATION_BOUNDS",
         parameter_source: source ? describeParameterSource(source) : null,
       };
     });

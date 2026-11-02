@@ -1125,6 +1125,46 @@ voxel budget, Recipe persistence/reconstruction and read-only
 Form Signature projection. Tests/build/Bun/CI/live Blockbench,
 save/reopen/export and visual QA **NOT EXECUTED**.
 
+### R3aa — Opt-in v14 constraint-aware morphology variation (2026-11-02; CODE ONLY)
+
+**Decision:** Preserve one canonical Recipe. Variation is a narrow
+authority over explicitly declared PROFILE_SWEEP station scalars, not a
+randomizer, a generic optimizer, a visual-style database, a new solver,
+or an independent native mutation path.
+
+The strict source `program.version=14` inherits v13 PROFILE_SWEEP,
+existing attachment, dimension, scale and optional uncertainty contracts.
+It requires at least one `variation_bounds` declaration naming a real
+semantic part, station index and `half_width`, `half_height` or
+`twist_degrees` property, finite exclusive-min/max bounds and a declared
+measurement evidence type. All other parameters are LOCKED by omission.
+Optional `variation_invariants` enforce an authored monotonic station
+width/height direction (e.g. non-increasing taper) without guessing an
+identity-specific silhouette or creating global art scores.
+
+`geometryMathVariation.ts` validates matched source claim handles and
+guards revision against the **stored, original** variation contract.
+Only allowed scalar changes inside original bounds may differ;
+part IDs, path points, profile kind, attachments, other dimensions,
+source refs, project geometry semantics, policy and source version
+are unchanged. The existing `buildAdvancedGeometryRecipeCandidate`
+and `inspect -> plan -> apply` route recompute the complete new Cuboid
+Recipe; original compiler/constraints/UV/native safety rules stay active.
+Creative redesign of a locked v14 feature requires a separate explicit
+creation/design decision, not silently relaxing its existing policy.
+
+`formSignature.ts` exposes bounded, source-matched variation handles to
+AI without a new public MCP tool or lookup stage; missing or mismatched
+saved source never attests an authorized variation. Source claim handles
+remain unverified references, not actual reference inspection or
+visual approval.
+
+**Source proof:** v14 schema, guard owner, Recipe composition bridge,
+Form Signature projection and focused positive/negative regression
+source authored. Bun/typecheck/build/tests/CI/native Blockbench/visual
+proof NOT EXECUTED. Math v1-v13 source behavior is not intentionally
+modified.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses
