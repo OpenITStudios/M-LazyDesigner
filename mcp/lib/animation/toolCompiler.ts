@@ -212,3 +212,79 @@ export function compileSemanticMotionToCreateAnimationPlan(
     },
   };
 }
+
+
+/**
+ * Source-only bridge to the existing stable-four Gateway invocation contract.
+ *
+ * A concrete declared semantic motion can be transmitted using the already
+ * registered create_animation capability with no new Runtime/schema surface.
+ * This helper does not invoke the Gateway, inspect native state, attest the
+ * project/stage, or authorize an external controller/gameplay transition.
+ *
+ * Explicit non-linear interpolation requires native clock-aware post-create
+ * mutation and is deliberately withheld from this single-call route.
+ */
+export function compileSemanticMotionToGatewayInvocation(
+  recipe: MotionRecipe,
+  intent: SemanticMotionIntent
+) {
+  const plan = compileSemanticMotionToCreateAnimationPlan(recipe, intent);
+
+  const requiresNonlinearEdits = plan.post_create_keyframe_edits.some((request) =>
+    request.keyframes.some((keyframe) =>
+      keyframe.interpolation !== undefined &&
+      keyframe.interpolation !== "linear"
+    )
+  );
+  if (requiresNonlinearEdits) {
+    throw new Error(
+      "SEMANTIC_MOTION_NATIVE_CLOCK_REQUIRED: non-linear interpolation " +
+      "needs a verified native animation UUID, snapping grid, and " +
+      "explicit manage_animation_timeline edit after clip creation."
+    );
+  }
+
+  // Native Bedrock import matches bone names case-insensitively. Never
+  // return an executable candidate with ambiguous authored identities.
+  const bones = Object.keys(plan.create_animation.bones);
+  const names = new Set<string>();
+  for (const bone of bones) {
+    if (!bone || bone !== bone.trim()) {
+      throw new Error("SEMANTIC_MOTION_BONE_IDENTITY_INVALID: trim or correct the authored bone identity.");
+    }
+    const key = bone.toLowerCase();
+    if (names.has(key)) {
+      throw new Error("SEMANTIC_MOTION_BONE_IDENTITY_COLLISION: Bedrock bone identity is case-insensitive.");
+    }
+    names.add(key);
+  }
+
+  if (bones.length === 0) {
+    throw new Error("SEMANTIC_MOTION_EMPTY_CLIP: at least one keyed bone is required.");
+  }
+
+  const args = plan.create_animation;
+  return {
+    gateway_tool: "invoke_capability" as const,
+    gateway_arguments: {
+      capability: "create_animation" as const,
+      arguments: args,
+      cohort_boundary: "COMPLETE" as const,
+    },
+    // Do not place unverified planner context or contact claims inside native
+    // arguments: the existing create_animation schema remains unchanged.
+    semantic_context: {
+      ...plan.semantic_motion_contract,
+      local_contact: plan.local_contact_contract,
+    },
+    execution_evidence: {
+      state: "SOURCE_PLAN_NOT_EXECUTED" as const,
+      native_runtime_attested: false as const,
+      playback_attested: false as const,
+      contact_attested: false as const,
+      controller_activation_attested: false as const,
+      native_interpolation_post_edits_required: false as const,
+    },
+  };
+}

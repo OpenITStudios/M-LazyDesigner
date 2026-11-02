@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { compileMotionRecipe } from "@/lib/animation/motionRecipe";
+import { createAnimationParameters } from "@/server/tools/animation";
+import { GATEWAY_TOOLS } from "@/gateway/contracts/protocol";
 import {
   compileMotionToCreateAnimation,
   compileMotionToCreateAnimationPlan,
   compileMotionWithLocalContactsToCreateAnimationPlan,
   compileSemanticMotionToCreateAnimationPlan,
+  compileSemanticMotionToGatewayInvocation,
 } from "@/lib/animation/toolCompiler";
 
 describe("motion create plan",()=>{
@@ -200,5 +203,122 @@ describe("native compaction and interpolation preservation", () => {
     const plan = compileMotionToCreateAnimationPlan(recipe);
     expect(plan.create_animation.bones.arm).toHaveLength(3);
     expect(plan.post_create_keyframe_edits).toHaveLength(0);
+  });
+});
+
+
+describe("semantic motion -> existing Gateway create_animation route", () => {
+  const recipe = () => ({
+    name: "animation.test.impact",
+    duration: 1,
+    poses: [
+      { id: "windup", time: 0, bones: {
+        body: { rotation: [0, 0, 0] as [number, number, number] },
+        foot: { position: [0, 0, 0] as [number, number, number] },
+      } },
+      { id: "strike", time: 0.5, bones: {
+        body: { rotation: [15, 0, 0] as [number, number, number] },
+        foot: { position: [1, 0, 0] as [number, number, number] },
+      } },
+      { id: "reset", time: 1, bones: {
+        body: { rotation: [0, 0, 0] as [number, number, number] },
+        foot: { position: [2, 0, 0] as [number, number, number] },
+      } },
+    ],
+  });
+  const intent = () => ({
+    archetype: "ACTION" as const,
+    activation: "PREVIEW_ONLY" as const,
+    primary_bones: ["body"],
+    pose_roles: [
+      { pose_id: "strike", role: "CONTACT" as const },
+      { pose_id: "windup", role: "ANTICIPATION" as const },
+      { pose_id: "reset", role: "RECOVERY" as const },
+    ],
+    local_contacts: [{
+      bone: "foot", channel: "position" as const,
+      start: 0.2, end: 0.8,
+      value: [0, 0, 0] as [number, number, number],
+    }],
+  });
+
+  test("produces a native schema-valid invoke_capability envelope without extra tool parameters", () => {
+    const input = recipe(), declared = intent();
+    const before = JSON.stringify({ input, declared });
+    const bridge = compileSemanticMotionToGatewayInvocation(input, declared);
+    expect(bridge.gateway_tool).toBe(GATEWAY_TOOLS.invokeCapability);
+    expect(bridge).toMatchObject({
+      gateway_tool: "invoke_capability",
+      gateway_arguments: {
+        capability: "create_animation",
+        cohort_boundary: "COMPLETE",
+        arguments: {
+          name: "animation.test.impact", loop: false, animation_length: 1,
+        },
+      },
+      semantic_context: {
+        archetype: "ACTION", activation: "PREVIEW_ONLY",
+        local_contact: {
+          state: "SOURCE_ONLY_LOCAL_HOLD",
+          world_space_foot_locking_authorized: false,
+        },
+      },
+      execution_evidence: {
+        state: "SOURCE_PLAN_NOT_EXECUTED",
+        native_runtime_attested: false,
+        playback_attested: false,
+        contact_attested: false,
+        controller_activation_attested: false,
+        native_interpolation_post_edits_required: false,
+      },
+    });
+    const nativeArgs = bridge.gateway_arguments.arguments;
+    expect(Object.keys(nativeArgs).sort())
+      .toEqual(["animation_length", "bones", "loop", "name"]);
+    expect(createAnimationParameters.safeParse(nativeArgs).success).toBe(true);
+    expect(nativeArgs.bones.foot.map((key) => key.time))
+      .toEqual([0, 0.2, 0.5, 0.8, 1]);
+    expect(JSON.stringify({ input, declared })).toBe(before);
+    expect(compileSemanticMotionToGatewayInvocation(input, declared)).toEqual(bridge);
+  });
+
+  test("permits explicit linear interpolation because native create_animation is linear", () => {
+    const input = recipe();
+    Object.assign(input.poses[1]!.bones.body, { interpolation: "linear" });
+    const bridge = compileSemanticMotionToGatewayInvocation(input, intent());
+    expect(createAnimationParameters.safeParse(
+      bridge.gateway_arguments.arguments
+    ).success).toBe(true);
+    expect(bridge.execution_evidence.native_interpolation_post_edits_required)
+      .toBe(false);
+  });
+
+  test("refuses nonlinear interpolation that would require an unsafe native grid edit", () => {
+    const input = recipe();
+    Object.assign(input.poses[1]!.bones.body, { interpolation: "catmullrom" });
+    expect(() => compileSemanticMotionToGatewayInvocation(input, intent()))
+      .toThrow("SEMANTIC_MOTION_NATIVE_CLOCK_REQUIRED");
+  });
+
+  test("refuses colliding case-insensitive Bedrock identities before Gateway invocation", () => {
+    const input = recipe();
+    Object.assign(input.poses[1]!.bones, { BODY: { rotation: [4, 0, 0] } });
+    expect(() => compileSemanticMotionToGatewayInvocation(input, intent()))
+      .toThrow("SEMANTIC_MOTION_BONE_IDENTITY_COLLISION");
+  });
+
+  test("refuses whitespace-padded bone identities and preserves native project targeting", () => {
+    const input = recipe();
+    Object.assign(input.poses[0]!.bones, { " foot ": { position: [0, 0, 0] } });
+    expect(() => compileSemanticMotionToGatewayInvocation(input, intent()))
+      .toThrow("SEMANTIC_MOTION_BONE_IDENTITY_INVALID");
+
+    const controllerIntent = {
+      ...intent(), activation: "CONTROLLER_STATE" as const,
+    };
+    const bridge = compileSemanticMotionToGatewayInvocation(recipe(), controllerIntent);
+    expect(bridge.semantic_context.activation).toBe("CONTROLLER_STATE");
+    expect(bridge.execution_evidence.controller_activation_attested).toBe(false);
+    expect(bridge.gateway_arguments).not.toHaveProperty("task_context_id");
   });
 });

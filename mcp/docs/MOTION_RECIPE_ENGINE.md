@@ -71,6 +71,39 @@ Current planning owners: `lib/animation/motionRecipe.ts`,
   extensions, effect state, native full-surface restoration, or authorize the
   protected native Blockbench timeline sampler.
 
+## Existing Gateway invocation bridge (source-only)
+
+The existing `compileSemanticMotionToGatewayInvocation(recipe, intent)`
+returns an exact stable-four request envelope:
+
+```text
+gateway_tool: invoke_capability
+gateway_arguments:
+  capability: create_animation
+  arguments: existing native create_animation payload
+  cohort_boundary: COMPLETE
+```
+
+The compiler validates source-declared primary bones/pose IDs, explicit
+archetype and activation intent, optional bone-local contact windows and
+case-insensitive Bedrock bone identities. It refuses nonlinear interpolation
+when a second mutation would require an unverified native snapping clock.
+Explicit linear metadata requires no post-create edit because the native
+creation path already authors linear transforms. The argument payload is
+checked against the existing `createAnimationParameters` schema in the
+focused compiler contract test; no public tool, request field, route or
+generator-owned artifact is introduced.
+
+The returned semantic context and SOURCE_PLAN_NOT_EXECUTED evidence are
+*not transmitted as native tool arguments*. The gateway still owns project,
+Stage, affinity and authorization, and Runtime owns real mutation/Undo.
+Compiling an envelope neither calls `invoke_capability` nor verifies live
+motion/contact, controller activation, export, or final visual fidelity.
+
+Full direct semantic input as a native `create_animation` branch remains a
+separate generator-coupled implementation unit; never hand-edit
+`mcp/docs/api.json` or `mcp/docs/index.html` to simulate schema generation.
+
 ## Hardening rules
 
 - do not guess mirrored Euler rotation signs;
