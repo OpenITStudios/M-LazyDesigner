@@ -750,6 +750,52 @@ connector orientation, interior/corner rejection and waypoint tangents;
 64-Cube and valid Bedrock UV, Undo and export checks.
 No build/typecheck/tests/CI/native Blockbench/visual QA was run.
 
+### R3s — Actual Cuboid face alignment via existing Recipe solver (2026-11-02; CODE ONLY)
+
+The prior v6 `ANCHOR` feature aligns only semantic-part bounding-box
+MIN/CENTER/MAX coordinates, not specific faces of asymmetric or hollow
+parts. That is insufficient for reliably mounting a small panel, armor
+plate or rotated bracket on a selected *real* source-Cube face.
+
+The strict opt-in `program.version=7` introduces `face_anchors`
+(max 12), each with a unique constraint ID, moving/fixed semantic
+part ID, unique source-local Cube ID, selected outward face, optional
+explicit repeated-copy index, and optional strictly tangential offset.
+Faces must have opposite normals on the same model axis. All names
+are validated against the existing part/constraint identities;
+CONNECT is excluded because it is constructed after ordinary solving.
+
+`geometryMathFaceAnchors.ts` owns pure, bounded source-only geometry
+preflight: it resolves Cuboid/copy identity, computes actual face
+centres, checks that the requested face is not obscured by another
+Cube/copy of the same part, then emits ordinary Recipe `ANCHOR`
+constraints using whole-part MIN anchors and mathematically derived
+three-axis offsets. It reuses the existing single
+`solveRecipeConstraints` dependency graph (including its duplicate,
+cycle and per-axis conflict detection). After positional solution, the
+same face planes must coincide with positive face AREA overlap on both
+tangent axes. No made-up “nearest” face, partial edge contact, new
+constraint engine, arbitrary scene rotation or hand-authored Cube
+coordinate is allowed.
+
+V7 retains v6 half-open LOFT raster, orthogonal ORIENT and
+face-aware CONNECT, and uses their same existing mathematics and
+native-Cuboid realizer. Source parameters and feature identity persist
+in the sole `advanced_geometry_source` Recipe field; no object-preset
+database, new Gateway capability, compiler/storage/Undo or plugin.
+
+Boundary: structural exposed-face checks consider the selected semantic
+part's own Cuboids/repetitions, not all other Project elements; source
+cannot certify global collision clearance, material/UV, rig/pivot,
+reference art fidelity or Bedrock export. No tests/build/typecheck/CI,
+native Blockbench, save/reopen/export or visual QA were executed.
+
+Pending *future* verification only: exact v1–v6 reconstruction;
+BOX/LOFT/ORIENT local face alignment, negative-repeat index,
+missing/ambiguous Cube IDs, buried faces, opposed-normal checks,
+normal-offset rejection, conflicting and cyclic mixed anchors,
+edge-only contact, native UV/Undo/save/Bedrock and visual acceptance.
+
 ### R4 — Quality-preserving correction and optimization (P1)
 
 **Source state:** `mcp/lib/authoringRecipe/geometryFidelity.ts` reuses

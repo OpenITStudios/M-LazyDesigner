@@ -7,8 +7,8 @@ import { z } from "zod";
  *
  * Units: Blockbench model units. Input is NOT a verified image observation.
  * v1 and v2 are frozen for stored Recipe reconstruction.
- * V1-v5 source semantics stay frozen. V6 adds opt-in orthogonal
- * orientation and face-aware connector checks without migration.
+ * V1-v6 source semantics stay frozen. V7 adds exact Cube FACE_ANCHOR
+ * placement through the original Recipe constraint solver, opt-in only.
  */
 const axis = z.enum(["X", "Y", "Z"]);
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -216,6 +216,30 @@ export const geometryMathPartV6Schema = z.union([
   geometryMathPartV5Schema,
   geometryMathOrientedInstanceSchema,
 ]);
+/**
+ * V7 positional FACE_ANCHOR: select one actual Cuboid face in each of two
+ * existing semantic parts and solve the placement with the canonical Recipe
+ * ANCHOR constraint engine. Explicit repeat_index disambiguates array
+ * copies; no inferred nearest face, Bone ownership or UV conversion.
+ */
+const mathFaceSide = z.enum([
+  "POS_X", "NEG_X", "POS_Y", "NEG_Y", "POS_Z", "NEG_Z",
+]);
+const mathFaceSelector = z.object({
+  part_id: id,
+  cube_id: id,
+  face: mathFaceSide,
+  repeat_index: z.number().int().min(0).max(15).optional(),
+}).strict();
+
+export const geometryMathFaceAnchorSchema = z.object({
+  kind: z.literal("FACE_ANCHOR"),
+  id,
+  moving: mathFaceSelector,
+  fixed: mathFaceSelector,
+  tangent_offset: vec3.optional(),
+}).strict();
+
 const programFields = {
   parts: z.array(geometryMathPartSchema).min(1).max(8),
   anchors: z.array(geometryMathAnchorSchema).max(16).optional(),
@@ -232,6 +256,10 @@ const programV6Fields = {
   ...programFields,
   parts: z.array(geometryMathPartV6Schema).min(1).max(8),
 };
+const programV7Fields = {
+  ...programV6Fields,
+  face_anchors: z.array(geometryMathFaceAnchorSchema).max(12).optional(),
+};
 
 /**
  * The source version selects numerical semantics; it is never defaulted.
@@ -244,6 +272,7 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
   z.object({ version: z.literal(4), ...programV4Fields }).strict(),
   z.object({ version: z.literal(5), ...programV5Fields }).strict(),
   z.object({ version: z.literal(6), ...programV6Fields }).strict(),
+  z.object({ version: z.literal(7), ...programV7Fields }).strict(),
 ]).superRefine((program, ctx) => {
   const ids = program.parts.map(part => part.id);
   if (new Set(ids).size !== ids.length) {
@@ -314,6 +343,49 @@ export const geometryMathProgramSchema = z.discriminatedUnion("version", [
       }
     });
   }
+  if (program.version === 7) {
+    const connectors = new Set(program.parts.filter(part =>
+      part.method === "CONNECT"
+    ).map(part => part.id));
+    const faceLinks = program.face_anchors ?? [];
+    const linkIds = faceLinks.map(link => link.id);
+    if (new Set([...linkIds, ...anchors.map(anchor => anchor.id)]).size !==
+      linkIds.length + anchors.length) {
+      ctx.addIssue({
+        code: "custom", path: ["face_anchors"],
+        message: "FACE_ANCHOR and ANCHOR IDs must be unique together.",
+      });
+    }
+    faceLinks.forEach((link, index) => {
+      const moving = link.moving.part_id;
+      const fixed = link.fixed.part_id;
+      if (!known.has(moving) || !known.has(fixed) ||
+        moving === fixed || connectors.has(moving) || connectors.has(fixed)) {
+        ctx.addIssue({
+          code: "custom", path: ["face_anchors", index],
+          message: "FACE_ANCHOR requires two distinct non-CONNECT parts.",
+        });
+      }
+      const first = link.moving.face;
+      const second = link.fixed.face;
+      const sameAxis = first.slice(4) === second.slice(4);
+      const opposed = first.slice(0, 3) !== second.slice(0, 3);
+      if (!sameAxis || !opposed) {
+        ctx.addIssue({
+          code: "custom", path: ["face_anchors", index],
+          message: "FACE_ANCHOR faces must have opposite normals along one axis.",
+        });
+      }
+      const normalAxis = "XYZ".indexOf(first.slice(4));
+      if (normalAxis >= 0 &&
+        Math.abs(link.tangent_offset?.[normalAxis] ?? 0) > 1e-9) {
+        ctx.addIssue({
+          code: "custom", path: ["face_anchors", index, "tangent_offset"],
+          message: "FACE_ANCHOR offset must be tangent to its face.",
+        });
+      }
+    });
+  }
 });
 
 export type GeometryMathPart = z.infer<typeof geometryMathPartSchema>;
@@ -325,5 +397,7 @@ export type GeometryMathOrientedInstance =
 export type GeometryMathLoftPart = z.infer<typeof geometryMathLoftPartSchema>;
 export type GeometryMathConnectorPart = z.infer<typeof geometryMathConnectorPartSchema>;
 export type GeometryMathProgram = z.infer<typeof geometryMathProgramSchema>;
+export type GeometryMathFaceAnchor =
+  z.infer<typeof geometryMathFaceAnchorSchema>;
 export type GeometryMathVersion = GeometryMathProgram["version"];
 export type GeometryMathAnchor = z.infer<typeof geometryMathAnchorSchema>;

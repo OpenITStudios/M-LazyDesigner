@@ -556,6 +556,64 @@ Bedrock export and visual/reference QA were NOT EXECUTED by user
 CODE-FIRST restriction. Public `construct_geometry` still awaits
 canonical generator-coupled registration and generated API docs.
 
+### R3s — Exact source-Cube FACE_ANCHOR (SOURCE ONLY)
+
+Opt-in Geometry Construction Language `program.version=7` adds bounded
+`face_anchors` to the SAME `kind:"program"` source field. Earlier
+programs v1–v6 retain their original schema, geometry, numerical
+semantics, IDs, order and source reconstruction.
+
+An entry names a distinct `moving` and `fixed` semantic part, the
+exact source-local `cube_id` in each part, and opposite faces such as
+`NEG_X` against `POS_X`. An optional `repeat_index` (0-based) is
+REQUIRED for repeated parts and forbidden for single parts; this makes
+each Cube/copy referent deterministic. Optional `tangent_offset` may
+change alignment along the two in-face dimensions only. The requested
+Cube face must be exposed against the other Cuboids in its own part,
+including repeated copies. Hidden faces, missing IDs, ambiguous
+copies, mismatched normals and inward offsets fail explicitly.
+
+The source-owned `geometryMathFaceAnchors.ts` converts those local
+face centres to full three-axis existing Recipe `ANCHOR` constraints
+for the whole semantic-part bounds. The canonical
+`solveRecipeConstraints` remains the ONLY positional graph solver
+and owns conflicts and cycles; no new runtime/native operation is
+introduced. After solving, the same source-Cube faces must have equal
+planes and positive-area overlap, not merely touch along an edge.
+This is a structural/local-scope check, not whole-scene clearance,
+UV transfer, native Bone parenting, rigid-body joint or visual PASS.
+
+Illustrative v7 source; `face_anchors` references `BOX`'s local
+Cube ID `box` (not a scene Cube UUID):
+
+```json
+{
+  "version":7,
+  "parts":[
+    {"id":"body","method":"BOX","at":[0,0,0],"size":[8,4,4]},
+    {"id":"panel","method":"BOX","at":[0,0,0],"size":[2,4,4]}
+  ],
+  "face_anchors":[{
+    "kind":"FACE_ANCHOR","id":"mount_panel",
+    "moving":{"part_id":"panel","cube_id":"box","face":"NEG_X"},
+    "fixed":{"part_id":"body","cube_id":"box","face":"POS_X"},
+    "tangent_offset":[0,0,0]
+  }]
+}
+```
+
+FACE_ANCHOR may coexist with normal envelope `anchors`; its derived
+constraints participate in the same conflict/cycle checks. CONNECT
+remains a separately derived, non-ANCHOR source feature and cannot be
+used as a FACE_ANCHOR endpoint. All v7 shapes, LOFT, ORIENT, INSTANCE,
+signed LINEAR repetition and CONNECT share the original expanded
+64-Cube-per-program limit and canonical Recipe source/Undo.
+
+Code only. No Bun, typecheck, build, tests, CI, Blockbench, save/reopen,
+export or visual/reference verification executed. Public
+`construct_geometry` remains UNREGISTERED pending atomic canonical
+API generation with Runtime registration.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

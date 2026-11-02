@@ -21,6 +21,7 @@ import { sweepMathVolume } from "./geometryMathSweep";
 import { revolveMathProfile } from "./geometryMathRevolve";
 import { loftMathVolume } from "./geometryMathLoft";
 import { rotateMathCuboidsQuarterTurns } from "./geometryMathOrthogonal";
+import { prepareGeometryFaceAnchors } from "./geometryMathFaceAnchors";
 import {
   buildMathConnector,
   type GeometryConnectorSource,
@@ -133,7 +134,7 @@ function canonicalConstraints(
  */
 function realizeStructuredParts(
   parts: readonly GeometryMathConstructiblePart[],
-  version: 4 | 5 | 6
+  version: 4 | 5 | 6 | 7
 ): LocalPart[] {
   const definitions = new Map(parts.map(part => [part.id, part] as const));
   const completed = new Map<string, LocalPart>();
@@ -195,7 +196,7 @@ function realizeStructuredParts(
           );
         }
       } else if (definition.method === "LOFT") {
-        boxes = loftMathVolume(definition, version === 6 ? 6 : 5);
+        boxes = loftMathVolume(definition, version >= 6 ? 6 : 5);
       } else {
         boxes = realizePart(definition, version);
       }
@@ -244,8 +245,15 @@ export function buildGeometryMathProgramPieces(
   // Re-validate at the builder boundary as callers may be internal. Reusing
   // this single strict schema also validates persisted source on inspection.
   const program = geometryMathProgramSchema.parse(feature.program);
-  const parts: LocalPart[] = program.version === 6
+  const parts: LocalPart[] = program.version === 7
     ? realizeStructuredParts(
+      program.parts.filter((part):
+        part is GeometryMathConstructiblePart =>
+        part.method !== "CONNECT"),
+      7
+    )
+    : program.version === 6
+      ? realizeStructuredParts(
       program.parts.filter((part):
         part is GeometryMathConstructiblePart =>
         part.method !== "CONNECT"),
@@ -317,16 +325,29 @@ export function buildGeometryMathProgramPieces(
       value + part.at[axis]!) as RecipeVec3,
     rotation: [0, 0, 0], scale: [1, 1, 1],
   }));
+  // V7 only: exact source-local Cube faces become regular Recipe ANCHOR
+  // constraints on semantic-part envelopes. Solver ownership is unchanged.
+  const faceAnchors = program.version === 7
+    ? prepareGeometryFaceAnchors(parts, program.face_anchors ?? [])
+    : null;
+  const standardConstraints = canonicalConstraints(
+    program.anchors ?? [], program.version
+  );
   const solved = solveRecipeConstraints(
-    initial, prototypes, canonicalConstraints(
-      program.anchors ?? [], program.version
-    )
+    initial, prototypes,
+    faceAnchors
+      ? [...standardConstraints, ...faceAnchors.constraints]
+      : standardConstraints
   );
   const byId = new Map(solved.map(instance => [
     instance.id, instance.translation,
   ] as const));
+  // Confirm real positive-area face contact after all canonical ANCHOR
+  // dependencies have resolved. No second constraint solver or native pass.
+  faceAnchors?.verify(byId);
 
-  if (program.version === 5 || program.version === 6) {
+  if (program.version === 5 || program.version === 6 ||
+    program.version === 7) {
     // A CONNECT references geometrically realized, ANCHOR-solved parts,
     // not arbitrary scene selections or an unverified bounding-box point.
     const sources = new Map<string, GeometryConnectorSource>();
@@ -359,7 +380,7 @@ export function buildGeometryMathProgramPieces(
     for (const connector of connectors) {
       try {
         const boxes = buildMathConnector(
-          connector, sources, program.version
+          connector, sources, program.version === 5 ? 5 : 6
         );
         const { min, max } = minMax(boxes);
         parts.push({
