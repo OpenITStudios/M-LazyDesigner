@@ -241,8 +241,12 @@ preset taxonomy, Runtime mode, or automatic quality decision.
 
 For an available Recipe-backed constructor, use a single bounded
 `inspect → plan → apply` sequence: inspect exact saved Recipe identity
-before revision, reject missing/mismatched source or owner state, plan
-against current Project UUID and exact parent Group UUID, then apply
+before revision, reject mismatched saved source or native owner state;
+legacy Recipes with no saved source remain `REVIEW_REQUIRED` on inspection
+and may be revised only from explicitly supplied replacement parameters
+under the existing guarded Recipe/native identity, never reconstructed by
+guess. Plan against the current Project UUID and exact parent Group UUID,
+then apply
 only with the returned matching plan ID and scene revision. A stale
 plan must be replanned; an uncertain committed native mutation must
 be inspected, **never blindly replayed**. Creation must not silently
