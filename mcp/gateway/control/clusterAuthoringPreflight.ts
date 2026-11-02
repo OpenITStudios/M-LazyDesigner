@@ -6,7 +6,7 @@ import type { ControlReferenceProjection } from "./referencePackage";
 import { lifecycleForDomain } from "./readiness";
 import { verifyCurrentClusterReferenceClaims } from "./clusterReferenceEvidence";
 
-type SourceBoundReadiness = Readonly<{
+export type SourceBoundReadiness = Readonly<{
   snapshot: ControlSnapshot;
   workspace: ControlWorkspaceProjection;
   reference: ControlReferenceProjection;
@@ -45,7 +45,10 @@ export function requireClusterAuthoringControlReadiness(
   // APPROVED / UV PASS requirements for Texturing in another owner.
   const lifecycle = lifecycleForDomain("TEXTURING", workspace);
   if (!lifecycle.ready || !workspace.available ||
-      !workspace.source_path ||
+      !workspace.source_path || !workspace.fingerprint ||
+      !Array.isArray(workspace.blockers) || workspace.blockers.length !== 0 ||
+      (workspace.workspace_issues?.length ?? 0) !== 0 ||
+      (workspace.blockers_omitted_count ?? 0) !== 0 ||
       workspace.current_stage?.trim().toUpperCase() !== "TEXTURING") {
     throw new Error(
       "CLUSTER_CONTROL_GEOMETRY_UV_OR_WORKSPACE_NOT_READY: " +
@@ -58,6 +61,9 @@ export function requireClusterAuthoringControlReadiness(
       !reference.asset_name || !workspace.asset ||
       workspace.asset.trim() !== reference.asset_name.trim()) {
     throw new Error("CLUSTER_CONTROL_REFERENCE_WORKSPACE_UNBOUND");
+  }
+  if (reference.readiness.texture !== "READY") {
+    throw new Error("CLUSTER_CONTROL_REFERENCE_STAGE_NOT_READY");
   }
   return {
     project_uuid: snapshot.project.affinity_uuid,
@@ -87,10 +93,15 @@ export async function prepareClusterAuthoringControlPreflight(input: {
   snapshot: ControlSnapshot;
   workspace: ControlWorkspaceProjection;
   reference: ControlReferenceProjection;
+  /** Trusted host re-observes actual Gateway, Workspace and Reference state
+   * AFTER source I/O. This callback is never an artist-supplied MCP field. */
+  observeCurrentControl: () => Promise<SourceBoundReadiness>;
 }): Promise<{
   state: "source_verified_native_execution_not_authorized";
   request: NativeClusterAuthoringRequest;
   project_uuid: string;
+  runtime_signature: string;
+  workspace_fingerprint: string;
   reference_fingerprint: string;
   source_image_count: number;
   declared_face_count: number;
@@ -103,6 +114,15 @@ export async function prepareClusterAuthoringControlPreflight(input: {
   // spends any filesystem or image decoding I/O.
   const request = nativeClusterAuthoringRequestSchema.parse(input.author_request);
   const ready = requireClusterAuthoringControlReadiness(input);
+  if (typeof input.observeCurrentControl !== "function") {
+    throw new Error("CLUSTER_CONTROL_REOBSERVATION_REQUIRED");
+  }
+  const before = {
+    ...ready,
+    workspace_path: input.workspace.source_path,
+    runtime_build: input.snapshot.runtime.build_identity,
+    open_project_count: input.snapshot.project.open_project_count,
+  };
 
   const evidence = await verifyCurrentClusterReferenceClaims({
     reference_package_path: ready.reference_source_path,
@@ -114,10 +134,27 @@ export async function prepareClusterAuthoringControlPreflight(input: {
     })),
   });
 
+  const current = await input.observeCurrentControl();
+  // Ready is not sufficient: a different valid asset/project must not
+  // inherit the source proof after an asynchronous reference-file read.
+  const refreshed = requireClusterAuthoringControlReadiness(current);
+  if (refreshed.project_uuid !== before.project_uuid ||
+      refreshed.runtime_signature !== before.runtime_signature ||
+      refreshed.workspace_fingerprint !== before.workspace_fingerprint ||
+      current.workspace.source_path !== before.workspace_path ||
+      refreshed.reference_fingerprint !== before.reference_fingerprint ||
+      refreshed.reference_source_path !== before.reference_source_path ||
+      current.snapshot.runtime.build_identity !== before.runtime_build ||
+      current.snapshot.project.open_project_count !== before.open_project_count) {
+    throw new Error("CLUSTER_CONTROL_CHANGED_DURING_REFERENCE_READ");
+  }
+
   return {
     state: "source_verified_native_execution_not_authorized",
     request,
-    project_uuid: ready.project_uuid,
+    project_uuid: refreshed.project_uuid,
+    runtime_signature: refreshed.runtime_signature,
+    workspace_fingerprint: refreshed.workspace_fingerprint!,
     reference_fingerprint: evidence.reference_fingerprint,
     source_image_count: evidence.image_count,
     declared_face_count: evidence.face_claim_count,

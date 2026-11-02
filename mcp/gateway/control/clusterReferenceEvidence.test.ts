@@ -305,12 +305,19 @@ describe("read-only Control cluster authoring stage and reference preflight",()=
       mutation_authorized:false,
     });
     const receipt=await prepareClusterAuthoringControlPreflight({
+      observeCurrentControl: async () => ({
+        snapshot: boundTexturingSnapshot(),
+        workspace: texturingWorkspace(root),
+        reference: projection,
+      }),
       author_request:clusterRequest(),snapshot,
       workspace,reference:projection,
     });
     expect(receipt).toMatchObject({
       state:"source_verified_native_execution_not_authorized",
       project_uuid:"project-1",
+      runtime_signature:"runtime-1",
+      workspace_fingerprint:"workspace-1",
       reference_fingerprint:projection.fingerprint,
       source_image_count:1,declared_face_count:1,
       reference_cluster_shapes_attested:false,
@@ -337,6 +344,11 @@ describe("read-only Control cluster authoring stage and reference preflight",()=
     ];
     for (const entry of bad) {
       await expect(prepareClusterAuthoringControlPreflight({
+      observeCurrentControl: async () => ({
+        snapshot: boundTexturingSnapshot(),
+        workspace: texturingWorkspace(root),
+        reference: projection,
+      }),
         author_request:clusterRequest(),
         snapshot:entry,workspace,reference:projection,
       })).rejects.toThrow("CLUSTER_CONTROL_PROJECT_OR_STAGE_UNVERIFIED");
@@ -354,15 +366,30 @@ describe("read-only Control cluster authoring stage and reference preflight",()=
       {available:false},
     ]) {
       await expect(prepareClusterAuthoringControlPreflight({
+      observeCurrentControl: async () => ({
+        snapshot: boundTexturingSnapshot(),
+        workspace: texturingWorkspace(root),
+        reference: projection,
+      }),
         author_request:clusterRequest(),snapshot,
         workspace:{...work,...fields},reference:projection,
       })).rejects.toThrow("CLUSTER_CONTROL_GEOMETRY_UV_OR_WORKSPACE_NOT_READY");
     }
     await expect(prepareClusterAuthoringControlPreflight({
+      observeCurrentControl: async () => ({
+        snapshot: boundTexturingSnapshot(),
+        workspace: texturingWorkspace(root),
+        reference: projection,
+      }),
       author_request:clusterRequest(),snapshot,
       workspace:{...work,asset:"Other"},reference:projection,
     })).rejects.toThrow("CLUSTER_CONTROL_REFERENCE_WORKSPACE_UNBOUND");
     await expect(prepareClusterAuthoringControlPreflight({
+      observeCurrentControl: async () => ({
+        snapshot: boundTexturingSnapshot(),
+        workspace: texturingWorkspace(root),
+        reference: projection,
+      }),
       author_request:clusterRequest(),snapshot,workspace:work,
       reference:{...projection,fingerprint:null},
     })).rejects.toThrow("CLUSTER_CONTROL_REFERENCE_WORKSPACE_UNBOUND");
@@ -371,16 +398,88 @@ describe("read-only Control cluster authoring stage and reference preflight",()=
   test("untrusted extra bitmap/UV fields fail schema before Reference PNG I/O",async()=>{
     const {root,projection}=await createPackage();
     await expect(prepareClusterAuthoringControlPreflight({
+      observeCurrentControl: async () => ({
+        snapshot: boundTexturingSnapshot(),
+        workspace: texturingWorkspace(root),
+        reference: projection,
+      }),
       author_request:{...clusterRequest(),native_faces:[],bitmap:"pretend"},
       snapshot:boundTexturingSnapshot(),
       workspace:texturingWorkspace(root),reference:projection,
     })).rejects.toThrow();
   });
 
+
+  test("requires trusted reobservation before source image I/O", async () => {
+    const {root,projection}=await createPackage();
+    // The malformed callback must fail before the already-changed PNG is read.
+    await writeFile(join(root,"images/front.png"),BLUE_PNG);
+    await expect(prepareClusterAuthoringControlPreflight({
+      author_request:clusterRequest(),snapshot:boundTexturingSnapshot(),
+      workspace:texturingWorkspace(root),reference:projection,
+      observeCurrentControl:undefined as unknown as () => Promise<never>,
+    })).rejects.toThrow("CLUSTER_CONTROL_REOBSERVATION_REQUIRED");
+  });
+
+  test("different READY project, Runtime generation or Workspace is stale after source read",async()=>{
+    const {root,projection}=await createPackage();
+    const snapshot=boundTexturingSnapshot(),workspace=texturingWorkspace(root);
+    const run=(observeCurrentControl:()=>Promise<{
+      snapshot:ControlSnapshot; workspace:ControlWorkspaceProjection;
+      reference:typeof projection;
+    }>)=>prepareClusterAuthoringControlPreflight({
+      author_request:clusterRequest(),snapshot,workspace,reference:projection,
+      observeCurrentControl,
+    });
+    const different=[
+      {snapshot:{...snapshot,project:{...snapshot.project,
+        affinity_uuid:"project-2",active_uuid:"project-2"}},workspace,reference:projection},
+      {snapshot:{...snapshot,runtime:{...snapshot.runtime,
+        runtime_signature:"restarted-runtime"}},workspace,reference:projection},
+      {snapshot,workspace:{...workspace,fingerprint:"workspace-new"},reference:projection},
+      {snapshot,workspace:{...workspace,
+        source_path:join(root,"different","README.md")},reference:projection},
+      {snapshot,workspace,reference:{...projection,
+        source_path:join(root,"different-reference")}},
+    ];
+    for(const current of different){
+      await expect(run(async()=>current))
+        .rejects.toThrow("CLUSTER_CONTROL_CHANGED_DURING_REFERENCE_READ");
+    }
+  });
+
+  test("new blockers, UV failure and withdrawn reference readiness refuse cluster proof",async()=>{
+    const {root,projection}=await createPackage();
+    const snapshot=boundTexturingSnapshot(),workspace=texturingWorkspace(root);
+    const changed=[
+      {...workspace,blockers:["pending UV correction"]},
+      {...workspace,workspace_issues:["WORKSPACE_LIFECYCLE_FIELD_CONFLICT"]},
+      {...workspace,blockers_omitted_count:2},
+      {...workspace,gates:{...workspace.gates,uv_layout:"FAIL"}},
+    ];
+    for(const fresh of changed){
+      await expect(prepareClusterAuthoringControlPreflight({
+        author_request:clusterRequest(),snapshot,workspace,reference:projection,
+        observeCurrentControl:async()=>({snapshot,workspace:fresh,reference:projection}),
+      })).rejects.toThrow("CLUSTER_CONTROL_GEOMETRY_UV_OR_WORKSPACE_NOT_READY");
+    }
+    await expect(prepareClusterAuthoringControlPreflight({
+      author_request:clusterRequest(),snapshot,workspace,reference:projection,
+      observeCurrentControl:async()=>({snapshot,workspace,reference:{
+        ...projection,readiness:{...projection.readiness,texture:"NEEDS_REVIEW"},
+      }}),
+    })).rejects.toThrow("CLUSTER_CONTROL_REFERENCE_STAGE_NOT_READY");
+  });
+
   test("changed Reference image after stage orientation blocks preflight without returning a token",async()=>{
     const {root,projection}=await createPackage();
     await writeFile(join(root,"images/front.png"),BLUE_PNG);
     await expect(prepareClusterAuthoringControlPreflight({
+      observeCurrentControl: async () => ({
+        snapshot: boundTexturingSnapshot(),
+        workspace: texturingWorkspace(root),
+        reference: projection,
+      }),
       author_request:clusterRequest(),snapshot:boundTexturingSnapshot(),
       workspace:texturingWorkspace(root),reference:projection,
     })).rejects.toThrow("CLUSTER_REFERENCE_PACKAGE_CHANGED_OR_BLOCKED");

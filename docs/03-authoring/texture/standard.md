@@ -446,6 +446,14 @@ the canonical Geometry APPROVED / UV PASS Workspace lifecycle,
 the current Workspace/Reference asset association and source byte
 evidence. It obtains the image path/fingerprint from the trusted
 Control projection rather than from untrusted cluster arguments.
+Before returning a non-authorizing source receipt, Control must
+**reobserve the current bound project, Runtime generation, Texturing
+Stage, Workspace lifecycle/fingerprint and Reference Package identity**
+after asynchronous PNG/manifest reads. A changed but otherwise READY
+project/asset is still stale. Missing fresh observation, Workspace
+blockers/ambiguity, withdrawn UV approval, or unready Texture reference
+fails closed. Only the trusted Gateway may supply the fresh observation
+callback; never accept an artist-provided status snapshot in its place.
 Its receipt authorizes no painting: serialized native identity,
 revision, source freshness and mapped visual review remain separate
 proof boundaries.

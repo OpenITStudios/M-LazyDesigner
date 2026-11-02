@@ -7,14 +7,13 @@ This file owns continuation only. Proof interpretation: [current-validation.md](
 **DECISION:** Freeze Geometry. Reuse one paint executor/Undo, four
 Gateway tools and generated API. No new UI, CI or release.
 
-**SOURCE:** Existing cluster, Oklab, compact request, source PNG and
-UV/material guards remain. New read-only Control preflight parses
-the compact request BEFORE image reads; checks bound active Runtime
-project/Stage, canonical Geometry APPROVED + UV PASS, Workspace/
-Reference asset, then fresh approved PNG/region/part byte identity.
-The Reference path/hash come from Control, not artist input. Receipt
-is NOT paint authorization. Regression tests for stale project,
-Stage/UV, source and injected native-state inputs authored.
+**SOURCE:** Compact cluster schema, PNG/part-byte verifier,
+native Cube/UV guards and existing paint/Undo remain.
+Control checks Geometry APPROVED, UV PASS, READY reference
+and no Workspace blockers; source proof now requires a trusted
+fresh Control observation after asynchronous PNG reads.
+Project/generation/Workspace drift is refused. Receipt is
+still NOT mutation authority; no public route is registered.
 
 **PROOF:** GitHub source/tests authored. Bun/typecheck/generator/CI,
 native Blockbench/Undo, save/export, Golden visual QA NOT EXECUTED.
