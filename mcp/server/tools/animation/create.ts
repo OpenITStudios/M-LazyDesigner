@@ -7,6 +7,7 @@ import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_STABLE } from "@/lib/constants";
 import { finiteAnimationVector3Schema } from "./shared";
 import { compactLinearCreationKeyframes } from "@/lib/animation/quality";
+import { nativeKeyframeTimesCollide } from "@/lib/animation/batchPlanning";
 
 const bedrockParticleEffectSchema = z.object({
   effect: z
@@ -178,6 +179,25 @@ const bedrockBoneKeyframesSchema = z
 
         channelTimes[channel].set(keyframe.time, index);
       });
+    });
+    // The native replacement window is broader than exact timestamp equality.
+    // Prevent two near-coincident values on one bone/channel from silently
+    // replacing one another during Blockbench keyframe import.
+    channels.forEach((channel) => {
+      const channelKeys = [...channelTimes[channel].entries()]
+        .sort((left, right) => left[0] - right[0]);
+      for (let index = 1; index < channelKeys.length; index += 1) {
+        if (nativeKeyframeTimesCollide(
+          channelKeys[index - 1][0], channelKeys[index][0]
+        )) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [channelKeys[index][1], "time"],
+            message: "Native Blockbench replacement tolerance would merge " +
+              channel + " keyframes less than 0.0001 seconds apart.",
+          });
+        }
+      }
     });
   })
   .describe(

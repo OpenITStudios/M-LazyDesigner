@@ -1,3 +1,5 @@
+import { nativeKeyframeTimesCollide } from "@/lib/animation/batchPlanning";
+
 export type MotionVec3 = [number, number, number];
 export type MotionChannel = "position" | "rotation" | "scale";
 export type MotionInterpolation = "linear" | "catmullrom" | "bezier" | "step";
@@ -80,6 +82,22 @@ export function compileMotionRecipe(recipe: MotionRecipe): CompiledMotionRecipe 
       if (transform.interpolation) frame.interpolation = transform.interpolation;
       if (frame.position === undefined && frame.rotation === undefined && frame.scale === undefined) continue;
       (bones[bone] ??= []).push(frame);
+    }
+  }
+  // Native replaceOthers() collides same-channel keys less than 0.0001s apart.
+  // Distinct semantic pose timestamps are not enough to prevent data loss.
+  for (const [bone, frames] of Object.entries(bones)) {
+    for (const channel of ["position", "rotation", "scale"] as const) {
+      const times = frames
+        .filter((frame) => frame[channel] !== undefined)
+        .map((frame) => frame.time)
+        .sort((a, b) => a - b);
+      for (let index = 1; index < times.length; index += 1) {
+        if (nativeKeyframeTimesCollide(times[index - 1], times[index])) {
+          throw new Error("Motion recipe " + bone + " " + channel +
+            " keys would collide under native Blockbench replacement tolerance.");
+        }
+      }
     }
   }
   return { name: recipe.name, loop: recipe.loop ?? false, duration, bones };

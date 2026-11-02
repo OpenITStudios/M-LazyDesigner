@@ -3,6 +3,8 @@ import { compileMotionRecipe } from "@/lib/animation/motionRecipe";
 import {
   compileMotionToCreateAnimation,
   compileMotionToCreateAnimationPlan,
+  compileMotionWithLocalContactsToCreateAnimationPlan,
+  compileSemanticMotionToCreateAnimationPlan,
 } from "@/lib/animation/toolCompiler";
 
 describe("motion create plan",()=>{
@@ -15,5 +17,100 @@ describe("motion create plan",()=>{
     const plan=compileMotionToCreateAnimationPlan(recipe);
     expect(plan.post_create_keyframe_edits).toHaveLength(1);
     expect(plan.post_create_keyframe_edits[0].action).toBe("edit");
+  });
+});
+
+
+describe("semantic motion and source-declared contact compilation", () => {
+  const source = () => ({
+    name: "hammer_action",
+    duration: 1,
+    poses: [
+      { id: "ready", time: 0, bones: {
+        body: { rotation: [0, 0, 0] as [number, number, number] },
+        foot: { position: [0, 0, 0] as [number, number, number] },
+      } },
+      { id: "impact", time: 0.5, bones: {
+        body: { rotation: [10, 0, 0] as [number, number, number] },
+        foot: { position: [1, 0, 0] as [number, number, number] },
+      } },
+      { id: "recover", time: 1, bones: {
+        body: { rotation: [0, 0, 0] as [number, number, number] },
+        foot: { position: [2, 0, 0] as [number, number, number] },
+      } },
+    ],
+  });
+
+  test("compiles explicit pose identities and preserves local source anchors without snapped writes", () => {
+    const plan = compileSemanticMotionToCreateAnimationPlan(source(), {
+      archetype: "ACTION",
+      activation: "PREVIEW_ONLY",
+      primary_bones: ["body"],
+      pose_roles: [
+        { pose_id: "recover", role: "RECOVERY" },
+        { pose_id: "ready", role: "ANTICIPATION" },
+        { pose_id: "impact", role: "CONTACT" },
+      ],
+      local_contacts: [
+        { bone: "foot", channel: "position", start: 0.2, end: 0.8, value: [0, 0, 0] },
+      ],
+    });
+    expect(plan.semantic_motion_contract.pose_roles.map((record) => record.pose_id))
+      .toEqual(["ready", "impact", "recover"]);
+    expect(plan.create_animation.bones.foot.map((frame) => frame.time))
+      .toEqual([0, 0.2, 0.5, 0.8, 1]);
+    // The new clip carries exact authored source anchors. No automatic
+    // post-create native writes may snap them to a different live grid.
+    expect(plan.post_create_keyframe_edits).toHaveLength(0);
+    expect(plan.local_contact_contract).toMatchObject({
+      source_boundary_count: 2,
+      post_create_anchor_writes_authorized: false,
+      native_snap_grid_verified: false,
+    });
+    expect(plan.local_contact_contract).toMatchObject({
+      state: "SOURCE_ONLY_LOCAL_HOLD",
+      physical_contact_verified: false,
+      native_pose_sampling_performed: false,
+      world_space_foot_locking_authorized: false,
+    });
+    expect(plan.semantic_motion_contract).toMatchObject({
+      activation: "PREVIEW_ONLY",
+      motion_fidelity_verified: false,
+      gameplay_activation_assumed: false,
+    });
+  });
+
+  test("rejects unspecified primary bone, duplicate pose roles and invented pose IDs", () => {
+    const intent = {
+      archetype: "ACTION" as const,
+      activation: "UNRESOLVED" as const,
+      primary_bones: ["body"],
+      pose_roles: [{ pose_id: "impact", role: "ACTION" as const }],
+    };
+    expect(() => compileSemanticMotionToCreateAnimationPlan(source(), {
+      ...intent, primary_bones: ["unknown"],
+    })).toThrow("distinct authored bone");
+    expect(() => compileSemanticMotionToCreateAnimationPlan(source(), {
+      ...intent, pose_roles: [{ pose_id: "unknown", role: "ACTION" }],
+    })).toThrow("exact, unique authored");
+    expect(() => compileSemanticMotionToCreateAnimationPlan(source(), {
+      ...intent,
+      pose_roles: [
+        { pose_id: "impact", role: "ACTION" },
+        { pose_id: "impact", role: "CONTACT" },
+      ],
+    })).toThrow("exact, unique authored");
+  });
+
+  test("declared local contact never claims world-space or physical contact proof", () => {
+    const plan = compileMotionWithLocalContactsToCreateAnimationPlan(source(), [
+      { bone: "foot", channel: "position", start: 0.2, end: 0.8, value: [0, 0, 0] },
+    ]);
+    expect(plan.local_contact_contract.physical_contact_verified).toBe(false);
+    expect(plan.local_contact_contract.source_boundary_count).toBe(2);
+    expect(plan.local_contact_contract.post_create_anchor_writes_authorized).toBe(false);
+    expect(plan.post_create_keyframe_edits.every((row) =>
+      row.action === "create" || row.action === "edit"
+    )).toBe(true);
   });
 });

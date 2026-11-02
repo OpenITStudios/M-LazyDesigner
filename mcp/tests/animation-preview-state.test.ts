@@ -262,3 +262,26 @@ describe("temporary animation preview state", () => {
     expect(state.effectsSuspended()).toBe(false);
   });
 });
+
+
+describe("temporary preview independent restoration", () => {
+  test("restores timeline, flags and effects if selected animation restoration fails", async () => {
+    const state = fixture(true);
+    const originalSetter = state.port.setSelectedAnimation;
+    state.port.setSelectedAnimation = (animation) => {
+      if (animation === state.idle) throw new Error("selection restore unavailable");
+      originalSetter(animation);
+    };
+    await expect(withTemporaryAnimationPreview(
+      state.port, state.walk, 0.25, () => "sample",
+    )).rejects.toThrow("selection restore unavailable");
+    expect(state.timeline.time).toBe(4);
+    expect(state.timeline.playing).toBe(true);
+    expect(state.idle.selected).toBe(true);
+    expect(state.idle.playing).toBe(true);
+    expect(state.walk.selected).toBe(false);
+    expect(state.walk.playing).toBe(false);
+    expect(state.effectsSuspended()).toBe(false);
+    expect(state.previewCalls()).toBe(2);
+  });
+});

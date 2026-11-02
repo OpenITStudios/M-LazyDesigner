@@ -31,6 +31,34 @@ motion/sequence intent
 - motion-set to existing controller-recipe linkage;
 - no new public capability.
 
+## Source-only semantic and local-contact compilation
+
+Current planning owners: `lib/animation/motionRecipe.ts`,
+`lib/animation/contactConstraints.ts`, and `lib/animation/toolCompiler.ts`.
+
+- `compileSemanticMotionToCreateAnimationPlan` validates explicitly supplied primary
+  bones, authored pose IDs/roles, archetype, and activation intent. No motion
+  style, timing, rig role, controller, or gameplay trigger is inferred.
+- `compileMotionWithLocalContactsToCreateAnimationPlan` only locks bone-local
+  positions within declared intervals. Conflicting targets, invalid vectors,
+  near-native timestamp collisions, nonlinear interpolation, and unknown
+  position tracks fail closed.
+- Output reuses `create_animation` and the existing optional
+  `manage_keyframes` interpolation-edit plan. Native create may
+  compact strictly redundant linear transform keys without changing
+  equivalent numeric motion; do not interpret saved anchor identity
+  as preserved merely because it appeared in the source plan.
+- No automatic post-create contact-anchor upsert is issued because
+  `manage_keyframes` snaps to the currently active native animation grid.
+  Exact clock ownership and observed playback are required before
+  any grid-sensitive correction can claim safe timing.
+- A local hold is NOT world-space foot locking, end-effector IK, physics,
+  verified visual contact, or native pose sampling. Existing contactEvidence
+  and the protected native restoration contract remain authoritative.
+- `withTemporaryAnimationPreview` now attempts independent restoration steps
+  even if one editor setter fails; this does not authorize the protected
+  native Blockbench timeline sampler.
+
 ## Hardening rules
 
 - do not guess mirrored Euler rotation signs;

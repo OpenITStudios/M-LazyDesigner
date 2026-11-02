@@ -5,6 +5,28 @@ import {
 } from "@/server/tools/animation";
 
 describe("create_animation contract", () => {
+  test("rejects near-native same-channel key collisions but permits independent channels", () => {
+    const frame = (time: number, channel: "rotation" | "position") =>
+      ({ time, [channel]: [0, 0, 0] });
+    const near = createAnimationParameters.safeParse({
+      name: "unsafe_frames", bones: { arm: [
+        frame(0.5, "rotation"), frame(0.50005, "rotation"),
+      ] },
+    });
+    expect(near.success).toBe(false);
+    if (!near.success) {
+      expect(near.error.issues.some((issue) =>
+        issue.message.includes("replacement tolerance")
+      )).toBe(true);
+    }
+    const independent = createAnimationParameters.safeParse({
+      name: "independent_channels", bones: { arm: [
+        frame(0.5, "rotation"), frame(0.50005, "position"),
+      ] },
+    });
+    expect(independent.success).toBe(true);
+  });
+
   test("accepts explicit zero animation length", () => {
     const result = createAnimationParameters.parse({
       name: "idle",

@@ -35,3 +35,27 @@ describe("motion recipe compiler",()=>{
     }
   });
 });
+
+
+describe("native keyframe timing integrity", () => {
+  test("rejects near-colliding authored same-channel keys before create_animation", () => {
+    expect(() => compileMotionRecipe({
+      name: "unsafe_foot",
+      poses: [
+        { id: "a", time: 0.5, bones: { foot: { position: [0, 0, 0] } } },
+        { id: "b", time: 0.50005, bones: { foot: { position: [1, 0, 0] } } },
+      ],
+    })).toThrow("native Blockbench replacement tolerance");
+  });
+
+  test("allows near-coincident times on different bone channels", () => {
+    const motion = compileMotionRecipe({
+      name: "separate_channels",
+      poses: [
+        { id: "a", time: 0.5, bones: { arm: { rotation: [0, 0, 0] } } },
+        { id: "b", time: 0.50005, bones: { arm: { position: [0, 0, 0] } } },
+      ],
+    });
+    expect(motion.bones.arm).toHaveLength(2);
+  });
+});

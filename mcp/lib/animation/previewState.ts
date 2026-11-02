@@ -148,26 +148,32 @@ export async function withTemporaryAnimationPreview<
     operationFailure = error;
   }
 
+  // Independent restoration attempts prevent one failing editor setter
+  // from skipping timeline, pose or effect cleanup. This is NOT the
+  // fully isolated native Blockbench sampling proof gate.
   const restoreFailures: unknown[] = [];
-  if (setupStarted) {
+  const attemptRestore = (operation: () => void) => {
     try {
-      flags.forEach(({ animation, selected, playing }) => {
-        restoreOptionalBoolean(animation, "selected", selected);
-        restoreOptionalBoolean(animation, "playing", playing);
-      });
-      port.setSelectedAnimation(previousSelected);
-      restoreTimelinePlaying(port.timeline, previousTimelinePlaying);
-      port.timeline.setTime(previousTime);
-
-      if (hadPlayingAnimation) {
-        port.preview();
-      } else if (port.showDefaultPose) {
-        port.showDefaultPose();
-      } else {
-        port.preview();
-      }
+      operation();
     } catch (error) {
       restoreFailures.push(error);
+    }
+  };
+  if (setupStarted) {
+    for (const { animation, selected, playing } of flags) {
+      attemptRestore(() => restoreOptionalBoolean(animation, "selected", selected));
+      attemptRestore(() => restoreOptionalBoolean(animation, "playing", playing));
+    }
+    attemptRestore(() => port.setSelectedAnimation(previousSelected));
+    attemptRestore(() => restoreTimelinePlaying(port.timeline, previousTimelinePlaying));
+    attemptRestore(() => port.timeline.setTime(previousTime));
+
+    if (hadPlayingAnimation) {
+      attemptRestore(() => port.preview());
+    } else if (port.showDefaultPose) {
+      attemptRestore(() => port.showDefaultPose!());
+    } else {
+      attemptRestore(() => port.preview());
     }
   }
 
