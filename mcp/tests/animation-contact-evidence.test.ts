@@ -1062,3 +1062,78 @@ test("explicit preview review keeps incomplete and mismatched source cohorts unv
     state: "UNVERIFIED", reason: "CONTACT_PREVIEW_JOINT_LOCATOR_CLOCK_MISMATCH",
   });
 });
+
+test("source preview does not label unreachable FABRIK as a valid IK proposal", () => {
+  const fixture = explicitPreviewContactFixture();
+  const source = fixture.joint_review;
+  if (source.state !== "SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS") {
+    throw new Error("Expected valid joint fixture");
+  }
+  // All three frames remain anatomically length-consistent, but a root
+  // displaced 2 units upward cannot reach the fixed contact target at x>0.
+  const farJointFrames: ObservedAnimationJointOriginFrame[] = source.frames.map(
+    (frame) => ({
+      project_uuid: fixture.binding.project_uuid,
+      animation_uuid: fixture.binding.animation_uuid,
+      time_seconds: frame.time_seconds,
+      groups: frame.groups.map((group) => ({
+        group_uuid: group.group_uuid,
+        parent_group_uuid: group.parent_group_uuid,
+        world_position: group.group_uuid === "hip"
+          ? [group.world_position[0], 2, 0]
+          : group.group_uuid === "knee"
+            ? [group.world_position[0], 1.5, 0]
+            : [...group.world_position] as [number, number, number],
+      })),
+    })
+  );
+  const joint = analyzeObservedAnimationJointOriginFrames(farJointFrames);
+  expect(joint.state).toBe("SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS");
+  const result = reviewExplicitPlantedContactIkFromPreview({
+    ...fixture,
+    joint_review: joint,
+  });
+  expect(result).toMatchObject({
+    state: "UNVERIFIED",
+    reason: "CONTACT_PREVIEW_IK_PROPOSAL_UNAVAILABLE",
+    ik_blocker: "CONTACT_IK_UNREACHABLE",
+    native_ik_bake_authorized: false,
+    physical_contact_verified: false,
+  });
+  if (result.state !== "UNVERIFIED") throw new Error("Unsafe source IK promotion");
+  expect(result.contact_evidence.ik_reachability_candidate?.state)
+    .toBe("unavailable");
+});
+
+test("source preview rejects a valid joint inventory whose ankle no longer meets Locator", () => {
+  const fixture = explicitPreviewContactFixture();
+  const joint = fixture.joint_review;
+  if (joint.state !== "SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS") {
+    throw new Error("Expected valid joint fixture");
+  }
+  const displaced: ObservedAnimationJointOriginFrame[] = joint.frames.map(
+    (frame, index) => ({
+      project_uuid: fixture.binding.project_uuid,
+      animation_uuid: fixture.binding.animation_uuid,
+      time_seconds: frame.time_seconds,
+      groups: frame.groups.map((group) => ({
+        group_uuid: group.group_uuid,
+        parent_group_uuid: group.parent_group_uuid,
+        world_position: group.group_uuid === "ankle" && index === 1
+          ? [group.world_position[0] + 0.01, group.world_position[1],
+            group.world_position[2]]
+          : [...group.world_position] as [number, number, number],
+      })),
+    })
+  );
+  const sourceJoint = analyzeObservedAnimationJointOriginFrames(displaced);
+  expect(sourceJoint.state).toBe("SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS");
+  expect(reviewExplicitPlantedContactIkFromPreview({
+    ...fixture, joint_review: sourceJoint,
+  })).toMatchObject({
+    state: "UNVERIFIED",
+    reason: "CONTACT_PREVIEW_IK_PROPOSAL_UNAVAILABLE",
+    ik_blocker: "CONTACT_IK_MARKER_JOINT_MISMATCH",
+    native_ik_bake_authorized: false,
+  });
+});

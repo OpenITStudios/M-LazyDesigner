@@ -313,6 +313,16 @@ and optional proposed world-space joint positions. Invalid roles, stale
 project/clip identity, incomplete timing, misplaced markers, mismatched
 parents and unsupported anchors return `UNVERIFIED`, not an authored clip.
 
+Importantly, the top-level `SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW` state
+now requires an actual `SOURCE_ONLY_REACHABLE` FABRIK candidate, complete
+stance coverage and unchanged false native/physical/visual proof flags.
+A failed geometric target, shifted Locator-to-joint endpoint or absence of
+a planted slip returns `CONTACT_PREVIEW_IK_PROPOSAL_UNAVAILABLE` with the
+canonical numeric `ik_blocker` reason and retained source diagnostic.
+This prevents a technically successful preview association from hiding a
+rejected IK correction. Even a valid source candidate never enables
+native animation writes.
+
 **Proof boundary:** the preview summaries do not certify native pose/time
 synchronization, complete editor restoration, physical contact, user approval,
 correct Euler rotations or safe keyframe baking. The returned review states

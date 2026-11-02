@@ -971,6 +971,42 @@ export function reviewExplicitPlantedContactIkFromPreview(
       contactReview.constraints.length !== 1) {
     return unavailable("CONTACT_PREVIEW_NUMERIC_CONTACT_REVIEW_INVALID");
   }
+  const numeric = contactReview.constraints[0];
+  const ik = numeric.ik_reachability_candidate;
+  // A successful contact/stance read does not mean the IK target can be
+  // reached. In particular, the existing contact analyzer intentionally
+  // returns an unavailable IK proposal for unplanted, unreachable, stretched
+  // or offset end-effectors. Never promote that to a ready-to-review IK pose.
+  if (!ik || ik.state !== "SOURCE_ONLY_REACHABLE") {
+    return {
+      ...unavailable("CONTACT_PREVIEW_IK_PROPOSAL_UNAVAILABLE"),
+      ik_blocker: ik?.reason ?? "NO_REACHABLE_IK_CANDIDATE",
+      contact_evidence: numeric,
+    };
+  }
+  // Keep even source-only acceptance conditional on an exact-time complete
+  // stance with a bounded, numeric-only FABRIK result. Native proof is NEVER
+  // inherited from numeric contact estimates or caller-provided identities.
+  if (numeric.slip_correction_hypothesis.state !== "candidate" ||
+      numeric.sampling_coverage !== "complete" ||
+      ik.frame_count !== sampled.length ||
+      ik.frames.length !== sampled.length ||
+      !Number.isFinite(ik.max_residual_world) ||
+      ik.frames.some((frame, index) =>
+        frame.time !== sampled[index].time ||
+        !Number.isFinite(frame.residual_world) ||
+        frame.residual_world < 0
+      ) ||
+      ik.native_sampling_attested !== false ||
+      ik.native_ik_bake_authorized !== false ||
+      ik.physical_contact_verified !== false ||
+      ik.visual_verdict !== "not_evaluated") {
+    return {
+      ...unavailable("CONTACT_PREVIEW_IK_PROPOSAL_INCONSISTENT"),
+      ik_blocker: "SOURCE_PLAN_OR_PROVENANCE_MISMATCH",
+      contact_evidence: numeric,
+    };
+  }
   return {
     state: "SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW" as const,
     reason: null,
