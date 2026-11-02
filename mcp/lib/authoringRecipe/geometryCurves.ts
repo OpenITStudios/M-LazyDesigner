@@ -58,6 +58,18 @@ export type GeometryCurveReview = {
 const finite = (value: number): boolean =>
   typeof value === "number" && Number.isFinite(value);
 
+/**
+ * A native Cube segment can be oriented in one coordinate plane only.
+ * The predicate is structural, not a claim about reference or visual fit.
+ */
+export function isNativePlanarCubeSpan(
+  start: RecipeVec3, end: RecipeVec3
+): boolean {
+  const delta = [0, 1, 2].map(axis => end[axis]! - start[axis]!);
+  const moved = delta.filter(value => Math.abs(value) > EPSILON).length;
+  return delta.every(finite) && moved >= 1 && moved <= 2;
+}
+
 function validateObservations(
   input: readonly GeometryCurveObservation[]
 ): void {
@@ -183,8 +195,21 @@ function reviewOne(
     });
   }
 
+  // Never advertise a construction that the planar Cube builder cannot
+  // realize. This is feasibility only, not a style or visual-quality score.
+  const segmentedRepresentable = points.slice(1).every((point, index) =>
+    isNativePlanarCubeSpan(points[index]!.center, point.center)
+  ) && intervals.every(interval =>
+    interval.direction_change_degrees <= 90 + EPSILON
+  );
+  const singleRepresentable = segmentedRepresentable &&
+    isNativePlanarCubeSpan(points[0]!.center, points[points.length - 1]!.center) &&
+    [0, 1, 2].some(axis => points.every(point =>
+      Math.abs(point.center[axis]! - points[0]!.center[axis]!) <= EPSILON
+    ));
+
   const alternatives: GeometryCurveReview["alternatives"] = [];
-  if (joints === 0) {
+  if (joints === 0 && singleRepresentable) {
     alternatives.push({
       strategy: "SINGLE_ROTATED_CUBOID_REVIEW",
       rationale: variation
@@ -202,7 +227,7 @@ function reviewOne(
       ],
     });
   }
-  if (variation || joints > 0) {
+  if ((variation || joints > 0) && segmentedRepresentable) {
     alternatives.push({
       strategy: "SEGMENTED_CUBOIDS_REVIEW",
       rationale: joints > 0

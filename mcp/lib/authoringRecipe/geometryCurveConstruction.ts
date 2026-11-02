@@ -5,7 +5,7 @@ import type {
   RecipeVec3,
 } from "./contracts";
 import type { GeometryCurveObservation } from "./geometryCurves";
-import { reviewGeometryCurveObservations } from "./geometryCurves";
+import { isNativePlanarCubeSpan, reviewGeometryCurveObservations } from "./geometryCurves";
 import { planRecipeFeatureRepresentations } from "./featureDecision";
 import { compileAuthoringRecipe } from "./compiler";
 import {
@@ -46,7 +46,7 @@ function planSegment(segment: CurveSegment, patternId: string, featureId: string
     throw new Error("RECIPE_CURVE_CONSTRUCTION_DEGENERATE_SPAN");
   }
   const moving = [0, 1, 2].filter(axis => Math.abs(delta[axis]!) > EPSILON);
-  if (moving.length === 0 || moving.length > 2) {
+  if (!isNativePlanarCubeSpan(start.center, end.center)) {
     throw new Error("RECIPE_CURVE_CONSTRUCTION_NONPLANAR: requires verified multi-axis transforms.");
   }
   const primary = moving.reduce((best, axis) =>

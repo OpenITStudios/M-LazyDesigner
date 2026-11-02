@@ -219,6 +219,10 @@ Curve samples to existing Recipe v1 and its existing plan/apply lifecycle:
   geometry, declared Anchor/Symmetry relations, foreign ownership and
   duplicate identities. Unknown claims, nonplanar/3-axis rotations,
   backtracking and Box UV subunit candidates fail before any mutation.
+- Read-only curve alternatives withhold unsupported single/segmented Cube
+  methods for three-axis spans or backtracking. A single-Cube review also
+  requires all declared samples to share one coordinate plane. This is only
+  a native construction feasibility guard, not a style rule or visual PASS.
 - Articulation requirements remain a rig review, not invented Bones.
   Geometry/source IDs do not attest image content or visual fidelity.
 
