@@ -20,9 +20,9 @@ Stage/UV, source and injected native-state inputs authored.
 native Blockbench/Undo, save/export, Golden visual QA NOT EXECUTED.
 Verification CI disabled.
 
-**RECOLOR ADDITION:** `protected_face_regions` exclude exact face-local
-logo texels during selective recolor, including shared RGB. Existing UV
-mask/Undo remain. Tests AUTHORED, NOT EXECUTED; no visual PASS.
+**RECOLOR:** `protected_face_regions` guard identity texels;
+`source_ramp_from_selected_pixels:true` samples selected shades
+around a declared base. Same Undo. Tests AUTHORED, NOT EXECUTED.
 
 **LIMIT:** Compact request/preflight INTERNAL/UNREGISTERED.
 Activation needs generated existing capability schema/docs and secure

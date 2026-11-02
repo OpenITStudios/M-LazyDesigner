@@ -234,6 +234,156 @@ describe("texture compute request and pipeline", () => {
       selection: stackedSelection })).toThrow("FACE_PROTECTION_SHARED_UV_REVIEW_REQUIRED");
   });
 
+  test("observes shadow/base/highlight on one exact face while preserving a same-RGB logo", () => {
+    const image = new Uint8ClampedArray([
+      0x50,0,0,255,  0xa0,0,0,255,  0xf0,0,0,255,
+      0xa0,0,0,255,  0,0,255,255,  0x50,0,0,255,
+    ]);
+    const face = { cube_uuid: "armor", face: "north" as const,
+      enabled: true, texture_uuid: "atlas",
+      native_material_name: "metal", rect: [0,0,5,1] as const,
+      uv: [0,0,5,1], rotation: 0 };
+    const other = { ...face, cube_uuid: "other",
+      rect: [5,0,6,1] as const, uv: [5,0,6,1] };
+    const request = parseTextureComputeRequest([{
+      operation: "gradient_map", args: {
+        ramp: ["#103020","#34834d","#b7f6c4"], mode: "nearest",
+        source_hue_color: "#a00000",
+        source_ramp_from_selected_pixels: true,
+        face_targets: [{ cube_uuid: "armor", face: "north" }],
+        protected_face_regions: [{ cube_uuid: "armor", face: "north",
+          rect: { x: 3, y: 0, width: 1, height: 1 } }],
+      },
+    }]);
+    const scope = planFaceScopedTextureSelection({
+      texture_uuid: "atlas", bitmap_width: 6, bitmap_height: 1,
+      faces: [face, other], face_targets: request.face_targets!,
+    });
+    const protectedMask = planProtectedFaceLocalRegions({
+      texture_uuid: "atlas", bitmap_width: 6, bitmap_height: 1,
+      logical_uv_width: 6, logical_uv_height: 1,
+      native_faces: [face,other], face_targets: request.face_targets!,
+      selection: scope, protected_regions: request.protected_face_regions!,
+    });
+    const result = applyTextureComputePipeline(
+      image,6,1,request.steps,scope.target_rect,protectedMask.target_mask
+    );
+    expect(result.receipt.execution.source_ramp_observation).toMatchObject({
+      method: "selected_current_atlas_pixels",
+      source_ramp: ["#500000","#a00000","#f00000"],
+      scanned_roi_pixels: 5,
+      sampled_opaque_pixels: 4, qualifying_opaque_pixels: 3,
+      visual_verdict: "not_evaluated",
+    });
+    expect(result.receipt.changed_pixels).toBe(3);
+    for(const i of [3,4,5]){
+      expect([...result.pixels.slice(i*4,i*4+4)])
+        .toEqual([...image.slice(i*4,i*4+4)]);
+    }
+    expect([...result.pixels.slice(0,4)]).toEqual([0x10,0x30,0x20,255]);
+    expect([...result.pixels.slice(4,8)]).toEqual([0x34,0x83,0x4d,255]);
+    expect([...result.pixels.slice(8,12)]).toEqual([0xb7,0xf6,0xc4,255]);
+  });
+
+  test("samples a generated-gradient ramp within ROI without changing other materials", () => {
+    const image = new Uint8ClampedArray([
+      0x50,0,0,255, 0xa0,0,0,255, 0xf0,0,0,255,
+      0x30,0,0,255, 0x20,0,0,255,
+    ]);
+    const parsed = parseTextureComputeRequest([{
+      operation: "generated_gradient_map", args: {
+        base_color: "#398455", steps: 3,
+        source_hue_color: "#a00000",
+        source_ramp_from_selected_pixels: true,
+        target_rect: { x: 0, y: 0, width: 3, height: 1 },
+      },
+    }]);
+    const result = applyTextureComputePipeline(
+      image, 5, 1, parsed.steps, parsed.target_rect!
+    );
+    expect(result.receipt.execution.source_ramp_observation?.source_ramp)
+      .toEqual(["#500000","#a00000","#f00000"]);
+    expect(result.receipt.changed_pixels).toBe(3);
+    expect([...result.pixels.slice(12)]).toEqual([...image.slice(12)]);
+    const manual = parseTextureComputeRequest([{
+      operation: "gradient_map", args: {
+        ramp: ["#103020","#34834d","#b7f6c4"], mode: "nearest",
+        source_hue_color: "#a00000",
+        source_ramp: ["#500000","#a00000","#f00000"],
+        target_rect: { x: 0, y: 0, width: 3, height: 1 },
+      },
+    }]);
+    const observed = parseTextureComputeRequest([{
+      operation: "gradient_map", args: {
+        ramp: ["#103020","#34834d","#b7f6c4"], mode: "nearest",
+        source_hue_color: "#a00000",
+        source_ramp_from_selected_pixels: true,
+        target_rect: { x: 0, y: 0, width: 3, height: 1 },
+      },
+    }]);
+    const a = applyTextureComputePipeline(image,5,1,manual.steps,manual.target_rect!);
+    const b = applyTextureComputePipeline(image,5,1,observed.steps,observed.target_rect!);
+    expect([...a.pixels]).toEqual([...b.pixels]);
+    expect(b.receipt.execution.planner.estimated_pixel_visits_upper_bound -
+      a.receipt.execution.planner.estimated_pixel_visits_upper_bound).toBe(3);
+    expect(a.receipt.execution.source_ramp_observation).toBeUndefined();
+  });
+
+  test("existing constant ordered-gradient ROI rewrite still runs before scope validation", () => {
+    const request = parseTextureComputeRequest([{
+      operation: "gradient_map", args: {
+        ramp: ["#112233", "#112233"], mode: "ordered",
+        target_rect: { x: 0, y: 0, width: 1, height: 1 },
+      },
+    }]);
+    const result = applyTextureComputePipeline(
+      new Uint8ClampedArray([255,0,0,255]), 1, 1,
+      request.steps, request.target_rect!
+    );
+    expect(result.receipt.rewrites).toContain("constant_ordered_gradient->nearest");
+    expect([...result.pixels]).toEqual([0x11,0x22,0x33,255]);
+  });
+
+  test("auto source ramp fails closed on missing, contradictory or non-opaque shades", () => {
+    const ramp = ["#103020","#34834d","#b7f6c4"];
+    const rect = { x: 0,y: 0,width: 3,height: 1 };
+    const auto = (args: Record<string,unknown>) =>
+      parseTextureComputeRequest([{operation:"gradient_map",args}]);
+    const params = {ramp,source_hue_color:"#a00000",
+      target_rect:rect,source_ramp_from_selected_pixels:true};
+    expect(()=>auto({...params,source_ramp:["#500000","#a00000","#f00000"]}))
+      .toThrow("MATERIAL_RAMP_SOURCE_CONFLICT");
+    expect(()=>auto({ramp,target_rect:rect,source_ramp_from_selected_pixels:true}))
+      .toThrow("requires source_hue_color");
+    expect(()=>auto({...params,source_ramp_from_selected_pixels:false}))
+      .toThrow();
+    const request=auto(params);
+    const onlyBase=new Uint8ClampedArray([
+      0xa0,0,0,255, 0xa0,0,0,255, 0xa0,0,0,255,
+    ]);
+    expect(()=>applyTextureComputePipeline(onlyBase,3,1,request.steps,rect))
+      .toThrow("MATERIAL_OBSERVED_RAMP_UNRESOLVED");
+    const transparentShadow=new Uint8ClampedArray([
+      0x50,0,0,0, 0xa0,0,0,255, 0xf0,0,0,255,
+    ]);
+    expect(()=>applyTextureComputePipeline(transparentShadow,3,1,request.steps,rect))
+      .toThrow("MATERIAL_OBSERVED_RAMP_UNRESOLVED");
+    const full=new Uint8ClampedArray([
+      0x50,0,0,255, 0xa0,0,0,255, 0xf0,0,0,255,
+    ]);
+    const hiddenBase = new Uint8Array([1,0,1]);
+    expect(()=>applyTextureComputePipeline(full,3,1,request.steps,rect,hiddenBase))
+      .toThrow("MATERIAL_SOURCE_SWATCH_NOT_FOUND");
+    const narrow=auto({...params,source_hue_color:"#f00000"});
+    expect(()=>applyTextureComputePipeline(full,3,1,narrow.steps,rect))
+      .toThrow("MATERIAL_OBSERVED_RAMP_UNRESOLVED");
+    const direct = {
+      sourceHueColor: "#a00000", sourceRampFromSelectedPixels:true as const,
+    };
+    expect(()=>gradientMapRgba(full,3,1,ramp,direct))
+      .toThrow("MATERIAL_OBSERVED_RAMP_REQUIRES_SCOPED_COMPUTE");
+  });
+
   test("material source/protection samples must be physically present in selected faces", () => {
     const source = new Uint8ClampedArray([
       0x50,0,0,255,  0xa0,0,0,255,  0xf0,0,0,255,

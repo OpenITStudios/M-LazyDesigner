@@ -10,6 +10,8 @@ import {
   palettizeErrorDiffusionRgba,
   palettizeRgba,
   parseHexRgba,
+  rgbaToOklab,
+  oklabToOklch,
   posterizeLightnessRgba,
   type AutoLevelsOptions,
   type DirectionalShadeOptions,
@@ -104,6 +106,15 @@ export type TextureComputeReceipt = {
     prepared_generated_ramps: number;
     transient_sample_buffers: number;
     actual_palette_comparisons: number;
+    /** Exact source atlas observations only; NOT a visual-quality verdict. */
+    source_ramp_observation?: {
+      method: "selected_current_atlas_pixels";
+      source_ramp: readonly [string, string, string];
+      scanned_roi_pixels: number;
+      sampled_opaque_pixels: number;
+      qualifying_opaque_pixels: number;
+      visual_verdict: "not_evaluated";
+    };
     planner: TextureComputeCostPlan;
     region: {
       bounded: boolean;
@@ -795,6 +806,7 @@ function requireMaterialSourceSwatches(
     (step.operation === "gradient_map" ||
       step.operation === "generated_gradient_map") &&
     (step.options?.sourceRamp !== undefined ||
+     step.options?.sourceRampFromSelectedPixels === true ||
      step.options?.protectedColors !== undefined)
   );
   if (!selected.length) return;
@@ -837,6 +849,124 @@ function requireMaterialSourceSwatches(
   }
 }
 
+type ObservedRamp = NonNullable<
+  TextureComputeReceipt["execution"]["source_ramp_observation"]
+>;
+
+/**
+ * Opt-in source shade observation from the exact current selected bitmap.
+ * The explicit sourceHueColor is the existing BASE swatch; only darker and
+ * lighter opaque colors from that hue family can flank it. No source-image,
+ * artistic identity, material or lighting inference is performed.
+ */
+function resolveObservedMaterialSourceRamp(
+  source: Uint8ClampedArray,
+  sourceWidth: number,
+  target: TextureComputeRect,
+  targetMask: Uint8Array | undefined,
+  options: GradientMapOptions
+): ObservedRamp {
+  if (!options.sourceHueColor || options.sourceRamp !== undefined ||
+      options.sourceRampFromSelectedPixels !== true) {
+    throw new Error("MATERIAL_OBSERVED_RAMP_INVALID_REQUEST");
+  }
+  const baseColor = parseHexRgba(options.sourceHueColor);
+  const baseRgb = (baseColor[0] << 16) | (baseColor[1] << 8) | baseColor[2];
+  const base = oklabToOklch(rgbaToOklab(baseColor));
+  const minChroma = options.minimumChroma ?? 0.035;
+  const tolerance = options.hueToleranceDegrees ?? 20;
+  if (base.C < minChroma) {
+    throw new Error("MATERIAL_OBSERVED_RAMP_NEUTRAL_BASE");
+  }
+  const protectedRgb = new Set((options.protectedColors ?? []).map(color =>
+    Number.parseInt(color.slice(1), 16)
+  ));
+  if (protectedRgb.has(baseRgb)) {
+    throw new Error("MATERIAL_RAMP_PROTECTED_COLLISION");
+  }
+  let darker: { L: number; rgb: number } | null = null;
+  let lighter: { L: number; rgb: number } | null = null;
+  let baseObserved = false;
+  let opaqueCount = 0;
+  let qualifyingCount = 0;
+  // The bounded targetRect or native face mask is mandatory.
+  // Scan once with request-local bounded color reuse.
+  const cached = new Map<number, { L: number; C: number; h: number }>();
+  for (let y = 0; y < target.height; y++) {
+    for (let x = 0; x < target.width; x++) {
+      if (targetMask && targetMask[y * target.width + x] !== 1) continue;
+      const offset = ((target.y + y) * sourceWidth + target.x + x) * 4;
+      if (source[offset + 3] !== 255) continue;
+      opaqueCount++;
+      const rgb = (source[offset] << 16) |
+        (source[offset + 1] << 8) | source[offset + 2];
+      if (protectedRgb.has(rgb)) continue;
+      let color = cached.get(rgb);
+      if (!color) {
+        color = oklabToOklch(rgbaToOklab([
+          source[offset], source[offset + 1], source[offset + 2], 255,
+        ]));
+        if (cached.size < 4096) cached.set(rgb, color);
+      }
+      if (color.C < minChroma ||
+          Math.abs(((color.h - base.h + 540) % 360) - 180) > tolerance) continue;
+      qualifyingCount++;
+      if (rgb === baseRgb) baseObserved = true;
+      if (color.L < base.L - 0.01 &&
+          (!darker || color.L < darker.L ||
+            (color.L === darker.L && rgb < darker.rgb))) {
+        darker = { L: color.L, rgb };
+      }
+      if (color.L > base.L + 0.01 &&
+          (!lighter || color.L > lighter.L ||
+            (color.L === lighter.L && rgb < lighter.rgb))) {
+        lighter = { L: color.L, rgb };
+      }
+    }
+  }
+  if (!baseObserved || !darker || !lighter) {
+    throw new Error(
+      "MATERIAL_OBSERVED_RAMP_UNRESOLVED: selected opaque current-atlas pixels require actual base, darker and lighter shades."
+    );
+  }
+  const hex = (value: number) => "#" + value.toString(16).padStart(6, "0");
+  return {
+    method: "selected_current_atlas_pixels",
+    source_ramp: [hex(darker.rgb), hex(baseRgb), hex(lighter.rgb)],
+    scanned_roi_pixels: target.width * target.height,
+    sampled_opaque_pixels: opaqueCount,
+    qualifying_opaque_pixels: qualifyingCount,
+    visual_verdict: "not_evaluated",
+  };
+}
+
+function materializeObservedMaterialRamp(
+  source: Uint8ClampedArray,
+  width: number,
+  target: TextureComputeRect,
+  targetMask: Uint8Array | undefined,
+  steps: readonly TextureComputeStep[]
+): { steps: TextureComputeStep[]; observation: ObservedRamp | null } {
+  if (steps.length !== 1) {
+    return { steps: [...steps], observation: null };
+  }
+  const step = steps[0];
+  if ((step.operation !== "gradient_map" &&
+       step.operation !== "generated_gradient_map") ||
+      step.options?.sourceRampFromSelectedPixels !== true) {
+    return { steps: [...steps], observation: null };
+  }
+  const observation = resolveObservedMaterialSourceRamp(
+    source, width, target, targetMask, step.options
+  );
+  const options: GradientMapOptions = {
+    ...step.options,
+    sourceRamp: observation.source_ramp,
+  };
+  delete options.sourceRampFromSelectedPixels;
+  return { steps: [{ ...step, options }], observation };
+}
+
 export function applyTextureComputePipeline(
   source: Uint8ClampedArray,
   width: number,
@@ -869,11 +999,12 @@ export function applyTextureComputePipeline(
     (step.operation === "gradient_map" ||
       step.operation === "generated_gradient_map") &&
     (step.options?.sourceRamp !== undefined ||
+     step.options?.sourceRampFromSelectedPixels === true ||
      step.options?.protectedColors !== undefined)
   ) && (!targetRect || !selectiveHue || steps.length !== 1)) {
     throw new Error("MATERIAL_RAMP_REQUIRES_SINGLE_SCOPED_GRADIENT");
   }
-  const plan = optimizeTextureComputeSteps(steps);
+  const originalPlan = optimizeTextureComputeSteps(steps);
   const target = targetRect
     ? requireTextureComputeRect(targetRect, width, height)
     : { x: 0, y: 0, width, height };
@@ -890,9 +1021,15 @@ export function applyTextureComputePipeline(
     if (coveredPixels === 0) throw new Error("FACE_SCOPE_MASK_EMPTY: zero face-owned texels.");
   }
   if (targetRect) {
-    for (const step of plan.steps) requireRoiSafeStep(step);
-    requireMaterialSourceSwatches(source, width, target, targetMask, plan.steps);
+    // Preserve existing constant-ordered -> nearest optimization before ROI
+    // validation; observed swatch selection changes no optimization semantics.
+    for (const step of originalPlan.steps) requireRoiSafeStep(step);
+    requireMaterialSourceSwatches(source, width, target, targetMask, originalPlan.steps);
   }
+  const observed = targetRect
+    ? materializeObservedMaterialRamp(source, width, target, targetMask, originalPlan.steps)
+    : { steps: [...originalPlan.steps], observation: null };
+  const plan = { ...originalPlan, steps: observed.steps };
   const halo = targetRect
     ? plan.steps.reduce(
         (total, step) => total + textureComputeStepHalo(step),
@@ -917,6 +1054,12 @@ export function applyTextureComputePipeline(
     target.width * target.height,
     targetRect !== undefined
   );
+  // Observation adds one bounded ROI traversal before the color transform.
+  // Do not understate compute visitation estimates when this opt-in is used.
+  if (observed.observation) {
+    costPlan.estimated_pixel_visits_baseline += observed.observation.scanned_roi_pixels;
+    costPlan.estimated_pixel_visits_upper_bound += observed.observation.scanned_roi_pixels;
+  }
   const executed: TextureComputeStep["operation"][] = [];
   const skipped = [...plan.skipped];
   let fusedGroups = 0;
@@ -1027,6 +1170,9 @@ export function applyTextureComputePipeline(
         transient_sample_buffers: 0,
         actual_palette_comparisons:
           context.metrics.palette_comparisons,
+        ...(observed.observation ? {
+          source_ramp_observation: observed.observation,
+        } : {}),
         planner: costPlan,
         region: {
           bounded: targetRect !== undefined,

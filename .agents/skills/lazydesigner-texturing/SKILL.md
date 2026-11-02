@@ -96,7 +96,19 @@ source-hue selector. This maps the existing material's own value range to
 the authored target ramp instead of flattening it through global 0..1
 lightness. The target `ramp` may come from a reviewed approved reference;
 the `source_ramp` must **never** be copied from reference image colors unless
-those RGBs also exist on the actual target atlas. For explicitly observed
+those RGBs also exist on the actual target atlas.
+**Observed source ramp (opt-in):** When the current selected face/ROI contains
+an exact **opaque base swatch** plus actual darker/lighter shades, use
+`source_ramp_from_selected_pixels:true` in the same selective gradient's
+`compute[0].args` instead of manually enumerating three source RGBs.
+`source_hue_color` is the existing sampled base, NOT an inferred material.
+This computes existing shadow/base/highlight only from selected current-atlas
+opaque texels of the same Oklch hue family, respecting
+`protected_face_regions` and `protected_colors`. It refuses missing
+or too-similar shades. Never combine the observed option and `source_ramp`,
+invent a base swatch from an image crop, or claim material recognition.
+Review `compute.execution.source_ramp_observation` and affected mapped
+views before repeating on more material faces. For explicitly observed
 identity/logo colors on the same face, pass up to 16 distinct exact RGBs
 as `protected_colors`. The compute preflight requires every declared
 source/protected RGB to be present on current visible pixels in the exact

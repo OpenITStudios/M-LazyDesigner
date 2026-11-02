@@ -35,6 +35,8 @@ export type GradientMapOptions = {
   minimumChroma?: number;
   /** Exact current-atlas shadow/base/highlight swatches, never target/reference guesses. */
   sourceRamp?: readonly [string, string, string];
+  /** Internal compute-only instruction: resolve from selected current atlas pixels. */
+  sourceRampFromSelectedPixels?: true;
   /** Exact current-atlas RGBs to protect within the selected native face scope. */
   protectedColors?: readonly string[];
 };
@@ -730,6 +732,9 @@ function prepareGradientMaterialAnchors(
   selection: GradientHueSelection | null,
   context?: TextureColorComputeContext
 ): GradientMaterialAnchors | null {
+  if (options.sourceRampFromSelectedPixels === true) {
+    throw new Error("MATERIAL_OBSERVED_RAMP_REQUIRES_SCOPED_COMPUTE");
+  }
   if (options.sourceRamp === undefined && options.protectedColors === undefined) {
     return null;
   }

@@ -322,7 +322,18 @@ selective `gradient_map` / `generated_gradient_map` compute now accepts
 16 current-atlas identity-mark RGBs) only with explicit
 `source_hue_color` and bounded `target_rect` or `face_targets`.
 It adjusts shade relationships while respecting exact protected RGBs and
-alpha, not general image recognition. If source and protected colors
+alpha, not general image recognition. Optional
+`source_ramp_from_selected_pixels:true` replaces explicit `source_ramp`
+only for a single bounded selective gradient. The caller must identify
+`source_hue_color` as an **existing opaque base RGB**, not merely the
+target/ref palette. The engine observes current-atlas opaque darker and
+lighter hue-compatible shades inside the exact selected ROI/native face mask,
+excluding protected regions and protected RGBs. Without a valid shade on
+both sides of the base, it stops instead of fabricating a ramp. The returned
+`compute.execution.source_ramp_observation` names the three exact chosen
+source colors and sample counts, with `visual_verdict=not_evaluated`.
+No artwork identification, reference-pixel similarity, Bedrock visual PASS
+or human approval is implied. Manual swatches remain available. If source and protected colors
 overlap, source anchors do not exist on the selected face, or a logo and
 material share the same RGB, use an **explicitly observed face-local
 identity region** instead of an RGB-only guard, or stop for review.

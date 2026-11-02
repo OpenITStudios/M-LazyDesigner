@@ -77,6 +77,7 @@ const hueSelectionArgs = {
   // Opt-in material-to-pixel relationship; source swatches must be sampled
   // from the current atlas within the actual selected face/ROI.
   source_ramp: z.tuple([opaqueRgbSchema, opaqueRgbSchema, opaqueRgbSchema]).optional(),
+  source_ramp_from_selected_pixels: z.literal(true).optional(),
   protected_colors: z.array(opaqueRgbSchema).min(1).max(16)
     .refine(colors => new Set(colors.map(color => color.toLowerCase())).size === colors.length,
       "Protected material colors must be distinct.").optional(),
@@ -141,13 +142,18 @@ function gradientOptions(
     hue_tolerance_degrees?: number;
     minimum_chroma?: number;
     source_ramp?: readonly [string, string, string];
+    source_ramp_from_selected_pixels?: true;
     protected_colors?: readonly string[];
   }
 ) {
   if (!value.source_hue_color &&
       (value.hue_tolerance_degrees !== undefined || value.minimum_chroma !== undefined ||
-       value.source_ramp !== undefined || value.protected_colors !== undefined)) {
+       value.source_ramp !== undefined || value.source_ramp_from_selected_pixels === true ||
+       value.protected_colors !== undefined)) {
     throw new Error("Material-to-pixel source_ramp/protected_colors and hue-family settings require source_hue_color.");
+  }
+  if (value.source_ramp !== undefined && value.source_ramp_from_selected_pixels === true) {
+    throw new Error("MATERIAL_RAMP_SOURCE_CONFLICT: choose explicit swatches or observed current-atlas ramp.");
   }
   return {
     ...(value.mode === undefined ? {} : { mode: value.mode }),
@@ -156,6 +162,9 @@ function gradientOptions(
     ...(value.hue_tolerance_degrees === undefined ? {} : { hueToleranceDegrees: value.hue_tolerance_degrees }),
     ...(value.minimum_chroma === undefined ? {} : { minimumChroma: value.minimum_chroma }),
     ...(value.source_ramp === undefined ? {} : { sourceRamp: value.source_ramp }),
+    ...(value.source_ramp_from_selected_pixels === undefined ? {} : {
+      sourceRampFromSelectedPixels: value.source_ramp_from_selected_pixels,
+    }),
     ...(value.protected_colors === undefined ? {} : { protectedColors: value.protected_colors }),
   };
 }
