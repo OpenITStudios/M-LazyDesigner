@@ -207,6 +207,50 @@ Do not create anchor constraints merely to make every coordinate parametric. Use
 
 `constraint_propagated_instance_ids` in incremental rebuild evidence distinguishes dependent movement from directly authored changes. This is structural evidence only; the propagated result still requires affected-view visual verification.
 
+## Construction Method Selection — one authoring path
+
+After the feature-level `GEOMETRY | TEXTURE | OMIT | REVIEW_REQUIRED`
+decision, choose the *least complex currently executable* construction
+method that preserves the source-grounded silhouette, dimensions, contact,
+negative space, repetition, and transform ownership. This is a method
+choice within the existing Modelling specialist, **not** a new router,
+preset taxonomy, Runtime mode, or automatic quality decision.
+
+- **Exact native Cube/group operations:** Prefer the registered
+  `manage_cubes`/Group capability for a known, bounded Cube cohort
+  with explicit coordinates, pivots, parents and approved dimensions.
+  One coherent batch is preferable to a loop of per-Cube calls.
+- **Parametric/related source:** Prefer the existing Authoring Recipe
+  construction path when a feature actually needs regeneration,
+  mathematically defined cross sections/curves, semantic instancing,
+  exact face attachments, dimension links, or measured scale constraints.
+  The mathematical language is a *source representation*, not permission
+  to construct from missing image depth or infer real-world/player scale.
+- **Current availability wins:** Internal `constructGeometry` source is
+  **not** an AI-callable capability until the current Runtime catalog
+  registers `construct_geometry` and provides its actual invocation
+  schema. Do not call it by guessed name, invoke internal exports through
+  unrelated tools, or simulate a missing constructor with unreviewed
+  micro-Cubes. If registered, use the existing Gateway `invoke_capability`
+  surface; do not add a fifth public Gateway tool.
+- **Incomplete source or unsupported method:** Preserve unaffected work
+  using available native operations, but mark the dependent feature
+  `REVIEW_REQUIRED` or `BLOCKED` with its missing evidence/capability.
+  Never convert a plan, proposed knowledge strategy or declared
+  `REFERENCE_CLAIM` into an approved measurement or visual PASS.
+
+For an available Recipe-backed constructor, use a single bounded
+`inspect → plan → apply` sequence: inspect exact saved Recipe identity
+before revision, reject missing/mismatched source or owner state, plan
+against current Project UUID and exact parent Group UUID, then apply
+only with the returned matching plan ID and scene revision. A stale
+plan must be replanned; an uncertain committed native mutation must
+be inspected, **never blindly replayed**. Creation must not silently
+overwrite an existing Recipe; revisions cannot change unrelated
+features or painted UV without an authorized remap. Native receipts,
+source matches, proportions and mathematical constraints remain
+separate from reference/visual, rig, UV and export acceptance.
+
 ## Primary vs Secondary Geometry
 
 Primary geometry is the minimum Cuboids plus **required primary hierarchy/pivots** that establish identity, global silhouette, primary volume, principal orientation, contact, and articulation. Secondary geometry adds only grounded silhouette refinement, attachment/layering, motion support, or visible detail after primary form passes.

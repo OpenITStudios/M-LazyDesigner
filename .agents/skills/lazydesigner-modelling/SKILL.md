@@ -63,6 +63,18 @@ Repeated/symmetric cohorts: derive once → one coherent `manage_cubes` batch; n
 ## Execution Path Preference
 Geometry should mutate native Blockbench objects directly through semantic capabilities. Do not reproduce a human click/drag workflow when the target UUIDs, transforms, hierarchy, or batch intent are already known.
 
+**Construction method gate:** After representation/parent/evidence are known,
+use `manage_cubes` for exact native Cube cohorts. Choose the versioned
+Recipe/Geometry Mathematics path only when its *current registered* Runtime
+capability and schema are available and a stable parametric relationship
+is materially needed. Internal `constructGeometry` source alone does not
+make `construct_geometry` callable. If available, revise via exact
+`inspect → plan → apply` handles; never replay an uncertain mutation.
+If unavailable, retain the direct path where sufficient; do not fake a
+complex math operation with guessed micro-Cubes. See
+`docs/03-authoring/modelling/standard.md#construction-method-selection--one-authoring-path`
+for the durable contract.
+
 ```text
 create multiple related Cubes
 → manage_cubes(operation="create") with one coherent elements batch
