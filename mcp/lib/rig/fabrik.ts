@@ -210,3 +210,80 @@ export function planTwoBonePoleSwing(
     visual_verdict:"not_evaluated" as const,
   };
 }
+
+
+/**
+ * Convert a WORLD-space swing into a mesh-parent-local quaternion change
+ * using actual *provided* source and corrected parent world orientations.
+ *
+ * This is not Blockbench BoneAnimator Euler data. Parent rotation from an
+ * upstream IK correction must be supplied: using the old parent quaternion
+ * after rotating the thigh would silently corrupt the knee correction.
+ */
+export function planWorldSwingToParentLocal(input: {
+  source_world_quaternion_xyzw: RigQuaternionXYZW;
+  source_parent_world_quaternion_xyzw: RigQuaternionXYZW;
+  corrected_parent_world_quaternion_xyzw: RigQuaternionXYZW;
+  world_delta_quaternion_xyzw: RigQuaternionXYZW;
+}) {
+  const unavailable=(reason:string)=>({
+    state:"unavailable" as const,reason,
+    native_euler_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    visual_verdict:"not_evaluated" as const,
+  });
+  const valid=(v: unknown):v is RigQuaternionXYZW =>
+    Array.isArray(v) && v.length===4 &&
+    v.every((x)=>typeof x==="number"&&Number.isFinite(x)) &&
+    Math.abs(Math.hypot(...v)-1)<=1e-3;
+  if (!input || !valid(input.source_world_quaternion_xyzw) ||
+      !valid(input.source_parent_world_quaternion_xyzw) ||
+      !valid(input.corrected_parent_world_quaternion_xyzw) ||
+      !valid(input.world_delta_quaternion_xyzw)) {
+    return unavailable("IK_LOCAL_QUATERNION_UNVERIFIED");
+  }
+  const normalized=(v:RigQuaternionXYZW):[number,number,number,number]=>{
+    const len=Math.hypot(...v);
+    return [v[0]/len,v[1]/len,v[2]/len,v[3]/len];
+  };
+  const multiply=(a:RigQuaternionXYZW,b:RigQuaternionXYZW):[number,number,number,number]=>{
+    const [x,y,z,w]=a,[X,Y,Z,W]=b;
+    return [
+      w*X+x*W+y*Z-z*Y,
+      w*Y-x*Z+y*W+z*X,
+      w*Z+x*Y-y*X+z*W,
+      w*W-x*X-y*Y-z*Z,
+    ];
+  };
+  const inverse=(q:RigQuaternionXYZW):[number,number,number,number] =>
+    [-q[0],-q[1],-q[2],q[3]];
+  const srcWorld=normalized(input.source_world_quaternion_xyzw);
+  const oldParent=normalized(input.source_parent_world_quaternion_xyzw);
+  const newParent=normalized(input.corrected_parent_world_quaternion_xyzw);
+  const delta=normalized(input.world_delta_quaternion_xyzw);
+  const localBefore=normalized(multiply(inverse(oldParent),srcWorld));
+  const worldAfter=normalized(multiply(delta,srcWorld));
+  const localAfter=normalized(multiply(inverse(newParent),worldAfter));
+  const rawDelta=normalized(multiply(localAfter,inverse(localBefore)));
+  const localDelta=rawDelta[3]<0
+    ? rawDelta.map((v)=>-v) as [number,number,number,number] : rawDelta;
+  const angularMatch=(a:RigQuaternionXYZW,b:RigQuaternionXYZW)=>
+    Math.abs(a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3]);
+  if (![...localBefore,...worldAfter,...localAfter,...localDelta].every(Number.isFinite) ||
+      angularMatch(normalized(multiply(newParent,localAfter)),worldAfter)<1-1e-8 ||
+      angularMatch(normalized(multiply(localDelta,localBefore)),localAfter)<1-1e-8) {
+    return unavailable("IK_LOCAL_QUATERNION_REPROJECTION_FAILED");
+  }
+  return {
+    state:"SOURCE_ONLY_PARENT_LOCAL_QUATERNION_HINT" as const,
+    reason:null,
+    source_local_quaternion_xyzw:localBefore,
+    corrected_world_quaternion_xyzw:worldAfter,
+    proposed_local_quaternion_xyzw:localAfter,
+    local_delta_quaternion_xyzw:localDelta,
+    parent_change_accounted_for:true as const,
+    native_euler_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    visual_verdict:"not_evaluated" as const,
+  };
+}

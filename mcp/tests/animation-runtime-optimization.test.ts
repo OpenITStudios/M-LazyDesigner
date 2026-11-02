@@ -211,6 +211,24 @@ describe("Animation runtime efficiency contracts", () => {
     expect(operation).toContain("native_ik_bake_authorized: false");
   });
 
+  test("native read-only Group orientations reject nonuniform scales and do not change Timeline", async () => {
+    const source=await Bun.file("server/runtime/contracts/animation.ts").text();
+    const start=source.indexOf("function readNativeAnimationGroupWorldQuaternion(");
+    const end=source.indexOf("function observeNativeAnimationJointOriginFrame(",start);
+    const nativeReader=source.slice(start,end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(nativeReader).toContain("getWorldQuaternion(new THREE.Quaternion())");
+    expect(nativeReader).toContain("ANIMATION_MESH_ORIENTATION_PARENT_UNVERIFIED");
+    expect(nativeReader).toContain("ANIMATION_MESH_ORIENTATION_SCALE_UNSUPPORTED");
+    expect(nativeReader).toContain("ANIMATION_MESH_ORIENTATION_QUATERNION_INVALID");
+    expect(nativeReader).not.toContain("Undo.initEdit");
+    expect(nativeReader).not.toContain("Timeline.setTime(");
+    const execution=source.slice(end,source.indexOf("async function captureAnimationSamples(",end));
+    expect(execution).toContain("readNativeAnimationGroupWorldQuaternion(group)");
+    expect(execution).toContain("orientation_unavailable_reason");
+  });
+
   test("focused Animation inspection can narrow one bone by channel and time range", () => {
     const accepted = focusedInspectAnimationParameters.parse({
       animation_id: "anim-walk",

@@ -1,4 +1,4 @@
-import { solveFabrikChain, planTwoBonePoleSwing } from "@/lib/rig/fabrik";
+import { solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal, type RigQuaternionXYZW } from "@/lib/rig/fabrik";
 import type { ExplicitContactMarkerBinding } from "./contactMarkerBinding";
 
 export type Vec3 = readonly [number, number, number];
@@ -716,6 +716,11 @@ export type ObservedAnimationJointOriginFrame = {
     group_uuid: string;
     parent_group_uuid: string | null;
     world_position: Vec3;
+    /** Optional Group.mesh world orientation, not authored BoneAnimator Euler. */
+    world_quaternion_xyzw?: RigQuaternionXYZW;
+    /** Optional immediate THREE mesh parent's world orientation. */
+    parent_world_quaternion_xyzw?: RigQuaternionXYZW;
+    orientation_unavailable_reason?: string;
   }[];
 };
 
@@ -730,6 +735,9 @@ export function analyzeObservedAnimationJointOriginFrames(
       group_uuid: string;
       parent_group_uuid: string | null;
       world_position: [number, number, number];
+      world_quaternion_xyzw?: RigQuaternionXYZW;
+      parent_world_quaternion_xyzw?: RigQuaternionXYZW;
+      orientation_unavailable_reason?: string;
     }>;
   };
   const unavailable = (reason: string) => ({
@@ -761,6 +769,10 @@ export function analyzeObservedAnimationJointOriginFrames(
     return unavailable("ANIMATION_JOINT_IDENTITY_OR_BUDGET_INVALID");
   }
   const expected = new Map<string, string | null>();
+  const validQuaternion=(value:unknown):value is RigQuaternionXYZW =>
+    Array.isArray(value) && value.length===4 &&
+    value.every((n)=>typeof n==="number"&&Number.isFinite(n)) &&
+    Math.abs(Math.hypot(...value)-1)<=1e-3;
   for (const frame of sorted) {
     if (frame.project_uuid !== first.project_uuid ||
         frame.animation_uuid !== first.animation_uuid ||
@@ -778,6 +790,18 @@ export function analyzeObservedAnimationJointOriginFrames(
             typeof value === "number" && Number.isFinite(value)
           ) || seen.has(group.group_uuid)) {
         return unavailable("ANIMATION_JOINT_GROUP_INVALID_OR_DUPLICATE");
+      }
+      const world=group.world_quaternion_xyzw;
+      const parentWorld=group.parent_world_quaternion_xyzw;
+      if ((world!==undefined || parentWorld!==undefined) &&
+          (!validQuaternion(world)||!validQuaternion(parentWorld))) {
+        return unavailable("ANIMATION_JOINT_WORLD_ORIENTATION_INVALID");
+      }
+      if (group.orientation_unavailable_reason !== undefined &&
+          (typeof group.orientation_unavailable_reason !== "string" ||
+           !group.orientation_unavailable_reason ||
+           world!==undefined || parentWorld!==undefined)) {
+        return unavailable("ANIMATION_JOINT_ORIENTATION_PROVENANCE_INVALID");
       }
       seen.add(group.group_uuid);
       if (frame === first) {
@@ -802,8 +826,24 @@ export function analyzeObservedAnimationJointOriginFrames(
       group_uuid: group.group_uuid,
       parent_group_uuid: group.parent_group_uuid,
       world_position: [...group.world_position] as [number, number, number],
+      ...(group.world_quaternion_xyzw && group.parent_world_quaternion_xyzw
+        ? {
+            world_quaternion_xyzw:
+              [...group.world_quaternion_xyzw] as [number,number,number,number],
+            parent_world_quaternion_xyzw:
+              [...group.parent_world_quaternion_xyzw] as [number,number,number,number],
+          } : {}),
+      ...(group.orientation_unavailable_reason
+        ? { orientation_unavailable_reason: group.orientation_unavailable_reason }
+        : {}),
     })).sort((a,b) => a.group_uuid.localeCompare(b.group_uuid)),
   }));
+  const rotationCovered=copied.every((frame)=>
+    frame.groups.every((group)=>
+      group.world_quaternion_xyzw!==undefined &&
+      group.parent_world_quaternion_xyzw!==undefined
+    )
+  );
   return {
     state: "SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS" as const,
     reason: null,
@@ -812,6 +852,12 @@ export function analyzeObservedAnimationJointOriginFrames(
     observed_frame_count: copied.length,
     observed_group_count: expected.size,
     frames: copied,
+    mesh_world_orientation_state: rotationCovered
+      ? "SOURCE_ONLY_MESH_WORLD_QUATERNIONS" as const
+      : "UNAVAILABLE" as const,
+    frames_with_complete_orientations: copied.filter((frame)=>
+      frame.groups.every((group)=>group.world_quaternion_xyzw!==undefined)
+    ).length,
     observation_scope: "CURRENT_NATIVE_PREVIEW_CALLBACK_READ_ONLY" as const,
     pose_time_synchronization_attested: false as const,
     native_preview_restoration_attested: false as const,
@@ -842,6 +888,93 @@ export type ExplicitPlantedPreviewIkInput = {
   bend_pole_world?: Vec3;
   max_swing_degrees?: number;
 };
+
+
+/**
+ * Bounded, pure projection of already sampled THREE Group.mesh world
+ * quaternion evidence and pole-guided world swings into parent-local hints.
+ * This assumes the parent above the explicit chain remains unchanged during
+ * this *hypothetical* correction; an actual native edit is never authorized.
+ */
+function planPreviewParentLocalIkHints(
+  jointFrames: readonly ObservedAnimationJointOriginFrame[],
+  jointIds: readonly string[],
+  sampledTimes: readonly number[],
+  candidateFrames: readonly {
+    time:number;
+    orientation_hint?: ReturnType<typeof planTwoBonePoleSwing>;
+  }[]
+) {
+  const unavailable=(reason:string)=>({
+    state:"unavailable" as const,reason,
+    native_euler_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    visual_verdict:"not_evaluated" as const,
+  });
+  if (jointIds.length!==3 || sampledTimes.length!==candidateFrames.length) {
+    return unavailable("IK_LOCAL_CHAIN_OR_FRAME_COUNT_INVALID");
+  }
+  const frames: Array<{
+    time:number;
+    hip:ReturnType<typeof planWorldSwingToParentLocal>;
+    knee:ReturnType<typeof planWorldSwingToParentLocal>;
+  }>=[];
+  for (let i=0;i<sampledTimes.length;i++) {
+    const sample=jointFrames.find((frame)=>frame.time_seconds===sampledTimes[i]);
+    const worldHint=candidateFrames[i].orientation_hint;
+    if (!sample || worldHint?.state!=="SOURCE_ONLY_POLE_SWING_HINT" ||
+        worldHint.segment_swings.length!==2) {
+      return unavailable("IK_LOCAL_WORLD_SWING_OR_FRAME_UNAVAILABLE");
+    }
+    const hip=sample.groups.find((g)=>g.group_uuid===jointIds[0]);
+    const knee=sample.groups.find((g)=>g.group_uuid===jointIds[1]);
+    if (!hip?.world_quaternion_xyzw || !hip.parent_world_quaternion_xyzw ||
+        !knee?.world_quaternion_xyzw || !knee.parent_world_quaternion_xyzw ||
+        knee.parent_group_uuid!==hip.group_uuid) {
+      return unavailable("IK_LOCAL_NATIVE_MESH_ORIENTATION_UNAVAILABLE");
+    }
+    const dot=hip.world_quaternion_xyzw.reduce((sum,x,index)=>
+      sum+x*knee.parent_world_quaternion_xyzw![index],0);
+    if (!Number.isFinite(dot)||Math.abs(dot)<1-1e-5) {
+      return unavailable("IK_LOCAL_PARENT_HIERARCHY_ORIENTATION_MISMATCH");
+    }
+    // Upper segment is corrected relative to its unchanged external parent.
+    const upper=planWorldSwingToParentLocal({
+      source_world_quaternion_xyzw:hip.world_quaternion_xyzw,
+      source_parent_world_quaternion_xyzw:hip.parent_world_quaternion_xyzw,
+      corrected_parent_world_quaternion_xyzw:hip.parent_world_quaternion_xyzw,
+      world_delta_quaternion_xyzw:
+        worldHint.segment_swings[0].world_delta_quaternion_xyzw,
+    });
+    if (upper.state!=="SOURCE_ONLY_PARENT_LOCAL_QUATERNION_HINT") {
+      return unavailable("IK_LOCAL_HIP_REPROJECTION_UNAVAILABLE");
+    }
+    // The knee parent IS the corrected thigh; using its old world quaternion
+    // would cause an apparent successful but physically incorrect local turn.
+    const lower=planWorldSwingToParentLocal({
+      source_world_quaternion_xyzw:knee.world_quaternion_xyzw,
+      source_parent_world_quaternion_xyzw:knee.parent_world_quaternion_xyzw,
+      corrected_parent_world_quaternion_xyzw:
+        upper.corrected_world_quaternion_xyzw,
+      world_delta_quaternion_xyzw:
+        worldHint.segment_swings[1].world_delta_quaternion_xyzw,
+    });
+    if (lower.state!=="SOURCE_ONLY_PARENT_LOCAL_QUATERNION_HINT") {
+      return unavailable("IK_LOCAL_KNEE_REPROJECTION_UNAVAILABLE");
+    }
+    frames.push({time:sampledTimes[i],hip:upper,knee:lower});
+  }
+  return {
+    state:"SOURCE_ONLY_PARENT_LOCAL_QUATERNION_CANDIDATES" as const,
+    reason:null,
+    frames,
+    external_chain_parent_unchanged_assumed:true as const,
+    native_euler_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    native_preview_restoration_attested:false as const,
+    visual_verdict:"not_evaluated" as const,
+  };
+}
 
 export function reviewExplicitPlantedContactIkFromPreview(
   input: ExplicitPlantedPreviewIkInput
@@ -1053,6 +1186,14 @@ export function reviewExplicitPlantedContactIkFromPreview(
       contact_evidence: numeric,
     };
   }
+  const localQuaternionReview=input.bend_pole_world!==undefined
+    ? planPreviewParentLocalIkHints(
+        joint.frames,
+        ids,
+        sampled.map((item)=>item.time),
+        ik.frames
+      )
+    : null;
   return {
     state: "SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW" as const,
     reason: null,
@@ -1067,6 +1208,9 @@ export function reviewExplicitPlantedContactIkFromPreview(
     stance_sample_count: sampled.length,
     stance_window: { ...window },
     contact_evidence: contactReview.constraints[0],
+    ...(localQuaternionReview
+      ? { parent_local_orientation_review: localQuaternionReview }
+      : {}),
     native_preview_restoration_attested: false as const,
     native_pose_time_synchronization_attested: false as const,
     native_ik_bake_authorized: false as const,

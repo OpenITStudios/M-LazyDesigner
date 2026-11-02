@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { solveFabrikChain, planTwoBonePoleSwing } from "@/lib/rig/fabrik";
+import { solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal } from "@/lib/rig/fabrik";
 
 describe("FABRIK solver", () => {
   test("reaches a reachable target while preserving segment lengths", () => {
@@ -106,5 +106,82 @@ describe("source-only FABRIK pole-guided joint swing hints", () => {
     })).toMatchObject({
       state: "unavailable", reason: "FABRIK_POLE_INPUT_INVALID",
     });
+  });
+});
+
+
+describe("parent-local quaternion projection from observed world swings", () => {
+  const identity=[0,0,0,1] as const;
+  const z90=[0,0,Math.SQRT1_2,Math.SQRT1_2] as const;
+  const x90=[Math.SQRT1_2,0,0,Math.SQRT1_2] as const;
+  const apply = (q:readonly number[], v:readonly number[]) => {
+    const [x,y,z,w]=q;
+    const cross=(a:readonly number[],b:readonly number[]) => [
+      a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]
+    ];
+    const t=cross([x,y,z],v).map(n=>2*n);
+    const v2=cross([x,y,z],t);
+    return v.map((n,i)=>n+w*t[i]+v2[i]);
+  };
+
+  test("world swing is reprojected with explicit observed/updated parent orientation", () => {
+    const p=planWorldSwingToParentLocal({
+      source_world_quaternion_xyzw:z90,
+      source_parent_world_quaternion_xyzw:z90,
+      corrected_parent_world_quaternion_xyzw:z90,
+      world_delta_quaternion_xyzw:x90,
+    });
+    expect(p.state).toBe("SOURCE_ONLY_PARENT_LOCAL_QUATERNION_HINT");
+    if (p.state!=="SOURCE_ONLY_PARENT_LOCAL_QUATERNION_HINT")
+      throw new Error(p.reason);
+    expect(Math.hypot(...p.local_delta_quaternion_xyzw)).toBeCloseTo(1,10);
+    const rotated=apply(p.local_delta_quaternion_xyzw,[1,0,0]);
+    expect(rotated[0]).toBeCloseTo(0,10);
+    expect(rotated[1]).toBeCloseTo(0,10);
+    expect(rotated[2]).toBeCloseTo(1,10);
+    expect(p.parent_change_accounted_for).toBe(true);
+    expect(p.native_euler_authorized).toBe(false);
+    expect(p.native_keyframe_authorized).toBe(false);
+  });
+
+  test("updated parent must be used when a corrected thigh rotates under the knee", () => {
+    const unchanged=planWorldSwingToParentLocal({
+      source_world_quaternion_xyzw:identity,
+      source_parent_world_quaternion_xyzw:identity,
+      corrected_parent_world_quaternion_xyzw:identity,
+      world_delta_quaternion_xyzw:identity,
+    });
+    const rotatedParent=planWorldSwingToParentLocal({
+      source_world_quaternion_xyzw:identity,
+      source_parent_world_quaternion_xyzw:identity,
+      corrected_parent_world_quaternion_xyzw:z90,
+      world_delta_quaternion_xyzw:identity,
+    });
+    expect(unchanged.state).toBe("SOURCE_ONLY_PARENT_LOCAL_QUATERNION_HINT");
+    expect(rotatedParent.state).toBe("SOURCE_ONLY_PARENT_LOCAL_QUATERNION_HINT");
+    if (unchanged.state!=="SOURCE_ONLY_PARENT_LOCAL_QUATERNION_HINT"||
+        rotatedParent.state!=="SOURCE_ONLY_PARENT_LOCAL_QUATERNION_HINT")
+      throw new Error("parent projection unavailable");
+    expect(unchanged.local_delta_quaternion_xyzw).toEqual([0,0,0,1]);
+    expect(rotatedParent.local_delta_quaternion_xyzw).not.toEqual([0,0,0,1]);
+    expect(rotatedParent.corrected_world_quaternion_xyzw).toEqual([0,0,0,1]);
+  });
+
+  test("malformed, nonunit and unobserved parent quaternions are rejected", () => {
+    const source={
+      source_world_quaternion_xyzw:identity,
+      source_parent_world_quaternion_xyzw:identity,
+      corrected_parent_world_quaternion_xyzw:identity,
+      world_delta_quaternion_xyzw:identity,
+    };
+    for (const replacement of [[0,0,0,0],[0,0,0,2],[NaN,0,0,1]]) {
+      expect(planWorldSwingToParentLocal({
+        ...source,corrected_parent_world_quaternion_xyzw:
+          replacement as [number,number,number,number],
+      })).toMatchObject({
+        state:"unavailable",reason:"IK_LOCAL_QUATERNION_UNVERIFIED",
+        native_keyframe_authorized:false,
+      });
+    }
   });
 });

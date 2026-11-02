@@ -1213,3 +1213,77 @@ test("explicit preview-to-contact link forwards pole intent without native Euler
     ik_blocker: "CONTACT_IK_POLE_ORIENTATION_UNSAFE",
   });
 });
+
+
+test("native mesh orientation is optional and copied in observed joint frames", () => {
+  const source=observedJointPreview();
+  const oriented: ObservedAnimationJointOriginFrame[]=source.map((frame)=>({
+    ...frame,
+    groups:frame.groups.map((group)=>({
+      ...group,
+      world_quaternion_xyzw:[0,0,0,1],
+      parent_world_quaternion_xyzw:[0,0,0,1],
+    })),
+  }));
+  const review=analyzeObservedAnimationJointOriginFrames(oriented);
+  expect(review.state).toBe("SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS");
+  if (review.state!=="SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS")
+    throw new Error("Expected world quaternion review");
+  expect(review.mesh_world_orientation_state)
+    .toBe("SOURCE_ONLY_MESH_WORLD_QUATERNIONS");
+  expect(review.frames_with_complete_orientations).toBe(3);
+  (oriented[0].groups[0].world_quaternion_xyzw as number[])[0]=0.8;
+  expect(review.frames[0].groups[0].world_quaternion_xyzw).toEqual([0,0,0,1]);
+  const malformed=analyzeObservedAnimationJointOriginFrames(oriented);
+  expect(malformed).toMatchObject({
+    state:"unavailable",reason:"ANIMATION_JOINT_WORLD_ORIENTATION_INVALID",
+  });
+});
+
+test("preview pole review can project source world swings into parent-local candidates", () => {
+  const input=explicitPreviewContactFixture();
+  const joint=input.joint_review;
+  if (joint.state!=="SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS")
+    throw new Error("Expected joint preview");
+  const oriented=analyzeObservedAnimationJointOriginFrames(joint.frames.map((frame)=>({
+    project_uuid:input.binding.project_uuid,
+    animation_uuid:input.binding.animation_uuid,
+    time_seconds:frame.time_seconds,
+    groups:frame.groups.map((group)=>({
+      ...group,
+      world_quaternion_xyzw:[0,0,0,1],
+      parent_world_quaternion_xyzw:[0,0,0,1],
+    })),
+  })));
+  const report=reviewExplicitPlantedContactIkFromPreview({
+    ...input,joint_review:oriented,bend_pole_world:[0,0,1],
+  });
+  expect(report.state).toBe("SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW");
+  if (report.state!=="SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW")
+    throw new Error("Expected source-only IK contact");
+  expect(report.parent_local_orientation_review?.state)
+    .toBe("SOURCE_ONLY_PARENT_LOCAL_QUATERNION_CANDIDATES");
+  if (report.parent_local_orientation_review?.state !==
+      "SOURCE_ONLY_PARENT_LOCAL_QUATERNION_CANDIDATES")
+    throw new Error("Parent-local source hint unavailable");
+  expect(report.parent_local_orientation_review.frames).toHaveLength(3);
+  expect(report.parent_local_orientation_review.frames[2].hip.native_keyframe_authorized)
+    .toBe(false);
+  expect(report.parent_local_orientation_review.frames[2].knee.native_euler_authorized)
+    .toBe(false);
+  expect(report.native_ik_bake_authorized).toBe(false);
+});
+
+test("missing mesh orientation leaves source world IK intact but local rotation unavailable", () => {
+  const result=reviewExplicitPlantedContactIkFromPreview({
+    ...explicitPreviewContactFixture(),bend_pole_world:[0,0,1],
+  });
+  expect(result.state).toBe("SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW");
+  if (result.state!=="SOURCE_ONLY_PREVIEW_CONTACT_IK_REVIEW")
+    throw new Error("World-space source candidate should remain available");
+  expect(result.parent_local_orientation_review).toMatchObject({
+    state:"unavailable",
+    reason:"IK_LOCAL_NATIVE_MESH_ORIENTATION_UNAVAILABLE",
+    native_keyframe_authorized:false,
+  });
+});

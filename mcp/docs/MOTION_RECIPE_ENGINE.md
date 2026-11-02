@@ -363,6 +363,40 @@ Reference concepts: Three.js Quaternion.setFromUnitVectors and its normalized
 [x,y,z,w] convention; FABRIK (Aristidou and Lasenby, 2011) produces joint
 positions, not final local bone rotations.
 
+### Passive mesh world quaternion and parent-local IK hints (2026-11-03)
+
+The existing Animation screenshot callback's Group joint-origin reader now
+*optionally* reads `Group.mesh.getWorldQuaternion` and the immediate native
+parent mesh's world quaternion in Three.js `[x,y,z,w]` order. It requires
+an exact Group parent/mesh relationship, visible scene ancestry and only
+positive uniform local scales: unsupported nonuniform/negative transforms
+and missing native quaternion APIs produce an explicit
+`orientation_unavailable_reason`, while retaining valid joint *position*
+observations. The existing bounded analyzer accepts only finite normalized
+quaternions and reports whether every sampled Group has orientation data.
+It does not synthesize missing rotations or bypass native identity fences.
+
+The canonical pure `planWorldSwingToParentLocal` converts an already
+validated world-space swing using the **source child world rotation, source
+parent world rotation and explicitly supplied corrected parent world rotation**:
+`local_before = inverse(parent_before) × world_before`;
+`world_after = world_swing × world_before`;
+`local_after = inverse(parent_after) × world_after`.
+It checks quaternion unit length and world/local reprojection, and returns
+the relative parent-local quaternion delta. In a pole-guided hip/knee chain,
+the existing contact reviewer uses the corrected hip world rotation as the
+knee's **corrected parent**, refusing inconsistent Group/mesh hierarchy.
+If mesh orientation is unavailable, world-space FABRIK remains diagnostic
+but parent-local quaternion hints are explicitly unavailable.
+
+All quaternion outputs are source-only mesh-space candidates, not
+Blockbench BoneAnimator local Euler values, rest-pivot/twist or pre-rotation
+compensation. The root's external parent is assumed unchanged inside the
+hypothetical correction and is not native-verified. Full Blockbench
+pose/time synchronization, effect restoration, Undo, Bedrock export and
+visual quality remain unverified. No native rotation writes, extra Gateway
+tools, schema changes or generated API edits are permitted.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

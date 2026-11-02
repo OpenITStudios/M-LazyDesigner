@@ -437,6 +437,55 @@ function observeNativeAnimationLocatorFrame(
  * No random Group selection, animation re-evaluation, contact-role guessing,
  * Timeline write, Undo edit or native IK correction is performed.
  */
+
+/**
+ * Passive native THREE mesh quaternion read, only for the exact current Group
+ * parent mesh. Scaling/shear or an extra render-space parent makes an Euler
+ * projection unsafe; leave position evidence intact but omit orientation.
+ */
+function readNativeAnimationGroupWorldQuaternion(group: Group) {
+  if (typeof THREE === "undefined" ||
+      typeof THREE.Quaternion !== "function" ||
+      typeof Canvas === "undefined" || !Canvas.scene) {
+    throw new Error("ANIMATION_MESH_ORIENTATION_RUNTIME_UNAVAILABLE");
+  }
+  const mesh=group.mesh as unknown as THREE.Object3D;
+  const parent=mesh?.parent;
+  const expected=group.parent instanceof Group
+    ? group.parent.mesh : Canvas.scene;
+  if (!mesh || parent!==expected ||
+      typeof mesh.getWorldQuaternion!=="function" ||
+      typeof parent?.getWorldQuaternion!=="function") {
+    throw new Error("ANIMATION_MESH_ORIENTATION_PARENT_UNVERIFIED");
+  }
+  let ancestor: THREE.Object3D | null=mesh, attached=false;
+  while (ancestor) {
+    const scale=ancestor.scale;
+    if (!scale || ![scale.x,scale.y,scale.z].every(Number.isFinite) ||
+        Math.min(scale.x,scale.y,scale.z)<=0 ||
+        Math.max(scale.x,scale.y,scale.z)-
+          Math.min(scale.x,scale.y,scale.z)>
+            1e-4*Math.max(1,scale.x,scale.y,scale.z)) {
+      throw new Error("ANIMATION_MESH_ORIENTATION_SCALE_UNSUPPORTED");
+    }
+    if (ancestor===Canvas.scene) {attached=true;break;}
+    ancestor=ancestor.parent;
+  }
+  if (!attached) throw new Error("ANIMATION_MESH_ORIENTATION_SCENE_UNVERIFIED");
+  const read=(node:THREE.Object3D) => {
+    const q=node.getWorldQuaternion(new THREE.Quaternion());
+    const tuple=[q.x,q.y,q.z,q.w] as [number,number,number,number];
+    const magnitude=Math.hypot(...tuple);
+    if (!tuple.every(Number.isFinite) ||
+        Math.abs(magnitude-1)>1e-3) {
+      throw new Error("ANIMATION_MESH_ORIENTATION_QUATERNION_INVALID");
+    }
+    return tuple;
+  };
+  const world=read(mesh),parentWorld=read(parent);
+  return {world_quaternion_xyzw:world,parent_world_quaternion_xyzw:parentWorld};
+}
+
 function observeNativeAnimationJointOriginFrame(
   animation: BBAnimation,
   time: number,
@@ -493,10 +542,21 @@ function observeNativeAnimationJointOriginFrame(
       throw new Error("ANIMATION_JOINT_NATIVE_WORLD_SNAPSHOT_UNVERIFIED");
     }
     const parent = group.parent instanceof Group ? group.parent : null;
+    let orientation: ReturnType<typeof readNativeAnimationGroupWorldQuaternion> | null=null;
+    let orientationFailure: string | null=null;
+    try {
+      orientation=readNativeAnimationGroupWorldQuaternion(group);
+    } catch (error) {
+      orientationFailure=error instanceof Error ? error.message :
+        "ANIMATION_MESH_ORIENTATION_READ_FAILED";
+    }
     groups.push({
       group_uuid: group.uuid,
       parent_group_uuid: parent?.uuid ?? null,
       world_position: [...snapshot.bone_origin_world] as [number,number,number],
+      ...(orientation ? orientation : {}),
+      ...(orientationFailure
+        ? {orientation_unavailable_reason:orientationFailure} : {}),
     });
   }
   if (typeof Project === "undefined" || !Project ||
