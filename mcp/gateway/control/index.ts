@@ -7,6 +7,7 @@ export {
 export { readWorkspaceProjection } from "./workspace";
 export { readReferencePackageProjection } from "./referencePackage";
 export { createCurrentClusterReferenceVerifier, verifyCurrentClusterReferenceClaims } from "./clusterReferenceEvidence";
+export { prepareClusterAuthoringControlPreflight, requireClusterAuthoringControlReadiness } from "./clusterAuthoringPreflight";
 export { buildControlStageContext, readinessForAuthoringDomain } from "./contextProjection";
 export {
   CONTROL_GATEWAY_ENVELOPE_PROXY_BYTES,

@@ -9,6 +9,12 @@ import {
 } from "./clusterReferenceEvidence";
 import { readReferencePackageProjection } from "./referencePackage";
 import type { executeNativeBoundClusterComposition } from "../../server/tools/paint/textureTransaction";
+import {
+  prepareClusterAuthoringControlPreflight,
+  requireClusterAuthoringControlReadiness,
+} from "./clusterAuthoringPreflight";
+import type { ControlSnapshot } from "./types";
+import type { ControlWorkspaceProjection } from "./workspace";
 
 const RED_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQoAHxcCAk+Uzr4AAAAASUVORK5CYII=",
@@ -230,5 +236,153 @@ describe("Control-owned reference proof for internal pixel cluster painting", ()
     await expect(verifyCurrentClusterReferenceClaims({
       ...args,expected_reference_fingerprint:"not-a-hash",faces:[face()],
     })).rejects.toThrow("CLUSTER_REFERENCE_PACKAGE_IDENTITY_REQUIRED");
+  });
+});
+
+function boundTexturingSnapshot(): ControlSnapshot {
+  return {
+    protocol: "lazydesigner-control-v1",
+    system: "READY", mode: "ASSET_AUTHORING",
+    project: {
+      affinity_uuid: "project-1", active_uuid: "project-1",
+      open_project_count: 1, binding: "BOUND",
+    },
+    authoring: { phase: "texturing", domain: "TEXTURING",
+      next_intent: "CONTINUE_TEXTURE_AUTHORING" },
+    runtime: { online: true, mcp_client_ready: true,
+      build_identity: "mock", runtime_signature: "runtime-1",
+      catalog_count: 15, catalog_stale: false },
+    context: { required: [], optional: [] },
+    blockers: [],
+  };
+}
+
+function texturingWorkspace(root: string): ControlWorkspaceProjection {
+  return {
+    available: true,
+    source_path: join(root, "README.md"),
+    fingerprint: "workspace-1",
+    asset: "Armor", current_stage: "Texturing",
+    gates: { geometry:"APPROVED", uv_layout:"PASS",
+      texturing:"IN_PROGRESS", animation:null },
+    next_step:null, blockers: [],
+  };
+}
+
+function clusterRequest() {
+  return {
+    texture_id: "armor-atlas",
+    expected_revision: "sha256:8x8:"+"c".repeat(64),
+    palette: { base:"#778899",highlight:"#AABBCC" },
+    source_mode: "transparent_template",
+    faces: [{
+      cube_uuid:"armor-cube",face:"north",
+      source_claim: {
+        image_id:"IMG_FRONT", image_sha256:SHA,
+        image_region_id:"armor_plate", part_id:"chest_armor",
+        observation_id:"view-front",
+      },
+      clusters:[{
+        cluster_id:"step-highlight",role:"highlight",
+        source_observation_id:"view-front",
+        shape:{kind:"rect",x:0,y:0,width:2,height:1},
+      }],
+    }],
+  };
+}
+
+describe("read-only Control cluster authoring stage and reference preflight",()=>{
+  test("valid geometry/UV and bound Texturing stage permit source proof, never mutation approval",async()=>{
+    const {root,projection}=await createPackage();
+    const snapshot=boundTexturingSnapshot();
+    const workspace=texturingWorkspace(root);
+    const control=requireClusterAuthoringControlReadiness({
+      snapshot,workspace,reference:projection,
+    });
+    expect(control).toMatchObject({
+      project_uuid:"project-1",stage:"TEXTURING",
+      lifecycle:"GEOMETRY_APPROVED_UV_PASS",
+      mutation_authorized:false,
+    });
+    const receipt=await prepareClusterAuthoringControlPreflight({
+      author_request:clusterRequest(),snapshot,
+      workspace,reference:projection,
+    });
+    expect(receipt).toMatchObject({
+      state:"source_verified_native_execution_not_authorized",
+      project_uuid:"project-1",
+      reference_fingerprint:projection.fingerprint,
+      source_image_count:1,declared_face_count:1,
+      reference_cluster_shapes_attested:false,
+      native_binding_attested:false,mutation_authorized:false,
+      visual_verdict:"not_evaluated",
+    });
+    expect(receipt.request).toMatchObject({
+      texture_id:"armor-atlas",source_mode:"transparent_template",
+    });
+  });
+
+  test("unbound/mismatched project, disconnected Runtime, foreign phase and stale catalog refuse cluster preflight",async()=>{
+    const {root,projection}=await createPackage();
+    const snapshot=boundTexturingSnapshot();
+    const workspace=texturingWorkspace(root);
+    const bad=[
+      {...snapshot,project:{...snapshot.project,binding:"UNBOUND" as const}},
+      {...snapshot,project:{...snapshot.project,active_uuid:"foreign"}},
+      {...snapshot,authoring:{...snapshot.authoring,phase:"geometry" as const}},
+      {...snapshot,runtime:{...snapshot.runtime,online:false}},
+      {...snapshot,runtime:{...snapshot.runtime,catalog_stale:true}},
+      {...snapshot,runtime:{...snapshot.runtime,mcp_client_ready:false}},
+      {...snapshot,blockers:["PROJECT_CONTEXT_UNVERIFIED"]},
+    ];
+    for (const entry of bad) {
+      await expect(prepareClusterAuthoringControlPreflight({
+        author_request:clusterRequest(),
+        snapshot:entry,workspace,reference:projection,
+      })).rejects.toThrow("CLUSTER_CONTROL_PROJECT_OR_STAGE_UNVERIFIED");
+    }
+  });
+
+  test("canonical Geometry APPROVED/UV PASS lifecycle and active workspace identity are required",async()=>{
+    const {root,projection}=await createPackage();
+    const snapshot=boundTexturingSnapshot();
+    const work=texturingWorkspace(root);
+    for (const fields of [
+      {gates:{...work.gates,geometry:"IN_PROGRESS"}},
+      {gates:{...work.gates,uv_layout:"FAIL"}},
+      {current_stage:"Geometry"},
+      {available:false},
+    ]) {
+      await expect(prepareClusterAuthoringControlPreflight({
+        author_request:clusterRequest(),snapshot,
+        workspace:{...work,...fields},reference:projection,
+      })).rejects.toThrow("CLUSTER_CONTROL_GEOMETRY_UV_OR_WORKSPACE_NOT_READY");
+    }
+    await expect(prepareClusterAuthoringControlPreflight({
+      author_request:clusterRequest(),snapshot,
+      workspace:{...work,asset:"Other"},reference:projection,
+    })).rejects.toThrow("CLUSTER_CONTROL_REFERENCE_WORKSPACE_UNBOUND");
+    await expect(prepareClusterAuthoringControlPreflight({
+      author_request:clusterRequest(),snapshot,workspace:work,
+      reference:{...projection,fingerprint:null},
+    })).rejects.toThrow("CLUSTER_CONTROL_REFERENCE_WORKSPACE_UNBOUND");
+  });
+
+  test("untrusted extra bitmap/UV fields fail schema before Reference PNG I/O",async()=>{
+    const {root,projection}=await createPackage();
+    await expect(prepareClusterAuthoringControlPreflight({
+      author_request:{...clusterRequest(),native_faces:[],bitmap:"pretend"},
+      snapshot:boundTexturingSnapshot(),
+      workspace:texturingWorkspace(root),reference:projection,
+    })).rejects.toThrow();
+  });
+
+  test("changed Reference image after stage orientation blocks preflight without returning a token",async()=>{
+    const {root,projection}=await createPackage();
+    await writeFile(join(root,"images/front.png"),BLUE_PNG);
+    await expect(prepareClusterAuthoringControlPreflight({
+      author_request:clusterRequest(),snapshot:boundTexturingSnapshot(),
+      workspace:texturingWorkspace(root),reference:projection,
+    })).rejects.toThrow("CLUSTER_REFERENCE_PACKAGE_CHANGED_OR_BLOCKED");
   });
 });

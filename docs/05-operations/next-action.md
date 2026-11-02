@@ -2,32 +2,31 @@
 
 This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
 
-## Primary next — Compact cluster authoring (2026-11-02)
+## Primary next — Cluster Control readiness (2026-11-02)
 
-**DECISION:** Freeze Geometry. Keep one Paint/Undo owner, four Gateway
-tools; no new UI, CI or release.
+**DECISION:** Freeze Geometry. Reuse one paint executor/Undo, four
+Gateway tools and generated API. No new UI, CI or release.
 
-**SOURCE:** Existing face-bound cluster compiler, Oklab recolor,
-native Cube/UV/material guards and Control Reference PNG proof remain.
-NEW strict `lib/texture/clusterAuthoringRequest.ts` accepts only
-texture ID/revision, face claims, palette, local cluster shapes and
-source mode. Native `executeNativeBoundClusterAuthoringRequest`
-reads actual Blockbench bitmap/UUID/UV/face inventory and delegates to
-the same guarded one-Undo executor. Caller-supplied bitmap/UV/material
-inventory fails closed. Positive/negative regressions authored.
+**SOURCE:** Existing cluster, Oklab, compact request, source PNG and
+UV/material guards remain. New read-only Control preflight parses
+the compact request BEFORE image reads; checks bound active Runtime
+project/Stage, canonical Geometry APPROVED + UV PASS, Workspace/
+Reference asset, then fresh approved PNG/region/part byte identity.
+The Reference path/hash come from Control, not artist input. Receipt
+is NOT paint authorization. Regression tests for stale project,
+Stage/UV, source and injected native-state inputs authored.
 
-**PROOF:** GitHub source/tests AUTHORED. Bun/typecheck/generator/CI,
-installed Blockbench, save/export and Golden user visual QA NOT
-EXECUTED. CI disabled.
+**PROOF:** GitHub source/tests authored. Bun/typecheck/generator/CI,
+native Blockbench/Undo, save/export, Golden visual QA NOT EXECUTED.
+Verification CI disabled.
 
-**LIMIT:** Compact request INTERNAL/UNREGISTERED. Public
-`paint_texture_transaction` branch requires Bun-generated API/docs
-plus serialized Control→Runtime authority. No generated-file edits or
-false activation. Source metadata does not prove image/face art match.
+**LIMIT:** Compact request/preflight INTERNAL/UNREGISTERED.
+Activation needs generated existing capability schema/docs and secure
+serialized Control→Runtime source authority. Do not hand-edit
+generated files or infer artistic image-face match.
 
-**NEXT:** Canonical generated branch + trusted cross-process source
-preflight in an actual capable workspace, then focused source gate
-and native/visual acceptance separately. No user-PC prerequisite.
+**NEXT:** Canonical generator-capable branch integration, source gate,
+then distinct native/visual acceptance. No user-PC prerequisite.
 
 **GEOMETRY HOLD:** `construct_geometry` UNREGISTERED;
 v12–14 `addfb6a008b9af8baf0417ff23435046df7285d4`.

@@ -153,6 +153,35 @@ rechecks source bytes after painting but before native Undo completion;
 a mismatch aborts via existing rollback. This is not exposed to
 the AI through the Gateway today; no new public schema has been authored.
 
+### Control project/Geometry/UV preflight (read-only)
+
+`gateway/control/clusterAuthoringPreflight.ts` now owns
+`prepareClusterAuthoringControlPreflight`. It first validates the
+compact author request (without image reads), then applies the existing
+Control project/Stage, Workspace and Reference projections:
+
+- bound Runtime project UUID == active project; connected, fresh catalog,
+  known Runtime signature, current TEXTURING Stage, no Control blockers;
+- current Workspace stage TEXTURING with canonical
+  `lifecycleForDomain("TEXTURING")` (Geometry APPROVED + UV Layout PASS);
+- current Reference Package available with a fingerprint and matching
+  Workspace asset name; Texturing reference not BLOCKED.
+
+The preflight uses the source path/fingerprint from Control's verified
+Reference projection, not a new path embedded in the author's request.
+It then calls the existing actual-byte/region verifier. Its receipt
+contains a normalized compact request but has
+`state=source_verified_native_execution_not_authorized`,
+`mutation_authorized=false`, `native_binding_attested=false`, and
+`visual_verdict=not_evaluated`. Name equality and Stage readiness are
+sanity checks, **not** proof that a source photo depicts a Cube face.
+
+This remains **internal and read-only**. The eventual existing
+`paint_texture_transaction` branch must run this inside Gateway's
+serialized backend preflight and recheck project affinity/source
+authority within the native transaction; a stale Control receipt
+cannot be replayed as permission. No generated API was changed.
+
 **Availability boundary:** The internal entrypoint is not currently
 reachable through `invoke_capability`; a trusted authoring owner must
 serialize its invocation and authenticate actual approved reference image

@@ -409,6 +409,17 @@ unregistered**, not a user-visible MCP capability or a guarantee of
 reference fidelity. The existing public exact-pixel transaction is
 still the correct route for independently known atlas pixels.
 
+The Control-owned, read-only
+`mcp/gateway/control/clusterAuthoringPreflight.ts` checks the
+compact source request against a **bound Texturing Runtime project**,
+the canonical Geometry APPROVED / UV PASS Workspace lifecycle,
+the current Workspace/Reference asset association and source byte
+evidence. It obtains the image path/fingerprint from the trusted
+Control projection rather than from untrusted cluster arguments.
+Its receipt authorizes no painting: serialized native identity,
+revision, source freshness and mapped visual review remain separate
+proof boundaries.
+
 Control now has a matching read-only Reference Package verifier in
 `mcp/gateway/control/clusterReferenceEvidence.ts`. It validates the
 actual current approved Texture image bytes and visible source-region/part

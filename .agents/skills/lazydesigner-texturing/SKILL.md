@@ -214,6 +214,19 @@ this request through current `invoke_capability`: it is not registered.
 The existing public `paint_texture_transaction.operations` remains
 usable for independently verified **absolute atlas pixel** edits.
 
+**Control Stage-bound preflight (internal, non-mutating):**
+`gateway/control/prepareClusterAuthoringControlPreflight` validates
+the compact source request and current bound Runtime project, active
+Texturing Stage, Geometry APPROVED, UV PASS, Workspace/Reference asset
+alignment, and current reference PNG/region identity. The verified
+source path/fingerprint come from Control, **not** an arbitrary value
+in the artist's cluster request. A successful source preflight
+retains `mutation_authorized=false`; the existing native executor
+must independently recheck Cube/UV/material, atlas revision and
+approved image evidence after entering its serialized call. Do not
+turn this internal helper into a Gateway tool or treat Control status
+as direct authority to paint.
+
 **Reference-byte verification for source clusters (Control/internal):**
 `gateway/control/createCurrentClusterReferenceVerifier` uses the
 canonical Reference Package image identity, actual PNG byte SHA-256,
