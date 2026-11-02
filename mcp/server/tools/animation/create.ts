@@ -311,6 +311,66 @@ export function normalizeBedrockAnimationName(name: string): string {
   return name.startsWith("animation.") ? name : `animation.${name}`;
 }
 
+
+/**
+ * Fail-closed native creation recovery. A fully completed Undo.finishEdit
+ * cannot be undone by deleting the created Animation afterward; a thrown
+ * finishEdit has uncertain native outcome and must not be auto-retried.
+ *
+ * Before finishEdit is attempted, best-effort cleanup is independent:
+ * one failed animation.remove does not skip remaining removals or Undo
+ * cancellation. All original and cleanup failures remain available.
+ */
+export function settleFailedAnimationCreation(
+  originalError: unknown,
+  scope: {
+    finish_attempted: boolean;
+    commit_completed: boolean;
+    undo_edit_started: boolean;
+    collect_created_removals: () => readonly (() => void)[];
+    cancel_undo_edit: () => void;
+  }
+): never {
+  if (scope.commit_completed) {
+    throw new Error(
+      "ANIMATION_CREATION_POST_COMMIT_REPORTING_FAILURE: the native clip was " +
+      "committed; inspect its UUID/state before any retry. No rollback was attempted.",
+      { cause: originalError }
+    );
+  }
+  if (scope.finish_attempted) {
+    throw new Error(
+      "ANIMATION_CREATION_COMMIT_OUTCOME_UNKNOWN: native Undo.finishEdit did " +
+      "not return successfully. Inspect the project before any retry; " +
+      "automatic deletion/cancellation is unsafe.",
+      { cause: originalError }
+    );
+  }
+
+  const recoveryFailures: unknown[] = [];
+  try {
+    const removals = scope.collect_created_removals();
+    for (const remove of removals) {
+      try { remove(); } catch (error) { recoveryFailures.push(error); }
+    }
+  } catch (error) {
+    recoveryFailures.push(error);
+  }
+
+  if (scope.undo_edit_started) {
+    try { scope.cancel_undo_edit(); }
+    catch (error) { recoveryFailures.push(error); }
+  }
+  if (recoveryFailures.length > 0) {
+    throw new AggregateError(
+      [originalError, ...recoveryFailures],
+      "ANIMATION_CREATION_ROLLBACK_OUTCOME_UNKNOWN: cleanup could not " +
+      "restore every native surface; inspect project/Undo before retry."
+    );
+  }
+  throw originalError;
+}
+
 export function registerCreateAnimationTool(): void {
   createTool(
     createAnimationToolDoc.name,
@@ -471,6 +531,8 @@ export function registerCreateAnimationTool(): void {
           AnimationItem.all.map((animation) => animation.uuid)
         );
         let editStarted = false;
+        let finishAttempted = false;
+        let editCommitted = false;
   
         try {
           Undo.initEdit({ animations: [] });
@@ -561,11 +623,15 @@ export function registerCreateAnimationTool(): void {
             );
           }
   
+          finishAttempted = true;
           Undo.finishEdit("Create animation", {
             animations: createdAnimations,
           });
-          recordCurrentCapabilitySemanticHistoryEffect("create_animation");
+          // Commit succeeded; a subsequent receipt/history failure must not
+          // delete an already-committed asset or cancel an unrelated edit.
+          editCommitted = true;
           editStarted = false;
+          recordCurrentCapabilitySemanticHistoryEffect("create_animation");
   
           const requestedParticleEffectCount = particle_effects
             ? Object.values(particle_effects).reduce(
@@ -615,16 +681,15 @@ export function registerCreateAnimationTool(): void {
             structuredContent: result,
           };
         } catch (error) {
-          const createdDuringAttempt = AnimationItem.all.filter(
-            (animation) => !animationUuidsBefore.has(animation.uuid)
-          );
-          createdDuringAttempt.forEach((animation) => {
-            animation.remove(false, false);
+          return settleFailedAnimationCreation(error, {
+            finish_attempted: finishAttempted,
+            commit_completed: editCommitted,
+            undo_edit_started: editStarted,
+            collect_created_removals: () => AnimationItem.all
+              .filter((animation) => !animationUuidsBefore.has(animation.uuid))
+              .map((animation) => () => animation.remove(false, false)),
+            cancel_undo_edit: () => Undo.cancelEdit(true),
           });
-          if (editStarted) {
-            Undo.cancelEdit(true);
-          }
-          throw error;
         }
       },
     },

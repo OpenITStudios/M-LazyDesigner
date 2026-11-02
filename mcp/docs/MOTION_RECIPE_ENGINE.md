@@ -143,6 +143,29 @@ must supply a schema-valid `create_animation` invocation through the
 already-authorized Gateway. Direct semantic schema expansion remains a
 separate generator-coupled task.
 
+## Native creation failure and Undo authority
+
+The registered `create_animation` implementation now separates three
+outcomes during native Codec creation:
+
+- **Before `Undo.finishEdit`:** attempt every newly created Animation
+  removal independently and cancel the open Undo edit. Preserve the original
+  error when recovery succeeds. If inventory, removal or Undo cancellation
+  fails, return `ANIMATION_CREATION_ROLLBACK_OUTCOME_UNKNOWN` with aggregated
+  causes; never claim the project is clean.
+- **`Undo.finishEdit` invoked but did not return:** report
+  `ANIMATION_CREATION_COMMIT_OUTCOME_UNKNOWN`. Do not blindly delete
+  clips, cancel Undo or replay a non-idempotent creation.
+- **`Undo.finishEdit` returned successfully:** mark commit completion
+  before semantic history and receipt formatting. An exception afterward
+  reports `ANIMATION_CREATION_POST_COMMIT_REPORTING_FAILURE`; do not
+  delete the committed clip or encourage a duplicate retry.
+
+These distinctions protect existing native creation and authored animation
+identity. They are not semantic input schema support or Blockbench
+runtime/visual verification. Use a fresh native project/clip inspection to
+resolve an uncertain outcome before any further mutation.
+
 ## Hardening rules
 
 - do not guess mirrored Euler rotation signs;

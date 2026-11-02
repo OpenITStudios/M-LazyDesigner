@@ -3,7 +3,10 @@ import {
   createAnimationParameters,
   normalizeBedrockAnimationName,
 } from "@/server/tools/animation";
-import { describeAuthoredAnimationCreationTiming } from "@/server/tools/animation/create";
+import {
+  describeAuthoredAnimationCreationTiming,
+  settleFailedAnimationCreation,
+} from "@/server/tools/animation/create";
 
 describe("create_animation contract", () => {
   test("rejects near-native same-channel key collisions but permits independent channels", () => {
@@ -206,5 +209,119 @@ describe("native create_animation codec timing gate", () => {
     expect(source).not.toContain("risky_eval");
     expect(source).not.toContain("Animator.preview()");
     expect(source).not.toContain("sampleIK()");
+  });
+});
+
+describe("native create_animation outcome-aware rollback", () => {
+  const cause = new Error("native import failed");
+  const recovery = (overrides: Partial<Parameters<typeof settleFailedAnimationCreation>[1]> = {}) => {
+    const called: string[] = [];
+    return {
+      called,
+      scope: {
+        finish_attempted: false,
+        commit_completed: false,
+        undo_edit_started: true,
+        collect_created_removals: () => [
+          () => called.push("remove:a"),
+          () => called.push("remove:b"),
+        ],
+        cancel_undo_edit: () => { called.push("cancel"); },
+        ...overrides,
+      },
+    };
+  };
+
+  test("a pre-commit failure removes all new clips, cancels Undo and preserves the original cause", () => {
+    const f = recovery();
+    let caught: unknown;
+    try { settleFailedAnimationCreation(cause, f.scope); }
+    catch (error) { caught = error; }
+    expect(caught).toBe(cause);
+    expect(f.called).toEqual(["remove:a", "remove:b", "cancel"]);
+  });
+
+  test("a failed clip removal does not suppress sibling cleanup or Undo cancellation", () => {
+    const f = recovery({
+      collect_created_removals: () => [
+        () => { f.called.push("remove:a"); throw new Error("cannot remove a"); },
+        () => { f.called.push("remove:b"); },
+      ],
+      cancel_undo_edit: () => { f.called.push("cancel"); },
+    });
+    let caught: unknown;
+    try { settleFailedAnimationCreation(cause, f.scope); }
+    catch (error) { caught = error; }
+    expect(f.called).toEqual(["remove:a", "remove:b", "cancel"]);
+    expect(caught).toBeInstanceOf(AggregateError);
+    expect((caught as AggregateError).message).toContain("ROLLBACK_OUTCOME_UNKNOWN");
+    expect((caught as AggregateError).errors[0]).toBe(cause);
+    expect((caught as AggregateError).errors).toHaveLength(2);
+  });
+
+  test("an inventory read failure still attempts Undo cancellation", () => {
+    const f = recovery({
+      collect_created_removals: () => { throw new Error("animation inventory unavailable"); },
+    });
+    expect(() => settleFailedAnimationCreation(cause, f.scope))
+      .toThrow("ROLLBACK_OUTCOME_UNKNOWN");
+    expect(f.called).toEqual(["cancel"]);
+  });
+
+  test("both cleanup phases failing are surfaced, not mistaken for a clean rollback", () => {
+    const f = recovery({
+      collect_created_removals: () => [
+        () => { throw new Error("remove failed"); },
+      ],
+      cancel_undo_edit: () => { throw new Error("undo cancel failed"); },
+    });
+    let caught: unknown;
+    try { settleFailedAnimationCreation(cause, f.scope); }
+    catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(AggregateError);
+    expect((caught as AggregateError).errors).toHaveLength(3);
+  });
+
+  test("a committed animation is never deleted because a receipt/history step failed", () => {
+    const f = recovery({ finish_attempted: true, commit_completed: true });
+    let caught: unknown;
+    try { settleFailedAnimationCreation(cause, f.scope); }
+    catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toContain("POST_COMMIT_REPORTING_FAILURE");
+    expect((caught as Error).cause).toBe(cause);
+    expect(f.called).toEqual([]);
+  });
+
+  test("a native finishEdit exception remains OUTCOME_UNKNOWN and blocks blind deletion/retry", () => {
+    const f = recovery({ finish_attempted: true, commit_completed: false });
+    let caught: unknown;
+    try { settleFailedAnimationCreation(cause, f.scope); }
+    catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toContain("COMMIT_OUTCOME_UNKNOWN");
+    expect((caught as Error).cause).toBe(cause);
+    expect(f.called).toEqual([]);
+  });
+
+  test("does not attempt Undo cancellation if the native edit was never opened", () => {
+    const f = recovery({ undo_edit_started: false });
+    expect(() => settleFailedAnimationCreation(cause, f.scope)).toThrow(cause);
+    expect(f.called).toEqual(["remove:a", "remove:b"]);
+  });
+
+  test("the native caller tracks finishEdit and commit completion in the correct order", async () => {
+    const src = await Bun.file("server/tools/animation/create.ts").text();
+    const preflight = src.indexOf("requireNativeCreationTimingIntegrity(nativeTimingTracks)");
+    const finishing = src.indexOf("finishAttempted = true;");
+    const commit = src.indexOf('Undo.finishEdit("Create animation"');
+    const completed = src.indexOf("editCommitted = true;");
+    const history = src.indexOf('recordCurrentCapabilitySemanticHistoryEffect("create_animation")');
+    expect(preflight).toBeGreaterThan(0);
+    expect(finishing).toBeGreaterThan(preflight);
+    expect(commit).toBeGreaterThan(finishing);
+    expect(completed).toBeGreaterThan(commit);
+    expect(history).toBeGreaterThan(completed);
+    expect(src).toContain("return settleFailedAnimationCreation(error, {");
   });
 });
