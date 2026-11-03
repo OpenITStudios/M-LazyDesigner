@@ -240,6 +240,11 @@ def render(job):
     meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
     if not meshes:
         fail("Imported GLB contains no mesh.")
+    if len(meshes) != job.get("expected_mesh_count"):
+        fail("Imported Blender mesh inventory differs from Blockbench source.")
+    imported_materials = {material.name for obj in meshes for material in obj.data.materials if material}
+    if len(imported_materials) != job.get("expected_material_count"):
+        fail("Imported Blender material inventory differs from Blockbench source.")
     stage_materials(meshes, job)
     bpy.context.view_layer.update()
     low, high, center, radius = bounds_of_objects(meshes)
