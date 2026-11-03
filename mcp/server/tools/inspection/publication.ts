@@ -69,6 +69,7 @@ export function registerPublicationRenderTool(): void {
               content: [{
                 type: "text" as const,
                 text: "Publication render " + status.job_id + ": " + status.state +
+                  " (phase: " + status.phase + ")" +
                   (status.receipt ? ". PNG saved at " + status.receipt.output_path : "") +
                   (status.error_code ? ". " + status.error_code : "") +
                   ". Not a visual QA verdict.",
