@@ -53,9 +53,12 @@ const receipt: PublicationRenderReceipt = {
       frame_safe: true, quality_is_artistic_score: false,
     },
     lights: [
-      { name: "LD_Key", power: 240, size: 2, position: [1, 2, 3] },
-      { name: "LD_Fill", power: 90, size: 2.8, position: [2, 1, 3] },
-      { name: "LD_Rim", power: 340, size: 1.6, position: [1, 3, 2] },
+      { name: "LD_Key", power: 240, size: 2, position: [1, 2, 3],
+        distance_to_subject: 3.7, color_rgb: [1, 0.85, 0.72] },
+      { name: "LD_Fill", power: 90, size: 2.8, position: [2, 1, 3],
+        distance_to_subject: 3.7, color_rgb: [0.67, 0.79, 1] },
+      { name: "LD_Rim", power: 340, size: 1.6, position: [1, 3, 2],
+        distance_to_subject: 3.7, color_rgb: [0.87, 0.94, 1] },
     ],
     renderer: {
       engine: "CYCLES", view_transform: "AgX",
