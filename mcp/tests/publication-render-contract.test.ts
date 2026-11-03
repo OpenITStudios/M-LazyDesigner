@@ -87,9 +87,11 @@ describe("Publication render contract", () => {
     expect(CAPABILITY_DEFINITIONS.render_publication).toMatchObject({
       stage: "core", operationClass: "EXPORT", executionClass: "heavy", verificationClass: "visual",
     });
-    expect(manifestEntriesForCapability("render_publication")).toHaveLength(1);
-    expect(manifestEntriesForCapability("render_publication")[0]?.semantic?.intents)
-      .toContain("render actual Blockbench model to PNG");
+    const branches = manifestEntriesForCapability("render_publication");
+    expect(branches).toHaveLength(3);
+    expect(branches.map(branch => branch.branch?.value)).toEqual(["start", "status", "cancel"]);
+    expect(branches.map(branch => branch.operationClass)).toEqual(["EXPORT", "QUERY", "CONTROL"]);
+    expect(branches[0]?.semantic?.intents).toContain("start actual 3D Blender render");
   });
 });
 
