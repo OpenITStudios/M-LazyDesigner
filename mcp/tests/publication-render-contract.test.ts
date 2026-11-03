@@ -232,6 +232,48 @@ function fixtureGlb(options: {
 }
 
 describe("GLB envelope and source fidelity preflight", () => {
+  test("checks PBR factors and nearest filtering, not just valid image/texture references", () => {
+    const colorReceipt = {
+      "ld_color_tex-1": {
+        color_uuid: "tex-1", texture_sha256: "a".repeat(64),
+        alpha_mode: "OPAQUE" as const, pbr: "NONE" as const,
+        gltf: expectedPublicationGltfMaterial(null),
+      },
+    };
+    expect(inspectPublicationGlb(fixtureGlb(), 1, 1, undefined, colorReceipt))
+      .toMatchObject({ mesh_count: 1, material_count: 1 });
+    expect(() => inspectPublicationGlb(
+      fixtureGlb({ corruptMaterial: true }), 1, 1, undefined, colorReceipt,
+    )).toThrow("PBR_FACTORS_OR_ALPHA_MISMATCH");
+    expect(() => inspectPublicationGlb(
+      fixtureGlb({ linearSampling: true }), 1, 1, undefined, colorReceipt,
+    )).toThrow("PBR_NEAREST_SAMPLING_LOST");
+
+    const uniform = expectedPublicationGltfMaterial({
+      color_uuid: "tex-1", mer_uuid: null, normal_uuid: null,
+      uniform_mer: [0, 0, 255],
+    });
+    const uniformReceipt = {
+      "ld_color_tex-1": { ...colorReceipt["ld_color_tex-1"], pbr: "MAPPED" as const, gltf: uniform },
+    };
+    expect(inspectPublicationGlb(
+      fixtureGlb({ materialProfile: "pbr_uniform" }), 1, 1, undefined, uniformReceipt,
+    ).material_count).toBe(1);
+    const merMap = expectedPublicationGltfMaterial({
+      color_uuid: "tex-1", mer_uuid: "mer-1", normal_uuid: null,
+      uniform_mer: null,
+    });
+    const merReceipt = {
+      "ld_color_tex-1": { ...colorReceipt["ld_color_tex-1"], pbr: "MAPPED" as const, gltf: merMap },
+    };
+    expect(inspectPublicationGlb(
+      fixtureGlb({ materialProfile: "pbr_mer" }), 1, 1, undefined, merReceipt,
+    ).material_count).toBe(1);
+    expect(() => inspectPublicationGlb(
+      fixtureGlb({ materialProfile: "pbr_uniform" }), 1, 1, undefined, merReceipt,
+    )).toThrow("PBR_FACTORS_OR_ALPHA_MISMATCH");
+  });
+
   test("rejects malformed bytes, changed length, lost UV and unexpected material count", () => {
     const valid = fixtureGlb();
     expect(inspectPublicationGlb(valid, 1, 1)).toMatchObject({
@@ -485,7 +527,7 @@ describe("Detached native fidelity bridge", () => {
       getTextures: () => [],
     }];
     f.texture.group = "group-1";
-    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("PBR_CHANNELS_AMBIGUOUS");
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("PBR_CHANNEL_INVENTORY_INVALID");
     f.texture.group = "";
     f.rgba[3] = 127;
     await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("ALPHA_SEMANTICS_UNVERIFIED");
