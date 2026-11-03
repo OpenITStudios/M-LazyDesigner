@@ -526,7 +526,7 @@ export function bakeShapePreservingMotionToLinearRecipe(
         analytic_tangent:seam,source_endpoints_equal:true,
       });
     }
-    for(let segment=0;segment<frames.length-1++){
+    for(let segment=0;segment<frames.length-1;segment++){
       const start=Math.round(times[segment]*fps);
       const end=Math.round(times[segment+1]*fps);
       const span=times[segment+1]-times[segment];
