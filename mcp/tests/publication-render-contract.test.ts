@@ -319,6 +319,31 @@ describe("Detached native fidelity bridge", () => {
     expect(() => verifyPublicationSourceCurrent(result.project_uuid, result.source_sha256)).toThrow("STALE");
   });
 
+  test("never substitutes an unrelated or ambiguous PBR display-name group", async () => {
+    const f = installNativeFixture();
+    f.texture.group = "not-found";
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
+      "PUBLICATION_TEXTURE_GROUP_UNRESOLVED_OR_AMBIGUOUS"
+    );
+    const group = (uuid: string, name: string) => ({
+      uuid, name, is_material: true,
+      material_config: { mer_value: [0, 0, 255] },
+      getTextures: () => [{ ...f.texture, pbr_channel: "color" }],
+    });
+    (globalThis as any).TextureGroup.all = [
+      group("uuid-1", "shared-name"),
+      group("uuid-2", "shared-name"),
+    ];
+    f.texture.group = "shared-name";
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
+      "PUBLICATION_TEXTURE_GROUP_UNRESOLVED_OR_AMBIGUOUS"
+    );
+    // A stable UUID takes precedence over duplicate human-readable group names.
+    f.texture.group = "uuid-1";
+    const result = await snapshotDetachedPublicationGlb();
+    expect(result.materials["ld_color_tex-1"]?.pbr).toBe("MAPPED");
+  });
+
   test("fails closed on ambiguous PBR, alpha, non-Cube geometry and invalid faces", async () => {
     const f = installNativeFixture();
     (globalThis as any).TextureGroup.all = [{
