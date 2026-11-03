@@ -44,6 +44,10 @@ import {
   type GatewayToolContext,
 } from "../execution/gatewayErrors";
 import type { BenchmarkTraceRecorder } from "../execution/benchmarkTrace";
+import type {
+  ProjectObservationRecorder,
+  ProjectObservationTool,
+} from "../execution/projectObservation";
 
 type GatewayToolDefinition = {
   title: string;
@@ -71,6 +75,8 @@ export type CoreGatewayRegistrationDeps = {
   surfaceProfile: GatewaySurfaceProfile;
   experimentalTools: () => readonly string[];
   trace?: BenchmarkTraceRecorder | null;
+  /** L0 counters are internal; no MCP schema or AI-visible payload changes. */
+  projectObservation?: ProjectObservationRecorder | null;
   onGatewayToolRequest?: () => void;
   invoke: (
     capability: string,
@@ -158,8 +164,39 @@ export function registerCoreGatewayTools(
     handler: GatewayToolHandler
   ): void => {
     registerNativeGatewayTool(name, definition, async (args, context) => {
+      // The executor observes invocations with its validated project preflight.
+      // The outer wrapper owns only status/search/describe observations.
+      const observeHere = name !== GATEWAY_TOOLS.invokeCapability &&
+        deps.projectObservation?.active === true;
+      const startedAt = observeHere ? performance.now() : 0;
       try {
-        return await handler(args, context);
+        const response = await handler(args, context);
+        if (observeHere) {
+          try {
+            deps.projectObservation?.record({
+              tool: name as ProjectObservationTool,
+              args,
+              result: response,
+              durationMs: performance.now() - startedAt,
+            });
+          } catch { /* L0 cannot affect MCP responses */ }
+        }
+        return response;
+      } catch (error) {
+        if (observeHere) {
+          try {
+            deps.projectObservation?.record({
+              tool: name as ProjectObservationTool,
+              args,
+              result: {
+                isError: true,
+                structuredContent: { code: "GATEWAY_HANDLER_FAILURE" },
+              },
+              durationMs: performance.now() - startedAt,
+            });
+          } catch { /* L0 cannot affect MCP errors */ }
+        }
+        throw error;
       } finally {
         // Only real client tool requests reach this observer. Evidence must
         // never change an MCP response or interrupt a native mutation.

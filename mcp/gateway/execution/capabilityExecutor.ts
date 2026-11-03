@@ -33,13 +33,15 @@ import {
 } from "./gatewayErrors";
 import type { BenchmarkTraceRecorder } from "./benchmarkTrace";
 import type { GatewayOperationTiming } from "../runtime/operationQueue";
+import type { ProjectObservationRecorder } from "./projectObservation";
 
 export class GatewayCapabilityExecutor {
   constructor(
     private readonly backend: BlockitRuntimeBackend,
     private readonly localCapabilities: LocalCapabilityRegistry,
     private readonly session: GatewaySessionState,
-    private readonly trace: BenchmarkTraceRecorder | null = null
+    private readonly trace: BenchmarkTraceRecorder | null = null,
+    private readonly projectObservation: ProjectObservationRecorder | null = null
   ) {}
 
   private directPreconditionBlockedResult(
@@ -98,6 +100,34 @@ export class GatewayCapabilityExecutor {
     }
   ): Promise<unknown> {
     const startedAt = this.trace?.startedAt() ?? 0;
+    const observationStartedAt = this.projectObservation?.active ? performance.now() : 0;
+    const observeResult = (
+      response: unknown,
+      trustedProjectUuid: string | null = null,
+      observedPhaseAfter: string | null = null,
+      observedDomain: string | null = null,
+      verificationClass: string | null = null
+    ): void => {
+      if (!this.projectObservation?.active) return;
+      try {
+        this.projectObservation.record({
+          tool: "invoke_capability",
+          // Only capability identity and an opaque canonical Control handle.
+          // Never send native mutation args into the analytics recorder.
+          args: {
+            capability,
+            task_context_id: controlOptions?.taskContextId ?? null,
+          },
+          result: response,
+          durationMs: performance.now() - observationStartedAt,
+          nativeIdentityVerified: true,
+          nativeProjectUuid: trustedProjectUuid,
+          nativePhaseAfter: observedPhaseAfter,
+          nativeDomain: observedDomain,
+          nativeVerificationClass: verificationClass,
+        });
+      } catch { /* L0 can never alter the native result or recovery. */ }
+    };
     const traceMeta = traceMetaFromContext(context);
     const traceContext = this.trace?.enabled ? {
       traceparent: traceMeta?.traceparent,
@@ -123,6 +153,7 @@ export class GatewayCapabilityExecutor {
           readOnly: null,
           verificationClass: null,
         });
+        observeResult(blocked);
         return blocked;
       }
 
@@ -286,6 +317,13 @@ export class GatewayCapabilityExecutor {
           readOnly: effectiveReadOnly,
           verificationClass: controlDelta.verification_class,
         });
+        observeResult(
+          response,
+          runtimeInvocation !== null ? verifiedProjectUuid : null,
+          receipt.phaseAfter,
+          controlDelta.authoring_domain,
+          controlDelta.verification_class
+        );
         return response;
       }
 
@@ -331,6 +369,13 @@ export class GatewayCapabilityExecutor {
         readOnly: effectiveReadOnly,
         verificationClass: controlDelta.verification_class,
       });
+      observeResult(
+        response,
+        runtimeInvocation !== null ? verifiedProjectUuid : null,
+        receipt.phaseAfter,
+        controlDelta.authoring_domain,
+        controlDelta.verification_class
+      );
       return response;
     } catch (error) {
       const response = gatewayErrorResult(error);
@@ -345,6 +390,7 @@ export class GatewayCapabilityExecutor {
         readOnly: null,
         verificationClass: null,
       });
+      observeResult(response);
       return response;
     }
   }

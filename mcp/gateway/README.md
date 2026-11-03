@@ -353,6 +353,67 @@ source edits, retries, release promotions, or an AI-generated quality verdict.
 This is an **offline diagnostics viewer**, not a live Desktop dashboard,
 OTLP exporter, new server, or autonomous optimization engine.
 
+## Always-On L0 Project Observation (source-authored)
+
+The existing four-tool Gateway now has an internal, lightweight **L0
+aggregate observer**. It executes as a best-effort callback after the
+regular tool has returned, using its existing status/Control Delta evidence:
+no extra MCP calls, AI prompts, native inspections, PNG capture, or
+AI-facing response fields. The detailed Golden recorder above remains
+separately opt-in; the L0 path does not duplicate its per-call NDJSON trace.
+
+L0 records bounded, non-payload counters: tool/capability call counts,
+failures by safe machine code, observed Gateway duration, domain-coded calls,
+verification obligations (never quality PASS), observed acceptance-gate
+invalidations and downstream recheck counts, the presence (not contents)
+of a user delta on status, a capped count of task context IDs **without
+storing their contents**, and phase observations from a verified status
+or validated phase-transition receipt only. None of these observations
+is itself a confirmed correction cause or user approval. Calls without
+a verifiable native project binding are assigned to `unbound`, not
+guessed into the last known project. The project key is a SHA-256 digest
+of the verified native project UUID, not a secret, long-lived account ID or
+guarantee of cross-reopen project identity. Different native UUIDs are
+never silently merged.
+
+L0 defaults on, and can be disabled via
+`LAZYDESIGNER_PROJECT_OBSERVABILITY=0`. On supported Windows installs,
+sessions use `%LOCALAPPDATA%/LazyDesigner/analytics/`; non-Windows
+development uses `$XDG_STATE_HOME/LazyDesigner/analytics/` or
+`~/.local/state/LazyDesigner/analytics/`. The observer stores **one
+atomic, coalesced summary snapshot per Gateway process session**, at most
+once per 64 calls or after an additional call beyond 60 seconds, and on
+normal shutdown. The cached snapshots are limited to sixteen owned
+session JSON files, 128 KiB maximum each. Cardinality is capped (12
+projects/session, 24 capability keys plus OTHER, 64 distinct task contexts
+per bound project, 24 recent phase observations). A slow disk never creates
+an unbounded write queue; only the latest pending snapshot is retained.
+A failed write must not interrupt authoring. An unexpected crash may lose
+up to the last unflushed interval; `state: OPEN` must not be called a
+complete session. The small writer/retention concern lives in
+`gateway/execution/projectObservationStore.ts`; metric accounting is owned by
+`gateway/execution/projectObservation.ts` and consumed by the offline reporter. This L0 window is **not** a complete audit/history service.
+
+Use the explicit, offline command:
+
+```text
+bun run report:project-analytics -- <local-analytics-directory>
+```
+
+The reporter reads at most sixteen regular snapshot files of bounded
+size and groups only matching hashed native UUID identities across sessions.
+Use the optional `--html` flag to output an entirely local static HTML
+report to stdout; JSON remains the default. HTML escapes all displayed
+metadata, uses a no-network Content Security Policy, and bounds its visible
+project cards to twenty. Nothing is uploaded or inserted into AI context.
+It distinguishes `OPEN`/closed sessions, unbound calls, source and
+coverage uncertainty, phase **observations** versus approvals, and calls
+summed across sessions versus elapsed/accepted-result time. It never
+infers visual quality, session-wide model usage, native project completion
+or full project wall time. It adds no status polling, persistent registry,
+new UI view or public Gateway tool. The existing opt-in P1-P5 detail
+reporters remain the drill-down route when evidence is needed.
+
 ## Context / Result Economy
 
 Context handles use SHA-256 identities of current canonical repository files. `known_context_ids` suppresses unchanged Skill/profile content and invalidates changed members of the same family.

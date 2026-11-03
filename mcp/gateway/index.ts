@@ -16,6 +16,7 @@ import { publishManagedGatewayLeaseEvidence } from "./session/leaseEvidence";
 import type { GatewayToolContext } from "./execution/gatewayErrors";
 import { GatewayCapabilityExecutor } from "./execution/capabilityExecutor";
 import { BenchmarkTraceRecorder } from "./execution/benchmarkTrace";
+import { ProjectObservationRecorder } from "./execution/projectObservation";
 import { registerMotionMp4GatewayResource } from "./resources/motionMp4";
 
 const session = new GatewaySessionState();
@@ -26,11 +27,13 @@ const backend = new BlockitRuntimeBackend(undefined, undefined, {
 });
 const localCapabilities = new LocalCapabilityRegistry();
 const benchmarkTrace = BenchmarkTraceRecorder.fromEnvironment();
+const projectObservation = ProjectObservationRecorder.fromEnvironment();
 const executor = new GatewayCapabilityExecutor(
   backend,
   localCapabilities,
   session,
-  benchmarkTrace
+  benchmarkTrace,
+  projectObservation
 );
 
 // Only the explicitly scoped AI-only MP4 resource is proxied. General Runtime
@@ -70,6 +73,7 @@ function buildGatewayServer(
     surfaceProfile,
     experimentalTools: () => registeredExperimentalTools,
     trace: benchmarkTrace,
+    projectObservation,
     onGatewayToolRequest: () => {
       publishManagedGatewayLeaseEvidence(backend.observedManagedCatalogEvidence());
     },
@@ -108,6 +112,7 @@ async function shutdown(exitCode: number): Promise<void> {
   try {
     await backend.close();
     await benchmarkTrace.flush();
+    await projectObservation.flush(true);
     await stdioHandle?.close();
   } finally {
     process.exit(exitCode);

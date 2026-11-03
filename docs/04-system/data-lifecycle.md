@@ -124,6 +124,30 @@ A prior `.bak` can be one successful metadata revision behind current state;
 recovering it is a deliberate user decision, not lossless recreation of
 the most recent preferences.
 
+## Observability cache and retention
+
+The Gateway L0 observer writes only small process-session aggregate snapshots
+outside Workspace, in a dedicated application-local analytics cache. It
+preserves counts, safe machine error codes, hashed verified native UUIDs,
+bounded timestamps and phase observations, not raw prompts, MCP arguments,
+project paths, native UUIDs, image bytes, model content, credentials or
+Codex session output. Its source owner is
+`mcp/gateway/execution/projectObservation.ts`; bounded filesystem storage
+is `mcp/gateway/execution/projectObservationStore.ts` and offline reporting
+is `mcp/scripts/reporting/summarize-project-observation.ts`.
+Static HTML presentation is isolated in
+`mcp/scripts/reporting/render-project-observation.ts`.
+
+The cache is best-effort, source-authority **independent** and limited to
+16 locally owned session snapshots (128 KiB/file). Old matching snapshots
+may be pruned; data older than this rolling window is not promised.
+Normal shutdown closes the session; a crash or failed storage write
+leaves incomplete/unknown history. The archive is never a backup of native
+models, user Workspace, Golden acceptance or complete AI usage. No
+extension of this cache may silently mark a Workspace stage approved,
+invoke a Runtime read for analytics, or insert monitoring data into the
+normal client-visible Gateway result.
+
 ## Review / verification
 
 Inventory tests own classification, alias resolution and the no-workspace-read

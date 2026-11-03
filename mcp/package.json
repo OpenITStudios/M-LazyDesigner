@@ -113,6 +113,7 @@
     "eval:golden-authoring": "bun test tests/benchmark/golden-authoring-run-contract.test.ts tests/benchmark/gateway-benchmark-trace-report.test.ts tests/benchmark/golden-benchmark-session-runner.test.ts tests/benchmark/golden-session-finalizer.test.ts tests/benchmark/golden-session-comparison.test.ts tests/benchmark/observability-session-comparison.test.ts gateway/execution/benchmarkTrace.test.ts",
     "report:golden-authoring": "bun run ./scripts/reporting/evaluate-golden-authoring-runs.ts",
     "report:gateway-trace": "bun run ./scripts/reporting/summarize-gateway-benchmark-trace.ts",
+    "report:project-analytics": "bun run ./scripts/reporting/summarize-project-observation.ts",
     "benchmark:golden-session": "bun run ./scripts/reporting/run-golden-benchmark-session.ts",
     "finalize:golden-session": "bun run ./scripts/reporting/finalize-golden-session.ts",
     "compare:golden-sessions": "bun run ./scripts/reporting/compare-golden-sessions.ts",
