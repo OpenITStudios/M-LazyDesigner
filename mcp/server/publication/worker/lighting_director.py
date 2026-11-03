@@ -177,7 +177,7 @@ def configure_environment_and_lighting(job: dict, bounds: tuple) -> dict:
     key, fill, rim = lights
     # This ratio is emitted ENERGY, not a measured brightness or aesthetic
     # quality estimate. Zero fill is intentional and reported as null.
-    key_to_fill = (key["power"] / fill["power"]) if fill["power"] > 0 else None
+    key_to_fill = (key["power"] / fill["power"]) if fill["power"] > 1e-6 else None
     return {
         "world": world,
         "ground": ground,
