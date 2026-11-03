@@ -9,7 +9,11 @@ import {
 } from "@/lib/factories";
 import { resolveCoreAnimation } from "@/lib/core/identity";
 import { withTemporaryAnimationPreview } from "@/lib/animation/previewState";
-import { inspectObservedAdditiveEulerPose } from "@/lib/rig/fabrik";
+import {
+  inspectObservedAdditiveEulerPose,
+  compareObservedEulerToExactAuthoredRotationKey,
+  IK_EXACT_EULER_KEYFRAME_LIMIT,
+} from "@/lib/rig/fabrik";
 import {
   readDirectLocatorCandidates,
   readCurrentBonePoseSnapshot,
@@ -553,6 +557,56 @@ function readNativeAnimationGroupEulerContext(
   });
 }
 
+
+/** Snapshot the native rotation channel without evaluating MoLang or editing.
+ * Only existing literal numeric KeyframeDataPoint x/y/z are considered.
+ * The pure source comparator validates every frame and exact sample time.
+ */
+function readNativeExactRotationKeyParity(
+  group: Group,
+  animation: BBAnimation,
+  time: number,
+  observed: ReturnType<typeof inspectObservedAdditiveEulerPose>
+): ReturnType<typeof compareObservedEulerToExactAuthoredRotationKey> {
+  const unavailable=(reason:string)=>({
+    state:"unavailable" as const, reason,
+    native_rotation_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    native_export_verified:false as const,
+    visual_verdict:"not_evaluated" as const,
+  });
+  if (observed.state!=="SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA" ||
+      typeof BoneAnimator==="undefined") {
+    return unavailable("IK_EULER_EXACT_NATIVE_PREVIEW_UNAVAILABLE");
+  }
+  const animator=animation.animators?.[group.uuid];
+  if (!(animator instanceof BoneAnimator)) {
+    return unavailable("IK_EULER_EXACT_NATIVE_BONE_ANIMATOR_MISSING");
+  }
+  const track=animator.rotation as BBKeyframe[] | undefined;
+  if (!Array.isArray(track) || track.length>IK_EXACT_EULER_KEYFRAME_LIMIT) {
+    return unavailable("IK_EULER_EXACT_NATIVE_CHANNEL_BUDGET_INVALID");
+  }
+  try {
+    return compareObservedEulerToExactAuthoredRotationKey({
+      observed,
+      time_seconds: time,
+      animation_length_seconds: animation.length,
+      rotation_keyframes: track.map((key) => ({
+        uuid:key.uuid,
+        time:key.time,
+        interpolation:key.interpolation,
+        data_points: Array.isArray(key.data_points)
+          ? key.data_points.map((point) => ({
+              x:point.x, y:point.y, z:point.z,
+            })) : [],
+      })),
+    });
+  } catch {
+    return unavailable("IK_EULER_EXACT_NATIVE_CHANNEL_READ_FAILED");
+  }
+}
+
 function observeNativeAnimationJointOriginFrame(
   animation: BBAnimation,
   time: number,
@@ -626,6 +680,9 @@ function observeNativeAnimationJointOriginFrame(
           native_keyframe_authorized:false as const,
           visual_verdict:"not_evaluated" as const,
         };
+    const exactSourceParity=readNativeExactRotationKeyParity(
+      group,animation,time,eulerReview
+    );
     groups.push({
       group_uuid: group.uuid,
       parent_group_uuid: parent?.uuid ?? null,
@@ -634,6 +691,7 @@ function observeNativeAnimationJointOriginFrame(
       ...(orientationFailure
         ? {orientation_unavailable_reason:orientationFailure} : {}),
       euler_pose_review:eulerReview,
+      euler_exact_keyframe_review:exactSourceParity,
     });
   }
   if (typeof Project === "undefined" || !Project ||

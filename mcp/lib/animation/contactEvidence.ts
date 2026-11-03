@@ -1,4 +1,8 @@
-import { solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal, inspectObservedAdditiveEulerPose, type RigQuaternionXYZW } from "@/lib/rig/fabrik";
+import {
+  solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal,
+  inspectObservedAdditiveEulerPose, compareObservedEulerToExactAuthoredRotationKey,
+  type RigQuaternionXYZW,
+} from "@/lib/rig/fabrik";
 import type { ExplicitContactMarkerBinding } from "./contactMarkerBinding";
 
 export type Vec3 = readonly [number, number, number];
@@ -722,6 +726,8 @@ export type ObservedAnimationJointOriginFrame = {
     parent_world_quaternion_xyzw?: RigQuaternionXYZW;
     orientation_unavailable_reason?: string;
     euler_pose_review?: ReturnType<typeof inspectObservedAdditiveEulerPose>;
+    euler_exact_keyframe_review?:
+      ReturnType<typeof compareObservedEulerToExactAuthoredRotationKey>;
   }[];
 };
 
@@ -740,6 +746,8 @@ export function analyzeObservedAnimationJointOriginFrames(
       parent_world_quaternion_xyzw?: RigQuaternionXYZW;
       orientation_unavailable_reason?: string;
       euler_pose_review?: ReturnType<typeof inspectObservedAdditiveEulerPose>;
+      euler_exact_keyframe_review?:
+        ReturnType<typeof compareObservedEulerToExactAuthoredRotationKey>;
     }>;
   };
   const unavailable = (reason: string) => ({
@@ -816,6 +824,19 @@ export function analyzeObservedAnimationJointOriginFrames(
            euler.state!=="unavailable"))) {
         return unavailable("ANIMATION_JOINT_EULER_EVIDENCE_INVALID");
       }
+      const exact=group.euler_exact_keyframe_review;
+      if (exact && (exact.native_rotation_authorized!==false ||
+          exact.native_keyframe_authorized!==false ||
+          exact.native_export_verified!==false ||
+          !["unavailable","SOURCE_ONLY_EXACT_KEY_NUMERIC_MATCH",
+            "SOURCE_ONLY_EXACT_KEY_NUMERIC_MISMATCH"].includes(exact.state) ||
+          (exact.state!=="unavailable" &&
+            (!Number.isFinite(exact.max_absolute_error_degrees) ||
+             !Array.isArray(exact.source_values_degrees) ||
+             !Array.isArray(exact.observed_values_degrees) ||
+             !Array.isArray(exact.axis_absolute_error_degrees))))) {
+        return unavailable("ANIMATION_JOINT_EXACT_EULER_PARITY_INVALID");
+      }
       seen.add(group.group_uuid);
       if (frame === first) {
         expected.set(group.group_uuid, group.parent_group_uuid);
@@ -859,6 +880,20 @@ export function analyzeObservedAnimationJointOriginFrames(
                 }
               : { ...group.euler_pose_review },
           } : {}),
+      ...(group.euler_exact_keyframe_review
+        ? { euler_exact_keyframe_review:
+            group.euler_exact_keyframe_review.state==="unavailable"
+              ? { ...group.euler_exact_keyframe_review }
+              : {
+                  ...group.euler_exact_keyframe_review,
+                  source_values_degrees:
+                    [...group.euler_exact_keyframe_review.source_values_degrees] as [number,number,number],
+                  observed_values_degrees:
+                    [...group.euler_exact_keyframe_review.observed_values_degrees] as [number,number,number],
+                  axis_absolute_error_degrees:
+                    [...group.euler_exact_keyframe_review.axis_absolute_error_degrees] as [number,number,number],
+                },
+          } : {}),
     })).sort((a,b) => a.group_uuid.localeCompare(b.group_uuid)),
   }));
   const rotationCovered=copied.every((frame)=>
@@ -887,6 +922,13 @@ export function analyzeObservedAnimationJointOriginFrames(
       )
     ).length,
     euler_keyframe_conversion_authorized:false as const,
+    frames_with_exact_numeric_rotation_parity: copied.filter((frame)=>
+      frame.groups.every((group)=>
+        group.euler_exact_keyframe_review?.state ===
+          "SOURCE_ONLY_EXACT_KEY_NUMERIC_MATCH"
+      )
+    ).length,
+    exact_numeric_source_does_not_attest_native_export:true as const,
     observation_scope: "CURRENT_NATIVE_PREVIEW_CALLBACK_READ_ONLY" as const,
     pose_time_synchronization_attested: false as const,
     native_preview_restoration_attested: false as const,

@@ -250,6 +250,26 @@ describe("Animation runtime efficiency contracts", () => {
     expect(capture).toContain("euler_pose_review:eulerReview");
   });
 
+  test("native exact Euler parity reads raw numeric key data without interpolation or editor mutations",async()=>{
+    const source=await Bun.file("server/runtime/contracts/animation.ts").text();
+    const start=source.indexOf("function readNativeExactRotationKeyParity(");
+    const end=source.indexOf("function observeNativeAnimationJointOriginFrame(",start);
+    const reader=source.slice(start,end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(reader).toContain("animator.rotation");
+    expect(reader).toContain("IK_EXACT_EULER_KEYFRAME_LIMIT");
+    expect(reader).toContain("key.data_points.map((point)");
+    expect(reader).toContain("compareObservedEulerToExactAuthoredRotationKey({");
+    expect(reader).not.toContain("key.getArray(");
+    expect(reader).not.toContain("animator.interpolate(");
+    expect(reader).not.toContain("Timeline.setTime(");
+    expect(reader).not.toContain("Undo.initEdit");
+    const consumer=source.slice(end,source.indexOf("async function captureAnimationSamples(",end));
+    expect(consumer).toContain("readNativeExactRotationKeyParity(");
+    expect(consumer).toContain("euler_exact_keyframe_review:exactSourceParity");
+  });
+
   test("focused Animation inspection can narrow one bone by channel and time range", () => {
     const accepted = focusedInspectAnimationParameters.parse({
       animation_id: "anim-walk",

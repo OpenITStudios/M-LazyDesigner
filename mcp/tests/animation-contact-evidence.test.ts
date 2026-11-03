@@ -5,6 +5,7 @@ import {
   analyzeObservedAnimationJointOriginFrames,
   reviewExplicitPlantedContactIkFromPreview,
   inspectObservedAdditiveEulerPose,
+  compareObservedEulerToExactAuthoredRotationKey,
   type ExplicitPlantedPreviewIkInput,
   type ObservedAnimationLocatorFrame,
   type ObservedAnimationJointOriginFrame,
@@ -1321,4 +1322,45 @@ test("observed joint Euler frames retain detached numeric evidence without keyfr
     "SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA");
   expect(good.state==="SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA"
     ? good.mesh_delta_euler_degrees[1] : null).toBeCloseTo(.2*180/Math.PI,8);
+});
+
+
+test("joint pose samples detach and count exact numeric Euler parity without authorizing IK writes",()=>{
+  const source=observedJointPreview();
+  const euler=inspectObservedAdditiveEulerPose({
+    mesh_rotation_radians:[0,0.2,0],
+    pre_animation_rotation_radians:[0,0,0],
+    fix_rotation_radians:[0,0,0],
+    format_euler_order:"XYZ",mesh_euler_order:"XYZ",
+    pre_animation_euler_order:"XYZ",fix_euler_order:"XYZ",
+    rotation_global:false,animation_override:false,
+    quaternion_interpolation:false,single_clip_blend_literal_one:true,
+  });
+  const parity=compareObservedEulerToExactAuthoredRotationKey({
+    time_seconds:0.5,animation_length_seconds:1,
+    observed:euler,rotation_keyframes:[{
+      uuid:"raw-rotation",time:0.5,interpolation:"linear",
+      data_points:[{x:0,y:0.2*180/Math.PI,z:0}],
+    }],
+  });
+  expect(parity.state).toBe("SOURCE_ONLY_EXACT_KEY_NUMERIC_MATCH");
+  const observations=source.map((frame)=>({
+    ...frame,groups:frame.groups.map((group)=>({
+      ...group,euler_pose_review:euler,
+      euler_exact_keyframe_review:parity,
+    })),
+  }));
+  const review=analyzeObservedAnimationJointOriginFrames(observations);
+  expect(review.state).toBe("SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS");
+  if(review.state!=="SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS")
+    throw new Error("Joint evidence invalid");
+  expect(review.frames_with_exact_numeric_rotation_parity).toBe(3);
+  expect(review.euler_keyframe_conversion_authorized).toBe(false);
+  expect(review.exact_numeric_source_does_not_attest_native_export).toBe(true);
+  const result=review.frames[0].groups[0].euler_exact_keyframe_review;
+  expect(result?.state).toBe("SOURCE_ONLY_EXACT_KEY_NUMERIC_MATCH");
+  if(!result || result.state==="unavailable")throw new Error("No parity source");
+  (result.source_values_degrees as [number,number,number])[1]=99;
+  expect(parity.state!=="unavailable"?parity.source_values_degrees[1]:null)
+    .toBeCloseTo(.2*180/Math.PI,10);
 });

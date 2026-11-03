@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal, inspectObservedAdditiveEulerPose } from "@/lib/rig/fabrik";
+import {
+  solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal,
+  inspectObservedAdditiveEulerPose, compareObservedEulerToExactAuthoredRotationKey,
+} from "@/lib/rig/fabrik";
 
 describe("FABRIK solver", () => {
   test("reaches a reachable target while preserving segment lengths", () => {
@@ -240,5 +243,87 @@ describe("native additive Euler preview context, source only", () => {
     expect(inspectObservedAdditiveEulerPose({
       ...source(),mesh_rotation_radians:[0.1,Math.PI+0.3,-0.2],
     })).toMatchObject({state:"unavailable",reason:"IK_EULER_DELTA_WRAP_OR_EXTREME"});
+  });
+});
+
+
+describe("exact-authored numeric Euler source parity (read-only)", () => {
+  const observed=()=>inspectObservedAdditiveEulerPose({
+    mesh_rotation_radians:[0.1,0.3,-0.2],
+    pre_animation_rotation_radians:[0.1,0.1,-0.2],
+    fix_rotation_radians:[0.1,0.1,-0.2],
+    format_euler_order:"XYZ",mesh_euler_order:"XYZ",
+    pre_animation_euler_order:"XYZ",fix_euler_order:"XYZ",
+    rotation_global:false,animation_override:false,
+    quaternion_interpolation:false,single_clip_blend_literal_one:true,
+  });
+  const numeric=(value:unknown=0.2*180/Math.PI)=>({
+    uuid:"key-mid",time:0.5,interpolation:"linear",
+    data_points:[{x:0,y:value,z:0}],
+  });
+  const inspect=(keys:readonly any[],observedValue=observed())=>
+    compareObservedEulerToExactAuthoredRotationKey({
+      time_seconds:0.5,animation_length_seconds:1,
+      observed:observedValue,rotation_keyframes:keys,
+    });
+
+  test("exact frame numeric linear rotation matches observed preview without keyframe authority",()=>{
+    const keys=[numeric()],snapshot=JSON.stringify(keys);
+    const result=inspect(keys);
+    expect(result).toMatchObject({
+      state:"SOURCE_ONLY_EXACT_KEY_NUMERIC_MATCH",
+      reason:null,keyframe_uuid:"key-mid",keyframe_time_seconds:0.5,
+      observed_time_seconds:0.5,
+      native_rotation_authorized:false,
+      native_keyframe_authorized:false,native_export_verified:false,
+    });
+    if(result.state==="unavailable")throw new Error(result.reason);
+    expect(result.max_absolute_error_degrees).toBeLessThan(1e-9);
+    expect(JSON.stringify(keys)).toBe(snapshot);
+  });
+
+  test("a real observed/source mismatch is explicit, never silently accepted",()=>{
+    const result=inspect([numeric(17)]);
+    expect(result).toMatchObject({
+      state:"SOURCE_ONLY_EXACT_KEY_NUMERIC_MISMATCH",
+      reason:"IK_EULER_EXACT_SOURCE_COMPONENT_DIFFERENCE",
+      native_keyframe_authorized:false,
+    });
+  });
+
+  test("interpolation, expressions, multiple data points and unkeyed clock refuse comparison",()=>{
+    expect(inspect([{...numeric(),interpolation:"bezier"}])).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_INTERPOLATION_UNSUPPORTED",
+    });
+    expect(inspect([{...numeric(),interpolation:"catmullrom"}])).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_INTERPOLATION_UNSUPPORTED",
+    });
+    expect(inspect([numeric("query.anim_time")])).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_NONNUMERIC_OR_MULTIPOINT",
+    });
+    expect(inspect([{...numeric(),data_points:[{x:0,y:10,z:0},{x:0,y:11,z:0}]}])).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_NONNUMERIC_OR_MULTIPOINT",
+    });
+    expect(inspect([{...numeric(),time:0}])).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_TIMESTAMP_NOT_KEYED",
+    });
+    expect(inspect([{...numeric(),time:0.49},{...numeric(),uuid:"other",time:0.51}])).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_TIMESTAMP_NOT_KEYED",
+    });
+  });
+
+  test("nearby track collisions, duplicate UUID, over budget and untrusted preview reject",()=>{
+    expect(inspect([numeric(),{...numeric(),uuid:"second",time:0.50005}])).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_TIMECODE_COLLISION",
+    });
+    expect(inspect([numeric(),{...numeric(),time:0.9}])).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_KEY_INVENTORY_INVALID",
+    });
+    expect(inspect(Array.from({length:257},(_,i)=>({...numeric(),uuid:"k"+i,time:i/256})))).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_TIME_OR_BUDGET_INVALID",
+    });
+    expect(inspect([numeric()],{state:"unavailable",reason:"no preview"} as any)).toMatchObject({
+      state:"unavailable",reason:"IK_EULER_EXACT_SOURCE_PREVIEW_UNAVAILABLE",
+    });
   });
 });

@@ -434,6 +434,36 @@ diagnostic does not certify the independently missing full native preview
 restoration and cannot authorize IK writes. Four Gateway tools and all
 public inputs remain unchanged.
 
+### Exact authored Euler rotation keyframe parity (2026-11-03)
+
+The current read-only Animation screenshot callback now optionally compares
+its bounded observed local Euler mesh delta with the raw native
+`BoneAnimator.rotation` key at **exactly the same preview time**. This
+is implemented via the existing canonical `rig/fabrik.ts` owner and the
+`readNativeExactRotationKeyParity` consumer; it does not invoke
+`BoneAnimator.interpolate`, `keyframe.getArray`, extra preview frames,
+Molang evaluation, Timeline writes, Undo, keyframe upsert, or export.
+
+The source comparator accepts only a unique, stable numeric keyframe track
+(up to 256 keys), exactly one `data_points` record with three finite
+numeric components, `interpolation="linear"` throughout the track and
+no native same-track timestamp collisions within 0.0001 s. If the current
+preview time is between keys, the source contains expression values, any
+nonlinear curve is present, a UUID is ambiguous or the raw key differs
+from the observed Euler delta by more than 0.001 degrees, the diagnostic
+is **unavailable or explicitly mismatched**, never a confirmed native
+authoring result. Numeric matches are reported as
+`SOURCE_ONLY_EXACT_KEY_NUMERIC_MATCH`, not runtime keyframe correctness.
+
+The optional joint-origin report preserves separate `euler_pose_review`
+and `euler_exact_keyframe_review` entries and counts fully matched sampled
+frames, while keeping `euler_keyframe_conversion_authorized=false`.
+This proof is deliberately narrow: full interpolation parity, all Blender/
+Blockbench-style preview effects, pre-rotated native rig transforms, export
+timestamps, persistence, foot contact and visual motion fidelity remain
+unverified. This step adds no new public Gateway tools or schema, no
+generated API files and no mutation.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

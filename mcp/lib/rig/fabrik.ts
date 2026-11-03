@@ -378,3 +378,122 @@ export function inspectObservedAdditiveEulerPose(input: {
       "authored keyframe or verified Blockbench preview/export interpolation.",
   };
 }
+
+
+export const IK_EXACT_EULER_KEYFRAME_LIMIT = 256;
+export type RawAuthoredEulerRotationKey = Readonly<{
+  uuid: string;
+  time: number;
+  interpolation: string;
+  data_points: readonly Readonly<{ x: unknown; y: unknown; z: unknown }>[];
+}>;
+
+/**
+ * Compare the CURRENT read-only Blockbench Euler preview to one exact numeric
+ * source rotation key at the same clock time. Never call interpolate(),
+ * getArray(), preview(), change Timeline or infer non-keyed curve values.
+ * All tracks must be strictly numeric linear source keys: Bezier/Catmull,
+ * duplicate-near timestamps and MoLang expressions fail closed.
+ *
+ * A numeric match is NOT evidence of export interpolation parity, normal
+ * visual motion, native restore completeness, or permission to write keys.
+ */
+export function compareObservedEulerToExactAuthoredRotationKey(input: {
+  time_seconds: number;
+  animation_length_seconds: number;
+  observed: ReturnType<typeof inspectObservedAdditiveEulerPose>;
+  rotation_keyframes: readonly RawAuthoredEulerRotationKey[];
+  tolerance_degrees?: number;
+}) {
+  const unavailable=(reason:string)=>({
+    state:"unavailable" as const,
+    reason,
+    native_rotation_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    native_export_verified:false as const,
+    visual_verdict:"not_evaluated" as const,
+  });
+  if (!input || input.observed?.state !== "SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA") {
+    return unavailable("IK_EULER_EXACT_SOURCE_PREVIEW_UNAVAILABLE");
+  }
+  const tolerance=input.tolerance_degrees ?? 1e-3;
+  if (!Number.isFinite(input.time_seconds) || input.time_seconds<0 ||
+      !Number.isFinite(input.animation_length_seconds) ||
+      input.animation_length_seconds<=0 ||
+      input.animation_length_seconds>10000 ||
+      input.time_seconds>input.animation_length_seconds+1e-6 ||
+      !Number.isFinite(tolerance) || tolerance<=0 || tolerance>0.05 ||
+      !Array.isArray(input.rotation_keyframes) ||
+      input.rotation_keyframes.length<1 ||
+      input.rotation_keyframes.length>IK_EXACT_EULER_KEYFRAME_LIMIT) {
+    return unavailable("IK_EULER_EXACT_SOURCE_TIME_OR_BUDGET_INVALID");
+  }
+  const keys=input.rotation_keyframes;
+  const validId=(s:unknown)=>typeof s==="string" && s.trim()===s &&
+    s.length>0 && s.length<=160;
+  const uuids=new Set<string>();
+  for (const key of keys) {
+    if (!key || !validId(key.uuid) || uuids.has(key.uuid) ||
+        !Number.isFinite(key.time) || key.time<0 ||
+        key.time>input.animation_length_seconds+1e-6 ||
+        !Array.isArray(key.data_points)) {
+      return unavailable("IK_EULER_EXACT_SOURCE_KEY_INVENTORY_INVALID");
+    }
+    uuids.add(key.uuid);
+    if (key.interpolation!=="linear") {
+      return unavailable("IK_EULER_EXACT_SOURCE_INTERPOLATION_UNSUPPORTED");
+    }
+    if (key.data_points.length!==1 ||
+        !["x","y","z"].every((axis)=>{
+          const value=(key.data_points[0] as Record<string,unknown>)[axis];
+          return typeof value==="number" && Number.isFinite(value);
+        })) {
+      return unavailable("IK_EULER_EXACT_SOURCE_NONNUMERIC_OR_MULTIPOINT");
+    }
+  }
+  const ordered=[...keys].sort((a,b)=>a.time-b.time);
+  if (ordered.some((key,i)=>
+    i>0 && key.time-ordered[i-1].time<1e-4
+  )) return unavailable("IK_EULER_EXACT_SOURCE_TIMECODE_COLLISION");
+  const matches=ordered.filter((key)=>
+    Math.abs(key.time-input.time_seconds)<=1e-6
+  );
+  if (matches.length!==1) {
+    return unavailable("IK_EULER_EXACT_SOURCE_TIMESTAMP_NOT_KEYED");
+  }
+  const key=matches[0];
+  const authored=[
+    key.data_points[0].x as number,
+    key.data_points[0].y as number,
+    key.data_points[0].z as number,
+  ] as [number,number,number];
+  const observed=input.observed.mesh_delta_euler_degrees;
+  if (!Array.isArray(observed) || observed.length!==3 ||
+      !observed.every(Number.isFinite)) {
+    return unavailable("IK_EULER_EXACT_SOURCE_OBSERVATION_INVALID");
+  }
+  const differences=authored.map((v,i)=>Math.abs(v-observed[i])) as [number,number,number];
+  const maxError=Math.max(...differences);
+  if (!Number.isFinite(maxError)) {
+    return unavailable("IK_EULER_EXACT_SOURCE_METRIC_INVALID");
+  }
+  return {
+    state:maxError<=tolerance
+      ? "SOURCE_ONLY_EXACT_KEY_NUMERIC_MATCH" as const
+      : "SOURCE_ONLY_EXACT_KEY_NUMERIC_MISMATCH" as const,
+    reason:maxError<=tolerance?null:"IK_EULER_EXACT_SOURCE_COMPONENT_DIFFERENCE",
+    keyframe_uuid:key.uuid,
+    keyframe_time_seconds:key.time,
+    observed_time_seconds:input.time_seconds,
+    source_values_degrees:[...authored] as [number,number,number],
+    observed_values_degrees:[...observed] as [number,number,number],
+    axis_absolute_error_degrees:differences,
+    max_absolute_error_degrees:maxError,
+    tolerance_degrees:tolerance,
+    sample_basis:"SINGLE_EXACT_NUMERIC_LINEAR_ROTATION_KEY" as const,
+    native_rotation_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    native_export_verified:false as const,
+    visual_verdict:"not_evaluated" as const,
+  };
+}
