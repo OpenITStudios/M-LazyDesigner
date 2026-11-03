@@ -112,6 +112,8 @@ describe("actual PNG transport accounting", () => {
     expect(src).toContain("...summarizeCaptureImageTraffic(imageTraffic)");
     expect(src).toContain("capture_processing_ms:");
     expect(src).toContain('measurement_scope: "THIS_MODEL_CAPTURE_RESPONSE_ONLY"');
+    expect(src.indexOf("const captureStartedAtMs = Date.now()"))
+      .toBeLessThan(src.indexOf("const dependencyBefore = readNativeVisualCaptureSnapshot(referenceBinding)"));
   });
 });
 

@@ -1137,6 +1137,9 @@ export function registerCameraTools() {
   createTool(cameraToolDocs[3].name, {
     ...cameraToolDocs[3],
     async execute({ views, evidence_targets, verification_risk, front_direction, framing, highlight_missing_textures, landmark_pairs, reference_correspondence, size }) {
+      // Measure the whole capture invocation, including both native dependency
+      // snapshots, rather than excluding the potentially expensive first read.
+      const captureStartedAtMs = Date.now();
       if (!Project) {
         throw new Error(
           "No project is open. Open or create the intended Bedrock project before capturing model views."
@@ -1219,7 +1222,6 @@ export function registerCameraTools() {
       const imageDigests: Array<{view: ModelView; sha256: string}> = [];
       const imageLedger: CaptureImageDeliveryLedger = new Map();
       const imageTraffic: CaptureImageTrafficRow[] = [];
-      const captureStartedAtMs = Date.now();
       const captures: Array<{
         view: ModelView;
         projection: "orthographic" | "perspective";
