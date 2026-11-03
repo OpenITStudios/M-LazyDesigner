@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { ChildProcess } from "node:child_process";
 
-import blenderWorker from "./worker/render.py";
+import blenderWorker from "./worker/render.py" with { type: "text" };
 import {
   blenderRenderArgs,
   makePublicationJob,
