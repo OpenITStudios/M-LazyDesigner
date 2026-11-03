@@ -72,6 +72,61 @@ function glbUvFingerprint(
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+/**
+ * glTFExporter shares vertex attributes between material primitives, but
+ * writes a distinct indexed draw range for each native Cube material group.
+ * Decode exact unsigned index values so identical UV/material metadata cannot
+ * conceal a changed triangle winding or face-to-material assignment.
+ */
+function glbPrimitiveIndices(
+  glb: Buffer,
+  bufferViews: readonly GltfRecord[],
+  accessors: readonly GltfRecord[],
+  accessorIndex: unknown,
+  expectedIndexCount: number,
+  sourceVertexCount: number,
+  binHeader: number,
+): number[] {
+  if (!validIndex(accessorIndex, accessors.length) || binHeader + 8 > glb.length) {
+    throw new Error("PUBLICATION_GLB_SOURCE_INDEX_ACCESSOR_MISSING");
+  }
+  const accessor = accessors[accessorIndex as number]!;
+  const width = accessor.componentType === 5121 ? 1
+    : accessor.componentType === 5123 ? 2
+      : accessor.componentType === 5125 ? 4 : 0;
+  if (!width || accessor.type !== "SCALAR" ||
+      accessor.count !== expectedIndexCount ||
+      accessor.normalized === true ||
+      !validIndex(accessor.bufferView, bufferViews.length)) {
+    throw new Error("PUBLICATION_GLB_SOURCE_INDEX_ACCESSOR_INVALID");
+  }
+  const view = bufferViews[accessor.bufferView as number]!;
+  const viewOffset = view.byteOffset ?? 0;
+  const accessorOffset = accessor.byteOffset ?? 0;
+  const byteLength = expectedIndexCount * width;
+  const binLength = glb.readUInt32LE(binHeader);
+  if ((view.buffer ?? 0) !== 0 || view.byteStride !== undefined ||
+      !Number.isSafeInteger(viewOffset) || viewOffset < 0 ||
+      !Number.isSafeInteger(accessorOffset) || accessorOffset < 0 ||
+      !Number.isSafeInteger(view.byteLength) || (view.byteLength as number) < byteLength ||
+      accessorOffset + byteLength > (view.byteLength as number) ||
+      viewOffset + accessorOffset + byteLength > binLength) {
+    throw new Error("PUBLICATION_GLB_SOURCE_INDEX_BUFFER_RANGE_INVALID");
+  }
+  const start = binHeader + 8 + viewOffset + accessorOffset;
+  const result: number[] = [];
+  for (let i = 0; i < expectedIndexCount; i++) {
+    const offset = start + i * width;
+    const index = width === 1 ? glb.readUInt8(offset)
+      : width === 2 ? glb.readUInt16LE(offset) : glb.readUInt32LE(offset);
+    if (index >= sourceVertexCount) {
+      throw new Error("PUBLICATION_GLB_SOURCE_INDEX_OUT_OF_RANGE");
+    }
+    result.push(index);
+  }
+  return result;
+}
+
 export function inspectPublicationGlb(
   glb: Buffer,
   expectedMeshes: number,
@@ -305,10 +360,19 @@ export function inspectPublicationGlb(
       if (primitives.length !== cube.primitives.length) {
         throw new Error("PUBLICATION_GLB_SOURCE_PRIMITIVE_COUNT_MISMATCH: " + cube.cube_uuid);
       }
+      const exportedIndices: number[] = [];
       for (let i = 0; i < cube.primitives.length; i++) {
         const expected = cube.primitives[i]!;
         const actual = primitives[i]!;
         const name = materials[actual.material as number]!.name;
+        const positionAccessor = record(actual.attributes) &&
+          validIndex(actual.attributes.POSITION, accessors.length)
+          ? accessors[actual.attributes.POSITION as number] : null;
+        if (!positionAccessor || positionAccessor.type !== "VEC3" ||
+            positionAccessor.componentType !== 5126 ||
+            positionAccessor.count !== cube.uv_vertex_count) {
+          throw new Error("PUBLICATION_GLB_SOURCE_POSITION_ACCESSOR_INVALID: " + cube.cube_uuid);
+        }
         if (!record(actual.attributes) ||
             glbUvFingerprint(
               glb, bufferViews as GltfRecord[], accessors,
@@ -320,7 +384,19 @@ export function inspectPublicationGlb(
           throw new Error("PUBLICATION_GLB_FACE_MATERIAL_MISMATCH: " +
             cube.cube_uuid + ":" + expected.face_keys.join(","));
         }
+        if ((actual.mode ?? 4) !== 4) {
+          throw new Error("PUBLICATION_GLB_SOURCE_PRIMITIVE_MODE_UNSUPPORTED: " + cube.cube_uuid);
+        }
+        exportedIndices.push(...glbPrimitiveIndices(
+          glb, bufferViews as GltfRecord[], accessors,
+          actual.indices, expected.face_keys.length * 6,
+          cube.uv_vertex_count, pointer,
+        ));
         expectedMaterialNames.add(expected.material_name);
+      }
+      if (createHash("sha256").update(JSON.stringify(exportedIndices)).digest("hex") !==
+          cube.index_sha256) {
+        throw new Error("PUBLICATION_GLB_SOURCE_INDEX_BYTES_MISMATCH: " + cube.cube_uuid);
       }
     }
     const outputMaterialNames = materials.map(material => material.name);

@@ -141,6 +141,7 @@ function fixtureGlb(options: {
   sourceIndex?: number;
   textureIndex?: number;
   corruptUv?: boolean;
+  corruptIndices?: "permutation" | "out_of_range" | "float_type";
   materialProfile?: "opaque" | "pbr_mer" | "pbr_uniform";
   corruptMaterial?: boolean;
   linearSampling?: boolean;
@@ -150,7 +151,10 @@ function fixtureGlb(options: {
   const positions = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0];
   const uv = [0, 1, 1, 1, 1, 0, 0, 0]; // Blockbench preview V inverted for glTF.
   if (options.corruptUv) uv[1] = 0.5;
-  const indices = [0, 2, 1, 0, 3, 2];
+  const indices = options.corruptIndices === "permutation"
+    ? [0, 1, 2, 0, 3, 2]
+    : options.corruptIndices === "out_of_range"
+      ? [0, 2, 99, 0, 3, 2] : [0, 2, 1, 0, 3, 2];
   const bin = Buffer.alloc(48 + 32 + 12);
   positions.forEach((value, index) => bin.writeFloatLE(value, index * 4));
   uv.forEach((value, index) => bin.writeFloatLE(value, 48 + index * 4));
@@ -204,7 +208,8 @@ function fixtureGlb(options: {
       { bufferView: 0, componentType: 5126, count: 4, type: "VEC3",
         min: [0, 0, 0], max: [1, 1, 0] },
       { bufferView: 1, componentType: 5126, count: 4, type: "VEC2" },
-      { bufferView: 2, componentType: 5123, count: 6, type: "SCALAR" },
+      { bufferView: 2, componentType: options.corruptIndices === "float_type"
+          ? 5126 : 5123, count: 6, type: "SCALAR" },
     ],
     materials: [material],
     samplers: [{
@@ -622,6 +627,23 @@ describe("Detached native fidelity bridge", () => {
     await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
       "PUBLICATION_GLB_SOURCE_UV_BYTES_MISMATCH",
     );
+  });
+
+  test("rejects changed Cube triangle topology although source UV/materials still match", async () => {
+    installNativeFixture();
+    for (const [corruptIndices, expectedCode] of [
+      ["permutation", "PUBLICATION_GLB_SOURCE_INDEX_BYTES_MISMATCH"],
+      ["out_of_range", "PUBLICATION_GLB_SOURCE_INDEX_OUT_OF_RANGE"],
+      ["float_type", "PUBLICATION_GLB_SOURCE_INDEX_ACCESSOR_INVALID"],
+    ] as const) {
+      const output = fixtureGlb({ corruptIndices });
+      (globalThis as any).THREE.GLTFExporter = class {
+        parse(_scene: unknown, done: (out: ArrayBuffer) => void) {
+          done(output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength));
+        }
+      };
+      await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(expectedCode);
+    }
   });
 
   test("rejects source modification during exporter callback instead of delivering stale GLB", async () => {
