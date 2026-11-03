@@ -2,6 +2,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { ChildProcess } from "node:child_process";
+import { inspectPublicationPng } from "@/lib/publication/pngIntegrity";
 
 import blenderWorker from "./worker/render.py" with { type: "text" };
 import {
@@ -68,15 +69,6 @@ function renderPermissions(directory: string): {
   return { fs, childProcess };
 }
 
-function validatedPng(data: Buffer, width: number, height: number): void {
-  if (data.length < 24 || data.length > 96 * 1024 * 1024 ||
-      data.toString("hex", 0, 8) !== "89504e470d0a1a0a") {
-    throw new Error("PUBLICATION_OUTPUT_PNG_INVALID_OR_OVERSIZED");
-  }
-  if (data.readUInt32BE(16) !== width || data.readUInt32BE(20) !== height) {
-    throw new Error("PUBLICATION_OUTPUT_DIMENSIONS_UNEXPECTED");
-  }
-}
 
 /**
  * Wait for confirmed Blender process close before touching its input files.
@@ -228,7 +220,7 @@ export async function renderPreparedPublication(
     if (!fs.existsSync(tempOutput)) throw new Error("PUBLICATION_OUTPUT_MISSING");
     const raw = fs.readFileSync(tempOutput);
     const png = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-    validatedPng(png, request.width, request.height);
+    inspectPublicationPng(png, request.width, request.height);
     assertActive();
     verifyPublicationSourceCurrent(snapshot.project_uuid, snapshot.source_sha256);
     // Exclusive destination create. No silent replacement and no success
