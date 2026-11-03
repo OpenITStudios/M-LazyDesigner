@@ -84,6 +84,15 @@ inspection, pose capture and playback-command results; its
 
 Only MP4 (H.264) is planned for temporal *visual* motion; it is an internal
 AI evidence artifact, not a user preview, with no GIF counterpart.
+The existing native MP4 encoding module can probe H.264 MIME support;
+`inspect_animation(diagnostics=true).motion_mp4_encoder_probe` reports
+device-level availability when possible. Encoded bytes also require a
+detached video first-frame decode probe; there is no video UI for users.
+Neither a supported MIME nor one decoded frame is motion review.
+It is **not** proof of MP4 capture:
+the native isolated motion evaluator, frame/time attestation and Sol
+video ingestion are still unverified. No WebM, GIF or FFmpeg fallback
+should silently replace missing H.264 support.
 A consistent MP4 manifest or URI alone never proves bytes or model ingestion.
 The actual recorder, artifact access and Sol video-consumption bridge are
 not registered yet, so temporal motion cannot be marked PASS from current tools.

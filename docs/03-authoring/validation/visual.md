@@ -362,6 +362,32 @@ Only when texture is in scope:
 
 Texture cannot approve or conceal wrong primary geometry.
 
+## MP4-only offscreen encoder readiness
+
+`lib/animation/mp4RecordingPlan.ts` owns bounded project/clip/revision,
+resolution, duration, bitrate and requested FPS, plus explicit H.264 MP4
+codec selection. `server/runtime/animation/mp4Encoder.ts` owns the
+`MediaRecorder`-based encoder from an existing canonical offscreen
+Blockbench canvas. It does **not** call `Timeline.setTime`,
+`Animator.preview`, or generate PNG/GIF. It uses a detached (not user-facing)
+video element to probe that the first encoded MP4 frame can be decoded;
+the temporary blob URL is revoked immediately. This first-frame probe
+is NOT whole-video decoding, exact frame-count proof, visual motion QA,
+or evidence that Sol can consume MP4. A future verified native
+playback adapter must keep the scene rendering and restore all state
+safely; no such adapter is currently connected.
+
+`inspect_animation(diagnostics=true)` can now return
+`motion_mp4_encoder_probe` when the Runtime supports MIME probing.
+`SUPPORTED_BY_MIME_QUERY_ONLY` checks device support, **not** that
+any frame was recorded or that the output's timing/codec is attested.
+The encoder reports actual output MP4 bytes only with explicit
+non-approving flags for authored playback timestamps, encoded frame
+count, native state restoration and Sol video consumption. When H.264
+MP4 cannot be recorded, the route fails without WebM/GIF fallback.
+The maximum request budget is bounded to avoid excessive resource
+consumption.
+
 ## AI-only MP4 binary resource — transport, not review
 
 Runtime registers a non-listed, short-lived binary resource using the existing

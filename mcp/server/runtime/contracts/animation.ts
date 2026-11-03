@@ -14,6 +14,7 @@ import { readRenderedModelBounds } from "@/lib/geometry/renderedModelBounds";
 import { sharedPoseFraming,samePoseBounds,comparePoseCameraReceipts,
   type PoseFrame,type PoseBounds } from "@/lib/animation/evidenceFraming";
 import { selectNativePoseDiagnosticRoute } from "@/lib/animation/poseDiagnosticScope";
+import { inspectMotionMp4EncoderAvailability } from "@/server/runtime/animation/mp4Encoder";
 import { describeAnimationEvidenceBoundary } from "@/lib/animation/motionEvidence";
 import {
   inspectObservedAdditiveEulerPose,
@@ -1460,6 +1461,11 @@ export function wireAnimationRuntimeContracts(): void {
             ? "NATIVE_CLIP_INSPECTION"
             : "NATIVE_CONTROLLER_INSPECTION"
         ),
+        // Inspect is read-only. MIME capability is a probe, NOT a recorder,
+        // native-state safety proof, or confirmation Sol can view MP4.
+        ...(request.diagnostics === true
+          ? { motion_mp4_encoder_probe: inspectMotionMp4EncoderAvailability() }
+          : {}),
       },
     };
   };
