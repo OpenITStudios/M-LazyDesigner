@@ -764,6 +764,22 @@ retain the 512 default, preserving existing high-detail behavior. Texture/identi
 should continue using detail-appropriate evidence; do not downsample merely to reduce
 Codex allowance when the decision depends on fine visual detail.
 
+## Claim-scoped optional Animation diagnostics
+
+Existing `animation_preview` now selects its **optional** native
+world-OBB/Locator/joint-origin scans from already declared
+`evidence_targets`. For appearance-only silhouette/count/width/height,
+extra native motion scans are not requested. Attachment still performs
+geometry/Locator/joint observations, and geometry claims such as depth
+or orientation retain world-OBB evidence. When there are no grounded
+targets (only explicit views), legacy full native diagnostics remain.
+The `native_pose_diagnostic_scope` receipt declares the exact selected
+readers; absent reports cannot be interpreted as PASS.
+
+This is scope selection, not a public API/schema change or motion quality
+approval. Every required visual image and the fixed pose-frame
+contract remain unchanged.
+
 ## Fixed camera for multi-pose Animation evidence
 
 Multi-pose `animation_preview` first uses temporary native scene evaluations

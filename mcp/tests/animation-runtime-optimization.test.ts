@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { sharedPoseFraming,samePoseBounds,comparePoseCameraReceipts } from "@/lib/animation/evidenceFraming";
+import { selectNativePoseDiagnosticRoute } from "@/lib/animation/poseDiagnosticScope";
 import {
   animationAwareCaptureModelViewsParameters,
   requireCompleteAnimationCaptureSample,
@@ -53,6 +54,31 @@ describe("Animation camera binding source contract",()=>{
       .toBeLessThan(runtime.indexOf("observedPoses.push({time,bounds})"));
     expect(runtime.indexOf("observedPoses.push({time,bounds})"))
       .toBeLessThan(runtime.indexOf("fixedCaptureRequest as unknown as Record<string, unknown>"));
+  });
+});
+
+describe("scope-aware native pose diagnostics",()=>{
+  test("appearance-only event poses do not run optional trajectory readers",()=>{
+    expect(selectNativePoseDiagnosticRoute(3,["silhouette","width"])).toMatchObject({
+      mode:"TARGETED",geometry:false,locators:false,joints:false,
+      visual_verdict:"NOT_EVALUATED"});
+    expect(selectNativePoseDiagnosticRoute(2,["depth"])).toMatchObject({
+      geometry:true,locators:false,joints:false});
+  });
+  test("attachment and unscoped legacy retain full diagnostics",()=>{
+    expect(selectNativePoseDiagnosticRoute(2,["attachment"])).toMatchObject({
+      geometry:true,locators:true,joints:true});
+    expect(selectNativePoseDiagnosticRoute(3,undefined)).toMatchObject({
+      mode:"UNSCOPED_LEGACY",geometry:true,locators:true,joints:true});
+    expect(selectNativePoseDiagnosticRoute(1,["attachment"])).toMatchObject({
+      mode:"NOT_REQUESTED",geometry:false,locators:false,joints:false});
+  });
+  test("canonical Animation Runtime applies the pure scoped decision",async()=>{
+    const runtime=await Bun.file("server/runtime/contracts/animation.ts").text();
+    expect(runtime).toContain("selectNativePoseDiagnosticRoute(");
+    expect(runtime).toContain("if (collectLocator) {");
+    expect(runtime).toContain("if (collectJoint && locatorFrame) {");
+    expect(runtime).toContain("native_pose_diagnostic_scope: nativePoseScope");
   });
 });
 
@@ -319,7 +345,7 @@ describe("Animation runtime efficiency contracts", () => {
     expect(reader).toContain('cube.parent === "root" ? "root" : null');
     expect(reader).not.toContain("Undo.initEdit");
     expect(reader).not.toContain("Timeline.setTime(");
-    expect(operation).toContain("const compareGeometry = preview.times.length >= 2");
+    expect(operation).toContain("const compareGeometry = nativePoseScope.geometry");
     expect(operation.indexOf("withTemporaryAnimationPreview("))
       .toBeLessThan(operation.indexOf("observeNativeAnimationGeometryPose("));
     expect(operation.indexOf("requireCompleteAnimationCaptureSample("))

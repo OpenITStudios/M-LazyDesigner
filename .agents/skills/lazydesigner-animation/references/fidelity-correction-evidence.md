@@ -74,6 +74,14 @@ File-backed client/runtime wiring remains compatibility/inspection, not normal m
 ## Evidence Economy
 
 Do not schedule screenshots every N seconds or for every keyframe.
+For multi-pose visual review with explicit `evidence_targets`, the Runtime
+skips optional world-OBB/Locator/joint-origin scans when those diagnostics
+cannot answer the visual claim (such as silhouette-only). Attachment
+requires geometry, Locator and joint evidence; depth/orientation triggers
+geometry only. Requests containing only explicit `views` retain the
+full legacy diagnostic path. Skipped observations are NOT_REQUESTED,
+not technical or visual PASS.
+
 For multi-pose visual review the Runtime now samples the requested event
 poses using temporary native Blockbench previews **without PNG output**,
 unions their rendered bounds and uses one fixed frame for the later captures.

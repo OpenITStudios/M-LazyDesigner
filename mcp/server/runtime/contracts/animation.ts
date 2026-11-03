@@ -13,6 +13,7 @@ import { withTemporaryAnimationPreview } from "@/lib/animation/previewState";
 import { readRenderedModelBounds } from "@/lib/geometry/renderedModelBounds";
 import { sharedPoseFraming,samePoseBounds,comparePoseCameraReceipts,
   type PoseFrame,type PoseBounds } from "@/lib/animation/evidenceFraming";
+import { selectNativePoseDiagnosticRoute } from "@/lib/animation/poseDiagnosticScope";
 import {
   inspectObservedAdditiveEulerPose,
   compareObservedEulerToExactAuthoredRotationKey,
@@ -972,7 +973,12 @@ async function captureAnimationSamples(
     landmark_diagnosis?: unknown;
   }> = [];
   let commonStructured: JsonRecord = {};
-  const compareGeometry = preview.times.length >= 2;
+  const nativePoseScope=selectNativePoseDiagnosticRoute(
+    preview.times.length,request.evidence_targets
+  );
+  const compareGeometry = nativePoseScope.geometry;
+  const collectLocator = nativePoseScope.locators;
+  const collectJoint = nativePoseScope.joints;
   const geometrySnapshots: GeometryPoseObbSnapshot[] = [];
   const geometryReadFailures: string[] = [];
   const locatorFrames: ObservedAnimationLocatorFrame[] = [];
@@ -1009,7 +1015,7 @@ async function captureAnimationSamples(
         }
         let locatorFrame: ObservedAnimationLocatorFrame | null = null;
         let locatorFailure: string | null = null;
-        if (compareGeometry) {
+        if (collectLocator) {
           try {
             locatorFrame = observeNativeAnimationLocatorFrame(animation, time);
           } catch (error) {
@@ -1018,7 +1024,7 @@ async function captureAnimationSamples(
         }
         let jointOriginFrame: ObservedAnimationJointOriginFrame | null = null;
         let jointOriginFailure: string | null = null;
-        if (locatorFrame) {
+        if (collectJoint && locatorFrame) {
           try {
             jointOriginFrame = observeNativeAnimationJointOriginFrame(
               animation, time, locatorFrame
@@ -1111,7 +1117,7 @@ async function captureAnimationSamples(
 
   // Pure role-free displacement diagnostics; a marker moving in world-space
   // is not a planted foot or a verified contact violation.
-  const locatorTrajectoryReview = compareGeometry
+  const locatorTrajectoryReview = collectLocator
     ? locatorReadFailures.length > 0 || locatorFrames.length !== preview.times.length
       ? {
           state: "unavailable" as const,
@@ -1132,7 +1138,7 @@ async function captureAnimationSamples(
 
   // Optional joint origins are independent of image/Locator success. Never
   // promote these preview callbacks to full-state-isolated IK evidence.
-  const jointOriginReview = compareGeometry
+  const jointOriginReview = collectJoint
     ? jointOriginReadFailures.length > 0 ||
         jointOriginFrames.length !== preview.times.length
       ? {
@@ -1161,6 +1167,7 @@ async function captureAnimationSamples(
         animation_capture_elapsed_ms: Math.max(0, Date.now() - captureStartedAtMs),
       },
       shared_pose_framing: sharedFrame,
+      native_pose_diagnostic_scope: nativePoseScope,
       pose_camera_comparability: comparePoseCameraReceipts(samples.map(sample=>({
         time:sample.time,
         framing_bounds:sample.framing_bounds as PoseBounds,
