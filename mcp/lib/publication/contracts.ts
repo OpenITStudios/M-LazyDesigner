@@ -61,7 +61,9 @@ export type PublicationJob = {
     color_uuid: string;
     texture_sha256: string;
     alpha_mode: "OPAQUE" | "MASK" | "BLEND";
-    pbr: "NONE" | "UNSUPPORTED";
+    pbr: "NONE" | "MAPPED";
+    mer_sha256?: string;
+    normal_sha256?: string;
   }>;
 };
 
