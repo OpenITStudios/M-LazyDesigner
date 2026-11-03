@@ -13,6 +13,7 @@ import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { inspectPublicationGlb } from "../../lib/publication/glbIntegrity";
+import { isAbsoluteFilesystemPath } from "../../lib/core/path";
 import { blenderRenderArgs, makePublicationJob, publicationRenderParameters } from "../../lib/publication/contracts";
 
 const ONE_PIXEL_PNG = Buffer.from(
@@ -95,24 +96,33 @@ function runWithConfirmedExit(
     let stderr = "";
     let stdout = "";
     let timedOut = false;
+    let settled = false;
+    let grace: ReturnType<typeof setTimeout> | null = null;
+    const settle = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (grace !== null) clearTimeout(grace);
+      if (error) reject(error);
+      else resolve();
+    };
     const timeout = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      try { child.kill(); } catch { /* no confirmation of process exit */ }
+      grace = setTimeout(() => {
+        settle(new Error("Cycles smoke process exit not confirmed after termination."));
+      }, 12_000);
     }, 180_000);
     child.stdout.on("data", chunk => { stdout = (stdout + chunk.toString()).slice(-16_000); });
     child.stderr.on("data", chunk => { stderr = (stderr + chunk.toString()).slice(-16_000); });
-    child.on("error", error => {
-      clearTimeout(timeout);
-      reject(error);
-    });
+    child.on("error", error => settle(error));
     child.on("close", code => {
-      clearTimeout(timeout);
       if (timedOut || code !== 0 || !stdout.includes("LAZYDESIGNER_RENDER_OUTPUT=")) {
-        reject(new Error("Cycles smoke failed: " + JSON.stringify({
+        settle(new Error("Cycles smoke failed: " + JSON.stringify({
           code, timedOut, stderr: stderr.slice(-1500), stdout: stdout.slice(-500),
         })));
       } else {
-        resolve();
+        settle();
       }
     });
   });
@@ -120,7 +130,7 @@ function runWithConfirmedExit(
 
 async function main(): Promise<void> {
   const blender = process.argv[2];
-  if (!blender || !/[/\\]blender(?:\.exe)?$/i.test(blender) || !blender.startsWith("/")) {
+  if (!blender || !/[/\\]blender(?:\.exe)?$/i.test(blender) || !isAbsoluteFilesystemPath(blender)) {
     throw new Error("Provide an existing absolute Blender 5.2 executable path (POSIX) for this explicit smoke run.");
   }
   const dir = await mkdtemp(join(tmpdir(), "lazydesigner-publication-smoke-"));
