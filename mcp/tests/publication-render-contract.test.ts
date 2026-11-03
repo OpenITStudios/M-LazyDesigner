@@ -135,9 +135,19 @@ function fixtureGlb(options: {
   imageUri?: string;
   sourceIndex?: number;
   textureIndex?: number;
+  corruptUv?: boolean;
 } = {}): Buffer {
+  const positions = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0];
+  const uv = [0, 1, 1, 1, 1, 0, 0, 0]; // Blockbench preview V inverted for glTF.
+  if (options.corruptUv) uv[1] = 0.5;
+  const indices = [0, 2, 1, 0, 3, 2];
+  const bin = Buffer.alloc(48 + 32 + 12);
+  positions.forEach((value, index) => bin.writeFloatLE(value, index * 4));
+  uv.forEach((value, index) => bin.writeFloatLE(value, 48 + index * 4));
+  indices.forEach((value, index) => bin.writeUInt16LE(value, 80 + index * 2));
   const json = Buffer.from(JSON.stringify({
     asset: { version: "2.0" },
+    scene: 0,
     scenes: [{ nodes: [0] }],
     nodes: [{
       mesh: 0, name: "cube_cube-1",
@@ -147,23 +157,42 @@ function fixtureGlb(options: {
         lazydesigner_bounds_max: [0.0625, 0, 0.0625],
       },
     }],
-    meshes: [{ primitives: [{ attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 0 }] }],
-    accessors: [{}, {}],
+    meshes: [{ primitives: [{
+      mode: 4, indices: 2,
+      attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 0,
+    }] }],
+    buffers: [{ byteLength: bin.length }],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 48, target: 34962 },
+      { buffer: 0, byteOffset: 48, byteLength: 32, target: 34962 },
+      { buffer: 0, byteOffset: 80, byteLength: 12, target: 34963 },
+    ],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 4, type: "VEC3",
+        min: [0, 0, 0], max: [1, 1, 0] },
+      { bufferView: 1, componentType: 5126, count: 4, type: "VEC2" },
+      { bufferView: 2, componentType: 5123, count: 6, type: "SCALAR" },
+    ],
     materials: [{ name: "ld_color_tex-1", pbrMetallicRoughness: {
       baseColorTexture: { index: options.textureIndex ?? 0 },
     } }],
     textures: [{ source: options.sourceIndex ?? 0 }],
-    images: [{ uri: options.imageUri ?? "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=" }],
+    images: [{ uri: options.imageUri ??
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=" }],
   }));
   const padded = Buffer.alloc(Math.ceil(json.byteLength / 4) * 4, 0x20);
   json.copy(padded);
-  const glb = Buffer.alloc(20 + padded.byteLength);
+  const glb = Buffer.alloc(12 + 8 + padded.length + 8 + bin.length);
   glb.write("glTF", 0, "ascii");
   glb.writeUInt32LE(2, 4);
-  glb.writeUInt32LE(glb.byteLength, 8);
-  glb.writeUInt32LE(padded.byteLength, 12);
+  glb.writeUInt32LE(glb.length, 8);
+  glb.writeUInt32LE(padded.length, 12);
   glb.writeUInt32LE(0x4e4f534a, 16);
   padded.copy(glb, 20);
+  const binOffset = 20 + padded.length;
+  glb.writeUInt32LE(bin.length, binOffset);
+  glb.writeUInt32LE(0x004e4942, binOffset + 4);
+  bin.copy(glb, binOffset + 8);
   return glb;
 }
 
