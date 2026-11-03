@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
+import { dirname, join } from "node:path";
 
 /**
  * Presentation rendering is deliberately separate from Bedrock render_profile,
@@ -21,12 +22,17 @@ export const publicationRenderParameters = z.object({
   width: z.number().int().min(256).max(4096).default(2048),
   height: z.number().int().min(256).max(4096).default(2048),
   background: z.enum(["dark", "light", "transparent"]).default("dark"),
+  device: z.enum(["auto", "cpu"]).default("auto"),
+  view_transform: z.enum(["AgX", "Standard"]).default("AgX"),
   camera: z.object({
+    mode: z.enum(["auto", "manual"]).default("auto"),
+    framing_padding: z.number().finite().min(1.08).max(2.2).default(1.28),
     yaw_degrees: z.number().finite().min(-180).max(180).default(38),
     elevation_degrees: z.number().finite().min(-30).max(80).default(18),
     projection: z.enum(["perspective", "orthographic"]).default("perspective"),
   }).default({
     yaw_degrees: 38, elevation_degrees: 18, projection: "perspective",
+    mode: "auto", framing_padding: 1.28,
   }),
   // Lighting is scene-wide, not selected by object type or asset category.
   look: z.object({
@@ -95,6 +101,9 @@ export type PublicationJob = {
   source_project_uuid: string;
   source_sha256: string;
   glb_path: string;
+  report_path: string;
+  device: PublicationRenderRequest["device"];
+  view_transform: PublicationRenderRequest["view_transform"];
   expected_mesh_count: number;
   expected_material_count: number;
   output_path: string;
@@ -126,6 +135,9 @@ export function makePublicationJob(
     source_project_uuid: source.project_uuid,
     source_sha256: source.sha256,
     glb_path: source.glb_path,
+    report_path: join(dirname(request.output_path), "report.json"),
+    device: request.device,
+    view_transform: request.view_transform,
     expected_mesh_count: source.mesh_count,
     expected_material_count: Object.keys(source.materials).length,
     output_path: request.output_path,
