@@ -130,6 +130,30 @@ describe("Nonblocking publication jobs through one serialized native preparation
     expect(() => jobs.status(started.job_id)).toThrow("EXPIRED");
   });
 
+  test("worker callbacks change only real stage labels, not estimated progress", async () => {
+    let notify: ((phase: "RENDERING_CYCLES" | "VERIFYING_OUTPUT" | "PUBLISHING") => void) | undefined;
+    let finish!: (value: PublicationRenderReceipt) => void;
+    const jobs = new PublicationRenderJobs(
+      (_prepared, _signal, onPhase) => new Promise<PublicationRenderReceipt>(resolve => {
+        notify = onPhase as typeof notify;
+        finish = resolve;
+      }), prepared,
+    );
+    const started = await jobs.start(REQUEST);
+    expect(started.phase).toBe("PREPARING_ASSETS");
+    await drain();
+    for (const phase of ["RENDERING_CYCLES", "VERIFYING_OUTPUT", "PUBLISHING"] as const) {
+      notify?.(phase);
+      expect(jobs.status(started.job_id).phase).toBe(phase);
+      expect(jobs.status(started.job_id).state).toBe("RUNNING");
+    }
+    finish(receipt);
+    await drain();
+    expect(jobs.status(started.job_id)).toMatchObject({
+      state: "RENDERED_DRAFT", phase: "FINISHED", output_is_visual_qa: false,
+    });
+  });
+
   test("a second native preparation is blocked while first GLB snapshot is unfinished", async () => {
     let complete!: (value: PreparedPublicationRender) => void;
     const pendingPrepare = new Promise<PreparedPublicationRender>(r => { complete = r; });
