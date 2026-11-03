@@ -250,7 +250,7 @@ export function openPublicationRenderDialog(): void {
           title: "LazyDesigner Render Started",
           icon: "info",
           message: "Blender Cycles job: " + status.job_id +
-            "\nStatus: " + status.state +
+            "\nStatus: " + status.state + "\nPhase: " + status.phase +
             "\nUse Render Status to check completion. A started job is not a completed PNG.",
           buttons: ["Close"],
         });
@@ -272,7 +272,7 @@ export function reviewPublicationRenderStatus(): void {
       Blockbench.showMessageBox({
         title: "LazyDesigner Render Status",
         icon: status.state === "RENDERED_DRAFT" ? "check" : "info",
-        message: "Job: " + status.job_id + "\nState: " + status.state +
+        message: "Job: " + status.job_id + "\nState: " + status.state + "\nPhase: " + status.phase +
           (status.receipt
             ? "\nPNG: " + status.receipt.output_path +
               "\nSHA-256: " + status.receipt.output_png_sha256 +
