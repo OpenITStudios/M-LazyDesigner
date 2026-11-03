@@ -58,7 +58,7 @@ def make_visual_evidence_png(job: dict) -> dict:
 
 
 
-def _sample_png(job: dict) -> dict:
+def _sample_png(job: dict, camera: dict) -> dict:
     filepath = job["output_path"]
     image = bpy.data.images.load(filepath, check_existing=False)
     try:
@@ -72,15 +72,33 @@ def _sample_png(job: dict) -> dict:
         image.pixels.foreach_get(rgba)
         luminances = []
         alphas = []
+        # Projected bounds are measured by Blender's actual camera projection.
+        # This ROI is a rectangle containing the subject; it is NOT a
+        # segmentation mask. Any background inside the box is still included.
+        bounds = camera["projected_bounds"]
+        low_x = max(0, math.floor(bounds[0] * PREVIEW_STAT_SIDE))
+        high_x = min(PREVIEW_STAT_SIDE, math.ceil(bounds[2] * PREVIEW_STAT_SIDE))
+        low_y = max(0, math.floor(bounds[1] * PREVIEW_STAT_SIDE))
+        high_y = min(PREVIEW_STAT_SIDE, math.ceil(bounds[3] * PREVIEW_STAT_SIDE))
+        require(high_x > low_x and high_y > low_y,
+                "PUBLICATION_PROJECTED_FRAME_ROI_EMPTY")
+        roi_luminances = []
         for idx in range(0, len(rgba), 4):
             red, green, blue, alpha = rgba[idx:idx + 4]
             require(all(math.isfinite(v) for v in (red, green, blue, alpha)),
                     "PUBLICATION_OUTPUT_PIXEL_NONFINITE")
             alphas.append(alpha)
             if alpha > 0.01:
-                luminances.append(0.2126 * red + 0.7152 * green + 0.0722 * blue)
+                luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+                luminances.append(luma)
+                px = (idx // 4) % PREVIEW_STAT_SIDE
+                py = (idx // 4) // PREVIEW_STAT_SIDE
+                if low_x <= px < high_x and low_y <= py < high_y:
+                    roi_luminances.append(luma)
         n = len(luminances)
         require(n > 0, "PUBLICATION_OUTPUT_ALL_TRANSPARENT")
+        require(bool(roi_luminances), "PUBLICATION_PROJECTED_FRAME_ROI_HAS_NO_VISIBLE_PIXELS")
+        roi_n = len(roi_luminances)
         return {
             "image_dimensions": [job["width"], job["height"]],
             "sampled_pixels": PREVIEW_STAT_SIDE ** 2,
@@ -91,6 +109,21 @@ def _sample_png(job: dict) -> dict:
             "nonopaque_fraction": round(sum(a < 0.99 for a in alphas) / len(alphas), 5),
             "analysis_type": "MEASURED_DOWNSAMPLED_CYCLES_PNG",
             "artistic_quality_score": None,
+            "projected_frame_roi": {
+                "source": "BLENDER_LOADED_CYCLES_PNG",
+                "region_type": "PROJECTED_BOUNDS_RECT_NOT_SEGMENTATION",
+                "bounds_ndc": bounds,
+                "sampled_pixels": (high_x - low_x) * (high_y - low_y),
+                "visible_samples": roi_n,
+                "mean_visible_luminance": round(sum(roi_luminances) / roi_n, 5),
+                "near_black_fraction": round(
+                    sum(value <= 0.02 for value in roi_luminances) / roi_n, 5
+                ),
+                "near_white_fraction": round(
+                    sum(value >= 0.98 for value in roi_luminances) / roi_n, 5
+                ),
+                "artistic_quality_score": None,
+            },
         }
     finally:
         bpy.data.images.remove(image, do_unlink=True)
@@ -105,7 +138,7 @@ def write_render_report(job: dict, asset: dict, camera: dict,
             and path.parent == target.parent and path.name == "report.json",
             "PUBLICATION_REPORT_PATH_OUTSIDE_JOB_DIRECTORY")
     require(not path.exists(), "PUBLICATION_REPORT_ALREADY_EXISTS")
-    image = _sample_png(job)
+    image = _sample_png(job, camera)
     preview = make_visual_evidence_png(job)
     warnings = []
     # Warn only on overwhelming signals. Dark studio backdrops make average
@@ -114,6 +147,12 @@ def write_render_report(job: dict, asset: dict, camera: dict,
         warnings.append("OUTPUT_NEARLY_ALL_OVEREXPOSED_VISIBLE_PIXELS")
     if image["near_black_visible_fraction"] > 0.98:
         warnings.append("OUTPUT_NEARLY_ALL_UNDEREXPOSED_VISIBLE_PIXELS")
+    # A dark or bright material can be authored intentionally. Flag review,
+    # never infer a lighting correction or an artistic quality PASS.
+    if image["projected_frame_roi"]["near_black_fraction"] > 0.98:
+        warnings.append("PROJECTED_SUBJECT_REGION_NEAR_BLACK_REVIEW")
+    if image["projected_frame_roi"]["near_white_fraction"] > 0.90:
+        warnings.append("PROJECTED_SUBJECT_REGION_NEAR_WHITE_REVIEW")
     result = {
         "schema_version": 1,
         "status": "RENDERED_DIAGNOSTICS_NOT_VISUAL_APPROVAL",
