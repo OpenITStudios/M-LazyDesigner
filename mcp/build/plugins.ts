@@ -57,12 +57,21 @@ export const textFileLoaderPlugin: BunPlugin = {
       };
     });
 
+    // Package the fixed, trusted Blender worker as a source string.
+    // Do not distribute a free-form Python execution or import hook.
+    build.onResolve({ filter: /\.py$/ }, (args) => {
+      if (args.namespace === "text-file" || args.resolveDir.includes("node_modules")) return;
+      return { path: resolvePath(args.path, args.resolveDir), namespace: "text-file" };
+    });
+
     // Load files as text from the text-file namespace
     build.onLoad({ filter: /.*/, namespace: "text-file" }, async (args) => {
       try {
         const content = await Bun.file(args.path).text();
         const ext = args.path.slice(args.path.lastIndexOf("."));
-        const minify = isProduction
+        const minify = ext === ".py"
+          ? (s: string) => s
+          : isProduction
           ? ext === ".css"
             ? minifyCSS
             : ext === ".svg"
