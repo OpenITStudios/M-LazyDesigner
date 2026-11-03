@@ -1,6 +1,10 @@
 /// <reference types="blockbench-types" />
 import { dirname, join } from "node:path";
-import { renderPublication } from "@/server/publication/execute";
+import {
+  startPublicationRender,
+  getPublicationRenderJobStatus,
+  cancelPublicationRenderJob,
+} from "@/server/publication/jobs";
 import {
   getRuntimeLifecycleSnapshot,
   isRuntimeGenerationCurrent,
@@ -9,7 +13,8 @@ import {
 
 let dialog: Dialog | null = null;
 let epoch = 0;
-let running = false;
+let submitting = false;
+let lastJobId: string | null = null;
 
 function initialOutputPath(): string {
   if (!Project) return "";
@@ -28,13 +33,26 @@ function showError(error: unknown): void {
   });
 }
 
+function withCurrentRuntime<T>(work: () => T): Promise<T> {
+  const generation = getRuntimeLifecycleSnapshot().owner_generation;
+  if (generation === null) {
+    return Promise.reject(new Error("Native LazyDesigner runtime is not ready."));
+  }
+  return runRuntimeOperationExclusive(generation, async () => {
+    if (!isRuntimeGenerationCurrent(generation)) {
+      throw new Error("LazyDesigner runtime reloaded. Inspect the current render job again.");
+    }
+    return work();
+  });
+}
+
 export function openPublicationRenderDialog(): void {
   if (!Project || Project.format?.id !== "bedrock") {
     showError(new Error("Open an active Bedrock Entity project first."));
     return;
   }
-  if (running) {
-    Blockbench.showQuickMessage("Publication renderer is busy.", 2500);
+  if (submitting) {
+    Blockbench.showQuickMessage("Publication render request is being submitted.", 2500);
     return;
   }
   dialog?.hide();
@@ -45,21 +63,22 @@ export function openPublicationRenderDialog(): void {
     title: "Publication Render — Blender Cycles",
     width: 500,
     lines: [
-      "<p>Render the actual model, not an AI-generated image. Requires Blender 5.2.x installed and local file/process permissions.</p>",
-      "<p>The image remains DRAFT until visual review. Supported color/MER/normal PBR channels are preserved; unsupported non-Cube, height or ambiguous-alpha content is blocked.</p>",
+      "<p>Renders real Blockbench geometry, UV and source pixels. This is not AI image generation.</p>",
+      "<p>Blender runs outside the Gateway call. Use Render Status to inspect the job; only a validated output receives a DRAFT PNG receipt.</p>",
+      "<p>Supported: opaque Cube geometry with standard/PBR color, MER and normal maps. Unsupported alpha, height, or non-Cube surfaces are rejected.</p>",
     ],
     form: {
       blender_executable: {
         label: "Blender executable (absolute path)",
         type: "text",
         value: "",
-        description: "Select the installed Blender 5.2 executable. No downloads or remote servers.",
+        description: "A user-authorized installed Blender 5.2 executable; no remote render service.",
       },
       output_path: {
         label: "Save PNG (absolute path)",
         type: "text",
         value: initialOutputPath(),
-        description: "Existing images are never overwritten.",
+        description: "Existing PNGs are never overwritten.",
       },
       quality: {
         label: "Render quality",
@@ -80,54 +99,83 @@ export function openPublicationRenderDialog(): void {
         options: { perspective: "Perspective", orthographic: "Orthographic" },
       },
     },
-    buttons: ["Render PNG", "Cancel"],
+    buttons: ["Start Render", "Cancel"],
     confirmIndex: 0,
     cancelIndex: 1,
     onConfirm(form) {
-      if (running || epoch !== currentEpoch) return;
-      const generation = getRuntimeLifecycleSnapshot().owner_generation;
-      if (generation === null) {
-        showError(new Error("Native LazyDesigner runtime is not ready."));
-        return;
-      }
+      if (submitting || epoch !== currentEpoch) return;
+      submitting = true;
       const quality = String(form.quality || "publication");
       const size = quality === "preview" ? 640 : quality === "high" ? 3200 : 2048;
-      running = true;
-      void runRuntimeOperationExclusive(generation, async () => {
-        if (!isRuntimeGenerationCurrent(generation) || Project !== project) {
-          throw new Error("Project/Runtime changed before render started.");
-        }
-        return renderPublication({
+      void withCurrentRuntime(() => {
+        if (Project !== project) throw new Error("Project changed before render was queued.");
+        return startPublicationRender({
           blender_executable: String(form.blender_executable || ""),
           output_path: String(form.output_path || ""),
           quality,
           width: size, height: size,
           background: String(form.background || "dark"),
           camera: {
-            yaw_degrees: 38,
-            elevation_degrees: 18,
+            yaw_degrees: 38, elevation_degrees: 18,
             projection: String(form.projection || "perspective"),
           },
         });
-      }).then(receipt => {
-        if (isRuntimeGenerationCurrent(generation)) {
-          Blockbench.showMessageBox({
-            title: "LazyDesigner Render — Draft Created",
-            icon: "check",
-            message: "Cycles PNG: " + receipt.output_path +
-              "\nSHA-256: " + receipt.output_png_sha256 +
-              "\nSource unchanged and rechecked. Visual quality has not yet been reviewed.",
-            buttons: ["Close"],
-          });
-        }
-      }).catch(showError).finally(() => { running = false; });
+      }).then(status => {
+        lastJobId = status.job_id;
+        Blockbench.showMessageBox({
+          title: "LazyDesigner Render Started",
+          icon: "info",
+          message: "Blender Cycles job: " + status.job_id +
+            "\nStatus: " + status.state +
+            "\nUse Render Status to check completion. A started job is not a completed PNG.",
+          buttons: ["Close"],
+        });
+      }).catch(showError).finally(() => { submitting = false; });
     },
   });
   dialog.show();
+}
+
+/** Explicit review action, no poll timer and no native project mutation. */
+export function reviewPublicationRenderStatus(): void {
+  const id = lastJobId;
+  if (!id) {
+    Blockbench.showQuickMessage("No publication render job started in this plugin session.", 3000);
+    return;
+  }
+  void withCurrentRuntime(() => getPublicationRenderJobStatus(id))
+    .then(status => {
+      Blockbench.showMessageBox({
+        title: "LazyDesigner Render Status",
+        icon: status.state === "RENDERED_DRAFT" ? "check" : "info",
+        message: "Job: " + status.job_id + "\nState: " + status.state +
+          (status.receipt
+            ? "\nPNG: " + status.receipt.output_path +
+              "\nSHA-256: " + status.receipt.output_png_sha256
+            : "") +
+          (status.error_code ? "\nDetail: " + status.error_code : "") +
+          "\nThis is not an artistic or QA approval.",
+        buttons: ["Close"],
+      });
+    }).catch(showError);
+}
+
+/** Cancelling is an explicit user action; completion requires observed process exit. */
+export function cancelPublicationRender(): void {
+  const id = lastJobId;
+  if (!id) return;
+  void withCurrentRuntime(() => cancelPublicationRenderJob(id))
+    .then(status => {
+      Blockbench.showQuickMessage(
+        "Render job " + status.job_id + ": " + status.state + ". Check status for final exit.",
+        4500,
+      );
+    }).catch(showError);
 }
 
 export function publicationRenderDialogTeardown(): void {
   epoch += 1;
   dialog?.hide();
   dialog = null;
+  // This closes UI only. The Runtime owns the active process/job and its exit.
 }
