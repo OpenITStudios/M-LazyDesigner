@@ -1,19 +1,14 @@
 import { randomBytes } from "node:crypto";
-import { publicationRenderParameters } from "@/lib/publication/contracts";
+import { publicationRenderParameters, type PublicationRenderRequest } from "@/lib/publication/contracts";
 import {
   renderPublication,
   type PublicationRenderReceipt,
 } from "./execute";
 
 /**
- * Process-local, one-job publication adapter for the fixed four-tool Gateway.
- * A Cycles render may outlive the Gateway's ~120s capability call timeout;
- * START must therefore return after scheduling, not after rendering.
- *
- * This is not a generalized workflow state machine or durable render queue.
- * It holds at most ONE current job in the installed plugin process. Plugin
- * reload/restart can invalidate its handle; uncertain subprocess exit blocks
- * further jobs until an explicit native recovery/restart.
+ * Process-local, one-job publication controller for the fixed four-tool Gateway.
+ * A Cycles render may outlive the Gateway's 120s capability timeout; start
+ * returns a job ID without waiting for Blender. No persistent queue/cloud jobs.
  */
 export type PublicationRenderJobState =
   | "RUNNING"
@@ -41,7 +36,9 @@ export type PublicationRenderJobStatus = {
   output_is_visual_qa: false;
 };
 
-let current: RenderJobRecord | null = null;
+type PublicationRunner = (
+  request: PublicationRenderRequest, signal: AbortSignal,
+) => Promise<PublicationRenderReceipt>;
 
 function projectJob(job: RenderJobRecord): PublicationRenderJobStatus {
   return {
@@ -54,58 +51,83 @@ function projectJob(job: RenderJobRecord): PublicationRenderJobStatus {
   };
 }
 
-function requireJob(jobId: string): RenderJobRecord {
-  if (!/^render_[a-f0-9]{24}$/.test(jobId) || !current ||
-      current.job_id !== jobId) {
-    throw new Error("PUBLICATION_RENDER_JOB_NOT_FOUND_OR_EXPIRED");
+/**
+ * One production instance. Injectable runner exists only to test its actual
+ * async cancellation/status semantics with no Blender or editor mutation.
+ */
+export class PublicationRenderJobs {
+  private current: RenderJobRecord | null = null;
+
+  constructor(private readonly run: PublicationRunner = renderPublication) {}
+
+  private requireJob(jobId: string): RenderJobRecord {
+    if (!/^render_[a-f0-9]{24}$/.test(jobId) || !this.current ||
+        this.current.job_id !== jobId) {
+      throw new Error("PUBLICATION_RENDER_JOB_NOT_FOUND_OR_EXPIRED");
+    }
+    return this.current;
   }
-  return current;
+
+  start(input: unknown): PublicationRenderJobStatus {
+    const request = publicationRenderParameters.parse(input);
+    if (this.current && (
+      this.current.state === "RUNNING" ||
+      this.current.state === "CANCELLING" ||
+      this.current.state === "EXIT_UNCONFIRMED"
+    )) {
+      throw new Error(
+        "PUBLICATION_RENDER_JOB_BUSY: a render is running, stopping, or process exit is unconfirmed.",
+      );
+    }
+    const job: RenderJobRecord = {
+      job_id: "render_" + randomBytes(12).toString("hex"),
+      state: "RUNNING",
+      started_at: new Date().toISOString(),
+      controller: new AbortController(),
+      receipt: null,
+      error_code: null,
+    };
+    this.current = job;
+    // No long await inside the Gateway capability call. Asynchronous work
+    // is tied to this installed plugin process, NOT to a background ChatGPT task.
+    void Promise.resolve().then(() => this.run(request, job.controller.signal))
+      .then(receipt => {
+        job.state = "RENDERED_DRAFT";
+        job.receipt = receipt;
+      }).catch(error => {
+        const message = error instanceof Error ? error.message : String(error);
+        job.error_code = message.slice(0, 800);
+        job.state = message.startsWith("PUBLICATION_BLENDER_EXIT_UNCONFIRMED")
+          ? "EXIT_UNCONFIRMED"
+          : job.controller.signal.aborted
+            ? "CANCELLED"
+            : "FAILED";
+      });
+    return projectJob(job);
+  }
+
+  status(jobId: string): PublicationRenderJobStatus {
+    return projectJob(this.requireJob(jobId));
+  }
+
+  cancel(jobId: string): PublicationRenderJobStatus {
+    const job = this.requireJob(jobId);
+    if (job.state === "RUNNING") {
+      job.state = "CANCELLING";
+      job.controller.abort();
+    }
+    return projectJob(job);
+  }
 }
+
+const productionJobs = new PublicationRenderJobs();
 
 export function startPublicationRender(input: unknown): PublicationRenderJobStatus {
-  const request = publicationRenderParameters.parse(input);
-  if (current && (
-    current.state === "RUNNING" ||
-    current.state === "CANCELLING" ||
-    current.state === "EXIT_UNCONFIRMED"
-  )) {
-    throw new Error(
-      "PUBLICATION_RENDER_JOB_BUSY: a render is still running, stopping, or has unconfirmed process exit.",
-    );
-  }
-  const job: RenderJobRecord = {
-    job_id: "render_" + randomBytes(12).toString("hex"),
-    state: "RUNNING",
-    started_at: new Date().toISOString(),
-    controller: new AbortController(),
-    receipt: null,
-    error_code: null,
-  };
-  current = job;
-  void renderPublication(request, job.controller.signal).then(receipt => {
-    job.state = "RENDERED_DRAFT";
-    job.receipt = receipt;
-  }).catch(error => {
-    const message = error instanceof Error ? error.message : String(error);
-    job.error_code = message.slice(0, 800);
-    job.state = message.startsWith("PUBLICATION_BLENDER_EXIT_UNCONFIRMED")
-      ? "EXIT_UNCONFIRMED"
-      : job.controller.signal.aborted
-        ? "CANCELLED"
-        : "FAILED";
-  });
-  return projectJob(job);
+  return productionJobs.start(input);
 }
-
 export function getPublicationRenderJobStatus(jobId: string): PublicationRenderJobStatus {
-  return projectJob(requireJob(jobId));
+  return productionJobs.status(jobId);
 }
-
 export function cancelPublicationRenderJob(jobId: string): PublicationRenderJobStatus {
-  const job = requireJob(jobId);
-  if (job.state === "RUNNING") {
-    job.state = "CANCELLING";
-    job.controller.abort();
-  }
-  return projectJob(job);
+  return productionJobs.cancel(jobId);
 }
