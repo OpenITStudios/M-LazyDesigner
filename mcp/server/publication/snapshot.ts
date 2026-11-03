@@ -359,6 +359,7 @@ function nativeState(): NativeState {
     return [
       uuid, pixels.width, pixels.height, texturePixelsSha(pixels),
       texture.frameCount ?? 1, texture.currentFrame,
+      texture.render_mode ?? "default",
     ];
   });
   const signature = sha256(JSON.stringify([
@@ -432,6 +433,8 @@ function copyPixelTexture(
   tex.name = name;
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.generateMipmaps = false;
   tex.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
   tex.needsUpdate = true;
