@@ -1,0 +1,118 @@
+import { describe, expect, test } from "bun:test";
+import { publicationDiagnosticsSchema } from "@/lib/publication/diagnostics";
+
+const worker = (name: string) =>
+  Bun.file(new URL("../server/publication/worker/" + name, import.meta.url)).text();
+
+const TEST_MODULES = [
+  "core_assets.py", "camera_director.py", "lighting_director.py",
+  "compositor_director.py", "quality_report.py",
+] as const;
+
+describe("Modular Blender Core source owners", () => {
+  test("packages all trusted modules, with no dynamic user Python execution", async () => {
+    const entry = await worker("render.py");
+    const executor = await Bun.file(new URL("../server/publication/execute.ts", import.meta.url)).text();
+    for (const name of TEST_MODULES) {
+      expect(executor).toContain('"' + name + '"');
+    }
+    for (const line of [
+      "from core_assets import", "from camera_director import",
+      "from lighting_director import", "from compositor_director import",
+      "from quality_report import",
+    ]) expect(entry).toContain(line);
+    expect(entry).toContain("sys.path.insert(0, str(Path(__file__).resolve().parent))");
+    expect(entry).not.toContain("exec(compile(");
+    expect(executor).toContain("BLENDER_CORE_MODULES");
+    expect(executor).toContain("publicationDiagnosticsSchema.parse");
+    expect(executor).toContain("inspectPublicationPng(png");
+    expect(executor).toContain("verifyPublicationSourceCurrent(");
+  });
+
+  test("camera and studio light rig derive from geometry, never subject labels", async () => {
+    const camera = await worker("camera_director.py");
+    const lights = await worker("lighting_director.py");
+    expect(camera).toContain("MAX_AUTO_CANDIDATES = 15");
+    expect(camera).toContain("MAX_SCORING_MESHES = 128");
+    expect(camera).toContain("full = _projection(scene, camera, _world_points(meshes))");
+    expect(camera).toContain("PUBLICATION_CAMERA_SUBJECT_CLIPPED");
+    for (const part of ["LD_Key", "LD_Fill", "LD_Rim", "is_shadow_catcher"]) {
+      expect(lights).toContain(part);
+    }
+  });
+
+  test("actual image statistics cannot be mistaken for artistic approval", async () => {
+    const report = await worker("quality_report.py");
+    expect(report).toContain("image.pixels.foreach_get(rgba)");
+    expect(report).toContain('"artistic_quality": "NOT_EVALUATED"');
+    expect(report).not.toContain('"artistic_quality": "PASS"');
+  });
+});
+
+const valid = {
+  schema_version: 1, status: "RENDERED_DIAGNOSTICS_NOT_VISUAL_APPROVAL",
+  asset: {
+    mesh_count: 1, polygon_count: 12, vertex_count: 24, material_count: 1,
+    world_min: [0, 0, 0], world_max: [1, 1, 1],
+    bounding_radius: 0.866, source_fidelity_visual: "NOT_EVALUATED",
+  },
+  camera: {
+    mode: "auto", requested_yaw_degrees: 38, requested_elevation_degrees: 18,
+    resolved_yaw_degrees: 38, resolved_elevation_degrees: 18,
+    projection: "perspective", candidate_count: 15,
+    projected_bounds: [0.1, 0.1, 0.9, 0.9],
+    projected_area: 0.64, frame_safe: true,
+    quality_is_artistic_score: false,
+  },
+  lighting: {
+    world: { background_color: [0.05, 0.07, 0.12, 1], world_strength: 0.7 },
+    ground: { mode: "dark", shadow_catcher: false, position_z: -0.002 },
+    lights: [
+      { name: "LD_Key", power: 180, size: 2, position: [1, 2, 3] },
+      { name: "LD_Fill", power: 70, size: 2.8, position: [2, 1, 3] },
+      { name: "LD_Rim", power: 240, size: 1.6, position: [1, 3, 2] },
+    ],
+    hdr_environment: "NONE_BUNDLED",
+    source_geometry_edited: false,
+  },
+  compositor: {
+    node_group: "LD_Publication_Compositor",
+    highlight_glow_enabled: true, glow_strength: 0.08,
+    glow_threshold: 2, pixel_art_filtering: "CLOSEST_IN_MATERIALS",
+    automatic_artistic_approval: false,
+  },
+  render: {
+    engine: "CYCLES", view_transform: "AgX",
+    sampling: { samples: 128, adaptive_threshold: 0.02, denoising: true },
+    device: { requested: "auto", actual: "CPU", backend: null },
+    render_size: [2048, 2048],
+  },
+  image: {
+    image_dimensions: [2048, 2048],
+    sampled_pixels: 9216, visible_samples: 9216,
+    mean_visible_luminance: 0.4, high_luminance_fraction: 0.01,
+    near_black_visible_fraction: 0.14, nonopaque_fraction: 0,
+    analysis_type: "MEASURED_DOWNSAMPLED_CYCLES_PNG", artistic_quality_score: null,
+  },
+  warnings: [], artistic_quality: "NOT_EVALUATED", source_model_edited: false,
+};
+
+describe("Measured Cycles report strict validation", () => {
+  test("accepts factual scene, camera and output observations", () => {
+    expect(publicationDiagnosticsSchema.parse(valid)).toMatchObject({
+      artistic_quality: "NOT_EVALUATED",
+    });
+  });
+  test("rejects fake PASS, invalid projected frame and pixel mismatches", () => {
+    for (const broken of [
+      { ...valid, artistic_quality: "PASS" },
+      { ...valid, camera: { ...valid.camera, frame_safe: false } },
+      { ...valid, camera: { ...valid.camera, candidate_count: 100 } },
+      { ...valid, image: { ...valid.image, high_luminance_fraction: NaN } },
+      { ...valid, image: { ...valid.image, image_dimensions: [512, 512] } },
+      { ...valid, source_model_edited: true },
+    ]) {
+      expect(publicationDiagnosticsSchema.safeParse(broken).success).toBe(false);
+    }
+  });
+});
