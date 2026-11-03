@@ -25,6 +25,16 @@ const receipt: PublicationRenderReceipt = {
   blender_target: "5.2.x",
   engine: "CYCLES",
   quality: "preview",
+  render_settings: {
+    background: "dark",
+    camera: { yaw_degrees: 38, elevation_degrees: 18, projection: "perspective" },
+    look: {
+      key: 1, fill: 1, rim: 1, softness: 1, environment: 1, exposure_ev: 0,
+      glow_strength: 0.08, glow_threshold: 2, glow_size: 0.45,
+    },
+    samples: 32,
+    noise_threshold: 0.08,
+  },
   output_path: "/tmp/finished.png",
   output_png_sha256: "d".repeat(64),
   output_png_bytes: 4096,
@@ -62,6 +72,10 @@ describe("Nonblocking publication jobs through one serialized native preparation
     expect(jobs.status(started.job_id)).toMatchObject({
       state: "RENDERED_DRAFT", receipt: {
         output_png_sha256: receipt.output_png_sha256,
+        render_settings: {
+          samples: 32,
+          look: { glow_strength: 0.08 },
+        },
         visual_quality: "NOT_EVALUATED",
       },
     });
