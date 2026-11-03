@@ -36,6 +36,14 @@ Bedrock per-face `material_name` is **not** a PBR map and **not** the Minecraft 
 
 Source-level material assertions are implemented. Imported Blender shader/texel parity is **NOT verified**; a successful PNG is never proof of a correct render-profile material.
 
+## Camera/lighting authority and observation boundaries
+
+**[ADR-R03 Camera & Lighting Director](../../../../experiments/publication-render/CAMERA_LIGHTING_SPEC.md)** defines geometry-only camera search (15 bounded angle candidates, up to 3 full-asset finalists, six fit adjustments), camera-relative area-light energy/size/color, true HDRI-world evidence and output-region luminance measurement.
+
+The camera uses the official Blender projection after a dependency graph update, not a duplicate viewport renderer or arbitrary asset-category labels. The lighting is a deterministic three-area-light rig, not a new scene generator. A subject **frame rectangle** extracted from the actual Cycles PNG can still contain background; its brightness statistics are **not** a segmented-object exposure measurement or aesthetic score.
+
+No new Blender MCP, model-editing operation, image generator, or extra Cycles render is introduced. The editor source, UV/texel/PBR material and runtime QA remain distinct and untouched.
+
 ## Canonical source owners
 
 | Source | Owner |
