@@ -6,6 +6,7 @@ import {
   prepareOffscreenPreview,
   resolveCaptureViewSelection,
   captureCameraSpecMetadata,
+  recordCaptureImageDelivery,
   selectCaptureSizeForEvidence,
   selectModelViewsForEvidence,
 } from "@/server/tools/inspection/camera";
@@ -14,6 +15,47 @@ const baseInput = {
   views: ["front"],
   front_direction: "+z",
 } as const;
+
+describe("lossless capture image evidence transport", () => {
+  test("reuses only exact PNG bytes within one response, retaining each view identity", () => {
+    const ledger = new Map();
+    const first = recordCaptureImageDelivery(ledger, "MODEL", "front", "AQID");
+    const same = recordCaptureImageDelivery(ledger, "MODEL", "back", "AQID");
+    const different = recordCaptureImageDelivery(ledger, "MODEL", "left", "AQIE");
+    expect(first).toMatchObject({ send_image: true, reused_from_view: null });
+    expect(same).toMatchObject({
+      image_sha256: first.image_sha256,
+      send_image: false,
+      reused_from_view: "front",
+    });
+    expect(different).toMatchObject({ send_image: true, reused_from_view: null });
+    expect(different.image_sha256).not.toBe(first.image_sha256);
+  });
+
+  test("does not alias silhouette data to a shaded image or reuse another capture session", () => {
+    const ledger = new Map();
+    const model = recordCaptureImageDelivery(ledger, "MODEL", "front", "AQID");
+    const silhouette = recordCaptureImageDelivery(ledger, "SILHOUETTE", "front", "AQID");
+    const repeatedMask = recordCaptureImageDelivery(ledger, "SILHOUETTE", "right", "AQID");
+    expect(model.send_image).toBe(true);
+    expect(silhouette.send_image).toBe(true);
+    expect(repeatedMask).toMatchObject({
+      send_image: false, reused_from_view: "front",
+    });
+    expect(recordCaptureImageDelivery(new Map(), "MODEL", "back", "AQID").send_image).toBe(true);
+  });
+
+  test("runtime preserves per-view provenance, complete captures and bounded image delivery", async () => {
+    const source = await Bun.file("server/tools/inspection/camera.ts").text();
+    expect(source).toContain('image_sha256: modelImageDelivery.image_sha256');
+    expect(source).toContain('reused_from_view: modelImageDelivery.reused_from_view');
+    expect(source).toContain('all_requested_views_captured: true');
+    expect(source).toContain('cross_revision_reuse: false');
+    expect(source).toContain('content.push(image)');
+    expect(source).toContain('content.push(silhouetteImage)');
+    expect(source).toContain('reference_comparison: buildModelViewReferenceComparison(');
+  });
+});
 
 describe("capture_model_views explicit framing contract", () => {
   test("requires either explicit views or evidence targets", () => {

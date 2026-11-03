@@ -170,6 +170,37 @@ Returns exact authored Cube/Group state for a diagnosed local target. Reuse fres
 These are source-implemented capabilities. Their live integration/image delivery
 still remains `LOCAL PROOF REQUIRED` until tested locally.
 
+## Lossless same-response image evidence
+
+The canonical `capture_model_views` tool still renders **every selected view**
+(including required risk expansion) and performs any requested Cube silhouette
+measurement. It now computes a SHA-256 identifier for each actual shaded PNG
+and includes that identifier plus delivery provenance in every per-view receipt.
+
+Within **one** tool response, a later image with **exactly identical PNG bytes**
+and the same role (shaded model vs. solid Cube silhouette mask) can point to the
+image already delivered earlier in that response. Each view retains its own
+camera specification and identity. Merely similar images, different roles,
+different invocations, different project revisions, and unproven image matches
+are never deduplicated. The returned `image_transport` counts actual delivered
+and exact-reused image items; `total_png_bytes` continues to describe all
+captured model views, not a measured token/API saving.
+
+This is **transport compaction**, not a screenshot cache or permission to skip
+a required view. A byte hash is not evidence of source fidelity, current native
+revision attestation, actual visual inspection, user approval, or Minecraft
+runtime behavior. Model and approved reference pixels must still be visible to
+the reviewing model before an applicable visual PASS. Native 3D/camera facts can
+narrow which view is useful, but cannot replace perceptual comparison.
+
+The next optimization should benchmark exact delivered image counts, bytes,
+native render time and cost-to-accepted-result against identical input assets;
+do not claim a percentage reduction without a measured live run. Deterministic
+camera/capture compatibility is a precondition for visual diffs, as documented
+by [Playwright visual comparisons](https://playwright.dev/docs/test-snapshots).
+An image-capable Codex model is not itself an attestation of the Blockbench
+viewport or reference fidelity.
+
 ## Reference ↔ Model View Pairing
 
 For actual image-based review through the Gateway: obtain the approved

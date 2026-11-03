@@ -38,6 +38,37 @@ const PERSPECTIVE_FOV = 45;
 
 const modelViewEnum = z.enum(MODEL_VIEWS);
 const visualEvidenceTargetEnum = z.enum(VISUAL_EVIDENCE_TARGETS);
+
+/**
+ * Request-local, lossless PNG transport deduplication. Every native view is
+ * still captured and accounted for; only byte-identical image items with the
+ * same diagnostic role may share one content.image in the SAME response.
+ * Never carry this ledger across calls, projects, revisions, or captures.
+ * A hash proves byte identity, not visual quality or camera equivalence.
+ */
+export type CaptureImageDeliveryLedger = Map<string, {
+  view: ModelView;
+  base64: string;
+}>;
+
+export function recordCaptureImageDelivery(
+  ledger: CaptureImageDeliveryLedger,
+  role: "MODEL" | "SILHOUETTE",
+  view: ModelView,
+  base64: string
+): { image_sha256: string; send_image: boolean; reused_from_view: ModelView | null } {
+  const image_sha256 = createHash("sha256")
+    .update(Buffer.from(base64, "base64"))
+    .digest("hex");
+  const key = role + ":" + image_sha256;
+  const previous = ledger.get(key);
+  // Do not alias hash collisions, different diagnostic roles or merely similar pixels.
+  if (previous?.base64 === base64) {
+    return { image_sha256, send_image: false, reused_from_view: previous.view };
+  }
+  if (!previous) ledger.set(key, { view, base64 });
+  return { image_sha256, send_image: true, reused_from_view: null };
+}
 type FrontDirection = "+z" | "-z";
 type FramingInput =
   | { mode: "model" }
@@ -944,9 +975,15 @@ export function registerCameraTools() {
         | { type: "image"; data: string; mimeType: string }
       > = [];
       const imageDigests: Array<{view: ModelView; sha256: string}> = [];
+      const imageLedger: CaptureImageDeliveryLedger = new Map();
+      let deliveredImageCount = 0;
+      let reusedExactImageCount = 0;
       const captures: Array<{
         view: ModelView;
         projection: "orthographic" | "perspective";
+        image_sha256: string;
+        image_delivery: "content.image" | "same_response_exact_png";
+        reused_from_view: ModelView | null;
         width: number;
         height: number;
         png_bytes: number;
@@ -980,8 +1017,21 @@ export function registerCameraTools() {
         const image = imageContent(captureOffscreenPng(capturePreview, highlight_missing_textures), "image/png")
           .content[0];
 
-        content.push({ type: "text", text: `VIEW ${view}` });
-        content.push(image);
+        const modelImageDelivery = recordCaptureImageDelivery(
+          imageLedger, "MODEL", view, image.data
+        );
+        content.push({
+          type: "text",
+          text: modelImageDelivery.reused_from_view
+            ? `VIEW ${view}: PNG is byte-identical to MODEL VIEW ${modelImageDelivery.reused_from_view} in this response (SHA-256 ${modelImageDelivery.image_sha256}). Its own camera/view identity remains distinct; no quality verdict is implied.`
+            : `VIEW ${view}`,
+        });
+        if (modelImageDelivery.send_image) {
+          content.push(image);
+          deliveredImageCount++;
+        } else {
+          reusedExactImageCount++;
+        }
         // Opt-in only: a second transparent capture is useful for silhouette
         // review, but must not double image/context cost for ordinary capture.
         let silhouetteEvidence: (typeof captures)[number]["silhouette_evidence"];
@@ -1013,8 +1063,22 @@ export function registerCameraTools() {
                 foreground_pixels: foreground,
                 native_cube_count: native.rendered_cube_count,
               };
-              content.push({ type: "text", text: `SILHOUETTE VIEW ${view}: visible solid Cube geometry only; not source-matched or visually approved.` });
-              content.push(silhouetteImage);
+              const maskDelivery = recordCaptureImageDelivery(
+                imageLedger, "SILHOUETTE", view, silhouetteImage.data
+              );
+              content.push({
+                type: "text",
+                text: `SILHOUETTE VIEW ${view}: visible solid Cube geometry only; not source-matched or visually approved.` +
+                  (maskDelivery.reused_from_view
+                    ? ` Exact PNG already included for SILHOUETTE VIEW ${maskDelivery.reused_from_view} (SHA-256 ${maskDelivery.image_sha256}).`
+                    : ""),
+              });
+              if (maskDelivery.send_image) {
+                content.push(silhouetteImage);
+                deliveredImageCount++;
+              } else {
+                reusedExactImageCount++;
+              }
             } else {
               silhouetteEvidence = {
                 ...base, state: "UNVERIFIED", reason: alpha.reason,
@@ -1036,15 +1100,15 @@ export function registerCameraTools() {
           }
         }
         if (reference_correspondence) {
-          imageDigests.push({
-            view,
-            sha256: createHash("sha256")
-              .update(Buffer.from(image.data, "base64")).digest("hex"),
-          });
+          imageDigests.push({ view, sha256: modelImageDelivery.image_sha256 });
         }
         captures.push({
           view,
           projection: spec.projection,
+          image_sha256: modelImageDelivery.image_sha256,
+          image_delivery: modelImageDelivery.send_image
+            ? "content.image" : "same_response_exact_png",
+          reused_from_view: modelImageDelivery.reused_from_view,
           width: captureSize,
           height: captureSize,
           png_bytes: Math.floor(image.data.length * 3 / 4) - (image.data.endsWith("==") ? 2 : image.data.endsWith("=") ? 1 : 0),
@@ -1136,6 +1200,14 @@ export function registerCameraTools() {
         },
         count: captures.length,
         total_png_bytes: captures.reduce((sum, capture) => sum + capture.png_bytes, 0),
+        image_transport: {
+          policy: "LOSSLESS_SAME_RESPONSE_EXACT_PNG",
+          delivered_image_count: deliveredImageCount,
+          reused_exact_image_count: reusedExactImageCount,
+          all_requested_views_captured: true,
+          cross_revision_reuse: false,
+          visual_verdict: "NOT_EVALUATED",
+        },
         front_direction,
         framing_mode: framingInput.mode,
         framing_bounds: { min: [...framingBounds.min], max: [...framingBounds.max] },
