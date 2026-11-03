@@ -17,7 +17,7 @@ import { isAbsoluteFilesystemPath } from "../../lib/core/path";
 import { blenderRenderArgs, makePublicationJob, publicationRenderParameters } from "../../lib/publication/contracts";
 
 const ONE_PIXEL_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=",
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGO4U2HzHwAGVAKQ461wkAAAAABJRU5ErkJggg==",
   "base64",
 );
 
