@@ -35,6 +35,18 @@ describe("Publication render contract", () => {
       key: 1, fill: 1, rim: 1, softness: 1,
       environment: 1, exposure_ev: 0,
     });
+    const partial = publicationRenderParameters.parse({
+      ...valid,
+      camera: { yaw_degrees: -24 },
+      look: { key: 1.4, exposure_ev: -0.5 },
+    });
+    expect(partial.camera).toEqual({
+      yaw_degrees: -24, elevation_degrees: 18, projection: "perspective",
+    });
+    expect(partial.look).toEqual({
+      key: 1.4, fill: 1, rim: 1, softness: 1,
+      environment: 1, exposure_ev: -0.5,
+    });
     for (const input of [
       { ...valid, blender_executable: "blender" },
       { ...valid, blender_executable: "C:\\Windows\\System32\\cmd.exe" },
