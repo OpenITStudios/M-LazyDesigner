@@ -16,6 +16,11 @@ type CleanupRequest = {
   fields: CleanupField[];
   dry_run: boolean;
 };
+type CleanupFidelity = {
+  mapped_texture_stretch_risk_count: number;
+  incomplete_face_inventory_count: number;
+  box_uv_template_review_count: number;
+};
 type CleanupPlan = {
   project: object;
   generation: number;
@@ -23,7 +28,7 @@ type CleanupPlan = {
   source: string;
   updates: Record<string, unknown>[];
   updatesSignature: string;
-  fidelity: Record<string, unknown>;
+  fidelity: CleanupFidelity;
 };
 let inputDialog: Dialog | null = null;
 let reviewDialog: Dialog | null = null;
@@ -54,23 +59,88 @@ function assertCurrentTarget(project: object, ids: readonly string[]): void {
   }
 }
 
-/** Snapshot fields that affect a Cube simplification plan or its UV ownership. */
-function captureTargetSource(ids: readonly string[]): string {
-  return JSON.stringify(ids.map((id) => {
-    const matches = Cube.all.filter((cube) => cube.uuid === id);
-    if (matches.length !== 1) throw new Error("Cube identity changed. Review the cleanup again.");
-    const cube = matches[0];
-    const faces = Object.entries(cube.faces ?? {}).map(([name, face]) => {
-      const entry = face as CubeFace;
-      return [name, entry?.uv ? [...entry.uv] : null,
-        entry?.texture ?? null, entry?.rotation ?? null, entry?.enabled ?? null];
+/** Bind review to parent transforms as well as Cube/UV state; a stale proposal must not apply. */
+function captureParentChain(cube: Cube) {
+  const chain: Array<{
+    uuid: string;
+    origin: number[];
+    rotation: number[];
+    visibility: boolean;
+  }> = [];
+  let parent: unknown = cube.parent;
+  const seen = new Set<string>();
+  while (typeof Group !== "undefined" && parent instanceof Group) {
+    if (seen.has(parent.uuid)) throw new Error("Cyclic Group ancestry; cleanup is not safe.");
+    seen.add(parent.uuid);
+    chain.push({
+      uuid: parent.uuid,
+      origin: [...parent.origin],
+      rotation: [...parent.rotation],
+      visibility: parent.visibility,
     });
-    return {
-      id, from: [...cube.from], to: [...cube.to], origin: [...cube.origin],
-      rotation: [...cube.rotation], inflate: cube.inflate ?? 0, box_uv: cube.box_uv,
-      faces,
-    };
-  }));
+    parent = parent.parent;
+  }
+  return chain;
+}
+
+/** Exact bounded review inputs, not a saved model/visual-quality fingerprint. */
+export function captureCubeCleanupSource(ids: readonly string[]): string {
+  requireBedrockEditorProject();
+  return JSON.stringify({
+    project: {
+      uuid: Project.uuid,
+      format: Project.format?.id,
+      box_uv: Project.box_uv,
+      texture_width: Project.texture_width,
+      texture_height: Project.texture_height,
+    },
+    cubes: ids.map((id) => {
+      const matches = Cube.all.filter((cube) => cube.uuid === id);
+      if (matches.length !== 1) throw new Error("Cube identity changed. Review the cleanup again.");
+      const cube = matches[0];
+      const faces = Object.entries(cube.faces ?? {}).map(([name, face]) => {
+        const entry = face as CubeFace;
+        return [name, entry?.uv ? [...entry.uv] : null,
+          entry?.texture ?? null, entry?.rotation ?? null, entry?.enabled ?? null,
+          entry?.material_name ?? null];
+      });
+      return {
+        id, parent_chain: captureParentChain(cube),
+        from: [...cube.from], to: [...cube.to], origin: [...cube.origin],
+        rotation: [...cube.rotation], inflate: cube.inflate ?? 0, box_uv: cube.box_uv,
+        mirror_uv: cube.mirror_uv, uv_offset: [...cube.uv_offset],
+        autouv: cube.autouv, visibility: cube.visibility, faces,
+      };
+    }),
+  });
+}
+
+function captureTargetSource(ids: readonly string[]): string {
+  return captureCubeCleanupSource(ids);
+}
+
+/** Missing or malformed UV-risk evidence cannot authorize Apply. */
+export function requireCleanupFidelity(receipt: Record<string, unknown>): CleanupFidelity {
+  const raw = receipt.simplification_fidelity;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("Cleanup fidelity evidence is unavailable. No change was authorized.");
+  }
+  const data = raw as Record<string, unknown>;
+  const keys = [
+    "mapped_texture_stretch_risk_count",
+    "incomplete_face_inventory_count",
+    "box_uv_template_review_count",
+  ] as const;
+  for (const key of keys) {
+    if (!Number.isSafeInteger(data[key]) || (data[key] as number) < 0) {
+      throw new Error("Cleanup fidelity evidence is incomplete or invalid: " + key);
+    }
+  }
+  return {
+    mapped_texture_stretch_risk_count: data.mapped_texture_stretch_risk_count as number,
+    incomplete_face_inventory_count: data.incomplete_face_inventory_count as number,
+    box_uv_template_review_count: data.box_uv_template_review_count as number,
+  };
 }
 
 function requireStructuredResult(value: unknown): Record<string, unknown> {
@@ -114,23 +184,39 @@ async function applyReviewedPlan(plan: CleanupPlan, epoch: number): Promise<void
   if (epoch !== dialogEpoch || !isRuntimeGenerationCurrent(plan.generation)) return;
   try {
     const receipt = await withNativeQueue(plan.generation, async () => {
+      if (epoch !== dialogEpoch) throw new Error("Review has been superseded.");
       assertCurrentTarget(plan.project, plan.request.ids);
       if (captureTargetSource(plan.request.ids) !== plan.source) {
-        throw new Error("Cube, pivot, or UV state changed after review. Run Preview again.");
+        throw new Error("Cube, hierarchy, or UV state changed after review. Run Preview again.");
+      }
+      if (typeof Undo !== "undefined" && Undo.current_save) {
+        throw new Error("Finish the current Blockbench edit before applying Cube Cleanup.");
       }
       const current = await callCanonicalCubeTool(plan.request);
       if (!Array.isArray(current.updates) ||
         JSON.stringify(current.updates) !== plan.updatesSignature) {
         throw new Error("The cleanup plan changed after review. Run Preview again.");
       }
-      // The canonical executor rechecks all native UV and texture safety gates.
+      const currentFidelity = requireCleanupFidelity(current);
+      if (JSON.stringify(currentFidelity) !== JSON.stringify(plan.fidelity) ||
+          currentFidelity.mapped_texture_stretch_risk_count > 0 ||
+          currentFidelity.incomplete_face_inventory_count > 0 ||
+          currentFidelity.box_uv_template_review_count > 0) {
+        throw new Error("Cleanup safety review changed or requires an explicit UV decision.");
+      }
+      if (epoch !== dialogEpoch || captureTargetSource(plan.request.ids) !== plan.source) {
+        throw new Error("Review or authored state changed while validating. Run Preview again.");
+      }
+      // The existing native executor rechecks all UV ownership and texture safety gates.
       return callCanonicalCubeTool({ ...plan.request, dry_run: false });
     });
     if (epoch !== dialogEpoch || !isRuntimeGenerationCurrent(plan.generation)) return;
-    if (receipt.execution !== "applied") {
+    if (receipt.execution === "applied") {
+      Blockbench.showQuickMessage("Cube cleanup applied. Use Blockbench Undo to revert.", 4000);
+    } else if (receipt.execution === "unchanged") {
       Blockbench.showQuickMessage("No Cube changes were applied.", 3000);
     } else {
-      Blockbench.showQuickMessage("Cube cleanup applied. Use Blockbench Undo to revert.", 4000);
+      showFailure(new Error("Native result is uncertain. Inspect current Cube state before another edit."));
     }
   } catch (error) {
     if (epoch === dialogEpoch) showFailure(error);
@@ -143,15 +229,17 @@ function showPlan(plan: CleanupPlan, epoch: number): void {
     Blockbench.showQuickMessage("Selected Cubes already match this increment.", 3000);
     return;
   }
-  const riskCount = Number(plan.fidelity.mapped_texture_stretch_risk_count ?? 0);
-  const incomplete = Number(plan.fidelity.incomplete_face_inventory_count ?? 0);
-  const blocked = riskCount > 0 || incomplete > 0;
+  const riskCount = plan.fidelity.mapped_texture_stretch_risk_count;
+  const incomplete = plan.fidelity.incomplete_face_inventory_count;
+  const templateReview = plan.fidelity.box_uv_template_review_count;
+  const blocked = riskCount > 0 || incomplete > 0 || templateReview > 0;
   const details = plan.updates.slice(0, 6).map((update) =>
     `<li><code>${escapeHtml(String(update.id ?? "Cube"))}</code>: ${escapeHtml(
       JSON.stringify({ from: update.from, to: update.to, rotation: update.rotation })
     )}</li>`
   ).join("");
   reviewDialog?.hide();
+  let submitted = false;
   reviewDialog = new Dialog({
     id: "lazydesigner_cleanup_review",
     title: "Review Cube Changes",
@@ -161,7 +249,7 @@ function showPlan(plan: CleanupPlan, epoch: number): void {
       `<ul style="max-height:180px;overflow:auto">${details}</ul>`,
       plan.updates.length > 6 ? "<p>Additional corrections are omitted from this preview.</p>" : "",
       blocked
-        ? "<p><strong>Apply blocked:</strong> native UV ownership or painted-face scaling requires review.</p>"
+        ? "<p><strong>Apply blocked:</strong> UV ownership, painted-face scaling, or Box UV template changes require an explicit UV review.</p>"
         : "<p>Applying will create one native Undo entry. This is not a visual-quality approval.</p>",
     ],
     buttons: blocked ? ["Close"] : ["Apply", "Cancel"],
@@ -169,7 +257,13 @@ function showPlan(plan: CleanupPlan, epoch: number): void {
     confirmIndex: 0,
     cancelIndex: blocked ? 0 : 1,
     onConfirm() {
-      if (!blocked) void applyReviewedPlan(plan, epoch);
+      if (!blocked && !submitted && epoch === dialogEpoch) {
+        submitted = true;
+        void applyReviewedPlan(plan, epoch);
+      }
+    },
+    onCancel() {
+      if (epoch === dialogEpoch) dialogEpoch += 1;
     },
   });
   reviewDialog.show();
@@ -188,14 +282,19 @@ async function preparePlan(
       assertCurrentTarget(project, ids);
       const source = captureTargetSource(ids);
       const receipt = await callCanonicalCubeTool(request);
-      if (!Array.isArray(receipt.updates)) {
-        throw new Error("Native dry-run did not return a Cube correction plan.");
+      if (!Array.isArray(receipt.updates) ||
+          (receipt.execution !== "planned" && receipt.execution !== "unchanged")) {
+        throw new Error("Native dry-run did not return a valid Cube correction plan.");
+      }
+      const fidelity = requireCleanupFidelity(receipt);
+      if (epoch !== dialogEpoch || captureTargetSource(ids) !== source) {
+        throw new Error("Cube or project state changed during review preparation.");
       }
       return {
         project, generation, request, source,
         updates: receipt.updates as Record<string, unknown>[],
         updatesSignature: JSON.stringify(receipt.updates),
-        fidelity: (receipt.simplification_fidelity ?? {}) as Record<string, unknown>,
+        fidelity,
       } satisfies CleanupPlan;
     });
     showPlan(plan, epoch);
@@ -222,8 +321,11 @@ export function openCubeCleanupDialog(): void {
     if (!canOpenCubeCleanup()) {
       throw new Error("Select 1–32 Cubes in the active Geometry Stage.");
     }
-    const epoch = dialogEpoch;
+    // Retire prior preview/apply callbacks before constructing a new dialog.
     inputDialog?.hide();
+    reviewDialog?.hide();
+    reviewDialog = null;
+    const epoch = ++dialogEpoch;
     inputDialog = new Dialog({
       id: "lazydesigner_cleanup_input",
       title: "Safe Cube Cleanup",
@@ -252,6 +354,9 @@ export function openCubeCleanupDialog(): void {
         void preparePlan(project, ids, {
           operation: "simplify", ids, increment, fields, dry_run: true,
         }, epoch);
+      },
+      onCancel() {
+        if (epoch === dialogEpoch) dialogEpoch += 1;
       },
     });
     inputDialog.show();

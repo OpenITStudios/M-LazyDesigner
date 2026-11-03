@@ -29,7 +29,10 @@
     <button v-for="category in ['geometry', 'texture', 'animation']"
       :key="category" :id="'ld-tab-' + category" type="button" role="tab"
       :aria-selected="activeCategory === category" :aria-controls="'ld-authoring-panel'"
+      :tabindex="activeCategory === category ? 0 : -1"
       :class="{ active: activeCategory === category }"
+      @keydown.left.prevent="cycleCategory(-1)"
+      @keydown.right.prevent="cycleCategory(1)"
       @click="selectCategory(category)">{{categoryLabel(category)}}</button>
   </nav>
 

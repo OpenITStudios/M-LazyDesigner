@@ -4,6 +4,10 @@ import {
   previewAuthoringPalette,
   requireBedrockEditorProject,
 } from "@/ui/authoringTools";
+import {
+  captureCubeCleanupSource,
+  requireCleanupFidelity,
+} from "@/ui/geometryCleanupDialog";
 
 type NativeKey = "Project" | "Cube" | "Group" | "Texture" | "TextureGroup" | "AnimationItem" | "AnimationController";
 
@@ -19,13 +23,24 @@ function withNativeFixtures(run: () => void) {
     configurable: true, writable: true, value,
   });
   class NativeGroup {
-    static all = [{ uuid: "root", name: "root", origin: [0, 0, 0], rotation: [0, 0, 0], parent: null }];
+    uuid = "root";
+    name = "root";
+    origin = [0, 0, 0];
+    rotation = [0, 0, 0];
+    visibility = true;
+    parent: unknown = "root";
+    static all = [new NativeGroup()];
     static selected: unknown[] = [];
   }
   class NativeCube {
     static all = [{
       uuid: "body", name: "body", from: [0, 0, 0], to: [2, 2, 2],
       origin: [1, 1, 1], rotation: [0, 0, 0], inflate: 0, box_uv: false,
+      parent: "root" as unknown, uv_offset: [0, 0], mirror_uv: false,
+      autouv: 0, visibility: true,
+      faces: {
+        north: { uv: [0, 0, 2, 2], texture: "atlas", rotation: 0, enabled: true, material_name: "" },
+      },
     }];
     static selected = NativeCube.all;
   }
@@ -92,6 +107,54 @@ describe("LazyDesigner AI-first Blockbench panel", () => {
     expect(() => previewAuthoringPalette("not-a-color")).toThrow();
   });
 
+  test("cleanup review fingerprints include ancestry, native UV and project settings", () => {
+    withNativeFixtures(() => {
+      const globals = globalThis as any;
+      const cube = globals.Cube.all[0];
+      const parent = globals.Group.all[0];
+      const original = captureCubeCleanupSource(["body"]);
+      expect(captureCubeCleanupSource(["body"])).toBe(original);
+
+      cube.parent = parent;
+      const reparented = captureCubeCleanupSource(["body"]);
+      expect(reparented).not.toBe(original);
+      parent.origin[1] = 4;
+      const movedGroup = captureCubeCleanupSource(["body"]);
+      expect(movedGroup).not.toBe(reparented);
+
+      globals.Project.texture_width = 128;
+      const resizedUv = captureCubeCleanupSource(["body"]);
+      expect(resizedUv).not.toBe(movedGroup);
+      cube.faces.north.uv[0] = 1;
+      expect(captureCubeCleanupSource(["body"])).not.toBe(resizedUv);
+
+      expect(() => captureCubeCleanupSource(["missing"])).toThrow("Cube identity changed");
+      globals.Cube.all.push({ ...cube });
+      expect(() => captureCubeCleanupSource(["body"])).toThrow("Cube identity changed");
+    });
+  });
+
+  test("missing/invalid fidelity risk evidence fails closed before any Apply", () => {
+    const safe = {
+      simplification_fidelity: {
+        mapped_texture_stretch_risk_count: 0,
+        incomplete_face_inventory_count: 0,
+        box_uv_template_review_count: 0,
+      },
+    };
+    expect(requireCleanupFidelity(safe)).toEqual(safe.simplification_fidelity);
+    for (const value of [
+      {},
+      { simplification_fidelity: {} },
+      { simplification_fidelity: { ...safe.simplification_fidelity, incomplete_face_inventory_count: -1 } },
+      { simplification_fidelity: { ...safe.simplification_fidelity, mapped_texture_stretch_risk_count: "0" } },
+      { simplification_fidelity: { ...safe.simplification_fidelity, mapped_texture_stretch_risk_count: NaN } },
+      { simplification_fidelity: { ...safe.simplification_fidelity, box_uv_template_review_count: undefined } },
+    ]) {
+      expect(() => requireCleanupFidelity(value)).toThrow();
+    }
+  });
+
   test("UI never changes AI Stage, opens only one Tools entry, and disposes its dialogs", async () => {
     const [ui, panel, cleanup, validation] = await Promise.all([
       Bun.file(new URL("../ui/index.ts", import.meta.url)).text(),
@@ -100,7 +163,18 @@ describe("LazyDesigner AI-first Blockbench panel", () => {
       Bun.file(new URL("../server/tools/validation/qualityIntelligence.ts", import.meta.url)).text(),
     ]);
     expect(ui).toContain('new Action("lazydesigner_tools_panel"');
+    expect(ui).toContain('MenuBar.addAction(toolsMenuAction, "tools")');
     expect(ui).toContain("toolsMenuAction?.delete()");
+    expect(ui).toContain("uiEpoch += 1");
+    expect(ui).toContain("inspectionVersion");
+    expect(ui).toContain('uiEpoch += 1');
+    expect(ui).toContain('"finished_edit"');
+    expect(ui).toContain('"undo"');
+    expect(ui).toContain('"redo"');
+    expect(ui).toContain('cycleCategory(');
+    expect(panel).toContain('@keydown.left.prevent="cycleCategory(-1)"');
+    expect(panel).toContain('@keydown.right.prevent="cycleCategory(1)"');
+    expect(panel).toContain(':tabindex="activeCategory === category ? 0 : -1"');
     expect(ui).toContain("cubeCleanupDialogTeardown()");
     expect(ui).toContain("runRuntimeOperationExclusive(generation");
     expect(ui).not.toContain("setActiveMcpAuthoringStage(");
@@ -114,5 +188,10 @@ describe("LazyDesigner AI-first Blockbench panel", () => {
     expect(cleanup).toContain("dry_run: false");
     expect(cleanup).toContain("Native dry-run did not return");
     expect(cleanup).toContain("Cube cleanup applied. Use Blockbench Undo");
+    expect(cleanup).toContain("const epoch = ++dialogEpoch");
+    expect(cleanup).toContain("submitted = true");
+    expect(cleanup).toContain("onCancel()");
+    expect(cleanup).toContain("captureParentChain");
+    expect(cleanup).toContain("requireCleanupFidelity(current)");
   });
 });

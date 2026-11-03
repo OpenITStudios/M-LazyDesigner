@@ -41,6 +41,7 @@ let runtimeStatusListener: (() => void) | undefined;
 let projectStateListener: (() => void) | undefined;
 let panelCssHandle: { delete(): void } | undefined;
 let toolsMenuAction: Action | undefined;
+let uiEpoch = 0;
 
 type UiSetupInput = {
   tools: Record<string, IMCPTool>;
@@ -69,6 +70,7 @@ type HumanPanelContext = {
   selectionLabel: string;
   canCleanup: boolean;
   paletteBase: string;
+  inspectionVersion: number;
 };
 
 function readHumanProjectState(): HumanProjectState {
@@ -107,7 +109,13 @@ function subscribeProjectState(callback: () => void): () => void {
     "update_project_settings",
     "update_selection",
     "update_keyframe_selection",
+    "update_texture_selection",
+    "select_animation",
     "select_mode",
+    "update_project_resolution",
+    "finished_edit",
+    "undo",
+    "redo",
   ] as const;
 
   for (const event of events) Blockbench.on(event, callback);
@@ -190,6 +198,8 @@ export function uiSetup(input: UiSetupInput) {
           vm.project.hasFolder = next.hasFolder;
           vm.selectionLabel = readHumanSelection();
           vm.canCleanup = canOpenCubeCleanup();
+          vm.inspectionVersion += 1;
+          vm.busy = false;
           vm.review = null;
           vm.error = "";
         };
@@ -214,17 +224,27 @@ export function uiSetup(input: UiSetupInput) {
         busy: false,
         error: "",
         review: null as AuthoringReview | null,
+        inspectionVersion: 0,
       }),
       methods: {
         selectCategory(this: HumanPanelContext, category: AuthoringCategory): void {
           this.activeCategory = category;
           this.canCleanup = canOpenCubeCleanup();
+          this.inspectionVersion += 1;
+          this.busy = false;
           this.review = null;
           this.error = "";
         },
         categoryLabel(category: AuthoringCategory): string {
           return category === "geometry" ? "Geometry" :
             category === "texture" ? "Texture" : "Animation";
+        },
+        cycleCategory(this: HumanPanelContext & { selectCategory(category: AuthoringCategory): void }, step: number): void {
+          const categories: AuthoringCategory[] = ["geometry", "texture", "animation"];
+          const current = categories.indexOf(this.activeCategory);
+          const next = categories[(current + step + categories.length) % categories.length];
+          this.selectCategory(next);
+          document.getElementById("ld-tab-" + next)?.focus();
         },
         async inspectActive(this: HumanPanelContext): Promise<void> {
           if (this.busy) return;
@@ -235,6 +255,8 @@ export function uiSetup(input: UiSetupInput) {
             this.error = "Open a Bedrock project in an active LazyDesigner plugin.";
             return;
           }
+          const requestVersion = ++this.inspectionVersion;
+          const mountedEpoch = uiEpoch;
           this.busy = true;
           this.review = null;
           this.error = "";
@@ -245,14 +267,20 @@ export function uiSetup(input: UiSetupInput) {
               }
               return inspectAuthoringCategory(category);
             });
-            if (isRuntimeGenerationCurrent(generation) &&
+            if (requestVersion === this.inspectionVersion && mountedEpoch === uiEpoch &&
+                isRuntimeGenerationCurrent(generation) &&
                 Project === project && this.activeCategory === category) {
               this.review = result;
             }
           } catch (error) {
-            this.error = error instanceof Error ? error.message : String(error);
+            if (requestVersion === this.inspectionVersion && mountedEpoch === uiEpoch &&
+                Project === project && this.activeCategory === category) {
+              this.error = error instanceof Error ? error.message : String(error);
+            }
           } finally {
-            this.busy = false;
+            if (requestVersion === this.inspectionVersion && mountedEpoch === uiEpoch) {
+              this.busy = false;
+            }
           }
         },
         openCleanup(): void {
@@ -348,7 +376,7 @@ export function uiSetup(input: UiSetupInput) {
         if (current.slot === "float") current.moveToFront();
       },
     });
-    MenuBar.menus.tools.addAction(toolsMenuAction);
+    MenuBar.addAction(toolsMenuAction, "tools");
   } catch (error) {
     toolsMenuAction?.delete();
     toolsMenuAction = undefined;
@@ -359,24 +387,27 @@ export function uiSetup(input: UiSetupInput) {
 }
 
 export function uiTeardown(): void {
-  runtimeStatusListener?.();
+  uiEpoch += 1; // Retire all queued inspector callbacks before any UI resource disposal.
+  const release = (label: string, cleanup: () => void) => {
+    try { cleanup(); }
+    catch (error) { console.warn(`[LazyDesigner] ${label} cleanup failed`, error); }
+  };
+  release("Runtime status listener", () => runtimeStatusListener?.());
   runtimeStatusListener = undefined;
-  projectStateListener?.();
+  release("Project event listeners", () => projectStateListener?.());
   projectStateListener = undefined;
 
-  // These dialogs are no longer part of the normal human-facing panel, but
-  // teardown remains so hot reload can safely close one opened by an older build.
-  overrideDialogTeardown();
-  cubeCleanupDialogTeardown();
-  toolTestDialogTeardown();
-  promptPreviewDialogTeardown();
+  // A broken optional legacy dialog must not prevent current Panel/Action cleanup.
+  release("Prompt override dialog", () => overrideDialogTeardown());
+  release("Cube cleanup dialog", () => cubeCleanupDialogTeardown());
+  release("Tool test dialog", () => toolTestDialogTeardown());
+  release("Prompt preview dialog", () => promptPreviewDialogTeardown());
 
-  try { toolsMenuAction?.delete(); }
-  catch (error) { console.warn("[LazyDesigner] Tools shortcut cleanup failed", error); }
+  release("Tools menu shortcut", () => toolsMenuAction?.delete());
   toolsMenuAction = undefined;
-  statusBarTeardown();
-  panel?.delete();
+  release("Status indicator", statusBarTeardown);
+  release("Authoring panel", () => panel?.delete());
   panel = undefined;
-  panelCssHandle?.delete();
+  release("Panel CSS", () => panelCssHandle?.delete());
   panelCssHandle = undefined;
 }

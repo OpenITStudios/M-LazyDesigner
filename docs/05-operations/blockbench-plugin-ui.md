@@ -29,6 +29,16 @@ The new panel does not expose raw MCP capability JSON, server endpoints, debug s
 - Unload/reload removes dialogs, listeners, status indicator, panel and Tools Action; a pending callback must not re-open UI for a retired generation.
 - The panel may be used while the AI client is disconnected; it must not claim Gateway connected from the Runtime status indicator.
 
+## Source-level QA hardening (2026-11-03)
+
+- Dialogs have a unique review generation: reopening or cancelling retires stale pending preview/apply callbacks; double-Apply is refused.
+- Cleanup review binds the project UUID/format and UV resolution, selected Cube transforms/faces and parent Group transform chain. A second serialized dry-run and native-state comparison occur before Apply.
+- A missing/incomplete fidelity receipt fails closed. Painted-face mapping, incomplete face inventories and Box UV template changes are not auto-applied from the UI.
+- The panel discards queued inspection results after project/selection/category/plugin changes; edit, Undo and Redo events invalidate previous displayed diagnostics.
+- The three tabs use roving arrow-key focus; one Tools menu Action uses the supported MenuBar API. UI teardown releases resources independently so one failed optional cleanup cannot prevent the rest.
+
+These controls are authored and receive focused source regressions. **Bun/typecheck/native UI execution is still NOT EXECUTED**, including whether the installed Blockbench matches the typed API and the actual Undo, save/reopen and visual results.
+
 ## Native acceptance (NOT EXECUTED from GitHub-only context)
 
 Use a disposable Bedrock `.bbmodel` matching installed plugin build + Blockbench version. Required falsifiable checks:
