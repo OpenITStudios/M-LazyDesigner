@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   PUBLICATION_UNITS_PER_MINECRAFT_BLOCK,
   PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT,
@@ -29,9 +30,8 @@ describe("MCP Cube source-to-GLB fidelity invariants", () => {
     const binary = Buffer.alloc(nativeUv.length * 4);
     const exported = [0, 1, 1, 1, 1, 0, 0, 0];
     exported.forEach((value, index) => binary.writeFloatLE(value, index * 4));
-    const crypto = require("node:crypto") as typeof import("node:crypto");
     expect(expectedPublicationGltfUvSha256(nativeUv))
-      .toBe(crypto.createHash("sha256").update(binary).digest("hex"));
+      .toBe(createHash("sha256").update(binary).digest("hex"));
     expect(() => expectedPublicationGltfUvSha256([0, Infinity])).toThrow("UV_FINGERPRINT_INVALID");
   });
 
