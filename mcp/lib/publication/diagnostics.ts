@@ -89,6 +89,14 @@ export const publicationDiagnosticsSchema = z.object({
     analysis_type: z.literal("MEASURED_DOWNSAMPLED_CYCLES_PNG"),
     artistic_quality_score: z.null(),
   }).strict(),
+  preview: z.object({
+    dimensions: z.tuple([
+      z.number().int().min(1).max(384),
+      z.number().int().min(1).max(384),
+    ]),
+    source: z.literal("DOWNSAMPLED_FINAL_CYCLES_PNG"),
+    artistic_approval: z.literal(false),
+  }).strict(),
   warnings: z.array(z.string().min(1).max(256)).max(16),
   artistic_quality: z.literal("NOT_EVALUATED"),
   source_model_edited: z.literal(false),
@@ -103,6 +111,10 @@ export const publicationDiagnosticsSchema = z.object({
   if ((data.lighting.hdr_environment === "USER_PROVIDED") !==
       (data.lighting.hdri_sha256 !== null)) {
     ctx.addIssue({ code: "custom", message: "HDRI light must have a verified source digest." });
+  }
+  if (data.preview.dimensions[0] > data.image.image_dimensions[0] ||
+      data.preview.dimensions[1] > data.image.image_dimensions[1]) {
+    ctx.addIssue({ code: "custom", message: "Preview must never enlarge the Cycles PNG." });
   }
   if (data.camera.mode === "manual" && data.camera.candidate_count !== 1) {
     ctx.addIssue({ code: "custom", message: "Manual camera cannot search additional views." });
@@ -125,6 +137,7 @@ export function compactPublicationDiagnostics(report: PublicationDiagnostics) {
     lights: report.lighting.lights,
     renderer: report.render,
     image: report.image,
+    preview: report.preview,
     warnings: report.warnings,
     artistic_quality: "NOT_EVALUATED" as const,
   };
