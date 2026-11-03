@@ -54,6 +54,17 @@ def require_job():
         fail("GLB file does not exist.")
     if os.path.exists(job["output_path"]):
         fail("Refusing to overwrite existing render output.")
+    look = job.get("look")
+    if not isinstance(look, dict):
+        fail("Missing validated scene lighting contract.")
+    for name, lower, upper in (
+        ("key", 0.2, 2.5), ("fill", 0.0, 2.0),
+        ("rim", 0.0, 2.0), ("softness", 0.5, 2.5),
+        ("environment", 0.0, 2.0), ("exposure_ev", -3.0, 3.0),
+    ):
+        val = look.get(name)
+        if type(val) not in (int, float) or not math.isfinite(val) or not lower <= val <= upper:
+            fail("Invalid scene lighting parameter: " + name)
     camera = job.get("camera")
     if not isinstance(camera, dict) or camera.get("projection") not in ("perspective", "orthographic"):
         fail("Camera contract is invalid.")
@@ -126,7 +137,7 @@ def stage_materials(meshes, job):
             material.use_backface_culling = False
 
 
-def configure_world(scene, background):
+def configure_world(scene, background, look):
     scene.world = bpy.data.worlds.new("LD_Publication_World")
     # Blender 5.0+ creates an empty shader graph for a new world.
     # Deprecated world.use_nodes no longer constructs default nodes.
@@ -137,10 +148,10 @@ def configure_world(scene, background):
     scene.world.node_tree.links.new(bg.outputs["Background"], out.inputs["Surface"])
     if background == "light":
         bg.inputs["Color"].default_value = (0.46, 0.48, 0.53, 1.0)
-        bg.inputs["Strength"].default_value = 0.65
+        bg.inputs["Strength"].default_value = 0.65 * look["environment"]
     else:
         bg.inputs["Color"].default_value = (0.05, 0.07, 0.12, 1.0)
-        bg.inputs["Strength"].default_value = 0.7
+        bg.inputs["Strength"].default_value = 0.7 * look["environment"]
 
 
 def area_light(name, point, target, energy, radius, color):
@@ -185,7 +196,8 @@ def place_camera(job, center, radius):
 
 def create_stage(job, lower, upper, center, radius):
     background = job["background"]
-    configure_world(bpy.context.scene, background)
+    look = job["look"]
+    configure_world(bpy.context.scene, background, look)
     if background != "transparent":
         bpy.ops.mesh.primitive_plane_add(size=2, location=(center.x, center.y, lower.z - 0.002 * radius))
         ground = bpy.context.object
@@ -207,11 +219,14 @@ def create_stage(job, lower, upper, center, radius):
     # Scale lights from actual model dimensions. Energies are benchmark starters.
     r = radius
     area_light("LD_Key", center + Vector((-2.2*r, -2*r, 3.2*r)),
-               center, 240 * r * r, 2.0*r, (1.0, 0.85, 0.72))
+               center, 240 * r * r * look["key"],
+               2.0*r * look["softness"], (1.0, 0.85, 0.72))
     area_light("LD_Fill", center + Vector((2.3*r, -1.2*r, 1.4*r)),
-               center, 90 * r * r, 2.8*r, (0.67, 0.79, 1.0))
+               center, 90 * r * r * look["fill"],
+               2.8*r * look["softness"], (0.67, 0.79, 1.0))
     area_light("LD_Rim", center + Vector((1.8*r, 2.2*r, 2.8*r)),
-               center, 340 * r * r, 1.6*r, (0.87, 0.94, 1.0))
+               center, 340 * r * r * look["rim"],
+               1.6*r * look["softness"], (0.87, 0.94, 1.0))
     place_camera(job, center, r)
 
 
@@ -234,7 +249,7 @@ def configure_render(job):
         scene.view_settings.view_transform = "AgX"
     except TypeError:
         fail("Expected AgX color management is unavailable.")
-    scene.view_settings.exposure = 0
+    scene.view_settings.exposure = job["look"]["exposure_ev"]
     scene.view_settings.gamma = 1
     # Deterministic minimal compositor; no fabricated glow or enhancement.
     # Blender 5.2: Scene.node_tree and CompositorNodeComposite are removed.
