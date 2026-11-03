@@ -47,11 +47,13 @@ function validateNativeCubeIndexGroups(
   }
   let offset = 0;
   for (const group of groups) {
+    const materialIndex = group.materialIndex;
     if (!Number.isSafeInteger(group.start) || group.start !== offset ||
         !Number.isSafeInteger(group.count) || group.count < 3 ||
         group.count % 3 !== 0 ||
-        !Number.isSafeInteger(group.materialIndex) ||
-        group.materialIndex < 0 || group.materialIndex >= faceCount ||
+        typeof materialIndex !== "number" ||
+        !Number.isSafeInteger(materialIndex) ||
+        materialIndex < 0 || materialIndex >= faceCount ||
         group.start + group.count > indices.length) {
       throw new Error("PUBLICATION_SOURCE_FACE_GROUP_INVALID");
     }
