@@ -239,6 +239,9 @@ export function inspectPublicationGlb(
         if (!record(sampler) || sampler.magFilter !== 9728 || sampler.minFilter !== 9728) {
           throw new Error("PUBLICATION_GLB_PBR_NEAREST_SAMPLING_LOST: " + name);
         }
+        if (sampler.wrapS !== 33071 || sampler.wrapT !== 33071) {
+          throw new Error("PUBLICATION_GLB_PBR_CLAMP_TO_EDGE_LOST: " + name);
+        }
       }
     }
   }
