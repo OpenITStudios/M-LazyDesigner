@@ -3,8 +3,26 @@ import { createHash, randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import { inspectPublicationPng } from "@/lib/publication/pngIntegrity";
+import {
+  publicationDiagnosticsSchema,
+  compactPublicationDiagnostics,
+  type PublicationDiagnostics,
+} from "@/lib/publication/diagnostics";
 
 import blenderWorker from "./worker/render.py" with { type: "text" };
+import coreAssetsSource from "./worker/core_assets.py" with { type: "text" };
+import cameraDirectorSource from "./worker/camera_director.py" with { type: "text" };
+import lightingDirectorSource from "./worker/lighting_director.py" with { type: "text" };
+import compositorDirectorSource from "./worker/compositor_director.py" with { type: "text" };
+import qualityReportSource from "./worker/quality_report.py" with { type: "text" };
+
+const BLENDER_CORE_MODULES = [
+  ["core_assets.py", coreAssetsSource],
+  ["camera_director.py", cameraDirectorSource],
+  ["lighting_director.py", lightingDirectorSource],
+  ["compositor_director.py", compositorDirectorSource],
+  ["quality_report.py", qualityReportSource],
+] as const;
 import {
   blenderRenderArgs,
   makePublicationJob,
@@ -36,8 +54,10 @@ export type PublicationRenderReceipt = {
   engine: "CYCLES";
   quality: PublicationRenderRequest["quality"];
   render_settings: Pick<PublicationJob,
-    "background" | "camera" | "look" | "samples" | "noise_threshold"
+    "background" | "camera" | "look" | "samples" | "noise_threshold" |
+    "device" | "view_transform"
   >;
+  diagnostics: ReturnType<typeof compactPublicationDiagnostics>;
   output_path: string;
   output_png_sha256: string;
   output_png_bytes: number;
@@ -202,11 +222,22 @@ export async function renderPreparedPublication(
   const workerPath = join(workdir, "render.py");
   const jobPath = join(workdir, "job.json");
   const tempOutput = join(workdir, "output.png");
-  const workerSha = hash(blenderWorker);
+  const reportPath = join(workdir, "report.json");
+  const moduleFiles = BLENDER_CORE_MODULES.map(([name, source]) => ({
+    path: join(workdir, name), source,
+  }));
+  // Source identity covers the ENTIRE trusted Blender Core, not only entry.py.
+  const workerSha = hash(
+    [["render.py", blenderWorker], ...BLENDER_CORE_MODULES]
+      .map(([name, source]) => name + "\0" + source).join("\0"),
+  );
   let preserveTemporaryJob = false;
   try {
     fs.writeFileSync(glbPath, snapshot.glb, { flag: "wx" });
     fs.writeFileSync(workerPath, blenderWorker, { flag: "wx" });
+    for (const module of moduleFiles) {
+      fs.writeFileSync(module.path, module.source, { flag: "wx" });
+    }
     const job = makePublicationJob(
       { ...request, output_path: tempOutput },
       {
@@ -225,6 +256,23 @@ export async function renderPreparedPublication(
     const raw = fs.readFileSync(tempOutput);
     const png = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
     inspectPublicationPng(png, request.width, request.height);
+    if (!fs.existsSync(reportPath) || fs.statSync(reportPath).size > 64_000) {
+      throw new Error("PUBLICATION_RENDER_DIAGNOSTICS_MISSING_OR_OVERSIZED");
+    }
+    let diagnostics: PublicationDiagnostics;
+    try {
+      diagnostics = publicationDiagnosticsSchema.parse(
+        JSON.parse(fs.readFileSync(reportPath, "utf8") as string),
+      );
+    } catch (error) {
+      throw new Error("PUBLICATION_RENDER_DIAGNOSTICS_INVALID: " + String(error));
+    }
+    if (diagnostics.asset.mesh_count !== snapshot.cube_count ||
+        diagnostics.asset.material_count !== snapshot.material_count ||
+        diagnostics.image.image_dimensions[0] !== request.width ||
+        diagnostics.image.image_dimensions[1] !== request.height) {
+      throw new Error("PUBLICATION_RENDER_DIAGNOSTICS_SOURCE_MISMATCH");
+    }
     assertActive();
     verifyPublicationSourceCurrent(snapshot.project_uuid, snapshot.source_sha256);
     // Exclusive destination create. No silent replacement and no success
@@ -256,7 +304,10 @@ export async function renderPreparedPublication(
         look: job.look,
         samples: job.samples,
         noise_threshold: job.noise_threshold,
+        device: job.device,
+        view_transform: job.view_transform,
       },
+      diagnostics: compactPublicationDiagnostics(diagnostics),
       output_path: request.output_path,
       output_png_sha256: hash(png),
       output_png_bytes: png.length,
@@ -279,7 +330,10 @@ export async function renderPreparedPublication(
       // Blockbench ScopedFS.rmSync is not reliably synchronous. Delete only
       // the four known files created for this job, then its empty directory.
       try {
-        for (const file of [glbPath, workerPath, jobPath, tempOutput]) {
+        for (const file of [
+          glbPath, workerPath, jobPath, tempOutput, reportPath,
+          ...moduleFiles.map(item => item.path),
+        ]) {
           if (fs.existsSync(file)) fs.unlinkSync(file);
         }
         fs.rmdirSync(workdir);
