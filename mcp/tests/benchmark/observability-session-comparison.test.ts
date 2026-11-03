@@ -7,6 +7,7 @@ import type {
   FinalGoldenSessionReport,
 } from "../../scripts/reporting/compare-golden-sessions";
 import type { UsageDocument, UsageRun } from "../../scripts/evaluate/validate-astra-usage";
+import { renderObservabilityHtml } from "../../scripts/reporting/render-observability-report";
 
 const TASK = "golden-full-asset-authoring";
 const BASE = "1".repeat(40);
@@ -127,11 +128,106 @@ function input() {
 }
 
 describe("correlated offline observability comparison", () => {
+  test("renders a standalone non-networked offline report without claiming a full timeline", () => {
+    const report = compareObservabilitySessions(input());
+    const html = renderObservabilityHtml(report);
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain('Content-Security-Policy');
+    expect(html).toContain("default-src 'none'");
+    expect(html).toContain("Baseline Gateway timeline");
+    expect(html).toContain("Candidate Gateway timeline");
+    expect(html).toContain("Start not measured");
+    expect(html).toContain("No timed bar");
+    expect(html).toContain("Quality-gated comparison");
+    expect(html).toContain("Evidence-linked investigation");
+    expect(html).toContain("Verified-feedback review");
+    expect(html).toContain("REVIEW_CANDIDATE");
+    expect(html).toContain("Golden proof");
+    expect(html).toContain("submitted provider events");
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toContain("<img");
+    expect(report.gateway.inspection.baseline.timeline.observed_window_ms).toBeNull();
+    expect(report.gateway.inspection.baseline.timeline.measured_start_events).toBe(0);
+  });
+
+  test("positions time bars only using observed start timestamps", () => {
+    const data = input();
+    const left = JSON.parse(data.baseline.gatewayTrace);
+    left.started_at = "2026-11-03T11:59:59.900Z";
+    data.baseline.gatewayTrace = JSON.stringify(left) + "\n";
+    data.usage.runs[0]!.gateway_trace_sha256 = sha256(data.baseline.gatewayTrace);
+    const report = compareObservabilitySessions(data);
+    const timeline = report.gateway.inspection.baseline.timeline;
+    expect(timeline.total_events).toBe(1);
+    expect(timeline.measured_start_events).toBe(1);
+    expect(timeline.observed_window_ms).toBe(100);
+    expect(timeline.events[0]).toMatchObject({
+      sequence: 0, offset_ms: 0, latency_ms: 100,
+    });
+    const html = renderObservabilityHtml(report);
+    expect(html).toContain("Observed first-start to last-recorded-end span");
+    expect(html).toContain('style="left:0.000%;width:100.000%"');
+    expect(html).toContain("Incomplete start timestamps");
+  });
+
+  test("never executes untrusted task labels or capability metadata as HTML", () => {
+    const report = compareObservabilitySessions(input());
+    report.task_id = '<img src=x onerror="alert(1)">';
+    report.gateway.inspection.baseline.timeline.events[0]!.capability =
+      '<script>alert("evil")</script>';
+    report.gateway.inspection.baseline.hotspots[0]!.capability =
+      '<a onclick="attack()">bad</a>';
+    const html = renderObservabilityHtml(report);
+    expect(html).not.toContain('<script>alert');
+    expect(html).not.toContain('<img src=x');
+    expect(html).not.toContain('<a onclick');
+    expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect(html).toContain("&lt;script&gt;alert(&quot;evil&quot;)&lt;/script&gt;");
+    expect(html).toContain("&lt;a onclick=&quot;attack()&quot;&gt;bad&lt;/a&gt;");
+  });
+
+  test("caps visible events while preserving the source event sequences", () => {
+    const data = input();
+    const events = Array.from({ length: 86 }, (_, index) => ({
+      ...JSON.parse(trace(BASE, 4)),
+      sequence: index,
+      started_at: new Date(Date.parse("2026-11-03T00:00:00.000Z") + index * 10).toISOString(),
+      latency_ms: 4,
+    }));
+    data.baseline.gatewayTrace = events.map((event) => JSON.stringify(event)).join("\n") + "\n";
+    data.usage.runs[0]!.gateway_trace_sha256 = sha256(data.baseline.gatewayTrace);
+    const report = compareObservabilitySessions(data);
+    const timeline = report.gateway.inspection.baseline.timeline;
+    expect(timeline).toMatchObject({
+      total_events: 86,
+      measured_start_events: 86,
+      omitted_events: 26,
+      observed_window_ms: 854,
+    });
+    expect(timeline.events).toHaveLength(60);
+    expect(timeline.events[0]!.sequence).toBe(0);
+    expect(timeline.events[29]!.sequence).toBe(29);
+    expect(timeline.events[30]!.sequence).toBe(56);
+    expect(timeline.events[59]!.sequence).toBe(85);
+    const html = renderObservabilityHtml(report);
+    expect(html).toContain("26 intermediate events omitted");
+    expect(html).toContain('id="baseline-event-85"');
+    expect(html).not.toContain('id="baseline-event-41"');
+  });
+
   test("reports source-provided token reduction only with exact trace and Golden evidence", () => {
     const report = compareObservabilitySessions(input());
     expect(report.quality_gate).toBe("BOTH_ACCEPTED_PASS_SAME_REFERENCE");
     expect(report.decision).toBe("MEASURED_TOKEN_REDUCTION");
     expect(report.provider.token_claim_available).toBe(true);
+    expect(report.feedback).toMatchObject({
+      scope: "OFFLINE_VERIFICATION_AND_REVIEW_ONLY",
+      disposition: "REVIEW_CANDIDATE",
+      never_auto_promote: true,
+    });
+    expect(report.feedback.evidence_gaps).toContain("BASELINE_TIMELINE_START_PARTIAL");
+    expect(report.feedback.evidence_gaps).toContain("CANDIDATE_QUEUE_DETAIL_PARTIAL");
     expect(report.provider.total_tokens).toEqual({
       baseline: 1200, candidate: 900, delta_candidate_minus_baseline: -300,
     });
@@ -157,6 +253,9 @@ describe("correlated offline observability comparison", () => {
     expect(unbound.provider.token_claim_available).toBe(false);
     expect(unbound.provider.total_tokens.baseline).toBeNull();
     expect(unbound.decision).toBe("INSUFFICIENT_LINKED_USAGE_EVIDENCE");
+    expect(unbound.feedback.disposition).toBe("HOLD_OR_NO_EFFICIENCY_GAIN");
+    expect(unbound.feedback.recommended_checks).toContain(
+      "VERIFY_EXPLICIT_PROVIDER_EXPORT_AND_EXACT_TRACE_BINDINGS");
 
     const unknown = input();
     unknown.usage.runs[1]!.usage.total_tokens = null;
@@ -192,6 +291,9 @@ describe("correlated offline observability comparison", () => {
     data.candidate.final.metrics!.user_corrections = 2;
     const report = compareObservabilitySessions(data);
     expect(report.decision).toBe("CORRECTION_REGRESSION");
+    expect(report.feedback.disposition).toBe("REJECT_CANDIDATE");
+    expect(report.feedback.recommended_checks).toContain(
+      "REVIEW_CORRECTIONS_BEFORE_ANY_PROMOTION");
     expect(report.provider.token_claim_available).toBe(false);
     expect(report.provider.total_tokens.candidate).toBeNull();
   });

@@ -317,6 +317,42 @@ content even with prompt logging disabled; selective sanitization belongs to
 the explicitly authorized client-side export workflow. Normal authoring and
 Gateway four-tool responses remain unchanged.
 
+## Offline Visual Report (P5)
+
+The existing `compare:observability` command accepts an optional final
+`--html` flag after its five required input paths. Without the flag its
+previous JSON output remains unchanged except for an **additive**
+`gateway.inspection` section containing two bounded trace previews and the
+already-generated investigative findings/hotspots.
+
+```text
+bun run compare:observability -- <baseline-final.json> <candidate-final.json> <baseline-trace.ndjson> <candidate-trace.ndjson> <normalized-usage.json> --html
+```
+
+HTML is written **only to stdout**, never automatically to user files or
+Workspace; an operator may intentionally redirect the output to an ignored
+local HTML report and open it offline. The report is static, includes a restrictive
+CSP, escapes all displayed input-derived strings, has no client scripts or
+external resources, and changes no live Gateway/Desktop state.
+
+The timeline displays up to 60 event rows per run (first 30 and last 30 when
+longer), explicitly reports omitted rows, and draws duration bars only when
+recorded `started_at` timestamps yield a complete measured window. Historical
+v1 traces without starts show `Start not measured` rather than fabricated
+timings. Reported Gateway latency sums are not task wall time or time-to-accepted
+result; missing queue/image measurements remain `null`. Signal links reference
+bounded event sequence numbers; events outside the preview are marked not shown.
+Results still require the P4 trace SHA, provider/Golden quality and correction
+gates. The JSON/HTML review also includes a bounded `feedback` disposition:
+`REJECT_CANDIDATE` for increased recorded user corrections,
+`REVIEW_CANDIDATE` for a source-event token reduction with supplied accepted
+Golden evidence, or `HOLD_OR_NO_EFFICIENCY_GAIN` otherwise. The report lists
+coverage gaps and bounded machine-readable recommended checks, never automatic
+source edits, retries, release promotions, or an AI-generated quality verdict.
+
+This is an **offline diagnostics viewer**, not a live Desktop dashboard,
+OTLP exporter, new server, or autonomous optimization engine.
+
 ## Context / Result Economy
 
 Context handles use SHA-256 identities of current canonical repository files. `known_context_ids` suppresses unchanged Skill/profile content and invalidates changed members of the same family.
