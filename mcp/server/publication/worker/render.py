@@ -12,6 +12,7 @@ from pathlib import Path
 
 import bpy
 from mathutils import Vector
+from bpy_extras.object_utils import world_to_camera_view
 
 
 def fail(message):
@@ -180,19 +181,48 @@ def place_camera(job, center, radius):
     camera = bpy.data.objects.new("LD_Publication_Camera", camera_data)
     bpy.context.scene.collection.objects.link(camera)
     bpy.context.scene.camera = camera
-    # Conservative sphere fit leaves room for the whole subject at all ratios.
-    min_aspect = min(1.0, job["width"] / job["height"])
+
+    # The smaller camera half-FOV, not simply lens or model size, determines
+    # whether a sphere fits in 16:9 landscape or 4:5 portrait framing.
+    aspect = job["width"] / job["height"]
+    fit_padding = 1.28
+    camera_data.sensor_fit = "HORIZONTAL"
     if req["projection"] == "orthographic":
         camera_data.type = "ORTHO"
-        camera_data.ortho_scale = radius * 2.9 / min_aspect
-        distance = radius * 4.5
+        camera_data.ortho_scale = 2 * radius * fit_padding * max(1, aspect)
+        distance = radius * 4.0 + 0.01
     else:
         camera_data.type = "PERSP"
         camera_data.lens = 45
-        distance = radius * 4.0 / min_aspect
+        horizontal_half_fov = math.atan(camera_data.sensor_width / (2 * camera_data.lens))
+        vertical_half_fov = math.atan(math.tan(horizontal_half_fov) / aspect)
+        fit_half_fov = min(horizontal_half_fov, vertical_half_fov)
+        distance = fit_padding * radius / math.sin(fit_half_fov)
+    camera_data.clip_start = max(0.001, min(radius * 0.001, distance / 100))
+    camera_data.clip_end = max(1000, distance + radius * 4)
     camera.location = center + direction * distance
     focus(camera, center)
 
+
+def verify_camera_coverage(meshes):
+    """Fail on objectively clipped native geometry; this is not an aesthetic score."""
+    scene = bpy.context.scene
+    camera = scene.camera
+    if camera is None:
+        fail("Publication camera was not created.")
+    bpy.context.view_layer.update()
+    bounds = [
+        world_to_camera_view(scene, camera, obj.matrix_world @ Vector(corner))
+        for obj in meshes for corner in obj.bound_box
+    ]
+    if not bounds or any(not all(math.isfinite(v) for v in p) for p in bounds):
+        fail("Publication camera produced invalid projected coordinates.")
+    margin = 0.015
+    if any(
+        p.z <= 0 or p.x < margin or p.x > 1 - margin
+        or p.y < margin or p.y > 1 - margin for p in bounds
+    ):
+        fail("PUBLICATION_CAMERA_SUBJECT_CLIPPED: adjust yaw, elevation or aspect ratio.")
 
 def create_stage(job, lower, upper, center, radius):
     background = job["background"]
@@ -284,6 +314,7 @@ def render(job):
     bpy.context.view_layer.update()
     low, high, center, radius = bounds_of_objects(meshes)
     create_stage(job, low, high, center, radius)
+    verify_camera_coverage(meshes)
     configure_render(job)
     bpy.ops.render.render(write_still=True)
     output = Path(job["output_path"])
