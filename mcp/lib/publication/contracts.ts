@@ -51,6 +51,35 @@ export const publicationRenderParameters = z.object({
 
 export type PublicationRenderRequest = z.infer<typeof publicationRenderParameters>;
 
+export const PUBLICATION_IMAGE_ASPECTS = {
+  square: [1, 1],
+  landscape_16_9: [16, 9],
+  landscape_4_3: [4, 3],
+  portrait_4_5: [4, 5],
+} as const;
+export type PublicationImageAspect = keyof typeof PUBLICATION_IMAGE_ASPECTS;
+
+/** Output framing is a presentation setting, not a model/object category. */
+export function publicationImageSizeForPreset(
+  quality: PublicationRenderRequest["quality"],
+  aspect: PublicationImageAspect,
+): { width: number; height: number } {
+  const sides = PUBLICATION_IMAGE_ASPECTS[aspect];
+  if (!sides || !(quality in PUBLICATION_QUALITY)) {
+    throw new Error("PUBLICATION_IMAGE_PRESET_INVALID");
+  }
+  const longestEdge = quality === "preview" ? 640 : quality === "high" ? 3200 : 2048;
+  const [a, b] = sides;
+  const width = Math.round(longestEdge * a / Math.max(a, b));
+  const height = Math.round(longestEdge * b / Math.max(a, b));
+  if (width < 256 || height < 256 || width * height > 12_000_000) {
+    throw new Error("PUBLICATION_IMAGE_PRESET_OUTSIDE_PIXEL_BUDGET");
+  }
+  return { width, height };
+}
+
+
+
 export const PUBLICATION_QUALITY = Object.freeze({
   preview: { samples: 32, noise_threshold: 0.08 },
   publication: { samples: 128, noise_threshold: 0.02 },
