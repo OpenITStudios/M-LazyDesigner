@@ -43,7 +43,7 @@ import {
   runRuntimeOperationExclusive,
 } from "@/lib/runtime/lifecycle";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
-import { openPublicationRenderDialog, publicationRenderDialogTeardown } from "@/ui/publicationRenderDialog";
+import { openPublicationRenderDialog, reviewPublicationRenderStatus, cancelPublicationRender, publicationRenderDialogTeardown } from "@/ui/publicationRenderDialog";
 
 let panel: Panel | undefined;
 let runtimeStatusListener: (() => void) | undefined;
@@ -450,6 +450,8 @@ export function uiSetup(input: UiSetupInput) {
           action.trigger();
         },
         openPublicationRender(): void { openPublicationRenderDialog(); },
+        checkPublicationRender(): void { reviewPublicationRenderStatus(); },
+        cancelPublicationJob(): void { cancelPublicationRender(); },
         reloadLazyDesigner(): void {
           if (reloadLazyDesignerPlugin()) return;
           Blockbench.showQuickMessage(
