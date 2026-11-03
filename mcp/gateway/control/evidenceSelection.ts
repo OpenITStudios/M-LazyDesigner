@@ -16,6 +16,15 @@ export function planFocusedTextureEvidenceRequest(
       ![left,top,right,bottom,width,height].every(Number.isSafeInteger) ||
       left < 0 || top < 0 || width <= 0 || height <= 0 ||
       !textureRevisionSchema.safeParse(scope.revision).success) return null;
+  // The full-atlas revision also declares decoded bitmap dimensions.
+  // Never recommend a crop that the native get_texture contract will reject.
+  const revisionSize = /^sha256:(\d+)x(\d+):/.exec(scope.revision);
+  if (!revisionSize) return null;
+  const atlasWidth = Number(revisionSize[1]);
+  const atlasHeight = Number(revisionSize[2]);
+  if (!Number.isSafeInteger(atlasWidth) || atlasWidth <= 0 ||
+      !Number.isSafeInteger(atlasHeight) || atlasHeight <= 0 ||
+      right > atlasWidth || bottom > atlasHeight) return null;
   return {
     capability: "get_texture" as const,
     args: {

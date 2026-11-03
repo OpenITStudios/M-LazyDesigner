@@ -157,15 +157,6 @@ export class GatewayCapabilityExecutor {
       const effectiveReadOnly = readOnly || branchReadOnly;
 
       const succeeded = result.isError !== true;
-      // The existing task-context cohort is the sole opt-in deferral
-      // boundary. Never strip a final/single-call image or native failures.
-      const deliveredContent = maybeDeferPaintCohortImage({
-        capability,succeeded,
-        cohortBoundary:controlOptions?.cohortBoundary,
-        taskContextId:controlOptions?.taskContextId,
-        structuredContent:result.structuredContent,
-        content:result.content,
-      });
       const receipt = deriveControlReceipt(
         capability,
         result.structuredContent,
@@ -184,6 +175,17 @@ export class GatewayCapabilityExecutor {
             ? this.session.projectUuid
             : runtimeInvocation.verifiedProjectUuid ?? null)
         : null;
+      // Do not hide an intermediate PNG until the serialized native
+      // invocation has confirmed project authority. Without that identity
+      // Control cannot safely retain the cohort's pending visual debt.
+      const deliveredContent = maybeDeferPaintCohortImage({
+        capability,succeeded,
+        cohortBoundary:controlOptions?.cohortBoundary,
+        taskContextId:controlOptions?.taskContextId,
+        projectUuid:verifiedProjectUuid,
+        structuredContent:result.structuredContent,
+        content:result.content,
+      });
       if (verifiedProjectUuid !== null &&
           verifiedProjectUuid !== this.session.projectUuid) {
         this.session.synchronizeProject(verifiedProjectUuid);

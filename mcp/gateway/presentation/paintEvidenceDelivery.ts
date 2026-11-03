@@ -14,13 +14,17 @@ export function maybeDeferPaintCohortImage(input: {
   succeeded: boolean;
   cohortBoundary?: "CONTINUE" | "COMPLETE";
   taskContextId?: string | null;
+  /** Verified native/project affinity, never an arbitrary caller UUID. */
+  projectUuid?: string | null;
   structuredContent?: unknown;
   content: unknown;
 }): unknown {
   if(input.capability!=="paint_texture_transaction" ||
      !input.succeeded || input.cohortBoundary!=="CONTINUE" ||
      typeof input.taskContextId!=="string" ||
-     !input.taskContextId.trim() || !Array.isArray(input.content)) {
+     !input.taskContextId.trim() ||
+     typeof input.projectUuid!=="string" || !input.projectUuid.trim() ||
+     !Array.isArray(input.content)) {
     return input.content;
   }
   if(assessInlinePaintImageEvidence(

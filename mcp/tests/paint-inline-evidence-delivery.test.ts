@@ -84,7 +84,7 @@ describe("paint image transport and cohort image economy",()=>{
   });
   test("default, COMPLETE and failed mutations preserve original PNG",()=>{
     const base={capability:"paint_texture_transaction",succeeded:true,
-      structuredContent:visualEvidence(),content:content()};
+      projectUuid:"project-a",structuredContent:visualEvidence(),content:content()};
     expect(maybeDeferPaintCohortImage(base)).toBe(base.content);
     expect(maybeDeferPaintCohortImage({...base,
       taskContextId:"cohort",cohortBoundary:"COMPLETE"})).toBe(base.content);
@@ -96,11 +96,20 @@ describe("paint image transport and cohort image economy",()=>{
       capability:"capture_model_views",taskContextId:"cohort",
       cohortBoundary:"CONTINUE"})).toBe(base.content);
   });
+  test("unverified native project identity cannot suppress a verified PNG",()=>{
+    const base={capability:"paint_texture_transaction",succeeded:true,
+      taskContextId:"cohort",cohortBoundary:"CONTINUE" as const,
+      structuredContent:visualEvidence(),content:content()};
+    expect(maybeDeferPaintCohortImage({...base,projectUuid:null})).toBe(base.content);
+    expect(maybeDeferPaintCohortImage({...base,projectUuid:""})).toBe(base.content);
+    expect(maybeDeferPaintCohortImage({...base,projectUuid:"project-a"}))
+      .not.toBe(base.content);
+  });
   test("only explicitly deferred intermediate image is omitted; visual debt remains",()=>{
     const raw=content();
     const deferred=maybeDeferPaintCohortImage({
       capability:"paint_texture_transaction",succeeded:true,
-      taskContextId:"cohort",cohortBoundary:"CONTINUE",
+      taskContextId:"cohort",cohortBoundary:"CONTINUE",projectUuid:"project-a",
       structuredContent:visualEvidence(),content:raw,
     }) as Array<{type:string;text?:string}>;
     expect(deferred).toHaveLength(1);
@@ -128,7 +137,7 @@ describe("paint image transport and cohort image economy",()=>{
     const raw=content();
     expect(maybeDeferPaintCohortImage({
       capability:"paint_texture_transaction",succeeded:true,
-      taskContextId:"cohort",cohortBoundary:"CONTINUE",
+      taskContextId:"cohort",cohortBoundary:"CONTINUE",projectUuid:"project-a",
       structuredContent:fake,content:raw,
     })).toBe(raw);
   });

@@ -209,7 +209,10 @@ stale evidence and partial view coverage are never upgraded to PASS.
 Within an explicit `invoke_capability` task cohort, a successful
 `paint_texture_transaction` with `cohort_boundary=CONTINUE` may omit
 its **verified inline PNG** from the AI-facing response. The native
-transaction and full revision guards still run; the Control verification
+transaction and full revision guards still run. PNG deferral additionally
+requires a verified project UUID from the serialized native invocation:
+unbound or uncertain project identity retains the inline PNG and cannot
+defer Control's visual obligation. The Control verification
 scope marks the preview as `follow_up_read` until a matching image is
 actually delivered. The default and final `COMPLETE` requests keep
 their image. A final merged cohort must re-read the affected region if

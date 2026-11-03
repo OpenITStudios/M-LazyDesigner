@@ -22,6 +22,13 @@ describe("smart Texture evidence selection",()=>{
     expect(planFocusedTextureEvidenceRequest({...focus,evidence_source:"mutation_response"})).toBeNull();
     expect(planFocusedTextureEvidenceRequest({...focus,revision:"unverified"})).toBeNull();
     expect(planFocusedTextureEvidenceRequest({...focus,affected_rect:[24,0,8,10]})).toBeNull();
+    expect(planFocusedTextureEvidenceRequest({...focus,affected_rect:[120,0,129,8]})).toBeNull();
+    expect(planFocusedTextureEvidenceRequest({...focus,affected_rect:[0,120,8,129]})).toBeNull();
+    expect(planFocusedTextureEvidenceRequest({...focus,revision:"sha256:0x128:"+"b".repeat(64)})).toBeNull();
+    expect(planFocusedTextureEvidenceRequest({...focus,revision:"sha256:999999999999999999999x128:"+"b".repeat(64)})).toBeNull();
+    expect(planFocusedTextureEvidenceRequest({
+      ...focus,affected_rect:[112,112,128,128],
+    })?.args.region).toEqual({x:112,y:112,width:16,height:16});
     expect(planFocusedTextureEvidenceRequest(null)).toBeNull();
   });
   test("native mutation Control continuation carries the exact focused request but does not execute",()=>{

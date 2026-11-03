@@ -392,6 +392,7 @@ export function reduceControlExecutionState(
 
   const defer =
     taskContextId !== null &&
+    delta.project_uuid !== null && delta.project_uuid.trim().length > 0 &&
     cohortBoundary === "CONTINUE" &&
     !hardBoundary;
 

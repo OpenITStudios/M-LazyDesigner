@@ -301,6 +301,20 @@ describe("Control verification cohort", () => {
     ]);
   });
 
+  test("unbound project cannot defer visual review even with a task_context_id", () => {
+    const original = textureDelta([1, 2, 3, 4], "sha256:rev-1", false);
+    const outcome = reduceControlExecutionState(null, {
+      ...original,
+      project_uuid: null,
+    }, {
+      taskContextId: "texture-cohort",
+      cohortBoundary: "CONTINUE",
+    });
+    expect(outcome.continuation.cohort?.deferred).toBe(false);
+    expect(outcome.state.pending_verification).toBeNull();
+    expect(outcome.continuation.next_action.kind).toBe("VERIFY_VISUAL");
+  });
+
   test("hard boundaries cannot defer uncertain mutation recovery", () => {
     const failed = buildControlDelta({
       capability: "manage_cubes",
