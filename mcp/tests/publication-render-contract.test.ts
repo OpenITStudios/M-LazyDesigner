@@ -9,6 +9,7 @@ import {
   snapshotDetachedPublicationGlb,
   verifyPublicationSourceCurrent,
 } from "@/server/publication/snapshot";
+import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publication/materialChannels";
 import {
   CAPABILITY_DEFINITIONS,
 } from "@/lib/capabilities/manifest";
@@ -156,6 +157,8 @@ function installNativeFixture() {
     DoubleSide: 2,
     NearestFilter: 1003,
     SRGBColorSpace: "srgb",
+    NoColorSpace: "linear",
+    Color: class { constructor(_value: unknown) {} },
     GLTFExporter: class {
       parse(scene: unknown, done: (out: ArrayBuffer) => void) {
         sceneInputs.push(scene);
@@ -171,7 +174,10 @@ function installNativeFixture() {
     document: {
       createElement: (_tag: string) => ({
         width: 0, height: 0,
-        getContext: (_type: string) => ({ putImageData: () => {} }),
+        getContext: (_type: string) => ({
+          putImageData: () => {},
+          createImageData: (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w*h*4) }),
+        }),
       }),
     },
   };
@@ -203,11 +209,49 @@ describe("Detached native fidelity bridge", () => {
     expect(() => verifyPublicationSourceCurrent(result.project_uuid, result.source_sha256)).toThrow("STALE");
   });
 
-  test("fails closed on unsupported PBR, alpha, non-Cube geometry and invalid faces", async () => {
+  test("maps supported MER/normal with exact pixel-channel semantics", async () => {
+    const color = new Uint8ClampedArray([200, 100, 50, 255]);
+    const mer = new Uint8ClampedArray([255, 128, 64, 255]);
+    const packed = convertBedrockMerToGltf(color, mer);
+    expect([...packed.metallicRoughness]).toEqual([0, 64, 255, 255]);
+    expect([...packed.emission]).toEqual([100, 50, 25, 255]);
+    expect([...convertBedrockNormalToGltf(new Uint8ClampedArray([128, 12, 255, 255]))])
+      .toEqual([128, 243, 255, 255]);
+    expect(() => convertBedrockMerToGltf(color, new Uint8ClampedArray(8))).toThrow();
+
     const f = installNativeFixture();
-    (globalThis as any).TextureGroup.all = [{ uuid: "group-1", name: "PBR", is_material: true }];
+    const merTexture = {
+      uuid: "mer-1", group: "group-1", pbr_channel: "mer",
+      ctx: {
+        canvas: { width: 1, height: 1 },
+        getImageData: () => ({ data: mer, width: 1, height: 1 }),
+      },
+    };
+    (globalThis as any).Texture.all.push(merTexture);
+    (globalThis as any).TextureGroup.all = [{
+      uuid: "group-1", name: "PBR", is_material: true,
+      material_config: { mer_value: [0, 0, 255] },
+      getTextures: () => [{ ...f.texture, pbr_channel: "color" }, merTexture],
+    }];
     f.texture.group = "group-1";
-    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("PBR_CHANNEL_BRIDGE_REQUIRED");
+    const result = await snapshotDetachedPublicationGlb();
+    expect(result.materials["ld_color_tex-1"]).toMatchObject({
+      pbr: "MAPPED", mer_sha256: expect.any(String),
+    });
+    verifyPublicationSourceCurrent(result.project_uuid, result.source_sha256);
+    mer[1] = 200;
+    expect(() => verifyPublicationSourceCurrent(result.project_uuid, result.source_sha256)).toThrow("STALE");
+  });
+
+  test("fails closed on ambiguous PBR, alpha, non-Cube geometry and invalid faces", async () => {
+    const f = installNativeFixture();
+    (globalThis as any).TextureGroup.all = [{
+      uuid: "group-1", name: "PBR", is_material: true,
+      material_config: { mer_value: [0, 0, 255] },
+      getTextures: () => [],
+    }];
+    f.texture.group = "group-1";
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("PBR_CHANNELS_AMBIGUOUS");
     f.texture.group = "";
     f.rgba[3] = 127;
     await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("ALPHA_SEMANTICS_UNVERIFIED");
