@@ -85,7 +85,7 @@ def bounds_of_objects(mesh_objects):
     return lower, upper, (lower + upper) * 0.5, max(delta.length * 0.5, 0.01)
 
 
-def stage_materials(meshes):
+def stage_materials(meshes, job):
     for obj in meshes:
         for item in obj.material_slots:
             material = item.material
@@ -96,12 +96,23 @@ def stage_materials(meshes):
             bsdf = next((n for n in nodes if n.type == "BSDF_PRINCIPLED"), None)
             if not bsdf:
                 fail("Imported GLB has no Principled material.")
+            source_materials = job.get("materials", {})
+            # Blender may append .001 to duplicate material names on import.
+            base_name = material.name.rsplit(".", 1)[0] if material.name.rsplit(".", 1)[-1].isdigit() else material.name
+            source = source_materials.get(material.name) or source_materials.get(base_name)
+            if not isinstance(source, dict):
+                fail("Imported GLB material has no source identity: " + material.name)
+            if source.get("alpha_mode") != "OPAQUE":
+                fail("Unsupported alpha semantics were imported.")
+            if source.get("pbr") not in ("NONE", "MAPPED"):
+                fail("Material source PBR contract is invalid.")
             metallic = bsdf.inputs.get("Metallic")
             roughness = bsdf.inputs.get("Roughness")
-            if metallic and not metallic.is_linked:
-                metallic.default_value = 0.0
-            if roughness and not roughness.is_linked:
-                roughness.default_value = 0.82
+            if source["pbr"] == "NONE":
+                if metallic and not metallic.is_linked:
+                    metallic.default_value = 0.0
+                if roughness and not roughness.is_linked:
+                    roughness.default_value = 0.85
             for node in nodes:
                 if node.type == "TEX_IMAGE" and node.image:
                     node.interpolation = "Closest"
@@ -229,7 +240,7 @@ def render(job):
     meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
     if not meshes:
         fail("Imported GLB contains no mesh.")
-    stage_materials(meshes)
+    stage_materials(meshes, job)
     bpy.context.view_layer.update()
     low, high, center, radius = bounds_of_objects(meshes)
     create_stage(job, low, high, center, radius)
