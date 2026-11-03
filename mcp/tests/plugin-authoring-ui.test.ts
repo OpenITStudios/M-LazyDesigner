@@ -167,6 +167,9 @@ describe("LazyDesigner AI-first Blockbench panel", () => {
     expect(ui).toContain("toolsMenuAction?.delete()");
     expect(ui).toContain("uiEpoch += 1");
     expect(ui).toContain("inspectionVersion");
+    // Native Group selection is stored on each Group, never a Group.selected static.
+    expect(ui).toContain("Group.all.filter((group) => group.selected === true)");
+    expect(ui).not.toContain("Group.selected?.length");
     expect(ui).toContain('uiEpoch += 1');
     expect(ui).toContain('"finished_edit"');
     expect(ui).toContain('"undo"');

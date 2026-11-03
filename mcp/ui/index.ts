@@ -89,7 +89,9 @@ function readHumanProjectState(): HumanProjectState {
 function readHumanSelection(): string {
   if (typeof Project === "undefined" || !Project) return "No project selected";
   const cubes = typeof Cube === "undefined" ? 0 : Cube.selected?.length ?? 0;
-  const groups = typeof Group === "undefined" ? 0 : Group.selected?.length ?? 0;
+  // Group.selection is instance-owned in the native API; Group.selected is not a static registry.
+  const groups = typeof Group === "undefined" || !Array.isArray(Group.all)
+    ? 0 : Group.all.filter((group) => group.selected === true).length;
   if (cubes) return `${cubes} Cube${cubes === 1 ? "" : "s"} selected`;
   if (groups) return `${groups} Group${groups === 1 ? "" : "s"} selected`;
   if (typeof AnimationItem !== "undefined" && AnimationItem.selected) {
