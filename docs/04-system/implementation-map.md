@@ -322,17 +322,30 @@ mcp/server/tools/inspection/camera.ts
 → visual framing / screenshot inspection owner
 
 mcp/server/tools/inspection/publication.ts
-→ Render branch: optional publication PNG capability (not a QA verdict)
+→ render_publication capability contract, registered under the export family;
+  start / status / preview / cancel (not an editor camera/QA mutation)
+
+mcp/server/publication/jobs.ts
+→ one process-local nonblocking render job state/cancellation owner, shared by MCP and Blockbench UI
 
 mcp/server/publication/snapshot.ts
-→ non-mutating native Cube/UV/texture → GLB fidelity bridge
+→ detached existing Bedrock Cube+Group+UV+texture/PBR GLB snapshot;
+  no general-purpose Blender modeling, no mutation of native project
 
 mcp/server/publication/execute.ts
+→ only source-to-Blender process/filesystem adapter, trusted worker packaging,
+  generation-bound native source recheck and exclusive PNG promotion
+
 mcp/server/publication/worker/render.py
-→ one permission-gated local Blender Cycles job and bundled worker
+mcp/server/publication/worker/core_assets.py
+mcp/server/publication/worker/camera_director.py
+mcp/server/publication/worker/lighting_director.py
+mcp/server/publication/worker/compositor_director.py
+mcp/server/publication/worker/quality_report.py
+→ one isolated Blender 5.2 Cycles rendering pipeline; original model input only
 
 mcp/lib/publication/**
-→ pure render request, material channel and GLB integrity contracts
+→ pure request, sampled atlas, GLB/PNG, material and diagnostics contracts
 
 mcp/server/tools/validation/qualityIntelligence.ts
 mcp/server/tools/validation/qualityEvidenceRuntime.ts
@@ -402,12 +415,18 @@ Domain intelligence helpers under `mcp/lib/**` remain supporting implementation 
 
 ## Publication Render UI (experimental Render branch only)
 
-`mcp/ui/publicationRenderDialog.ts` is the human UI consumer of the same
-`mcp/server/publication/execute.ts` service invoked by
-`render_publication` through the existing Gateway. `mcp/ui/index.ts`
-owns its trigger and teardown. No new Gateway transport, renderer state
-registry or modification of QA `capture_model_views` is permitted.
-Both source and native acceptance remain separate proof domains.
+`mcp/ui/publicationRenderDialog.ts` and the `render_publication` capability
+share exactly one job owner: `mcp/server/publication/jobs.ts`. That owner
+executes one detached Blockbench snapshot through the existing Runtime native
+queue and one Blender Core job through `execute.ts`; final PNG promotion
+rechecks the same source within a generation-bound serialized native operation.
+`mcp/ui/index.ts` owns the human entrypoint and dialog cleanup.
+
+The render capability belongs to the **Export** registration family, whereas
+`capture_model_views` remains under **Camera** as editor QA. The Gateway keeps
+its exact four methods, and the result is a PNG from authored Blockbench assets,
+not a generic Blender editing API. Source and native/visual proof remain
+separate; do not label source-authored components as runtime-verified.
 
 ## Plugin / Blockbench Integration
 
