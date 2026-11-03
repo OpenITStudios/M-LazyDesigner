@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import {
   preparePublicationRender,
   renderPreparedPublication,
+  getPublicationEvidenceBytes,
   type PreparedPublicationRender,
   type PublicationRenderReceipt,
 } from "./execute";
@@ -127,6 +128,17 @@ export class PublicationRenderJobs {
     return projectJob(this.requireJob(jobId));
   }
 
+  evidence(jobId: string): { status: PublicationRenderJobStatus; png: Buffer } {
+    const job = this.requireJob(jobId);
+    if (job.state !== "RENDERED_DRAFT" || !job.receipt) {
+      throw new Error("PUBLICATION_RENDER_EVIDENCE_NOT_READY: render has not completed.");
+    }
+    return {
+      status: projectJob(job),
+      png: getPublicationEvidenceBytes(job.receipt),
+    };
+  }
+
   /** Re-enable the same process-local owner after legitimate plugin reload. */
   reactivate(): void {
     // Active/uncertain old workers remain protected by existing busy gates.
@@ -163,6 +175,12 @@ export function getPublicationRenderJobStatus(jobId: string): PublicationRenderJ
 }
 export function cancelPublicationRenderJob(jobId: string): PublicationRenderJobStatus {
   return productionJobs.cancel(jobId);
+}
+
+export function getPublicationRenderEvidence(
+  jobId: string,
+): { status: PublicationRenderJobStatus; png: Buffer } {
+  return productionJobs.evidence(jobId);
 }
 
 export function retirePublicationRenderJobsOnPluginUnload(): void {
