@@ -20,7 +20,7 @@ import bpy
 from core_assets import PublicationRenderError, geometry_bounds, geometry_receipt, imported_meshes
 from camera_director import configure_camera
 from lighting_director import configure_environment_and_lighting
-from compositor_director import configure_cycles, configure_compositor
+from compositor_director import configure_cycles, configure_compositor, render_cycles_with_fallback
 from quality_report import write_render_report
 
 
@@ -146,7 +146,7 @@ def main() -> None:
     camera = configure_camera(job, meshes, bounds[2], bounds[3])
     lighting = configure_environment_and_lighting(job, bounds)
     compositor = configure_compositor(job)
-    bpy.ops.render.render(write_still=True)
+    render_cycles_with_fallback(job, render_settings)
     target = Path(job["output_path"])
     if not target.is_file() or target.stat().st_size <= 100:
         fail("PUBLICATION_CYCLES_OUTPUT_MISSING")
