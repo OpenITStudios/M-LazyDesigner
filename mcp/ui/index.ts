@@ -43,6 +43,7 @@ import {
   runRuntimeOperationExclusive,
 } from "@/lib/runtime/lifecycle";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
+import { openPublicationRenderDialog, publicationRenderDialogTeardown } from "@/ui/publicationRenderDialog";
 
 let panel: Panel | undefined;
 let runtimeStatusListener: (() => void) | undefined;
@@ -448,6 +449,7 @@ export function uiSetup(input: UiSetupInput) {
           }
           action.trigger();
         },
+        openPublicationRender(): void { openPublicationRenderDialog(); },
         reloadLazyDesigner(): void {
           if (reloadLazyDesignerPlugin()) return;
           Blockbench.showQuickMessage(
@@ -518,6 +520,7 @@ export function uiTeardown(): void {
   // A broken optional legacy dialog must not prevent current Panel/Action cleanup.
   release("Prompt override dialog", () => overrideDialogTeardown());
   release("Cube cleanup dialog", () => cubeCleanupDialogTeardown());
+  release("Publication Render dialog", publicationRenderDialogTeardown);
   release("Tool test dialog", () => toolTestDialogTeardown());
   release("Prompt preview dialog", () => promptPreviewDialogTeardown());
 
