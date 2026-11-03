@@ -95,6 +95,31 @@ describe("Blender worker process lifecycle", () => {
     expect(executor).not.toContain("fs.rmSync(workdir");
   });
 
+  test("already aborted publication never spawns Blender or writes a PNG", async () => {
+    const job = stubProcess("success");
+    const controller = new AbortController();
+    controller.abort();
+    await expect(runBlender(
+      job.process, "/trusted/blender", "/isolated/render.py",
+      "/isolated/job.json", "/isolated/render-job", 1000, 10,
+      controller.signal,
+    )).rejects.toThrow("PUBLICATION_BLENDER_CANCELLED");
+    expect(job.getChild()).toBeNull();
+  });
+
+  test("cancellation waits for confirmed child close before reporting CANCELLED", async () => {
+    const job = stubProcess("timeout_closed");
+    const controller = new AbortController();
+    const pending = runBlender(
+      job.process, "/trusted/blender", "/isolated/render.py",
+      "/isolated/job.json", "/isolated/render-job", 1000, 10,
+      controller.signal,
+    );
+    controller.abort();
+    await expect(pending).rejects.toThrow("PUBLICATION_BLENDER_CANCELLED");
+    expect(job.getChild()?.killCalls).toBe(1);
+  });
+
   test("UI high-resolution preset remains below its strict 12MP area limit", async () => {
     const ui = await Bun.file(new URL("../ui/publicationRenderDialog.ts", import.meta.url)).text();
     expect(ui).toContain('quality === "high" ? 3200 : 2048');
