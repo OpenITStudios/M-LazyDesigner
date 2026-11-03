@@ -139,7 +139,14 @@ function fixtureGlb(options: {
   const json = Buffer.from(JSON.stringify({
     asset: { version: "2.0" },
     scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, name: "cube_cube-1" }],
+    nodes: [{
+      mesh: 0, name: "cube_cube-1",
+      extras: {
+        lazydesigner_cube_uuid: "cube-1",
+        lazydesigner_bounds_min: [0, 0, 0],
+        lazydesigner_bounds_max: [0.0625, 0, 0.0625],
+      },
+    }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 0 }] }],
     accessors: [{}, {}],
     materials: [{ name: "ld_color_tex-1", pbrMetallicRoughness: {
@@ -193,7 +200,7 @@ describe("GLB envelope and source fidelity preflight", () => {
 });
 
 const previous = new Map<string, { present: boolean; value: unknown }>();
-const names = ["Project", "Format", "Cube", "Group", "Mesh", "Texture", "TextureGroup", "THREE", "document"];
+const names = ["Project", "Format", "Modes", "Cube", "Group", "Mesh", "Texture", "TextureGroup", "THREE", "document"];
 
 function installNativeFixture() {
   for (const name of names) {
@@ -203,12 +210,16 @@ function installNativeFixture() {
     });
   }
   class Geometry {
-    attributes = { position: { array: [0, 0, 0, 1, 0, 0, 0, 1, 0] }, uv: { array: [0, 0, 1, 0, 0, 1] } };
-    index = { array: [0, 1, 2] };
+    attributes = {
+      position: { array: [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0] },
+      uv: { array: [0, 0, 1, 0, 1, 1, 0, 1] },
+    };
+    index = { array: [0, 2, 1, 0, 3, 2] };
     faces = ["north"];
-    groups = [{ start: 0, count: 3, materialIndex: 0 }];
+    groups = [{ start: 0, count: 6, materialIndex: 0 }];
     clone() { return new Geometry(); }
     applyMatrix4(_matrix: unknown) { return this; }
+    scale(_x: number, _y: number, _z: number) { return this; }
     dispose() {}
   }
   class MockMesh {
@@ -246,6 +257,7 @@ function installNativeFixture() {
   const texture = {
     uuid: "tex-1",
     group: "",
+    currentFrame: 0,
     ctx: { canvas: { width: 1, height: 1 }, getImageData: () => ({ data: rgba, width: 1, height: 1 }) },
   };
   const cube = {
@@ -280,7 +292,8 @@ function installNativeFixture() {
     },
   };
   const values: Record<string, unknown> = {
-    Project, Format: { id: "bedrock" }, Cube: { all: [cube] },
+    Project, Format: { id: "bedrock" }, Modes: { edit: true, animate: false },
+    Cube: { all: [cube] },
     Group: class {}, Mesh: { all: [] },
     Texture: { all: [texture] }, TextureGroup: { all: [] },
     THREE,
@@ -314,6 +327,13 @@ describe("Detached native fidelity bridge", () => {
     expect(result.project_uuid).toBe("project-1");
     expect(result.cube_count).toBe(1);
     expect(result.material_count).toBe(1);
+    expect(result.source_manifest.pose_mode).toBe("EDIT_STATIC_VERIFIED");
+    expect(result.source_manifest.gltf_units_per_blockbench_unit).toBe(0.0625);
+    expect(result.source_manifest.cubes[0]?.expected_blender_bounds_max)
+      .toEqual([0.0625, 0, 0.0625]);
+    expect(result.source_manifest.cubes[0]?.primitives[0]?.material_name)
+      .toBe("ld_color_tex-1");
+    expect(result.source_manifest_sha256).toHaveLength(64);
     expect(result.glb.toString("ascii", 0, 4)).toBe("glTF");
     expect(f.sceneInputs).toHaveLength(1);
     expect(JSON.stringify({ cube: f.cube, rgba: [...f.rgba] })).toBe(before);
@@ -425,6 +445,18 @@ describe("Detached native fidelity bridge", () => {
     await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
       "PUBLICATION_SOURCE_FACE_GROUP_INVALID",
     );
+  });
+
+  test("fails closed on non-edit pose, ambiguous face slots and animated source frames", async () => {
+    const fixture = installNativeFixture();
+    (globalThis as any).Modes.edit = false;
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("POSE_PROVENANCE_UNVERIFIED");
+    (globalThis as any).Modes.edit = true;
+    fixture.texture.currentFrame = 1;
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("TEXTURE_FRAME_PROVENANCE_UNVERIFIED");
+    fixture.texture.currentFrame = 0;
+    fixture.cube.faces.north.material_name = "glass";
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("UNSUPPORTED_FACE_MATERIAL");
   });
 
   test("rejects source modification during exporter callback instead of delivering stale GLB", async () => {
