@@ -30,7 +30,9 @@ describe("Publication render contract", () => {
     expect(args.width).toBe(2048);
     expect(args.height).toBe(2048);
     expect(args.background).toBe("dark");
-    expect(args.camera.projection).toBe("perspective");
+    expect(args.camera).toMatchObject({ mode: "auto", projection: "perspective", framing_padding: 1.28 });
+    expect(args.device).toBe("auto");
+    expect(args.view_transform).toBe("AgX");
     expect(args.look).toEqual({
       key: 1, fill: 1, rim: 1, softness: 1,
       environment: 1, exposure_ev: 0,
@@ -43,6 +45,7 @@ describe("Publication render contract", () => {
     });
     expect(partial.camera).toEqual({
       yaw_degrees: -24, elevation_degrees: 18, projection: "perspective",
+      mode: "auto", framing_padding: 1.28,
     });
     expect(partial.look).toEqual({
       key: 1.4, fill: 1, rim: 1, softness: 1,
@@ -58,6 +61,10 @@ describe("Publication render contract", () => {
       { ...valid, width: 8192 },
       { ...valid, width: 4096, height: 4096 },
       { ...valid, quality: "random" },
+      { ...valid, device: "cuda_and_shell" },
+      { ...valid, view_transform: "unverified_transform" },
+      { ...valid, camera: { mode: "unknown" } },
+      { ...valid, camera: { framing_padding: 0.2 } },
       { ...valid, background: "fantasy" },
       { ...valid, camera: { yaw_degrees: Infinity } },
       { ...valid, look: { key: 0 } },
@@ -92,6 +99,10 @@ describe("Publication render contract", () => {
     expect(job.look).toEqual(publicationRenderParameters.parse(valid).look);
     expect(job.expected_mesh_count).toBe(1);
     expect(job.expected_material_count).toBe(1);
+    expect(job.report_path).toMatch(/report\.json$/);
+    expect(job.device).toBe("auto");
+    expect(job.view_transform).toBe("AgX");
+    expect(job.camera.mode).toBe("auto");
     expect(job.materials.ld_color_abc.color_uuid).toBe("abc");
     expect(blenderRenderArgs("C:\\Art\\render.py", "C:\\Art\\job.json")).toEqual([
       "--background", "--factory-startup", "--disable-autoexec", "--python",
