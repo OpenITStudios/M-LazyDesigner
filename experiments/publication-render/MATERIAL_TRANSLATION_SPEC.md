@@ -54,7 +54,7 @@ This acceptance matrix is intentionally strict. A blocked surface is an explicit
 
 | Source | glTF representation | Numeric policy | Preview/source evidence |
 | --- | --- | --- | --- |
-| COLOR RGBA | `pbrMetallicRoughness.baseColorTexture` | Preserve sampled texture bytes, sRGB interpretation, source UV after Blockbench V flip | Original COLOR raw RGBA SHA; decoded texture parity still native-unverified |
+| COLOR RGBA | `pbrMetallicRoughness.baseColorTexture` | Preserve sampled opaque face texels, sRGB interpretation, source UV after Blockbench V flip | Raw source RGBA SHA and source-matched GLB PNG decoded-pixel SHA; Blender appearance remains native-unverified |
 | MER red | `metallicRoughnessTexture` BLUE | Integer R 0–255; normalized by glTF | Source MER SHA + expected glTF map role |
 | MER blue | `metallicRoughnessTexture` GREEN | Integer B 0–255; normalized by glTF | Source MER SHA + expected glTF map role |
 | MER green | `emissiveTexture` mask times COLOR | Integer G 0–255; emission factor 1 for textured MER | Source MER SHA + expected glTF emission role |
@@ -89,10 +89,13 @@ Before launching Blender, the GLB verifier must check:
 4. Required `baseColorTexture`, `metallicRoughnessTexture`, `normalTexture`, and `emissiveTexture` references exist; forbidden roles are absent.
 5. Every referenced texture uses `GL_NEAREST = 9728` for minification and magnification, and `GL_CLAMP_TO_EDGE = 33071` for UV atlas safety.
 6. Every map must reference its exact exporter source identity (`ld_base_<color_uuid>`, `ld_mer_<color_uuid>`, `ld_normal_<color_uuid>`, or `ld_emission_<color_uuid>`). Uniform-MER emissive reuses COLOR; all references use `TEXCOORD_0` or its implicit default.
-7. Cube node → ordered face primitive → source material ID matches ADR-R01 mapping and raw Float32 glTF UV data. A valid glTF header is not enough.
+7. Cube node → ordered face primitive → source material ID matches ADR-R01 mapping and raw Float32 glTF UV data. Source-authored triangle index ordering is checked across primitive groups; a valid glTF header is not enough.
 8. The file has only embedded images, no external URL or unapproved extension. PNG integrity and decoded pixel parity are separate checks.
+9. For each exported texture, decode its embedded RGBA8 PNG with bounded zlib inflation and all five PNG scanline filters; compare its canonical pixel SHA-256 against the source COLOR, converted MER, converted NORMAL or derived emissive bytes. Bind by exact exporter texture name and require complete expected image inventory.
 
-**Important:** The deterministic GLB assertions are implemented as source checks. This is **not** a full Khronos Validator pass and does not prove Blender material appearance. Real importer shader wiring and source COLOR/MER/NORMAL decoded texel comparison are future native gates.
+**Canonical pixel-digest boundary:** Source COLOR texels that a Cube face samples must be opaque; nonopaque atlas padding outside those faces is intentionally allowed. For GLB pixel digests, nonopaque texels are normalized to four zero bytes on both sides, because the browser Canvas PNG round-trip can discard hidden RGB without changing what the opaque material renders. The independent raw source texture SHA remains unchanged. An altered opaque visible texel must fail. This is a source/export-image structural check, **not** a test that Blender imported pixels, UV loops, shader connections or final light response match.
+
+**Important:** The deterministic GLB assertions are implemented as source checks. This is **not** a full Khronos Validator pass and does not prove Blender material appearance. Real importer shader wiring, COLOR/MER/NORMAL image behavior and the actual Cycles result remain future native gates.
 
 ## 5. Blender 5.2 import invariants
 
@@ -125,7 +128,8 @@ Cutout/translucency/emissive-alpha remains blocked at this stage. PBR emissive t
 | `mcp/lib/publication/atlasCoverage.ts` | Conservative visible-face UV/alpha coverage | Accept unused padding, reject unknown visible alpha |
 | `mcp/server/publication/snapshot.ts` | Native TextureGroup resolution and material creation | Source receipt + detached material, without native editor changes |
 | `mcp/lib/publication/contracts.ts` | Material expectation in job/receipt | Bounded typed source semantics |
-| `mcp/lib/publication/glbIntegrity.ts` | GLB material numeric/role/sampler validation | Fail before Blender on material mismatch |
+| `mcp/lib/publication/glbIntegrity.ts` | GLB material factors, indexed face topology, role/sampler and embedded image identity/pixel parity | Fail before Blender on source-to-GLB mismatch |
+| `mcp/lib/publication/pngIntegrity.ts` | Bounded PNG CRC, zlib filter decoding and optional canonical RGBA SHA | Compare source/exported PNG texel values without treating unused nonopaque padding as a visible defect |
 | `mcp/server/publication/worker/core_assets.py` | Blender imported shader/texture/link inspection | Import proof data, not artistic PASS |
 
 No duplicate PBR registry, second Blender gateway, additional public tool, object-class taxonomy, Python eval or dedicated material-render subprocess is required.
@@ -147,13 +151,16 @@ No duplicate PBR registry, second Blender gateway, additional public tool, objec
 | MAT11 | Nearest replaced by linear or wrap changed to repeat | GLB sampler failure |
 | MAT12 | Blender import changes normal/emission node wiring or color-space | Native import failure (not tested yet) |
 | MAT13 | Valid material renders as wrong light response or blurry atlas | Real PNG visual failure (not tested yet) |
+| MAT14 | Correct texture names but altered opaque COLOR/MER/emissive pixels | GLB pixel digest mismatch before Blender |
+| MAT15 | Nonopaque unused atlas padding has changed hidden RGB; used opaque pixels intact | Source-to-GLB canonical digest remains valid |
+| MAT16 | Correct Cube UV/material roles but changed triangle winding or second material group's indices | GLB source index sequence mismatch |
 
 Source contracts and fixture tests are authored under `mcp/tests/publication-material-translation.test.ts` and `mcp/tests/publication-render-contract.test.ts`. **They have NOT been executed.** Do not claim a source pass, Blender import success, visual equivalence or in-game material certification.
 
 ## 9. Definition of completion and next narrow step
 
 - **SPECIFIED:** Every supported material role and explicit unsupported case is documented; one canonical source owner per operation.
-- **SOURCE-AUTHORED:** Snapshot uses the pure plan; GLB preflight checks numeric factor, role and nearest/clamp expectations; no silent downgrade.
+- **SOURCE-AUTHORED:** Snapshot uses the pure plan; GLB preflight checks numeric factor, source triangle index sequence, material roles, nearest/clamp and canonical decoded COLOR/MER/emissive/NORMAL PNG pixel digests; no silent downgrade. These are authored checks, not executed source tests or native proof.
 - **BUILD-VERIFIED:** TypeScript/Bun/build checks pass for exact Render commit (**NOT EXECUTED**).
 - **BLENDER-VERIFIED:** Native 5.2 import of actual MCP-authored model preserves shader graph, normal/emission maps, texel sharpness and geometry (**NOT EXECUTED**).
 - **VISUALLY-ACCEPTED:** Genuine Cycles output has been reviewed against the user's five reference images (**NOT EXECUTED**).
