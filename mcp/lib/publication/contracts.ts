@@ -122,6 +122,7 @@ export type PublicationJob = {
     pbr: "NONE" | "MAPPED";
     mer_sha256?: string;
     normal_sha256?: string;
+    unused_alpha_pixels?: number;
   }>;
 };
 
