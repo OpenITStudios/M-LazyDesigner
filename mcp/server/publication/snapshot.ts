@@ -8,6 +8,8 @@ import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publi
 import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
 
 const MAX_TEXTURE_PIXELS = 4_194_304;
+const MAX_TOTAL_TEXTURE_PIXELS = 8_388_608;
+const MAX_TEXTURE_COUNT = 128;
 const MAX_CUBES = 10_000;
 const MAX_GLTF_BYTES = 96 * 1024 * 1024;
 
@@ -149,10 +151,18 @@ function nativeState(): NativeState {
         channels.map(channel => [channel.uuid, channel.pbr_channel]).sort()]);
     }
   }
+  if (usedTextureIds.size > MAX_TEXTURE_COUNT) {
+    throw new Error("PUBLICATION_TEXTURE_COUNT_BUDGET_EXCEEDED");
+  }
+  let totalTexturePixels = 0;
   const imageRows = [...usedTextureIds].sort().map(uuid => {
     const texture = Texture.all.find(item => item.uuid === uuid);
     if (!texture) throw new Error("PUBLICATION_TEXTURE_DISAPPEARED: " + uuid);
     const pixels = imageData(texture);
+    totalTexturePixels += pixels.width * pixels.height;
+    if (totalTexturePixels > MAX_TOTAL_TEXTURE_PIXELS) {
+      throw new Error("PUBLICATION_TEXTURE_TOTAL_PIXEL_BUDGET_EXCEEDED");
+    }
     return [uuid, pixels.width, pixels.height, texturePixelsSha(pixels)];
   });
   return {
