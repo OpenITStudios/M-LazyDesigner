@@ -240,11 +240,33 @@ function copyPixelTexture(
   return tex;
 }
 
+/** Build face-to-atlas UV ownership once instead of rescanning all cubes for every material. */
+function collectUsedAtlasUv(): Map<string, AtlasRect[]> {
+  const usage = new Map<string, AtlasRect[]>();
+  for (const cube of Cube.all.filter(visibleWithParents)) {
+    const faceKeys = (cube.mesh?.geometry as { faces?: string[] } | undefined)?.faces;
+    if (!Array.isArray(faceKeys)) throw new Error("PUBLICATION_NATIVE_FACE_INVENTORY_MISSING");
+    for (const faceKey of faceKeys) {
+      const face = cube.faces?.[faceKey as keyof typeof cube.faces] as CubeFace | undefined;
+      const texture = face?.getTexture();
+      if (!texture?.uuid) throw new Error("PUBLICATION_FACE_TEXTURE_UNRESOLVED");
+      if (!Array.isArray(face.uv) || face.uv.length !== 4) {
+        throw new Error("PUBLICATION_FACE_UV_REQUIRED_FOR_ALPHA_FIDELITY");
+      }
+      const entries = usage.get(texture.uuid) ?? [];
+      entries.push(face.uv as unknown as AtlasRect);
+      usage.set(texture.uuid, entries);
+    }
+  }
+  return usage;
+}
+
 function makeMaterial(
   uuid: string,
   receipts: MaterialReceipt,
   createdTextures: THREE.Texture[],
   materialCache: Map<string, THREE.MeshStandardMaterial>,
+  uvUsage: ReadonlyMap<string, AtlasRect[]>,
 ): THREE.MeshStandardMaterial {
   const previous = materialCache.get(uuid);
   if (previous) return previous;
@@ -252,21 +274,7 @@ function makeMaterial(
   const colorPixels = imageData(texture);
   // Transparent atlas padding is not transparency on the 3D object. Verify
   // the precise authored face-UV regions rather than rejecting empty islands.
-  const uvRects: AtlasRect[] = [];
-  for (const cube of Cube.all.filter(visibleWithParents)) {
-    const faceKeys = (cube.mesh?.geometry as { faces?: string[] } | undefined)?.faces;
-    if (!Array.isArray(faceKeys)) {
-      throw new Error("PUBLICATION_NATIVE_FACE_INVENTORY_MISSING");
-    }
-    for (const faceKey of faceKeys) {
-      const face = cube.faces?.[faceKey as keyof typeof cube.faces] as CubeFace | undefined;
-      if (face?.getTexture()?.uuid !== uuid) continue;
-      if (!Array.isArray(face.uv) || face.uv.length !== 4) {
-        throw new Error("PUBLICATION_FACE_UV_REQUIRED_FOR_ALPHA_FIDELITY");
-      }
-      uvRects.push(face.uv as unknown as AtlasRect);
-    }
-  }
+  const uvRects = uvUsage.get(uuid) ?? [];
   const logicalWidth = Number(Project.texture_width) || colorPixels.width;
   const logicalHeight = Number(Project.texture_height) || colorPixels.height;
   const alphaCoverage = verifyVisibleAtlasPixelsOpaque(
@@ -356,6 +364,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
   const createdTextures: THREE.Texture[] = [];
   const createdGeometry: THREE.BufferGeometry[] = [];
   const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+  const uvUsage = collectUsedAtlasUv();
   const materialReceipts: MaterialReceipt = {};
   const scene = new THREE.Scene();
   scene.name = "lazydesigner_publication_snapshot";
@@ -373,7 +382,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
         const face = cube.faces?.[faceKey as keyof typeof cube.faces] as CubeFace | undefined;
         const tex = face?.getTexture();
         if (!tex?.uuid) throw new Error("PUBLICATION_FACE_TEXTURE_UNRESOLVED: " + cube.uuid);
-        const m = makeMaterial(tex.uuid, materialReceipts, createdTextures, materialCache);
+        const m = makeMaterial(tex.uuid, materialReceipts, createdTextures, materialCache, uvUsage);
         if (!createdMaterials.includes(m)) createdMaterials.push(m);
         return m;
       });
