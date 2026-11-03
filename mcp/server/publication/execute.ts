@@ -10,6 +10,7 @@ import {
   makePublicationJob,
   publicationRenderParameters,
   type PublicationRenderRequest,
+  type PublicationJob,
 } from "@/lib/publication/contracts";
 import {
   snapshotDetachedPublicationGlb,
@@ -34,6 +35,9 @@ export type PublicationRenderReceipt = {
   blender_target: "5.2.x";
   engine: "CYCLES";
   quality: PublicationRenderRequest["quality"];
+  render_settings: Pick<PublicationJob,
+    "background" | "camera" | "look" | "samples" | "noise_threshold"
+  >;
   output_path: string;
   output_png_sha256: string;
   output_png_bytes: number;
@@ -246,6 +250,13 @@ export async function renderPreparedPublication(
       blender_target: "5.2.x",
       engine: "CYCLES",
       quality: request.quality,
+      render_settings: {
+        background: job.background,
+        camera: job.camera,
+        look: job.look,
+        samples: job.samples,
+        noise_threshold: job.noise_threshold,
+      },
       output_path: request.output_path,
       output_png_sha256: hash(png),
       output_png_bytes: png.length,
