@@ -8,6 +8,7 @@
  * Proves only synthetic GLB->Blender Cycles PNG; LIVE_BLOCKBENCH fidelity is separate.
  */
 import { createHash } from "node:crypto";
+import { expectedPublicationGltfMaterial } from "../../lib/publication/materialContract";
 import { spawn } from "node:child_process";
 import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -162,6 +163,7 @@ async function main(): Promise<void> {
       materials: { ld_color_test: {
         color_uuid: "synthetic", texture_sha256: createHash("sha256").update(ONE_PIXEL_PNG).digest("hex"),
         alpha_mode: "OPAQUE", pbr: "NONE",
+        gltf: expectedPublicationGltfMaterial(null),
       } },
     });
     await writeFile(jobPath, JSON.stringify(job), { flag: "wx" });
