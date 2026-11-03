@@ -1,110 +1,233 @@
-# Publication Render — Research and implementation proposal
+# High-Fidelity Publication Renderer — Technical Research and Architecture Decision
 
-Status: RESEARCH / DESIGN ONLY — **no runtime renderer or export feature has been implemented or tested**.
-Branch: `Render`; fork point: `Local@85cb9889435a1c72893a9020f9ac4b73608a8ca9`.
-Date: 2026-11-03.
+**Date:** 2026-11-03  
+**Branch:** Render (initial fork: Local at 85cb9889435a1c72893a9020f9ac4b73608a8ca9)  
+**State:** RESEARCH DECISION / IMPLEMENTATION READY AS A SPECIFICATION — **NOT IMPLEMENTED, BUILT, OR LIVE TESTED**.  
+**Source authority:** This is a branch-isolated research document. Do not merge into Local/main, touch QA capture, change workflows, or publish without an independent explicit request.
 
-## Goal and boundary
+## 1. What the user actually wants (not an object taxonomy)
 
-Produce presentation-quality image assets **after model authoring**, from the actual Blockbench project: hero PNGs, transparent cutouts, orthographic/model sheets, and later optional animation/action poses. This is **publication**, not reference-conformance QA. Beauty renders may deliberately alter artistic lighting and backdrop but must not be used as geometric/texture quality evidence or Minecraft-runtime proof.
+Input is the **real authored Blockbench asset**. Output must be a **real high-quality 3D render**, visually comparable in rendering craft (not identical scene content) to the five submitted reference images. The requested quality is INDEPENDENT of whether the asset is furniture, a mob, a vehicle, a golem, or a whole scene. Do NOT generate or redraw the model with a diffusion/image model. Do NOT classify the render quality or renderer by asset subject.
 
-**Required separation:** Keep `capture_model_views` and its native dependency/approval semantics unchanged. No modification to `Local` or `main`. Do not use a marketing image to claim an approved model/animation or a native QA PASS.
+Cross-cutting visual outcomes:
 
-## Current repository facts (read at fork SHA)
+1. Strong but controlled key/fill/rim and indirect bounce lighting; expressive but readable forms.
+2. Preserved pixel-art / voxel albedo and exact UV alignment; sharp texture texels, not blurred/smoothed or hallucinated detail.
+3. Readable recesses and convincing contact shadows; physically plausible reflectance when authored maps exist.
+4. Correct alpha, roughness, metalness, normals, emission and postprocessing, not a uniformly glossy/plastic shader.
+5. Intentional camera/composition, foreground/background separation, coherent exposure/white balance and color grade.
+6. Optional scene/environment, atmospheric depth, volume lighting and action pose; no expectation that rendering invents scenery absent from the source/approved asset library.
+7. Delivery as normal PNGs + optional editable scene/EXR, traceable to exact source model and settings.
 
-- `mcp/server/tools/inspection/camera.ts` owns canonical `capture_model_views`: selected offscreen `Screencam.NoAAPreview`, deterministic framing, same-response PNG compaction and dependency freshness. This is evidence capture, not art-directed studio rendering.
-- `mcp/lib/blockbench/capture.ts` is a simple viewport screenshot helper, not a renderer.
-- `mcp/lib/geometry/renderedModelBounds.ts` provides transformed model bounds. Reuse its read-only computation where applicable rather than inventing a second model-axis authority.
-- `mcp/server/tools/io/export.ts` implements `.bbmodel` and Bedrock codec delivery. It does **not** expose a publication-image codec.
-- `mcp/server/runtime/registration.ts` registers the camera/export families; `mcp/lib/capabilities/manifest.ts` declares capability metadata; `mcp/gateway/capabilities/manifest.ts` owns discovery semantics. The AI client must retain exactly four public Gateway methods.
-- `mcp/ui/index.ts` and `mcp/plugin/blockbenchIntegration.ts` own the existing human-facing plugin integration; there is no standalone publication renderer.
-- `docs/03-authoring/finalization/standard.md` separates stage approval, saved `.bbmodel` identity, requested exports and visual proof. A publication PNG must bind to a known source revision if labeled FINAL, not confer approval on that revision.
+**Fundamental constraint:** A render engine improves lighting and presentation, but cannot recreate geometry/paint detail that the original model does not contain. A cinematic shot with architecture/props requires actual scene assets; these are composited as 3D geometry, not generated pixels.
 
-## Upstream systems reviewed
+## 2. Locked technical decision
 
-| System / source | Why it matters | Limitations / decision |
-| --- | --- | --- |
-| [Blockbench: Rendering Models](https://www.blockbench.net/wiki/guides/model-rendering/) | Official GLTF→Blender/Light Tracer/Sketchfab overview. Blender is a full lighting/ray-tracing alternative. | External program adds installation/runtime/format boundaries. |
-| [Shapescape Render Model](https://github.com/ShapescapeMC/Blockbench-Plugins/tree/main/plugins/render_model) + [usage](https://blockbench-plugins.readthedocs.io/en/latest/render_model/usage.html) | Batch PNG angles, isometric sheets, GIF turntable, animation samples; offscreen native capture, auto frame and multiple resolutions. | Primarily presentation capture, not cinematic lighting. Requires desktop Blockbench 5+ for disk writes. GPL-3.0; do not copy without license compliance. |
-| [Lightflow for Blockbench](https://github.com/MidFord/lightflow-blockbench) + [Studio Render](https://github.com/MidFord/lightflow-blockbench/blob/main/studio_render.js) | Rich studio ecosystem: key/fill/rim lighting, soft shadows, material/shader editing, environment, atmosphere, HDR/grade/bloom, tiled supersampled PNGs, transparent backgrounds, camera presets. Apache-2.0. | Development `main` remains explicitly unstable. Do **not** assume a supported programmatic extension contract or require installation; test source and live GPU behavior before adapter work. |
-| [Lightflow status (2026-10-18)](https://github.com/MidFord/lightflow-blockbench/blob/main/docs/DEVELOPMENT_STATUS.md) | Stable preview is a pre-release; `main` targets later RC. | No production-ready guarantee; different module versions/dependencies. |
-| [Three.js WebGLRenderer](https://threejs.org/docs/pages/WebGLRenderer.html) | Bundled in Blockbench; offscreen rendering, color space, shadow maps, tone mapping, and configurable output resolution. | Texture/material conversion, GPU limits and native scene isolation need live verification. |
-| [Blender background rendering](https://docs.blender.org/api/current/info_tips_and_tricks.html) + [Blockbench export formats](https://www.blockbench.net/wiki/guides/export-formats/) | Optional automated high-quality render of glTF/GLB via Python/Eevee/Cycles, physical lights, shadows and compositor. | Extra binary, export fidelity, permission/process security; never required for base workflow. |
-| [Blender Image Texture interpolation](https://docs.blender.org/manual/en/3.3/render/shader_nodes/textures/image.html) | `Closest`/nearest-neighbor preserves crisp Minecraft pixel-art edges. | Correct alpha and emission require per-material verification. |
+**Primary:** Blender 5.2 LTS, pin **5.2.3** for initial proof (released 2026-10-22), using **Cycles path tracing**. Headless deterministic Blender Python worker for both low-sample preview and high-quality final; no Eevee/Cycles look-switch in the normal preview-to-final path. Eevee is an optional future interactive draft, not the source of visual truth.
 
-These are **references**, not vendored dependencies. No third-party code was copied into LazyDesigner.
+**Input transport:** Validated **GLB/glTF 2.0** containing a detached, non-mutating Blockbench snapshot + a compact material/source manifest. The input MUST derive from original native meshes and texture pixels. It is never a reconstructed AI image.
 
-## Engineering decision
+**Orchestration:** One Runtime-side publication service callable by the existing Blockbench Plugin UI and through the existing Gateway four-method surface via an additional discoverable Runtime capability. No public fifth Gateway method, new cloud service, parallel model state, mandatory third-party Blockbench plugins, or modification to the QA capture tool.
 
-Build a **native, optional Studio Publication pipeline first**, with an opt-in Blender high-fidelity backend considered only after a demonstrated need. Benchmark Lightflow and Shapescape against our native implementation rather than installing an experimental plugin as a mandatory dependency.
+**Rendering worker:** Explicitly user-authorized local Blender executable, invoked with a validated argv array (never a shell command string) using Blockbench's permission-scoped child_process + filesystem APIs. No dependency on external API, image generator, or paid render service. Worker is optional: if Blender is absent, present an honest unavailable state, not an inferior render mislabeled final.
 
-- Native dependency baseline: existing Blockbench Three.js/canvas and project textures/meshes, no external online service, no new GPU engine/framework.
-- Publication scene should be **detached** from the authoring/QA scene where feasible: read transformed visible native geometry, keep textures/material semantics, add temporary presentation-only lights, floor/shadow receiver, background and camera. Any unsupported/ambiguous material or pose semantics must fail explicitly or be marked visually unverified — never silently recolor.
-- Reuse existing model/camera orientation contracts and single-source native dependencies; do not reuse QA PNGs as publication results, weaken QA or duplicate its validation.
-- One native render service shared by **Plugin UI** and **MCP Runtime capability**. Gateway exposes it through existing `invoke_capability` (never a fifth top-level client tool). Studio settings are presentation-specific; **do not reuse `render_profile`**, which means Bedrock entity material behavior elsewhere in this repository.
-- Favor a bounded single render request with direct save and short artifact receipt, not transfer of every full-resolution PNG into the LLM context.
+**Excluded as primary:**
+- Existing Blockbench screenshot / Three.js viewport: good for QA/camera orientation, lacks Cycles GI/path-traced final quality.
+- Lightflow: excellent lighting/shader/compositor *reference*, but its active development renderer is not a proven stable automation API; optional future integration only after compatibility tests.
+- Shapescape Render Model: excellent batch/sheet/turntable *reference*, not the final GI renderer.
+- Direct .bbmodel-to-Blender importer: creates a second full model parser and risks geometry/UV/animation divergence; do not build unless source GLB fidelity cannot be solved.
+- AI image generation or upscaling: disallowed for source-faithful render output. Do not claim hallucinated detail is an authored 3D asset.
 
-### Proposed user experience
+## 3. Critical verified source facts and risks
 
-After current-revision finalization or an explicitly labeled draft:
-1. Open **LazyDesigner → Render** (or invoke known `export_publication_render` capability).
-2. Select a preset and camera, then preview at low resolution. Presets: `clean_studio`, `dark_cinematic`, `marketplace_card`, `transparent_cutout`.
-3. Adjust **Key / Fill / Rim**, shadow softness, background, exposure, crop/negative space and optionally label/brand layout. Preserve pixel-art texture sampling; no automatic smoothing or changes to source textures.
-4. Choose output (PNG 1:1, 4:5 or 16:9; recommended 2048px long side, optional 4096 on supported GPU). Save high-quality PNG without altering the model.
-5. Optionally render 3 fixed hero angles, multi-view sheet, and separate posed frame(s) from actual animation time once native pose preservation is proven.
-6. Receive output paths, dimensions, image hashes, source revision identity, preset/camera settings, and honest verification state. Optional small preview for AI inspection, not automatic full-size image delivery.
+1. **Blockbench recommends glTF for rendering in Blender** and supports hierarchy/animation. Official: https://blockbench.net/wiki/guides/model-rendering/
+2. In upstream Blockbench's actual glTF codec, compile() uses THREE.GLTFExporter but also sets animated texture frames to 0, changes edit/animation preview, changes view mode to textured, temporarily moves scene objects and performs some restoration without a guaranteed full rollback on error. **Do not invoke the current glTF codec in the authoritative live editor as an unquestioned side-effect-free operation**. Source: https://github.com/JannisX11/blockbench/blob/master/js/formats/standards/gltf.js
+3. Current LazyDesigner export_model intentionally restricts codec IDs to bedrock/project/bedrock_animation; it does not expose GLB. Source: mcp/server/tools/io/export.ts at initial Render fork.
+4. Current LazyDesigner capture_model_views includes valuable frame/bounds/fingerprint concepts, but is explicitly an evidence/QA owner, not a beauty-render pipeline. Reuse safe pure geometry calculations where practical, not its image result or its visual verdict. Source: mcp/server/tools/inspection/camera.ts.
+5. LazyDesigner PBR TextureGroup already tracks color, normal, height and MER. Source: mcp/server/tools/texture/materialState.ts. Official Bedrock MER: **R=metalness, G=emissive, B=roughness**, while MERS adds alpha=subsurface and requires separate recognition. Sources: https://learn.microsoft.com/en-us/minecraft/creator/documents/vibrantvisuals/useblockbenchtocreatemodelswithtextures?view=minecraft-bedrock-stable and https://github.com/MicrosoftDocs/minecraft-creator/blob/main/creator/Reference/Content/TextureSetsReference/TextureSetsConcepts/TextureSetsIntroduction.md
+6. Bedrock render_profile, PBR texture_set, and Blockbench preview render_mode are DIFFERENT semantic domains and alpha has slot/zone-specific meanings. Never infer transparency, color mask, or emissive mapping from alpha alone. Source: docs/03-authoring/texture/render-profile.md.
+7. Blockbench native APIs explicitly allow child_process to launch external programs after plugin permission. Permission denial is a normal blocked outcome. Source: https://github.com/JannisX11/blockbench/blob/master/types/custom/desktop.d.ts and https://github.com/JannisX11/blockbench/blob/master/js/native_apis.ts
+8. Blender 5.2.3 LTS is the active patched 5.2 line as of this decision date. Official: https://www.blender.org/releases/5-2/
+9. Blender's glTF import uses bpy.ops.import_scene.gltf, including meshes/materials/textures/animations, but importer compatibility is NOT proof of exact per-face equality. API: https://docs.blender.org/api/5.2/bpy.ops.import_scene.html
+10. Khronos glTF-Validator checks structure, references, buffer values and extensions; it cannot prove visual fidelity: https://github.com/KhronosGroup/glTF-Validator
+11. Pixel-art interpolation **Closest** (nearest neighbor) and Cycles denoising with albedo+normal guide passes are documented: https://docs.blender.org/manual/sl/5.2/render/shader_nodes/textures/image.html and https://docs.blender.org/manual/en/5.2/compositing/types/filter/denoise.html
+12. Poly Haven HDRIs are CC0; do not auto-download at render time or ship enormous assets by default: https://polyhaven.com/license
 
-**Default output = individual PNG files**, not a ZIP, uploaded screenshot or external/cloud render. Do not overwrite existing paths without explicit authorization.
+## 4. End-to-end architecture and trust boundaries
 
-### Illustrative capability contract — not implemented
+~~~text
+Approved/current native Blockbench project
+    |
+    | read-only geometry / exact RGBA atlas / material intent / current pose
+    v
+[Asset Fidelity Bridge: detached snapshot]
+    |  => isolated snapshot.glb
+    |  => render-input.json (source/texture hashes, material channels, pose)
+    |  => native state BEFORE/AFTER attestation
+    v
+[GLB structural validation + source fidelity preflight]
+    |  invalid, partial, ambiguous => BLOCKED, do not render
+    v
+[User-permitted local Blender 5.2.3 process]
+    |  bpy.ops.import_scene.gltf()
+    |  material translation, light rig, ground/shadow catcher, world
+    |  camera projection and composition, compositing graph
+    v
+[Cycles low-sample preview; same scene graph used for final]
+    |  user/AI art-direction corrections when needed
+    v
+[Cycles final + optional transparent/shadow/albedo/depth passes]
+    |
+    v
+[Quality checks + source/job/renderer provenance]
+    => named publication PNG(s), optional .blend/EXR, compact receipt
+    => same internal service accessed by Blockbench UI or Gateway
+~~~
 
-```ts
-export_publication_render({
-  preset: "clean_studio" | "dark_cinematic" | "marketplace_card" | "transparent_cutout",
-  view: "front_3_4" | "back_3_4" | "front" | "side" | "custom",
-  width: 2048, height: 2048,
-  background: { mode: "transparent" | "solid" | "gradient", /* bounded colors */ },
-  output: { mode: "preview" | "save", path?: /* authorized absolute path */ },
-  include_small_mcp_preview: false
-}) -> {
-  project_uuid, source_checkpoint_sha256_or_null, publication_status,
-  output: { path_or_null, image_sha256, width, height, png_bytes },
-  pose_metadata, render_settings, source_revision_state,
-  viewport_untouched, model_state_untouched, warnings
+**No AI token burn on full resolution PNG data by default**. Save to a user-authorized location and return path/hash/dimensions and at most one small preview if explicitly requested. Do not write over existing assets without explicit permission.
+
+### 4.1 Non-mutating Asset Fidelity Bridge (the FIRST vertical slice)
+
+Implement a **detached scene snapshot**, NOT the current mutation-prone native glTF codec on the user's active project:
+
+- Lock to current project UUID, native/runtime generation and source revision; read current visible/exportable native model Cube geometry, transformed world matrices, mesh UVs, material groups and exact texture bytes.
+- Clone geometry, transform and materials into an independent glTF-compatible THREE.Scene; NEVER reparent the editor's objects, switch native mode, change Texture.currentFrame, select animations, edit Undo, or save the project.
+- Export from the detached scene using the bundled THREE.GLTFExporter. Preserve per-face UVs, world space, original color/alpha textures and exact source UUID mapping through extras/sidecar. Convert Blockbench-specific runtime shader materials explicitly into portable glTF channels; do not assume GLTFExporter can serialize arbitrary Blockbench ShaderMaterial.
+- For V1, support native visible/exportable Cube-derived geometry and CURRENT verified static pose. If unsupported non-Cube elements, ambiguous baked transforms or shader semantics are present, return a bounded UNSUPPORTED/UNVERIFIED report; **do not silently drop elements**.
+- Restore nothing because no authoritative state was mutated. Still attest model/texture/project/generation unchanged before/after snapshot and fail closed if concurrent edits occur.
+- Run Khronos glTF-Validator and independent reimport checks; perform camera-matched flat/unlit material comparison with native reference as the actual visual fidelity test.
+- A fallback using the native Blockbench glTF codec is allowed ONLY on an independently disposable project with explicit state isolation and proven restoration on success + failure; never relax the source-project non-mutation invariant.
+
+**Animation/pose expansion:** V1 can render the already-verified current pose as static meshes. Deterministic clip/time sampling, rig export, animation snapshots and action-pose batches are a SEPARATE follow-up that must preserve editor's animation state/Undo and prove exact frame fidelity. Do not claim that V1 renders arbitrary animation time.
+
+### 4.2 Material Fidelity Bridge
+
+- Preserve original albedo bitmap/hash and per-face UV orientation. For voxel/pixel textures use Blender image node interpolation=Closest; normal/height/MER use Non-Color as appropriate, color textures use correct sRGB interpretation, not raw data.
+- When PBR channels exist, map Color -> Principled Base Color, normal -> Normal Map, MER.R -> Metallic, MER.B -> Roughness, MER.G -> Emission strength/mask (with authored emission hue/color policy), alpha and shadow mode by verified native semantic meaning; handle authored uniform channel values.
+- If only color exists, use a conservative neutral non-metal rough material by default and make look-dev overrides opt-in, clearly distinguishing 'publication look' from Minecraft gameplay material. Do not infer metalness/emission from blue or bright pixels.
+- Cutout, translucent, emissive alpha/mask, color-mask and Bedrock runtime-only render semantics are NOT interchangeable. Map only supported variants; fail or explicitly mark unsupported/visually unverified.
+- Keep flat / voxel normals by default; no smoothing subdivision or speculative geometry. Optional bevels are render-only stylistic overrides, disabled by default and never silently claimed to be authored geometry.
+- Texture fidelity and PBR material appearance are two independent verification dimensions.
+
+### 4.3 One quality engine for ALL assets (no asset-category branching)
+
+All scenes share the same render graph, camera logic and quality policy. Adjustable scene parameters are not subject classifications.
+
+1. Camera: calculate native visible-geometry bounding volume, candidate three-quarter angles + orthographic/perspective with explicit known front direction, safe margins, intentional focal length and subject occupancy. Optional bounded low-cost candidate previews rank silhouette coverage, clipping and visibility; don't guess canonical 'front' from asset name.
+2. Lighting: relative-size key/fill/rim Area Lights with physically meaningful warm/cool separation and soft shadows; optional calibrated environment HDRI for indirect fill/reflections; tune by measured scene extents rather than absolute hardcoded world coordinates.
+3. Ground/contact: real floor, soft contact shadows, optional shadow catcher for compositing; separate object alpha and shadow passes for transparent publication PNGs.
+4. Material response: metallic/specular/roughness/normal driven by actual authored maps or explicit presentation overrides; preserve voxel color blocking and edge readability.
+5. Color: scene-linear lighting, AgX view transform as a STARTING hypothesis (not mandated without comparison), calibrated exposure/white balance/contrast, limited saturated clipping. Test against 'Standard' on pixel-art swatches to avoid accidental washed-out atlas appearance.
+6. Post: use Cycles denoising with albedo+normal guides; conservative emission-only bloom/glare, optional slight vignette; depth of field only where it does not destroy subject detail; optional volumetric fog when requested/scene supplies depth.
+7. Compositing: render layers/passes for Albedo, Normal, Z, Emission and Shadow Catcher as relevant; do not bake global haze/bloom into every pixel blindly.
+8. Scene/background: initially a neutral physically based stage. For rich environmental images use actual licensed/user-authored 3D background assets or a procedural stage, with separately controlled lighting/atmosphere. **One asset alone cannot automatically yield a detailed city or other authored environment without additional scene content.**
+
+## 5. Initial parameter candidates (TO BE BENCHMARKED, NOT A QUALITY CLAIM)
+
+| Control | Fast review | Publication default | High-quality optional |
+| --- | --- | --- | --- |
+| Engine | Cycles | Cycles | Cycles |
+| Resolution | 640px longest edge | 2048px longest edge | 3840px longest edge / 4K |
+| Samples | 24–48 | 128 | 256 |
+| Adaptive noise | on | on | on, lower threshold after test |
+| Denoise | on, guided | on, guided | on, guided with crispness comparison |
+| Texture filtering | Closest for authored voxel pixel art | Same | Same |
+| Geometry | Original only | Original only | Original only |
+| Background | Neutral stage | Neutral/gradient or supplied scene | Supplied/procedural scene |
+| Color/bloom | restrained | calibrated per shot | calibrated per shot |
+
+These are **first benchmark inputs**, not validated performance or a universal recipe. CPU/GPU support, VRAM constraints, timing and exact final sample levels must be measured on real devices. Do not promise minutes/seconds. Use source-preserving preview/final parity, NOT a different renderer for the final look.
+
+## 6. Integration design
+
+### In Blockbench Plugin
+
+A single **Render** panel/dialog under existing LazyDesigner UI: current asset identity, explicit publication draft/final readiness, camera preview, light/environment adjustments, optional material overrides, destination and Render button. The UI calls the SAME internal publication service used by the Runtime tool. A per-job cancellation action and error/permission feedback are required; never freeze or take over the active authoring viewport.
+
+### In MCP
+
+New conditional native capability, tentatively named **render_publication**, discovered/described/invoked through the existing Gateway methods. No fifth method and no new independent Gateway transport.
+
+Illustrative non-implemented request:
+
+~~~json
+{
+  "quality": "preview|publication|high",
+  "source": {"project_uuid": "...", "checkpoint_sha256": "..."},
+  "camera": {"mode": "auto|manual", "front_direction": "+z", "projection": "perspective", "framing": "full"},
+  "look": {"key": 1, "fill": 0.4, "rim": 0.65, "hdri_id": null, "bloom_strength": 0.1},
+  "scene": {"mode": "neutral|supplied", "scene_asset_ids": []},
+  "output": {"format": "png", "path": "authorized absolute path", "overwrite": false},
+  "preview_delivery": "metadata_only|small_image"
 }
-```
+~~~
 
-No `FINAL` label without a verified matching saved source revision; allow `DRAFT` images explicitly. Do not mistake successful filesystem write or source hash for a visual quality PASS.
+Return structured receipt: success/error code, source checkpoint + texture/source GLB hashes, Blender executable/version/device, import/bridge status, exact camera/light/look/quality settings, output PNG checksum/size/path, elapsed/provenance metrics, native state unchanged, optional preview; **no automatic claim of artistic PASS**.
 
-### Suggested exact owners after research is accepted
+**Exact source owners to modify only during implementation:**
+- mcp/server/tools/inspection/publication.ts — registered native Runtime capability (reuse existing camera family and declarative capability metadata);
+- mcp/server/publication/ — one native export snapshot/worker service;
+- mcp/lib/publication/ — pure job schema, material channel mapping, camera/light normalization and result policy;
+- mcp/ui/publicationRenderDialog.ts + minimal mcp/ui/index.ts integration — human UI consumer of same service;
+- mcp/lib/capabilities/manifest.ts and mcp/gateway/capabilities/manifest.ts — semantic discovery/cost/operation, no extra public Gateway method;
+- Blender worker script kept under mcp/server/publication/worker/ (trusted, bundled and versioned; no generic user script execution);
+- mcp/tests/publication-render*.test.ts — native fidelity/worker/contract regression.
+No edits to QA owner mcp/server/tools/inspection/camera.ts unless a narrowly justified shared pure helper is proved necessary. Generated docs/prompts must follow canonical generator; never hand-edit them.
 
-1. `mcp/lib/publication/`: pure presets, bounded parameter policy and camera composition math.
-2. `mcp/server/publication/`: native render engine and immutable capture transaction; material/pose compatibility diagnostics.
-3. `mcp/server/tools/inspection/publication.ts`: small tool schema and executor registration in **existing camera family**. Retain `inspection/camera.ts` as QA owner.
-4. `mcp/ui/publicationRenderDialog.ts` + small existing `mcp/ui/index.ts` integration: human trigger to the **same** native service under the current exclusive runtime operation queue.
-5. `mcp/lib/capabilities/manifest.ts` + `mcp/gateway/capabilities/manifest.ts`: explicit discovery, stage/core classification, operation/export effect and heavy execution metadata. Register without changing public Gateway shape; update actual surface tests and only generator-owned artifacts via the canonical generator.
-6. `mcp/tests/publication-render*.test.ts` + a real disposable Bedrock fixture for runtime/GPU visual acceptance.
+## 7. Worker execution / security
 
-This is a design map, **not permission to bypass native plugin permissions or finalization gates**. Avoid adding new Gateway commands, independent state databases, or broad modifications to QA.
+- Only a user-selected, verified Blender executable. Check Blender version/identity and local availability before exposing Ready.
+- Explicit scoped Blockbench permissions for fs and child_process; never silently bypass denial. Spawn with argv (no shell), strict trusted script path and dedicated, bounded temporary job directory.
+- Use Blender CLI flags: --background --factory-startup --disable-autoexec --python <trusted worker> -- <job-json path>, with environment isolation and plugin auto-run controls. Blender Python script is code trusted from **our signed/verified distribution**, NEVER supplied by arbitrary model/scene content.
+- Import only validated GLB and approved scene assets; avoid opening untrusted .blend projects with auto scripts. Do not let a model, user label or remote filename become a Python expression or shell command.
+- Reject path traversal, symlink redirection, unauthorized overwrites and unbounded resolutions, sample counts, memory, subprocess durations, scene files or output sizes. On crash/time-out report actual failure, no fabricated artifact or silent retry after uncertain write.
+- GPU backend (OptiX/CUDA/HIP/oneAPI/Metal) only when enumerated as available; explicit CPU fallback reported. No measured speed claims.
+- Temporary files cleaned only after proof/retention policy; persistent asset files unaffected.
 
-## Minimum first implementation slice (MVP)
+Official Blender CLI/security: https://docs.blender.org/manual/sl/5.2/advanced/command_line/arguments.html , https://docs.staging.blender.org/manual/en/latest/advanced/scripting/security.html  
+GPU support: https://docs.blender.org/manual/pt/5.2/render/cycles/gpu_rendering.html
 
-- One `clean_studio` PNG preset with orthographic 3/4 camera, automatically framed from current rendered model bounds.
-- Isolated background and key/fill/rim; camera and project state unchanged; exact original textures/UV, supported transparency, nearest-neighbor sampling.
-- Bounded resolution preview (e.g. 512) and exported PNG (e.g. 2048); resource/GPU guardrails, fresh project identity before/after, path safety and write integrity.
-- Both UI button and one MCP capability use **one implementation**; show save path and a small preview where requested.
-- Source and contract tests designed before claiming native rendering success. No animation pose iteration, multi-image sheets, or optional Blender until baseline native fidelity is demonstrated.
+## 8. Acceptance gates — no vague 'looks good'
 
-## Acceptance and negative tests (must be executed before saying production-ready)
+### Gate A — Asset fidelity (required before polishing renders)
 
-- Correct identity: real Bedrock Cube UV/rotations/parent groups, player-size scaling, pixel edges, alpha clip/blend, transparent PNG background, emissive/material distinctions and no missing textures.
-- Exact UI/MCP equivalence: same project+settings produce comparable output, with deterministic camera and file metadata (byte equality not assumed across GPU drivers).
-- State isolation: original Blockbench camera, lights, selection, pose, Undo stack, project save identity and QA capture dependency behavior unchanged after success **and exceptions**.
-- Failure cases: no project, no visible geometry, invalid size/color/camera, oversized output, GPU/context loss, project switch during render, stale source, unsupported texture/pose, filename collision, denied filesystem permission, readback mismatch, timeout.
-- Output: PNG signature and dimensions, alpha/background behavior, expected aspect ratio, no cut-off silhouette, explicit image SHA-256, no misleading visual PASS.
-- Real visual rubric: 3 fixture classes (humanoid/mob, tall/mechanical asset, translucent/emissive asset), three camera angles, readability at thumbnail, key/fill/rim balance, shadows, texture sharpness and comparable result vs Shapescape/Lightflow/Blender.
-- Performance: cold/warm render duration, GPU memory, successful PNG bytes, number of full-res images sent to MCP, **cost per accepted image** and failure rate. No arbitrary claimed percent savings.
+- GLB structurally valid; no broken buffers/texture references; imported Blender scene has non-empty visible native geometry.
+- No dropped source-visible elements, faces, UV islands or external/unsupported materials; unsupported category must explicitly block rather than silently degrade.
+- Project UUID/stage/checkpoint/texture hashes identical before and after capture; native selection, camera, pose, Undo, save status and QA capture unaffected on both success and error.
+- World bounds and silhouette can be compared in aligned coordinates within a documented numerical tolerance; cross-render unlit/albedo views checked visually for flipped UV, missing faces, interpolation blur, alpha difference and color mapping. Structural validation **never substitutes** pixel-level comparison.
+- Animated pose/clip/time remains OUT OF SCOPE until own evidence passes.
 
-## Delivery/proof gate
+### Gate B — Renderer / image correctness
 
-At this commit, the **research and exact-source audit** is complete; implementation/test/build/native GPU evaluation is **NOT EXECUTED**. GitHub-only proof can validate authored source/contract later; it cannot certify beautiful pixels or Blockbench lifecycle. Local/manual rendering and any Blender optional backend remain separate proof domains. Never silently merge into `Local` or `main`.
+- Blender actually runs the pinned worker; accepted RGB/RGBA PNG signature/size/alpha profile; valid successful readback + digest; file write collision blocked.
+- Representative renders under a fixed scene/camera show crisp texels, correct PBR/reflection/emissive, no unintended clipping, smooth controllable contact shadows, no light leaks or denoising smear.
+- Both neutral and colored/transparent stage outputs retain intended alpha and ground/shadow treatment.
+- A render failure returns a truthful code and never "succeeds" by sending a native screenshot or AI-produced image.
+
+### Gate C — Perceptual publication bar (independent of object subject)
+
+Use 5 uploaded references ONLY as a **visual-craft benchmark**, NOT as a request to recreate their scene/subject. Evaluate on 3+ real distinct existing LazyDesigner .bbmodel fixtures with the SAME render engine, with controlled adjustments to camera/lights/scene.
+
+Art-director rubric, scored 1–5 in blind visual review: (a) subject silhouette and readable detail, (b) lighting direction/indirect fill, (c) credible shadows/contact, (d) material response and preserved voxel sharpness, (e) color/composition/post-production discipline. Define success as >=4/5 on all five criteria for each accepted fixture, with no Gate A defects. These are **proposed acceptance criteria**, not measured results. Record rejected frames and settings, not only cherry-picked successes.
+
+Quantitative diagnostics should report occupancy/clipping, overexposure on non-emissive pixels, texture/shader coverage, rendering time, peak memory where measurable, failure/redo rate and count of final PNGs sent to an AI model. Thresholds must be calibrated from real cases, not invented.
+
+## 9. Implementation sequence and stop conditions
+
+1. **Fidelity spike FIRST**: detached Cube/model -> GLB -> structural validation -> Blender import; camera-matched unlit comparison and native-state invariants on real Blockbench fixtures. If this fails, stop and fix bridge before any beauty-render features.
+2. **Single Cycles render**: deterministic Blender worker creates camera, lights, physically grounded floor, color/normal/MER/alpha node graph, one output PNG with metadata.
+3. **MCP + Plugin equivalence**: same service, permission gating, source revision binding, preview vs final and compact receipts.
+4. **Quality convergence**: tune auto composition, key/fill/rim, shadow catcher, AgX vs Standard, PBR, denoise, bloom and HDRI against five references and ≥3 genuine assets; benchmark actual GPU/CPU.
+5. **Environment + motion**: user-authored or approved CC0 3D scenes, volumetrics, multi-shot renders, turntable and animation frame sampling only after fidelity gates.
+
+**STOP**: Do not claim "photorealistic / comparable to the references / production ready" from source or docs alone. Require both valid live Blockbench snapshot and real Blender output quality evidence. A working PNG with wrong texture/UV is a FAIL, not a success.
+
+## 10. Current proof and bounded handoff
+
+- Research and exact repository + official external source review: COMPLETE.
+- Current branch only contains documentation. No rendering engine, export bridge, UI capability, worker, or test implementation has been authored here.
+- Blender binary, Bun toolchain, installed Blockbench and live Gateway: **NOT AVAILABLE / NOT EXECUTED in this GitHub-only research session**.
+- No images generated, downloaded or copied into this branch; five user reference images are quality criteria only.
+- No commits to Local/main, no CI workflows changed, no release/publish.
+
+**Next engineering task:** implement Gate A as one source/test/fixture-bound vertical slice on Render. Do not start with bloom, scene libraries, or brand presets before GLB and source fidelity actually pass.
