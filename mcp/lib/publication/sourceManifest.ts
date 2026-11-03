@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 /**
  * Source-faithful Bedrock Cube -> GLB still-render contract.
  * Pure, import-safe and scoped to existing LazyDesigner-authored Cube geometry.
@@ -20,6 +22,8 @@ export type PublicationCubeManifest = Readonly<{
   expected_blender_bounds_max: readonly [number, number, number];
   position_sha256: string;
   uv_sha256: string;
+  gltf_uv_sha256: string;
+  uv_vertex_count: number;
   normal_sha256: string | null;
   index_sha256: string;
   primitives: readonly PublicationPrimitiveBinding[];
@@ -87,6 +91,24 @@ export function expectedPublicationBlenderBounds(
     }
   }
   return { min, max };
+}
+
+/**
+ * Blockbench's bundled glTF exporter flips V for TEXCOORD_0 in its own
+ * detached output (v_glTF = 1 - v_preview). It also writes Float32 values.
+ * Fingerprint the actual expected GLB accessor, not the unflipped native UV.
+ */
+export function expectedPublicationGltfUvSha256(uv: readonly number[]): string {
+  if (uv.length === 0 || uv.length % 2 !== 0 ||
+      uv.some(value => !Number.isFinite(value))) {
+    throw new Error("PUBLICATION_SOURCE_UV_FINGERPRINT_INVALID");
+  }
+  const data = Buffer.allocUnsafe(uv.length * 4);
+  for (let i = 0; i < uv.length; i += 2) {
+    data.writeFloatLE(uv[i]!, i * 4);
+    data.writeFloatLE(1 - uv[i + 1]!, (i + 1) * 4);
+  }
+  return createHash("sha256").update(data).digest("hex");
 }
 
 /**
