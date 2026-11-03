@@ -15,6 +15,45 @@ const MAX_CUBES = 10_000;
 const MAX_VERTEX_COMPONENTS = 3_000_000;
 const MAX_GLTF_BYTES = 96 * 1024 * 1024;
 
+function requireFiniteGeometryArray(
+  values: readonly number[],
+  itemSize: number,
+  label: string,
+): void {
+  if (values.length === 0 || values.length % itemSize !== 0 ||
+      values.some(value => !Number.isFinite(value))) {
+    throw new Error("PUBLICATION_SOURCE_GEOMETRY_INVALID_" + label);
+  }
+}
+
+function validateNativeCubeIndexGroups(
+  indices: readonly number[],
+  groups: readonly { start: number; count: number; materialIndex: number }[],
+  vertexCount: number,
+  faceCount: number,
+): void {
+  if (indices.length === 0 || indices.length % 3 !== 0 ||
+      indices.some(value => !Number.isSafeInteger(value) ||
+        value < 0 || value >= vertexCount)) {
+    throw new Error("PUBLICATION_SOURCE_INDEX_OUT_OF_RANGE");
+  }
+  let offset = 0;
+  for (const group of groups) {
+    if (!Number.isSafeInteger(group.start) || group.start !== offset ||
+        !Number.isSafeInteger(group.count) || group.count < 3 ||
+        group.count % 3 !== 0 ||
+        !Number.isSafeInteger(group.materialIndex) ||
+        group.materialIndex < 0 || group.materialIndex >= faceCount ||
+        group.start + group.count > indices.length) {
+      throw new Error("PUBLICATION_SOURCE_FACE_GROUP_INVALID");
+    }
+    offset += group.count;
+  }
+  if (offset !== indices.length) {
+    throw new Error("PUBLICATION_SOURCE_FACE_GROUP_COVERAGE_MISMATCH");
+  }
+}
+
 type MaterialReceipt = PublicationJob["materials"];
 export type DetachedPublicationSnapshot = {
   project_uuid: string;
@@ -132,13 +171,28 @@ function nativeState(): NativeState {
     });
     const uv = Array.from(geometry.attributes.uv.array);
     const positions = Array.from(geometry.attributes.position.array);
+    requireFiniteGeometryArray(positions, 3, "POSITION");
+    requireFiniteGeometryArray(uv, 2, "UV");
+    if (uv.length / 2 !== positions.length / 3) {
+      throw new Error("PUBLICATION_SOURCE_VERTEX_UV_COUNT_MISMATCH");
+    }
     vertexComponentCount += positions.length;
     if (vertexComponentCount > MAX_VERTEX_COMPONENTS) {
       throw new Error("PUBLICATION_SOURCE_VERTEX_COMPONENT_BUDGET_EXCEEDED");
     }
     const normals = geometry.attributes.normal
       ? Array.from(geometry.attributes.normal.array) : null;
+    if (normals) {
+      requireFiniteGeometryArray(normals, 3, "NORMAL");
+      if (normals.length !== positions.length) {
+        throw new Error("PUBLICATION_SOURCE_NORMAL_COUNT_MISMATCH");
+      }
+    }
     const indices = geometry.index ? Array.from(geometry.index.array) : null;
+    if (!indices) throw new Error("PUBLICATION_SOURCE_INDEX_REQUIRED");
+    validateNativeCubeIndexGroups(
+      indices, geometry.groups, positions.length / 3, f.length,
+    );
     cubeRows.push([
       cube.uuid, matrix, cube.from, cube.to, cube.origin, cube.rotation,
       cube.inflate ?? 0, cube.box_uv, cube.mirror_uv, cube.uv_offset, faces,
