@@ -127,6 +127,12 @@ export class PublicationRenderJobs {
     return projectJob(this.requireJob(jobId));
   }
 
+  /** Re-enable the same process-local owner after legitimate plugin reload. */
+  reactivate(): void {
+    // Active/uncertain old workers remain protected by existing busy gates.
+    this.retired = false;
+  }
+
   /** Called by plugin teardown, never by ordinary panel reconstruction. */
   retire(): void {
     this.retired = true;
@@ -161,4 +167,8 @@ export function cancelPublicationRenderJob(jobId: string): PublicationRenderJobS
 
 export function retirePublicationRenderJobsOnPluginUnload(): void {
   productionJobs.retire();
+}
+
+export function activatePublicationRenderJobsAfterPluginLoad(): void {
+  productionJobs.reactivate();
 }
