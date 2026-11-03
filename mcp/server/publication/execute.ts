@@ -18,7 +18,7 @@ import {
 type ScopedPublicationFs = Pick<
   typeof import("node:fs"),
   "existsSync" | "statSync" | "mkdirSync" | "writeFileSync" |
-  "readFileSync" | "rmSync"
+  "readFileSync" | "unlinkSync" | "rmdirSync"
 >;
 
 export type PublicationRenderReceipt = {
@@ -206,11 +206,17 @@ export async function renderPublication(input: unknown): Promise<PublicationRend
       live_minecraft_verified: false,
     };
   } finally {
+    // Blockbench's ScopedFS rmSync is not reliably synchronous. Delete only
+    // the four known files that this fresh job owns, then remove the empty dir.
+    // Never recurse into or follow arbitrary paths during renderer cleanup.
     try {
-      fs.rmSync(workdir, { recursive: true, force: true });
+      for (const file of [glbPath, workerPath, jobPath, tempOutput]) {
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+      }
+      fs.rmdirSync(workdir);
     } catch {
-      // Cleanup failure is visible to the user's filesystem; never touch
-      // unrelated files or claim a cleanup guarantee.
+      // Leave unremoved temporary files for explicit, safe recovery. Never
+      // touch the existing editor project or another job's directories.
       console.warn("[LazyDesigner Render] Temporary render job cleanup failed:", workdir);
     }
   }
