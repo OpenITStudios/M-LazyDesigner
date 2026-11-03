@@ -297,6 +297,34 @@ export function summarizeProjectObservation(snapshots: readonly unknown[]) {
   };
 }
 
+/** Read-only access to the canonical bounded L0 cache window.
+ * Retain exact bytes so explicit research archives can fingerprint the source
+ * without round-tripping JSON or copying native/private model files.
+ */
+export async function readProjectObservationSnapshotFiles(directory: string) {
+  const names = (await readdir(directory))
+    .filter(name => OWNED_SESSION_FILE.test(name)).sort();
+  const selected = names.slice(-MAX_SESSIONS);
+  const files: Array<{ name: string; bytes: Buffer; snapshot: unknown }> = [];
+  for (const name of selected) {
+    const file = join(directory, name);
+    const metadata = await lstat(file);
+    if (!metadata.isFile() || metadata.size > MAX_FILE_BYTES) {
+      throw new Error("Refusing untrusted, oversized or non-file observation snapshot.");
+    }
+    const bytes = await readFile(file);
+    if (bytes.length > MAX_FILE_BYTES) {
+      throw new Error("Observation snapshot grew beyond the byte ceiling while reading.");
+    }
+    files.push({ name, bytes, snapshot: JSON.parse(bytes.toString("utf8")) as unknown });
+  }
+  return {
+    total_matching_files: names.length,
+    omitted_files: names.length - selected.length,
+    files,
+  };
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const html = args.length === 2 && args[1] === "--html";
@@ -304,18 +332,8 @@ async function main(): Promise<void> {
     throw new Error("Usage: bun run report:project-analytics -- <local-analytics-directory> [--html]");
   }
   const directory = args[0]!;
-  const names = (await readdir(directory))
-    .filter(name => OWNED_SESSION_FILE.test(name)).sort().slice(-MAX_SESSIONS);
-  const snapshots: unknown[] = [];
-  for (const name of names) {
-    const file = join(directory, name);
-    const metadata = await lstat(file);
-    if (!metadata.isFile() || metadata.size > MAX_FILE_BYTES) {
-      throw new Error("Refusing untrusted, oversized or non-file observation snapshot.");
-    }
-    snapshots.push(JSON.parse(await readFile(file, "utf8")) as unknown);
-  }
-  const report = summarizeProjectObservation(snapshots);
+  const capture = await readProjectObservationSnapshotFiles(directory);
+  const report = summarizeProjectObservation(capture.files.map(file => file.snapshot));
   console.log(html ? renderProjectObservationHtml(report) : JSON.stringify(report, null, 2));
 }
 

@@ -8,6 +8,7 @@ It owns:
 Gateway hot-path/replay benchmark contracts
 Hybrid experimental benchmark/promotion contracts
 golden authoring/session/reporting contracts
+explicit L0 research archive/index and integrity contracts
 quality benchmark corpus contracts
 semantic invalidation/UV benchmark contracts
 zero-waste benchmark contracts

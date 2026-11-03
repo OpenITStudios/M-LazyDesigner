@@ -414,6 +414,35 @@ or full project wall time. It adds no status polling, persistent registry,
 new UI view or public Gateway tool. The existing opt-in P1-P5 detail
 reporters remain the drill-down route when evidence is needed.
 
+## Research Archive & Index (explicit offline operations)
+
+For longer-lived research, the rolling L0 session window can be copied on
+explicit request into a dedicated research location. No background archiving,
+Gateway calls, AI tracking, Desktop polling, or database are added.
+
+```text
+bun run research:archive -- capture <l0-cache-dir> <research-root> "Geometry Trial 01"
+bun run research:archive -- verify <research-root>/research-<id>
+bun run research:index -- <research-root> --format=json
+bun run research:index -- <research-root> --format=csv --project-key=<64hex>
+bun run research:index -- <research-root> --label=Geometry --since=2026-11-01
+```
+
+The archive contains only bounded L0 JSON snapshots, checksums, and a
+derived summary; it is *not* another native project owner or a replacement
+for the explicit Golden acceptance/usage comparator. Indexing reads
+manifests only, warns when archived captures reuse the same session, and
+never sums duplicated session data across experiments. JSON/CSV are
+emitted to stdout for optional user-controlled storage. A separate explicit
+verify operation rereads source snapshots and checks file hashes and
+summary consistency. The index deliberately marks underlying snapshot
+integrity `NOT_RECHECKED` until such verification is performed.
+
+L0 cannot prove exact code source SHA, native Runtime build, Workspace
+binding, approved visual quality or model token usage. All remain
+`null`/`UNVERIFIED` in this archival flow. The research index is a
+safe source locator and trend input, not a causal or quality verdict.
+
 ## Context / Result Economy
 
 Context handles use SHA-256 identities of current canonical repository files. `known_context_ids` suppresses unchanged Skill/profile content and invalidates changed members of the same family.

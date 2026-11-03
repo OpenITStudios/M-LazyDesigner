@@ -114,6 +114,8 @@
     "report:golden-authoring": "bun run ./scripts/reporting/evaluate-golden-authoring-runs.ts",
     "report:gateway-trace": "bun run ./scripts/reporting/summarize-gateway-benchmark-trace.ts",
     "report:project-analytics": "bun run ./scripts/reporting/summarize-project-observation.ts",
+    "research:archive": "bun run ./scripts/reporting/project-research-archive.ts",
+    "research:index": "bun run ./scripts/reporting/project-research-index.ts",
     "benchmark:golden-session": "bun run ./scripts/reporting/run-golden-benchmark-session.ts",
     "finalize:golden-session": "bun run ./scripts/reporting/finalize-golden-session.ts",
     "compare:golden-sessions": "bun run ./scripts/reporting/compare-golden-sessions.ts",

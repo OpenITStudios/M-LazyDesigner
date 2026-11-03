@@ -148,6 +148,40 @@ extension of this cache may silently mark a Workspace stage approved,
 invoke a Runtime read for analytics, or insert monitoring data into the
 normal client-visible Gateway result.
 
+## Explicit research archives and source-quality boundaries
+
+Longer-running research must not rely on the rolling sixteen-session Gateway
+cache. The reporting-only `research:archive` command explicitly copies up
+to sixteen already-existing bounded L0 snapshots into a new unique archive
+directory, with a manifest, exact file-byte SHA-256 checksums, a derived
+summary and the state of source evidence coverage. It does not run during
+normal authoring or copy native files, prompt text, user paths, image data,
+secrets, or Codex transcripts.
+
+Archives are manually selected and have no automatic deletion policy. Their
+storage location is an explicitly supplied local research root **separate**
+from the L0 cache and Workspace; this is not a second persistent authoring
+ledger. A staged write is renamed into a unique archive folder so incomplete
+captures are not visible as completed archives. Native UUID-derived project
+hashes are stable only where the existing native identity is stable; they
+are never guessed together across a different reopened project UUID.
+
+`research:index` rebuilds an ephemeral index from bounded archive manifests
+on request. It offers project-key/label/date filters and JSON/CSV stdout
+formats. It never modifies archived evidence or silently aggregates
+overlapping session captures. Reused session IDs across archives are surfaced
+as duplicate warnings. Index contents are marked `NOT_RECHECKED` until an
+explicit `research:archive verify` rereads the archived snapshots and checks
+both original file SHA-256 values and the derived aggregate. Checksums
+detect changed bytes, not independently authenticated source provenance.
+
+Crucially, L0 snapshots do **not** contain authenticated source Git SHA,
+Runtime build, Workspace-to-native mapping, verified quality, or provider
+token usage. Archive manifests preserve each one as unknown/unverified;
+a user-given label never upgrades them. Separate Golden/usage evidence and
+a future verified bridge are required before comparing system versions or
+claiming accepted results.
+
 ## Review / verification
 
 Inventory tests own classification, alias resolution and the no-workspace-read
