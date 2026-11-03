@@ -101,7 +101,7 @@ def _hull_area(coordinates: list) -> float:
     )) * 0.5
 
 
-def _projection(scene, camera, points: list) -> dict:
+def _projection(scene, camera, points: list, *, include_hull: bool = True) -> dict:
     projected = [world_to_camera_view(scene, camera, point) for point in points]
     if not projected or any(not all(math.isfinite(v) for v in item) for item in projected):
         raise PublicationRenderError("PUBLICATION_CAMERA_PROJECTION_INVALID")
@@ -113,7 +113,10 @@ def _projection(scene, camera, points: list) -> dict:
     frame_safe = behind == 0 and left >= FRAME_MARGIN and right <= 1 - FRAME_MARGIN \
         and bottom >= FRAME_MARGIN and top <= 1 - FRAME_MARGIN
     area = max(0.0, right - left) * max(0.0, top - bottom)
-    hull_area = _hull_area([(p.x, p.y) for p in projected])
+    # The whole-model fit loop needs only clipping bounds. Avoid re-sorting
+    # up to 80,000 model points per refit, reserving hull metrics for ranking
+    # and the final verified camera.
+    hull_area = _hull_area([(p.x, p.y) for p in projected]) if include_hull else 0.0
     return {
         "frame_safe": frame_safe,
         "bounding_box": [round(left, 5), round(bottom, 5),
@@ -127,11 +130,12 @@ def _projection(scene, camera, points: list) -> dict:
 
 
 def _fit_candidate(scene, camera, job: dict, center: Vector, radius: float,
-                   yaw: float, elevation: float, points: list):
+                   yaw: float, elevation: float, points: list,
+                   include_hull: bool = True):
     """Fit actual projected corners; no Cycles render or extra scene objects."""
     for count, multiple in enumerate(FIT_MULTIPLIERS, 1):
         _position_camera(camera, job, center, radius, yaw, elevation, multiple)
-        evidence = _projection(scene, camera, points)
+        evidence = _projection(scene, camera, points, include_hull=include_hull)
         if evidence["frame_safe"]:
             return evidence, multiple, count
     return None
@@ -187,6 +191,7 @@ def configure_camera(job: dict, meshes: list, center: Vector, radius: float) -> 
     for _score, yaw, elevation, _sample_fit in ranked[:MAX_FINAL_CANDIDATES]:
         fitted = _fit_candidate(
             scene, camera, job, center, radius, yaw, elevation, full_points,
+            include_hull=False,
         )
         if fitted is not None:
             selected = (yaw, elevation, *fitted)
