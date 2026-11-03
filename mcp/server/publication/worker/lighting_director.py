@@ -75,7 +75,7 @@ def _world(background: str, factor: float, environment: dict) -> dict:
         tex = nodes.new("ShaderNodeTexEnvironment")
         tex.image = bpy.data.images.load(str(selected), check_existing=False)
         tex.projection = "EQUIRECTANGULAR"
-        nodes.links.new(tex.outputs["Color"], ambient.inputs["Color"])
+        world.node_tree.links.new(tex.outputs["Color"], ambient.inputs["Color"])
     return {"background_color": list(base_color), "world_strength": strength * factor}
 
 
