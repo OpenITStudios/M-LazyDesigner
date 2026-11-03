@@ -782,6 +782,31 @@ describe("source-only PCHIP baked motion through the existing Gateway bridge",()
     expect(result.execution_evidence.native_runtime_attested).toBe(false);
   });
 
+  test("acceleration and jerk caps appear only in semantic source evidence",()=>{
+    const result=compileSemanticMotionWithPchipToGatewayInvocation(
+      clip(),intent(),[{bone:"body",channel:"rotation"}],{
+        sample_fps:30,boundary_tangent:"rest_endpoints",
+        max_sampled_speed_ratio:1.15,
+        max_sampled_acceleration_ratio:1,
+        max_sampled_jerk_ratio:1,
+      }
+    );
+    expect(result.semantic_context.shape_preserving_linear_bake
+      .sampled_derivative_guard).toMatchObject({
+        state:"SOURCE_ONLY_SAMPLED_DERIVATIVES_BOUNDED",
+        native_export_derivatives_attested:false,
+        tracks:[{
+          final_peak_sampled_speed:expect.any(Number),
+          final_peak_sampled_acceleration:expect.any(Number),
+          final_peak_sampled_jerk:expect.any(Number),
+        }],
+      });
+    expect(result.gateway_arguments.arguments).not.toHaveProperty("sampled_derivative_guard");
+    expect(createAnimationParameters.safeParse(result.gateway_arguments.arguments).success)
+      .toBe(true);
+    expect(result.execution_evidence.native_runtime_attested).toBe(false);
+  });
+
   test("authoritative contact bones and spring-owned followers cannot be silently smoothed",()=>{
     const source=clip();
     expect(()=>compileSemanticMotionWithPchipToGatewayInvocation(source,{

@@ -578,6 +578,34 @@ potential regressions. The feature remains opt-in, leaves old PCHIP
 behavior unchanged when the ratio is omitted, adds no native Gateway
 argument and does not authorize keyframe edits or native/visual PASS.
 
+### Joint sampled acceleration and jerk bounds (2026-11-03)
+
+The PCHIP opt-in workflow can now declare
+`max_sampled_acceleration_ratio` and `max_sampled_jerk_ratio` (each
+finite 1..3) in addition to `max_sampled_speed_ratio`. The existing
+source baker uses a **single** bounded convex PCHIP/linear blend weight
+for all requested bounds. Its per-FPS finite differences measure vector
+velocity, acceleration and jerk in the selected bone's native authored
+units. The reference is the original LINEAR trajectory on the **same**
+sample grid. The blend weight is chosen so every requested peak is within
+its allowed multiple of that original; the final retained LINEAR keys
+are resampled and checked separately before returning a plan.
+
+Strict caps can force the blend effectively to zero. This is rejected
+(`MOTION_PCHIP_DERIVATIVE_CAP_NO_EFFECTIVE_SMOOTHING`) rather than falsely
+calling an unchanged source clip smooth. The existing optional
+`sampled_peak_speed_guard` contract remains present when speed is
+requested, while acceleration/jerk details live in the separate
+`sampled_derivative_guard` source receipt. Neither field is forwarded
+into native `create_animation` arguments.
+
+These limits are exact only for **discrete finite differences** on the
+requested FPS grid; they cannot certify native continuous-time velocity,
+real physical acceleration, visual quality, contact dynamics or exported
+Bedrock playback. Source references with zero baseline acceleration/jerk
+may be unsatisfiable while preserving authored anchors. All native and
+visual proof flags remain false.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

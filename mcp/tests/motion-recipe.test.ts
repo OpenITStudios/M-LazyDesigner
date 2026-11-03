@@ -244,3 +244,96 @@ describe("explicit sampled speed cap on PCHIP linear baked motion",()=>{
     expect(result.evidence.generated_channel_key_count).toBe(28);
   });
 });
+
+
+describe("simultaneous sampled speed, acceleration and jerk caps",()=>{
+  const action=()=>({
+    name:"three_derivative_caps",loop:false,duration:1,
+    poses:[
+      {id:"ready",time:0,bones:{arm:{rotation:[0,0,0] as [number,number,number]}}},
+      {id:"contact",time:0.5,bones:{arm:{rotation:[8,0,0] as [number,number,number]}}},
+      {id:"recover",time:1,bones:{arm:{rotation:[0,0,0] as [number,number,number]}}},
+    ],
+  });
+  test("combined bounds select one PCHIP weight and retain every authored pose",()=>{
+    const source=action(),before=JSON.stringify(source);
+    const result=bakeShapePreservingMotionToLinearRecipe(
+      source,[{bone:"arm",channel:"rotation"}],{
+        sample_fps:30,boundary_tangent:"rest_endpoints",
+        max_sampled_speed_ratio:1.15,
+        max_sampled_acceleration_ratio:1,
+        max_sampled_jerk_ratio:1,
+      }
+    );
+    const speed=result.evidence.sampled_peak_speed_guard;
+    const derivatives=result.evidence.sampled_derivative_guard;
+    expect(speed?.state).toBe("SOURCE_ONLY_SAMPLED_SPEED_BOUNDED");
+    expect(derivatives?.state).toBe("SOURCE_ONLY_SAMPLED_DERIVATIVES_BOUNDED");
+    const frame=derivatives!.tracks[0];
+    expect(frame.pchip_shape_weight).toBeGreaterThan(0);
+    expect(frame.pchip_shape_weight).toBeLessThan(1);
+    expect(frame.final_peak_sampled_speed)
+      .toBeLessThanOrEqual(frame.allowed_peak_sampled_speed!+0.00001);
+    expect(frame.final_peak_sampled_acceleration)
+      .toBeLessThanOrEqual(frame.allowed_peak_sampled_acceleration!+0.00001);
+    expect(frame.final_peak_sampled_jerk)
+      .toBeLessThanOrEqual(frame.allowed_peak_sampled_jerk!+0.00001);
+    expect(frame.allowed_peak_sampled_speed).toBeCloseTo(18.4,4);
+    expect(frame.uncapped_peak_sampled_speed).toBeGreaterThan(23);
+    expect(derivatives!.rest_endpoint_tangent_may_be_relaxed).toBe(true);
+    expect(derivatives!.native_playback_attested).toBe(false);
+    expect(derivatives!.native_export_derivatives_attested).toBe(false);
+    expect(result.recipe.poses.filter((pose)=>!pose.id.startsWith("__ld_pchip_"))
+      .map((pose)=>pose.bones.arm.rotation?.[0])).toEqual([0,8,0]);
+    expect(result.recipe.duration).toBe(1);
+    expect(JSON.stringify(source)).toBe(before);
+  });
+
+  test("derivative-only caps use source units and never imply a speed cap",()=>{
+    const result=bakeShapePreservingMotionToLinearRecipe(
+      action(),[{bone:"arm",channel:"rotation"}],{
+        sample_fps:30,boundary_tangent:"rest_endpoints",
+        max_sampled_acceleration_ratio:1.1,
+        max_sampled_jerk_ratio:1.1,
+      }
+    );
+    expect(result.evidence.sampled_peak_speed_guard).toBeUndefined();
+    const report=result.evidence.sampled_derivative_guard;
+    expect(report?.tracks).toHaveLength(1);
+    expect(report!.tracks[0].allowed_peak_sampled_speed).toBeNull();
+    expect(report!.tracks[0].final_peak_sampled_acceleration)
+      .toBeLessThanOrEqual(report!.tracks[0].allowed_peak_sampled_acceleration!+1e-5);
+    expect(report!.tracks[0].final_peak_sampled_jerk)
+      .toBeLessThanOrEqual(report!.tracks[0].allowed_peak_sampled_jerk!+1e-5);
+  });
+
+  test("linear source with zero baseline acceleration or jerk cannot invent easing",()=>{
+    const input=action();
+    input.poses[1].bones.arm.rotation[0]=5;
+    input.poses[2].bones.arm.rotation[0]=10;
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(
+      input,[{bone:"arm",channel:"rotation"}],{
+        sample_fps:30,boundary_tangent:"rest_endpoints",
+        max_sampled_acceleration_ratio:1,
+        max_sampled_jerk_ratio:1,
+      }
+    )).toThrow("MOTION_PCHIP_DERIVATIVE_CAP_NO_EFFECTIVE_SMOOTHING");
+  });
+
+  test("invalid derivative ratios fail before any original recipe mutation",()=>{
+    const source=action(),before=JSON.stringify(source);
+    for(const bad of [0.5,3.1,Number.NaN,Number.POSITIVE_INFINITY]){
+      expect(()=>bakeShapePreservingMotionToLinearRecipe(
+        source,[{bone:"arm",channel:"rotation"}],{
+          sample_fps:30,max_sampled_acceleration_ratio:bad,
+        }
+      )).toThrow("MOTION_PCHIP_ACCELERATION_RATIO_INVALID");
+      expect(()=>bakeShapePreservingMotionToLinearRecipe(
+        source,[{bone:"arm",channel:"rotation"}],{
+          sample_fps:30,max_sampled_jerk_ratio:bad,
+        }
+      )).toThrow("MOTION_PCHIP_JERK_RATIO_INVALID");
+    }
+    expect(JSON.stringify(source)).toBe(before);
+  });
+});
