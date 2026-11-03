@@ -5,7 +5,7 @@ describe("Zero-Waste workflow benchmark", () => {
   test("synthetic workflow projection preserves modeled verification steps", () => {
     const workflows = runZeroWasteWorkflowBenchmark();
 
-    expect(workflows).toHaveLength(11);
+    expect(workflows).toHaveLength(12);
     const workflowNames = workflows.map(item => item.workflow);
     for (const required of ["correction_continuation_transport", "correction_semantic_delta_grouping"]) {
       expect(workflowNames.filter(name => name === required), required).toHaveLength(1);
@@ -21,7 +21,8 @@ describe("Zero-Waste workflow benchmark", () => {
         Object.values(workflow.quality_checks).every(Boolean),
         workflow.workflow
       ).toBe(true);
-      if (["visual_local_correction", "visual_cross_view_reuse"].includes(workflow.workflow)) {
+      if (["visual_local_correction", "visual_cross_view_reuse",
+        "targeted_geometry_texture_animation_evidence"].includes(workflow.workflow)) {
         // View provenance adds metadata while reducing the actual image area.
         expect(workflow.optimized.image_pixel_area, workflow.workflow)
           .toBeLessThan(workflow.baseline.image_pixel_area);
@@ -41,6 +42,29 @@ describe("Zero-Waste workflow benchmark", () => {
         workflow.redundant_baseline_calls_removed
       );
     }
+  });
+
+  test("targeted source evidence saves planned image inputs without dropping QA coverage", () => {
+    const workflow = runZeroWasteWorkflowBenchmark().find(
+      item => item.workflow === "targeted_geometry_texture_animation_evidence"
+    );
+    expect(workflow).toBeDefined();
+    expect(workflow!.baseline.calls).toBe(3);
+    expect(workflow!.optimized.calls).toBe(3);
+    // 6 Geometry images + 1 full atlas + 5 clip frames become
+    // 4 Geometry images + 1 focused crop + 3 focused clip frames.
+    expect(workflow!.baseline.image_inputs).toBe(12);
+    expect(workflow!.optimized.image_inputs).toBe(8);
+    expect(workflow!.optimized.image_inputs)
+      .toBeLessThan(workflow!.baseline.image_inputs);
+    expect(workflow!.optimized.image_pixel_area)
+      .toBeLessThan(workflow!.baseline.image_pixel_area);
+    expect(workflow!.quality_preserved).toBe(true);
+    expect(Object.values(workflow!.quality_checks).every(Boolean)).toBe(true);
+    expect(workflow!.quality_evidence).toBe("SYNTHETIC_SEMANTIC_CHECKS_ONLY");
+    expect(workflow!.optimized.steps.map(row => row.kind))
+      .toEqual(["verify", "inspect", "verify"]);
+    expect(workflow!.quality_checks.no_false_continuous_motion_pass).toBe(true);
   });
 
   test("known-target and visual paths never trade verification for lower call count", () => {

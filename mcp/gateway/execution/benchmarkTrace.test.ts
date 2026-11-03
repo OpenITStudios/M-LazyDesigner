@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { BenchmarkTraceRecorder } from "./benchmarkTrace";
+import { BenchmarkTraceRecorder, measureMcpImageDelivery } from "./benchmarkTrace";
 
 const temporaryDirectories: string[] = [];
 
@@ -16,6 +16,27 @@ afterEach(async () => {
 });
 
 describe("Gateway benchmark trace recorder", () => {
+  test("counts actual MCP image items; rejects malformed base64 without persisting pixels", () => {
+    const png = Buffer.from([137,80,78,71,13,10,26,10,0,1,2,3]);
+    const other = Buffer.from([0,1,2,3,4]);
+    const payload = {
+      content: [
+        {type:"text",text:"PRIVATE/PATH"},
+        {type:"image",mimeType:"image/png",data:png.toString("base64")},
+        {type:"image",mimeType:"image/webp",data:other.toString("base64")},
+      ],
+    };
+    expect(measureMcpImageDelivery(payload)).toEqual({
+      delivered_count:2,delivered_bytes:17,png_count:1,png_bytes:12,
+    });
+    expect(measureMcpImageDelivery({content:[{type:"text",text:"fine"}]}))
+      .toEqual({delivered_count:0,delivered_bytes:0,png_count:0,png_bytes:0});
+    expect(measureMcpImageDelivery({content:[{
+      type:"image",mimeType:"image/png",data:"INVALID!!",
+    }]})).toBeNull();
+    expect(measureMcpImageDelivery({structuredContent:{claimed_images:5}}))
+      .toBeNull();
+  });
   test("is a zero-write no-op unless explicitly enabled", async () => {
     const recorder = BenchmarkTraceRecorder.fromEnvironment({});
     expect(recorder.enabled).toBe(false);
@@ -90,6 +111,12 @@ describe("Gateway benchmark trace recorder", () => {
     expect(text).not.toContain(payload);
     const events = text.trim().split("\n").map(row => JSON.parse(row));
     expect(events).toHaveLength(2);
+    expect(events[0].mcp_images).toEqual({
+      delivered_count:1,delivered_bytes:png.length,png_count:1,png_bytes:png.length,
+    });
+    expect(events[1].mcp_images).toEqual({
+      delivered_count:1,delivered_bytes:png.length,png_count:1,png_bytes:png.length,
+    });
     expect(events[0].capture_evidence).toMatchObject({
       reference_package_fingerprint: fingerprint,
       project_uuid: "disposable-golden",

@@ -249,8 +249,12 @@ writing response contents, failure messages, or private file paths.
 
 The existing trace reporter now includes nearest-rank p50/p95 latency and
 failure counts grouped by machine error code. Older v1 traces without
-`error_code` remain supported. These metrics measure Gateway request timing
-only; they are not provider token usage or accepted visual Blockbench results.
+`error_code` remain supported. When opt-in, it also counts actual
+`content.image` items and decoded media/PNG byte lengths in the final
+Gateway responses, without storing image bytes, base64 or source paths.
+Historical/incomplete image telemetry remains null, never zero. These
+metrics are NOT model-ingestion proof, provider token usage or accepted
+visual Blockbench results.
 No database, monitoring service, or fifth Gateway tool is added.
 
 ## Bounded Queue Telemetry

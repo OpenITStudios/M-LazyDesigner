@@ -41,6 +41,20 @@ function parseTrace(text: string): BenchmarkTraceEvent[] {
     if (typeof event.success !== "boolean") {
       throw new Error(`Trace line ${index + 1} has an invalid success flag.`);
     }
+    if (event.mcp_images !== undefined && event.mcp_images !== null) {
+      const row = event.mcp_images;
+      const fields = [
+        row.delivered_count, row.delivered_bytes,
+        row.png_count, row.png_bytes,
+      ];
+      if (fields.some(n => !Number.isSafeInteger(n) || n < 0) ||
+          row.png_count > row.delivered_count ||
+          row.png_bytes > row.delivered_bytes ||
+          (row.delivered_count === 0 && row.delivered_bytes !== 0) ||
+          (row.png_count === 0 && row.png_bytes !== 0)) {
+        throw new Error(`Trace line ${index + 1} has invalid MCP image metrics.`);
+      }
+    }
     if (event.error_code !== undefined &&
         event.error_code !== null &&
         (typeof event.error_code !== "string" ||
@@ -100,6 +114,12 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     }
   }
   const latencies = ordered.map((event) => event.latency_ms);
+  const knownMedia = ordered.filter(event => event.mcp_images != null);
+  const allMediaKnown = knownMedia.length === ordered.length;
+  const mediaSum = (key: keyof NonNullable<BenchmarkTraceEvent["mcp_images"]>) =>
+    allMediaKnown
+      ? knownMedia.reduce((total, event) => total + event.mcp_images![key], 0)
+      : null;
   return {
     schema: 1,
     report: "gateway-benchmark-trace",
@@ -119,6 +139,15 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     },
     payload: {
       result_bytes: sum(ordered.map((event) => event.result_bytes)),
+    },
+    mcp_images: {
+      measured_events: knownMedia.length,
+      unmeasured_events: ordered.length - knownMedia.length,
+      delivered_count: mediaSum("delivered_count"),
+      delivered_bytes: mediaSum("delivered_bytes"),
+      png_count: mediaSum("png_count"),
+      png_bytes: mediaSum("png_bytes"),
+      note: "Actual Gateway response image-content bytes only. Unmeasured historical/invalid events return null; image counts are not AI-ingestion, token, latency or visual-acceptance proof.",
     },
     failures: {
       by_code: failuresByCode,

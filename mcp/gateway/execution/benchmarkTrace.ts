@@ -11,6 +11,18 @@ export type BenchmarkTraceKind =
   | "verify"
   | "recovery";
 
+/**
+ * Recorded only when opt-in Gateway benchmarking sees actual MCP image items.
+ * Never persists pixels, Base64 or source paths; unknown image payload => null.
+ * Encoded byte size is NOT vision tokens, cost or proof that AI saw an image.
+ */
+export type BenchmarkMcpImageDelivery = {
+  delivered_count: number;
+  delivered_bytes: number;
+  png_count: number;
+  png_bytes: number;
+};
+
 export type BenchmarkTraceEvent = {
   schema: "lazydesigner-gateway-benchmark-trace-v1";
   sequence: number;
@@ -22,6 +34,8 @@ export type BenchmarkTraceEvent = {
   success: boolean;
   latency_ms: number;
   result_bytes: number | null;
+  /** Optional on older v1 traces. Null means delivery could not be measured. */
+  mcp_images?: BenchmarkMcpImageDelivery | null;
   read_only: boolean | null;
   verification_class: string | null;
   /** Optional to keep older v1 benchmark trace files readable. */
@@ -191,6 +205,40 @@ function payloadBytes(value: unknown): number | null {
   }
 }
 
+/**
+ * Observe the final Gateway response, not a Runtime-generated image claim.
+ * Transport count only. Strict base64 prevents accidental size claims from
+ * invalid/partial payloads; never retain or log decoded bytes.
+ */
+export function measureMcpImageDelivery(result: unknown): BenchmarkMcpImageDelivery | null {
+  const items = recordValue(result)?.content;
+  if (!Array.isArray(items) || items.length > 128) return null;
+  let delivered_count = 0;
+  let delivered_bytes = 0;
+  let png_count = 0;
+  let png_bytes = 0;
+  for (const part of items) {
+    const item = recordValue(part);
+    if (item?.type !== "image") continue;
+    if (typeof item.data !== "string" ||
+        typeof item.mimeType !== "string" ||
+        !/^image\/[a-z0-9.+-]{1,64}$/.test(item.mimeType) ||
+        item.data.length < 4 || item.data.length % 4 !== 0 ||
+        item.data.length > 64 * 1024 * 1024 ||
+        !/^[A-Za-z0-9+/]+={0,2}$/.test(item.data)) return null;
+    const bytes = Buffer.from(item.data, "base64");
+    if (bytes.length === 0 || bytes.toString("base64") !== item.data)
+      return null;
+    delivered_count++;
+    delivered_bytes += bytes.length;
+    if (item.mimeType === "image/png") {
+      png_count++;
+      png_bytes += bytes.length;
+    }
+  }
+  return { delivered_count, delivered_bytes, png_count, png_bytes };
+}
+
 function safeErrorCode(result: unknown): string | null {
   if (!result || typeof result !== "object" || Array.isArray(result)) return null;
   const structured = (result as { structuredContent?: unknown }).structuredContent;
@@ -284,6 +332,9 @@ export class BenchmarkTraceRecorder {
       latency_ms: elapsedMs(input.startedAt),
       result_bytes:
         input.result === undefined ? null : payloadBytes(input.result),
+      ...(input.result === undefined ? {} : {
+        mcp_images: measureMcpImageDelivery(input.result),
+      }),
       read_only: input.readOnly ?? null,
       verification_class: input.verificationClass ?? null,
       // Persist bounded error identifiers, never diagnostic messages or paths.

@@ -35,6 +35,10 @@ describe("gateway benchmark trace report", () => {
     expect(report.calls.mutate).toBe(1);
     expect(report.calls.verify).toBe(1);
     expect(report.payload.result_bytes).toBe(400);
+    expect(report.mcp_images).toMatchObject({
+      measured_events:0,unmeasured_events:4,
+      delivered_count:null,delivered_bytes:null,png_count:null,png_bytes:null,
+    });
     expect(report.latency.total_ms).toBe(40);
     expect(report.latency.p50_ms).toBe(10);
     expect(report.latency.p95_ms).toBe(10);
@@ -56,6 +60,41 @@ describe("gateway benchmark trace report", () => {
       by_code: { OUTCOME_UNKNOWN: 1 },
       unclassified: 0,
     });
+  });
+
+  test("aggregates observed image traffic without pretending legacy events were measured", () => {
+    const input=[event(0,"mutate"),event(1,"verify")].map((raw,i)=>({
+      ...JSON.parse(raw),
+      mcp_images:i===0
+        ? {delivered_count:0,delivered_bytes:0,png_count:0,png_bytes:0}
+        : {delivered_count:2,delivered_bytes:270,png_count:1,png_bytes:230},
+    }));
+    const report=summarizeGatewayBenchmarkTrace(
+      input.map(row=>JSON.stringify(row)).join("\n")
+    );
+    expect(report.mcp_images).toMatchObject({
+      measured_events:2,unmeasured_events:0,
+      delivered_count:2,delivered_bytes:270,png_count:1,png_bytes:230,
+    });
+    const mixed=summarizeGatewayBenchmarkTrace(
+      [JSON.stringify(input[0]),event(1,"verify")].join("\n")
+    );
+    expect(mixed.mcp_images).toMatchObject({
+      measured_events:1,unmeasured_events:1,
+      delivered_count:null,png_bytes:null,
+    });
+  });
+  test("rejects fabricated or inconsistent image telemetry", () => {
+    for (const invalid of [
+      {delivered_count:-1,delivered_bytes:10,png_count:0,png_bytes:0},
+      {delivered_count:1,delivered_bytes:10,png_count:2,png_bytes:10},
+      {delivered_count:1,delivered_bytes:10,png_count:1,png_bytes:11},
+      {delivered_count:0,delivered_bytes:1,png_count:0,png_bytes:0},
+    ]) {
+      expect(()=>summarizeGatewayBenchmarkTrace(JSON.stringify({
+        ...JSON.parse(event(0,"mutate")),mcp_images:invalid,
+      }))).toThrow("invalid MCP image metrics");
+    }
   });
 
   test("rejects private paths masquerading as error codes", () => {

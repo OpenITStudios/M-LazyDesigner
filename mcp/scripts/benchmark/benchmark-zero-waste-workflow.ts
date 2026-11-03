@@ -1,4 +1,13 @@
 import { runZeroWasteGoldenBenchmark } from "./benchmark-zero-waste-golden";
+import {
+  selectCaptureSizeForEvidence,
+  selectModelViewsForEvidence,
+  selectSilhouetteCaptureViews,
+} from "../../server/tools/inspection/camera";
+import { planFocusedTextureEvidenceRequest } from "../../gateway/control/evidenceSelection";
+import type { ControlVerificationScope } from "../../gateway/control/types";
+import { planTemporalImageEvidence } from "../../lib/animation/temporalEvidenceSampling";
+import type { AnimationMotionTrackInput } from "../../lib/animation/motionDynamics";
 
 type StepKind =
   | "status"
@@ -1033,6 +1042,126 @@ export function runZeroWasteWorkflowBenchmark(): WorkflowGoldenResult[] {
     }
   );
 
+  // Package 3: source-backed evidence selection. Counts/pixel area below
+  // describe PLANNED image blocks from canonical selectors, not images
+  // actually consumed by an AI client or a measured Codex allowance.
+  const silhouetteViews = selectModelViewsForEvidence(["silhouette"], "HIGH").views;
+  const allMasks = [...silhouetteViews];
+  const scopedMasks = selectSilhouetteCaptureViews(
+    silhouetteViews, ["silhouette"], false
+  );
+  const explicitMasks = selectSilhouetteCaptureViews(
+    ["front", "left"], ["silhouette"], true
+  );
+  const modelPngSize = selectCaptureSizeForEvidence(["silhouette"], "HIGH");
+  const originalCrop: ControlVerificationScope = {
+    kind: "TEXTURE_REGION",
+    texture_uuid: "atlas-evidence-fixture",
+    affected_rect: [16, 32, 32, 48],
+    revision: "sha256:128x128:" + "a".repeat(64),
+    evidence_source: "follow_up_read",
+  };
+  const focusedCrop = planFocusedTextureEvidenceRequest(originalCrop);
+  const movingTracks: AnimationMotionTrackInput[] = [
+    {
+      group_uuid: "unrelated-bone", group_name: "Other",
+      channel: "rotation",
+      keyframes: [
+        {time:0, value:[0,0,0], data_point_count:1},
+        {time:0.1, value:[120,0,0], data_point_count:1},
+        {time:0.2, value:[0,0,0], data_point_count:1},
+        {time:1, value:[0,0,0], data_point_count:1},
+      ],
+    },
+    {
+      group_uuid: "target-bone", group_name: "Target",
+      channel: "rotation",
+      keyframes: [
+        {time:0, value:[0,0,0], data_point_count:1},
+        {time:0.75, value:[0,0,0], data_point_count:1},
+        {time:0.9, value:[90,0,0], data_point_count:1},
+        {time:1, value:[90,0,0], data_point_count:1},
+      ],
+    },
+  ];
+  const fullClip = planTemporalImageEvidence({
+    duration_seconds: 1, tracks: movingTracks,
+  });
+  const focusedClip = planTemporalImageEvidence({
+    duration_seconds: 1, tracks: movingTracks, max_frames:3,
+    focus_bone_uuid:"target-bone",
+    focus_time_range:{start:0.75,end:1},
+  });
+  const fullTimes = fullClip.suggested_times_seconds;
+  const focusedTimes = focusedClip.suggested_times_seconds;
+  const evidenceSelection = summarize(
+    "targeted_geometry_texture_animation_evidence",
+    [
+      step("verify", {
+        stage:"GEOMETRY", evidence_targets:["silhouette"],
+        model_views:silhouetteViews, extra_mask_views:allMasks,
+        renderer_proof:"SOURCE_SELECTION_ONLY",
+      }, true, "Baseline requests masks even for orthogonal context views.",
+      {imageInputs:silhouetteViews.length+allMasks.length,imageSize:modelPngSize}),
+      step("inspect", {
+        stage:"TEXTURE", texture:originalCrop.texture_uuid,
+        review_region:"FULL_ATLAS",
+        revision:originalCrop.revision,
+      }, true, "Baseline re-reads a full 128x128 atlas for one 16x16 changed region.",
+      {imageInputs:1,imageSize:128}),
+      step("verify", {
+        stage:"ANIMATION", review:"FOCUSED_BONE_LATE_EVENT",
+        full_clip_times:fullTimes,
+        unsampled_motion_verified:false,
+      }, true, "Baseline uses source-wide event time suggestions for a focused question.",
+      {imageInputs:fullTimes.length,imageSize:512}),
+    ],
+    [
+      step("verify", {
+        stage:"GEOMETRY", evidence_targets:["silhouette"],
+        model_views:silhouetteViews, extra_mask_views:scopedMasks,
+        renderer_proof:"SOURCE_SELECTION_ONLY",
+      }, true, "Shaded geometry views remain; only redundant auto-selected masks are absent.",
+      {imageInputs:silhouetteViews.length+scopedMasks.length,imageSize:modelPngSize}),
+      step("inspect", {
+        stage:"TEXTURE",
+        capability:focusedCrop?.capability??null,
+        args:focusedCrop?.args??null,
+      }, true, "Source-verified region+revision yield one focused, not full-atlas, request.",
+      {imageInputs:focusedCrop?1:0,imageSize:focusedCrop?16:0}),
+      step("verify", {
+        stage:"ANIMATION", review:"FOCUSED_BONE_LATE_EVENT",
+        focused_times:focusedTimes,
+        unsampled_motion_verified:false,
+      }, true, "Scoped authored event sampling retains the requested time window.",
+      {imageInputs:focusedTimes.length,imageSize:512}),
+    ],
+    {
+      all_shaded_geometry_views_preserved: silhouetteViews.join("|") ===
+        selectModelViewsForEvidence(["silhouette"],"HIGH").views.join("|"),
+      silhouette_target_mask_retained:scopedMasks.includes("front"),
+      explicit_view_masks_not_suppressed:explicitMasks.join("|")==="front|left",
+      scoped_mask_plan_less_than_legacy:scopedMasks.length<allMasks.length,
+      source_image_budget_respected:silhouetteViews.length+scopedMasks.length<=8,
+      texture_roi_exact:focusedCrop?.args.region.x===16 &&
+        focusedCrop.args.region.y===32 && focusedCrop.args.region.width===16 &&
+        focusedCrop.args.region.height===16,
+      texture_revision_pinned:focusedCrop?.args.expected_revision===originalCrop.revision,
+      texture_no_automatic_review:focusedCrop?.automatic_call===false &&
+        focusedCrop.authorizes_visual_pass===false,
+      focused_bone_events_bound_to_requested_window:
+        focusedClip.state==="CANDIDATE_ONLY" &&
+        focusedTimes.every(time=>time>=0.75&&time<=1),
+      focused_event_coverage_nonempty:focusedTimes.some(time=>time>0.75&&time<1),
+      fewer_animation_image_candidates:fullTimes.length>focusedTimes.length,
+      animation_frame_budget_retained:focusedTimes.length<=5 &&
+        focusedTimes.length<=8,
+      no_false_continuous_motion_pass:fullClip.all_motion_observed===false &&
+        focusedClip.all_motion_observed===false &&
+        focusedClip.visual_pass_authorized===false,
+    }
+  );
+
   return [
     knownTarget,
     unknownTarget,
@@ -1045,6 +1174,7 @@ export function runZeroWasteWorkflowBenchmark(): WorkflowGoldenResult[] {
     continuationTransport,
     semanticDeltaGrouping,
     failedMutation,
+    evidenceSelection,
   ];
 }
 
