@@ -44,6 +44,16 @@ type ScopedPublicationFs = Pick<
   "readFileSync" | "unlinkSync" | "rmdirSync"
 >;
 
+export type PublicationRenderPhase =
+  | "PREPARING_ASSETS"
+  | "RENDERING_CYCLES"
+  | "VERIFYING_OUTPUT"
+  | "PUBLISHING"
+  | "FINISHED"
+  | "CANCELLING"
+  | "CANCELLED"
+  | "FAILED";
+
 export type PublicationRenderReceipt = {
   state: "RENDERED_DRAFT";
   source_project_uuid: string;
@@ -230,8 +240,10 @@ export async function preparePublicationRender(input: unknown): Promise<Prepared
 export async function renderPreparedPublication(
   prepared: PreparedPublicationRender,
   signal?: AbortSignal,
+  onPhase?: (phase: PublicationRenderPhase) => void,
 ): Promise<PublicationRenderReceipt> {
   const { request, snapshot } = prepared;
+  onPhase?.("PREPARING_ASSETS");
   const assertActive = () => {
     if (signal?.aborted) throw new Error("PUBLICATION_BLENDER_CANCELLED");
   };
@@ -314,9 +326,11 @@ export async function renderPreparedPublication(
       },
     );
     fs.writeFileSync(jobPath, JSON.stringify(job), { flag: "wx" });
+    onPhase?.("RENDERING_CYCLES");
     await runBlender(childProcess, request.blender_executable, workerPath, jobPath, workdir,
       15 * 60 * 1000, 12_000, signal);
     assertActive();
+    onPhase?.("VERIFYING_OUTPUT");
     if (!fs.existsSync(tempOutput)) throw new Error("PUBLICATION_OUTPUT_MISSING");
     const raw = fs.readFileSync(tempOutput);
     const png = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
@@ -350,6 +364,7 @@ export async function renderPreparedPublication(
       diagnostics.preview.dimensions[0],
       diagnostics.preview.dimensions[1],
     );
+    onPhase?.("PUBLISHING");
     // Run the last native source fingerprint and the exclusive final write in
     // one serialized Runtime operation. Blender itself rendered immutable
     // detached GLB bytes without occupying this queue.
