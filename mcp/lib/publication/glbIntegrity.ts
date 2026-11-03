@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { PublicationCubeManifest } from "@/lib/publication/sourceManifest";
 
 /** Strict, bounded glTF 2.0 GLB envelope and semantic inventory preflight.
@@ -25,6 +26,47 @@ function positiveArray(value: unknown): GltfRecord[] {
 }
 function validIndex(index: unknown, length: number): boolean {
   return Number.isSafeInteger(index) && (index as number) >= 0 && (index as number) < length;
+}
+
+/** Decode only the exact GLB Float32 UV accessor range; never load external data. */
+function glbUvFingerprint(
+  glb: Buffer,
+  bufferViews: readonly GltfRecord[],
+  accessors: readonly GltfRecord[],
+  accessorIndex: unknown,
+  expectedVertexCount: number,
+  binHeader: number,
+): string {
+  if (!validIndex(accessorIndex, accessors.length) || binHeader + 8 >= glb.length) {
+    throw new Error("PUBLICATION_GLB_UV_ACCESSOR_MISSING");
+  }
+  const accessor = accessors[accessorIndex as number]!;
+  if (accessor.componentType !== 5126 || accessor.type !== "VEC2" ||
+      accessor.count !== expectedVertexCount ||
+      !validIndex(accessor.bufferView, bufferViews.length)) {
+    throw new Error("PUBLICATION_GLB_UV_ACCESSOR_FORMAT_MISMATCH");
+  }
+  const view = bufferViews[accessor.bufferView as number]!;
+  const viewOffset = view.byteOffset ?? 0;
+  const accessorOffset = accessor.byteOffset ?? 0;
+  const stride = view.byteStride ?? 8;
+  const byteLength = expectedVertexCount * 8;
+  const binLength = glb.readUInt32LE(binHeader);
+  if ((view.buffer ?? 0) !== 0 ||
+      !Number.isSafeInteger(viewOffset) || viewOffset < 0 ||
+      !Number.isSafeInteger(accessorOffset) || accessorOffset < 0 ||
+      !Number.isSafeInteger(view.byteLength) ||
+      stride !== 8 ||
+      accessorOffset + byteLength > (view.byteLength as number) ||
+      viewOffset + accessorOffset + byteLength > binLength) {
+    throw new Error("PUBLICATION_GLB_UV_BUFFER_RANGE_INVALID");
+  }
+  const at = binHeader + 8 + viewOffset + accessorOffset;
+  const bytes = glb.subarray(at, at + byteLength);
+  if (bytes.length !== byteLength) {
+    throw new Error("PUBLICATION_GLB_UV_BUFFER_TRUNCATED");
+  }
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 export function inspectPublicationGlb(
@@ -195,6 +237,13 @@ export function inspectPublicationGlb(
         const expected = cube.primitives[i]!;
         const actual = primitives[i]!;
         const name = materials[actual.material as number]!.name;
+        if (!record(actual.attributes) ||
+            glbUvFingerprint(
+              glb, bufferViews as GltfRecord[], accessors,
+              actual.attributes.TEXCOORD_0, cube.uv_vertex_count, pointer,
+            ) !== cube.gltf_uv_sha256) {
+          throw new Error("PUBLICATION_GLB_SOURCE_UV_BYTES_MISMATCH: " + cube.cube_uuid);
+        }
         if (name !== expected.material_name) {
           throw new Error("PUBLICATION_GLB_FACE_MATERIAL_MISMATCH: " +
             cube.cube_uuid + ":" + expected.face_keys.join(","));
