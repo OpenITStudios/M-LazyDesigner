@@ -42,6 +42,9 @@ def _world(background: str, factor: float) -> dict:
     scene = bpy.context.scene
     world = bpy.data.worlds.new("LD_Publication_World")
     scene.world = world
+    if world.node_tree is None and hasattr(world, "use_nodes"):
+        world.use_nodes = True
+    require(world.node_tree is not None, "PUBLICATION_WORLD_SHADER_GRAPH_UNAVAILABLE")
     nodes = world.node_tree.nodes
     nodes.clear()
     output = nodes.new("ShaderNodeOutputWorld")
@@ -74,6 +77,9 @@ def _studio_ground(job: dict, bounds: tuple) -> dict:
     material = bpy.data.materials.new("LD_Publication_Ground_Material")
     color = (0.10, 0.11, 0.13, 1) if background != "light" else (0.50, 0.53, 0.56, 1)
     material.diffuse_color = color
+    if material.node_tree is None and hasattr(material, "use_nodes"):
+        material.use_nodes = True
+    require(material.node_tree is not None, "PUBLICATION_GROUND_SHADER_GRAPH_UNAVAILABLE")
     nodes = material.node_tree.nodes
     nodes.clear()
     shader = nodes.new("ShaderNodeBsdfPrincipled")
