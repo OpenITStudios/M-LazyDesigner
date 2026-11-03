@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
+import type { PublicationCubeManifest } from "@/lib/publication/sourceManifest";
 import {
   PUBLICATION_QUALITY,
   blenderRenderArgs,
@@ -248,6 +250,88 @@ function fixtureGlb(options: {
   bin.copy(glb, binOffset + 8);
   return glb;
 }
+
+/**
+ * Blockbench glTFExporter shares POSITION/TEXCOORD_0 for the full Cube, while
+ * each material primitive stores its own group-specific index accessor.
+ * This fixture verifies that two material groups preserve original face order.
+ */
+function fixtureTwoMaterialPrimitives(corruptSecond = false): {
+  glb: Buffer;
+  cube: PublicationCubeManifest;
+} {
+  const base = fixtureGlb();
+  const jsonLength = base.readUInt32LE(12);
+  const json = JSON.parse(base.toString("utf8", 20, 20 + jsonLength));
+  const bin = base.subarray(20 + jsonLength + 8);
+  const sourceFirst = [0, 2, 1, 0, 3, 2];
+  const sourceSecond = [0, 3, 1, 0, 2, 3];
+  const exportedSecond = [...sourceSecond];
+  if (corruptSecond) exportedSecond[1] = 2; // Valid index, wrong triangle.
+  const secondBuffer = Buffer.alloc(12);
+  exportedSecond.forEach((value, index) => secondBuffer.writeUInt16LE(value, index * 2));
+  const combined = Buffer.concat([bin, secondBuffer]);
+  json.meshes[0].primitives.push({
+    mode: 4, indices: 3, attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 1,
+  });
+  json.materials.push({
+    name: "ld_color_tex-2", doubleSided: true,
+    pbrMetallicRoughness: {
+      baseColorTexture: { index: 1 }, metallicFactor: 0, roughnessFactor: 0.85,
+    },
+  });
+  json.textures.push({ name: "ld_base_tex-2", source: 0, sampler: 0 });
+  json.bufferViews.push({
+    buffer: 0, byteOffset: bin.length, byteLength: secondBuffer.length, target: 34963,
+  });
+  json.accessors.push({ bufferView: 3, componentType: 5123, count: 6, type: "SCALAR" });
+  json.buffers[0].byteLength = combined.length;
+  const body = Buffer.from(JSON.stringify(json));
+  const padded = Buffer.alloc(Math.ceil(body.length / 4) * 4, 0x20);
+  body.copy(padded);
+  const glb = Buffer.alloc(12 + 8 + padded.length + 8 + combined.length);
+  glb.write("glTF", 0, "ascii");
+  glb.writeUInt32LE(2, 4);
+  glb.writeUInt32LE(glb.length, 8);
+  glb.writeUInt32LE(padded.length, 12);
+  glb.writeUInt32LE(0x4e4f534a, 16);
+  padded.copy(glb, 20);
+  const binOffset = 20 + padded.length;
+  glb.writeUInt32LE(combined.length, binOffset);
+  glb.writeUInt32LE(0x004e4942, binOffset + 4);
+  combined.copy(glb, binOffset + 8);
+  const digest = (value: Buffer | string) =>
+    createHash("sha256").update(value).digest("hex");
+  const cube: PublicationCubeManifest = {
+    cube_uuid: "cube-1", group_ancestry_uuids: [],
+    source_world_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    expected_blender_bounds_min: [0, 0, 0],
+    expected_blender_bounds_max: [0.0625, 0, 0.0625],
+    position_sha256: "0".repeat(64), uv_sha256: "0".repeat(64),
+    gltf_uv_sha256: digest(bin.subarray(48, 80)), uv_vertex_count: 4,
+    normal_sha256: null,
+    index_sha256: digest(JSON.stringify([...sourceFirst, ...sourceSecond])),
+    primitives: [
+      { face_keys: ["north"], material_name: "ld_color_tex-1", texture_uuid: "tex-1" },
+      { face_keys: ["south"], material_name: "ld_color_tex-2", texture_uuid: "tex-2" },
+    ],
+  };
+  return { glb, cube };
+}
+
+describe("GLB Cube multi-material triangle fidelity", () => {
+  test("accepts two independent material index ranges sharing one full-mesh UV", () => {
+    const { glb, cube } = fixtureTwoMaterialPrimitives();
+    expect(inspectPublicationGlb(glb, 1, 2, [cube])).toMatchObject({
+      mesh_count: 1, material_count: 2, primitive_count: 2,
+    });
+  });
+  test("rejects a wrong second face triangle despite unchanged UV and material identity", () => {
+    const { glb, cube } = fixtureTwoMaterialPrimitives(true);
+    expect(() => inspectPublicationGlb(glb, 1, 2, [cube]))
+      .toThrow("PUBLICATION_GLB_SOURCE_INDEX_BYTES_MISMATCH");
+  });
+});
 
 describe("GLB envelope and source fidelity preflight", () => {
   test("checks PBR factors and nearest filtering, not just valid image/texture references", () => {
