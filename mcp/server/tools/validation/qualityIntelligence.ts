@@ -45,7 +45,7 @@ function objectRecord(value: unknown): Record<string, unknown> | null {
 }
 
 
-function geometryHygieneRuntime() {
+export function geometryHygieneRuntime() {
   if (typeof Cube === "undefined" || typeof Group === "undefined") {
     return {
       state: "unavailable" as const,
@@ -82,7 +82,7 @@ function surfaceQualitySummaryRuntime(
   return summarizeSurfaceQualityWarnings(warnings);
 }
 
-function rigGraphRuntime() {
+export function rigGraphRuntime() {
   if (typeof Group === "undefined") {
     return {
       state: "unavailable" as const,

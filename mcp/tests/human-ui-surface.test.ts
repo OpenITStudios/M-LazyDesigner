@@ -103,23 +103,25 @@ describe("human-facing Blockbench UI", () => {
     expect(app).not.toContain('aria-label="Blockbench actions"');
   });
 
-  test("normal panel exposes only human status and useful project actions", async () => {
-    const panel = await source("ui/panel.html");
+  test("three-stage editor panel stays compact and hides MCP internals", async () => {
+    const [panel, ui] = await Promise.all([source("ui/panel.html"), source("ui/index.ts")]);
 
     expect(panel).toContain("LazyDesigner status");
     expect(panel).toContain("Current project");
-    expect(panel).toContain("Open Project Folder");
-    expect(panel).toContain("Technical authoring runs through your connected AI client.");
+    expect(panel).toContain("Open the project folder");
+    expect(panel).toContain('role="tablist"');
+    expect(panel).toContain("['geometry', 'texture', 'animation']");
+    expect(panel).toContain("Safe Cube Cleanup");
+    expect(panel).toContain("Inspect Model");
+    expect(panel).toContain("Inspect Textures");
+    expect(panel).toContain("Inspect Animations");
+    expect(panel).toContain("Preview Palette");
+    expect(panel).toContain("Switching tabs does not change its authoring stage.");
+    expect(ui).toContain('activeCategory: "geometry"');
+    expect(ui).toContain("runRuntimeOperationExclusive(generation");
+    expect(ui).not.toContain("setActiveMcpAuthoringStage(");
 
-    for (const internal of [
-      "Advanced details",
-      "Tools",
-      "Resources",
-      "Workflow",
-      "Runtime endpoint",
-      "Tool catalog",
-      "Coming soon",
-    ]) {
+    for (const internal of ["Advanced details", "Resources", "Runtime endpoint", "Tool catalog", "Coming soon"]) {
       expect(panel).not.toContain(internal);
     }
   });
@@ -169,7 +171,7 @@ describe("human-facing Blockbench UI", () => {
     ]);
 
     expect(panel).toContain("runtime.state === 'failed'");
-    expect(panel).toContain("Reload LazyDesigner");
+    expect(panel).toContain('@click="reloadLazyDesigner"');
     expect(panel).toContain("Copy Error Details");
     expect(ui).toContain("reloadLazyDesignerPlugin()");
     expect(ui).toContain("LazyDesigner support details");

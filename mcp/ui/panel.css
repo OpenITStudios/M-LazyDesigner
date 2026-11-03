@@ -1,144 +1,189 @@
+/* Compact, editor-native controls. No fixed overlay or viewport interception. */
 .mcp-panel {
-    max-block-size: 66vh;
-    overflow: auto;
-    padding: 12px;
+  max-block-size: 66vh;
+  overflow: auto;
+  padding: 10px;
+  color: var(--color-text);
+  font-size: 13px;
 }
-
-.mcp-panel .lazydesigner-card,
-.mcp-panel .project-section {
-    padding: 14px;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-back);
+.mcp-panel .ld-header,
+.mcp-panel .ld-workspace {
+  border: 1px solid var(--color-border);
+  background: var(--color-back);
+  border-radius: 7px;
+  padding: 12px;
 }
-
-.mcp-panel .project-section {
-    margin-block-start: 10px;
+.mcp-panel .runtime-summary,
+.mcp-panel .ld-project-row,
+.mcp-panel .ld-palette-input-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
-
-.mcp-panel .runtime-summary {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-}
-
+.mcp-panel .runtime-copy,
+.mcp-panel .ld-project-details { min-inline-size: 0; flex: 1; }
 .mcp-panel .runtime-dot {
-    inline-size: 9px;
-    block-size: 9px;
-    flex: 0 0 9px;
-    margin-block-start: 5px;
-    border-radius: 50%;
-    background: var(--color-subtle_text);
+  inline-size: 8px;
+  block-size: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--color-subtle_text);
 }
-
-.mcp-panel .runtime-dot.running {
-    background: #4caf50;
-}
-
-.mcp-panel .runtime-dot.starting {
-    background: #ff9800;
-}
-
-.mcp-panel .runtime-dot.failed {
-    background: #f44336;
-}
-
-.mcp-panel .runtime-copy {
-    min-inline-size: 0;
-}
-
-.mcp-panel .runtime-title {
-    font-size: 1em;
-    font-weight: 600;
-    line-height: 1.3;
-}
-
-.mcp-panel .runtime-subtitle {
-    margin-block-start: 2px;
-    color: var(--color-subtle_text);
-    font-size: 0.84em;
-    line-height: 1.45;
-}
-
-.mcp-panel .runtime-help {
-    margin-block-start: 12px;
-    padding-block-start: 10px;
-    border-block-start: 1px solid var(--color-border);
-}
-
-.mcp-panel .runtime-help-title,
-.mcp-panel .section-label {
-    margin-block-end: 4px;
-    color: var(--color-subtle_text);
-    font-size: 0.76em;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    text-transform: uppercase;
-}
-
-.mcp-panel .runtime-help-text,
+.mcp-panel .runtime-dot.running { background: #4caf50; }
+.mcp-panel .runtime-dot.starting { background: #ff9800; }
+.mcp-panel .runtime-dot.failed { background: #f44336; }
+.mcp-panel .runtime-title { font-size: .93em; font-weight: 600; }
+.mcp-panel .runtime-subtitle,
+.mcp-panel .ld-description,
 .mcp-panel .section-hint,
-.mcp-panel .panel-note {
-    color: var(--color-subtle_text);
-    font-size: 0.8em;
-    line-height: 1.45;
+.mcp-panel .panel-note,
+.mcp-panel .ld-review-note {
+  color: var(--color-subtle_text);
+  line-height: 1.4;
+  font-size: .82em;
 }
-
+.mcp-panel .runtime-subtitle { margin-top: 2px; }
+.mcp-panel .ld-project-row {
+  border-top: 1px solid var(--color-border);
+  margin-top: 10px;
+  padding-top: 10px;
+  justify-content: space-between;
+}
+.mcp-panel .section-label {
+  font-size: .73em;
+  color: var(--color-subtle_text);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+}
 .mcp-panel .project-name {
-    overflow: hidden;
-    font-size: 0.95em;
-    font-weight: 600;
-    line-height: 1.35;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 3px;
 }
-
-.mcp-panel .project-name.muted {
-    color: var(--color-subtle_text);
-    font-weight: 500;
+.mcp-panel .project-name.muted { color: var(--color-subtle_text); }
+.mcp-panel .section-hint { margin-top: 4px; }
+.mcp-panel .runtime-help { border-top: 1px solid var(--color-border); margin-top: 10px; padding-top: 10px; }
+.mcp-panel .runtime-help-title { font-size: .83em; font-weight: 600; }
+.mcp-panel .runtime-help-text { font-size: .8em; color: var(--color-subtle_text); margin-top: 3px; }
+.mcp-panel .ld-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  margin-block: 11px 8px;
+  border-bottom: 1px solid var(--color-border);
 }
-
-.mcp-panel .section-hint {
-    margin-block-start: 5px;
+.mcp-panel .ld-tabs button {
+  min-inline-size: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 9px 2px 8px;
+  color: var(--color-subtle_text);
+  font: inherit;
+  font-size: .88em;
+  cursor: pointer;
 }
-
+.mcp-panel .ld-tabs button.active {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-text);
+  font-weight: 600;
+}
+.mcp-panel .ld-tabs button:hover { color: var(--color-text); }
+.mcp-panel button:focus-visible,
+.mcp-panel input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.mcp-panel .ld-section-title { font-weight: 600; font-size: 1em; }
+.mcp-panel .ld-description { margin: 4px 0 0; }
+.mcp-panel .ld-tool-actions,
 .mcp-panel .action-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px;
-    margin-block-start: 10px;
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 10px;
 }
-
-.mcp-panel .quick-access {
-    margin-block-start: 10px;
-}
-
 .mcp-panel .user-action {
-    min-block-size: 30px;
-    padding: 6px 10px;
-    border: 1px solid var(--color-border);
-    border-radius: 5px;
-    background: var(--color-button);
-    color: var(--color-text);
-    font: inherit;
-    font-size: 0.82em;
-    cursor: pointer;
+  min-block-size: 30px;
+  max-inline-size: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  padding: 6px 10px;
+  background: var(--color-button);
+  color: var(--color-text);
+  font: inherit;
+  font-size: .84em;
+  cursor: pointer;
 }
-
+.mcp-panel .user-action.primary { border-color: var(--color-accent); }
 .mcp-panel .user-action:hover:not(:disabled) {
-    background: var(--color-accent);
-    color: var(--color-accent_text, var(--color-text));
+  background: var(--color-accent);
+  color: var(--color-accent_text, var(--color-text));
 }
-
-.mcp-panel .user-action.primary {
-    border-color: var(--color-accent);
+.mcp-panel .user-action:disabled { opacity: .5; cursor: default; }
+.mcp-panel .ld-compact-action { flex: 0 0 auto; }
+.mcp-panel .ld-palette-controls {
+  border-top: 1px solid var(--color-border);
+  padding-top: 11px;
+  margin-top: 12px;
 }
-
-.mcp-panel .user-action:disabled {
-    cursor: default;
-    opacity: 0.45;
+.mcp-panel .ld-palette-controls label {
+  display: block;
+  font-size: .8em;
+  margin-bottom: 5px;
+  color: var(--color-subtle_text);
 }
-
-.mcp-panel .panel-note {
-    margin: 10px 2px 0;
+.mcp-panel .ld-palette-input-row { flex-wrap: wrap; }
+.mcp-panel .ld-palette-input-row input {
+  min-width: 92px;
+  width: 108px;
+  min-height: 30px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-back);
+  color: var(--color-text);
+  padding: 5px 8px;
+  font: inherit;
 }
+.mcp-panel .ld-empty-state { font-size: .84em; color: var(--color-subtle_text); margin-top: 12px; }
+.mcp-panel .ld-error {
+  margin-top: 10px;
+  border-left: 2px solid var(--color-error);
+  padding: 4px 8px;
+  font-size: .84em;
+  overflow-wrap: anywhere;
+}
+.mcp-panel .ld-review { border-top: 1px solid var(--color-border); margin-top: 12px; padding-top: 11px; }
+.mcp-panel .ld-review-title { font-weight: 600; font-size: .92em; }
+.mcp-panel .ld-review-summary { margin-top: 4px; font-size: .84em; }
+.mcp-panel .ld-review-rows { margin: 10px 0 0; }
+.mcp-panel .ld-review-rows > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--color-border);
+  padding: 5px 0;
+  font-size: .83em;
+}
+.mcp-panel .ld-review-rows dt { color: var(--color-subtle_text); }
+.mcp-panel .ld-review-rows dd {
+  margin: 0;
+  text-align: right;
+  max-inline-size: 55%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mcp-panel .ld-swatches { display: flex; gap: 4px; margin-top: 12px; }
+.mcp-panel .ld-swatches span {
+  flex: 1;
+  height: 26px;
+  border-radius: 3px;
+  border: 1px solid var(--color-border);
+}
+.mcp-panel .ld-review-note { margin-top: 10px; }
+.mcp-panel .panel-note { margin: 10px 2px 0; }

@@ -67,8 +67,8 @@ describe("LazyDesigner plugin surface hardening", () => {
 
     expect(panel).toContain("runtimeStatusLabel(runtime.state)");
     expect(panel).toContain("Current project");
-    expect(panel).toContain("Open Project Folder");
-    expect(panel).toContain("Technical authoring runs through your connected AI client.");
+    expect(panel).toContain("Open the project folder");
+    expect(panel).toContain("AI works through the existing MCP Gateway.");
     expect(panel).not.toContain("availableToolCount");
     expect(panel).not.toContain("resources.length");
     expect(panel).not.toContain("availablePromptCount");

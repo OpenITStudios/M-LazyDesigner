@@ -18,11 +18,29 @@ import { promptPreviewDialogTeardown } from "@/ui/promptPreviewDialog";
 import { overrideDialogTeardown } from "@/ui/promptOverrideDialog";
 import panelCSS from "@/ui/panel.css";
 import template from "@/ui/panel.html";
+import {
+  inspectAuthoringCategory,
+  previewAuthoringPalette,
+  type AuthoringCategory,
+  type AuthoringReview,
+} from "@/ui/authoringTools";
+import {
+  canOpenCubeCleanup,
+  openCubeCleanupDialog,
+  cubeCleanupDialogTeardown,
+} from "@/ui/geometryCleanupDialog";
+import {
+  getRuntimeLifecycleSnapshot,
+  isRuntimeGenerationCurrent,
+  runRuntimeOperationExclusive,
+} from "@/lib/runtime/lifecycle";
+import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
 
 let panel: Panel | undefined;
 let runtimeStatusListener: (() => void) | undefined;
 let projectStateListener: (() => void) | undefined;
 let panelCssHandle: { delete(): void } | undefined;
+let toolsMenuAction: Action | undefined;
 
 type UiSetupInput = {
   tools: Record<string, IMCPTool>;
@@ -44,6 +62,13 @@ type HumanPanelContext = {
     detail: string;
   };
   project: HumanProjectState;
+  activeCategory: AuthoringCategory;
+  review: AuthoringReview | null;
+  busy: boolean;
+  error: string;
+  selectionLabel: string;
+  canCleanup: boolean;
+  paletteBase: string;
 };
 
 function readHumanProjectState(): HumanProjectState {
@@ -59,6 +84,18 @@ function readHumanProjectState(): HumanProjectState {
   };
 }
 
+function readHumanSelection(): string {
+  if (typeof Project === "undefined" || !Project) return "No project selected";
+  const cubes = typeof Cube === "undefined" ? 0 : Cube.selected?.length ?? 0;
+  const groups = typeof Group === "undefined" ? 0 : Group.selected?.length ?? 0;
+  if (cubes) return `${cubes} Cube${cubes === 1 ? "" : "s"} selected`;
+  if (groups) return `${groups} Group${groups === 1 ? "" : "s"} selected`;
+  if (typeof AnimationItem !== "undefined" && AnimationItem.selected) {
+    return `Animation: ${AnimationItem.selected.name}`;
+  }
+  return "Nothing selected";
+}
+
 function subscribeProjectState(callback: () => void): () => void {
   const events = [
     "select_project",
@@ -68,6 +105,9 @@ function subscribeProjectState(callback: () => void): () => void {
     "save_project",
     "close_project",
     "update_project_settings",
+    "update_selection",
+    "update_keyframe_selection",
+    "select_mode",
   ] as const;
 
   for (const event of events) Blockbench.on(event, callback);
@@ -148,6 +188,10 @@ export function uiSetup(input: UiSetupInput) {
           vm.project.open = next.open;
           vm.project.name = next.name;
           vm.project.hasFolder = next.hasFolder;
+          vm.selectionLabel = readHumanSelection();
+          vm.canCleanup = canOpenCubeCleanup();
+          vm.review = null;
+          vm.error = "";
         };
         projectStateListener?.();
         projectStateListener = subscribeProjectState(refreshProject);
@@ -163,8 +207,66 @@ export function uiSetup(input: UiSetupInput) {
         runtime: getStatusBarState(),
         project: readHumanProjectState(),
         canReload: canReloadLazyDesignerPlugin(),
+        activeCategory: "geometry" as AuthoringCategory,
+        selectionLabel: readHumanSelection(),
+        canCleanup: canOpenCubeCleanup(),
+        paletteBase: "#866b51",
+        busy: false,
+        error: "",
+        review: null as AuthoringReview | null,
       }),
       methods: {
+        selectCategory(this: HumanPanelContext, category: AuthoringCategory): void {
+          this.activeCategory = category;
+          this.canCleanup = canOpenCubeCleanup();
+          this.review = null;
+          this.error = "";
+        },
+        categoryLabel(category: AuthoringCategory): string {
+          return category === "geometry" ? "Geometry" :
+            category === "texture" ? "Texture" : "Animation";
+        },
+        async inspectActive(this: HumanPanelContext): Promise<void> {
+          if (this.busy) return;
+          const category = this.activeCategory;
+          const project = typeof Project !== "undefined" ? Project : null;
+          const generation = getRuntimeLifecycleSnapshot().owner_generation;
+          if (!project || generation === null) {
+            this.error = "Open a Bedrock project in an active LazyDesigner plugin.";
+            return;
+          }
+          this.busy = true;
+          this.review = null;
+          this.error = "";
+          try {
+            const result = await runRuntimeOperationExclusive(generation, async () => {
+              if (!isRuntimeGenerationCurrent(generation) || Project !== project) {
+                throw new Error("Project or plugin changed before inspection.");
+              }
+              return inspectAuthoringCategory(category);
+            });
+            if (isRuntimeGenerationCurrent(generation) &&
+                Project === project && this.activeCategory === category) {
+              this.review = result;
+            }
+          } catch (error) {
+            this.error = error instanceof Error ? error.message : String(error);
+          } finally {
+            this.busy = false;
+          }
+        },
+        openCleanup(): void {
+          openCubeCleanupDialog();
+        },
+        previewPalette(this: HumanPanelContext): void {
+          this.error = "";
+          try {
+            this.review = previewAuthoringPalette(this.paletteBase);
+          } catch (error) {
+            this.review = null;
+            this.error = error instanceof Error ? error.message : String(error);
+          }
+        },
         runtimeStatusLabel(state: McpServerStatus): string {
           if (state === "starting") return "Starting";
           if (state === "failed") return "Needs attention";
@@ -214,7 +316,7 @@ export function uiSetup(input: UiSetupInput) {
             `Status: ${this.runtime.state}`,
             `Blockbench: ${Blockbench.version}`,
             `Project: ${this.project.open ? this.project.name : "No project open"}`,
-            `Authoring stage: ${input.phase}`,
+            `Authoring stage: ${getActiveMcpAuthoringStage()}`,
             `Message: ${detail || "No additional error detail was reported."}`,
           ].join("\n");
 
@@ -234,6 +336,25 @@ export function uiSetup(input: UiSetupInput) {
     expand_button: true,
   });
 
+  // One discoverable menu entry; all authoring controls stay inside the docked panel.
+  try {
+    toolsMenuAction = new Action("lazydesigner_tools_panel", {
+      name: "LazyDesigner Tools",
+      icon: "build",
+      click() {
+        const current = Panels.mcp_panel as Panel | undefined;
+        if (!current) return;
+        if (current.folded) current.fold(false);
+        if (current.slot === "float") current.moveToFront();
+      },
+    });
+    MenuBar.menus.tools.addAction(toolsMenuAction);
+  } catch (error) {
+    toolsMenuAction?.delete();
+    toolsMenuAction = undefined;
+    console.warn("[LazyDesigner] Optional Tools menu shortcut unavailable", error);
+  }
+
   return panel;
 }
 
@@ -246,9 +367,13 @@ export function uiTeardown(): void {
   // These dialogs are no longer part of the normal human-facing panel, but
   // teardown remains so hot reload can safely close one opened by an older build.
   overrideDialogTeardown();
+  cubeCleanupDialogTeardown();
   toolTestDialogTeardown();
   promptPreviewDialogTeardown();
 
+  try { toolsMenuAction?.delete(); }
+  catch (error) { console.warn("[LazyDesigner] Tools shortcut cleanup failed", error); }
+  toolsMenuAction = undefined;
   statusBarTeardown();
   panel?.delete();
   panel = undefined;

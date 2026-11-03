@@ -1,45 +1,89 @@
 <div class="mcp-panel">
-    <section class="lazydesigner-card" aria-label="LazyDesigner status">
-        <div class="runtime-summary">
-            <span class="runtime-dot" :class="runtime.state" aria-hidden="true"></span>
-            <div class="runtime-copy">
-                <div class="runtime-title">{{runtimeStatusLabel(runtime.state)}}</div>
-                <div class="runtime-subtitle">{{runtimeStatusMessage(runtime.state)}}</div>
-            </div>
-        </div>
-
-        <div v-if="runtime.state === 'failed'" class="runtime-help">
-            <div class="runtime-help-title">Try this</div>
-            <div v-if="canReload" class="runtime-help-text">Reload LazyDesigner. If the problem continues, restart Blockbench.</div>
-            <div v-else class="runtime-help-text">Restart Blockbench. You can copy the error details if you need help.</div>
-            <div class="action-row">
-                <button v-if="canReload" type="button" class="user-action primary" @click="reloadLazyDesigner">
-                    Reload LazyDesigner
-                </button>
-                <button type="button" class="user-action" @click="copyErrorDetails">
-                    Copy Error Details
-                </button>
-            </div>
-        </div>
-    </section>
-
-    <section class="project-section" aria-label="Current project">
+  <section class="ld-header" aria-label="LazyDesigner status">
+    <div class="runtime-summary">
+      <span class="runtime-dot" :class="runtime.state" aria-hidden="true"></span>
+      <div class="runtime-copy">
+        <div class="runtime-title">{{runtimeStatusLabel(runtime.state)}}</div>
+        <div class="runtime-subtitle">{{runtimeStatusMessage(runtime.state)}}</div>
+      </div>
+    </div>
+    <div class="ld-project-row">
+      <div class="ld-project-details">
         <div class="section-label">Current project</div>
-        <template v-if="project.open">
-            <div class="project-name" :title="project.name">{{project.name}}</div>
-            <div class="action-row quick-access">
-                <button type="button" class="user-action" :disabled="!project.hasFolder" @click="openProjectFolder"
-                    :title="project.hasFolder ? 'Open the folder containing this project.' : 'Save this project once to enable this shortcut.'">
-                    Open Project Folder
-                </button>
-            </div>
-            <div v-if="!project.hasFolder" class="section-hint">Save the project once to enable folder access.</div>
-        </template>
-        <template v-else>
-            <div class="project-name muted">No project open</div>
-            <div class="section-hint">Open or create a Blockbench project to begin.</div>
-        </template>
-    </section>
+        <div class="project-name" :class="{ muted: !project.open }" :title="project.name">{{project.name}}</div>
+        <div class="section-hint" v-if="project.open">{{selectionLabel}}</div>
+      </div>
+      <button v-if="project.open && project.hasFolder" type="button" class="user-action ld-compact-action" @click="openProjectFolder" title="Open the project folder">Folder</button>
+    </div>
+    <div v-if="runtime.state === 'failed'" class="runtime-help">
+      <div class="runtime-help-title">Connection needs attention</div>
+      <div class="runtime-help-text">Local editor tools and AI connection have separate readiness.</div>
+      <div class="action-row">
+        <button v-if="canReload" type="button" class="user-action" @click="reloadLazyDesigner">Reload</button>
+        <button type="button" class="user-action" @click="copyErrorDetails">Copy Error Details</button>
+      </div>
+    </div>
+  </section>
 
-    <p class="panel-note">Technical authoring runs through your connected AI client.</p>
+  <nav class="ld-tabs" role="tablist" aria-label="LazyDesigner authoring tools">
+    <button v-for="category in ['geometry', 'texture', 'animation']"
+      :key="category" :id="'ld-tab-' + category" type="button" role="tab"
+      :aria-selected="activeCategory === category" :aria-controls="'ld-authoring-panel'"
+      :class="{ active: activeCategory === category }"
+      @click="selectCategory(category)">{{categoryLabel(category)}}</button>
+  </nav>
+
+  <section class="ld-workspace" id="ld-authoring-panel" role="tabpanel" :aria-labelledby="'ld-tab-' + activeCategory">
+    <template v-if="activeCategory === 'geometry'">
+      <div class="ld-section-title">Geometry</div>
+      <p class="ld-description">Inspect the current model and review safe Cube corrections.</p>
+      <div class="ld-tool-actions">
+        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectActive">{{busy ? 'Inspecting...' : 'Inspect Model'}}</button>
+        <button type="button" class="user-action" :disabled="!canCleanup || busy" @click="openCleanup" title="Review and apply bounds/rotation rounding to selected Cubes">Safe Cube Cleanup</button>
+      </div>
+      <p class="section-hint" v-if="!canCleanup && project.open">For cleanup, select 1–32 Cubes in the active Geometry stage.</p>
+    </template>
+
+    <template v-else-if="activeCategory === 'texture'">
+      <div class="ld-section-title">Texture</div>
+      <p class="ld-description">Review the texture inventory or create a color-only palette preview.</p>
+      <div class="ld-tool-actions">
+        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectActive">{{busy ? 'Inspecting...' : 'Inspect Textures'}}</button>
+      </div>
+      <div class="ld-palette-controls">
+        <label for="ld-base-color">Base color</label>
+        <div class="ld-palette-input-row">
+          <input id="ld-base-color" v-model="paletteBase" type="text" maxlength="7" placeholder="#RRGGBB" spellcheck="false" aria-label="Palette base color in hex" />
+          <button type="button" class="user-action" @click="previewPalette">Preview Palette</button>
+        </div>
+      </div>
+    </template>
+
+    <template v-else>
+      <div class="ld-section-title">Animation</div>
+      <p class="ld-description">Inspect authored clips and controllers without changing playback or keyframes.</p>
+      <div class="ld-tool-actions">
+        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectActive">{{busy ? 'Inspecting...' : 'Inspect Animations'}}</button>
+      </div>
+    </template>
+
+    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project to inspect its authoring state.</p>
+    <div v-if="error" class="ld-error" role="alert">{{error}}</div>
+
+    <section v-if="review" class="ld-review" aria-live="polite" aria-label="Tool results">
+      <div class="ld-review-title">{{review.heading}}</div>
+      <p class="ld-review-summary">{{review.summary}}</p>
+      <dl class="ld-review-rows">
+        <div v-for="(entry, index) in review.rows" :key="entry.label + index">
+          <dt>{{entry.label}}</dt><dd :title="entry.value">{{entry.value}}</dd>
+        </div>
+      </dl>
+      <div v-if="review.swatches && review.swatches.length" class="ld-swatches" aria-label="Generated color ramp">
+        <span v-for="(swatch, index) in review.swatches" :key="index" :style="{backgroundColor: swatch}" :title="swatch" :aria-label="swatch"></span>
+      </div>
+      <p class="ld-review-note">{{review.note}}</p>
+    </section>
+  </section>
+
+  <p class="panel-note">AI works through the existing MCP Gateway. Switching tabs does not change its authoring stage.</p>
 </div>
