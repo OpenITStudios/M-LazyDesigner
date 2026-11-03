@@ -146,6 +146,18 @@ export function openPublicationRenderDialog(): void {
         label: "Exposure (EV)",
         type: "number", value: 0, min: -3, max: 3, step: 0.1,
       },
+      glow_strength: {
+        label: "Soft highlight glow",
+        type: "number", value: 0.08, min: 0, max: 0.35, step: 0.01,
+      },
+      glow_threshold: {
+        label: "Glow highlight threshold",
+        type: "number", value: 2, min: 0.5, max: 20, step: 0.1,
+      },
+      glow_size: {
+        label: "Glow spread",
+        type: "number", value: 0.45, min: 0.1, max: 0.8, step: 0.05,
+      },
     },
     buttons: ["Start Render", "Cancel"],
     confirmIndex: 0,
@@ -182,6 +194,9 @@ export function openPublicationRenderDialog(): void {
             softness: Number(form.softness ?? 1),
             environment: Number(form.environment ?? 1),
             exposure_ev: Number(form.exposure_ev ?? 0),
+            glow_strength: Number(form.glow_strength ?? 0.08),
+            glow_threshold: Number(form.glow_threshold ?? 2),
+            glow_size: Number(form.glow_size ?? 0.45),
           },
         });
       }).then(status => {
