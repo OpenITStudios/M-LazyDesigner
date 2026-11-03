@@ -111,35 +111,38 @@ export function inspectGeometryIssues(): GeometryIssueReview {
 }
 
 /**
- * Locate only the exact Cube/Group from the current project.
- * Select + showInOutliner are native editor navigation, not model mutation.
- * Caller serializes with AI work and rechecks the current issue set before calling.
+ * Shared exact native Outliner navigator. Only caller-verified UUIDs enter here.
+ * This changes selection, never authored geometry or Undo history.
  */
-export function locateGeometryIssue(
-  issue: GeometryIssue,
-  project: object,
+export function locateExactGeometryTarget(
+  kind: "cube" | "group",
+  uuid: string,
+  project: object
 ): string {
   requireBedrockEditorProject();
   if (Project !== project) {
-    throw new Error("The project changed. Run Find Geometry Issues again.");
+    throw new Error("The project changed. Run the review again.");
   }
-  const nodes = issue.kind === "cube"
+  const nodes = kind === "cube"
     ? (typeof Cube === "undefined" ? [] : Cube.all)
     : (typeof Group === "undefined" ? [] : Group.all);
-  const matches = nodes.filter((node) => node.uuid === issue.uuid);
+  const matches = nodes.filter((node) => node.uuid === uuid);
   if (matches.length !== 1) {
-    throw new Error("The diagnosed object no longer has a unique UUID in this project.");
+    throw new Error("The reviewed object no longer has a unique UUID in this project.");
   }
   const node = matches[0];
   if (typeof node.select !== "function" ||
       typeof node.showInOutliner !== "function") {
     throw new Error("Native Outliner navigation is unavailable for this object.");
   }
-  // The native Group signature requires (event, is_outliner_click);
-  // Cube accepts the same arguments. Do not report success for locked targets.
   if (node.select(undefined, false) === false || node.selected !== true) {
     throw new Error("Blockbench could not select this object. Check whether it is locked.");
   }
   node.showInOutliner();
   return node.name;
+}
+
+/** Navigate to a current canonical diagnostic, not an inferred Cube. */
+export function locateGeometryIssue(issue: GeometryIssue, project: object): string {
+  return locateExactGeometryTarget(issue.kind, issue.uuid, project);
 }

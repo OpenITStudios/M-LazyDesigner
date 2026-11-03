@@ -38,10 +38,11 @@
 
   <section class="ld-workspace" id="ld-authoring-panel" role="tabpanel" :aria-labelledby="'ld-tab-' + activeCategory">
     <template v-if="activeCategory === 'geometry'">
-      <div class="ld-section-title">Geometry Issue Navigator</div>
-      <p class="ld-description">Find exact Cubes and Groups with technical problems, then locate them in the native Outliner.</p>
+      <div class="ld-section-title">Geometry Review</div>
+      <p class="ld-description">Inspect the last applied Cube edit from native Undo history, or locate a technical issue.</p>
       <div class="ld-tool-actions">
-        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectActive">{{busy ? 'Checking...' : 'Find Geometry Issues'}}</button>
+        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectLatestEdit">{{busy ? 'Checking...' : 'Review Latest Edit'}}</button>
+        <button type="button" class="user-action" :disabled="!project.open || busy" @click="inspectActive">Find Geometry Issues</button>
       </div>
       <details class="ld-utilities">
         <summary>Geometry utility</summary>
@@ -61,8 +62,35 @@
       <p class="ld-description">Use Blockbench's native Timeline for manual editing and the existing MCP capabilities for AI authoring. No inventory-only buttons.</p>
     </template>
 
-    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project before running Geometry diagnostics.</p>
+    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project before reviewing Geometry.</p>
     <div v-if="error" class="ld-error" role="alert">{{error}}</div>
+
+    <section v-if="editReview && activeCategory === 'geometry'" class="ld-review" aria-live="polite" aria-label="Native geometry change review">
+      <div class="ld-review-title">{{editReview.heading}}</div>
+      <p class="ld-review-summary">{{editReview.action}} — {{editReview.summary}}</p>
+      <div v-if="editReview.cubes.length" class="ld-findings">
+        <article v-for="change in editReview.cubes" :key="change.uuid" class="ld-finding">
+          <div class="ld-finding-title" :title="change.uuid">
+            {{change.name}} <span class="ld-finding-kind">({{change.kind}})</span>
+          </div>
+          <div class="ld-change-rows">
+            <div v-for="field in change.fields" :key="field.field" class="ld-change-row">
+              <span class="ld-change-key">{{field.field}}</span>
+              <span class="ld-change-before">{{field.before}}</span>
+              <span class="ld-change-arrow" aria-label="to">→</span>
+              <span class="ld-change-after">{{field.after}}</span>
+            </div>
+            <p v-if="!change.fields.length" class="section-hint">Object {{change.kind}} in this native edit.</p>
+          </div>
+          <button v-if="change.canLocate" type="button" class="user-action"
+            :disabled="busy || !project.open" @click="locateEditedCube(change)">Locate Cube</button>
+        </article>
+      </div>
+      <p v-if="editReview.truncated" class="section-hint">
+        Only the first 8 of {{editReview.affectedCount}} changed Cubes are shown.
+      </p>
+      <p class="ld-review-note">{{editReview.note}}</p>
+    </section>
 
     <section v-if="review && activeCategory === 'geometry'" class="ld-review" aria-live="polite" aria-label="Geometry diagnostic results">
       <div class="ld-review-title">{{review.heading}}</div>

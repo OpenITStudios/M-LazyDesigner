@@ -160,6 +160,34 @@
   margin: 6px 0 10px;
   color: var(--color-subtle_text);
 }
+.mcp-panel .ld-change-rows {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 10px;
+}
+.mcp-panel .ld-change-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 12px minmax(0, 1fr);
+  align-items: start;
+  gap: 5px;
+  font-size: .77em;
+  line-height: 1.35;
+  min-width: 0;
+}
+.mcp-panel .ld-change-key {
+  color: var(--color-subtle_text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.mcp-panel .ld-change-before,
+.mcp-panel .ld-change-after {
+  font-family: monospace;
+  overflow-wrap: anywhere;
+}
+.mcp-panel .ld-change-arrow {
+  color: var(--color-subtle_text);
+  text-align: center;
+}
 .mcp-panel .ld-empty-state { font-size: .84em; color: var(--color-subtle_text); margin-top: 12px; }
 .mcp-panel .ld-error {
   margin-top: 10px;

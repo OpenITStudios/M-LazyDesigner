@@ -21,10 +21,17 @@ import template from "@/ui/panel.html";
 import {
   inspectGeometryIssues,
   locateGeometryIssue,
+  locateExactGeometryTarget,
   type AuthoringCategory,
   type GeometryIssue,
   type GeometryIssueReview,
 } from "@/ui/authoringTools";
+import {
+  reviewCurrentGeometryEdit,
+  requireCurrentGeometryEditReview,
+  type GeometryEditCubeDiff,
+  type GeometryEditReview,
+} from "@/ui/geometryChangeReview";
 import {
   canOpenCubeCleanup,
   openCubeCleanupDialog,
@@ -66,6 +73,7 @@ type HumanPanelContext = {
   project: HumanProjectState;
   activeCategory: AuthoringCategory;
   review: GeometryIssueReview | null;
+  editReview: GeometryEditReview | null;
   busy: boolean;
   error: string;
   selectionLabel: string;
@@ -216,6 +224,7 @@ export function uiSetup(input: UiSetupInput) {
           vm.inspectionVersion += 1;
           vm.busy = false;
           vm.review = null;
+          vm.editReview = null;
           vm.error = "";
         };
         projectStateListener?.();
@@ -238,6 +247,7 @@ export function uiSetup(input: UiSetupInput) {
         busy: false,
         error: "",
         review: null as GeometryIssueReview | null,
+        editReview: null as GeometryEditReview | null,
         inspectionVersion: 0,
       }),
       methods: {
@@ -247,6 +257,7 @@ export function uiSetup(input: UiSetupInput) {
           this.inspectionVersion += 1;
           this.busy = false;
           this.review = null;
+          this.editReview = null;
           this.error = "";
         },
         categoryLabel(category: AuthoringCategory): string {
@@ -273,6 +284,7 @@ export function uiSetup(input: UiSetupInput) {
           const mountedEpoch = uiEpoch;
           this.busy = true;
           this.review = null;
+          this.editReview = null;
           this.error = "";
           try {
             const result = await runRuntimeOperationExclusive(generation, async () => {
@@ -295,6 +307,72 @@ export function uiSetup(input: UiSetupInput) {
             if (requestVersion === this.inspectionVersion && mountedEpoch === uiEpoch) {
               this.busy = false;
             }
+          }
+        },
+        async inspectLatestEdit(this: HumanPanelContext): Promise<void> {
+          if (this.busy || this.activeCategory !== "geometry") return;
+          const project = typeof Project !== "undefined" ? Project : null;
+          const generation = getRuntimeLifecycleSnapshot().owner_generation;
+          if (!project || generation === null) {
+            this.error = "Open a Bedrock project before reviewing an edit.";
+            return;
+          }
+          const version = ++this.inspectionVersion;
+          const epoch = uiEpoch;
+          this.busy = true;
+          this.review = null;
+          this.editReview = null;
+          this.error = "";
+          try {
+            const result = await runRuntimeOperationExclusive(generation, async () => {
+              if (epoch !== uiEpoch || !isRuntimeGenerationCurrent(generation) ||
+                  Project !== project) {
+                throw new Error("Project or plugin changed before the edit was reviewed.");
+              }
+              return reviewCurrentGeometryEdit();
+            });
+            if (epoch === uiEpoch && version === this.inspectionVersion &&
+                Project === project && this.activeCategory === "geometry") {
+              this.editReview = result;
+            }
+          } catch (error) {
+            if (epoch === uiEpoch && version === this.inspectionVersion) {
+              this.error = error instanceof Error ? error.message : String(error);
+            }
+          } finally {
+            if (epoch === uiEpoch && version === this.inspectionVersion) this.busy = false;
+          }
+        },
+        async locateEditedCube(this: HumanPanelContext, change: GeometryEditCubeDiff): Promise<void> {
+          const reviewed = this.editReview;
+          if (this.busy || !reviewed || !change.canLocate ||
+              this.activeCategory !== "geometry" ||
+              !reviewed.cubes.some(c => c.uuid === change.uuid && c.kind === change.kind)) return;
+          const project = typeof Project !== "undefined" ? Project : null;
+          const generation = getRuntimeLifecycleSnapshot().owner_generation;
+          if (!project || generation === null) {
+            this.error = "Open the original project and review the edit again.";
+            return;
+          }
+          const version = this.inspectionVersion;
+          const epoch = uiEpoch;
+          this.busy = true;
+          this.error = "";
+          try {
+            await runRuntimeOperationExclusive(generation, async () => {
+              if (epoch !== uiEpoch || !isRuntimeGenerationCurrent(generation) ||
+                  Project !== project) {
+                throw new Error("Project or plugin changed. Review the latest edit again.");
+              }
+              requireCurrentGeometryEditReview(reviewed);
+              locateExactGeometryTarget("cube", change.uuid, project);
+            });
+          } catch (error) {
+            if (epoch === uiEpoch && version === this.inspectionVersion) {
+              this.error = error instanceof Error ? error.message : String(error);
+            }
+          } finally {
+            if (epoch === uiEpoch && version === this.inspectionVersion) this.busy = false;
           }
         },
         openCleanup(): void {
