@@ -100,6 +100,10 @@ const captureModelViewsWithAnimationBase = captureModelViewsParameters.safeExten
 
 export const animationAwareCaptureModelViewsParameters =
   captureModelViewsWithAnimationBase.superRefine((request, ctx) => {
+    if(request.animation_preview&&request.ai_ingestion_probe){
+      ctx.addIssue({code:z.ZodIssueCode.custom,path:["ai_ingestion_probe"],
+        message:"Synthetic AI ingestion test must not be mixed into animation pose evidence."});
+    }
     const sampleCount = request.animation_preview?.times.length ?? 1;
     // Evidence targets are expanded to actual canonical views at capture time.
     // Apply the same eight-image limit before native posing/screenshot work,

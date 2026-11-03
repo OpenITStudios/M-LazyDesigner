@@ -8,6 +8,7 @@ import { captureScreenshot, captureAppScreenshot } from "@/lib/blockbench/captur
 import { captureNativeCubeSilhouette } from "@/lib/blockbench/silhouetteCapture";
 import { extractVerifiedPngAlpha } from "@/lib/reference/pngAlphaEvidence";
 import { imageContent } from "@/lib/protocol/imageContent";
+import { createNativeVisualIngestionProbe } from "@/lib/protocol/visualIngestionProbe";
 import { assessVisualPartCorrespondence } from "@/lib/reference/partCorrespondence";
 import { readRecipePartCaptureScope } from "@/server/runtime/recipes/authoring/service";
 import {
@@ -658,6 +659,7 @@ export const captureModelViewsParameters = z
   .object({
   size: z.number().int().min(32).max(1024).optional().describe("PNG square size. Omitted: 256/384/512 by evidence_targets detail/risk, else 512. 32-64: icons only."),
   highlight_missing_textures: z.boolean().default(false).describe("Temporarily brighten missing-texture materials, then restore. Diagnostic only: no shaded comparison/UI flash."),
+  ai_ingestion_probe: z.boolean().default(false).describe("Opt-in one-shot AI pixel-perception challenge, one extra diagnostic PNG. Never normal QA or auto-run."),
   reference_correspondence: referenceCorrespondenceSchema.optional().describe(
     "Opt-in region→saved recipe Cube UUID candidates. Use current status image metadata. Verify recipe/native identity; PROVISIONAL capture provenance, never visual PASS or mutation."
   ),
@@ -1136,7 +1138,7 @@ export function registerCameraTools() {
 
   createTool(cameraToolDocs[3].name, {
     ...cameraToolDocs[3],
-    async execute({ views, evidence_targets, verification_risk, front_direction, framing, highlight_missing_textures, landmark_pairs, reference_correspondence, size }) {
+    async execute({ views, evidence_targets, verification_risk, front_direction, framing, highlight_missing_textures, landmark_pairs, reference_correspondence, size, ai_ingestion_probe }) {
       // Measure the whole capture invocation, including both native dependency
       // snapshots, rather than excluding the potentially expensive first read.
       const captureStartedAtMs = Date.now();
@@ -1465,6 +1467,15 @@ export function registerCameraTools() {
         };
       }
 
+      // Separate synthetic image for a one-time client compatibility check.
+      // It is neither model evidence nor an animation pose.
+      const ingestionProbe=ai_ingestion_probe?createNativeVisualIngestionProbe():null;
+      if(ai_ingestion_probe){
+        if(!ingestionProbe)throw new Error("AI_INGESTION_PROBE_MISSING");
+        content.push({type:"text",text:
+          "AI_IMAGE_INGESTION_CHALLENGE: Read the separate 4x3 color grid and return 12 capital letters left-to-right, top-to-bottom using R red, G green, B blue, Y yellow, C cyan, M magenta. The answer is ONLY in the PNG. Verify against receipt nonce/SHA-256 independently. This is not model visual evidence."});
+        content.push(ingestionProbe.image);
+      }
       const format = Format as { id?: string } | undefined;
       const structuredContent = {
         project: {
@@ -1516,6 +1527,7 @@ export function registerCameraTools() {
           selected_size: captureSize,
         },
         captures,
+        ...(ingestionProbe?{ai_image_ingestion_probe:ingestionProbe.receipt}:{}),
         ...(partCorrespondenceEvidence
           ? { part_correspondence: partCorrespondenceEvidence }
           : {}),

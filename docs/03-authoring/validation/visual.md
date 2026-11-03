@@ -13,6 +13,32 @@ Reference preparation belongs to [Reference Preparation](../../02-reference/READ
 This note validates the Blockbench result.
 Comparison captures require Shading ON. Record shading, view/front direction, and artifact revision with the image; unknown/off shading is not final comparison evidence. Use the same lighting context for before/after judgements. Blockbench preview shading supports review but does not prove actual Minecraft in-game lighting.
 
+## Verify AI pixel ingestion before trusting visual QA
+
+A successful Blockbench render and valid MCP ImageContent do NOT prove the
+receiving AI actually saw the pixels. On a new/changed AI client, call
+`capture_model_views` once with ordinary view arguments plus
+`ai_ingestion_probe: true`. This appends one synthetic 4×3 color-grid PNG
+after the actual model images, with a separate receipt. It is NOT an asset
+render, reference image or visual QA verdict, and is never automatic.
+
+Ask AI for 12 color letters in row-major order (R red, G green, B blue,
+Y yellow, C cyan, M magenta). The answer does not appear in the textual
+MCP result. Independently verify the reported answer with the receipt's
+nonce and expected_answer_sha256. Digest construction:
+`SHA256("LAZYDESIGNER_MCP_IMAGE_PROBE_V1\\n"+nonce+"\\n"+answer)`.
+The reusable pure checker is `verifyVisualIngestionProbeResponse` in
+`mcp/lib/protocol/visualIngestionProbe.ts`. Wrong answer / missing image
+means the client's pixel ingestion is UNVERIFIED. A correct answer proves
+only this particular image transport; it is not a motion or visual PASS.
+Never replace actual pixels with a file path, hash or written description.
+
+`inspect_animation(diagnostics=true).motion_dynamics.temporal_image_capture_hints`
+offers image-free candidate timestamps ranked from authored numeric keys;
+it does not render interpolated frames. Capture only decision-changing poses
+within the current views × times × optional silhouette ≤8 limit. Missing
+samples, MoLang, controller playback and continuous motion stay UNVERIFIED.
+
 ## Core Principle
 
 **Structural success is not visual success.**

@@ -20,6 +20,7 @@ import {
   type AnimationMotionTrackInput,
 } from "@/lib/animation/motionDynamics";
 import { captureNativeIkBakeReadiness } from "@/server/tools/animation/ikBakeNativeSamples";
+import { planTemporalImageEvidence } from "@/lib/animation/temporalEvidenceSampling";
 
 type JsonRecord = Record<string, unknown>;
 type RuntimeAnimationItem = BBAnimation | AnimationController;
@@ -493,10 +494,18 @@ function motionDynamicsRuntime(item: RuntimeAnimationItem) {
       });
     }
   }
-  return analyzeAnimationMotionDynamics({
-    loop_mode: String(item.loop),
-    tracks,
-  });
+  return {
+    ...analyzeAnimationMotionDynamics({
+      loop_mode: String(item.loop),
+      tracks,
+    }),
+    // Zero extra renders, tool calls or expensive repeat track reads.
+    // These are candidate timestamps, not evaluated interpolated frames.
+    temporal_image_capture_hints: planTemporalImageEvidence({
+      duration_seconds: Number((item as BBAnimation).length),
+      tracks,
+    }),
+  };
 }
 
 function clientEntityWiringRuntime(
