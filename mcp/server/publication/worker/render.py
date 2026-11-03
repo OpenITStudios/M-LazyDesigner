@@ -93,6 +93,13 @@ def stage_materials(meshes, job):
                 fail("Imported mesh has no material.")
             material.use_nodes = True
             nodes = material.node_tree.nodes
+            # A material that has a valid name but lost its imported atlas is
+            # not acceptable; never replace a broken PBR map with a flat color.
+            image_nodes = [n for n in nodes if n.type == "TEX_IMAGE" and n.image]
+            if not image_nodes or any(
+                n.image.size[0] < 1 or n.image.size[1] < 1 for n in image_nodes
+            ):
+                fail("Imported material is missing usable native texture pixels: " + material.name)
             bsdf = next((n for n in nodes if n.type == "BSDF_PRINCIPLED"), None)
             if not bsdf:
                 fail("Imported GLB has no Principled material.")
@@ -180,7 +187,7 @@ def create_stage(job, lower, upper, center, radius):
     background = job["background"]
     configure_world(bpy.context.scene, background)
     if background != "transparent":
-        bpy.ops.mesh.primitive_plane_add(size=2, location=(center.x, center.y, lower.z - 0.04 * radius))
+        bpy.ops.mesh.primitive_plane_add(size=2, location=(center.x, center.y, lower.z - 0.002 * radius))
         ground = bpy.context.object
         ground.name = "LD_Publication_Ground"
         ground.scale = (radius * 5, radius * 5, 1)
@@ -250,6 +257,9 @@ def render(job):
     meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
     if not meshes:
         fail("Imported GLB contains no mesh.")
+    for obj in meshes:
+        if not obj.data.polygons or not obj.data.uv_layers:
+            fail("Imported mesh lost its polygon/UV inventory: " + obj.name)
     if len(meshes) != job.get("expected_mesh_count"):
         fail("Imported Blender mesh inventory differs from Blockbench source.")
     imported_materials = {material.name for obj in meshes for material in obj.data.materials if material}
