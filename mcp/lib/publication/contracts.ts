@@ -49,6 +49,8 @@ export type PublicationJob = {
   source_project_uuid: string;
   source_sha256: string;
   glb_path: string;
+  expected_mesh_count: number;
+  expected_material_count: number;
   output_path: string;
   width: number;
   height: number;
@@ -69,7 +71,7 @@ export type PublicationJob = {
 
 export function makePublicationJob(
   request: PublicationRenderRequest,
-  source: { project_uuid: string; sha256: string; glb_path: string; materials: PublicationJob["materials"] },
+  source: { project_uuid: string; sha256: string; glb_path: string; mesh_count: number; materials: PublicationJob["materials"] },
 ): PublicationJob {
   const quality = PUBLICATION_QUALITY[request.quality];
   return {
@@ -77,6 +79,8 @@ export function makePublicationJob(
     source_project_uuid: source.project_uuid,
     source_sha256: source.sha256,
     glb_path: source.glb_path,
+    expected_mesh_count: source.mesh_count,
+    expected_material_count: Object.keys(source.materials).length,
     output_path: request.output_path,
     width: request.width,
     height: request.height,
