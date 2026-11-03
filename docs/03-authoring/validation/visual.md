@@ -201,6 +201,33 @@ by [Playwright visual comparisons](https://playwright.dev/docs/test-snapshots).
 An image-capable Codex model is not itself an attestation of the Blockbench
 viewport or reference fidelity.
 
+## Native capture freshness, not an image cache
+
+The existing `capture_model_views` native owner now fingerprints the same
+project's Cube geometry, face UV/material references, Group hierarchy,
+current rendered Cube world matrices, decoded texture pixels within a bounded
+on-demand budget, pose context and capture presentation before and after the
+requested view series. It also incorporates caller-supplied reference identity
+metadata without pretending that Runtime can certify the Gateway's approved
+Reference Package. Every model view carries a camera/image/dependency-bound
+`capture_contract_sha256`.
+
+If project identity or tracked dependency bytes change across the series, the
+tool fails closed with `MODEL_CAPTURE_STALE`; it does **not** deliver mixed
+before/after screenshot proof. Unknown texture canvas, budget exhaustion,
+unsupported visible non-Cube geometry, missing native pose or renderer state
+sets `evidence_freshness.state=UNVERIFIED` with explicit reasons. The requested
+views are still captured for manual comparison; missing coverage is **not**
+quietly treated as validated. Source-reference image pixels and native renderer
+attestation remain outside this internal identity fingerprint.
+
+`MATCHED` means only that the **tracked same-call dependencies** were observed
+unchanged; it is not an artistic, reference, animation playback or in-game
+PASS. No cross-invocation screenshot reuse is authorized: a future cache must
+independently match current native state, reference bytes and capture context.
+Fingerprint reads run only when users actually request capture, not at every
+Cube edit. Live native acceptance and measured savings are still required.
+
 ## Reference ↔ Model View Pairing
 
 For actual image-based review through the Gateway: obtain the approved

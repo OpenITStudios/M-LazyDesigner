@@ -7,6 +7,8 @@ import {
   resolveCaptureViewSelection,
   captureCameraSpecMetadata,
   recordCaptureImageDelivery,
+  assessVisualCaptureFreshness,
+  fingerprintVisualCaptureDependencies,
   selectCaptureSizeForEvidence,
   selectModelViewsForEvidence,
 } from "@/server/tools/inspection/camera";
@@ -15,6 +17,71 @@ const baseInput = {
   views: ["front"],
   front_direction: "+z",
 } as const;
+
+describe("capture native dependency freshness contract", () => {
+  const baseline = {
+    project_uuid: "project-a",
+    cubes: [["cube", [0, 0, 0], [2, 2, 2], ["north", [0, 0, 2, 2]]]],
+    groups: [["root", [0, 0, 0]]],
+    textures: [["atlas", 16, 16, "bitmap-sha-a"]],
+    pose: { animation: "idle", time: 0, world: [1, 0, 0] },
+    presentation: { shading: true, brightness: 50, view_mode: "textured" },
+    reference_binding: { sha256: "approved-ref-a" },
+  };
+  const snapshot = (dependency_sha256: string, coverage: "TRACKED" | "PARTIAL" = "TRACKED") => ({
+    project_uuid: "project-a", dependency_sha256, coverage, unresolved:
+      coverage === "PARTIAL" ? ["TEXTURE_PIXEL_READ_UNAVAILABLE"] : [],
+    texture_pixels_hashed: coverage === "PARTIAL" ? 0 : 256,
+  });
+
+  test("geometry, UV, texture, pose, presentation and reference each change identity", () => {
+    const digest = fingerprintVisualCaptureDependencies(baseline);
+    const variants = [
+      { ...baseline, project_uuid: "project-b" },
+      { ...baseline, cubes: [["cube", [0, 0, 0], [3, 2, 2], ["north", [0, 0, 2, 2]]]] },
+      { ...baseline, cubes: [["cube", [0, 0, 0], [2, 2, 2], ["north", [1, 0, 2, 2]]]] },
+      { ...baseline, groups: [["root", [0, 1, 0]] },
+      { ...baseline, textures: [["atlas", 16, 16, "bitmap-sha-b"]] },
+      { ...baseline, pose: { ...baseline.pose, time: 0.25 } },
+      { ...baseline, presentation: { ...baseline.presentation, brightness: 75 } },
+      { ...baseline, reference_binding: { sha256: "approved-ref-b" } },
+    ];
+    expect(fingerprintVisualCaptureDependencies(baseline)).toBe(digest);
+    for (const changed of variants) {
+      expect(fingerprintVisualCaptureDependencies(changed)).not.toBe(digest);
+    }
+  });
+
+  test("rejects mixed revisions and never treats partial snapshot as current proof", () => {
+    const a = fingerprintVisualCaptureDependencies(baseline);
+    const b = fingerprintVisualCaptureDependencies({
+      ...baseline, textures: [["atlas", 16, 16, "changed"]],
+    });
+    expect(assessVisualCaptureFreshness(snapshot(a), snapshot(a))).toEqual({
+      state: "MATCHED", reason: null,
+    });
+    expect(assessVisualCaptureFreshness(snapshot(a), snapshot(b))).toMatchObject({
+      state: "STALE",
+    });
+    expect(assessVisualCaptureFreshness(snapshot(a), {
+      ...snapshot(a), project_uuid: "project-b",
+    })).toMatchObject({ state: "STALE" });
+    expect(assessVisualCaptureFreshness(snapshot(a, "PARTIAL"), snapshot(a, "PARTIAL")))
+      .toMatchObject({ state: "UNVERIFIED" });
+  });
+
+  test("native runtime rejects change during view series and returns scope limitations", async () => {
+    const source = await Bun.file("server/tools/inspection/camera.ts").text();
+    expect(source).toContain("const dependencyBefore = readNativeVisualCaptureSnapshot(referenceBinding)");
+    expect(source).toContain("const dependencyAfter = readNativeVisualCaptureSnapshot(referenceBinding)");
+    expect(source).toContain('dependencyFreshness.state === "STALE"');
+    expect(source).toContain("MODEL_CAPTURE_STALE:");
+    expect(source).toContain('reference_authority: "CALLER_DECLARED_NOT_RUNTIME_VERIFIED"');
+    expect(source).toContain("cross_invocation_reuse_allowed: false");
+    expect(source).toContain("CAPTURE_TEXTURE_PIXEL_BUDGET");
+    expect(source).toContain("capture_contract_sha256,");
+  });
+});
 
 describe("lossless capture image evidence transport", () => {
   test("reuses only exact PNG bytes within one response, retaining each view identity", () => {

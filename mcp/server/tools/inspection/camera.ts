@@ -69,6 +69,197 @@ export function recordCaptureImageDelivery(
   if (!previous) ledger.set(key, { view, base64 });
   return { image_sha256, send_image: true, reused_from_view: null };
 }
+
+/**
+ * Current-capture dependency identity. This is a native observation guard,
+ * not a persistent image cache, a visual score, or a reference attestation.
+ * Capture only happens on demand; never hash bitmaps on an ordinary Cube edit.
+ */
+export type VisualCaptureDependencyInput = Readonly<{
+  project_uuid: string;
+  cubes: readonly unknown[];
+  groups: readonly unknown[];
+  textures: readonly unknown[];
+  pose: unknown;
+  presentation: unknown;
+  reference_binding: unknown;
+}>;
+
+export function fingerprintVisualCaptureDependencies(
+  input: VisualCaptureDependencyInput
+): string {
+  if (!input.project_uuid || !Array.isArray(input.cubes) ||
+      !Array.isArray(input.groups) || !Array.isArray(input.textures)) {
+    throw new Error("VISUAL_CAPTURE_DEPENDENCY_INPUT_INVALID");
+  }
+  return createHash("sha256")
+    .update(JSON.stringify(["mivubi-lazydesigner-capture-v1", input]))
+    .digest("hex");
+}
+
+export type VisualNativeCaptureSnapshot = Readonly<{
+  project_uuid: string;
+  dependency_sha256: string;
+  coverage: "TRACKED" | "PARTIAL";
+  unresolved: readonly string[];
+  texture_pixels_hashed: number;
+}>;
+
+export function assessVisualCaptureFreshness(
+  before: VisualNativeCaptureSnapshot,
+  after: VisualNativeCaptureSnapshot
+): { state: "MATCHED" | "STALE" | "UNVERIFIED"; reason: string | null } {
+  if (before.project_uuid !== after.project_uuid ||
+      before.dependency_sha256 !== after.dependency_sha256) {
+    return { state: "STALE", reason: "NATIVE_CAPTURE_DEPENDENCIES_CHANGED" };
+  }
+  if (before.coverage !== "TRACKED" || after.coverage !== "TRACKED" ||
+      before.unresolved.length > 0 || after.unresolved.length > 0 ||
+      JSON.stringify(before.unresolved) !== JSON.stringify(after.unresolved)) {
+    return { state: "UNVERIFIED", reason: "NATIVE_CAPTURE_DEPENDENCY_COVERAGE_INCOMPLETE" };
+  }
+  return { state: "MATCHED", reason: null };
+}
+
+const CAPTURE_TEXTURE_PIXEL_BUDGET = 4_194_304;
+const CAPTURE_FACE_KEYS = ["north", "south", "east", "west", "up", "down"] as const;
+
+/**
+ * Sample directly from the installed editor. Hash only visual dependencies,
+ * not Outliner expanded/selected UI state. Missing read access never becomes
+ * a fabricated clean snapshot. Bounded texture reads prevent huge atlas costs.
+ */
+function readNativeVisualCaptureSnapshot(referenceBinding: unknown): VisualNativeCaptureSnapshot {
+  if (!Project?.uuid || typeof Cube === "undefined" ||
+      !Array.isArray(Cube.all)) {
+    throw new Error("VISUAL_CAPTURE_NATIVE_PROJECT_UNAVAILABLE");
+  }
+  const unresolved = new Set<string>();
+  const cubeRows = [...Cube.all].sort((a, b) => a.uuid.localeCompare(b.uuid));
+  const seenCubes = new Set<string>();
+  const cubes = cubeRows.map(cube => {
+    if (typeof cube.uuid !== "string" || !cube.uuid.trim() ||
+        seenCubes.has(cube.uuid)) {
+      unresolved.add("CUBE_UUID_AMBIGUOUS");
+    }
+    seenCubes.add(cube.uuid);
+    const faces = CAPTURE_FACE_KEYS.map(faceKey => {
+      const face = cube.faces?.[faceKey];
+      if (!face) {
+        unresolved.add("CUBE_FACE_UNAVAILABLE");
+        return [faceKey, null];
+      }
+      return [
+        faceKey, face.enabled ?? null, face.texture ?? null,
+        [...(face.uv ?? [])], face.rotation ?? null,
+        face.material_name ?? null,
+      ];
+    });
+    let worldMatrix: number[] | null = null;
+    if (cube.mesh) {
+      try {
+        cube.mesh.updateWorldMatrix(true, false);
+        const matrix = cube.mesh.matrixWorld?.elements;
+        if (matrix && matrix.length === 16) {
+          worldMatrix = Array.from(matrix);
+          if (worldMatrix.some(n => !Number.isFinite(n))) {
+            worldMatrix = null;
+          }
+        }
+      } catch {
+        // A failed native pose observation cannot certify an unchanged pose.
+      }
+    }
+    if (cube.visibility !== false && !worldMatrix) {
+      unresolved.add("CUBE_WORLD_POSE_UNAVAILABLE");
+    }
+    return [
+      cube.uuid, cube.from, cube.to, cube.origin, cube.rotation,
+      cube.inflate ?? null, cube.visibility !== false,
+      cube.export !== false, cube.box_uv ?? null,
+      cube.autouv ?? null, cube.mirror_uv ?? null,
+      cube.uv_offset ?? null, cube.parent instanceof Group
+        ? cube.parent.uuid : null, faces, worldMatrix,
+    ];
+  });
+  const groups = (typeof Group !== "undefined" && Array.isArray(Group.all)
+    ? [...Group.all].sort((a, b) => a.uuid.localeCompare(b.uuid))
+        .map(g => [
+          g.uuid, g.origin, g.rotation, g.visibility ?? null,
+          g.parent instanceof Group ? g.parent.uuid : "root",
+        ])
+    : (unresolved.add("GROUP_INVENTORY_UNAVAILABLE"), []));
+  const meshes = typeof Mesh !== "undefined" && Array.isArray(Mesh.all)
+    ? Mesh.all.filter(mesh => mesh.visibility !== false).length
+    : 0;
+  if (meshes > 0) unresolved.add("NON_CUBE_GEOMETRY_NOT_TRACKED");
+  let texturePixelsHashed = 0;
+  const textures: unknown[] = [];
+  if (typeof Texture === "undefined" || !Array.isArray(Texture.all)) {
+    unresolved.add("TEXTURE_INVENTORY_UNAVAILABLE");
+  } else {
+    for (const texture of [...Texture.all].sort((a, b) => a.uuid.localeCompare(b.uuid))) {
+      const ctx = texture.ctx;
+      const width = ctx?.canvas?.width;
+      const height = ctx?.canvas?.height;
+      let bitmapSha: string | null = null;
+      if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+          !width || !height) {
+        unresolved.add("TEXTURE_PIXEL_CANVAS_UNAVAILABLE");
+      } else if (width * height > CAPTURE_TEXTURE_PIXEL_BUDGET - texturePixelsHashed) {
+        unresolved.add("TEXTURE_HASH_BUDGET_EXCEEDED");
+      } else {
+        try {
+          const pixels = ctx.getImageData(0, 0, width, height).data;
+          if (pixels.byteLength !== width * height * 4) {
+            unresolved.add("TEXTURE_PIXEL_LENGTH_INVALID");
+          } else {
+            bitmapSha = createHash("sha256")
+              .update(Buffer.from(pixels.buffer, pixels.byteOffset, pixels.byteLength))
+              .digest("hex");
+            texturePixelsHashed += width * height;
+          }
+        } catch {
+          unresolved.add("TEXTURE_PIXEL_READ_UNAVAILABLE");
+        }
+      }
+      textures.push([
+        texture.uuid, texture.width, texture.height,
+        texture.display_height ?? null, texture.uv_width ?? null,
+        texture.uv_height ?? null, bitmapSha,
+      ]);
+    }
+  }
+  const animation = typeof AnimationItem !== "undefined"
+    ? (AnimationItem as unknown as { selected?: { uuid?: string } }).selected
+    : undefined;
+  const timeline = (globalThis as unknown as { Timeline?: { time?: number } }).Timeline;
+  const pose = {
+    selected_animation_uuid: animation?.uuid ?? null,
+    timeline_time: timeline?.time ?? null,
+  };
+  const shading = typeof settings === "undefined" ? null : settings.shading?.value;
+  if (typeof shading !== "boolean") unresolved.add("SHADING_STATE_UNAVAILABLE");
+  const presentation = {
+    format: typeof Format === "undefined" ? null : Format.id,
+    view_mode: Project.view_mode ?? null,
+    shading,
+    brightness: Settings.get("brightness"),
+  };
+  const dependency_sha256 = fingerprintVisualCaptureDependencies({
+    project_uuid: Project.uuid,
+    cubes, groups, textures, pose, presentation,
+    reference_binding: referenceBinding,
+  });
+  return {
+    project_uuid: Project.uuid,
+    dependency_sha256,
+    coverage: unresolved.size ? "PARTIAL" : "TRACKED",
+    unresolved: [...unresolved].sort(),
+    texture_pixels_hashed: texturePixelsHashed,
+  };
+}
+
 type FrontDirection = "+z" | "-z";
 type FramingInput =
   | { mode: "model" }
@@ -969,6 +1160,17 @@ export function registerCameraTools() {
         );
       }
       prepareOffscreenPreview(capturePreview, captureSize);
+      // Runtime cannot attest the Gateway's approved Reference Package.
+      // These are caller-declared identities for capture consistency only.
+      const referenceBinding = reference_correspondence
+        ? {
+            package_fingerprint: reference_correspondence.reference.package_fingerprint,
+            current_package_fingerprint: reference_correspondence.reference.current_package_fingerprint,
+          }
+        : (landmark_pairs ?? []).map(pair => [
+            pair.reference_image_id, pair.reference_sha256, pair.view,
+          ]);
+      const dependencyBefore = readNativeVisualCaptureSnapshot(referenceBinding);
 
       const content: Array<
         | { type: "text"; text: string }
@@ -984,6 +1186,7 @@ export function registerCameraTools() {
         image_sha256: string;
         image_delivery: "content.image" | "same_response_exact_png";
         reused_from_view: ModelView | null;
+        capture_contract_sha256: string;
         width: number;
         height: number;
         png_bytes: number;
@@ -1102,10 +1305,18 @@ export function registerCameraTools() {
         if (reference_correspondence) {
           imageDigests.push({ view, sha256: modelImageDelivery.image_sha256 });
         }
+        const capture_contract_sha256 = createHash("sha256")
+          .update(JSON.stringify([
+            "capture-view-v1", dependencyBefore.dependency_sha256,
+            view, captureCameraSpecMetadata(spec),
+            captureSize, front_direction, highlight_missing_textures,
+            modelImageDelivery.image_sha256,
+          ])).digest("hex");
         captures.push({
           view,
           projection: spec.projection,
           image_sha256: modelImageDelivery.image_sha256,
+          capture_contract_sha256,
           image_delivery: modelImageDelivery.send_image
             ? "content.image" : "same_response_exact_png",
           reused_from_view: modelImageDelivery.reused_from_view,
@@ -1116,6 +1327,17 @@ export function registerCameraTools() {
           ...(landmark_pairs?.length ? { landmark_projections: landmarkProjections } : {}),
           ...(silhouetteEvidence ? { silhouette_evidence: silhouetteEvidence } : {}),
         });
+      }
+
+      const dependencyAfter = readNativeVisualCaptureSnapshot(referenceBinding);
+      const dependencyFreshness = assessVisualCaptureFreshness(
+        dependencyBefore, dependencyAfter
+      );
+      if (dependencyFreshness.state === "STALE") {
+        throw new Error(
+          "MODEL_CAPTURE_STALE: project/geometry/UV/texture/pose or " +
+          "presentation changed while capturing. Repeat affected views."
+        );
       }
 
       let partCorrespondenceEvidence = null;
@@ -1200,6 +1422,19 @@ export function registerCameraTools() {
         },
         count: captures.length,
         total_png_bytes: captures.reduce((sum, capture) => sum + capture.png_bytes, 0),
+        evidence_freshness: {
+          state: dependencyFreshness.state,
+          reason: dependencyFreshness.reason,
+          project_uuid: dependencyBefore.project_uuid,
+          native_dependency_sha256: dependencyBefore.dependency_sha256,
+          coverage: dependencyBefore.coverage,
+          unresolved: dependencyBefore.unresolved,
+          texture_pixels_hashed: dependencyBefore.texture_pixels_hashed,
+          reference_authority: "CALLER_DECLARED_NOT_RUNTIME_VERIFIED",
+          cross_invocation_reuse_allowed: false,
+          native_renderer_attested: false,
+          visual_verdict: "NOT_EVALUATED",
+        },
         image_transport: {
           policy: "LOSSLESS_SAME_RESPONSE_EXACT_PNG",
           delivered_image_count: deliveredImageCount,
@@ -1260,6 +1495,15 @@ export function registerCameraTools() {
         warnings: observed.warnings.length,
       };
 
+      if (dependencyFreshness.state === "UNVERIFIED") {
+        content.unshift({
+          type: "text",
+          text: "Capture scene-dependency coverage is incomplete (" +
+            dependencyBefore.unresolved.join(", ") +
+            "). This is not a native freshness certificate or visual PASS; " +
+            "do not reuse it across invocations.",
+        });
+      }
       content.unshift({
         type: "text",
         text:
