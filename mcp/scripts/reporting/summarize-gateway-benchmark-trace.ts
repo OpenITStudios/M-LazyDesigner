@@ -55,6 +55,34 @@ function parseTrace(text: string): BenchmarkTraceEvent[] {
         throw new Error(`Trace line ${index + 1} has invalid MCP image metrics.`);
       }
     }
+    if (event.started_at !== undefined &&
+        (typeof event.started_at !== "string" ||
+         !Number.isFinite(Date.parse(event.started_at)))) {
+      throw new Error(`Trace line ${index + 1} has invalid start time.`);
+    }
+    if (event.correlation !== undefined) {
+      const c = event.correlation;
+      if (!c || !/^[0-9a-f]{32}$/.test(c.trace_id) ||
+          /^0+$/.test(c.trace_id) ||
+          !/^[0-9a-f]{16}$/.test(c.span_id) || /^0+$/.test(c.span_id) ||
+          (c.parent_span_id !== null &&
+           (!/^[0-9a-f]{16}$/.test(c.parent_span_id) ||
+            /^0+$/.test(c.parent_span_id))) ||
+          (c.origin !== "CLIENT_TRACEPARENT" && c.origin !== "GATEWAY_LOCAL") ||
+          (c.task_context_ref !== null &&
+           !/^[0-9a-f]{64}$/.test(c.task_context_ref)) ||
+          (c.cohort_boundary !== null && c.cohort_boundary !== "CONTINUE" &&
+           c.cohort_boundary !== "COMPLETE")) {
+        throw new Error(`Trace line ${index + 1} has invalid correlation.`);
+      }
+    }
+    if (event.queue_timing !== undefined && event.queue_timing !== null) {
+      const q = event.queue_timing;
+      if (!Number.isFinite(q.queue_wait_ms) || q.queue_wait_ms < 0 ||
+          !Number.isFinite(q.operation_duration_ms) || q.operation_duration_ms < 0) {
+        throw new Error(`Trace line ${index + 1} has invalid queue timing.`);
+      }
+    }
     if (event.error_code !== undefined &&
         event.error_code !== null &&
         (typeof event.error_code !== "string" ||
@@ -106,6 +134,16 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     }
   }
 
+  const correlated = ordered.filter((event) => event.correlation != null);
+  const spanKeys = correlated.map((event) =>
+    event.correlation!.trace_id + ":" + event.correlation!.span_id);
+  if (new Set(spanKeys).size !== spanKeys.length) {
+    throw new Error("Trace correlation contains duplicate span IDs.");
+  }
+  const measuredQueue = ordered.flatMap((event) =>
+    event.queue_timing ? [event.queue_timing] : []);
+  const queueWaits = measuredQueue.map((t) => t.queue_wait_ms);
+  const queueDurations = measuredQueue.map((t) => t.operation_duration_ms);
   const failed = ordered.filter((event) => !event.success);
   const failuresByCode: Record<string, number> = {};
   for (const event of failed) {
@@ -139,6 +177,25 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     },
     payload: {
       result_bytes: sum(ordered.map((event) => event.result_bytes)),
+    },
+    correlation: {
+      measured_events: correlated.length,
+      unmeasured_events: ordered.length - correlated.length,
+      trace_count: new Set(correlated.map((event) => event.correlation!.trace_id)).size,
+      client_parented_events: correlated.filter((event) =>
+        event.correlation!.origin === "CLIENT_TRACEPARENT").length,
+      scoped_context_events: correlated.filter((event) =>
+        event.correlation!.task_context_ref !== null).length,
+    },
+    queue_timing: {
+      measured_events: measuredQueue.length,
+      unmeasured_events: ordered.length - measuredQueue.length,
+      observed_queue_wait_ms: measuredQueue.length
+        ? queueWaits.reduce((sum, value) => sum + value, 0) : null,
+      queue_wait_p50_ms: percentile(queueWaits, 0.5),
+      queue_wait_p95_ms: percentile(queueWaits, 0.95),
+      operation_duration_p95_ms: percentile(queueDurations, 0.95),
+      note: "Observed native-queue admissions only. Duration includes Gateway connection/catalog/preflight; not pure Blockbench execution. Missing measurements are unknown, not zero.",
     },
     mcp_images: {
       measured_events: knownMedia.length,

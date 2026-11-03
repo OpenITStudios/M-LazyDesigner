@@ -221,6 +221,40 @@ four-tool Gateway and Control Delta, without new tools or a cross-call
 image cache. Omitting a PNG reduces AI-visible image blocks but does
 not remove native encoding work or prove token/allowance savings.
 
+## Correlated Diagnostic Trace (opt-in)
+
+The existing Gateway benchmark trace remains the only durable per-call event
+recorder. New additive v1 fields include request start time, one span ID per
+recorded Gateway tool request and validated W3C version-00 `traceparent`
+correlation when supplied by a client. Without a valid parent, a process-local
+trace ID groups the Gateway's recorded session. Raw Control
+`task_context_id` is never persisted; only its SHA-256 digest and the fixed
+`cohort_boundary` enum may be retained. A matched trace ID does not prove
+AI model usage or a complete client-to-Blockbench trace.
+
+The existing Gateway operation queue keeps its always-on, bounded 64-sample
+aggregate wait and duration statistics. **Only with detailed trace capture
+enabled**, a native invocation additionally records queue admission wait
+and queued-operation duration. The operation duration includes possible
+connection, catalog and preflight costs; it is not pure native execution.
+A missing measurement remains `null` rather than an invented zero.
+Trace observers cannot alter mutation results, recovery, or Undo.
+
+Use the already-supported environment contract to capture a scoped local trace:
+
+```text
+LAZYDESIGNER_BENCHMARK_TRACE_PATH=<ignored local .cache path>
+LAZYDESIGNER_BENCHMARK_TASK_ID=<one bounded logical task>
+LAZYDESIGNER_BENCHMARK_SOURCE_SHA=<exact 40-character Git SHA>
+```
+
+Then use `bun run report:gateway-trace -- <trace.ndjson>` to inspect
+correlation coverage, observed timing and bounded event metadata.
+Historical v1 trace files remain readable. No additional MCP tool,
+background monitoring server, database, prompts, images, raw project paths or
+credentials are recorded by this extension. Gateway byte/image counts are
+not Codex/Astra provider tokens, verified model ingestion, or visual approval.
+
 ## Context / Result Economy
 
 Context handles use SHA-256 identities of current canonical repository files. `known_context_ids` suppresses unchanged Skill/profile content and invalidates changed members of the same family.

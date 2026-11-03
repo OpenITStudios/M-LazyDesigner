@@ -33,7 +33,7 @@ import {
 import { classifyInterruptedCall } from "./interruptionPolicy";
 import { searchCapabilityCatalog } from "../capabilities/catalog";
 import { GatewayConnectionManager } from "./connectionManager";
-import { GatewayOperationQueue } from "./operationQueue";
+import { GatewayOperationQueue, type GatewayOperationTiming } from "./operationQueue";
 import {
   resolveGatewayCapabilityEffects,
   validateGatewayCapabilityEffectReceipt,
@@ -165,7 +165,8 @@ export class BlockitRuntimeBackend {
 
   private runExclusive<T>(
     operation: () => Promise<T>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onTiming?: (timing: GatewayOperationTiming) => void
   ): Promise<T> {
     return this.operationQueue.run(async () => {
       this.backendRevision += 1;
@@ -174,7 +175,7 @@ export class BlockitRuntimeBackend {
       } finally {
         this.backendRevision += 1;
       }
-    }, { signal });
+    }, { signal, onTiming });
   }
 
   private operationStatus(): GatewayRuntimeStatus["operations"] {
@@ -860,7 +861,8 @@ export class BlockitRuntimeBackend {
     capability: string,
     args: JsonRecord = {},
     requestMeta?: JsonRecord,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onTiming?: (timing: GatewayOperationTiming) => void
   ): Promise<GatewayRuntimeInvocation> {
     return this.runExclusive(async () => {
       const capabilityMetadata = getCapabilityMetadata(capability);
@@ -1050,7 +1052,7 @@ export class BlockitRuntimeBackend {
           }
         );
       }
-    }, signal);
+    }, signal, onTiming);
   }
 
   async close(): Promise<void> {

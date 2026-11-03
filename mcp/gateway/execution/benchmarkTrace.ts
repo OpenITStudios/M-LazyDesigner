@@ -1,6 +1,7 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import type { GatewayOperationTiming } from "../runtime/operationQueue";
 import { MODEL_VIEWS } from "../../lib/reference/visualEvidence";
 
 export type BenchmarkTraceKind =
@@ -23,12 +24,27 @@ export type BenchmarkMcpImageDelivery = {
   png_bytes: number;
 };
 
+/** Additive v1 correlation; never persist input args, paths or raw Control context IDs. */
+export type BenchmarkTraceCorrelation = {
+  trace_id: string;
+  span_id: string;
+  parent_span_id: string | null;
+  origin: "CLIENT_TRACEPARENT" | "GATEWAY_LOCAL";
+  task_context_ref: string | null;
+  cohort_boundary: "CONTINUE" | "COMPLETE" | null;
+};
+
 export type BenchmarkTraceEvent = {
   schema: "lazydesigner-gateway-benchmark-trace-v1";
   sequence: number;
   task_id: string;
   source_sha: string;
   timestamp: string;
+  /** Absent on historical v1 trace rows. */
+  started_at?: string;
+  correlation?: BenchmarkTraceCorrelation;
+  /** Per-call queue timing, not pure Blockbench execution. */
+  queue_timing?: GatewayOperationTiming | null;
   kind: BenchmarkTraceKind;
   capability: string | null;
   success: boolean;
@@ -253,13 +269,24 @@ function elapsedMs(startedAt: number): number {
   return Math.max(0, Date.now() - startedAt);
 }
 
+/** Accept only W3C version-00 parents; malformed and all-zero IDs are not linked. */
+function clientTraceParent(value: unknown): { traceId: string; parentSpanId: string } | null {
+  if (typeof value !== "string") return null;
+  const match = /^00-([0-9a-f]{32})-([0-9a-f]{16})-[0-9a-f]{2}$/.exec(value);
+  if (!match || /^0+$/.test(match[1]!) || /^0+$/.test(match[2]!)) return null;
+  return { traceId: match[1]!, parentSpanId: match[2]! };
+}
+
 export class BenchmarkTraceRecorder {
   private sequence = 0;
   private writeTail: Promise<void> = Promise.resolve();
+  private readonly localTraceId: string | null;
 
   private constructor(
     private readonly options: BenchmarkTraceRecorderOptions | null
-  ) {}
+  ) {
+    this.localTraceId = options ? randomBytes(16).toString("hex") : null;
+  }
 
   static fromEnvironment(
     env: Record<string, string | undefined> = process.env
@@ -307,6 +334,10 @@ export class BenchmarkTraceRecorder {
     result?: unknown;
     readOnly?: boolean | null;
     verificationClass?: string | null;
+    traceparent?: unknown;
+    taskContextId?: string | null;
+    cohortBoundary?: "CONTINUE" | "COMPLETE" | null;
+    queueTiming?: GatewayOperationTiming | null;
   }): void {
     if (!this.options) return;
 
@@ -320,12 +351,25 @@ export class BenchmarkTraceRecorder {
           input.result, this.options.referenceFingerprint
         )
       : null;
+    const parent = clientTraceParent(input.traceparent);
+    const correlation: BenchmarkTraceCorrelation = {
+      trace_id: parent?.traceId ?? this.localTraceId!,
+      span_id: randomBytes(8).toString("hex"),
+      parent_span_id: parent?.parentSpanId ?? null,
+      origin: parent ? "CLIENT_TRACEPARENT" : "GATEWAY_LOCAL",
+      task_context_ref: typeof input.taskContextId === "string" && input.taskContextId.trim()
+        ? createHash("sha256").update(input.taskContextId).digest("hex") : null,
+      cohort_boundary: input.cohortBoundary ?? null,
+    };
     const event: BenchmarkTraceEvent = {
       schema: "lazydesigner-gateway-benchmark-trace-v1",
       sequence: this.sequence++,
       task_id: this.options.taskId,
       source_sha: this.options.sourceSha,
       timestamp: new Date().toISOString(),
+      started_at: new Date(input.startedAt).toISOString(),
+      correlation,
+      queue_timing: input.queueTiming ?? null,
       kind: input.kind,
       capability: input.capability ?? null,
       success: input.success,

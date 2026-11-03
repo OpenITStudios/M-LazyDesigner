@@ -5,8 +5,15 @@ import {
 
 const METRIC_SAMPLE_LIMIT = 64;
 
+/** Includes Gateway connection/catalog/preflight work, not pure native execution. */
+export type GatewayOperationTiming = Readonly<{
+  queue_wait_ms: number;
+  operation_duration_ms: number;
+}>;
+
 type QueuedOperation = {
   enqueuedAt: number;
+  queueWaitMs: number | null;
   execute: () => Promise<void>;
   rejectWaiting: (reason: GatewayBackendError) => void;
   cleanup: () => void;
@@ -102,6 +109,7 @@ export class GatewayOperationQueue {
       next.cleanup();
       this.activeOperations = 1;
       const waited = Math.max(0, Date.now() - next.enqueuedAt);
+      next.queueWaitMs = waited;
       this.lastQueueWaitMs = waited;
       this.maxObservedQueueWaitMs = Math.max(this.maxObservedQueueWaitMs, waited);
       appendSample(this.queueWaitSamples, waited);
@@ -141,7 +149,7 @@ export class GatewayOperationQueue {
 
   run<T>(
     operation: () => Promise<T>,
-    options: { signal?: AbortSignal } = {}
+    options: { signal?: AbortSignal; onTiming?: (timing: GatewayOperationTiming) => void } = {}
   ): Promise<T> {
     if (options.signal?.aborted) {
       this.cancelledBeforeStart += 1;
@@ -169,6 +177,7 @@ export class GatewayOperationQueue {
       const enqueuedAt = Date.now();
       const entry: QueuedOperation = {
         enqueuedAt,
+        queueWaitMs: null,
         rejectWaiting: reject,
         cleanup: () => {
           if (timer !== null) {
@@ -207,6 +216,15 @@ export class GatewayOperationQueue {
             appendSample(this.durationSamples, elapsedMs);
             this.activeOperations = 0;
             this.scheduleNext();
+            // Observability is advisory, never a new source of authoring failures.
+            if (options.onTiming && entry.queueWaitMs !== null) {
+              try {
+                options.onTiming({
+                  queue_wait_ms: entry.queueWaitMs,
+                  operation_duration_ms: elapsedMs,
+                });
+              } catch { /* diagnostic observers cannot alter operation outcomes */ }
+            }
           }
           // Do not make the completion observable before the queue has
           // released its active slot and recorded final duration metrics.

@@ -183,7 +183,9 @@ export function registerCoreGatewayTools(
         openWorldHint: false,
       },
     },
-    async (rawArgs) => {
+    async (rawArgs, context) => {
+      const startedAt = trace?.startedAt() ?? 0;
+      const traceparent = context?.mcpReq?._meta?.traceparent;
       try {
         const {
           adopt_active_project,
@@ -279,7 +281,7 @@ export function registerCoreGatewayTools(
         }
 
         const registeredExperimentalTools = experimentalTools();
-        return {
+        const response = {
           content: [
             {
               type: "text" as const,
@@ -349,8 +351,16 @@ export function registerCoreGatewayTools(
             } : {}),
           },
         };
+        trace?.record({ startedAt, traceparent, kind: "inspect",
+          capability: "status", success: true, result: response,
+          readOnly: true, verificationClass: null });
+        return response;
       } catch (error) {
-        return gatewayErrorResult(error);
+        const response = gatewayErrorResult(error);
+        trace?.record({ startedAt, traceparent, kind: "inspect",
+          capability: "status", success: false, result: response,
+          readOnly: true, verificationClass: null });
+        return response;
       }
     }
   );
@@ -370,8 +380,9 @@ export function registerCoreGatewayTools(
         openWorldHint: false,
       },
     },
-    async (rawArgs) => {
+    async (rawArgs, context) => {
       const startedAt = trace?.startedAt() ?? 0;
+      const traceparent = context?.mcpReq?._meta?.traceparent;
       try {
         const { query, limit } = searchInput.parse(rawArgs);
         const runtimeCapabilities = await backend.searchCapabilities(query, limit, {
@@ -397,6 +408,7 @@ export function registerCoreGatewayTools(
         };
         trace?.record({
           startedAt,
+          traceparent,
           kind: "search",
           success: true,
           result: response,
@@ -408,6 +420,7 @@ export function registerCoreGatewayTools(
         const response = gatewayErrorResult(error);
         trace?.record({
           startedAt,
+          traceparent,
           kind: "search",
           success: false,
           result: response,
@@ -434,8 +447,9 @@ export function registerCoreGatewayTools(
         openWorldHint: false,
       },
     },
-    async (rawArgs) => {
+    async (rawArgs, context) => {
       const startedAt = trace?.startedAt() ?? 0;
+      const traceparent = context?.mcpReq?._meta?.traceparent;
       let tracedCapability: string | null = null;
       try {
         const { capability, detail, branch } = describeInput.parse(rawArgs);
@@ -510,6 +524,7 @@ export function registerCoreGatewayTools(
         };
         trace?.record({
           startedAt,
+          traceparent,
           kind: "describe",
           capability: tracedCapability,
           success: true,
@@ -522,6 +537,7 @@ export function registerCoreGatewayTools(
         const response = gatewayErrorResult(error);
         trace?.record({
           startedAt,
+          traceparent,
           kind: "describe",
           capability: tracedCapability,
           success: false,

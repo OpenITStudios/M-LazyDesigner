@@ -215,6 +215,10 @@ describe("Gateway benchmark trace recorder", () => {
       },
       readOnly: true,
       verificationClass: "focused_read",
+      traceparent: "00-" + "a".repeat(32) + "-" + "b".repeat(16) + "-01",
+      taskContextId: "C:/private/control-context",
+      cohortBoundary: "CONTINUE",
+      queueTiming: { queue_wait_ms: 3, operation_duration_ms: 7 },
     });
     recorder.record({
       startedAt: recorder.startedAt(),
@@ -224,6 +228,7 @@ describe("Gateway benchmark trace recorder", () => {
       result: { execution: "applied" },
       readOnly: false,
       verificationClass: "visual",
+      traceparent: "forged-or-invalid-parent",
     });
     recorder.record({
       startedAt: recorder.startedAt(),
@@ -244,6 +249,8 @@ describe("Gateway benchmark trace recorder", () => {
     expect(raw).not.toContain("private/reference.png");
     expect(raw).not.toContain("do-not-persist");
     expect(raw).not.toContain("private/sensitive-result");
+    expect(raw).not.toContain("private/control-context");
+    expect(raw).not.toContain("forged-or-invalid-parent");
 
     const events = raw
       .trim()
@@ -264,5 +271,25 @@ describe("Gateway benchmark trace recorder", () => {
       verification_class: "focused_read",
     });
     expect(events[0].result_bytes).toBeGreaterThan(0);
+    expect(events[0].started_at).toMatch(/^\d{4}-/);
+    expect(events[0].queue_timing).toEqual({
+      queue_wait_ms: 3, operation_duration_ms: 7,
+    });
+    expect(events[0].correlation).toMatchObject({
+      trace_id: "a".repeat(32),
+      parent_span_id: "b".repeat(16),
+      origin: "CLIENT_TRACEPARENT",
+      task_context_ref: createHash("sha256")
+        .update("C:/private/control-context").digest("hex"),
+      cohort_boundary: "CONTINUE",
+    });
+    expect(events[0].correlation.span_id).toMatch(/^[a-f0-9]{16}$/);
+    expect(events[1].correlation).toMatchObject({
+      origin: "GATEWAY_LOCAL", parent_span_id: null,
+      task_context_ref: null,
+    });
+    expect(events[1].correlation.trace_id).toBe(events[2].correlation.trace_id);
+    expect(new Set(events.map((event) => event.correlation.span_id)).size)
+      .toBe(3);
   });
 });

@@ -32,6 +32,7 @@ import {
   type GatewayToolContext,
 } from "./gatewayErrors";
 import type { BenchmarkTraceRecorder } from "./benchmarkTrace";
+import type { GatewayOperationTiming } from "../runtime/operationQueue";
 
 export class GatewayCapabilityExecutor {
   constructor(
@@ -97,6 +98,13 @@ export class GatewayCapabilityExecutor {
     }
   ): Promise<unknown> {
     const startedAt = this.trace?.startedAt() ?? 0;
+    const traceMeta = traceMetaFromContext(context);
+    const traceContext = this.trace?.enabled ? {
+      traceparent: traceMeta?.traceparent,
+      taskContextId: controlOptions?.taskContextId,
+      cohortBoundary: controlOptions?.cohortBoundary,
+    } : undefined;
+    let queueTiming: GatewayOperationTiming | null = null;
     try {
       // Both stable invoke_capability and explicit experimental direct tools
       // enforce only proven-missing prerequisites; UNKNOWN stays Runtime-owned.
@@ -105,6 +113,8 @@ export class GatewayCapabilityExecutor {
         // The AI paid for this call even though no Runtime mutation occurred.
         // Benchmark-only recording is a zero-write no-op when disabled.
         this.trace?.record({
+          ...traceContext,
+          queueTiming,
           startedAt,
           kind: "recovery",
           capability,
@@ -116,7 +126,6 @@ export class GatewayCapabilityExecutor {
         return blocked;
       }
 
-      const traceMeta = traceMetaFromContext(context);
       const branch = capabilityBranchFromArguments(args);
 
       if (context?.mcpReq?.signal?.aborted) {
@@ -134,7 +143,8 @@ export class GatewayCapabilityExecutor {
             capability,
             args,
             traceMeta,
-            context?.mcpReq?.signal
+            context?.mcpReq?.signal,
+            this.trace?.enabled ? (timing) => { queueTiming = timing; } : undefined
           );
       const result = localResult ?? runtimeInvocation!.result;
       // The backend verifies Stage in its serialized preflight. Reuse that
@@ -261,6 +271,8 @@ export class GatewayCapabilityExecutor {
             : {}),
         };
         this.trace?.record({
+          ...traceContext,
+          queueTiming,
           startedAt,
           kind:
             capability === "capture_model_views"
@@ -304,6 +316,8 @@ export class GatewayCapabilityExecutor {
         structuredContent,
       };
       this.trace?.record({
+        ...traceContext,
+        queueTiming,
         startedAt,
         kind:
           capability === "capture_model_views"
@@ -321,6 +335,8 @@ export class GatewayCapabilityExecutor {
     } catch (error) {
       const response = gatewayErrorResult(error);
       this.trace?.record({
+        ...traceContext,
+        queueTiming,
         startedAt,
         kind: "recovery",
         capability,

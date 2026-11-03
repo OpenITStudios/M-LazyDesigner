@@ -97,6 +97,52 @@ describe("gateway benchmark trace report", () => {
     }
   });
 
+  test("reports correlated spans and queue timing without inventing legacy measurements", () => {
+    const first = {
+      ...JSON.parse(event(0, "mutate")),
+      started_at: "2026-09-29T00:00:00.000Z",
+      correlation: {
+        trace_id: "a".repeat(32), span_id: "b".repeat(16),
+        parent_span_id: null, origin: "GATEWAY_LOCAL",
+        task_context_ref: "c".repeat(64), cohort_boundary: "CONTINUE",
+      },
+      queue_timing: { queue_wait_ms: 4, operation_duration_ms: 9 },
+    };
+    const second = {
+      ...JSON.parse(event(1, "inspect")),
+      correlation: {
+        trace_id: "a".repeat(32), span_id: "d".repeat(16),
+        parent_span_id: "b".repeat(16), origin: "CLIENT_TRACEPARENT",
+        task_context_ref: null, cohort_boundary: null,
+      },
+      queue_timing: null,
+    };
+    const output = summarizeGatewayBenchmarkTrace(
+      [first, second].map((row) => JSON.stringify(row)).join("\n")
+    );
+    expect(output.correlation).toMatchObject({
+      measured_events: 2, trace_count: 1,
+      client_parented_events: 1, scoped_context_events: 1,
+    });
+    expect(output.queue_timing).toMatchObject({
+      measured_events: 1, unmeasured_events: 1,
+      observed_queue_wait_ms: 4, queue_wait_p95_ms: 4,
+      operation_duration_p95_ms: 9,
+    });
+    expect(summarizeGatewayBenchmarkTrace(event(0, "inspect")).queue_timing)
+      .toMatchObject({ measured_events: 0, observed_queue_wait_ms: null });
+    expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify({
+      ...first, queue_timing: { queue_wait_ms: -1, operation_duration_ms: 9 },
+    }))).toThrow("invalid queue timing");
+    expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify({
+      ...first, correlation: { ...first.correlation, span_id: "bad" },
+    }))).toThrow("invalid correlation");
+    expect(() => summarizeGatewayBenchmarkTrace(
+      [first, { ...second, correlation: first.correlation }]
+        .map((row) => JSON.stringify(row)).join("\n")
+    )).toThrow("duplicate span IDs");
+  });
+
   test("rejects private paths masquerading as error codes", () => {
     const row = {
       ...(JSON.parse(event(0, "mutate")) as Record<string, unknown>),

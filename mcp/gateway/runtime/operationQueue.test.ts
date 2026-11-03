@@ -3,6 +3,33 @@ import { GatewayOperationQueue } from "./operationQueue";
 import { GatewayBackendError } from "./backendContract";
 
 describe("Gateway operation queue", () => {
+  test("emits per-operation timing only for admitted work; observer cannot alter the result", async () => {
+    const queue = new GatewayOperationQueue(0);
+    const timings: Array<{ queue_wait_ms: number; operation_duration_ms: number }> = [];
+    const result = await queue.run(async () => "kept", {
+      onTiming: (timing) => {
+        timings.push(timing);
+        throw new Error("diagnostics observer must not break authoring");
+      },
+    });
+    expect(result).toBe("kept");
+    expect(timings).toHaveLength(1);
+    expect(timings[0]!.queue_wait_ms).toBeGreaterThanOrEqual(0);
+    expect(timings[0]!.operation_duration_ms).toBeGreaterThanOrEqual(0);
+    const failure = new Error("runtime failed");
+    let failedTiming = 0;
+    await expect(queue.run(async () => { throw failure; }, {
+      onTiming: () => { failedTiming += 1; },
+    })).rejects.toBe(failure);
+    expect(failedTiming).toBe(1);
+    const aborted = new AbortController();
+    aborted.abort();
+    await expect(queue.run(async () => "not-executed", {
+      signal: aborted.signal,
+      onTiming: () => { throw new Error("must not notify for non-admission"); },
+    })).rejects.toMatchObject({ code: "GATEWAY_QUEUE_CANCELLED" });
+    expect(queue.snapshot()).toMatchObject({ completed: 1, failed: 1 });
+  });
   test("keeps the configured deadline separate from observed wait metrics", async () => {
     const queue = new GatewayOperationQueue(1, 1_000);
     expect(queue.snapshot().max_queue_wait_ms).toBe(0);
