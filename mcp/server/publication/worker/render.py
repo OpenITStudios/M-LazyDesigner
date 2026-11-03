@@ -288,6 +288,7 @@ def configure_render(job):
     # generates un-authored geometry, painted details or arbitrary pixels.
     compositor = bpy.data.node_groups.new("LD_Publication_Compositor", "CompositorNodeTree")
     scene.compositing_node_group = compositor
+    scene.render.use_compositing = True
     compositor.interface.new_socket(
         name="Image", in_out="OUTPUT", socket_type="NodeSocketColor"
     )
