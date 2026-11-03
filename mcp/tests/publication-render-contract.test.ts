@@ -144,6 +144,8 @@ function fixtureGlb(options: {
   materialProfile?: "opaque" | "pbr_mer" | "pbr_uniform";
   corruptMaterial?: boolean;
   linearSampling?: boolean;
+  swappedBaseTexture?: boolean;
+  withNormal?: boolean;
 } = {}): Buffer {
   const positions = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0];
   const uv = [0, 1, 1, 1, 1, 0, 0, 0]; // Blockbench preview V inverted for glTF.
@@ -171,6 +173,9 @@ function fixtureGlb(options: {
     ...(profile === "pbr_mer" ? {
       emissiveFactor: [1, 1, 1],
       emissiveTexture: { index: 2 },
+    } : {}),
+    ...(options.withNormal ? {
+      normalTexture: { index: profile === "pbr_mer" ? 3 : 1 },
     } : {}),
   };
   const json = Buffer.from(JSON.stringify({
@@ -207,12 +212,19 @@ function fixtureGlb(options: {
       minFilter: options.linearSampling ? 9729 : 9728,
       wrapS: 33071, wrapT: 33071,
     }],
-    textures: (profile === "pbr_mer"
-      ? [
-        { source: options.sourceIndex ?? 0, sampler: 0 },
-        { source: 0, sampler: 0 },
-        { source: 0, sampler: 0 },
-      ] : [{ source: options.sourceIndex ?? 0, sampler: 0 }]),
+    textures: [
+      {
+        name: options.swappedBaseTexture ? "ld_normal_tex-1" : "ld_base_tex-1",
+        source: options.sourceIndex ?? 0, sampler: 0,
+      },
+      ...(profile === "pbr_mer" ? [
+        { name: "ld_mer_tex-1", source: 0, sampler: 0 },
+        { name: "ld_emission_tex-1", source: 0, sampler: 0 },
+      ] : []),
+      ...(options.withNormal ? [{
+        name: "ld_normal_tex-1", source: 0, sampler: 0,
+      }] : []),
+    ],
     images: [{ uri: options.imageUri ??
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=" }],
   }));
@@ -249,6 +261,9 @@ describe("GLB envelope and source fidelity preflight", () => {
     expect(() => inspectPublicationGlb(
       fixtureGlb({ linearSampling: true }), 1, 1, undefined, colorReceipt,
     )).toThrow("PBR_NEAREST_SAMPLING_LOST");
+    expect(() => inspectPublicationGlb(
+      fixtureGlb({ swappedBaseTexture: true }), 1, 1, undefined, colorReceipt,
+    )).toThrow("PBR_TEXTURE_IDENTITY_MISMATCH");
 
     const uniform = expectedPublicationGltfMaterial({
       color_uuid: "tex-1", mer_uuid: null, normal_uuid: null,
@@ -273,6 +288,23 @@ describe("GLB envelope and source fidelity preflight", () => {
     expect(() => inspectPublicationGlb(
       fixtureGlb({ materialProfile: "pbr_uniform" }), 1, 1, undefined, merReceipt,
     )).toThrow("PBR_FACTORS_OR_ALPHA_MISMATCH");
+    const merNormalReceipt = {
+      "ld_color_tex-1": {
+        ...merReceipt["ld_color_tex-1"],
+        gltf: expectedPublicationGltfMaterial({
+          color_uuid: "tex-1", mer_uuid: "mer-1",
+          normal_uuid: "normal-1", uniform_mer: null,
+        }),
+      },
+    };
+    expect(inspectPublicationGlb(
+      fixtureGlb({ materialProfile: "pbr_mer", withNormal: true }),
+      1, 1, undefined, merNormalReceipt,
+    ).material_count).toBe(1);
+    expect(() => inspectPublicationGlb(
+      fixtureGlb({ materialProfile: "pbr_mer" }),
+      1, 1, undefined, merNormalReceipt,
+    )).toThrow("PBR_TEXTURE_ROLE_MISMATCH");
   });
 
   test("rejects malformed bytes, changed length, lost UV and unexpected material count", () => {
