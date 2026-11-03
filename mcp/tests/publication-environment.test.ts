@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { expectedPublicationGltfMaterial } from "@/lib/publication/materialContract";
 import {
   publicationEnvironmentSchema, validateHdriBytes,
 } from "@/lib/publication/environment";
@@ -17,6 +18,7 @@ const source = {
     ld_color_test: {
       color_uuid: "color", texture_sha256: "b".repeat(64),
       alpha_mode: "OPAQUE" as const, pbr: "NONE" as const,
+      gltf: expectedPublicationGltfMaterial(null),
     },
   },
 };
