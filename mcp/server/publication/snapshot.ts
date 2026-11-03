@@ -567,6 +567,10 @@ function makeMaterial(
 export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicationSnapshot> {
   const editorFenceBefore = publicationEditorFence();
   const before = nativeState();
+  // Avoid repeated linear searches across every source Cube for large models.
+  const sourceCubesByUuid = new Map(
+    before.manifest.cubes.map(cube => [cube.cube_uuid, cube] as const),
+  );
   const createdMaterials: THREE.Material[] = [];
   const createdTextures: THREE.Texture[] = [];
   const createdGeometry: THREE.BufferGeometry[] = [];
@@ -609,7 +613,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
       createdGeometry.push(geometry);
       const detached = new THREE.Mesh(geometry, mappedMaterials);
       detached.name = "cube_" + cube.uuid;
-      const sourceCube = before.manifest.cubes.find(item => item.cube_uuid === cube.uuid);
+      const sourceCube = sourceCubesByUuid.get(cube.uuid);
       if (!sourceCube) {
         throw new Error("PUBLICATION_SOURCE_CUBE_MANIFEST_MISSING: " + cube.uuid);
       }
