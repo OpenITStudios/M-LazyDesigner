@@ -114,9 +114,9 @@ Generated API docs and prompt manifests must never be hand-edited.
 
 ```text
 Gateway client surface        4 fixed tools
-Active Stage-union catalog   54 tools
-AUTHORING surface            47 tools
-Animation surface            18 tools
+Active Stage-union catalog   55 tools
+AUTHORING surface            48 tools
+Animation surface            19 tools
 ```
 
 Generated source-doc/prompt snapshots may be stale until the next canonical generator pass. Generated artifacts never override current source/runtime ownership.
