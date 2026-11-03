@@ -33,6 +33,7 @@ describe("Publication render contract", () => {
     expect(args.camera).toMatchObject({ mode: "auto", projection: "perspective", framing_padding: 1.28 });
     expect(args.device).toBe("auto");
     expect(args.view_transform).toBe("AgX");
+    expect(args.environment).toEqual({ mode: "studio" });
     expect(args.look).toEqual({
       key: 1, fill: 1, rim: 1, softness: 1,
       environment: 1, exposure_ev: 0,
@@ -62,6 +63,10 @@ describe("Publication render contract", () => {
       { ...valid, width: 4096, height: 4096 },
       { ...valid, quality: "random" },
       { ...valid, device: "cuda_and_shell" },
+      { ...valid, environment: { mode: "hdri" } },
+      { ...valid, environment: { mode: "studio", hdri_path: "C:\\Art\\studio.hdr" } },
+      { ...valid, environment: { mode: "hdri", hdri_path: "https://example.com/env.hdr" } },
+      { ...valid, environment: { mode: "hdri", hdri_path: "C:\\Art\\..\\unsafe.hdr" } },
       { ...valid, view_transform: "unverified_transform" },
       { ...valid, camera: { mode: "unknown" } },
       { ...valid, camera: { framing_padding: 0.2 } },
@@ -100,6 +105,7 @@ describe("Publication render contract", () => {
     expect(job.expected_mesh_count).toBe(1);
     expect(job.expected_material_count).toBe(1);
     expect(job.report_path).toMatch(/report\.json$/);
+    expect(job.environment).toEqual({ mode: "studio", hdri_path: null, hdri_sha256: null });
     expect(job.device).toBe("auto");
     expect(job.view_transform).toBe("AgX");
     expect(job.camera.mode).toBe("auto");
