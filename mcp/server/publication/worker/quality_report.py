@@ -144,9 +144,9 @@ def write_render_report(job: dict, asset: dict, camera: dict,
     # Warn only on overwhelming signals. Dark studio backdrops make average
     # histogram metrics unsuitable for claims about the subject's brightness.
     if image["high_luminance_fraction"] > 0.9:
-        warnings.append("OUTPUT_NEARLY_ALL_OVEREXPOSED_VISIBLE_PIXELS")
+        warnings.append("GLOBAL_PNG_NEAR_WHITE_PIXELS_REVIEW")
     if image["near_black_visible_fraction"] > 0.98:
-        warnings.append("OUTPUT_NEARLY_ALL_UNDEREXPOSED_VISIBLE_PIXELS")
+        warnings.append("GLOBAL_PNG_NEAR_BLACK_PIXELS_REVIEW")
     # A dark or bright material can be authored intentionally. Flag review,
     # never infer a lighting correction or an artistic quality PASS.
     if image["projected_frame_roi"]["near_black_fraction"] > 0.98:
