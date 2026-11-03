@@ -25,6 +25,13 @@
     </div>
   </section>
 
+  <section class="ld-publication">
+    <div class="ld-section-title">Publication Render</div>
+    <p class="ld-description">Render the actual model in Blender Cycles. PNG is a draft until visual review; QA evidence is separate.</p>
+    <button type="button" class="user-action primary" :disabled="!project.open"
+      @click="openPublicationRender">Render Studio PNG</button>
+  </section>
+
   <nav class="ld-tabs" role="tablist" aria-label="LazyDesigner authoring tools">
     <button v-for="category in ['geometry', 'texture', 'animation']"
       :key="category" :id="'ld-tab-' + category" type="button" role="tab"
