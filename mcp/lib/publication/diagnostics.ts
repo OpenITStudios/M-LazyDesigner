@@ -51,7 +51,8 @@ export const publicationDiagnosticsSchema = z.object({
       size: boundedFloat.min(0.01),
       position: vector3,
     }).strict()).length(3),
-    hdr_environment: z.literal("NONE_BUNDLED"),
+    hdr_environment: z.enum(["NONE_BUNDLED", "USER_PROVIDED"]),
+    hdri_sha256: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
     source_geometry_edited: z.literal(false),
   }).strict(),
   compositor: z.object({
@@ -98,6 +99,10 @@ export const publicationDiagnosticsSchema = z.object({
   if (data.image.image_dimensions[0] !== data.render.render_size[0] ||
       data.image.image_dimensions[1] !== data.render.render_size[1]) {
     ctx.addIssue({ code: "custom", message: "Measured PNG size differs from Cycles job." });
+  }
+  if ((data.lighting.hdr_environment === "USER_PROVIDED") !==
+      (data.lighting.hdri_sha256 !== null)) {
+    ctx.addIssue({ code: "custom", message: "HDRI light must have a verified source digest." });
   }
   if (data.camera.mode === "manual" && data.camera.candidate_count !== 1) {
     ctx.addIssue({ code: "custom", message: "Manual camera cannot search additional views." });
