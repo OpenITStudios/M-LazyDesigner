@@ -106,7 +106,9 @@ function glbPrimitiveIndices(
   const byteLength = expectedIndexCount * width;
   const binLength = glb.readUInt32LE(binHeader);
   if ((view.buffer ?? 0) !== 0 || view.byteStride !== undefined ||
+      typeof viewOffset !== "number" ||
       !Number.isSafeInteger(viewOffset) || viewOffset < 0 ||
+      typeof accessorOffset !== "number" ||
       !Number.isSafeInteger(accessorOffset) || accessorOffset < 0 ||
       !Number.isSafeInteger(view.byteLength) || (view.byteLength as number) < byteLength ||
       accessorOffset + byteLength > (view.byteLength as number) ||
