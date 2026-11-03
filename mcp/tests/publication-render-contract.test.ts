@@ -84,16 +84,22 @@ describe("Publication render contract", () => {
 });
 
 /** Minimal structurally plausible GLB; not a substitute for the real exporter. */
-function fixtureGlb(): Buffer {
+function fixtureGlb(options: {
+  imageUri?: string;
+  sourceIndex?: number;
+  textureIndex?: number;
+} = {}): Buffer {
   const json = Buffer.from(JSON.stringify({
     asset: { version: "2.0" },
     scenes: [{ nodes: [0] }],
     nodes: [{ mesh: 0, name: "cube_cube-1" }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 0 }] }],
     accessors: [{}, {}],
-    materials: [{ name: "ld_color_tex-1" }],
-    textures: [{ source: 0 }],
-    images: [{ uri: "data:image/png;base64,AA==" }],
+    materials: [{ name: "ld_color_tex-1", pbrMetallicRoughness: {
+      baseColorTexture: { index: options.textureIndex ?? 0 },
+    } }],
+    textures: [{ source: options.sourceIndex ?? 0 }],
+    images: [{ uri: options.imageUri ?? "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=" }],
   }));
   const padded = Buffer.alloc(Math.ceil(json.byteLength / 4) * 4, 0x20);
   json.copy(padded);
@@ -119,6 +125,18 @@ describe("GLB envelope and source fidelity preflight", () => {
     expect(() => inspectPublicationGlb(invalidLength, 1, 1)).toThrow("HEADER_OR_LENGTH_INVALID");
     expect(() => inspectPublicationGlb(valid, 2, 1)).toThrow("SOURCE_INVENTORY_MISMATCH");
     expect(() => inspectPublicationGlb(valid, 1, 2)).toThrow("SOURCE_INVENTORY_MISMATCH");
+    expect(() => inspectPublicationGlb(
+      fixtureGlb({ imageUri: "https://example.com/untrusted.png" }), 1, 1,
+    )).toThrow("SOURCE_INVENTORY_MISMATCH");
+    expect(() => inspectPublicationGlb(
+      fixtureGlb({ imageUri: "data:image/png;base64,AA==" }), 1, 1,
+    )).toThrow("SOURCE_INVENTORY_MISMATCH");
+    expect(() => inspectPublicationGlb(
+      fixtureGlb({ sourceIndex: 2 }), 1, 1,
+    )).toThrow("TEXTURE_IMAGE_REFERENCE_INVALID");
+    expect(() => inspectPublicationGlb(
+      fixtureGlb({ textureIndex: 2 }), 1, 1,
+    )).toThrow("MATERIAL_TEXTURE_REFERENCE_INVALID");
     const mutated = Buffer.from(valid);
     const pos = mutated.indexOf("TEXCOORD_0");
     expect(pos).toBeGreaterThan(0);
