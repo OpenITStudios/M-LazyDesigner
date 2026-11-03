@@ -13,7 +13,7 @@ import {
   teardownProjectNavigationSnapshot,
 } from "@/plugin/projectNavigationSnapshot";
 import { uiSetup, uiTeardown } from "@/ui";
-import { retirePublicationRenderJobsOnPluginUnload } from "@/server/publication/jobs";
+import { activatePublicationRenderJobsAfterPluginLoad, retirePublicationRenderJobsOnPluginUnload } from "@/server/publication/jobs";
 import { setupI18n } from "@/ui/i18n";
 import {
   isExtendedMcpFamiliesEnabled,
@@ -34,6 +34,7 @@ export class BlockbenchIntegration {
   setupBase(options: BlockbenchIntegrationOptions): McpRegistrationProfile {
     this.generation = options.generation;
     this.isGenerationCurrent = options.isGenerationCurrent;
+    activatePublicationRenderJobsAfterPluginLoad();
 
     setupI18n();
     settingsSetup();
