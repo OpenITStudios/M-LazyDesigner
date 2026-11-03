@@ -68,6 +68,14 @@ const receipt: PublicationRenderReceipt = {
     warnings: [],
     artistic_quality: "NOT_EVALUATED",
   },
+  visual_evidence: {
+    kind: "DOWNSAMPLED_FINAL_CYCLES_PNG",
+    png_sha256: "f".repeat(64),
+    byte_length: 5120,
+    width: 256,
+    height: 256,
+    visual_review: "NOT_EVALUATED",
+  },
   output_path: "/tmp/finished.png",
   output_png_sha256: "d".repeat(64),
   output_png_bytes: 4096,
@@ -96,6 +104,7 @@ describe("Nonblocking publication jobs through one serialized native preparation
     expect(started.state).toBe("RUNNING");
     expect(started.job_id).toMatch(/^render_[a-f0-9]{24}$/);
     expect(started.receipt).toBeNull();
+    expect(() => jobs.evidence(started.job_id)).toThrow("PUBLICATION_RENDER_EVIDENCE_NOT_READY");
     expect(started.output_is_visual_qa).toBe(false);
     await expect(jobs.start(REQUEST)).rejects.toThrow("PUBLICATION_RENDER_JOB_BUSY");
     await drain();
@@ -112,6 +121,9 @@ describe("Nonblocking publication jobs through one serialized native preparation
         visual_quality: "NOT_EVALUATED",
       },
     });
+    // A synthetic receipt without actual validated preview bytes is not
+    // permitted to masquerade as genuine image evidence.
+    expect(() => jobs.evidence(started.job_id)).toThrow("PUBLICATION_RENDER_EVIDENCE_NOT_AVAILABLE");
     const next = await jobs.start(REQUEST);
     expect(next.job_id).not.toBe(started.job_id);
     expect(() => jobs.status(started.job_id)).toThrow("EXPIRED");
