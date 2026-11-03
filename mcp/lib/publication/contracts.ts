@@ -26,6 +26,15 @@ export const publicationRenderParameters = z.object({
     elevation_degrees: z.number().finite().min(-30).max(80).default(18),
     projection: z.enum(["perspective", "orthographic"]).default("perspective"),
   }).default({}),
+  // Lighting is scene-wide, not selected by object type or asset category.
+  look: z.object({
+    key: z.number().finite().min(0.2).max(2.5).default(1),
+    fill: z.number().finite().min(0).max(2).default(1),
+    rim: z.number().finite().min(0).max(2).default(1),
+    softness: z.number().finite().min(0.5).max(2.5).default(1),
+    environment: z.number().finite().min(0).max(2).default(1),
+    exposure_ev: z.number().finite().min(-3).max(3).default(0),
+  }).strict().default({}),
   overwrite: z.literal(false).optional().default(false),
 }).strict().superRefine((input, context) => {
   if (input.width * input.height > 12_000_000) {
@@ -57,6 +66,7 @@ export type PublicationJob = {
   quality: PublicationRenderRequest["quality"];
   background: PublicationRenderRequest["background"];
   camera: PublicationRenderRequest["camera"];
+  look: PublicationRenderRequest["look"];
   samples: number;
   noise_threshold: number;
   materials: Record<string, {
@@ -87,6 +97,7 @@ export function makePublicationJob(
     quality: request.quality,
     background: request.background,
     camera: request.camera,
+    look: request.look,
     samples: quality.samples,
     noise_threshold: quality.noise_threshold,
     materials: source.materials,
