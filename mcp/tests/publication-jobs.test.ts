@@ -109,6 +109,38 @@ describe("Nonblocking publication jobs through one serialized native preparation
     expect(() => jobs.status("render_" + "0".repeat(24))).toThrow("NOT_FOUND");
   });
 
+  test("plugin unload aborts active Cycles job and prevents restart in retired runtime", async () => {
+    const jobs = new PublicationRenderJobs((_prepared, signal) =>
+      new Promise<PublicationRenderReceipt>((_resolve, reject) => {
+        if (signal.aborted) reject(new Error("PUBLICATION_BLENDER_CANCELLED"));
+        else signal.addEventListener("abort", () =>
+          reject(new Error("PUBLICATION_BLENDER_CANCELLED")), { once: true });
+      }), prepared,
+    );
+    const started = await jobs.start(REQUEST);
+    jobs.retire();
+    expect(jobs.status(started.job_id).state).toBe("CANCELLING");
+    await drain();
+    expect(jobs.status(started.job_id).state).toBe("CANCELLED");
+    await expect(jobs.start(REQUEST)).rejects.toThrow("PUBLICATION_RENDER_RUNTIME_RETIRED");
+  });
+
+  test("plugin unloading mid-snapshot cannot start detached Cycles afterwards", async () => {
+    let resolvePrepare!: (value: PreparedPublicationRender) => void;
+    let ran = false;
+    const jobs = new PublicationRenderJobs(async () => {
+      ran = true;
+      return receipt;
+    }, () => new Promise<PreparedPublicationRender>(resolve => {
+      resolvePrepare = resolve;
+    }));
+    const pending = jobs.start(REQUEST);
+    jobs.retire();
+    resolvePrepare(await prepared(REQUEST));
+    await expect(pending).rejects.toThrow("PUBLICATION_RENDER_RUNTIME_RETIRED");
+    expect(ran).toBe(false);
+  });
+
   test("invalid source render input creates no job", async () => {
     const jobs = new PublicationRenderJobs(async () => receipt, prepared);
     await expect(jobs.start({ ...REQUEST, output_path: "../relative.png" })).rejects.toThrow();
