@@ -98,6 +98,33 @@ function requireVerifiedPublicationEditPose(): void {
   }
 }
 
+/** Read-only editor fence: avoids mistaking a native export side effect for an
+ * acceptable model-only snapshot. Do not invoke view/mode/timeline setters.
+ */
+function publicationEditorFence(): string {
+  const activeUndo = (typeof Undo !== "undefined" ? Undo : null) as
+    | { history?: unknown[]; index?: number } | null;
+  const selectedCubes = Array.isArray(Cube.selected)
+    ? Cube.selected.map(item => item.uuid).sort() : [];
+  const selectedGroups = typeof Group !== "undefined" && Array.isArray(Group.selected)
+    ? Group.selected.map(item => item.uuid).sort() : [];
+  return JSON.stringify({
+    project_uuid: Project?.uuid ?? null,
+    project_save_path: Project?.save_path ?? null,
+    project_saved: Project?.saved ?? null,
+    editor_mode: typeof Modes !== "undefined"
+      ? [Modes.edit, Modes.animate] : null,
+    project_view_mode: Project?.view_mode ?? null,
+    selected_cubes: selectedCubes,
+    selected_groups: selectedGroups,
+    selected_texture: typeof Texture !== "undefined" ? Texture.selected?.uuid ?? null : null,
+    undo_length: activeUndo?.history?.length ?? null,
+    undo_index: activeUndo?.index ?? null,
+    timeline: typeof Timeline !== "undefined"
+      ? [Timeline.time, Timeline.playing] : null,
+  });
+}
+
 function publicationGroupAncestry(cube: Cube): string[] {
   const uuids: string[] = [];
   const visited = new Set<object>();
@@ -509,6 +536,7 @@ function makeMaterial(
  * are never mutated. Unsupported fidelity semantics block the job.
  */
 export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicationSnapshot> {
+  const editorFenceBefore = publicationEditorFence();
   const before = nativeState();
   const createdMaterials: THREE.Material[] = [];
   const createdTextures: THREE.Texture[] = [];
@@ -590,6 +618,9 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
       before.manifest.cubes,
     );
     const after = nativeState();
+    if (publicationEditorFence() !== editorFenceBefore) {
+      throw new Error("PUBLICATION_EDITOR_STATE_CHANGED_DURING_SNAPSHOT");
+    }
     if (before.project !== after.project ||
         before.project_uuid !== after.project_uuid ||
         before.signature !== after.signature) {
