@@ -124,11 +124,13 @@ export function derivePublicationPrimitiveBindings(
   const bindings: PublicationPrimitiveBinding[] = [];
   let next = 0;
   for (const group of groups) {
+    const materialIndex = group.materialIndex;
     if (!Number.isSafeInteger(group.start) || group.start !== next ||
         !Number.isSafeInteger(group.count) || group.count < 6 ||
         group.count % 6 !== 0 ||
-        !Number.isSafeInteger(group.materialIndex) ||
-        group.materialIndex !== group.start / 6 ||
+        typeof materialIndex !== "number" ||
+        !Number.isSafeInteger(materialIndex) ||
+        materialIndex !== group.start / 6 ||
         group.start + group.count > indexCount) {
       throw new Error("PUBLICATION_FACE_GROUP_BINDING_INVALID: " + cubeUuid);
     }
