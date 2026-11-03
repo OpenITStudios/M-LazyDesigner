@@ -51,6 +51,7 @@ def require_job() -> dict:
         ("glb_path", ".glb"),
         ("output_path", ".png"),
         ("report_path", ".json"),
+        ("preview_path", ".png"),
     ):
         value = job.get(name)
         if not isinstance(value, str):
@@ -63,10 +64,13 @@ def require_job() -> dict:
         fail("PUBLICATION_GLB_SOURCE_NOT_FOUND")
     output = Path(job["output_path"])
     report = Path(job["report_path"])
-    if output.exists() or report.exists():
+    preview = Path(job["preview_path"])
+    if output.exists() or report.exists() or preview.exists():
         fail("PUBLICATION_JOB_WOULD_OVERWRITE_EXISTING_FILE")
     if report.parent != output.parent or report.name != "report.json":
         fail("PUBLICATION_JOB_REPORT_PATH_INVALID")
+    if preview.parent != output.parent or preview.name != "evidence.png":
+        fail("PUBLICATION_JOB_EVIDENCE_PATH_INVALID")
     width, height = job.get("width"), job.get("height")
     if type(width) is not int or type(height) is not int or not (
         256 <= width <= 4096 and 256 <= height <= 4096
