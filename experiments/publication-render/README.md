@@ -5,6 +5,25 @@
 **State:** DESIGN COMPLETE; SOURCE IMPLEMENTATION IN PROGRESS ON `Render` — **BUN/TYPECHECK/BUILD/BLENDER/NATIVE VISUAL ACCEPTANCE NOT EXECUTED**.  
 **Source authority:** This is a branch-isolated research document. Do not merge into Local/main, touch QA capture, change workflows, or publish without an independent explicit request.
 
+## Implementation continuation — 2026-11-03, Render branch
+
+**Source additions since the initial fidelity bridge:**
+
+- `mcp/server/publication/jobs.ts`: one process-local, nonblocking `start / status / cancel` job with native GLB preparation completed before releasing the Runtime queue. Cycles worker runs on a detached, immutable snapshot; Gateway's 120-second default timeout is not held for a 15-minute Cycles render.
+- `mcp/plugin/blockbenchIntegration.ts` unload now requests job cancellation. Ordinary UI reconstruction does not cancel an active render.
+- `mcp/lib/publication/pngIntegrity.ts`: RGBA8 PNG dimensions, full chunk bounds, CRC and terminal IEND are verified before destination is written; a fake header is no longer accepted.
+- `mcp/server/publication/snapshot.ts`: aggregate texture inventory capped at 128 distinct images and 8,388,608 total pixels in addition to the per-texture limit; unresolved or ambiguously named PBR groups fail explicitly.
+- `mcp/lib/publication/contracts.ts` + `mcp/ui/publicationRenderDialog.ts`: square/16:9/4:3/4:5 output, exact camera controls, nine lighting/post parameters, conservative Fog Glow, bounded resolution and complete nested worker defaults.
+- `mcp/server/publication/worker/render.py`: Cycles camera distance derived from narrower FOV, corner projection clipping check, Blender 5.2 compositing NodeGroup/Fog Glow, verified imported mesh/texture presence and meaningful shadow contact.
+- `mcp/server/publication/execute.ts`: render receipts now carry camera, background, lighting, sampling, source identity and SHA provenance. Results are DRAFT; no artistic PASS.
+- `mcp/tests/publication-png-integrity.test.ts` and `mcp/tests/publication-jobs.test.ts` add negative file/process/job cases. `mcp/scripts/verify/verify-publication-render-live.ts` is an opt-in **disposable synthetic** GLB→Cycles PNG smoke harness; it is not a test of the user's model.
+
+**Proof available in this ChatGPT/GitHub session:** GitHub exact-source reads and branch-isolated commits; 15/15 static binding/ownership presence checks, then 9/9 lighting controls matched across schema/worker/UI and 5/5 additional source closure checks; independent Python numeric camera-fit sanity for 1:1, 16:9, 4:3, 4:5; Pillow confirmed the two tiny PNG smoke fixtures are genuine 1x1 RGBA pixels. These are **NOT Bun tests, Blender output, native import fidelity, or visual acceptance**.
+
+**Unexecuted gates:** Bun tests, TypeScript compile, canonical generated MCP artifacts, Blender 5.2 process, actual PNG render, Blockbench installed UI/GLB state invariants, reference-quality comparative evaluation. This execution context provides GitHub source access plus a generic local Python/Node sandbox, but no Bun/Blender/native installed Blockbench. Do not claim runtime completeness or source-level quality parity.
+
+**Test entrypoints for a genuinely capable environment:** from `mcp/`, `bun test tests/publication*.test.ts`, `bun run typecheck`, canonical docs/contract generator, and explicit opt-in `bun run scripts/verify/verify-publication-render-live.ts <absolute Blender 5.2 executable>`. Run the real Blockbench fixture only with the Render build identity. Do not run release/merge or enable CI automatically.
+
 ## Current Render-branch source implementation (2026-11-03)
 
 **Implemented in source, not runtime-proven:**
