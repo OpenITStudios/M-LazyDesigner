@@ -62,6 +62,8 @@ def require_job():
         ("key", 0.2, 2.5), ("fill", 0.0, 2.0),
         ("rim", 0.0, 2.0), ("softness", 0.5, 2.5),
         ("environment", 0.0, 2.0), ("exposure_ev", -3.0, 3.0),
+        ("glow_strength", 0.0, 0.35), ("glow_threshold", 0.5, 20.0),
+        ("glow_size", 0.1, 0.8),
     ):
         val = look.get(name)
         if type(val) not in (int, float) or not math.isfinite(val) or not lower <= val <= upper:
@@ -281,9 +283,9 @@ def configure_render(job):
         fail("Expected AgX color management is unavailable.")
     scene.view_settings.exposure = job["look"]["exposure_ev"]
     scene.view_settings.gamma = 1
-    # Deterministic minimal compositor; no fabricated glow or enhancement.
-    # Blender 5.2: Scene.node_tree and CompositorNodeComposite are removed.
-    # Compositing is a separately assigned CompositorNodeTree with Group Output.
+    # Blender 5.2 compositing uses a compositor NodeGroup assigned to Scene.
+    # The restrained glare only affects actual scene highlights; it never
+    # generates un-authored geometry, painted details or arbitrary pixels.
     compositor = bpy.data.node_groups.new("LD_Publication_Compositor", "CompositorNodeTree")
     scene.compositing_node_group = compositor
     compositor.interface.new_socket(
@@ -291,7 +293,19 @@ def configure_render(job):
     )
     layers = compositor.nodes.new("CompositorNodeRLayers")
     output = compositor.nodes.new("NodeGroupOutput")
-    compositor.links.new(layers.outputs["Image"], output.inputs["Image"])
+    if job["look"]["glow_strength"] > 0:
+        glare = compositor.nodes.new("CompositorNodeGlare")
+        # Blender 5.x Glare configuration uses input sockets, NOT the removed
+        # legacy glare_type, threshold, quality or size attributes.
+        glare.inputs["Type"].default_value = "Fog Glow"
+        glare.inputs["Quality"].default_value = "Medium"
+        glare.inputs["Threshold"].default_value = job["look"]["glow_threshold"]
+        glare.inputs["Strength"].default_value = job["look"]["glow_strength"]
+        glare.inputs["Size"].default_value = job["look"]["glow_size"]
+        compositor.links.new(layers.outputs["Image"], glare.inputs["Image"])
+        compositor.links.new(glare.outputs["Image"], output.inputs["Image"])
+    else:
+        compositor.links.new(layers.outputs["Image"], output.inputs["Image"])
 
 
 def render(job):
