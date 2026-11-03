@@ -87,6 +87,30 @@ function animationDelta(start: number, end: number) {
 }
 
 describe("Control verification cohort", () => {
+  test("Cube visual debt remains while automatic screenshot recommendation is removed", () => {
+    const next = reduceControlExecutionState(
+      null, cubeDelta("cube-a", "rotation", -1, 1)
+    ).continuation.next_action;
+    expect(next).toMatchObject({
+      kind: "VERIFY_VISUAL", recommended_capability: null,
+      verification_scope: { kind: "CUBE_TARGETS", cube_uuids: ["cube-a"] },
+    });
+    expect(next.reason).toContain("capture_model_views");
+    expect(next.reason).toContain("Do not capture per Cube");
+  });
+  test("Texture and animation maintain existing required review routes", () => {
+    const tex = reduceControlExecutionState(
+      null, textureDelta([1, 2, 3, 4], "sha256:rev", false)
+    ).continuation.next_action;
+    expect(tex).toMatchObject({
+      kind: "VERIFY_VISUAL", recommended_capability: "get_texture",
+    });
+    const anim = reduceControlExecutionState(
+      null, animationDelta(0, 1)
+    ).continuation.next_action;
+    expect(anim.kind).toBe("VERIFY_VISUAL");
+    expect(anim.reason).toContain("not every keyframe");
+  });
   test("default COMPLETE behavior keeps one-call verification semantics", () => {
     const delta = cubeDelta("cube-a", "rotation", -1, 1);
     const result = reduceControlExecutionState(null, delta);

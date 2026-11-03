@@ -260,6 +260,46 @@ function readNativeVisualCaptureSnapshot(referenceBinding: unknown): VisualNativ
   };
 }
 
+/**
+ * Image transport for one canonical capture invocation. Byte metrics are
+ * not image tokens or Codex billing. No additional renderer calls.
+ */
+export type CaptureImageTrafficRow = Readonly<{
+  kind: "MODEL" | "SILHOUETTE";
+  png_bytes: number;
+  delivery: "DELIVERED" | "EXACT_REUSE" | "DIAGNOSTIC_NOT_SENT";
+}>;
+
+export function summarizeCaptureImageTraffic(rows: readonly CaptureImageTrafficRow[]) {
+  if (rows.some(row =>
+    !Number.isSafeInteger(row.png_bytes) || row.png_bytes < 0 ||
+    !["MODEL", "SILHOUETTE"].includes(row.kind) ||
+    !["DELIVERED", "EXACT_REUSE", "DIAGNOSTIC_NOT_SENT"].includes(row.delivery)
+  )) throw new Error("CAPTURE_IMAGE_TRAFFIC_INVALID");
+  const bytes = (filter: (row: CaptureImageTrafficRow) => boolean) =>
+    rows.filter(filter).reduce((sum, row) => sum + row.png_bytes, 0);
+  const count = (delivery: CaptureImageTrafficRow["delivery"]) =>
+    rows.filter(row => row.delivery === delivery).length;
+  return {
+    generated_image_count: rows.length,
+    generated_png_bytes: bytes(() => true),
+    delivered_image_count: count("DELIVERED"),
+    delivered_png_bytes: bytes(row => row.delivery === "DELIVERED"),
+    reused_exact_image_count: count("EXACT_REUSE"),
+    reused_exact_png_bytes: bytes(row => row.delivery === "EXACT_REUSE"),
+    diagnostic_not_sent_image_count: count("DIAGNOSTIC_NOT_SENT"),
+    diagnostic_not_sent_png_bytes: bytes(row => row.delivery === "DIAGNOSTIC_NOT_SENT"),
+    model_image_count: rows.filter(row => row.kind === "MODEL").length,
+    silhouette_image_count: rows.filter(row => row.kind === "SILHOUETTE").length,
+    api_token_usage: null as null,
+  };
+}
+
+function encodedPngBytes(base64: string): number {
+  return Math.floor(base64.length * 3 / 4) -
+    (base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0);
+}
+
 type FrontDirection = "+z" | "-z";
 type FramingInput =
   | { mode: "model" }
@@ -1178,8 +1218,8 @@ export function registerCameraTools() {
       > = [];
       const imageDigests: Array<{view: ModelView; sha256: string}> = [];
       const imageLedger: CaptureImageDeliveryLedger = new Map();
-      let deliveredImageCount = 0;
-      let reusedExactImageCount = 0;
+      const imageTraffic: CaptureImageTrafficRow[] = [];
+      const captureStartedAtMs = Date.now();
       const captures: Array<{
         view: ModelView;
         projection: "orthographic" | "perspective";
@@ -1223,6 +1263,11 @@ export function registerCameraTools() {
         const modelImageDelivery = recordCaptureImageDelivery(
           imageLedger, "MODEL", view, image.data
         );
+        const modelPngBytes = encodedPngBytes(image.data);
+        imageTraffic.push({
+          kind: "MODEL", png_bytes: modelPngBytes,
+          delivery: modelImageDelivery.send_image ? "DELIVERED" : "EXACT_REUSE",
+        });
         content.push({
           type: "text",
           text: modelImageDelivery.reused_from_view
@@ -1231,9 +1276,6 @@ export function registerCameraTools() {
         });
         if (modelImageDelivery.send_image) {
           content.push(image);
-          deliveredImageCount++;
-        } else {
-          reusedExactImageCount++;
         }
         // Opt-in only: a second transparent capture is useful for silhouette
         // review, but must not double image/context cost for ordinary capture.
@@ -1269,6 +1311,10 @@ export function registerCameraTools() {
               const maskDelivery = recordCaptureImageDelivery(
                 imageLedger, "SILHOUETTE", view, silhouetteImage.data
               );
+              imageTraffic.push({
+                kind: "SILHOUETTE", png_bytes: pngBytes.byteLength,
+                delivery: maskDelivery.send_image ? "DELIVERED" : "EXACT_REUSE",
+              });
               content.push({
                 type: "text",
                 text: `SILHOUETTE VIEW ${view}: visible solid Cube geometry only; not source-matched or visually approved.` +
@@ -1278,11 +1324,12 @@ export function registerCameraTools() {
               });
               if (maskDelivery.send_image) {
                 content.push(silhouetteImage);
-                deliveredImageCount++;
-              } else {
-                reusedExactImageCount++;
               }
             } else {
+              imageTraffic.push({
+                kind: "SILHOUETTE", png_bytes: pngBytes.byteLength,
+                delivery: "DIAGNOSTIC_NOT_SENT",
+              });
               silhouetteEvidence = {
                 ...base, state: "UNVERIFIED", reason: alpha.reason,
                 image_sha256: sha256,
@@ -1322,7 +1369,7 @@ export function registerCameraTools() {
           reused_from_view: modelImageDelivery.reused_from_view,
           width: captureSize,
           height: captureSize,
-          png_bytes: Math.floor(image.data.length * 3 / 4) - (image.data.endsWith("==") ? 2 : image.data.endsWith("=") ? 1 : 0),
+          png_bytes: modelPngBytes,
           camera_spec: captureCameraSpecMetadata(spec),
           ...(landmark_pairs?.length ? { landmark_projections: landmarkProjections } : {}),
           ...(silhouetteEvidence ? { silhouette_evidence: silhouetteEvidence } : {}),
@@ -1437,8 +1484,9 @@ export function registerCameraTools() {
         },
         image_transport: {
           policy: "LOSSLESS_SAME_RESPONSE_EXACT_PNG",
-          delivered_image_count: deliveredImageCount,
-          reused_exact_image_count: reusedExactImageCount,
+          ...summarizeCaptureImageTraffic(imageTraffic),
+          capture_processing_ms: Math.max(0, Date.now() - captureStartedAtMs),
+          measurement_scope: "THIS_MODEL_CAPTURE_RESPONSE_ONLY",
           all_requested_views_captured: true,
           cross_revision_reuse: false,
           visual_verdict: "NOT_EVALUATED",

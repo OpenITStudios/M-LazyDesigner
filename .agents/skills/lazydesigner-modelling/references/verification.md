@@ -55,7 +55,22 @@ success alone never grants Geometry visual PASS.
 
 Verdict requires approved reference + fresh current-revision model evidence:
 `claim | matching reference view | current view | observed difference | severity | owning cause | FAIL | UNVERIFIED | PASS`.
-Mutation stales affected captures. Correct first cause, then recapture affected views. `capture_model_views` correspondence metadata only maps captures to canonical board slots; it is not a scorer and never creates visual PASS.
+Mutation stales affected captures. Correct first cause, then recapture affected views.
+
+A Control `VERIFY_VISUAL` after `CUBE_TARGETS` is **visual verification debt**,
+not a command to screenshot after every Cube. Reuse fresh native mutation
+receipts first; when structural facts are missing, call `inspect_model_bounds`
+once at a material cohort boundary and follow its existing
+`surface_integrity.evidence_economy` advice. That advice cannot grant visual
+approval. Group related safe edits using the existing Control
+`CONTINUE → COMPLETE` cohort so stale scopes are not forgotten.
+At an actual reference-fidelity gate obtain the minimum compatible
+`capture_model_views` images covering all unanswered claims; do not
+postpone required review to save tokens. For Texture reuse a current returned
+region PNG only if its revision and rectangle cover the question; otherwise
+use `get_texture`. For Animation inspect affected native clip/bone/time data
+before meaningful pose review, not every keyframe. Do not use whole-desktop
+screenshots as normal QA evidence. `capture_model_views` correspondence metadata only maps captures to canonical board slots; it is not a scorer and never creates visual PASS.
 Tool success, coordinates, bounds, hierarchy, validators, or similarity scores cannot justify `PASS`. Internal Geometry `PASS` requires form/depth, surface integrity, hierarchy/pivots, and no major defect.
 
 **Largest-difference-first:** rank only material visible differences by construction consequence, not pixel area. Fix in this order when applicable: missing/extra required part → wrong topology/attachment → wrong primary silhouette/proportion/depth → broken negative space/contact → pivot/motion-readiness defect → secondary geometric detail. Do not spend a correction round polishing a smaller difference while a higher-order structural defect remains.

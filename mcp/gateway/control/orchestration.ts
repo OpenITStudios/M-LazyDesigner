@@ -72,7 +72,8 @@ function visualRecommendedCapability(
   scope: ControlVerificationScope | null
 ): string | null {
   if (!scope) return null;
-  if (scope.kind === "CUBE_TARGETS") return "capture_model_views";
+  // Visual verification remains owed, but one Cube edit is not an image gate.
+  if (scope.kind === "CUBE_TARGETS") return null;
   if (scope.kind === "TEXTURE_REGION") {
     return scope.evidence_source === "follow_up_read" ? "get_texture" : null;
   }
@@ -136,7 +137,11 @@ export function nextActionForControlDelta(delta: ControlDelta): ControlNextActio
 
     return {
       kind: "VERIFY_VISUAL",
-      reason: "decision-changing visual evidence is required",
+      reason: delta.verification_scope?.kind === "CUBE_TARGETS"
+        ? "Geometry visual review remains owed. Reuse fresh mutation receipts and native diagnostics; inspect_model_bounds only for missing structural facts. Do not capture per Cube. At the next material reference/quality gate, use capture_model_views for only unresolved compatible views; never infer visual PASS from numeric evidence."
+        : delta.verification_scope?.kind === "ANIMATION_RANGE"
+          ? "Animation motion review remains owed. Reuse current keyframe/contact diagnostics; inspect only affected clip/bone/time windows and capture meaningful poses at the motion-quality gate, not every keyframe."
+          : "decision-changing visual evidence is required",
       recommended_capability: visualRecommendedCapability(delta.verification_scope),
       target_domain: delta.authoring_domain,
       verification_scope: delta.verification_scope,

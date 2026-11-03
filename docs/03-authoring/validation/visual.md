@@ -764,6 +764,28 @@ retain the 512 default, preserving existing high-detail behavior. Texture/identi
 should continue using detail-appropriate evidence; do not downsample merely to reduce
 Codex allowance when the decision depends on fine visual detail.
 
+## Usage-aware visual evidence routing
+
+Control `VERIFY_VISUAL` still means visual verification is owed.
+For `CUBE_TARGETS`, the continuation no longer recommends an immediate
+`capture_model_views` after every Cube edit. Reuse the current mutation
+receipt and existing native evidence; call `inspect_model_bounds` only
+when structural uncertainty actually changes the next decision.
+At a reference-fidelity gate, inspect matched approved source/model pixels.
+Numeric structure alone cannot establish a visual PASS.
+
+`TEXTURE_REGION` retains strict revision/rectangle coverage and uses
+a verified returned crop where it covers the change; otherwise read
+`get_texture`. Animation keeps meaningful sampled motion/pose reviews.
+Cohort `CONTINUE` is batching, not indefinite review deferral.
+Unknown outcomes, stale evidence and skipped claims cannot count as savings.
+
+`capture_model_views.image_transport` measures same-response image
+counts, generated/delivered/exact-reused PNG bytes and processing time.
+This excludes separately delivered approved references, texture crops,
+other tool images and actual GPT-6.1 Sol token billing. Do not calculate
+token cost from PNG bytes.
+
 ## Native-first evidence economy (zero-image geometry triage)
 
 Before requesting a new model screenshot for geometry hygiene, consume the

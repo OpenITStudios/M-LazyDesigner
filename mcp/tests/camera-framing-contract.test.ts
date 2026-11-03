@@ -7,6 +7,7 @@ import {
   resolveCaptureViewSelection,
   captureCameraSpecMetadata,
   recordCaptureImageDelivery,
+  summarizeCaptureImageTraffic,
   assessVisualCaptureFreshness,
   fingerprintVisualCaptureDependencies,
   selectCaptureSizeForEvidence,
@@ -40,7 +41,7 @@ describe("capture native dependency freshness contract", () => {
       { ...baseline, project_uuid: "project-b" },
       { ...baseline, cubes: [["cube", [0, 0, 0], [3, 2, 2], ["north", [0, 0, 2, 2]]]] },
       { ...baseline, cubes: [["cube", [0, 0, 0], [2, 2, 2], ["north", [1, 0, 2, 2]]]] },
-      { ...baseline, groups: [["root", [0, 1, 0]] },
+      { ...baseline, groups: [["root", [0, 1, 0]]] },
       { ...baseline, textures: [["atlas", 16, 16, "bitmap-sha-b"]] },
       { ...baseline, pose: { ...baseline.pose, time: 0.25 } },
       { ...baseline, presentation: { ...baseline.presentation, brightness: 75 } },
@@ -80,6 +81,37 @@ describe("capture native dependency freshness contract", () => {
     expect(source).toContain("cross_invocation_reuse_allowed: false");
     expect(source).toContain("CAPTURE_TEXTURE_PIXEL_BUDGET");
     expect(source).toContain("capture_contract_sha256,");
+  });
+});
+
+describe("actual PNG transport accounting", () => {
+  test("separates sent bytes from exact reuse and invalid local evidence", () => {
+    expect(summarizeCaptureImageTraffic([
+      { kind: "MODEL", png_bytes: 500, delivery: "DELIVERED" },
+      { kind: "MODEL", png_bytes: 500, delivery: "EXACT_REUSE" },
+      { kind: "SILHOUETTE", png_bytes: 100, delivery: "DIAGNOSTIC_NOT_SENT" },
+      { kind: "SILHOUETTE", png_bytes: 180, delivery: "DELIVERED" },
+    ])).toMatchObject({
+      generated_image_count: 4, generated_png_bytes: 1280,
+      delivered_image_count: 2, delivered_png_bytes: 680,
+      reused_exact_image_count: 1, reused_exact_png_bytes: 500,
+      diagnostic_not_sent_image_count: 1, diagnostic_not_sent_png_bytes: 100,
+      model_image_count: 2, silhouette_image_count: 2, api_token_usage: null,
+    });
+  });
+  test("rejects invalid image traffic instead of inventing savings", () => {
+    expect(() => summarizeCaptureImageTraffic([
+      { kind: "MODEL", png_bytes: Number.NaN, delivery: "DELIVERED" },
+    ])).toThrow("CAPTURE_IMAGE_TRAFFIC_INVALID");
+    expect(() => summarizeCaptureImageTraffic([
+      { kind: "MODEL", png_bytes: -1, delivery: "DELIVERED" },
+    ])).toThrow("CAPTURE_IMAGE_TRAFFIC_INVALID");
+  });
+  test("runtime exposes measured image traffic and no estimated tokens", async () => {
+    const src = await Bun.file("server/tools/inspection/camera.ts").text();
+    expect(src).toContain("...summarizeCaptureImageTraffic(imageTraffic)");
+    expect(src).toContain("capture_processing_ms:");
+    expect(src).toContain('measurement_scope: "THIS_MODEL_CAPTURE_RESPONSE_ONLY"');
   });
 });
 

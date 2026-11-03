@@ -127,6 +127,24 @@ Measure efficiency only after or alongside quality evidence. Record:
 
 The target is **Cost to Accepted Result**, not minimum tool calls in isolation.
 
+### Actual image usage with the existing quality-first Golden task
+
+Record `capture_model_views.image_transport` values: delivered image
+count, generated PNG bytes, delivered PNG bytes, exact-reused PNG bytes and
+capture processing milliseconds. Separately account for approved Reference
+Package images, texture region and animation pose images. Record GPT-6.1
+Sol usage tokens or billing only when reliable native/provider telemetry
+is actually supplied; otherwise say `NOT_MEASURED`. PNG bytes are not
+token usage, and fewer pictures do not independently prove lower costs.
+
+Compare matching baseline/candidate input asset, approved reference image
+bytes, runtime environment, criteria and artifact revision. Any missed
+critical defect, skipped required gate or newly UNVERIFIED quality claim
+disqualifies an efficiency improvement. Once both results achieve accepted
+and comparable quality, assess the already-owned cost-to-accepted-result,
+tool calls, image delivery bytes, correction rounds and elapsed time.
+Do not create another benchmark engine or claim a synthetic percentage.
+
 ## Future Local Benchmark Run
 
 When a matching live environment is available, run **one full-asset Golden Task** (`golden-full-asset-authoring`) using its isolated fixture; retain these quality dimensions as a review rubric rather than running six unrelated Golden assets:
