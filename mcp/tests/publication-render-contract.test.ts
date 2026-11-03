@@ -34,6 +34,7 @@ describe("Publication render contract", () => {
     expect(args.look).toEqual({
       key: 1, fill: 1, rim: 1, softness: 1,
       environment: 1, exposure_ev: 0,
+      glow_strength: 0.08, glow_threshold: 2, glow_size: 0.45,
     });
     const partial = publicationRenderParameters.parse({
       ...valid,
@@ -46,6 +47,7 @@ describe("Publication render contract", () => {
     expect(partial.look).toEqual({
       key: 1.4, fill: 1, rim: 1, softness: 1,
       environment: 1, exposure_ev: -0.5,
+      glow_strength: 0.08, glow_threshold: 2, glow_size: 0.45,
     });
     for (const input of [
       { ...valid, blender_executable: "blender" },
@@ -63,6 +65,9 @@ describe("Publication render contract", () => {
       { ...valid, look: { softness: 6 } },
       { ...valid, look: { exposure_ev: Infinity } },
       { ...valid, look: { unknown: 1 } },
+      { ...valid, look: { glow_strength: 0.4 } },
+      { ...valid, look: { glow_threshold: 0 } },
+      { ...valid, look: { glow_size: 2 } },
       { ...valid, overwrite: true },
       { ...valid, unexpected_extra_field: true },
     ]) {
