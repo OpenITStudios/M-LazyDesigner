@@ -33,7 +33,7 @@ function showError(error: unknown): void {
   });
 }
 
-function withCurrentRuntime<T>(work: () => T): Promise<T> {
+function withCurrentRuntime<T>(work: () => T | Promise<T>): Promise<T> {
   const generation = getRuntimeLifecycleSnapshot().owner_generation;
   if (generation === null) {
     return Promise.reject(new Error("Native LazyDesigner runtime is not ready."));
@@ -42,7 +42,7 @@ function withCurrentRuntime<T>(work: () => T): Promise<T> {
     if (!isRuntimeGenerationCurrent(generation)) {
       throw new Error("LazyDesigner runtime reloaded. Inspect the current render job again.");
     }
-    return work();
+    return await work();
   });
 }
 
