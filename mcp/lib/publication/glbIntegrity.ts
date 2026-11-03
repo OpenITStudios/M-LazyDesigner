@@ -1,3 +1,5 @@
+import type { PublicationCubeManifest } from "@/lib/publication/sourceManifest";
+
 /** Strict, bounded glTF 2.0 GLB envelope and semantic inventory preflight.
  * Khronos glTF-Validator and native Blender reimport remain separately required:
  * this does not certify full spec compliance or visual equality.
@@ -25,7 +27,12 @@ function validIndex(index: unknown, length: number): boolean {
   return Number.isSafeInteger(index) && (index as number) >= 0 && (index as number) < length;
 }
 
-export function inspectPublicationGlb(glb: Buffer, expectedMeshes: number, expectedMaterials: number): PublicationGlbInventory {
+export function inspectPublicationGlb(
+  glb: Buffer,
+  expectedMeshes: number,
+  expectedMaterials: number,
+  expectedCubes?: readonly PublicationCubeManifest[],
+): PublicationGlbInventory {
   if (!Buffer.isBuffer(glb) || glb.length < 20 || glb.length > 96 * 1024 * 1024 ||
       glb.toString("ascii", 0, 4) !== "glTF" || glb.readUInt32LE(4) !== 2 ||
       glb.readUInt32LE(8) !== glb.length) {
@@ -124,8 +131,69 @@ export function inspectPublicationGlb(glb: Buffer, expectedMeshes: number, expec
       }
     }
   }
-  if (textures.length < materials.length) {
-    throw new Error("PUBLICATION_GLB_TEXTURE_REFERENCES_MISSING");
+  // Multiple intentionally distinct source materials may share one atlas.
+  // Do not require more texture objects than materials; verify per-material
+  // base-color references and the exact source face/group mapping instead.
+  if (materials.some(material =>
+    !record(material.pbrMetallicRoughness) ||
+    !record(material.pbrMetallicRoughness.baseColorTexture) ||
+    !validIndex(material.pbrMetallicRoughness.baseColorTexture.index, textures.length)
+  )) {
+    throw new Error("PUBLICATION_GLB_BASE_COLOR_TEXTURE_MISSING");
+  }
+  if (expectedCubes) {
+    if (expectedCubes.length !== expectedMeshes) {
+      throw new Error("PUBLICATION_GLB_EXPECTED_SOURCE_MESH_COUNT_INVALID");
+    }
+    const nodes = Array.isArray(json.nodes) ? json.nodes : [];
+    if (nodes.some(node => !record(node))) {
+      throw new Error("PUBLICATION_GLB_NODE_INVENTORY_INVALID");
+    }
+    const byName = new Map<string, GltfRecord>();
+    for (const node of nodes as GltfRecord[]) {
+      if (typeof node.name !== "string" || !node.name.startsWith("cube_")) continue;
+      if (byName.has(node.name)) {
+        throw new Error("PUBLICATION_GLB_DUPLICATE_CUBE_NODE: " + node.name);
+      }
+      byName.set(node.name, node);
+    }
+    if (byName.size !== expectedCubes.length) {
+      throw new Error("PUBLICATION_GLB_SOURCE_CUBE_NODES_MISMATCH");
+    }
+    const expectedMaterialNames = new Set<string>();
+    const usedMeshIds = new Set<number>();
+    for (const cube of expectedCubes) {
+      const node = byName.get("cube_" + cube.cube_uuid);
+      if (!node || !validIndex(node.mesh, meshes.length)) {
+        throw new Error("PUBLICATION_GLB_SOURCE_CUBE_NODE_MISSING: " + cube.cube_uuid);
+      }
+      const meshIndex = node.mesh as number;
+      if (usedMeshIds.has(meshIndex)) {
+        throw new Error("PUBLICATION_GLB_SOURCE_CUBE_MESH_SHARED_UNEXPECTEDLY");
+      }
+      usedMeshIds.add(meshIndex);
+      const primitives = meshes[meshIndex]!.primitives as GltfRecord[];
+      if (primitives.length !== cube.primitives.length) {
+        throw new Error("PUBLICATION_GLB_SOURCE_PRIMITIVE_COUNT_MISMATCH: " + cube.cube_uuid);
+      }
+      for (let i = 0; i < cube.primitives.length; i++) {
+        const expected = cube.primitives[i]!;
+        const actual = primitives[i]!;
+        const name = materials[actual.material as number]!.name;
+        if (name !== expected.material_name) {
+          throw new Error("PUBLICATION_GLB_FACE_MATERIAL_MISMATCH: " +
+            cube.cube_uuid + ":" + expected.face_keys.join(","));
+        }
+        expectedMaterialNames.add(expected.material_name);
+      }
+    }
+    const outputMaterialNames = materials.map(material => material.name);
+    if (outputMaterialNames.some(name => typeof name !== "string") ||
+        new Set(outputMaterialNames).size !== outputMaterialNames.length ||
+        outputMaterialNames.length !== expectedMaterialNames.size ||
+        outputMaterialNames.some(name => !expectedMaterialNames.has(name as string))) {
+      throw new Error("PUBLICATION_GLB_SOURCE_MATERIAL_IDENTITY_MISMATCH");
+    }
   }
   return {
     mesh_count: meshes.length,
