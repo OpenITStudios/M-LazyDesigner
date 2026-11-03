@@ -381,7 +381,14 @@ describe("equal-grid PCHIP motion continuity diagnostics", () => {
     });
     expect(result.tracks[0].knot_velocity_jump.max_baked).toBeLessThan(8);
     expect(result.tracks[0].source_dynamics.max_speed).toBeGreaterThan(0);
-    expect(result.tracks[0].baked_dynamics.max_acceleration).toBeGreaterThan(0);
+    // Equal grid makes the trade-off honest: smoothing a sharp reversal
+    // can LOWER jerk and knot discontinuity while RAISING peak speed.
+    expect(result.tracks[0].baked_dynamics.max_speed)
+      .toBeGreaterThan(result.tracks[0].source_dynamics.max_speed);
+    expect(result.tracks[0].baked_dynamics.max_acceleration)
+      .toBeLessThan(result.tracks[0].source_dynamics.max_acceleration);
+    expect(result.tracks[0].baked_dynamics.max_jerk)
+      .toBeLessThan(result.tracks[0].source_dynamics.max_jerk);
     expect(result.native_playback_attested).toBe(false);
     expect(result.continuous_native_velocity_attested).toBe(false);
     expect(JSON.stringify(input)).toBe(before);
@@ -396,6 +403,8 @@ describe("equal-grid PCHIP motion continuity diagnostics", () => {
     expect(comparePchipLinearContinuityOnSharedGrid(wrong)).toMatchObject({
       state:"unavailable",reason:"PCHIP_CONTINUITY_AUTHORED_ANCHOR_CHANGED",
     });
+    // .5 seconds is representable at 24 FPS, but the added 30 FPS
+    // keyframes are NOT: both cohorts must fit the same declared grid.
     expect(comparePchipLinearContinuityOnSharedGrid({...input,sample_fps:24}))
       .toMatchObject({state:"unavailable",
         reason:"PCHIP_CONTINUITY_SOURCE_CLOCK_OR_EXTENT_MISMATCH"});

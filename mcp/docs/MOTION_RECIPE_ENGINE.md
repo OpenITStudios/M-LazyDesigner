@@ -526,8 +526,9 @@ For each *original interior authored key*, the diagnostic also compares
 the incoming vs outgoing sampled velocity-vector jump before and after
 baking. It reports whether that local change decreased, increased or
 remained effectively unchanged, with bounded examples. The analyzer
-rechecks original source values at authored anchor times, requires the
-same source clock and extent, refuses unsupported/nonlinear data or
+rechecks original source values at authored anchor times, requires
+**every source and baked transform key** to lie on the *same* declared FPS
+grid with matching temporal extent, refuses unsupported/nonlinear data or
 nonfinite derivative metrics, and caps evaluation at 2,048 grid
 samples per selected channel. A source-only comparison unavailable for
 these reasons blocks the opt-in Gateway plan before native invocation.
@@ -536,7 +537,8 @@ The receipt lives in
 `semantic_context.shape_preserving_linear_bake.continuity_review`
 **outside** native `create_animation` arguments. It is diagnostic:
 PCHIP may improve a particular key's finite-difference velocity jump
-while changing accelerations/jerk elsewhere. No silent interpolation
+and reduce jerk while **increasing peak speed** elsewhere. Both are
+reported; neither is hidden to claim overall smoothing success. No silent interpolation
 replacement or automatic artistic PASS/FAIL is inferred. Sampled LINEAR
 keyframes do not actually have continuous velocity, and source-grid
 mathematics cannot certify native playback, export, physical contact or

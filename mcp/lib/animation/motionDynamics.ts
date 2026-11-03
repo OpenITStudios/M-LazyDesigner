@@ -469,7 +469,7 @@ export function comparePchipLinearContinuityOnSharedGrid(input: {
     if(Math.abs(source[0].time-baked[0].time)>PCHIP_CONTINUITY_CLOCK_EPSILON||
         Math.abs(source[source.length-1].time-baked[baked.length-1].time)>
           PCHIP_CONTINUITY_CLOCK_EPSILON ||
-        source.some((key)=>!Number.isFinite(key.time)||
+        [...source,...baked].some((key)=>!Number.isFinite(key.time)||
           Math.abs(key.time-Math.round(key.time*fps)/fps)>
             PCHIP_CONTINUITY_CLOCK_EPSILON)) {
       return unavailable("PCHIP_CONTINUITY_SOURCE_CLOCK_OR_EXTENT_MISMATCH");
