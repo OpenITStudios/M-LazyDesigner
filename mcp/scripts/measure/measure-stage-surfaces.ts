@@ -14,15 +14,15 @@ import {
 const HOST = "127.0.0.1";
 const ENDPOINT = "/bb-mcp";
 const PROTOCOL_VERSION = "2025-06-18";
-const CATALOG_TOOL_COUNT = 54;
+const CATALOG_TOOL_COUNT = 55;
 
 const EXPECTED_STAGE_TOOL_COUNTS: Record<McpAuthoringStage, number> = {
-  geometry: 47,
-  texturing: 47,
+  geometry: 48,
+  texturing: 48,
   // Animation intentionally excludes create_project plus editor-selection helpers;
   // project lifecycle and Cube/Group selection belong to AUTHORING before the
   // approved handoff into the Animation surface.
-  animation: 18,
+  animation: 19,
 };
 
 type ListedTool = {
