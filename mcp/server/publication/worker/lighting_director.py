@@ -8,6 +8,8 @@ consistent when the subject view changes.
 from __future__ import annotations
 
 import math
+import hashlib
+from pathlib import Path
 
 import bpy
 from mathutils import Vector
@@ -38,7 +40,7 @@ def _light(name: str, position: Vector, center: Vector,
     }
 
 
-def _world(background: str, factor: float) -> dict:
+def _world(background: str, factor: float, environment: dict) -> dict:
     scene = bpy.context.scene
     world = bpy.data.worlds.new("LD_Publication_World")
     scene.world = world
@@ -56,6 +58,24 @@ def _world(background: str, factor: float) -> dict:
         base_color, strength = (0.05, 0.07, 0.12, 1.0), 0.7
     ambient.inputs["Color"].default_value = base_color
     ambient.inputs["Strength"].default_value = strength * factor
+    if environment["mode"] == "hdri":
+        selected = Path(environment["hdri_path"])
+        require(
+            selected.is_absolute() and selected.parent == Path(bpy.context.scene.render.filepath).parent
+            and selected.name in ("environment.hdr", "environment.exr")
+            and selected.is_file(),
+            "PUBLICATION_HDRI_WORKER_SOURCE_OUTSIDE_ISOLATED_JOB",
+        )
+        digest = hashlib.sha256()
+        with selected.open("rb") as file:
+            for block in iter(lambda: file.read(1024 * 1024), b""):
+                digest.update(block)
+        require(digest.hexdigest() == environment["hdri_sha256"],
+                "PUBLICATION_HDRI_SOURCE_SHA_MISMATCH")
+        tex = nodes.new("ShaderNodeTexEnvironment")
+        tex.image = bpy.data.images.load(str(selected), check_existing=False)
+        tex.projection = "EQUIRECTANGULAR"
+        nodes.links.new(tex.outputs["Color"], ambient.inputs["Color"])
     return {"background_color": list(base_color), "world_strength": strength * factor}
 
 
@@ -99,7 +119,7 @@ def configure_environment_and_lighting(job: dict, bounds: tuple) -> dict:
     _low, _high, center, radius = bounds
     look = job["look"]
     background = job["background"]
-    world = _world(background, float(look["environment"]))
+    world = _world(background, float(look["environment"]), job["environment"])
     ground = _studio_ground(job, bounds)
 
     camera = bpy.context.scene.camera
@@ -136,6 +156,8 @@ def configure_environment_and_lighting(job: dict, bounds: tuple) -> dict:
         "world": world,
         "ground": ground,
         "lights": lights,
-        "hdr_environment": "NONE_BUNDLED",
+        "hdr_environment": "USER_PROVIDED" if job["environment"]["mode"] == "hdri"
+                            else "NONE_BUNDLED",
+        "hdri_sha256": job["environment"]["hdri_sha256"],
         "source_geometry_edited": False,
     }
