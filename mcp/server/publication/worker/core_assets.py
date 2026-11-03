@@ -22,11 +22,60 @@ def require(condition: bool, code: str) -> None:
 
 def imported_meshes(job: dict) -> list:
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=job["glb_path"])
+    bpy.context.scene.unit_settings.scale_length = 1.0
+    # Preserve glTF object extras and source material slots for structural
+    # fidelity. Blender does the official Y-up -> Z-up conversion.
+    bpy.ops.import_scene.gltf(
+        filepath=job["glb_path"],
+        import_scene_extras=True,
+        import_merge_material_slots=False,
+    )
     meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
     require(bool(meshes), "PUBLICATION_IMPORTED_MESH_EMPTY")
     require(len(meshes) == job["expected_mesh_count"],
             "PUBLICATION_IMPORTED_MESH_COUNT_MISMATCH")
+    bpy.context.view_layer.update()
+    found_cubes = set()
+    for obj in meshes:
+        cube_id = obj.get("lazydesigner_cube_uuid")
+        expected_min = obj.get("lazydesigner_bounds_min")
+        expected_max = obj.get("lazydesigner_bounds_max")
+        require(isinstance(cube_id, str) and cube_id
+                and obj.name == "cube_" + cube_id
+                and cube_id not in found_cubes,
+                "PUBLICATION_IMPORT_SOURCE_CUBE_IDENTITY_MISMATCH:" + obj.name)
+        found_cubes.add(cube_id)
+        try:
+            minimum = [float(value) for value in expected_min]
+            maximum = [float(value) for value in expected_max]
+        except (TypeError, ValueError):
+            raise PublicationRenderError(
+                "PUBLICATION_IMPORT_SOURCE_BOUNDS_EXTRAS_MISSING:" + obj.name,
+            )
+        require(
+            len(minimum) == 3 and len(maximum) == 3 and
+            all(math.isfinite(value) and minimum[axis] <= maximum[axis]
+                for axis in range(3) for value in (minimum[axis], maximum[axis])),
+            "PUBLICATION_IMPORT_SOURCE_BOUNDS_EXTRAS_INVALID:" + obj.name,
+        )
+        actual_points = [
+            obj.matrix_world @ Vector(corner) for corner in obj.bound_box
+        ]
+        actual_min = [min(v[axis] for v in actual_points) for axis in range(3)]
+        actual_max = [max(v[axis] for v in actual_points) for axis in range(3)]
+        # A conservative float32 import tolerance, not an artistic-quality
+        # verdict. Must be calibrated at the future Blender 5.2 native gate.
+        for axis in range(3):
+            tolerance = max(
+                1e-4,
+                max(abs(minimum[axis]), abs(maximum[axis])) * 1e-5,
+            )
+            require(
+                abs(actual_min[axis] - minimum[axis]) <= tolerance and
+                abs(actual_max[axis] - maximum[axis]) <= tolerance,
+                "PUBLICATION_IMPORT_CUBE_BOUNDS_DIVERGED:" +
+                obj.name + ":axis=" + str(axis),
+            )
     for obj in meshes:
         require(bool(obj.data.polygons) and bool(obj.data.uv_layers),
                 "PUBLICATION_IMPORTED_MESH_FACE_OR_UV_MISSING:" + obj.name)
