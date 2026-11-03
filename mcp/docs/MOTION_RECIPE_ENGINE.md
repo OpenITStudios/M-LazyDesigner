@@ -464,6 +464,51 @@ timestamps, persistence, foot contact and visual motion fidelity remain
 unverified. This step adds no new public Gateway tools or schema, no
 generated API files and no mutation.
 
+
+## Opt-in shape-preserving PCHIP sampled as native-linear keys (2026-11-03)
+
+The existing `motionRecipe.ts` and `toolCompiler.ts` now offer an opt-in
+`bakeShapePreservingMotionToLinearRecipe` and
+`compileSemanticMotionWithPchipToGatewayInvocation` route. Explicitly selected
+bone **position** or **Euler rotation** channels are modeled with shape-
+preserving piecewise cubic Hermite tangents (Fritsch–Butland weighted harmonic
+interior slopes). `boundary_tangent="shape_preserving"` retains continuous
+flow; `"rest_endpoints"` deliberately sets the overall track's start/end
+tangents to zero when an action should ease in/out, **not every authored pose**.
+The curve is sampled on a declared integer 10..120 FPS time grid into ordinary
+native-supported **LINEAR** transform keys. This never changes the registered
+native `create_animation` schema or calls a separate animation evaluator.
+
+Only authored numeric linear-or-unset interpolation is eligible. Every
+original semantic pose time must lie on the chosen sample grid. The baker
+preserves original pose IDs and authored transforms, never injects an extra
+key into a protected source pose, refuses ambiguous Euler source jumps above
+120 degrees, axis overshoot, nonfinite math, duplicate channel ownership,
+invalid time grids, unchanged/straight curves and more than 512 new channel
+keys. Source loop recipes are refused because periodic derivative/seam
+matching has not been proven by this non-periodic PCHIP. Explicit local-contact
+bones and spring-owned followers are protected from this independent smooth
+curve ownership.
+
+The opt-in semantic Gateway compiler then runs **the existing**
+`compileSemanticMotionToGatewayInvocation`: case-insensitive bone-name
+identity, critical primary-role key retention, source/native compaction parity
+and supported 10..120 FPS effective export-grid preflight are still enforced.
+Its extra `semantic_context.shape_preserving_linear_bake` is source-only
+metadata **outside** the unchanged `create_animation` arguments. It reports
+original and generated pose/key counts, sample FPS, tangent policy, and
+false native playback/export/visual attestations.
+
+PCHIP is mathematically C1 and bounded within each authored axis segment.
+A baked collection of LINEAR keys only *approximates* that cubic curve;
+velocity need not be exactly continuous after sampling and Blockbench/Bedrock
+runtime interpolation and visual appeal are **not** verified. It is an
+opt-in easing tool, never an automatic correction of world-space contact,
+rotation wrap, foot locking or installed native/visual proof.
+
+References: SciPy PchipInterpolator (Fritsch–Butland slope and monotonicity),
+Microsoft Minecraft Creator Animations Overview (linear Bedrock keyframes).
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

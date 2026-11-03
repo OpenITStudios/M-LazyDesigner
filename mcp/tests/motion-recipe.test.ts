@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compileMotionRecipe } from "@/lib/animation/motionRecipe";
+import { compileMotionRecipe, bakeShapePreservingMotionToLinearRecipe } from "@/lib/animation/motionRecipe";
 import { compileMotionToCreateAnimation, compileMotionToKeyframeRequests } from "@/lib/animation/toolCompiler";
 
 describe("motion recipe compiler",()=>{
@@ -57,5 +57,108 @@ describe("native keyframe timing integrity", () => {
       ],
     });
     expect(motion.bones.arm).toHaveLength(2);
+  });
+});
+
+
+describe("opt-in axiswise shape-preserving linear motion bake",()=>{
+  const action=()=>({
+    name:"smooth_action",loop:false,duration:1,
+    poses:[
+      {id:"start",time:0,bones:{arm:{rotation:[0,0,0] as [number,number,number]},root:{scale:1}}},
+      {id:"contact",time:0.5,bones:{arm:{rotation:[8,0,0] as [number,number,number]},root:{scale:1}}},
+      {id:"recover",time:1,bones:{arm:{rotation:[0,0,0] as [number,number,number]},root:{scale:1}}},
+    ],
+  });
+
+  test("preserves source identity/anchors, prevents axis overshoot and reduces velocity at turn",()=>{
+    const src=action(),before=JSON.stringify(src);
+    const result=bakeShapePreservingMotionToLinearRecipe(
+      src,[{bone:"arm",channel:"rotation"}],
+      {sample_fps:30,boundary_tangent:"rest_endpoints"}
+    );
+    const original=result.recipe.poses.filter(p=>["start","contact","recover"].includes(p.id));
+    expect(original.map(p=>p.time)).toEqual([0,0.5,1]);
+    expect(original.map(p=>p.id)).toEqual(["start","contact","recover"]);
+    expect(original.map(p=>p.bones.arm?.rotation?.[0])).toEqual([0,8,0]);
+    const added=result.recipe.poses.filter(p=>p.id.startsWith("__ld_pchip_"));
+    expect(added.length).toBe(28);
+    expect(added.every(p=>p.bones.arm?.rotation?.every(x=>x>=0&&x<=8))).toBe(true);
+    expect(added.every(p=>p.bones.root===undefined)).toBe(true);
+    const baked=compileMotionRecipe(result.recipe);
+    const left=baked.bones.arm.find(p=>Math.abs(p.time-14/30)<1e-9)!;
+    const right=baked.bones.arm.find(p=>Math.abs(p.time-16/30)<1e-9)!;
+    const turnJump=Math.abs((8-left.rotation![0])/(.5-left.time)-
+      (right.rotation![0]-8)/(right.time-.5));
+    expect(turnJump).toBeLessThan(32);
+    expect(result.evidence).toMatchObject({
+      state:"SOURCE_ONLY_SHAPE_PRESERVING_LINEAR_BAKE",
+      generated_channel_key_count:28,
+      authored_pose_ids_preserved:true,
+      native_playback_attested:false,
+      native_export_timecodes_verified:false,
+    });
+    expect(JSON.stringify(src)).toBe(before);
+    expect(bakeShapePreservingMotionToLinearRecipe(src,
+      [{bone:"arm",channel:"rotation"}],
+      {sample_fps:30,boundary_tangent:"rest_endpoints"})).toEqual(result);
+  });
+
+  test("monotone source never overshoots or flips extrema",()=>{
+    const src=action();
+    src.poses[1].bones.arm.rotation[0]=5;
+    src.poses[2].bones.arm.rotation[0]=3;
+    const result=bakeShapePreservingMotionToLinearRecipe(src,
+      [{bone:"arm",channel:"rotation"}],{sample_fps:30});
+    const values=result.recipe.poses.map(p=>p.bones.arm?.rotation?.[0])
+      .filter((x):x is number=>x!==undefined);
+    expect(Math.min(...values)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...values)).toBeLessThanOrEqual(5);
+    expect(result.evidence.tangent_policy).toBe("shape_preserving");
+  });
+
+  test("straight constant velocity has no invented smoothing benefit",()=>{
+    const src=action();
+    src.poses[1].bones.arm.rotation[0]=5;
+    src.poses[2].bones.arm.rotation[0]=10;
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(src,
+      [{bone:"arm",channel:"rotation"}],{sample_fps:30}))
+      .toThrow("MOTION_PCHIP_NO_EFFECTIVE_SHAPE_CHANGE");
+  });
+
+  test("rejects off-grid source, loop seams, nonlinear metadata and ambiguous Euler arc",()=>{
+    const src=action();
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(
+      {...src,loop:true},[{bone:"arm",channel:"rotation"}],
+      {sample_fps:30})).toThrow("MOTION_PCHIP_LOOP_REQUIRES_PERIODIC_TANGENTS");
+    src.poses[1].time=.51;
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(src,
+      [{bone:"arm",channel:"rotation"}],{sample_fps:30}))
+      .toThrow("MOTION_PCHIP_AUTHORED_CLOCK_NOT_ON_GRID");
+    src.poses[1].time=.5;
+    Object.assign(src.poses[1].bones.arm,{interpolation:"bezier"});
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(src,
+      [{bone:"arm",channel:"rotation"}],{sample_fps:30}))
+      .toThrow("MOTION_PCHIP_NONLINEAR_SOURCE_UNSUPPORTED");
+    delete (src.poses[1].bones.arm as {interpolation?:string}).interpolation;
+    src.poses[1].bones.arm.rotation[0]=170;
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(src,
+      [{bone:"arm",channel:"rotation"}],{sample_fps:30}))
+      .toThrow("MOTION_PCHIP_EULER_ARC_AMBIGUOUS");
+  });
+
+  test("strict sampling budget and duplicate ownership are rejected before native creation",()=>{
+    const src=action();
+    const target=[{bone:"arm",channel:"rotation" as const}];
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(src,target,{sample_fps:121}))
+      .toThrow("MOTION_PCHIP_SAMPLING_POLICY_INVALID");
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(src,[...target,...target],
+      {sample_fps:30})).toThrow("MOTION_PCHIP_DUPLICATE_CHANNEL_OWNERSHIP");
+    const long={...src,duration:30,poses:src.poses.map(p=>({
+      ...p,time:p.time*30,
+    }))};
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(long,target,
+      {sample_fps:30,boundary_tangent:"rest_endpoints"}))
+      .toThrow("MOTION_PCHIP_SOURCE_KEY_BUDGET_EXCEEDED");
   });
 });

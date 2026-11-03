@@ -1,5 +1,8 @@
 import {
   compileMotionRecipe,
+  bakeShapePreservingMotionToLinearRecipe,
+  type MotionPchipTarget,
+  type MotionPchipOptions,
   type CompiledMotionRecipe,
   type MotionChannel,
   type MotionRecipe,
@@ -396,6 +399,36 @@ export function compileSemanticMotionToGatewayInvocation(
       contact_attested: false as const,
       controller_activation_attested: false as const,
       native_interpolation_post_edits_required: false as const,
+    },
+  };
+}
+
+
+/**
+ * Optional source-only shape-preserving easing. All generated values are
+ * ordinary linear create_animation keys, so the existing Gateway bridge still
+ * owns native snapping, required semantic primary poses and bone identity.
+ * It never changes authored source or emits nonlinear post-create edits.
+ */
+export function compileSemanticMotionWithPchipToGatewayInvocation(
+  recipe: MotionRecipe,
+  intent: SemanticMotionIntent,
+  targets: readonly MotionPchipTarget[],
+  options: MotionPchipOptions
+) {
+  if (targets.some((target)=>
+    (intent?.local_contacts??[]).some((contact)=>contact.bone===target.bone)
+  )) throw new Error("SEMANTIC_PCHIP_CONTACT_BONE_PROTECTED");
+  if (targets.some((target)=>
+    (intent?.spring_links??[]).some((spring)=>spring.child_bone===target.bone)
+  )) throw new Error("SEMANTIC_PCHIP_SPRING_CHILD_PROTECTED");
+  const baked=bakeShapePreservingMotionToLinearRecipe(recipe,targets,options);
+  const invocation=compileSemanticMotionToGatewayInvocation(baked.recipe,intent);
+  return {
+    ...invocation,
+    semantic_context:{
+      ...invocation.semantic_context,
+      shape_preserving_linear_bake:baked.evidence,
     },
   };
 }

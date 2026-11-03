@@ -10,6 +10,7 @@ import {
   compileMotionWithLocalContactsToCreateAnimationPlan,
   compileSemanticMotionToCreateAnimationPlan,
   compileSemanticMotionToGatewayInvocation,
+  compileSemanticMotionWithPchipToGatewayInvocation,
 } from "@/lib/animation/toolCompiler";
 
 describe("motion create plan",()=>{
@@ -685,5 +686,72 @@ describe("semantic motion source-to-native clock preflight", () => {
       ...intent(),
       pose_roles: [{ pose_id: "contact", role: "CONTACT" }],
     })).toThrow("ANIMATION_NATIVE_SNAPPING_UNREPRESENTABLE");
+  });
+});
+
+
+describe("source-only PCHIP baked motion through the existing Gateway bridge",()=>{
+  const clip=()=>({
+    name:"eased_attack",duration:1,loop:false,
+    poses:[
+      {id:"ready",time:0,bones:{body:{rotation:[0,0,0] as [number,number,number]}}},
+      {id:"impact",time:.5,bones:{body:{rotation:[15,0,0] as [number,number,number]}}},
+      {id:"recover",time:1,bones:{body:{rotation:[0,0,0] as [number,number,number]}}},
+    ],
+  });
+  const intent=()=>({
+    archetype:"ACTION" as const,
+    activation:"PREVIEW_ONLY" as const,
+    primary_bones:["body"],
+    pose_roles:[
+      {pose_id:"ready",role:"ANTICIPATION" as const},
+      {pose_id:"impact",role:"CONTACT" as const},
+      {pose_id:"recover",role:"RECOVERY" as const},
+    ],
+  });
+
+  test("explicit smooth curve is native linear payload with all semantic roles retained",()=>{
+    const source=clip(),before=JSON.stringify({source,intent:intent()});
+    const invocation=compileSemanticMotionWithPchipToGatewayInvocation(
+      source,intent(),[{bone:"body",channel:"rotation"}],
+      {sample_fps:30,boundary_tangent:"rest_endpoints"}
+    );
+    expect(createAnimationParameters.safeParse(invocation.gateway_arguments.arguments).success)
+      .toBe(true);
+    expect(invocation.gateway_tool).toBe("invoke_capability");
+    expect(invocation.gateway_arguments.capability).toBe("create_animation");
+    expect(invocation.semantic_context.pose_roles.map(role=>role.pose_id))
+      .toEqual(["ready","impact","recover"]);
+    expect(invocation.semantic_context.primary_role_key_retention.state)
+      .toBe("SOURCE_ONLY_PRIMARY_KEYS_RETAINED");
+    expect(invocation.semantic_context.source_frame_grid_preflight)
+      .toMatchObject({state:"SOURCE_ONLY_GRID_REPRESENTABLE",
+        native_playback_attested:false});
+    expect(invocation.semantic_context.shape_preserving_linear_bake).toMatchObject({
+      state:"SOURCE_ONLY_SHAPE_PRESERVING_LINEAR_BAKE",
+      source_sample_fps:30,
+      generated_channel_key_count:28,
+      native_playback_attested:false,
+    });
+    expect(invocation.gateway_arguments.arguments)
+      .not.toHaveProperty("shape_preserving_linear_bake");
+    expect(invocation.execution_evidence.state).toBe("SOURCE_PLAN_NOT_EXECUTED");
+    expect(invocation.execution_evidence.playback_attested).toBe(false);
+    expect(JSON.stringify({source,intent:intent()})).toBe(before);
+  });
+
+  test("authoritative contact bones and spring-owned followers cannot be silently smoothed",()=>{
+    const source=clip();
+    expect(()=>compileSemanticMotionWithPchipToGatewayInvocation(source,{
+      ...intent(),
+      local_contacts:[{bone:"body",channel:"position" as const,start:.25,end:.75,
+        value:[0,0,0] as [number,number,number]}],
+    },[{bone:"body",channel:"rotation"}],{sample_fps:30}))
+      .toThrow("SEMANTIC_PCHIP_CONTACT_BONE_PROTECTED");
+    expect(()=>compileSemanticMotionWithPchipToGatewayInvocation(source,{
+      ...intent(),
+      spring_links:[{parent_bone:"root",child_bone:"body",channel:"rotation" as const}],
+    },[{bone:"body",channel:"rotation"}],{sample_fps:30}))
+      .toThrow("SEMANTIC_PCHIP_SPRING_CHILD_PROTECTED");
   });
 });
