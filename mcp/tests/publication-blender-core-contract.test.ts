@@ -112,6 +112,31 @@ describe("Measured Cycles report strict validation", () => {
       artistic_quality: "NOT_EVALUATED",
     });
   });
+  test("device backend and GPU-to-CPU fallback cannot be mislabeled", () => {
+    const asDevice = (device: Record<string, unknown>) =>
+      publicationDiagnosticsSchema.safeParse({
+        ...valid,
+        render: { ...valid.render, device },
+      }).success;
+    expect(asDevice({
+      requested: "auto", actual: "CPU", backend: null,
+      fallback_reason: "GPU_RENDER_EXCEPTION",
+    })).toBe(true);
+    expect(asDevice({
+      requested: "auto", actual: "GPU", backend: "OPTIX",
+    })).toBe(true);
+    expect(asDevice({
+      requested: "auto", actual: "GPU", backend: null,
+    })).toBe(false);
+    expect(asDevice({
+      requested: "cpu", actual: "CPU", backend: null,
+      fallback_reason: "GPU_RENDER_EXCEPTION",
+    })).toBe(false);
+    expect(asDevice({
+      requested: "auto", actual: "CPU", backend: "CUDA",
+    })).toBe(false);
+  });
+
   test("rejects fake PASS, invalid projected frame and pixel mismatches", () => {
     for (const broken of [
       { ...valid, artistic_quality: "PASS" },
