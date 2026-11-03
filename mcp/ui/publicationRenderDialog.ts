@@ -1,6 +1,11 @@
 /// <reference types="blockbench-types" />
 import { dirname, join } from "node:path";
 import {
+  publicationImageSizeForPreset,
+  type PublicationImageAspect,
+  type PublicationRenderRequest,
+} from "@/lib/publication/contracts";
+import {
   startPublicationRender,
   getPublicationRenderJobStatus,
   cancelPublicationRenderJob,
@@ -86,6 +91,17 @@ export function openPublicationRenderDialog(): void {
         value: "publication",
         options: { preview: "Preview (640px)", publication: "Publication (2048px)", high: "High (3200px)" },
       },
+      aspect: {
+        label: "Image composition",
+        type: "select",
+        value: "square",
+        options: {
+          square: "Square (1:1)",
+          landscape_16_9: "Landscape (16:9)",
+          landscape_4_3: "Landscape (4:3)",
+          portrait_4_5: "Portrait (4:5)",
+        },
+      },
       background: {
         label: "Studio background",
         type: "select",
@@ -98,26 +114,74 @@ export function openPublicationRenderDialog(): void {
         value: "perspective",
         options: { perspective: "Perspective", orthographic: "Orthographic" },
       },
+      yaw_degrees: {
+        label: "Camera yaw (degrees)",
+        type: "number", value: 38, min: -180, max: 180, step: 1,
+      },
+      elevation_degrees: {
+        label: "Camera elevation (degrees)",
+        type: "number", value: 18, min: -30, max: 80, step: 1,
+      },
+      key: {
+        label: "Key light",
+        type: "number", value: 1, min: 0.2, max: 2.5, step: 0.05,
+      },
+      fill: {
+        label: "Fill light",
+        type: "number", value: 1, min: 0, max: 2, step: 0.05,
+      },
+      rim: {
+        label: "Rim light",
+        type: "number", value: 1, min: 0, max: 2, step: 0.05,
+      },
+      softness: {
+        label: "Shadow softness",
+        type: "number", value: 1, min: 0.5, max: 2.5, step: 0.05,
+      },
+      environment: {
+        label: "Environment lighting",
+        type: "number", value: 1, min: 0, max: 2, step: 0.05,
+      },
+      exposure_ev: {
+        label: "Exposure (EV)",
+        type: "number", value: 0, min: -3, max: 3, step: 0.1,
+      },
     },
     buttons: ["Start Render", "Cancel"],
     confirmIndex: 0,
     cancelIndex: 1,
     onConfirm(form) {
       if (submitting || epoch !== currentEpoch) return;
+      const quality = String(form.quality || "publication") as PublicationRenderRequest["quality"];
+      const aspect = String(form.aspect || "square") as PublicationImageAspect;
+      let dimensions: { width: number; height: number };
+      try {
+        dimensions = publicationImageSizeForPreset(quality, aspect);
+      } catch (error) {
+        showError(error);
+        return;
+      }
       submitting = true;
-      const quality = String(form.quality || "publication");
-      const size = quality === "preview" ? 640 : quality === "high" ? 3200 : 2048;
       void withCurrentRuntime(() => {
         if (Project !== project) throw new Error("Project changed before render was queued.");
         return startPublicationRender({
           blender_executable: String(form.blender_executable || ""),
           output_path: String(form.output_path || ""),
           quality,
-          width: size, height: size,
+          ...dimensions,
           background: String(form.background || "dark"),
           camera: {
-            yaw_degrees: 38, elevation_degrees: 18,
+            yaw_degrees: Number(form.yaw_degrees ?? 38),
+            elevation_degrees: Number(form.elevation_degrees ?? 18),
             projection: String(form.projection || "perspective"),
+          },
+          look: {
+            key: Number(form.key ?? 1),
+            fill: Number(form.fill ?? 1),
+            rim: Number(form.rim ?? 1),
+            softness: Number(form.softness ?? 1),
+            environment: Number(form.environment ?? 1),
+            exposure_ev: Number(form.exposure_ev ?? 0),
           },
         });
       }).then(status => {
