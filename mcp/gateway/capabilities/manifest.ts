@@ -67,6 +67,19 @@ const CAPABILITY_BRANCH_SPECS: readonly Omit<
   "id"
 >[] = [
   {
+    capability: "render_publication",
+    operationClass: "EXPORT",
+    executionClass: "heavy",
+    verificationClass: "receipt_only",
+    semantic: {
+      intents: ["render actual Blockbench model to PNG", "publication-quality Blender Cycles render", "export beauty render from model"],
+      nouns: ["render", "cycles", "blender", "PNG", "studio", "publication"],
+      verbs: ["render", "export", "produce"],
+      excludes: ["generate reference image", "screenshot QA evidence", "repair geometry"],
+      examples: ["render my finished model as a high-quality PNG", "create a studio beauty render in Blender"],
+    },
+  },
+  {
     capability: "manage_cubes",
     branch: { field: "operation", value: "create" },
     schemaFields: ["operation"],
