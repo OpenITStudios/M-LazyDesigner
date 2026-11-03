@@ -25,7 +25,9 @@ export const publicationRenderParameters = z.object({
     yaw_degrees: z.number().finite().min(-180).max(180).default(38),
     elevation_degrees: z.number().finite().min(-30).max(80).default(18),
     projection: z.enum(["perspective", "orthographic"]).default("perspective"),
-  }).default({}),
+  }).default({
+    yaw_degrees: 38, elevation_degrees: 18, projection: "perspective",
+  }),
   // Lighting is scene-wide, not selected by object type or asset category.
   look: z.object({
     key: z.number().finite().min(0.2).max(2.5).default(1),
@@ -34,7 +36,9 @@ export const publicationRenderParameters = z.object({
     softness: z.number().finite().min(0.5).max(2.5).default(1),
     environment: z.number().finite().min(0).max(2).default(1),
     exposure_ev: z.number().finite().min(-3).max(3).default(0),
-  }).strict().default({}),
+  }).strict().default({
+    key: 1, fill: 1, rim: 1, softness: 1, environment: 1, exposure_ev: 0,
+  }),
   overwrite: z.literal(false).optional().default(false),
 }).strict().superRefine((input, context) => {
   if (input.width * input.height > 12_000_000) {
