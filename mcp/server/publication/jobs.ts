@@ -5,6 +5,7 @@ import {
   getPublicationEvidenceBytes,
   type PreparedPublicationRender,
   type PublicationRenderReceipt,
+  type PublicationRenderPhase,
 } from "./execute";
 
 /**
@@ -23,6 +24,7 @@ export type PublicationRenderJobState =
 type RenderJobRecord = {
   job_id: string;
   state: PublicationRenderJobState;
+  phase: PublicationRenderPhase;
   started_at: string;
   controller: AbortController;
   receipt: PublicationRenderReceipt | null;
@@ -32,6 +34,7 @@ type RenderJobRecord = {
 export type PublicationRenderJobStatus = {
   job_id: string;
   state: PublicationRenderJobState;
+  phase: PublicationRenderPhase;
   started_at: string;
   receipt: PublicationRenderReceipt | null;
   error_code: string | null;
@@ -39,7 +42,9 @@ export type PublicationRenderJobStatus = {
 };
 
 type PublicationRunner = (
-  prepared: PreparedPublicationRender, signal: AbortSignal,
+  prepared: PreparedPublicationRender,
+  signal: AbortSignal,
+  onPhase?: (phase: PublicationRenderPhase) => void,
 ) => Promise<PublicationRenderReceipt>;
 type PublicationPreparer = (input: unknown) => Promise<PreparedPublicationRender>;
 
@@ -47,6 +52,7 @@ function projectJob(job: RenderJobRecord): PublicationRenderJobStatus {
   return {
     job_id: job.job_id,
     state: job.state,
+    phase: job.phase,
     started_at: job.started_at,
     receipt: job.receipt,
     error_code: job.error_code,
@@ -100,6 +106,7 @@ export class PublicationRenderJobs {
     const job: RenderJobRecord = {
       job_id: "render_" + randomBytes(12).toString("hex"),
       state: "RUNNING",
+      phase: "PREPARING_ASSETS",
       started_at: new Date().toISOString(),
       controller: new AbortController(),
       receipt: null,
@@ -108,9 +115,17 @@ export class PublicationRenderJobs {
     this.current = job;
     // No long await inside the Gateway capability call. Asynchronous work
     // is tied to this installed plugin process, NOT to a background ChatGPT task.
-    void Promise.resolve().then(() => this.run(prepared, job.controller.signal))
+    void Promise.resolve().then(() => this.run(
+      prepared, job.controller.signal,
+      phase => {
+        // Cancellation is an authoritative user instruction. An outstanding
+        // Blender callback may not turn CANCELLING back into RUNNING.
+        if (job.state === "RUNNING") job.phase = phase;
+      },
+    ))
       .then(receipt => {
         job.state = "RENDERED_DRAFT";
+        job.phase = "FINISHED";
         job.receipt = receipt;
       }).catch(error => {
         const message = error instanceof Error ? error.message : String(error);
@@ -120,6 +135,7 @@ export class PublicationRenderJobs {
           : job.controller.signal.aborted
             ? "CANCELLED"
             : "FAILED";
+        job.phase = job.state === "CANCELLED" ? "CANCELLED" : "FAILED";
       });
     return projectJob(job);
   }
@@ -151,6 +167,7 @@ export class PublicationRenderJobs {
     const job = this.current;
     if (job && job.state === "RUNNING") {
       job.state = "CANCELLING";
+      job.phase = "CANCELLING";
       job.controller.abort();
     }
   }
@@ -159,6 +176,7 @@ export class PublicationRenderJobs {
     const job = this.requireJob(jobId);
     if (job.state === "RUNNING") {
       job.state = "CANCELLING";
+      job.phase = "CANCELLING";
       job.controller.abort();
     }
     return projectJob(job);
