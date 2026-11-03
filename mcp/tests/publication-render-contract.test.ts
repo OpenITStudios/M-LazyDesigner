@@ -105,6 +105,7 @@ describe("Publication render contract", () => {
     expect(job.expected_mesh_count).toBe(1);
     expect(job.expected_material_count).toBe(1);
     expect(job.report_path).toMatch(/report\.json$/);
+    expect(job.preview_path).toMatch(/evidence\.png$/);
     expect(job.environment).toEqual({ mode: "studio", hdri_path: null, hdri_sha256: null });
     expect(job.device).toBe("auto");
     expect(job.view_transform).toBe("AgX");
@@ -122,9 +123,9 @@ describe("Publication render contract", () => {
       stage: "core", operationClass: "EXPORT", executionClass: "heavy", verificationClass: "visual",
     });
     const branches = manifestEntriesForCapability("render_publication");
-    expect(branches).toHaveLength(3);
-    expect(branches.map(branch => branch.branch?.value)).toEqual(["start", "status", "cancel"]);
-    expect(branches.map(branch => branch.operationClass)).toEqual(["EXPORT", "QUERY", "CONTROL"]);
+    expect(branches).toHaveLength(4);
+    expect(branches.map(branch => branch.branch?.value)).toEqual(["start", "status", "preview", "cancel"]);
+    expect(branches.map(branch => branch.operationClass)).toEqual(["EXPORT", "QUERY", "QUERY", "CONTROL"]);
     expect(branches[0]?.semantic?.intents).toContain("start actual 3D Blender render");
   });
 });
