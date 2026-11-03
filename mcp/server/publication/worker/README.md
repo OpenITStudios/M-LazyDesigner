@@ -28,6 +28,14 @@ PNG final + small PNG evidence + factual receipt
 
 **Scope is frozen.** Do not add animation/movie production, arbitrary imported meshes, model generation, scene-building workflows, render farm, multi-agent queues, alternative MCP servers, or external Blender integrations in this effort. Existing optional settings remain available but are not a reason to expand the system. Unsupported data fails explicitly.
 
+## Source material semantics
+
+The material bridge is **not** a universal Blender material editor. Its authoritative contract is **[ADR-R02 Material Translation](../../../../experiments/publication-render/MATERIAL_TRANSLATION_SPEC.md)**. The pure `mcp/lib/publication/materialContract.ts` plans COLOR/MER/NORMAL roles and expected glTF material factors. `mcp/server/publication/snapshot.ts` creates detached texture/material data; `glbIntegrity.ts` verifies exact material values, atlas identities, UV0, nearest and clamp-to-edge before starting Blender.
+
+Bedrock per-face `material_name` is **not** a PBR map and **not** the Minecraft entity render profile. Without an explicit downstream controller-to-shader binding, nonempty face material instances, unknown alpha, HEIGHT, subsurface and editor-only nondefault preview modes must fail explicitly. The Blender worker does not synthesize replacements. Existing `capture_model_views` remains independent QA.
+
+Source-level material assertions are implemented. Imported Blender shader/texel parity is **NOT verified**; a successful PNG is never proof of a correct render-profile material.
+
 ## Canonical source owners
 
 | Source | Owner |
