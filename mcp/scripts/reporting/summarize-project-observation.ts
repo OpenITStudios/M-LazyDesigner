@@ -135,6 +135,26 @@ function validate(snapshot: unknown): asserts snapshot is ProjectObservationSnap
       }
       number(item.at_ms, "phase_observation.at_ms");
     }
+    if (p.runtime_build_keys !== undefined) {
+      if (!Array.isArray(p.runtime_build_keys) ||
+          p.runtime_build_keys.length > 8 ||
+          new Set(p.runtime_build_keys).size !== p.runtime_build_keys.length ||
+          p.runtime_build_keys.some(key => !/^[a-f0-9]{64}$/.test(key)) ||
+          typeof p.runtime_build_keys_capped !== "boolean") {
+        throw new Error("Invalid observed Runtime build keys.");
+      }
+    }
+    if (p.matched_checkpoint_sha256_refs !== undefined) {
+      if (!Array.isArray(p.matched_checkpoint_sha256_refs) ||
+          p.matched_checkpoint_sha256_refs.length > 8 ||
+          new Set(p.matched_checkpoint_sha256_refs).size !==
+            p.matched_checkpoint_sha256_refs.length ||
+          p.matched_checkpoint_sha256_refs.some(ref =>
+            !/^sha256:[a-f0-9]{64}$/.test(ref)) ||
+          typeof p.checkpoint_refs_capped !== "boolean") {
+        throw new Error("Invalid finalization checkpoint references.");
+      }
+    }
     number(p.observed_distinct_task_contexts, "observed_distinct_task_contexts");
     if (p.observed_distinct_task_contexts > 64 ||
         typeof p.task_contexts_capped !== "boolean") {
@@ -173,6 +193,13 @@ type ProjectReport = {
   task_context_count_per_session_sum: number;
   phase_changes_observed: number;
   phase_history_truncated: boolean;
+  observed_runtime_build_keys?: string[];
+  runtime_build_keys_capped?: boolean;
+  source_sha?: null;
+  runtime_build_provenance?: "OBSERVED_BOUND_STATUS_NOT_GIT_SOURCE_PROOF";
+  matched_checkpoint_sha256_refs?: string[];
+  checkpoint_refs_capped?: boolean;
+  checkpoint_identity_scope?: "MATCHED_NATIVE_FINALIZATION_CONTENT_NOT_PROJECT_ID";
 };
 
 function emptyProject(key: string): ProjectReport {
@@ -254,6 +281,41 @@ export function summarizeProjectObservation(snapshots: readonly unknown[]) {
       target.phase_changes_observed += p.phase_observations.filter(
         event => event.observation === "CHANGED_BETWEEN_OBSERVATIONS").length;
       if (p.phase_observations.length === 24) target.phase_history_truncated = true;
+      // Historical v1 archives must retain byte-identical summary serialization.
+      // New source fields are inserted only when they existed in the snapshot.
+      if (p.runtime_build_keys !== undefined) {
+        target.observed_runtime_build_keys ??= [];
+        target.runtime_build_keys_capped ??= false;
+        target.source_sha = null;
+        target.runtime_build_provenance =
+          "OBSERVED_BOUND_STATUS_NOT_GIT_SOURCE_PROOF";
+        for (const build of p.runtime_build_keys) {
+          if (!target.observed_runtime_build_keys.includes(build)) {
+            if (target.observed_runtime_build_keys.length < 16) {
+              target.observed_runtime_build_keys.push(build);
+            } else {
+              target.runtime_build_keys_capped = true;
+            }
+          }
+        }
+        if (p.runtime_build_keys_capped) target.runtime_build_keys_capped = true;
+      }
+      if (p.matched_checkpoint_sha256_refs !== undefined) {
+        target.matched_checkpoint_sha256_refs ??= [];
+        target.checkpoint_refs_capped ??= false;
+        target.checkpoint_identity_scope =
+          "MATCHED_NATIVE_FINALIZATION_CONTENT_NOT_PROJECT_ID";
+        for (const checkpoint of p.matched_checkpoint_sha256_refs) {
+          if (!target.matched_checkpoint_sha256_refs.includes(checkpoint)) {
+            if (target.matched_checkpoint_sha256_refs.length < 16) {
+              target.matched_checkpoint_sha256_refs.push(checkpoint);
+            } else {
+              target.checkpoint_refs_capped = true;
+            }
+          }
+        }
+        if (p.checkpoint_refs_capped) target.checkpoint_refs_capped = true;
+      }
       for (const [tool, count] of Object.entries(p.counters.by_tool)) {
         target.by_tool[tool as ProjectObservationTool] += count;
       }

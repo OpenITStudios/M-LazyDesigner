@@ -5,6 +5,8 @@ import {
 
 export type ResearchIndexQuery = {
   project_key?: string;
+  /** Observed Runtime build fingerprint, not a Git source SHA. */
+  runtime_build_key?: string;
   label?: string;
   since?: string;
 };
@@ -13,6 +15,9 @@ const HEX_SHA = /^[a-f0-9]{64}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function requireQuery(query: ResearchIndexQuery): number | null {
+  if (query.runtime_build_key !== undefined && !HEX_SHA.test(query.runtime_build_key)) {
+    throw new Error("Research build filter requires a lowercase SHA-256 observation key.");
+  }
   if (query.project_key !== undefined && !HEX_SHA.test(query.project_key)) {
     throw new Error("Research project filter requires a lowercase 64-character SHA-256 key.");
   }
@@ -49,6 +54,10 @@ export function indexProjectResearch(
     if (query.project_key &&
         !manifest.summary.projects.some(project =>
           project.project_key === query.project_key)) return false;
+    if (query.runtime_build_key &&
+        !manifest.summary.projects.some(project =>
+          (project.observed_runtime_build_keys ?? []).includes(query.runtime_build_key!)))
+      return false;
     return true;
   });
   const archives = new Set<string>();
@@ -68,6 +77,8 @@ export function indexProjectResearch(
     capture_failures_in_archive: number;
     persist_failures_in_archive: number;
     build_source_sha: null;
+    observed_runtime_build_keys: string[];
+    matched_checkpoint_content_refs: string[];
     accepted_quality: "UNVERIFIED";
     content_integrity: "NOT_RECHECKED";
   }> = [];
@@ -81,9 +92,11 @@ export function indexProjectResearch(
       owners.add(manifest.archive_id);
       sessionOwners.set(snapshot.session_id, owners);
     }
-    const selected = query.project_key
-      ? manifest.summary.projects.filter(project => project.project_key === query.project_key)
-      : manifest.summary.projects;
+    const selected = manifest.summary.projects.filter(project =>
+      (query.project_key === undefined || project.project_key === query.project_key) &&
+      (query.runtime_build_key === undefined ||
+       (project.observed_runtime_build_keys ?? []).includes(query.runtime_build_key))
+    );
     for (const project of selected) {
       rows.push({
         archive_id: manifest.archive_id,
@@ -100,12 +113,15 @@ export function indexProjectResearch(
         capture_failures_in_archive: manifest.summary.coverage.capture_failures,
         persist_failures_in_archive: manifest.summary.coverage.persist_failures,
         build_source_sha: null,
+        observed_runtime_build_keys: project.observed_runtime_build_keys ?? [],
+        matched_checkpoint_content_refs: project.matched_checkpoint_sha256_refs ?? [],
         accepted_quality: "UNVERIFIED",
         content_integrity: "NOT_RECHECKED",
       });
     }
     // Unknown project binding is still research-relevant; retain it explicitly.
-    if (!query.project_key && selected.length === 0) {
+    if (!query.project_key && !query.runtime_build_key &&
+        manifest.summary.projects.length === 0) {
       rows.push({
         archive_id: manifest.archive_id,
         label: manifest.label,
@@ -121,6 +137,8 @@ export function indexProjectResearch(
         capture_failures_in_archive: manifest.summary.coverage.capture_failures,
         persist_failures_in_archive: manifest.summary.coverage.persist_failures,
         build_source_sha: null,
+        observed_runtime_build_keys: [],
+        matched_checkpoint_content_refs: [],
         accepted_quality: "UNVERIFIED",
         content_integrity: "NOT_RECHECKED",
       });
@@ -163,8 +181,9 @@ const COLUMN_NAMES = [
   "observed_calls", "failed_calls", "recorded_sessions", "open_or_unclean_sessions",
   "acceptance_gate_invalidations", "recheck_requests",
   "unbound_gateway_calls_in_archive", "capture_failures_in_archive",
-  "persist_failures_in_archive", "build_source_sha", "accepted_quality",
-  "content_integrity",
+  "persist_failures_in_archive", "build_source_sha",
+  "observed_runtime_build_keys", "matched_checkpoint_content_refs",
+  "accepted_quality", "content_integrity",
 ] as const;
 
 function csvCell(value: string | number | null): string {
@@ -177,7 +196,10 @@ function csvCell(value: string | number | null): string {
 export function renderProjectResearchCsv(report: ResearchIndexReport): string {
   const header = COLUMN_NAMES.map(csvCell).join(",");
   const rows = report.rows.map(row =>
-    COLUMN_NAMES.map(column => csvCell(row[column])).join(","));
+    COLUMN_NAMES.map(column => {
+      const cell = row[column];
+      return csvCell(Array.isArray(cell) ? cell.join(";") : cell);
+    }).join(","));
   // CSV is a flat per-archive view, not a claim of verified project lifetime.
   return [header, ...rows].join("\r\n") + "\r\n";
 }
@@ -185,7 +207,7 @@ export function renderProjectResearchCsv(report: ResearchIndexReport): string {
 async function main(): Promise<void> {
   const [root, ...args] = process.argv.slice(2);
   if (!root) throw new Error(
-    "Usage: bun run research:index -- <archive-root> [--format=csv|json] [--project-key=<sha256>] [--label=<text>] [--since=YYYY-MM-DD]"
+    "Usage: bun run research:index -- <archive-root> [--format=csv|json] [--project-key=<sha256>] [--runtime-build-key=<sha256>] [--label=<text>] [--since=YYYY-MM-DD]"
   );
   const options: ResearchIndexQuery = {};
   let format: "csv" | "json" = "json";
@@ -203,6 +225,7 @@ async function main(): Promise<void> {
       if (val !== "json" && val !== "csv") throw new Error("Unsupported Research Index format.");
       format = val;
     } else if (name === "project-key") options.project_key = val;
+    else if (name === "runtime-build-key") options.runtime_build_key = val;
     else if (name === "label") options.label = val;
     else if (name === "since") options.since = val;
     else throw new Error("Unsupported Research Index option: " + name);

@@ -182,6 +182,33 @@ a user-given label never upgrades them. Separate Golden/usage evidence and
 a future verified bridge are required before comparing system versions or
 claiming accepted results.
 
+## AI-first archive access, build observations and trust limits
+
+The reporting-only `read-project-research.ts` provides stateless,
+source-validated catalog/archive/project/sessions/session views. A client
+reads only a bounded page (1–24 entries) or one source-hash-verified L0
+snapshot and may follow revision-bound cursors for complete **retained**
+history. Full-session output contains only fields allowlisted by the
+canonical L0 schema, excluding unknown JSON keys and raw tool content.
+Labels and all stored research material must be treated as untrusted
+evidence data, never as instructions to an AI agent.
+
+Gateway L0 now requires a canonical Control `BOUND` result before
+attributing a status call to a native project UUID; previously a ready
+Runtime with unknown project binding could be misattributed. An observed,
+bound Runtime build identity can be recorded as its SHA-256 fingerprint,
+and an existing MATCHED finalization receipt may supply a saved-content
+checksum. Neither proves exact Git commit, complete Workspace identity
+across native UUID changes, model-quality approval, or provider usage.
+The additive fields are optional for historical snapshots; their summary
+serialization and archived local checksum validity are preserved.
+
+Research retrieval is a separately requested offline process. It does not
+modify Gateway responses, read native assets, create new MCP calls, or
+cause model tracking usage. In absence of actual local filesystem/command
+access, an AI client cannot access research archives merely because this
+code exists.
+
 ## Review / verification
 
 Inventory tests own classification, alias resolution and the no-workspace-read

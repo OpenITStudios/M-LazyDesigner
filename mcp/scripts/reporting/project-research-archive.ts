@@ -7,6 +7,7 @@ import {
   readProjectObservationSnapshotFiles,
   summarizeProjectObservation,
 } from "./summarize-project-observation";
+import type { ProjectObservationSnapshot } from "../../gateway/execution/projectObservation";
 
 const SNAPSHOT_NAME = /^session-[0-9]{13}-[a-f0-9]{16}\.json$/;
 const ARCHIVE_ID = /^research-[0-9]{13}-[a-f0-9]{16}$/;
@@ -135,6 +136,33 @@ function archiveManifest(value: unknown): ProjectResearchArchiveManifest {
         !safeInteger(project.session_count, MAX_ARCHIVE_SNAPSHOTS)) {
       throw new Error("Research project index contains an invalid identity or count.");
     }
+    if (project.observed_runtime_build_keys !== undefined) {
+      if (!Array.isArray(project.observed_runtime_build_keys) ||
+          project.observed_runtime_build_keys.length > 16 ||
+          new Set(project.observed_runtime_build_keys).size !==
+            project.observed_runtime_build_keys.length ||
+          project.observed_runtime_build_keys.some(key =>
+            typeof key !== "string" || !HEX_SHA.test(key)) ||
+          typeof project.runtime_build_keys_capped !== "boolean" ||
+          project.source_sha !== null ||
+          project.runtime_build_provenance !==
+            "OBSERVED_BOUND_STATUS_NOT_GIT_SOURCE_PROOF") {
+        throw new Error("Research build observation is invalid or claims false source proof.");
+      }
+    }
+    if (project.matched_checkpoint_sha256_refs !== undefined) {
+      if (!Array.isArray(project.matched_checkpoint_sha256_refs) ||
+          project.matched_checkpoint_sha256_refs.length > 16 ||
+          new Set(project.matched_checkpoint_sha256_refs).size !==
+            project.matched_checkpoint_sha256_refs.length ||
+          project.matched_checkpoint_sha256_refs.some(ref =>
+            typeof ref !== "string" || !/^sha256:[a-f0-9]{64}$/.test(ref)) ||
+          typeof project.checkpoint_refs_capped !== "boolean" ||
+          project.checkpoint_identity_scope !==
+            "MATCHED_NATIVE_FINALIZATION_CONTENT_NOT_PROJECT_ID") {
+        throw new Error("Research checkpoint content evidence is invalid.");
+      }
+    }
   }
   return value as unknown as ProjectResearchArchiveManifest;
 }
@@ -245,6 +273,45 @@ export async function archiveProjectObservation(
   return {
     archive_id: archiveId, archive_path: finalPath,
     sessions: manifest.snapshots.length, observed_calls: report.observed_calls,
+  };
+}
+
+/** Verify one selected archived L0 snapshot for AI drill-down, without scanning
+ * unrelated sessions or treating a local SHA-256 as source attestation.
+ */
+export async function readResearchArchiveSnapshot(
+  directory: string, sessionId: string
+) {
+  if (!/^[a-f0-9]{16}$/.test(sessionId)) {
+    throw new Error("Research session ID must be a 16-character lowercase hex value.");
+  }
+  const manifest = await readResearchManifest(directory);
+  const reference = manifest.snapshots.find(row => row.session_id === sessionId);
+  if (!reference) throw new Error("Requested research session is not in this archive.");
+  const sourceDir = join(directory, "snapshots");
+  await assertPlainDirectory(sourceDir);
+  const path = join(sourceDir, reference.name);
+  const metadata = await lstat(path);
+  if (!metadata.isFile() || metadata.size !== reference.bytes ||
+      metadata.size > MAX_SOURCE_BYTES) {
+    throw new Error("Selected research snapshot size or file type changed.");
+  }
+  const bytes = await readFile(path);
+  if (bytes.length !== reference.bytes || sha256(bytes) !== reference.sha256) {
+    throw new Error("Selected research snapshot SHA-256 mismatch.");
+  }
+  const parsed = JSON.parse(bytes.toString("utf8")) as unknown;
+  if (!isRecord(parsed) || parsed.session_id !== reference.session_id ||
+      parsed.state !== reference.state) {
+    throw new Error("Selected research snapshot session identity changed.");
+  }
+  // The canonical aggregator enforces the L0 schema and internal counter invariants.
+  summarizeProjectObservation([parsed]);
+  return {
+    reference,
+    snapshot: parsed as ProjectObservationSnapshot,
+    integrity: "SNAPSHOT_BYTES_MATCH_ARCHIVE_MANIFEST" as const,
+    source_authenticity: "NOT_ATTESTED" as const,
   };
 }
 

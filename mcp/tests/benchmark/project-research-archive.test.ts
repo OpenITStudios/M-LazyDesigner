@@ -28,8 +28,12 @@ async function workspace() {
 function status(uuid: string | null, ready = true) {
   return {
     structuredContent: {
-      runtime: { mcp_client_ready: ready },
+      runtime: {
+        mcp_client_ready: ready,
+        identity: { build_identity: "test-runtime-build" },
+      },
       affinity: { project_uuid: uuid, authoring_phase: "geometry" },
+      control: { project: { binding: ready ? "BOUND" : "UNKNOWN" } },
     },
   };
 }
@@ -221,6 +225,30 @@ describe("explicit L0 research archive and ephemeral index", () => {
       .toThrow("real UTC calendar date");
     expect(() => indexProjectResearch([manifest], { label: "\n" }))
       .toThrow("label filter");
+  });
+
+  test("historical L0 snapshots remain byte-compatible with new optional provenance fields", async () => {
+    const { cache, archiveRoot } = await workspace();
+    await addSession(cache, "native-legacy-project");
+    const files = (await readdir(cache)).filter(file => file.startsWith("session-"));
+    expect(files).toHaveLength(1);
+    const file = join(cache, files[0]!);
+    const legacy = JSON.parse(await readFile(file, "utf8"));
+    for (const project of legacy.projects) {
+      delete project.runtime_build_keys;
+      delete project.runtime_build_keys_capped;
+      delete project.matched_checkpoint_sha256_refs;
+      delete project.checkpoint_refs_capped;
+    }
+    await writeFile(file, JSON.stringify(legacy), "utf8");
+    const archived = await archiveProjectObservation(cache, archiveRoot, "Legacy Schema 1");
+    const manifest = await readResearchManifest(archived.archive_path);
+    const project = manifest.summary.projects[0]!;
+    expect("observed_runtime_build_keys" in project).toBe(false);
+    expect("matched_checkpoint_sha256_refs" in project).toBe(false);
+    await expect(verifyResearchArchive(archived.archive_path)).resolves.toMatchObject({
+      verification: "LOCAL_SOURCE_CHECKSUMS_MATCH",
+    });
   });
 
   test("rejects unexpected files inside an archive during verification", async () => {

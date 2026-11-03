@@ -9,6 +9,7 @@ Gateway hot-path/replay benchmark contracts
 Hybrid experimental benchmark/promotion contracts
 golden authoring/session/reporting contracts
 explicit L0 research archive/index and integrity contracts
+AI-first paginated reader, verified build observation and trust-boundary tests
 quality benchmark corpus contracts
 semantic invalidation/UV benchmark contracts
 zero-waste benchmark contracts

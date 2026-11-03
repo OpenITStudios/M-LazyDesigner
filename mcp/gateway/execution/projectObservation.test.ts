@@ -23,8 +23,12 @@ const TASK = "task:" + "a".repeat(20);
 function status(uuid: string | null, phase: string = "geometry", live = true) {
   return {
     structuredContent: {
-      runtime: { mcp_client_ready: live },
+      runtime: {
+        mcp_client_ready: live,
+        identity: { build_identity: "runtime-build-A" },
+      },
       affinity: { project_uuid: uuid, authoring_phase: phase },
+      control: { project: { binding: live ? "BOUND" : "UNKNOWN" } },
     },
     content: [{ type: "text", text: "private-text-do-not-persist" }],
   };
@@ -100,6 +104,45 @@ describe("bounded always-on project observation", () => {
         observation: "CHANGED_BETWEEN_OBSERVATIONS" },
     ]);
     expect(report.retention.max_session_files).toBe(16);
+  });
+
+  test("captures observed build keys and finalization content only with bound proof", () => {
+    const obs = new ProjectObservationRecorder("/disposable-test-root");
+    const matched = status("native-final");
+    Object.assign(matched.structuredContent.control, {
+      workspace: {
+        finalization_native_revision: {
+          state: "MATCHED",
+          accepted_sha256: "sha256:" + "a".repeat(64),
+          observed_sha256: "sha256:" + "a".repeat(64),
+        },
+      },
+    });
+    obs.record({ tool: "status", args: {}, result: matched, durationMs: 2 });
+    const row = obs.snapshot().projects[0]!;
+    expect(row.runtime_build_keys).toHaveLength(1);
+    expect(row.runtime_build_keys![0]).toMatch(/^[a-f0-9]{64}$/);
+    expect(row.matched_checkpoint_sha256_refs).toEqual(["sha256:" + "a".repeat(64)]);
+
+    const stale = status("native-final");
+    Object.assign(stale.structuredContent.control, {
+      workspace: { finalization_native_revision: {
+        state: "MATCHED",
+        accepted_sha256: "sha256:" + "b".repeat(64),
+        observed_sha256: "sha256:" + "c".repeat(64),
+      }},
+    });
+    obs.record({ tool: "status", args: {}, result: stale, durationMs: 2 });
+    expect(obs.snapshot().projects[0]!.matched_checkpoint_sha256_refs)
+      .toHaveLength(1);
+    expect(obs.snapshot().projects[0]!.runtime_build_keys).toHaveLength(1);
+
+    // Missing canonical Control BOUND evidence must not attribute native UUID.
+    const unbound = status("unverified-project");
+    Object.assign(unbound.structuredContent.control, { project: { binding: "UNKNOWN" } });
+    obs.record({ tool: "status", args: {}, result: unbound, durationMs: 2 });
+    expect(obs.snapshot().unbound.calls).toBe(1);
+    expect(obs.snapshot().projects).toHaveLength(1);
   });
 
   test("attributes native read-only operations from the executor's verified binding", () => {
