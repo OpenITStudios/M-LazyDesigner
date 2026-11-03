@@ -401,6 +401,32 @@ describe("Detached native fidelity bridge", () => {
     await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("FACE_TEXTURE_UNRESOLVED");
   });
 
+  test("rejects nonfinite MCP Cube positions and mismatched face UV inventory", async () => {
+    const f = installNativeFixture();
+    f.cube.mesh.geometry.attributes.position.array[0] = Number.NaN;
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
+      "PUBLICATION_SOURCE_GEOMETRY_INVALID_POSITION",
+    );
+    f.cube.mesh.geometry.attributes.position.array[0] = 0;
+    f.cube.mesh.geometry.attributes.uv.array.pop();
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
+      "PUBLICATION_SOURCE_GEOMETRY_INVALID_UV",
+    );
+  });
+
+  test("rejects out-of-bounds Cube triangle indices and malformed native material groups", async () => {
+    const f = installNativeFixture();
+    f.cube.mesh.geometry.index.array[2] = 99;
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
+      "PUBLICATION_SOURCE_INDEX_OUT_OF_RANGE",
+    );
+    f.cube.mesh.geometry.index.array[2] = 2;
+    f.cube.mesh.geometry.groups[0].start = 1;
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
+      "PUBLICATION_SOURCE_FACE_GROUP_INVALID",
+    );
+  });
+
   test("rejects source modification during exporter callback instead of delivering stale GLB", async () => {
     const f = installNativeFixture();
     const THREE = (globalThis as any).THREE;
