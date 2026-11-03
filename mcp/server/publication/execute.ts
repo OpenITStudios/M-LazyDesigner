@@ -164,6 +164,7 @@ export async function renderPublication(input: unknown): Promise<PublicationRend
         project_uuid: snapshot.project_uuid,
         sha256: snapshot.source_sha256,
         glb_path: glbPath,
+        mesh_count: snapshot.cube_count,
         materials: snapshot.materials,
       },
     );
