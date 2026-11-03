@@ -29,7 +29,7 @@ const PROTOCOL_VERSION = "2025-06-18";
 // and Resource metadata ceilings move by that justified capability delta.
 // 2026-09-10: named-plugin Cube/AO/noise/copy/palette/easing schemas.
 // Loopback: 111603 response / 94148 schema / 11578 largest tool chars.
-// 2026-09-17: current default Bedrock profile intentionally exposes 54 tools after
+// 2026-09-17: current default Bedrock profile intentionally exposes 55 tools after
 // retired/default-disabled compatibility helpers. Current canonical Particle and
 // exact Paint transaction schemas are larger because their strict bounded branches
 // are now fully advertised rather than hidden. Measured loopback: 112225 response /
@@ -41,7 +41,7 @@ const PROTOCOL_VERSION = "2025-06-18";
 // Preserve strict branch validation and image provenance; this is a measured
 // coverage baseline update, not token savings or native acceptance.
 const SURFACE_BUDGET = {
-  tool_count: 54,
+  tool_count: 55,
   initialize_instructions_chars: 700,
   tools_list_response_chars: 118_000,
   input_schema_chars: 99_000,
