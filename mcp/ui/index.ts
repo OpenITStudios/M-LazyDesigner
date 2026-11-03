@@ -43,7 +43,7 @@ import {
   runRuntimeOperationExclusive,
 } from "@/lib/runtime/lifecycle";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
-import { openPublicationRenderDialog, reviewPublicationRenderStatus, cancelPublicationRender, publicationRenderDialogTeardown } from "@/ui/publicationRenderDialog";
+import { openPublicationRenderDialog, openPublicationVisualEvidenceDialog, reviewPublicationRenderStatus, cancelPublicationRender, publicationRenderDialogTeardown } from "@/ui/publicationRenderDialog";
 
 let panel: Panel | undefined;
 let runtimeStatusListener: (() => void) | undefined;
@@ -451,6 +451,7 @@ export function uiSetup(input: UiSetupInput) {
         },
         openPublicationRender(): void { openPublicationRenderDialog(); },
         checkPublicationRender(): void { reviewPublicationRenderStatus(); },
+        previewPublicationRender(): void { openPublicationVisualEvidenceDialog(); },
         cancelPublicationJob(): void { cancelPublicationRender(); },
         reloadLazyDesigner(): void {
           if (reloadLazyDesignerPlugin()) return;
