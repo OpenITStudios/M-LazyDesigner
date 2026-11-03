@@ -74,6 +74,13 @@ File-backed client/runtime wiring remains compatibility/inspection, not normal m
 ## Evidence Economy
 
 Do not schedule screenshots every N seconds or for every keyframe.
+For multi-pose visual review the Runtime now samples the requested event
+poses using temporary native Blockbench previews **without PNG output**,
+unions their rendered bounds and uses one fixed frame for the later captures.
+An explicit frame must cover every requested pose; it is rejected before
+rendering if any sampled pose falls outside it. `pose_camera_comparability`
+compares planned camera metadata only, not GPU rendering or source-camera
+calibration. It proves nothing about unsampled in-between poses.
 Use native `inspect_animation` (focused bone/channel/time-range) and current
 mutation receipts to diagnose authored motion first; use actual playback for
 continuity, foot contact, rhythm and loop behavior. Only when a still image

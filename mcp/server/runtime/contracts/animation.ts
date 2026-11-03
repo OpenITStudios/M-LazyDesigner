@@ -10,6 +10,9 @@ import {
 } from "@/lib/factories";
 import { resolveCoreAnimation } from "@/lib/core/identity";
 import { withTemporaryAnimationPreview } from "@/lib/animation/previewState";
+import { readRenderedModelBounds } from "@/lib/geometry/renderedModelBounds";
+import { sharedPoseFraming,samePoseBounds,comparePoseCameraReceipts,
+  type PoseFrame,type PoseBounds } from "@/lib/animation/evidenceFraming";
 import {
   inspectObservedAdditiveEulerPose,
   compareObservedEulerToExactAuthoredRotationKey,
@@ -926,6 +929,31 @@ async function captureAnimationSamples(
   const expectedViewCount = resolveCaptureViewSelection(
     request.views, request.evidence_targets, request.verification_risk
   ).views.length;
+
+  const captureStartedAtMs = Date.now();
+  // Separate native sampling from PNG capture: no image is produced while
+  // establishing the shared envelope of the requested event-time poses.
+  const sourceProject = Project?.uuid;
+  const observedPoses: PoseFrame[] = [];
+  for(const time of preview.times) {
+    const bounds = await withTemporaryAnimationPreview(
+      animationPreviewPort() as never,animation as never,time,()=>{
+        if(!sourceProject || Project?.uuid!==sourceProject)
+          throw new Error("ANIMATION_FRAMING_PROJECT_CHANGED");
+        const observed = readRenderedModelBounds({includeSurfaceWarnings:false});
+        if(!observed.bounds)throw new Error("ANIMATION_FRAMING_NO_VISIBLE_CUBES");
+        return {min:[...observed.bounds.min] as [number,number,number],
+          max:[...observed.bounds.max] as [number,number,number]};
+      }
+    );
+    observedPoses.push({time,bounds});
+  }
+  const callerFrame = baseRequest.framing.mode==="explicit"
+    ? baseRequest.framing : undefined;
+  const sharedFrame=sharedPoseFraming(observedPoses,callerFrame);
+  const fixedCaptureRequest={...baseRequest,framing:sharedFrame.framing};
+  if(Project?.uuid!==sourceProject)throw new Error("ANIMATION_FRAMING_PROJECT_CHANGED");
+
   const content: unknown[] = [
     {
       type: "text" as const,
@@ -943,7 +971,6 @@ async function captureAnimationSamples(
     part_correspondence?: unknown;
     landmark_diagnosis?: unknown;
   }> = [];
-  const captureStartedAtMs = Date.now();
   let commonStructured: JsonRecord = {};
   const compareGeometry = preview.times.length >= 2;
   const geometrySnapshots: GeometryPoseObbSnapshot[] = [];
@@ -960,13 +987,17 @@ async function captureAnimationSamples(
       time,
       async () => {
         const result = await definition.execute(
-          baseRequest as unknown as Record<string, unknown>,
+          fixedCaptureRequest as unknown as Record<string, unknown>,
           context
         );
         // Confirm native screenshot evidence before reading optional OBBs.
         const structured = requireCompleteAnimationCaptureSample(
           result, expectedViewCount
         );
+        const prepass=observedPoses.find(s=>s.time===time);
+        if(!prepass || !samePoseBounds(prepass.bounds,structured.native_current_pose_bounds)){
+          throw new Error("ANIMATION_POSE_BOUNDS_CHANGED_DURING_CAPTURE");
+        }
         let geometry: GeometryPoseObbSnapshot | null = null;
         let geometryFailure: string | null = null;
         if (compareGeometry) {
@@ -1129,6 +1160,12 @@ async function captureAnimationSamples(
         ...aggregateAnimationCaptureTraffic(samples.map(sample => sample.image_transport)),
         animation_capture_elapsed_ms: Math.max(0, Date.now() - captureStartedAtMs),
       },
+      shared_pose_framing: sharedFrame,
+      pose_camera_comparability: comparePoseCameraReceipts(samples.map(sample=>({
+        time:sample.time,
+        framing_bounds:sample.framing_bounds as PoseBounds,
+        captures:sample.captures as Array<{view:string;camera_spec:unknown}>,
+      }))),
       animation_preview: {
         animation: {
           uuid: animation.uuid,

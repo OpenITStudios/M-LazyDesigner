@@ -764,6 +764,22 @@ retain the 512 default, preserving existing high-detail behavior. Texture/identi
 should continue using detail-appropriate evidence; do not downsample merely to reduce
 Codex allowance when the decision depends on fine visual detail.
 
+## Fixed camera for multi-pose Animation evidence
+
+Multi-pose `animation_preview` first uses temporary native scene evaluations
+to collect the rendered bounds of only the specified times, without images.
+It creates one shared explicit frame for every later model image, rather than
+re-centering or auto-zooming separately for each pose. A caller-supplied
+explicit frame must already cover every sampled pose or it fails before
+rendering. Current native pose bounds are compared against the prepass to
+detect incompatible native changes.
+
+The `shared_pose_framing` and `pose_camera_comparability` receipts prove
+only sampled-frame planning and matching computed camera settings. They do
+not establish live GPU camera attestation, missing intermediate motion
+extrema, approved source camera calibration, or visual PASS. This prepass
+adds bounded native CPU work but does not transport PNGs.
+
 ## Animation evidence integrity and capture cost
 
 The existing Animation Runtime extension supports `animation_preview.times`

@@ -1499,6 +1499,7 @@ export function registerCameraTools() {
         front_direction,
         framing_mode: framingInput.mode,
         framing_bounds: { min: [...framingBounds.min], max: [...framingBounds.max] },
+        native_current_pose_bounds: observed.bounds,
         view_selection: {
           mode: views?.length ? "explicit" : "information_gain",
           requested_targets: selection.requested_targets,

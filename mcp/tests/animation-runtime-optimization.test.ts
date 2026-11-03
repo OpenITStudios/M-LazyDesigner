@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { sharedPoseFraming,samePoseBounds,comparePoseCameraReceipts } from "@/lib/animation/evidenceFraming";
 import {
   animationAwareCaptureModelViewsParameters,
   requireCompleteAnimationCaptureSample,
@@ -8,6 +9,52 @@ import {
   focusedInspectAnimationParameters,
   optimizedAnimationTimelineParameters,
 } from "@/server/runtime/animationRuntimeContracts";
+
+describe("fixed-camera multi-pose contracts (pure, no screenshots)", () => {
+  const pose=(time:number,min:[number,number,number],max:[number,number,number])=>
+    ({time,bounds:{min,max}});
+  test("sampled envelope covers all event poses, not just the first view",()=>{
+    const rows=[pose(0,[-2,0,-2],[2,8,2]),pose(0.8,[-9,-1,-2],[4,12,5])];
+    expect(sharedPoseFraming(rows)).toMatchObject({
+      framing:{mode:"explicit",min:[-9,-1,-2],max:[4,12,5]},
+      basis:"SAMPLED_POSE_UNION",unsampled_motion_verified:false});
+    expect(sharedPoseFraming(rows,{mode:"explicit",min:[-10,-2,-4],max:[8,15,8]}).basis)
+      .toBe("CALLER_EXPLICIT");
+    expect(()=>sharedPoseFraming(rows,{mode:"explicit",min:[-2,0,-2],max:[2,8,2]}))
+      .toThrow("ANIMATION_EXPLICIT_FRAME_EXCLUDES_POSE");
+    expect(samePoseBounds(rows[0].bounds,rows[1].bounds)).toBe(false);
+  });
+  test("strict planned camera comparison never grants visual approval",()=>{
+    const base={min:[-9,-1,-2] as [number,number,number],
+      max:[4,12,5] as [number,number,number]};
+    const row=(time:number,zoom:number)=>({
+      time,framing_bounds:base,
+      captures:[{view:"front",camera_spec:{projection:"orthographic",zoom}}],
+    });
+    expect(comparePoseCameraReceipts([row(0,1),row(0.8,1)])).toMatchObject({
+      state:"MATCHED_PLANNED_CAMERA",actual_native_renderer_attested:false,
+      visual_verdict:"NOT_EVALUATED"});
+    expect(comparePoseCameraReceipts([row(0,1),row(0.8,2)]).reason)
+      .toBe("POSE_CAMERA_FRAMING_DRIFT");
+    expect(comparePoseCameraReceipts([row(0,1)]).state).toBe("UNVERIFIED");
+  });
+});
+
+describe("Animation camera binding source contract",()=>{
+  test("all sampled poses route through one envelope and a current-pose bounds fence",async()=>{
+    const runtime=await Bun.file("server/runtime/contracts/animation.ts").text();
+    const camera=await Bun.file("server/tools/inspection/camera.ts").text();
+    expect(runtime).toContain("const sharedFrame=sharedPoseFraming(observedPoses,callerFrame)");
+    expect(runtime).toContain("fixedCaptureRequest as unknown as Record<string, unknown>");
+    expect(runtime).toContain("ANIMATION_POSE_BOUNDS_CHANGED_DURING_CAPTURE");
+    expect(runtime).toContain("pose_camera_comparability: comparePoseCameraReceipts");
+    expect(camera).toContain("native_current_pose_bounds: observed.bounds");
+    expect(runtime.indexOf("const captureStartedAtMs = Date.now()"))
+      .toBeLessThan(runtime.indexOf("observedPoses.push({time,bounds})"));
+    expect(runtime.indexOf("observedPoses.push({time,bounds})"))
+      .toBeLessThan(runtime.indexOf("fixedCaptureRequest as unknown as Record<string, unknown>"));
+  });
+});
 
 describe("Animation runtime efficiency contracts", () => {
   test("multi-time canonical capture stays bounded to eight images per call", () => {
