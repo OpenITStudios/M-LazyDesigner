@@ -9,6 +9,12 @@
 
 This document is the architectural contract for subsequent source changes. It is **not** an assertion that current code implements every clause. Tables explicitly distinguish CURRENT, DECIDED-NOT-IMPLEMENTED, and BLOCKED-PENDING-PROOF. The user requested detailed engineering design before running local/native tests.
 
+## Material translation follow-up — ADR-R02
+
+The material-specific continuation is defined in **[MATERIAL_TRANSLATION_SPEC.md](./MATERIAL_TRANSLATION_SPEC.md)**. It separates face material instances, Bedrock render controller profiles, TextureGroup PBR, and editor preview modes. Current Render source now checks explicit PBR channel identity, material factors, map roles, exact atlas names, UV0, nearest and clamp-to-edge sampler settings before launching Blender. PBR subsurface/height and custom/alpha material instances remain unsupported and **fail closed**.
+
+This is only SOURCE-AUTHORED progress; glTF/Blender visual shader parity and Build/Blockbench integration are NOT executed or accepted.
+
 ## Implementation update — R01 P0 source pass (2026-11-03)
 
 The following changes are now **authored in the Render branch only**. They have **NOT** been exercised by Bun, the installed Blockbench editor or Blender 5.2. This section overrides earlier "NOT implemented" shorthand in the decision table without claiming tested acceptance.
