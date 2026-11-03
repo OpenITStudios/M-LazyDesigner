@@ -53,6 +53,8 @@ export type UsageRun = {
   task_success: boolean | null;
   accepted_result?: boolean | null;
   user_corrections: NullableNumber;
+  /** Exact SHA-256 of the Gateway NDJSON trace file for this one run, not an AI session ID. */
+  gateway_trace_sha256?: string | null;
   usage: Usage;
   model_events?: ModelUsageEvent[];
   calls: Calls;
@@ -233,6 +235,12 @@ function validateRun(run: UsageRun, index: number): void {
     );
   }
   requireNullableNonNegativeNumber(run.user_corrections, `runs[${index}].user_corrections`);
+  if (run.gateway_trace_sha256 !== undefined &&
+      run.gateway_trace_sha256 !== null &&
+      (typeof run.gateway_trace_sha256 !== "string" ||
+       !/^[a-f0-9]{64}$/.test(run.gateway_trace_sha256))) {
+    throw new Error(`runs[${index}].gateway_trace_sha256 must be a lowercase SHA-256 or null.`);
+  }
   validateUsage(run.usage, `runs[${index}].usage`);
   if (run.model_events !== undefined) {
     if (!Array.isArray(run.model_events)) {

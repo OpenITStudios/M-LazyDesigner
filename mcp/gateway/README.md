@@ -275,6 +275,48 @@ token usage is `null` and accepted-result quality is `UNVERIFIED` until
 separately sourced. Evidence coverage and legacy trace compatibility remain
 explicit.
 
+## Offline Codex Usage + Golden Comparison (explicit inputs only)
+
+`bun run compare:observability -- <baseline-final.json>
+<candidate-final.json> <baseline-trace.ndjson> <candidate-trace.ndjson>
+<normalized-usage.json>` performs a **read-only, offline** comparison.
+
+Inputs are two accepted LIVE_BLOCKBENCH Golden final reports, the corresponding
+opt-in Gateway NDJSON traces, and the existing normalized `lazydesigner-astra-usage-v1`
+document containing exactly one `baseline` and one `zero_waste` run.
+For each usage run, set `gateway_trace_sha256` to the exact lowercase SHA-256
+of its captured NDJSON *file bytes*. The comparator validates the binding,
+Golden task/source identities, identical starting asset and reference, accepted
+results, matched provider model where available, and correction counts. The
+document-level `source_sha` must be `null` when comparing two different
+source revisions. Trace files may not be reused across both runs.
+
+A token-reduction claim additionally requires a named source and model from
+the client, a submitted source-provided `model_events` list with distinct stable
+`event_id`, `source`, and `total_tokens` for every response/compaction
+event, explicit accepted-result PASS on both normalized runs, and no increase
+in user corrections. No component-based token estimation, unverified aggregate
+usage, cross-model claim, API pricing, allowance inference or automatic
+improvement is allowed. If an identity or digest **contradicts** the evidence,
+the comparison fails closed; if telemetry is missing, it reports
+`INSUFFICIENT_LINKED_USAGE_EVIDENCE`. A SHA bind selects an exact file and
+does **not** independently authenticate the upstream Codex OTel export.
+
+Codex supports opt-in OpenTelemetry exports. The current Codex release and its
+exported field semantics must be verified at capture time; notably some
+historical `response.completed` OTel logs called provider total tokens
+`tool_token_count`. Do not silently treat this field as tool-only usage or
+derive missing totals by summing input/output fields. Normalize only genuinely
+source-provided totals, preserving response/compaction coverage and model
+identity, and record the exporter/version in the source description.
+
+This comparator does **not** read private Codex session files, enable host
+telemetry, change `config.toml`, start an OTLP collector, retain raw prompts,
+or ingest tool arguments/output. Raw Codex OTel logs may include sensitive tool
+content even with prompt logging disabled; selective sanitization belongs to
+the explicitly authorized client-side export workflow. Normal authoring and
+Gateway four-tool responses remain unchanged.
+
 ## Context / Result Economy
 
 Context handles use SHA-256 identities of current canonical repository files. `known_context_ids` suppresses unchanged Skill/profile content and invalidates changed members of the same family.

@@ -400,6 +400,35 @@ describe("Astra usage validation contract", () => {
     ).toThrow(/performance\.wall_time_ms.*non-negative/);
   });
 
+  test("optional per-run Gateway trace digest must be an exact lowercase SHA-256", () => {
+    const input = {
+      schema: "lazydesigner-astra-usage-v1",
+      proof_scope: "LIVE_BLOCKBENCH",
+      source_sha: null,
+      model: null,
+      telemetry_source: null,
+      runs: [{
+        task_id: "A_known_transform",
+        variant: "baseline",
+        quality_verdict: "UNVERIFIED",
+        task_success: null,
+        user_corrections: null,
+        gateway_trace_sha256: "not-the-actual-file-hash",
+        usage: {
+          total_tokens: null, input_tokens: null, cached_input_tokens: null,
+          output_tokens: null, reasoning_tokens: null,
+        },
+        calls: {
+          total: null, search: null, describe: null,
+          inspect: null, mutate: null, verify: null, recovery: null,
+        },
+      }],
+    } as any;
+    expect(() => validateAstraUsageDocument(input)).toThrow("gateway_trace_sha256");
+    input.runs[0].gateway_trace_sha256 = "a".repeat(64);
+    expect(() => validateAstraUsageDocument(input)).not.toThrow();
+  });
+
   test("live Golden manifest covers A-F and keeps quality before efficiency", async () => {
     const manifest = await Bun.file(
       "tests/fixtures/astra-live-golden-tasks.json"

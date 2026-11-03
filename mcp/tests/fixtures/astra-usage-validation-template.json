@@ -12,6 +12,7 @@
       "quality_verdict": "UNVERIFIED",
       "task_success": null,
       "user_corrections": null,
+      "gateway_trace_sha256": null,
       "usage": {
         "total_tokens": null,
         "input_tokens": null,
@@ -46,6 +47,7 @@
       "quality_verdict": "UNVERIFIED",
       "task_success": null,
       "user_corrections": null,
+      "gateway_trace_sha256": null,
       "usage": {
         "total_tokens": null,
         "input_tokens": null,
