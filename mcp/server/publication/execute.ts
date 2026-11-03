@@ -90,7 +90,9 @@ export async function runBlender(
   cwd: string,
   timeoutMs = 15 * 60 * 1000,
   terminationGraceMs = 12_000,
+  signal?: AbortSignal,
 ): Promise<void> {
+  if (signal?.aborted) throw new Error("PUBLICATION_BLENDER_CANCELLED");
   const argv = blenderRenderArgs(workerPath, jobPath);
   await new Promise<void>((resolve, reject) => {
     let child: ChildProcess;
@@ -104,7 +106,7 @@ export async function runBlender(
     }
 
     let settled = false;
-    let timeoutFired = false;
+    let stopReason: "TIMEOUT" | "CANCELLED" | null = null;
     let stderr = "";
     let stdout = "";
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -116,33 +118,40 @@ export async function runBlender(
       settled = true;
       clearTimeout(timeoutTimer);
       if (graceTimer !== null) clearTimeout(graceTimer);
+      signal?.removeEventListener("abort", onAbort);
       if (error) reject(error);
       else resolve();
     };
-    const timeoutTimer = setTimeout(() => {
-      if (settled) return;
-      timeoutFired = true;
-      try { child.kill(); } catch { /* close/error may still arrive */ }
-      graceTimer = setTimeout(() => {
-        finish(new Error(
-          "PUBLICATION_BLENDER_EXIT_UNCONFIRMED: subprocess did not close after termination; " +
-          "its isolated temporary files have been preserved for safe recovery.",
-        ));
-      }, terminationGraceMs);
-    }, timeoutMs);
+    const terminate = (reason: "TIMEOUT" | "CANCELLED") => {
+      if (settled || stopReason) return;
+      stopReason = reason;
+      try { child.kill(); } catch { /* exit may remain uncertain */ }
+      graceTimer = setTimeout(() => finish(new Error(
+        "PUBLICATION_BLENDER_EXIT_UNCONFIRMED: Blender did not close after termination. " +
+        "The isolated job directory must be retained.",
+      )), terminationGraceMs);
+    };
+    const onAbort = () => terminate("CANCELLED");
+    const timeoutTimer = setTimeout(() => terminate("TIMEOUT"), timeoutMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
 
     child.stdout?.on("data", chunk => { stdout = collect(chunk, stdout); });
     child.stderr?.on("data", chunk => { stderr = collect(chunk, stderr); });
-    child.on("error", error => finish(new Error(
-      "PUBLICATION_BLENDER_PROCESS_ERROR: " + error.message,
-    )));
-    child.on("close", (code, signal) => {
-      if (timeoutFired) {
+    child.on("error", error => {
+      if (!stopReason) finish(new Error(
+        "PUBLICATION_BLENDER_PROCESS_ERROR: " + error.message,
+      ));
+    });
+    child.on("close", (code, signalName) => {
+      if (stopReason === "TIMEOUT") {
         finish(new Error("PUBLICATION_BLENDER_TIMEOUT: Cycles render exceeded the configured deadline."));
+      } else if (stopReason === "CANCELLED") {
+        finish(new Error("PUBLICATION_BLENDER_CANCELLED: output was not promoted."));
       } else if (code !== 0) {
         finish(new Error(
           "PUBLICATION_BLENDER_RENDER_FAILED: exit=" + String(code) +
-          " signal=" + String(signal) + " " + stderr.slice(-1800),
+          " signal=" + String(signalName) + " " + stderr.slice(-1800),
         ));
       } else if (!stdout.includes("LAZYDESIGNER_RENDER_OUTPUT=")) {
         finish(new Error("PUBLICATION_BLENDER_OUTPUT_RECEIPT_MISSING"));
@@ -158,8 +167,12 @@ export async function runBlender(
  * Blender is an explicitly selected local executable, never a network service.
  * External PNG is deliberately DRAFT until independent artistic/user review.
  */
-export async function renderPublication(input: unknown): Promise<PublicationRenderReceipt> {
+export async function renderPublication(input: unknown, signal?: AbortSignal): Promise<PublicationRenderReceipt> {
   const request = publicationRenderParameters.parse(input);
+  const assertActive = () => {
+    if (signal?.aborted) throw new Error("PUBLICATION_BLENDER_CANCELLED");
+  };
+  assertActive();
   const outputDirectory = dirname(request.output_path);
   const { fs, childProcess } = renderPermissions(outputDirectory);
   if (!fs.existsSync(outputDirectory) ||
@@ -170,6 +183,7 @@ export async function renderPublication(input: unknown): Promise<PublicationRend
     throw new Error("PUBLICATION_OUTPUT_EXISTS: choose a new PNG name; overwrite is disabled.");
   }
   const snapshot = await snapshotDetachedPublicationGlb();
+  assertActive();
   const workdir = join(outputDirectory, ".lazydesigner-render-" + randomBytes(12).toString("hex"));
   // Unique fresh workdir: never reuse or follow paths provided by a model.
   fs.mkdirSync(workdir);
@@ -193,17 +207,21 @@ export async function renderPublication(input: unknown): Promise<PublicationRend
       },
     );
     fs.writeFileSync(jobPath, JSON.stringify(job), { flag: "wx" });
-    await runBlender(childProcess, request.blender_executable, workerPath, jobPath, workdir);
+    await runBlender(childProcess, request.blender_executable, workerPath, jobPath, workdir,
+      15 * 60 * 1000, 12_000, signal);
+    assertActive();
     if (!fs.existsSync(tempOutput)) throw new Error("PUBLICATION_OUTPUT_MISSING");
     const raw = fs.readFileSync(tempOutput);
     const png = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
     validatedPng(png, request.width, request.height);
+    assertActive();
     verifyPublicationSourceCurrent(snapshot.project_uuid, snapshot.source_sha256);
     // Exclusive destination create. No silent replacement and no success
     // receipt for an uncertain or partially overwritten result.
     if (fs.existsSync(request.output_path)) {
       throw new Error("PUBLICATION_OUTPUT_RACE_COLLISION");
     }
+    assertActive();
     fs.writeFileSync(request.output_path, png, { flag: "wx" });
     const result = fs.readFileSync(request.output_path);
     const persisted = Buffer.isBuffer(result) ? result : Buffer.from(result);
