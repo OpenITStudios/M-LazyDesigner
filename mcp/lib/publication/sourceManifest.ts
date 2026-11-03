@@ -16,6 +16,8 @@ export type PublicationCubeManifest = Readonly<{
   cube_uuid: string;
   group_ancestry_uuids: readonly string[];
   source_world_matrix: readonly number[];
+  expected_blender_bounds_min: readonly [number, number, number];
+  expected_blender_bounds_max: readonly [number, number, number];
   position_sha256: string;
   uv_sha256: string;
   normal_sha256: string | null;
@@ -44,6 +46,48 @@ type SourceGroup = Readonly<{
   count: number;
   materialIndex?: number;
 }>;
+
+/**
+ * Predict Blender glTF 2.0 import world-space AABB without a second geometry
+ * parser. THREE Matrix4 stores column-major values and the exporter operates
+ * in glTF Y-up coordinates. Blender glTF importer maps (x,y,z)->(x,-z,y).
+ * Source scale is the declared 1/16 scene-unit conversion.
+ *
+ * These are expected bounds, not native import acceptance evidence.
+ */
+export function expectedPublicationBlenderBounds(
+  positions: readonly number[],
+  worldMatrix: readonly number[],
+): {
+  min: [number, number, number];
+  max: [number, number, number];
+} {
+  if (worldMatrix.length !== 16 ||
+      positions.length === 0 || positions.length % 3 !== 0 ||
+      [...worldMatrix, ...positions].some(value => !Number.isFinite(value))) {
+    throw new Error("PUBLICATION_SOURCE_BOUNDS_INPUT_INVALID");
+  }
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i]!, y = positions[i + 1]!, z = positions[i + 2]!;
+    const gltfX = (worldMatrix[0]! * x + worldMatrix[4]! * y +
+      worldMatrix[8]! * z + worldMatrix[12]!) *
+      PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT;
+    const gltfY = (worldMatrix[1]! * x + worldMatrix[5]! * y +
+      worldMatrix[9]! * z + worldMatrix[13]!) *
+      PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT;
+    const gltfZ = (worldMatrix[2]! * x + worldMatrix[6]! * y +
+      worldMatrix[10]! * z + worldMatrix[14]!) *
+      PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT;
+    const rotated = [gltfX, -gltfZ, gltfY];
+    for (let axis = 0; axis < 3; axis++) {
+      min[axis] = Math.min(min[axis]!, rotated[axis]!);
+      max[axis] = Math.max(max[axis]!, rotated[axis]!);
+    }
+  }
+  return { min, max };
+}
 
 /**
  * Bedrock per-face material names are geometry slot identities, NOT proof of
