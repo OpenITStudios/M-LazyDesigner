@@ -104,6 +104,7 @@ export type PublicationJob = {
   source_sha256: string;
   glb_path: string;
   report_path: string;
+  preview_path: string;
   environment: PublicationEnvironmentJob;
   device: PublicationRenderRequest["device"];
   view_transform: PublicationRenderRequest["view_transform"];
@@ -154,6 +155,7 @@ export function makePublicationJob(
     source_sha256: source.sha256,
     glb_path: source.glb_path,
     report_path: join(dirname(request.output_path), "report.json"),
+    preview_path: join(dirname(request.output_path), "evidence.png"),
     environment,
     device: request.device,
     view_transform: request.view_transform,
