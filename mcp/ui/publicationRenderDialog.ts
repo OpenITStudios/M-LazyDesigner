@@ -46,7 +46,7 @@ export function openPublicationRenderDialog(): void {
     width: 500,
     lines: [
       "<p>Render the actual model, not an AI-generated image. Requires Blender 5.2.x installed and local file/process permissions.</p>",
-      "<p>The image will be labeled DRAFT until visual review. PBR, non-Cube and ambiguous alpha materials are blocked rather than silently altered.</p>",
+      "<p>The image remains DRAFT until visual review. Supported color/MER/normal PBR channels are preserved; unsupported non-Cube, height or ambiguous-alpha content is blocked.</p>",
     ],
     form: {
       blender_executable: {
@@ -65,7 +65,7 @@ export function openPublicationRenderDialog(): void {
         label: "Render quality",
         type: "select",
         value: "publication",
-        options: { preview: "Preview (640px)", publication: "Publication (2048px)", high: "High (3840px)" },
+        options: { preview: "Preview (640px)", publication: "Publication (2048px)", high: "High (3200px)" },
       },
       background: {
         label: "Studio background",
@@ -91,7 +91,7 @@ export function openPublicationRenderDialog(): void {
         return;
       }
       const quality = String(form.quality || "publication");
-      const size = quality === "preview" ? 640 : quality === "high" ? 3840 : 2048;
+      const size = quality === "preview" ? 640 : quality === "high" ? 3200 : 2048;
       running = true;
       void runRuntimeOperationExclusive(generation, async () => {
         if (!isRuntimeGenerationCurrent(generation) || Project !== project) {
