@@ -509,6 +509,39 @@ rotation wrap, foot locking or installed native/visual proof.
 References: SciPy PchipInterpolator (Fritsch–Butland slope and monotonicity),
 Microsoft Minecraft Creator Animations Overview (linear Bedrock keyframes).
 
+### Same-grid Motion Continuity QA (2026-11-03)
+
+The opt-in PCHIP Gateway compiler now compares original LINEAR source
+motion with the baked LINEAR approximation on an **identical integer FPS
+grid** before returning an invocation. The canonical owner is
+`lib/animation/motionDynamics.ts::comparePchipLinearContinuityOnSharedGrid`.
+It reuses `analyzeAnimationMotionDynamics` on both equally sampled
+tracks, avoiding the misleading comparison of sparse source keys with
+densely baked keys. Each channel independently reports maximum sampled
+speed, acceleration, jerk and path length. Rotation uses degrees and
+position uses Blockbench model units; different units are never totaled
+or ranked against each other.
+
+For each *original interior authored key*, the diagnostic also compares
+the incoming vs outgoing sampled velocity-vector jump before and after
+baking. It reports whether that local change decreased, increased or
+remained effectively unchanged, with bounded examples. The analyzer
+rechecks original source values at authored anchor times, requires the
+same source clock and extent, refuses unsupported/nonlinear data or
+nonfinite derivative metrics, and caps evaluation at 2,048 grid
+samples per selected channel. A source-only comparison unavailable for
+these reasons blocks the opt-in Gateway plan before native invocation.
+
+The receipt lives in
+`semantic_context.shape_preserving_linear_bake.continuity_review`
+**outside** native `create_animation` arguments. It is diagnostic:
+PCHIP may improve a particular key's finite-difference velocity jump
+while changing accelerations/jerk elsewhere. No silent interpolation
+replacement or automatic artistic PASS/FAIL is inferred. Sampled LINEAR
+keyframes do not actually have continuous velocity, and source-grid
+mathematics cannot certify native playback, export, physical contact or
+visual quality. Those proof flags remain false.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

@@ -3,7 +3,14 @@ import {
   MOLANG_ANIMATION_MATH_SYMBOLS,
   analyzeAnimationMolangExpressions,
 } from "@/lib/animationMolangSemantics";
-import { analyzeAnimationMotionDynamics } from "@/lib/animationMotionDynamics";
+import {
+  analyzeAnimationMotionDynamics,
+  comparePchipLinearContinuityOnSharedGrid,
+} from "@/lib/animationMotionDynamics";
+import {
+  compileMotionRecipe,
+  bakeShapePreservingMotionToLinearRecipe,
+} from "@/lib/animation/motionRecipe";
 import { animationNativePropertiesParameters } from "@/server/tools/animation-native-intelligence";
 
 describe("Bedrock animation native intelligence", () => {
@@ -331,5 +338,107 @@ describe("Bedrock animation native intelligence", () => {
     expect(graphBody).toContain("animation: { uuid: animation.uuid, name: animation.name }");
     expect(graphBody).toContain("bone: { uuid: group.uuid, name: group.name }");
     expect(graphBody).toContain("affected_keyframes: keyframes.map(keyframeContinuationState)");
+  });
+});
+
+
+describe("equal-grid PCHIP motion continuity diagnostics", () => {
+  const authored=()=>({
+    name:"turning_arm",duration:1,loop:false,
+    poses:[
+      {id:"start",time:0,bones:{arm:{rotation:[0,0,0] as [number,number,number]}}},
+      {id:"contact",time:0.5,bones:{arm:{rotation:[8,0,0] as [number,number,number]}}},
+      {id:"end",time:1,bones:{arm:{rotation:[0,0,0] as [number,number,number]}}},
+    ],
+  });
+  const prepared=()=>{
+    const recipe=authored();
+    const baked=bakeShapePreservingMotionToLinearRecipe(
+      recipe,[{bone:"arm",channel:"rotation"}],
+      {sample_fps:30,boundary_tangent:"rest_endpoints"}
+    );
+    return {source:compileMotionRecipe(recipe),
+      baked:compileMotionRecipe(baked.recipe),
+      targets:[{bone:"arm",channel:"rotation" as const}],
+      sample_fps:30};
+  };
+
+  test("compares identical 30 FPS clocks and reduces the interior pose velocity jump",()=>{
+    const input=prepared(),before=JSON.stringify(input);
+    const result=comparePchipLinearContinuityOnSharedGrid(input);
+    expect(result.state).toBe("SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON");
+    if(result.state!=="SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON")
+      throw new Error(result.reason);
+    expect(result.evaluated_interior_knot_count).toBe(1);
+    expect(result.analyzed_track_count).toBe(1);
+    expect(result.tracks[0].units).toBe("degrees");
+    expect(result.tracks[0].grid_sample_count).toBe(31);
+    expect(result.tracks[0].knot_velocity_jump).toMatchObject({
+      max_source:32,
+      decreased_count:1,
+      increased_count:0,
+      examples:[{time:0.5,change:"decreased"}],
+    });
+    expect(result.tracks[0].knot_velocity_jump.max_baked).toBeLessThan(8);
+    expect(result.tracks[0].source_dynamics.max_speed).toBeGreaterThan(0);
+    expect(result.tracks[0].baked_dynamics.max_acceleration).toBeGreaterThan(0);
+    expect(result.native_playback_attested).toBe(false);
+    expect(result.continuous_native_velocity_attested).toBe(false);
+    expect(JSON.stringify(input)).toBe(before);
+    expect(comparePchipLinearContinuityOnSharedGrid(input)).toEqual(result);
+  });
+
+  test("direct comparison refuses altered original anchors and mismatched source clocks",()=>{
+    const input=prepared();
+    const wrong=JSON.parse(JSON.stringify(input)) as typeof input;
+    const target=wrong.baked.bones.arm.find((key)=>key.time===0.5)!;
+    target.rotation![0]=7;
+    expect(comparePchipLinearContinuityOnSharedGrid(wrong)).toMatchObject({
+      state:"unavailable",reason:"PCHIP_CONTINUITY_AUTHORED_ANCHOR_CHANGED",
+    });
+    expect(comparePchipLinearContinuityOnSharedGrid({...input,sample_fps:24}))
+      .toMatchObject({state:"unavailable",
+        reason:"PCHIP_CONTINUITY_SOURCE_CLOCK_OR_EXTENT_MISMATCH"});
+  });
+
+  test("different units remain separate and no interior knots remain explicitly unevaluated",()=>{
+    const source=compileMotionRecipe({
+      name:"short_position",loop:false,duration:1,
+      poses:[
+        {id:"a",time:0,bones:{root:{position:[0,0,0]}}},
+        {id:"b",time:1,bones:{root:{position:[10,0,0]}}},
+      ],
+    });
+    const result=comparePchipLinearContinuityOnSharedGrid({
+      source,baked:source,
+      targets:[{bone:"root",channel:"position"}],
+      sample_fps:30,
+    });
+    expect(result.state).toBe("SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON");
+    if(result.state!=="SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON")
+      throw new Error(result.reason);
+    expect(result.evaluated_interior_knot_count).toBe(0);
+    expect(result.tracks[0].units).toBe("blockbench_model_units");
+    expect(result.tracks[0].knot_velocity_jump.examples).toHaveLength(0);
+    expect(result.tracks[0].source_dynamics).toEqual(result.tracks[0].baked_dynamics);
+    expect(result.units_are_not_aggregated_across_channels).toBe(true);
+  });
+
+  test("bounded shared sample grid rejects excessive analysis without native action",()=>{
+    const source=compileMotionRecipe({
+      name:"long",duration:100,loop:false,
+      poses:[
+        {id:"a",time:0,bones:{root:{position:[0,0,0]}}},
+        {id:"b",time:100,bones:{root:{position:[3,0,0]}}},
+      ],
+    });
+    expect(comparePchipLinearContinuityOnSharedGrid({
+      source,baked:source,
+      targets:[{bone:"root",channel:"position"}],
+      sample_fps:30,
+    })).toMatchObject({
+      state:"unavailable",reason:"PCHIP_CONTINUITY_GRID_SAMPLE_BUDGET_EXCEEDED",
+      native_playback_attested:false,
+    });
   });
 });

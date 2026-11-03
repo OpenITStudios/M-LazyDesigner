@@ -15,6 +15,7 @@ import {
   type NativeCreationSnappingTrack,
 } from "@/lib/animation/batchPlanning";
 import { compileSpringSecondaryMotion, type SpringMotionLink } from "@/lib/animation/springMotion";
+import { comparePchipLinearContinuityOnSharedGrid } from "@/lib/animation/motionDynamics";
 
 function createAnimationPayload(recipe:CompiledMotionRecipe){
   return {name:recipe.name,loop:recipe.loop,animation_length:recipe.duration,bones:Object.fromEntries(
@@ -423,12 +424,26 @@ export function compileSemanticMotionWithPchipToGatewayInvocation(
     (intent?.spring_links??[]).some((spring)=>spring.child_bone===target.bone)
   )) throw new Error("SEMANTIC_PCHIP_SPRING_CHILD_PROTECTED");
   const baked=bakeShapePreservingMotionToLinearRecipe(recipe,targets,options);
+  // Compare the sparse original and dense bake on the SAME declared FPS grid
+  // before producing any executable Gateway arguments.
+  const continuity=comparePchipLinearContinuityOnSharedGrid({
+    source:compileMotionRecipe(recipe),
+    baked:compileMotionRecipe(baked.recipe),
+    targets,
+    sample_fps:options.sample_fps,
+  });
+  if(continuity.state!=="SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON"){
+    throw new Error("MOTION_PCHIP_CONTINUITY_PRECHECK_UNAVAILABLE: "+continuity.reason);
+  }
   const invocation=compileSemanticMotionToGatewayInvocation(baked.recipe,intent);
   return {
     ...invocation,
     semantic_context:{
       ...invocation.semantic_context,
-      shape_preserving_linear_bake:baked.evidence,
+      shape_preserving_linear_bake:{
+        ...baked.evidence,
+        continuity_review:continuity,
+      },
     },
   };
 }

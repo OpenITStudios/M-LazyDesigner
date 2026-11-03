@@ -732,9 +732,22 @@ describe("source-only PCHIP baked motion through the existing Gateway bridge",()
       source_sample_fps:30,
       generated_channel_key_count:28,
       native_playback_attested:false,
+      continuity_review:{
+        state:"SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON",
+        sample_fps:30,
+        evaluated_interior_knot_count:1,
+        continuous_native_velocity_attested:false,
+        native_playback_attested:false,
+        tracks:[{
+          bone:"body",channel:"rotation",
+          knot_velocity_jump:{decreased_count:1,increased_count:0},
+        }],
+      },
     });
     expect(invocation.gateway_arguments.arguments)
       .not.toHaveProperty("shape_preserving_linear_bake");
+    expect(invocation.gateway_arguments.arguments)
+      .not.toHaveProperty("continuity_review");
     expect(invocation.execution_evidence.state).toBe("SOURCE_PLAN_NOT_EXECUTED");
     expect(invocation.execution_evidence.playback_attested).toBe(false);
     expect(JSON.stringify({source,intent:intent()})).toBe(before);
