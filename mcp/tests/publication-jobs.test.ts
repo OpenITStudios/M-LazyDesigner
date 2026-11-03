@@ -1,0 +1,99 @@
+import { describe, expect, test } from "bun:test";
+import { PublicationRenderJobs } from "@/server/publication/jobs";
+import type { PublicationRenderReceipt } from "@/server/publication/execute";
+
+const REQUEST = {
+  blender_executable: "/opt/blender-5.2/blender",
+  output_path: "/tmp/finished.png",
+  quality: "preview" as const,
+  width: 256,
+  height: 256,
+};
+
+const receipt: PublicationRenderReceipt = {
+  state: "RENDERED_DRAFT",
+  source_project_uuid: "test-project",
+  source_sha256: "a".repeat(64),
+  glb_sha256: "b".repeat(64),
+  worker_sha256: "c".repeat(64),
+  cube_count: 1,
+  material_count: 1,
+  blender_target: "5.2.x",
+  engine: "CYCLES",
+  quality: "preview",
+  output_path: "/tmp/finished.png",
+  output_png_sha256: "d".repeat(64),
+  output_png_bytes: 4096,
+  width: 256,
+  height: 256,
+  editor_state: "UNTOUCHED_BY_SNAPSHOT_AND_SOURCE_RECHECKED",
+  visual_quality: "NOT_EVALUATED",
+  live_minecraft_verified: false,
+};
+
+async function drain(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+describe("Nonblocking publication jobs through the same Runtime", () => {
+  test("start returns job ID without waiting for Cycles, then publishes only an actual receipt", async () => {
+    let resolve!: (value: PublicationRenderReceipt) => void;
+    const pending = new Promise<PublicationRenderReceipt>(r => { resolve = r; });
+    const jobs = new PublicationRenderJobs(async () => pending);
+    const started = jobs.start(REQUEST);
+    expect(started.state).toBe("RUNNING");
+    expect(started.job_id).toMatch(/^render_[a-f0-9]{24}$/);
+    expect(started.receipt).toBeNull();
+    expect(started.output_is_visual_qa).toBe(false);
+    expect(() => jobs.start(REQUEST)).toThrow("PUBLICATION_RENDER_JOB_BUSY");
+    await drain();
+    expect(jobs.status(started.job_id).state).toBe("RUNNING");
+    resolve(receipt);
+    await drain();
+    expect(jobs.status(started.job_id)).toMatchObject({
+      state: "RENDERED_DRAFT", receipt: {
+        output_png_sha256: receipt.output_png_sha256,
+        visual_quality: "NOT_EVALUATED",
+      },
+    });
+    const next = jobs.start(REQUEST);
+    expect(next.job_id).not.toBe(started.job_id);
+    expect(() => jobs.status(started.job_id)).toThrow("EXPIRED");
+  });
+
+  test("cancel returns CANCELLING until the worker confirms termination", async () => {
+    const jobs = new PublicationRenderJobs((_request, signal) =>
+      new Promise<PublicationRenderReceipt>((_resolve, reject) => {
+        if (signal.aborted) reject(new Error("PUBLICATION_BLENDER_CANCELLED"));
+        else signal.addEventListener("abort",
+          () => reject(new Error("PUBLICATION_BLENDER_CANCELLED")),
+          { once: true });
+      }),
+    );
+    const started = jobs.start(REQUEST);
+    expect(jobs.cancel(started.job_id).state).toBe("CANCELLING");
+    expect(() => jobs.start(REQUEST)).toThrow("PUBLICATION_RENDER_JOB_BUSY");
+    await drain();
+    expect(jobs.status(started.job_id).state).toBe("CANCELLED");
+    expect(jobs.status(started.job_id).receipt).toBeNull();
+  });
+
+  test("uncertain process exit blocks a second render rather than hiding the worker", async () => {
+    const jobs = new PublicationRenderJobs(async () => {
+      throw new Error("PUBLICATION_BLENDER_EXIT_UNCONFIRMED");
+    });
+    const started = jobs.start(REQUEST);
+    await drain();
+    expect(jobs.status(started.job_id).state).toBe("EXIT_UNCONFIRMED");
+    expect(() => jobs.start(REQUEST)).toThrow("PUBLICATION_RENDER_JOB_BUSY");
+    expect(() => jobs.status("render_" + "0".repeat(24))).toThrow("NOT_FOUND");
+  });
+
+  test("invalid render inputs never create a new job", () => {
+    const jobs = new PublicationRenderJobs(async () => receipt);
+    expect(() => jobs.start({ ...REQUEST, output_path: "../relative.png" })).toThrow();
+    expect(() => jobs.status("bad-id")).toThrow("NOT_FOUND");
+  });
+});
