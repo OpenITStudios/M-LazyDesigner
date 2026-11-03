@@ -184,17 +184,25 @@ def configure_camera(job: dict, meshes: list, center: Vector, radius: float) -> 
     require(bool(ranked), "PUBLICATION_CAMERA_NO_SAFE_CANDIDATE")
     ranked.sort(key=lambda item: -item[0])
 
-    # Expensive full-asset projection is run for at most three best candidates.
-    # Never accept sampled frame coverage as proof that ALL model parts fit.
+    # Most models need only the three best sampled candidates. If those
+    # clip an unsampled outlier, try remaining already-ranked views before
+    # failing. This costs no additional Cycles frames and never accepts a
+    # sampled-only fit as full-model proof.
     full_points = _world_points(meshes)
     selected = None
-    for _score, yaw, elevation, _sample_fit in ranked[:MAX_FINAL_CANDIDATES]:
-        fitted = _fit_candidate(
-            scene, camera, job, center, radius, yaw, elevation, full_points,
-            include_hull=False,
-        )
-        if fitted is not None:
-            selected = (yaw, elevation, *fitted)
+    for candidate_group in (
+        ranked[:MAX_FINAL_CANDIDATES],
+        ranked[MAX_FINAL_CANDIDATES:],
+    ):
+        for _score, yaw, elevation, _sample_fit in candidate_group:
+            fitted = _fit_candidate(
+                scene, camera, job, center, radius, yaw, elevation, full_points,
+                include_hull=False,
+            )
+            if fitted is not None:
+                selected = (yaw, elevation, *fitted)
+                break
+        if selected is not None:
             break
     require(selected is not None, "PUBLICATION_CAMERA_SUBJECT_CLIPPED")
     yaw, elevation, full, multiple, attempts = selected

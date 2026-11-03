@@ -36,6 +36,8 @@ describe("Modular Blender Core source owners", () => {
     expect(camera).toContain("MAX_SCORING_MESHES = 128");
     expect(camera).toContain("full_points = _world_points(meshes)");
     expect(camera).toContain("MAX_FINAL_CANDIDATES = 3");
+    expect(camera).toContain("ranked[MAX_FINAL_CANDIDATES:]");
+    expect(camera).toContain("if selected is not None:");
     expect(camera).toContain("FIT_MULTIPLIERS =");
     expect(camera).toContain("bpy.context.view_layer.update()");
     expect(camera).toContain("_hull_area(");
