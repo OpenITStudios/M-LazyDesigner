@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 
 import type { PublicationJob } from "@/lib/publication/contracts";
 import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publication/materialChannels";
+import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
 
 const MAX_TEXTURE_PIXELS = 4_194_304;
 const MAX_CUBES = 10_000;
@@ -360,6 +361,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
         glb.toString("ascii", 0, 4) !== "glTF") {
       throw new Error("PUBLICATION_GLTF_INVALID_OR_OVERSIZED");
     }
+    inspectPublicationGlb(glb, scene.children.length, Object.keys(materialReceipts).length);
     const after = nativeState();
     if (before.project !== after.project ||
         before.project_uuid !== after.project_uuid ||
