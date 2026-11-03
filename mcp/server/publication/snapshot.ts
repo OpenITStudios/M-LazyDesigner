@@ -12,6 +12,7 @@ import {
   PUBLICATION_UNITS_PER_MINECRAFT_BLOCK,
   derivePublicationPrimitiveBindings,
   expectedPublicationBlenderBounds,
+  expectedPublicationGltfUvSha256,
   type PublicationCubeManifest,
   type PublicationSourceManifest,
 } from "@/lib/publication/sourceManifest";
@@ -296,6 +297,8 @@ function nativeState(): NativeState {
       expected_blender_bounds_max: bounds.max,
       position_sha256: positionSha,
       uv_sha256: uvSha,
+      gltf_uv_sha256: expectedPublicationGltfUvSha256(uv),
+      uv_vertex_count: uv.length / 2,
       normal_sha256: normalSha,
       index_sha256: indexSha,
       primitives,
