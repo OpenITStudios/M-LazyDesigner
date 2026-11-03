@@ -488,6 +488,19 @@ describe("Detached native fidelity bridge", () => {
     await expect(snapshotDetachedPublicationGlb()).rejects.toThrow("UNSUPPORTED_FACE_MATERIAL");
   });
 
+  test("detects corrupted actual GLB UV bytes even when mesh/material inventory matches", async () => {
+    installNativeFixture();
+    const corrupt = fixtureGlb({ corruptUv: true });
+    (globalThis as any).THREE.GLTFExporter = class {
+      parse(_scene: unknown, done: (out: ArrayBuffer) => void) {
+        done(corrupt.buffer.slice(corrupt.byteOffset, corrupt.byteOffset + corrupt.byteLength));
+      }
+    };
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
+      "PUBLICATION_GLB_SOURCE_UV_BYTES_MISMATCH",
+    );
+  });
+
   test("rejects source modification during exporter callback instead of delivering stale GLB", async () => {
     const f = installNativeFixture();
     const THREE = (globalThis as any).THREE;
