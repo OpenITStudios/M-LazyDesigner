@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { publicationRenderParameters, type PublicationRenderRequest } from "@/lib/publication/contracts";
 import {
-  renderPublication,
+  preparePublicationRender,
+  renderPreparedPublication,
+  type PreparedPublicationRender,
   type PublicationRenderReceipt,
 } from "./execute";
 
@@ -37,8 +38,9 @@ export type PublicationRenderJobStatus = {
 };
 
 type PublicationRunner = (
-  request: PublicationRenderRequest, signal: AbortSignal,
+  prepared: PreparedPublicationRender, signal: AbortSignal,
 ) => Promise<PublicationRenderReceipt>;
+type PublicationPreparer = (input: unknown) => Promise<PreparedPublicationRender>;
 
 function projectJob(job: RenderJobRecord): PublicationRenderJobStatus {
   return {
@@ -57,8 +59,12 @@ function projectJob(job: RenderJobRecord): PublicationRenderJobStatus {
  */
 export class PublicationRenderJobs {
   private current: RenderJobRecord | null = null;
+  private preparing = false;
 
-  constructor(private readonly run: PublicationRunner = renderPublication) {}
+  constructor(
+    private readonly run: PublicationRunner = renderPreparedPublication,
+    private readonly prepare: PublicationPreparer = preparePublicationRender,
+  ) {}
 
   private requireJob(jobId: string): RenderJobRecord {
     if (!/^render_[a-f0-9]{24}$/.test(jobId) || !this.current ||
@@ -68,16 +74,24 @@ export class PublicationRenderJobs {
     return this.current;
   }
 
-  start(input: unknown): PublicationRenderJobStatus {
-    const request = publicationRenderParameters.parse(input);
-    if (this.current && (
+  async start(input: unknown): Promise<PublicationRenderJobStatus> {
+    if (this.preparing || (this.current && (
       this.current.state === "RUNNING" ||
       this.current.state === "CANCELLING" ||
       this.current.state === "EXIT_UNCONFIRMED"
-    )) {
+    ))) {
       throw new Error(
-        "PUBLICATION_RENDER_JOB_BUSY: a render is running, stopping, or process exit is unconfirmed.",
+        "PUBLICATION_RENDER_JOB_BUSY: a render is preparing, running, stopping, or process exit is unconfirmed.",
       );
+    }
+    this.preparing = true;
+    let prepared: PreparedPublicationRender;
+    try {
+      // This await stays INSIDE the Runtime native request queue. The GLB
+      // exporter must finish against one coherent project before start replies.
+      prepared = await this.prepare(input);
+    } finally {
+      this.preparing = false;
     }
     const job: RenderJobRecord = {
       job_id: "render_" + randomBytes(12).toString("hex"),
@@ -90,7 +104,7 @@ export class PublicationRenderJobs {
     this.current = job;
     // No long await inside the Gateway capability call. Asynchronous work
     // is tied to this installed plugin process, NOT to a background ChatGPT task.
-    void Promise.resolve().then(() => this.run(request, job.controller.signal))
+    void Promise.resolve().then(() => this.run(prepared, job.controller.signal))
       .then(receipt => {
         job.state = "RENDERED_DRAFT";
         job.receipt = receipt;
@@ -122,7 +136,7 @@ export class PublicationRenderJobs {
 
 const productionJobs = new PublicationRenderJobs();
 
-export function startPublicationRender(input: unknown): PublicationRenderJobStatus {
+export function startPublicationRender(input: unknown): Promise<PublicationRenderJobStatus> {
   return productionJobs.start(input);
 }
 export function getPublicationRenderJobStatus(jobId: string): PublicationRenderJobStatus {
