@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { deflateSync } from "node:zlib";
+import { createHash } from "node:crypto";
 import { inspectPublicationPng } from "@/lib/publication/pngIntegrity";
 
 /** True RGBA8 1x1 PNG generated from an opaque pixel, not a fake header. */
@@ -92,7 +93,10 @@ describe("Publication PNG decoded-payload contract", () => {
       const png = fixtureRgbaPng(Buffer.from([filter, 9, 12, 24, 255]), {
         splitIdat: true,
       });
-      expect(inspectPublicationPng(png, 1, 1)).toMatchObject({
+      const expectedSha = createHash("sha256").update(
+        Buffer.from([9, 12, 24, 255]),
+      ).digest("hex");
+      expect(inspectPublicationPng(png, 1, 1, expectedSha)).toMatchObject({
         width: 1, height: 1, chunk_count: 4,
       });
     }
@@ -109,6 +113,15 @@ describe("Publication PNG decoded-payload contract", () => {
       fixtureRgbaPng(Buffer.from([5, 9, 12, 24, 255])), 1, 1,
     )).toThrow("PNG_FILTER_INVALID");
   });
+  test("detects source-pixel substitution in an otherwise valid-CRC RGBA8 PNG", () => {
+    const expectedSha = createHash("sha256").update(
+      Buffer.from([9, 12, 24, 255]),
+    ).digest("hex");
+    const altered = fixtureRgbaPng(Buffer.from([0, 10, 12, 24, 255]));
+    expect(() => inspectPublicationPng(altered, 1, 1, expectedSha))
+      .toThrow("PNG_SOURCE_PIXELS_MISMATCH");
+  });
+
   test("bounds decompression and rejects unknown critical chunks", () => {
     expect(() => inspectPublicationPng(
       fixtureRgbaPng(Buffer.alloc(65_536)), 1, 1,

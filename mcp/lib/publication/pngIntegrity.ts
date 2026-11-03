@@ -1,4 +1,5 @@
 import { inflateSync } from "node:zlib";
+import { createHash } from "node:crypto";
 
 /** Strict PNG publication output validation, not a perceptual image-quality score.
  * Check the complete RGBA8 PNG container and bounded decompressed scanlines
@@ -41,6 +42,7 @@ function verifyIdatScanlines(
   chunks: readonly Buffer[],
   width: number,
   height: number,
+  expectedRgbaSha256?: string,
 ): void {
   // RGBA8/zero-interlace has one filter byte plus four bytes per pixel/row.
   // The output bound prevents small PNG containers from inflating indefinitely.
@@ -57,10 +59,41 @@ function verifyIdatScanlines(
   if (inflated.length !== expectedBytes) {
     throw new Error("PUBLICATION_OUTPUT_PNG_DECOMPRESSED_SIZE_INVALID");
   }
+  const sha = expectedRgbaSha256 === undefined ? null : createHash("sha256");
+  const rowSize = width * 4;
+  let previous = sha ? Buffer.alloc(rowSize) : null;
+  let decoded = sha ? Buffer.allocUnsafe(rowSize) : null;
   for (let row = 0; row < height; row++) {
-    if (inflated[row * stride]! > 4) {
+    const start = row * stride;
+    const filter = inflated[start]!;
+    if (filter > 4) {
       throw new Error("PUBLICATION_OUTPUT_PNG_FILTER_INVALID");
     }
+    if (!sha || !previous || !decoded) continue;
+    for (let i = 0; i < rowSize; i++) {
+      const left = i < 4 ? 0 : decoded[i - 4]!;
+      const above = previous[i]!;
+      const upperLeft = i < 4 ? 0 : previous[i - 4]!;
+      let predictor = 0;
+      if (filter === 1) predictor = left;
+      else if (filter === 2) predictor = above;
+      else if (filter === 3) predictor = Math.floor((left + above) / 2);
+      else if (filter === 4) {
+        const estimate = left + above - upperLeft;
+        const dl = Math.abs(estimate - left);
+        const da = Math.abs(estimate - above);
+        const dc = Math.abs(estimate - upperLeft);
+        predictor = dl <= da && dl <= dc ? left : da <= dc ? above : upperLeft;
+      }
+      decoded[i] = (inflated[start + 1 + i]! + predictor) & 0xff;
+    }
+    sha.update(decoded);
+    const prior = previous;
+    previous = decoded;
+    decoded = prior;
+  }
+  if (sha && sha.digest("hex") !== expectedRgbaSha256) {
+    throw new Error("PUBLICATION_OUTPUT_PNG_SOURCE_PIXELS_MISMATCH");
   }
 }
 
@@ -68,13 +101,18 @@ export function inspectPublicationPng(
   png: Buffer,
   expectedWidth: number,
   expectedHeight: number,
+  expectedRgbaSha256?: string,
 ): PublicationPngIntegrity {
+  if (expectedRgbaSha256 !== undefined &&
+      !/^[a-f0-9]{64}$/.test(expectedRgbaSha256)) {
+    throw new Error("PUBLICATION_OUTPUT_PNG_SOURCE_DIGEST_INVALID");
+  }
   if (!Buffer.isBuffer(png) ||
       png.length < 57 || png.length > MAX_PNG_BYTES ||
       png.toString("hex", 0, 8) !== PNG_SIGNATURE ||
       !Number.isSafeInteger(expectedWidth) || !Number.isSafeInteger(expectedHeight) ||
       expectedWidth < 1 || expectedHeight < 1 ||
-      expectedWidth > 4096 || expectedHeight > 4096 ||
+      expectedWidth > 8192 || expectedHeight > 8192 ||
       expectedWidth * expectedHeight > MAX_OUTPUT_PIXELS ||
       png.readUInt32BE(16) !== expectedWidth ||
       png.readUInt32BE(20) !== expectedHeight) {
@@ -140,7 +178,7 @@ export function inspectPublicationPng(
     if (count > 16_384) throw new Error("PUBLICATION_OUTPUT_PNG_TOO_MANY_CHUNKS");
   }
   if (!seenIEND) throw new Error("PUBLICATION_OUTPUT_PNG_MISSING_IEND");
-  verifyIdatScanlines(idatChunks, expectedWidth, expectedHeight);
+  verifyIdatScanlines(idatChunks, expectedWidth, expectedHeight, expectedRgbaSha256);
   return {
     width: expectedWidth,
     height: expectedHeight,

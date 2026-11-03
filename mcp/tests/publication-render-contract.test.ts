@@ -137,6 +137,17 @@ describe("Publication render contract", () => {
   });
 });
 
+const FIXTURE_SOURCE_COLOR_URI =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mMIqFj1HwAFAAJyaPBjRAAAAABJRU5ErkJggg=="; // [80,120,170,255]
+const FIXTURE_SOURCE_CHANGED_URI =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mMIrFj1HwAFBAJzRRKqAgAAAABJRU5ErkJggg=="; // [81,120,170,255]
+const FIXTURE_MER_URI =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNgcPj/HwADwgI/tA9c/AAAAABJRU5ErkJggg=="; // [0,64,255,255]
+const FIXTURE_EMISSION_URI =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPQsAn9DwADAgG5m+8wfQAAAABJRU5ErkJggg=="; // [40,60,85,255]
+const FIXTURE_NORMAL_URI =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNo+Pz/PwAH2wNydFC2VwAAAABJRU5ErkJggg=="; // [128,243,255,255]
+
 /** Minimal structurally plausible GLB; not a substitute for the real exporter. */
 function fixtureGlb(options: {
   imageUri?: string;
@@ -149,6 +160,8 @@ function fixtureGlb(options: {
   linearSampling?: boolean;
   swappedBaseTexture?: boolean;
   withNormal?: boolean;
+  corruptMerPixels?: boolean;
+  corruptEmissionPixels?: boolean;
 } = {}): Buffer {
   const positions = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0];
   const uv = [0, 1, 1, 1, 1, 0, 0, 0]; // Blockbench preview V inverted for glTF.
@@ -225,15 +238,21 @@ function fixtureGlb(options: {
         source: options.sourceIndex ?? 0, sampler: 0,
       },
       ...(profile === "pbr_mer" ? [
-        { name: "ld_mer_tex-1", source: 0, sampler: 0 },
-        { name: "ld_emission_tex-1", source: 0, sampler: 0 },
+        { name: "ld_mer_tex-1", source: 1, sampler: 0 },
+        { name: "ld_emission_tex-1", source: 2, sampler: 0 },
       ] : []),
       ...(options.withNormal ? [{
-        name: "ld_normal_tex-1", source: 0, sampler: 0,
+        name: "ld_normal_tex-1", source: profile === "pbr_mer" ? 3 : 1, sampler: 0,
       }] : []),
     ],
-    images: [{ uri: options.imageUri ??
-      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=" }],
+    images: [
+      { uri: options.imageUri ?? FIXTURE_SOURCE_COLOR_URI },
+      ...(profile === "pbr_mer" ? [
+        { uri: options.corruptMerPixels ? FIXTURE_SOURCE_CHANGED_URI : FIXTURE_MER_URI },
+        { uri: options.corruptEmissionPixels ? FIXTURE_SOURCE_CHANGED_URI : FIXTURE_EMISSION_URI },
+      ] : []),
+      ...(options.withNormal ? [{ uri: FIXTURE_NORMAL_URI }] : []),
+    ],
   }));
   const padded = Buffer.alloc(Math.ceil(json.byteLength / 4) * 4, 0x20);
   json.copy(padded);
@@ -727,6 +746,54 @@ describe("Detached native fidelity bridge", () => {
         }
       };
       await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(expectedCode);
+    }
+  });
+
+  test("rejects GLB atlas with correct name and dimensions but changed RGBA pixel bytes", async () => {
+    installNativeFixture();
+    const mismatched = fixtureGlb({ imageUri: FIXTURE_SOURCE_CHANGED_URI });
+    (globalThis as any).THREE.GLTFExporter = class {
+      parse(_scene: unknown, done: (out: ArrayBuffer) => void) {
+        done(mismatched.buffer.slice(
+          mismatched.byteOffset, mismatched.byteOffset + mismatched.byteLength,
+        ));
+      }
+    };
+    await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
+      "PUBLICATION_OUTPUT_PNG_SOURCE_PIXELS_MISMATCH",
+    );
+  });
+
+  test("rejects an incorrect derived MER image even when PBR metadata is intact", async () => {
+    const f = installNativeFixture();
+    const mer = new Uint8ClampedArray([255, 128, 64, 255]);
+    const merTexture = {
+      uuid: "mer-1", group: "group-1", pbr_channel: "mer", currentFrame: 0,
+      ctx: { canvas: { width: 1, height: 1 },
+        getImageData: () => ({ data: mer, width: 1, height: 1 }) },
+    };
+    (globalThis as any).Texture.all.push(merTexture);
+    (globalThis as any).TextureGroup.all = [{
+      uuid: "group-1", name: "PBR", is_material: true,
+      material_config: { mer_value: [0, 0, 255] },
+      getTextures: () => [{ ...f.texture, pbr_channel: "color" }, merTexture],
+    }];
+    f.texture.group = "group-1";
+    for (const options of [
+      { materialProfile: "pbr_mer" as const, corruptMerPixels: true },
+      { materialProfile: "pbr_mer" as const, corruptEmissionPixels: true },
+    ]) {
+      const mismatched = fixtureGlb(options);
+      (globalThis as any).THREE.GLTFExporter = class {
+        parse(_scene: unknown, done: (out: ArrayBuffer) => void) {
+          done(mismatched.buffer.slice(
+            mismatched.byteOffset, mismatched.byteOffset + mismatched.byteLength,
+          ));
+        }
+      };
+      await expect(snapshotDetachedPublicationGlb()).rejects.toThrow(
+        "PUBLICATION_OUTPUT_PNG_SOURCE_PIXELS_MISMATCH",
+      );
     }
   });
 

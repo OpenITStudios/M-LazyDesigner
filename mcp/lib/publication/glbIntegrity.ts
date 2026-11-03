@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { inspectPublicationPng } from "@/lib/publication/pngIntegrity";
 import type { PublicationCubeManifest } from "@/lib/publication/sourceManifest";
 import type { PublicationJob } from "@/lib/publication/contracts";
 
@@ -13,6 +14,13 @@ export type PublicationGlbInventory = {
   image_count: number;
   primitive_count: number;
 };
+
+/** Exact RGBA bytes expected after the trusted Blockbench glTF canvas export. */
+export type PublicationEmbeddedImageExpectation = Readonly<{
+  width: number;
+  height: number;
+  rgba_sha256: string;
+}>;
 
 type GltfRecord = Record<string, unknown>;
 
@@ -135,6 +143,7 @@ export function inspectPublicationGlb(
   expectedMaterials: number,
   expectedCubes?: readonly PublicationCubeManifest[],
   expectedMaterialSemantics?: PublicationJob["materials"],
+  expectedImagePixels?: Readonly<Record<string, PublicationEmbeddedImageExpectation>>,
 ): PublicationGlbInventory {
   if (!Buffer.isBuffer(glb) || glb.length < 20 || glb.length > 96 * 1024 * 1024 ||
       glb.toString("ascii", 0, 4) !== "glTF" || glb.readUInt32LE(4) !== 2 ||
@@ -173,25 +182,27 @@ export function inspectPublicationGlb(
     bytes.toString("hex", 0, 8) === "89504e470d0a1a0a" &&
     bytes.readUInt32BE(16) > 0 && bytes.readUInt32BE(16) <= 8192 &&
     bytes.readUInt32BE(20) > 0 && bytes.readUInt32BE(20) <= 8192;
-  const embeddedPng = (image: GltfRecord, views: GltfRecord[]): boolean => {
+  const embeddedPng = (image: GltfRecord, views: GltfRecord[]): Buffer | null => {
     const uri = image.uri;
     if (typeof uri === "string") {
       // A detached source snapshot must never load network or external images.
       if (!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(uri) ||
-          uri.length > 42 * 1024 * 1024) return false;
-      return isPng(Buffer.from(uri.slice("data:image/png;base64,".length), "base64"));
+          uri.length > 42 * 1024 * 1024) return null;
+      const bytes = Buffer.from(uri.slice("data:image/png;base64,".length), "base64");
+      return isPng(bytes) ? bytes : null;
     }
     if (image.mimeType !== "image/png" ||
-        !validIndex(image.bufferView, views.length) || pointer >= glb.length) return false;
+        !validIndex(image.bufferView, views.length) || pointer >= glb.length) return null;
     const view = views[image.bufferView as number]!;
     const offset = view.byteOffset ?? 0;
     const length = view.byteLength;
     if (!Number.isSafeInteger(offset) || (offset as number) < 0 ||
         !Number.isSafeInteger(length) || (length as number) < 24 ||
         (length as number) > 32 * 1024 * 1024 ||
-        pointer + 8 + (offset as number) + (length as number) > glb.length) return false;
+        pointer + 8 + (offset as number) + (length as number) > glb.length) return null;
     const start = pointer + 8 + (offset as number);
-    return isPng(glb.subarray(start, start + (length as number)));
+    const bytes = glb.subarray(start, start + (length as number));
+    return isPng(bytes) ? bytes : null;
   };
   const meshes = positiveArray(json.meshes);
   const materials = positiveArray(json.materials);
@@ -310,6 +321,47 @@ export function inspectPublicationGlb(
           throw new Error("PUBLICATION_GLB_PBR_CLAMP_TO_EDGE_LOST: " + name);
         }
       }
+    }
+  }
+  if (expectedImagePixels) {
+    // The native snapshot supplies exact expected RGBA content for every
+    // emitted texture, including derived MER/emission/normal images.
+    // Do not trust PNG signatures or names as proof of pixel fidelity.
+    const expectedNames = Object.keys(expectedImagePixels);
+    if (!expectedNames.length) {
+      throw new Error("PUBLICATION_GLB_SOURCE_IMAGES_EXPECTATIONS_EMPTY");
+    }
+    const verifiedNames = new Set<string>();
+    const verifiedSources = new Map<number, string>();
+    for (const item of textures) {
+      if (!record(item) || typeof item.name !== "string" ||
+          !validIndex(item.source, images.length)) {
+        throw new Error("PUBLICATION_GLB_SOURCE_IMAGE_REFERENCE_INVALID");
+      }
+      const name = item.name;
+      const expected = expectedImagePixels[name];
+      if (!expected || verifiedNames.has(name)) {
+        throw new Error("PUBLICATION_GLB_SOURCE_IMAGE_IDENTITY_MISMATCH:" + name);
+      }
+      const index = item.source as number;
+      const identity = expected.width + "x" + expected.height + ":" + expected.rgba_sha256;
+      const previouslyVerified = verifiedSources.get(index);
+      if (previouslyVerified !== undefined && previouslyVerified !== identity) {
+        throw new Error("PUBLICATION_GLB_SOURCE_IMAGE_SHARED_BYTES_MISMATCH:" + name);
+      }
+      if (previouslyVerified === undefined) {
+        const image = images[index];
+        const bytes = record(image) ? embeddedPng(image, bufferViews) : null;
+        if (!bytes) throw new Error("PUBLICATION_GLB_SOURCE_IMAGE_MISSING:" + name);
+        inspectPublicationPng(
+          bytes, expected.width, expected.height, expected.rgba_sha256,
+        );
+        verifiedSources.set(index, identity);
+      }
+      verifiedNames.add(name);
+    }
+    if (verifiedNames.size !== expectedNames.length) {
+      throw new Error("PUBLICATION_GLB_SOURCE_IMAGE_INVENTORY_MISMATCH");
     }
   }
   if (expectedCubes) {

@@ -10,7 +10,7 @@ import {
   expectedPublicationGltfMaterial,
   requirePublicationTexturePreviewMode,
 } from "@/lib/publication/materialContract";
-import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
+import { inspectPublicationGlb, type PublicationEmbeddedImageExpectation } from "@/lib/publication/glbIntegrity";
 import { verifyVisibleAtlasPixelsOpaque, type AtlasRect } from "@/lib/publication/atlasCoverage";
 import {
   PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT,
@@ -463,12 +463,31 @@ function collectUsedAtlasUv(): Map<string, AtlasRect[]> {
   return usage;
 }
 
+function expectPublicationImage(
+  expectations: Record<string, PublicationEmbeddedImageExpectation>,
+  name: string,
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+): void {
+  if (Object.hasOwn(expectations, name)) {
+    throw new Error("PUBLICATION_SOURCE_IMAGE_IDENTITY_DUPLICATE:" + name);
+  }
+  expectations[name] = {
+    width, height,
+    rgba_sha256: sha256(Buffer.from(
+      pixels.buffer, pixels.byteOffset, pixels.byteLength,
+    )),
+  };
+}
+
 function makeMaterial(
   uuid: string,
   receipts: MaterialReceipt,
   createdTextures: THREE.Texture[],
   materialCache: Map<string, THREE.MeshStandardMaterial>,
   uvUsage: ReadonlyMap<string, AtlasRect[]>,
+  expectedImages: Record<string, PublicationEmbeddedImageExpectation>,
 ): THREE.MeshStandardMaterial {
   const previous = materialCache.get(uuid);
   if (previous) return previous;
@@ -498,6 +517,10 @@ function makeMaterial(
       },
     )
     : null;
+  expectPublicationImage(
+    expectedImages, "ld_base_" + uuid,
+    colorPixels.data, colorPixels.width, colorPixels.height,
+  );
   const colorMap = copyPixelTexture(colorPixels, "ld_base_" + uuid, true, createdTextures);
   const material = new THREE.MeshStandardMaterial({
     map: colorMap, color: 0xffffff, side: THREE.DoubleSide,
@@ -517,6 +540,14 @@ function makeMaterial(
         throw new Error("PUBLICATION_PBR_CHANNEL_DIMENSIONS_INVALID: " + uuid);
       }
       const mapped = convertBedrockMerToGltf(colorPixels.data, pixels.data);
+      expectPublicationImage(
+        expectedImages, "ld_mer_" + uuid, mapped.metallicRoughness,
+        pixels.width, pixels.height,
+      );
+      expectPublicationImage(
+        expectedImages, "ld_emission_" + uuid, mapped.emission,
+        pixels.width, pixels.height,
+      );
       const metalRough = copyPixelTexture(
         pixels, "ld_mer_" + uuid, false, createdTextures, mapped.metallicRoughness,
       );
@@ -546,9 +577,14 @@ function makeMaterial(
       if (pixels.width !== colorPixels.width || pixels.height !== colorPixels.height) {
         throw new Error("PUBLICATION_NORMAL_CHANNEL_DIMENSIONS_INVALID: " + uuid);
       }
+      const convertedNormal = convertBedrockNormalToGltf(pixels.data);
+      expectPublicationImage(
+        expectedImages, "ld_normal_" + uuid, convertedNormal,
+        pixels.width, pixels.height,
+      );
       const normalMap = copyPixelTexture(
         pixels, "ld_normal_" + uuid, false, createdTextures,
-        convertBedrockNormalToGltf(pixels.data),
+        convertedNormal,
       );
       material.normalMap = normalMap;
       receipt.normal_sha256 = texturePixelsSha(pixels);
@@ -577,6 +613,8 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
   const materialCache = new Map<string, THREE.MeshStandardMaterial>();
   const uvUsage = collectUsedAtlasUv();
   const materialReceipts: MaterialReceipt = {};
+  const expectedImages: Record<string, PublicationEmbeddedImageExpectation> =
+    Object.create(null);
   const scene = new THREE.Scene();
   scene.name = "lazydesigner_publication_snapshot";
   try {
@@ -593,7 +631,10 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
         const face = cube.faces?.[faceKey as keyof typeof cube.faces] as CubeFace | undefined;
         const tex = face?.getTexture();
         if (!tex?.uuid) throw new Error("PUBLICATION_FACE_TEXTURE_UNRESOLVED: " + cube.uuid);
-        const m = makeMaterial(tex.uuid, materialReceipts, createdTextures, materialCache, uvUsage);
+        const m = makeMaterial(
+          tex.uuid, materialReceipts, createdTextures, materialCache,
+          uvUsage, expectedImages,
+        );
         if (!createdMaterials.includes(m)) createdMaterials.push(m);
         return m;
       });
@@ -648,7 +689,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
     }
     inspectPublicationGlb(
       glb, scene.children.length, Object.keys(materialReceipts).length,
-      before.manifest.cubes, materialReceipts,
+      before.manifest.cubes, materialReceipts, expectedImages,
     );
     const after = nativeState();
     if (publicationEditorFence() !== editorFenceBefore) {
