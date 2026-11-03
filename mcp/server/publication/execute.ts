@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import { inspectPublicationPng } from "@/lib/publication/pngIntegrity";
+import { getRuntimeLifecycleSnapshot, runRuntimeOperationExclusive } from "@/lib/runtime/lifecycle";
 import { validateHdriBytes } from "@/lib/publication/environment";
 import {
   publicationDiagnosticsSchema,
@@ -209,12 +210,20 @@ export async function runBlender(
 export type PreparedPublicationRender = Readonly<{
   request: PublicationRenderRequest;
   snapshot: DetachedPublicationSnapshot;
+  runtime_generation: number;
 }>;
 
 export async function preparePublicationRender(input: unknown): Promise<PreparedPublicationRender> {
   const request = publicationRenderParameters.parse(input);
+  const generation = getRuntimeLifecycleSnapshot().owner_generation;
+  if (generation === null) {
+    throw new Error("PUBLICATION_RUNTIME_GENERATION_REQUIRED");
+  }
   const snapshot = await snapshotDetachedPublicationGlb();
-  return { request, snapshot };
+  if (getRuntimeLifecycleSnapshot().owner_generation !== generation) {
+    throw new Error("PUBLICATION_RUNTIME_GENERATION_CHANGED_DURING_SNAPSHOT");
+  }
+  return { request, snapshot, runtime_generation: generation };
 }
 
 /** Cycles may run after the native queue releases: it consumes only immutable GLB bytes. */
@@ -341,20 +350,23 @@ export async function renderPreparedPublication(
       diagnostics.preview.dimensions[0],
       diagnostics.preview.dimensions[1],
     );
-    assertActive();
-    verifyPublicationSourceCurrent(snapshot.project_uuid, snapshot.source_sha256);
-    // Exclusive destination create. No silent replacement and no success
-    // receipt for an uncertain or partially overwritten result.
-    if (fs.existsSync(request.output_path)) {
-      throw new Error("PUBLICATION_OUTPUT_RACE_COLLISION");
-    }
-    assertActive();
-    fs.writeFileSync(request.output_path, png, { flag: "wx" });
-    const result = fs.readFileSync(request.output_path);
-    const persisted = Buffer.isBuffer(result) ? result : Buffer.from(result);
-    if (hash(persisted) !== hash(png)) {
-      throw new Error("PUBLICATION_OUTPUT_READBACK_MISMATCH: verify the file manually.");
-    }
+    // Run the last native source fingerprint and the exclusive final write in
+    // one serialized Runtime operation. Blender itself rendered immutable
+    // detached GLB bytes without occupying this queue.
+    await runRuntimeOperationExclusive(prepared.runtime_generation, async () => {
+      assertActive();
+      verifyPublicationSourceCurrent(snapshot.project_uuid, snapshot.source_sha256);
+      if (fs.existsSync(request.output_path)) {
+        throw new Error("PUBLICATION_OUTPUT_RACE_COLLISION");
+      }
+      assertActive();
+      fs.writeFileSync(request.output_path, png, { flag: "wx" });
+      const result = fs.readFileSync(request.output_path);
+      const persisted = Buffer.isBuffer(result) ? result : Buffer.from(result);
+      if (hash(persisted) !== hash(png)) {
+        throw new Error("PUBLICATION_OUTPUT_READBACK_MISMATCH: verify the file manually.");
+      }
+    }, { signal });
     const completed: PublicationRenderReceipt = {
       state: "RENDERED_DRAFT",
       source_project_uuid: snapshot.project_uuid,
@@ -427,5 +439,10 @@ export async function renderPreparedPublication(
 
 /** Compatibility path for direct explicit callers; normal AI/UI use nonblocking jobs. */
 export async function renderPublication(input: unknown, signal?: AbortSignal): Promise<PublicationRenderReceipt> {
-  return renderPreparedPublication(await preparePublicationRender(input), signal);
+  const generation = getRuntimeLifecycleSnapshot().owner_generation;
+  if (generation === null) throw new Error("PUBLICATION_RUNTIME_GENERATION_REQUIRED");
+  const prepared = await runRuntimeOperationExclusive(
+    generation, () => preparePublicationRender(input), { signal },
+  );
+  return renderPreparedPublication(prepared, signal);
 }
