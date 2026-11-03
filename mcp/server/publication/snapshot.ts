@@ -5,6 +5,11 @@ import { createHash } from "node:crypto";
 
 import type { PublicationJob } from "@/lib/publication/contracts";
 import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publication/materialChannels";
+import {
+  inspectPublicationPbrPlan,
+  expectedPublicationGltfMaterial,
+  requirePublicationTexturePreviewMode,
+} from "@/lib/publication/materialContract";
 import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
 import { verifyVisibleAtlasPixelsOpaque, type AtlasRect } from "@/lib/publication/atlasCoverage";
 import {
@@ -465,6 +470,7 @@ function makeMaterial(
   const previous = materialCache.get(uuid);
   if (previous) return previous;
   const texture = resolveTexture(uuid);
+  requirePublicationTexturePreviewMode(uuid, texture.render_mode);
   const colorPixels = imageData(texture);
   // Transparent atlas padding is not transparency on the 3D object. Verify
   // the precise authored face-UV regions rather than rejecting empty islands.
@@ -476,6 +482,19 @@ function makeMaterial(
     logicalWidth, logicalHeight, uvRects,
   );
   const group = resolvePublicationTextureGroup(texture);
+  const plan = group?.is_material === true
+    ? inspectPublicationPbrPlan(
+      uuid,
+      group.getTextures().map(channel => ({
+        uuid: channel.uuid,
+        pbr_channel: channel.pbr_channel,
+      })),
+      {
+        mer_value: group.material_config?.mer_value,
+        subsurface_value: group.material_config?.subsurface_value,
+      },
+    )
+    : null;
   const colorMap = copyPixelTexture(colorPixels, "ld_base_" + uuid, true, createdTextures);
   const material = new THREE.MeshStandardMaterial({
     map: colorMap, color: 0xffffff, side: THREE.DoubleSide,
@@ -484,53 +503,43 @@ function makeMaterial(
   material.name = "ld_color_" + uuid;
   const receipt: MaterialReceipt[string] = {
     color_uuid: uuid, texture_sha256: texturePixelsSha(colorPixels),
-    alpha_mode: "OPAQUE", pbr: "NONE",
+    alpha_mode: "OPAQUE", pbr: plan ? "MAPPED" : "NONE",
     unused_alpha_pixels: alphaCoverage.transparent_pixels_outside_mapped_uv,
+    gltf: expectedPublicationGltfMaterial(plan),
   };
-  if (group?.is_material === true) {
-    const channels = group.getTextures();
-    if (!Array.isArray(channels)) throw new Error("PUBLICATION_PBR_CHANNEL_INVENTORY_UNAVAILABLE");
-    const color = channels.filter(item => item.pbr_channel === "color");
-    const mer = channels.filter(item => item.pbr_channel === "mer");
-    const normal = channels.filter(item => item.pbr_channel === "normal");
-    const height = channels.filter(item => item.pbr_channel === "height");
-    if (color.length !== 1 || color[0]!.uuid !== uuid ||
-        mer.length > 1 || normal.length > 1 || height.length > 0) {
-      throw new Error("PUBLICATION_PBR_CHANNELS_AMBIGUOUS_OR_UNSUPPORTED: " + uuid);
-    }
-    receipt.pbr = "MAPPED";
-    if (mer.length === 1) {
-      const pixels = imageData(mer[0]!);
+  if (plan) {
+    if (plan.mer_uuid) {
+      const pixels = imageData(resolveTexture(plan.mer_uuid));
       if (pixels.width !== colorPixels.width || pixels.height !== colorPixels.height) {
         throw new Error("PUBLICATION_PBR_CHANNEL_DIMENSIONS_INVALID: " + uuid);
       }
       const mapped = convertBedrockMerToGltf(colorPixels.data, pixels.data);
-      const metalRough = copyPixelTexture(pixels, "ld_mer_" + uuid, false, createdTextures, mapped.metallicRoughness);
+      const metalRough = copyPixelTexture(
+        pixels, "ld_mer_" + uuid, false, createdTextures, mapped.metallicRoughness,
+      );
       material.metalness = 1;
       material.roughness = 1;
       material.metalnessMap = metalRough;
       material.roughnessMap = metalRough;
-      const emissionMap = copyPixelTexture(pixels, "ld_emission_" + uuid, true, createdTextures, mapped.emission);
+      const emissionMap = copyPixelTexture(
+        pixels, "ld_emission_" + uuid, true, createdTextures, mapped.emission,
+      );
       material.emissive = new THREE.Color(0xffffff);
       material.emissiveMap = emissionMap;
       material.emissiveIntensity = 1;
       receipt.mer_sha256 = texturePixelsSha(pixels);
     } else {
-      const values = group.material_config?.mer_value;
-      if (!Array.isArray(values) || values.length !== 3 ||
-          values.some(v => !Number.isFinite(v) || v < 0 || v > 255)) {
-        throw new Error("PUBLICATION_PBR_UNIFORM_MER_INVALID");
-      }
-      material.metalness = values[0]! / 255;
-      material.roughness = values[2]! / 255;
-      if (values[1]! > 0) {
+      const values = plan.uniform_mer!;
+      material.metalness = values[0] / 255;
+      material.roughness = values[2] / 255;
+      if (values[1] > 0) {
         material.emissive = new THREE.Color(0xffffff);
         material.emissiveMap = colorMap;
-        material.emissiveIntensity = values[1]! / 255;
+        material.emissiveIntensity = values[1] / 255;
       }
     }
-    if (normal.length === 1) {
-      const pixels = imageData(normal[0]!);
+    if (plan.normal_uuid) {
+      const pixels = imageData(resolveTexture(plan.normal_uuid));
       if (pixels.width !== colorPixels.width || pixels.height !== colorPixels.height) {
         throw new Error("PUBLICATION_NORMAL_CHANNEL_DIMENSIONS_INVALID: " + uuid);
       }
@@ -632,7 +641,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
     }
     inspectPublicationGlb(
       glb, scene.children.length, Object.keys(materialReceipts).length,
-      before.manifest.cubes,
+      before.manifest.cubes, materialReceipts,
     );
     const after = nativeState();
     if (publicationEditorFence() !== editorFenceBefore) {
