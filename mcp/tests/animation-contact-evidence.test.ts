@@ -4,6 +4,7 @@ import {
   analyzeObservedAnimationLocatorTrajectories,
   analyzeObservedAnimationJointOriginFrames,
   reviewExplicitPlantedContactIkFromPreview,
+  inspectObservedAdditiveEulerPose,
   type ExplicitPlantedPreviewIkInput,
   type ObservedAnimationLocatorFrame,
   type ObservedAnimationJointOriginFrame,
@@ -1286,4 +1287,38 @@ test("missing mesh orientation leaves source world IK intact but local rotation 
     reason:"IK_LOCAL_NATIVE_MESH_ORIENTATION_UNAVAILABLE",
     native_keyframe_authorized:false,
   });
+});
+
+
+test("observed joint Euler frames retain detached numeric evidence without keyframe claims", () => {
+  const src=observedJointPreview();
+  const good=inspectObservedAdditiveEulerPose({
+    mesh_rotation_radians:[0,0.2,0],
+    pre_animation_rotation_radians:[0,0,0],
+    fix_rotation_radians:[0,0,0],
+    format_euler_order:"XYZ",mesh_euler_order:"XYZ",
+    pre_animation_euler_order:"XYZ",fix_euler_order:"XYZ",
+    rotation_global:false,animation_override:false,
+    quaternion_interpolation:false,single_clip_blend_literal_one:true,
+  });
+  const input=src.map((frame)=>({
+    ...frame,groups:frame.groups.map((group)=>({
+      ...group,euler_pose_review:good,
+    })),
+  }));
+  const review=analyzeObservedAnimationJointOriginFrames(input);
+  expect(review.state).toBe("SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS");
+  if (review.state!=="SOURCE_ONLY_CURRENT_PREVIEW_JOINT_ORIGINS")
+    throw new Error("Valid joint observation unavailable");
+  expect(review.frames_with_supported_additive_euler_context).toBe(3);
+  expect(review.euler_keyframe_conversion_authorized).toBe(false);
+  const before=review.frames[0].groups[0].euler_pose_review;
+  expect(before?.state).toBe("SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA");
+  if (before?.state!=="SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA")
+    throw new Error("Expected good Euler evidence");
+  (before.mesh_delta_euler_degrees as [number,number,number])[1]=99;
+  expect((input[0].groups[0].euler_pose_review as typeof good).state).toBe(
+    "SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA");
+  expect(good.state==="SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA"
+    ? good.mesh_delta_euler_degrees[1] : null).toBeCloseTo(.2*180/Math.PI,8);
 });

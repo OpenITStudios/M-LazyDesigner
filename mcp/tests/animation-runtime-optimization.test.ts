@@ -229,6 +229,27 @@ describe("Animation runtime efficiency contracts", () => {
     expect(execution).toContain("orientation_unavailable_reason");
   });
 
+  test("native Euler preview gate reuses Blockbench pre_rotation without authoring rotation", async () => {
+    const source=await Bun.file("server/runtime/contracts/animation.ts").text();
+    const start=source.indexOf("function readNativeAnimationGroupEulerContext(");
+    const end=source.indexOf("function observeNativeAnimationJointOriginFrame(",start);
+    const reader=source.slice(start,end);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    expect(reader).toContain("mesh?.pre_rotation");
+    expect(reader).toContain("mesh?.fix_rotation");
+    expect(reader).toContain("settings.rotation_global");
+    expect(reader).toContain("animation.override===true");
+    expect(reader).toContain("format.euler_order");
+    expect(reader).toContain("quaternionInterpolation");
+    expect(reader).toContain("inspectObservedAdditiveEulerPose({");
+    expect(reader).not.toContain("Undo.initEdit");
+    expect(reader).not.toContain("Timeline.setTime(");
+    const capture=source.slice(end,source.indexOf("async function captureAnimationSamples(",end));
+    expect(capture).toContain("readNativeAnimationGroupEulerContext(group,animation)");
+    expect(capture).toContain("euler_pose_review:eulerReview");
+  });
+
   test("focused Animation inspection can narrow one bone by channel and time range", () => {
     const accepted = focusedInspectAnimationParameters.parse({
       animation_id: "anim-walk",

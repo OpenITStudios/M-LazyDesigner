@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal } from "@/lib/rig/fabrik";
+import { solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal, inspectObservedAdditiveEulerPose } from "@/lib/rig/fabrik";
 
 describe("FABRIK solver", () => {
   test("reaches a reachable target while preserving segment lengths", () => {
@@ -183,5 +183,62 @@ describe("parent-local quaternion projection from observed world swings", () => 
         native_keyframe_authorized:false,
       });
     }
+  });
+});
+
+
+describe("native additive Euler preview context, source only", () => {
+  const source = () => ({
+    mesh_rotation_radians:[0.1,0.3,-0.2] as [number,number,number],
+    pre_animation_rotation_radians:[0.1,0.1,-0.2] as [number,number,number],
+    fix_rotation_radians:[0.1,0.1,-0.2] as [number,number,number],
+    format_euler_order:"XYZ",mesh_euler_order:"XYZ",
+    pre_animation_euler_order:"XYZ",fix_euler_order:"XYZ",
+    rotation_global:false,animation_override:false,
+    quaternion_interpolation:false,single_clip_blend_literal_one:true,
+  });
+
+  test("source mesh rotation delta in degrees is not a native Euler keyframe", () => {
+    const input=source(),before=JSON.stringify(input);
+    const result=inspectObservedAdditiveEulerPose(input);
+    expect(result.state).toBe("SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA");
+    if (result.state!=="SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA")
+      throw new Error(result.reason);
+    expect(result.euler_order).toBe("XYZ");
+    expect(result.mesh_delta_euler_degrees[0]).toBeCloseTo(0,10);
+    expect(result.mesh_delta_euler_degrees[1]).toBeCloseTo(0.2*180/Math.PI,10);
+    expect(result.mesh_delta_euler_degrees[2]).toBeCloseTo(0,10);
+    expect(result.native_euler_authorized).toBe(false);
+    expect(result.native_keyframe_authorized).toBe(false);
+    expect(JSON.stringify(input)).toBe(before);
+  });
+
+  test("global rotation, override, nonunit blending and quaternion interpolation fail closed", () => {
+    const cases=[
+      [{rotation_global:true},"IK_EULER_ROTATION_GLOBAL_UNSUPPORTED"],
+      [{animation_override:true},"IK_EULER_ANIMATION_OVERRIDE_UNSUPPORTED"],
+      [{single_clip_blend_literal_one:false},"IK_EULER_BLEND_OR_EXPRESSION_UNVERIFIED"],
+      [{quaternion_interpolation:true},"IK_EULER_QUATERNION_INTERPOLATION_UNSUPPORTED"],
+    ] as const;
+    for (const [change,reason] of cases) {
+      expect(inspectObservedAdditiveEulerPose({...source(),...change}))
+        .toMatchObject({state:"unavailable",reason,
+          native_keyframe_authorized:false});
+    }
+  });
+
+  test("Euler order mismatch, modified pre-stack rest pose and gimbal lock are refused", () => {
+    expect(inspectObservedAdditiveEulerPose({
+      ...source(),mesh_euler_order:"ZYX",
+    })).toMatchObject({state:"unavailable",reason:"IK_EULER_ORDER_UNVERIFIED"});
+    expect(inspectObservedAdditiveEulerPose({
+      ...source(),pre_animation_rotation_radians:[0.2,0.1,-0.2],
+    })).toMatchObject({state:"unavailable",reason:"IK_EULER_PRE_ROTATION_NOT_BASELINE"});
+    expect(inspectObservedAdditiveEulerPose({
+      ...source(),mesh_rotation_radians:[0.1,Math.PI/2,-0.2],
+    })).toMatchObject({state:"unavailable",reason:"IK_EULER_GIMBAL_SINGULARITY"});
+    expect(inspectObservedAdditiveEulerPose({
+      ...source(),mesh_rotation_radians:[0.1,Math.PI+0.3,-0.2],
+    })).toMatchObject({state:"unavailable",reason:"IK_EULER_DELTA_WRAP_OR_EXTREME"});
   });
 });

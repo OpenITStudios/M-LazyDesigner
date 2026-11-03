@@ -287,3 +287,94 @@ export function planWorldSwingToParentLocal(input: {
     visual_verdict:"not_evaluated" as const,
   };
 }
+
+
+/**
+ * Assess only the additive Euler delta visible in a current preview frame.
+ * Blockbench 5.2.2 BoneAnimator.displayRotation adds frame rotation to the
+ * pre-animation local Euler. Global rotations, override, quaternion
+ * interpolation, blend expressions and pre-stack modifications invalidate
+ * this simple model. Native animated keyframes are NEVER inferred or written.
+ */
+export function inspectObservedAdditiveEulerPose(input: {
+  mesh_rotation_radians: RigVec3;
+  pre_animation_rotation_radians: RigVec3;
+  fix_rotation_radians: RigVec3;
+  format_euler_order: string;
+  mesh_euler_order: string;
+  pre_animation_euler_order: string;
+  fix_euler_order: string;
+  rotation_global: boolean;
+  animation_override: boolean;
+  quaternion_interpolation: boolean;
+  single_clip_blend_literal_one: boolean;
+}) {
+  const unavailable=(reason:string)=>({
+    state:"unavailable" as const,reason,
+    native_euler_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    visual_verdict:"not_evaluated" as const,
+  });
+  if (!input || typeof input!=="object") {
+    return unavailable("IK_EULER_PREVIEW_CONTEXT_MISSING");
+  }
+  const accepted=["XYZ","XZY","YXZ","YZX","ZXY","ZYX"];
+  const order=input.format_euler_order;
+  if (typeof order!=="string" || !accepted.includes(order) ||
+      input.mesh_euler_order!==order ||
+      input.pre_animation_euler_order!==order ||
+      input.fix_euler_order!==order) {
+    return unavailable("IK_EULER_ORDER_UNVERIFIED");
+  }
+  const vectors=[input.mesh_rotation_radians,
+    input.pre_animation_rotation_radians,input.fix_rotation_radians];
+  if (vectors.some((v)=>!Array.isArray(v) || v.length!==3 ||
+      !v.every((x)=>typeof x==="number"&&Number.isFinite(x)))) {
+    return unavailable("IK_EULER_POSE_NONFINITE");
+  }
+  if (input.rotation_global!==false) {
+    return unavailable("IK_EULER_ROTATION_GLOBAL_UNSUPPORTED");
+  }
+  if (input.animation_override!==false) {
+    return unavailable("IK_EULER_ANIMATION_OVERRIDE_UNSUPPORTED");
+  }
+  if (input.quaternion_interpolation!==false) {
+    return unavailable("IK_EULER_QUATERNION_INTERPOLATION_UNSUPPORTED");
+  }
+  if (input.single_clip_blend_literal_one!==true) {
+    return unavailable("IK_EULER_BLEND_OR_EXPRESSION_UNVERIFIED");
+  }
+  const pre=input.pre_animation_rotation_radians;
+  const fix=input.fix_rotation_radians;
+  if (pre.some((x,i)=>Math.abs(x-fix[i])>1e-5)) {
+    return unavailable("IK_EULER_PRE_ROTATION_NOT_BASELINE");
+  }
+  // The middle Euler axis is singular at +/-90 degrees for all six orders.
+  // A close gimbal lock or a near-180 degree component wrap has no reliable
+  // local authoring direction without a native per-frame comparison.
+  const middleAxis="XYZ".indexOf(order[1]);
+  if ([input.mesh_rotation_radians,pre].some((v)=>
+    Math.abs(Math.cos(v[middleAxis]))<0.05
+  )) return unavailable("IK_EULER_GIMBAL_SINGULARITY");
+  const delta=input.mesh_rotation_radians.map((x,i)=>x-pre[i]);
+  if (delta.some((x)=>!Number.isFinite(x) ||
+      Math.abs(x)>170*Math.PI/180)) {
+    return unavailable("IK_EULER_DELTA_WRAP_OR_EXTREME");
+  }
+  const degrees=delta.map((x)=>x*180/Math.PI) as [number,number,number];
+  if (!degrees.every(Number.isFinite)) {
+    return unavailable("IK_EULER_DELTA_NONFINITE");
+  }
+  return {
+    state:"SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA" as const,
+    reason:null,
+    euler_order:order,
+    mesh_delta_euler_degrees:degrees,
+    based_on_current_preview_only:true as const,
+    native_euler_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    visual_verdict:"not_evaluated" as const,
+    note:"Observed Euler component delta from fix/pre baseline, not an "+
+      "authored keyframe or verified Blockbench preview/export interpolation.",
+  };
+}

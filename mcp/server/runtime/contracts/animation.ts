@@ -9,6 +9,7 @@ import {
 } from "@/lib/factories";
 import { resolveCoreAnimation } from "@/lib/core/identity";
 import { withTemporaryAnimationPreview } from "@/lib/animation/previewState";
+import { inspectObservedAdditiveEulerPose } from "@/lib/rig/fabrik";
 import {
   readDirectLocatorCandidates,
   readCurrentBonePoseSnapshot,
@@ -486,6 +487,72 @@ function readNativeAnimationGroupWorldQuaternion(group: Group) {
   return {world_quaternion_xyzw:world,parent_world_quaternion_xyzw:parentWorld};
 }
 
+
+/**
+ * Current-frame read-only Blockbench additive Euler preflight.
+ *
+ * Source: upstream v5.2.2 BoneAnimator.displayRotation. This observes
+ * bone.mesh.pre_rotation and bone.mesh.fix_rotation independently of world
+ * quaternion. It cannot identify authored keyframes or certify playback.
+ */
+function readNativeAnimationGroupEulerContext(
+  group: Group, animation: BBAnimation
+): ReturnType<typeof inspectObservedAdditiveEulerPose> {
+  const unavailable=(reason:string)=>({
+    state:"unavailable" as const,reason,
+    native_euler_authorized:false as const,
+    native_keyframe_authorized:false as const,
+    visual_verdict:"not_evaluated" as const,
+  });
+  if (typeof Format==="undefined" || !Format ||
+      typeof BoneAnimator==="undefined") {
+    return unavailable("IK_EULER_NATIVE_FORMAT_UNAVAILABLE");
+  }
+  const animator=animation.animators?.[group.uuid];
+  if (!(animator instanceof BoneAnimator)) {
+    return unavailable("IK_EULER_NATIVE_BONE_ANIMATOR_UNAVAILABLE");
+  }
+  const mesh=group.mesh as unknown as THREE.Object3D & {
+    fix_rotation?: THREE.Euler;
+    pre_rotation?: THREE.Euler;
+  };
+  const rotation=mesh?.rotation,pre=mesh?.pre_rotation,fix=mesh?.fix_rotation;
+  if (!rotation || !pre || !fix) {
+    return unavailable("IK_EULER_NATIVE_PRE_ROTATION_UNAVAILABLE");
+  }
+  const format=Format as {
+    euler_order?: string;
+    per_animator_rotation_interpolation?: boolean;
+    quaternion_interpolation?: boolean;
+  };
+  const settings=animator as BoneAnimator & {
+    rotation_global?: boolean;
+    quaternion_interpolation?: boolean;
+  };
+  const quaternionInterpolation=format.per_animator_rotation_interpolation===true
+    ? settings.quaternion_interpolation
+    : format.quaternion_interpolation;
+  const blend=animation.blend_weight;
+  const blendIsLiteralOne=blend===undefined || blend===null ||
+    blend===1 ||
+    (typeof blend==="string" &&
+      (blend.trim()==="" || blend.trim()==="1"));
+  const sample=(e:THREE.Euler)=>[e.x,e.y,e.z] as [number,number,number];
+  return inspectObservedAdditiveEulerPose({
+    mesh_rotation_radians:sample(rotation),
+    pre_animation_rotation_radians:sample(pre),
+    fix_rotation_radians:sample(fix),
+    format_euler_order:format.euler_order ?? "",
+    mesh_euler_order:rotation.order,
+    pre_animation_euler_order:pre.order,
+    fix_euler_order:fix.order,
+    rotation_global:settings.rotation_global === false ? false : true,
+    animation_override:animation.override===true,
+    quaternion_interpolation:quaternionInterpolation===false ? false : true,
+    single_clip_blend_literal_one:blendIsLiteralOne,
+  });
+}
+
 function observeNativeAnimationJointOriginFrame(
   animation: BBAnimation,
   time: number,
@@ -550,6 +617,15 @@ function observeNativeAnimationJointOriginFrame(
       orientationFailure=error instanceof Error ? error.message :
         "ANIMATION_MESH_ORIENTATION_READ_FAILED";
     }
+    const eulerReview=orientation
+      ? readNativeAnimationGroupEulerContext(group,animation)
+      : {
+          state:"unavailable" as const,
+          reason:"IK_EULER_WORLD_ORIENTATION_UNAVAILABLE",
+          native_euler_authorized:false as const,
+          native_keyframe_authorized:false as const,
+          visual_verdict:"not_evaluated" as const,
+        };
     groups.push({
       group_uuid: group.uuid,
       parent_group_uuid: parent?.uuid ?? null,
@@ -557,6 +633,7 @@ function observeNativeAnimationJointOriginFrame(
       ...(orientation ? orientation : {}),
       ...(orientationFailure
         ? {orientation_unavailable_reason:orientationFailure} : {}),
+      euler_pose_review:eulerReview,
     });
   }
   if (typeof Project === "undefined" || !Project ||

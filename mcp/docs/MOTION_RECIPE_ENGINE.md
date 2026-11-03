@@ -397,6 +397,43 @@ pose/time synchronization, effect restoration, Undo, Bedrock export and
 visual quality remain unverified. No native rotation writes, extra Gateway
 tools, schema changes or generated API edits are permitted.
 
+### Observed additive Euler baseline preflight (2026-11-03)
+
+Upstream Blockbench **v5.2.2** `BoneAnimator.displayRotation()`
+applies ordinary 3-component rotation as an **additive Euler rotation in
+radians** to `bone.mesh.rotation`; an override can reset to
+`bone.fix_rotation`. With `rotation_global`, it instead premultiplies by
+the inverse parent world quaternion. The preview stack can also apply
+animation blend expressions, selected global/per-animator quaternion
+interpolation and external `pre_stack_node_animations` listeners.
+These cases cannot be safely inferred from world-space mesh quaternion
+samples alone. See upstream
+`JannisX11/blockbench@v5.2.2/js/animations/timeline_animators.js`
+and `js/animations/animation_mode.js`.
+
+The already registered read-only Animation screenshot callback now
+*optionally* inspects the current mesh `rotation`, native
+`mesh.pre_rotation` and `mesh.fix_rotation`, the matching authored
+`BoneAnimator.rotation_global`, `Animation.override`, literal blend
+weight, quaternion interpolation and `Format.euler_order`.
+The canonical `rig/fabrik.ts::inspectObservedAdditiveEulerPose` only
+reports a **current-frame mesh Euler component delta** when all orders
+match, the `pre_rotation` matches the fixed native baseline and the
+source mode is unblended additive local Euler. Singular middle-axis
+Euler angles, ambiguous component wraps and unsafe global/override/
+quaternion-interpolated animation modes return an explicit refusal.
+
+The `joint_origin_review` continues to retain validated world-space
+positions even when optional Euler context is unavailable. Where
+available, its `euler_pose_review` records finite source-frame Euler
+deltas as `SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA`. No direct
+semantic Euler keyframe, animator interpolation or Bedrock export timecode
+is attested: `native_keyframe_authorized=false` and
+`euler_keyframe_conversion_authorized=false` remain mandatory. This
+diagnostic does not certify the independently missing full native preview
+restoration and cannot authorize IK writes. Four Gateway tools and all
+public inputs remain unchanged.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

@@ -1,4 +1,4 @@
-import { solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal, type RigQuaternionXYZW } from "@/lib/rig/fabrik";
+import { solveFabrikChain, planTwoBonePoleSwing, planWorldSwingToParentLocal, inspectObservedAdditiveEulerPose, type RigQuaternionXYZW } from "@/lib/rig/fabrik";
 import type { ExplicitContactMarkerBinding } from "./contactMarkerBinding";
 
 export type Vec3 = readonly [number, number, number];
@@ -721,6 +721,7 @@ export type ObservedAnimationJointOriginFrame = {
     /** Optional immediate THREE mesh parent's world orientation. */
     parent_world_quaternion_xyzw?: RigQuaternionXYZW;
     orientation_unavailable_reason?: string;
+    euler_pose_review?: ReturnType<typeof inspectObservedAdditiveEulerPose>;
   }[];
 };
 
@@ -738,6 +739,7 @@ export function analyzeObservedAnimationJointOriginFrames(
       world_quaternion_xyzw?: RigQuaternionXYZW;
       parent_world_quaternion_xyzw?: RigQuaternionXYZW;
       orientation_unavailable_reason?: string;
+      euler_pose_review?: ReturnType<typeof inspectObservedAdditiveEulerPose>;
     }>;
   };
   const unavailable = (reason: string) => ({
@@ -803,6 +805,17 @@ export function analyzeObservedAnimationJointOriginFrames(
            world!==undefined || parentWorld!==undefined)) {
         return unavailable("ANIMATION_JOINT_ORIENTATION_PROVENANCE_INVALID");
       }
+      const euler=group.euler_pose_review;
+      if (euler && (euler.native_euler_authorized!==false ||
+          euler.native_keyframe_authorized!==false ||
+          (euler.state==="SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA" &&
+            (!Array.isArray(euler.mesh_delta_euler_degrees) ||
+             euler.mesh_delta_euler_degrees.length!==3 ||
+             !euler.mesh_delta_euler_degrees.every(Number.isFinite))) ||
+          (euler.state!=="SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA" &&
+           euler.state!=="unavailable"))) {
+        return unavailable("ANIMATION_JOINT_EULER_EVIDENCE_INVALID");
+      }
       seen.add(group.group_uuid);
       if (frame === first) {
         expected.set(group.group_uuid, group.parent_group_uuid);
@@ -836,6 +849,16 @@ export function analyzeObservedAnimationJointOriginFrames(
       ...(group.orientation_unavailable_reason
         ? { orientation_unavailable_reason: group.orientation_unavailable_reason }
         : {}),
+      ...(group.euler_pose_review
+        ? { euler_pose_review:
+            group.euler_pose_review.state==="SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA"
+              ? {
+                  ...group.euler_pose_review,
+                  mesh_delta_euler_degrees:
+                    [...group.euler_pose_review.mesh_delta_euler_degrees] as [number,number,number],
+                }
+              : { ...group.euler_pose_review },
+          } : {}),
     })).sort((a,b) => a.group_uuid.localeCompare(b.group_uuid)),
   }));
   const rotationCovered=copied.every((frame)=>
@@ -858,6 +881,12 @@ export function analyzeObservedAnimationJointOriginFrames(
     frames_with_complete_orientations: copied.filter((frame)=>
       frame.groups.every((group)=>group.world_quaternion_xyzw!==undefined)
     ).length,
+    frames_with_supported_additive_euler_context: copied.filter((frame)=>
+      frame.groups.every((group)=>
+        group.euler_pose_review?.state === "SOURCE_ONLY_OBSERVED_ADDITIVE_EULER_DELTA"
+      )
+    ).length,
+    euler_keyframe_conversion_authorized:false as const,
     observation_scope: "CURRENT_NATIVE_PREVIEW_CALLBACK_READ_ONLY" as const,
     pose_time_synchronization_attested: false as const,
     native_preview_restoration_attested: false as const,
