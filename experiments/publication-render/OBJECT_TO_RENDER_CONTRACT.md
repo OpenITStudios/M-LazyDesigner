@@ -9,6 +9,12 @@
 
 This document is the architectural contract for subsequent source changes. It is **not** an assertion that current code implements every clause. Tables explicitly distinguish CURRENT, DECIDED-NOT-IMPLEMENTED, and BLOCKED-PENDING-PROOF. The user requested detailed engineering design before running local/native tests.
 
+## Camera and lighting continuation — ADR-R03
+
+The presentation-only camera and three-light studio contract for the already validated source Cube model is specified in **[CAMERA_LIGHTING_SPEC.md](./CAMERA_LIGHTING_SPEC.md)**. It uses Blender's actual projected geometry, bounded view candidates, finite area-light energy and factual pixel-region diagnostics. These are geometric and radiometric starting points, not claims of perceptual or reference-image quality.
+
+R01 source/GLB material fidelity remains a prerequisite; no Camera/Lighting Director may modify authored geometry, UV, texture or PBR to improve beauty.
+
 ## Material translation follow-up — ADR-R02
 
 The material-specific continuation is defined in **[MATERIAL_TRANSLATION_SPEC.md](./MATERIAL_TRANSLATION_SPEC.md)**. It separates face material instances, Bedrock render controller profiles, TextureGroup PBR, and editor preview modes. Current Render source now checks explicit PBR channel identity, material factors, map roles, exact atlas names, UV0, nearest and clamp-to-edge sampler settings before launching Blender. PBR subsurface/height and custom/alpha material instances remain unsupported and **fail closed**.
