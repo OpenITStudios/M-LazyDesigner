@@ -239,6 +239,18 @@ function nativeState(): NativeState {
     cube.mesh.updateWorldMatrix(true, false);
     const matrix = Array.from(cube.mesh.matrixWorld.elements);
     if (matrix.some(n => !Number.isFinite(n))) throw new Error("PUBLICATION_INVALID_WORLD_MATRIX");
+    // A negative determinant changes triangle winding. Do not silently make
+    // it look correct by forcing every imported material double-sided.
+    const determinant =
+      matrix[0]! * (matrix[5]! * matrix[10]! - matrix[6]! * matrix[9]!) -
+      matrix[4]! * (matrix[1]! * matrix[10]! - matrix[2]! * matrix[9]!) +
+      matrix[8]! * (matrix[1]! * matrix[6]! - matrix[2]! * matrix[5]!);
+    if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-12) {
+      throw new Error("PUBLICATION_SOURCE_WORLD_TRANSFORM_SINGULAR: " + cube.uuid);
+    }
+    if (determinant < 0) {
+      throw new Error("PUBLICATION_SOURCE_MIRROR_WINDING_UNVERIFIED: " + cube.uuid);
+    }
     const geometry = cube.mesh.geometry;
     const f = (geometry as typeof geometry & { faces?: string[] }).faces;
     if (!Array.isArray(f) || !f.length) throw new Error("PUBLICATION_NATIVE_FACE_INVENTORY_MISSING");
