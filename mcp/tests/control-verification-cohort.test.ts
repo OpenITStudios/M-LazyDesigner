@@ -192,7 +192,7 @@ describe("Control verification cohort", () => {
     expect(completed.state.pending_verification).toBeNull();
   });
 
-  test("the latest full-cover texture image can replace another read safely", () => {
+  test("metadata-only latest full-cover claim cannot replace an actual PNG read", () => {
     const first = reduceControlExecutionState(
       null,
       textureDelta([3, 3, 5, 5], "sha256:rev-1"),
@@ -204,11 +204,12 @@ describe("Control verification cohort", () => {
       { taskContextId: "texture-cohort", cohortBoundary: "COMPLETE" }
     );
     expect(completed.continuation.next_action).toMatchObject({
-      kind: "REVIEW_RETURNED_EVIDENCE",
+      kind: "VERIFY_VISUAL",
+      recommended_capability: "get_texture",
       verification_scope: {
         affected_rect: [2, 1, 8, 9],
         revision: "sha256:rev-2",
-        evidence_source: "mutation_response",
+        evidence_source: "follow_up_read",
       },
     });
   });

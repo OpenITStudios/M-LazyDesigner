@@ -1,6 +1,7 @@
 import type { BlockitRuntimeBackend } from "../runtime/backend";
 import { GatewayBackendError } from "../runtime/backendContract";
 import type { JsonRecord } from "../contracts/protocol";
+import { maybeDeferPaintCohortImage } from "../presentation/paintEvidenceDelivery";
 import {
   compactGatewayCapabilityContent,
   compactGatewayCapabilityStructuredContent,
@@ -156,6 +157,15 @@ export class GatewayCapabilityExecutor {
       const effectiveReadOnly = readOnly || branchReadOnly;
 
       const succeeded = result.isError !== true;
+      // The existing task-context cohort is the sole opt-in deferral
+      // boundary. Never strip a final/single-call image or native failures.
+      const deliveredContent = maybeDeferPaintCohortImage({
+        capability,succeeded,
+        cohortBoundary:controlOptions?.cohortBoundary,
+        taskContextId:controlOptions?.taskContextId,
+        structuredContent:result.structuredContent,
+        content:result.content,
+      });
       const receipt = deriveControlReceipt(
         capability,
         result.structuredContent,
@@ -207,6 +217,7 @@ export class GatewayCapabilityExecutor {
         projectUuid: verifiedProjectUuid,
         succeeded,
         result: result.structuredContent,
+        content: deliveredContent,
       });
 
       const attachControlDelta = shouldAttachGatewayControlDelta(
@@ -242,6 +253,7 @@ export class GatewayCapabilityExecutor {
       if (result.structuredContent === undefined) {
         const response = {
           ...result,
+          content: deliveredContent,
           ...(gatewayControlDelta
             ? { structuredContent: { control_delta: gatewayControlDelta } }
             : {}),
@@ -272,7 +284,7 @@ export class GatewayCapabilityExecutor {
       const compactedContent = compactGatewayCapabilityContent(
         capability,
         result.structuredContent,
-        result.content,
+        deliveredContent,
         controlDelta.verification_class,
         effectiveReadOnly,
         succeeded

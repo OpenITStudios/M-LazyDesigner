@@ -174,6 +174,8 @@ Rules:
 - Do not use `trigger_action`, `emulate_clicks`, or `fill_dialog` for normal texturing. Those are maintenance/UI fallbacks, not authoring executors.
 - Do not call `activate_texture` immediately before a tool that already accepts explicit `texture_id` unless active-editor state itself is required for a subsequent human/native action.
 - Batch a coherent texture-owned correction before verification; do not verify after each pixel/stroke.
+- For several already-planned paint transactions of one intent, use the existing Gateway `task_context_id` with `cohort_boundary=CONTINUE` on intermediate calls and `COMPLETE` on the last call. The Gateway suppresses **only verified intermediate** affected-region PNG transport; it never skips native mutation integrity checks or final visual review. Use a single-call/default route when immediate visual correction is necessary.
+- When the final paint response includes an actual matching PNG and Control returns `REVIEW_RETURNED_EVIDENCE`, review those pixels directly instead of calling `get_texture` again for the same current region/revision. If Control requests `get_texture`, if the PNG is not visible to the AI, or if the final PNG does not cover earlier cohort edits, take the scoped read. An image receipt never substitutes for mapped-model reference fidelity or user approval.
 
 ## UV Gate
 `uv_audit.production_gate`=ready = hygiene, **not UV Layout PASS**; review face aspect ratio, texel density, semantic UV reuse.

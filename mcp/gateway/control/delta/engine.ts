@@ -26,6 +26,8 @@ export function buildControlDelta(input: {
   projectUuid: string | null;
   succeeded: boolean;
   result?: unknown;
+  /** Actual MCP content items for transport-bound visual claims. */
+  content?: unknown;
 }): ControlDelta {
   const changed: string[] = [];
   if (input.succeeded && input.phaseBefore !== input.phaseAfter) changed.push("authoring_phase");
@@ -82,7 +84,8 @@ export function buildControlDelta(input: {
   const verificationScope = verificationScopeForResult(
     input.capability,
     verificationClass,
-    input.result
+    input.result,
+    input.content
   );
   const downstreamRecheck = downstreamRechecksForFreshness({
     capability: input.capability,

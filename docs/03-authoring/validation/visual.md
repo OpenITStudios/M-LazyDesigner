@@ -200,6 +200,35 @@ Returns exact authored Cube/Group state for a diagnosed local target. Reuse fres
 These are source-implemented capabilities. Their live integration/image delivery
 still remains `LOCAL PROOF REQUIRED` until tested locally.
 
+## Texture inline-image transport and cohort deferral
+
+The native `paint_texture_transaction` produces a postcondition-checked
+affected-region PNG by default. Its `visual_evidence` receipt now includes
+the PNG's encoded byte length and SHA-256. Before Control marks
+`evidence_source=mutation_response`, the Gateway must see exactly one
+actual PNG `content.image`, verify canonical Base64, PNG envelope and
+dimensions, and match its bytes with the signed-by-source digest claim.
+A metadata-only `visual_evidence` claim cannot authorize
+`REVIEW_RETURNED_EVIDENCE`; the focused `get_texture` route remains.
+
+For an explicitly grouped editing sequence, pass a nonempty
+`task_context_id` and `cohort_boundary=CONTINUE` through existing
+`invoke_capability`. On successful native paint mutations whose PNG
+transport is verified, the Gateway omits that **intermediate PNG only**,
+retains mutation receipts and pending visual debt, and reports that the
+image was withheld. The default and `COMPLETE` requests retain the
+actual PNG. The final image avoids another `get_texture` call only
+when its verified revision and rectangle fully cover the merged cohort.
+Otherwise Control retains `follow_up_read`. The source still performs
+PNG encoding internally, so this is AI image-transport economy, not
+measured native speed or model-token savings.
+
+Do not group edits that need intermediate visual decisions, do not
+silently defer failures or unverified source bytes, and never treat
+producer PNG, SHA-256, transport match or reduced calls as visual PASS.
+An approved reference and the relevant mapped model view still need
+actual side-by-side perception for material fidelity.
+
 ## Lossless same-response image evidence
 
 The canonical `capture_model_views` tool still renders **every selected view**

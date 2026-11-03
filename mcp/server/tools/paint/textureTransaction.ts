@@ -1,4 +1,5 @@
 /// <reference types="blockbench-types" />
+import { createHash } from "node:crypto";
 
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { recordCurrentCapabilitySemanticHistoryEffect } from "@/lib/authoring/semanticHistory";
@@ -641,6 +642,14 @@ async function executePaintTextureTransaction(
           // unavailable in headless Runtime verification; authored mutation and
           // revision proof remain valid and Control will request follow-up read.
         }
+        // Hash the already-encoded PNG; do not generate a second image.
+        // This binds the producer receipt to actual image bytes for Gateway
+        // verification without asserting AI perception or visual PASS.
+        const inlinePngBytes = affectedRegionImage
+          ? Buffer.from(affectedRegionImage.data, "base64") : null;
+        const inlinePngSha = inlinePngBytes
+          ? createHash("sha256").update(inlinePngBytes).digest("hex")
+          : null;
         const outputReceipt = preparedOutput
           ? {
               path: preparedOutput.state.path,
@@ -688,6 +697,8 @@ async function executePaintTextureTransaction(
                   revision: plannedReceipt.revision.after,
                   width: plannedReceipt.affected_size[0],
                   height: plannedReceipt.affected_size[1],
+                  image_sha256: inlinePngSha,
+                  png_bytes: inlinePngBytes?.byteLength ?? null,
                 }
               : null,
             output: outputReceipt,

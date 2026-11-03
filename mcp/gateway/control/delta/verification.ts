@@ -2,6 +2,7 @@ import { getCapabilityMetadata } from "../../../lib/capabilities/metadata";
 import { manifestEntryForBranch } from "../../capabilities/manifest";
 import type { CapabilityBranchHint } from "../../capabilities/types";
 import { cubeVisualScopeFromResult } from "../../../lib/receipts/cubeMutation";
+import { assessInlinePaintImageEvidence } from "../../../lib/texture/inlinePaintImageEvidence";
 import type { ControlDelta, ControlVerificationScope } from "../types";
 import { STATE_MUTATIONS } from "./policy";
 import {
@@ -61,7 +62,7 @@ export function animationVerificationScope(value: unknown): ControlVerificationS
   };
 }
 
-export function textureVerificationScope(value: unknown): ControlVerificationScope | null {
+export function textureVerificationScope(value: unknown, content?: unknown): ControlVerificationScope | null {
   const candidate = authoritativeReceipt(value);
   if (!candidate) return null;
   const texture = record(candidate.texture);
@@ -79,9 +80,9 @@ export function textureVerificationScope(value: unknown): ControlVerificationSco
     rect[2] <= rect[0] || rect[3] <= rect[1]
   ) return null;
   const visualEvidence = record(candidate.visual_evidence);
-  // The native tool emits this metadata only alongside the PNG produced
-  // after the verified mutation. An unbound kind label cannot replace a
-  // fresh on-demand get_texture read of the actual affected region.
+  // A claimed image in metadata is NOT evidence until actual MCP image
+  // bytes agree with the current revision and affected dimensions.
+  // Missing, stripped or malformed PNG always requires a focused read.
   const imageMatchesReceipt =
     visualEvidence?.kind === "affected_region_png" &&
     visualEvidence.revision === revision.after &&
@@ -91,7 +92,8 @@ export function textureVerificationScope(value: unknown): ControlVerificationSco
       (value, index) => value === rect[index]
     ) &&
     visualEvidence.width === rect[2] - rect[0] &&
-    visualEvidence.height === rect[3] - rect[1];
+    visualEvidence.height === rect[3] - rect[1] &&
+    assessInlinePaintImageEvidence(candidate,content).state === "MATCHED";
   return {
     kind: "TEXTURE_REGION",
     texture_uuid: texture.uuid,
@@ -104,7 +106,8 @@ export function textureVerificationScope(value: unknown): ControlVerificationSco
 }
 
 type VisualScopeResolver = (
-  value: unknown
+  value: unknown,
+  content?: unknown
 ) => ControlVerificationScope | null;
 
 const VISUAL_SCOPE_RESOLVERS: Readonly<
@@ -126,10 +129,11 @@ export const BOUNDED_VISUAL_SCOPE_CAPABILITIES = Object.freeze(
 export function verificationScopeForResult(
   capability: string,
   verificationClass: ControlDelta["verification_class"],
-  result: unknown
+  result: unknown,
+  content?: unknown
 ): ControlVerificationScope | null {
   if (verificationClass !== "visual") return null;
-  return VISUAL_SCOPE_RESOLVERS[capability]?.(result) ?? null;
+  return VISUAL_SCOPE_RESOLVERS[capability]?.(result,content) ?? null;
 }
 
 export function verificationClassForResult(

@@ -193,6 +193,20 @@ Animation→ Animation
 
 This is affected-knowledge metadata, not a forced full downstream reset.
 
+## Scoped Texture Image Delivery
+
+Within an explicit `invoke_capability` task cohort, a successful
+`paint_texture_transaction` with `cohort_boundary=CONTINUE` may omit
+its **verified inline PNG** from the AI-facing response. The native
+transaction and full revision guards still run; the Control verification
+scope marks the preview as `follow_up_read` until a matching image is
+actually delivered. The default and final `COMPLETE` requests keep
+their image. A final merged cohort must re-read the affected region if
+the last PNG does not cover all earlier edits. This uses the existing
+four-tool Gateway and Control Delta, without new tools or a cross-call
+image cache. Omitting a PNG reduces AI-visible image blocks but does
+not remove native encoding work or prove token/allowance savings.
+
 ## Context / Result Economy
 
 Context handles use SHA-256 identities of current canonical repository files. `known_context_ids` suppresses unchanged Skill/profile content and invalidates changed members of the same family.
