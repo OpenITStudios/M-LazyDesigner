@@ -13,6 +13,14 @@ Read **[OBJECT_TO_RENDER_CONTRACT.md](./OBJECT_TO_RENDER_CONTRACT.md)** before c
 
 This specification supersedes any earlier shorthand in this research README that calls the full renderer "complete" or assumes all materials/poses are covered. Native Bun/Blender/Blockbench tests were intentionally **not run**.
 
+## Authoritative Material Translation Contract (ADR-R02)
+
+Read **[MATERIAL_TRANSLATION_SPEC.md](./MATERIAL_TRANSLATION_SPEC.md)** for exact source PBR semantics and the GLB material assertions. The Render branch now has a pure channel/expectation owner (`mcp/lib/publication/materialContract.ts`) and uses it in the detached source snapshot and glTF preflight.
+
+Supported source contract: opaque COLOR, explicitly authored MER (texture or uniform), optional NORMAL, genuine nearest/clamped voxel sampling. Source material instances and Bedrock entity render profiles are distinct from PBR TextureGroups. Unknown/duplicate channels, unverified alpha/per-face slots, nonzero subsurface, HEIGHT and editor-only preview modes **fail closed**, rather than being silently replaced with generic materials.
+
+**Source code is authored, NOT Bun/typecheck/Blender/native-verified.** A glTF material receipt and numeric parity do not prove Blender visual equality. See the exact open native gates in ADR-R02.
+
 ## Scope lock — the requested product, not a general Blender MCP
 
 Only render the **actual Bedrock Entity Cube/Group/UV/Texture/PBR object authored by LazyDesigner MCP in Blockbench**. Keep one existing Gateway, one `render_publication` output capability, one detached GLB bridge and one trusted Blender 5.2 Cycles worker. Do **not** create another general Blender MCP, import/code-generation workflow, multi-scene cinematic framework, or a new model representation. All other model-authoring tools, native project state and screenshot QA remain independent.
