@@ -101,7 +101,13 @@ export function getPublicationEvidenceBytes(receipt: PublicationRenderReceipt): 
   if (!bytes || receipt.state !== "RENDERED_DRAFT") {
     throw new Error("PUBLICATION_RENDER_EVIDENCE_NOT_AVAILABLE");
   }
-  return bytes;
+  if (bytes.length !== receipt.visual_evidence.byte_length ||
+      bytes.length > 2_000_000 ||
+      hash(bytes) !== receipt.visual_evidence.png_sha256) {
+    throw new Error("PUBLICATION_RENDER_EVIDENCE_CHECKSUM_MISMATCH");
+  }
+  // Return a copy so a consumer cannot modify future observations.
+  return Buffer.from(bytes);
 }
 
 function renderPermissions(directory: string): {
