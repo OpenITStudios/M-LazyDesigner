@@ -2,8 +2,16 @@
 
 **Date:** 2026-11-03  
 **Branch:** Render (initial fork: Local at 85cb9889435a1c72893a9020f9ac4b73608a8ca9)  
-**State:** DESIGN COMPLETE; SOURCE IMPLEMENTATION IN PROGRESS ON `Render` — **BUN/TYPECHECK/BUILD/BLENDER/NATIVE VISUAL ACCEPTANCE NOT EXECUTED**.  
+**State:** **RENDER-ONLY SOURCE ARCHITECTURE CLOSED** on `Render` — **BUN/TYPECHECK/BUILD/BLENDER/NATIVE VISUAL ACCEPTANCE NOT EXECUTED**.  
 **Source authority:** This is a branch-isolated research document. Do not merge into Local/main, touch QA capture, change workflows, or publish without an independent explicit request.
+
+## Scope lock — the requested product, not a general Blender MCP
+
+Only render the **actual Bedrock Entity Cube/Group/UV/Texture/PBR object authored by LazyDesigner MCP in Blockbench**. Keep one existing Gateway, one `render_publication` output capability, one detached GLB bridge and one trusted Blender 5.2 Cycles worker. Do **not** create another general Blender MCP, import/code-generation workflow, multi-scene cinematic framework, or a new model representation. All other model-authoring tools, native project state and screenshot QA remain independent.
+
+Final architecture and per-module ownership are frozen in [mcp/server/publication/worker/README.md](../../mcp/server/publication/worker/README.md). The Runtime capability now belongs to the **Export** registration family. Four operations remain `start`, `status`, `preview`, `cancel` within the existing four Gateway methods. Source output is a true Cycles PNG, not an AI-generated picture.
+
+"Closed architecture" refers **only to component responsibilities and authored source**. It does **not** assert successful installation, Blender execution, image fidelity, or equality to the five visual references. User-requested native tests remain deferred.
 
 ## Source continuation — bounded genuine Cycles image feedback
 
