@@ -137,9 +137,7 @@ function nativeState(): NativeState {
   const groupsSeen = new Set<string>();
   for (const uuid of [...usedTextureIds]) {
     const texture = resolveTexture(uuid);
-    const group = typeof TextureGroup !== "undefined" && Array.isArray(TextureGroup.all)
-      ? TextureGroup.all.find(value => value.uuid === texture.group || value.name === texture.group)
-      : null;
+    const group = resolvePublicationTextureGroup(texture);
     if (group?.is_material === true && !groupsSeen.has(group.uuid)) {
       groupsSeen.add(group.uuid);
       const channels = group.getTextures();
@@ -162,6 +160,23 @@ function nativeState(): NativeState {
     project_uuid,
     signature: sha256(JSON.stringify([project_uuid, cubeRows, imageRows, pbrGroups.sort()])),
   };
+}
+
+/** Never guess a PBR source group from the first matching display name. */
+function resolvePublicationTextureGroup(texture: Texture): TextureGroup | null {
+  const id = texture.group;
+  if (!id) return null;
+  if (typeof TextureGroup === "undefined" || !Array.isArray(TextureGroup.all)) {
+    throw new Error("PUBLICATION_TEXTURE_GROUP_INVENTORY_UNAVAILABLE: " + texture.uuid);
+  }
+  const exact = TextureGroup.all.filter(group => group.uuid === id);
+  if (exact.length === 1) return exact[0]!;
+  if (exact.length > 1) throw new Error("PUBLICATION_TEXTURE_GROUP_UUID_AMBIGUOUS: " + id);
+  const named = TextureGroup.all.filter(group => group.name === id);
+  if (named.length !== 1) {
+    throw new Error("PUBLICATION_TEXTURE_GROUP_UNRESOLVED_OR_AMBIGUOUS: " + id);
+  }
+  return named[0]!;
 }
 
 function resolveTexture(uuid: string): Texture {
@@ -219,10 +234,7 @@ function makeMaterial(
       throw new Error("PUBLICATION_ALPHA_SEMANTICS_UNVERIFIED: " + uuid);
     }
   }
-  const groupId = texture.group;
-  const group = typeof TextureGroup !== "undefined" && Array.isArray(TextureGroup.all)
-    ? TextureGroup.all.find(value => value.uuid === groupId || value.name === groupId)
-    : null;
+  const group = resolvePublicationTextureGroup(texture);
   const colorMap = copyPixelTexture(colorPixels, "ld_base_" + uuid, true, createdTextures);
   const material = new THREE.MeshStandardMaterial({
     map: colorMap, color: 0xffffff, side: THREE.DoubleSide,
