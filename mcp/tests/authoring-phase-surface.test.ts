@@ -124,6 +124,8 @@ describe("authoring stage MCP surface", () => {
     expect(animation.has("create_animation")).toBe(true);
     expect(animation.has("render_publication")).toBe(true);
     expect(geometry.has("render_publication")).toBe(true);
+    expect(getToolRegistrationFamily("render_publication")).toBe("export");
+    expect(getToolRegistrationFamily("capture_model_views")).toBe("camera");
     expect(animation.has("create_project")).toBe(false);
     expect(animation.has("manage_cubes")).toBe(false);
     expect(animation.has("create_texture")).toBe(false);
