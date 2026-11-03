@@ -56,12 +56,15 @@ describe("Publication render contract", () => {
       project_uuid: "test-project",
       sha256: "a".repeat(64),
       glb_path: "C:\\Art\\model.glb",
+      mesh_count: 1,
       materials: {
         ld_color_abc: { color_uuid: "abc", texture_sha256: "b".repeat(64), alpha_mode: "OPAQUE", pbr: "NONE" },
       },
     });
     expect(job.schema_version).toBe(1);
     expect(job.samples).toBe(128);
+    expect(job.expected_mesh_count).toBe(1);
+    expect(job.expected_material_count).toBe(1);
     expect(job.materials.ld_color_abc.color_uuid).toBe("abc");
     expect(blenderRenderArgs("C:\\Art\\render.py", "C:\\Art\\job.json")).toEqual([
       "--background", "--factory-startup", "--disable-autoexec", "--python",
