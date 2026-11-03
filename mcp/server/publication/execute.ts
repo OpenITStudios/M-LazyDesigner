@@ -13,6 +13,7 @@ import {
 import {
   snapshotDetachedPublicationGlb,
   verifyPublicationSourceCurrent,
+  type DetachedPublicationSnapshot,
 } from "./snapshot";
 
 type ScopedPublicationFs = Pick<
@@ -167,8 +168,24 @@ export async function runBlender(
  * Blender is an explicitly selected local executable, never a network service.
  * External PNG is deliberately DRAFT until independent artistic/user review.
  */
-export async function renderPublication(input: unknown, signal?: AbortSignal): Promise<PublicationRenderReceipt> {
+/** Called within the native serialized Runtime operation before returning a job ID. */
+export type PreparedPublicationRender = Readonly<{
+  request: PublicationRenderRequest;
+  snapshot: DetachedPublicationSnapshot;
+}>;
+
+export async function preparePublicationRender(input: unknown): Promise<PreparedPublicationRender> {
   const request = publicationRenderParameters.parse(input);
+  const snapshot = await snapshotDetachedPublicationGlb();
+  return { request, snapshot };
+}
+
+/** Cycles may run after the native queue releases: it consumes only immutable GLB bytes. */
+export async function renderPreparedPublication(
+  prepared: PreparedPublicationRender,
+  signal?: AbortSignal,
+): Promise<PublicationRenderReceipt> {
+  const { request, snapshot } = prepared;
   const assertActive = () => {
     if (signal?.aborted) throw new Error("PUBLICATION_BLENDER_CANCELLED");
   };
@@ -182,8 +199,6 @@ export async function renderPublication(input: unknown, signal?: AbortSignal): P
   if (fs.existsSync(request.output_path)) {
     throw new Error("PUBLICATION_OUTPUT_EXISTS: choose a new PNG name; overwrite is disabled.");
   }
-  const snapshot = await snapshotDetachedPublicationGlb();
-  assertActive();
   const workdir = join(outputDirectory, ".lazydesigner-render-" + randomBytes(12).toString("hex"));
   // Unique fresh workdir: never reuse or follow paths provided by a model.
   fs.mkdirSync(workdir);
@@ -270,4 +285,10 @@ export async function renderPublication(input: unknown, signal?: AbortSignal): P
       }
     }
   }
+}
+
+
+/** Compatibility path for direct explicit callers; normal AI/UI use nonblocking jobs. */
+export async function renderPublication(input: unknown, signal?: AbortSignal): Promise<PublicationRenderReceipt> {
+  return renderPreparedPublication(await preparePublicationRender(input), signal);
 }
