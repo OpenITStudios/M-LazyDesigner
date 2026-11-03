@@ -34,7 +34,11 @@ describe("Modular Blender Core source owners", () => {
     const lights = await worker("lighting_director.py");
     expect(camera).toContain("MAX_AUTO_CANDIDATES = 15");
     expect(camera).toContain("MAX_SCORING_MESHES = 128");
-    expect(camera).toContain("full = _projection(scene, camera, _world_points(meshes))");
+    expect(camera).toContain("full_points = _world_points(meshes)");
+    expect(camera).toContain("MAX_FINAL_CANDIDATES = 3");
+    expect(camera).toContain("FIT_MULTIPLIERS =");
+    expect(camera).toContain("bpy.context.view_layer.update()");
+    expect(camera).toContain("_hull_area(");
     expect(camera).toContain("PUBLICATION_CAMERA_SUBJECT_CLIPPED");
     for (const part of ["LD_Key", "LD_Fill", "LD_Rim", "is_shadow_catcher"]) {
       expect(lights).toContain(part);
@@ -64,7 +68,9 @@ const valid = {
     resolved_yaw_degrees: 38, resolved_elevation_degrees: 18,
     projection: "perspective", candidate_count: 15,
     projected_bounds: [0.1, 0.1, 0.9, 0.9],
-    projected_area: 0.64, frame_safe: true,
+    projected_area: 0.64, projected_hull_area: 0.52,
+    framing_fit_multiplier: 1, framing_fit_attempts: 1,
+    frame_safe: true,
     quality_is_artistic_score: false,
   },
   lighting: {
@@ -97,6 +103,15 @@ const valid = {
     mean_visible_luminance: 0.4, high_luminance_fraction: 0.01,
     near_black_visible_fraction: 0.14, nonopaque_fraction: 0,
     analysis_type: "MEASURED_DOWNSAMPLED_CYCLES_PNG", artistic_quality_score: null,
+    projected_frame_roi: {
+      source: "BLENDER_LOADED_CYCLES_PNG",
+      region_type: "PROJECTED_BOUNDS_RECT_NOT_SEGMENTATION",
+      bounds_ndc: [0.1, 0.1, 0.9, 0.9],
+      sampled_pixels: 5929, visible_samples: 5929,
+      mean_visible_luminance: 0.43,
+      near_black_fraction: 0.16, near_white_fraction: 0.01,
+      artistic_quality_score: null,
+    },
   },
   preview: {
     dimensions: [384, 384],
@@ -145,6 +160,11 @@ describe("Measured Cycles report strict validation", () => {
       { ...valid, image: { ...valid.image, high_luminance_fraction: NaN } },
       { ...valid, image: { ...valid.image, image_dimensions: [512, 512] } },
       { ...valid, source_model_edited: true },
+      { ...valid, camera: { ...valid.camera, framing_fit_attempts: 9 } },
+      { ...valid, camera: { ...valid.camera, projected_hull_area: 0.9 } },
+      { ...valid, image: { ...valid.image,
+        projected_frame_roi: { ...valid.image.projected_frame_roi,
+          bounds_ndc: [0.02, 0.02, 0.5, 0.5] } } },
       { ...valid, preview: { ...valid.preview, artistic_approval: true } },
       { ...valid, preview: { ...valid.preview, dimensions: [4096, 4096] } },
       { ...valid, preview: { ...valid.preview, source: "GENERATED_AI_IMAGE" } },
