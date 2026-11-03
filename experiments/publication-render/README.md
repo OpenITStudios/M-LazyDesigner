@@ -2,8 +2,26 @@
 
 **Date:** 2026-11-03  
 **Branch:** Render (initial fork: Local at 85cb9889435a1c72893a9020f9ac4b73608a8ca9)  
-**State:** RESEARCH DECISION / IMPLEMENTATION READY AS A SPECIFICATION — **NOT IMPLEMENTED, BUILT, OR LIVE TESTED**.  
+**State:** DESIGN COMPLETE; SOURCE IMPLEMENTATION IN PROGRESS ON `Render` — **BUN/TYPECHECK/BUILD/BLENDER/NATIVE VISUAL ACCEPTANCE NOT EXECUTED**.  
 **Source authority:** This is a branch-isolated research document. Do not merge into Local/main, touch QA capture, change workflows, or publish without an independent explicit request.
+
+## Current Render-branch source implementation (2026-11-03)
+
+**Implemented in source, not runtime-proven:**
+
+- `mcp/lib/publication/contracts.ts`: bounded Blender/path, quality, camera, and general key/fill/rim/softness/environment/exposure inputs; no overwrites or shell flags.
+- `mcp/lib/publication/materialChannels.ts`: deterministic Bedrock MER→glTF roughness/metallic/emission and normal-Y conversion; no invented material data.
+- `mcp/lib/publication/glbIntegrity.ts`: bounded GLB 2.0 JSON/BIN, material/mesh/UV and embedded PNG checks; not a substitute for Khronos validator or visual comparison.
+- `mcp/server/publication/snapshot.ts`: detached Cube mesh + exact texture bytes; fails closed for unsupported non-Cube, alpha, height and unknown texture groups, and rechecks source identity.
+- `mcp/server/publication/worker/render.py`: Blender 5.2 Cycles, lights/AgX/ground, closest interpolation, image, UV, and imported mesh validation; 5.2 compositor migrated to group-based API.
+- `mcp/server/publication/execute.ts`: permission-scoped child process/filesystem, exclusive output PNG/readback SHA, bounded process shutdown and uncertain-exit cleanup hold.
+- `mcp/server/tools/inspection/publication.ts` + registration/metadata: `render_publication` exposed via unchanged four Gateway methods. QA `capture_model_views` not edited.
+- `mcp/ui/publicationRenderDialog.ts`: human Render button using the same service.
+- `mcp/tests/publication-render-contract.test.ts`, `mcp/tests/publication-process.test.ts`: tests source-authored NOT EXECUTED; Runtime source counts and owner map updated only on Render.
+
+**Current deliberate limitations:** Current native Cube geometry and opaque RGBA atlas with supported color/MER/normal PBR channels. Does not support animation sampling, alpha masks/cutout/glass, height-to-bump, non-Cube meshes, scene libraries, HDRI, multi-shot, compositing glow, or automatic artistic PASS. This scope must not be disguised by visually attractive output.
+
+**Required remaining proof:** targeted Bun tests/typecheck/build and canonical generated artifacts, native Blockbench GLB export, real Blender 5.2 import/Cycles PNG, no editor/Undo changes, reference-matched visual asset integrity and performance/cost benchmark. CI verification remains disabled. Do not require user-PC work as prerequisite for ChatGPT-owned source development.
 
 ## 1. What the user actually wants (not an object taxonomy)
 
@@ -225,9 +243,9 @@ Quantitative diagnostics should report occupancy/clipping, overexposure on non-e
 ## 10. Current proof and bounded handoff
 
 - Research and exact repository + official external source review: COMPLETE.
-- Current branch only contains documentation. No rendering engine, export bridge, UI capability, worker, or test implementation has been authored here.
+- A bounded Cycles publication pipeline, capability/UI and regression test source is committed on Render. No successful Bun/build/Blender/native acceptance has been observed.
 - Blender binary, Bun toolchain, installed Blockbench and live Gateway: **NOT AVAILABLE / NOT EXECUTED in this GitHub-only research session**.
 - No images generated, downloaded or copied into this branch; five user reference images are quality criteria only.
 - No commits to Local/main, no CI workflows changed, no release/publish.
 
-**Next engineering task:** implement Gate A as one source/test/fixture-bound vertical slice on Render. Do not start with bloom, scene libraries, or brand presets before GLB and source fidelity actually pass.
+**Next engineering task:** execute focused Bun tests/typecheck, regenerate canonical artifacts, then run an exact-SHA disposable Blockbench→GLB→Blender 5.2 Cycles visual fidelity fixture. Tune lighting/camera against the five reference images only after source-fidelity acceptance. Do not release or merge without proof.
