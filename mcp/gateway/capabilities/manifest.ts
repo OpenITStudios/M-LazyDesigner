@@ -97,6 +97,28 @@ const CAPABILITY_BRANCH_SPECS: readonly Omit<
   },
   {
     capability: "render_publication",
+    branch: { field: "operation", value: "preview" },
+    schemaFields: ["operation", "job_id"],
+    operationClass: "QUERY",
+    executionClass: "fast",
+    verificationClass: "receipt_only",
+    semantic: {
+      intents: [
+        "show actual Blender render preview for visual review",
+        "inspect completed Cycles beauty render image",
+        "look at rendered model lighting, shadows and materials",
+      ],
+      nouns: ["preview", "render", "image", "Cycles", "lighting", "materials", "composition"],
+      verbs: ["preview", "inspect", "show", "review"],
+      excludes: ["generate a new reference image", "capture editor viewport screenshot"],
+      examples: [
+        "show me the finished Blender render preview",
+        "inspect the Cycles PNG visually before deciding if lighting needs adjustment",
+      ],
+    },
+  },
+  {
+    capability: "render_publication",
     branch: { field: "operation", value: "cancel" },
     schemaFields: ["operation", "job_id"],
     operationClass: "CONTROL",
