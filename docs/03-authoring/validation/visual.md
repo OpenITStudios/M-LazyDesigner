@@ -362,6 +362,27 @@ Only when texture is in scope:
 
 Texture cannot approve or conceal wrong primary geometry.
 
+## AI-only MP4 binary resource — transport, not review
+
+Runtime registers a non-listed, short-lived binary resource using the existing
+MCP `createResource` factory: `motion-evidence://{id}/{revision}/{sha256}`.
+There is NO UI player, no GIF, no scheduled screenshot flow and no file
+written to the user's project. A trusted in-process native encoder (NOT YET
+IMPLEMENTED) is the only intended producer, via
+`nativeMotionMp4EvidenceSlot.publishFromNativeRecorder`.
+
+The source restricts payload size, parses bounded top-level MP4 boxes, checks
+encoded-byte length/SHA, requires current project/animation/revision on each
+read, expires old artifacts and never lists evidence as a user-visible item.
+This does not prove H.264 decodability or time continuity. A base64 MP4 read
+through MCP proves binary transport at most, NOT that GPT-6.1 Sol watched
+or understood the video. The AI-consumption/quality gate remains
+`UNVERIFIED` until independently supported.
+
+Runtime resources are not automatically accessible via the four-tool Gateway;
+the narrowly scoped Gateway resource proxy is a separate required integration,
+not a fifth Gateway tool.
+
 ## Evidence medium contract: Geometry / Texture / Animation
 
 Geometry uses native geometry facts plus selected still model views for
