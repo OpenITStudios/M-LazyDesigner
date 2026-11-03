@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { PublicationCubeManifest } from "@/lib/publication/sourceManifest";
+import type { PublicationJob } from "@/lib/publication/contracts";
 
 /** Strict, bounded glTF 2.0 GLB envelope and semantic inventory preflight.
  * Khronos glTF-Validator and native Blender reimport remain separately required:
@@ -76,6 +77,7 @@ export function inspectPublicationGlb(
   expectedMeshes: number,
   expectedMaterials: number,
   expectedCubes?: readonly PublicationCubeManifest[],
+  expectedMaterialSemantics?: PublicationJob["materials"],
 ): PublicationGlbInventory {
   if (!Buffer.isBuffer(glb) || glb.length < 20 || glb.length > 96 * 1024 * 1024 ||
       glb.toString("ascii", 0, 4) !== "glTF" || glb.readUInt32LE(4) !== 2 ||
@@ -184,6 +186,61 @@ export function inspectPublicationGlb(
     !validIndex(material.pbrMetallicRoughness.baseColorTexture.index, textures.length)
   )) {
     throw new Error("PUBLICATION_GLB_BASE_COLOR_TEXTURE_MISSING");
+  }
+  if (expectedMaterialSemantics) {
+    const names = Object.keys(expectedMaterialSemantics);
+    if (names.length !== materials.length) {
+      throw new Error("PUBLICATION_GLB_PBR_MATERIAL_INVENTORY_MISMATCH");
+    }
+    const samplers = Array.isArray(json.samplers) ? json.samplers : [];
+    for (const material of materials) {
+      const name = material.name;
+      const receipt = typeof name === "string" ? expectedMaterialSemantics[name] : null;
+      if (!receipt) {
+        throw new Error("PUBLICATION_GLB_PBR_SOURCE_MATERIAL_MISSING: " + String(name));
+      }
+      const expected = receipt.gltf;
+      const pbr = material.pbrMetallicRoughness;
+      if (!record(pbr)) throw new Error("PUBLICATION_GLB_PBR_MATERIAL_MISSING: " + name);
+      const close = (actual: unknown, wanted: number) =>
+        typeof actual === "number" && Number.isFinite(actual) &&
+        Math.abs(actual - wanted) <= 1e-6;
+      const metallic = pbr.metallicFactor ?? 1;
+      const roughness = pbr.roughnessFactor ?? 1;
+      const emission = material.emissiveFactor === undefined
+        ? [0, 0, 0] : material.emissiveFactor;
+      if ((material.alphaMode ?? "OPAQUE") !== expected.alpha_mode ||
+          material.doubleSided !== expected.double_sided ||
+          !close(metallic, expected.metallic_factor) ||
+          !close(roughness, expected.roughness_factor) ||
+          !Array.isArray(emission) || emission.length !== 3 ||
+          emission.some(value => !close(value, expected.emissive_factor))) {
+        throw new Error("PUBLICATION_GLB_PBR_FACTORS_OR_ALPHA_MISMATCH: " + name);
+      }
+      const expectedSlots = [
+        [pbr.baseColorTexture, true],
+        [pbr.metallicRoughnessTexture, expected.metallic_roughness_texture],
+        [material.normalTexture, expected.normal_texture],
+        [material.emissiveTexture, expected.emissive_texture],
+      ] as const;
+      for (const [reference, required] of expectedSlots) {
+        if (Boolean(reference !== undefined) !== required) {
+          throw new Error("PUBLICATION_GLB_PBR_TEXTURE_ROLE_MISMATCH: " + name);
+        }
+        if (!required) continue;
+        if (!record(reference) || !validIndex(reference.index, textures.length)) {
+          throw new Error("PUBLICATION_GLB_PBR_TEXTURE_REFERENCE_INVALID: " + name);
+        }
+        const texture = textures[reference.index as number];
+        if (!record(texture) || !validIndex(texture.sampler, samplers.length)) {
+          throw new Error("PUBLICATION_GLB_PBR_SAMPLER_MISSING: " + name);
+        }
+        const sampler = samplers[texture.sampler as number];
+        if (!record(sampler) || sampler.magFilter !== 9728 || sampler.minFilter !== 9728) {
+          throw new Error("PUBLICATION_GLB_PBR_NEAREST_SAMPLING_LOST: " + name);
+        }
+      }
+    }
   }
   if (expectedCubes) {
     if (expectedCubes.length !== expectedMeshes) {
