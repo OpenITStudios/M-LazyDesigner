@@ -1,8 +1,32 @@
 # LazyDesigner Blender Core — Publication Rendering
 
-Branch: Render only. State: source-authored; Blender 5.2 native acceptance NOT EXECUTED.
+Branch: Render only. State: **render-only architecture closed at source level; build/Blender 5.2/native acceptance NOT EXECUTED**.
 
 Purpose: high-quality actual Cycles rendering of authored Blockbench geometry/UV/texture, never regenerated AI images or renamed objects.
+
+## Frozen product scope — only objects authored in LazyDesigner MCP
+
+Input is the **currently open Bedrock Entity Blockbench project created/edited through LazyDesigner MCP**. The existing manage_cubes, Group/UV, Texture and PBR tools own its authored geometry and surface data. The renderer is a consumer, never a second modeler.
+
+```text
+LazyDesigner MCP-authored Bedrock Cube/Group/UV/Texture/PBR
+       ↓ detached native Cube snapshot (unchanged authored state)
+GLB 2.0 + source/material hashes (no new model parser)
+       ↓ existing Render publication job (start/status/preview/cancel)
+Blender 5.2 — one trusted bundled Cycles worker
+       ↓
+PNG final + small PNG evidence + factual receipt
+```
+
+- **One public control owner:** existing LazyDesigner Gateway, exactly four public methods. No Blender MCP server or second Blockbench plugin.
+- **One Runtime capability:** `render_publication` registered in the **export** family; editor `capture_model_views` remains in **camera** for QA and is not overwritten.
+- **One job owner:** `jobs.ts` serializes capture through native Runtime, executes Blender separately to avoid Gateway timeouts, then rechecks source revision in a generation-bound native queue before exclusive PNG publication.
+- **One immutable render source:** only real native Cube geometry/face UV/texture pixels and explicitly authored PBR maps. No broad Blender modeling API, generated scenery, semantic asset categories or user-written Python.
+- **One final rendering engine:** Cycles preview and publication modes differ only in resolution and samples. Studio lighting/HDRI, camera and compositor affect presentation, not authored geometry.
+- **One evidence route:** the image returned to AI/humans is a bounded downsample of the same finished Cycles PNG. Numeric diagnostics cannot assert that the image is artistically approved.
+- **One launch target:** a user-authorized Blender 5.2 desktop executable; no other installed Blender MCP/add-ons are required.
+
+**Scope is frozen.** Do not add animation/movie production, arbitrary imported meshes, model generation, scene-building workflows, render farm, multi-agent queues, alternative MCP servers, or external Blender integrations in this effort. Existing optional settings remain available but are not a reason to expand the system. Unsupported data fails explicitly.
 
 ## Canonical source owners
 
