@@ -45,9 +45,10 @@ describe("Animation camera binding source contract",()=>{
   test("all sampled poses route through one envelope and a current-pose bounds fence",async()=>{
     const runtime=await Bun.file("server/runtime/contracts/animation.ts").text();
     const camera=await Bun.file("server/tools/inspection/camera.ts").text();
-    expect(runtime).toContain("const sharedFrame=sharedPoseFraming(observedPoses,callerFrame)");
+    expect(runtime).toContain("const sharedFrame=crossPoseComparison");
     expect(runtime).toContain("fixedCaptureRequest as unknown as Record<string, unknown>");
     expect(runtime).toContain("ANIMATION_POSE_BOUNDS_CHANGED_DURING_CAPTURE");
+    expect(runtime).toContain("for(const time of crossPoseComparison ? preview.times : [])");
     expect(runtime).toContain("pose_camera_comparability: comparePoseCameraReceipts");
     expect(camera).toContain("native_current_pose_bounds: observed.bounds");
     expect(runtime.indexOf("const captureStartedAtMs = Date.now()"))

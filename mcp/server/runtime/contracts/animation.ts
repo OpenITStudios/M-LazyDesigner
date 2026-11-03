@@ -936,7 +936,8 @@ async function captureAnimationSamples(
   // establishing the shared envelope of the requested event-time poses.
   const sourceProject = Project?.uuid;
   const observedPoses: PoseFrame[] = [];
-  for(const time of preview.times) {
+  const crossPoseComparison = preview.times.length >= 2;
+  for(const time of crossPoseComparison ? preview.times : []) {
     const bounds = await withTemporaryAnimationPreview(
       animationPreviewPort() as never,animation as never,time,()=>{
         if(!sourceProject || Project?.uuid!==sourceProject)
@@ -951,8 +952,10 @@ async function captureAnimationSamples(
   }
   const callerFrame = baseRequest.framing.mode==="explicit"
     ? baseRequest.framing : undefined;
-  const sharedFrame=sharedPoseFraming(observedPoses,callerFrame);
-  const fixedCaptureRequest={...baseRequest,framing:sharedFrame.framing};
+  const sharedFrame=crossPoseComparison
+    ? sharedPoseFraming(observedPoses,callerFrame) : null;
+  const fixedCaptureRequest=sharedFrame
+    ? {...baseRequest,framing:sharedFrame.framing} : baseRequest;
   if(Project?.uuid!==sourceProject)throw new Error("ANIMATION_FRAMING_PROJECT_CHANGED");
 
   const content: unknown[] = [
@@ -1000,9 +1003,11 @@ async function captureAnimationSamples(
         const structured = requireCompleteAnimationCaptureSample(
           result, expectedViewCount
         );
-        const prepass=observedPoses.find(s=>s.time===time);
-        if(!prepass || !samePoseBounds(prepass.bounds,structured.native_current_pose_bounds)){
-          throw new Error("ANIMATION_POSE_BOUNDS_CHANGED_DURING_CAPTURE");
+        if(crossPoseComparison) {
+          const prepass=observedPoses.find(s=>s.time===time);
+          if(!prepass || !samePoseBounds(prepass.bounds,structured.native_current_pose_bounds)){
+            throw new Error("ANIMATION_POSE_BOUNDS_CHANGED_DURING_CAPTURE");
+          }
         }
         let geometry: GeometryPoseObbSnapshot | null = null;
         let geometryFailure: string | null = null;

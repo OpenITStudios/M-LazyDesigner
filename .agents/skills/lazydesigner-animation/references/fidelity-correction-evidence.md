@@ -82,6 +82,10 @@ geometry only. Requests containing only explicit `views` retain the
 full legacy diagnostic path. Skipped observations are NOT_REQUESTED,
 not technical or visual PASS.
 
+Single-pose preview does not perform a redundant union-bounds prepass.
+Cross-pose comparisons (two or more requested event times) retain the
+shared-frame scan and stable planned camera checks.
+
 For multi-pose visual review the Runtime now samples the requested event
 poses using temporary native Blockbench previews **without PNG output**,
 unions their rendered bounds and uses one fixed frame for the later captures.
