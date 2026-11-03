@@ -547,7 +547,16 @@ bounded action token
 bounded outcome token
 ```
 
-The active file is capped at 512 KiB and rotates to one previous file. Readiness outcomes use bounded tokens such as `READY`, `RUNTIME_READY`, `APPROVAL_REQUIRED`, or a bounded reason token for `NEEDS_ATTENTION`; managed actions prefer the canonical receipt status. It does not record project content, file paths, environment values, command output, TLS material, Codex configuration, or arbitrary error prose. Diagnostic export does not automatically attach this log.
+The active file is capped at 512 KiB and rotates to one previous file. Readiness outcomes use bounded tokens such as `READY`, `RUNTIME_READY`, `APPROVAL_REQUIRED`, or a bounded reason token for `NEEDS_ATTENTION`; managed actions prefer the canonical receipt status. It does not record project content, file paths, environment values, command output, TLS material, Codex configuration, or arbitrary error prose. Diagnostic export does not automatically attach this log. Upon explicit
+Export diagnostics, Desktop reads at most the bounded current and rotated
+local log files, rejects non-regular files, and exports only counts of
+well-formed recent entries, narrowly recognized error outcomes and the
+latest recorded timestamp. No raw action/outcome tokens, full log text,
+project identifiers, Gateway trace or provider token usage are copied.
+The `desktop_activity.coverage` field reports `NO_LOG`, `UNAVAILABLE`,
+`PARTIAL` or `RECENT_ROTATING_LOG_WINDOW`. The latter is explicitly a
+limited recent window, not complete lifetime usage. The normal UI continues
+to show its existing current-session activity list without extra polling.
 
 This log is operational evidence only. Managed Distribution receipts remain authoritative for install/update/repair transitions.
 

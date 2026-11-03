@@ -1,4 +1,4 @@
-use crate::{desktop_error::DesktopError, system_status};
+use crate::{desktop_error::DesktopError, operation_log, system_status};
 use rfd::FileDialog;
 use serde::Serialize;
 use serde_json::json;
@@ -41,11 +41,14 @@ fn write_snapshot(path: &PathBuf) -> Result<(), DesktopError> {
             "arch": std::env::consts::ARCH
         },
         "status": status,
+        "desktop_activity": operation_log::recent_summary(),
         "privacy": {
             "contains_project_content": false,
             "contains_environment_variables": false,
             "contains_tls_private_key": false,
-            "contains_codex_config": false
+            "contains_codex_config": false,
+            "contains_raw_operation_log": false,
+            "contains_gateway_trace": false
         }
     });
 
@@ -65,7 +68,9 @@ mod tests {
             "contains_project_content": false,
             "contains_environment_variables": false,
             "contains_tls_private_key": false,
-            "contains_codex_config": false
+            "contains_codex_config": false,
+            "contains_raw_operation_log": false,
+            "contains_gateway_trace": false
         });
         assert_eq!(privacy["contains_tls_private_key"], false);
         assert_eq!(privacy["contains_project_content"], false);

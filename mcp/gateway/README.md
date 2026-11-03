@@ -255,6 +255,26 @@ background monitoring server, database, prompts, images, raw project paths or
 credentials are recorded by this extension. Gateway byte/image counts are
 not Codex/Astra provider tokens, verified model ingestion, or visual approval.
 
+## Bounded Offline Bottleneck Review
+
+The existing `report:gateway-trace` command now includes a diagnostic
+section in its JSON output. It ranks up to five capabilities by **summed
+observed Gateway call latency**, which is not task wall time and may overlap
+with parallel work. Missing response bytes remain `null`, never zero.
+
+Up to four `INVESTIGATE_ONLY` findings identify repeated matching
+capability/error codes or queue waits that repeatedly exceed the corresponding
+queued-operation duration. A matching error code does not prove identical root
+cause or waste; these signals propose investigation, not retry, source edits,
+quality claims, or automatic optimization. Each candidate points to a bounded
+list of event sequence numbers; no inputs or response contents are retained.
+
+No new instrumentation or background collection was added to normal authoring
+for this report. The report consumes only the existing opt-in trace; provider
+token usage is `null` and accepted-result quality is `UNVERIFIED` until
+separately sourced. Evidence coverage and legacy trace compatibility remain
+explicit.
+
 ## Context / Result Economy
 
 Context handles use SHA-256 identities of current canonical repository files. `known_context_ids` suppresses unchanged Skill/profile content and invalidates changed members of the same family.

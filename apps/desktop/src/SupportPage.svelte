@@ -98,7 +98,7 @@
       </div>
     {/if}
     <div class="settings-row">
-      <div><strong>Export diagnostics</strong><span>Create a local troubleshooting snapshot. Nothing is uploaded automatically.</span></div>
+      <div><strong>Export diagnostics</strong><span>Export local system status and recent Desktop action counts. Gateway traces, models and AI token usage are not included. Nothing is uploaded automatically.</span></div>
       <button class="secondary-button" onclick={exportDiagnostics} disabled={busyAction !== null}>{busyAction === 'export-diagnostics' ? 'Exporting…' : 'Export'}</button>
     </div>
 
@@ -124,7 +124,7 @@
   {#if operations.length > 0}
     <section class="settings-section">
       <details class="recent-activity">
-        <summary><span><strong>Recent activity</strong><small>Current Desktop session</small></span><span>Show</span></summary>
+        <summary><span><strong>Recent activity</strong><small>Desktop actions only; not Gateway or model usage</small></span><span>Show</span></summary>
         <div class="recent-list">
           {#each operations as operation}
             <div><span>{operation.action}</span><strong class:failed={operation.outcome === 'failed'} class:pending={operation.outcome === 'pending'} class:unchanged={operation.outcome === 'unchanged'}>{operation.outcome === 'success' ? 'Completed' : operation.outcome === 'pending' ? 'Next step' : operation.outcome === 'unchanged' ? 'No change' : 'Failed'}</strong></div>

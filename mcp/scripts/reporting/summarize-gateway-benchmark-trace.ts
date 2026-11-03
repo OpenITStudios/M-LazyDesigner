@@ -144,6 +144,82 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     event.queue_timing ? [event.queue_timing] : []);
   const queueWaits = measuredQueue.map((t) => t.queue_wait_ms);
   const queueDurations = measuredQueue.map((t) => t.operation_duration_ms);
+  // Advisory analysis of existing Gateway metadata; not a quality evaluator.
+  const capabilityRows = new Map<string, {
+    calls: number; failures: number; latencies: number[];
+    responseBytes: number; allBytesKnown: boolean;
+  }>();
+  const repeatedErrors = new Map<string, {
+    capability: string; error_code: string; sequences: number[];
+  }>();
+  for (const event of ordered) {
+    if (typeof event.capability !== "string" || !event.capability) continue;
+    const row = capabilityRows.get(event.capability) ?? {
+      calls: 0, failures: 0, latencies: [], responseBytes: 0,
+      allBytesKnown: true,
+    };
+    row.calls++;
+    if (!event.success) row.failures++;
+    row.latencies.push(event.latency_ms);
+    if (event.result_bytes === null) row.allBytesKnown = false;
+    else row.responseBytes += event.result_bytes;
+    capabilityRows.set(event.capability, row);
+    if (!event.success && event.error_code) {
+      const key = JSON.stringify([event.capability, event.error_code]);
+      const group = repeatedErrors.get(key) ?? {
+        capability: event.capability, error_code: event.error_code, sequences: [],
+      };
+      group.sequences.push(event.sequence);
+      repeatedErrors.set(key, group);
+    }
+  }
+  const topCapabilities = [...capabilityRows.entries()].map(([capability, row]) => ({
+    capability,
+    calls: row.calls,
+    failures: row.failures,
+    observed_latency_sum_ms: row.latencies.reduce((sum, n) => sum + n, 0),
+    latency_p95_ms: percentile(row.latencies, 0.95),
+    response_bytes: row.allBytesKnown ? row.responseBytes : null,
+  })).sort((a, b) =>
+    b.observed_latency_sum_ms - a.observed_latency_sum_ms ||
+    a.capability.localeCompare(b.capability)
+  ).slice(0, 5);
+
+  const findings: Array<{
+    code: "REPEATED_ERROR_CODE" | "QUEUE_WAIT_OUTWEIGHS_OPERATION";
+    disposition: "INVESTIGATE_ONLY";
+    capability: string | null;
+    error_code: string | null;
+    observed_events: number;
+    example_sequences: number[];
+  }> = [...repeatedErrors.values()]
+    .filter((row) => row.sequences.length >= 2)
+    .sort((a, b) =>
+      b.sequences.length - a.sequences.length ||
+      a.sequences[0]! - b.sequences[0]!
+    )
+    .slice(0, 3).map((row) => ({
+      code: "REPEATED_ERROR_CODE" as const,
+      disposition: "INVESTIGATE_ONLY" as const,
+      capability: row.capability,
+      error_code: row.error_code,
+      observed_events: row.sequences.length,
+      example_sequences: row.sequences.slice(0, 6),
+    }));
+  const queueCandidates = ordered.filter((event) => {
+    const timing = event.queue_timing;
+    return timing != null && timing.queue_wait_ms >= 10 &&
+      timing.queue_wait_ms > timing.operation_duration_ms;
+  });
+  if (measuredQueue.length >= 3 && queueCandidates.length >= 2) {
+    findings.push({
+      code: "QUEUE_WAIT_OUTWEIGHS_OPERATION",
+      disposition: "INVESTIGATE_ONLY",
+      capability: null, error_code: null,
+      observed_events: queueCandidates.length,
+      example_sequences: queueCandidates.slice(0, 6).map((e) => e.sequence),
+    });
+  }
   const failed = ordered.filter((event) => !event.success);
   const failuresByCode: Record<string, number> = {};
   for (const event of failed) {
@@ -221,6 +297,14 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
         .map((event) => event.capability)
         .filter((value): value is string => value !== null)
     )],
+    diagnostics: {
+      scope: "RECORDED_GATEWAY_EVENTS_ONLY",
+      interpretation: "Observed tool latency is summed across calls, not wall time. Findings require investigation; none proves waste, root cause, provider token usage or quality acceptance.",
+      top_capabilities_by_observed_latency: topCapabilities,
+      findings: findings.slice(0, 4),
+      accepted_result: "UNVERIFIED",
+      provider_token_usage: null,
+    },
     events: ordered,
   };
 }
