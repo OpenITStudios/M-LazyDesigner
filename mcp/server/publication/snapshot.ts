@@ -6,11 +6,13 @@ import { createHash } from "node:crypto";
 import type { PublicationJob } from "@/lib/publication/contracts";
 import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publication/materialChannels";
 import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
+import { verifyVisibleAtlasPixelsOpaque, type AtlasRect } from "@/lib/publication/atlasCoverage";
 
 const MAX_TEXTURE_PIXELS = 4_194_304;
 const MAX_TOTAL_TEXTURE_PIXELS = 8_388_608;
 const MAX_TEXTURE_COUNT = 128;
 const MAX_CUBES = 10_000;
+const MAX_VERTEX_COMPONENTS = 3_000_000;
 const MAX_GLTF_BYTES = 96 * 1024 * 1024;
 
 type MaterialReceipt = PublicationJob["materials"];
@@ -98,6 +100,7 @@ function nativeState(): NativeState {
     throw new Error("PUBLICATION_CUBE_BUDGET_EXCEEDED");
   }
   const cubeRows: unknown[] = [];
+  let vertexComponentCount = 0;
   const usedTextureIds = new Set<string>();
   const seen = new Set<string>();
   const cubes = Cube.all.filter(visibleWithParents).sort((a, b) => a.uuid.localeCompare(b.uuid));
@@ -128,11 +131,19 @@ function nativeState(): NativeState {
       return [faceKey, tex.uuid, face.uv, face.rotation, face.material_name ?? null];
     });
     const uv = Array.from(geometry.attributes.uv.array);
+    const positions = Array.from(geometry.attributes.position.array);
+    vertexComponentCount += positions.length;
+    if (vertexComponentCount > MAX_VERTEX_COMPONENTS) {
+      throw new Error("PUBLICATION_SOURCE_VERTEX_COMPONENT_BUDGET_EXCEEDED");
+    }
+    const normals = geometry.attributes.normal
+      ? Array.from(geometry.attributes.normal.array) : null;
     const indices = geometry.index ? Array.from(geometry.index.array) : null;
     cubeRows.push([
       cube.uuid, matrix, cube.from, cube.to, cube.origin, cube.rotation,
       cube.inflate ?? 0, cube.box_uv, cube.mirror_uv, cube.uv_offset, faces,
-      uv, indices, geometry.groups.map(g => [g.start, g.count, g.materialIndex]),
+      uv, positions, normals, indices,
+      geometry.groups.map(g => [g.start, g.count, g.materialIndex]),
     ]);
   }
   const pbrGroups: unknown[] = [];
@@ -239,11 +250,29 @@ function makeMaterial(
   if (previous) return previous;
   const texture = resolveTexture(uuid);
   const colorPixels = imageData(texture);
-  for (let i = 3; i < colorPixels.data.length; i += 4) {
-    if (colorPixels.data[i] !== 255) {
-      throw new Error("PUBLICATION_ALPHA_SEMANTICS_UNVERIFIED: " + uuid);
+  // Transparent atlas padding is not transparency on the 3D object. Verify
+  // the precise authored face-UV regions rather than rejecting empty islands.
+  const uvRects: AtlasRect[] = [];
+  for (const cube of Cube.all.filter(visibleWithParents)) {
+    const faceKeys = (cube.mesh?.geometry as { faces?: string[] } | undefined)?.faces;
+    if (!Array.isArray(faceKeys)) {
+      throw new Error("PUBLICATION_NATIVE_FACE_INVENTORY_MISSING");
+    }
+    for (const faceKey of faceKeys) {
+      const face = cube.faces?.[faceKey as keyof typeof cube.faces] as CubeFace | undefined;
+      if (face?.getTexture()?.uuid !== uuid) continue;
+      if (!Array.isArray(face.uv) || face.uv.length !== 4) {
+        throw new Error("PUBLICATION_FACE_UV_REQUIRED_FOR_ALPHA_FIDELITY");
+      }
+      uvRects.push(face.uv as unknown as AtlasRect);
     }
   }
+  const logicalWidth = Number(Project.texture_width) || colorPixels.width;
+  const logicalHeight = Number(Project.texture_height) || colorPixels.height;
+  const alphaCoverage = verifyVisibleAtlasPixelsOpaque(
+    colorPixels.data, colorPixels.width, colorPixels.height,
+    logicalWidth, logicalHeight, uvRects,
+  );
   const group = resolvePublicationTextureGroup(texture);
   const colorMap = copyPixelTexture(colorPixels, "ld_base_" + uuid, true, createdTextures);
   const material = new THREE.MeshStandardMaterial({
@@ -254,6 +283,7 @@ function makeMaterial(
   const receipt: MaterialReceipt[string] = {
     color_uuid: uuid, texture_sha256: texturePixelsSha(colorPixels),
     alpha_mode: "OPAQUE", pbr: "NONE",
+    unused_alpha_pixels: alphaCoverage.transparent_pixels_outside_mapped_uv,
   };
   if (group?.is_material === true) {
     const channels = group.getTextures();
