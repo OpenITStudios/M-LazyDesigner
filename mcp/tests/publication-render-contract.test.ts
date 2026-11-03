@@ -76,7 +76,6 @@ describe("Publication render contract", () => {
   });
 });
 
-type Fixture = ReturnType<typeof installNativeFixture>;
 const previous = new Map<string, { present: boolean; value: unknown }>();
 const names = ["Project", "Format", "Cube", "Group", "Mesh", "Texture", "TextureGroup", "THREE", "document"];
 
