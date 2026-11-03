@@ -76,6 +76,25 @@ def require_job() -> dict:
     if job.get("quality") not in ("preview", "publication", "high") or \
         job.get("background") not in ("dark", "light", "transparent"):
         fail("PUBLICATION_JOB_QUALITY_OR_BACKGROUND_INVALID")
+    environment = job.get("environment")
+    if not isinstance(environment, dict) or environment.get("mode") not in ("studio", "hdri"):
+        fail("PUBLICATION_JOB_ENVIRONMENT_INVALID")
+    if environment["mode"] == "studio":
+        if environment.get("hdri_path") is not None or environment.get("hdri_sha256") is not None:
+            fail("PUBLICATION_JOB_STUDIO_WITH_UNDECLARED_HDRI")
+    else:
+        hdri = environment.get("hdri_path")
+        sha = environment.get("hdri_sha256")
+        if not isinstance(hdri, str) or not isinstance(sha, str) or len(sha) != 64 or any(
+            ch not in "0123456789abcdef" for ch in sha
+        ):
+            fail("PUBLICATION_JOB_HDRI_SOURCE_PROVENANCE_INVALID")
+        selected = Path(hdri)
+        output_dir = Path(job["output_path"]).parent
+        if not selected.is_absolute() or selected.parent != output_dir or selected.name not in (
+            "environment.hdr", "environment.exr"
+        ):
+            fail("PUBLICATION_JOB_HDRI_OUTSIDE_ISOLATED_DIRECTORY")
     if job.get("device") not in ("cpu", "auto"):
         fail("PUBLICATION_JOB_DEVICE_INVALID")
     if job.get("view_transform") not in ("AgX", "Standard"):
