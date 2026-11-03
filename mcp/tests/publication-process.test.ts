@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { runBlender } from "@/server/publication/execute";
+import { publicationImageSizeForPreset } from "@/lib/publication/contracts";
 
 type FakeOutcome =
   | "success"
@@ -120,9 +121,21 @@ describe("Blender worker process lifecycle", () => {
     expect(job.getChild()?.killCalls).toBe(1);
   });
 
-  test("UI high-resolution preset remains below its strict 12MP area limit", async () => {
-    const ui = await Bun.file(new URL("../ui/publicationRenderDialog.ts", import.meta.url)).text();
-    expect(ui).toContain('quality === "high" ? 3200 : 2048');
-    expect(3200 * 3200).toBeLessThan(12_000_000);
+  test("all Studio aspect ratios remain valid for 12MP preview/publication/high limits", () => {
+    const cases = [
+      ["square", 3200, 3200],
+      ["landscape_16_9", 3200, 1800],
+      ["landscape_4_3", 3200, 2400],
+      ["portrait_4_5", 2560, 3200],
+    ] as const;
+    for (const [aspect, width, height] of cases) {
+      expect(publicationImageSizeForPreset("high", aspect)).toEqual({ width, height });
+      for (const quality of ["preview", "publication", "high"] as const) {
+        const result = publicationImageSizeForPreset(quality, aspect);
+        expect(result.width * result.height).toBeLessThanOrEqual(12_000_000);
+      }
+    }
+    expect(() => publicationImageSizeForPreset("high", "unknown" as never))
+      .toThrow("PRESET_INVALID");
   });
 });
