@@ -14,6 +14,8 @@ import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { inspectPublicationGlb } from "../../lib/publication/glbIntegrity";
+import { inspectPublicationPng } from "../../lib/publication/pngIntegrity";
+import { publicationDiagnosticsSchema } from "../../lib/publication/diagnostics";
 import { isAbsoluteFilesystemPath } from "../../lib/core/path";
 import { blenderRenderArgs, makePublicationJob, publicationRenderParameters } from "../../lib/publication/contracts";
 
@@ -139,7 +141,7 @@ function runWithConfirmedExit(
 async function main(): Promise<void> {
   const blender = process.argv[2];
   if (!blender || !/[/\\]blender(?:\.exe)?$/i.test(blender) || !isAbsoluteFilesystemPath(blender)) {
-    throw new Error("Provide an existing absolute Blender 5.2 executable path (POSIX) for this explicit smoke run.");
+    throw new Error("Provide an existing absolute Blender 5.2 executable path for this explicit smoke run.");
   }
   const dir = await mkdtemp(join(tmpdir(), "lazydesigner-publication-smoke-"));
   const glbPath = join(dir, "fixture.glb");
@@ -170,9 +172,17 @@ async function main(): Promise<void> {
     await runWithConfirmedExit(blender, workerPath, jobPath, dir);
     processExitConfirmed = true;
     const png = await readFile(outputPath);
-    if (png.length < 32 || png.toString("hex", 0, 8) !== "89504e470d0a1a0a" ||
-        png.readUInt32BE(16) !== 256 || png.readUInt32BE(20) !== 256) {
-      throw new Error("Cycles smoke produced no valid 256x256 PNG.");
+    inspectPublicationPng(png, 256, 256);
+    const report = publicationDiagnosticsSchema.parse(JSON.parse(
+      await readFile(join(dir, "report.json"), "utf8"),
+    ));
+    const thumb = await readFile(join(dir, "evidence.png"));
+    inspectPublicationPng(thumb, ...report.preview.dimensions);
+    if (!report.camera.frame_safe ||
+        report.camera.projected_hull_area > report.camera.projected_area + 1e-4 ||
+        !report.lighting.lights.every(light => light.distance_to_subject > 0) ||
+        report.image.projected_frame_roi.visible_samples < 1) {
+      throw new Error("Camera/lighting geometry and projected frame evidence is incomplete.");
     }
     console.log(JSON.stringify({
       state: "BLENDER_SYNTHETIC_SMOKE_PASS",
@@ -181,6 +191,19 @@ async function main(): Promise<void> {
       engine: "CYCLES",
       result_sha256: createHash("sha256").update(png).digest("hex"),
       bytes: png.length,
+      camera: {
+        mode: report.camera.mode,
+        frame_safe: report.camera.frame_safe,
+        hull_area: report.camera.projected_hull_area,
+        fit_multiplier: report.camera.framing_fit_multiplier,
+        candidates: report.camera.candidate_count,
+      },
+      lighting: {
+        actual_device: report.render.device.actual,
+        key_to_fill_energy_ratio: report.lighting.key_to_fill_energy_ratio,
+        projected_frame_roi: report.image.projected_frame_roi,
+      },
+      image_evidence_sha256: createHash("sha256").update(thumb).digest("hex"),
       source_fidelity_live_blockbench: "NOT_EXECUTED",
       visual_acceptance: "NOT_EVALUATED",
     }, null, 2));
