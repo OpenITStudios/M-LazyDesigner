@@ -379,9 +379,19 @@ through MCP proves binary transport at most, NOT that GPT-6.1 Sol watched
 or understood the video. The AI-consumption/quality gate remains
 `UNVERIFIED` until independently supported.
 
-Runtime resources are not automatically accessible via the four-tool Gateway;
-the narrowly scoped Gateway resource proxy is a separate required integration,
-not a fifth Gateway tool.
+The existing four-tool Gateway now exposes only this exact unlisted MP4
+resource via a narrow `resources/read` proxy. It does NOT proxy arbitrary
+Runtime files or resources, does not create a fifth tool, and does not add
+a user preview. Reads run through the existing Gateway Runtime operation
+queue with bound project/Animation-stage and generation checks; the Gateway
+independently validates MP4 MIME/container/hash after reading the blob.
+No remote arbitrary URL, filesystem path or unbounded binary payload is
+accepted by this bridge.
+
+This makes MCP *binary access* possible when a future native recorder
+publishes a real clip; it does NOT mean the current Sol client supports
+ingesting or reviewing MP4 as video. Motion remains `UNVERIFIED` until
+that separate client capability and actual perceptual review are established.
 
 ## Evidence medium contract: Geometry / Texture / Animation
 

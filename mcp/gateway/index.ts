@@ -16,6 +16,7 @@ import { publishManagedGatewayLeaseEvidence } from "./session/leaseEvidence";
 import type { GatewayToolContext } from "./execution/gatewayErrors";
 import { GatewayCapabilityExecutor } from "./execution/capabilityExecutor";
 import { BenchmarkTraceRecorder } from "./execution/benchmarkTrace";
+import { registerMotionMp4GatewayResource } from "./resources/motionMp4";
 
 const session = new GatewaySessionState();
 
@@ -32,8 +33,9 @@ const executor = new GatewayCapabilityExecutor(
   benchmarkTrace
 );
 
-// Runtime resources and prompts are not proxied. Stable-four remains the
-// production default; Hybrid-4 is an explicit experimental startup profile.
+// Only the explicitly scoped AI-only MP4 resource is proxied. General Runtime
+// resources/prompts are not proxied and the four-tool surface is unchanged.
+ // Hybrid-4 remains an explicit experimental startup profile.
 const GATEWAY_INSTRUCTIONS =
   "LazyDesigner Gateway. status only for missing/stale orientation; assets pass reference_package_path. Load active Skill/profile via Control handles; reuse while content survives compaction. Geometry/Texturing share AUTHORING; Animation handoff. Known capability/schema: invoke directly. Unknown: search; uncertain schema: describe required branch. READY=usable; UNKNOWN=Runtime-check; BLOCKED=prerequisites. Cohorts reuse task_context_id; cohort_boundary=CONTINUE then COMPLETE. Follow control_delta: receipt_only=no reread; focused_read=missing evidence only; visual=decision-changing evidence. Sample before bulk visual edits; mutation success is not visual approval. Never auto-retry interrupted mutations. Development: status(task_mode=SYSTEM_DEVELOPMENT,task_intent). Omitted reference facts: paged status(reference_fact_request) with fingerprint.";
 
@@ -74,6 +76,10 @@ function buildGatewayServer(
     invoke: (capability, args, context, controlOptions) =>
       executor.invoke(capability, args, context, controlOptions),
   });
+
+  // No resource listing or user playback UI: a client must already possess
+  // the exact, short-lived URI returned by the native recorder.
+  registerMotionMp4GatewayResource(server,backend);
 
   if (isExperimentalGatewaySurface(surfaceProfile)) {
     if (!experimentalRegistrar) {

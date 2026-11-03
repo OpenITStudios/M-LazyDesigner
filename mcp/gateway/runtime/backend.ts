@@ -1,5 +1,9 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import {
+  parseMotionMp4ResourceUri,
+  validateMotionMp4ResourceRead,
+} from "@/lib/animation/motionEvidence";
+import {
   readRuntimeAuthoringPhase,
   readRuntimeProjectHealth,
   type BlockitAuthoringPhaseAffinity,
@@ -797,6 +801,48 @@ export class BlockitRuntimeBackend {
     return this.runExclusive(async () => {
       if (!this.hasFreshCatalog()) await this.ensureCatalogUnsafe();
       return readTool();
+    });
+  }
+
+  /**
+   * AI-only MP4 resource read. Uses the SAME serialized Runtime affinity and
+   * generation checks as an ordinary Gateway invocation. No arbitrary URI,
+   * file path, schema bypass or independent video transport.
+   */
+  async readMotionMp4Resource(uri: string): Promise<{
+    contents: [{uri:string;blob:string;mimeType:"video/mp4"}];
+  }> {
+    parseMotionMp4ResourceUri(uri);
+    return this.runExclusive(async () => {
+      await this.ensureCatalogUnsafe();
+      const generation=this.connectedSignature;
+      const project=this.projectUuid;
+      if (!this.client || !generation || !project ||
+          this.authoringPhase!=="animation") {
+        throw new GatewayBackendError(
+          "BACKEND_UNAVAILABLE",
+          "MP4 resource requires a bound Animation-stage Runtime project.",
+          true
+        );
+      }
+      // No automatic retry and no trust in arbitrary MCP resource payloads.
+      const data=await this.client.readResource(
+        {uri},
+        {timeout:this.callTimeoutMs}
+      );
+      if(this.connectedSignature!==generation ||
+         this.projectUuid!==project ||
+         this.authoringPhase!=="animation") {
+        throw new GatewayBackendError(
+          "PROJECT_CONTEXT_LOST",
+          "MP4 resource read crossed a Runtime generation or project boundary.",
+          false
+        );
+      }
+      const verified=validateMotionMp4ResourceRead(uri,data);
+      return {contents:[{
+        uri:verified.uri,blob:verified.blob,mimeType:verified.mimeType,
+      }]};
     });
   }
 
