@@ -167,6 +167,21 @@ export function inspectPublicationGlb(
       if (!node || !validIndex(node.mesh, meshes.length)) {
         throw new Error("PUBLICATION_GLB_SOURCE_CUBE_NODE_MISSING: " + cube.cube_uuid);
       }
+      const extras = node.extras;
+      if (!record(extras) || extras.lazydesigner_cube_uuid !== cube.cube_uuid ||
+          !Array.isArray(extras.lazydesigner_bounds_min) ||
+          !Array.isArray(extras.lazydesigner_bounds_max) ||
+          (["lazydesigner_bounds_min", "lazydesigner_bounds_max"] as const).some(key => {
+            const values = extras[key] as unknown[];
+            const expected = key === "lazydesigner_bounds_min"
+              ? cube.expected_blender_bounds_min : cube.expected_blender_bounds_max;
+            return values.length !== 3 ||
+              values.some((value, axis) =>
+                typeof value !== "number" || !Number.isFinite(value) ||
+                Math.abs(value - expected[axis]!) > 1e-6);
+          })) {
+        throw new Error("PUBLICATION_GLB_SOURCE_BOUNDS_EXTRAS_MISMATCH: " + cube.cube_uuid);
+      }
       const meshIndex = node.mesh as number;
       if (usedMeshIds.has(meshIndex)) {
         throw new Error("PUBLICATION_GLB_SOURCE_CUBE_MESH_SHARED_UNEXPECTEDLY");
