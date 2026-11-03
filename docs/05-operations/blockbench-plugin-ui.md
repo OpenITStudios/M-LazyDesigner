@@ -1,66 +1,65 @@
-# LazyDesigner Blockbench Plugin UI — AI-first editor surface
+# LazyDesigner Blockbench Plugin UI — product-value gate
 
-Source baseline for this first vertical slice: `Local` at `5a0941ce800c7676b599059165b3ba041f6612a6`. This is source implementation, **not installed/live acceptance**. The source-only design follows the Blockbench plugin API (Panel, Action, Dialog, Undo); the exact Blockbench 5.2.2 behavior requires native verification.
+Source context: `Local`, baseline `de589d7f5024a2054f6ca57f4408a6f17116b315` on 2026-11-03. This specification describes **source-authored changes**, not verified installed-plugin behavior.
 
-## Product intent
+## Product rule: no nonproductive UI
 
-AI continues to call the existing four-tool MCP Gateway and its capability schemas; AI **does not** click the plugin. A Blockbench artist needs only three human-facing categories: **Geometry, Texture, Animation**. Selecting a category is UI navigation; it MUST NOT change Control Stage, expose hidden capabilities, publish stage receipts, or claim AI-client connection.
+The normal AI workflow uses the existing four-tool Gateway and canonical Runtime capabilities directly. The user only needs the native editor panel when it improves a specific **human decision or action**. The plugin shall not recreate Blockbench's Texture list, palette controls, Animation clip list or Timeline as trivial copies.
 
-Keep the plugin in the existing right-docked Panel, with one optional Tools menu shortcut. Match Blockbench theme variables, keyboard-focus behavior and the native editor. No overlay, separate framework, new HTTP endpoint, duplicate Gateway, or new persistence manager.
+Keep exactly three navigation categories: **Geometry**, **Texture**, **Animation**. Switching categories never changes the active MCP Stage or exposed capability surface. Tabs with no uniquely useful action contain brief, truthful text rather than fake controls. No second Gateway, route registry, progress engine, polling loop or screenshot-as-QA.
 
-## First functional slice
+## Shipped-source scope in this slice
 
-| Category | User controls | Canonical owner and proof ceiling |
-| --- | --- | --- |
-| Geometry | Inspect Model | Existing `geometryHygieneRuntime` and `rigGraphRuntime` native readers; bounded technical warnings, NOT visual PASS |
-| Geometry | Safe Cube Cleanup | Existing `manage_cubes(operation=simplify)`: 1–32 explicitly selected UUIDs, review via `dry_run=true`, fresh state/plan check, then canonical `dry_run=false` executor and one native Undo |
-| Texture | Inspect Textures | Native texture count/material groups/logical atlas dimensions/names only; NOT a seam/pixel-quality judgement |
-| Texture | Preview Palette | Existing pure `generateTexturePalette` (7 shades, `mode=preview`); must never mutate palette or bitmap |
-| Animation | Inspect Animations | Native clip/controller count and selected identity only; NOT motion QA or playback acceptance |
+| Category | Visible feature | Input | Output / real outcome | Proof ceiling |
+| --- | --- | --- | --- | --- |
+| Geometry | **Geometry Issue Navigator** | Current Bedrock Project + native Cube and Group inventories | Canonical geometry diagnostic findings tied to exact Cube/Group UUIDs; one-click **Locate in Outliner** selects the native object and scrolls it into view | Source-authored; installed native navigation unverified |
+| Geometry | **Safe Cube Cleanup** (secondary utility) | 1–32 selected Cubes, selected increment/field | Existing `manage_cubes(operation=simplify)` dry-run, UV and hierarchy review, native Apply and Undo | Existing executable path; exact installed Undo/visual preservation unverified |
+| Texture | No duplicate editor feature | — | AI continues using the current Texturing MCP surface; Blockbench owns native texture editor | Not a new feature |
+| Animation | No duplicate editor feature | — | AI continues using existing Animation MCP surface; Blockbench owns native timeline | Not a new feature |
 
-The new panel does not expose raw MCP capability JSON, server endpoints, debug schema forms, or controls for unregistered UV/cluster/advanced Motion sources. This is a deliberate source-verified first slice; Texture and Animation authoring/repair tools remain follow-on work after equivalent native planning and Undo acceptance.
+The previous `Texture Inventory`, `Preview Palette` and `Animation Inventory` buttons were removed from the human panel because they did not edit assets or improve a review decision, and duplicated native editor information. **The underlying MCP capabilities were not removed.**
 
-## Concurrency and target safety
+## Canonical Geometry evidence and issue contract
 
-- Shared `runRuntimeOperationExclusive` serializes manual inspections/edits with AI/Gateway Runtime mutations. Do not call an executor outside the native queue.
-- Before Cube review and Apply: recheck plugin generation, exact project object, Bedrock format, Geometry Stage, registered/enabled capability, selected UUID order, all Cube transform/UV fields, and the dry-run plan.
-- If selection/project/state changes, reject the stale proposal. Do not retry a mutation with unknown outcome.
-- Existing native executor retains mapping, span, UV ownership and texture-stretch protection. A warning/plan alone does not authorize edit.
-- Unload/reload removes dialogs, listeners, status indicator, panel and Tools Action; a pending callback must not re-open UI for a retired generation.
-- The panel may be used while the AI client is disconnected; it must not claim Gateway connected from the Runtime status indicator.
+- Reuse `geometryHygieneRuntime()` and `rigGraphRuntime()` as-is; these already wrap `analyzeGeometryHygiene` and `analyzeRigGraph`.
+- Only present **targeted** findings from real `degenerate_cubes.examples`, `duplicate_bone_names.examples[].groups`, and `box_uv_subunit.examples`. Every issue contains the actual native UUID, type, name and a cautious description.
+- Intentionally omit tiny precision drifts from the primary findings list; keep them in optional counts. Avoid treating zero-thickness design panels or coincident pivots as automatic defects.
+- Limit visible findings, disclose truncated examples, and never infer visual PASS from a clean bounded scan.
+- Locate revalidates the project/generation and current UUID-backed issue under the shared `runRuntimeOperationExclusive` queue. Reject stale, missing and duplicate UUIDs. Use the native `select()` and `showInOutliner()`, not duplicate selection or viewport code.
+- Selecting a finding should **not clear the issue list**. Geometry edits, project changes, Undo, Redo and plugin reload invalidate the analysis. No model mutation or Undo entry is created by locating an object.
+- This does not claim the AI's previous job finished successfully; no inferred AI receipt, status or fake progress.
 
-## Source-level QA hardening (2026-11-03)
+## Existing Safe Cube Cleanup invariants
 
-- Dialogs have a unique review generation: reopening or cancelling retires stale pending preview/apply callbacks; double-Apply is refused.
-- Cleanup review binds the project UUID/format and UV resolution, selected Cube transforms/faces and parent Group transform chain. A second serialized dry-run and native-state comparison occur before Apply.
-- A missing/incomplete fidelity receipt fails closed. Painted-face mapping, incomplete face inventories and Box UV template changes are not auto-applied from the UI.
-- The panel discards queued inspection results after project/selection/category/plugin changes; edit, Undo and Redo events invalidate previous displayed diagnostics.
-- The three tabs use roving arrow-key focus; one Tools menu Action uses the supported MenuBar API. UI teardown releases resources independently so one failed optional cleanup cannot prevent the rest.
+- Before Apply, recheck project/format, Geometry Stage, exact selected UUIDs, parent/UV/transform state and fresh canonical dry-run result.
+- Reject incomplete UV inventory, mapped painted-face stretch, Box UV template risk, stale plan, concurrent native edit, retired generation and duplicate Apply.
+- Apply only via the canonical `manage_cubes` native executor under the shared Runtime operation queue. Never replay an ambiguous mutation.
+- A successful source-level receipt is **not** a visual reference-accuracy PASS.
 
-These controls are authored and receive focused source regressions. **Bun/typecheck/native UI execution is still NOT EXECUTED**, including whether the installed Blockbench matches the typed API and the actual Undo, save/reopen and visual results.
+## Acceptance criteria: minimum for any "useful tool" claim
 
-## Native acceptance (NOT EXECUTED from GitHub-only context)
+1. **Fixture / locator:** Construct disposable Bedrock asset with two degenerate Cubes, distinct duplicate-named Groups and a sub-unit Box UV Cube. Every exposed finding is anchored to the exact UUID; clicking **Locate in Outliner** selects and reveals the correct native node, not the first name match.
+2. **No mutation by inspection:** Inspecting and locating must not change transforms, UVs, animation curves, textures, dirty state or Undo history; editor selection changes are intentional and visible.
+3. **Context isolation:** Switching project, editing the source Cube, deleting/replacing an UUID, or plugin reload invalidates stale findings. Queue a simultaneous AI edit and user locate; they must serialize without stale replay.
+4. **Review honesty:** Limit and truncation are disclosed; no visual or export acceptance is inferred from technical checks.
+5. **Cleanup:** Preview has no Undo; explicit Apply has one Undo unit and correct Redo. Block mapped-texture/Box UV hazards; re-open/save preserves the asset.
+6. **Normal UX:** Three categories remain navigable by keyboard; no redundant palette/clip list, no abandoned dialogs/actions after reload, no raw MCP schemas in the human panel.
+7. **Value benchmark (not yet run):** Measure time and clicks to find an exact problem Cube in a 100+ Cube asset with and without the Issue Navigator. Keep the feature only if it demonstrates an objective gain without mistaken targets.
 
-Use a disposable Bedrock `.bbmodel` matching installed plugin build + Blockbench version. Required falsifiable checks:
+## Verification state / boundary
 
-1. Load/unload/reload twice; exactly one Panel, status button and Tools action; no stale listeners/dialogs.
-2. Geometry/Texture/Animation tabs switch without a network request or Stage change. Check keyboard operation and right-sidebar narrow width.
-3. Empty project and non-Bedrock format fail clearly; no mutation. Verify no false AI-client connected status.
-4. Geometry Analyze produces bounded live Cube/Group counts; malformed/unavailable inventory yields an error rather than fake PASS.
-5. Cube selection (1/32/33), no-op rounding, collapsing spans, rotated Cube, ambiguous/duplicate UUID, texture stretching and missing UV ownership.
-6. Preview must leave Cube/UV/palette, Undo history and dirty state identical.
-7. Change selection, source Cube/UV or project tab while Review is open: Apply fails before Undo.
-8. Competing AI request and UI Apply serialize. Unknown/failed native mutation never auto-retries.
-9. Successful Apply: exact coordinates, one Undo, Redo, save/reopen, no unintended atlas or animation change.
-10. Texture palette preview changes no bitmap; Animation inventory changes no keyframes, playback, selected clip or Timeline.time.
+- `REMOTE_GITHUB`: source inspection, Git object verification and authored regression tests **only**.
+- `LOCAL_CODE`: `bun test tests/plugin-authoring-ui.test.ts tests/human-ui-surface.test.ts tests/plugin-surface-hardening.test.ts tests/cube-simplify.test.ts`, then `bun run typecheck` and build.
+- `LIVE_BLOCKBENCH`: installed plugin and 5.2.x native selection, Undo/Redo, save/reopen, concurrent AI Runtime, visual/persistence acceptance.
+- Until those checks complete, do not label the plugin **tested**, the issue navigator **working in native Blockbench**, or any model **visually approved**.
+- Existing CI is disabled by policy; do not enable or create workflows or publish releases to manufacture verification.
 
-Source and test definitions do **not** prove the above. Bun/typecheck/build/installed Blockbench, live visual QA, native Undo/save/export remain **NOT EXECUTED** with verification CI disabled. Do not publish a release based on source inspection.
+## Source references
 
-## Research authority
-
+- `mcp/ui/authoringTools.ts`: canonical issue review and native target navigation.
+- `mcp/ui/index.ts`, `mcp/ui/panel.html`, `mcp/ui/panel.css`: panel and event/selection lifecycle.
+- `mcp/ui/geometryCleanupDialog.ts`, `mcp/server/tools/geometry/cubes.ts`: existing bounded native cleanup.
+- `mcp/lib/geometry/quality.ts`, `mcp/lib/geometry/modelQuality.ts`: canonical analyzers.
+- `mcp/lib/runtime/lifecycle.ts`: shared queue.
 - Official plugin guide: https://blockbench.net/wiki/docs/plugin/
-- Typed API reference: https://web.blockbench.net/docs/
-- Native version adoption: `docs/05-operations/blockbench-5.2-native-adoption.md`
-- Existing UI lifecycle: `mcp/ui/index.ts`, `mcp/plugin/blockbenchIntegration.ts`
-- Existing runtime queue and cleanup: `mcp/lib/runtime/lifecycle.ts`
-- Existing native Cube safety: `mcp/server/tools/geometry/cubes.ts`
+- Official native API: https://web.blockbench.net/docs/

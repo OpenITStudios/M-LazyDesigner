@@ -19,10 +19,11 @@ import { overrideDialogTeardown } from "@/ui/promptOverrideDialog";
 import panelCSS from "@/ui/panel.css";
 import template from "@/ui/panel.html";
 import {
-  inspectAuthoringCategory,
-  previewAuthoringPalette,
+  inspectGeometryIssues,
+  locateGeometryIssue,
   type AuthoringCategory,
-  type AuthoringReview,
+  type GeometryIssue,
+  type GeometryIssueReview,
 } from "@/ui/authoringTools";
 import {
   canOpenCubeCleanup,
@@ -64,12 +65,11 @@ type HumanPanelContext = {
   };
   project: HumanProjectState;
   activeCategory: AuthoringCategory;
-  review: AuthoringReview | null;
+  review: GeometryIssueReview | null;
   busy: boolean;
   error: string;
   selectionLabel: string;
   canCleanup: boolean;
-  paletteBase: string;
   inspectionVersion: number;
 };
 
@@ -100,7 +100,7 @@ function readHumanSelection(): string {
   return "Nothing selected";
 }
 
-function subscribeProjectState(callback: () => void): () => void {
+function subscribeProjectState(callback: (event: string) => void): () => void {
   const events = [
     "select_project",
     "new_project",
@@ -110,6 +110,7 @@ function subscribeProjectState(callback: () => void): () => void {
     "close_project",
     "update_project_settings",
     "update_selection",
+    "added_to_selection",
     "update_keyframe_selection",
     "update_texture_selection",
     "select_animation",
@@ -120,9 +121,15 @@ function subscribeProjectState(callback: () => void): () => void {
     "redo",
   ] as const;
 
-  for (const event of events) Blockbench.on(event, callback);
+  const listeners = events.map((event) => {
+    const listener = () => callback(event);
+    Blockbench.on(event, listener);
+    return { event, listener };
+  });
   return () => {
-    for (const event of events) Blockbench.removeListener(event, callback);
+    for (const { event, listener } of listeners) {
+      Blockbench.removeListener(event, listener);
+    }
   };
 }
 
@@ -193,13 +200,19 @@ export function uiSetup(input: UiSetupInput) {
         runtimeStatusListener = () =>
           document.removeEventListener(BLOCKIT_RUNTIME_STATUS_CHANGED, statusHandler);
 
-        const refreshProject = () => {
+        const refreshProject = (event?: string) => {
           const next = readHumanProjectState();
           vm.project.open = next.open;
           vm.project.name = next.name;
           vm.project.hasFolder = next.hasFolder;
           vm.selectionLabel = readHumanSelection();
           vm.canCleanup = canOpenCubeCleanup();
+          // Selecting a diagnosed object is navigation, not a geometry edit.
+          // Keep the issue list so the user can locate several findings in sequence.
+          if (event === "update_selection" || event === "added_to_selection" ||
+              event === "update_keyframe_selection" ||
+              event === "update_texture_selection" ||
+              event === "select_animation" || event === "select_mode") return;
           vm.inspectionVersion += 1;
           vm.busy = false;
           vm.review = null;
@@ -222,10 +235,9 @@ export function uiSetup(input: UiSetupInput) {
         activeCategory: "geometry" as AuthoringCategory,
         selectionLabel: readHumanSelection(),
         canCleanup: canOpenCubeCleanup(),
-        paletteBase: "#866b51",
         busy: false,
         error: "",
-        review: null as AuthoringReview | null,
+        review: null as GeometryIssueReview | null,
         inspectionVersion: 0,
       }),
       methods: {
@@ -249,7 +261,7 @@ export function uiSetup(input: UiSetupInput) {
           document.getElementById("ld-tab-" + next)?.focus();
         },
         async inspectActive(this: HumanPanelContext): Promise<void> {
-          if (this.busy) return;
+          if (this.busy || this.activeCategory !== "geometry") return;
           const category = this.activeCategory;
           const project = typeof Project !== "undefined" ? Project : null;
           const generation = getRuntimeLifecycleSnapshot().owner_generation;
@@ -267,7 +279,7 @@ export function uiSetup(input: UiSetupInput) {
               if (!isRuntimeGenerationCurrent(generation) || Project !== project) {
                 throw new Error("Project or plugin changed before inspection.");
               }
-              return inspectAuthoringCategory(category);
+              return inspectGeometryIssues();
             });
             if (requestVersion === this.inspectionVersion && mountedEpoch === uiEpoch &&
                 isRuntimeGenerationCurrent(generation) &&
@@ -288,13 +300,39 @@ export function uiSetup(input: UiSetupInput) {
         openCleanup(): void {
           openCubeCleanupDialog();
         },
-        previewPalette(this: HumanPanelContext): void {
+        async locateIssue(this: HumanPanelContext, issue: GeometryIssue): Promise<void> {
+          if (this.busy || !this.review || this.activeCategory !== "geometry") return;
+          const project = typeof Project !== "undefined" ? Project : null;
+          const generation = getRuntimeLifecycleSnapshot().owner_generation;
+          if (!project || generation === null) {
+            this.error = "Open a Bedrock project before locating an issue.";
+            return;
+          }
+          const version = this.inspectionVersion;
+          const epoch = uiEpoch;
+          this.busy = true;
           this.error = "";
           try {
-            this.review = previewAuthoringPalette(this.paletteBase);
+            await runRuntimeOperationExclusive(generation, async () => {
+              if (epoch !== uiEpoch || !isRuntimeGenerationCurrent(generation) ||
+                  Project !== project) {
+                throw new Error("Project or plugin changed. Run Find Geometry Issues again.");
+              }
+              const current = inspectGeometryIssues();
+              if (!current.issues.some((entry) =>
+                entry.kind === issue.kind && entry.uuid === issue.uuid && entry.code === issue.code)) {
+                throw new Error("This finding is no longer current. Run Find Geometry Issues again.");
+              }
+              locateGeometryIssue(issue, project);
+            });
           } catch (error) {
-            this.review = null;
-            this.error = error instanceof Error ? error.message : String(error);
+            if (epoch === uiEpoch && version === this.inspectionVersion) {
+              this.error = error instanceof Error ? error.message : String(error);
+            }
+          } finally {
+            if (epoch === uiEpoch && version === this.inspectionVersion) {
+              this.busy = false;
+            }
           }
         },
         runtimeStatusLabel(state: McpServerStatus): string {

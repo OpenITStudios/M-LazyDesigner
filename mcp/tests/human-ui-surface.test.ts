@@ -112,10 +112,12 @@ describe("human-facing Blockbench UI", () => {
     expect(panel).toContain('role="tablist"');
     expect(panel).toContain("['geometry', 'texture', 'animation']");
     expect(panel).toContain("Safe Cube Cleanup");
-    expect(panel).toContain("Inspect Model");
-    expect(panel).toContain("Inspect Textures");
-    expect(panel).toContain("Inspect Animations");
-    expect(panel).toContain("Preview Palette");
+    expect(panel).toContain("Find Geometry Issues");
+    expect(panel).toContain("Locate in Outliner");
+    expect(panel).toContain("Geometry utility");
+    expect(panel).not.toContain("Inspect Textures");
+    expect(panel).not.toContain("Inspect Animations");
+    expect(panel).not.toContain("Preview Palette");
     expect(panel).toContain("Switching tabs does not change its authoring stage.");
     expect(ui).toContain('activeCategory: "geometry"');
     expect(ui).toContain("runRuntimeOperationExclusive(generation");
@@ -157,8 +159,9 @@ describe("human-facing Blockbench UI", () => {
     ]) {
       expect(ui).toContain(`"${event}"`);
     }
-    expect(ui).toContain("Blockbench.on(event, callback)");
-    expect(ui).toContain("Blockbench.removeListener(event, callback)");
+    expect(ui).toContain("Blockbench.on(event, listener)");
+    expect(ui).toContain("Blockbench.removeListener(event, listener)");
+    expect(ui).toContain('event === "update_selection"');
     expect(ui).toContain("open_model_folder");
     expect(ui).not.toContain("setInterval(");
   });

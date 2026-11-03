@@ -38,52 +38,53 @@
 
   <section class="ld-workspace" id="ld-authoring-panel" role="tabpanel" :aria-labelledby="'ld-tab-' + activeCategory">
     <template v-if="activeCategory === 'geometry'">
-      <div class="ld-section-title">Geometry</div>
-      <p class="ld-description">Inspect the current model and review safe Cube corrections.</p>
+      <div class="ld-section-title">Geometry Issue Navigator</div>
+      <p class="ld-description">Find exact Cubes and Groups with technical problems, then locate them in the native Outliner.</p>
       <div class="ld-tool-actions">
-        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectActive">{{busy ? 'Inspecting...' : 'Inspect Model'}}</button>
-        <button type="button" class="user-action" :disabled="!canCleanup || busy" @click="openCleanup" title="Review and apply bounds/rotation rounding to selected Cubes">Safe Cube Cleanup</button>
+        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectActive">{{busy ? 'Checking...' : 'Find Geometry Issues'}}</button>
       </div>
-      <p class="section-hint" v-if="!canCleanup && project.open">For cleanup, select 1–32 Cubes in the active Geometry stage.</p>
+      <details class="ld-utilities">
+        <summary>Geometry utility</summary>
+        <p class="section-hint">Round selected Cube bounds or rotation only after reviewing the native dry-run and UV risk.</p>
+        <button type="button" class="user-action" :disabled="!canCleanup || busy" @click="openCleanup">Safe Cube Cleanup</button>
+        <p class="section-hint" v-if="!canCleanup && project.open">Requires 1–32 selected Cubes and the active Geometry stage.</p>
+      </details>
     </template>
 
     <template v-else-if="activeCategory === 'texture'">
       <div class="ld-section-title">Texture</div>
-      <p class="ld-description">Review the texture inventory or create a color-only palette preview.</p>
-      <div class="ld-tool-actions">
-        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectActive">{{busy ? 'Inspecting...' : 'Inspect Textures'}}</button>
-      </div>
-      <div class="ld-palette-controls">
-        <label for="ld-base-color">Base color</label>
-        <div class="ld-palette-input-row">
-          <input id="ld-base-color" v-model="paletteBase" type="text" maxlength="7" placeholder="#RRGGBB" spellcheck="false" aria-label="Palette base color in hex" />
-          <button type="button" class="user-action" @click="previewPalette">Preview Palette</button>
-        </div>
-      </div>
+      <p class="ld-description">Native Blockbench handles texture lists and palettes. AI texture authoring remains available through MCP; no duplicate editor controls are added here.</p>
     </template>
 
     <template v-else>
       <div class="ld-section-title">Animation</div>
-      <p class="ld-description">Inspect authored clips and controllers without changing playback or keyframes.</p>
-      <div class="ld-tool-actions">
-        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectActive">{{busy ? 'Inspecting...' : 'Inspect Animations'}}</button>
-      </div>
+      <p class="ld-description">Use Blockbench's native Timeline for manual editing and the existing MCP capabilities for AI authoring. No inventory-only buttons.</p>
     </template>
 
-    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project to inspect its authoring state.</p>
+    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project before running Geometry diagnostics.</p>
     <div v-if="error" class="ld-error" role="alert">{{error}}</div>
 
-    <section v-if="review" class="ld-review" aria-live="polite" aria-label="Tool results">
+    <section v-if="review && activeCategory === 'geometry'" class="ld-review" aria-live="polite" aria-label="Geometry diagnostic results">
       <div class="ld-review-title">{{review.heading}}</div>
       <p class="ld-review-summary">{{review.summary}}</p>
-      <dl class="ld-review-rows">
-        <div v-for="(entry, index) in review.rows" :key="entry.label + index">
-          <dt>{{entry.label}}</dt><dd :title="entry.value">{{entry.value}}</dd>
-        </div>
-      </dl>
-      <div v-if="review.swatches && review.swatches.length" class="ld-swatches" aria-label="Generated color ramp">
-        <span v-for="(swatch, index) in review.swatches" :key="index" :style="{backgroundColor: swatch}" :title="swatch" :aria-label="swatch"></span>
+
+      <div v-if="review.issues.length" class="ld-findings">
+        <article v-for="issue in review.issues" :key="issue.code + ':' + issue.uuid" class="ld-finding">
+          <div class="ld-finding-title" :title="issue.uuid">{{issue.name}} <span class="ld-finding-kind">({{issue.kind}})</span></div>
+          <p class="ld-finding-description">{{issue.description}}</p>
+          <button type="button" class="user-action" :disabled="busy || !project.open" @click="locateIssue(issue)">Locate in Outliner</button>
+        </article>
       </div>
+      <p v-if="review.truncated" class="section-hint">Some additional findings are omitted. Resolve and re-run the inspection for more examples.</p>
+
+      <details class="ld-diagnostic-details">
+        <summary>Technical counts</summary>
+        <dl class="ld-review-rows">
+          <div v-for="(entry, index) in review.rows" :key="entry.label + index">
+            <dt>{{entry.label}}</dt><dd :title="entry.value">{{entry.value}}</dd>
+          </div>
+        </dl>
+      </details>
       <p class="ld-review-note">{{review.note}}</p>
     </section>
   </section>

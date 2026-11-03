@@ -1,16 +1,29 @@
 /// <reference types="blockbench-types" />
-import { geometryHygieneRuntime, rigGraphRuntime } from "@/server/tools/validation/qualityIntelligence";
-import { generateTexturePalette, texturePaletteParameters } from "@/lib/texture/palette";
+import {
+  geometryHygieneRuntime,
+  rigGraphRuntime,
+} from "@/server/tools/validation/qualityIntelligence";
 
 export type AuthoringCategory = "geometry" | "texture" | "animation";
-export type ReviewRow = { label: string; value: string };
-export type AuthoringReview = {
+
+export type GeometryIssue = {
+  kind: "cube" | "group";
+  uuid: string;
+  name: string;
+  code: "degenerate_cube" | "box_uv_subunit" | "duplicate_group_name";
+  description: string;
+};
+
+export type GeometryIssueReview = {
   heading: string;
   summary: string;
-  rows: ReviewRow[];
+  rows: Array<{ label: string; value: string }>;
+  issues: GeometryIssue[];
+  truncated: boolean;
   note: string;
-  swatches?: string[];
 };
+
+const MAX_VISIBLE_ISSUES = 8;
 
 export function requireBedrockEditorProject(): void {
   if (typeof Project === "undefined" || !Project) {
@@ -21,87 +34,112 @@ export function requireBedrockEditorProject(): void {
   }
 }
 
-/** Three human-oriented views of the native state; none mutates a project or changes the AI Stage. */
-export function inspectAuthoringCategory(category: AuthoringCategory): AuthoringReview {
+/**
+ * One actual workflow: native Geometry diagnostics -> UUID-specific review.
+ * Never present a count without explaining the diagnostic's limited scope.
+ * No guessed corrections, arbitrary selection, or visual-quality certification.
+ */
+export function inspectGeometryIssues(): GeometryIssueReview {
   requireBedrockEditorProject();
-  if (category === "geometry") {
-    // The same native adapters and pure analyzers that enrich MCP quality receipts.
-    const geometry = geometryHygieneRuntime();
-    const rig = rigGraphRuntime();
-    if (geometry.state === "unavailable" || rig.state === "unavailable") {
-      throw new Error("The Blockbench geometry or Group inventory is not available.");
+  const hygiene = geometryHygieneRuntime();
+  const rig = rigGraphRuntime();
+  if (hygiene.state === "unavailable" || rig.state === "unavailable") {
+    throw new Error("The Blockbench Cube/Group inventory is not available.");
+  }
+
+  const candidates: GeometryIssue[] = [];
+  for (const item of hygiene.degenerate_cubes.examples) {
+    candidates.push({
+      kind: "cube", uuid: item.cube_uuid, name: item.cube_name,
+      code: "degenerate_cube",
+      description: `Invalid or collapsed extent on ${item.invalid_axes.join(", ")}. Inspect the Cube before repairing it.`,
+    });
+  }
+  for (const duplicate of hygiene.duplicate_bone_names.examples) {
+    for (const group of duplicate.groups) {
+      candidates.push({
+        kind: "group", uuid: group.uuid, name: group.name,
+        code: "duplicate_group_name",
+        description: `Name "${duplicate.name}" is shared by ${duplicate.count} Groups. Use UUIDs to avoid ambiguous bone targets.`,
+      });
     }
-    const findings =
-      geometry.precision.affected_cube_count +
-      geometry.degenerate_cubes.count +
-      geometry.box_uv_subunit.count +
-      geometry.duplicate_bone_names.group_count;
-    const graphInvalid = rig.state === "invalid_graph";
-    return {
-      heading: "Model Inspector",
-      summary: findings > 0 || graphInvalid
-        ? "Technical findings need review."
-        : "No issues in the bounded geometry and rig checks.",
-      rows: [
-        { label: "Cubes", value: String(Cube.all?.length ?? 0) },
-        { label: "Groups", value: String(rig.group_count) },
-        { label: "Precision candidates", value: String(geometry.precision.affected_cube_count) },
-        { label: "Degenerate cubes", value: String(geometry.degenerate_cubes.count) },
-        { label: "Box UV risks", value: String(geometry.box_uv_subunit.count) },
-        { label: "Duplicate group names", value: String(geometry.duplicate_bone_names.group_count) },
-        { label: "Rig graph", value: rig.state === "invalid_graph" ? "Needs review" : rig.state === "empty" ? "No groups" : "Structurally valid" },
-      ],
-      note: "Diagnostics are bounded technical evidence, not a visual-quality PASS or automatic approval.",
-    };
+  }
+  for (const item of hygiene.box_uv_subunit.examples) {
+    candidates.push({
+      kind: "cube", uuid: item.cube_uuid, name: item.cube_name,
+      code: "box_uv_subunit",
+      description: `Box UV has sub-unit dimensions on ${item.axes.join(", ")}. Check the UV mapping; small geometry can be intentional.`,
+    });
   }
 
-  if (category === "texture") {
-    const textures = typeof Texture !== "undefined" && Array.isArray(Texture.all) ? Texture.all : [];
-    const groups = typeof TextureGroup !== "undefined" && Array.isArray(TextureGroup.all) ? TextureGroup.all : [];
-    return {
-      heading: "Texture Inventory",
-      summary: textures.length ? "Current project texture overview." : "No textures are present in this project.",
-      rows: [
-        { label: "Textures", value: String(textures.length) },
-        { label: "Material groups", value: String(groups.length) },
-        { label: "Logical atlas size", value: Number.isFinite(Project.texture_width) && Number.isFinite(Project.texture_height)
-          ? `${Project.texture_width} × ${Project.texture_height}` : "Unknown" },
-        { label: "Texture names", value: textures.slice(0, 4).map((texture) => String(texture.name)).join(", ") || "None" },
-      ],
-      note: "Inventory only. Pixel accuracy, UV seams, and material quality have not been evaluated.",
-    };
-  }
+  const unique = new Set<string>();
+  const issues = candidates.filter((issue) => {
+    const key = issue.code + ":" + issue.uuid;
+    if (!issue.uuid || unique.has(key)) return false;
+    unique.add(key);
+    return true;
+  }).slice(0, MAX_VISIBLE_ISSUES);
 
-  const items = typeof AnimationItem !== "undefined" && Array.isArray(AnimationItem.all) ? AnimationItem.all : [];
-  const controllers = typeof AnimationController === "undefined"
-    ? 0
-    : items.filter((item) => item instanceof AnimationController).length;
-  const selected = typeof AnimationItem === "undefined" ? null : AnimationItem.selected;
+  const needsReview =
+    hygiene.state === "review_required" || rig.state === "invalid_graph";
+  const truncated =
+    candidates.length > MAX_VISIBLE_ISSUES ||
+    hygiene.degenerate_cubes.examples_truncated ||
+    hygiene.box_uv_subunit.examples_truncated ||
+    hygiene.duplicate_bone_names.examples_truncated ||
+    hygiene.duplicate_bone_names.examples.some((item) => item.groups_truncated);
+
   return {
-    heading: "Animation Inventory",
-    summary: items.length ? "Current clips and controllers." : "No authored animations are present.",
+    heading: "Geometry Issues",
+    summary: needsReview
+      ? issues.length
+        ? "Select a finding to locate the affected object in the native Outliner."
+        : "Technical findings exist, but no directly locatable issue is included in this bounded review."
+      : "No findings in the checks shown. This does not certify visual quality.",
     rows: [
-      { label: "Animation clips", value: String(items.length - controllers) },
-      { label: "Controllers", value: String(controllers) },
-      { label: "Selected", value: selected ? String(selected.name) : "None" },
-      { label: "Names", value: items.slice(0, 4).map((item) => String(item.name)).join(", ") || "None" },
+      { label: "Degenerate Cubes", value: String(hygiene.degenerate_cubes.count) },
+      { label: "Duplicate Group names", value: String(hygiene.duplicate_bone_names.name_count) },
+      { label: "Box UV sub-unit risks", value: String(hygiene.box_uv_subunit.count) },
+      { label: "Precision hints", value: String(hygiene.precision.drift_count) },
+      { label: "Rig graph", value: rig.state === "invalid_graph" ? "Structural review required" : "No structural error detected" },
     ],
-    note: "Inventory only. Motion continuity, native playback, and exported behavior have not been evaluated.",
+    issues,
+    truncated,
+    note:
+      "Read-only native diagnostics. Precision hints and rig-graph aggregates are not automatic fixes; missing issues are not proof of model quality.",
   };
 }
 
-export function previewAuthoringPalette(base: string): AuthoringReview {
-  // Preview-only: never use append/replace from this surface.
-  const request = texturePaletteParameters.parse({ base, count: 7, mode: "preview" });
-  const palette = generateTexturePalette(request);
-  return {
-    heading: "Palette Preview",
-    summary: "Seven shades derived from one base color.",
-    rows: [
-      { label: "Base", value: request.base.toLowerCase() },
-      { label: "Distinct colors", value: String(palette.unique_colors) },
-    ],
-    swatches: palette.colors,
-    note: "Color planning only. No palette, texture bitmap, or material was changed.",
-  };
+/**
+ * Locate only the exact Cube/Group from the current project.
+ * Select + showInOutliner are native editor navigation, not model mutation.
+ * Caller serializes with AI work and rechecks the current issue set before calling.
+ */
+export function locateGeometryIssue(
+  issue: GeometryIssue,
+  project: object,
+): string {
+  requireBedrockEditorProject();
+  if (Project !== project) {
+    throw new Error("The project changed. Run Find Geometry Issues again.");
+  }
+  const nodes = issue.kind === "cube"
+    ? (typeof Cube === "undefined" ? [] : Cube.all)
+    : (typeof Group === "undefined" ? [] : Group.all);
+  const matches = nodes.filter((node) => node.uuid === issue.uuid);
+  if (matches.length !== 1) {
+    throw new Error("The diagnosed object no longer has a unique UUID in this project.");
+  }
+  const node = matches[0];
+  if (typeof node.select !== "function" ||
+      typeof node.showInOutliner !== "function") {
+    throw new Error("Native Outliner navigation is unavailable for this object.");
+  }
+  // The native Group signature requires (event, is_outliner_click);
+  // Cube accepts the same arguments. Do not report success for locked targets.
+  if (node.select(undefined, false) === false || node.selected !== true) {
+    throw new Error("Blockbench could not select this object. Check whether it is locked.");
+  }
+  node.showInOutliner();
+  return node.name;
 }

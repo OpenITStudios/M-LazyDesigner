@@ -14,8 +14,7 @@
   padding: 12px;
 }
 .mcp-panel .runtime-summary,
-.mcp-panel .ld-project-row,
-.mcp-panel .ld-palette-input-row {
+.mcp-panel .ld-project-row {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -125,28 +124,41 @@
 }
 .mcp-panel .user-action:disabled { opacity: .5; cursor: default; }
 .mcp-panel .ld-compact-action { flex: 0 0 auto; }
-.mcp-panel .ld-palette-controls {
+.mcp-panel .ld-utilities,
+.mcp-panel .ld-diagnostic-details {
   border-top: 1px solid var(--color-border);
-  padding-top: 11px;
   margin-top: 12px;
+  padding-top: 10px;
 }
-.mcp-panel .ld-palette-controls label {
-  display: block;
-  font-size: .8em;
-  margin-bottom: 5px;
+.mcp-panel .ld-utilities summary,
+.mcp-panel .ld-diagnostic-details summary {
+  cursor: pointer;
   color: var(--color-subtle_text);
+  font-size: .82em;
+  font-weight: 600;
 }
-.mcp-panel .ld-palette-input-row { flex-wrap: wrap; }
-.mcp-panel .ld-palette-input-row input {
-  min-width: 92px;
-  width: 108px;
-  min-height: 30px;
+.mcp-panel .ld-utilities .user-action { margin-top: 9px; }
+.mcp-panel .ld-findings { display: grid; gap: 8px; margin-top: 12px; }
+.mcp-panel .ld-finding {
   border: 1px solid var(--color-border);
   border-radius: 5px;
-  background: var(--color-back);
-  color: var(--color-text);
-  padding: 5px 8px;
-  font: inherit;
+  padding: 9px;
+  min-width: 0;
+}
+.mcp-panel .ld-finding-title {
+  font-size: .85em;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.mcp-panel .ld-finding-kind {
+  color: var(--color-subtle_text);
+  font-weight: 400;
+}
+.mcp-panel .ld-finding-description {
+  font-size: .82em;
+  line-height: 1.42;
+  margin: 6px 0 10px;
+  color: var(--color-subtle_text);
 }
 .mcp-panel .ld-empty-state { font-size: .84em; color: var(--color-subtle_text); margin-top: 12px; }
 .mcp-panel .ld-error {
@@ -177,13 +189,6 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-.mcp-panel .ld-swatches { display: flex; gap: 4px; margin-top: 12px; }
-.mcp-panel .ld-swatches span {
-  flex: 1;
-  height: 26px;
-  border-radius: 3px;
-  border: 1px solid var(--color-border);
 }
 .mcp-panel .ld-review-note { margin-top: 10px; }
 .mcp-panel .panel-note { margin: 10px 2px 0; }
