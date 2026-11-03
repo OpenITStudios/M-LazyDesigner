@@ -77,12 +77,19 @@ function validatedPng(data: Buffer, width: number, height: number): void {
   }
 }
 
-async function runBlender(
+/**
+ * Wait for confirmed Blender process close before touching its input files.
+ * When a process ignores termination, preserve its job directory rather than
+ * deleting a GLB/script it might still be reading.
+ */
+export async function runBlender(
   childProcess: typeof import("node:child_process"),
   executable: string,
   workerPath: string,
   jobPath: string,
   cwd: string,
+  timeoutMs = 15 * 60 * 1000,
+  terminationGraceMs = 12_000,
 ): Promise<void> {
   const argv = blenderRenderArgs(workerPath, jobPath);
   await new Promise<void>((resolve, reject) => {
@@ -95,28 +102,44 @@ async function runBlender(
       reject(new Error("PUBLICATION_BLENDER_LAUNCH_FAILED: " + String(error)));
       return;
     }
-    let finished = false;
+
+    let settled = false;
+    let timeoutFired = false;
     let stderr = "";
     let stdout = "";
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
     const collect = (chunk: unknown, current: string): string =>
       (current + String(chunk)).slice(-8192);
-    child.stdout?.on("data", chunk => { stdout = collect(chunk, stdout); });
-    child.stderr?.on("data", chunk => { stderr = collect(chunk, stderr); });
+
     const finish = (error?: Error) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timeout);
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutTimer);
+      if (graceTimer !== null) clearTimeout(graceTimer);
       if (error) reject(error);
       else resolve();
     };
-    const timeout = setTimeout(() => {
-      child.kill();
-      finish(new Error("PUBLICATION_BLENDER_TIMEOUT: bounded render exceeded 15 minutes."));
-    }, 15 * 60 * 1000);
-    child.on("error", error =>
-      finish(new Error("PUBLICATION_BLENDER_PROCESS_ERROR: " + error.message)));
+    const timeoutTimer = setTimeout(() => {
+      if (settled) return;
+      timeoutFired = true;
+      try { child.kill(); } catch { /* close/error may still arrive */ }
+      graceTimer = setTimeout(() => {
+        finish(new Error(
+          "PUBLICATION_BLENDER_EXIT_UNCONFIRMED: subprocess did not close after termination; " +
+          "its isolated temporary files have been preserved for safe recovery.",
+        ));
+      }, terminationGraceMs);
+    }, timeoutMs);
+
+    child.stdout?.on("data", chunk => { stdout = collect(chunk, stdout); });
+    child.stderr?.on("data", chunk => { stderr = collect(chunk, stderr); });
+    child.on("error", error => finish(new Error(
+      "PUBLICATION_BLENDER_PROCESS_ERROR: " + error.message,
+    )));
     child.on("close", (code, signal) => {
-      if (code !== 0) {
+      if (timeoutFired) {
+        finish(new Error("PUBLICATION_BLENDER_TIMEOUT: Cycles render exceeded the configured deadline."));
+      } else if (code !== 0) {
         finish(new Error(
           "PUBLICATION_BLENDER_RENDER_FAILED: exit=" + String(code) +
           " signal=" + String(signal) + " " + stderr.slice(-1800),
@@ -155,6 +178,7 @@ export async function renderPublication(input: unknown): Promise<PublicationRend
   const jobPath = join(workdir, "job.json");
   const tempOutput = join(workdir, "output.png");
   const workerSha = hash(blenderWorker);
+  let preserveTemporaryJob = false;
   try {
     fs.writeFileSync(glbPath, snapshot.glb, { flag: "wx" });
     fs.writeFileSync(workerPath, blenderWorker, { flag: "wx" });
@@ -206,19 +230,26 @@ export async function renderPublication(input: unknown): Promise<PublicationRend
       visual_quality: "NOT_EVALUATED",
       live_minecraft_verified: false,
     };
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("PUBLICATION_BLENDER_EXIT_UNCONFIRMED")) {
+      preserveTemporaryJob = true;
+    }
+    throw error;
   } finally {
-    // Blockbench's ScopedFS rmSync is not reliably synchronous. Delete only
-    // the four known files that this fresh job owns, then remove the empty dir.
-    // Never recurse into or follow arbitrary paths during renderer cleanup.
-    try {
-      for (const file of [glbPath, workerPath, jobPath, tempOutput]) {
-        if (fs.existsSync(file)) fs.unlinkSync(file);
+    // A process that did not confirm exit may still be using the input GLB.
+    if (preserveTemporaryJob) {
+      console.warn("[LazyDesigner Render] Process exit unconfirmed; isolated job preserved:", workdir);
+    } else {
+      // Blockbench ScopedFS.rmSync is not reliably synchronous. Delete only
+      // the four known files created for this job, then its empty directory.
+      try {
+        for (const file of [glbPath, workerPath, jobPath, tempOutput]) {
+          if (fs.existsSync(file)) fs.unlinkSync(file);
+        }
+        fs.rmdirSync(workdir);
+      } catch {
+        console.warn("[LazyDesigner Render] Temporary render job cleanup failed:", workdir);
       }
-      fs.rmdirSync(workdir);
-    } catch {
-      // Leave unremoved temporary files for explicit, safe recovery. Never
-      // touch the existing editor project or another job's directories.
-      console.warn("[LazyDesigner Render] Temporary render job cleanup failed:", workdir);
     }
   }
 }
