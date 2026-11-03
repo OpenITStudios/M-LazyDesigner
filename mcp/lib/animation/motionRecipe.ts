@@ -114,6 +114,13 @@ export type MotionPchipOptions = {
   sample_fps: number;
   /** Preserve continuous flow, or explicitly bring the full track to rest. */
   boundary_tangent?: "shape_preserving" | "rest_endpoints";
+  /**
+   * Opt-in cap on peak FINITE-DIFFERENCE speed of the final native-LINEAR
+   * approximation, relative to the original linear source on the SAME grid.
+   * Must be 1..3. This may relax requested rest-endpoint easing; it does
+   * not change pose anchors, clip length, or enable native IK/playback.
+   */
+  max_sampled_speed_ratio?: number;
 };
 
 const MOTION_PCHIP_MAX_TARGETS = 12;
@@ -155,6 +162,154 @@ function pchipAxisSlopes(times: readonly number[], values: readonly number[], st
   return slopes;
 }
 
+
+type PchipGeneratedPose = {
+  id:string;time:number;
+  bones:Record<string,{position?:MotionVec3;rotation?:MotionVec3}>;
+};
+
+/**
+ * Keep the full sampled shape as a convex blend of the authored LINEAR
+ * baseline and the unconstrained PCHIP bake. Both curves meet every authored
+ * key, so ANY blend preserves source anchors and axiswise no-overshoot.
+ *
+ * Peak finite-difference speed is convex as a function of blend weight.
+ * The feasible interval includes alpha=0 (the original linear baseline).
+ * Bisection therefore finds the strongest usable PCHIP shape under an
+ * explicit relative sampled-speed cap without changing clip duration.
+ */
+function boundPchipTrackSampledSpeed(
+  compiled:CompiledMotionRecipe,
+  additions:Map<number,PchipGeneratedPose>,
+  target:MotionPchipTarget,
+  fps:number,
+  maxRatio:number
+) {
+  type SampleKey={time:number;value:MotionVec3};
+  const source=(compiled.bones[target.bone]??[])
+    .filter((frame)=>frame[target.channel]!==undefined)
+    .map((frame):SampleKey=>({
+      time:frame.time,value:frame[target.channel] as MotionVec3,
+    }));
+  const generated=[...additions.values()].filter(
+    (pose)=>pose.bones[target.bone]?.[target.channel]!==undefined
+  );
+  const collect=():SampleKey[]=>[
+    ...source,
+    ...generated.map((pose)=>({
+      time:pose.time,
+      value:pose.bones[target.bone][target.channel] as MotionVec3,
+    })),
+  ].sort((a,b)=>a.time-b.time);
+  const sample=(keys:readonly SampleKey[],time:number):MotionVec3=>{
+    if (!keys.length || time<keys[0].time-1e-8 ||
+        time>keys[keys.length-1].time+1e-8) {
+      throw new Error("MOTION_PCHIP_SPEED_SOURCE_CLOCK_INVALID");
+    }
+    let lo=0,hi=keys.length-1;
+    while(lo+1<hi){
+      const mid=(lo+hi)>>1;
+      if(keys[mid].time<time)lo=mid;else hi=mid;
+    }
+    if(Math.abs(keys[lo].time-time)<=1e-8)return [...keys[lo].value] as MotionVec3;
+    if(Math.abs(keys[hi].time-time)<=1e-8)return [...keys[hi].value] as MotionVec3;
+    const width=keys[hi].time-keys[lo].time;
+    if(!(width>0))throw new Error("MOTION_PCHIP_SPEED_SOURCE_CLOCK_INVALID");
+    const u=(time-keys[lo].time)/width;
+    return [0,1,2].map((i)=>
+      keys[lo].value[i]+u*(keys[hi].value[i]-keys[lo].value[i])
+    ) as MotionVec3;
+  };
+  const firstTick=Math.round(source[0].time*fps);
+  const lastTick=Math.round(source[source.length-1].time*fps);
+  const samples=lastTick-firstTick+1;
+  if(!Number.isSafeInteger(samples)||samples<2||samples>2048){
+    throw new Error("MOTION_PCHIP_SPEED_GRID_BUDGET_EXCEEDED");
+  }
+  const rawKeys=collect();
+  const baseline:MotionVec3[]=[],unbounded:MotionVec3[]=[];
+  for(let tick=firstTick;tick<=lastTick;tick++){
+    const time=tick/fps;
+    baseline.push(sample(source,time));
+    unbounded.push(sample(rawKeys,time));
+  }
+  const peak=(alpha:number)=>{
+    let maximum=0;
+    for(let i=1;i<samples;i++){
+      const diff=[0,1,2].map((axis)=>{
+        const base=baseline[i][axis]-baseline[i-1][axis];
+        const change=(unbounded[i][axis]-unbounded[i-1][axis])-base;
+        return (base+alpha*change)*fps;
+      });
+      maximum=Math.max(maximum,Math.hypot(...diff));
+    }
+    return maximum;
+  };
+  const sourcePeak=peak(0),unboundedPeak=peak(1),allowed=sourcePeak*maxRatio;
+  if(![sourcePeak,unboundedPeak,allowed].every(Number.isFinite) ||
+      sourcePeak<=1e-9) {
+    throw new Error("MOTION_PCHIP_SPEED_REFERENCE_UNAVAILABLE");
+  }
+  const precision=Math.max(1e-7,allowed*1e-8);
+  let alpha=1;
+  if(unboundedPeak>allowed+precision){
+    let lo=0,hi=1;
+    for(let i=0;i<42;i++){
+      const mid=(lo+hi)/2;
+      if(peak(mid)<=allowed)lo=mid;else hi=mid;
+    }
+    alpha=lo;
+  }
+  const hadShape=unbounded.some((value,i)=>value.some((v,j)=>
+    Math.abs(v-baseline[i][j])>MOTION_PCHIP_LINEAR_DIFFERENCE
+  ));
+  if(hadShape && alpha<=1e-6) {
+    throw new Error("MOTION_PCHIP_SPEED_CAP_NO_EFFECTIVE_SMOOTHING");
+  }
+  if(alpha<1){
+    for(const pose of generated){
+      const current=pose.bones[target.bone][target.channel] as MotionVec3;
+      const original=sample(source,pose.time);
+      pose.bones[target.bone][target.channel]=[0,1,2].map((axis)=>
+        original[axis]+alpha*(current[axis]-original[axis])
+      ) as MotionVec3;
+    }
+  }
+  // This checks the ACTUAL retained LINEAR key inventory. A generated
+  // sample may have been omitted at an unrelated semantic pose time, and
+  // simply checking analytic PCHIP derivatives would overstate safety.
+  const finalKeys=collect();
+  const final:MotionVec3[]=[];
+  for(let tick=firstTick;tick<=lastTick;tick++) {
+    const value=sample(finalKeys,tick/fps);
+    if(value.some((n)=>!Number.isFinite(n))) {
+      throw new Error("MOTION_PCHIP_SPEED_BAKE_NONFINITE");
+    }
+    final.push(value);
+  }
+  let finalPeak=0;
+  for(let i=1;i<final.length;i++){
+    finalPeak=Math.max(finalPeak,Math.hypot(...[0,1,2].map((axis)=>
+      (final[i][axis]-final[i-1][axis])*fps
+    )));
+  }
+  if(!Number.isFinite(finalPeak)||finalPeak>allowed+precision){
+    throw new Error("MOTION_PCHIP_SPEED_CAP_NOT_PRESERVED");
+  }
+  return {
+    bone:target.bone,
+    channel:target.channel,
+    units:target.channel==="rotation"?"degrees_per_second" as const
+      :"blockbench_model_units_per_second" as const,
+    source_peak_sampled_speed:Number(sourcePeak.toFixed(6)),
+    uncapped_peak_sampled_speed:Number(unboundedPeak.toFixed(6)),
+    allowed_peak_sampled_speed:Number(allowed.toFixed(6)),
+    final_peak_sampled_speed:Number(finalPeak.toFixed(6)),
+    pchip_shape_weight:Number(alpha.toFixed(6)),
+    cap_applied:alpha<1-1e-6,
+  };
+}
+
 /**
  * Opt-in shape-preserving PCHIP sampled as existing native-safe LINEAR keys.
  * The source curve is mathematically C1; the baked LINEAR approximation is
@@ -180,6 +335,11 @@ export function bakeShapePreservingMotionToLinearRecipe(
       (policy!=="shape_preserving" && policy!=="rest_endpoints")) {
     throw new Error("MOTION_PCHIP_SAMPLING_POLICY_INVALID");
   }
+  const speedRatio=options?.max_sampled_speed_ratio;
+  if(speedRatio!==undefined &&
+      (!Number.isFinite(speedRatio)||speedRatio<1||speedRatio>3)) {
+    throw new Error("MOTION_PCHIP_SPEED_RATIO_INVALID");
+  }
   if (!Array.isArray(targets)||targets.length===0 ||
       targets.length>MOTION_PCHIP_MAX_TARGETS) {
     throw new Error("MOTION_PCHIP_TARGET_SELECTION_INVALID");
@@ -193,10 +353,7 @@ export function bakeShapePreservingMotionToLinearRecipe(
 
   const originalPoseIds=new Set(recipe.poses.map((pose)=>pose.id));
   const originalPoseTimes=recipe.poses.map((pose)=>pose.time);
-  const additions=new Map<number,{
-    id:string;time:number;
-    bones:Record<string,{position?:MotionVec3;rotation?:MotionVec3}>;
-  }>();
+  const additions=new Map<number,PchipGeneratedPose>();
   const claimed=new Set<string>();
   let newKeyCount=0, effectiveShapeChange=false;
   for (const target of targets) {
@@ -282,6 +439,17 @@ export function bakeShapePreservingMotionToLinearRecipe(
   if (!effectiveShapeChange) {
     throw new Error("MOTION_PCHIP_NO_EFFECTIVE_SHAPE_CHANGE");
   }
+  const sampledSpeedReports=speedRatio===undefined
+    ? []
+    : targets.map((target)=>
+        boundPchipTrackSampledSpeed(compiled,additions,target,fps,speedRatio)
+      );
+  if (speedRatio!==undefined) {
+    // The sampled cap may force the source PCHIP blend effectively to zero.
+    // Never report a smooth-shape improvement when the result is linear.
+    const modified=sampledSpeedReports.some((report)=>report.pchip_shape_weight>1e-6);
+    if(!modified)throw new Error("MOTION_PCHIP_SPEED_CAP_NO_EFFECTIVE_SMOOTHING");
+  }
 
   const clone=recipe.poses.map((pose):MotionPose=>({
     id:pose.id,time:pose.time,
@@ -313,6 +481,19 @@ export function bakeShapePreservingMotionToLinearRecipe(
       selected_channel_count:targets.length,
       source_sample_fps:fps,
       tangent_policy:policy,
+      ...(speedRatio!==undefined?{
+        sampled_peak_speed_guard:{
+          state:"SOURCE_ONLY_SAMPLED_SPEED_BOUNDED" as const,
+          max_sampled_speed_ratio:speedRatio,
+          tracks:sampledSpeedReports,
+          source_duration_preserved:true as const,
+          rest_endpoint_tangent_may_be_relaxed:
+            policy==="rest_endpoints"&&
+            sampledSpeedReports.some((r)=>r.cap_applied),
+          native_playback_attested:false as const,
+          native_export_speed_attested:false as const,
+        },
+      }:{}),
       authored_pose_ids_preserved:true as const,
       axiswise_no_overshoot_preflight:true as const,
       native_linear_approximation_only:true as const,

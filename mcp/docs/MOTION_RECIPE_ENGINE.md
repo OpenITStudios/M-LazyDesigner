@@ -544,6 +544,40 @@ keyframes do not actually have continuous velocity, and source-grid
 mathematics cannot certify native playback, export, physical contact or
 visual quality. Those proof flags remain false.
 
+### Opt-in sampled speed cap for PCHIP (2026-11-03)
+
+`MotionPchipOptions.max_sampled_speed_ratio` is now an **optional**
+source-side speed guard (finite, between 1 and 3) for the same PCHIP bake.
+For each explicitly selected bone/channel, it computes the original
+LINEAR peak sampled speed and the unconstrained PCHIP-LINEAR peak sampled
+speed on the SAME requested FPS grid. If the cubic bake exceeds the
+requested multiplier of the source speed, it finds the maximum usable
+convex blend between the original linear trajectory and PCHIP via a
+bounded bisection. This retains all original semantic pose values and
+times, axiswise interpolation bounds, the exact channel clock and clip
+duration. It refuses a limit that erases meaningful smoothing rather than
+silently returning a fully original unmodified animation.
+
+The limiter verifies the **actual retained native-linear source key
+inventory**, not only ideal cubic derivatives. It reports for each
+selected channel its source peak, unconstrained peak, allowed peak,
+resulting peak, and blend weight under
+`sampled_peak_speed_guard` in the existing
+`semantic_context.shape_preserving_linear_bake` receipt. When
+`boundary_tangent="rest_endpoints"` is requested and a speed cap applies,
+the final blended curve may **no longer have zero endpoint derivatives**;
+`rest_endpoint_tangent_may_be_relaxed` records this explicitly.
+This is an honest trade-off, not a hidden promise of perfect easing.
+
+This source-only guard bounds the maximum **finite-difference** velocity
+at the sampled FPS grid, not the exact continuous cubic derivative,
+Blockbench Runtime interpolation, network frame timing or a Bedrock
+in-game speed. It does not automatically limit acceleration or jerk;
+the same-grid `continuity_review` continues to report both, including
+potential regressions. The feature remains opt-in, leaves old PCHIP
+behavior unchanged when the ratio is omitted, adds no native Gateway
+argument and does not authorize keyframe edits or native/visual PASS.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

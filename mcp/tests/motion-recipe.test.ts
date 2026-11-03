@@ -162,3 +162,85 @@ describe("opt-in axiswise shape-preserving linear motion bake",()=>{
       .toThrow("MOTION_PCHIP_SOURCE_KEY_BUDGET_EXCEEDED");
   });
 });
+
+
+describe("explicit sampled speed cap on PCHIP linear baked motion",()=>{
+  const action=()=>({
+    name:"speed_bounded_attack",duration:1,loop:false,
+    poses:[
+      {id:"ready",time:0,bones:{arm:{rotation:[0,0,0] as [number,number,number]}}},
+      {id:"contact",time:0.5,bones:{arm:{rotation:[8,0,0] as [number,number,number]}}},
+      {id:"recover",time:1,bones:{arm:{rotation:[0,0,0] as [number,number,number]}}},
+    ],
+  });
+
+  test("limits discrete peak speed without touching original times, values or duration",()=>{
+    const source=action(),saved=JSON.stringify(source);
+    const bounded=bakeShapePreservingMotionToLinearRecipe(
+      source,[{bone:"arm",channel:"rotation"}],{
+        sample_fps:30,boundary_tangent:"rest_endpoints",
+        max_sampled_speed_ratio:1.15,
+      }
+    );
+    const stats=bounded.evidence.sampled_peak_speed_guard;
+    expect(stats?.state).toBe("SOURCE_ONLY_SAMPLED_SPEED_BOUNDED");
+    expect(stats?.max_sampled_speed_ratio).toBe(1.15);
+    expect(stats?.tracks).toHaveLength(1);
+    const s=stats!.tracks[0];
+    expect(s.source_peak_sampled_speed).toBeCloseTo(16,5);
+    expect(s.uncapped_peak_sampled_speed).toBeGreaterThan(23);
+    expect(s.allowed_peak_sampled_speed).toBeCloseTo(18.4,5);
+    expect(s.final_peak_sampled_speed).toBeLessThanOrEqual(18.400001);
+    expect(s.pchip_shape_weight).toBeGreaterThan(0.1);
+    expect(s.pchip_shape_weight).toBeLessThan(1);
+    expect(s.cap_applied).toBe(true);
+    expect(stats?.rest_endpoint_tangent_may_be_relaxed).toBe(true);
+    expect(stats?.native_playback_attested).toBe(false);
+    expect(stats?.native_export_speed_attested).toBe(false);
+    const authored=bounded.recipe.poses.filter((pose)=>
+      ["ready","contact","recover"].includes(pose.id)
+    );
+    expect(authored.map((pose)=>pose.time)).toEqual([0,0.5,1]);
+    expect(authored.map((pose)=>pose.bones.arm.rotation?.[0]))
+      .toEqual([0,8,0]);
+    expect(bounded.recipe.duration).toBe(1);
+    expect(JSON.stringify(source)).toBe(saved);
+    expect(bakeShapePreservingMotionToLinearRecipe(
+      source,[{bone:"arm",channel:"rotation"}],{
+        sample_fps:30,boundary_tangent:"rest_endpoints",
+        max_sampled_speed_ratio:1.15,
+      }
+    )).toEqual(bounded);
+  });
+
+  test("strict 100% source speed cap rejects easing that would be numerically erased",()=>{
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(
+      action(),[{bone:"arm",channel:"rotation"}],{
+        sample_fps:30,boundary_tangent:"rest_endpoints",
+        max_sampled_speed_ratio:1,
+      }
+    )).toThrow("MOTION_PCHIP_SPEED_CAP_NO_EFFECTIVE_SMOOTHING");
+  });
+
+  test("invalid sampled speed ratios cannot silently change the source",()=>{
+    const recipe=action(),before=JSON.stringify(recipe);
+    for(const ratio of [0.99,3.1,Number.NaN,Number.POSITIVE_INFINITY]){
+      expect(()=>bakeShapePreservingMotionToLinearRecipe(
+        recipe,[{bone:"arm",channel:"rotation"}],{
+          sample_fps:30,max_sampled_speed_ratio:ratio,
+        }
+      )).toThrow("MOTION_PCHIP_SPEED_RATIO_INVALID");
+    }
+    expect(JSON.stringify(recipe)).toBe(before);
+  });
+
+  test("legacy PCHIP behavior and evidence remain unchanged without speed cap",()=>{
+    const result=bakeShapePreservingMotionToLinearRecipe(
+      action(),[{bone:"arm",channel:"rotation"}],{
+        sample_fps:30,boundary_tangent:"rest_endpoints",
+      }
+    );
+    expect(result.evidence).not.toHaveProperty("sampled_peak_speed_guard");
+    expect(result.evidence.generated_channel_key_count).toBe(28);
+  });
+});

@@ -753,6 +753,35 @@ describe("source-only PCHIP baked motion through the existing Gateway bridge",()
     expect(JSON.stringify({source,intent:intent()})).toBe(before);
   });
 
+  test("bounded peak speed stays source-only and outside the native create schema",()=>{
+    const result=compileSemanticMotionWithPchipToGatewayInvocation(
+      clip(),intent(),[{bone:"body",channel:"rotation"}],{
+        sample_fps:30,boundary_tangent:"rest_endpoints",
+        max_sampled_speed_ratio:1.15,
+      }
+    );
+    expect(result.semantic_context.shape_preserving_linear_bake
+      .sampled_peak_speed_guard).toMatchObject({
+      state:"SOURCE_ONLY_SAMPLED_SPEED_BOUNDED",
+      max_sampled_speed_ratio:1.15,
+      rest_endpoint_tangent_may_be_relaxed:true,
+      native_playback_attested:false,
+      tracks:[{cap_applied:true}],
+    });
+    const report=result.semantic_context.shape_preserving_linear_bake
+      .continuity_review;
+    expect(report.state).toBe("SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON");
+    if(report.state!=="SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON")
+      throw new Error(report.reason);
+    expect(report.tracks[0].baked_dynamics.max_speed)
+      .toBeLessThanOrEqual(report.tracks[0].source_dynamics.max_speed*1.15+0.001);
+    expect(createAnimationParameters.safeParse(result.gateway_arguments.arguments).success)
+      .toBe(true);
+    expect(result.gateway_arguments.arguments)
+      .not.toHaveProperty("sampled_peak_speed_guard");
+    expect(result.execution_evidence.native_runtime_attested).toBe(false);
+  });
+
   test("authoritative contact bones and spring-owned followers cannot be silently smoothed",()=>{
     const source=clip();
     expect(()=>compileSemanticMotionWithPchipToGatewayInvocation(source,{
