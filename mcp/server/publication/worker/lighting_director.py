@@ -17,16 +17,29 @@ from mathutils import Vector
 from core_assets import require
 
 
+# Cap pathological geometry sizes rather than silently clamp authored light
+# settings or let Cycles accept infinite/high-overflow radiant power values.
+MAX_AREA_LIGHT_WATTS = 50_000_000.0
+
+
 def _aim(light_obj, center: Vector) -> None:
     light_obj.rotation_euler = (center - light_obj.location).to_track_quat("-Z", "Y").to_euler()
 
 
 def _light(name: str, position: Vector, center: Vector,
            energy: float, softness: float, color: tuple) -> dict:
+    require(math.isfinite(energy) and 0.0 <= energy <= MAX_AREA_LIGHT_WATTS,
+            "PUBLICATION_STUDIO_LIGHT_ENERGY_OUT_OF_BUDGET:" + name)
+    require(math.isfinite(softness) and 0 < softness <= 1_000_000,
+            "PUBLICATION_STUDIO_LIGHT_SIZE_OUT_OF_BUDGET:" + name)
+    require(len(color) == 3 and all(
+        isinstance(value, (int, float)) and
+        math.isfinite(value) and 0.0 <= value <= 1.0 for value in color
+    ), "PUBLICATION_STUDIO_LIGHT_COLOR_INVALID:" + name)
     data = bpy.data.lights.new(name, type="AREA")
-    data.energy = max(0.0, energy)
+    data.energy = energy
     data.shape = "DISK"
-    data.size = max(0.05, softness)
+    data.size = softness
     data.color = color
     obj = bpy.data.objects.new(name, data)
     bpy.context.scene.collection.objects.link(obj)
@@ -37,6 +50,8 @@ def _light(name: str, position: Vector, center: Vector,
         "power": round(data.energy, 5),
         "size": round(data.size, 5),
         "position": [round(v, 5) for v in position],
+        "distance_to_subject": round((position - center).length, 5),
+        "color_rgb": [round(v, 4) for v in color],
     }
 
 
@@ -76,7 +91,14 @@ def _world(background: str, factor: float, environment: dict) -> dict:
         tex.image = bpy.data.images.load(str(selected), check_existing=False)
         tex.projection = "EQUIRECTANGULAR"
         world.node_tree.links.new(tex.outputs["Color"], ambient.inputs["Color"])
-    return {"background_color": list(base_color), "world_strength": strength * factor}
+    return {
+        "background_color": list(base_color),
+        "background_color_role": (
+            "HDRI_FALLBACK_UNUSED" if environment["mode"] == "hdri"
+            else "ACTIVE_PROCEDURAL_WORLD"
+        ),
+        "world_strength": strength * factor,
+    }
 
 
 def _studio_ground(job: dict, bounds: tuple) -> dict:
@@ -152,10 +174,16 @@ def configure_environment_and_lighting(job: dict, bounds: tuple) -> dict:
     ]
     require(all(math.isfinite(item["power"]) for item in lights),
             "PUBLICATION_LIGHTING_NONFINITE")
+    key, fill, rim = lights
+    # This ratio is emitted ENERGY, not a measured brightness or aesthetic
+    # quality estimate. Zero fill is intentional and reported as null.
+    key_to_fill = (key["power"] / fill["power"]) if fill["power"] > 0 else None
     return {
         "world": world,
         "ground": ground,
         "lights": lights,
+        "key_to_fill_energy_ratio": round(key_to_fill, 5)
+                                    if key_to_fill is not None else None,
         "hdr_environment": "USER_PROVIDED" if job["environment"]["mode"] == "hdri"
                             else "NONE_BUNDLED",
         "hdri_sha256": job["environment"]["hdri_sha256"],
