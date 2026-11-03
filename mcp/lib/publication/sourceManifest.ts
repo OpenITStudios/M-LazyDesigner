@@ -85,6 +85,9 @@ export function expectedPublicationBlenderBounds(
       worldMatrix[10]! * z + worldMatrix[14]!) *
       PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT;
     const rotated = [gltfX, -gltfZ, gltfY];
+    if (rotated.some(value => !Number.isFinite(value))) {
+      throw new Error("PUBLICATION_SOURCE_BOUNDS_OVERFLOW");
+    }
     for (let axis = 0; axis < 3; axis++) {
       min[axis] = Math.min(min[axis]!, rotated[axis]!);
       max[axis] = Math.max(max[axis]!, rotated[axis]!);
