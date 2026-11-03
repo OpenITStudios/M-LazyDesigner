@@ -31,6 +31,10 @@ describe("Publication render contract", () => {
     expect(args.height).toBe(2048);
     expect(args.background).toBe("dark");
     expect(args.camera.projection).toBe("perspective");
+    expect(args.look).toEqual({
+      key: 1, fill: 1, rim: 1, softness: 1,
+      environment: 1, exposure_ev: 0,
+    });
     for (const input of [
       { ...valid, blender_executable: "blender" },
       { ...valid, blender_executable: "C:\\Windows\\System32\\cmd.exe" },
@@ -42,6 +46,11 @@ describe("Publication render contract", () => {
       { ...valid, quality: "random" },
       { ...valid, background: "fantasy" },
       { ...valid, camera: { yaw_degrees: Infinity } },
+      { ...valid, look: { key: 0 } },
+      { ...valid, look: { rim: -1 } },
+      { ...valid, look: { softness: 6 } },
+      { ...valid, look: { exposure_ev: Infinity } },
+      { ...valid, look: { unknown: 1 } },
       { ...valid, overwrite: true },
       { ...valid, unexpected_extra_field: true },
     ]) {
@@ -63,6 +72,7 @@ describe("Publication render contract", () => {
     });
     expect(job.schema_version).toBe(1);
     expect(job.samples).toBe(128);
+    expect(job.look).toEqual(publicationRenderParameters.parse(valid).look);
     expect(job.expected_mesh_count).toBe(1);
     expect(job.expected_material_count).toBe(1);
     expect(job.materials.ld_color_abc.color_uuid).toBe("abc");
