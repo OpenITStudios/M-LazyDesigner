@@ -218,12 +218,15 @@ export function inspectPublicationGlb(
         throw new Error("PUBLICATION_GLB_PBR_FACTORS_OR_ALPHA_MISMATCH: " + name);
       }
       const expectedSlots = [
-        [pbr.baseColorTexture, true],
-        [pbr.metallicRoughnessTexture, expected.metallic_roughness_texture],
-        [material.normalTexture, expected.normal_texture],
-        [material.emissiveTexture, expected.emissive_texture],
+        [pbr.baseColorTexture, true, "ld_base_" + receipt.color_uuid],
+        [pbr.metallicRoughnessTexture, expected.metallic_roughness_texture,
+          "ld_mer_" + receipt.color_uuid],
+        [material.normalTexture, expected.normal_texture, "ld_normal_" + receipt.color_uuid],
+        [material.emissiveTexture, expected.emissive_texture,
+          (expected.metallic_roughness_texture ? "ld_emission_" : "ld_base_") +
+            receipt.color_uuid],
       ] as const;
-      for (const [reference, required] of expectedSlots) {
+      for (const [reference, required, expectedTextureName] of expectedSlots) {
         if (Boolean(reference !== undefined) !== required) {
           throw new Error("PUBLICATION_GLB_PBR_TEXTURE_ROLE_MISMATCH: " + name);
         }
@@ -231,8 +234,15 @@ export function inspectPublicationGlb(
         if (!record(reference) || !validIndex(reference.index, textures.length)) {
           throw new Error("PUBLICATION_GLB_PBR_TEXTURE_REFERENCE_INVALID: " + name);
         }
+        if (reference.texCoord !== undefined && reference.texCoord !== 0) {
+          throw new Error("PUBLICATION_GLB_PBR_UV_SET_MISMATCH: " + name);
+        }
         const texture = textures[reference.index as number];
-        if (!record(texture) || !validIndex(texture.sampler, samplers.length)) {
+        if (!record(texture) || texture.name !== expectedTextureName) {
+          throw new Error("PUBLICATION_GLB_PBR_TEXTURE_IDENTITY_MISMATCH: " +
+            name + ":" + expectedTextureName);
+        }
+        if (!validIndex(texture.sampler, samplers.length)) {
           throw new Error("PUBLICATION_GLB_PBR_SAMPLER_MISSING: " + name);
         }
         const sampler = samplers[texture.sampler as number];
