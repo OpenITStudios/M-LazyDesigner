@@ -1,7 +1,7 @@
 """Render Core: version-pinned Cycles and Blender 5.2 compositor director.
 
 All configuration is confined to the isolated headless Blender worker.
-No arbitrary Python text, scene imports, GPU auto-retry or image synthesis.
+No arbitrary Python text, scene imports, unbounded GPU retries or image synthesis.
 """
 from __future__ import annotations
 
@@ -84,6 +84,35 @@ def configure_cycles(job: dict) -> dict:
         "render_size": [int(job["width"]), int(job["height"])],
     }
 
+
+def render_cycles_with_fallback(job: dict, settings: dict) -> None:
+    """One GPU render, with at most one CPU retry on caught Cycles exceptions.
+
+    Blender process crashes are not recoverable from inside Python. Any
+    successful CPU retry is reported explicitly, never mislabeled a GPU pass.
+    """
+    try:
+        bpy.ops.render.render(write_still=True)
+        return
+    except Exception as first_error:
+        if job["device"] != "auto" or settings["device"]["actual"] != "GPU":
+            raise
+        # No repeated GPU/backend cycling and no silent low-sample fallback.
+        import sys
+        from pathlib import Path
+        print(
+            "LAZYDESIGNER_GPU_TO_CPU_FALLBACK=" + type(first_error).__name__,
+            file=sys.stderr,
+        )
+        existing = Path(job["output_path"])
+        # The destination is constrained to the isolated render workdir.
+        if existing.exists():
+            existing.unlink()
+        bpy.context.scene.cycles.device = "CPU"
+        settings["device"]["actual"] = "CPU"
+        settings["device"]["backend"] = None
+        settings["device"]["fallback_reason"] = "GPU_RENDER_EXCEPTION"
+        bpy.ops.render.render(write_still=True)
 
 def configure_compositor(job: dict) -> dict:
     scene = bpy.context.scene
