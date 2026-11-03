@@ -91,6 +91,16 @@ export function openPublicationRenderDialog(): void {
         value: "publication",
         options: { preview: "Preview (640px)", publication: "Publication (2048px)", high: "High (3200px)" },
       },
+      device: {
+        label: "Cycles device",
+        type: "select", value: "auto",
+        options: { auto: "Auto GPU (CPU fallback)", cpu: "CPU (reproducible)" },
+      },
+      view_transform: {
+        label: "Color response",
+        type: "select", value: "AgX",
+        options: { AgX: "AgX (highlight rolloff)", Standard: "Standard (source color)" },
+      },
       aspect: {
         label: "Image composition",
         type: "select",
@@ -113,6 +123,19 @@ export function openPublicationRenderDialog(): void {
         type: "select",
         value: "perspective",
         options: { perspective: "Perspective", orthographic: "Orthographic" },
+      },
+      camera_mode: {
+        label: "Camera direction",
+        type: "select",
+        value: "auto",
+        options: {
+          auto: "Auto — evaluate geometry views",
+          manual: "Manual — use exact yaw/elevation",
+        },
+      },
+      framing_padding: {
+        label: "Camera breathing room",
+        type: "number", value: 1.28, min: 1.08, max: 2.2, step: 0.05,
       },
       yaw_degrees: {
         label: "Camera yaw (degrees)",
@@ -182,7 +205,11 @@ export function openPublicationRenderDialog(): void {
           quality,
           ...dimensions,
           background: String(form.background || "dark"),
+          device: String(form.device || "auto"),
+          view_transform: String(form.view_transform || "AgX"),
           camera: {
+            mode: String(form.camera_mode || "auto"),
+            framing_padding: Number(form.framing_padding ?? 1.28),
             yaw_degrees: Number(form.yaw_degrees ?? 38),
             elevation_degrees: Number(form.elevation_degrees ?? 18),
             projection: String(form.projection || "perspective"),
@@ -230,7 +257,13 @@ export function reviewPublicationRenderStatus(): void {
         message: "Job: " + status.job_id + "\nState: " + status.state +
           (status.receipt
             ? "\nPNG: " + status.receipt.output_path +
-              "\nSHA-256: " + status.receipt.output_png_sha256
+              "\nSHA-256: " + status.receipt.output_png_sha256 +
+              "\nCycles device: " + status.receipt.diagnostics.renderer.device.actual +
+              "\nCamera yaw: " + status.receipt.diagnostics.camera.resolved_yaw_degrees +
+              "\nMeasured exposure/alpha: available in MCP receipt" +
+              (status.receipt.diagnostics.warnings.length
+                ? "\nDiagnostics: " + status.receipt.diagnostics.warnings.join(", ")
+                : "")
             : "") +
           (status.error_code ? "\nDetail: " + status.error_code : "") +
           "\nThis is not an artistic or QA approval.",
