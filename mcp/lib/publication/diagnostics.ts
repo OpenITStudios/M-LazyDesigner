@@ -32,6 +32,9 @@ export const publicationDiagnosticsSchema = z.object({
     candidate_count: z.number().int().min(1).max(15),
     projected_bounds: vector4,
     projected_area: boundedFloat.min(0).max(1),
+    projected_hull_area: boundedFloat.min(0).max(1),
+    framing_fit_multiplier: boundedFloat.min(1).max(3),
+    framing_fit_attempts: z.number().int().min(1).max(6),
     frame_safe: z.literal(true),
     quality_is_artistic_score: z.literal(false),
   }).strict(),
@@ -89,6 +92,17 @@ export const publicationDiagnosticsSchema = z.object({
     nonopaque_fraction: unitFraction,
     analysis_type: z.literal("MEASURED_DOWNSAMPLED_CYCLES_PNG"),
     artistic_quality_score: z.null(),
+    projected_frame_roi: z.object({
+      source: z.literal("BLENDER_LOADED_CYCLES_PNG"),
+      region_type: z.literal("PROJECTED_BOUNDS_RECT_NOT_SEGMENTATION"),
+      bounds_ndc: vector4,
+      sampled_pixels: z.number().int().min(1).max(20_000),
+      visible_samples: z.number().int().min(1).max(20_000),
+      mean_visible_luminance: boundedFloat.min(0),
+      near_black_fraction: unitFraction,
+      near_white_fraction: unitFraction,
+      artistic_quality_score: z.null(),
+    }).strict(),
   }).strict(),
   preview: z.object({
     dimensions: z.tuple([
@@ -125,6 +139,13 @@ export const publicationDiagnosticsSchema = z.object({
   if (data.preview.dimensions[0] > data.image.image_dimensions[0] ||
       data.preview.dimensions[1] > data.image.image_dimensions[1]) {
     ctx.addIssue({ code: "custom", message: "Preview must never enlarge the Cycles PNG." });
+  }
+  const roi = data.image.projected_frame_roi;
+  if (roi.bounds_ndc.some((value, i) =>
+      Math.abs(value - data.camera.projected_bounds[i]!) > 0.05) ||
+      roi.visible_samples > roi.sampled_pixels ||
+      data.camera.projected_hull_area > data.camera.projected_area + 0.0001) {
+    ctx.addIssue({ code: "custom", message: "Projected camera region/geometry metrics are inconsistent." });
   }
   if (data.camera.mode === "manual" && data.camera.candidate_count !== 1) {
     ctx.addIssue({ code: "custom", message: "Manual camera cannot search additional views." });
