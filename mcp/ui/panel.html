@@ -28,8 +28,12 @@
   <section class="ld-publication">
     <div class="ld-section-title">Publication Render</div>
     <p class="ld-description">Render the actual model in Blender Cycles. PNG is a draft until visual review; QA evidence is separate.</p>
-    <button type="button" class="user-action primary" :disabled="!project.open"
-      @click="openPublicationRender">Render Studio PNG</button>
+    <div class="ld-tool-actions">
+      <button type="button" class="user-action primary" :disabled="!project.open"
+        @click="openPublicationRender">Start Studio Render</button>
+      <button type="button" class="user-action" @click="checkPublicationRender">Render Status</button>
+      <button type="button" class="user-action" @click="cancelPublicationJob">Cancel Render</button>
+    </div>
   </section>
 
   <nav class="ld-tabs" role="tablist" aria-label="LazyDesigner authoring tools">
