@@ -6,6 +6,7 @@ import { publicationRenderParameters } from "@/lib/publication/contracts";
 import {
   startPublicationRender,
   getPublicationRenderJobStatus,
+  getPublicationRenderEvidence,
   cancelPublicationRenderJob,
 } from "@/server/publication/jobs";
 
@@ -23,12 +24,16 @@ export const publicationControlParameters = z.discriminatedUnion("operation", [
     operation: z.literal("cancel"),
     job_id: jobId,
   }).strict(),
+  z.object({
+    operation: z.literal("preview"),
+    job_id: jobId,
+  }).strict(),
 ]);
 
 /** One nonblocking native render service shared by AI Runtime and human UI. */
 export const publicationRenderToolDoc: ToolSpec = {
   name: "render_publication",
-  description: "Blender Cycles publication rendering of current source-faithful Blockbench model geometry and textures. operation=start schedules an independent local render and returns a job ID quickly; operation=status checks progress/PNG receipt; operation=cancel requests termination. No 15-minute blocking Gateway call. Requires an explicit local Blender 5.2 executable and authorized output. Results remain DRAFT pending visual review, never QA PASS.",
+  description: "Blender Cycles render from real Blockbench model geometry and textures. start schedules one job, status checks progress, cancel requests termination; preview returns a bounded downsample of the actual COMPLETED Cycles PNG as an MCP image for AI visual review, without forwarding the full-resolution file. No long Gateway call or new public tool. Requires authorized local Blender 5.2 and output path. Results remain DRAFT, never visual QA PASS.",
   annotations: {
     title: "Render Publication PNG (Blender Cycles)",
     readOnlyHint: false,
@@ -69,6 +74,34 @@ export function registerPublicationRenderTool(): void {
                   ". Not a visual QA verdict.",
               }],
               structuredContent: status,
+            };
+          }
+          case "preview": {
+            const evidence = getPublicationRenderEvidence(args.job_id);
+            const receipt = evidence.status.receipt!;
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: "Actual Blender Cycles preview for " + evidence.status.job_id +
+                    " (" + receipt.visual_evidence.width + "x" +
+                    receipt.visual_evidence.height + "). Inspect lighting, silhouette, " +
+                    "material and composition visually. This is a downsample of the final " +
+                    "PNG, NOT AI-generated and NOT an automated quality PASS.",
+                },
+                {
+                  type: "image" as const,
+                  data: evidence.png.toString("base64"),
+                  mimeType: "image/png",
+                },
+              ],
+              structuredContent: {
+                job_id: evidence.status.job_id,
+                state: "RENDERED_DRAFT" as const,
+                visual_evidence: receipt.visual_evidence,
+                diagnostics: receipt.diagnostics,
+                visual_review: "NOT_EVALUATED" as const,
+              },
             };
           }
           case "cancel": {
