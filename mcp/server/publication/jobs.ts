@@ -60,6 +60,7 @@ function projectJob(job: RenderJobRecord): PublicationRenderJobStatus {
 export class PublicationRenderJobs {
   private current: RenderJobRecord | null = null;
   private preparing = false;
+  private retired = false;
 
   constructor(
     private readonly run: PublicationRunner = renderPreparedPublication,
@@ -75,6 +76,7 @@ export class PublicationRenderJobs {
   }
 
   async start(input: unknown): Promise<PublicationRenderJobStatus> {
+    if (this.retired) throw new Error("PUBLICATION_RENDER_RUNTIME_RETIRED");
     if (this.preparing || (this.current && (
       this.current.state === "RUNNING" ||
       this.current.state === "CANCELLING" ||
@@ -93,6 +95,7 @@ export class PublicationRenderJobs {
     } finally {
       this.preparing = false;
     }
+    if (this.retired) throw new Error("PUBLICATION_RENDER_RUNTIME_RETIRED");
     const job: RenderJobRecord = {
       job_id: "render_" + randomBytes(12).toString("hex"),
       state: "RUNNING",
@@ -124,6 +127,16 @@ export class PublicationRenderJobs {
     return projectJob(this.requireJob(jobId));
   }
 
+  /** Called by plugin teardown, never by ordinary panel reconstruction. */
+  retire(): void {
+    this.retired = true;
+    const job = this.current;
+    if (job && job.state === "RUNNING") {
+      job.state = "CANCELLING";
+      job.controller.abort();
+    }
+  }
+
   cancel(jobId: string): PublicationRenderJobStatus {
     const job = this.requireJob(jobId);
     if (job.state === "RUNNING") {
@@ -144,4 +157,8 @@ export function getPublicationRenderJobStatus(jobId: string): PublicationRenderJ
 }
 export function cancelPublicationRenderJob(jobId: string): PublicationRenderJobStatus {
   return productionJobs.cancel(jobId);
+}
+
+export function retirePublicationRenderJobsOnPluginUnload(): void {
+  productionJobs.retire();
 }
