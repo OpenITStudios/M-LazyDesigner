@@ -91,6 +91,19 @@ export function openPublicationRenderDialog(): void {
         value: "publication",
         options: { preview: "Preview (640px)", publication: "Publication (2048px)", high: "High (3200px)" },
       },
+      environment_mode: {
+        label: "Environment lighting",
+        type: "select", value: "studio",
+        options: {
+          studio: "Procedural studio (no external assets)",
+          hdri: "User-provided HDRI (.hdr / .exr)",
+        },
+      },
+      hdri_path: {
+        label: "HDRI file (only if selected above)",
+        type: "text", value: "",
+        description: "Absolute local path. One-time read permission; file is never modified.",
+      },
       device: {
         label: "Cycles device",
         type: "select", value: "auto",
@@ -205,6 +218,9 @@ export function openPublicationRenderDialog(): void {
           quality,
           ...dimensions,
           background: String(form.background || "dark"),
+          environment: String(form.environment_mode || "studio") === "hdri"
+            ? { mode: "hdri", hdri_path: String(form.hdri_path || "") }
+            : { mode: "studio" },
           device: String(form.device || "auto"),
           view_transform: String(form.view_transform || "AgX"),
           camera: {
