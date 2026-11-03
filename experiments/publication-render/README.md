@@ -5,6 +5,17 @@
 **State:** DESIGN COMPLETE; SOURCE IMPLEMENTATION IN PROGRESS ON `Render` — **BUN/TYPECHECK/BUILD/BLENDER/NATIVE VISUAL ACCEPTANCE NOT EXECUTED**.  
 **Source authority:** This is a branch-isolated research document. Do not merge into Local/main, touch QA capture, change workflows, or publish without an independent explicit request.
 
+## Source continuation — bounded genuine Cycles image feedback
+
+- Worker quality_report.py creates ONE evidence.png (maximum 384px each side) by resizing a disposable Blender image datablock loaded from the **actual saved Cycles PNG**; no second renderer, image generator, source atlas replacement or default full-resolution image transfer.
+- The TypeScript publication service accepts it only after strict RGBA8 PNG/CRC checks and source-bound diagnostic dimensions. Source GLB identity is rechecked inside the same native serialized queue operation that exclusively saves the final PNG.
+- The render_publication capability now has four operations **start/status/preview/cancel** while the Gateway itself still has exactly four top-level methods. The explicit preview operation returns genuine PNG image content only for a completed DRAFT job. Status is text-only by default.
+- Plugin Studio includes a View Real PNG Preview dialog using the same validated bytes. The process-local WeakMap ties the cache to the original completed receipt and verifies SHA on each read; no network image URLs.
+- Phase labels separate preparation, rendering, output verification and publication, without invented %/ETA. Auto GPU may retry on CPU once for a catchable Cycles exception with accurate backend/fallback provenance.
+- AI can visually inspect that low-resolution real 3D output and request a new bounded camera/light configuration; there is **NO automatic artistic PASS or unattended unlimited refinement loop**.
+
+**All of the above is source-authored, NOT executed/visually proven in Blender 5.2.** No user asset was rendered and no native Blockbench/MCP evidence run occurred. Visual quality parity with the five references is still unproven.
+
 ## Blender Core modular implementation — current source (3 Nov 2026)
 
 The original source has now been expanded to a **standalone, original multi-module Blender Core** while retaining exactly one existing LazyDesigner MCP/Gateway and one secure headless worker launcher.
@@ -59,7 +70,7 @@ The canonical module ownership guide is at mcp/server/publication/worker/README.
 - `mcp/ui/publicationRenderDialog.ts`: human Render button using the same service.
 - `mcp/tests/publication-render-contract.test.ts`, `mcp/tests/publication-process.test.ts`: tests source-authored NOT EXECUTED; Runtime source counts and owner map updated only on Render.
 
-**Current deliberate limitations:** Current native Cube geometry and opaque RGBA atlas with supported color/MER/normal PBR channels. Does not support animation sampling, alpha masks/cutout/glass, height-to-bump, non-Cube meshes, scene libraries, HDRI, multi-shot, compositing glow, or automatic artistic PASS. This scope must not be disguised by visually attractive output.
+**Current deliberate limitations (updated):** The source currently supports native Cube geometry, opaque face UV pixels, color/MER/normal PBR, a procedural studio, optional user-approved local HDR/EXR lighting, conservative Blender 5.2 Fog Glow and verified preview image retrieval. It still does NOT support arbitrary animation pose sampling, explicit per-zone cutout/translucent/glass semantics, height-to-bump, non-Cube geometry, imported 3D cinematic environment/prop libraries, multi-shot/MP4, or automatic artistic-quality PASS. Source implementation is not a measured finished renderer.
 
 **Required remaining proof:** targeted Bun tests/typecheck/build and canonical generated artifacts, native Blockbench GLB export, real Blender 5.2 import/Cycles PNG, no editor/Undo changes, reference-matched visual asset integrity and performance/cost benchmark. CI verification remains disabled. Do not require user-PC work as prerequisite for ChatGPT-owned source development.
 
