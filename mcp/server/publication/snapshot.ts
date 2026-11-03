@@ -4,6 +4,7 @@ declare const THREE: typeof import("three");
 import { createHash } from "node:crypto";
 
 import type { PublicationJob } from "@/lib/publication/contracts";
+import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publication/materialChannels";
 
 const MAX_TEXTURE_PIXELS = 4_194_304;
 const MAX_CUBES = 10_000;
@@ -131,6 +132,24 @@ function nativeState(): NativeState {
       uv, indices, geometry.groups.map(g => [g.start, g.count, g.materialIndex]),
     ]);
   }
+  const pbrGroups: unknown[] = [];
+  const groupsSeen = new Set<string>();
+  for (const uuid of [...usedTextureIds]) {
+    const texture = resolveTexture(uuid);
+    const group = typeof TextureGroup !== "undefined" && Array.isArray(TextureGroup.all)
+      ? TextureGroup.all.find(value => value.uuid === texture.group || value.name === texture.group)
+      : null;
+    if (group?.is_material === true && !groupsSeen.has(group.uuid)) {
+      groupsSeen.add(group.uuid);
+      const channels = group.getTextures();
+      for (const channel of channels) usedTextureIds.add(channel.uuid);
+      pbrGroups.push([group.uuid,
+        group.material_config?.mer_value ?? null,
+        group.material_config?.color_value ?? null,
+        group.material_config?.subsurface_value ?? null,
+        channels.map(channel => [channel.uuid, channel.pbr_channel]).sort()]);
+    }
+  }
   const imageRows = [...usedTextureIds].sort().map(uuid => {
     const texture = Texture.all.find(item => item.uuid === uuid);
     if (!texture) throw new Error("PUBLICATION_TEXTURE_DISAPPEARED: " + uuid);
@@ -140,7 +159,7 @@ function nativeState(): NativeState {
   return {
     project,
     project_uuid,
-    signature: sha256(JSON.stringify([project_uuid, cubeRows, imageRows])),
+    signature: sha256(JSON.stringify([project_uuid, cubeRows, imageRows, pbrGroups.sort()])),
   };
 }
 
@@ -150,70 +169,126 @@ function resolveTexture(uuid: string): Texture {
   return texture;
 }
 
+
+function copyPixelTexture(
+  pixels: ImageData,
+  name: string,
+  color: boolean,
+  created: THREE.Texture[],
+  replacement?: Uint8ClampedArray,
+): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = pixels.width;
+  canvas.height = pixels.height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("PUBLICATION_TEXTURE_CANVAS_UNAVAILABLE");
+  if (replacement) {
+    if (replacement.byteLength !== pixels.data.byteLength) {
+      throw new Error("PUBLICATION_PBR_CHANNEL_DIMENSIONS_INVALID");
+    }
+    const result = context.createImageData(pixels.width, pixels.height);
+    result.data.set(replacement);
+    context.putImageData(result, 0, 0);
+  } else {
+    context.putImageData(pixels, 0, 0);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.name = name;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.colorSpace = color ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  tex.needsUpdate = true;
+  created.push(tex);
+  return tex;
+}
+
 function makeMaterial(
   uuid: string,
-  materials: MaterialReceipt,
-  textures: THREE.Texture[],
-  nativeTextures: Map<string, THREE.Texture>,
+  receipts: MaterialReceipt,
+  createdTextures: THREE.Texture[],
+  materialCache: Map<string, THREE.MeshStandardMaterial>,
 ): THREE.MeshStandardMaterial {
+  const previous = materialCache.get(uuid);
+  if (previous) return previous;
   const texture = resolveTexture(uuid);
+  const colorPixels = imageData(texture);
+  for (let i = 3; i < colorPixels.data.length; i += 4) {
+    if (colorPixels.data[i] !== 255) {
+      throw new Error("PUBLICATION_ALPHA_SEMANTICS_UNVERIFIED: " + uuid);
+    }
+  }
   const groupId = texture.group;
-  const materialGroup = typeof TextureGroup !== "undefined" && Array.isArray(TextureGroup.all)
-    ? TextureGroup.all.find(group => group.uuid === groupId || group.name === groupId)
+  const group = typeof TextureGroup !== "undefined" && Array.isArray(TextureGroup.all)
+    ? TextureGroup.all.find(value => value.uuid === groupId || value.name === groupId)
     : null;
-  // A PBR atlas must not lose its authored normal/MER/emission channel on export.
-  // A dedicated PBR bridge is required before that input is accepted.
-  if (materialGroup?.is_material === true) {
-    throw new Error("PUBLICATION_PBR_CHANNEL_BRIDGE_REQUIRED: " + texture.uuid);
-  }
-
-  let exported = nativeTextures.get(uuid);
-  if (!exported) {
-    const pixels = imageData(texture);
-    let hasZeroAlpha = false;
-    let hasIntermediateAlpha = false;
-    for (let i = 3; i < pixels.data.length; i += 4) {
-      const alpha = pixels.data[i]!;
-      if (alpha === 0) hasZeroAlpha = true;
-      else if (alpha < 255) hasIntermediateAlpha = true;
-    }
-    if (hasZeroAlpha || hasIntermediateAlpha) {
-      throw new Error(
-        "PUBLICATION_ALPHA_SEMANTICS_UNVERIFIED: " + uuid +
-        " (transparent, cutout, color-mask and emissive-alpha are not interchangeable)",
-      );
-    }
-    const canvas = document.createElement("canvas");
-    canvas.width = pixels.width;
-    canvas.height = pixels.height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("PUBLICATION_TEXTURE_CANVAS_UNAVAILABLE");
-    context.putImageData(pixels, 0, 0);
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.name = "ld_color_" + uuid;
-    tex.magFilter = THREE.NearestFilter;
-    tex.minFilter = THREE.NearestFilter;
-    tex.generateMipmaps = false;
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.needsUpdate = true;
-    textures.push(tex);
-    nativeTextures.set(uuid, tex);
-    exported = tex;
-    materials["ld_color_" + uuid] = {
-      color_uuid: uuid,
-      texture_sha256: texturePixelsSha(pixels),
-      alpha_mode: "OPAQUE",
-      pbr: "NONE",
-    };
-  }
+  const colorMap = copyPixelTexture(colorPixels, "ld_base_" + uuid, true, createdTextures);
   const material = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    map: exported,
-    roughness: 0.85,
-    metalness: 0,
-    side: THREE.DoubleSide,
+    map: colorMap, color: 0xffffff, side: THREE.DoubleSide,
+    roughness: 0.85, metalness: 0,
   });
   material.name = "ld_color_" + uuid;
+  const receipt: MaterialReceipt[string] = {
+    color_uuid: uuid, texture_sha256: texturePixelsSha(colorPixels),
+    alpha_mode: "OPAQUE", pbr: "NONE",
+  };
+  if (group?.is_material === true) {
+    const channels = group.getTextures();
+    if (!Array.isArray(channels)) throw new Error("PUBLICATION_PBR_CHANNEL_INVENTORY_UNAVAILABLE");
+    const color = channels.filter(item => item.pbr_channel === "color");
+    const mer = channels.filter(item => item.pbr_channel === "mer");
+    const normal = channels.filter(item => item.pbr_channel === "normal");
+    const height = channels.filter(item => item.pbr_channel === "height");
+    if (color.length !== 1 || color[0]!.uuid !== uuid ||
+        mer.length > 1 || normal.length > 1 || height.length > 0) {
+      throw new Error("PUBLICATION_PBR_CHANNELS_AMBIGUOUS_OR_UNSUPPORTED: " + uuid);
+    }
+    receipt.pbr = "MAPPED";
+    if (mer.length === 1) {
+      const pixels = imageData(mer[0]!);
+      if (pixels.width !== colorPixels.width || pixels.height !== colorPixels.height) {
+        throw new Error("PUBLICATION_PBR_CHANNEL_DIMENSIONS_INVALID: " + uuid);
+      }
+      const mapped = convertBedrockMerToGltf(colorPixels.data, pixels.data);
+      const metalRough = copyPixelTexture(pixels, "ld_mer_" + uuid, false, createdTextures, mapped.metallicRoughness);
+      material.metalness = 1;
+      material.roughness = 1;
+      material.metalnessMap = metalRough;
+      material.roughnessMap = metalRough;
+      const emissionMap = copyPixelTexture(pixels, "ld_emission_" + uuid, true, createdTextures, mapped.emission);
+      material.emissive = new THREE.Color(0xffffff);
+      material.emissiveMap = emissionMap;
+      material.emissiveIntensity = 1;
+      receipt.mer_sha256 = texturePixelsSha(pixels);
+    } else {
+      const values = group.material_config?.mer_value;
+      if (!Array.isArray(values) || values.length !== 3 ||
+          values.some(v => !Number.isFinite(v) || v < 0 || v > 255)) {
+        throw new Error("PUBLICATION_PBR_UNIFORM_MER_INVALID");
+      }
+      material.metalness = values[0]! / 255;
+      material.roughness = values[2]! / 255;
+      if (values[1]! > 0) {
+        material.emissive = new THREE.Color(0xffffff);
+        material.emissiveMap = colorMap;
+        material.emissiveIntensity = values[1]! / 255;
+      }
+    }
+    if (normal.length === 1) {
+      const pixels = imageData(normal[0]!);
+      if (pixels.width !== colorPixels.width || pixels.height !== colorPixels.height) {
+        throw new Error("PUBLICATION_NORMAL_CHANNEL_DIMENSIONS_INVALID: " + uuid);
+      }
+      const normalMap = copyPixelTexture(
+        pixels, "ld_normal_" + uuid, false, createdTextures,
+        convertBedrockNormalToGltf(pixels.data),
+      );
+      material.normalMap = normalMap;
+      receipt.normal_sha256 = texturePixelsSha(pixels);
+    }
+  }
+  receipts[material.name] = receipt;
+  materialCache.set(uuid, material);
   return material;
 }
 
@@ -227,7 +302,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
   const createdMaterials: THREE.Material[] = [];
   const createdTextures: THREE.Texture[] = [];
   const createdGeometry: THREE.BufferGeometry[] = [];
-  const nativeTextures = new Map<string, THREE.Texture>();
+  const materialCache = new Map<string, THREE.MeshStandardMaterial>();
   const materialReceipts: MaterialReceipt = {};
   const scene = new THREE.Scene();
   scene.name = "lazydesigner_publication_snapshot";
@@ -245,8 +320,8 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
         const face = cube.faces?.[faceKey as keyof typeof cube.faces] as CubeFace | undefined;
         const tex = face?.getTexture();
         if (!tex?.uuid) throw new Error("PUBLICATION_FACE_TEXTURE_UNRESOLVED: " + cube.uuid);
-        const m = makeMaterial(tex.uuid, materialReceipts, createdTextures, nativeTextures);
-        createdMaterials.push(m);
+        const m = makeMaterial(tex.uuid, materialReceipts, createdTextures, materialCache);
+        if (!createdMaterials.includes(m)) createdMaterials.push(m);
         return m;
       });
       original.updateWorldMatrix(true, false);
