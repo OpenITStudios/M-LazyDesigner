@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
 import { dirname, join } from "node:path";
 import { publicationEnvironmentSchema, type PublicationEnvironmentJob } from "@/lib/publication/environment";
+import type { PublicationMaterialExpectation } from "@/lib/publication/materialContract";
 
 /**
  * Presentation rendering is deliberately separate from Bedrock render_profile,
@@ -127,6 +128,7 @@ export type PublicationJob = {
     mer_sha256?: string;
     normal_sha256?: string;
     unused_alpha_pixels?: number;
+    gltf: PublicationMaterialExpectation;
   }>;
 };
 
