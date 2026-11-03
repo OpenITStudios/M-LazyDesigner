@@ -75,6 +75,7 @@ export const publicationDiagnosticsSchema = z.object({
       requested: z.enum(["auto", "cpu"]),
       actual: z.enum(["CPU", "GPU"]),
       backend: z.enum(["OPTIX", "CUDA", "HIP", "METAL", "ONEAPI"]).nullable(),
+      fallback_reason: z.literal("GPU_RENDER_EXCEPTION").optional(),
     }).strict(),
     render_size: z.tuple([z.number().int().min(256).max(4096), z.number().int().min(256).max(4096)]),
   }).strict(),
@@ -111,6 +112,15 @@ export const publicationDiagnosticsSchema = z.object({
   if ((data.lighting.hdr_environment === "USER_PROVIDED") !==
       (data.lighting.hdri_sha256 !== null)) {
     ctx.addIssue({ code: "custom", message: "HDRI light must have a verified source digest." });
+  }
+  const device = data.render.device;
+  if ((device.actual === "GPU") !== (device.backend !== null)) {
+    ctx.addIssue({ code: "custom", message: "Rendered device/backend mismatch." });
+  }
+  if (device.fallback_reason && (
+      device.requested !== "auto" || device.actual !== "CPU" ||
+      device.backend !== null)) {
+    ctx.addIssue({ code: "custom", message: "CPU fallback must be truthful." });
   }
   if (data.preview.dimensions[0] > data.image.image_dimensions[0] ||
       data.preview.dimensions[1] > data.image.image_dimensions[1]) {
