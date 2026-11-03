@@ -132,6 +132,26 @@ def require_job() -> dict:
         _range(look, key, lo, hi)
     if not isinstance(job.get("materials"), dict) or len(job["materials"]) != job["expected_material_count"]:
         fail("PUBLICATION_JOB_SOURCE_MATERIAL_INVENTORY_INVALID")
+    for name, material in job["materials"].items():
+        if not isinstance(name, str) or not isinstance(material, dict):
+            fail("PUBLICATION_JOB_MATERIAL_RECEIPT_INVALID")
+        gltf = material.get("gltf")
+        pngs = material.get("import_png_sha256")
+        if not isinstance(gltf, dict) or not isinstance(pngs, dict):
+            fail("PUBLICATION_JOB_IMPORT_PNG_PROVENANCE_REQUIRED")
+        expected_roles = {"base"}
+        if gltf.get("metallic_roughness_texture") is True:
+            expected_roles.add("mer")
+        if gltf.get("normal_texture") is True:
+            expected_roles.add("normal")
+        if gltf.get("emissive_texture") is True:
+            expected_roles.add("emission")
+        if set(pngs) != expected_roles:
+            fail("PUBLICATION_JOB_IMPORT_PNG_ROLE_INVENTORY_MISMATCH")
+        if any(not isinstance(value, str) or len(value) != 64 or
+               any(ch not in "0123456789abcdef" for ch in value)
+               for value in pngs.values()):
+            fail("PUBLICATION_JOB_IMPORT_PNG_SHA_INVALID")
     return job
 
 

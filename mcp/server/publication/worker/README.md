@@ -34,7 +34,7 @@ The material bridge is **not** a universal Blender material editor. Its authorit
 
 Bedrock per-face `material_name` is **not** a PBR map and **not** the Minecraft entity render profile. Without an explicit downstream controller-to-shader binding, nonempty face material instances, unknown alpha, HEIGHT, subsurface and editor-only nondefault preview modes must fail explicitly. The Blender worker does not synthesize replacements. Existing `capture_model_views` remains independent QA.
 
-Source-level material assertions are implemented. Imported Blender shader/texel parity is **NOT verified**; a successful PNG is never proof of a correct render-profile material.
+Source-level material assertions now bind each source-verified embedded GLB PNG SHA-256 to the existing internal material receipt. The Blender worker checks the exact packed PNG bytes, nearest/clamp filtering, color/data channel, graph connectivity for base/emissive, MER Blue→metallic and Green→roughness, and tangent normal mapping. Unexpected image roles, missing shader links, wrong imported factors or changed imported PNG bytes fail closed instead of being silently corrected. **These are SOURCE-AUTHORED checks, NOT a Blender 5.2 acceptance PASS.** Actual imported UV loop equivalence, Blender pixel decoding/color response and real Cycles visual fidelity remain unverified.
 
 ## Camera/lighting authority and observation boundaries
 

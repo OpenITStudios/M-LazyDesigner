@@ -13,6 +13,8 @@ export type PublicationGlbInventory = {
   texture_count: number;
   image_count: number;
   primitive_count: number;
+  /** Exact PNG bytes of embedded images, already checked against source pixels. */
+  verified_image_png_sha256: Readonly<Record<string, string>>;
 };
 
 /** Exact RGBA bytes expected after the trusted Blockbench glTF canvas export. */
@@ -323,6 +325,7 @@ export function inspectPublicationGlb(
       }
     }
   }
+  const verifiedImageShaByName: Record<string, string> = Object.create(null);
   if (expectedImagePixels) {
     // The native snapshot supplies exact expected RGBA content for every
     // emitted texture, including derived MER/emission/normal images.
@@ -332,7 +335,10 @@ export function inspectPublicationGlb(
       throw new Error("PUBLICATION_GLB_SOURCE_IMAGES_EXPECTATIONS_EMPTY");
     }
     const verifiedNames = new Set<string>();
-    const verifiedSources = new Map<number, string>();
+    const verifiedSources = new Map<number, {
+      source_identity: string;
+      png_sha256: string;
+    }>();
     for (const item of textures) {
       if (!record(item) || typeof item.name !== "string" ||
           !validIndex(item.source, images.length)) {
@@ -345,19 +351,24 @@ export function inspectPublicationGlb(
       }
       const index = item.source as number;
       const identity = expected.width + "x" + expected.height + ":" + expected.rgba_sha256;
-      const previouslyVerified = verifiedSources.get(index);
-      if (previouslyVerified !== undefined && previouslyVerified !== identity) {
+      let verified = verifiedSources.get(index);
+      if (verified !== undefined && verified.source_identity !== identity) {
         throw new Error("PUBLICATION_GLB_SOURCE_IMAGE_SHARED_BYTES_MISMATCH:" + name);
       }
-      if (previouslyVerified === undefined) {
+      if (verified === undefined) {
         const image = images[index];
         const bytes = record(image) ? embeddedPng(image, bufferViews) : null;
         if (!bytes) throw new Error("PUBLICATION_GLB_SOURCE_IMAGE_MISSING:" + name);
         inspectPublicationPng(
           bytes, expected.width, expected.height, expected.rgba_sha256,
         );
-        verifiedSources.set(index, identity);
+        verified = {
+          source_identity: identity,
+          png_sha256: createHash("sha256").update(bytes).digest("hex"),
+        };
+        verifiedSources.set(index, verified);
       }
+      verifiedImageShaByName[name] = verified.png_sha256;
       verifiedNames.add(name);
     }
     if (verifiedNames.size !== expectedNames.length) {
@@ -467,5 +478,6 @@ export function inspectPublicationGlb(
     texture_count: textures.length,
     image_count: images.length,
     primitive_count: primitiveCount,
+    verified_image_png_sha256: verifiedImageShaByName,
   };
 }

@@ -165,6 +165,9 @@ async function main(): Promise<void> {
       materials: { ld_color_test: {
         color_uuid: "synthetic", texture_sha256: createHash("sha256").update(ONE_PIXEL_PNG).digest("hex"),
         alpha_mode: "OPAQUE", pbr: "NONE",
+        import_png_sha256: {
+          base: createHash("sha256").update(ONE_PIXEL_PNG).digest("hex"),
+        },
         gltf: expectedPublicationGltfMaterial(null),
       } },
     });

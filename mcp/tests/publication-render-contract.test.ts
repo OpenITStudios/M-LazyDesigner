@@ -582,6 +582,11 @@ describe("Detached native fidelity bridge", () => {
     expect(result.source_manifest.cubes[0]?.primitives[0]?.material_name)
       .toBe("ld_color_tex-1");
     expect(result.source_manifest_sha256).toHaveLength(64);
+    expect(result.materials["ld_color_tex-1"]?.import_png_sha256).toEqual({
+      base: createHash("sha256").update(
+        Buffer.from(FIXTURE_SOURCE_COLOR_URI.split(",")[1]!, "base64"),
+      ).digest("hex"),
+    });
     expect(result.glb.toString("ascii", 0, 4)).toBe("glTF");
     expect(f.sceneInputs).toHaveLength(1);
     expect(JSON.stringify({ cube: f.cube, rgba: [...f.rgba] })).toBe(before);
@@ -624,6 +629,11 @@ describe("Detached native fidelity bridge", () => {
     const result = await snapshotDetachedPublicationGlb();
     expect(result.materials["ld_color_tex-1"]).toMatchObject({
       pbr: "MAPPED", mer_sha256: expect.any(String),
+      import_png_sha256: {
+        base: expect.stringMatching(/^[a-f0-9]{64}$/),
+        mer: expect.stringMatching(/^[a-f0-9]{64}$/),
+        emission: expect.stringMatching(/^[a-f0-9]{64}$/),
+      },
     });
     verifyPublicationSourceCurrent(result.project_uuid, result.source_sha256);
     mer[1] = 200;

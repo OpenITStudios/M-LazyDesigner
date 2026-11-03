@@ -27,6 +27,15 @@ describe("Modular Blender Core source owners", () => {
     expect(executor).toContain("publicationDiagnosticsSchema.parse");
     expect(executor).toContain("inspectPublicationPng(png");
     expect(executor).toContain("verifyPublicationSourceCurrent(");
+    const importSource = await worker("core_assets.py");
+    const entrySource = await worker("render.py");
+    expect(entrySource).toContain("PUBLICATION_JOB_IMPORT_PNG_PROVENANCE_REQUIRED");
+    expect(importSource).toContain("PUBLICATION_IMPORTED_TEXTURE_SOURCE_BYTES_MISMATCH");
+    expect(importSource).toContain("PUBLICATION_IMPORTED_MER_CHANNEL_BINDING_MISMATCH");
+    expect(importSource).toContain("PUBLICATION_IMPORTED_NORMAL_MAP_BINDING_MISMATCH");
+    expect(importSource).toContain("PUBLICATION_IMPORTED_TEXTURE_COLORSPACE_MISMATCH");
+    expect(importSource).toContain('node.interpolation == "Closest"');
+    expect(importSource).not.toContain('node.interpolation = "Closest"');
   });
 
   test("camera and studio light rig derive from geometry, never subject labels", async () => {

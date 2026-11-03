@@ -128,6 +128,13 @@ export type PublicationJob = {
     mer_sha256?: string;
     normal_sha256?: string;
     unused_alpha_pixels?: number;
+    /** Verified GLB PNG bytes expected in the imported Blender material. */
+    import_png_sha256?: {
+      base: string;
+      mer?: string;
+      normal?: string;
+      emission?: string;
+    };
     gltf: PublicationMaterialExpectation;
   }>;
 };

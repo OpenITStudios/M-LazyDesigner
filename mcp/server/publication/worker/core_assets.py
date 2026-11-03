@@ -5,6 +5,7 @@ Execution occurs only in the trusted Blender 5.2 worker.
 """
 from __future__ import annotations
 
+import hashlib
 import math
 
 import bpy
@@ -18,6 +19,146 @@ class PublicationRenderError(RuntimeError):
 def require(condition: bool, code: str) -> None:
     if not condition:
         raise PublicationRenderError(code)
+
+
+def _reaches_socket(links, source_node, source_output, destination) -> bool:
+    """Check an actual shader path through imported nodes, not only socket presence."""
+    if source_output is None or destination is None:
+        return False
+    pending = [(source_node, source_output.name)]
+    visited = set()
+    while pending:
+        node, output_name = pending.pop()
+        identity = (node.as_pointer(), output_name)
+        if identity in visited:
+            continue
+        visited.add(identity)
+        for link in links:
+            if link.from_node != node or (
+                output_name is not None and link.from_socket.name != output_name
+            ):
+                continue
+            if link.to_socket == destination:
+                return True
+            pending.append((link.to_node, None))
+    return False
+
+
+def _verify_imported_material(material, source: dict, image_digests: dict) -> None:
+    name = material.name
+    require(source.get("alpha_mode") == "OPAQUE" and source.get("pbr") in ("NONE", "MAPPED"),
+            "PUBLICATION_IMPORTED_MATERIAL_CONTRACT_INVALID:" + name)
+    gltf = source.get("gltf")
+    png_shas = source.get("import_png_sha256")
+    require(isinstance(gltf, dict) and isinstance(png_shas, dict),
+            "PUBLICATION_IMPORTED_MATERIAL_PROVENANCE_MISSING:" + name)
+    require(bool(material.node_tree), "PUBLICATION_IMPORTED_NO_SHADER_GRAPH:" + name)
+    tree = material.node_tree
+    bsdfs = [node for node in tree.nodes if node.type == "BSDF_PRINCIPLED"]
+    require(len(bsdfs) == 1, "PUBLICATION_IMPORTED_PRINCIPLED_MISMATCH:" + name)
+    bsdf = bsdfs[0]
+    require(any(
+        link.from_node == bsdf and link.to_node.type == "OUTPUT_MATERIAL" and
+        link.to_socket.name == "Surface" for link in tree.links
+    ), "PUBLICATION_IMPORTED_MATERIAL_OUTPUT_DISCONNECTED:" + name)
+
+    roles = {"BASE COLOR": ("base", False)}
+    if gltf.get("metallic_roughness_texture") is True:
+        roles["METALLIC ROUGHNESS"] = ("mer", True)
+    if gltf.get("normal_texture") is True:
+        roles["NORMAL MAP"] = ("normal", True)
+    if gltf.get("emissive_texture") is True:
+        roles["EMISSIVE"] = ("emission", False)
+    require(set(png_shas) == {role for role, _is_data in roles.values()},
+            "PUBLICATION_IMPORTED_TEXTURE_ROLE_INVENTORY_MISMATCH:" + name)
+
+    imported = {}
+    for node in tree.nodes:
+        if node.type != "TEX_IMAGE":
+            continue
+        label = node.label.strip().upper()
+        require(label in roles and label not in imported,
+                "PUBLICATION_IMPORTED_TEXTURE_ROLE_UNKNOWN_OR_DUPLICATE:" + name)
+        kind, is_data = roles[label]
+        require(node.image is not None and min(node.image.size) > 0,
+                "PUBLICATION_IMPORTED_TEXTURE_PIXEL_MISSING:" + name + ":" + label)
+        require(node.interpolation == "Closest" and node.extension == "EXTEND",
+                "PUBLICATION_IMPORTED_TEXTURE_SAMPLING_MISMATCH:" + name + ":" + label)
+        require(bool(node.image.colorspace_settings.is_data) == is_data,
+                "PUBLICATION_IMPORTED_TEXTURE_COLORSPACE_MISMATCH:" + name + ":" + label)
+        packed = node.image.packed_file
+        require(packed is not None,
+                "PUBLICATION_IMPORTED_TEXTURE_UNPACKED:" + name + ":" + label)
+        image_id = node.image.as_pointer()
+        if image_id not in image_digests:
+            image_digests[image_id] = hashlib.sha256(bytes(packed.data)).hexdigest()
+        require(image_digests[image_id] == png_shas[kind],
+                "PUBLICATION_IMPORTED_TEXTURE_SOURCE_BYTES_MISMATCH:" + name + ":" + label)
+        imported[label] = node
+    require(set(imported) == set(roles),
+            "PUBLICATION_IMPORTED_TEXTURE_ROLE_MISSING:" + name)
+
+    def path(label, output_name, target_name):
+        node = imported[label]
+        return _reaches_socket(
+            tree.links, node, node.outputs.get(output_name),
+            bsdf.inputs.get(target_name),
+        )
+
+    require(path("BASE COLOR", "Color", "Base Color"),
+            "PUBLICATION_IMPORTED_BASE_COLOR_DISCONNECTED:" + name)
+    metallic = bsdf.inputs.get("Metallic")
+    roughness = bsdf.inputs.get("Roughness")
+    require(metallic is not None and roughness is not None,
+            "PUBLICATION_IMPORTED_PBR_SOCKET_MISSING:" + name)
+    if "METALLIC ROUGHNESS" in imported:
+        mer = imported["METALLIC ROUGHNESS"]
+        splits = [
+            link.to_node for link in tree.links
+            if link.from_node == mer and link.from_socket.name == "Color" and
+            link.to_node.type == "SEPARATE_COLOR" and link.to_socket.name == "Color"
+        ]
+        require(len(splits) == 1 and splits[0].mode == "RGB",
+                "PUBLICATION_IMPORTED_MER_CHANNEL_SPLIT_MISSING:" + name)
+        split = splits[0]
+        require(_reaches_socket(tree.links, split, split.outputs.get("Blue"), metallic) and
+                _reaches_socket(tree.links, split, split.outputs.get("Green"), roughness),
+                "PUBLICATION_IMPORTED_MER_CHANNEL_BINDING_MISMATCH:" + name)
+    else:
+        require(not metallic.is_linked and not roughness.is_linked,
+                "PUBLICATION_IMPORTED_UNDECLARED_MER_LINKS:" + name)
+        for socket, factor in (
+            (metallic, gltf.get("metallic_factor")),
+            (roughness, gltf.get("roughness_factor")),
+        ):
+            require(isinstance(factor, (int, float)) and math.isfinite(factor) and
+                    abs(socket.default_value - factor) <= 1e-4,
+                    "PUBLICATION_IMPORTED_PBR_FACTOR_DIVERGED:" + name)
+    normal = bsdf.inputs.get("Normal")
+    if "NORMAL MAP" in imported:
+        img = imported["NORMAL MAP"]
+        normal_nodes = [
+            link.to_node for link in tree.links
+            if link.from_node == img and link.from_socket.name == "Color" and
+            link.to_node.type == "NORMAL_MAP" and link.to_socket.name == "Color"
+        ]
+        require(len(normal_nodes) == 1 and normal_nodes[0].space == "TANGENT" and
+                _reaches_socket(
+                    tree.links, normal_nodes[0], normal_nodes[0].outputs.get("Normal"), normal,
+                ), "PUBLICATION_IMPORTED_NORMAL_MAP_BINDING_MISMATCH:" + name)
+    else:
+        require(normal is not None and not normal.is_linked,
+                "PUBLICATION_IMPORTED_UNDECLARED_NORMAL_LINK:" + name)
+    emission = bsdf.inputs.get("Emission Color")
+    strength = bsdf.inputs.get("Emission Strength")
+    emissive_factor = gltf.get("emissive_factor")
+    require(emission is not None and strength is not None and
+            isinstance(emissive_factor, (int, float)) and math.isfinite(emissive_factor) and
+            not strength.is_linked and abs(strength.default_value - emissive_factor) <= 1e-4,
+            "PUBLICATION_IMPORTED_EMISSION_FACTOR_DIVERGED:" + name)
+    if "EMISSIVE" in imported:
+        require(path("EMISSIVE", "Color", "Emission Color"),
+                "PUBLICATION_IMPORTED_EMISSIVE_DISCONNECTED:" + name)
 
 
 def imported_meshes(job: dict) -> list:
@@ -79,8 +220,17 @@ def imported_meshes(job: dict) -> list:
     for obj in meshes:
         require(bool(obj.data.polygons) and bool(obj.data.uv_layers),
                 "PUBLICATION_IMPORTED_MESH_FACE_OR_UV_MISSING:" + obj.name)
+        uv = obj.data.uv_layers.active
+        require(uv is not None and len(uv.data) == len(obj.data.loops) and
+                all(math.isfinite(value) for point in uv.data for value in point.uv),
+                "PUBLICATION_IMPORTED_MESH_UV_INVALID:" + obj.name)
         require(all(math.isfinite(v) for vertex in obj.data.vertices for v in vertex.co),
                 "PUBLICATION_IMPORTED_NONFINITE_GEOMETRY:" + obj.name)
+        require(all(
+            0 <= poly.material_index < len(obj.data.materials) and
+            obj.data.materials[poly.material_index] is not None
+            for poly in obj.data.polygons
+        ), "PUBLICATION_IMPORTED_FACE_MATERIAL_UNRESOLVED:" + obj.name)
     materials = {
         material.name: material for obj in meshes
         for material in obj.data.materials if material
@@ -88,48 +238,16 @@ def imported_meshes(job: dict) -> list:
     require(len(materials) == job["expected_material_count"],
             "PUBLICATION_IMPORTED_MATERIAL_COUNT_MISMATCH")
     expected = job["materials"]
-    # Materials with Blender-generated numeric suffixes must never masquerade
-    # as a different source atlas, including intentionally duplicated names.
+    require(set(materials) == set(expected),
+            "PUBLICATION_IMPORTED_SOURCE_MATERIAL_IDENTITY_MISMATCH")
+    # Blender may share one Image among several supported shader roles.
+    # Hash each packed image once without replacing source pixels or nodes.
+    image_digests = {}
     for name, material in materials.items():
         source = expected.get(name)
         require(isinstance(source, dict),
                 "PUBLICATION_IMPORTED_UNKNOWN_SOURCE_MATERIAL:" + name)
-        require(source.get("alpha_mode") == "OPAQUE",
-                "PUBLICATION_IMPORTED_UNSUPPORTED_ALPHA:" + name)
-        require(source.get("pbr") in ("NONE", "MAPPED"),
-                "PUBLICATION_IMPORTED_PBR_CONTRACT_INVALID:" + name)
-        require(bool(material.node_tree),
-                "PUBLICATION_IMPORTED_NO_SHADER_GRAPH:" + name)
-        nodes = material.node_tree.nodes
-        maps = [n for n in nodes if n.type == "TEX_IMAGE" and n.image]
-        require(bool(maps), "PUBLICATION_IMPORTED_COLOR_MAP_MISSING:" + name)
-        for node in maps:
-            require(node.image.size[0] > 0 and node.image.size[1] > 0,
-                    "PUBLICATION_IMPORTED_TEXTURE_PIXEL_MISSING:" + name)
-            node.interpolation = "Closest"
-        bsdf = next((n for n in nodes if n.type == "BSDF_PRINCIPLED"), None)
-        require(bsdf is not None,
-                "PUBLICATION_IMPORTED_PRINCIPLED_MISSING:" + name)
-        if source["pbr"] == "NONE":
-            metallic = bsdf.inputs.get("Metallic")
-            roughness = bsdf.inputs.get("Roughness")
-            if metallic and not metallic.is_linked:
-                metallic.default_value = 0.0
-            if roughness and not roughness.is_linked:
-                roughness.default_value = 0.85
-        if source.get("mer_sha256"):
-            metallic = bsdf.inputs.get("Metallic")
-            roughness = bsdf.inputs.get("Roughness")
-            require(
-                bool(metallic and metallic.is_linked and roughness and roughness.is_linked),
-                "PUBLICATION_IMPORTED_MER_SHADER_LINKS_MISSING:" + name,
-            )
-        if source.get("normal_sha256"):
-            normal = bsdf.inputs.get("Normal")
-            require(bool(normal and normal.is_linked),
-                    "PUBLICATION_IMPORTED_NORMAL_SHADER_LINK_MISSING:" + name)
-    require(set(materials) == set(expected),
-            "PUBLICATION_IMPORTED_SOURCE_MATERIAL_IDENTITY_MISMATCH")
+        _verify_imported_material(material, source, image_digests)
     bpy.context.view_layer.update()
     return meshes
 

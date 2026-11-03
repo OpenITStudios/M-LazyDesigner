@@ -696,10 +696,33 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
         glb.toString("ascii", 0, 4) !== "glTF") {
       throw new Error("PUBLICATION_GLTF_INVALID_OR_OVERSIZED");
     }
-    inspectPublicationGlb(
+    const inspectedGlb = inspectPublicationGlb(
       glb, scene.children.length, Object.keys(materialReceipts).length,
       before.manifest.cubes, materialReceipts, expectedImages,
     );
+    const verifiedPngSha = inspectedGlb.verified_image_png_sha256;
+    const requiredPng = (name: string): string => {
+      const value = verifiedPngSha[name];
+      if (!value || !/^[a-f0-9]{64}$/.test(value)) {
+        throw new Error("PUBLICATION_GLB_IMPORT_PNG_PROVENANCE_MISSING:" + name);
+      }
+      return value;
+    };
+    for (const material of Object.values(materialReceipts)) {
+      const uuid = material.color_uuid;
+      const gltf = material.gltf;
+      material.import_png_sha256 = {
+        base: requiredPng("ld_base_" + uuid),
+        ...(gltf.metallic_roughness_texture
+          ? { mer: requiredPng("ld_mer_" + uuid) } : {}),
+        ...(gltf.normal_texture
+          ? { normal: requiredPng("ld_normal_" + uuid) } : {}),
+        ...(gltf.emissive_texture
+          ? { emission: requiredPng(
+            (gltf.metallic_roughness_texture ? "ld_emission_" : "ld_base_") + uuid,
+          ) } : {}),
+      };
+    }
     const after = nativeState();
     if (publicationEditorFence() !== editorFenceBefore) {
       throw new Error("PUBLICATION_EDITOR_STATE_CHANGED_DURING_SNAPSHOT");
