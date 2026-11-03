@@ -14,6 +14,7 @@ import { readRenderedModelBounds } from "@/lib/geometry/renderedModelBounds";
 import { sharedPoseFraming,samePoseBounds,comparePoseCameraReceipts,
   type PoseFrame,type PoseBounds } from "@/lib/animation/evidenceFraming";
 import { selectNativePoseDiagnosticRoute } from "@/lib/animation/poseDiagnosticScope";
+import { describeAnimationEvidenceBoundary } from "@/lib/animation/motionEvidence";
 import {
   inspectObservedAdditiveEulerPose,
   compareObservedEulerToExactAuthoredRotationKey,
@@ -1172,6 +1173,7 @@ async function captureAnimationSamples(
         animation_capture_elapsed_ms: Math.max(0, Date.now() - captureStartedAtMs),
       },
       shared_pose_framing: sharedFrame,
+      animation_evidence_boundary: describeAnimationEvidenceBoundary("STATIC_POSE_PNG"),
       native_pose_diagnostic_scope: nativePoseScope,
       pose_camera_comparability: comparePoseCameraReceipts(samples.map(sample=>({
         time:sample.time,
@@ -1451,7 +1453,14 @@ export function wireAnimationRuntimeContracts(): void {
               : "inspect_animation returned structured Animation evidence.",
         },
       ],
-      structuredContent,
+      structuredContent: {
+        ...structuredContent,
+        animation_evidence_boundary: describeAnimationEvidenceBoundary(
+          structuredContent.authored_space === "blockbench_animation"
+            ? "NATIVE_CLIP_INSPECTION"
+            : "NATIVE_CONTROLLER_INSPECTION"
+        ),
+      },
     };
   };
 
@@ -1470,11 +1479,24 @@ export function wireAnimationRuntimeContracts(): void {
       .describe("Required only when operation=batch."),
     animation_id: animationIdOptionalSchema,
   };
-  timelineDefinition.execute = async (rawArgs, context) =>
-    executeOptimizedAnimationTimeline(
-      optimizedAnimationTimelineParameters.parse(rawArgs),
-      context
-    );
+  timelineDefinition.execute = async (rawArgs, context) => {
+    const request = optimizedAnimationTimelineParameters.parse(rawArgs);
+    const result = await executeOptimizedAnimationTimeline(request, context);
+    if (request.operation !== "timeline" ||
+        !["play","pause","stop"].includes(request.action) ||
+        !isRecord(result) || !isRecord(result.structuredContent)) {
+      return result;
+    }
+    // A successful Timeline command is NOT observed continuous playback.
+    return {
+      ...result,
+      structuredContent: {
+        ...result.structuredContent,
+        animation_evidence_boundary:
+          describeAnimationEvidenceBoundary("PLAYBACK_COMMAND"),
+      },
+    };
+  };
 
   const captureDefinition = requireRuntimeToolDefinition("capture_model_views");
   const originalCaptureDefinition: RuntimeToolDefinition = {

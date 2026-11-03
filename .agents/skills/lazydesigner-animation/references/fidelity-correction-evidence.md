@@ -71,6 +71,23 @@ Molang route: `create_animation(bones={})` → returned UUID → `manage_animati
 
 File-backed client/runtime wiring remains compatibility/inspection, not normal model creation. Never `risky_eval` or evaluate gameplay truth.
 
+## Media ownership: static pose versus temporal motion
+
+Native keyframe and contact diagnostics prove only their supported technical
+scope. A `capture_model_views(animation_preview)` result consists of
+**static PNG poses** and must never be treated as a video, even when several
+timestamps were captured. `manage_animation_timeline(...play)` proves only
+the playback command ran. Neither constitutes an AI-observed motion sequence.
+The runtime now includes `animation_evidence_boundary` in native authored
+inspection, pose capture and playback-command results; its
+`temporal_motion.state=UNVERIFIED` cannot be upgraded by these producers.
+
+Only MP4 (H.264) is planned for temporal *visual* motion; it is an internal
+AI evidence artifact, not a user preview, with no GIF counterpart.
+A consistent MP4 manifest or URI alone never proves bytes or model ingestion.
+The actual recorder, artifact access and Sol video-consumption bridge are
+not registered yet, so temporal motion cannot be marked PASS from current tools.
+
 ## Evidence Economy
 
 Do not schedule screenshots every N seconds or for every keyframe.
@@ -106,10 +123,11 @@ multiple static poses as proof of smooth motion.
 
 ```text
 AUTHOR coherent keys/batch
-→ capture representative times
-→ focused inspect only when evidence can change correction
-→ one causal correction
-→ recapture affected cohort
+→ reuse native inspection for technical claims
+→ obtain static pose PNG only for a specific unresolved pose claim
+→ obtain a revision-bound MP4 only when a verified AI motion bridge exists
+→ temporal motion remains UNVERIFIED without observed video
+→ make one supported causal correction, then recheck affected evidence
 ```
 
 Verify `DISCOVER → AUTHOR → VERIFY → CORRECT → VERIFY → DONE`; record `IMPROVED | UNCHANGED | REGRESSED`. Cyclic/idle verification requires repeated full-loop playback; three static snapshots do not prove timing/phase/contact/seam.

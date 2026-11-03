@@ -362,6 +362,33 @@ Only when texture is in scope:
 
 Texture cannot approve or conceal wrong primary geometry.
 
+## Evidence medium contract: Geometry / Texture / Animation
+
+Geometry uses native geometry facts plus selected still model views for
+form-fidelity questions. Texture uses native UV/bitmap and optional PNG crop
+plus mapped shaded model views. Animation has **three distinct gates**:
+
+1. **Technical Animation:** authored keyframes, curves, rig, trajectory,
+   contacts and effects; scope-limited native data, not a motion visual PASS.
+2. **Static Pose Fidelity:** selected reference-paired pose PNGs. These may
+   establish a named pose claim but cannot establish motion continuity.
+3. **Temporal Motion Fidelity:** actual observed time-sequence movement
+   (timing, weight, foot sliding, recovery, loops). The ONLY planned
+   visual artifact is MP4/H.264; GIF and user-facing video preview are
+   explicitly excluded.
+
+The existing `inspect_animation`, multi-pose
+`capture_model_views(animation_preview)`, and successful
+`manage_animation_timeline(...play)` emit a non-approving
+`animation_evidence_boundary`: temporal-motion remains `UNVERIFIED`
+until an independent, revision-bound MP4 has really been produced,
+delivered and consumed by the AI reviewer. PNG count, elapsed timeline,
+Molang syntax, a plausible trajectory report and a model-facing MP4
+descriptor alone NEVER prove temporal motion. The current MCP tool
+content contract and connected AI client do not yet provide a verified
+MP4-consumption bridge. Do not introduce a fake URL, in-memory video
+claim, polling screenshots or alternative media codec to disguise it.
+
 ## Gate 4 — Animation
 
 Only when animation is required:

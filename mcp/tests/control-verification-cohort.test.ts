@@ -110,6 +110,14 @@ describe("Control verification cohort", () => {
     ).continuation.next_action;
     expect(anim.kind).toBe("VERIFY_VISUAL");
     expect(anim.reason).toContain("not every keyframe");
+    expect(anim.reason).toContain("Temporal motion stays UNVERIFIED");
+    expect(anim.reason).toContain("MP4");
+    expect(anim.recommended_capability).toBeNull();
+    const unbounded = reduceControlExecutionState(
+      null, { ...animationDelta(0, 1), verification_scope: null }
+    ).continuation.next_action;
+    expect(unbounded.reason).toContain("Temporal motion stays UNVERIFIED");
+    expect(unbounded.reason).toContain("MP4");
   });
   test("default COMPLETE behavior keeps one-call verification semantics", () => {
     const delta = cubeDelta("cube-a", "rotation", -1, 1);
