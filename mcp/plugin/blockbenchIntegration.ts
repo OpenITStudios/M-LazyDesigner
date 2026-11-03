@@ -13,6 +13,7 @@ import {
   teardownProjectNavigationSnapshot,
 } from "@/plugin/projectNavigationSnapshot";
 import { uiSetup, uiTeardown } from "@/ui";
+import { retirePublicationRenderJobsOnPluginUnload } from "@/server/publication/jobs";
 import { setupI18n } from "@/ui/i18n";
 import {
   isExtendedMcpFamiliesEnabled,
@@ -100,6 +101,10 @@ export class BlockbenchIntegration {
   }
 
   teardown(): void {
+    // Stop active Blender subprocess on actual plugin unload. This is NOT
+    // called by uiSetup's normal idempotent panel reconstruction.
+    try { retirePublicationRenderJobsOnPluginUnload(); }
+    catch (error) { console.warn("[LazyDesigner] Publication render teardown failed", error); }
     // Release independent owners even when an upstream optional API throws.
     try { uiTeardown(); }
     catch (error) { console.warn("[LazyDesigner] Editor panel cleanup failed", error); }
