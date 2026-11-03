@@ -11,6 +11,7 @@ import type { ToolSpec, PromptSpec, ResourceSpec } from "../../../lib/factories"
 
 // Tool docs imports — each file exports schemas at module level with zero Blockbench deps
 import { cameraToolDocs } from "../../../server/tools/camera";
+import { publicationRenderToolDoc } from "../../../server/tools/inspection/publication";
 import { cubeToolDocs } from "../../../server/tools/cubes";
 import { elementToolDocs } from "../../../server/tools/element";
 import { elementInspectionToolDocs } from "../../../server/tools/element-inspection";
@@ -61,7 +62,7 @@ export const toolManifest: CategoryGroup[] = [
     ],
   },
   { category: "Elements", tools: [consolidatedInspectionToolDocs, ...elementToolDocs.filter((tool) => !["list_outline", "find_elements_by_criteria"].includes(tool.name)), ...elementInspectionToolDocs.filter((tool) => tool.name !== "inspect_element"), ...locatorToolDocs] },
-  { category: "Export", tools: exportToolDocs },
+  { category: "Export", tools: [...exportToolDocs, publicationRenderToolDoc] },
   { category: "History", tools: historyToolDocs },
   { category: "Import/Export", tools: importToolDocs },
   { category: "Material Instances", tools: [consolidatedMaterialInstancesToolDocs, ...materialInstanceToolDocs.filter((tool) => !["get_face_material_instances", "set_face_material_instance", "list_material_instances", "bulk_set_material_instances", "clear_material_instances"].includes(tool.name))] },
