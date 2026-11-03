@@ -8,6 +8,7 @@ import {
 import {
   startPublicationRender,
   getPublicationRenderJobStatus,
+  getPublicationRenderEvidence,
   cancelPublicationRenderJob,
 } from "@/server/publication/jobs";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@/lib/runtime/lifecycle";
 
 let dialog: Dialog | null = null;
+let visualEvidenceDialog: Dialog | null = null;
 let epoch = 0;
 let submitting = false;
 let lastJobId: string | null = null;
@@ -288,6 +290,41 @@ export function reviewPublicationRenderStatus(): void {
     }).catch(showError);
 }
 
+/** View the same validated Cycles PNG downsample returned by MCP preview.
+ * No user-supplied markup: image base64 and numeric dimensions are derived
+ * exclusively from verified finished job bytes.
+ */
+export function openPublicationVisualEvidenceDialog(): void {
+  const id = lastJobId;
+  if (!id) {
+    Blockbench.showQuickMessage("No completed render to preview in this plugin session.", 3000);
+    return;
+  }
+  void withCurrentRuntime(() => getPublicationRenderEvidence(id))
+    .then(({ status, png }) => {
+      const receipt = status.receipt!;
+      const meta = receipt.visual_evidence;
+      const encoded = png.toString("base64");
+      visualEvidenceDialog?.hide();
+      visualEvidenceDialog = new Dialog({
+        id: "lazydesigner_publication_visual_evidence",
+        title: "Cycles Render — Real PNG Preview",
+        width: Math.max(480, meta.width + 48),
+        lines: [
+          '<div style="text-align:center;max-width:100%;overflow:hidden">' +
+            '<img alt="Downsampled actual Blender Cycles render" ' +
+            'src="data:image/png;base64,' + encoded + '" ' +
+            'width="' + meta.width + '" height="' + meta.height + '" ' +
+            'style="max-width:100%;height:auto;image-rendering:auto" /></div>',
+          "<p>Real Cycles PNG downsample; geometry, textures and the full-size output are unchanged.</p>",
+          "<p>Inspect silhouette, lighting, materials and composition. This is a DRAFT, not a QA or artistic PASS.</p>",
+        ],
+        buttons: ["Close"],
+      });
+      visualEvidenceDialog.show();
+    }).catch(showError);
+}
+
 /** Cancelling is an explicit user action; completion requires observed process exit. */
 export function cancelPublicationRender(): void {
   const id = lastJobId;
@@ -305,5 +342,7 @@ export function publicationRenderDialogTeardown(): void {
   epoch += 1;
   dialog?.hide();
   dialog = null;
+  visualEvidenceDialog?.hide();
+  visualEvidenceDialog = null;
   // This closes UI only. The Runtime owns the active process/job and its exit.
 }
