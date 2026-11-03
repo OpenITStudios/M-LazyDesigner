@@ -72,6 +72,13 @@ describe("MCP PBR -> glTF publication material contract", () => {
     for (const item of invalid) {
       expect(() => inspectPublicationPbrPlan("color", item.channels, item.contract)).toThrow();
     }
+    expect(() => inspectPublicationPbrPlan("color", [
+      color, { uuid: "rough", pbr_channel: "rough" },
+    ], baseline)).toThrow("PUBLICATION_PBR_UNKNOWN_CHANNEL");
+    expect(() => inspectPublicationPbrPlan("color", [
+      color, { uuid: "normal", pbr_channel: "normal" },
+    ], { mer_value: [0, 0, 255], subsurface_value: 20 }))
+      .toThrow("PUBLICATION_PBR_SUBSURFACE_UNSUPPORTED");
     expect(() => inspectPublicationPbrPlan(
       "wrong-color",
       [color],
