@@ -75,11 +75,15 @@ function registerTextureFamilyTools(): void {
 const registrationFunctions: Record<McpRegistrationFamily, RegistrationFunction> = {
   animation: registerAnimationFamilyTools,
   animation_inspection: registerAnimationInspectionTools,
-  camera: () => { registerCameraTools(); registerPublicationRenderTool(); },
+  camera: registerCameraTools,
   cubes: registerCubesTools,
   elements: registerElementFamilyTools,
   element_inspection: registerElementInspectionTools,
-  export: registerExportTools,
+  export: () => {
+    registerExportTools();
+    // Publication is an output artifact of MCP-authored Cubes, not a camera QA tool.
+    registerPublicationRenderTool();
+  },
   history: registerHistoryTools,
   import: registerImportTools,
   material_instances: registerMaterialInstanceTools,
