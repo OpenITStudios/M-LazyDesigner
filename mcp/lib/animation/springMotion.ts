@@ -126,7 +126,7 @@ export function compileSpringSecondaryMotion(recipe:MotionRecipe,links:readonly 
       // Bound work to 32 cycles x the existing maximum 2,400 samples.
       let converged=false;
       for(let cycle=0;cycle<32;cycle+=1){
-        const beforeX=[...x],beforeV=[...v];
+        const beforeX:Vec3=[...x],beforeV:Vec3=[...v];
         let lastTime=0;
         for(let step=1;step<=steps;step+=1){
           const time=Math.min(duration,step/sampleRate);
