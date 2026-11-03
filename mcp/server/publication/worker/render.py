@@ -207,7 +207,6 @@ def configure_render(job):
     scene.render.image_settings.color_depth = "8"
     scene.render.film_transparent = job["background"] == "transparent"
     scene.render.filepath = job["output_path"]
-    scene.render.film_transparent_glass = False
     try:
         scene.view_settings.view_transform = "AgX"
     except TypeError:
