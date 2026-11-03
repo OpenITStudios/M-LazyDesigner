@@ -23,3 +23,9 @@ declare module "*.md" {
   const content: string;
   export default content;
 }
+
+/** Trusted bundled Blender worker, loaded without minification. */
+declare module "*.py" {
+  const content: string;
+  export default content;
+}
