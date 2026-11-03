@@ -8,6 +8,7 @@ import {
   analyzeStaticMarginalProjection,
   analyzeStaticCubeMergeCandidates,
   prioritizeGeometryConstructionReview,
+  planGeometryEvidenceEconomy,
 } from "@/lib/geometrySurfaceEvidence";
 
 const cube = (uuid: string, from: number[], to: number[], rotation = [0, 0, 0]) => ({
@@ -593,4 +594,66 @@ test("nonfinite Cube rotation cannot masquerade as unrotated surface evidence", 
   expect(result.state).toBe("partial");
   expect(result.excluded_rotated_cube_count).toBe(1);
   expect(result.coplanar_overlap_count).toBe(0);
+});
+
+test("native structural blockers route to zero-image targeted Cube review before screenshots", () => {
+  const evidence = analyzeAxisAlignedSurfaceEvidence([
+    { ...cube("back", [0, 0, 0], [4, 4, 4]), parent_id: "root" },
+    { ...cube("front", [0, 0, 0], [4, 4, 2]), parent_id: "root" },
+  ]);
+  const plan = planGeometryEvidenceEconomy(evidence);
+  expect(plan).toMatchObject({
+    route: "FIX_NATIVE_SURFACE_BLOCKER",
+    capture_policy: "DEFER_VISUAL_CAPTURE_UNTIL_STRUCTURAL_REPAIR",
+    image_bytes_requested: 0,
+    visual_gate_remains_required: true,
+    visual_verdict: "NOT_EVALUATED",
+    approvals_granted: false,
+  });
+  expect(plan.affected_cube_uuids).toEqual(["back", "front"]);
+  expect(plan.finding_count).toBeGreaterThan(0);
+});
+
+test("incomplete rotations/ownership never pass from numeric or image evidence", () => {
+  const evidence = analyzeAxisAlignedSurfaceEvidence([
+    { ...cube("rotated", [0, 0, 0], [4, 4, 4], [0, 30, 0]), parent_id: "root" },
+  ]);
+  const plan = planGeometryEvidenceEconomy(evidence);
+  expect(plan).toMatchObject({
+    route: "RESOLVE_NATIVE_COVERAGE",
+    structural_scope_complete: false,
+    capture_policy: "DO_NOT_USE_SCREENSHOT_AS_STRUCTURAL_CLEARANCE",
+    visual_verdict: "NOT_EVALUATED",
+    image_bytes_requested: 0,
+  });
+});
+
+test("valid structural candidates remain review-only, never automatic deletion", () => {
+  const result = analyzeAxisAlignedSurfaceEvidence([
+    { ...cube("shell", [0, 0, 0], [8, 8, 8]), parent_id: "root" },
+    { ...cube("inside", [2, 2, 2], [4, 4, 4]), parent_id: "root" },
+  ]);
+  const plan = planGeometryEvidenceEconomy(result);
+  expect(plan).toMatchObject({
+    route: "REVIEW_NATIVE_GEOMETRY_CANDIDATES",
+    capture_policy: "USE_EXISTING_NUMERIC_EVIDENCE_FIRST",
+    approvals_granted: false,
+    image_bytes_requested: 0,
+  });
+});
+
+test("clean native surface does not force screenshots or fake visual approval", () => {
+  const result = analyzeAxisAlignedSurfaceEvidence([
+    { ...cube("simple", [0, 0, 0], [2, 2, 2]), parent_id: "root" },
+  ]);
+  const plan = planGeometryEvidenceEconomy(result);
+  expect(plan).toMatchObject({
+    route: "REFERENCE_VISUAL_GATE_ONLY_WHEN_DUE",
+    capture_policy: "NO_EXTRA_SCREENSHOT_FOR_CLEAN_STRUCTURAL_READ",
+    finding_count: 0,
+    structural_scope_complete: true,
+    image_bytes_requested: 0,
+    visual_gate_remains_required: true,
+    visual_verdict: "NOT_EVALUATED",
+  });
 });

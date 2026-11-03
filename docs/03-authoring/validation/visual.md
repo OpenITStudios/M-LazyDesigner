@@ -764,6 +764,49 @@ retain the 512 default, preserving existing high-detail behavior. Texture/identi
 should continue using detail-appropriate evidence; do not downsample merely to reduce
 Codex allowance when the decision depends on fine visual detail.
 
+## Native-first evidence economy (zero-image geometry triage)
+
+Before requesting a new model screenshot for geometry hygiene, consume the
+existing `inspect_model_bounds.surface_integrity.evidence_economy` projection.
+It does **not** run a second scan: it classifies the exact same native Cube
+surface, containment and projected-contribution results already produced by
+the current inspector. It costs **zero additional image bytes** per receipt,
+not necessarily zero CPU or zero text tokens.
+
+- `FIX_NATIVE_SURFACE_BLOCKER`: same-facing coplanar Cube/face pairs already
+  carry concrete UUID evidence. Correct the confirmed structural issue through
+  the existing authoring/correction path; do not request a screenshot just to
+  reconfirm a deterministic overlap.
+- `RESOLVE_NATIVE_COVERAGE`: a rotated, unsupported, cross-parent, invalid
+  or budget-omitted region remains structurally unverified. A screenshot
+  cannot prove the missing *numeric* scan completed.
+- `REVIEW_NATIVE_GEOMETRY_CANDIDATES`: inspect existing positive-volume,
+  containment, and projected-outline findings before requesting visual data.
+  These are not deletion recommendations or proof of aesthetic redundancy.
+- `REFERENCE_VISUAL_GATE_ONLY_WHEN_DUE`: a clean native check does not
+  justify a celebratory screenshot. At the appropriate modelling review gate,
+  the actual approved source image **and** matching current model view are still
+  required for reference-fidelity PASS.
+
+For UV/texture and animation, use existing native UV/bitmap and keyframe/
+contact diagnostics before choosing the smallest unresolved region or
+meaningful pose. Reuse fresh mutation receipt images when they actually cover
+the affected texture region. Do not generate geometry screenshots after every
+Cube edit or full-frame animation screenshots at every keyframe. This policy
+changes **evidence order**, not verification ownership or review gates.
+
+A screenshot-free ray hit can potentially identify a Cube candidate from a
+known camera coordinate, but cannot establish pixel-accurate UV, alpha
+occlusion, material appearance, or artistic similarity. Do not create a
+duplicate raycasting renderer before actual native evidence shows existing
+UUID-backed issue navigation cannot answer a specific defect. No new public
+Gateway/capture schema is required for the native-first route.
+
+**Cost measurement:** compare equal golden assets using total delivered image
+items and bytes, model-visible tokens when reported by the client, native QA
+latency, missed critical defects, and corrections to accepted quality. No
+claimed savings percentage exists without live measured baselines.
+
 ## Evidence Economy
 
 Good reasons to capture:

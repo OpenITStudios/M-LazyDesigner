@@ -1113,3 +1113,84 @@ export function analyzeAxisAlignedSurfaceEvidence(
       : "Bounded local surface evidence is partial when transforms, owner identity, Mesh/rotated geometry or cross-Bone pairs are unresolved. Cross-Bone contact belongs to the current-preview world OBB scan; never infer whole-model visual PASS.",
   };
 }
+
+/**
+ * Reuse the EXISTING native surface/projection work as a screenshot-free
+ * diagnostic receipt. No additional scene scan, image transport, score engine,
+ * or automatic mutation is authorized by this route.
+ *
+ * A clean structural scan never implies reference resemblance or artistic PASS.
+ * At an actual reference-driven stage gate, visual comparison remains required.
+ */
+export function planGeometryEvidenceEconomy(
+  surface: ReturnType<typeof analyzeAxisAlignedSurfaceEvidence>
+) {
+  const base = {
+    evidence_owner: "inspect_model_bounds.surface_integrity" as const,
+    image_bytes_requested: 0 as const,
+    visual_verdict: "NOT_EVALUATED" as const,
+    approvals_granted: false as const,
+    analysis_scope: "AXIS_ALIGNED_REST_POSE_ONLY" as const,
+    visual_gate_remains_required: true as const,
+  };
+  const idsFromExamples = (examples: readonly Record<string, unknown>[]) => {
+    const ids = new Set<string>();
+    for (const example of examples) {
+      for (const key of ["a", "b"] as const) {
+        const value = example[key];
+        if (value && typeof value === "object" && "uuid" in value &&
+            typeof value.uuid === "string" && value.uuid.trim()) {
+          ids.add(value.uuid);
+        }
+      }
+    }
+    return [...ids].sort().slice(0, GEOMETRY_SURFACE_EXAMPLE_LIMIT);
+  };
+
+  if (surface.coplanar_overlap_count > 0) {
+    return {
+      ...base,
+      route: "FIX_NATIVE_SURFACE_BLOCKER" as const,
+      capture_policy: "DEFER_VISUAL_CAPTURE_UNTIL_STRUCTURAL_REPAIR" as const,
+      affected_cube_uuids: idsFromExamples(surface.coplanar_overlap_examples),
+      finding_count: surface.coplanar_overlap_count,
+      structural_scope_complete: surface.complete,
+      reason: "Native same-facing coplanar overlap is a scoped structural defect. Inspect/repair identified Cube faces before asking AI to judge appearance.",
+    };
+  }
+  if (surface.state !== "clean" || !surface.complete) {
+    return {
+      ...base,
+      route: "RESOLVE_NATIVE_COVERAGE" as const,
+      capture_policy: "DO_NOT_USE_SCREENSHOT_AS_STRUCTURAL_CLEARANCE" as const,
+      affected_cube_uuids: [] as string[],
+      finding_count: 0,
+      structural_scope_complete: false,
+      reason: "Incomplete or unsupported native surface coverage cannot be promoted to PASS; resolve the exact omitted transforms, ownership or budgets.",
+    };
+  }
+  if (surface.positive_volume_intersection_count > 0 ||
+      surface.rest_pose_containment_review.contained_candidate_count > 0 ||
+      surface.rest_pose_marginal_projection_review.no_new_projected_outline_count > 0) {
+    return {
+      ...base,
+      route: "REVIEW_NATIVE_GEOMETRY_CANDIDATES" as const,
+      capture_policy: "USE_EXISTING_NUMERIC_EVIDENCE_FIRST" as const,
+      affected_cube_uuids: idsFromExamples(surface.positive_volume_examples),
+      finding_count: surface.positive_volume_intersection_count +
+        surface.rest_pose_containment_review.contained_candidate_count +
+        surface.rest_pose_marginal_projection_review.no_new_projected_outline_count,
+      structural_scope_complete: true,
+      reason: "Native overlap/containment/projected-contribution facts are review candidates, not removal authorization. Resolve causally before a targeted visual gate.",
+    };
+  }
+  return {
+    ...base,
+    route: "REFERENCE_VISUAL_GATE_ONLY_WHEN_DUE" as const,
+    capture_policy: "NO_EXTRA_SCREENSHOT_FOR_CLEAN_STRUCTURAL_READ" as const,
+    affected_cube_uuids: [] as string[],
+    finding_count: 0,
+    structural_scope_complete: true,
+    reason: "No reported axis-aligned surface defect. Do not capture merely to confirm tool success; reference fidelity still requires actual paired images at its stage gate.",
+  };
+}

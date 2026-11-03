@@ -5,6 +5,7 @@ import {
   analyzeAxisAlignedSurfaceEvidence,
   analyzeCurrentPreviewObbContainment,
   GEOMETRY_WORLD_OBB_SAMPLE_LIMIT,
+  planGeometryEvidenceEconomy,
 } from "@/lib/geometry/surfaceEvidence";
 import { orientedBoxFromCube } from "@/lib/geometry/blockbenchCubeObb";
 import {captureNativeMeshToCubeSource} from "../geometry/meshToCubeNativeTransaction";
@@ -114,6 +115,7 @@ function geometrySurfaceRuntime() {
   });
   return {
     ...base,
+    evidence_economy: planGeometryEvidenceEconomy(base),
     mesh_to_cube_fidelity: nativeMeshToCubeFidelity(),
     current_preview_world_obb_review: analyzeCurrentPreviewObbContainment(
       poseInputs, {
