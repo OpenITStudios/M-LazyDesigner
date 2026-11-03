@@ -13,6 +13,7 @@ import {
   type McpAuthoringStage,
 } from "@/lib/capabilities/authoringStage";
 import { registerCameraTools } from "../tools/inspection/camera";
+import { registerPublicationRenderTool } from "../tools/inspection/publication";
 import { registerAnimationTools } from "../tools/animation";
 import { registerAnimationEffectTools } from "../tools/animation/effects";
 import { registerAnimationControllerTools } from "../tools/animation/controller";
@@ -74,7 +75,7 @@ function registerTextureFamilyTools(): void {
 const registrationFunctions: Record<McpRegistrationFamily, RegistrationFunction> = {
   animation: registerAnimationFamilyTools,
   animation_inspection: registerAnimationInspectionTools,
-  camera: registerCameraTools,
+  camera: () => { registerCameraTools(); registerPublicationRenderTool(); },
   cubes: registerCubesTools,
   elements: registerElementFamilyTools,
   element_inspection: registerElementInspectionTools,
