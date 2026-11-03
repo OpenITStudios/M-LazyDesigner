@@ -89,6 +89,7 @@ const receipt: PublicationRenderReceipt = {
 const prepared = async (input: unknown): Promise<PreparedPublicationRender> => ({
   request: publicationRenderParameters.parse(input),
   snapshot: {} as PreparedPublicationRender["snapshot"],
+  runtime_generation: 1,
 });
 
 async function drain(): Promise<void> {
