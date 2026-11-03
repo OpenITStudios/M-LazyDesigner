@@ -845,6 +845,33 @@ describe("Detached native fidelity bridge", () => {
     }
   });
 
+  test("signature-only source recheck detects UV, geometry and face material changes", async () => {
+    const fixture = installNativeFixture();
+    const result = await snapshotDetachedPublicationGlb();
+    expect(result.source_manifest.cubes[0]?.blender_triangle_sha256)
+      .toMatch(/^[a-f0-9]{64}$/);
+    // A stable model remains current even after repeated signature-only checks.
+    verifyPublicationSourceCurrent(result.project_uuid, result.source_sha256);
+    verifyPublicationSourceCurrent(result.project_uuid, result.source_sha256);
+
+    fixture.cube.mesh.geometry.attributes.uv.array[0] = 0.25;
+    expect(() => verifyPublicationSourceCurrent(
+      result.project_uuid, result.source_sha256,
+    )).toThrow("PUBLICATION_SOURCE_STALE_AFTER_RENDER");
+    fixture.cube.mesh.geometry.attributes.uv.array[0] = 0;
+
+    fixture.cube.mesh.geometry.attributes.position.array[0] = 0.125;
+    expect(() => verifyPublicationSourceCurrent(
+      result.project_uuid, result.source_sha256,
+    )).toThrow("PUBLICATION_SOURCE_STALE_AFTER_RENDER");
+    fixture.cube.mesh.geometry.attributes.position.array[0] = 0;
+
+    fixture.cube.faces.north.material_name = "custom_slot";
+    expect(() => verifyPublicationSourceCurrent(
+      result.project_uuid, result.source_sha256,
+    )).toThrow("PUBLICATION_UNSUPPORTED_FACE_MATERIAL");
+  });
+
   test("rejects source modification during exporter callback instead of delivering stale GLB", async () => {
     const f = installNativeFixture();
     const THREE = (globalThis as any).THREE;

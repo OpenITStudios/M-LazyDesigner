@@ -90,6 +90,7 @@ type NativeState = {
   signature: string;
   manifest: PublicationSourceManifest;
 };
+type NativeIdentity = Pick<NativeState, "project" | "project_uuid" | "signature">;
 
 function sha256(data: Buffer | string): string {
   return createHash("sha256").update(data).digest("hex");
@@ -219,14 +220,22 @@ function texturePixelsSha(pixels: ImageData): string {
  * referenced image bytes. Any unavailable material semantics fail closed.
  * This intentionally makes no QA/reference-approval claims.
  */
-function nativeState(): NativeState {
+// Only the FIRST snapshot needs geometry witnesses, bounds and per-Cube
+// digests. Subsequent integrity checks still read the exact live geometry,
+// pose, material bindings and source texture bytes to compute the SAME hash,
+// but do not rebuild a manifest that their callers never consume.
+function nativeState(): NativeState;
+function nativeState(includeManifest: false): NativeIdentity;
+function nativeState(includeManifest: true): NativeState;
+function nativeState(includeManifest = true): NativeState | NativeIdentity {
   const { project, project_uuid } = requireSourceProject();
   requireVerifiedPublicationEditPose();
   if (Cube.all.length > MAX_CUBES) {
     throw new Error("PUBLICATION_CUBE_BUDGET_EXCEEDED");
   }
   const cubeRows: unknown[] = [];
-  const manifestCubes: PublicationCubeManifest[] = [];
+  const manifestCubes: PublicationCubeManifest[] | null =
+    includeManifest ? [] : null;
   let vertexComponentCount = 0;
   const usedTextureIds = new Set<string>();
   const seen = new Set<string>();
@@ -302,30 +311,28 @@ function nativeState(): NativeState {
       cube.uuid, faceBindings, geometry.groups, indices.length,
     );
     const ancestry = publicationGroupAncestry(cube);
-    const bounds = expectedPublicationBlenderBounds(positions, matrix);
-    const positionSha = sha256(JSON.stringify(positions));
-    const uvSha = sha256(JSON.stringify(uv));
-    const indexSha = sha256(JSON.stringify(indices));
-    const normalSha = normals ? sha256(JSON.stringify(normals)) : null;
-    manifestCubes.push({
-      cube_uuid: cube.uuid,
-      group_ancestry_uuids: ancestry,
-      source_world_matrix: matrix,
-      expected_blender_bounds_min: bounds.min,
-      expected_blender_bounds_max: bounds.max,
-      position_sha256: positionSha,
-      uv_sha256: uvSha,
-      gltf_uv_sha256: expectedPublicationGltfUvSha256(uv),
-      uv_vertex_count: uv.length / 2,
-      normal_sha256: normalSha,
-      index_sha256: indexSha,
-      blender_triangle_sha256: expectedPublicationBlenderTriangleSha256({
-        positions, uv, indices, groups: geometry.groups,
-        material_names: primitives.map(primitive => primitive.material_name),
-        world_matrix: matrix,
-      }),
-      primitives,
-    });
+    if (manifestCubes !== null) {
+      const bounds = expectedPublicationBlenderBounds(positions, matrix);
+      manifestCubes.push({
+        cube_uuid: cube.uuid,
+        group_ancestry_uuids: ancestry,
+        source_world_matrix: matrix,
+        expected_blender_bounds_min: bounds.min,
+        expected_blender_bounds_max: bounds.max,
+        position_sha256: sha256(JSON.stringify(positions)),
+        uv_sha256: sha256(JSON.stringify(uv)),
+        gltf_uv_sha256: expectedPublicationGltfUvSha256(uv),
+        uv_vertex_count: uv.length / 2,
+        normal_sha256: normals ? sha256(JSON.stringify(normals)) : null,
+        index_sha256: sha256(JSON.stringify(indices)),
+        blender_triangle_sha256: expectedPublicationBlenderTriangleSha256({
+          positions, uv, indices, groups: geometry.groups,
+          material_names: primitives.map(primitive => primitive.material_name),
+          world_matrix: matrix,
+        }),
+        primitives,
+      });
+    }
     cubeRows.push([
       cube.uuid, ancestry, matrix, cube.from, cube.to, cube.origin, cube.rotation,
       cube.inflate ?? 0, cube.box_uv, cube.mirror_uv, cube.uv_offset, faceBindings,
@@ -372,10 +379,10 @@ function nativeState(): NativeState {
     project_uuid, "EDIT_STATIC_VERIFIED", PUBLICATION_UNITS_PER_MINECRAFT_BLOCK,
     cubeRows, imageRows, pbrGroups.sort(),
   ]));
+  const identity = { project, project_uuid, signature };
+  if (manifestCubes === null) return identity;
   return {
-    project,
-    project_uuid,
-    signature,
+    ...identity,
     manifest: {
       schema_version: 1,
       target_kind: "ACTIVE_PROJECT_VISIBLE_EXPORTABLE_CUBES",
@@ -730,7 +737,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
           ) } : {}),
       };
     }
-    const after = nativeState();
+    const after = nativeState(false);
     if (publicationEditorFence() !== editorFenceBefore) {
       throw new Error("PUBLICATION_EDITOR_STATE_CHANGED_DURING_SNAPSHOT");
     }
@@ -763,7 +770,7 @@ export function verifyPublicationSourceCurrent(
   expectedProjectUuid: string,
   expectedSha256: string,
 ): void {
-  const now = nativeState();
+  const now = nativeState(false);
   if (now.project_uuid !== expectedProjectUuid || now.signature !== expectedSha256) {
     throw new Error("PUBLICATION_SOURCE_STALE_AFTER_RENDER: no final PNG was promoted.");
   }
