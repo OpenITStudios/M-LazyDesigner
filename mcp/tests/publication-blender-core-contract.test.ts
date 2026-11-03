@@ -44,6 +44,9 @@ describe("Modular Blender Core source owners", () => {
   test("actual image statistics cannot be mistaken for artistic approval", async () => {
     const report = await worker("quality_report.py");
     expect(report).toContain("image.pixels.foreach_get(rgba)");
+    expect(report).toContain("make_visual_evidence_png(job)");
+    expect(report).toContain("DOWNSAMPLED_FINAL_CYCLES_PNG");
+    expect(report).toContain("EVIDENCE_MAX_SIDE = 384");
     expect(report).toContain('"artistic_quality": "NOT_EVALUATED"');
     expect(report).not.toContain('"artistic_quality": "PASS"');
   });
@@ -95,6 +98,11 @@ const valid = {
     near_black_visible_fraction: 0.14, nonopaque_fraction: 0,
     analysis_type: "MEASURED_DOWNSAMPLED_CYCLES_PNG", artistic_quality_score: null,
   },
+  preview: {
+    dimensions: [384, 384],
+    source: "DOWNSAMPLED_FINAL_CYCLES_PNG",
+    artistic_approval: false,
+  },
   warnings: [], artistic_quality: "NOT_EVALUATED", source_model_edited: false,
 };
 
@@ -112,6 +120,9 @@ describe("Measured Cycles report strict validation", () => {
       { ...valid, image: { ...valid.image, high_luminance_fraction: NaN } },
       { ...valid, image: { ...valid.image, image_dimensions: [512, 512] } },
       { ...valid, source_model_edited: true },
+      { ...valid, preview: { ...valid.preview, artistic_approval: true } },
+      { ...valid, preview: { ...valid.preview, dimensions: [4096, 4096] } },
+      { ...valid, preview: { ...valid.preview, source: "GENERATED_AI_IMAGE" } },
     ]) {
       expect(publicationDiagnosticsSchema.safeParse(broken).success).toBe(false);
     }
