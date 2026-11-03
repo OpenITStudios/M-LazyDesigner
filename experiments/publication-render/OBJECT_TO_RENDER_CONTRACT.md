@@ -9,6 +9,22 @@
 
 This document is the architectural contract for subsequent source changes. It is **not** an assertion that current code implements every clause. Tables explicitly distinguish CURRENT, DECIDED-NOT-IMPLEMENTED, and BLOCKED-PENDING-PROOF. The user requested detailed engineering design before running local/native tests.
 
+## Implementation update — R01 P0 source pass (2026-11-03)
+
+The following changes are now **authored in the Render branch only**. They have **NOT** been exercised by Bun, the installed Blockbench editor or Blender 5.2. This section overrides earlier "NOT implemented" shorthand in the decision table without claiming tested acceptance.
+
+| P0 item | Source status | Exact change | Proof still missing |
+| --- | --- | --- | --- |
+| P0-1 static pose/frame | SOURCE-AUTHORED, RESTRICTED | `snapshot.ts` requires Blockbench Edit mode, refuses animation/timeline playback, refuses used texture frames other than static frame 0, hashes frame data and checks editor selection/view/Undo fence before/after GLB | Real Edit/paint/animation-mode behavior, live source/edit/Undo invariants |
+| P0-2 face material | SOURCE-AUTHORED, FAIL-CLOSED | `sourceManifest.ts` derives exact native group-to-face-to-texture mapping; any nonempty authored material instance blocks with precise error instead of silently falling back to base color | Mapping for external Bedrock render-controller shader slots remains unsupported; source cannot claim universal alpha/material rendering |
+| P0-3 units/coordinates | SOURCE-AUTHORED, UNVERIFIED | Detached geometry is scaled by 1/16; pure source formula calculates glTF Y-up to Blender Z-up bounds `(x,-z,y)` | Real Blender importer/large-coordinate precision and lighting-scale validation |
+| P0-4 Group/identity manifest | SOURCE-AUTHORED, IN-MEMORY | Per-Cube UUID, Group ancestry UUIDs, source world matrix, native position/normal/UV/index hashes, expected Blender AABB, face primitive bindings and source manifest SHA; glTF node extras carry UUID and AABB | Persistent sidecar not included in P0; native extras round-trip verification pending |
+| P0-5 glTF/Blender fidelity | SOURCE-AUTHORED, PARTIAL | GLB validator now checks named Cube nodes, material names per primitive, exact expected Float32 UV accessor bytes after Blockbench V flip, plus object-world AABB checks in Blender import source | Texture pixel/color-space parity, normals/winding visual fidelity and full Khronos validator/native render still unproven |
+
+**Important constraints.** (a) This is deliberately restricted to existing MCP-created Bedrock Cube objects; no new Blender MCP or general 3D importer. (b) The Blender import AABB threshold (`max(1e-4, magnitude*1e-5)`) is a conservative provisional float32 guard, **not an empirically calibrated acceptance tolerance**. (c) Snapshot freshness handling from R01-D10 remains an open P1 decision: current code still blocks output after source edits; it does not yet publish stale snapshots. (d) Source manifest is a typed in-memory object with SHA; the worker sees source-bound glTF node extras rather than reading a second full model JSON parser. (e) Per-face shader slots, animated atlases and unknown alpha deliberately block instead of yielding false fidelity.
+
+Source regression intents added/updated: `mcp/tests/publication-source-manifest.test.ts`, `mcp/tests/publication-render-contract.test.ts`, `mcp/tests/publication-jobs.test.ts`, and the opt-in synthetic GLB worker harness. These are authored checks, not executed evidence.
+
 ## 0. Executive decisions (R01)
 
 | ID | Decision | Rationale | Current implementation |
