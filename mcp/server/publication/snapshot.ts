@@ -7,6 +7,13 @@ import type { PublicationJob } from "@/lib/publication/contracts";
 import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publication/materialChannels";
 import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
 import { verifyVisibleAtlasPixelsOpaque, type AtlasRect } from "@/lib/publication/atlasCoverage";
+import {
+  PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT,
+  PUBLICATION_UNITS_PER_MINECRAFT_BLOCK,
+  derivePublicationPrimitiveBindings,
+  type PublicationCubeManifest,
+  type PublicationSourceManifest,
+} from "@/lib/publication/sourceManifest";
 
 const MAX_TEXTURE_PIXELS = 4_194_304;
 const MAX_TOTAL_TEXTURE_PIXELS = 8_388_608;
@@ -63,16 +70,58 @@ export type DetachedPublicationSnapshot = {
   cube_count: number;
   material_count: number;
   materials: MaterialReceipt;
+  source_manifest: PublicationSourceManifest;
+  source_manifest_sha256: string;
 };
 
 type NativeState = {
   project: object;
   project_uuid: string;
   signature: string;
+  manifest: PublicationSourceManifest;
 };
 
 function sha256(data: Buffer | string): string {
   return createHash("sha256").update(data).digest("hex");
+}
+
+/** Snapshot only a proven static edit pose. Never reset animation or texture frames. */
+function requireVerifiedPublicationEditPose(): void {
+  if (typeof Modes === "undefined" || Modes.edit !== true ||
+      Modes.animate === true ||
+      (typeof Timeline !== "undefined" && Timeline.playing === true)) {
+    throw new Error(
+      "PUBLICATION_POSE_PROVENANCE_UNVERIFIED: switch to Blockbench Edit mode " +
+      "and stop timeline playback before requesting a static publication render.",
+    );
+  }
+}
+
+function publicationGroupAncestry(cube: Cube): string[] {
+  const uuids: string[] = [];
+  const visited = new Set<object>();
+  let parent: unknown = cube.parent;
+  while (typeof Group !== "undefined" && parent instanceof Group) {
+    if (visited.has(parent) || typeof parent.uuid !== "string" || !parent.uuid) {
+      throw new Error("PUBLICATION_PARENT_GROUP_IDENTITY_INVALID: " + cube.uuid);
+    }
+    visited.add(parent);
+    uuids.unshift(parent.uuid);
+    parent = parent.parent;
+  }
+  return uuids;
+}
+
+function requireStaticSourceTexture(texture: Texture): void {
+  // Blockbench frameCount getter is undefined for a static texture.
+  const frameCount = texture.frameCount ?? 1;
+  if (!Number.isSafeInteger(frameCount) || frameCount !== 1 ||
+      !Number.isSafeInteger(texture.currentFrame) ||
+      texture.currentFrame !== 0) {
+    throw new Error(
+      "PUBLICATION_TEXTURE_FRAME_PROVENANCE_UNVERIFIED: " + texture.uuid,
+    );
+  }
 }
 
 function requireSourceProject(): { project: object; project_uuid: string } {
@@ -135,10 +184,12 @@ function texturePixelsSha(pixels: ImageData): string {
  */
 function nativeState(): NativeState {
   const { project, project_uuid } = requireSourceProject();
+  requireVerifiedPublicationEditPose();
   if (Cube.all.length > MAX_CUBES) {
     throw new Error("PUBLICATION_CUBE_BUDGET_EXCEEDED");
   }
   const cubeRows: unknown[] = [];
+  const manifestCubes: PublicationCubeManifest[] = [];
   let vertexComponentCount = 0;
   const usedTextureIds = new Set<string>();
   const seen = new Set<string>();
@@ -160,14 +211,19 @@ function nativeState(): NativeState {
     const geometry = cube.mesh.geometry;
     const f = (geometry as typeof geometry & { faces?: string[] }).faces;
     if (!Array.isArray(f) || !f.length) throw new Error("PUBLICATION_NATIVE_FACE_INVENTORY_MISSING");
-    const faces = f.map(faceKey => {
+    const faceBindings = f.map(faceKey => {
       const face = cube.faces?.[faceKey as keyof typeof cube.faces] as CubeFace | undefined;
       const tex = face?.getTexture();
       if (!face || !tex?.uuid) {
         throw new Error("PUBLICATION_FACE_TEXTURE_UNRESOLVED: " + cube.uuid + ":" + faceKey);
       }
       usedTextureIds.add(tex.uuid);
-      return [faceKey, tex.uuid, face.uv, face.rotation, face.material_name ?? null];
+      return {
+        face_key: faceKey,
+        texture_uuid: tex.uuid,
+        material_name: face.material_name ?? null,
+        uv: face.uv, rotation: face.rotation,
+      };
     });
     const uv = Array.from(geometry.attributes.uv.array);
     const positions = Array.from(geometry.attributes.position.array);
@@ -193,10 +249,28 @@ function nativeState(): NativeState {
     validateNativeCubeIndexGroups(
       indices, geometry.groups, positions.length / 3, f.length,
     );
+    const primitives = derivePublicationPrimitiveBindings(
+      cube.uuid, faceBindings, geometry.groups, indices.length,
+    );
+    const ancestry = publicationGroupAncestry(cube);
+    const positionSha = sha256(JSON.stringify(positions));
+    const uvSha = sha256(JSON.stringify(uv));
+    const indexSha = sha256(JSON.stringify(indices));
+    const normalSha = normals ? sha256(JSON.stringify(normals)) : null;
+    manifestCubes.push({
+      cube_uuid: cube.uuid,
+      group_ancestry_uuids: ancestry,
+      source_world_matrix: matrix,
+      position_sha256: positionSha,
+      uv_sha256: uvSha,
+      normal_sha256: normalSha,
+      index_sha256: indexSha,
+      primitives,
+    });
     cubeRows.push([
-      cube.uuid, matrix, cube.from, cube.to, cube.origin, cube.rotation,
-      cube.inflate ?? 0, cube.box_uv, cube.mirror_uv, cube.uv_offset, faces,
-      uv, positions, normals, indices,
+      cube.uuid, ancestry, matrix, cube.from, cube.to, cube.origin, cube.rotation,
+      cube.inflate ?? 0, cube.box_uv, cube.mirror_uv, cube.uv_offset, faceBindings,
+      cube.visibility, cube.export, uv, positions, normals, indices, primitives,
       geometry.groups.map(g => [g.start, g.count, g.materialIndex]),
     ]);
   }
@@ -223,17 +297,35 @@ function nativeState(): NativeState {
   const imageRows = [...usedTextureIds].sort().map(uuid => {
     const texture = Texture.all.find(item => item.uuid === uuid);
     if (!texture) throw new Error("PUBLICATION_TEXTURE_DISAPPEARED: " + uuid);
+    requireStaticSourceTexture(texture);
     const pixels = imageData(texture);
     totalTexturePixels += pixels.width * pixels.height;
     if (totalTexturePixels > MAX_TOTAL_TEXTURE_PIXELS) {
       throw new Error("PUBLICATION_TEXTURE_TOTAL_PIXEL_BUDGET_EXCEEDED");
     }
-    return [uuid, pixels.width, pixels.height, texturePixelsSha(pixels)];
+    return [
+      uuid, pixels.width, pixels.height, texturePixelsSha(pixels),
+      texture.frameCount ?? 1, texture.currentFrame,
+    ];
   });
+  const signature = sha256(JSON.stringify([
+    project_uuid, "EDIT_STATIC_VERIFIED", PUBLICATION_UNITS_PER_MINECRAFT_BLOCK,
+    cubeRows, imageRows, pbrGroups.sort(),
+  ]));
   return {
     project,
     project_uuid,
-    signature: sha256(JSON.stringify([project_uuid, cubeRows, imageRows, pbrGroups.sort()])),
+    signature,
+    manifest: {
+      schema_version: 1,
+      target_kind: "ACTIVE_PROJECT_VISIBLE_EXPORTABLE_CUBES",
+      project_uuid,
+      pose_mode: "EDIT_STATIC_VERIFIED",
+      source_sha256: signature,
+      source_units_per_minecraft_block: PUBLICATION_UNITS_PER_MINECRAFT_BLOCK,
+      gltf_units_per_blockbench_unit: PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT,
+      cubes: manifestCubes,
+    },
   };
 }
 
@@ -443,6 +535,11 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
       original.updateWorldMatrix(true, false);
       const geometry = original.geometry.clone();
       geometry.applyMatrix4(original.matrixWorld);
+      geometry.scale(
+        PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT,
+        PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT,
+        PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT,
+      );
       // Native Blockbench Cube geometry groups are face-ordered and can merge
       // consecutive same-texture faces. Preserve their existing material indices.
       if (geometry.groups.some(g => g.materialIndex < 0 || g.materialIndex >= mappedMaterials.length)) {
@@ -476,7 +573,10 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
         glb.toString("ascii", 0, 4) !== "glTF") {
       throw new Error("PUBLICATION_GLTF_INVALID_OR_OVERSIZED");
     }
-    inspectPublicationGlb(glb, scene.children.length, Object.keys(materialReceipts).length);
+    inspectPublicationGlb(
+      glb, scene.children.length, Object.keys(materialReceipts).length,
+      before.manifest.cubes,
+    );
     const after = nativeState();
     if (before.project !== after.project ||
         before.project_uuid !== after.project_uuid ||
@@ -491,6 +591,8 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
       cube_count: scene.children.length,
       material_count: Object.keys(materialReceipts).length,
       materials: materialReceipts,
+      source_manifest: before.manifest,
+      source_manifest_sha256: sha256(JSON.stringify(before.manifest)),
     };
   } finally {
     for (const geometry of createdGeometry) geometry.dispose();
