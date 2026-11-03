@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
 import { dirname, join } from "node:path";
+import { publicationEnvironmentSchema, type PublicationEnvironmentJob } from "@/lib/publication/environment";
 
 /**
  * Presentation rendering is deliberately separate from Bedrock render_profile,
@@ -22,6 +23,7 @@ export const publicationRenderParameters = z.object({
   width: z.number().int().min(256).max(4096).default(2048),
   height: z.number().int().min(256).max(4096).default(2048),
   background: z.enum(["dark", "light", "transparent"]).default("dark"),
+  environment: publicationEnvironmentSchema.default({ mode: "studio" }),
   device: z.enum(["auto", "cpu"]).default("auto"),
   view_transform: z.enum(["AgX", "Standard"]).default("AgX"),
   camera: z.object({
@@ -102,6 +104,7 @@ export type PublicationJob = {
   source_sha256: string;
   glb_path: string;
   report_path: string;
+  environment: PublicationEnvironmentJob;
   device: PublicationRenderRequest["device"];
   view_transform: PublicationRenderRequest["view_transform"];
   expected_mesh_count: number;
@@ -128,15 +131,30 @@ export type PublicationJob = {
 
 export function makePublicationJob(
   request: PublicationRenderRequest,
-  source: { project_uuid: string; sha256: string; glb_path: string; mesh_count: number; materials: PublicationJob["materials"] },
+  source: {
+    project_uuid: string; sha256: string; glb_path: string; mesh_count: number;
+    materials: PublicationJob["materials"];
+    environment_asset?: { path: string; sha256: string };
+  },
 ): PublicationJob {
   const quality = PUBLICATION_QUALITY[request.quality];
+  if (request.environment.mode === "hdri" && !source.environment_asset) {
+    throw new Error("PUBLICATION_HDRI_ASSET_NOT_PREPARED");
+  }
+  const environment: PublicationEnvironmentJob = request.environment.mode === "hdri"
+    ? {
+      mode: "hdri",
+      hdri_path: source.environment_asset!.path,
+      hdri_sha256: source.environment_asset!.sha256,
+    }
+    : { mode: "studio", hdri_path: null, hdri_sha256: null };
   return {
     schema_version: 1,
     source_project_uuid: source.project_uuid,
     source_sha256: source.sha256,
     glb_path: source.glb_path,
     report_path: join(dirname(request.output_path), "report.json"),
+    environment,
     device: request.device,
     view_transform: request.view_transform,
     expected_mesh_count: source.mesh_count,
