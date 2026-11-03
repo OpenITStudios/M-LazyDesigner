@@ -10,6 +10,7 @@ import {
   verifyPublicationSourceCurrent,
 } from "@/server/publication/snapshot";
 import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publication/materialChannels";
+import { expectedPublicationGltfMaterial } from "@/lib/publication/materialContract";
 import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
 import {
   CAPABILITY_DEFINITIONS,
@@ -96,7 +97,11 @@ describe("Publication render contract", () => {
       glb_path: "C:\\Art\\model.glb",
       mesh_count: 1,
       materials: {
-        ld_color_abc: { color_uuid: "abc", texture_sha256: "b".repeat(64), alpha_mode: "OPAQUE", pbr: "NONE" },
+        ld_color_abc: {
+          color_uuid: "abc", texture_sha256: "b".repeat(64),
+          alpha_mode: "OPAQUE", pbr: "NONE",
+          gltf: expectedPublicationGltfMaterial(null),
+        },
       },
     });
     expect(job.schema_version).toBe(1);
@@ -136,6 +141,9 @@ function fixtureGlb(options: {
   sourceIndex?: number;
   textureIndex?: number;
   corruptUv?: boolean;
+  materialProfile?: "opaque" | "pbr_mer" | "pbr_uniform";
+  corruptMaterial?: boolean;
+  linearSampling?: boolean;
 } = {}): Buffer {
   const positions = [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0];
   const uv = [0, 1, 1, 1, 1, 0, 0, 0]; // Blockbench preview V inverted for glTF.
@@ -145,6 +153,26 @@ function fixtureGlb(options: {
   positions.forEach((value, index) => bin.writeFloatLE(value, index * 4));
   uv.forEach((value, index) => bin.writeFloatLE(value, 48 + index * 4));
   indices.forEach((value, index) => bin.writeUInt16LE(value, 80 + index * 2));
+  const profile = options.materialProfile ?? "opaque";
+  const pbr = profile === "pbr_mer"
+    ? { metallicFactor: 1, roughnessFactor: 1 }
+    : profile === "pbr_uniform"
+      ? { metallicFactor: 0, roughnessFactor: 1 }
+      : { metallicFactor: 0, roughnessFactor: 0.85 };
+  const material = {
+    name: "ld_color_tex-1",
+    doubleSided: true,
+    pbrMetallicRoughness: {
+      baseColorTexture: { index: options.textureIndex ?? 0 },
+      metallicFactor: options.corruptMaterial ? 0.3 : pbr.metallicFactor,
+      roughnessFactor: pbr.roughnessFactor,
+      ...(profile === "pbr_mer" ? { metallicRoughnessTexture: { index: 1 } } : {}),
+    },
+    ...(profile === "pbr_mer" ? {
+      emissiveFactor: [1, 1, 1],
+      emissiveTexture: { index: 2 },
+    } : {}),
+  };
   const json = Buffer.from(JSON.stringify({
     asset: { version: "2.0" },
     scene: 0,
@@ -173,10 +201,17 @@ function fixtureGlb(options: {
       { bufferView: 1, componentType: 5126, count: 4, type: "VEC2" },
       { bufferView: 2, componentType: 5123, count: 6, type: "SCALAR" },
     ],
-    materials: [{ name: "ld_color_tex-1", pbrMetallicRoughness: {
-      baseColorTexture: { index: options.textureIndex ?? 0 },
-    } }],
-    textures: [{ source: options.sourceIndex ?? 0 }],
+    materials: [material],
+    samplers: [{
+      magFilter: options.linearSampling ? 9729 : 9728,
+      minFilter: options.linearSampling ? 9729 : 9728,
+    }],
+    textures: (profile === "pbr_mer"
+      ? [
+        { source: options.sourceIndex ?? 0, sampler: 0 },
+        { source: 0, sampler: 0 },
+        { source: 0, sampler: 0 },
+      ] : [{ source: options.sourceIndex ?? 0, sampler: 0 }]),
     images: [{ uri: options.imageUri ??
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQYV2NgAAIAAAUAAarVyFEAAAAASUVORK5CYII=" }],
   }));
@@ -383,7 +418,7 @@ describe("Detached native fidelity bridge", () => {
 
     const f = installNativeFixture();
     const merTexture = {
-      uuid: "mer-1", group: "group-1", pbr_channel: "mer",
+      uuid: "mer-1", group: "group-1", pbr_channel: "mer", currentFrame: 0,
       ctx: {
         canvas: { width: 1, height: 1 },
         getImageData: () => ({ data: mer, width: 1, height: 1 }),
@@ -396,6 +431,12 @@ describe("Detached native fidelity bridge", () => {
       getTextures: () => [{ ...f.texture, pbr_channel: "color" }, merTexture],
     }];
     f.texture.group = "group-1";
+    const output = fixtureGlb({ materialProfile: "pbr_mer" });
+    (globalThis as any).THREE.GLTFExporter = class {
+      parse(_scene: unknown, done: (out: ArrayBuffer) => void) {
+        done(output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength));
+      }
+    };
     const result = await snapshotDetachedPublicationGlb();
     expect(result.materials["ld_color_tex-1"]).toMatchObject({
       pbr: "MAPPED", mer_sha256: expect.any(String),
@@ -426,6 +467,12 @@ describe("Detached native fidelity bridge", () => {
     );
     // A stable UUID takes precedence over duplicate human-readable group names.
     f.texture.group = "uuid-1";
+    const output = fixtureGlb({ materialProfile: "pbr_uniform" });
+    (globalThis as any).THREE.GLTFExporter = class {
+      parse(_scene: unknown, done: (out: ArrayBuffer) => void) {
+        done(output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength));
+      }
+    };
     const result = await snapshotDetachedPublicationGlb();
     expect(result.materials["ld_color_tex-1"]?.pbr).toBe("MAPPED");
   });
