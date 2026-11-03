@@ -764,6 +764,35 @@ retain the 512 default, preserving existing high-detail behavior. Texture/identi
 should continue using detail-appropriate evidence; do not downsample merely to reduce
 Codex allowance when the decision depends on fine visual detail.
 
+## Animation evidence integrity and capture cost
+
+The existing Animation Runtime extension supports `animation_preview.times`
+within the existing `capture_model_views` tool. Times must be chosen for
+specific pose/contact events, not generated every fixed number of seconds.
+The limit of eight potential images per request is a maximum, **not** a
+screenshot budget to exhaust. Inspect the authored clip and current native
+poses first; use playback for dynamic continuity and use still images only
+for actual unresolved visual pose/reference claims.
+
+Every per-time response now validates delivered shaded PNG bytes or an
+exact-byte alias to an earlier **same-role, same-pose** image. A model PNG
+must never be considered present because a silhouette mask increased the
+total item count. Invalid alias/image labels/identity fail closed. Silhouette
+images retain their `SILHOUETTE VIEW` labels during multi-time composition.
+
+Multi-time usage totals aggregate all per-time model/mask counts, actual
+delivered/reused bytes and native capture time. The per-time capture
+freshness, framing, reference correspondence and evidence metadata are
+not silently replaced with the first pose's values. No token billing
+or cross-pose image-reuse claim is inferred.
+
+The canonical camera framing path now skips the separate OBB pairwise
+surface-warning scan; that diagnostic remains owned by
+`inspect_model_bounds` when it can change the structural decision.
+Ordinary capture still evaluates rendered bounds and its own freshness
+contract. Avoid requesting silhouette masks merely to reaffirm numeric
+width/height when the real visual question is different.
+
 ## Usage-aware visual evidence routing
 
 Control `VERIFY_VISUAL` still means visual verification is owed.

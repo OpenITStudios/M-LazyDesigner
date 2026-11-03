@@ -146,6 +146,17 @@ describe("lossless capture image evidence transport", () => {
     expect(recordCaptureImageDelivery(new Map(), "MODEL", "back", "AQID").send_image).toBe(true);
   });
 
+  test("capture framing skips redundant surface scan but full native inspection retains it", async () => {
+    const source = await Bun.file("server/tools/inspection/camera.ts").text();
+    const bounds = await Bun.file("lib/geometry/renderedModelBounds.ts").text();
+    const project = await Bun.file("server/tools/project/project.ts").text();
+    expect(source).toContain("readRenderedModelBounds({ includeSurfaceWarnings: false })");
+    expect(source).toContain('surface_quality_warning_scan: "NOT_RUN_FOR_CAPTURE"');
+    expect(bounds).toContain("if (includeSurfaceWarnings) {");
+    expect(bounds).toContain("options.includeSurfaceWarnings !== false");
+    expect(project).toContain("const observed = readRenderedModelBounds();");
+  });
+
   test("runtime preserves per-view provenance, complete captures and bounded image delivery", async () => {
     const source = await Bun.file("server/tools/inspection/camera.ts").text();
     expect(source).toContain('image_sha256: modelImageDelivery.image_sha256');

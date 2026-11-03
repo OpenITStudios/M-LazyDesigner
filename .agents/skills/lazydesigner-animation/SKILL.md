@@ -94,7 +94,7 @@ Rules:
 - Prefer one bounded keyframe/batch mutation over loops of one-key calls when a coherent cohort shares the same correction intent.
 - Reuse the animation UUID returned by creation/mutation; do not reselect or rediscover the clip merely to confirm identity.
 - Do not call `inspect_animation` after every successful deterministic mutation. Inspect only when required state is unknown/stale or when the next correction depends on a field not present in the mutation receipt.
-- Do not repeatedly `set_time` to collect static evidence. Prefer one bounded `capture_model_views(animation_preview)` request across the representative times required by the verdict.
+- Do not repeatedly `set_time` or take screenshots at uniform intervals. Diagnose authored keys, pivots, contact and loop constraints through native data first; use playback for motion continuity. Request `capture_model_views(animation_preview)` only for unresolved visual pose questions at meaningful events, never for every keyframe or fixed time step. The multi-time tool is optional, not the default verifier.
 - Timeline selection/view expansion is editor state, not authored motion. Change it only when it materially supports evidence or a native operation that depends on selection.
 - Native Timeline/Animator API calls are the intended execution path; the fact that Blockbench UI updates afterward does not make them UI automation.
 

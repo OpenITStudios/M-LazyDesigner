@@ -1,6 +1,7 @@
 /// <reference types="blockbench-types" />
 
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import {
   getAllToolDefinitions,
   extractShape,
@@ -281,23 +282,47 @@ function requireAnimationSampleTime(animation: BBAnimation, time: number): void 
   }
 }
 
-function captureContinuationContent(result: unknown): unknown[] {
+
+/** Keep diagnostic mask labels with their images in multi-pose responses. */
+export function captureContinuationContent(result: unknown): unknown[] {
   if (!isRecord(result) || !Array.isArray(result.content)) return [];
   return result.content.filter((item) => {
     if (!isRecord(item)) return false;
     if (item.type === "image") return true;
-    return (
-      item.type === "text" &&
+    return item.type === "text" &&
       typeof item.text === "string" &&
-      item.text.startsWith("VIEW ")
-    );
+      (item.text.startsWith("VIEW ") ||
+       item.text.startsWith("SILHOUETTE VIEW "));
   });
 }
 
+type DeliveredCaptureImage = { sha256: string; bytes: number };
+
+function imageIdentityFromContent(value: JsonRecord): DeliveredCaptureImage {
+  const data = value.data;
+  if (value.mimeType !== "image/png" || typeof data !== "string" ||
+      data.length === 0 || data.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    throw new Error("ANIMATION_CAPTURE_INCOMPLETE: invalid PNG image payload.");
+  }
+  const bytes = Buffer.from(data, "base64");
+  if (bytes.byteLength < 8 || bytes.toString("base64") !== data ||
+      !bytes.subarray(0, 8).equals(
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+      )) {
+    throw new Error("ANIMATION_CAPTURE_INCOMPLETE: invalid or noncanonical PNG bytes.");
+  }
+  return {
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    bytes: bytes.byteLength,
+  };
+}
+
 /**
- * Native capture must yield a complete set for each requested time.
- * Never turn an inner tool failure or partial media/metadata into a successful
- * multi-time receipt; a retry would require fresh state inspection.
+ * Verify EVERY named view against its actual shaded PNG bytes or a previous
+ * same-response byte-identical shaded view. Images and silhouette masks are
+ * separate diagnostic roles. Counting all image items is not proof that a
+ * model image exists for each view. No cross-time alias is accepted.
  */
 export function requireCompleteAnimationCaptureSample(
   result: unknown,
@@ -309,21 +334,186 @@ export function requireCompleteAnimationCaptureSample(
       !Array.isArray(result.structuredContent.captures) ||
       result.structuredContent.captures.length !== expectedViewCount ||
       !Array.isArray(result.content)) {
-    throw new Error(
-      "ANIMATION_CAPTURE_INCOMPLETE: native capture failed or returned fewer view receipts than requested; no batch evidence is accepted."
-    );
+    throw new Error("ANIMATION_CAPTURE_INCOMPLETE: native capture or view receipts are incomplete.");
   }
-  const mediaCount = result.content.filter(
-    (item) => isRecord(item) && item.type === "image" &&
-      typeof item.data === "string" && item.data.length > 0
-  ).length;
-  if (mediaCount < expectedViewCount) {
-    throw new Error(
-      "ANIMATION_CAPTURE_INCOMPLETE: missing PNG image content for one or more requested views; no batch evidence is accepted."
-    );
+  const structured = result.structuredContent;
+  const records = structured.captures;
+  const labels = new Map<string, string>();
+  const silhouetteLabels = new Map<string, string>();
+  const modelImages = new Map<string, DeliveredCaptureImage>();
+  const maskImages = new Map<string, DeliveredCaptureImage>();
+  const viewOrder: string[] = [];
+  let current: { role: "MODEL" | "SILHOUETTE"; view: string } | null = null;
+  let deliveredImageCount = 0;
+
+  for (const value of result.content) {
+    if (!isRecord(value)) {
+      throw new Error("ANIMATION_CAPTURE_INCOMPLETE: unrecognized content item.");
+    }
+    if (value.type === "text" && typeof value.text === "string") {
+      const model = /^VIEW ([a-z0-9_]+)(?::|$)/.exec(value.text);
+      const silhouette = /^SILHOUETTE VIEW ([a-z0-9_]+)(?::|$)/.exec(value.text);
+      if (model) {
+        if (labels.has(model[1])) {
+          throw new Error("ANIMATION_CAPTURE_INCOMPLETE: duplicate model-view label.");
+        }
+        labels.set(model[1], value.text);
+        viewOrder.push(model[1]);
+        current = { role: "MODEL", view: model[1] };
+      } else if (silhouette) {
+        if (silhouetteLabels.has(silhouette[1]) ||
+            !labels.has(silhouette[1])) {
+          throw new Error("ANIMATION_CAPTURE_INCOMPLETE: orphan silhouette label.");
+        }
+        silhouetteLabels.set(silhouette[1], value.text);
+        current = { role: "SILHOUETTE", view: silhouette[1] };
+      } else {
+        current = null; // Native capture summaries are preambles, not images.
+      }
+      continue;
+    }
+    if (value.type !== "image" || !current) {
+      throw new Error("ANIMATION_CAPTURE_INCOMPLETE: unlabeled or unsupported media.");
+    }
+    const image = imageIdentityFromContent(value);
+    const target = current.role === "MODEL" ? modelImages : maskImages;
+    if (target.has(current.view)) {
+      throw new Error("ANIMATION_CAPTURE_INCOMPLETE: duplicate image for one view/role.");
+    }
+    target.set(current.view, image);
+    deliveredImageCount++;
+    current = null;
   }
-  return result.structuredContent as JsonRecord & { captures: unknown[] };
+
+  if (viewOrder.length !== expectedViewCount) {
+    throw new Error("ANIMATION_CAPTURE_INCOMPLETE: some model views lack labels.");
+  }
+  const directModels = new Map<string, DeliveredCaptureImage>();
+  const directMasks = new Map<string, DeliveredCaptureImage>();
+  for (let index = 0; index < records.length; index++) {
+    const capture = records[index];
+    if (!isRecord(capture) || typeof capture.view !== "string" ||
+        capture.view !== viewOrder[index] ||
+        typeof capture.image_sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/.test(capture.image_sha256) ||
+        !Number.isSafeInteger(capture.png_bytes) ||
+        (capture.png_bytes as number) < 8) {
+      throw new Error("ANIMATION_CAPTURE_INCOMPLETE: view/PNG receipt identity invalid.");
+    }
+    const view = capture.view;
+    const currentImage = modelImages.get(view);
+    if (capture.image_delivery === "content.image") {
+      if (!currentImage || currentImage.sha256 !== capture.image_sha256 ||
+          currentImage.bytes !== capture.png_bytes ||
+          capture.reused_from_view !== null) {
+        throw new Error("ANIMATION_CAPTURE_INCOMPLETE: model PNG bytes differ from receipt.");
+      }
+      directModels.set(view, currentImage);
+    } else if (capture.image_delivery === "same_response_exact_png") {
+      const from = capture.reused_from_view;
+      const prior = typeof from === "string" ? directModels.get(from) : null;
+      if (currentImage || !prior || prior.sha256 !== capture.image_sha256 ||
+          prior.bytes !== capture.png_bytes ||
+          !labels.get(view)?.includes(
+            "MODEL VIEW " + from + " in this response (SHA-256 " +
+            capture.image_sha256 + ")"
+          )) {
+        throw new Error("ANIMATION_CAPTURE_INCOMPLETE: stale or unbound model PNG alias.");
+      }
+    } else {
+      throw new Error("ANIMATION_CAPTURE_INCOMPLETE: unknown image delivery policy.");
+    }
+
+    const silhouette = isRecord(capture.silhouette_evidence)
+      ? capture.silhouette_evidence : null;
+    const mask = maskImages.get(view);
+    const maskLabel = silhouetteLabels.get(view);
+    if (silhouette?.state === "AVAILABLE") {
+      if (typeof silhouette.image_sha256 !== "string" ||
+          !/^[a-f0-9]{64}$/.test(silhouette.image_sha256) ||
+          !maskLabel) {
+        throw new Error("ANIMATION_CAPTURE_INCOMPLETE: silhouette identity missing.");
+      }
+      if (mask) {
+        if (mask.sha256 !== silhouette.image_sha256) {
+          throw new Error("ANIMATION_CAPTURE_INCOMPLETE: silhouette PNG mismatch.");
+        }
+        directMasks.set(view, mask);
+      } else {
+        const alias = /Exact PNG already included for SILHOUETTE VIEW ([a-z0-9_]+) \(SHA-256 ([a-f0-9]{64})\)\./.exec(maskLabel);
+        const prior = alias ? directMasks.get(alias[1]) : null;
+        if (!alias || !prior ||
+            prior.sha256 !== silhouette.image_sha256 ||
+            alias[2] !== silhouette.image_sha256) {
+          throw new Error("ANIMATION_CAPTURE_INCOMPLETE: unbound silhouette alias.");
+        }
+      }
+    } else if (silhouette === null || silhouette.state === "UNVERIFIED") {
+      if (mask || maskLabel) {
+        throw new Error("ANIMATION_CAPTURE_INCOMPLETE: unsupported silhouette media.");
+      }
+    } else {
+      throw new Error("ANIMATION_CAPTURE_INCOMPLETE: silhouette state invalid.");
+    }
+  }
+
+  const traffic = structured.image_transport;
+  if (!isRecord(traffic) ||
+      traffic.policy !== "LOSSLESS_SAME_RESPONSE_EXACT_PNG" ||
+      traffic.delivered_image_count !== deliveredImageCount ||
+      traffic.generated_image_count !==
+        (traffic.delivered_image_count as number) +
+        (traffic.reused_exact_image_count as number) +
+        (traffic.diagnostic_not_sent_image_count as number)) {
+    throw new Error("ANIMATION_CAPTURE_INCOMPLETE: image traffic/receipt mismatch.");
+  }
+  const totalModelBytes = records.reduce((total, item) =>
+    total + ((item as JsonRecord).png_bytes as number), 0);
+  if (structured.total_png_bytes !== totalModelBytes ||
+      !Number.isSafeInteger(structured.warnings) ||
+      (structured.warnings as number) < 0) {
+    throw new Error("ANIMATION_CAPTURE_INCOMPLETE: model-byte or warning summary mismatch.");
+  }
+  return structured as JsonRecord & { captures: unknown[] };
 }
+
+/** Sum actual per-pose transport, never reuse the first pose's counters. */
+export function aggregateAnimationCaptureTraffic(rows: readonly unknown[]) {
+  if (rows.length < 1 || rows.some(row => !isRecord(row))) {
+    throw new Error("ANIMATION_CAPTURE_TRAFFIC_UNVERIFIED");
+  }
+  const keys = [
+    "generated_image_count", "generated_png_bytes",
+    "delivered_image_count", "delivered_png_bytes",
+    "reused_exact_image_count", "reused_exact_png_bytes",
+    "diagnostic_not_sent_image_count", "diagnostic_not_sent_png_bytes",
+    "model_image_count", "silhouette_image_count",
+    "capture_processing_ms",
+  ] as const;
+  const counters = {} as Record<(typeof keys)[number], number>;
+  for (const key of keys) {
+    let sum = 0;
+    for (const row of rows) {
+      const value = (row as JsonRecord)[key];
+      if (typeof value !== "number" || !Number.isSafeInteger(value) ||
+          value < 0 || !Number.isSafeInteger(sum + value)) {
+        throw new Error("ANIMATION_CAPTURE_TRAFFIC_UNVERIFIED: " + key);
+      }
+      sum += value;
+    }
+    counters[key] = sum;
+  }
+  return {
+    policy: "LOSSLESS_EXACT_PNG_WITHIN_EACH_POSE" as const,
+    ...counters,
+    measurement_scope: "ALL_ANIMATION_POSE_SAMPLES" as const,
+    cross_pose_reuse: false as const,
+    all_requested_views_captured: true as const,
+    api_token_usage: null as null,
+    visual_verdict: "NOT_EVALUATED" as const,
+  };
+}
+
 
 /**
  * Read geometry at the SAME native preview time already requested for the
@@ -745,7 +935,15 @@ async function captureAnimationSamples(
   const samples: Array<{
     time: number;
     captures: unknown[];
+    image_transport: JsonRecord;
+    total_png_bytes: number;
+    warnings: number;
+    evidence_freshness: unknown;
+    framing_bounds: unknown;
+    part_correspondence?: unknown;
+    landmark_diagnosis?: unknown;
   }> = [];
+  const captureStartedAtMs = Date.now();
   let commonStructured: JsonRecord = {};
   const compareGeometry = preview.times.length >= 2;
   const geometrySnapshots: GeometryPoseObbSnapshot[] = [];
@@ -807,7 +1005,22 @@ async function captureAnimationSamples(
     content.push({ type: "text" as const, text: `ANIMATION_TIME ${time}` });
     content.push(...captureContinuationContent(observed.result));
     const captures = observed.structured.captures as unknown[];
-    samples.push({ time, captures });
+    const traffic = observed.structured.image_transport;
+    if (!isRecord(traffic)) {
+      throw new Error("ANIMATION_CAPTURE_INCOMPLETE: per-pose traffic is missing.");
+    }
+    samples.push({
+      time, captures,
+      image_transport: traffic,
+      total_png_bytes: observed.structured.total_png_bytes as number,
+      warnings: observed.structured.warnings as number,
+      evidence_freshness: observed.structured.evidence_freshness ?? null,
+      framing_bounds: observed.structured.framing_bounds ?? null,
+      ...(observed.structured.part_correspondence !== undefined
+        ? { part_correspondence: observed.structured.part_correspondence } : {}),
+      ...(observed.structured.landmark_diagnosis !== undefined
+        ? { landmark_diagnosis: observed.structured.landmark_diagnosis } : {}),
+    });
     if (observed.geometry) geometrySnapshots.push(observed.geometry);
     if (observed.geometryFailure) geometryReadFailures.push(observed.geometryFailure);
     if (observed.locatorFrame) locatorFrames.push(observed.locatorFrame);
@@ -815,7 +1028,18 @@ async function captureAnimationSamples(
     if (observed.jointOriginFrame) jointOriginFrames.push(observed.jointOriginFrame);
     if (observed.jointOriginFailure) jointOriginReadFailures.push(observed.jointOriginFailure);
     if (Object.keys(commonStructured).length === 0) {
-      const { captures: _captures, count: _count, ...rest } = observed.structured;
+      const {
+        captures: _captures,
+        count: _count,
+        image_transport: _imageTransport,
+        total_png_bytes: _totalPngBytes,
+        evidence_freshness: _evidenceFreshness,
+        framing_bounds: _framingBounds,
+        part_correspondence: _partCorrespondence,
+        landmark_diagnosis: _landmarkDiagnosis,
+        warnings: _warnings,
+        ...rest
+      } = observed.structured;
       commonStructured = rest;
     }
   }
@@ -899,6 +1123,12 @@ async function captureAnimationSamples(
     structuredContent: {
       ...commonStructured,
       count: samples.reduce((sum, sample) => sum + sample.captures.length, 0),
+      total_png_bytes: samples.reduce((sum, sample) => sum + sample.total_png_bytes, 0),
+      warnings: samples.reduce((sum, sample) => sum + sample.warnings, 0),
+      image_transport: {
+        ...aggregateAnimationCaptureTraffic(samples.map(sample => sample.image_transport)),
+        animation_capture_elapsed_ms: Math.max(0, Date.now() - captureStartedAtMs),
+      },
       animation_preview: {
         animation: {
           uuid: animation.uuid,
@@ -911,6 +1141,7 @@ async function captureAnimationSamples(
         persistent_timeline_state_restored: true,
         restoration_verification_scope: "KNOWN_TIMELINE_SELECTION_FLAGS_ONLY",
         full_native_state_restoration_attested: false,
+        scene_dependency_proof_scope: "PER_POSE_ONLY",
       },
       samples,
       ...(geometryPoseReview ? { geometry_pose_review: geometryPoseReview } : {}),

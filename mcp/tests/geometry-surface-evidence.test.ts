@@ -642,6 +642,22 @@ test("valid structural candidates remain review-only, never automatic deletion",
   });
 });
 
+test("native candidate routing includes containment and outline UUIDs, not only pair collisions", () => {
+  const observed = analyzeAxisAlignedSurfaceEvidence([
+    { ...cube("shell", [0, 0, 0], [8, 8, 8]), parent_id: "root" },
+    { ...cube("inside", [2, 2, 2], [4, 4, 4]), parent_id: "root" },
+  ]);
+  // Isolate the containment branch: its exact UUIDs must survive even when
+  // positive-volume examples are absent from a bounded diagnostic response.
+  const narrowed = {
+    ...observed,
+    positive_volume_intersection_count: 0,
+    positive_volume_examples: [],
+  };
+  expect(planGeometryEvidenceEconomy(narrowed).affected_cube_uuids)
+    .toEqual(["inside", "shell"]);
+});
+
 test("clean native surface does not force screenshots or fake visual approval", () => {
   const result = analyzeAxisAlignedSurfaceEvidence([
     { ...cube("simple", [0, 0, 0], [2, 2, 2]), parent_id: "root" },

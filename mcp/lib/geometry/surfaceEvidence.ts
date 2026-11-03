@@ -1136,6 +1136,12 @@ export function planGeometryEvidenceEconomy(
   const idsFromExamples = (examples: readonly Record<string, unknown>[]) => {
     const ids = new Set<string>();
     for (const example of examples) {
+      // Containment and projected-contribution evidence already carries exact
+      // native UUIDs directly, unlike paired coplanar/penetration examples.
+      for (const key of ["cube_uuid", "containing_cube_uuid"] as const) {
+        const uuid = example[key];
+        if (typeof uuid === "string" && uuid.trim()) ids.add(uuid);
+      }
       for (const key of ["a", "b"] as const) {
         const value = example[key];
         if (value && typeof value === "object" && "uuid" in value &&
@@ -1176,7 +1182,11 @@ export function planGeometryEvidenceEconomy(
       ...base,
       route: "REVIEW_NATIVE_GEOMETRY_CANDIDATES" as const,
       capture_policy: "USE_EXISTING_NUMERIC_EVIDENCE_FIRST" as const,
-      affected_cube_uuids: idsFromExamples(surface.positive_volume_examples),
+      affected_cube_uuids: idsFromExamples([
+        ...surface.positive_volume_examples,
+        ...surface.rest_pose_containment_review.examples,
+        ...surface.rest_pose_marginal_projection_review.examples,
+      ]),
       finding_count: surface.positive_volume_intersection_count +
         surface.rest_pose_containment_review.contained_candidate_count +
         surface.rest_pose_marginal_projection_review.no_new_projected_outline_count,

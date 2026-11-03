@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
   animationAwareCaptureModelViewsParameters,
   requireCompleteAnimationCaptureSample,
+  captureContinuationContent,
+  aggregateAnimationCaptureTraffic,
   focusedInspectAnimationParameters,
   optimizedAnimationTimelineParameters,
 } from "@/server/runtime/animationRuntimeContracts";
@@ -104,22 +107,153 @@ describe("Animation runtime efficiency contracts", () => {
     }).success).toBe(false); // 3 × 2 × 2 exceeds 8.
   });
 
-  test("rejects failed and partial native animation pose samples", () => {
-    const good = {
-      structuredContent: { captures: [{ view: "front" }, { view: "left" }] },
-      content: [{ type: "text", text: "VIEW front" },
-        { type: "image", data: "base64one" }, { type: "image", data: "base64two" }],
+
+  test("checks each model view against real bytes or a prior exact-byte alias", () => {
+    const imageA = Buffer.from([137,80,78,71,13,10,26,10,11]);
+    const imageB = Buffer.from([137,80,78,71,13,10,26,10,12]);
+    const dataA = imageA.toString("base64");
+    const dataB = imageB.toString("base64");
+    const shaA = createHash("sha256").update(imageA).digest("hex");
+    const shaB = createHash("sha256").update(imageB).digest("hex");
+    const capture = (view: string, sha: string, bytes: number,
+                     delivery: string, from: string | null) => ({
+      view, image_sha256: sha, png_bytes: bytes,
+      image_delivery: delivery, reused_from_view: from,
+    });
+    const direct = {
+      structuredContent: {
+        captures: [capture("front",shaA,imageA.length,"content.image",null),
+                   capture("left",shaB,imageB.length,"content.image",null)],
+        total_png_bytes: imageA.length + imageB.length,
+        warnings: 0,
+        image_transport: {
+          policy: "LOSSLESS_SAME_RESPONSE_EXACT_PNG",
+          generated_image_count: 2, delivered_image_count: 2,
+          reused_exact_image_count: 0, diagnostic_not_sent_image_count: 0,
+        },
+      },
+      content: [
+        {type:"text",text:"VIEW front"},
+        {type:"image",mimeType:"image/png",data:dataA},
+        {type:"text",text:"VIEW left"},
+        {type:"image",mimeType:"image/png",data:dataB},
+      ],
     };
-    expect(requireCompleteAnimationCaptureSample(good, 2).captures).toHaveLength(2);
-    expect(() => requireCompleteAnimationCaptureSample({ ...good, isError: true }, 2))
-      .toThrow("ANIMATION_CAPTURE_INCOMPLETE");
+    expect(requireCompleteAnimationCaptureSample(direct,2).captures).toHaveLength(2);
+    // Keep earlier failure protections while introducing exact PNG aliasing.
     expect(() => requireCompleteAnimationCaptureSample({
-      ...good, structuredContent: { captures: [{ view: "front" }] },
+      ...direct, isError: true,
     }, 2)).toThrow("ANIMATION_CAPTURE_INCOMPLETE");
     expect(() => requireCompleteAnimationCaptureSample({
-      ...good, content: [{ type: "image", data: "base64one" }],
+      ...direct, structuredContent: {
+        ...direct.structuredContent,
+        captures: [direct.structuredContent.captures[0]],
+      },
     }, 2)).toThrow("ANIMATION_CAPTURE_INCOMPLETE");
+    const alias = {
+      structuredContent: {
+        ...direct.structuredContent,
+        captures: [
+          capture("front",shaA,imageA.length,"content.image",null),
+          capture("left",shaA,imageA.length,"same_response_exact_png","front"),
+        ],
+        total_png_bytes: imageA.length * 2,
+        image_transport: {
+          ...direct.structuredContent.image_transport,
+          delivered_image_count: 1, reused_exact_image_count: 1,
+        },
+      },
+      content: [
+        {type:"text",text:"VIEW front"},
+        {type:"image",mimeType:"image/png",data:dataA},
+        {type:"text",text:"VIEW left: PNG is byte-identical to MODEL VIEW front in this response (SHA-256 "+shaA+"). Its own camera identity remains distinct."},
+      ],
+    };
+    expect(requireCompleteAnimationCaptureSample(alias,2).captures).toHaveLength(2);
+    expect(() => requireCompleteAnimationCaptureSample({
+      ...alias,
+      structuredContent: {
+        ...alias.structuredContent,
+        captures: [alias.structuredContent.captures[0],
+          {...alias.structuredContent.captures[1], reused_from_view:"missing"}],
+      },
+    },2)).toThrow("ANIMATION_CAPTURE_INCOMPLETE");
+    expect(() => requireCompleteAnimationCaptureSample({
+      ...direct,
+      structuredContent: {
+        ...direct.structuredContent,
+        captures: [direct.structuredContent.captures[0],
+          {...direct.structuredContent.captures[1], image_sha256:shaA}],
+      },
+    },2)).toThrow("ANIMATION_CAPTURE_INCOMPLETE");
+    expect(() => requireCompleteAnimationCaptureSample({
+      ...direct, content: direct.content.filter(item => item.type!=="image" || item.data!==dataB),
+    },2)).toThrow("ANIMATION_CAPTURE_INCOMPLETE");
   });
+
+  test("keeps silhouette labels and verifies image identity independently", () => {
+    const png = Buffer.from([137,80,78,71,13,10,26,10,55]);
+    const sha = createHash("sha256").update(png).digest("hex");
+    const data = png.toString("base64");
+    const result = {
+      structuredContent: {
+        captures: [
+          {view:"front",image_sha256:sha,png_bytes:png.length,
+           image_delivery:"content.image",reused_from_view:null,
+           silhouette_evidence:{state:"AVAILABLE",image_sha256:sha}},
+        ],
+        image_transport:{
+          policy:"LOSSLESS_SAME_RESPONSE_EXACT_PNG",
+          generated_image_count:2,delivered_image_count:2,
+          reused_exact_image_count:0,diagnostic_not_sent_image_count:0,
+        },
+        total_png_bytes:png.length,warnings:0,
+      },
+      content:[
+        {type:"text",text:"VIEW front"},
+        {type:"image",mimeType:"image/png",data},
+        {type:"text",text:"SILHOUETTE VIEW front: visible solid Cube geometry only."},
+        {type:"image",mimeType:"image/png",data},
+      ],
+    };
+    expect(requireCompleteAnimationCaptureSample(result,1).captures).toHaveLength(1);
+    expect(captureContinuationContent(result)).toEqual(result.content);
+    expect(() => requireCompleteAnimationCaptureSample({
+      ...result, content:result.content.filter(item =>
+        item.type!=="text" || !item.text?.startsWith("SILHOUETTE VIEW")),
+    },1)).toThrow("ANIMATION_CAPTURE_INCOMPLETE");
+  });
+
+  test("aggregates all animation pose image bytes rather than first-pose counters", () => {
+    const first={
+      generated_image_count:2,generated_png_bytes:900,
+      delivered_image_count:1,delivered_png_bytes:500,
+      reused_exact_image_count:1,reused_exact_png_bytes:400,
+      diagnostic_not_sent_image_count:0,diagnostic_not_sent_png_bytes:0,
+      model_image_count:2,silhouette_image_count:0,capture_processing_ms:12,
+    };
+    const second={
+      generated_image_count:3,generated_png_bytes:1500,
+      delivered_image_count:2,delivered_png_bytes:1200,
+      reused_exact_image_count:0,reused_exact_png_bytes:0,
+      diagnostic_not_sent_image_count:1,diagnostic_not_sent_png_bytes:300,
+      model_image_count:2,silhouette_image_count:1,capture_processing_ms:18,
+    };
+    expect(aggregateAnimationCaptureTraffic([first,second])).toMatchObject({
+      generated_image_count:5,generated_png_bytes:2400,
+      delivered_image_count:3,delivered_png_bytes:1700,
+      reused_exact_image_count:1,reused_exact_png_bytes:400,
+      diagnostic_not_sent_image_count:1,diagnostic_not_sent_png_bytes:300,
+      model_image_count:4,silhouette_image_count:1,capture_processing_ms:30,
+      api_token_usage:null,cross_pose_reuse:false,
+      measurement_scope:"ALL_ANIMATION_POSE_SAMPLES",
+    });
+    expect(()=>aggregateAnimationCaptureTraffic([
+      {...first, delivered_png_bytes:NaN},
+    ])).toThrow("ANIMATION_CAPTURE_TRAFFIC_UNVERIFIED");
+  });
+
+
 
   test("native animation image capture reuses its preview frame for bounded Geometry OBB evidence", async () => {
     const source = await Bun.file("server/runtime/contracts/animation.ts").text();

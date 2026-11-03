@@ -73,7 +73,17 @@ File-backed client/runtime wiring remains compatibility/inspection, not normal m
 
 ## Evidence Economy
 
-Do not `set_time` repeatedly. One `capture_model_views` with explicit times; `views × times <= 8`.
+Do not schedule screenshots every N seconds or for every keyframe.
+Use native `inspect_animation` (focused bone/channel/time-range) and current
+mutation receipts to diagnose authored motion first; use actual playback for
+continuity, foot contact, rhythm and loop behavior. Only when a still image
+can answer a specific reference-pose question, request the event-defined
+time(s), such as anticipation, impact, extreme contact or recovery, through
+one bounded `capture_model_views(animation_preview)` call. The resolved
+view × time × optional silhouette image count must stay within eight,
+and fewer events are preferable when no additional claim is answered.
+This limit is a ceiling, never a mandatory screenshot quota. Never treat
+multiple static poses as proof of smooth motion.
 
 ```text
 AUTHOR coherent keys/batch

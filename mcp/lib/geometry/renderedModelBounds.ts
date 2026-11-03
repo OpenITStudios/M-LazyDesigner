@@ -631,7 +631,8 @@ function readRenderedBoundsFromCubes(
   renderedCubes: readonly Cube[],
   totalCubeCount: number,
   hiddenCubeCount: number,
-  warnings: string[]
+  warnings: string[],
+  includeSurfaceWarnings = true
 ): RenderedModelBoundsObservation {
   if (renderedCubes.length === 0) {
     return {
@@ -673,7 +674,9 @@ function readRenderedBoundsFromCubes(
   }
 
   const { center, size } = summarizeFiniteBounds(min, max);
-  warnings.push(...readSurfaceQualityWarnings(renderedCubes));
+  if (includeSurfaceWarnings) {
+    warnings.push(...readSurfaceQualityWarnings(renderedCubes));
+  }
 
   return {
     total_cube_count: totalCubeCount,
@@ -737,7 +740,9 @@ export function readRenderedCubeBounds(
   return readRenderedBoundsFromCubes(cubes, cubes.length, 0, []);
 }
 
-export function readRenderedModelBounds(): RenderedModelBoundsObservation {
+export function readRenderedModelBounds(
+  options: { includeSurfaceWarnings?: boolean } = {}
+): RenderedModelBoundsObservation {
   requireCubeBoundsProject();
 
   const totalCubeCount = Cube.all.length;
@@ -757,6 +762,7 @@ export function readRenderedModelBounds(): RenderedModelBoundsObservation {
     renderedCubes,
     totalCubeCount,
     hiddenCubeCount,
-    warnings
+    warnings,
+    options.includeSurfaceWarnings !== false
   );
 }

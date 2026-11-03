@@ -1149,7 +1149,10 @@ export function registerCameraTools() {
         throw new Error("No active Blockbench preview is available.");
       }
 
-      const observed = readRenderedModelBounds();
+      // Capture framing needs exact rendered extents, not a second expensive
+      // pairwise surface-quality diagnostic for every view/animation pose.
+      // The existing inspect_model_bounds owner still performs that review.
+      const observed = readRenderedModelBounds({ includeSurfaceWarnings: false });
       const selection = resolveCaptureViewSelection(
         views as ModelView[] | undefined,
         evidence_targets as VisualEvidenceTarget[] | undefined,
@@ -1543,6 +1546,7 @@ export function registerCameraTools() {
         },
         active_editor_camera_untouched: true,
         warnings: observed.warnings.length,
+        surface_quality_warning_scan: "NOT_RUN_FOR_CAPTURE",
       };
 
       if (dependencyFreshness.state === "UNVERIFIED") {
