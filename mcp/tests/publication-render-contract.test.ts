@@ -31,6 +31,8 @@ describe("Publication render contract", () => {
     expect(args.camera.projection).toBe("perspective");
     for (const input of [
       { ...valid, blender_executable: "blender" },
+      { ...valid, blender_executable: "C:\\Windows\\System32\\cmd.exe" },
+      { ...valid, output_path: "C:\\Art\\..\\unsafe.png" },
       { ...valid, output_path: "../asset.png" },
       { ...valid, output_path: "C:\\Art\\asset.glb" },
       { ...valid, width: 8192 },
