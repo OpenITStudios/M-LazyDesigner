@@ -321,6 +321,19 @@ mcp/server/tools/geometry/locators.ts
 mcp/server/tools/inspection/camera.ts
 → visual framing / screenshot inspection owner
 
+mcp/server/tools/inspection/publication.ts
+→ Render branch: optional publication PNG capability (not a QA verdict)
+
+mcp/server/publication/snapshot.ts
+→ non-mutating native Cube/UV/texture → GLB fidelity bridge
+
+mcp/server/publication/execute.ts
+mcp/server/publication/worker/render.py
+→ one permission-gated local Blender Cycles job and bundled worker
+
+mcp/lib/publication/**
+→ pure render request, material channel and GLB integrity contracts
+
 mcp/server/tools/validation/qualityIntelligence.ts
 mcp/server/tools/validation/qualityEvidenceRuntime.ts
 → bounded Runtime quality/validation augmentation owners
@@ -386,6 +399,15 @@ mcp/lib/runtime/lifecycle.ts    runtime generation/lifecycle safety helpers
 ```
 
 Domain intelligence helpers under `mcp/lib/**` remain supporting implementation for the owning Tool family; they are not alternate public capabilities.
+
+## Publication Render UI (experimental Render branch only)
+
+`mcp/ui/publicationRenderDialog.ts` is the human UI consumer of the same
+`mcp/server/publication/execute.ts` service invoked by
+`render_publication` through the existing Gateway. `mcp/ui/index.ts`
+owns its trigger and teardown. No new Gateway transport, renderer state
+registry or modification of QA `capture_model_views` is permitted.
+Both source and native acceptance remain separate proof domains.
 
 ## Plugin / Blockbench Integration
 
