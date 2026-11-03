@@ -58,6 +58,9 @@ export type PublicationRenderReceipt = {
   state: "RENDERED_DRAFT";
   source_project_uuid: string;
   source_sha256: string;
+  source_manifest_sha256: string;
+  source_pose: "EDIT_STATIC_VERIFIED";
+  units_per_minecraft_block: 16;
   glb_sha256: string;
   worker_sha256: string;
   cube_count: number;
@@ -392,6 +395,9 @@ export async function renderPreparedPublication(
       state: "RENDERED_DRAFT",
       source_project_uuid: snapshot.project_uuid,
       source_sha256: snapshot.source_sha256,
+      source_manifest_sha256: snapshot.source_manifest_sha256,
+      source_pose: snapshot.source_manifest.pose_mode,
+      units_per_minecraft_block: snapshot.source_manifest.source_units_per_minecraft_block,
       glb_sha256: snapshot.glb_sha256,
       worker_sha256: workerSha,
       cube_count: snapshot.cube_count,
