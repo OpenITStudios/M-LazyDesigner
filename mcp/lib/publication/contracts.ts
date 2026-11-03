@@ -6,11 +6,15 @@ import { isAbsoluteFilesystemPath } from "@/lib/core/path";
  * visual QA capture and native model persistence.
  */
 export const publicationRenderParameters = z.object({
-  blender_executable: z.string().min(1).max(1024).refine(isAbsoluteFilesystemPath, {
-    message: "Select an absolute, installed Blender executable path.",
-  }),
+  blender_executable: z.string().min(1).max(1024).refine(
+    (value) => isAbsoluteFilesystemPath(value) &&
+      /(?:^|[\\/])blender(?:\.exe)?$/i.test(value) &&
+      !/[\x00-\x1f]/.test(value), {
+      message: "Select an absolute installed Blender executable (blender or blender.exe).",
+    }),
   output_path: z.string().min(5).max(2048).refine(
-    (value) => isAbsoluteFilesystemPath(value) && /\.png$/i.test(value),
+    (value) => isAbsoluteFilesystemPath(value) && /\.png$/i.test(value) &&
+      !/[\x00-\x1f]/.test(value) && !/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(value),
     "Select an absolute .png output file.",
   ),
   quality: z.enum(["preview", "publication", "high"]).default("publication"),
