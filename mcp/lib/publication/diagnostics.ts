@@ -41,6 +41,9 @@ export const publicationDiagnosticsSchema = z.object({
   lighting: z.object({
     world: z.object({
       background_color: vector4,
+      background_color_role: z.enum([
+        "ACTIVE_PROCEDURAL_WORLD", "HDRI_FALLBACK_UNUSED",
+      ]),
       world_strength: boundedFloat.min(0).max(3),
     }).strict(),
     ground: z.object({
@@ -50,10 +53,15 @@ export const publicationDiagnosticsSchema = z.object({
     }).strict(),
     lights: z.array(z.object({
       name: z.enum(["LD_Key", "LD_Fill", "LD_Rim"]),
-      power: boundedFloat.min(0),
+      power: boundedFloat.min(0).max(50_000_000),
       size: boundedFloat.min(0.01),
       position: vector3,
+      color_rgb: z.tuple([
+        unitFraction, unitFraction, unitFraction,
+      ]),
+      distance_to_subject: boundedFloat.min(0),
     }).strict()).length(3),
+    key_to_fill_energy_ratio: boundedFloat.min(0).nullable(),
     hdr_environment: z.enum(["NONE_BUNDLED", "USER_PROVIDED"]),
     hdri_sha256: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
     source_geometry_edited: z.literal(false),
@@ -126,6 +134,28 @@ export const publicationDiagnosticsSchema = z.object({
   if ((data.lighting.hdr_environment === "USER_PROVIDED") !==
       (data.lighting.hdri_sha256 !== null)) {
     ctx.addIssue({ code: "custom", message: "HDRI light must have a verified source digest." });
+  }
+  const lightColors = data.lighting.lights;
+  if (data.lighting.hdr_environment === "USER_PROVIDED" &&
+      data.lighting.world.background_color_role !== "HDRI_FALLBACK_UNUSED") {
+    ctx.addIssue({ code: "custom", message: "HDRI world color role is inconsistent." });
+  }
+  if (data.lighting.hdr_environment === "NONE_BUNDLED" &&
+      data.lighting.world.background_color_role !== "ACTIVE_PROCEDURAL_WORLD") {
+    ctx.addIssue({ code: "custom", message: "Procedural world color role is inconsistent." });
+  }
+  const keyLight = lightColors.find(light => light.name === "LD_Key");
+  const fillLight = lightColors.find(light => light.name === "LD_Fill");
+  const rimLight = lightColors.find(light => light.name === "LD_Rim");
+  if (!keyLight || !fillLight || !rimLight ||
+      fillLight.power <= 1e-6 && data.lighting.key_to_fill_energy_ratio !== null ||
+      fillLight.power > 1e-6 && (
+        data.lighting.key_to_fill_energy_ratio === null ||
+        Math.abs(data.lighting.key_to_fill_energy_ratio -
+          keyLight.power / fillLight.power) >
+          Math.max(0.001, keyLight.power / fillLight.power * 1e-4)
+      )) {
+    ctx.addIssue({ code: "custom", message: "Reported three-light energy ratio is inconsistent." });
   }
   const device = data.render.device;
   if ((device.actual === "GPU") !== (device.backend !== null)) {
