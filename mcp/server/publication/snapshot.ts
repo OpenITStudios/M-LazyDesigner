@@ -473,11 +473,20 @@ function expectPublicationImage(
   if (Object.hasOwn(expectations, name)) {
     throw new Error("PUBLICATION_SOURCE_IMAGE_IDENTITY_DUPLICATE:" + name);
   }
+  // The real Cube UVs are validated opaque before this path. Outside those
+  // sampled regions, alpha padding has no material appearance semantics,
+  // and Canvas PNG may discard or re-quantize hidden RGB values.
+  const raw = Buffer.from(pixels.buffer, pixels.byteOffset, pixels.byteLength);
+  let canonical = raw;
+  for (let i = 3; i < raw.length; i += 4) {
+    if (raw[i] !== 255) {
+      if (canonical === raw) canonical = Buffer.from(raw);
+      canonical.fill(0, i - 3, i + 1);
+    }
+  }
   expectations[name] = {
     width, height,
-    rgba_sha256: sha256(Buffer.from(
-      pixels.buffer, pixels.byteOffset, pixels.byteLength,
-    )),
+    rgba_sha256: sha256(canonical),
   };
 }
 

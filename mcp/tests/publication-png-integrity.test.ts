@@ -66,11 +66,17 @@ function fixtureChunk(type: string, payload: Buffer): Buffer {
 
 function fixtureRgbaPng(
   scanline: Buffer,
-  options: { splitIdat?: boolean; compressed?: Buffer; critical?: boolean } = {},
+  options: {
+    splitIdat?: boolean;
+    compressed?: Buffer;
+    critical?: boolean;
+    width?: number;
+    height?: number;
+  } = {},
 ): Buffer {
   const header = Buffer.alloc(13);
-  header.writeUInt32BE(1, 0);
-  header.writeUInt32BE(1, 4);
+  header.writeUInt32BE(options.width ?? 1, 0);
+  header.writeUInt32BE(options.height ?? 1, 4);
   header[8] = 8;
   header[9] = 6;
   const compressed = options.compressed ?? deflateSync(scanline);
@@ -120,6 +126,27 @@ describe("Publication PNG decoded-payload contract", () => {
     const altered = fixtureRgbaPng(Buffer.from([0, 10, 12, 24, 255]));
     expect(() => inspectPublicationPng(altered, 1, 1, expectedSha))
       .toThrow("PNG_SOURCE_PIXELS_MISMATCH");
+  });
+
+  test("ignores only nonopaque atlas padding, retaining exact visible opaque texels", () => {
+    // Row 2 has one fully opaque face texel and one outside-UV alpha pixel.
+    const raw = Buffer.from([
+      0, 80, 120, 170, 255, 255, 1, 2, 0,
+    ]);
+    const canonical = Buffer.from([80, 120, 170, 255, 0, 0, 0, 0]);
+    const digest = createHash("sha256").update(canonical).digest("hex");
+    const changedInvisibleRgb = Buffer.from([
+      0, 80, 120, 170, 255, 5, 99, 77, 0,
+    ]);
+    const original = fixtureRgbaPng(raw, { width: 2, height: 1 });
+    const altered = fixtureRgbaPng(changedInvisibleRgb, { width: 2, height: 1 });
+    expect(inspectPublicationPng(original, 2, 1, digest).width).toBe(2);
+    expect(inspectPublicationPng(altered, 2, 1, digest).width).toBe(2);
+    const corruptedFacePixel = Buffer.from(raw);
+    corruptedFacePixel[1] = 81;
+    expect(() => inspectPublicationPng(
+      fixtureRgbaPng(corruptedFacePixel, { width: 2, height: 1 }), 2, 1, digest,
+    )).toThrow("SOURCE_PIXELS_MISMATCH");
   });
 
   test("bounds decompression and rejects unknown critical chunks", () => {

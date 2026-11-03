@@ -87,7 +87,17 @@ function verifyIdatScanlines(
       }
       decoded[i] = (inflated[start + 1 + i]! + predictor) & 0xff;
     }
-    sha.update(decoded);
+    // Source-face alpha must be opaque. Non-opaque atlas padding is not
+    // sampled by the mesh and may lose hidden RGB during Canvas PNG export.
+    // Keep unfiltered bytes intact for subsequent PNG Up/Paeth rows.
+    let digestRow = decoded;
+    for (let i = 3; i < rowSize; i += 4) {
+      if (decoded[i] !== 255) {
+        if (digestRow === decoded) digestRow = Buffer.from(decoded);
+        digestRow.fill(0, i - 3, i + 1);
+      }
+    }
+    sha.update(digestRow);
     const prior = previous;
     previous = decoded;
     decoded = prior;
