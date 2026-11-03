@@ -220,3 +220,12 @@
 }
 .mcp-panel .ld-review-note { margin-top: 10px; }
 .mcp-panel .panel-note { margin: 10px 2px 0; }
+
+.mcp-panel .ld-publication {
+  border: 1px solid var(--color-border);
+  background: var(--color-back);
+  border-radius: 7px;
+  padding: 12px;
+  margin-top: 9px;
+}
+.mcp-panel .ld-publication .user-action { margin-top: 10px; }
