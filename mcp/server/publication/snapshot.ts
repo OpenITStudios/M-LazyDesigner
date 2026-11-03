@@ -552,7 +552,15 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
       createdGeometry.push(geometry);
       const detached = new THREE.Mesh(geometry, mappedMaterials);
       detached.name = "cube_" + cube.uuid;
-      detached.userData = { lazydesigner_cube_uuid: cube.uuid };
+      const sourceCube = before.manifest.cubes.find(item => item.cube_uuid === cube.uuid);
+      if (!sourceCube) {
+        throw new Error("PUBLICATION_SOURCE_CUBE_MANIFEST_MISSING: " + cube.uuid);
+      }
+      detached.userData = {
+        lazydesigner_cube_uuid: cube.uuid,
+        lazydesigner_bounds_min: sourceCube.expected_blender_bounds_min,
+        lazydesigner_bounds_max: sourceCube.expected_blender_bounds_max,
+      };
       scene.add(detached);
     }
     const Exporter = (THREE as unknown as {
