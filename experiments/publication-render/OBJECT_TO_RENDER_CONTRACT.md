@@ -50,7 +50,7 @@ Source regression intents added/updated: `mcp/tests/publication-source-manifest.
 | R01-D07 | Define one explicit 16 Blockbench units = 1 Minecraft block = 1 glTF meter-equivalent scene unit conversion for Bedrock assets; never apply an undocumented scale twice | Consistent scene lighting/units | DECIDED-NOT-IMPLEMENTED: current code exports 1:1 coordinates |
 | R01-D08 | Convert only declared color/MER/normal semantics; unrecognized alpha, material instance or shader mode is a **blocked source condition**, not a guessed shader | Faithful image rather than a deceptively attractive image | Partial (opaque/PBR channels); per-face material_name ignored |
 | R01-D09 | Cycles may change camera/light/world/ground/compositor only. It cannot mutate authored mesh, atlas, UV or material source properties | Separate *presentation* from *asset fidelity* | Partly implemented; Blender-side proof pending |
-| R01-D10 | Completion of a valid historical snapshot and whether it is STILL CURRENT are independent facts. A stale snapshot render may be retained with a STALE label, never mislabeled current | Avoid wasting expensive Cycles work | DECIDED-NOT-IMPLEMENTED: current code blocks final publication if source changed |
+| R01-D10 | Completion of a valid historical snapshot and whether it is STILL CURRENT are independent facts. A changed snapshot render may be retained with a CHANGED/UNAVAILABLE label, never mislabeled current | Avoid wasting expensive Cycles work | SOURCE-AUTHORED: final receipt now distinguishes CURRENT, CHANGED and UNAVAILABLE; native acceptance deferred |
 | R01-D11 | No automatic artistic PASS, source-import PASS or Minecraft certification from a successful PNG or histogram | Correct proof ceiling | Implemented as source metadata; live proof pending |
 | R01-D12 | One existing LazyDesigner Gateway, one export-family publication capability, one immutable GLB bridge, one trusted Blender worker, one job owner | Modular without additional MCP or scene framework | Source ownership defined |
 
@@ -71,8 +71,8 @@ The source model may have artistic quality limitations that rendering cannot fix
 | mcp/lib/publication/materialChannels.ts | Packs Bedrock MER and flips normal green channel | Channel numbers alone are not proof of imported shader equivalence |
 | mcp/lib/publication/glbIntegrity.ts | Checks GLB envelope, source-index order, UV, PBR/material identity and canonical RGBA texels in exported embedded PNGs | Still not a Khronos glTF 2.0 validator or Blender-imported texture/color-space parity proof |
 | mcp/server/publication/worker/core_assets.py | Imports GLB, checks mesh/material count, UV presence and some PBR shader links | Does not yet compare numeric vertex/UV coordinates or original face-to-material assignment with a source baseline |
-| mcp/server/publication/jobs.ts | Nonblocking start/status/preview/cancel, process-local one-job owner | Only latest job retained; operation-specific retry/read-only semantics not yet resolved |
-| mcp/server/publication/execute.ts | Local Blender process, scratch GLB/scripts, real output verification, source revision recheck before exclusive PNG write | Current active-project changes force rejection rather than allowing clearly labeled valid historical snapshot |
+| mcp/server/publication/jobs.ts | Nonblocking start/status/preview/cancel, one process-local job shared with human panel; no native queue for panel receipt reads | Only latest job retained and plugin unload still cancels. No persistent jobs or background coordinator |
+| mcp/server/publication/execute.ts | Local Blender subprocess, immutable GLB input, permission/output preflight before snapshot, verified PNG and source revision observation before exclusive output write | Result remains tied to original source SHA, labeled CURRENT/CHANGED/UNAVAILABLE. Restart-independent jobs are not implemented |
 | mcp/server/tools/inspection/publication.ts | One Runtime tool with four operation branches, overall readOnlyHint false | Status/preview are query branches but transport retry policy inspects tool-wide annotation |
 | mcp/server/publication/worker/*.py | Source modular camera/studio/Cycles/compositor/measurement | No real Blender 5.2 acceptance conducted |
 | mcp/compatibility/blockbench.json | Target minimum 5.1.0, source baseline 5.2.1 | liveValidatedBuilds is empty |
@@ -310,9 +310,10 @@ Three separate identities must be visible:
 
 | Event | Target behavior | Currently implemented |
 | --- | --- | --- |
-| Source unchanged at completion | Publish PNG with freshness CURRENT | Current code can publish |
-| Geometry/texture changes after frozen snapshot | Publish as STALE_SNAPSHOT with original digest; never claim CURRENT | Current code rejects final PNG; implementation gap |
-| Active project switched, but same Runtime generation | Do not bind output to new project; preserve old snapshot provenance and require explicit review | Current code rejects on current project comparison |
+| Source unchanged at completion | Publish PNG with source_revision_at_publication=CURRENT | SOURCE-AUTHORED, native test pending |
+| Geometry/texture changes after frozen snapshot | Publish immutable historical PNG with source_revision_at_publication=CHANGED and original digest; never claim current | SOURCE-AUTHORED, native test pending |
+| Active project switched, but same Runtime generation | Preserve original project UUID and hash, mark CHANGED; never bind to newly active project | SOURCE-AUTHORED, native test pending |
+| Current source cannot be inspected safely | Preserve original snapshot identity and mark UNAVAILABLE, not CURRENT | SOURCE-AUTHORED, native test pending |
 | Runtime/plugin generation retired | Cancel or report uncertain outcome; never attach to a new generation | Existing generation-bound recheck present |
 | Destination PNG exists | Block; no overwrite | Implemented |
 | Blender process exit unconfirmed | Do not publish; retain isolated job for safe recovery | Implemented as source |
@@ -386,7 +387,7 @@ All above are code constants/proposals for resource protection; no throughput, m
 | S09 | Animated atlas or ambiguous current animator mode | Explicit pose/frame error; editor unchanged |
 | S10 | Hidden child under hidden Group | Properly excluded with source evidence |
 | S11 | Source mutation during snapshot | Export aborted with no edited source |
-| S12 | Source mutation after snapshot during Cycles | Intended STALE_SNAPSHOT output; current code blocks until policy implemented |
+| S12 | Source mutation after snapshot during Cycles | Historical PNG permitted with original source digest and explicit CHANGED/UNAVAILABLE freshness; source tests authored, native test deferred |
 | S13 | Blender import alters UV, normals or scale | Fidelity failure before publication-quality claim |
 | S14 | Missing Blender executable/permission denied | Clear error, no fallback to screenshot/image AI |
 | S15 | Blender timeout, crash, GPU failure or cancel | Correct state and no premature success |
@@ -405,9 +406,9 @@ These are test-plan acceptance scenarios **not executed**. A source-only unit te
 | P0-3 | Canonical 1/16 unit scale and Blender transform parity | snapshot.ts + worker/core_assets.py | deterministic transform matrix and structural readback |
 | P0-4 | Stable Group ancestry and source mesh/face manifest | snapshot.ts + pure contract type in mcp/lib/publication | versioned compact source manifest, no duplicate parser |
 | P0-5 | Full GLB primitive/texture semantic parity | glbIntegrity.ts + worker/core_assets.py | assert material slot and UV correspondence, defer visual comparison to native gate |
-| P1-1 | Historical snapshot validity vs CURRENT project status | execute.ts + jobs.ts | preserve old snapshot result with explicit staleness, no false current claim |
+| P1-1 | Historical snapshot validity vs CURRENT project status | execute.ts + snapshot.ts | SOURCE-AUTHORED: publish provenance-labeled historical PNG, fail closed on cancelled/uncertain subprocess |
 | P1-2 | Persistent render sidecar and recovery states | execute.ts | bounded metadata and safe output commit transaction |
-| P1-3 | Per-operation retry/read-only contract | Gateway declarative metadata + render capability source | status/preview safe; start/cancel outcome-aware |
+| P1-3 | Per-operation retry/read-only contract | Gateway interruptionPolicy + branch manifest | SOURCE-AUTHORED: status/preview retryable after interrupted transport, start/cancel remain OUTCOME_UNKNOWN |
 | P1-4 | Actual camera/material/light visual quality | worker/*.py + manual/AI image review | compare real Cycles PNGs; no fake scoring |
 | P2 | Optional render-only crop evidence optimization | quality_report.py / existing preview operation | only when a specific visible detail cannot be judged at 384px |
 

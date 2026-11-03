@@ -144,6 +144,11 @@ export class PublicationRenderJobs {
     return projectJob(this.requireJob(jobId));
   }
 
+  /** Latest job shared with AI; no parallel panel-owned registry. */
+  latestJobId(): string | null {
+    return this.current?.job_id ?? null;
+  }
+
   evidence(jobId: string): { status: PublicationRenderJobStatus; png: Buffer } {
     const job = this.requireJob(jobId);
     if (job.state !== "RENDERED_DRAFT" || !job.receipt) {
@@ -190,6 +195,9 @@ export function startPublicationRender(input: unknown): Promise<PublicationRende
 }
 export function getPublicationRenderJobStatus(jobId: string): PublicationRenderJobStatus {
   return productionJobs.status(jobId);
+}
+export function getCurrentPublicationRenderJobId(): string | null {
+  return productionJobs.latestJobId();
 }
 export function cancelPublicationRenderJob(jobId: string): PublicationRenderJobStatus {
   return productionJobs.cancel(jobId);

@@ -765,7 +765,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
   }
 }
 
-/** Final job must still point at the same live authored source revision. */
+/** Strict current-source check retained for callers that require that guarantee. */
 export function verifyPublicationSourceCurrent(
   expectedProjectUuid: string,
   expectedSha256: string,
@@ -773,5 +773,24 @@ export function verifyPublicationSourceCurrent(
   const now = nativeState(false);
   if (now.project_uuid !== expectedProjectUuid || now.signature !== expectedSha256) {
     throw new Error("PUBLICATION_SOURCE_STALE_AFTER_RENDER: no final PNG was promoted.");
+  }
+}
+
+/** A historical GLB remains a valid render input when the editor has moved on.
+ * This is an observation, not permission to mutate an invalid/changed project.
+ */
+export type PublicationSourceRevisionAtDelivery = "CURRENT" | "CHANGED" | "UNAVAILABLE";
+
+export function publicationSourceRevisionAtDelivery(
+  expectedProjectUuid: string,
+  expectedSha256: string,
+): PublicationSourceRevisionAtDelivery {
+  try {
+    verifyPublicationSourceCurrent(expectedProjectUuid, expectedSha256);
+    return "CURRENT";
+  } catch (error) {
+    return error instanceof Error &&
+      error.message.startsWith("PUBLICATION_SOURCE_STALE_AFTER_RENDER")
+      ? "CHANGED" : "UNAVAILABLE";
   }
 }

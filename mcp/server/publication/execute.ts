@@ -34,7 +34,8 @@ import {
 } from "@/lib/publication/contracts";
 import {
   snapshotDetachedPublicationGlb,
-  verifyPublicationSourceCurrent,
+  publicationSourceRevisionAtDelivery,
+  type PublicationSourceRevisionAtDelivery,
   type DetachedPublicationSnapshot,
 } from "./snapshot";
 
@@ -58,6 +59,8 @@ export type PublicationRenderReceipt = {
   state: "RENDERED_DRAFT";
   source_project_uuid: string;
   source_sha256: string;
+  /** CURRENT only if the live editor source still matches the frozen GLB. */
+  source_revision_at_publication: PublicationSourceRevisionAtDelivery;
   source_manifest_sha256: string;
   source_pose: "EDIT_STATIC_VERIFIED";
   units_per_minecraft_block: 16;
@@ -238,6 +241,17 @@ export async function preparePublicationRender(input: unknown): Promise<Prepared
   if (generation === null) {
     throw new Error("PUBLICATION_RUNTIME_GENERATION_REQUIRED");
   }
+  // Cheap output/permission preflight BEFORE expensive native geometry, UV,
+  // PNG pixel reads, and GLB export. Recheck after preparation for TOCTOU.
+  const outputDirectory = dirname(request.output_path);
+  const { fs } = renderPermissions(outputDirectory);
+  if (!fs.existsSync(outputDirectory) ||
+      !fs.statSync(outputDirectory).isDirectory()) {
+    throw new Error("PUBLICATION_OUTPUT_DIRECTORY_NOT_FOUND");
+  }
+  if (fs.existsSync(request.output_path)) {
+    throw new Error("PUBLICATION_OUTPUT_EXISTS: choose a new PNG name; overwrite is disabled.");
+  }
   const snapshot = await snapshotDetachedPublicationGlb();
   if (getRuntimeLifecycleSnapshot().owner_generation !== generation) {
     throw new Error("PUBLICATION_RUNTIME_GENERATION_CHANGED_DURING_SNAPSHOT");
@@ -374,12 +388,15 @@ export async function renderPreparedPublication(
       diagnostics.preview.dimensions[1],
     );
     onPhase?.("PUBLISHING");
-    // Run the last native source fingerprint and the exclusive final write in
-    // one serialized Runtime operation. Blender itself rendered immutable
-    // detached GLB bytes without occupying this queue.
+    // The render belongs to the immutable, source-verified GLB revision.
+    // Allow modeling to continue while Cycles runs. A changed/unavailable
+    // editor may never be described as the CURRENT revision.
+    let revisionAtPublication: PublicationSourceRevisionAtDelivery = "UNAVAILABLE";
     await runRuntimeOperationExclusive(prepared.runtime_generation, async () => {
       assertActive();
-      verifyPublicationSourceCurrent(snapshot.project_uuid, snapshot.source_sha256);
+      revisionAtPublication = publicationSourceRevisionAtDelivery(
+        snapshot.project_uuid, snapshot.source_sha256,
+      );
       if (fs.existsSync(request.output_path)) {
         throw new Error("PUBLICATION_OUTPUT_RACE_COLLISION");
       }
@@ -395,6 +412,7 @@ export async function renderPreparedPublication(
       state: "RENDERED_DRAFT",
       source_project_uuid: snapshot.project_uuid,
       source_sha256: snapshot.source_sha256,
+      source_revision_at_publication: revisionAtPublication,
       source_manifest_sha256: snapshot.source_manifest_sha256,
       source_pose: snapshot.source_manifest.pose_mode,
       units_per_minecraft_block: snapshot.source_manifest.source_units_per_minecraft_block,

@@ -13,6 +13,7 @@ import {
 import {
   snapshotDetachedPublicationGlb,
   verifyPublicationSourceCurrent,
+  publicationSourceRevisionAtDelivery,
 } from "@/server/publication/snapshot";
 import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publication/materialChannels";
 import { expectedPublicationGltfMaterial } from "@/lib/publication/materialContract";
@@ -870,6 +871,19 @@ describe("Detached native fidelity bridge", () => {
     expect(() => verifyPublicationSourceCurrent(
       result.project_uuid, result.source_sha256,
     )).toThrow("PUBLICATION_UNSUPPORTED_FACE_MATERIAL");
+  });
+
+  test("labels frozen render revision without blocking an edited or unavailable live project", async () => {
+    const f = installNativeFixture();
+    const initial = await snapshotDetachedPublicationGlb();
+    expect(publicationSourceRevisionAtDelivery(initial.project_uuid, initial.source_sha256))
+      .toBe("CURRENT");
+    f.rgba[0] = 81;
+    expect(publicationSourceRevisionAtDelivery(initial.project_uuid, initial.source_sha256))
+      .toBe("CHANGED");
+    (globalThis as any).Project = null;
+    expect(publicationSourceRevisionAtDelivery(initial.project_uuid, initial.source_sha256))
+      .toBe("UNAVAILABLE");
   });
 
   test("rejects source modification during exporter callback instead of delivering stale GLB", async () => {

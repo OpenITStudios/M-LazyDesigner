@@ -26,6 +26,20 @@ describe("Gateway remote fault-injection contract", () => {
       safe_to_retry: false,
     });
 
+    const renderTool: BackendTool = {
+      ...tool(false), name: "render_publication",
+    };
+    for (const operation of ["status", "preview"]) {
+      expect(classifyInterruptedCall(renderTool, { operation })).toEqual({
+        code: "BACKEND_CALL_INTERRUPTED", safe_to_retry: true,
+      });
+    }
+    for (const operation of ["start", "cancel", "unknown"]) {
+      expect(classifyInterruptedCall(renderTool, { operation })).toEqual({
+        code: "OUTCOME_UNKNOWN", safe_to_retry: false,
+      });
+    }
+
     expect(recoveryForGatewayError("BACKEND_CALL_INTERRUPTED", true)).toMatchObject({
       category: "TRANSPORT",
       safe_to_retry: true,

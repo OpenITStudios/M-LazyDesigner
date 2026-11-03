@@ -70,7 +70,9 @@ export function registerPublicationRenderTool(): void {
                 type: "text" as const,
                 text: "Publication render " + status.job_id + ": " + status.state +
                   " (phase: " + status.phase + ")" +
-                  (status.receipt ? ". PNG saved at " + status.receipt.output_path : "") +
+                  (status.receipt ? ". PNG saved at " + status.receipt.output_path +
+                    ". Source revision at publication: " + status.receipt.source_revision_at_publication
+                    : "") +
                   (status.error_code ? ". " + status.error_code : "") +
                   ". Not a visual QA verdict.",
               }],
@@ -88,7 +90,9 @@ export function registerPublicationRenderTool(): void {
                     " (" + receipt.visual_evidence.width + "x" +
                     receipt.visual_evidence.height + "). Inspect lighting, silhouette, " +
                     "material and composition visually. This is a downsample of the final " +
-                    "PNG, NOT AI-generated and NOT an automated quality PASS.",
+                    "PNG from snapshot " + receipt.source_sha256.slice(0, 12) +
+                    " (source revision at publication: " + receipt.source_revision_at_publication +
+                    "), NOT AI-generated and NOT an automated quality PASS.",
                 },
                 {
                   type: "image" as const,

@@ -984,7 +984,7 @@ export class BlockitRuntimeBackend {
           throw error;
         }
 
-        const classification = classifyInterruptedCall(tool);
+        const classification = classifyInterruptedCall(tool, args);
         const timedOut = isRequestTimeoutError(error);
         await this.closeConnectionUnsafe();
         const retryAfterMs = this.connection.markDegraded();

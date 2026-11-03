@@ -18,6 +18,7 @@ const receipt: PublicationRenderReceipt = {
   state: "RENDERED_DRAFT",
   source_project_uuid: "test-project",
   source_sha256: "a".repeat(64),
+  source_revision_at_publication: "CURRENT",
   source_manifest_sha256: "e".repeat(64),
   source_pose: "EDIT_STATIC_VERIFIED",
   units_per_minecraft_block: 16,
@@ -118,7 +119,9 @@ describe("Nonblocking publication jobs through one serialized native preparation
     let resolve!: (value: PublicationRenderReceipt) => void;
     const pending = new Promise<PublicationRenderReceipt>(r => { resolve = r; });
     const jobs = new PublicationRenderJobs(async () => pending, prepared);
+    expect(jobs.latestJobId()).toBeNull();
     const started = await jobs.start(REQUEST);
+    expect(jobs.latestJobId()).toBe(started.job_id);
     expect(started.state).toBe("RUNNING");
     expect(started.job_id).toMatch(/^render_[a-f0-9]{24}$/);
     expect(started.receipt).toBeNull();
@@ -143,6 +146,7 @@ describe("Nonblocking publication jobs through one serialized native preparation
     // permitted to masquerade as genuine image evidence.
     expect(() => jobs.evidence(started.job_id)).toThrow("PUBLICATION_RENDER_EVIDENCE_NOT_AVAILABLE");
     const next = await jobs.start(REQUEST);
+    expect(jobs.latestJobId()).toBe(next.job_id);
     expect(next.job_id).not.toBe(started.job_id);
     expect(() => jobs.status(started.job_id)).toThrow("EXPIRED");
   });

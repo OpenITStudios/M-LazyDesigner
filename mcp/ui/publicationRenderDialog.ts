@@ -8,6 +8,7 @@ import {
 import {
   startPublicationRender,
   getPublicationRenderJobStatus,
+  getCurrentPublicationRenderJobId,
   getPublicationRenderEvidence,
   cancelPublicationRenderJob,
 } from "@/server/publication/jobs";
@@ -262,12 +263,13 @@ export function openPublicationRenderDialog(): void {
 
 /** Explicit review action, no poll timer and no native project mutation. */
 export function reviewPublicationRenderStatus(): void {
-  const id = lastJobId;
+  const id = getCurrentPublicationRenderJobId() ?? lastJobId;
   if (!id) {
     Blockbench.showQuickMessage("No publication render job started in this plugin session.", 3000);
     return;
   }
-  void withCurrentRuntime(() => getPublicationRenderJobStatus(id))
+  // Process-local status does not need a native editor lock.
+  void Promise.resolve().then(() => getPublicationRenderJobStatus(id))
     .then(status => {
       Blockbench.showMessageBox({
         title: "LazyDesigner Render Status",
@@ -276,6 +278,7 @@ export function reviewPublicationRenderStatus(): void {
           (status.receipt
             ? "\nPNG: " + status.receipt.output_path +
               "\nSHA-256: " + status.receipt.output_png_sha256 +
+              "\nSource revision: " + status.receipt.source_revision_at_publication +
               "\nCycles device: " + status.receipt.diagnostics.renderer.device.actual +
               "\nCamera yaw: " + status.receipt.diagnostics.camera.resolved_yaw_degrees +
               "\nMeasured exposure/alpha: available in MCP receipt" +
@@ -295,12 +298,13 @@ export function reviewPublicationRenderStatus(): void {
  * exclusively from verified finished job bytes.
  */
 export function openPublicationVisualEvidenceDialog(): void {
-  const id = lastJobId;
+  const id = getCurrentPublicationRenderJobId() ?? lastJobId;
   if (!id) {
     Blockbench.showQuickMessage("No completed render to preview in this plugin session.", 3000);
     return;
   }
-  void withCurrentRuntime(() => getPublicationRenderEvidence(id))
+  // Evidence is immutable bytes owned by a completed job.
+  void Promise.resolve().then(() => getPublicationRenderEvidence(id))
     .then(({ status, png }) => {
       const receipt = status.receipt!;
       const meta = receipt.visual_evidence;
@@ -327,9 +331,10 @@ export function openPublicationVisualEvidenceDialog(): void {
 
 /** Cancelling is an explicit user action; completion requires observed process exit. */
 export function cancelPublicationRender(): void {
-  const id = lastJobId;
+  const id = getCurrentPublicationRenderJobId() ?? lastJobId;
   if (!id) return;
-  void withCurrentRuntime(() => cancelPublicationRenderJob(id))
+  // Aborting the external worker must not wait for modeling operations.
+  void Promise.resolve().then(() => cancelPublicationRenderJob(id))
     .then(status => {
       Blockbench.showQuickMessage(
         "Render job " + status.job_id + ": " + status.state + ". Check status for final exit.",
