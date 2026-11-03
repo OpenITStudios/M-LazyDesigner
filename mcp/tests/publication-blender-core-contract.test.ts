@@ -42,6 +42,9 @@ describe("Modular Blender Core source owners", () => {
     expect(camera).toContain("PUBLICATION_CAMERA_SUBJECT_CLIPPED");
     for (const part of ["LD_Key", "LD_Fill", "LD_Rim", "is_shadow_catcher"]) {
       expect(lights).toContain(part);
+    expect(lights).toContain("MAX_AREA_LIGHT_WATTS");
+    expect(lights).toContain("key_to_fill_energy_ratio");
+    expect(lights).toContain("distance_to_subject");
     }
   });
 
@@ -74,13 +77,21 @@ const valid = {
     quality_is_artistic_score: false,
   },
   lighting: {
-    world: { background_color: [0.05, 0.07, 0.12, 1], world_strength: 0.7 },
+    world: {
+      background_color: [0.05, 0.07, 0.12, 1],
+      background_color_role: "ACTIVE_PROCEDURAL_WORLD",
+      world_strength: 0.7,
+    },
     ground: { mode: "dark", shadow_catcher: false, position_z: -0.002 },
     lights: [
-      { name: "LD_Key", power: 180, size: 2, position: [1, 2, 3] },
-      { name: "LD_Fill", power: 70, size: 2.8, position: [2, 1, 3] },
-      { name: "LD_Rim", power: 240, size: 1.6, position: [1, 3, 2] },
+      { name: "LD_Key", power: 180, size: 2, position: [1, 2, 3],
+        distance_to_subject: 3.7, color_rgb: [1, 0.85, 0.72] },
+      { name: "LD_Fill", power: 70, size: 2.8, position: [2, 1, 3],
+        distance_to_subject: 3.7, color_rgb: [0.67, 0.79, 1] },
+      { name: "LD_Rim", power: 240, size: 1.6, position: [1, 3, 2],
+        distance_to_subject: 3.7, color_rgb: [0.87, 0.94, 1] },
     ],
+    key_to_fill_energy_ratio: 2.57143,
     hdr_environment: "NONE_BUNDLED",
     hdri_sha256: null,
     source_geometry_edited: false,
@@ -161,6 +172,11 @@ describe("Measured Cycles report strict validation", () => {
       { ...valid, image: { ...valid.image, image_dimensions: [512, 512] } },
       { ...valid, source_model_edited: true },
       { ...valid, camera: { ...valid.camera, framing_fit_attempts: 9 } },
+      { ...valid, lighting: { ...valid.lighting, key_to_fill_energy_ratio: 123 } },
+      { ...valid, lighting: { ...valid.lighting, world: {
+        ...valid.lighting.world,
+        background_color_role: "HDRI_FALLBACK_UNUSED",
+      } } },
       { ...valid, camera: { ...valid.camera, projected_hull_area: 0.9 } },
       { ...valid, image: { ...valid.image,
         projected_frame_roi: { ...valid.image.projected_frame_roi,
