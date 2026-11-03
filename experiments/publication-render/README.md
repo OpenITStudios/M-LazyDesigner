@@ -9,7 +9,7 @@
 
 Read **[OBJECT_TO_RENDER_CONTRACT.md](./OBJECT_TO_RENDER_CONTRACT.md)** before changing the Render implementation. It contains the exact native source boundary, pose/frame policy, Box UV and per-face material mapping, Group/world transform and chosen unit scale, frozen asset identity, GLB/Blender import checks, snapshot freshness, output semantics, resource limits, error codes and 18 acceptance scenarios.
 
-**The design specification is now written; P0 fidelity clauses remain partially unimplemented.** In particular, static pose/frame provenance, per-face material semantics, exact 1/16 scale, full Group ancestry provenance, and GLB→Blender numeric/texel parity still need source work and later native evidence. Do not infer those have passed simply from an existing GLB or Cycles PNG.
+**ADR-R01 P0 source implementation has now been extended, but native acceptance remains open.** The source now has an explicit Edit/static-frame fence, a fail-closed per-face material rule, 1/16 detached geometry scaling, Group ancestry/bounds manifest and binary GLB UV plus Blender world-bounds checks. Unresolved source/material coverage remains for nonempty Bedrock material slots and advanced alpha; numeric and texture parity require later live Blender/Blockbench evidence. Exact statuses are in ADR-R01 section “Implementation update”. Do not infer those have passed simply from an existing GLB or Cycles PNG.
 
 This specification supersedes any earlier shorthand in this research README that calls the full renderer "complete" or assumes all materials/poses are covered. Native Bun/Blender/Blockbench tests were intentionally **not run**.
 
