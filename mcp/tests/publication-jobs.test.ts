@@ -27,6 +27,7 @@ const receipt: PublicationRenderReceipt = {
   quality: "preview",
   render_settings: {
     background: "dark",
+    environment: { mode: "studio", sha256: null },
     camera: { yaw_degrees: 38, elevation_degrees: 18, projection: "perspective", mode: "auto", framing_padding: 1.28 },
     look: {
       key: 1, fill: 1, rim: 1, softness: 1, environment: 1, exposure_ev: 0,
