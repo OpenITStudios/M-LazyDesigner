@@ -27,6 +27,10 @@ Y yellow, C cyan, M magenta). The answer does not appear in the textual
 MCP result. Independently verify the reported answer with the receipt's
 nonce and expected_answer_sha256. Digest construction:
 `SHA256("LAZYDESIGNER_MCP_IMAGE_PROBE_V1\\n"+nonce+"\\n"+answer)`.
+For an independent local check, run:
+`node mcp/scripts/qa/verify-mcp-image-probe.mjs <nonce> <sha256> <AI_12_LETTERS>`.
+The command returns a machine-readable PASS/FAIL and a nonzero exit code
+on mismatch. Never put the answer into the prompt before AI reads the PNG.
 The reusable pure checker is `verifyVisualIngestionProbeResponse` in
 `mcp/lib/protocol/visualIngestionProbe.ts`. Wrong answer / missing image
 means the client's pixel ingestion is UNVERIFIED. A correct answer proves

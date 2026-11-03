@@ -42,6 +42,25 @@ describe("bounded candidate times for image evidence",()=>{
       expect(p.interpolated_pose_evaluated).toBe(false);
     }
   });
+  test("a full 360-degree authored rotation is not misclassified as a static pose",()=>{
+    const p=planTemporalImageEvidence({
+      duration_seconds:1,max_frames:3,
+      tracks:[track([0,1],[0,360])],
+    });
+    expect(p.state).toBe("CANDIDATE_ONLY");
+    expect(p.suggested_times_seconds).toEqual([0,0.5,1]);
+  });
+  test("unsupported-only and submicrosecond clips fail closed",()=>{
+    expect(planTemporalImageEvidence({
+      duration_seconds:1,
+      tracks:[{group_uuid:"expr",group_name:"Expression",channel:"rotation",
+        keyframes:[{time:0,value:["math.sin(t)",0,0],data_point_count:1},
+          {time:1,value:["math.cos(t)",0,0],data_point_count:1}]}],
+    }).state).toBe("UNAVAILABLE");
+    expect(planTemporalImageEvidence({
+      duration_seconds:1e-8,tracks:[track([0,1e-8],[0,45])],
+    }).state).toBe("UNAVAILABLE");
+  });
   test("refuses excessive keyframes without rendering",()=>{
     const p=planTemporalImageEvidence({
       duration_seconds:1,

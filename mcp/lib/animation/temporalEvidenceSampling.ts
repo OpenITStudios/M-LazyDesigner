@@ -13,7 +13,10 @@ function distance(channel:AnimationMotionTrackInput["channel"],
   a:readonly unknown[],b:readonly unknown[]):number {
   return Math.hypot(...[0,1,2].map(i=>{
     const delta=(b[i] as number)-(a[i] as number);
-    return channel==="rotation"?((delta+180)%360+360)%360-180:delta;
+    // Preserve large authored turns (including 360 degrees). A shortest-arc
+    // rewrite can otherwise mistake a full spin for zero movement.
+    return channel==="rotation"&&Math.abs(delta)<180
+      ? ((delta+180)%360+360)%360-180:delta;
   }));
 }
 export function planTemporalImageEvidence(input:{
@@ -28,7 +31,7 @@ export function planTemporalImageEvidence(input:{
     all_motion_observed:false as const,
   });
   const duration=input?.duration_seconds,budget=input?.max_frames??5;
-  if(!Number.isFinite(duration)||duration<=0||duration>10000||
+  if(!Number.isFinite(duration)||duration<1e-6||duration>10000||
      !Number.isInteger(budget)||budget<2||budget>5||
      !Array.isArray(input?.tracks)||input.tracks.length>128)
     return unavailable("INVALID_TEMPORAL_SAMPLING_INPUT");
@@ -66,6 +69,7 @@ export function planTemporalImageEvidence(input:{
         time:end,score:score*0.55,id:track.group_uuid});
     }
   }
+  if(numeric_segments===0)return unavailable("NO_NUMERIC_KEYFRAME_INTERVALS");
   const byTime=new Map<number,Pick>();
   for(const c of candidates)if(!byTime.has(c.time)||
     byTime.get(c.time)!.score<c.score)byTime.set(c.time,c);
