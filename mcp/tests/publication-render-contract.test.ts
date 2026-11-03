@@ -10,6 +10,7 @@ import {
   verifyPublicationSourceCurrent,
 } from "@/server/publication/snapshot";
 import { convertBedrockMerToGltf, convertBedrockNormalToGltf } from "@/lib/publication/materialChannels";
+import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
 import {
   CAPABILITY_DEFINITIONS,
 } from "@/lib/capabilities/manifest";
@@ -76,6 +77,50 @@ describe("Publication render contract", () => {
     expect(manifestEntriesForCapability("render_publication")).toHaveLength(1);
     expect(manifestEntriesForCapability("render_publication")[0]?.semantic?.intents)
       .toContain("render actual Blockbench model to PNG");
+  });
+});
+
+/** Minimal structurally plausible GLB; not a substitute for the real exporter. */
+function fixtureGlb(): Buffer {
+  const json = Buffer.from(JSON.stringify({
+    asset: { version: "2.0" },
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0, name: "cube_cube-1" }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 0 }] }],
+    accessors: [{}, {}],
+    materials: [{ name: "ld_color_tex-1" }],
+    textures: [{ source: 0 }],
+    images: [{ uri: "data:image/png;base64,AA==" }],
+  }));
+  const padded = Buffer.alloc(Math.ceil(json.byteLength / 4) * 4, 0x20);
+  json.copy(padded);
+  const glb = Buffer.alloc(20 + padded.byteLength);
+  glb.write("glTF", 0, "ascii");
+  glb.writeUInt32LE(2, 4);
+  glb.writeUInt32LE(glb.byteLength, 8);
+  glb.writeUInt32LE(padded.byteLength, 12);
+  glb.writeUInt32LE(0x4e4f534a, 16);
+  padded.copy(glb, 20);
+  return glb;
+}
+
+describe("GLB envelope and source fidelity preflight", () => {
+  test("rejects malformed bytes, changed length, lost UV and unexpected material count", () => {
+    const valid = fixtureGlb();
+    expect(inspectPublicationGlb(valid, 1, 1)).toMatchObject({
+      mesh_count: 1, material_count: 1, primitive_count: 1,
+    });
+    expect(() => inspectPublicationGlb(valid.subarray(0, 12), 1, 1)).toThrow();
+    const invalidLength = Buffer.from(valid);
+    invalidLength.writeUInt32LE(123456, 8);
+    expect(() => inspectPublicationGlb(invalidLength, 1, 1)).toThrow("HEADER_OR_LENGTH_INVALID");
+    expect(() => inspectPublicationGlb(valid, 2, 1)).toThrow("SOURCE_INVENTORY_MISMATCH");
+    expect(() => inspectPublicationGlb(valid, 1, 2)).toThrow("SOURCE_INVENTORY_MISMATCH");
+    const mutated = Buffer.from(valid);
+    const pos = mutated.indexOf("TEXCOORD_0");
+    expect(pos).toBeGreaterThan(0);
+    mutated.write("TEXCOORX_0", pos, "ascii");
+    expect(() => inspectPublicationGlb(mutated, 1, 1)).toThrow("PRIMITIVE_UV_OR_MATERIAL_INVALID");
   });
 });
 
@@ -147,7 +192,7 @@ function installNativeFixture() {
     faces: { north: { uv: [0, 0, 1, 1], rotation: 0, material_name: null, getTexture: () => texture } },
   };
   const Project = { uuid: "project-1", name: "Fixture", saved: true };
-  const glbBytes = Buffer.from("676c54460200000018000000000000000000000000000000", "hex");
+  const glbBytes = fixtureGlb();
   const sceneInputs: unknown[] = [];
   const THREE = {
     Mesh: MockMesh,
@@ -269,7 +314,7 @@ describe("Detached native fidelity bridge", () => {
     THREE.GLTFExporter = class {
       parse(_scene: unknown, done: (out: ArrayBuffer) => void) {
         f.rgba[0] += 1;
-        const data = Buffer.from("676c54460200000018000000000000000000000000000000", "hex");
+        const data = fixtureGlb();
         done(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
       }
     };
