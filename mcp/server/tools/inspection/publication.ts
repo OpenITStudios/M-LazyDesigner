@@ -47,7 +47,7 @@ export function registerPublicationRenderTool(): void {
       async execute(args) {
         switch (args.operation) {
           case "start": {
-            const status = startPublicationRender(args.request);
+            const status = await startPublicationRender(args.request);
             return {
               content: [{
                 type: "text" as const,
