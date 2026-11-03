@@ -73,6 +73,7 @@ const valid = {
       { name: "LD_Rim", power: 240, size: 1.6, position: [1, 3, 2] },
     ],
     hdr_environment: "NONE_BUNDLED",
+    hdri_sha256: null,
     source_geometry_edited: false,
   },
   compositor: {
