@@ -307,3 +307,14 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
     scene.clear();
   }
 }
+
+/** Final job must still point at the same live authored source revision. */
+export function verifyPublicationSourceCurrent(
+  expectedProjectUuid: string,
+  expectedSha256: string,
+): void {
+  const now = nativeState();
+  if (now.project_uuid !== expectedProjectUuid || now.signature !== expectedSha256) {
+    throw new Error("PUBLICATION_SOURCE_STALE_AFTER_RENDER: no final PNG was promoted.");
+  }
+}
