@@ -5,6 +5,14 @@
 **State:** **RENDER-ONLY SOURCE ARCHITECTURE CLOSED** on `Render` — **BUN/TYPECHECK/BUILD/BLENDER/NATIVE VISUAL ACCEPTANCE NOT EXECUTED**.  
 **Source authority:** This is a branch-isolated research document. Do not merge into Local/main, touch QA capture, change workflows, or publish without an independent explicit request.
 
+## Authoritative Object-to-Render Contract (ADR-R01)
+
+Read **[OBJECT_TO_RENDER_CONTRACT.md](./OBJECT_TO_RENDER_CONTRACT.md)** before changing the Render implementation. It contains the exact native source boundary, pose/frame policy, Box UV and per-face material mapping, Group/world transform and chosen unit scale, frozen asset identity, GLB/Blender import checks, snapshot freshness, output semantics, resource limits, error codes and 18 acceptance scenarios.
+
+**The design specification is now written; P0 fidelity clauses remain partially unimplemented.** In particular, static pose/frame provenance, per-face material semantics, exact 1/16 scale, full Group ancestry provenance, and GLB→Blender numeric/texel parity still need source work and later native evidence. Do not infer those have passed simply from an existing GLB or Cycles PNG.
+
+This specification supersedes any earlier shorthand in this research README that calls the full renderer "complete" or assumes all materials/poses are covered. Native Bun/Blender/Blockbench tests were intentionally **not run**.
+
 ## Scope lock — the requested product, not a general Blender MCP
 
 Only render the **actual Bedrock Entity Cube/Group/UV/Texture/PBR object authored by LazyDesigner MCP in Blockbench**. Keep one existing Gateway, one `render_publication` output capability, one detached GLB bridge and one trusted Blender 5.2 Cycles worker. Do **not** create another general Blender MCP, import/code-generation workflow, multi-scene cinematic framework, or a new model representation. All other model-authoring tools, native project state and screenshot QA remain independent.
