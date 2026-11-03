@@ -36,8 +36,12 @@ export const publicationRenderParameters = z.object({
     softness: z.number().finite().min(0.5).max(2.5).default(1),
     environment: z.number().finite().min(0).max(2).default(1),
     exposure_ev: z.number().finite().min(-3).max(3).default(0),
+    glow_strength: z.number().finite().min(0).max(0.35).default(0.08),
+    glow_threshold: z.number().finite().min(0.5).max(20).default(2),
+    glow_size: z.number().finite().min(0.1).max(0.8).default(0.45),
   }).strict().default({
     key: 1, fill: 1, rim: 1, softness: 1, environment: 1, exposure_ev: 0,
+    glow_strength: 0.08, glow_threshold: 2, glow_size: 0.45,
   }),
   overwrite: z.literal(false).optional().default(false),
 }).strict().superRefine((input, context) => {
