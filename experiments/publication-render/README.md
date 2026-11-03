@@ -5,6 +5,27 @@
 **State:** DESIGN COMPLETE; SOURCE IMPLEMENTATION IN PROGRESS ON `Render` — **BUN/TYPECHECK/BUILD/BLENDER/NATIVE VISUAL ACCEPTANCE NOT EXECUTED**.  
 **Source authority:** This is a branch-isolated research document. Do not merge into Local/main, touch QA capture, change workflows, or publish without an independent explicit request.
 
+## Blender Core modular implementation — current source (3 Nov 2026)
+
+The original source has now been expanded to a **standalone, original multi-module Blender Core** while retaining exactly one existing LazyDesigner MCP/Gateway and one secure headless worker launcher.
+
+The canonical module ownership guide is at mcp/server/publication/worker/README.md.
+
+- core_assets.py: native imported geometry/material/UV/PBR identity, no arbitrary source modification.
+- camera_director.py: bounded geometry-projection-based automatic or manual camera, real aspect-safe bounds and a single final Cycles frame; no asset-name taxonomies.
+- lighting_director.py: relative soft key/fill/rim plus physical contact-ground/shadow-catcher. Procedural studio is the default. A user-approved local Radiance HDR or OpenEXR may be copied into isolated job directory with signature, size and SHA checks and used as an Environment Texture.
+- compositor_director.py: Cycles adaptive sampling, denoising, reliable CPU or best-effort GPU backend with truthful fallback, AgX/Standard and version-pinned Blender 5.2 Fog Glow.
+- quality_report.py: actual output PNG histogram/alpha observations and precise camera/lighting/device provenance; **artistic quality is never auto-approved**.
+- render.py: reduced to one fixed trusted Blender 5.2 job schema/entrypoint. No MCP-supplied Python, external dependency download or third-party Blender plugin required.
+- execute.ts: all trusted Python modules embedded as inert text with whole-worker fingerprint, isolated source/asset files, report JSON and strict PNG/GLB integrity before committing an output image. Only source model files are read; project Undo/editor QA remains distinct.
+- source UV atlas semantics: alpha outside sampled UV face regions is treated as unused padding; visible mapped alpha requires explicit verified downstream Bedrock material semantics, never guessed from pixel values.
+- Runtime starts/queries/cancels a long-running render by job ID; it does not block Gateway for up to 15 minutes. Canonical plugin load/unload owns cancellation/reactivation.
+
+**Efficiency:** Up to fifteen camera candidates are evaluated geometrically without rendering fifteen images; their scoring uses a bounded subset of mesh bounds, but the final chosen camera verifies **all** imported bounds. One Cycles image is rendered per job; diagnostics downsample the actual PNG after output. Same Cycles engine in preview/final avoids a second independent look.
+
+**Remaining work before actual target quality can be claimed:** Not executed in this ChatGPT/GitHub session: Bun/typecheck/build, packaging/generation, installed Blender 5.2 headless execution and isolated HDRI/compositor behavior, native Blockbench export/UV/pose fidelity, and multi-asset visual comparison to the five references. Feature gaps remain non-Cube, per-face Bedrock alpha shader profiles, arbitrary animation pose sampling/MP4, supplied 3D cinematic scene assets and autonomous image-based artistic decisions. Do not claim those implemented.
+
+
 ## Implementation continuation — 2026-11-03, Render branch
 
 **Source additions since the initial fidelity bridge:**
