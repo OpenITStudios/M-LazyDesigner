@@ -28,7 +28,7 @@ function requireFiniteGeometryArray(
 
 function validateNativeCubeIndexGroups(
   indices: readonly number[],
-  groups: readonly { start: number; count: number; materialIndex: number }[],
+  groups: readonly { start: number; count: number; materialIndex?: number }[],
   vertexCount: number,
   faceCount: number,
 ): void {
