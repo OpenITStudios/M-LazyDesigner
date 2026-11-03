@@ -13,6 +13,14 @@ Read **[OBJECT_TO_RENDER_CONTRACT.md](./OBJECT_TO_RENDER_CONTRACT.md)** before c
 
 This specification supersedes any earlier shorthand in this research README that calls the full renderer "complete" or assumes all materials/poses are covered. Native Bun/Blender/Blockbench tests were intentionally **not run**.
 
+## Authoritative Camera & Lighting Director Contract (ADR-R03)
+
+Read **[CAMERA_LIGHTING_SPEC.md](./CAMERA_LIGHTING_SPEC.md)** for the bounded geometry-driven camera algorithm and the source-bound studio light/ROI evidence. The Blender 5.2 Director now evaluates up to 15 projected-angle candidates without a separate beauty render, checks all source Cube bounds for the final camera and records exact camera-fit metadata.
+
+Three area lights remain tied to the actual camera and model radius, with finite power/size bounds, actual RGB/distance/power provenance, and a measured luminance ROI extracted from the **same saved Cycles PNG**. The ROI is explicitly **not an object segmentation mask** and never drives an automatic artistic-quality PASS or silent exposure correction.
+
+This is **source-authoring**, not successful native Blender rendering, professional-reference quality proof, or completed GPU performance measurements. There is no second Blender MCP or general-purpose 3D scene expansion.
+
 ## Authoritative Material Translation Contract (ADR-R02)
 
 Read **[MATERIAL_TRANSLATION_SPEC.md](./MATERIAL_TRANSLATION_SPEC.md)** for exact source PBR semantics and the GLB material assertions. The Render branch now has a pure channel/expectation owner (`mcp/lib/publication/materialContract.ts`) and uses it in the detached source snapshot and glTF preflight.
