@@ -161,6 +161,55 @@ def _verify_imported_material(material, source: dict, image_digests: dict) -> No
                 "PUBLICATION_IMPORTED_EMISSIVE_DISCONNECTED:" + name)
 
 
+def _imported_triangle_witness(obj) -> str:
+    """Hash oriented world-space triangle corners, UV and source material.
+
+    The official glTF importer can reindex vertices per primitive. Sorting
+    triangle records and allowing cyclic corner starts protects that valid
+    behavior without treating reversed winding as equivalent.
+    """
+    uv = obj.data.uv_layers.active
+    require(uv is not None, "PUBLICATION_IMPORT_TRIANGLE_UV_LAYER_MISSING:" + obj.name)
+    records = []
+
+    def quantize(value, scale):
+        value = float(value)
+        require(math.isfinite(value), "PUBLICATION_IMPORT_TRIANGLE_NONFINITE:" + obj.name)
+        number = math.floor(value * scale + 0.5)
+        require(abs(number) <= 9007199254740991,
+                "PUBLICATION_IMPORT_TRIANGLE_PRECISION_EXCEEDED:" + obj.name)
+        return str(number)
+
+    for poly in obj.data.polygons:
+        require(len(poly.loop_indices) == 3,
+                "PUBLICATION_IMPORT_NON_TRIANGLE_PRIMITIVE:" + obj.name)
+        require(0 <= poly.material_index < len(obj.data.materials),
+                "PUBLICATION_IMPORT_TRIANGLE_MATERIAL_INVALID:" + obj.name)
+        material = obj.data.materials[poly.material_index]
+        require(material is not None and material.name.startswith("ld_color_"),
+                "PUBLICATION_IMPORT_TRIANGLE_MATERIAL_UNRESOLVED:" + obj.name)
+        corner_keys = []
+        for index in poly.loop_indices:
+            loop = obj.data.loops[index]
+            point = obj.matrix_world @ obj.data.vertices[loop.vertex_index].co
+            texel = uv.data[index].uv
+            corner_keys.append(",".join([
+                quantize(point[0], 10000),
+                quantize(point[1], 10000),
+                quantize(point[2], 10000),
+                quantize(texel[0], 100000),
+                quantize(texel[1], 100000),
+            ]))
+        a, b, c = corner_keys
+        records.append(material.name + "|" + min(
+            a + ";" + b + ";" + c,
+            b + ";" + c + ";" + a,
+            c + ";" + a + ";" + b,
+        ))
+    require(bool(records), "PUBLICATION_IMPORT_TRIANGLE_INVENTORY_EMPTY:" + obj.name)
+    return hashlib.sha256("\n".join(sorted(records)).encode("utf8")).hexdigest()
+
+
 def imported_meshes(job: dict) -> list:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.scene.unit_settings.scale_length = 1.0
@@ -186,6 +235,11 @@ def imported_meshes(job: dict) -> list:
                 and cube_id not in found_cubes,
                 "PUBLICATION_IMPORT_SOURCE_CUBE_IDENTITY_MISMATCH:" + obj.name)
         found_cubes.add(cube_id)
+        expected_triangle_sha = obj.get("lazydesigner_triangle_sha256")
+        require(isinstance(expected_triangle_sha, str) and
+                len(expected_triangle_sha) == 64 and
+                all(ch in "0123456789abcdef" for ch in expected_triangle_sha),
+                "PUBLICATION_IMPORT_TRIANGLE_WITNESS_MISSING:" + obj.name)
         try:
             minimum = [float(value) for value in expected_min]
             maximum = [float(value) for value in expected_max]
@@ -218,6 +272,10 @@ def imported_meshes(job: dict) -> list:
                 obj.name + ":axis=" + str(axis),
             )
     for obj in meshes:
+        expected_triangle_sha = obj.get("lazydesigner_triangle_sha256")
+        actual_triangle_sha = _imported_triangle_witness(obj)
+        require(actual_triangle_sha == expected_triangle_sha,
+                "PUBLICATION_IMPORT_TRIANGLE_UV_MATERIAL_DIVERGED:" + obj.name)
         require(bool(obj.data.polygons) and bool(obj.data.uv_layers),
                 "PUBLICATION_IMPORTED_MESH_FACE_OR_UV_MISSING:" + obj.name)
         uv = obj.data.uv_layers.active

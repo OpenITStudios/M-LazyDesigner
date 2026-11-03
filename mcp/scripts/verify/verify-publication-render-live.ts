@@ -9,6 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import { expectedPublicationGltfMaterial } from "../../lib/publication/materialContract";
+import { expectedPublicationBlenderTriangleSha256 } from "../../lib/publication/sourceManifest";
 import { spawn } from "node:child_process";
 import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -46,6 +47,14 @@ function makeRealFixtureGlb(): Buffer {
         lazydesigner_cube_uuid: "test",
         lazydesigner_bounds_min: [0, 0, 0],
         lazydesigner_bounds_max: [1, 0, 1],
+        lazydesigner_triangle_sha256: expectedPublicationBlenderTriangleSha256({
+          positions: [0, 0, 0, 16, 0, 0, 0, 16, 0],
+          uv: [0, 1, 1, 1, 0, 0],
+          indices: [0, 1, 2],
+          groups: [{ start: 0, count: 3, materialIndex: 0 }],
+          material_names: ["ld_color_test"],
+          world_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+        }),
       },
     }],
     meshes: [{ primitives: [{

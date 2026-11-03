@@ -26,6 +26,8 @@ export type PublicationCubeManifest = Readonly<{
   uv_vertex_count: number;
   normal_sha256: string | null;
   index_sha256: string;
+  /** World-space Blender triangle+UV+material fingerprint, independent of vertex IDs. */
+  blender_triangle_sha256: string;
   primitives: readonly PublicationPrimitiveBinding[];
 }>;
 
@@ -112,6 +114,92 @@ export function expectedPublicationGltfUvSha256(uv: readonly number[]): string {
     data.writeFloatLE(1 - uv[i + 1]!, (i + 1) * 4);
   }
   return createHash("sha256").update(data).digest("hex");
+}
+
+/**
+ * Canonical Cube triangle witness for native Blockbench → Blender glTF import.
+ *
+ * Blender 5.2 may renumber/split vertices per material primitive. The witness
+ * therefore records oriented triangle CORNERS (world XYZ, UV, material), not
+ * vertex IDs, sorted independent of triangle/primitive enumeration order.
+ * Cyclic corner rotation is equivalent; reversed winding is NOT equivalent.
+ *
+ * Quantization is provisional (1e-4 Blender world units, 1e-5 UV units).
+ * Native Blender 5.2 acceptance must still calibrate these thresholds.
+ * This is an integrity check, never a perceptual quality score.
+ */
+export function expectedPublicationBlenderTriangleSha256(input: {
+  positions: readonly number[];
+  uv: readonly number[];
+  indices: readonly number[];
+  groups: readonly SourceGroup[];
+  material_names: readonly string[];
+  world_matrix: readonly number[];
+}): string {
+  const { positions, uv, indices, groups, material_names, world_matrix: matrix } = input;
+  if (positions.length === 0 || positions.length % 3 !== 0 ||
+      uv.length !== positions.length / 3 * 2 ||
+      indices.length === 0 || indices.length % 3 !== 0 ||
+      matrix.length !== 16 || groups.length === 0 ||
+      groups.length !== material_names.length ||
+      [...positions, ...uv, ...matrix].some(value => !Number.isFinite(value))) {
+    throw new Error("PUBLICATION_TRIANGLE_WITNESS_SOURCE_INVALID");
+  }
+  const quantize = (value: number, scale: number): number => {
+    const fixed = Math.round(value * scale);
+    if (!Number.isSafeInteger(fixed)) {
+      throw new Error("PUBLICATION_TRIANGLE_WITNESS_PRECISION_EXCEEDED");
+    }
+    return fixed;
+  };
+  const corners: string[] = [];
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i]!, y = positions[i + 1]!, z = positions[i + 2]!;
+    const wx = (matrix[0]! * x + matrix[4]! * y +
+      matrix[8]! * z + matrix[12]!) * PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT;
+    const wy = (matrix[1]! * x + matrix[5]! * y +
+      matrix[9]! * z + matrix[13]!) * PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT;
+    const wz = (matrix[2]! * x + matrix[6]! * y +
+      matrix[10]! * z + matrix[14]!) * PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT;
+    const vertex = i / 3;
+    corners.push([
+      quantize(wx, 10_000),
+      quantize(-wz, 10_000),
+      quantize(wy, 10_000),
+      quantize(uv[vertex * 2]!, 100_000),
+      quantize(uv[vertex * 2 + 1]!, 100_000),
+    ].join(","));
+  }
+  const records: string[] = [];
+  let offset = 0;
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+    const group = groups[groupIndex]!;
+    const material = material_names[groupIndex]!;
+    if (group.start !== offset || !Number.isSafeInteger(group.count) ||
+        group.count < 3 || group.count % 3 !== 0 ||
+        group.start + group.count > indices.length ||
+        !/^ld_color_[a-zA-Z0-9_-]+$/.test(material)) {
+      throw new Error("PUBLICATION_TRIANGLE_WITNESS_GROUP_INVALID");
+    }
+    for (let i = group.start; i < group.start + group.count; i += 3) {
+      const vertexIds = [indices[i], indices[i + 1], indices[i + 2]];
+      if (vertexIds.some(id => !Number.isSafeInteger(id) ||
+          (id as number) < 0 || (id as number) >= corners.length)) {
+        throw new Error("PUBLICATION_TRIANGLE_WITNESS_INDEX_INVALID");
+      }
+      const [a, b, c] = vertexIds.map(id => corners[id!]!);
+      const rotations = [a + ";" + b + ";" + c,
+        b + ";" + c + ";" + a, c + ";" + a + ";" + b];
+      rotations.sort();
+      records.push(material + "|" + rotations[0]!);
+    }
+    offset += group.count;
+  }
+  if (offset !== indices.length || records.length !== indices.length / 3) {
+    throw new Error("PUBLICATION_TRIANGLE_WITNESS_COVERAGE_MISMATCH");
+  }
+  records.sort();
+  return createHash("sha256").update(records.join("\n")).digest("hex");
 }
 
 /**

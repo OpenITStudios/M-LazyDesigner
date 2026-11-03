@@ -416,6 +416,10 @@ export function inspectPublicationGlb(
           })) {
         throw new Error("PUBLICATION_GLB_SOURCE_BOUNDS_EXTRAS_MISMATCH: " + cube.cube_uuid);
       }
+      if (extras.lazydesigner_triangle_sha256 !== cube.blender_triangle_sha256 ||
+          !/^[a-f0-9]{64}$/.test(cube.blender_triangle_sha256)) {
+        throw new Error("PUBLICATION_GLB_TRIANGLE_WITNESS_PROVENANCE_MISMATCH:" + cube.cube_uuid);
+      }
       const meshIndex = node.mesh as number;
       if (usedMeshIds.has(meshIndex)) {
         throw new Error("PUBLICATION_GLB_SOURCE_CUBE_MESH_SHARED_UNEXPECTEDLY");

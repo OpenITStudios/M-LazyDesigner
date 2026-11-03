@@ -34,7 +34,7 @@ The material bridge is **not** a universal Blender material editor. Its authorit
 
 Bedrock per-face `material_name` is **not** a PBR map and **not** the Minecraft entity render profile. Without an explicit downstream controller-to-shader binding, nonempty face material instances, unknown alpha, HEIGHT, subsurface and editor-only nondefault preview modes must fail explicitly. The Blender worker does not synthesize replacements. Existing `capture_model_views` remains independent QA.
 
-Source-level material assertions now bind each source-verified embedded GLB PNG SHA-256 to the existing internal material receipt. The Blender worker checks the exact packed PNG bytes, nearest/clamp filtering, color/data channel, graph connectivity for base/emissive, MER Blue→metallic and Green→roughness, and tangent normal mapping. Unexpected image roles, missing shader links, wrong imported factors or changed imported PNG bytes fail closed instead of being silently corrected. **These are SOURCE-AUTHORED checks, NOT a Blender 5.2 acceptance PASS.** Actual imported UV loop equivalence, Blender pixel decoding/color response and real Cycles visual fidelity remain unverified.
+Source-level material assertions now bind each source-verified embedded GLB PNG SHA-256 to the existing internal material receipt. The Blockbench snapshot also pins an oriented per-Cube triangle witness (world-space positions, UV corners and material), carried through checked GLB node extras and compared against the imported Blender polygons without relying on importer vertex numbering. The Blender worker checks the exact packed PNG bytes, nearest/clamp filtering, color/data channel, graph connectivity for base/emissive, MER Blue→metallic and Green→roughness, and tangent normal mapping. Unexpected image roles, missing shader links, wrong imported factors or changed imported PNG bytes fail closed instead of being silently corrected. **These are SOURCE-AUTHORED checks, NOT a Blender 5.2 acceptance PASS.** Actual imported UV loop equivalence, Blender pixel decoding/color response and real Cycles visual fidelity remain unverified.
 
 ## Camera/lighting authority and observation boundaries
 
@@ -49,7 +49,7 @@ No new Blender MCP, model-editing operation, image generator, or extra Cycles re
 | Source | Owner |
 | --- | --- |
 | render.py | Trusted Blender 5.2 job entry; validates bounded job and assembles one Cycles render |
-| core_assets.py | Imported GLB/UV/PBR/material fidelity and bounds |
+| core_assets.py | Imported GLB/UV/PBR/material fidelity, oriented triangle/UV/material witness and bounds |
 | camera_director.py | Geometry-driven bounded camera candidates and all-mesh frame safety |
 | lighting_director.py | Camera-relative key/fill/rim, ground/shadow catcher and optional approved HDRI |
 | compositor_director.py | Cycles sampling, device, AgX/Standard and Blender 5.2 Fog Glow |

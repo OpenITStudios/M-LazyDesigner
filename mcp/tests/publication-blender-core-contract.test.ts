@@ -34,6 +34,9 @@ describe("Modular Blender Core source owners", () => {
     expect(importSource).toContain("PUBLICATION_IMPORTED_MER_CHANNEL_BINDING_MISMATCH");
     expect(importSource).toContain("PUBLICATION_IMPORTED_NORMAL_MAP_BINDING_MISMATCH");
     expect(importSource).toContain("PUBLICATION_IMPORTED_TEXTURE_COLORSPACE_MISMATCH");
+    expect(importSource).toContain("PUBLICATION_IMPORT_TRIANGLE_UV_MATERIAL_DIVERGED");
+    expect(importSource).toContain("_imported_triangle_witness(obj)");
+    expect(importSource).toContain('obj.get("lazydesigner_triangle_sha256")');
     expect(importSource).toContain('node.interpolation == "Closest"');
     expect(importSource).not.toContain('node.interpolation = "Closest"');
   });

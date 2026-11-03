@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import type { PublicationCubeManifest } from "@/lib/publication/sourceManifest";
+import {
+  expectedPublicationBlenderTriangleSha256,
+  type PublicationCubeManifest,
+} from "@/lib/publication/sourceManifest";
 import {
   PUBLICATION_QUALITY,
   blenderRenderArgs,
@@ -148,6 +151,19 @@ const FIXTURE_EMISSION_URI =
 const FIXTURE_NORMAL_URI =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNo+Pz/PwAH2wNydFC2VwAAAABJRU5ErkJggg=="; // [128,243,255,255]
 
+const nativeFixtureTriangleSha = (options: {
+  indices?: number[];
+  material_names?: string[];
+  groups?: { start: number; count: number; materialIndex: number }[];
+} = {}) => expectedPublicationBlenderTriangleSha256({
+  positions: [0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0],
+  uv: [0, 0, 1, 0, 1, 1, 0, 1],
+  indices: options.indices ?? [0, 2, 1, 0, 3, 2],
+  groups: options.groups ?? [{ start: 0, count: 6, materialIndex: 0 }],
+  material_names: options.material_names ?? ["ld_color_tex-1"],
+  world_matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+});
+
 /** Minimal structurally plausible GLB; not a substitute for the real exporter. */
 function fixtureGlb(options: {
   imageUri?: string;
@@ -207,6 +223,7 @@ function fixtureGlb(options: {
         lazydesigner_cube_uuid: "cube-1",
         lazydesigner_bounds_min: [0, 0, 0],
         lazydesigner_bounds_max: [0.0625, 0, 0.0625],
+        lazydesigner_triangle_sha256: nativeFixtureTriangleSha(),
       },
     }],
     meshes: [{ primitives: [{
@@ -290,6 +307,15 @@ function fixtureTwoMaterialPrimitives(corruptSecond = false): {
   const secondBuffer = Buffer.alloc(12);
   exportedSecond.forEach((value, index) => secondBuffer.writeUInt16LE(value, index * 2));
   const combined = Buffer.concat([bin, secondBuffer]);
+  const expectedTriangleSha = nativeFixtureTriangleSha({
+    indices: [...sourceFirst, ...sourceSecond],
+    groups: [
+      { start: 0, count: 6, materialIndex: 0 },
+      { start: 6, count: 6, materialIndex: 1 },
+    ],
+    material_names: ["ld_color_tex-1", "ld_color_tex-2"],
+  });
+  json.nodes[0].extras.lazydesigner_triangle_sha256 = expectedTriangleSha;
   json.meshes[0].primitives.push({
     mode: 4, indices: 3, attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 1,
   });
@@ -330,6 +356,7 @@ function fixtureTwoMaterialPrimitives(corruptSecond = false): {
     gltf_uv_sha256: digest(bin.subarray(48, 80)), uv_vertex_count: 4,
     normal_sha256: null,
     index_sha256: digest(JSON.stringify([...sourceFirst, ...sourceSecond])),
+    blender_triangle_sha256: expectedTriangleSha,
     primitives: [
       { face_keys: ["north"], material_name: "ld_color_tex-1", texture_uuid: "tex-1" },
       { face_keys: ["south"], material_name: "ld_color_tex-2", texture_uuid: "tex-2" },
@@ -345,6 +372,17 @@ describe("GLB Cube multi-material triangle fidelity", () => {
       mesh_count: 1, material_count: 2, primitive_count: 2,
     });
   });
+  test("rejects a forged GLB triangle witness even with matching source face inventory", () => {
+    const { glb, cube } = fixtureTwoMaterialPrimitives();
+    const broken = Buffer.from(glb);
+    const search = Buffer.from(cube.blender_triangle_sha256);
+    const offset = broken.indexOf(search);
+    expect(offset).toBeGreaterThan(0);
+    broken[offset] = broken[offset] === 97 ? 98 : 97;
+    expect(() => inspectPublicationGlb(broken, 1, 2, [cube]))
+      .toThrow("PUBLICATION_GLB_TRIANGLE_WITNESS_PROVENANCE_MISMATCH");
+  });
+
   test("rejects a wrong second face triangle despite unchanged UV and material identity", () => {
     const { glb, cube } = fixtureTwoMaterialPrimitives(true);
     expect(() => inspectPublicationGlb(glb, 1, 2, [cube]))

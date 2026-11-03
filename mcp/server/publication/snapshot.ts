@@ -17,6 +17,7 @@ import {
   PUBLICATION_UNITS_PER_MINECRAFT_BLOCK,
   derivePublicationPrimitiveBindings,
   expectedPublicationBlenderBounds,
+  expectedPublicationBlenderTriangleSha256,
   expectedPublicationGltfUvSha256,
   type PublicationCubeManifest,
   type PublicationSourceManifest,
@@ -318,6 +319,11 @@ function nativeState(): NativeState {
       uv_vertex_count: uv.length / 2,
       normal_sha256: normalSha,
       index_sha256: indexSha,
+      blender_triangle_sha256: expectedPublicationBlenderTriangleSha256({
+        positions, uv, indices, groups: geometry.groups,
+        material_names: primitives.map(primitive => primitive.material_name),
+        world_matrix: matrix,
+      }),
       primitives,
     });
     cubeRows.push([
@@ -671,6 +677,7 @@ export async function snapshotDetachedPublicationGlb(): Promise<DetachedPublicat
         lazydesigner_cube_uuid: cube.uuid,
         lazydesigner_bounds_min: sourceCube.expected_blender_bounds_min,
         lazydesigner_bounds_max: sourceCube.expected_blender_bounds_max,
+        lazydesigner_triangle_sha256: sourceCube.blender_triangle_sha256,
       };
       scene.add(detached);
     }
