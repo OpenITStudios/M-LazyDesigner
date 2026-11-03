@@ -99,7 +99,7 @@ describe("authoring stage MCP surface", () => {
     const geometry = phaseSurface("geometry");
     const texturing = phaseSurface("texturing");
     expect([...geometry].sort()).toEqual([...texturing].sort());
-    expect(geometry.size).toBe(47);
+    expect(geometry.size).toBe(48);
 
     for (const tool of [
       "manage_cubes",
@@ -120,8 +120,10 @@ describe("authoring stage MCP surface", () => {
     expect(geometry.has("create_animation")).toBe(false);
 
     const animation = phaseSurface("animation");
-    expect(animation.size).toBe(18);
+    expect(animation.size).toBe(19);
     expect(animation.has("create_animation")).toBe(true);
+    expect(animation.has("render_publication")).toBe(true);
+    expect(geometry.has("render_publication")).toBe(true);
     expect(animation.has("create_project")).toBe(false);
     expect(animation.has("manage_cubes")).toBe(false);
     expect(animation.has("create_texture")).toBe(false);
