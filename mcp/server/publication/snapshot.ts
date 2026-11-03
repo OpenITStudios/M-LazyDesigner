@@ -11,6 +11,7 @@ import {
   PUBLICATION_GLTF_UNITS_PER_BLOCKBENCH_UNIT,
   PUBLICATION_UNITS_PER_MINECRAFT_BLOCK,
   derivePublicationPrimitiveBindings,
+  expectedPublicationBlenderBounds,
   type PublicationCubeManifest,
   type PublicationSourceManifest,
 } from "@/lib/publication/sourceManifest";
@@ -253,6 +254,7 @@ function nativeState(): NativeState {
       cube.uuid, faceBindings, geometry.groups, indices.length,
     );
     const ancestry = publicationGroupAncestry(cube);
+    const bounds = expectedPublicationBlenderBounds(positions, matrix);
     const positionSha = sha256(JSON.stringify(positions));
     const uvSha = sha256(JSON.stringify(uv));
     const indexSha = sha256(JSON.stringify(indices));
@@ -261,6 +263,8 @@ function nativeState(): NativeState {
       cube_uuid: cube.uuid,
       group_ancestry_uuids: ancestry,
       source_world_matrix: matrix,
+      expected_blender_bounds_min: bounds.min,
+      expected_blender_bounds_max: bounds.max,
       position_sha256: positionSha,
       uv_sha256: uvSha,
       normal_sha256: normalSha,
