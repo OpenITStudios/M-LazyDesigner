@@ -37,7 +37,14 @@ function makeRealFixtureGlb(): Buffer {
     asset: { version: "2.0", generator: "LazyDesigner disposable Cycles smoke" },
     scene: 0,
     scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, name: "cube_test" }],
+    nodes: [{
+      mesh: 0, name: "cube_test",
+      extras: {
+        lazydesigner_cube_uuid: "test",
+        lazydesigner_bounds_min: [0, 0, 0],
+        lazydesigner_bounds_max: [1, 0, 1],
+      },
+    }],
     meshes: [{ primitives: [{
       attributes: { POSITION: 0, TEXCOORD_0: 1 },
       indices: 2, material: 0, mode: 4,
