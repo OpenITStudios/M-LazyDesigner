@@ -59,6 +59,14 @@ export type PublicationRenderReceipt = {
     "device" | "view_transform"
   > & { environment: { mode: "studio" | "hdri"; sha256: string | null } };
   diagnostics: ReturnType<typeof compactPublicationDiagnostics>;
+  visual_evidence: {
+    kind: "DOWNSAMPLED_FINAL_CYCLES_PNG";
+    png_sha256: string;
+    byte_length: number;
+    width: number;
+    height: number;
+    visual_review: "NOT_EVALUATED";
+  };
   output_path: string;
   output_png_sha256: string;
   output_png_bytes: number;
@@ -71,6 +79,18 @@ export type PublicationRenderReceipt = {
 
 function hash(data: Buffer | string): string {
   return createHash("sha256").update(data).digest("hex");
+}
+
+// Owned by the completed publication receipt, not by a second job registry.
+// Weak keys allow old preview buffers to be reclaimed after a new job begins.
+const validatedEvidence = new WeakMap<PublicationRenderReceipt, Buffer>();
+
+export function getPublicationEvidenceBytes(receipt: PublicationRenderReceipt): Buffer {
+  const bytes = validatedEvidence.get(receipt);
+  if (!bytes || receipt.state !== "RENDERED_DRAFT") {
+    throw new Error("PUBLICATION_RENDER_EVIDENCE_NOT_AVAILABLE");
+  }
+  return bytes;
 }
 
 function renderPermissions(directory: string): {
@@ -250,6 +270,7 @@ export async function renderPreparedPublication(
   const jobPath = join(workdir, "job.json");
   const tempOutput = join(workdir, "output.png");
   const reportPath = join(workdir, "report.json");
+  const evidencePath = join(workdir, "evidence.png");
   const hdriTarget = hdriSuffix ? join(workdir, "environment" + hdriSuffix) : null;
   const moduleFiles = BLENDER_CORE_MODULES.map(([name, source]) => ({
     path: join(workdir, name), source,
@@ -308,6 +329,18 @@ export async function renderPreparedPublication(
         diagnostics.image.image_dimensions[1] !== request.height) {
       throw new Error("PUBLICATION_RENDER_DIAGNOSTICS_SOURCE_MISMATCH");
     }
+    if (!fs.existsSync(evidencePath) || !fs.statSync(evidencePath).isFile() ||
+        fs.statSync(evidencePath).size > 2_000_000 ||
+        fs.statSync(evidencePath).size < 57) {
+      throw new Error("PUBLICATION_RENDER_EVIDENCE_MISSING_OR_OVERSIZED");
+    }
+    const evidenceRaw = fs.readFileSync(evidencePath);
+    const evidenceBytes = Buffer.isBuffer(evidenceRaw) ? evidenceRaw : Buffer.from(evidenceRaw);
+    inspectPublicationPng(
+      evidenceBytes,
+      diagnostics.preview.dimensions[0],
+      diagnostics.preview.dimensions[1],
+    );
     assertActive();
     verifyPublicationSourceCurrent(snapshot.project_uuid, snapshot.source_sha256);
     // Exclusive destination create. No silent replacement and no success
@@ -322,7 +355,7 @@ export async function renderPreparedPublication(
     if (hash(persisted) !== hash(png)) {
       throw new Error("PUBLICATION_OUTPUT_READBACK_MISMATCH: verify the file manually.");
     }
-    return {
+    const completed: PublicationRenderReceipt = {
       state: "RENDERED_DRAFT",
       source_project_uuid: snapshot.project_uuid,
       source_sha256: snapshot.source_sha256,
@@ -344,6 +377,14 @@ export async function renderPreparedPublication(
         environment: { mode: job.environment.mode, sha256: job.environment.hdri_sha256 },
       },
       diagnostics: compactPublicationDiagnostics(diagnostics),
+      visual_evidence: {
+        kind: "DOWNSAMPLED_FINAL_CYCLES_PNG",
+        png_sha256: hash(evidenceBytes),
+        byte_length: evidenceBytes.length,
+        width: diagnostics.preview.dimensions[0],
+        height: diagnostics.preview.dimensions[1],
+        visual_review: "NOT_EVALUATED",
+      },
       output_path: request.output_path,
       output_png_sha256: hash(png),
       output_png_bytes: png.length,
@@ -353,6 +394,8 @@ export async function renderPreparedPublication(
       visual_quality: "NOT_EVALUATED",
       live_minecraft_verified: false,
     };
+    validatedEvidence.set(completed, evidenceBytes);
+    return completed;
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("PUBLICATION_BLENDER_EXIT_UNCONFIRMED")) {
       preserveTemporaryJob = true;
@@ -367,7 +410,7 @@ export async function renderPreparedPublication(
       // the four known files created for this job, then its empty directory.
       try {
         for (const file of [
-          glbPath, workerPath, jobPath, tempOutput, reportPath,
+          glbPath, workerPath, jobPath, tempOutput, reportPath, evidencePath,
           ...(hdriTarget ? [hdriTarget] : []),
           ...moduleFiles.map(item => item.path),
         ]) {
