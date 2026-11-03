@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import { inspectPublicationPng } from "@/lib/publication/pngIntegrity";
+import { validateHdriBytes } from "@/lib/publication/environment";
 import {
   publicationDiagnosticsSchema,
   compactPublicationDiagnostics,
@@ -56,7 +57,7 @@ export type PublicationRenderReceipt = {
   render_settings: Pick<PublicationJob,
     "background" | "camera" | "look" | "samples" | "noise_threshold" |
     "device" | "view_transform"
-  >;
+  > & { environment: { mode: "studio" | "hdri"; sha256: string | null } };
   diagnostics: ReturnType<typeof compactPublicationDiagnostics>;
   output_path: string;
   output_png_sha256: string;
@@ -215,6 +216,32 @@ export async function renderPreparedPublication(
   if (fs.existsSync(request.output_path)) {
     throw new Error("PUBLICATION_OUTPUT_EXISTS: choose a new PNG name; overwrite is disabled.");
   }
+  // A user-provided HDRI is a separate, explicit filesystem permission.
+  // The Blender worker never reads arbitrary user paths, only copied verified
+  // bytes in its own isolated render job directory.
+  let hdriSource: Buffer | null = null;
+  let hdriSha: string | null = null;
+  let hdriSuffix: ".hdr" | ".exr" | null = null;
+  if (request.environment.mode === "hdri") {
+    const sourcePath = request.environment.hdri_path!;
+    const inputDirectory = dirname(sourcePath);
+    const inputFs = requireNativeModule("fs", {
+      scope: inputDirectory,
+      message: "Read the selected HDRI environment image for this one Blender render.",
+      optional: true,
+    }) as ScopedPublicationFs | undefined;
+    if (!inputFs) throw new Error("PUBLICATION_HDRI_READ_PERMISSION_DENIED");
+    if (!inputFs.existsSync(sourcePath)) throw new Error("PUBLICATION_HDRI_SOURCE_MISSING");
+    const stat = inputFs.statSync(sourcePath);
+    if (!stat.isFile() || stat.size > 64 * 1024 * 1024 || stat.size < 16) {
+      throw new Error("PUBLICATION_HDRI_FILE_INVALID_OR_OVERSIZED");
+    }
+    const raw = inputFs.readFileSync(sourcePath);
+    hdriSource = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+    validateHdriBytes(sourcePath, hdriSource);
+    hdriSha = hash(hdriSource);
+    hdriSuffix = /\.exr$/i.test(sourcePath) ? ".exr" : ".hdr";
+  }
   const workdir = join(outputDirectory, ".lazydesigner-render-" + randomBytes(12).toString("hex"));
   // Unique fresh workdir: never reuse or follow paths provided by a model.
   fs.mkdirSync(workdir);
@@ -223,6 +250,7 @@ export async function renderPreparedPublication(
   const jobPath = join(workdir, "job.json");
   const tempOutput = join(workdir, "output.png");
   const reportPath = join(workdir, "report.json");
+  const hdriTarget = hdriSuffix ? join(workdir, "environment" + hdriSuffix) : null;
   const moduleFiles = BLENDER_CORE_MODULES.map(([name, source]) => ({
     path: join(workdir, name), source,
   }));
@@ -238,6 +266,10 @@ export async function renderPreparedPublication(
     for (const module of moduleFiles) {
       fs.writeFileSync(module.path, module.source, { flag: "wx" });
     }
+    if (hdriTarget && hdriSource && hdriSha) {
+      fs.writeFileSync(hdriTarget, hdriSource, { flag: "wx" });
+      hdriSource = null; // Release large source bytes before Cycles starts.
+    }
     const job = makePublicationJob(
       { ...request, output_path: tempOutput },
       {
@@ -246,6 +278,9 @@ export async function renderPreparedPublication(
         glb_path: glbPath,
         mesh_count: snapshot.cube_count,
         materials: snapshot.materials,
+        ...(hdriTarget && hdriSha
+          ? { environment_asset: { path: hdriTarget, sha256: hdriSha } }
+          : {}),
       },
     );
     fs.writeFileSync(jobPath, JSON.stringify(job), { flag: "wx" });
@@ -306,6 +341,7 @@ export async function renderPreparedPublication(
         noise_threshold: job.noise_threshold,
         device: job.device,
         view_transform: job.view_transform,
+        environment: { mode: job.environment.mode, sha256: job.environment.hdri_sha256 },
       },
       diagnostics: compactPublicationDiagnostics(diagnostics),
       output_path: request.output_path,
@@ -332,6 +368,7 @@ export async function renderPreparedPublication(
       try {
         for (const file of [
           glbPath, workerPath, jobPath, tempOutput, reportPath,
+          ...(hdriTarget ? [hdriTarget] : []),
           ...moduleFiles.map(item => item.path),
         ]) {
           if (fs.existsSync(file)) fs.unlinkSync(file);
