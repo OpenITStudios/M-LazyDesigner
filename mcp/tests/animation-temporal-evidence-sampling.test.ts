@@ -69,9 +69,54 @@ describe("bounded candidate times for image evidence",()=>{
     });
     expect(p.state).toBe("UNAVAILABLE");
   });
+  test("focused bone and time-range hints exclude unrelated motion events",()=>{
+    const other={...track([0,0.2,1],[0,160,160]),group_uuid:"other"};
+    const target={...track([0,0.75,0.9,1],[0,0,90,90]),group_uuid:"arm"};
+    const p=planTemporalImageEvidence({
+      duration_seconds:1,tracks:[other,target],max_frames:3,
+      focus_bone_uuid:"arm",focus_time_range:{start:0.75,end:1},
+    });
+    expect(p.state).toBe("CANDIDATE_ONLY");
+    if(p.state==="CANDIDATE_ONLY"){
+      expect(p.suggested_times_seconds).toEqual([0.75,0.825,1]);
+      expect(p.focus_bone_uuid).toBe("arm");
+      expect(p.focus_time_range).toEqual({start:0.75,end:1});
+      expect(p.max_model_views_without_masks).toBe(2);
+      expect(p.interpolated_pose_evaluated).toBe(false);
+    }
+  });
+  test("bracketing keys survive focus clipping without importing unrelated frames",()=>{
+    const p=planTemporalImageEvidence({
+      duration_seconds:1,max_frames:3,
+      tracks:[track([0,1],[0,90])],
+      focus_time_range:{start:0.3,end:0.5},
+    });
+    expect(p.state).toBe("CANDIDATE_ONLY");
+    expect(p.suggested_times_seconds).toEqual([0.3,0.4,0.5]);
+  });
+  test("unchanged numeric keys do not request redundant visual frames",()=>{
+    const p=planTemporalImageEvidence({
+      duration_seconds:1,tracks:[track([0,0.5,1],[30,30,30])],
+    });
+    expect(p).toMatchObject({
+      state:"UNAVAILABLE",reason:"NO_DETECTABLE_NUMERIC_MOTION_EVENT",
+      suggested_times_seconds:[],visual_pass_authorized:false,
+    });
+  });
+  test("invalid or unsupported narrow scopes fail closed",()=>{
+    const t=track([0,1],[0,90]);
+    expect(planTemporalImageEvidence({
+      duration_seconds:1,tracks:[t],focus_time_range:{start:0.7,end:0.2},
+    }).state).toBe("UNAVAILABLE");
+    expect(planTemporalImageEvidence({
+      duration_seconds:1,tracks:[t],focus_bone_uuid:"nonexistent",
+    }).state).toBe("UNAVAILABLE");
+  });
   test("only on explicitly requested native diagnostics",async()=>{
     const s=await Bun.file("server/runtime/extensions/animation/nativeIntelligence.ts").text();
     expect(s).toContain("temporal_image_capture_hints: planTemporalImageEvidence");
     expect(s).toContain("if (args.diagnostics !== true) return result");
+    expect(s).toContain("focused_bone");
+    expect(s).toContain("focus_time_range:focus?.time_range");
   });
 });

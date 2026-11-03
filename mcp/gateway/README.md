@@ -193,6 +193,17 @@ Animation→ Animation
 
 This is affected-knowledge metadata, not a forced full downstream reset.
 
+## Smart Evidence Selection
+
+The Gateway/Control continuation can provide executable `get_texture`
+crop arguments for a current, validated Texture region without adding a
+new MCP capability or calling a tool automatically. Geometry's automatic
+silhouette evidence suppresses only redundant masks from orthogonal
+risk-expansion views, not shaded views. Animation's numeric-keyframe
+candidate times can be narrowed to a focused bone/time range without
+extra native renders. All remain advisory until actual visual inspection;
+stale evidence and partial view coverage are never upgraded to PASS.
+
 ## Scoped Texture Image Delivery
 
 Within an explicit `invoke_capability` task cohort, a successful

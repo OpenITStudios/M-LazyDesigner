@@ -12,6 +12,7 @@ import {
   fingerprintVisualCaptureDependencies,
   selectCaptureSizeForEvidence,
   selectModelViewsForEvidence,
+  selectSilhouetteCaptureViews,
 } from "@/server/tools/inspection/camera";
 
 const baseInput = {
@@ -228,6 +229,17 @@ describe("capture_model_views explicit framing contract", () => {
     });
   });
 
+  test("auto silhouette masks only support its claim, explicit mask views remain intact", () => {
+    const medium=selectModelViewsForEvidence(["silhouette"],"MEDIUM").views;
+    expect(medium).toEqual(["front","left"]);
+    expect(selectSilhouetteCaptureViews(medium,["silhouette"],false)).toEqual(["front"]);
+    const high=selectModelViewsForEvidence(["silhouette"],"HIGH").views;
+    expect(high).toEqual(["front","left","top"]);
+    expect(selectSilhouetteCaptureViews(high,["silhouette"],false)).toEqual(["front"]);
+    expect(selectSilhouetteCaptureViews(["front","left"],["silhouette"],true)).toEqual(["front","left"]);
+    expect(selectSilhouetteCaptureViews(["left"],["silhouette"],true)).toEqual(["left"]);
+    expect(selectSilhouetteCaptureViews(["front","left"],["width"],false)).toEqual([]);
+  });
   test("risk is forwarded by the runtime selection route", () => {
     expect(resolveCaptureViewSelection(undefined, ["width"], "LOW").views).toEqual(["front"]);
     expect(resolveCaptureViewSelection(undefined, ["width"], "MEDIUM")).toMatchObject({

@@ -89,7 +89,7 @@ describe("bounded visual verification scope registry", () => {
       verificationScopeForResult("paint_texture_transaction", "visual", candidate);
     expect(scope(receipt)).toMatchObject({
       kind: "TEXTURE_REGION",
-      evidence_source: "mutation_response",
+      evidence_source: "follow_up_read",
     });
     for (const visual_evidence of [
       { kind: "affected_region_png" },

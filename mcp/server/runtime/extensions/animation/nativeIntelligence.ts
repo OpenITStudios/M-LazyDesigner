@@ -452,7 +452,10 @@ function nativePropertySummary(item: RuntimeAnimationItem) {
   };
 }
 
-function motionDynamicsRuntime(item: RuntimeAnimationItem) {
+function motionDynamicsRuntime(item: RuntimeAnimationItem, focus?:{
+  bone_uuid?:string;
+  time_range?:{start:number;end:number};
+}) {
   if (
     isAnimationControllerRuntime(item) ||
     typeof BoneAnimator === "undefined" ||
@@ -504,6 +507,8 @@ function motionDynamicsRuntime(item: RuntimeAnimationItem) {
     temporal_image_capture_hints: planTemporalImageEvidence({
       duration_seconds: Number((item as BBAnimation).length),
       tracks,
+      focus_bone_uuid:focus?.bone_uuid,
+      focus_time_range:focus?.time_range,
     }),
   };
 }
@@ -634,6 +639,12 @@ function wireInspectDiagnostics(): void {
     const molang = analyzeAnimationMolangExpressions(
       collectAnimationExpressions(item)
     );
+    const focusedGroup=objectRecord(objectRecord(structured.focused_bone)?.group);
+    const rawWindow=objectRecord(args.time_range);
+    const focusedTimeRange = rawWindow &&
+      typeof rawWindow.start==="number" &&
+      typeof rawWindow.end==="number"
+      ? {start:rawWindow.start,end:rawWindow.end} : undefined;
     return {
       ...record,
       structuredContent: {
@@ -643,7 +654,10 @@ function wireInspectDiagnostics(): void {
           ? { state: "not_applicable" as const, reason: "animation_controller" as const }
           : captureNativeIkBakeReadiness(item),
         molang_analysis: molang,
-        motion_dynamics: motionDynamicsRuntime(item),
+        motion_dynamics: motionDynamicsRuntime(item,{
+          bone_uuid:typeof focusedGroup?.uuid==="string"?focusedGroup.uuid:undefined,
+          time_range:focusedTimeRange,
+        }),
         client_entity_wiring: clientEntityWiringRuntime(
           item,
           molang.dependencies.variable

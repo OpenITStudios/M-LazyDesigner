@@ -166,19 +166,31 @@ describe("Animation runtime efficiency contracts", () => {
       evidence_targets: ["silhouette"], verification_risk: "MEDIUM",
       front_direction: "+z",
       animation_preview: { animation_id: "anim-walk", times: [0, 0.5] },
-    }).success).toBe(true); // 2 views × 2 times × 2 images = 8.
+    }).success).toBe(true); // (2 shaded + 1 canonical mask) × 2 = 6.
 
     expect(animationAwareCaptureModelViewsParameters.safeParse({
       evidence_targets: ["silhouette"], verification_risk: "MEDIUM",
       front_direction: "+z",
       animation_preview: { animation_id: "anim-walk", times: [0, 0.5, 1] },
-    }).success).toBe(false); // 2 × 3 × 2 exceeds 8.
+    }).success).toBe(false); // (2 shaded + 1 mask) × 3 = 9.
 
     expect(animationAwareCaptureModelViewsParameters.safeParse({
       evidence_targets: ["silhouette"], verification_risk: "HIGH",
       front_direction: "+z",
       animation_preview: { animation_id: "anim-walk", times: [0, 1] },
-    }).success).toBe(false); // 3 × 2 × 2 exceeds 8.
+    }).success).toBe(true); // (3 shaded + 1 canonical mask) × 2 = 8.
+    // Explicit views are intentional: keep one mask for EACH requested view.
+    expect(animationAwareCaptureModelViewsParameters.safeParse({
+      views: ["front", "left"], evidence_targets: ["silhouette"],
+      front_direction: "+z",
+      animation_preview: { animation_id: "anim-walk", times: [0, 0.5] },
+    }).success).toBe(true); // 2 shaded + 2 masks, for 2 times = 8.
+    expect(animationAwareCaptureModelViewsParameters.safeParse({
+      views: ["front", "left"], evidence_targets: ["silhouette"],
+      front_direction: "+z",
+      animation_preview: { animation_id: "anim-walk", times: [0, 0.5, 1] },
+    }).success).toBe(false); // 4 per time × 3 = 12.
+
   });
 
 

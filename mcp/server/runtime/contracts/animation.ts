@@ -45,6 +45,7 @@ import { animationIdOptionalSchema } from "@/lib/schemas/ids";
 import {
   captureModelViewsParameters,
   resolveCaptureViewSelection,
+  selectSilhouetteCaptureViews,
 } from "../../tools/inspection/camera";
 import { inspectAnimationParameters } from "../../tools/animation/inspectionSchema";
 import {
@@ -108,18 +109,23 @@ export const animationAwareCaptureModelViewsParameters =
     // Evidence targets are expanded to actual canonical views at capture time.
     // Apply the same eight-image limit before native posing/screenshot work,
     // including implicit MEDIUM/HIGH verification-risk expansion.
-    const actualViewCount = resolveCaptureViewSelection(
+    const resolvedViews = resolveCaptureViewSelection(
       request.views, request.evidence_targets, request.verification_risk
-    ).views.length;
-    // Optional native Cube-silhouette evidence can add a second PNG for
-    // every shaded view. Reserve the worst-case media budget before capture.
-    const possibleImagesPerView = request.evidence_targets?.includes("silhouette") ? 2 : 1;
-    if (actualViewCount * sampleCount * possibleImagesPerView > 8) {
+    ).views;
+    // The preflight image budget mirrors actual shaded+mask capture plans.
+    const silhouetteViewCount = selectSilhouetteCaptureViews(
+      resolvedViews, request.evidence_targets, Boolean(request.views?.length)
+    ).length;
+    const plannedImages = sampleCount * (
+      resolvedViews.length + silhouetteViewCount
+    );
+    if (plannedImages > 8) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["animation_preview", "times"],
         message:
-          "Animation visual evidence is bounded to at most 8 images per call (resolved views × times × optional silhouette images <= 8). Reduce sample times, evidence targets/risk, or explicit views.",
+          "Animation visual evidence is bounded to at most 8 images per call (resolved views × times × optional silhouette images <= 8). Planned " +
+          plannedImages + " images; reduce sample times, evidence targets/risk, or explicit views.",
       });
     }
   });

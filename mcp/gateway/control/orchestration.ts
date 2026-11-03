@@ -1,3 +1,4 @@
+import { planFocusedTextureEvidenceRequest } from "./evidenceSelection";
 import type {
   ControlAuthoringDomain,
   ControlDelta,
@@ -20,6 +21,8 @@ export type ControlNextAction = {
   recommended_capability: string | null;
   target_domain: ControlAuthoringDomain | null;
   verification_scope: ControlVerificationScope | null;
+  /** Executable argument hint, not an automatic evidence tool call. */
+  evidence_request?: NonNullable<ReturnType<typeof planFocusedTextureEvidenceRequest>>;
 };
 
 export type ControlCohortBoundary = "CONTINUE" | "COMPLETE";
@@ -135,6 +138,7 @@ export function nextActionForControlDelta(delta: ControlDelta): ControlNextActio
       };
     }
 
+    const evidenceRequest=planFocusedTextureEvidenceRequest(delta.verification_scope);
     return {
       kind: "VERIFY_VISUAL",
       reason: delta.verification_scope?.kind === "CUBE_TARGETS"
@@ -147,6 +151,7 @@ export function nextActionForControlDelta(delta: ControlDelta): ControlNextActio
       recommended_capability: visualRecommendedCapability(delta.verification_scope),
       target_domain: delta.authoring_domain,
       verification_scope: delta.verification_scope,
+      ...(evidenceRequest ? { evidence_request:evidenceRequest } : {}),
     };
   }
 

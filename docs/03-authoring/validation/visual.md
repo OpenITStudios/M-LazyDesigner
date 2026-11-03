@@ -200,6 +200,30 @@ Returns exact authored Cube/Group state for a diagnosed local target. Reuse fres
 These are source-implemented capabilities. Their live integration/image delivery
 still remains `LOCAL PROOF REQUIRED` until tested locally.
 
+## Smart Evidence Selection (target-bound, source-only)
+
+For automatic `capture_model_views(evidence_targets=["silhouette"])`,
+only canonical views whose primary evidence supports silhouette receive
+the extra silhouette PNG. Other risk-expanded views still deliver shaded
+model images; explicitly selected views keep mask-per-view behavior.
+`view_selection.silhouette_mask_views` reports the exact plan and
+Animation's eight-image preflight uses the same selection function.
+
+A scoped Texture `get_texture` follow-up can now supply
+`continuation.next_action.evidence_request.args` with the exact
+`texture`, `region={x,y,width,height}`, and `expected_revision`
+derived from the current right-exclusive affected rectangle. This is a
+suggestion, not a tool call, image cache, or visual PASS. The model still
+needs actual mapped 3D/reference comparison when material fidelity is
+under review.
+
+`inspect_animation(diagnostics=true,bone=...,time_range=...)` now
+returns optional timestamp hints only for the selected bone and window.
+Bracketing authored keys are included for candidate selection, and
+different high-change intervals are prioritized before redundant frames
+within the same interval. No native interpolation/playback or PNG is
+performed by these hints. Continuous motion remains UNVERIFIED.
+
 ## Texture inline-image transport and cohort deferral
 
 The native `paint_texture_transaction` produces a postcondition-checked

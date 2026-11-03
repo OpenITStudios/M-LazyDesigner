@@ -517,6 +517,24 @@ export function selectModelViewsForEvidence(
   };
 }
 
+/**
+ * Automatic silhouette capture: only canonical views supporting the
+ * silhouette claim receive the extra mask; orthogonal risk-expanded views
+ * still supply their ordinary shaded PNGs. Explicit requested views retain
+ * mask-per-view semantics. No visual verdict is produced.
+ */
+export function selectSilhouetteCaptureViews(
+  selectedViews: readonly ModelView[],
+  targets: readonly VisualEvidenceTarget[] | undefined,
+  explicitViews: boolean
+): ModelView[] {
+  if (!targets?.includes("silhouette")) return [];
+  if (explicitViews) return [...selectedViews];
+  return selectedViews.filter(view =>
+    modelViewReferenceContract(view).primary_evidence.includes("silhouette")
+  );
+}
+
 /** Resolve camera selection without overriding explicit view intent. */
 export function resolveCaptureViewSelection(
   views: readonly ModelView[] | undefined,
@@ -1167,6 +1185,10 @@ export function registerCameraTools() {
         );
       }
       const selectedViews = selection.views;
+      const silhouetteCaptureViews = selectSilhouetteCaptureViews(
+        selectedViews, evidence_targets as VisualEvidenceTarget[] | undefined,
+        Boolean(views?.length)
+      );
       // Validate actual native recipe ownership before doing expensive captures.
       const requestedCorrespondenceUuids = reference_correspondence
         ? [...new Set<string>(reference_correspondence.proposals.flatMap(
@@ -1287,7 +1309,7 @@ export function registerCameraTools() {
         // Opt-in only: a second transparent capture is useful for silhouette
         // review, but must not double image/context cost for ordinary capture.
         let silhouetteEvidence: (typeof captures)[number]["silhouette_evidence"];
-        if (evidence_targets?.includes("silhouette")) {
+        if (silhouetteCaptureViews.includes(view)) {
           const base = {
             scope: "VISIBLE_CUBES_SOLID_GEOMETRY" as const,
             visual_verdict: "NOT_EVALUATED" as const,
@@ -1513,6 +1535,9 @@ export function registerCameraTools() {
         native_current_pose_bounds: observed.bounds,
         view_selection: {
           mode: views?.length ? "explicit" : "information_gain",
+          silhouette_mask_views: silhouetteCaptureViews,
+          silhouette_mask_policy: views?.length
+            ? "EXPLICIT_VIEW_SET" : "CANONICAL_TARGET_SUPPORT_ONLY",
           requested_targets: selection.requested_targets,
           verification_risk: selection.risk,
           minimum_views: selection.minimum_views,
