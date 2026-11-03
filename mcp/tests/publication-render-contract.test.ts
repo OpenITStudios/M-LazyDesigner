@@ -205,6 +205,7 @@ function fixtureGlb(options: {
     samplers: [{
       magFilter: options.linearSampling ? 9729 : 9728,
       minFilter: options.linearSampling ? 9729 : 9728,
+      wrapS: 33071, wrapT: 33071,
     }],
     textures: (profile === "pbr_mer"
       ? [
@@ -387,6 +388,7 @@ function installNativeFixture() {
     CanvasTexture: MockCanvasTexture,
     DoubleSide: 2,
     NearestFilter: 1003,
+    ClampToEdgeWrapping: 1001,
     SRGBColorSpace: "srgb",
     NoColorSpace: "linear",
     Color: class { constructor(_value: unknown) {} },
