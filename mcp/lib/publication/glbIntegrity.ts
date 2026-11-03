@@ -38,7 +38,7 @@ export function inspectPublicationGlb(glb: Buffer, expectedMeshes: number, expec
   if (!jsonLength || jsonLength % 4 !== 0 || 20 + jsonLength > glb.length) {
     throw new Error("PUBLICATION_GLB_JSON_CHUNK_INVALID");
   }
-  let pointer = 20 + jsonLength;
+  const pointer = 20 + jsonLength;
   if (pointer < glb.length) {
     if (pointer + 8 > glb.length ||
         glb.readUInt32LE(pointer + 4) !== 0x004e4942) {
@@ -58,16 +58,41 @@ export function inspectPublicationGlb(glb: Buffer, expectedMeshes: number, expec
   if (!record(json) || !record(json.asset) || json.asset.version !== "2.0") {
     throw new Error("PUBLICATION_GLB_VERSION_INVALID");
   }
+  const isPng = (bytes: Buffer): boolean =>
+    bytes.length >= 24 &&
+    bytes.toString("hex", 0, 8) === "89504e470d0a1a0a" &&
+    bytes.readUInt32BE(16) > 0 && bytes.readUInt32BE(16) <= 8192 &&
+    bytes.readUInt32BE(20) > 0 && bytes.readUInt32BE(20) <= 8192;
+  const embeddedPng = (image: GltfRecord, views: GltfRecord[]): boolean => {
+    const uri = image.uri;
+    if (typeof uri === "string") {
+      // A detached source snapshot must never load network or external images.
+      if (!/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(uri) ||
+          uri.length > 42 * 1024 * 1024) return false;
+      return isPng(Buffer.from(uri.slice("data:image/png;base64,".length), "base64"));
+    }
+    if (image.mimeType !== "image/png" ||
+        !validIndex(image.bufferView, views.length) || pointer >= glb.length) return false;
+    const view = views[image.bufferView as number]!;
+    const offset = view.byteOffset ?? 0;
+    const length = view.byteLength;
+    if (!Number.isSafeInteger(offset) || (offset as number) < 0 ||
+        !Number.isSafeInteger(length) || (length as number) < 24 ||
+        (length as number) > 32 * 1024 * 1024 ||
+        pointer + 8 + (offset as number) + (length as number) > glb.length) return false;
+    const start = pointer + 8 + (offset as number);
+    return isPng(glb.subarray(start, start + (length as number)));
+  };
   const meshes = positiveArray(json.meshes);
   const materials = positiveArray(json.materials);
   const accessors = positiveArray(json.accessors);
   const images = Array.isArray(json.images) ? json.images : [];
   const textures = Array.isArray(json.textures) ? json.textures : [];
   const bufferViews = Array.isArray(json.bufferViews) ? json.bufferViews : [];
+  if (bufferViews.some(view => !record(view))) throw new Error("PUBLICATION_GLB_BUFFERVIEWS_INVALID");
   if (meshes.length !== expectedMeshes || materials.length !== expectedMaterials ||
       meshes.length < 1 || materials.length < 1 || images.length < 1 ||
-      images.some(item => !record(item) ||
-        (!validIndex(item.bufferView, bufferViews.length) && typeof item.uri !== "string"))) {
+      images.some(item => !record(item) || !embeddedPng(item, bufferViews))) {
     throw new Error("PUBLICATION_GLB_SOURCE_INVENTORY_MISMATCH");
   }
   let primitiveCount = 0;
@@ -83,6 +108,20 @@ export function inspectPublicationGlb(glb: Buffer, expectedMeshes: number, expec
         throw new Error("PUBLICATION_GLB_PRIMITIVE_UV_OR_MATERIAL_INVALID");
       }
       primitiveCount++;
+    }
+  }
+  for (const texture of textures) {
+    if (!record(texture) || !validIndex(texture.source, images.length)) {
+      throw new Error("PUBLICATION_GLB_TEXTURE_IMAGE_REFERENCE_INVALID");
+    }
+  }
+  for (const material of materials) {
+    const pbr = record(material.pbrMetallicRoughness) ? material.pbrMetallicRoughness : {};
+    for (const ref of [pbr.baseColorTexture, pbr.metallicRoughnessTexture,
+      material.normalTexture, material.emissiveTexture]) {
+      if (ref !== undefined && (!record(ref) || !validIndex(ref.index, textures.length))) {
+        throw new Error("PUBLICATION_GLB_MATERIAL_TEXTURE_REFERENCE_INVALID");
+      }
     }
   }
   if (textures.length < materials.length) {
