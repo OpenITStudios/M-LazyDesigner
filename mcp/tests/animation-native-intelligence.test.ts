@@ -451,3 +451,42 @@ describe("equal-grid PCHIP motion continuity diagnostics", () => {
     });
   });
 });
+
+
+test("same-FPS diagnostic compares exact closed-loop seam without native seam claims",()=>{
+  const recipe=compileMotionRecipe({
+    name:"loop",loop:true,duration:1,
+    poses:[
+      {id:"a",time:0,bones:{arm:{rotation:[0,0,0]}}},
+      {id:"b",time:.25,bones:{arm:{rotation:[10,0,0]}}},
+      {id:"c",time:.5,bones:{arm:{rotation:[0,0,0]}}},
+      {id:"d",time:.75,bones:{arm:{rotation:[-4,0,0]}}},
+      {id:"e",time:1,bones:{arm:{rotation:[0,0,0]}}},
+    ],
+  });
+  const raw=bakeShapePreservingMotionToLinearRecipe({
+    name:"loop",loop:true,duration:1,
+    poses:[
+      {id:"a",time:0,bones:{arm:{rotation:[0,0,0]}}},
+      {id:"b",time:.25,bones:{arm:{rotation:[10,0,0]}}},
+      {id:"c",time:.5,bones:{arm:{rotation:[0,0,0]}}},
+      {id:"d",time:.75,bones:{arm:{rotation:[-4,0,0]}}},
+      {id:"e",time:1,bones:{arm:{rotation:[0,0,0]}}},
+    ],
+  },[{bone:"arm",channel:"rotation"}],
+  {sample_fps:40,loop_strategy:"periodic"});
+  const check=comparePchipLinearContinuityOnSharedGrid({
+    source:recipe,baked:compileMotionRecipe(raw.recipe),
+    targets:[{bone:"arm",channel:"rotation"}],sample_fps:40,
+  });
+  expect(check.state).toBe("SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON");
+  if(check.state!=="SOURCE_ONLY_SHARED_GRID_CONTINUITY_COMPARISON")
+    throw new Error(check.reason);
+  expect(check.tracks[0].loop_seam_velocity_jump).toMatchObject({
+    native_seam_continuity_attested:false,
+    decreased:true,
+  });
+  expect(check.tracks[0].loop_seam_velocity_jump?.baked)
+    .toBeLessThan(check.tracks[0].loop_seam_velocity_jump!.source);
+  expect(check.native_playback_attested).toBe(false);
+});

@@ -337,3 +337,66 @@ describe("simultaneous sampled speed, acceleration and jerk caps",()=>{
     expect(JSON.stringify(source)).toBe(before);
   });
 });
+
+
+describe("opt-in periodic C1 seam PCHIP",()=>{
+  const closed=()=>({
+    name:"periodic_pose",loop:true,duration:1,
+    poses:[
+      {id:"start",time:0,bones:{arm:{rotation:[0,0,0] as [number,number,number]}}},
+      {id:"high",time:0.25,bones:{arm:{rotation:[10,0,0] as [number,number,number]}}},
+      {id:"mid",time:0.5,bones:{arm:{rotation:[0,0,0] as [number,number,number]}}},
+      {id:"low",time:0.75,bones:{arm:{rotation:[-4,0,0] as [number,number,number]}}},
+      {id:"seam",time:1,bones:{arm:{rotation:[0,0,0] as [number,number,number]}}},
+    ],
+  });
+  test("source-closed periodic loop preserves anchors and exact analytic end/start tangents",()=>{
+    const input=closed(),before=JSON.stringify(input);
+    const baked=bakeShapePreservingMotionToLinearRecipe(
+      input,[{bone:"arm",channel:"rotation"}],
+      {sample_fps:40,loop_strategy:"periodic"}
+    );
+    const seam=baked.evidence.periodic_seam;
+    expect(seam?.state).toBe("SOURCE_ONLY_ANALYTIC_C1_SEAM");
+    expect(seam?.tracks).toHaveLength(1);
+    expect(seam?.tracks[0].analytic_tangent[0]).toBeGreaterThan(0);
+    expect(seam?.native_loop_playback_attested).toBe(false);
+    expect(seam?.native_linear_seam_velocity_attested).toBe(false);
+    expect(baked.recipe.loop).toBe(true);
+    expect(baked.evidence.generated_channel_key_count).toBe(36);
+    expect(baked.recipe.poses.filter(p=>!p.id.startsWith("__ld_pchip_"))
+      .map(p=>p.bones.arm.rotation?.[0])).toEqual([0,10,0,-4,0]);
+    expect(JSON.stringify(input)).toBe(before);
+  });
+
+  test("open endpoints, incomplete source cycle and unsupported tangent policy fail closed",()=>{
+    const input=closed();
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(
+      input,[{bone:"arm",channel:"rotation"}],
+      {sample_fps:40})).toThrow("MOTION_PCHIP_LOOP_REQUIRES_PERIODIC_TANGENTS");
+    input.poses[4].bones.arm.rotation[0]=1;
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(
+      input,[{bone:"arm",channel:"rotation"}],
+      {sample_fps:40,loop_strategy:"periodic"}))
+      .toThrow("MOTION_PCHIP_PERIODIC_SOURCE_NOT_CLOSED");
+    input.poses[4].bones.arm.rotation[0]=0;
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(
+      input,[{bone:"arm",channel:"rotation"}],
+      {sample_fps:40,loop_strategy:"periodic",boundary_tangent:"rest_endpoints"}))
+      .toThrow("MOTION_PCHIP_PERIODIC_TANGENT_POLICY_OR_CAP_UNSUPPORTED");
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(
+      input,[{bone:"arm",channel:"rotation"}],
+      {sample_fps:40,loop_strategy:"periodic",max_sampled_speed_ratio:1.2}))
+      .toThrow("MOTION_PCHIP_PERIODIC_TANGENT_POLICY_OR_CAP_UNSUPPORTED");
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(
+      {...input,loop:false},[{bone:"arm",channel:"rotation"}],
+      {sample_fps:40,loop_strategy:"periodic"}))
+      .toThrow("MOTION_PCHIP_PERIODIC_REQUIRES_AUTHORED_LOOP");
+    const incomplete=closed();
+    incomplete.poses[4].time=0.975;
+    expect(()=>bakeShapePreservingMotionToLinearRecipe(
+      incomplete,[{bone:"arm",channel:"rotation"}],
+      {sample_fps:40,loop_strategy:"periodic"}))
+      .toThrow("MOTION_PCHIP_PERIODIC_SOURCE_NOT_CLOSED");
+  });
+});

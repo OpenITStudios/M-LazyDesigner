@@ -822,3 +822,37 @@ describe("source-only PCHIP baked motion through the existing Gateway bridge",()
       .toThrow("SEMANTIC_PCHIP_SPRING_CHILD_PROTECTED");
   });
 });
+
+
+describe("periodic source-only PCHIP Gateway invocation",()=>{
+  test("closed cyclic pose uses existing native create schema with explicit seam evidence",()=>{
+    const source={
+      name:"breathing_loop",loop:true,duration:1,
+      poses:[
+        {id:"a",time:0,bones:{body:{rotation:[0,0,0] as [number,number,number]}}},
+        {id:"b",time:.25,bones:{body:{rotation:[10,0,0] as [number,number,number]}}},
+        {id:"c",time:.5,bones:{body:{rotation:[0,0,0] as [number,number,number]}}},
+        {id:"d",time:.75,bones:{body:{rotation:[-4,0,0] as [number,number,number]}}},
+        {id:"e",time:1,bones:{body:{rotation:[0,0,0] as [number,number,number]}}},
+      ],
+    };
+    const out=compileSemanticMotionWithPchipToGatewayInvocation(source,{
+      archetype:"IDLE",activation:"PREVIEW_ONLY",
+      primary_bones:["body"],
+      pose_roles:[{pose_id:"b",role:"ACTION"}],
+    },[{bone:"body",channel:"rotation"}],
+    {sample_fps:40,loop_strategy:"periodic"});
+    expect(createAnimationParameters.safeParse(out.gateway_arguments.arguments).success)
+      .toBe(true);
+    expect(out.gateway_arguments.arguments.loop).toBe(true);
+    expect(out.semantic_context.shape_preserving_linear_bake.periodic_seam)
+      .toMatchObject({state:"SOURCE_ONLY_ANALYTIC_C1_SEAM",
+        native_loop_playback_attested:false});
+    expect(out.semantic_context.shape_preserving_linear_bake.continuity_review.tracks[0]
+      .loop_seam_velocity_jump).toMatchObject({
+        decreased:true,native_seam_continuity_attested:false,
+      });
+    expect(out.gateway_arguments.arguments).not.toHaveProperty("periodic_seam");
+    expect(out.execution_evidence.playback_attested).toBe(false);
+  });
+});

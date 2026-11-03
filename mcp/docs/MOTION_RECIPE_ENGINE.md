@@ -606,6 +606,35 @@ Bedrock playback. Source references with zero baseline acceleration/jerk
 may be unsatisfiable while preserving authored anchors. All native and
 visual proof flags remain false.
 
+### Explicit closed-loop periodic PCHIP (2026-11-03)
+
+`MotionPchipOptions.loop_strategy="periodic"` enables closed-loop easing
+only when the original `MotionRecipe.loop=true`, source first/last
+channel keys cover exactly `[0,duration]`, those two values are equal
+on all three axes and at least four source keys define the cyclic track.
+The PCHIP tangent at the loop boundary is computed once from the last
+and first secants using a weighted harmonic mean (or zero when they
+reverse direction), and copied exactly to both endpoints. Therefore the
+**analytic cubic** has matching boundary values and first derivatives.
+All original pose IDs/values and timeline grid requirements remain
+unchanged. It does not auto-close an open loop.
+
+Periodic mode explicitly refuses `rest_endpoints` and speed/
+acceleration/jerk convex caps because blending an original LINEAR loop
+would generally destroy its periodic C1 tangent contract. Unsupported
+or incomplete cycles fail closed. The source-only
+`periodic_seam` receipt contains each target's common analytic
+tangent, with native sampled seam/loop-playback proof flags false.
+The existing same-FPS `continuity_review` also compares the incoming
+versus outgoing *sampled LINEAR* velocity jump at the loop boundary.
+This diagnostic must not be mistaken for a guarantee of continuous
+velocity after LINEAR baking or Blockbench/Bedrock playback.
+
+These changes reuse the existing `create_animation` Gateway,
+source/native FPS checks and semantic role/identity validation without
+changing the public schema, release status, native Undo or player
+animation controllers.
+
 ## Native codec timing parity (registered create path)
 
 The already-registered `create_animation` Runtime now checks all requested

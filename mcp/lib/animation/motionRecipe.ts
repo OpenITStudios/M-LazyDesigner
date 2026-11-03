@@ -124,6 +124,8 @@ export type MotionPchipOptions = {
   /** Opt-in 1..3x bounds on same-FPS discrete 2nd/3rd differences. */
   max_sampled_acceleration_ratio?: number;
   max_sampled_jerk_ratio?: number;
+  /** Explicit-only closed-loop PCHIP with equal end/start tangents. */
+  loop_strategy?: "periodic";
 };
 
 const MOTION_PCHIP_MAX_TARGETS = 12;
@@ -136,7 +138,10 @@ const MOTION_PCHIP_LINEAR_DIFFERENCE = 1e-6;
  * neighboring secants change sign or touch a hold, preventing local extrema
  * from being overshot. Each output channel uses independent numeric axes.
  */
-function pchipAxisSlopes(times: readonly number[], values: readonly number[], stopEnds: boolean) {
+function pchipAxisSlopes(
+  times: readonly number[], values: readonly number[],
+  stopEnds: boolean, periodic=false
+) {
   const h = times.slice(1).map((time,i)=>time-times[i]);
   const d = h.map((span,i)=>(values[i+1]-values[i])/span);
   if (h.some((span)=>!Number.isFinite(span)||span<=0) ||
@@ -144,6 +149,11 @@ function pchipAxisSlopes(times: readonly number[], values: readonly number[], st
     throw new Error("MOTION_PCHIP_NUMERIC_SLOPE_INVALID");
   }
   const n=values.length;
+  if (periodic && (n<4 || stopEnds ||
+      Math.abs(values[0]-values[n-1])>
+        1e-9*Math.max(1,Math.abs(values[0]),Math.abs(values[n-1])))) {
+    throw new Error("MOTION_PCHIP_PERIODIC_SOURCE_NOT_CLOSED");
+  }
   if (n===2) return stopEnds ? [0,0] : [d[0],d[0]];
   const slopes=new Array<number>(n).fill(0);
   const endpoint=(h0:number,h1:number,d0:number,d1:number) => {
@@ -158,6 +168,18 @@ function pchipAxisSlopes(times: readonly number[], values: readonly number[], st
     if (d[i-1]*d[i]<=0) continue;
     const w1=2*h[i]+h[i-1],w2=h[i]+2*h[i-1];
     slopes[i]=(w1+w2)/(w1/d[i-1]+w2/d[i]);
+  }
+  if(periodic){
+    const left=h.length-1;
+    let boundary=0;
+    if(d[left]*d[0]>0){
+      // Weighted harmonic first/last secants choose one common tangent
+      // at t=0 and t=duration. This is not periodic extrapolation.
+      const w1=2*h[0]+h[left],w2=h[0]+2*h[left];
+      boundary=(w1+w2)/(w1/d[left]+w2/d[0]);
+    }
+    slopes[0]=boundary;
+    slopes[n-1]=boundary;
   }
   if (slopes.some((s)=>!Number.isFinite(s))) {
     throw new Error("MOTION_PCHIP_NUMERIC_SLOPE_INVALID");
@@ -398,8 +420,21 @@ export function bakeShapePreservingMotionToLinearRecipe(
   options: MotionPchipOptions
 ) {
   const compiled=compileMotionRecipe(recipe);
-  if (recipe.loop===true) {
+  const periodic=options?.loop_strategy==="periodic";
+  if(recipe.loop===true && !periodic){
     throw new Error("MOTION_PCHIP_LOOP_REQUIRES_PERIODIC_TANGENTS");
+  }
+  if(recipe.loop!==true && options?.loop_strategy!==undefined){
+    throw new Error("MOTION_PCHIP_PERIODIC_REQUIRES_AUTHORED_LOOP");
+  }
+  if(recipe.loop===true && periodic &&
+      (options.boundary_tangent==="rest_endpoints" ||
+       options.max_sampled_speed_ratio!==undefined ||
+       options.max_sampled_acceleration_ratio!==undefined ||
+       options.max_sampled_jerk_ratio!==undefined)){
+    // A convex blend with the original LINEAR loop generally destroys
+    // periodic C1 tangents. Do not silently weaken the seam contract.
+    throw new Error("MOTION_PCHIP_PERIODIC_TANGENT_POLICY_OR_CAP_UNSUPPORTED");
   }
   const fps=options?.sample_fps;
   const policy=options?.boundary_tangent??"shape_preserving";
@@ -434,6 +469,11 @@ export function bakeShapePreservingMotionToLinearRecipe(
   const additions=new Map<number,PchipGeneratedPose>();
   const claimed=new Set<string>();
   let newKeyCount=0, effectiveShapeChange=false;
+  const periodicSeamEvidence:Array<{
+    bone:string;channel:"position"|"rotation";
+    analytic_tangent:[number,number,number];
+    source_endpoints_equal:boolean;
+  }>=[];
   for (const target of targets) {
     if (!target || typeof target.bone!=="string" ||
         !target.bone.trim() || target.bone!==target.bone.trim() ||
@@ -452,6 +492,18 @@ export function bakeShapePreservingMotionToLinearRecipe(
     }
     const times=frames.map((frame)=>frame.time);
     const values=frames.map((frame)=>frame[target.channel] as MotionVec3);
+    if(periodic){
+      if(frames.length<4 ||
+          Math.abs(times[0])>MOTION_PCHIP_GRID_TOLERANCE ||
+          Math.abs(times[times.length-1]-compiled.duration)>
+            MOTION_PCHIP_GRID_TOLERANCE ||
+          values[0].some((value,axis)=>
+            Math.abs(value-values[values.length-1][axis])>
+              1e-8*Math.max(1,Math.abs(value))
+          )){
+        throw new Error("MOTION_PCHIP_PERIODIC_SOURCE_NOT_CLOSED");
+      }
+    }
     if (target.channel==="rotation" &&
         values.some((value,i)=>i>0 &&
           value.some((axis,j)=>Math.abs(axis-values[i-1][j])>120))) {
@@ -459,9 +511,22 @@ export function bakeShapePreservingMotionToLinearRecipe(
     }
     const tangents=[0,1,2].map((axis)=>
       pchipAxisSlopes(times,values.map((value)=>value[axis]),
-        policy==="rest_endpoints")
+        policy==="rest_endpoints",periodic)
     );
-    for(let segment=0;segment<frames.length-1;segment++){
+    if(periodic){
+      const seam=tangents.map((axisSlopes)=>axisSlopes[0])
+        as [number,number,number];
+      if(seam.some((value,axis)=>
+        !Number.isFinite(value) ||
+        Math.abs(value-tangents[axis][tangents[axis].length-1])>1e-8)){
+        throw new Error("MOTION_PCHIP_PERIODIC_TANGENT_SEAM_UNVERIFIED");
+      }
+      periodicSeamEvidence.push({
+        bone:target.bone,channel:target.channel,
+        analytic_tangent:seam,source_endpoints_equal:true,
+      });
+    }
+    for(let segment=0;segment<frames.length-1++){
       const start=Math.round(times[segment]*fps);
       const end=Math.round(times[segment+1]*fps);
       const span=times[segment+1]-times[segment];
@@ -561,6 +626,15 @@ export function bakeShapePreservingMotionToLinearRecipe(
       selected_channel_count:targets.length,
       source_sample_fps:fps,
       tangent_policy:policy,
+      ...(periodic ? {
+        periodic_seam:{
+          state:"SOURCE_ONLY_ANALYTIC_C1_SEAM" as const,
+          selected_channel_count:periodicSeamEvidence.length,
+          tracks:periodicSeamEvidence,
+          native_linear_seam_velocity_attested:false as const,
+          native_loop_playback_attested:false as const,
+        },
+      } : {}),
       ...(speedRatio!==undefined?{
         sampled_peak_speed_guard:{
           state:"SOURCE_ONLY_SAMPLED_SPEED_BOUNDED" as const,

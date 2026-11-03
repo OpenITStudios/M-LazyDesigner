@@ -373,7 +373,7 @@ export function comparePchipLinearContinuityOnSharedGrid(input: {
   if (!input || !input.source || !input.baked ||
       input.source.name!==input.baked.name ||
       input.source.duration!==input.baked.duration ||
-      input.source.loop!==false || input.baked.loop!==false ||
+      input.source.loop!==input.baked.loop ||
       !Number.isSafeInteger(input.sample_fps) ||
       input.sample_fps<10 || input.sample_fps>120 ||
       !Array.isArray(input.targets) || input.targets.length<1 ||
@@ -437,6 +437,11 @@ export function comparePchipLinearContinuityOnSharedGrid(input: {
       max_speed:number;max_acceleration:number;max_jerk:number;
       path_length:number;
     };
+    loop_seam_velocity_jump:{
+      source:number;baked:number;
+      decreased:boolean;
+      native_seam_continuity_attested:false;
+    } | null;
     knot_velocity_jump:{
       max_source:number;max_baked:number;
       decreased_count:number;increased_count:number;unchanged_count:number;
@@ -473,6 +478,13 @@ export function comparePchipLinearContinuityOnSharedGrid(input: {
           Math.abs(key.time-Math.round(key.time*fps)/fps)>
             PCHIP_CONTINUITY_CLOCK_EPSILON)) {
       return unavailable("PCHIP_CONTINUITY_SOURCE_CLOCK_OR_EXTENT_MISMATCH");
+    }
+    if(input.source.loop===true &&
+        source[0].value.some((value,axis)=>
+          Math.abs(value-source[source.length-1].value[axis])>
+            1e-8*Math.max(1,Math.abs(value))
+        )){
+      return unavailable("PCHIP_CONTINUITY_PERIODIC_SOURCE_NOT_CLOSED");
     }
     // A smooth curve must never move a user-authored primary pose/phase key.
     if(source.some((key)=>{
@@ -560,8 +572,27 @@ export function comparePchipLinearContinuityOnSharedGrid(input: {
         });
       }
     }
+    const seamJump=(samples:readonly MotionVec3[])=>
+      Math.hypot(...[0,1,2].map((axis)=>
+        ((samples[1][axis]-samples[0][axis])-
+          (samples[samples.length-1][axis]-
+            samples[samples.length-2][axis]))*fps
+      ));
+    const loopSeam=input.source.loop===true
+      ? {
+          source:round(seamJump(sourcePositions),6),
+          baked:round(seamJump(bakedPositions),6),
+          decreased:seamJump(bakedPositions)<seamJump(sourcePositions)-1e-5,
+          native_seam_continuity_attested:false as const,
+        }
+      : null;
+    if(loopSeam && (!Number.isFinite(loopSeam.source)||
+        !Number.isFinite(loopSeam.baked))){
+      return unavailable("PCHIP_CONTINUITY_PERIODIC_SEAM_NONFINITE");
+    }
     tracks.push({
       bone:target.bone,channel:target.channel,
+      loop_seam_velocity_jump:loopSeam,
       units:target.channel==="rotation"?"degrees":"blockbench_model_units",
       grid_sample_count:count,
       authored_interior_knot_count:source.length-2,
