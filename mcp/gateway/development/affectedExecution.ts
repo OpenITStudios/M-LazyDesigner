@@ -375,6 +375,7 @@ const GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH: Readonly<Record<string, readonly str
   ],
   "mcp/gateway/control/orchestration.ts": [
     "mcp/tests/gateway-control-orchestration.test.ts",
+    "mcp/tests/animation-motion-evidence-contract.test.ts",
   ],
   "mcp/gateway/capabilities/catalog.ts": [
     "mcp/gateway/capabilities/intelligence.test.ts",
@@ -385,6 +386,7 @@ const GATEWAY_HOT_PATH_REGRESSIONS_BY_PATH: Readonly<Record<string, readonly str
   ],
   "mcp/gateway/control/capabilities.ts": [
     "mcp/tests/gateway-contract.test.ts",
+    "mcp/tests/gateway-capability-discovery-hardening.test.ts",
   ],
   "mcp/gateway/handlers/registerCoreTools.ts": [
     "mcp/tests/gateway-contract.test.ts",
@@ -586,6 +588,11 @@ function sharedContractTestsForPath(path: string): readonly string[] {
   if (path === "mcp/lib/animation/motionRecipe.ts") {
     return ["mcp/tests/motion-recipe.test.ts"];
   }
+  if (path === "mcp/lib/animation/motionEvidence.ts") {
+    // Keep the retained non-approving animation evidence contract in scope
+    // after retirement of its MP4 transport, without a broad test sweep.
+    return ["mcp/tests/animation-motion-evidence-contract.test.ts"];
+  }
   if (path === "mcp/lib/animation/quality.ts") {
     return ["mcp/tests/quality-efficiency-intelligence.test.ts"];
   }
@@ -594,6 +601,7 @@ function sharedContractTestsForPath(path: string): readonly string[] {
       "mcp/tests/animation-preview-state.test.ts",
       "mcp/tests/animation-runtime-optimization.test.ts",
       "mcp/tests/geometry-surface-evidence.test.ts",
+      "mcp/tests/animation-motion-evidence-contract.test.ts",
     ];
   }
   if (path === "mcp/lib/animation/previewState.ts") {

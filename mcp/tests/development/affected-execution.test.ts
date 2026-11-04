@@ -355,6 +355,34 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("retained animation motion evidence keeps its actual source and Runtime consumers covered", async () => {
+    const contract = "mcp/tests/animation-motion-evidence-contract.test.ts";
+    const cases: Array<[string, string[]]> = [
+      ["mcp/lib/animation/motionEvidence.ts", [contract]],
+      ["mcp/server/runtime/contracts/animation.ts", [
+        "mcp/tests/animation-preview-state.test.ts",
+        "mcp/tests/animation-runtime-optimization.test.ts",
+        "mcp/tests/geometry-surface-evidence.test.ts",
+        contract,
+      ]],
+    ];
+    for (const [source, expected] of cases) {
+      const plan = planAffectedExecution({
+        changedPaths: [source], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, source).toBe(false);
+      expect(plan.checks, source).toContain("PROJECT_GRAPH");
+      expect(plan.checks, source).toContain("TARGETED_TESTS");
+      expect(plan.targeted_tests, source).toEqual([...expected].sort());
+      expect(plan.commands, source).toContain(
+        `bun test ${[...expected].sort().map(path => path.slice(4)).join(" ")}`
+      );
+      for (const file of expected) {
+        expect(await Bun.file(file.slice(4)).exists(), file).toBe(true);
+      }
+    }
+  });
+
   test("pose capture source selects its existing focused animation preview regressions", () => {
     const plan = planAffectedExecution({
       changedPaths: ["mcp/lib/animation/previewState.ts"],
@@ -825,6 +853,7 @@ describe("affected execution planner", () => {
       ]],
       ["mcp/gateway/control/orchestration.ts", [
         "mcp/tests/gateway-control-orchestration.test.ts",
+        "mcp/tests/animation-motion-evidence-contract.test.ts",
       ]],
       ["mcp/gateway/capabilities/catalog.ts", [
         "mcp/gateway/capabilities/intelligence.test.ts",
@@ -835,6 +864,7 @@ describe("affected execution planner", () => {
       ]],
       ["mcp/gateway/control/capabilities.ts", [
         "mcp/tests/gateway-contract.test.ts",
+        "mcp/tests/gateway-capability-discovery-hardening.test.ts",
       ]],
       ["mcp/gateway/handlers/registerCoreTools.ts", [
         "mcp/tests/gateway-contract.test.ts",
