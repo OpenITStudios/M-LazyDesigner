@@ -736,7 +736,8 @@ export class CorrectionLoopRegistry {
       };
     }
 
-    this.updateEvidence(
+    // Compiled observations may update visual loops; raw discrepancies may not.
+    this.applyEvidence(
       handle,
       evidenceHandle,
       compiled.supported,
@@ -754,6 +755,22 @@ export class CorrectionLoopRegistry {
     evidenceHandle: VerificationEvidenceHandle,
     discrepancies: readonly VerificationDiscrepancy[],
     options: CorrectionEvidenceUpdateOptions = {}
+  ): void {
+    const record = this.entries.get(handle);
+    if (!record) throw new Error("CORRECTION_LOOP_NOT_FOUND: handle expired.");
+    if (record.observation_origin === "STRUCTURED_VISUAL") {
+      throw new Error(
+        "STRUCTURED_VISUAL_OBSERVATIONS_REQUIRED: use the existing structured observation compiler."
+      );
+    }
+    this.applyEvidence(handle, evidenceHandle, discrepancies, options);
+  }
+
+  private applyEvidence(
+    handle: CorrectionLoopHandle,
+    evidenceHandle: VerificationEvidenceHandle,
+    discrepancies: readonly VerificationDiscrepancy[],
+    options: CorrectionEvidenceUpdateOptions
   ): void {
     const record = this.entries.get(handle);
     if (!record) throw new Error("CORRECTION_LOOP_NOT_FOUND: handle expired.");

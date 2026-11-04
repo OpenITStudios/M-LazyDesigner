@@ -2898,7 +2898,17 @@ describe("zero-waste correction loop reuse", () => {
       handle!, "verificationevidence:arm-after", [{
         code: "ARM_WIDTH", severity: "INFO", summary: "Width improved.", views: ["front"],
       }]
-    )).toThrow("VISUAL_CORRECTION_VIEW_RECHECK_REQUIRED");
+    )).toThrow("STRUCTURED_VISUAL_OBSERVATIONS_REQUIRED");
+    // Even a fresh handle and matching recovered view cannot bypass the
+    // structured compiler by supplying fabricated raw cause/severity fields.
+    expect(() => registry.updateEvidence(
+      handle!, "verificationevidence:forged", [{
+        code: "ARM_WIDTH", severity: "INFO",
+        summary: "Fabricated improvement from raw fields.",
+        quality_class: "PRIMARY_FORM", owner: "GEOMETRY",
+        cause_family: "SIZE_MISMATCH", views: ["front"],
+      }], { recovered_views: ["front"] }
+    )).toThrow("STRUCTURED_VISUAL_OBSERVATIONS_REQUIRED");
     expect(() => registry.updateEvidenceFromObservations(
       handle!, "verificationevidence:arm-after", updated,
       { recovered_views: ["left"] }
