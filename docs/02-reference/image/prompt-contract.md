@@ -104,7 +104,8 @@ contrast, and overall Minecraft/Blockbench game-asset visual language.
 MINECRAFT_STYLIZED_BLOCKBENCH
 = composed primary cuboids + selected rotated layers/frames + purposeful
 faceted transitions + intentionally visible block-derived depth
-+ detailed hand-painted pixel clusters shaded ON model faces
++ deliberate non-uniform, material-aware hand-painted pixel clusters ON model faces
++ meaningful quiet zones and distinct dark/mid/light groupings
 != smooth photorealistic car CGI or generic polished conventional low-poly
 != LEGO bricks, Minecraft world terrain, one raised mini-cube per pixel
 
@@ -113,6 +114,27 @@ INTENTIONAL_VOXEL_BLOCK_ART    = optional regularly stepped blocks if requested
 ```
 
 **Object-space lock:** preserve the source's true long/short proportions, part count, contact, and view-side attachments. Distinguish structural cuboids from painted face pixels; keep body panels purposeful and avoid cosmetic cube clutter. Make angular/rounded approximations plausible for Blockbench, but do not claim a perfect curved mesh or native export proof.
+
+### Source-Image Style Fingerprint — No Generic Voxel Adjectives
+
+If a style example is present, first visually inspect the actual image and derive only decision-changing features from `standard.md`'s **Evidence-Led Style Dissection**. Do not emit the image prompt from the phrase "detailed Minecraft voxel" or copy a generic marketplace aesthetic. For difficult cases, use a few concise clauses:
+
+```text
+MACRO_FORM          = <large silhouette masses, coarse angular character>
+MESO_STRUCTURE      = <only genuinely volumetric joints, structural layers, supports>
+MICRO_TEXTURE       = <material-specific painted pixel clusters ON faces>
+REST_ZONES          = <faces that remain visually calm and low-frequency>
+VALUE_HIERARCHY     = <where the visible reference groups dark/mid/light values>
+MATERIAL_SEPARATION = <different texture treatment for paint/metal/glass/rubber/etc>
+SUBJECT_LOCK        = <source object's actual identity, proportions, parts and colors>
+STYLE_LOCK          = <example's artistic treatment, not its object identity>
+```
+
+**Distribute detail by meaning, not evenly by screen space.** Avoid all-over repeated checkerboard squares, equally spaced highlights, generic noisy dithering, bevel tiles pretending to be Cubes, oversized micro-pixel steps and one shading recipe applied to every material. Favor meaningful accent clusters at physical interfaces and controlled quieter surfaces elsewhere. For Minecraft-inspired art, shape is principally carried by geometry and most fine information by texture; this does not require literal vanilla art constraints for a non-vanilla approved style.
+
+**Use actual images** for both source/object and style when available. An image URL, filename, Markdown label, or generated text summary cannot substitute for those pixels in a visual style match. Never interpret photographic illumination as required texture patches or scene background as asset topology.
+
+**Error-first revision routing:** if a generated asset has correct silhouette but checkerboard surfaces, revise MICRO texture distribution without adding MESO Cubes; if texture is faithful but structure is wrong, fix MACRO/MESO geometry first; if the output includes charts or invented dimensions, fix presentation independently. Two repeated failures in the same direction require a changed diagnosis or stop, not another adjective-heavy render.
 
 **Style repair without overcorrecting:** after a user rejects both pixelated block sculptures and smooth real-world product renders, target the **middle**: handcrafted Minecraft game-asset geometry with cuboid layering and painterly/pixel face texture, matching the actual style example. Do not replace it with an untextured low-poly object.
 

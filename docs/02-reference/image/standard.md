@@ -147,7 +147,7 @@ Do not add quotes, slogans, model-info paragraphs, or technical prose inside the
 
 ## Minecraft-Style Blockbench Model Grammar — Geometry AND Hand-Painted Texture
 
-For ChatGPT visual/model generation, the default Minecraft-style 3D reference is **MINECRAFT_STYLIZED_BLOCKBENCH**: deliberately built, chunky **cuboid-based game asset geometry** with selected rotated/angular parts, layered depth and **hand-painted pixel-art texturing on the faces**. It is not a real-world object render with a Minecraft label, nor a world-scale sculpture made of hundreds of individual tiny cubes. When the user supplies a visual style example, **use that actual example as the style authority**, while retaining the separate subject/source image as identity and proportion authority.
+For ChatGPT visual/model generation, the default Minecraft-style 3D reference is **MINECRAFT_STYLIZED_BLOCKBENCH**: deliberately constructed **cuboid-based game asset geometry** with selected rotated/angular parts, layered depth and **hand-painted pixel-art texturing on the faces**. It is not a real-world object render with a Minecraft label, nor a world-scale sculpture made of hundreds of individual tiny cubes. When the user supplies a visual style example, **use that actual example as the style authority**, while retaining the separate subject/source image as identity and proportion authority.
 
 ```text
 MINECRAFT_STYLIZED_BLOCKBENCH (default for Minecraft 3D asset references)
@@ -155,8 +155,8 @@ MINECRAFT_STYLIZED_BLOCKBENCH (default for Minecraft 3D asset references)
 → selected beams, inset panels, trims and attachments with visible structural depth
 → angled faces / stepped arcs ONLY where macro geometry or silhouette requires them
 → readable angular/segmented rounded forms, not smoothly shaded CGI cylinders
-→ hand-painted face textures: purposeful pixel-color clusters, banded lights/shadows,
-  differentiated wood/metal/glass/cloth/stone, restrained surface pixel variation
+→ hand-painted face textures: purposeful non-uniform pixel-color clusters, material-aware
+  light/shadow and hue-shifted ramps, quiet surfaces and restrained pixel variation
 → texture pixels stay painted ON surfaces: never one physical Cube per painted pixel
 
 CLEAN_BLOCKBENCH_FORM (alternate when user explicitly wants simpler, flatter geometry)
@@ -172,6 +172,46 @@ STANDALONE_PIXEL_ART
 **Distinguish three scales:** (1) whole-object silhouette and proportion, (2) meaningful Blockbench geometry pieces such as panels/frames/joints, and (3) texture-pixel clusters painted *onto those pieces*. Do not collapse scale 2 into scale 3 by extruding every highlight. Do not remove scale 2 entirely in pursuit of smooth product-render surfaces. Cube is a construction primitive, **not a visible pixel-per-Cube rule**.
 
 The user's object photograph is **subject authority** (recognizable identity, overall proportions, functional parts and confirmed colors). A second visual example can be **style-only authority** (cuboid detail density, painted material shading, angular construction and rendering treatment). Do not copy the example vehicle's identity, body layout, color, logo, accessories or dimensions when it was supplied only to demonstrate style. Preserve UNKNOWN source-hidden details; the illustrative style example cannot reveal them.
+
+### Evidence-Led Style Dissection — Observe Before Generating
+
+When a user supplies a **style example**, inspect the actual image at whole-object and localized detail scale **before** choosing adjectives or issuing image generation. Do not silently substitute a generic image found online, a remembered render, or a prose label for that source. The result is a short internal **style fingerprint**, not a new mode, learned weight, persistent approval, model score or asset-specific geometry template.
+
+```text
+MACRO / silhouette    → large volumes, overall proportion, angle language,
+                        recognizability, depth and support
+MESO / construction   → only actual structural panels, rails, borders,
+                        overlapping supports, joints, bevels and attachments
+MICRO / face texture  → painted pixel-color clusters, restrained highlight/shadow
+                        and material details ON the exposed faces
+REST / visual quiet   → which large surfaces deliberately have low detail
+MATERIAL DIFFERENCE  → how each visible material handles texture and shade
+LIGHT VS PAINT       → visible scene lighting versus model-painted tonal pattern
+UNKNOWN              → details, camera, hidden sides or UV resolution not proved
+```
+
+**Critical separation:** texture micro-pixels must not become separate protruding cubes. A plausible MESO panel must have structural purpose, depth/attachment or a silhouette effect; do not fabricate it just to display more pattern. On each material's large face, distribute texture detail *non-uniformly* and deliberately: emphasize relevant edges, intersections, inset boundaries, material direction and wear/lighting cues; keep broad **quiet areas**. Do not cover all faces with regular checkerboard rectangles, uniform random squares, evenly spaced white highlights, repeated faux bevels, or unnecessary noise.
+
+**Material-aware clustering, not one procedural overlay:** wood may need directional grain; iron/stone needs weight, restrained highlights and contact-darkened edges; colored paint can use coherent midtones with localized hue-shifted clusters; dark glass may be mostly calm with a few selective reflections. These are conditionally useful examples, not universal rules, palette prescriptions or proof of the supplied model's real material properties. Prefer readable limited ramps and controlled color temperature; avoid pillow shading, repetitive tiling, banding and mixed pixel resolutions when they conflict with the visible style.
+
+**Study example — supplied angular off-road vehicle image (style evidence only):** visible structural hierarchy includes large orange body regions, coherent dark charcoal supports/fenders/roof gear and angular framed windows. It uses clear depth where components really overlap; painted orange/dark tonal clusters are concentrated around meaningful bands and edges, while significant surfaces remain comparatively quiet. The wheel reads as an intentional segmented 3D assembly with face-level shading, not a textured square icon. The rendered dark studio background supports contrast but does not establish the source model format, exact Cube count, true UV texture resolution or Bedrock exportability. Do **not** transplant this vehicle's color, geometry, accessories or silhouette into other source objects. Promote only these *cross-object decisions* into the active prompt.
+
+This image-based visual study is not a claim the sample was exported from Blockbench, nor that one screenshot reveals hidden geometry. The actual style image remains essential: text alone cannot reproduce its precise artistic judgment. The official Blockbench **Minecraft Style Guide** is informative about element economy, texturing, color ramps, mixels and banding, but it documents primarily vanilla style; do not impose vanilla restrictions as mandatory on a user's distinctive non-vanilla example.
+
+### Failure Discriminator — Geometry vs Texture vs Presentation
+
+```text
+UNIFORM_CHECKERBOARD_SURFACE → texture distribution FAIL; not solved by adding geometry
+CUBIC_MICRO_GRAIN           → texture pixels have been converted into tiny raised Cubes
+NO_VISUAL_REST              → every face has equally intense detail; reduce noise
+REPETITIVE_COLOR_RAMP       → repeated identical light/dark bands independent of form
+MATERIAL_HOMOGENIZATION     → glass, body paint, metal and rubber share one texture noise rule
+GENERIC_SMOOTH_PRODUCT      → structure/style stripped away; preserve meaningful MESO construction
+STYLE_IDENTITY_LEAK         → style-example object features inserted into subject source
+POSTER_INSTEAD_OF_OBJECT    → additional labels, dimensions or panels replace style examination
+```
+
+An accepted reference should preserve **recognizable MACRO form**, **purposeful MESO volume**, **controlled MICRO painting**, **quiet regions** and **material-specific treatment** simultaneously. Failure on one layer is not a command to increase detail on all layers. Inspect *actual pixels* and identify the first wrong layer before selecting a new prompt or edit. Do not assign a numerical threshold or assert visual PASS without a reviewed output.
 
 ### Negative and acceptance examples
 

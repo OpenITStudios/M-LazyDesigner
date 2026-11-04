@@ -316,6 +316,44 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(skill).toContain("no infographic, dimensions, labels");
   });
 
+
+  test("style analysis studies material-aware clusters and visual rest before new image generation", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("evidence-led style dissection");
+    for (const layer of ["macro / silhouette", "meso / construction", "micro / face texture", "rest / visual quiet"]) {
+      expect(standard).toContain(layer);
+    }
+    for (const defect of [
+      "uniform_checkerboard_surface", "no_visual_rest", "material_homogenization",
+      "style_identity_leak", "poster_instead_of_object",
+    ]) expect(standard).toContain(defect);
+    expect(prompt).toContain("no generic voxel adjectives");
+    expect(prompt).toContain("rest_zones");
+    expect(templates).toContain("no repeated checkerboard squares");
+    expect(skill).toContain("reference learning rule");
+    expect(skill).toContain("not weight training");
+  });
+
+  test("texture-only pattern failure does not trigger extra Cube geometry or invented style identity", async () => {
+    const [standard, prompt, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("micro-pixels must not become separate protruding cubes");
+    expect(prompt).toContain("correct silhouette but checkerboard surfaces");
+    expect(prompt).toContain("without adding meso cubes");
+    expect(standard).toContain("the supplied angular off-road vehicle image");
+    expect(standard).toContain("do not transplant this vehicle");
+    expect(skill).toContain("only promote observed");
+    expect(skill).toContain("do not compensate by making the render busier");
+  });
+
   test("coverage review cannot turn declared metadata or unobserved images into visual PASS", async () => {
     const [standard, prompt, templates, skill] = await Promise.all([
       read("../docs/02-reference/image/standard.md"),

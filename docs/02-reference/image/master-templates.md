@@ -84,6 +84,8 @@ CREATE ONE MINECRAFT-STYLE BLOCKBENCH 3D MODEL IMAGE.
 SUBJECT = <source object's recognizable parts, colors, silhouette and proportions>
 STYLE  = <actual style example's cuboid construction and hand-painted face texture>
 GEOMETRY = <primary masses, angular trims, useful attachment depth, limited facets>
+TEXTURE  = <material-specific NON-UNIFORM hand-painted clusters on faces>
+REST     = <broad quiet areas; no repeated checkerboard squares or global noise>
 PRESERVE = <source identity, confirmed size relationships and part details>
 BACKGROUND = neutral or dark studio; full asset visible and uncropped.
 ONLY IMAGE = one isolated front-left or matching 3/4 hero asset.
@@ -156,6 +158,13 @@ PANELS
 
 For each panel:
 - <PANEL LABEL>: <view/subject> — <single downstream decision purpose>
+
+SURFACE STYLE FROM ACTUAL EXAMPLE
+- <MACRO silhouette/shape language; only actual geometric MESO layering>
+- <MICRO pixel painting on faces, clustered around material/edge meaning>
+- <REST_ZONES with little/no pattern; avoid all-over checkerboard or random dithering>
+- <material-specific value ramps; distinguish dark glass, painted body and metal>
+- <keep source identity separate from visual example; no invented scale>
 
 SURFACE COVERAGE (only if a P1 decision needs a view)
 - <critical mass / back-or-side depth / attachment / opening and the panel supplying evidence>
