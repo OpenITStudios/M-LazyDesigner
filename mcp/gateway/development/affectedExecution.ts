@@ -32,6 +32,10 @@ export type AffectedExecutionPlan = {
   authoring_domains: AuthoringDomain[];
   commands: string[];
   fallback_full_verify: boolean;
+  /** Newly introduced executable source without a mapped behavior-test owner.
+   * This blocks affected execution; running all unrelated tests is not proof.
+   */
+  unowned_new_runtime_sources: string[];
   reasons: string[];
 };
 
@@ -951,6 +955,8 @@ function clearlyMappedPath(path: string): boolean {
 
 export function planAffectedExecution(input: {
   changedPaths: readonly string[];
+  /** Added/untracked status from the same Git selection; paths alone lack it. */
+  addedPaths?: readonly string[];
   semanticImpact: SemanticImpactReport;
   semanticInvalidation?: SemanticInvalidationPlan;
   semanticSourceAlignment?: {
@@ -1064,6 +1070,31 @@ export function planAffectedExecution(input: {
   ]);
   if (targetedTests.length > 0) checks.add("TARGETED_TESTS");
 
+  // A new executable module is not covered merely by living below mcp/
+  // or passing the TypeScript project graph. An unrelated changed test cannot
+  // establish ownership. Use the existing capability/anchor or shared
+  // source-to-regression map, not a second test registry or a full-suite proxy.
+  const changedSet = new Set(changedPaths);
+  const ownerSources = new Set(input.semanticImpact.affected_sources.map(normalize));
+  const hasAnchoredOwner = input.semanticImpact.affected_anchor_tests.length > 0;
+  const unownedNewRuntimeSources = uniqueSorted(
+    (input.addedPaths ?? []).map(normalize).filter((path) =>
+      changedSet.has(path) &&
+      isProjectGraphTypeScript(path) &&
+      !path.endsWith(".d.ts") &&
+      !path.endsWith(".test.ts") &&
+      !path.endsWith(".spec.ts") &&
+      sharedContractTestsForPath(path).length === 0 &&
+      !(hasAnchoredOwner && ownerSources.has(path))
+    )
+  );
+  if (unownedNewRuntimeSources.length > 0) {
+    reasons.push(
+      "New executable source has no explicit behavior-test owner: " +
+      unownedNewRuntimeSources.join(", ")
+    );
+  }
+
   if (checks.size === 0) {
     checks.add("FULL_VERIFY");
     reasons.push("mapped change produced no safe bounded verification owner");
@@ -1118,8 +1149,11 @@ export function planAffectedExecution(input: {
     checks: [...checks].sort(),
     targeted_tests: targetedTests,
     authoring_domains: domainInvalidation.domains,
-    commands: uniqueSorted(commands),
+    // Stop before executing even a full verifier: test count cannot prove
+    // the new module's behavior without a source-to-test relationship.
+    commands: unownedNewRuntimeSources.length > 0 ? [] : uniqueSorted(commands),
     fallback_full_verify: checks.has("FULL_VERIFY"),
+    unowned_new_runtime_sources: unownedNewRuntimeSources,
     reasons,
   };
 }

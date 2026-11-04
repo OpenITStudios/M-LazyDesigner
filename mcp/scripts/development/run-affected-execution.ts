@@ -61,10 +61,27 @@ export function assertSemanticSourceAlignedForAffectedRun(
   );
 }
 
+/** Refuse misleading structural-only source verification at the source owner.
+ * Existing mapped changes keep their bounded commands, without a full sweep.
+ */
+export function assertAffectedSourceOwnershipForRun(
+  plan: ReturnType<typeof buildAffectedExecutionPlan>
+): void {
+  const unowned = plan.execution.unowned_new_runtime_sources;
+  if (unowned.length === 0) return;
+  throw new Error(
+    "NEW_RUNTIME_SOURCE_OWNER_REQUIRED: " + unowned.join(", ") +
+    ". Add an existing capability owner/anchor or a focused source-to-test " +
+    "mapping with a real behavior regression. No checks were executed."
+  );
+}
+
 async function main() {
-  const { changedPaths, previousSemanticRegistry } =
+  const { changedPaths, addedPaths, previousSemanticRegistry } =
     await parseAffectedExecutionArguments(process.argv.slice(2));
-  const plan = buildAffectedExecutionPlan(changedPaths, previousSemanticRegistry);
+  const plan = buildAffectedExecutionPlan(
+    changedPaths, previousSemanticRegistry, addedPaths
+  );
 
   console.log(
     JSON.stringify(
@@ -73,6 +90,7 @@ async function main() {
         checks: plan.execution.checks,
         targeted_tests: plan.execution.targeted_tests,
         fallback_full_verify: plan.execution.fallback_full_verify,
+        unowned_new_runtime_sources: plan.execution.unowned_new_runtime_sources,
         ...(plan.semantic_source_alignment
           ? { semantic_source_alignment: plan.semantic_source_alignment }
           : {}),
@@ -82,7 +100,8 @@ async function main() {
     )
   );
 
-  // The plan-only command remains available to inspect unresolved changes.
+  // No command may run when ownership or semantic revision proof is missing.
+  assertAffectedSourceOwnershipForRun(plan);
   assertSemanticSourceAlignedForAffectedRun(plan);
 
   for (const command of plan.execution.commands) {

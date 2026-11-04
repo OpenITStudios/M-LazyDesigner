@@ -124,7 +124,8 @@ function graphBranchReadinessReview(changedPaths: readonly string[]) {
 
 export function buildAffectedExecutionPlan(
   changedPaths: readonly string[],
-  previousSemanticRegistry?: readonly CapabilitySemanticRecord[]
+  previousSemanticRegistry?: readonly CapabilitySemanticRecord[],
+  addedPaths: readonly string[] = []
 ) {
   const semanticImpact = analyzeSemanticImpact({
     changedPaths,
@@ -158,6 +159,7 @@ export function buildAffectedExecutionPlan(
       : {}),
     execution: planAffectedExecution({
       changedPaths,
+      addedPaths,
       semanticImpact,
       ...(semanticInvalidation ? { semanticInvalidation } : {}),
       ...(sourceAlignment ? { semanticSourceAlignment: sourceAlignment } : {}),
@@ -215,6 +217,36 @@ export function discoverAffectedGitPaths(
   return [...new Set(parseGitNameOnlyPaths(changed))].sort();
 }
 
+/** Newly added tracked or untracked paths from the same Git scope.
+ * A --name-only changed list cannot distinguish a new executable module
+ * from an existing module and must not silently certify either as owned.
+ */
+export function discoverAddedGitPaths(
+  dirty: readonly string[] = discoverWorkingGitPaths()
+): string[] {
+  if (dirty.length > 0) {
+    return [...new Set([
+      ...parseGitNameOnlyPaths(gitText([
+        "diff", "--no-renames", "--diff-filter=A", "--name-only", "-z", "HEAD", "--"
+      ])),
+      ...parseGitNameOnlyPaths(gitText([
+        "ls-files", "--others", "--exclude-standard", "-z", "--"
+      ])),
+    ])].sort();
+  }
+  const [head, parent] = gitText([
+    "rev-list", "--parents", "-n", "1", "HEAD"
+  ]).trim().split(/\s+/);
+  if (!head || !/^[a-f0-9]{40}$/i.test(head)) {
+    throw new Error("Cannot identify Git HEAD for added-source selection.");
+  }
+  const added = parent
+    ? gitText(["diff", "--no-renames", "--diff-filter=A",
+        "--name-only", "-z", parent, head, "--"])
+    : gitText(["ls-tree", "-r", "--name-only", "-z", head]);
+  return [...new Set(parseGitNameOnlyPaths(added))].sort();
+}
+
 /** Pin the source bytes, not merely the last Git commit.
  * Pure regression seam; callers get changes from the one existing Git reader.
  */
@@ -238,6 +270,7 @@ export async function parseAffectedExecutionArguments(
   rawArgs: readonly string[]
 ): Promise<{
   changedPaths: string[];
+  addedPaths?: string[];
   previousSemanticRegistry?: CapabilitySemanticRecord[];
 }> {
   const args = [...rawArgs];
@@ -285,16 +318,27 @@ export async function parseAffectedExecutionArguments(
     workingPaths = discoverWorkingGitPaths();
     assertExpectedSourceSha(expectedSha, actual, workingPaths);
   }
+  const working = workingPaths ?? discoverWorkingGitPaths();
+  const changedPaths = auto ? discoverAffectedGitPaths(working) : args.filter(Boolean);
+  const normalizedChanged = new Set(changedPaths.map((path) =>
+    path.replaceAll("\\", "/").replace(/^\.\//, "")
+  ));
+  const addedPaths = discoverAddedGitPaths(working).filter((path) =>
+    normalizedChanged.has(path)
+  );
   return {
-    changedPaths: auto ? discoverAffectedGitPaths(workingPaths) : args.filter(Boolean),
+    changedPaths,
+    ...(addedPaths.length > 0 ? { addedPaths } : {}),
     ...(previousSemanticRegistry ? { previousSemanticRegistry } : {}),
   };
 }
 
 async function main() {
-  const { changedPaths, previousSemanticRegistry } =
+  const { changedPaths, addedPaths, previousSemanticRegistry } =
     await parseAffectedExecutionArguments(process.argv.slice(2));
-  const plan = buildAffectedExecutionPlan(changedPaths, previousSemanticRegistry);
+  const plan = buildAffectedExecutionPlan(
+    changedPaths, previousSemanticRegistry, addedPaths
+  );
   console.log(JSON.stringify(plan, null, 2));
 }
 

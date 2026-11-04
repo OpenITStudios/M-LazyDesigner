@@ -38,6 +38,22 @@ Grouped execution is recorded against source `ba4ed7f3` in
 Earlier preparation notes below describe the source changes; their pending-execution
 statements are superseded by that scoped proof, not by a full/native acceptance claim.
 
+## New executable source ownership guard
+
+The existing Git-aware affected planner distinguishes **added/untracked**
+production TypeScript files from modifications. A new
+`mcp/lib/`, `mcp/server/` or `mcp/gateway/` module must have an explicit
+capability source/anchor or existing source-to-behavior-regression mapping
+before `verify:affected` runs. An unrelated newly added test or a passing
+TypeScript project graph does not establish that relationship.
+
+If that owner is missing, the same planner returns
+`unowned_new_runtime_sources` and **no executable commands**, and the
+affected runner fails before invoking Bun. This avoids an expensive full
+suite that still cannot prove the new module's behavior. Existing owned
+modifications, tests and documentation retain the original focused gates.
+No second selector, test registry, or CI automation is introduced.
+
 ## Test granularity
 
 Organize tests around an owning behavior or boundary, not one new file per fix

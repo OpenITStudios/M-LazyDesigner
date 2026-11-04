@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readdir } from "node:fs/promises";
+import { assertAffectedSourceOwnershipForRun } from "../../scripts/development/run-affected-execution";
 import {
   planAffectedExecution,
   RECEIPT_CONTRACT_TESTS_BY_PATH,
@@ -1397,6 +1398,66 @@ describe("affected execution planner", () => {
         expect(await Bun.file(file.slice(4)).exists(), file).toBe(true);
       }
     }
+  });
+
+  test("new executable source without an explicit owner blocks instead of falsely passing typecheck or running thousands of tests", () => {
+    for (const path of [
+      "mcp/lib/texture/unmappedNewComposer.ts",
+      "mcp/server/tools/geometry/unmappedNewExecutor.ts",
+      "mcp/gateway/runtime/unmappedNewHandler.ts",
+    ]) {
+      const plan = buildAffectedExecutionPlan([path], undefined, [path]);
+      expect(plan.execution.unowned_new_runtime_sources).toEqual([path]);
+      expect(plan.execution.commands).toEqual([]);
+      expect(plan.execution.reasons.join(" ")).toContain("behavior-test owner");
+      expect(() => assertAffectedSourceOwnershipForRun(plan))
+        .toThrow("NEW_RUNTIME_SOURCE_OWNER_REQUIRED");
+      expect(plan.execution.checks).toContain("PROJECT_GRAPH");
+    }
+  });
+
+  test("an unrelated new test cannot approve an unowned new source", () => {
+    const sourcePath = "mcp/lib/texture/unmappedNewComposer.ts";
+    const testPath = "mcp/tests/some-unrelated-feature.test.ts";
+    const plan = buildAffectedExecutionPlan(
+      [sourcePath, testPath], undefined, [sourcePath, testPath]
+    );
+    expect(plan.execution.targeted_tests).toContain(testPath);
+    expect(plan.execution.unowned_new_runtime_sources).toEqual([sourcePath]);
+    expect(plan.execution.commands).toEqual([]);
+    expect(() => assertAffectedSourceOwnershipForRun(plan))
+      .toThrow("NEW_RUNTIME_SOURCE_OWNER_REQUIRED");
+  });
+
+  test("existing mapped source remains focused even when supplied as newly added", () => {
+    const path = "mcp/lib/animation/motionRecipe.ts";
+    const plan = buildAffectedExecutionPlan([path], undefined, [path]);
+    expect(plan.execution.unowned_new_runtime_sources).toEqual([]);
+    expect(plan.execution.fallback_full_verify).toBe(false);
+    expect(plan.execution.targeted_tests).toContain("mcp/tests/motion-recipe.test.ts");
+    expect(plan.execution.commands.some((command) => command.includes("motion-recipe.test.ts")))
+      .toBe(true);
+    expect(() => assertAffectedSourceOwnershipForRun(plan)).not.toThrow();
+  });
+
+  test("normal modifications and documentation-only additions do not trigger the new-source guard", () => {
+    const existing = buildAffectedExecutionPlan([
+      "mcp/lib/texture/vanillaKnowledge.ts"
+    ]);
+    expect(existing.execution.unowned_new_runtime_sources).toEqual([]);
+    expect(existing.execution.commands).toContain("bun run verify:project-graph");
+    const docs = buildAffectedExecutionPlan(
+      ["docs/03-authoring/animation/standard.md"], undefined,
+      ["docs/03-authoring/animation/standard.md"]
+    );
+    expect(docs.execution.unowned_new_runtime_sources).toEqual([]);
+    expect(() => assertAffectedSourceOwnershipForRun(docs)).not.toThrow();
+    const unrelated = planAffectedExecution({
+      changedPaths: ["mcp/lib/texture/vanillaKnowledge.ts"],
+      addedPaths: ["mcp/gateway/runtime/not-changed.ts"],
+      semanticImpact: impact(),
+    });
+    expect(unrelated.unowned_new_runtime_sources).toEqual([]);
   });
 
   test("unmapped, infra, empty-owner, or truncated changes fail safe to the full verifier", () => {

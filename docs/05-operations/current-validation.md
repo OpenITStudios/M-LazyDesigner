@@ -2,6 +2,20 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-04 — Added-source test ownership guard (source-only)
+
+The existing affected-execution planner now treats newly added executable
+Runtime/Gateway/library modules without a mapped capability/behavior test as
+a blocker, not structural typecheck PASS or an indiscriminate full-suite run.
+The Git-aware CLI carries added/untracked path status into the existing plan;
+the runner refuses a missing owner before running any verifier. Existing
+mapped changes keep their focused path. Positive and negative regression
+cases were authored in the existing affected-execution test owner.
+
+Proof: pinned GitHub source review and static change checks only; Bun tests,
+typecheck, CI, native Blockbench and Golden visual acceptance NOT EXECUTED.
+Verification CI remains disabled. No release, new registry or asset mutation.
+
 ## 2026-11-04 — Unused MP4 pipeline retirement (source-only)
 
 The MP4/H.264 recording plan and encoder, Runtime binary slot, Gateway proxy
