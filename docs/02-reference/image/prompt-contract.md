@@ -155,7 +155,7 @@ STYLE_LOCK          = <example's artistic treatment, not its object identity>
 
 **Style repair without overcorrecting:** after a user rejects both pixelated block sculptures and smooth real-world product renders, target the **middle**: handcrafted Minecraft game-asset geometry with cuboid layering and painterly/pixel face texture, matching the actual style example. Do not replace it with an untextured low-poly object.
 
-**Style-calibration delivery:** for a correction specifically about visual style, the *next generation* should default to one LARGE hero 3/4 object on a plain neutral or dark studio background. **NO INFOGRAPHIC**: no title, labels, material palette, dimensions, 16×7×7 claims, color-coded construction guide, detached part closeups, or extra front/back/side/top/bottom thumbnails. The hero is the whole reference for that call. Once style is reviewed, use the normal minimum-sufficient sheet/view rules only if construction needs them. Do not silently add an infographic because the word `reference` appeared.
+**Style-calibration delivery:** for a correction specifically about visual style, the *next generation* should default to one LARGE hero 3/4 object on a plain neutral or dark studio background. **NO INFOGRAPHIC**: no title, labels, material palette, dimensions, 16×7×7 claims, color-coded construction guide, detached part closeups, or extra front/back/side/top/bottom thumbnails. The hero is the whole reference for that call. Once style is reviewed, a completed 3D MODEL reference uses the standard four-side FRONT/RIGHT/BACK/LEFT construction sheet; only supplementary views remain minimum-sufficient. Do not silently add an infographic because the word `reference` appeared.
 
 An actual image model can ignore even correct instructions; its pixels still require after-generation inspection. If two targeted retries repeat the same layout defect, stop that direction rather than regenerate a third nearly identical sheet.
 
@@ -213,13 +213,13 @@ VARIANT_REFERENCE
 
 Use the Unified Image Reference Standard.
 
-Default upper guidance:
+For a completed 3D MODEL construction sheet:
 
 ```text
-HERO                 1
-CONSTRUCTION VIEWS   2–4
-CRITICAL DETAILS     0–3
-KEY POSES            0–5
+HERO                 0 on the four-side sheet; optional isolated preview
+CONSTRUCTION VIEWS   4 required: FRONT, RIGHT, BACK, LEFT
+CRITICAL DETAILS     separate only when material
+KEY POSES            separate only when motion is required
 ```
 
 Each included panel has:
@@ -232,11 +232,11 @@ purpose
 priority: P1 | P2
 ```
 
-A panel without downstream purpose is removed before generation.
+Every cardinal panel answers the base perimeter-construction decision and stays even when the surface is simple. Extra panels without a downstream purpose are removed before generation.
 
 ### Surface Coverage Gate — Internal Panel Decision
 
-Before compiling a panel list, apply the Surface Coverage Gate in `standard.md`. For each critical P1 region, identify the construction decision, what actual source or approved evidence proves it, whether a view can resolve a gap and why an omitted view is safe. This is a **temporary working inventory**, not a new package field or fixed six-view quota.
+Before compiling a panel list, apply the Surface Coverage Gate in `standard.md`. For each critical P1 region, identify the construction decision, what actual source or approved evidence proves it, which of the four cardinal views or supplementary view can resolve the gap and why an EXTRA view may safely be omitted. The four canonical sides are not optional in a completed MODEL construction sheet. This is a **temporary working inventory**, not a new package field or fixed six-view quota.
 
 ```text
 SUPPORTED P1 region       → reuse its view and remove redundant panels.
@@ -246,7 +246,7 @@ CONFLICTING views         → correct the governing contradiction instead of ave
 NO MATERIAL VIEW BENEFIT  → omit the panel and keep existing readable construction evidence.
 ```
 
-A plain back is allowed when supported; a presumed symmetric back or opposite side is not evidence. An additional BACK, RIGHT, TOP, BOTTOM or detail view is justified by the specific unresolved build decision, not by a quota. Where a view cannot reveal unknown source geometry, retain UNKNOWN instead of generating a fictitious source-backed view. Escalate to Sheet 02 only if decision-critical P1/P2 content would otherwise be unreadable.
+A plain BACK panel is valid when supported; a presumed symmetric back or opposite side is not source evidence. FRONT/RIGHT/BACK/LEFT are included by default for a complete model reference; only additional TOP/BOTTOM/detail views depend on unresolved decisions. Where a side cannot reveal unknown source geometry, retain UNKNOWN / NOT_ASSESSABLE for source truth, and use a clearly PROVISIONAL concept only if appropriate; never present generated hidden geometry as observed. Escalate to Sheet 02 only if decision-critical P1/P2 additions would shrink the four required panels.
 
 ### ChatGPT Shared Object-Space Build Brief
 
@@ -275,7 +275,7 @@ Each panel contributes a single decision-focused instruction rather than another
 <PANEL_ID> → <needed object-space camera or local detail> → <one P1/P2 build decision>
 ```
 
-Pick the minimum useful set of views using the existing Surface Coverage Gate. FRONT, BACK, LEFT, RIGHT, TOP, BOTTOM and 3/4 are options—not quotas. Generate one readable sheet by default; only use Sheet 02+ when critical information cannot fit without shrinking or hiding it, preserving the actual approved Sheet 01 image as the visual anchor.
+For a completed 3D MODEL construction reference, the four views FRONT, RIGHT, BACK and LEFT are REQUIRED, not a conditional quota. Select only extra TOP/BOTTOM/3/4/detail views with the Surface Coverage Gate; a HERO-only preview is a separate stage, not a substitute. Generate one readable 2×2 sheet by default and keep any extra P1/P2 information on Sheet 02+ instead of shrinking those four panels. Preserve the actual approved visual anchor for future continuation.
 
 ### ChatGPT Image-Generation Failure Targets
 
@@ -441,7 +441,7 @@ CRITICAL DETAILS when needed
 MOTION STRIP when needed
 ```
 
-If the current model really needs four construction sides, render only a balanced 2×2 Front/Right/Back/Left sheet, object-relative, same scale and neutral background. Do not squeeze a fifth HERO, banner, material legend, imagined exact dimensions or PASS/QA labels into it. This is conditional, not a default four-view quota.
+For a **completed 3D MODEL construction reference**, render a balanced **2×2 Front/Right/Back/Left** sheet by default, object-relative, same scale and neutral background. The four-side MODEL baseline is not optional because an earlier HERO looks sufficient. Do not squeeze a fifth HERO, banner, material legend, imagined exact dimensions or PASS/QA labels into it. A user-requested HERO-only preview stays a separate, incomplete-for-construction image.
 
 Image text is limited to asset title, view labels, short detail labels, and short pose labels.
 
@@ -457,10 +457,10 @@ TARGET IDENTITY
 + IDENTITY LOCK
 + SCALE LOCK when material
 + MAIN_REFERENCE purpose
-+ minimum useful panel plan
++ four-side MODEL construction baseline (or explicitly HERO-only preview)
 + consistency rules
 + targeted negatives
-+ adaptive layout
++ balanced 2×2 layout when full 3D MODEL reference
 ```
 
 ### Sheet 02+ — Continuation

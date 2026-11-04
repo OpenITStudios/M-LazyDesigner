@@ -53,6 +53,8 @@ Sheet 02+ = bounded elaboration / overflow only
 
 Additional sheets never redesign or rescale the asset.
 
+**Mandatory MODEL construction baseline:** for any completed Minecraft/Blockbench **3D model reference**, Sheet 01 presents all **four mandatory object-relative sides: FRONT, RIGHT, BACK, LEFT**, using a balanced 2×2 layout. This applies to vehicles, props, humanoids, creatures, mechanical assets and foliage models. A HERO-only image remains valid for an explicitly requested single image or preliminary style calibration, but is **not** a completed four-side construction reference. The separate Pixel Art/Particle branches are unchanged. User instructions requesting only a HERO or an isolated correction take precedence over the default full-sheet deliverable.
+
 ## Information Priority
 
 When space is constrained:
@@ -67,16 +69,16 @@ Never shrink critical form/proportion/depth evidence merely to fit lower-value s
 
 ## Information Budget
 
-Default upper guidance for one sheet:
+For a completed 3D MODEL construction reference, the first sheet reserves full readable area for exactly four object-relative sides:
 
 ```text
-HERO                 1
-CONSTRUCTION VIEWS   2–4
-CRITICAL DETAILS     0–3
-KEY POSES            0–5
+HERO                 0 in the four-side construction sheet (optional separate style preview)
+CONSTRUCTION VIEWS   4 — FRONT / RIGHT / BACK / LEFT
+CRITICAL DETAILS     0 on that sheet; separate only if necessary
+KEY POSES            0 on that sheet; separate only if animation is required
 ```
 
-These are not quotas. Simple assets may use far less.
+Four sides are the mandatory MODEL baseline, not a fixed count of extra detail, rig, or motion panels. Do not shrink four essential views to fit decorative material. A simple model still presents four views; a HERO-only intermediate is not final construction evidence.
 
 ## Panel Priority
 
@@ -103,44 +105,34 @@ If crowded, remove the lowest-value P2 before shrinking P1.
 
 ## Universal Layout Grammar
 
-Preferred adaptive composition:
+For a final 3D MODEL reference sheet, use the balanced **2×2 four-side baseline**:
 
 ```text
-┌──────────────────────────────────────────────────────┐
-│ ASSET NAME                                           │
-├──────────────────────────┬───────────────────────────┤
-│                          │ FRONT                     │
-│       HERO / 3/4         │ LEFT                      │
-│                          │ BACK / TOP / RIGHT        │
-│                          │ only when useful          │
-├──────────────────────────┴───────────────────────────┤
-│ CRITICAL DETAIL 1 │ DETAIL 2 │ DETAIL 3             │
-├──────────────────────────────────────────────────────┤
-│ KEY POSES / MOTION STRIP — only when useful         │
-└──────────────────────────────────────────────────────┘
+┌───────────────────────┬───────────────────────┐
+│ FRONT                 │ RIGHT                 │
+│ same physical model   │ same physical model   │
+├───────────────────────┼───────────────────────┤
+│ BACK                  │ LEFT                  │
+│ same physical model   │ same physical model   │
+└───────────────────────┴───────────────────────┘
 ```
+
+Keep similar object height, neutral background and restrained lighting, comparable camera distance and only short direction labels. The model must fill each panel clearly. No fifth HERO, title bar, floating parts, palette, moodboard, instructions or badge on the four-side sheet. HERO style calibration is an optional **separate** one-image stage; extra top/bottom views, localized details, UV/material or animation evidence use separate sheets when needed.
 
 ```text
-no animation       → no motion row
-no critical detail → no detail row
-no useful BACK/TOP → enlarge useful views
-simple asset       → fewer/larger panels
-complex overflow   → additional sheet instead of overpacking
+CONTENT DECIDES LAYOUT FOR ADDITIONAL EVIDENCE
+FOUR SIDES FIX THE BASELINE FOR FINAL 3D MODEL CONSTRUCTION
 ```
 
-```text
-CONTENT DECIDES LAYOUT
-NOT LAYOUT FORCES CONTENT
-```
+### Balanced Four-Side Construction — Default after LazyBuilder Study
 
+M-LazyBuilder's EX-REF-02/03 approved exteriors establish a useful **presentation pattern**: four balanced large subject views, clean neutral background, thin dividers and short labels. This does **not** approve their house architecture, materials, roof shapes, block-building scale or ornaments as reusable Blockbench model style. Do not claim those example pixels were inspected in a particular generation unless actually accessible.
 
-### Balanced Four-Side Construction — Learned from LazyBuilder
+**Four-side MODEL baseline:** FRONT top-left, RIGHT top-right, BACK bottom-left, LEFT bottom-right. Directions are object-relative, not image-left/right or arbitrary label aliases. One frozen object-space brief must own component count, widths/depths/heights, contacts, gaps, color and material ownership, and orientation; only the camera moves. Image-generation text can request nominal orthographic views, **not prove calibrated 90° camera rotations or true 3D topology**. No side is replaced by a HERO even when the model is visually symmetric or simple.
 
-M-LazyBuilder's approved EX-REF-02/03 exterior images demonstrate a **presentation pattern** (large subjects, balanced panels, short labels and neutral framing), not an approved LazyDesigner **model style or architecture source**. Their roofs, towers, chimneys, palettes, facade decoration and full-block building conventions must never leak into a model's identity. The actual PNG pixels must be accessible before claiming this visual pattern was inspected for a generation.
+**Source-hidden rear/side:** if original source pixels do not show a side, do not promote any AI completion to observed source truth. In an original creative concept, a coherent unseen side can be presented as **PROVISIONAL** until reviewed. In a faithful-source job where the hidden side is material, keep it **UNKNOWN / NOT_ASSESSABLE** as source fidelity, even if a provisional design image fills the requested reference sheet; disclose that limitation outside the image. Do not mirror the front and claim the back has been observed. When an unresolved source critical topology blocks geometry, mark only that downstream decision BLOCKED, not the entire independently supported artifact.
 
-Use a clean **2×2 Front / Right / Back / Left construction-only sheet** only if all four sides are explicitly requested or materially resolve P1 construction uncertainty. Orient labels by **object-space** sides, not page-relative handedness. Keep the same model, primary masses, part inventory, contacts, material ownership, apparent scale and restrained light. Do not add a fifth HERO, detached detail panels, a title bar, swatches, decorative infographic, invented dimensions or on-image PASS badges. Check real output pixels for contradictions; four labeled panels are not calibrated camera evidence.
-
-For simpler props, vehicles, creatures or characters, continue using the **minimum sufficient views**. A single accepted HERO plus a focused view can be enough; a needed top, underside, rig, animation or material explanation may get a separate purposeful sheet rather than shrinking all four panels. This is an optional visual layout, **not a new camera engine or universal turnaround quota**.
+The four-side baseline applies to the **VISUAL/MODEL** reference branch. A separately requested HERO-only image, focused correction, 2D pixel artwork or particle asset does not trigger an unsolicited four-view sheet. Other views (TOP/BOTTOM, detail, rig, motion) are decision-driven additions, not replacements for any of the four.
 
 
 ## Header
@@ -238,7 +230,7 @@ INFOGRAPHIC_OVER_FORM    → poster labels, palettes, invented dimensions, wiref
 MULTI_VIEW_BEFORE_STYLE  → many views consume pixels before the intended style has been accepted
 ```
 
-**Style-calibration first:** when a user says a generated 3D object does not match a supplied Minecraft style, the next image defaults to ONE large, uncropped 3/4 model on a neutral/dark studio background with **no infographic, labels, dimensions, color swatches, wireframe, extra orthographic views or technical notes**. This is a temporary focused **HERO-only panel plan**, not a new generator mode or permanent ban on orthographic references. Add only the minimum useful views after the actual main style is judged correct. If a generator ignores the same presentation correction twice, stop blindly repeating and report what remains unresolved.
+**Style-calibration first:** when a user says a generated 3D object does not match a supplied Minecraft style, the next image defaults to ONE large, uncropped 3/4 model on a neutral/dark studio background with **no infographic, labels, dimensions, color swatches, wireframe, extra orthographic views or technical notes**. This is a temporary focused **HERO-only panel plan**, not a new generator mode or permanent ban on orthographic references. Once style is accepted and the task requires a completed 3D MODEL reference, generate the balanced FRONT/RIGHT/BACK/LEFT construction sheet next; extras remain minimum-useful. If a generator ignores the same presentation correction twice, stop blindly repeating and report what remains unresolved.
 
 Bedrock/Blockbench target compatibility is a design constraint, not a claim of actual native export. A picture of a rotated cuboid, faceted round feature or painterly texture is not proof that an arbitrary mesh, boolean cut or exact UV has been implemented. Use the existing later model/visual verification for that evidence.
 
@@ -269,23 +261,24 @@ It is a production reference, not a cinematic beauty render.
 
 ## Construction Views
 
-Use minimum sufficient views.
+For a completed 3D MODEL reference, **four mandatory object-relative sides** provide a coherent full perimeter, even when a side is simple:
 
 ```text
-FRONT → width / height / visible part count / primary silhouette
-LEFT  → depth / profile / attachment / body axis
-BACK  → only when rear topology/asymmetry matters
-TOP   → only when footprint/depth/layout matters
-RIGHT → only when left/right asymmetry matters
+FRONT → identifiable front, width, height and face-specific components
+RIGHT → object's right-side silhouette, depth and attachments
+BACK  → rear silhouette and continuity; unknown source facts remain UNKNOWN
+LEFT  → object's left-side silhouette, depth and attachments
+TOP   → only when footprint/depth/layout matters; supplementary
+BOTTOM → only when mounting/support/underside matters; supplementary
 ```
 
-Do not require all sides ceremonially.
+Never skip RIGHT or BACK because a HERO happens to show much of the model. Do not add mirrored detail merely to balance the composition. The minimum supplementary view set can be zero when all four sides plus the explicit brief are enough.
 
-Orthographic/construction views preserve consistent orientation, apparent scale, and proportions.
+All four views use one object-space coordinate/orientation lock, similar scale and projection conventions, and readable construction framing. A source photograph with only one angle cannot by itself verify the resulting opposite camera views.
 
 ## Surface Coverage Gate — Construction Evidence
 
-This is an **internal panel-planning and after-generation review gate**, not a mandatory six-view turnaround, new generator, similarity score or new `REFERENCE.json` field. Inspect only regions that can change a downstream Geometry, Texture or Animation decision; do not count every face merely for completeness.
+This is an **internal panel-planning and after-generation review gate**, not a mandatory six-view turnaround, new generator, similarity score or new `REFERENCE.json` field. Four sides are the default final MODEL coverage; this gate selects only supplementary views and determines which unseen-side claims remain UNKNOWN. Inspect only regions that can change a downstream Geometry, Texture or Animation decision; do not count every face merely for completeness.
 
 Before selecting views, keep a compact temporary inventory for **P1 decision-critical** parts/surfaces:
 
@@ -303,17 +296,17 @@ opening, support, articulation or identity-critical material)
 - `UNAVAILABLE` / UNKNOWN: the necessary source-backed hidden geometry or attachment is not evidenced. Do not invent its depth, ornaments, dimensions or materials.
 - P2 supporting views and decision-neutral surfaces may be omitted. An unknown only blocks the dependent decision when it materially changes construction.
 
-Select the **minimum sufficient view set**. A single view can be enough. Add BACK, RIGHT, TOP, BOTTOM or a detail only when it resolves an actual P1/P2 gap. An opposite view may be omitted when **confirmed symmetry**, explicitly known geometry or other adequate visible evidence already covers its construction decisions. **Merely not seeing asymmetry is insufficient.** The existing construction-view guidance is a starting priority, not a prohibition against a necessary rear/side view.
+The **minimum sufficient view set for a final 3D MODEL** is now FRONT/RIGHT/BACK/LEFT. A single view can be enough only for a requested preliminary HERO/style decision, **not** for a complete construction reference. Add TOP, BOTTOM or focused detail only if they resolve a remaining P1/P2 ambiguity. Even **confirmed symmetry** does not remove RIGHT or BACK from the default layout; it only reduces redundant decoration or extra views. **Merely not seeing asymmetry is insufficient** to claim symmetry. Where a hidden source surface remains unknown, include a clearly qualified conceptual completion only if appropriate and never treat it as source-verified.
 
 A plain back is **not automatically a defect**. It fails when required depth continuity, rear support, attachment or material identity is missing, contradicts approved evidence, or is presented as known without evidence. Do not add decorations solely to fill a side.
 
 ### General Decision Scenarios
 
 ```text
-ONE_VIEW_SUFFICIENT       → P1 shape and contact already supported; retain one view.
+ONE_VIEW_SUFFICIENT       → one view may suffice for a bounded HERO/style review; full MODEL construction still needs four sides.
 REAR_STRUCTURAL_UNKNOWN  → P1 rear depth/attachment unresolved; request source or block dependent Geometry.
-PROVEN_SYMMETRY          → skip opposite view only with supported symmetry evidence.
-RIGHT_SIDE_DIFFERENCE    → include object-RIGHT when confirmed asymmetry changes construction.
+PROVEN_SYMMETRY          → simplify repeated detail, but retain each of the four directional views.
+RIGHT_SIDE_DIFFERENCE    → object-RIGHT is always shown; confirm any side-specific difference rather than mirror it.
 TOP_OR_UNDERSIDE         → include when footprint, opening, support or contact is decision-critical.
 CROSS_VIEW_CONFLICT      → correct contradictory form rather than accept a unified but inconsistent asset.
 COMPOSITE_TURNAROUND     → one composite is not multiple independently verified single-view images.
@@ -346,7 +339,7 @@ Review the **actual generated reference**, not merely its panel labels. This sec
 
 | Scenario | Reference-stage outcome / limitation |
 | --- | --- |
-| One view already explains all P1 volume/contact decisions | May reach `READY` after review; no extra view required |
+| One view already explains all P1 volume/contact decisions | A bounded HERO/style review may be usable; the completed MODEL construction sheet still requires four sides |
 | Front looks complete, required rear support remains source-occluded/UNKNOWN | Geometry `BLOCKED` on that decision; never invent an observed rear attachment |
 | A plain back is confirmed by source or approved original design | Can be `READY`; do not add ornamental filler |
 | Front/back have matching bounds but contradict rear attachment | Geometry `BLOCKED`; equal envelope is not topology proof |
@@ -546,7 +539,7 @@ generic model-info block
 text-heavy infographic decorations, invented dimensions or swatches that compete with the model
 decorative quote/tagline
 scale illustration unless decision-critical
-RIGHT when identical to LEFT
+duplicate extra RIGHT/BACK panels beyond the four mandatory directions
 TOP when it constrains nothing
 repeated props already clear
 close-up already clear
@@ -563,7 +556,7 @@ identity matches confirmed brief
 player/world scale matches current Scale Lock
 required parts are present
 no unrequested smooth product-render look, mini-cube tessellation or style-example identity copying
-P1 surface coverage and omitted-view reasons checked against actual pixels
+all four FRONT/RIGHT/BACK/LEFT panels present, correctly oriented and readable; P1 coverage and optional-view omissions checked against actual pixels
 hidden rear/side construction is UNKNOWN unless evidenced, not filled by invention
 hero and construction views agree
 proportions do not drift

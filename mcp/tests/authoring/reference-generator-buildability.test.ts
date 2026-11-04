@@ -97,16 +97,16 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(standard).not.toContain("five fixed broad preview positions");
   });
 
-  test("construction views are minimum-sufficient rather than a mandatory turnaround ritual", async () => {
+  test("completed MODEL construction defaults to four sides with only supplementary views conditional", async () => {
     const [policy, standard] = await Promise.all([
       read("../docs/02-reference/policy.md"),
       read("../docs/02-reference/image/standard.md"),
     ]);
 
     expect(policy).toContain("minimum evidence that materially reduces downstream uncertainty");
-    expect(standard).toContain("use minimum sufficient views");
-    expect(standard).toContain("right → only when left/right asymmetry matters");
-    expect(standard).toContain("top → only when footprint/depth/layout matters");
+    expect(standard).toContain("four mandatory object-relative sides");
+    expect(standard).toContain("right → object\'s right-side silhouette");
+    expect(standard).toContain("top   → only when footprint/depth/layout matters");
   });
 
   test("Minecraft player-relative scale is canonical without inventing exact dimensions", async () => {
@@ -173,12 +173,12 @@ describe("LazyDesigner reference preparation contract", () => {
     ]);
     for (const owner of [standard, prompt, skill]) expect(owner).toContain("surface coverage gate");
     expect(standard).toContain("not a mandatory six-view turnaround");
-    expect(standard).toContain("minimum sufficient view set");
+    expect(standard).toContain("minimum sufficient view set for a final 3d model");
     expect(standard).toContain("a plain back is not automatically a defect");
     expect(standard).toContain("merely not seeing asymmetry is insufficient");
     expect(prompt).toContain("not a new package field");
     expect(templates).toContain("critical_surface_coverage when material");
-    expect(skill).toContain("a single view is sufficient");
+    expect(skill).toContain("a single hero is not a complete construction sheet");
   });
 
   test("surface coverage scenarios distinguish hidden source facts from original creative proposals", async () => {
@@ -397,16 +397,60 @@ describe("LazyDesigner reference preparation contract", () => {
       read("../docs/02-reference/image/master-templates.md"),
       read(REFERENCE_SKILL),
     ]);
-    const core = templates.split("m-ld-ref — controlled reference request v1.0")[1]?.split("a style-mismatch report")[0] ?? "";
+    const core = templates.split("m-ld-ref — controlled reference request v1.1")[1]?.split("a style-mismatch report")[0] ?? "";
     for (const token of ["hero_style_check", "minimum_construction", "four_side_construction",
       "front top-left / right top-right / back bottom-left", "only direction labels",
       "one first-observed failure", "one bounded correction", "no_false_pass"]) {
       expect(core).toContain(token);
     }
-    expect(standard).toContain("universal turnaround quota");
+    expect(standard).toContain("four-side model baseline");
     expect(prompt).toContain("do not squeeze a fifth hero");
     expect(skill).toContain("construction-only");
     expect(skill).toContain("remain unverified without real tests");
+  });
+
+
+  test("four cardinal views are mandatory on completed MODEL reference sheets while HERO stays separate", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("mandatory model construction baseline");
+    expect(standard).toContain("front top-left, right top-right, back bottom-left, left bottom-right");
+    expect(standard).toContain("a hero-only image remains valid");
+    expect(standard).toContain("no side is replaced by a hero");
+    expect(prompt).toContain("four canonical sides are not optional");
+    expect(prompt).toContain("the four-side model baseline is not optional");
+    expect(templates).toContain("four_side_construction: default final 3d model reference");
+    expect(templates).toContain("exactly four balanced 2×2 panels");
+    expect(skill).toContain("a single hero is not a complete construction sheet");
+  });
+
+  test("missing source rear remains unverified; four rendered panels are not 3D or approval proof", async () => {
+    const [standard, prompt, templates] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+    ]);
+    expect(standard).toContain("unknown / not_assessable");
+    expect(standard).toContain("provisional");
+    expect(standard).toContain("not prove calibrated 90° camera rotations");
+    expect(prompt).toContain("never present generated hidden geometry as observed");
+    expect(templates).toContain("a provisional construction proposal");
+    expect(templates).toContain("no_false_pass");
+  });
+
+  test("four-side requirement is isolated from Pixel Art and Particle and does not mandate a HERO", async () => {
+    const [standard, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("the separate pixel art/particle branches are unchanged");
+    expect(standard).toContain("no fifth hero");
+    expect(skill).toContain("a request explicitly limited to hero/one corrective view");
+    expect(skill).toContain("do not generate every module by default");
   });
 
 });
