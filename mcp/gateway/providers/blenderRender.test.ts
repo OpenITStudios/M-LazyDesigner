@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -134,6 +135,12 @@ describe("Independent Gateway Blender MCP control contract", () => {
       operation: "status",
     }).success).toBe(true);
     expect(blenderRenderControlParameters.safeParse({
+      operation: "status", include_preview: true,
+    }).success).toBe(true);
+    expect(blenderRenderControlParameters.safeParse({
+      operation: "status", include_preview: "yes",
+    }).success).toBe(false);
+    expect(blenderRenderControlParameters.safeParse({
       operation: "recover", receipt_path: "/tmp/render.png.lazydesigner.json",
     }).success).toBe(true);
     expect(blenderRenderControlParameters.safeParse({
@@ -177,6 +184,7 @@ describe("Independent Gateway Blender MCP control contract", () => {
     );
     expect(projectedStatus.projected).toBe(true);
     expect(JSON.stringify(projectedStatus.inputSchema)).toContain("job_id");
+    expect(JSON.stringify(projectedStatus.inputSchema)).toContain("include_preview");
     for (const [branch, field] of [
       ["auto", "options"], ["recover", "receipt_path"], ["release", "handoff_path"],
     ] as const) {
@@ -287,7 +295,9 @@ describe("Independent Gateway Blender MCP control contract", () => {
     const provider = new BlenderRenderProvider();
     const id = "blender_" + "a".repeat(24);
     const current: {
-      id: string; state: string; phase: string; receipt: { output_path: string } | null;
+      id: string; state: string; phase: string;
+      receipt: { output_path: string; preview_sha256?: string } | null;
+      preview?: Buffer;
       error_code: string | null; handoff_cleanup: string;
     } = {
       id, state: "RENDERED_DRAFT", phase: "FINISHED",
@@ -298,6 +308,30 @@ describe("Independent Gateway Blender MCP control contract", () => {
     const success = await provider.invoke({ operation: "status", job_id: id });
     expect(JSON.stringify(success.content)).toContain("PNG saved at /tmp/verified-render.png");
     expect(JSON.stringify(success.content)).toContain("NOT_EVALUATED");
+    expect(success.content).toHaveLength(1);
+    // A real encoded PNG fixture is only transport evidence, never proof
+    // that Blender actually ran in this synthetic provider test.
+    const pixels = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGOoMr/+HwAFPwKIuAByCAAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    current.receipt = {
+      output_path: "/tmp/verified-render.png",
+      preview_sha256: createHash("sha256").update(pixels).digest("hex"),
+    };
+    current.preview = pixels;
+    const withPreview = await provider.invoke({
+      operation: "status", job_id: id, include_preview: true,
+    });
+    expect(withPreview.content).toHaveLength(2);
+    expect(withPreview.content[1]).toMatchObject({
+      type: "image", data: pixels.toString("base64"), mimeType: "image/png",
+    });
+    current.state = "RUNNING";
+    const inProgress = await provider.invoke({
+      operation: "status", job_id: id, include_preview: true,
+    });
+    expect(inProgress.content).toHaveLength(1);
     current.state = "FAILED";
     current.phase = "FAILED";
     current.receipt = null;

@@ -114,7 +114,7 @@ export class LocalCapabilityRegistry {
         content: [{
           type: "text",
           text: "Automatic Blockbench-to-Blender Cycles job started: " + started.job_id +
-            ". Check blender_render operation=status and request one real PNG preview when complete.",
+            ". Check blender_render operation=status; include_preview=true returns the real image in the completed status without a separate preview call.",
         }],
         structuredContent: started,
       };

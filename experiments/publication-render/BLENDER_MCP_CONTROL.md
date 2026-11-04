@@ -31,8 +31,12 @@ With the current Bedrock Entity project open, the AI can call the existing
 Optional `options` select quality, aspect, background, device or color view
 transform. The Gateway execution owner (`mcp/gateway/execution/renderOrchestration.ts`) requests `render_publication(operation=handoff)` once, requires the source project UUID to match the backend-verified active project,
 verifies the immutable GLB, starts the independent Cycles worker and returns
-a job ID. AI then uses `status` and one real `preview` after
-`RENDERED_DRAFT`; it never treats a started job as successful PNG publication.
+a job ID. The AI or host checks `status`. An optional
+`{"operation":"status","include_preview":true}` returns the actual preview
+PNG in that same status response **only after** `RENDERED_DRAFT`;
+`preview` remains available as a compatible explicit operation. This
+does not add automatic chat delivery or background polling, and a started
+job is never treated as successful PNG publication.
 
 Auto-owned handoffs use a Gateway-selected 24-hex handoff ID before native export,
 so a lost/failed native response still leaves one **expected inspection path**.

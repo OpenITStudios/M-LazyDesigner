@@ -59,6 +59,7 @@ export const blenderRenderControlParameters = z.discriminatedUnion("operation", 
     operation: z.literal("status"),
     // Omit job_id to recover latest process-local job after a lost start response.
     job_id: z.string().regex(ID).optional(),
+    include_preview: z.boolean().default(false),
   }).strict(),
   z.object({
     operation: z.literal("preview"),
@@ -809,6 +810,13 @@ export class BlenderRenderProvider {
       }
       case "status": {
         const current = this.status(operation.job_id);
+        // The actual image is included only when explicitly requested and
+        // the current job is already a verified completed DRAFT. No image
+        // token cost during RUNNING/CANCELLING/FAILED status checks.
+        const finishedPreview = operation.include_preview &&
+          current.state === "RENDERED_DRAFT"
+            ? this.preview(current.job_id)
+            : null;
         const receipt = current.receipt as RenderReceipt | null;
         const error = typeof current.error_code === "string" ? current.error_code : null;
         const cleanup = current.handoff_cleanup;
@@ -825,8 +833,9 @@ export class BlenderRenderProvider {
                 : terminal && cleanup === "PENDING"
                   ? " Automatic handoff cleanup is pending; do not replace this job yet."
                   : "") +
+              (finishedPreview ? " Actual verified Cycles preview attached." : "") +
               " Visual quality remains NOT_EVALUATED.",
-          }],
+          }, ...(finishedPreview ? finishedPreview.content.slice(1) : [])],
           structuredContent: current,
         };
       }

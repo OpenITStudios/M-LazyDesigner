@@ -99,7 +99,7 @@ const CAPABILITY_BRANCH_SPECS: readonly Omit<
   {
     capability: "blender_render",
     branch: { field: "operation", value: "status" },
-    schemaFields: ["operation", "job_id"],
+    schemaFields: ["operation", "job_id", "include_preview"],
     operationClass: "QUERY",
     executionClass: "fast",
     verificationClass: "receipt_only",
