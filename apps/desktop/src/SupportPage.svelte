@@ -40,7 +40,7 @@
     <section class="settings-section">
       <h2>Review previous {migrationConflictKind === 'plugin' ? 'plugin' : 'AI client'}</h2>
       <p>Migration backs up the previous client entry and plugin in the installation journal, preserves other client settings, and waits for active sessions to finish before switching components.</p>
-      <button class="secondary-button" onclick={migrateLegacySetup} disabled={busyAction !== null || status.manager_available}>Back up and migrate previous setup</button>
+      <button class="secondary-button" onclick={migrateLegacySetup} disabled={busyAction !== null || status.manager_available || statusProbeFailures >= 2}>Back up and migrate previous setup</button>
       {#if migrationConflictKind === 'plugin'}
         <p>Save your models and close Blockbench. You can inspect the previous plugin before choosing the backed-up migration above. Migration removes the old plugin from the active profile only after retaining its exact bytes for rollback.</p>
         <button class="secondary-button" onclick={showRetiredPluginFile}>Show existing plugin</button>
@@ -92,7 +92,7 @@
     <h2>Troubleshooting</h2>
     <div class="settings-row">
       <div><strong>Blockbench installation</strong><span>Choose the real installed Blockbench.exe if it moved or multiple installations were detected. Self-extracting *_portable.exe launchers are not supported yet. Close Blockbench before changing this. Your project files and managed plugin stay untouched.</span></div>
-      <button class="secondary-button" onclick={chooseBlockbenchExecutable} disabled={busyAction !== null}>{busyAction === 'choose-editor' ? 'Selecting…' : 'Choose…'}</button>
+      <button class="secondary-button" onclick={chooseBlockbenchExecutable} disabled={busyAction !== null || statusProbeFailures >= 2}>{busyAction === 'choose-editor' ? 'Selecting…' : 'Choose…'}</button>
     </div>
     {#if status.manager_available}
       <div class="settings-row">

@@ -17,6 +17,7 @@ SCENARIOS = (
     ("ready", "workspace"),
     ("ready-no-active", "workspace"),
     ("status-unverified", "workspace"),
+    ("status-unverified", "support"),
     ("ready", "support"),
     ("ready", "analytics"),
     ("approval-required", "workspace"),
@@ -63,6 +64,36 @@ def inspect(page):
     }""")
 
 
+def inspect_action_states(page, fixture, view):
+    """Check only decisions introduced by the current UI refinement."""
+    expected = {
+        ("ready-no-active", "workspace"): {
+            "Open Blockbench": True,
+        },
+        ("status-unverified", "workspace"): {
+            "Open Model…": True,
+            "Go to Blockbench for Modern Chair": False,
+            "Open folder for project Furniture": False,
+            "Add Project Folder": False,
+            "Refresh": True,
+        },
+        ("status-unverified", "support"): {
+            "Choose…": False,
+            "Refresh": True,
+            "Export": True,
+        },
+    }.get((fixture, view), {})
+    issues = []
+    for name, should_be_enabled in expected.items():
+        button = page.get_by_role("button", name=name, exact=True)
+        count = button.count()
+        if count != 1:
+            issues.append(f"expected one '{name}' button, found {count}")
+        elif button.is_enabled() != should_be_enabled:
+            issues.append(f"'{name}' enabled={not should_be_enabled}, expected {should_be_enabled}")
+    return {"checked": len(expected), "issues": issues}
+
+
 def main():
     args = parse_args()
     target = urlsplit(args.base_url)
@@ -100,9 +131,15 @@ def main():
                             page.get_by_text("Gateway analytics", exact=True).wait_for(timeout=10000)
                         if fixture == "ready-no-active":
                             page.get_by_role("button", name="Open Blockbench").wait_for(timeout=10000)
-                        if fixture == "status-unverified":
+                        if fixture == "status-unverified" and view == "workspace":
                             page.get_by_text("AI connection unverified", exact=True).wait_for(timeout=10000)
+                        if fixture == "status-unverified" and view == "support":
+                            page.get_by_text("AI status needs verification", exact=True).wait_for(timeout=10000)
                         snapshot = inspect(page)
+                        action_checks = inspect_action_states(page, fixture, view)
+                        entry["actionChecks"] = action_checks
+                        for issue in action_checks["issues"]:
+                            failures.append(name + ": " + issue)
                         top_name = name + "-top.png"
                         page.screenshot(path=str(out / top_name), animations="disabled")
                         entry.update({"inspection": snapshot, "screenshot": top_name})

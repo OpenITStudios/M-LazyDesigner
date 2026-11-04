@@ -125,17 +125,23 @@ describe("human-facing Blockbench UI", () => {
     expect(capture).toContain('("ready", "analytics")');
     expect(capture).toContain('("ready-no-active", "workspace")');
     expect(capture).toContain('("status-unverified", "workspace")');
+    expect(capture).toContain('("status-unverified", "support")');
+    expect(capture).toContain("def inspect_action_states(page, fixture, view):");
+    expect(capture).toContain('"Go to Blockbench for Modern Chair": False');
+    expect(capture).toContain('"Open Model…": True');
+    expect(capture).toContain('"Choose…": False');
     expect(capture).toContain('VIEWPORTS = ((780, 560), (980, 680))');
   });
 
 
   test("Workspace blocks stale project decisions without blocking direct model browsing", async () => {
-    const [app, workspace, navigator, deleteDialog, pluginDoc] = await Promise.all([
+    const [app, workspace, navigator, deleteDialog, pluginDoc, support] = await Promise.all([
       Bun.file(new URL("../../apps/desktop/src/App.svelte", import.meta.url)).text(),
       Bun.file(new URL("../../apps/desktop/src/WorkspacePage.svelte", import.meta.url)).text(),
       Bun.file(new URL("../../apps/desktop/src/ProjectNavigator.svelte", import.meta.url)).text(),
       Bun.file(new URL("../../apps/desktop/src/ProjectDeleteDialog.svelte", import.meta.url)).text(),
       Bun.file(new URL("../../docs/05-operations/blockbench-plugin-ui.md", import.meta.url)).text(),
+      Bun.file(new URL("../../apps/desktop/src/SupportPage.svelte", import.meta.url)).text(),
     ]);
     expect(workspace).toContain("canOpenModel={statusProbeFailures < 2}");
     expect(workspace).toContain("canEditProjectPrefs={statusProbeFailures < 2}");
@@ -150,6 +156,9 @@ describe("human-facing Blockbench UI", () => {
     expect(app).toContain("if (devFixture === 'status-unverified') statusProbeFailures = 2;");
     expect(deleteDialog).toContain("disabled={busy || confirmBlocked}");
     expect(deleteDialog).toContain("onclick={onCancel} disabled={busy}");
+    expect(support).toContain("onclick={migrateLegacySetup} disabled={busyAction !== null || status.manager_available || statusProbeFailures >= 2}");
+    expect(support).toContain("onclick={chooseBlockbenchExecutable} disabled={busyAction !== null || statusProbeFailures >= 2}");
+    expect(support).toContain("onclick={exportDiagnostics} disabled={busyAction !== null}");
     expect(navigator).toContain('aria-label={`Open model ${model.name}`}');
     expect(navigator).toContain('aria-label={`Open folder for project ${project.name}`}');
     expect(pluginDoc).toContain("No empty Texture or Animation tabs");
