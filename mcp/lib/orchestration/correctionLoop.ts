@@ -776,6 +776,21 @@ export class CorrectionLoopRegistry {
       }
     }
 
+    // A new handle alone cannot certify visual views invalidated by a native
+    // correction. This additional review declaration applies only to
+    // structured image observations; numeric Recipe updates remain unchanged.
+    if (record.observation_origin === "STRUCTURED_VISUAL" &&
+        record.pending_target_discrepancy_codes.length > 0) {
+      const recovered = new Set(options.recovered_views ?? []);
+      const missing = record.pending_stale_views.filter((view) => !recovered.has(view));
+      if (missing.length > 0) {
+        throw new Error(
+          "VISUAL_CORRECTION_VIEW_RECHECK_REQUIRED: recheck affected views " +
+          missing.join(", ") + "."
+        );
+      }
+    }
+
     assertUniqueDiscrepancyCodes(discrepancies);
     // Missing findings are not proof of resolution. In a targeted correction,
     // only pending codes are in scope; otherwise the full current batch is.

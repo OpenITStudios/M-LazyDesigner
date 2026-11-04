@@ -750,6 +750,12 @@ covering the target's recorded views (or verification fallback views when
 the claim has no recorded view). This is a reviewer's bounded clearance
 declaration, **not** automatic visual certification. Missing or contradictory
 coverage rejects the update before mutation, leaving verification pending.
+For structured visual corrections, a fresh evidence handle alone cannot
+refresh a previously affected view. After the native correction receipt,
+`recovered_views` must explicitly cover the pending stale views even when a
+discrepancy still exists. This is a review declaration, not native attestation;
+raw numeric Recipe corrections retain their existing update contract.
+
 Unrelated discrepancies remain tracked independently. For non-targeted full
 updates, previously recorded claims also need explicit clearance before
 they disappear; do not rename a remaining mismatch to bypass verification.

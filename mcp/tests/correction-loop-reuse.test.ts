@@ -2750,6 +2750,79 @@ describe("zero-waste correction loop reuse", () => {
     expect(registry.projectContinuation(mixed.handle!)).toMatchObject({ attempt: 0 });
   });
 
+  test("structured visual correction cannot refresh an affected view by handle alone", () => {
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
+    const observation = {
+      code: "ARM_WIDTH",
+      criterion: "SILHOUETTE_PROPORTION" as const,
+      severity: "REVIEW" as const,
+      summary: "Arm is narrower than the approved front reference.",
+      evidence: {
+        current_evidence_ref: "model:front:before",
+        reference_evidence_ref: "approved:front",
+        views: ["front" as const],
+      },
+      cause_family: "SIZE_MISMATCH" as const,
+    };
+    const { handle } = registry.startFromObservations({
+      recipe_id: "asset",
+      base_recipe: recipe(),
+      verification_request: {
+        domain: "GEOMETRY", source: "capture_model_views",
+        verification_risk: "LOW", views: ["front"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["arms:0"],
+      },
+      verification_evidence_handle: "verificationevidence:arm-before",
+      observations: [observation],
+    });
+    expect(handle).not.toBeNull();
+    const plan = registry.planGeometryCorrection(handle!, [{
+      id: "resize-arm", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["ARM_WIDTH"], correction_family: "RESIZE",
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: { kind: "RESIZE_AXIS", axis: "X", mode: "ADD", value: 1, anchor: "MIN" },
+        },
+      },
+    }]);
+    expect(plan).toMatchObject({
+      state: "CORRECTION_READY", evidence_reuse: { stale_views: ["front"] },
+    });
+    const pending = registry.projectContinuation(handle!);
+    const updated = [{
+      ...observation,
+      severity: "INFO" as const,
+      summary: "Arm width improved, small difference remains.",
+      evidence: { ...observation.evidence, current_evidence_ref: "model:front:after" },
+    }];
+    expect(() => registry.updateEvidenceFromObservations(
+      handle!, "verificationevidence:arm-after", updated
+    )).toThrow("VISUAL_CORRECTION_VIEW_RECHECK_REQUIRED");
+    expect(() => registry.updateEvidence(
+      handle!, "verificationevidence:arm-after", [{
+        code: "ARM_WIDTH", severity: "INFO", summary: "Width improved.", views: ["front"],
+      }]
+    )).toThrow("VISUAL_CORRECTION_VIEW_RECHECK_REQUIRED");
+    expect(() => registry.updateEvidenceFromObservations(
+      handle!, "verificationevidence:arm-after", updated,
+      { recovered_views: ["left"] }
+    )).toThrow("VISUAL_CORRECTION_VIEW_RECHECK_REQUIRED");
+    expect(registry.projectContinuation(handle!)).toEqual(pending);
+
+    expect(registry.updateEvidenceFromObservations(
+      handle!, "verificationevidence:arm-after", updated,
+      { recovered_views: ["front"] }
+    )).toMatchObject({ applied: true, accepted_count: 1, unverified: [] });
+    const after = registry.projectContinuation(handle!);
+    expect(after.convergence.state).toBe("IMPROVED");
+    expect(after.fresh_view_evidence).toContainEqual({
+      view: "front", handle: "verificationevidence:arm-after",
+    });
+  });
+
   test("observation update excludes unsupported claims from fresh correction evidence", () => {
     const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const started = registry.startFromObservations({
