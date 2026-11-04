@@ -1,54 +1,28 @@
-import { describe,expect,test } from "bun:test";
-import {
-  MOTION_VIDEO_MIME,MOTION_VIDEO_CODEC,
-  describeAnimationEvidenceBoundary,
-  assessDeclaredMp4Evidence,
-} from "@/lib/animation/motionEvidence";
+import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { describeAnimationEvidenceBoundary } from "@/lib/animation/motionEvidence";
 
-const digest = (character: string) => character.repeat(64);
-const owner = {
-  project_uuid:"project-123",
-  animation_uuid:"walk-123",
-  revision_sha256:digest("a"),
-};
-const declared = {
-  mime_type:"video/mp4" as const,
-  video_codec:"h264" as const,
-  ...owner,
-  mp4_sha256:digest("b"),
-  byte_length:4096,
-  frame_count:60,
-  duration_ms:2000,
-  camera_sha256:digest("c"),
-};
-
-describe("Animation motion medium is explicit and fail-closed",()=>{
-  test("authored keys, static poses and successful playback cannot certify continuous motion",()=>{
-    const routes=[
+describe("Animation evidence remains bounded after retiring unused video transport", () => {
+  test("authored keys, still PNG and playback command cannot certify continuous motion", () => {
+    for (const source of [
       "NATIVE_CLIP_INSPECTION",
       "NATIVE_CONTROLLER_INSPECTION",
       "STATIC_POSE_PNG",
       "PLAYBACK_COMMAND",
-    ] as const;
-    for(const source of routes){
-      const boundary=describeAnimationEvidenceBoundary(source);
+    ] as const) {
+      const boundary = describeAnimationEvidenceBoundary(source);
       expect(boundary).toMatchObject({
-        contract:"LAZYDESIGNER_ANIMATION_MEDIA_V1",source,
-        static_pose_visual_pass_claim:false,
-        authored_motion_technical_pass_claim:false,
-        temporal_motion:{
-          state:"UNVERIFIED",
-          required_visual_media:"video/mp4",
-          codec_policy:"h264",
-          mp4_recorder_registered:false,
-          mp4_bytes_verified:false,
-          ai_video_consumption_attested:false,
-          continuous_motion_reviewed:false,
-          motion_pass_authorized:false,
-          still_images_can_satisfy_motion:false,
-          playback_command_can_satisfy_motion:false,
-          no_user_preview_required:true,
-          gif_artifact_required:false,
+        contract: "LAZYDESIGNER_ANIMATION_MEDIA_V1",
+        source,
+        static_pose_visual_pass_claim: false,
+        authored_motion_technical_pass_claim: false,
+        temporal_motion: {
+          state: "UNVERIFIED",
+          reason: "CONTINUOUS_MOTION_REVIEW_NOT_ATTESTED",
+          continuous_motion_reviewed: false,
+          motion_pass_authorized: false,
+          still_images_can_satisfy_motion: false,
+          playback_command_can_satisfy_motion: false,
         },
       });
     }
@@ -56,51 +30,43 @@ describe("Animation motion medium is explicit and fail-closed",()=>{
     expect(describeAnimationEvidenceBoundary("PLAYBACK_COMMAND").playback_command_executed).toBe(true);
     expect(describeAnimationEvidenceBoundary("NATIVE_CLIP_INSPECTION").authored_data_available).toBe(true);
     expect(describeAnimationEvidenceBoundary("NATIVE_CONTROLLER_INSPECTION").authored_data_available).toBe(true);
-    expect(MOTION_VIDEO_MIME).toBe("video/mp4");
-    expect(MOTION_VIDEO_CODEC).toBe("h264");
   });
 
-  test("matching untrusted MP4 manifest does not assert file bytes or AI consumption",()=>{
-    expect(assessDeclaredMp4Evidence(declared,owner)).toMatchObject({
-      manifest:"CONSISTENT_DECLARATION_ONLY",
-      reason:"MP4_BYTES_AND_AI_CONSUMPTION_UNVERIFIED",
-      media_bytes_attested:false,ai_consumption_attested:false,
-      temporal_motion_verdict:"UNVERIFIED",visual_pass_authorized:false,
-    });
-  });
-
-  test("rejects stale, foreign, unsupported or fabricated media metadata",()=>{
-    for(const candidate of [
-      { ...declared,project_uuid:"different-project" },
-      { ...declared,animation_uuid:"other-animation" },
-      { ...declared,revision_sha256:digest("d") },
-      { ...declared,mp4_sha256:"not-sha256" },
-      { ...declared,mime_type:"image/gif" },
-      { ...declared,video_codec:"vp9" },
-      { ...declared,byte_length:-1 },
-      { ...declared,frame_count:0 },
-      { ...declared,duration_ms:0 },
-      { ...declared,uri:"file:///tmp/forged.mp4" },
-    ]){
-      const result=assessDeclaredMp4Evidence(candidate,owner);
-      expect(result.manifest).toBe("REJECTED");
-      expect(result.temporal_motion_verdict).toBe("UNVERIFIED");
-      expect(result.visual_pass_authorized).toBe(false);
+  test("the experimental encoder, planner, binary resources and dependent tests remain absent", () => {
+    for (const path of [
+      "lib/animation/mp4RecordingPlan.ts",
+      "server/runtime/animation/mp4Encoder.ts",
+      "server/resources/motionMp4.ts",
+      "gateway/resources/motionMp4.ts",
+      "tests/animation-motion-mp4-bridge.test.ts",
+      "tests/animation-mp4-encoder-contract.test.ts",
+      "tests/gateway-motion-mp4-resource.test.ts",
+    ]) {
+      expect(existsSync(path)).toBe(false);
     }
-    expect(assessDeclaredMp4Evidence(declared,{
-      ...owner,revision_sha256:"invalid",
-    }).manifest).toBe("REJECTED");
   });
 
-  test("active Runtime and Control emit the same non-approving motion contract",async()=>{
-    const runtime=await Bun.file("server/runtime/contracts/animation.ts").text();
-    const control=await Bun.file("gateway/control/orchestration.ts").text();
+  test("Runtime, Gateway, Control and pose capture retain a non-approving boundary", async () => {
+    const paths = [
+      "server/runtime/contracts/animation.ts",
+      "server/runtime/registration.ts",
+      "gateway/runtime/backend.ts",
+      "gateway/index.ts",
+      "gateway/control/orchestration.ts",
+      "lib/animation/motionEvidence.ts",
+    ];
+    for (const path of paths) {
+      const source = await Bun.file(path).text();
+      expect(source.toLowerCase()).not.toContain("mp4");
+    }
+    const runtime = await Bun.file(paths[0]!).text();
+    const control = await Bun.file(paths[4]!).text();
     expect(runtime).toContain('"NATIVE_CLIP_INSPECTION"');
     expect(runtime).toContain('"NATIVE_CONTROLLER_INSPECTION"');
     expect(runtime).toContain('describeAnimationEvidenceBoundary("STATIC_POSE_PNG")');
     expect(runtime).toContain('describeAnimationEvidenceBoundary("PLAYBACK_COMMAND")');
-    expect(control).toContain("Temporal motion stays UNVERIFIED");
-    expect(control).toContain("MP4");
     expect(runtime).toContain("return captureAnimationSamples(originalCaptureDefinition, request, context)");
+    expect(control).toContain("Temporal motion stays UNVERIFIED");
+    expect(control).toContain("native playback");
   });
 });

@@ -82,20 +82,13 @@ The runtime now includes `animation_evidence_boundary` in native authored
 inspection, pose capture and playback-command results; its
 `temporal_motion.state=UNVERIFIED` cannot be upgraded by these producers.
 
-Only MP4 (H.264) is planned for temporal *visual* motion; it is an internal
-AI evidence artifact, not a user preview, with no GIF counterpart.
-The existing native MP4 encoding module can probe H.264 MIME support;
-`inspect_animation(diagnostics=true).motion_mp4_encoder_probe` reports
-device-level availability when possible. Encoded bytes also require a
-detached video first-frame decode probe; there is no video UI for users.
-Neither a supported MIME nor one decoded frame is motion review.
-It is **not** proof of MP4 capture:
-the native isolated motion evaluator, frame/time attestation and Sol
-video ingestion are still unverified. No WebM, GIF or FFmpeg fallback
-should silently replace missing H.264 support.
-A consistent MP4 manifest or URI alone never proves bytes or model ingestion.
-The actual recorder, artifact access and Sol video-consumption bridge are
-not registered yet, so temporal motion cannot be marked PASS from current tools.
+The experimental video encoder and MCP binary resource were retired:
+they did not provide a usable AI-consumed motion review. Do not generate
+video, infer motion from a descriptor, or substitute GIF, a synthetic frame
+stream or periodic screenshots. Native playback observation is a separate
+review task. Record the current animation and revision, actual observed
+motion and unresolved timing/contact/loop issues. Current automated evidence
+cannot authorize temporal visual PASS.
 
 ## Evidence Economy
 
@@ -134,10 +127,10 @@ multiple static poses as proof of smooth motion.
 AUTHOR coherent keys/batch
 → reuse native inspection for technical claims
 → obtain static pose PNG only for a specific unresolved pose claim
-→ obtain a revision-bound MP4 only when a verified AI motion bridge exists
-→ temporal motion remains UNVERIFIED without observed video
+→ review native playback only when actual motion can be observed
+→ temporal motion remains UNVERIFIED without independent observed motion
 → make one supported causal correction, then recheck affected evidence
 ```
 
 Verify `DISCOVER → AUTHOR → VERIFY → CORRECT → VERIFY → DONE`; record `IMPROVED | UNCHANGED | REGRESSED`. Cyclic/idle verification requires repeated full-loop playback; three static snapshots do not prove timing/phase/contact/seam.
-Observe at least three consecutive cycles for cyclic review. Check only motion-relevant contact, sliding, penetration, weight transfer, follow-through and loop continuity. Action clips also require landing/recovery and any intended preview transition. Retain a playable evidence clip with revision, duration and view at review boundaries. Playback unavailable or interrupted means `UNVERIFIED`, not a replacement static PASS.
+Observe at least three consecutive cycles for cyclic review. Check only motion-relevant contact, sliding, penetration, weight transfer, follow-through and loop continuity. Action clips also require landing/recovery and any intended preview transition. Record inspected animation UUID/revision, timing, view and observed playback limits at review boundaries. Playback unavailable or interrupted means `UNVERIFIED`, not a replacement static PASS.

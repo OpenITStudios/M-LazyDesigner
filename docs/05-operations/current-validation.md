@@ -2,6 +2,21 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-04 — Unused MP4 pipeline retirement (source-only)
+
+The MP4/H.264 recording plan and encoder, Runtime binary slot, Gateway proxy
+and their three isolated tests were retired. Native registration, diagnostic
+codec probing, Gateway read path, Control/Skill references and shared
+animation evidence were reconciled without removing keyframe inspection,
+focused pose PNG or playback. Temporal motion remains UNVERIFIED without
+an independently observed native motion review. Generated API/HTML contained
+no matching MP4 entries; no generated artifacts were manually changed.
+
+Proof: pinned GitHub source/dependency screening and static patch checks only.
+Bun tests/typecheck/build, native Blockbench, UI and Golden visual acceptance
+NOT EXECUTED; verification CI disabled. Compatibility facades, historical
+assets and still-used temporal sampling were retained pending separate proof.
+
 ## Current source authority — 2026-10-30
 
 Source baseline before the first Golden correction: `2b24811f89541e3af0fbd5d6c6e3b7270b808d5a` on `Local`. Golden output destinations now reject Workspace/fixture paths and resolved symlink aliases; a Reference fingerprint is retained only when its post-session content matches preflight. The subsequent source-provenance correction requires clean Git HEAD at both session boundaries and withholds provenance on dirty/drifted source. On 2026-10-31 the user approved the new voxel-style visual. Its exact 1,640,048-byte PNG is now staged as a canonical Git fixture (`beacon-courier-approved.png`), matching SHA-256 `ad8ecd1e07aa858bdecff779dc7097e49bcf5410c864d1320d252c9134e56245` and Git blob `d6d58841a884498f9e9ce76ef5991e18b18d47c5`. The source Reference Package declares `APPROVED` visual authority and `READY` stage-reference input; the original SVG remains unchanged as non-active concept provenance. Actual Bun/Control execution and native model/human-result acceptance are NOT EXECUTED.

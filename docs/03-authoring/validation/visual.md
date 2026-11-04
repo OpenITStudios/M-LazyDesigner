@@ -445,62 +445,21 @@ Only when texture is in scope:
 
 Texture cannot approve or conceal wrong primary geometry.
 
-## MP4-only offscreen encoder readiness
+## Animation visual-evidence availability
 
-`lib/animation/mp4RecordingPlan.ts` owns bounded project/clip/revision,
-resolution, duration, bitrate and requested FPS, plus explicit H.264 MP4
-codec selection. `server/runtime/animation/mp4Encoder.ts` owns the
-`MediaRecorder`-based encoder from an existing canonical offscreen
-Blockbench canvas. It does **not** call `Timeline.setTime`,
-`Animator.preview`, or generate PNG/GIF. It uses a detached (not user-facing)
-video element to probe that the first encoded MP4 frame can be decoded;
-the temporary blob URL is revoked immediately. This first-frame probe
-is NOT whole-video decoding, exact frame-count proof, visual motion QA,
-or evidence that Sol can consume MP4. A future verified native
-playback adapter must keep the scene rendering and restore all state
-safely; no such adapter is currently connected.
+The experimental MP4 encoder, recording plan, Runtime binary slot and Gateway
+resource proxy were retired because they did not provide a usable AI-consumed
+motion-review workflow. They are not normal capabilities or an acceptance
+dependency. Do not recreate video encoding or screenshot polling to invent PASS.
 
-`inspect_animation(diagnostics=true)` can now return
-`motion_mp4_encoder_probe` when the Runtime supports MIME probing.
-`SUPPORTED_BY_MIME_QUERY_ONLY` checks device support, **not** that
-any frame was recorded or that the output's timing/codec is attested.
-The encoder reports actual output MP4 bytes only with explicit
-non-approving flags for authored playback timestamps, encoded frame
-count, native state restoration and Sol video consumption. When H.264
-MP4 cannot be recorded, the route fails without WebM/GIF fallback.
-The maximum request budget is bounded to avoid excessive resource
-consumption.
-
-## AI-only MP4 binary resource — transport, not review
-
-Runtime registers a non-listed, short-lived binary resource using the existing
-MCP `createResource` factory: `motion-evidence://{id}/{revision}/{sha256}`.
-There is NO UI player, no GIF, no scheduled screenshot flow and no file
-written to the user's project. A trusted in-process native encoder (NOT YET
-IMPLEMENTED) is the only intended producer, via
-`nativeMotionMp4EvidenceSlot.publishFromNativeRecorder`.
-
-The source restricts payload size, parses bounded top-level MP4 boxes, checks
-encoded-byte length/SHA, requires current project/animation/revision on each
-read, expires old artifacts and never lists evidence as a user-visible item.
-This does not prove H.264 decodability or time continuity. A base64 MP4 read
-through MCP proves binary transport at most, NOT that GPT-6.1 Sol watched
-or understood the video. The AI-consumption/quality gate remains
-`UNVERIFIED` until independently supported.
-
-The existing four-tool Gateway now exposes only this exact unlisted MP4
-resource via a narrow `resources/read` proxy. It does NOT proxy arbitrary
-Runtime files or resources, does not create a fifth tool, and does not add
-a user preview. Reads run through the existing Gateway Runtime operation
-queue with bound project/Animation-stage and generation checks; the Gateway
-independently validates MP4 MIME/container/hash after reading the blob.
-No remote arbitrary URL, filesystem path or unbounded binary payload is
-accepted by this bridge.
-
-This makes MCP *binary access* possible when a future native recorder
-publishes a real clip; it does NOT mean the current Sol client supports
-ingesting or reviewing MP4 as video. Motion remains `UNVERIFIED` until
-that separate client capability and actual perceptual review are established.
+Native animation inspection, targeted pose PNG captures and Timeline playback
+remain distinct sources. Technical checks inspect keys, curves, pivots,
+trajectories, contacts and effects. Still PNG poses support specific
+reference-paired pose claims, never continuity. A successful playback command
+proves only execution of that command. Independently observed current-revision
+native playback is required to review actual continuity, timing, weight and
+foot contact. Until observed and recorded, temporal motion remains
+`UNVERIFIED`; technical and pose checking may proceed independently.
 
 ## Evidence medium contract: Geometry / Texture / Animation
 
@@ -512,22 +471,16 @@ plus mapped shaded model views. Animation has **three distinct gates**:
    contacts and effects; scope-limited native data, not a motion visual PASS.
 2. **Static Pose Fidelity:** selected reference-paired pose PNGs. These may
    establish a named pose claim but cannot establish motion continuity.
-3. **Temporal Motion Fidelity:** actual observed time-sequence movement
-   (timing, weight, foot sliding, recovery, loops). The ONLY planned
-   visual artifact is MP4/H.264; GIF and user-facing video preview are
-   explicitly excluded.
+3. **Temporal Motion Fidelity:** independently observed time-sequence motion
+   (timing, weight, foot sliding, recovery and loops). No current automated
+   video evidence or continuous-motion visual approval is available.
 
-The existing `inspect_animation`, multi-pose
-`capture_model_views(animation_preview)`, and successful
-`manage_animation_timeline(...play)` emit a non-approving
-`animation_evidence_boundary`: temporal-motion remains `UNVERIFIED`
-until an independent, revision-bound MP4 has really been produced,
-delivered and consumed by the AI reviewer. PNG count, elapsed timeline,
-Molang syntax, a plausible trajectory report and a model-facing MP4
-descriptor alone NEVER prove temporal motion. The current MCP tool
-content contract and connected AI client do not yet provide a verified
-MP4-consumption bridge. Do not introduce a fake URL, in-memory video
-claim, polling screenshots or alternative media codec to disguise it.
+`inspect_animation`, focused `capture_model_views(animation_preview)`
+and `manage_animation_timeline(...play)` return non-approving
+`animation_evidence_boundary` data. The automated evidence surface retains
+`UNVERIFIED` temporal motion: a collection of poses, plausible diagnostics
+or a successful playback command cannot prove continuity. Do not infer PASS
+or recreate a retired media path to conceal this limitation.
 
 ## Gate 4 — Animation
 

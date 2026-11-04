@@ -14,7 +14,6 @@ import {
 } from "@/lib/capabilities/authoringStage";
 import { registerCameraTools } from "../tools/inspection/camera";
 import { registerAnimationTools } from "../tools/animation";
-import { registerMotionMp4EvidenceResource } from "../resources/motionMp4";
 import { registerAnimationEffectTools } from "../tools/animation/effects";
 import { registerAnimationControllerTools } from "../tools/animation/controller";
 import { registerAnimationInspectionTools } from "../tools/animation/inspection";
@@ -55,7 +54,6 @@ function registerAnimationFamilyTools(): void {
   registerAnimationControllerTools();
   registerParticleTools();
   registerParticleResources();
-  registerMotionMp4EvidenceResource();
 }
 
 function registerElementFamilyTools(): void {

@@ -54,7 +54,7 @@ particle inspect/create/patch/save/preview → inspect_particle / manage_particl
 controller state/composition/effects  → manage_animation_controller
 nested controller/blend curve         → same tool (native_operations)
 static pose/reference evidence        → capture_model_views(animation_preview)
-continuous motion visual evidence     → MP4 AI bridge NOT YET REGISTERED; remain UNVERIFIED
+continuous motion visual evidence     → independent native playback observation; automated verdict UNVERIFIED
 ```
 
 `new known clip → create_animation → reuse returned UUID/state; timeline if needed`
@@ -95,7 +95,7 @@ Rules:
 - Prefer one bounded keyframe/batch mutation over loops of one-key calls when a coherent cohort shares the same correction intent.
 - Reuse the animation UUID returned by creation/mutation; do not reselect or rediscover the clip merely to confirm identity.
 - Do not call `inspect_animation` after every successful deterministic mutation. Inspect only when required state is unknown/stale or when the next correction depends on a field not present in the mutation receipt.
-- Keep three separate gates: authored-key technical readiness, static pose reference fidelity, and temporal visual motion. The current tools cannot certify temporal motion from PNGs or a successful playback command; without a verified, AI-consumed MP4 mark temporal motion UNVERIFIED. No GIF or user-facing video preview.
+- Keep three separate gates: authored-key technical readiness, static pose reference fidelity, and temporal visual motion. The current automated tools cannot certify continuous motion from PNGs or a successful playback command: leave temporal motion UNVERIFIED. When available, observe native playback separately; do not recreate a video encoder, binary resource, GIF, or screenshot polling.
 - For a specific unresolved pose question, reuse `inspect_animation(diagnostics=true).motion_dynamics.temporal_image_capture_hints` as candidate times without automatic image capture. When one bone/time window is in question, inspect `bone` and `time_range` together so candidate frames focus on that scope rather than the whole clip; unfocused/global checks remain available. The planner favors separate authored motion intervals before redundant frames in the same interval. It does not infer actual intermediate poses. These hints do not attest interpolated motion or PASS; honor the eight-image budget.
 - Do not repeatedly `set_time` or take screenshots at uniform intervals. Diagnose authored keys, pivots, contact and loop constraints through native data first; use playback for motion continuity. Request `capture_model_views(animation_preview)` only for unresolved visual pose questions at meaningful events, never for every keyframe or fixed time step. The multi-time tool is optional, not the default verifier.
 - Timeline selection/view expansion is editor state, not authored motion. Change it only when it materially supports evidence or a native operation that depends on selection.
