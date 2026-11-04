@@ -97,7 +97,7 @@ The `<actual returned id>` notation is explanatory: replace the entire `handoff_
 }
 ```
 
-Use `operation=preview` to return a bounded image from the completed Cycles PNG, or `operation=cancel` to request shutdown. Both use the same job ID. If the `start` reply/job ID is lost while the Gateway remains running, call `blender_render` with `{"operation":"status"}` to recover the **latest process-local job ID**; `preview` and `cancel` still require the exact ID. Preview is a **DRAFT**; a source-compatible image is not an artistic approval or Minecraft certification.
+Use `operation=preview` to return a bounded image from the completed Cycles PNG, or `operation=cancel` to request shutdown. Both use the same job ID. `status` reports a verified completed PNG path, bounded failure reason and any automatic handoff cleanup requiring review; no success or visual quality is inferred from a running job. If the `start` reply/job ID is lost while the Gateway remains running, call `blender_render` with `{"operation":"status"}` to recover the **latest process-local job ID**; `preview` and `cancel` still require the exact ID. Preview is a **DRAFT**; a source-compatible image is not an artistic approval or Minecraft certification.
 
 **4. Recover a completed outcome after a Gateway restart:**
 

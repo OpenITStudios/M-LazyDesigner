@@ -820,11 +820,23 @@ export class BlenderRenderProvider {
       }
       case "status": {
         const current = this.status(operation.job_id);
+        const receipt = current.receipt as RenderReceipt | null;
+        const error = typeof current.error_code === "string" ? current.error_code : null;
+        const cleanup = current.handoff_cleanup;
+        const terminal = ["RENDERED_DRAFT", "FAILED", "CANCELLED"].includes(String(current.state));
         return {
           content: [{
             type: "text",
             text: "Blender job " + current.job_id + ": " + current.state +
-              " (" + current.phase + "). No visual approval.",
+              " (" + current.phase + ")." +
+              (receipt ? " PNG saved at " + receipt.output_path + "." : "") +
+              (error ? " Error: " + error + "." : "") +
+              (cleanup === "REQUIRES_REVIEW"
+                ? " Handoff requires inspection; do not automatically repeat an uncertain native export."
+                : terminal && cleanup === "PENDING"
+                  ? " Automatic handoff cleanup is pending; do not replace this job yet."
+                  : "") +
+              " Visual quality remains NOT_EVALUATED.",
           }],
           structuredContent: current,
         };

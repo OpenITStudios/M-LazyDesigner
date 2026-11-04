@@ -217,6 +217,36 @@ describe("Independent Gateway Blender MCP control contract", () => {
     expect(() => new BlenderRenderProvider().startAutomatic({})).toThrow("AUTO_NATIVE_RUNTIME_UNAVAILABLE");
   });
 
+  test("status reports actual output path, failure reason and cleanup uncertainty", async () => {
+    const provider = new BlenderRenderProvider();
+    const id = "blender_" + "a".repeat(24);
+    const current: {
+      id: string; state: string; phase: string; receipt: { output_path: string } | null;
+      error_code: string | null; handoff_cleanup: string;
+    } = {
+      id, state: "RENDERED_DRAFT", phase: "FINISHED",
+      receipt: { output_path: "/tmp/verified-render.png" },
+      error_code: null, handoff_cleanup: "RELEASED",
+    };
+    (provider as unknown as { current: unknown }).current = current;
+    const success = await provider.invoke({ operation: "status", job_id: id });
+    expect(JSON.stringify(success.content)).toContain("PNG saved at /tmp/verified-render.png");
+    expect(JSON.stringify(success.content)).toContain("NOT_EVALUATED");
+    current.state = "FAILED";
+    current.phase = "FAILED";
+    current.receipt = null;
+    current.error_code = "PUBLICATION_AUTO_HANDOFF_UNCONFIRMED";
+    current.handoff_cleanup = "REQUIRES_REVIEW";
+    const failure = await provider.invoke({ operation: "status", job_id: id });
+    expect(JSON.stringify(failure.content)).toContain("PUBLICATION_AUTO_HANDOFF_UNCONFIRMED");
+    expect(JSON.stringify(failure.content)).toContain("do not automatically repeat");
+    current.state = "RENDERED_DRAFT";
+    current.error_code = null;
+    current.handoff_cleanup = "PENDING";
+    const pending = await provider.invoke({ operation: "status", job_id: id });
+    expect(JSON.stringify(pending.content)).toContain("cleanup is pending");
+  });
+
   test("pending automatic handoff cleanup retains its job and blocks replacement", async () => {
     const provider = new BlenderRenderProvider();
     const path = "/tmp/.lazydesigner-blender-handoff-" + "a".repeat(24) + "/handoff.json";
