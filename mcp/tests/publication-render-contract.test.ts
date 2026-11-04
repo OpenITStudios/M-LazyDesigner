@@ -10,6 +10,7 @@ import {
   makePublicationJob,
   publicationRenderParameters,
 } from "@/lib/publication/contracts";
+import { publicationHandoffParameters } from "@/server/publication/handoff";
 import {
   snapshotDetachedPublicationGlb,
   verifyPublicationSourceCurrent,
@@ -129,15 +130,22 @@ describe("Publication render contract", () => {
     expect(() => blenderRenderArgs("render.py", "C:\\Art\\job.json")).toThrow("absolute");
   });
 
+  test("handoff accepts only an explicit local output directory", () => {
+    expect(publicationHandoffParameters.safeParse({ directory: "C:\\Art" }).success).toBe(true);
+    for (const directory of ["relative", "../parent", "C:\\Art\\..\\unsafe", "https://example.com/a"]) {
+      expect(publicationHandoffParameters.safeParse({ directory }).success).toBe(false);
+    }
+  });
+
   test("publication remains discoverable without a fifth Gateway method", () => {
     expect(CAPABILITY_DEFINITIONS.render_publication).toMatchObject({
       stage: "core", operationClass: "EXPORT", executionClass: "heavy", verificationClass: "visual",
     });
     const branches = manifestEntriesForCapability("render_publication");
-    expect(branches).toHaveLength(4);
-    expect(branches.map(branch => branch.branch?.value)).toEqual(["start", "status", "preview", "cancel"]);
-    expect(branches.map(branch => branch.operationClass)).toEqual(["EXPORT", "QUERY", "QUERY", "CONTROL"]);
-    expect(branches[0]?.semantic?.intents).toContain("start actual 3D Blender render");
+    expect(branches).toHaveLength(5);
+    expect(branches.map(branch => branch.branch?.value)).toEqual(["handoff", "start", "status", "preview", "cancel"]);
+    expect(branches.map(branch => branch.operationClass)).toEqual(["EXPORT", "EXPORT", "QUERY", "QUERY", "CONTROL"]);
+    expect(branches[1]?.semantic?.intents).toContain("start actual 3D Blender render");
   });
 });
 
@@ -392,6 +400,15 @@ describe("GLB Cube multi-material triangle fidelity", () => {
 });
 
 describe("GLB envelope and source fidelity preflight", () => {
+  test("exposes exact embedded PNG checksums for independent Blender handoff", () => {
+    const glb = fixtureGlb();
+    const inventory = inspectPublicationGlb(glb, 1, 1);
+    const embeddedPng = Buffer.from(FIXTURE_SOURCE_COLOR_URI.split(",")[1]!, "base64");
+    expect(inventory.verified_image_png_sha256["ld_base_tex-1"]).toBe(
+      createHash("sha256").update(embeddedPng).digest("hex"),
+    );
+  });
+
   test("checks PBR factors and nearest filtering, not just valid image/texture references", () => {
     const colorReceipt = {
       "ld_color_tex-1": {

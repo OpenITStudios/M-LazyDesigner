@@ -100,6 +100,8 @@ async function shutdown(exitCode: number): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   try {
+    // Abort and await our owned Blender process on Gateway shutdown.
+    await localCapabilities.close();
     await backend.close();
     await benchmarkTrace.flush();
     await stdioHandle?.close();

@@ -13,8 +13,9 @@ describe("Modular Blender Core source owners", () => {
   test("packages all trusted modules, with no dynamic user Python execution", async () => {
     const entry = await worker("render.py");
     const executor = await Bun.file(new URL("../server/publication/execute.ts", import.meta.url)).text();
+    const sharedWorker = await Bun.file(new URL("../lib/publication/blenderProcess.ts", import.meta.url)).text();
     for (const name of TEST_MODULES) {
-      expect(executor).toContain('"' + name + '"');
+      expect(sharedWorker).toContain('"' + name + '"');
     }
     for (const line of [
       "from core_assets import", "from camera_director import",
@@ -24,6 +25,8 @@ describe("Modular Blender Core source owners", () => {
     expect(entry).toContain("sys.path.insert(0, str(Path(__file__).resolve().parent))");
     expect(entry).not.toContain("exec(compile(");
     expect(executor).toContain("BLENDER_CORE_MODULES");
+    expect(sharedWorker).toContain("export async function runBlender");
+    expect(executor).not.toContain("childProcess.spawn(executable");
     expect(executor).toContain("publicationDiagnosticsSchema.parse");
     expect(executor).toContain("inspectPublicationPng(png");
     expect(executor).toContain("verifyPublicationSourceCurrent(");

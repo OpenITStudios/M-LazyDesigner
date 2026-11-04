@@ -95,6 +95,7 @@ export const CAPABILITY_DEFINITIONS = {
   "apply_texture": { discoveryMode: "exact_only", stage: "texturing", stateClass: "texture_appearance", defaultStaleScopes: ["TEXTURE_APPEARANCE"], verificationClass: "visual", aliases: ["assign texture","texture cube","texture face","map texture"] },
   "assign_texture_channel": { discoveryMode: "exact_only", stage: "texturing", stateClass: "material_render", defaultStaleScopes: ["MATERIAL_RENDER"], verificationClass: "focused_read" },
   "batch_keyframe_operations": { discoveryMode: "exact_only", stage: "animation", stateClass: "animation_motion", defaultStaleScopes: ["ANIMATION_MOTION"], verificationClass: "visual" },
+  "blender_render": { tier: "support", stage: "core", operationClass: "EXPORT", executionClass: "heavy", verificationClass: "visual", aliases: ["blender mcp", "independent blender renderer", "render glb handoff", "control blender cycles", "rendering blender"] },
   "bone_rigging": { stage: "geometry", stateClass: "geometry", defaultStaleScopes: ["GEOMETRY_STRUCTURE","ANIMATION_MOTION"], verificationClass: "focused_read", aliases: ["inverse kinematics","ik target","ik controller","ik root","ik source","ik pole","pole vector","mirror bone","rig mirror"] },
   "bulk_set_material_instances": { discoveryMode: "exact_only", stage: "texturing", stateClass: "material_render", defaultStaleScopes: ["MATERIAL_RENDER"], verificationClass: "focused_read" },
   "capture_model_views": { tier: "primary", stage: "core", operationClass: "PREVIEW", executionClass: "heavy", verificationClass: "visual" },

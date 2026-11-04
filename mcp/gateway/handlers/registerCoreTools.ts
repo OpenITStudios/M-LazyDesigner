@@ -374,9 +374,16 @@ export function registerCoreGatewayTools(
       const startedAt = trace?.startedAt() ?? 0;
       try {
         const { query, limit } = searchInput.parse(rawArgs);
-        const runtimeCapabilities = await backend.searchCapabilities(query, limit, {
-          facts: session.facts,
-        });
+        let runtimeCapabilities;
+        try {
+          runtimeCapabilities = await backend.searchCapabilities(query, limit, {
+            facts: session.facts,
+          });
+        } catch (error) {
+          // Gateway Blender is independent from native Blockbench availability.
+          if (!localCapabilities.canSearchWithoutRuntime(query)) throw error;
+          runtimeCapabilities = [];
+        }
         const rawCapabilities = await localCapabilities.search(
           query,
           runtimeCapabilities,

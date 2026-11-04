@@ -6,21 +6,20 @@ Purpose: high-quality actual Cycles rendering of authored Blockbench geometry/UV
 
 ## Frozen product scope — only objects authored in LazyDesigner MCP
 
-Input is the **currently open Bedrock Entity Blockbench project created/edited through LazyDesigner MCP**. The existing manage_cubes, Group/UV, Texture and PBR tools own its authored geometry and surface data. The renderer is a consumer, never a second modeler.
+Input is the **immutable Bedrock Cube GLB snapshot** authored/exported through LazyDesigner MCP in Blockbench. The existing manage_cubes, Group/UV, Texture and PBR tools own the source model. For independent rendering the source is handed to the Gateway Blender controller via `handoff.json`; it never requires direct access to the current editor session after handoff. The renderer is a consumer, never a second modeler.
 
 ```text
-LazyDesigner MCP-authored Bedrock Cube/Group/UV/Texture/PBR
-       ↓ detached native Cube snapshot (unchanged authored state)
-GLB 2.0 + source/material hashes (no new model parser)
-       ↓ existing Render publication job (start/status/preview/cancel)
-Blender 5.2 — one trusted bundled Cycles worker
-       ↓
-PNG final + small PNG evidence + factual receipt
+LazyDesigner MCP Gateway (four public tools)
+       ├── Blockbench Runtime: render_publication(operation=handoff)
+       │      ↓ verified immutable model.glb + handoff.json
+       └── Gateway local provider: blender_render(start/status/preview/cancel)
+              ↓ same shared Blender 5.2 trusted Cycles worker
+              ↓ PNG + small real evidence + factual receipt
 ```
 
 - **One public control owner:** existing LazyDesigner Gateway, exactly four public methods. No Blender MCP server or second Blockbench plugin.
-- **One Runtime capability:** `render_publication` registered in the **export** family; editor `capture_model_views` remains in **camera** for QA and is not overwritten.
-- **One job owner:** `jobs.ts` serializes capture through native Runtime, executes Blender separately to avoid Gateway timeouts, then observes source revision in a generation-bound native queue before exclusive PNG publication. A changed or unavailable live model cannot be labeled CURRENT; its frozen snapshot remains valid as a historical PNG.
+- **Two application boundaries:** Blockbench `render_publication` is in the native **export** family; independent Gateway-local `blender_render` owns Cycles start/status/preview/cancel after handoff. Editor `capture_model_views` remains independent camera QA.
+- **One job owner per renderer entry:** Blockbench's existing convenience job remains process-local to the plugin; independent Gateway Blender jobs live exclusively in `gateway/providers/blenderRender.ts`. Both reuse `lib/publication/blenderProcess.ts` for trusted Python bundling/process lifecycle. No background queue service or second renderer implementation. 
 - **One immutable render source:** only real native Cube geometry/face UV/texture pixels and explicitly authored PBR maps. No broad Blender modeling API, generated scenery, semantic asset categories or user-written Python.
 - **One final rendering engine:** Cycles preview and publication modes differ only in resolution and samples. Studio lighting/HDRI, camera and compositor affect presentation, not authored geometry.
 - **One evidence route:** the image returned to AI/humans is a bounded downsample of the same finished Cycles PNG. Numeric diagnostics cannot assert that the image is artistically approved.
@@ -42,7 +41,7 @@ Source-level material assertions now bind each source-verified embedded GLB PNG 
 
 The camera uses the official Blender projection after a dependency graph update, not a duplicate viewport renderer or arbitrary asset-category labels. The lighting is a deterministic three-area-light rig, not a new scene generator. A subject **frame rectangle** extracted from the actual Cycles PNG can still contain background; its brightness statistics are **not** a segmented-object exposure measurement or aesthetic score.
 
-No new Blender MCP, model-editing operation, image generator, or extra Cycles render is introduced. The editor source, UV/texel/PBR material and runtime QA remain distinct and untouched.
+A Gateway-local Blender **render MCP capability** is introduced without adding a second Gateway/server, any Blender model-editing operation, image generator, or extra Cycles render. The editor source, UV/texel/PBR material and runtime QA remain distinct and untouched.
 
 ## Canonical source owners
 
@@ -54,7 +53,9 @@ No new Blender MCP, model-editing operation, image generator, or extra Cycles re
 | lighting_director.py | Camera-relative key/fill/rim, ground/shadow catcher and optional approved HDRI |
 | compositor_director.py | Cycles sampling, device, AgX/Standard and Blender 5.2 Fog Glow |
 | quality_report.py | Measured PNG pixel/alpha observations, NO automatic artistic PASS |
-| ../execute.ts | Only trusted Python source bundler and local subprocess/PNG file owner |
+| ../../../lib/publication/blenderProcess.ts | Canonical trusted worker Python sources and subprocess close/cancellation handling for both owners |
+| ../execute.ts | Existing Blockbench-owned legacy render and exclusive output |
+| ../../../../gateway/providers/blenderRender.ts | Gateway-owned independent Blender render MCP control and bounded local handoff consumption |
 | ../jobs.ts | One process-local start/status/cancel controller |
 | ../../../lib/publication/ | Pure render contracts, GLB/PNG validation, material channels, atlas coverage, HDRI/source digest and report schema |
 

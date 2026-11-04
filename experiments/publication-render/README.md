@@ -2,8 +2,12 @@
 
 **Date:** 2026-11-03  
 **Branch:** Render (initial fork: Local at 85cb9889435a1c72893a9020f9ac4b73608a8ca9)  
-**State:** **RENDER-ONLY SOURCE ARCHITECTURE CLOSED** on `Render` — **BUN/TYPECHECK/BUILD/BLENDER/NATIVE VISUAL ACCEPTANCE NOT EXECUTED**.  
+**State:** **RENDER CROSS-APP MCP ADAPTER SOURCE-AUTHORED** on `Render` — **BUN/TYPECHECK/BUILD/BLENDER/NATIVE VISUAL ACCEPTANCE NOT EXECUTED**. Earlier single-application architecture statements below are historical; the explicit current boundary is [BLENDER_MCP_CONTROL.md](./BLENDER_MCP_CONTROL.md).  
 **Source authority:** This is a branch-isolated research document. Do not merge into Local/main, touch QA capture, change workflows, or publish without an independent explicit request.
+
+## Current Blender MCP control boundary
+
+**[BLENDER_MCP_CONTROL.md](./BLENDER_MCP_CONTROL.md)** is the current integration contract for the two applications: one unchanged main MCP Gateway, an explicit Blockbench GLB `handoff` operation, and the Gateway-local `blender_render` controller (start/status/preview/cancel). It reuses the same trusted Blender worker and has its own job lifecycle, so the Blockbench session can close after handoff. No native/local tests have run and `Local` must remain untouched.
 
 ## Authoritative Object-to-Render Contract (ADR-R01)
 
@@ -19,7 +23,7 @@ Read **[CAMERA_LIGHTING_SPEC.md](./CAMERA_LIGHTING_SPEC.md)** for the bounded ge
 
 Three area lights remain tied to the actual camera and model radius, with finite power/size bounds, actual RGB/distance/power provenance, and a measured luminance ROI extracted from the **same saved Cycles PNG**. The ROI is explicitly **not an object segmentation mask** and never drives an automatic artistic-quality PASS or silent exposure correction.
 
-This is **source-authoring**, not successful native Blender rendering, professional-reference quality proof, or completed GPU performance measurements. There is no second Blender MCP or general-purpose 3D scene expansion.
+This is **source-authoring**, not successful native Blender rendering, professional-reference quality proof, or completed GPU performance measurements. The new Gateway-local Blender render capability is not a second MCP server or general-purpose 3D scene editor.
 
 ## Authoritative Material Translation Contract (ADR-R02)
 
@@ -29,11 +33,11 @@ Supported source contract: opaque COLOR, explicitly authored MER (texture or uni
 
 **Source code is authored, NOT Bun/typecheck/Blender/native-verified.** A glTF material receipt and numeric parity do not prove Blender visual equality. See the exact open native gates in ADR-R02.
 
-## Scope lock — the requested product, not a general Blender MCP
+## Scope lock — the requested product, not arbitrary Blender scene editing
 
-Only render the **actual Bedrock Entity Cube/Group/UV/Texture/PBR object authored by LazyDesigner MCP in Blockbench**. Keep one existing Gateway, one `render_publication` output capability, one detached GLB bridge and one trusted Blender 5.2 Cycles worker. Do **not** create another general Blender MCP, import/code-generation workflow, multi-scene cinematic framework, or a new model representation. All other model-authoring tools, native project state and screenshot QA remain independent.
+Only render the **actual Bedrock Entity Cube/Group/UV/Texture/PBR object authored by LazyDesigner MCP in Blockbench**. Keep one existing Gateway, native `render_publication` (including `handoff`), one independent Gateway-local `blender_render` control capability, one detached GLB bridge and one shared Blender 5.2 Cycles worker. Do **not** create a second network MCP server, arbitrary Blender scripting/import interfaces, multi-scene cinematic framework or duplicate model representation. All other model-authoring tools, native project state and screenshot QA remain independent.
 
-Final architecture and per-module ownership are frozen in [mcp/server/publication/worker/README.md](../../mcp/server/publication/worker/README.md). The Runtime capability now belongs to the **Export** registration family. Four operations remain `start`, `status`, `preview`, `cancel` within the existing four Gateway methods. Source output is a true Cycles PNG, not an AI-generated picture.
+Final architecture and per-module ownership are frozen in [mcp/server/publication/worker/README.md](../../mcp/server/publication/worker/README.md). The Runtime capability now belongs to the **Export** registration family. Native `render_publication` provides `handoff/start/status/preview/cancel` (five branches); Gateway-local `blender_render` provides `start/status/preview/cancel` (four branches). Both remain beneath the **same four Gateway methods**. Source output is a true Cycles PNG, not an AI-generated picture.
 
 "Closed architecture" refers **only to component responsibilities and authored source**. It does **not** assert successful installation, Blender execution, image fidelity, or equality to the five visual references. User-requested native tests remain deferred.
 
@@ -41,7 +45,7 @@ Final architecture and per-module ownership are frozen in [mcp/server/publicatio
 
 - Worker quality_report.py creates ONE evidence.png (maximum 384px each side) by resizing a disposable Blender image datablock loaded from the **actual saved Cycles PNG**; no second renderer, image generator, source atlas replacement or default full-resolution image transfer.
 - The TypeScript publication service accepts it only after strict RGBA8 PNG/CRC checks and source-bound diagnostic dimensions. Source GLB identity is rechecked inside the same native serialized queue operation that exclusively saves the final PNG.
-- The render_publication capability now has four operations **start/status/preview/cancel** while the Gateway itself still has exactly four top-level methods. The explicit preview operation returns genuine PNG image content only for a completed DRAFT job. Status is text-only by default.
+- The Blockbench native `render_publication` capability now also has a `handoff` operation to produce a durable, source-checked GLB package for independent Gateway Blender rendering; legacy start/status/preview/cancel remain for compatibility. The Gateway itself still has exactly four top-level methods. The explicit preview operation returns genuine PNG image content only for a completed DRAFT job. Status is text-only by default.
 - Plugin Studio includes a View Real PNG Preview dialog using the same validated bytes. The process-local WeakMap ties the cache to the original completed receipt and verifies SHA on each read; no network image URLs.
 - Phase labels separate preparation, rendering, output verification and publication, without invented %/ETA. Auto GPU may retry on CPU once for a catchable Cycles exception with accurate backend/fallback provenance.
 - AI can visually inspect that low-resolution real 3D output and request a new bounded camera/light configuration; there is **NO automatic artistic PASS or unattended unlimited refinement loop**.

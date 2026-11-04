@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createTool, type ToolSpec } from "@/lib/factories";
 import { STATUS_EXPERIMENTAL } from "@/lib/constants";
 import { publicationRenderParameters } from "@/lib/publication/contracts";
+import { preparePublicationHandoff, publicationHandoffParameters } from "@/server/publication/handoff";
 import {
   startPublicationRender,
   getPublicationRenderJobStatus,
@@ -12,6 +13,10 @@ import {
 
 const jobId = z.string().regex(/^render_[a-f0-9]{24}$/);
 export const publicationControlParameters = z.discriminatedUnion("operation", [
+  z.object({
+    operation: z.literal("handoff"),
+    request: publicationHandoffParameters,
+  }).strict(),
   z.object({
     operation: z.literal("start"),
     request: publicationRenderParameters,
@@ -33,7 +38,7 @@ export const publicationControlParameters = z.discriminatedUnion("operation", [
 /** One nonblocking native render service shared by AI Runtime and human UI. */
 export const publicationRenderToolDoc: ToolSpec = {
   name: "render_publication",
-  description: "Blender Cycles render from real Blockbench model geometry and textures. start schedules one job, status checks progress, cancel requests termination; preview returns a bounded downsample of the actual COMPLETED Cycles PNG as an MCP image for AI visual review, without forwarding the full-resolution file. No long Gateway call or new public tool. Requires authorized local Blender 5.2 and output path. Results remain DRAFT, never visual QA PASS.",
+  description: "Blender Cycles rendering from a real MCP-authored Blockbench model. handoff creates an explicit verified GLB+manifest directory for the independent Gateway blender_render controller; existing start/status/preview/cancel remain as the Blockbench-owned legacy convenience path. The independent controller can continue rendering the frozen GLB after Blockbench closes while Gateway remains running. Neither path changes native geometry/Undo. Results remain DRAFT, not visual QA PASS.",
   annotations: {
     title: "Render Publication PNG (Blender Cycles)",
     readOnlyHint: false,
@@ -51,6 +56,19 @@ export function registerPublicationRenderTool(): void {
       ...publicationRenderToolDoc,
       async execute(args) {
         switch (args.operation) {
+          case "handoff": {
+            const handoff = await preparePublicationHandoff(args.request);
+            return {
+              content: [{
+                type: "text" as const,
+                text: "Verified Blockbench snapshot exported to " + handoff.handoff_path +
+                  ". To render independently, call Gateway blender_render operation=start " +
+                  "with this handoff_path and an authorized Blender executable. " +
+                  "Handoff files are immutable inputs; manage their retention explicitly.",
+              }],
+              structuredContent: handoff,
+            };
+          }
           case "start": {
             const status = await startPublicationRender(args.request);
             return {

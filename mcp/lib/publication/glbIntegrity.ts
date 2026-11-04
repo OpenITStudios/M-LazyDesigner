@@ -375,6 +375,32 @@ export function inspectPublicationGlb(
       throw new Error("PUBLICATION_GLB_SOURCE_IMAGE_INVENTORY_MISMATCH");
     }
   }
+  if (!expectedImagePixels) {
+    // A Gateway Blender controller receives a previously source-verified
+    // handoff. Verify its exact embedded PNG bytes against the handoff's
+    // per-material SHA receipt; never trust the JSON sidecar alone.
+    const bySource = new Map<number, string>();
+    for (const item of textures) {
+      if (!record(item) || typeof item.name !== "string" ||
+          !validIndex(item.source, images.length) ||
+          Object.hasOwn(verifiedImageShaByName, item.name)) {
+        throw new Error("PUBLICATION_GLB_HANDOFF_TEXTURE_IDENTITY_INVALID");
+      }
+      const sourceId = item.source as number;
+      let digest = bySource.get(sourceId);
+      if (!digest) {
+        const image = images[sourceId];
+        const png = record(image) ? embeddedPng(image, bufferViews) : null;
+        if (!png) throw new Error("PUBLICATION_GLB_HANDOFF_EMBEDDED_PNG_MISSING");
+        // Full PNG CRC/decompression/filter validation using the same
+        // bounded source verifier, without a second PNG decoder.
+        inspectPublicationPng(png, png.readUInt32BE(16), png.readUInt32BE(20));
+        digest = createHash("sha256").update(png).digest("hex");
+        bySource.set(sourceId, digest);
+      }
+      verifiedImageShaByName[item.name] = digest;
+    }
+  }
   if (expectedCubes) {
     if (expectedCubes.length !== expectedMeshes) {
       throw new Error("PUBLICATION_GLB_EXPECTED_SOURCE_MESH_COUNT_INVALID");

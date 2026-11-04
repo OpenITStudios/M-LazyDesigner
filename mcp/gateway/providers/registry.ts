@@ -1,4 +1,5 @@
 import { summarizeCapability } from "../capabilities/catalog";
+import { BLENDER_RENDER_TOOL, BlenderRenderProvider, shouldProbeBlenderRender } from "./blenderRender";
 import type {
   BackendTool,
   CapabilitySummary,
@@ -25,6 +26,7 @@ type LocalCapabilityProvider = {
 
 export class LocalCapabilityRegistry {
   private readonly providers: readonly LocalCapabilityProvider[];
+  private readonly blender = new BlenderRenderProvider();
 
   constructor() {
     const vanilla = new VanillaEntityReferenceProvider();
@@ -35,7 +37,22 @@ export class LocalCapabilityRegistry {
         isAvailable: () => vanilla.isAvailable(),
         invoke: (args) => vanilla.invoke(args),
       },
+      {
+        tool: BLENDER_RENDER_TOOL,
+        shouldProbe: shouldProbeBlenderRender,
+        isAvailable: () => this.blender.isAvailable(),
+        invoke: async args => this.blender.invoke(args),
+      },
     ];
+  }
+
+  /** Blender-owned capabilities remain discoverable if Blockbench is closed. */
+  canSearchWithoutRuntime(query: string): boolean {
+    return shouldProbeBlenderRender(query);
+  }
+
+  async close(): Promise<void> {
+    await this.blender.close();
   }
 
   private providerFor(capability: string): LocalCapabilityProvider | null {
