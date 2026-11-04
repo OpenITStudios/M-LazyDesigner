@@ -1,6 +1,8 @@
-# Approved Model Four-Side Reference Samples — M-LazyDesigner
+# Four-Side Model Reference Samples — Approved and Backup Candidates
 
-**Approval scope confirmed 2026-11-05:** **MD-REF-01 (Silver Luxury SUV)** is accepted by the user as a **VISUAL GUIDELINE** for the **clean four-panel layout** and restrained Minecraft-stylized Blockbench rendering language. It is **NOT** approved as a reusable SUV shape, wheel geometry, grille, color palette, materials, brand identity, or native Blockbench model blueprint. New subject/source images and explicit user decisions always outrank example content.
+**Approval scope confirmed 2026-11-05:** **MD-REF-01 (Silver Luxury SUV)** remains the **sole approved** VISUAL GUIDELINE for clean four-panel layout and restrained Minecraft-stylized Blockbench presentation. Its SUV shape, wheel geometry, grille, colors and accessories must never transfer to another subject.
+
+**Backup status (not approved):** **MD-REF-02 (Roman Legionary)** was generated and saved on explicit user request as a **BACKUP_CANDIDATE_NEEDS_USER_REVIEW**. Its generated four-side sheet is useful for comparison but has unresolved equipment and hidden-side fidelity. Saving the files is not visual acceptance or a native model PASS. New source evidence and user-approved constraints override either example.
 
 This catalog follows [M-LazyBuilder's approved-reference storage discipline](https://github.com/OpenITStudios/M-LazyBuilder-MCP/blob/develop/docs/03-authoring/exterior/reference-samples.md): original full-resolution image **bytes stay in ChatGPT Library**, GitHub contains the durable catalog/rules/identifiers. GitHub Markdown, hashes and image-generation IDs do **not** supply the actual pixels to ChatGPT or local Codex. No new GitHub image-generation engine, auto-loader, Project installation, runtime schema, or persistent model state is introduced.
 
@@ -41,7 +43,35 @@ This catalog follows [M-LazyBuilder's approved-reference storage discipline](htt
 
 **C. Local Codex/Blockbench use.** Explicitly export/download the approved PNG from Library or the approved ZIP to the development workspace and verify actual bytes with the commands below. A repository path, Markdown catalog, or SHA by itself is not an image file. Preserve `MD-REF-01` provenance and approval scope on handoff; do not claim tested native geometry or approval of new models.
 
-**Sample promotion policy:** new sample approval and persistent Library saves require explicit user authorization. A user-approved visual direction is not automatically a newly approved example. Only the current sample is approved in this catalog; do not add rejected poster-heavy SUV sheets as secondary baselines.
+**Sample promotion policy:** new sample approval and persistent Library saves require explicit user authorization. Save authorization alone does not promote a new sample. **MD-REF-01 remains the sole approved baseline; MD-REF-02 is a separately stored backup candidate awaiting visual review.** Do not use rejected poster-heavy images as approved baselines.
+
+
+
+## MD-REF-02 — Roman Legionary (BACKUP CANDIDATE, NOT APPROVED)
+
+**User instruction on 2026-11-05:** generate another four-side model reference from the uploaded Roman-soldier photograph and save it as a **backup example using the same storage format**. This authorizes the archive, **not promotion to APPROVED_VISUAL_GUIDELINE**. The MD-REF-01 approved PNG/ZIP remain immutable and unchanged; the original v1 approved ZIP intentionally contains **only MD-REF-01**.
+
+**ChatGPT Library sample folder:** `/M-LazyDesigner/Reference Samples/Model Four Sides/MD-REF-02_roman-legionary/`
+
+**Separate backup ZIP:** `M_LazyDesigner_Roman_Legionary_Backup_MD-REF-02_v1.zip`
+
+- ZIP SHA-256: `6f64d9ca6ed365ef34fe9dce62a757cfdc50efaa003a05d1c525204f247309bd`; size **1,261,415 bytes**; ZIP integrity verified against exact Library-readback bytes.
+- `candidate_four_sides.png`: **1448 × 1086**, **707,894 bytes**; SHA-256 `8a886d4d004c077a62e9237e8201d2c206ecf3227c249ce86090dad18d48b853`.
+- `input_source.png`: user-provided Roman legionary photograph, **415 × 739**, **551,467 bytes**; SHA-256 `4f024d5ba1be92490b3cae5870ef2ba6795b3a7ff8245f0e054640969cf421cf`.
+- `REPRODUCE.md`: source-specific instructions, provenance and P1/P2 visual QA findings; **not** the original hidden image prompt or a reproducible seed.
+- `manifest.json`: candidate status, exact hashes, source/visual role, provenance and unverified claims. Library-root `manifest.json` **v2** indexes both MD-REF-01 (approved) and MD-REF-02 (backup candidate) separately.
+
+**Image provenance:** user subject photo is the **SUBJECT_SOURCE**. ChatGPT generated a four-side strip in a poster-style sheet with source generation ID `242549b3-cfba-480a-a1a0-57fd2094a21e`. Two image-model attempts included unrequested infographic panels; after repeated failure, the four generated directional panels from the first output were **cropped and deterministically reassembled** into the clean 2×2 candidate. This is a **presentation-only transform**, not new 3D modelling, corrected anatomy, independently generated orthographic views, calibrated rotations or a claim that the underlying generator obeyed the requested sheet specification.
+
+**Current four-side order:** `FRONT | RIGHT` / `BACK | LEFT`, with no fifth HERO, generated dimensions, palette or poster footer. Hand-painted faceted metal, red cloth, leather straps and the upright shield read visually, but do not copy their design to unrelated new subjects.
+
+**Open P1/P2 QA:**
+- **P1:** the sword held in the soldier's **right hand** is shown in FRONT and BACK but not clearly carried through the RIGHT-side view; its grip/contact relationship is `NOT_ASSESSABLE`. Do **not** mark all four views `CONSISTENT` or geometry-ready.
+- **P1:** shield/left-arm attachment is partly obscured in the side/rear views; do not invent a validated shield pivot/rig.
+- **P1:** the source photograph reveals only the front-three-quarter side; rear helmet/strap/armor geometry is **PROVISIONAL**, not SOURCE-OBSERVED or exact reconstruction.
+- **P2:** panel images are generated and reassembled illustration, not native Blockbench orthographic camera captures; element inventory, UV, rig, exact texture scale and Bedrock export are `NOT_EXECUTED / UNVERIFIED`.
+
+**Use policy:** MD-REF-02 is available as an explicitly selected **backup presentation/style experiment**, but it is **not the default globally approved sample**. The new object's own `SUBJECT_SOURCE` still owns silhouette, parts, colors and materials. Do not load the archived Roman input photo as identity for other projects. Before any future promotion, review actual candidate/corrected pixels and resolve the P1 sword/attachment failures, then obtain explicit user acceptance and version the artifact rather than overwriting it silently.
 
 ## Byte-verified local Codex handoff (Windows PowerShell)
 

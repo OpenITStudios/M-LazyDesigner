@@ -503,4 +503,29 @@ describe("LazyDesigner reference preparation contract", () => {
   });
 
 
+
+  test("MD-REF-02 candidate is archived separately and cannot silently replace the approved SUV", async () => {
+    const [catalog, imageReadme] = await Promise.all([
+      read("../docs/02-reference/image/reference-samples.md"),
+      read("../docs/02-reference/image/README.md"),
+    ]);
+    expect(catalog).toContain("md-ref-01 remains the sole approved");
+    expect(catalog).toContain("md-ref-02 — roman legionary (backup candidate, not approved)");
+    expect(catalog).toContain("backup_candidate_needs_user_review");
+    expect(catalog).toContain("candidate_four_sides.png");
+    expect(catalog).toContain("input_source.png");
+    expect(catalog).toContain("reproduce.md");
+    expect(catalog).toContain("manifest.json");
+    for (const hash of [
+      "8a886d4d004c077a62e9237e8201d2c206ecf3227c249ce86090dad18d48b853",
+      "4f024d5ba1be92490b3cae5870ef2ba6795b3a7ff8245f0e054640969cf421cf",
+      "6f64d9ca6ed365ef34fe9dce62a757cfdc50efaa003a05d1c525204f247309bd",
+    ]) expect(catalog).toContain(hash);
+    expect(catalog).toContain("presentation-only transform");
+    expect(catalog).toContain("not clearly carried through the right-side view");
+    expect(catalog).toContain("provisional");
+    expect(imageReadme).toContain("md-ref-01 is currently the sole approved default");
+    expect(imageReadme).toContain("backup candidate requiring review");
+  });
+
 });
