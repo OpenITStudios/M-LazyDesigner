@@ -176,6 +176,51 @@ NO MATERIAL VIEW BENEFIT  → omit the panel and keep existing readable construc
 
 A plain back is allowed when supported; a presumed symmetric back or opposite side is not evidence. An additional BACK, RIGHT, TOP, BOTTOM or detail view is justified by the specific unresolved build decision, not by a quota. Where a view cannot reveal unknown source geometry, retain UNKNOWN instead of generating a fictitious source-backed view. Escalate to Sheet 02 only if decision-critical P1/P2 content would otherwise be unreadable.
 
+### ChatGPT Shared Object-Space Build Brief
+
+Before sending a multi-view request to the **ChatGPT image generator**, compile one compact **internal** description of the unchanged object. For a one-view asset, retain only the facts that prevent important construction mistakes. This is a prompt-planning method, **not** a persisted scene graph, modelling engine, generated 3D mesh or new `REFERENCE.json` schema.
+
+```text
+INTENT          → faithful source reconstruction | new original design
+IDENTITY        → one object, required parts and identity-bearing features
+FRONT / SIDES   → front-identifying feature and OBJECT LEFT/RIGHT (not page directions)
+PRIMARY VOLUMES → major masses and supported relative width/height/depth
+CONNECTIONS     → what attaches, supports, overlaps or contacts what
+NEGATIVE SPACE  → actual holes, gaps, arches or openings when evidenced
+MATERIAL        → confirmed colors/markings on their actual owning surfaces
+DEPTH READ      → evidence for real protrusion/recess vs paint, shadow or highlight
+UNKNOWN         → source-hidden missing facts | original-design PROVISIONAL completion
+LOCKS           → real approved visual, Scale Lock, side-specific marks and parts
+```
+
+Physical continuity is the central rule: if a mass is in the FRONT view, it is the **same mass** in SIDE/BACK/TOP, although its projection and occlusion change. The back is the reverse of one unchanged volume, not a mirrored second front; identity-bearing left/right features cannot switch object sides. A dark painted patch does **not** prove a hole. A highlight or cast shadow does **not** establish thickness, a bevel, or a new Cube. Do not convert stylistic shading into unsupported geometry.
+
+For source-faithful reconstruction, unseen identity-critical structure remains UNKNOWN; never invent source-owned rear/underside topology. In open-ended original design, a restrained, coherent continuation may be PROVISIONAL until the user reviews it. Keep the chosen form consistent across views, and do not present it as an observed source fact.
+
+Each panel contributes a single decision-focused instruction rather than another complete description of the object:
+
+```text
+<PANEL_ID> → <needed object-space camera or local detail> → <one P1/P2 build decision>
+```
+
+Pick the minimum useful set of views using the existing Surface Coverage Gate. FRONT, BACK, LEFT, RIGHT, TOP, BOTTOM and 3/4 are options—not quotas. Generate one readable sheet by default; only use Sheet 02+ when critical information cannot fit without shrinking or hiding it, preserving the actual approved Sheet 01 image as the visual anchor.
+
+### ChatGPT Image-Generation Failure Targets
+
+Apply a targeted negative only for the current material risk, not a long list of generic constraints:
+
+```text
+DUPLICATED_FRONT_AS_BACK → show real supported reverse-side form, never copy the front
+SWAPPED_OBJECT_SIDES     → preserve object-left/right asymmetry and markings
+PART_COUNT_DRIFT         → preserve primary mass and accessory counts in every view
+FLOATING_OR_FAKE_CONTACT → preserve supported attachment and ground contact
+SHADOW_AS_GEOMETRY       → distinguish paint/shading from actual voxel volume
+UNREADABLE_PANEL         → enlarge decision-critical evidence; remove redundant details
+SOURCE_HIDDEN_INVENTION  → UNKNOWN for source fidelity, PROVISIONAL for original design
+```
+
+Words can guide but **cannot guarantee true 3D consistency** or prove a generated image matches Minecraft geometry. Do not imply a hidden pre-display visual QA gate or a change to the underlying image model. Inspect actual generated pixels after the call and correct only observed defects.
+
 ## 7. Panel-Specific Evidence
 
 ### HERO
@@ -279,7 +324,7 @@ MULTI-VIEW CONTRADICTION → regenerate the affected sheet from the same locks
 INSUFFICIENT EVIDENCE  → mark affected claim UNVERIFIED; do not invent a PASS
 ```
 
-For an edit, identify the faulty panel and one concrete mismatch; preserve all unaffected panels and locked facts. Reinspect every panel touched by the edit, since image edits can affect unintended regions. Repeating the same failed correction direction twice without new evidence is a stop condition, not a reason to keep regenerating.
+For an edit, identify the faulty panel and one concrete mismatch; preserve all unaffected panels and locked facts. When possible, compare the revised image with the actual previous approved image rather than a prose summary. A believable shadow is not evidence of real thickness or a new recess, and rear ornament cannot substitute for source-supported structure. Reinspect every panel touched by the edit, since image edits can affect unintended regions. Repeating the same failed correction direction twice without new evidence is a stop condition, not a reason to keep regenerating.
 
 Do not create an extra sheet, proxy mesh, camera engine, part registry, or validation score to satisfy this clause. Metadata agreement is not visual PASS; missing P1 evidence blocks only its dependent modelling decision. A simple asset whose one view already answers the task does not need any multi-view work.
 

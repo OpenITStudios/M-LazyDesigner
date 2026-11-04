@@ -217,6 +217,53 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(templates).not.toContain("create a new reference panel validator");
   });
 
+
+  test("ChatGPT image generator uses one shared object-space brief rather than MCP generation", async () => {
+    const [skill, prompt, templates] = await Promise.all([
+      read(REFERENCE_SKILL),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+    ]);
+    expect(skill).toContain("chatgpt is the image-generation actor");
+    expect(skill).toContain("downstream consumer, not the image generator");
+    expect(skill).toContain("invoke image generation once when authorized");
+    expect(prompt).toContain("chatgpt shared object-space build brief");
+    expect(prompt).toContain("not a persisted scene graph");
+    expect(templates).toContain("construction lock — one shared object-space form");
+  });
+
+  test("reference generator distinguishes real volume from shading and retains side identity", async () => {
+    const [prompt, standard, templates] = await Promise.all([
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+    ]);
+    for (const scenario of [
+      "duplicated_front_as_back", "swapped_object_sides", "part_count_drift",
+      "floating_or_fake_contact", "shadow_as_geometry", "unreadable_panel",
+      "source_hidden_invention",
+    ]) expect(prompt).toContain(scenario);
+    expect(prompt).toContain("cannot guarantee true 3d consistency");
+    expect(prompt).toContain("not quotas");
+    expect(standard).toContain("shadow or dark paint interpreted as unsupported geometric depth");
+    expect(templates).toContain("back is the same underlying object volume");
+    expect(templates).not.toContain("six views are mandatory");
+  });
+
+  test("ChatGPT reviews real generated images and performs bounded corrections", async () => {
+    const [skill, prompt, templates] = await Promise.all([
+      read(REFERENCE_SKILL),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+    ]);
+    expect(skill).toContain("review actual generated pixels after generation");
+    expect(skill).toContain("bounded change + preserve image correction");
+    expect(skill).toContain("hidden pre-display quality pass");
+    expect(prompt).toContain("actual previous approved image");
+    expect(templates).toContain("actual approved image when available");
+    expect(templates).toContain("painted shadows/highlights are not mistaken");
+  });
+
   test("coverage review cannot turn declared metadata or unobserved images into visual PASS", async () => {
     const [standard, prompt, templates, skill] = await Promise.all([
       read("../docs/02-reference/image/standard.md"),

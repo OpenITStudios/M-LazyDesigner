@@ -465,6 +465,8 @@ hidden rear/side construction is UNKNOWN unless evidenced, not filled by inventi
 hero and construction views agree
 proportions do not drift
 attachments/openings agree
+painted shadows/highlights are not mistaken for unsupported physical form
+true rear depth continuity and object-side asymmetry remain consistent
 approved materials/colors remain stable
 support panels describe the same asset
 motion poses preserve geometry identity + scale
@@ -481,6 +483,8 @@ A sheet fails on any material condition:
 
 ```text
 cross-view structural contradiction
+shadow or dark paint interpreted as unsupported geometric depth
+copied or mirrored front falsely presented as a distinct rear
 missing P1 rear/side construction evidence presented as READY
 part shape/count changes without approved reason
 player/world scale drifts across views/sheets

@@ -112,9 +112,12 @@ IDENTITY LOCK
 - <required asymmetry / orientation>
 - <identity-critical markings/material facts>
 
-CONSTRUCTION LOCK
-- <major attachment/opening/contact relationship>
-- <major body/assembly hierarchy only when material>
+CONSTRUCTION LOCK — ONE SHARED OBJECT-SPACE FORM
+- <main masses and supported relative width/height/depth, no invented measurements>
+- <secondary volumes and actual attachments/ground contacts>
+- <real openings/negative space vs painted shadows or surface marks>
+- <front, object-left/right, and confirmed asymmetry>
+- <UNKNOWN hidden source geometry or original-design PROVISIONAL facts when material>
 
 VISUAL LANGUAGE
 Minecraft Bedrock / Blockbench production reference only.
@@ -137,7 +140,7 @@ SURFACE COVERAGE (only if a P1 decision needs a view)
 
 CONSISTENCY
 - same asset proportions in every panel
-- same part count and attachments
+- same part count, rear depth continuity, attachments and openings
 - same left/right orientation
 - same approved materials/colors
 - same player-relative/world scale
@@ -315,6 +318,7 @@ Do not leave the old version in another panel.
 
 PANEL-LEVEL RECHECK
 - <affected PANEL_IDs and associated P1/P2 evidence decisions>
+- Compare with the actual approved image when available; preserve unrelated material and structural authority.
 - Re-ground panel boundaries against the new image; do not reuse stale crop/label assumptions.
 - Inspect the complete sheet for collateral changes outside the targeted edit.
 - A zoom/crop is only a focus on the same parent image, not independent source authority.
@@ -441,6 +445,8 @@ multi-view panels share one 3D form but may have different projected 2D silhouet
 required part count and attachment relationships are consistent
 approved side-specific markings, materials and colors do not drift
 P1 rear/side/attachment coverage is actually inspectable or missing information remains UNKNOWN
+painted shadows/highlights are not mistaken for extra voxel depth or true openings
+back is the same underlying object volume, not a copied front or new asset
 an empty back is not decorated solely for visual balance
 later sheets preserve actual approved Sheet 01 visual identity
 motion views use the same object rather than redesigning it

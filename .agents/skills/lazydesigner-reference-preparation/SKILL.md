@@ -119,6 +119,26 @@ Sheet 01 is the identity/scale anchor when a sheet workflow is needed; Sheet 02+
 
 A generated visual becomes approved visual authority only after explicit user acceptance when visual approval is material.
 
+### ChatGPT Image Generator execution path
+
+In the **VISUAL / MODEL** route, **ChatGPT is the image-generation actor** and M-LazyDesigner/Blockbench is the downstream consumer, not the image generator. Reuse the shared object-space brief in `prompt-contract.md`, the existing minimum-useful panel plan, and `master-templates.md`. Do not route a merely weak generated image into MCP/Control development without a proved integration defect.
+
+```text
+USER IMAGE REQUEST + SOURCE / APPROVED VISUALS
+→ resolve only BLOCKING facts; distinguish source fidelity from original creation
+→ compile one shared object-space build brief (volumes, contacts, voids, surfaces)
+→ select minimum useful camera directions and panel-specific evidence targets
+→ invoke image generation once when authorized using the compact compiled prompt
+→ review ACTUAL generated pixels after generation for form, sides, material, P1 coverage
+→ if a visible material defect exists, bounded CHANGE + PRESERVE image correction
+→ reinspect all affected panels, then obtain user visual approval as appropriate
+→ package ONLY when explicitly requested
+```
+
+Keep the underlying object fixed across panels; only the view and visibility change. Do not confuse a dark painted patch with an opening, shading with a protrusion or a front-facing feature with a backside feature. For source reconstruction, unknown hidden features remain UNKNOWN; for an original creative request, optional plausible completions remain PROVISIONAL until reviewed. An approved prior sheet/image should be supplied as the **actual visual anchor** for correction/continuation whenever possible; filenames and prose are insufficient replacements.
+
+A generative image may become visible to the user before inspection. Never claim a hidden pre-display quality pass. These Skill instructions do not change image-model weights, execute automatic pixel inspection, or themselves prove visual correctness.
+
 ## Pixel-art branch
 
 Delegate deliberate integer-grid icons, object/prop pixel art, sprites, tiles/patterns, reference conversion, and Minecraft-native/MIVUBI HD pixel references to `lazydesigner-pixel-art-authoring`.
