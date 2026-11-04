@@ -76,7 +76,8 @@ For source-faithful reconstruction, do not invent lore, environment, accessories
 
 ```text
 Minecraft/Blockbench target only
-clean voxel/block construction
+clean low-poly Blockbench cuboid/planar geometry with continuous faces by default
+no pixelated cube-grid unless explicitly selected
 neutral studio-like lighting
 light neutral background
 high silhouette and edge clarity
@@ -86,6 +87,25 @@ minimal decorative styling
 ```
 
 Do not embed the original real-world source into the final production sheet by default.
+
+### Blockbench Low-Poly Geometry Style Gate
+
+Select visual **geometry rendering style** before composing the image prompt. For normal Blockbench/Bedrock **3D models**, use `CLEAN_BLOCKBENCH_FORM`, not visible miniature voxel-block tessellation. Only select `INTENTIONAL_VOXEL_BLOCK_ART` when the user requests that look or explicitly approves an example showing it. Standalone 2D pixel art remains a different specialist branch.
+
+```text
+CLEAN_BLOCKBENCH_FORM
+= large clean uninterrupted planar/cuboid surfaces
++ deliberate rotated parts and limited low-poly facets where silhouette needs them
++ credible source proportions and subtle surface-level material treatment
+!= 1-pixel cube staircase, raised pixel mosaic, chunky plated body, square icon wheels
+
+INTENTIONAL_VOXEL_BLOCK_ART
+= exposed small-block stepping only if the requested visual style demands it
+```
+
+The source photograph establishes shape, layout, recognizable mass and details—not a requirement to model every specular reflection or pixel. A dark painted mark need not be an opening; a highlight does not become a new Cube. Approximate curved features with few well-chosen facets rather than many grid blocks. Do not replace low-poly with photorealistic high-poly 3D or claim arbitrary meshes/bevels/cylinders are Bedrock Entity export-ready.
+
+For `CLEAN_BLOCKBENCH_FORM`, use a targeted negative clause: no world-scale Minecraft blocks; no regular tiny cube grid; no staircase wheel arches/limbs; no chunky extruded texture pixels; no square wheel icons; no excessive infographic title, notes or decorative detail strips. This is a general style rule, not an object-specific template. Actual visual inspection remains necessary after generation.
 
 ## 3. Identity Lock
 
@@ -265,7 +285,7 @@ same accessories
 same approved materials/colors
 same left/right orientation
 same structural attachment logic
-same voxel/detail language
+same selected Blockbench geometry style and surface texture/detail language
 ```
 
 Orthographic panels are views of one asset, not independently redesigned illustrations.
@@ -312,7 +332,7 @@ Inspect the **actual generated panels** before calling a sheet usable, comparing
 2. consistent underlying width/height/depth relationships and relative spacing, allowing the projected 2D silhouette to differ by viewpoint;
 3. the same attachment/contact topology, openings and negative spaces;
 4. stable object-left/object-right asymmetry without mirroring;
-5. unchanged identity-critical markings and Minecraft-block construction language;
+5. unchanged identity-critical markings and selected Blockbench geometry language;
 6. P1 rear/side/top/contact coverage is supported by actual images or remains explicitly UNKNOWN; no omitted view is silently counted as independent evidence.
 
 Choose one bounded response based on visible evidence:

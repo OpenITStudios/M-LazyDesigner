@@ -139,6 +139,12 @@ Keep the underlying object fixed across panels; only the view and visibility cha
 
 A generative image may become visible to the user before inspection. Never claim a hidden pre-display quality pass. These Skill instructions do not change image-model weights, execute automatic pixel inspection, or themselves prove visual correctness.
 
+### Blockbench Model Style vs Pixelated Voxel Art
+
+For VISUAL / MODEL image generation, default to `CLEAN_BLOCKBENCH_FORM` from `docs/02-reference/image/standard.md`: coherent planar/cuboid masses, limited silhouette-critical faceting, controlled angles, surface-level material detail, and recognizable source proportions. A Cube is a Blockbench authoring primitive, **not a mandatory visible Minecraft block pixel**. A user-selected `INTENTIONAL_VOXEL_BLOCK_ART` style may deliberately show a small-cube grid, but never force that on every 3D model. Standalone Pixel Art retains its separate route.
+
+If the user criticizes an output as `pixelated cube`, make a **geometry style correction**: preserve the original source silhouette, proportions, part identity and relevant views; remove mini-cube tessellation, staircase arches, decorative stacked plates and squared pixel-wheel icons. Do not overcorrect into photorealistic high-poly rendering or pretend smooth mesh export has been verified. Use the actual source and rejected render as references for bounded CHANGE + PRESERVE image correction, inspect the result and ask for visual acceptance when needed.
+
 ## Pixel-art branch
 
 Delegate deliberate integer-grid icons, object/prop pixel art, sprites, tiles/patterns, reference conversion, and Minecraft-native/MIVUBI HD pixel references to `lazydesigner-pixel-art-authoring`.

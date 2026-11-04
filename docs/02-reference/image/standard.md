@@ -145,6 +145,42 @@ Optional small subtitle only when it materially helps orientation.
 
 Do not add quotes, slogans, model-info paragraphs, or technical prose inside the image.
 
+## Blockbench Geometry Rendering Standard — Not Pixelated Cubes
+
+For 3D visual/model reference images, default to **CLEAN_BLOCKBENCH_FORM**: a stylized low-poly Blockbench model with large coherent planar/cuboid surfaces, purposeful rotated parts and selective silhouette-critical facets. Do **not** turn every face into a mosaic of miniature Minecraft blocks merely because the target is Blockbench/Bedrock. Respect the user's actual visual example or approved style when it differs.
+
+```text
+CLEAN_BLOCKBENCH_FORM (default for 3D model references)
+→ uninterrupted principal planar faces, intentional cuboids and restrained rotations
+→ curve/arch/wheel contours expressed with only the necessary broad low-poly facets
+→ stable major mass, clean edge rhythm, readable attachments and source silhouette
+→ material colors, highlights and shadows on the surfaces, not extra raised mini-cubes
+
+INTENTIONAL_VOXEL_BLOCK_ART (only when the user explicitly wants stepped block art)
+→ intentionally visible voxel-grid facets and staircase silhouettes at the chosen granularity
+
+STANDALONE_PIXEL_ART
+→ handled by the separate Pixel Art reference branch, not the default 3D model style
+```
+
+**Cube is an authoring primitive, not a mandatory visible pixel.** Blockbench Bedrock geometry commonly relies on cubes, rotations, bones and pivots. The reference must be practical to interpret through the intended native model format, but a picture does not prove that arbitrary smooth meshes, cylinders, bevels, boolean holes or wedge shapes export natively. Simplify curves into a small number of meaningful facets only where the outline needs them; keep unsupported exportability claims UNVERIFIED.
+
+A painted panel seam, metallic reflection, shadow or texture cluster does not imply a physical extrusion, hole or additional Cube. Preserve continuous body/surface mass unless true shape depth is supported by source evidence. Do not compensate for missing structure by adding many tiny voxels.
+
+### Failure patterns
+
+```text
+PIXELATED_CUBE_GRID     → subdivided tiny cubic tessellation on otherwise plain faces
+STAIRCASE_ARCS          → overly stepped pixel-size wheel arches, limbs or curved contours
+CHUNKY_TILED_BODY       → layers of artificial decorative voxel plates
+SQUARE_FAKE_CIRCLES     → rounded features reduced to square pixel-art icons
+SHADING_AS_VOXEL_DEPTH  → every painted highlight becomes a 3D raised piece
+INFOGRAPHIC_OVER_FORM   → text-heavy decorative panels displace model geometry
+HIGH_POLY_PHOTO_REALISM → slick photorealistic 3D instead of feasible stylized Blockbench form
+```
+
+Use these rules across every object profile; this is not a vehicle-only preset. Verify actual form and silhouette first, before presentation or surface texture polish.
+
 ## Hero View
 
 Use one dominant hero when it improves whole-form understanding.
@@ -400,7 +436,8 @@ An enlarged detail panel may change presentation size without changing underlyin
 clean light/neutral background
 neutral studio-like lighting
 clear Minecraft/Blockbench target construction
-readable voxel/block form
+readable Blockbench low-poly form with large coherent planar/cuboid surfaces
+no default pixelated cube-grid; show block art only when specifically requested
 high edge/silhouette clarity
 low visual noise
 consistent scale within related views
@@ -442,6 +479,7 @@ Do not include by default:
 ```text
 color palette box
 generic model-info block
+text-heavy infographic decorations that compete with the model
 decorative quote/tagline
 scale illustration unless decision-critical
 RIGHT when identical to LEFT
@@ -460,6 +498,7 @@ Before user review verify:
 identity matches confirmed brief
 player/world scale matches current Scale Lock
 required parts are present
+no unintended pixelated cube-grid, staircase arcs or chunky tiled bodies
 P1 surface coverage and omitted-view reasons checked against actual pixels
 hidden rear/side construction is UNKNOWN unless evidenced, not filled by invention
 hero and construction views agree

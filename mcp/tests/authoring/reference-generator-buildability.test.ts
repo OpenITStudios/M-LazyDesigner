@@ -264,6 +264,41 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(templates).toContain("painted shadows/highlights are not mistaken");
   });
 
+
+  test("3D Blockbench reference rendering defaults to clean planar forms instead of pixelated cube art", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    for (const content of [standard, prompt, templates, skill]) {
+      expect(content).toContain("clean_blockbench_form");
+      expect(content).toContain("intentional_voxel_block_art");
+    }
+    expect(standard).toContain("cube is an authoring primitive, not a mandatory visible pixel");
+    expect(prompt).toContain("not visible miniature voxel-block tessellation");
+    expect(templates).toContain("large clean planar/cuboid volumes");
+    expect(skill).toContain("not a mandatory visible minecraft block pixel");
+  });
+
+  test("pixel-art rejection preserves geometry style and does not promise unsupported Bedrock meshes", async () => {
+    const [standard, prompt, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    for (const pattern of [
+      "pixelated_cube_grid", "staircase_arcs", "chunky_tiled_body",
+      "square_fake_circles", "shading_as_voxel_depth",
+      "infographic_over_form", "high_poly_photo_realism",
+    ]) expect(standard).toContain(pattern);
+    expect(prompt).toContain("not a requirement to model every specular reflection");
+    expect(skill).toContain("geometry style correction");
+    expect(skill).toContain("do not overcorrect into photorealistic high-poly rendering");
+    expect(standard).toContain("every object profile");
+  });
+
   test("coverage review cannot turn declared metadata or unobserved images into visual PASS", async () => {
     const [standard, prompt, templates, skill] = await Promise.all([
       read("../docs/02-reference/image/standard.md"),

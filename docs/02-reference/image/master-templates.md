@@ -62,10 +62,12 @@ Never convert a relative scale category into invented exact block dimensions.
 Use this once per generated sheet, not repeatedly per panel:
 
 ```text
-Minecraft Bedrock / Blockbench production reference only.
-Clean voxel/block construction, neutral light background, studio-like neutral lighting,
-clear silhouette and edge readability, consistent proportions and material identity across all panels,
-minimal text and minimal decorative styling.
+Minecraft Bedrock / Blockbench 3D model reference only.
+CLEAN_BLOCKBENCH_FORM by default: coherent large planar/cuboid surfaces,
+intentional geometric parts and only necessary low-poly silhouette facets.
+Do not pixelate every face into mini-cubes or make staircase arcs unless the
+user explicitly selected INTENTIONAL_VOXEL_BLOCK_ART. Neutral light background,
+clear model geometry, consistent proportions and materials, minimal decoration.
 ```
 
 When the source is real-world/non-Minecraft, the final production sheet still shows the Minecraft/Blockbench target only unless the user explicitly requests otherwise.
@@ -120,9 +122,11 @@ CONSTRUCTION LOCK — ONE SHARED OBJECT-SPACE FORM
 - <UNKNOWN hidden source geometry or original-design PROVISIONAL facts when material>
 
 VISUAL LANGUAGE
-Minecraft Bedrock / Blockbench production reference only.
-Clean voxel/block construction, neutral light background, studio-like neutral lighting,
-clear silhouette and edges, consistent proportions and materials, minimal text and decoration.
+Minecraft Bedrock / Blockbench stylized low-poly model reference.
+Use CLEAN_BLOCKBENCH_FORM: large clean planar/cuboid volumes and selective
+faceting; no raised pixel grid, no staircase silhouette, restrained texture.
+INTENTIONAL_VOXEL_BLOCK_ART is used only when explicitly requested.
+Neutral background/lighting, readable source shape and minimal labels.
 
 SHEET PURPOSE
 MAIN_REFERENCE — establish canonical identity, scale and core construction.
@@ -154,7 +158,7 @@ PRESENTATION
 - construction views aligned and consistently scaled
 - no paragraph text
 - no palette box unless decision-critical
-- no decorative panels
+- no decorative panels or large infographic note blocks
 - omit rows that carry no useful evidence
 ```
 
@@ -446,6 +450,8 @@ required part count and attachment relationships are consistent
 approved side-specific markings, materials and colors do not drift
 P1 rear/side/attachment coverage is actually inspectable or missing information remains UNKNOWN
 painted shadows/highlights are not mistaken for extra voxel depth or true openings
+no mini-cube mosaics on broad surfaces or staircase curves/wheel arches
+rounded parts remain readable as simple low-poly forms, not square pixel icons
 back is the same underlying object volume, not a copied front or new asset
 an empty back is not decorated solely for visual balance
 later sheets preserve actual approved Sheet 01 visual identity
