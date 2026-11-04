@@ -314,6 +314,30 @@ describe("pure source-image to recipe-owned Cube correspondence", () => {
     });
   });
 
+  test("unapproved source images cannot claim approved reference-view coverage", () => {
+    const draft = fixture();
+    draft.reference.images[0]!.status = "DRAFT";
+    const result = assessVisualPartCorrespondence(draft);
+    expect(result.source_views).toEqual([]);
+    expect(result.claims[0]).toMatchObject({
+      state: "PROVISIONAL", reason: "SOURCE_NOT_APPROVED",
+    });
+  });
+
+  test("draft view relabeling cannot invalidate an independently approved view", () => {
+    const input = fixture();
+    input.reference.images.push({
+      ...structuredClone(input.reference.images[0]!),
+      id: "IMG_DRAFT_LEFT", view: "left", status: "DRAFT",
+    });
+    const result = assessVisualPartCorrespondence(input);
+    expect(result.source_views).toEqual(["front"]);
+    expect(result.claims[0]).toMatchObject({
+      state: "SUPPORTED", reason: "MATCH_REVIEWED",
+    });
+    expect(result.visual_verdict).toBe("NOT_EVALUATED");
+  });
+
   test("same image bytes relabelled as different views conflict even with reported review", () => {
     const x = fixture();
     x.reference.images.push({

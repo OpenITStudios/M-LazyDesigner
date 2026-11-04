@@ -134,7 +134,8 @@ function roleOwner(role: RegionRole): PartCorrespondenceClaim["owner"] {
 function conflictingSourceViewHashes(images: readonly CorrespondenceSourceImage[]): Set<string> {
   const viewsByHash = new Map<string, Set<ModelView>>();
   for (const image of images) {
-    if (image.integrity !== "VERIFIED" || !image.sha256 ||
+    // Draft or other unapproved labels cannot invalidate an approved view.
+    if (image.status !== "APPROVED" || image.integrity !== "VERIFIED" || !image.sha256 ||
         !SHA256.test(image.sha256) || !image.view) continue;
     const views = viewsByHash.get(image.sha256) ?? new Set<ModelView>();
     views.add(image.view);
@@ -325,7 +326,8 @@ export function assessVisualPartCorrespondence(input: PartCorrespondenceInput): 
     state: "ASSESSED",
     visual_verdict: "NOT_EVALUATED",
     source_views: [...new Set(input.reference.images.flatMap((image) =>
-      image.view && image.integrity === "VERIFIED" && image.sha256 &&
+      image.status === "APPROVED" && image.view &&
+      image.integrity === "VERIFIED" && image.sha256 &&
       SHA256.test(image.sha256) && !conflictingViewHashes.has(image.sha256)
         ? [image.view] : []
     ))],
