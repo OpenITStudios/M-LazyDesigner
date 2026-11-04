@@ -80,6 +80,44 @@ describe("capability discovery efficiency", () => {
     }
   });
 
+  test("prewired metadata cannot advertise unregistered native capabilities", () => {
+    const definitions = getAllToolDefinitions();
+    const stages = ["geometry", "texturing", "animation"] as const;
+    const exposed = new Set(stages.flatMap((stage) =>
+      getMcpSurfaceToolNames("bedrock_entity", stage)
+    ));
+
+    // Manifest entries and planning code alone never publish a Runtime tool.
+    // These are intentionally unregistered until generator/native acceptance.
+    for (const planned of ["construct_geometry", "manage_uv_layout"]) {
+      expect(exposed.has(planned), planned).toBe(false);
+      expect(Object.hasOwn(definitions, planned), planned).toBe(false);
+    }
+    expect(getCapabilityMetadata("manage_uv_layout").tier).toBe("primary");
+    expect(exposed.has("manage_cubes")).toBe(true);
+    expect(exposed.has("paint_texture_transaction")).toBe(true);
+
+    const catalog = [...exposed].map((name) => ({
+      name,
+      description: definitions[name]!.description,
+      annotations: definitions[name]!.annotations,
+    })) as BackendTool[];
+    const names = new Set(catalog.map((item) => item.name));
+
+    // Exact missing capability identity must never resolve to a different
+    // executor merely because semantic aliases exist in the manifest.
+    expect(searchCapabilityCatalog(catalog, "manage_uv_layout", 8)).toEqual([]);
+    for (const intent of ["pack uv islands", "construct_geometry"]) {
+      const results = searchCapabilityCatalog(catalog, intent, 8);
+      expect(results.every((entry) => names.has(entry.capability_id)), intent)
+        .toBe(true);
+      expect(results.map((entry) => entry.capability_id), intent)
+        .not.toContain("manage_uv_layout");
+      expect(results.map((entry) => entry.capability_id), intent)
+        .not.toContain("construct_geometry");
+    }
+  });
+
   test("registered IK discovery retains short domain vocabulary", () => {
     const definitions = getAllToolDefinitions();
     const catalog = getMcpSurfaceToolNames("bedrock_entity", "geometry")

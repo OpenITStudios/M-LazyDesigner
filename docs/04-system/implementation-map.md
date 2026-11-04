@@ -43,6 +43,7 @@ flowchart TD
 | --- | --- | --- |
 | Which Stage/specialist now? | `gateway/control/` + `lib/capabilities/authoringStage.ts` | `docs/04-system/authoring-stage-context.md` for cross-stage ambiguity |
 | Which tool and prerequisites? | `gateway/capabilities/manifest.ts` + `graph.ts` | Runtime tool schema for execution |
+| Which tool is actually exposed? | `server/runtime/registration.ts` + `getMcpSurfaceDescriptor` | Live `tools/list` and current Gateway Runtime catalog when executable proof is needed |
 | What state/evidence was invalidated? | `gateway/control/delta/` + `lib/orchestration/` | affected current evidence |
 | Who fixes capability source? | `gateway/development/sourceOwners.ts` | exact module + `anchor_test` |
 | Which tests are affected? | `gateway/development/affectedExecution.ts` | focused verifier |
@@ -50,7 +51,13 @@ flowchart TD
 
 A branch without `graph` metadata is **not automatically defective**:
 some tools need only Runtime validation. `READY/UNKNOWN/BLOCKED` describes
-known prerequisites; it does not establish visual approval. Never infer
+known prerequisites, **not Runtime registration, execution success, or visual
+approval**. A capability in the core/branch manifest (including an `active`
+lifecycle entry) may be prewired while absent from the registered Runtime
+surface; only the actual catalog can establish availability. For example,
+`manage_uv_layout` and `construct_geometry` remain unregistered, while
+`manage_cubes` and `paint_texture_transaction` use registered executors.
+Do not infer activation from a schema, source module, Skill, or manifest.  Never infer
 source ownership from a capability's semantic similarity or a diagram arrow.
 If the exact owner exists, do not traverse document navigation again.
 

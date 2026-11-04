@@ -2,6 +2,22 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-04 — Capability registration/discovery reconciliation (source-only)
+
+The current Runtime registration/profile descriptor remains the only source
+of executable capability exposure. The core/branch manifests carry semantic
+metadata and may intentionally describe planned, unregistered operations.
+`manage_uv_layout` and `construct_geometry` are not registered in the normal
+Bedrock Runtime, while `manage_cubes` and `paint_texture_transaction` are.
+An existing discovery test now includes a negative guard against exposing
+the planned names, with explicit missing-identity and real-catalog assertions.
+No production schema, registration, generator output or feature was activated.
+
+Proof: exact Local source/registration/manifest review and authored regression
+only. Bun/typecheck/build, CI and LIVE_BLOCKBENCH NOT EXECUTED. Branch-specific
+readiness without a selected graph branch remains separate source work and
+must not be mistaken for executable activation or approved visual quality.
+
 ## 2026-11-04 — Added-source test ownership guard (source-only)
 
 The existing affected-execution planner now treats newly added executable
