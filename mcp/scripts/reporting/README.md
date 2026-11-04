@@ -25,6 +25,14 @@ the catalog first and follow `next_cursor` to access all retained data;
 opaque cursors refuse stale collections. Source SHA and workspace identity
 remain unknown until established independently.
 
+The existing `summarize-project-observation.ts` or an explicit archived
+`verify` operation may correlate an accepted
+canonical Golden final report with same-session L0 artifact/build/task
+evidence via optional `--golden-final=<path>`. It does not synthesize a
+quality PASS or time-to-acceptance from L0 counters. Per-build metrics
+include only calls with verified preflight evidence and state measured
+session coverage and unknown-build counts.
+
 Reporting consumes benchmark/evaluation evidence; it does not own Runtime behavior or acceptance truth.
 The explicit Research archive is a selected copy of L0 cache evidence, not
 a competing project history or authoring state owner. It never runs on the

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -208,6 +209,22 @@ describe("bounded always-on project observation", () => {
     obs.record({
       tool: "invoke_capability",
       args: { capability: "manage_cubes" },
+      result: {
+        isError: true,
+        structuredContent: { code: "OUTCOME_UNKNOWN",
+          control_delta: { project_uuid: "spoofed-native" } },
+      },
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "spoofed-native",
+      nativeRuntimeBuildIdentity: "spoofed-build",
+      durationMs: 1,
+    });
+    expect(obs.snapshot().projects).toHaveLength(0);
+    expect(obs.snapshot().unbound).toMatchObject({ calls: 3, failures: 2 });
+
+    obs.record({
+      tool: "invoke_capability",
+      args: { capability: "manage_cubes" },
       result: invocation("verified-native"),
       nativeIdentityVerified: true,
       nativeProjectUuid: "verified-native",
@@ -222,6 +239,76 @@ describe("bounded always-on project observation", () => {
       acceptance_gate_invalidations: 1,
       downstream_recheck_requests: 1,
     });
+  });
+
+  test("counts exact observed Runtime builds separately without misattributing missing preflight evidence", () => {
+    const obs = new ProjectObservationRecorder("/disposable-test-root");
+    obs.record({
+      tool: "status", args: {}, result: status("same-project"), durationMs: 2,
+    });
+    obs.record({
+      tool: "invoke_capability", args: { capability: "manage_cubes" },
+      result: invocation("same-project"),
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "same-project",
+      nativeRuntimeBuildIdentity: "runtime-build-B",
+      nativeDomain: "GEOMETRY",
+      durationMs: 5,
+    });
+    obs.record({
+      tool: "invoke_capability", args: { capability: "manage_cubes" },
+      result: invocation("same-project"),
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "same-project",
+      nativeRuntimeBuildIdentity: "runtime-build-B",
+      nativeDomain: "GEOMETRY",
+      durationMs: 7,
+    });
+    obs.record({
+      tool: "invoke_capability", args: { capability: "inspect_elements" },
+      result: invocation("same-project"),
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "same-project",
+      nativeDomain: "GEOMETRY",
+      durationMs: 3,
+    });
+    const key = (value: string) => createHash("sha256")
+      .update("lazydesigner-observed-runtime-build:" + value).digest("hex");
+    const row = obs.snapshot().projects[0]!;
+    expect(row.observed_runtime_build_calls).toMatchObject({
+      [key("runtime-build-A")]: { calls: 1, failures: 0, duration_sum_ms: 2 },
+      [key("runtime-build-B")]: { calls: 2, failures: 0, duration_sum_ms: 12 },
+    });
+    expect(row.runtime_build_unattributed_calls).toBe(1);
+    expect(row.counters.calls).toBe(4);
+    const report = summarizeProjectObservation([obs.snapshot()]);
+    expect(report.projects[0]!.observed_runtime_build_calls).toMatchObject({
+      [key("runtime-build-B")]: { calls: 2, failures: 0, duration_sum_ms: 12 },
+    });
+    expect(report.projects[0]!.runtime_build_measured_sessions).toBe(1);
+    expect(report.projects[0]!.runtime_build_unattributed_calls).toBe(1);
+    expect(report.coverage.accepted_quality).toBe("UNVERIFIED");
+  });
+
+  test("preserves task-context correlation hashes without storing raw IDs", () => {
+    const obs = new ProjectObservationRecorder("/disposable-test-root");
+    const item = status("native-context");
+    Object.assign(item.structuredContent.control, { task_context_id: TASK });
+    obs.record({ tool: "status", args: {}, result: item, durationMs: 1 });
+    obs.record({
+      tool: "invoke_capability",
+      args: { capability: "manage_cubes", task_context_id: TASK },
+      result: invocation("native-context"),
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "native-context",
+      durationMs: 1,
+    });
+    const expected = createHash("sha256").update(
+      "lazydesigner-task-context:" + TASK).digest("hex");
+    const row = obs.snapshot().projects[0]!;
+    expect(row.observed_task_context_hashes).toEqual([expected]);
+    expect(row.observed_distinct_task_contexts).toBe(1);
+    expect(JSON.stringify(obs.snapshot())).not.toContain(TASK);
   });
 
   test("does not assign stale status or failed operations to another project", () => {
@@ -299,6 +386,34 @@ describe("bounded always-on project observation", () => {
     expect(report.capture_failures).toBe(1);
     expect(report.observed_calls).toBe(0);
     expect(report.projects).toHaveLength(0);
+  });
+
+  test("legacy sessions remain visibly partial in per-build aggregation", () => {
+    const old = new ProjectObservationRecorder("/disposable-test-root");
+    const current = new ProjectObservationRecorder("/disposable-test-root");
+    old.record({
+      tool: "status", args: {}, result: status("same-native"), durationMs: 1,
+    });
+    current.record({
+      tool: "status", args: {}, result: status("same-native"), durationMs: 2,
+    });
+    const legacy = structuredClone(old.snapshot());
+    for (const project of legacy.projects) {
+      delete project.observed_runtime_build_calls;
+      delete project.runtime_build_unattributed_calls;
+      delete project.runtime_build_call_counts_capped;
+      delete project.observed_task_context_hashes;
+      delete project.task_context_hashes_capped;
+    }
+    const report = summarizeProjectObservation([legacy, current.snapshot()]);
+    expect(report.projects[0]).toMatchObject({
+      session_count: 2,
+      observed_calls: 2,
+      runtime_build_measured_sessions: 1,
+      runtime_build_unattributed_calls: 0,
+    });
+    expect(Object.values(report.projects[0]!.observed_runtime_build_calls!)
+      .reduce((sum, row) => sum + row.calls, 0)).toBe(1);
   });
 
   test("disabled L0 never creates a filesystem requirement", async () => {

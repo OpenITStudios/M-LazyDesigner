@@ -222,6 +222,44 @@ describe("BlockitRuntimeBackend catalog fast path", () => {
     expect(result.result.isError).not.toBe(true);
   });
 
+  test("native invocation exports only the preflight-verified build without another health request", async () => {
+    const backend = new BlockitRuntimeBackend("http://127.0.0.1:3000/bb-mcp");
+    const state = backend as any;
+    const build = "sha256:" + "d".repeat(64);
+    state.projectUuid = "project-verified";
+    state.authoringPhase = "geometry";
+    state.client = {
+      callTool: async () => ({
+        content: [],
+        structuredContent: { execution: "applied" },
+      }),
+    };
+    state.catalog = new Map([[
+      "manage_cubes",
+      { name: "manage_cubes", annotations: { readOnlyHint: false } },
+    ]]);
+    state.ensureCatalogUnsafe = async () => {};
+    state.probeHealth = async () => {
+      throw new Error("Analytics must not request extra Runtime health.");
+    };
+    state.observedManagedCatalogEvidence = () => ({
+      catalog_ready: true, runtime_build_identity: build,
+    });
+    const trusted = await backend.invokeCapabilityWithMetadata(
+      "manage_cubes", { operation: "update" }
+    );
+    expect(trusted.verifiedProjectUuid).toBe("project-verified");
+    expect(trusted.observedRuntimeBuildIdentity).toBe(build);
+
+    state.observedManagedCatalogEvidence = () => ({
+      catalog_ready: false, runtime_build_identity: build,
+    });
+    const stale = await backend.invokeCapabilityWithMetadata(
+      "manage_cubes", { operation: "update" }
+    );
+    expect(stale).not.toHaveProperty("observedRuntimeBuildIdentity");
+  });
+
   test("search uses a fresh local catalog without probing Runtime", async () => {
     const backend = new BlockitRuntimeBackend(undefined, undefined, {
       catalogLeaseMs: 5_000,

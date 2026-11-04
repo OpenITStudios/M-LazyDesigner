@@ -33,6 +33,11 @@ type DomainCounts = {
   duration_sum_ms: number;
   verification_required: number;
 };
+type BuildCallCounts = {
+  calls: number;
+  failures: number;
+  duration_sum_ms: number;
+};
 
 export type ProjectObservationSummary = {
   /** SHA-256 of the verified native UUID, not its plaintext. */
@@ -57,6 +62,13 @@ export type ProjectObservationSummary = {
   /** Exact saved project content at an existing FINALIZATION native match only. */
   matched_checkpoint_sha256_refs?: string[];
   checkpoint_refs_capped?: boolean;
+  /** Only calls with existing bound Runtime evidence are build-attributed. */
+  observed_runtime_build_calls?: Record<string, BuildCallCounts>;
+  runtime_build_unattributed_calls?: number;
+  runtime_build_call_counts_capped?: boolean;
+  /** Source-correlatable Control handle digests; not raw task IDs or approval. */
+  observed_task_context_hashes?: string[];
+  task_context_hashes_capped?: boolean;
 };
 
 export type ProjectObservationSnapshot = {
@@ -87,6 +99,8 @@ const MAX_CAPABILITIES = 24;
 const MAX_ERROR_CODES = 12;
 const MAX_PHASE_OBSERVATIONS = 24;
 const MAX_CONTEXTS = 64;
+const MAX_BUILD_CALL_KEYS = 8;
+const MAX_CONTEXT_HASHES = 32;
 const MAX_SNAPSHOT_BYTES = 128 * 1024;
 const MAX_SESSION_FILES = 16;
 const CHECKPOINT_EVERY = 64;
@@ -169,6 +183,8 @@ type ObservedCall = {
   nativePhaseAfter?: string | null;
   nativeDomain?: string | null;
   nativeVerificationClass?: string | null;
+  /** Captured from existing verified native preflight, no extra health probe. */
+  nativeRuntimeBuildIdentity?: string | null;
   /** Used only to construct deterministic tests. */
   observedAtMs?: number;
 };
@@ -230,7 +246,7 @@ export class ProjectObservationRecorder {
       // preflight may attribute an operation to a project. A Control Delta
       // appearing in arbitrary response metadata is not identity proof.
       const uuid = input.tool === "invoke_capability"
-        ? (input.nativeIdentityVerified === true
+        ? (!failed && input.nativeIdentityVerified === true
           ? input.nativeProjectUuid : null)
         : statusBound ? affinity?.project_uuid : null;
       const verifiedUuid = typeof uuid === "string" && uuid.length <= 160 &&
@@ -261,6 +277,15 @@ export class ProjectObservationRecorder {
       const verificationRequired = verificationClass === "visual" ||
         verificationClass === "focused_read";
       const code = failed ? safeError(structured?.code) : null;
+      const build = input.tool === "invoke_capability"
+        ? (input.nativeIdentityVerified === true
+          ? input.nativeRuntimeBuildIdentity : null)
+        : statusBound ? recordValue(runtime?.identity)?.build_identity : null;
+      const buildKey = typeof build === "string" && build.length > 0 &&
+        build.length <= 256
+        ? createHash("sha256").update(
+          "lazydesigner-observed-runtime-build:" + build).digest("hex")
+        : null;
 
       let summary: ProjectObservationSummary | null = null;
       if (verifiedUuid !== null) {
@@ -282,6 +307,12 @@ export class ProjectObservationRecorder {
             runtime_build_keys_capped: false,
             matched_checkpoint_sha256_refs: [],
             checkpoint_refs_capped: false,
+            observed_runtime_build_calls:
+              Object.create(null) as Record<string, BuildCallCounts>,
+            runtime_build_unattributed_calls: 0,
+            runtime_build_call_counts_capped: false,
+            observed_task_context_hashes: [],
+            task_context_hashes_capped: false,
           };
           this.projects.set(key, summary);
         } else if (!summary) {
@@ -304,6 +335,34 @@ export class ProjectObservationRecorder {
       if (userDeltaPresent) bucket.user_delta_status_observations++;
 
       if (summary) {
+        // Build evidence must be captured at the operation's actual preflight,
+        // not inherited from another request's most recent status.
+        if (buildKey !== null) {
+          const observed = summary.runtime_build_keys ?? [];
+          if (!observed.includes(buildKey)) {
+            if (observed.length < MAX_BUILD_CALL_KEYS) observed.push(buildKey);
+            else summary.runtime_build_keys_capped = true;
+          }
+          summary.runtime_build_keys = observed;
+          const perBuild = summary.observed_runtime_build_calls ??
+            (Object.create(null) as Record<string, BuildCallCounts>);
+          const known = Object.hasOwn(perBuild, buildKey);
+          const distinct = Object.keys(perBuild).filter(key => key !== "OTHER").length;
+          const bucketKey = known || distinct < MAX_BUILD_CALL_KEYS
+            ? buildKey : "OTHER";
+          if (bucketKey === "OTHER") summary.runtime_build_call_counts_capped = true;
+          const metric = perBuild[bucketKey] ?? {
+            calls: 0, failures: 0, duration_sum_ms: 0,
+          };
+          metric.calls++;
+          if (failed) metric.failures++;
+          metric.duration_sum_ms += duration;
+          perBuild[bucketKey] = metric;
+          summary.observed_runtime_build_calls = perBuild;
+        } else {
+          summary.runtime_build_unattributed_calls =
+            (summary.runtime_build_unattributed_calls ?? 0) + 1;
+        }
         if (statusBound) {
           const controlWorkspace = recordValue(
             recordValue(gatewayStatus?.control)?.workspace);
@@ -319,19 +378,6 @@ export class ProjectObservationRecorder {
               else summary.checkpoint_refs_capped = true;
             }
             summary.matched_checkpoint_sha256_refs = refs;
-          }
-          const identity = recordValue(runtime?.identity);
-          const build = identity?.build_identity;
-          if (typeof build === "string" && build.length > 0 &&
-              build.length <= 256) {
-            const key = createHash("sha256").update(
-              "lazydesigner-observed-runtime-build:" + build).digest("hex");
-            const seen = summary.runtime_build_keys ?? [];
-            if (!seen.includes(key)) {
-              if (seen.length < 8) seen.push(key);
-              else summary.runtime_build_keys_capped = true;
-            }
-            summary.runtime_build_keys = seen;
           }
         }
         summary.last_seen_ms = Math.max(summary.last_seen_ms, now);
@@ -359,7 +405,9 @@ export class ProjectObservationRecorder {
             source: phaseSource, observation,
           });
         }
-        const contextId = args?.task_context_id;
+        const contextId = statusBound
+          ? recordValue(gatewayStatus?.control)?.task_context_id
+          : input.nativeIdentityVerified === true ? args?.task_context_id : null;
         if (typeof contextId === "string" &&
             /^task:[a-f0-9]{20}$/.test(contextId)) {
           let seen = this.contexts.get(summary.project_key);
@@ -371,6 +419,14 @@ export class ProjectObservationRecorder {
             if (seen.size < MAX_CONTEXTS) {
               seen.add(contextId);
               summary.observed_distinct_task_contexts = seen.size;
+              const digest = createHash("sha256").update(
+                "lazydesigner-task-context:" + contextId).digest("hex");
+              const keys = summary.observed_task_context_hashes ?? [];
+              if (!keys.includes(digest)) {
+                if (keys.length < MAX_CONTEXT_HASHES) keys.push(digest);
+                else summary.task_context_hashes_capped = true;
+              }
+              summary.observed_task_context_hashes = keys;
             } else {
               summary.task_contexts_capped = true;
             }

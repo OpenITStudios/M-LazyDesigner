@@ -90,6 +90,10 @@ export type GatewayRuntimeInvocation = {
   readOnly: boolean;
   /** Existing backend health/project preflight identity; no additional status. */
   verifiedProjectUuid: string | null;
+  /** Existing preflight's expected build, only when catalog and verified
+   * Runtime health still agree; missing evidence remains null. Never an
+   * authenticated Git source commit. */
+  observedRuntimeBuildIdentity?: string | null;
   /** Verified within the serialized preflight, before any native tool call. */
   phaseBefore: BlockitAuthoringPhaseAffinity | null;
   /** Backend-validated once; reused by Control instead of re-parsing affinity receipts. */

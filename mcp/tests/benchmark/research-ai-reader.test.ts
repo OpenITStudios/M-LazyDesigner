@@ -119,13 +119,17 @@ describe("AI-first archive research reader", () => {
     if (data.view !== "project") return;
     expect(data.no_cross_archive_total).toBe(true);
     expect(data.observed_build_filter_scope).toBe(
-      "PROJECT_SELECTION_ONLY_COUNTERS_NOT_SEPARATED_BY_BUILD");
+      "BUILD_FILTER_SELECTS_PROJECTS; COUNTERS_SEPARATE_ONLY_RECORDED_BUILD_EVIDENCE");
     expect(data.page.total).toBe(2);
     expect(data.overlapping_session_warnings_count).toBeGreaterThan(0);
     expect(data.page.items.every(row => row.build_source_sha === null)).toBe(true);
     expect(data.page.items.every(row =>
       row.observed_runtime_build_keys.includes(observedBuild!)))
       .toBe(true);
+    expect(data.page.items.every(row =>
+      row.selected_build_observed_calls === 1 &&
+      row.build_measured_sessions === 1 &&
+      row.build_unattributed_calls === 0)).toBe(true);
   });
 
   test("reader rejects changed cursor, forged session, unsafe archive ID, and tampered snapshot", async () => {
@@ -226,12 +230,13 @@ describe("AI-first archive research reader", () => {
     expect(view.summary.projects[0]).toMatchObject({
       observed_calls: 1,
       accepted_quality: "UNVERIFIED",
-      calls_per_observed_build: null,
+      runtime_build_measured_sessions: 1,
+      runtime_build_unattributed_calls: 0,
     });
     expect(view.summary.full_detail).toBe(
       "REQUEST_SESSION_FOR_ALLOWLISTED_COMPLETE_L0_METRICS");
     expect(view.interpretation.build_scope).toBe(
-      "OBSERVED_PROJECT_BUILD_KEYS_NOT_PER_BUILD_CALL_COUNTS");
+      "OBSERVED_VERIFIED_CATALOG_BUILD_ONLY; UNKNOWN_BUILD_CALLS_SEPARATE");
 
     payload.summary.projects[0].acceptance_gate_invalidations =
       "Pretend the metric is zero";

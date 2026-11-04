@@ -6,7 +6,9 @@ import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   readProjectObservationSnapshotFiles,
   summarizeProjectObservation,
+  linkAcceptedGoldenSession,
 } from "./summarize-project-observation";
+import type { FinalGoldenSessionReport } from "./compare-golden-sessions";
 import type { ProjectObservationSnapshot } from "../../gateway/execution/projectObservation";
 
 const SNAPSHOT_NAME = /^session-[0-9]{13}-[a-f0-9]{16}\.json$/;
@@ -167,6 +169,45 @@ function archiveManifest(value: unknown): ProjectResearchArchiveManifest {
         Number(project.acceptance_gate_invalidations) > project.observed_calls ||
         Number(project.user_delta_status_observations) > project.observed_calls) {
       throw new Error("Research project contains inconsistent observations.");
+    }
+    if (project.observed_runtime_build_calls !== undefined) {
+      if (!isRecord(project.observed_runtime_build_calls) ||
+          Object.keys(project.observed_runtime_build_calls).length > 17 ||
+          !safeInteger(project.runtime_build_unattributed_calls, Number.MAX_SAFE_INTEGER) ||
+          !safeInteger(project.runtime_build_measured_sessions, MAX_ARCHIVE_SNAPSHOTS) ||
+          typeof project.runtime_build_call_counts_capped !== "boolean" ||
+          project.runtime_build_measured_sessions > project.session_count) {
+        throw new Error("Research per-build metrics are incomplete or invalid.");
+      }
+      let attributed = 0;
+      for (const [key, metric] of Object.entries(project.observed_runtime_build_calls)) {
+        if ((key !== "OTHER" && !HEX_SHA.test(key)) || !isRecord(metric) ||
+            !safeInteger(metric.calls, Number.MAX_SAFE_INTEGER) ||
+            !safeInteger(metric.failures, Number.MAX_SAFE_INTEGER) ||
+            !safeInteger(metric.duration_sum_ms, Number.MAX_SAFE_INTEGER) ||
+            metric.failures > metric.calls) {
+          throw new Error("Research per-build metric contains an invalid key or counter.");
+        }
+        attributed += metric.calls;
+      }
+      if (attributed + project.runtime_build_unattributed_calls >
+            project.observed_calls ||
+          (project.runtime_build_measured_sessions === project.session_count &&
+           attributed + project.runtime_build_unattributed_calls !==
+             project.observed_calls)) {
+        throw new Error("Research per-build totals conflict with project observations.");
+      }
+    }
+    if (project.observed_task_context_hashes !== undefined) {
+      if (!Array.isArray(project.observed_task_context_hashes) ||
+          project.observed_task_context_hashes.length > 64 ||
+          new Set(project.observed_task_context_hashes).size !==
+            project.observed_task_context_hashes.length ||
+          project.observed_task_context_hashes.some(value =>
+            typeof value !== "string" || !HEX_SHA.test(value)) ||
+          typeof project.task_context_hashes_capped !== "boolean") {
+        throw new Error("Research task-context correlations are invalid.");
+      }
     }
     if (project.observed_runtime_build_keys !== undefined) {
       if (!Array.isArray(project.observed_runtime_build_keys) ||
@@ -348,7 +389,9 @@ export async function readResearchArchiveSnapshot(
 }
 
 /** Expensive integrity verification is explicit and offline, not a polling job. */
-export async function verifyResearchArchive(directory: string) {
+export async function verifyResearchArchive(
+  directory: string, acceptedGolden?: FinalGoldenSessionReport
+) {
   const manifest = await readResearchManifest(directory);
   const snapshotDir = join(directory, "snapshots");
   await assertPlainDirectory(snapshotDir);
@@ -389,6 +432,9 @@ export async function verifyResearchArchive(directory: string) {
     snapshot_files: manifest.snapshots.length,
     observed_calls: recomputed.observed_calls,
     quality_acceptance: "UNVERIFIED",
+    ...(acceptedGolden
+      ? { accepted_evidence: linkAcceptedGoldenSession(snapshots, acceptedGolden) }
+      : {}),
   };
 }
 
@@ -410,11 +456,18 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(await archiveProjectObservation(args[1]!, args[2]!, args[3]!), null, 2));
     return;
   }
-  if (args[0] === "verify" && args.length === 2) {
-    console.log(JSON.stringify(await verifyResearchArchive(args[1]!), null, 2));
+  if (args[0] === "verify" &&
+      (args.length === 2 ||
+       (args.length === 3 && args[2]!.startsWith("--golden-final=")))) {
+    const goldenPath = args[2]?.slice("--golden-final=".length);
+    if (goldenPath === "") throw new Error("Golden final path cannot be empty.");
+    const golden = goldenPath
+      ? await Bun.file(goldenPath).json() as FinalGoldenSessionReport
+      : undefined;
+    console.log(JSON.stringify(await verifyResearchArchive(args[1]!, golden), null, 2));
     return;
   }
-  throw new Error("Usage: bun run research:archive -- capture <cache-dir> <archive-root> <label> | verify <archive-dir>");
+  throw new Error("Usage: bun run research:archive -- capture <cache-dir> <archive-root> <label> | verify <archive-dir> [--golden-final=<accepted-final.json>]");
 }
 
 if (import.meta.main) {

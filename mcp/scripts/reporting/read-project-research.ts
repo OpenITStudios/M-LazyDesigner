@@ -85,7 +85,7 @@ function rules(view: string) {
       usage: "L0_GATEWAY_COUNTERS_NOT_PROVIDER_TOKENS",
       duration: "SUMMED_CALL_TIME_NOT_TASK_OR_PROJECT_WALL_TIME",
       identity_display: "HASHED_METADATA_NOT_ANONYMIZATION_GUARANTEE",
-      build_scope: "OBSERVED_PROJECT_BUILD_KEYS_NOT_PER_BUILD_CALL_COUNTS",
+      build_scope: "OBSERVED_VERIFIED_CATALOG_BUILD_ONLY; UNKNOWN_BUILD_CALLS_SEPARATE",
     },
   };
 }
@@ -157,6 +157,23 @@ function safeSessionSnapshot(snapshot: import("../../gateway/execution/projectOb
             matched_checkpoint_sha256_refs: [...project.matched_checkpoint_sha256_refs],
             checkpoint_refs_capped: project.checkpoint_refs_capped,
           } : {}),
+      ...(project.observed_runtime_build_calls !== undefined
+        ? {
+            observed_runtime_build_calls:
+              Object.fromEntries(Object.entries(project.observed_runtime_build_calls)
+                .map(([key, count]) => [key, {
+                  calls: count.calls,
+                  failures: count.failures,
+                  duration_sum_ms: count.duration_sum_ms,
+                }])),
+            runtime_build_unattributed_calls: project.runtime_build_unattributed_calls,
+            runtime_build_call_counts_capped: project.runtime_build_call_counts_capped,
+          } : {}),
+      ...(project.observed_task_context_hashes !== undefined
+        ? {
+            observed_task_context_hashes: [...project.observed_task_context_hashes],
+            task_context_hashes_capped: project.task_context_hashes_capped,
+          } : {}),
     })),
     dropped_project_observations: snapshot.dropped_project_observations,
     capture_failures: snapshot.capture_failures,
@@ -190,7 +207,22 @@ function archiveOverview(summary: ArchivedSummary, snapshots: number) {
       downstream_recheck_requests: project.downstream_recheck_requests,
       observed_runtime_build_keys: [...(project.observed_runtime_build_keys ?? [])],
       matched_checkpoint_content_refs: [...(project.matched_checkpoint_sha256_refs ?? [])],
-      calls_per_observed_build: null,
+      runtime_build_call_counts: project.observed_runtime_build_calls
+        ? Object.fromEntries(Object.entries(project.observed_runtime_build_calls)
+            .map(([key, count]) => [key, {
+              calls: count.calls,
+              failures: count.failures,
+              duration_sum_ms: count.duration_sum_ms,
+            }]))
+        : null,
+      runtime_build_unattributed_calls: project.runtime_build_unattributed_calls ?? null,
+      runtime_build_call_counts_capped: project.runtime_build_call_counts_capped ?? null,
+      runtime_build_measured_sessions: project.runtime_build_measured_sessions ?? 0,
+      runtime_build_coverage: project.runtime_build_measured_sessions === undefined
+        ? "NOT_RECORDED"
+        : project.runtime_build_measured_sessions === project.session_count
+          ? "ALL_RETAINED_PROJECT_SESSIONS"
+          : "PARTIAL_RETAINED_SESSIONS",
       accepted_quality: "UNVERIFIED" as const,
     })),
     coverage: {
@@ -285,7 +317,7 @@ export async function readProjectResearchForAI(
       project_key: query.project_key,
       no_cross_archive_total: true,
       observed_build_filter_scope:
-        "PROJECT_SELECTION_ONLY_COUNTERS_NOT_SEPARATED_BY_BUILD",
+        "BUILD_FILTER_SELECTS_PROJECTS; COUNTERS_SEPARATE_ONLY_RECORDED_BUILD_EVIDENCE",
       overlapping_session_warnings_count: index.duplicate_session_warnings.length,
       overlapping_session_warnings_preview:
         index.duplicate_session_warnings.slice(0, 8),

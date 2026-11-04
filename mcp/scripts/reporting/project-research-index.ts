@@ -79,6 +79,11 @@ export function indexProjectResearch(
     build_source_sha: null;
     observed_runtime_build_keys: string[];
     matched_checkpoint_content_refs: string[];
+    selected_build_observed_calls: number | null;
+    selected_build_observed_failures: number | null;
+    selected_build_observed_duration_ms: number | null;
+    build_measured_sessions: number | null;
+    build_unattributed_calls: number | null;
     accepted_quality: "UNVERIFIED";
     content_integrity: "NOT_RECHECKED";
   }> = [];
@@ -115,6 +120,17 @@ export function indexProjectResearch(
         build_source_sha: null,
         observed_runtime_build_keys: project.observed_runtime_build_keys ?? [],
         matched_checkpoint_content_refs: project.matched_checkpoint_sha256_refs ?? [],
+        selected_build_observed_calls: query.runtime_build_key
+          ? project.observed_runtime_build_calls?.[query.runtime_build_key]?.calls ?? null
+          : null,
+        selected_build_observed_failures: query.runtime_build_key
+          ? project.observed_runtime_build_calls?.[query.runtime_build_key]?.failures ?? null
+          : null,
+        selected_build_observed_duration_ms: query.runtime_build_key
+          ? project.observed_runtime_build_calls?.[query.runtime_build_key]?.duration_sum_ms ?? null
+          : null,
+        build_measured_sessions: project.runtime_build_measured_sessions ?? null,
+        build_unattributed_calls: project.runtime_build_unattributed_calls ?? null,
         accepted_quality: "UNVERIFIED",
         content_integrity: "NOT_RECHECKED",
       });
@@ -139,6 +155,11 @@ export function indexProjectResearch(
         build_source_sha: null,
         observed_runtime_build_keys: [],
         matched_checkpoint_content_refs: [],
+        selected_build_observed_calls: null,
+        selected_build_observed_failures: null,
+        selected_build_observed_duration_ms: null,
+        build_measured_sessions: null,
+        build_unattributed_calls: null,
         accepted_quality: "UNVERIFIED",
         content_integrity: "NOT_RECHECKED",
       });
@@ -159,7 +180,7 @@ export function indexProjectResearch(
     scope: "EXPLICIT_ARCHIVE_MANIFESTS_ONLY",
     integrity_scope: "METADATA_CHECKS_ONLY_USE_RESEARCH_VERIFY_FOR_FILE_HASHES",
     join_policy: "NO_CROSS_ARCHIVE_SUMS_OR_AUTO_NATIVE_IDENTITY_MERGE",
-    build_filter_scope: "OBSERVED_PROJECT_BUILD_MEMBERSHIP_ONLY_NOT_PER_BUILD_CALLS",
+    build_filter_scope: "SELECTS_PROJECTS_WITH_BUILD_OBSERVED; PER_BUILD_METRICS_COVER_RECORDED_SESSIONS_ONLY",
     filters: { ...query },
     archive_count: matched.length,
     rows,
@@ -184,7 +205,9 @@ const COLUMN_NAMES = [
   "unbound_gateway_calls_in_archive", "capture_failures_in_archive",
   "persist_failures_in_archive", "build_source_sha",
   "observed_runtime_build_keys", "matched_checkpoint_content_refs",
-  "accepted_quality", "content_integrity",
+  "selected_build_observed_calls", "selected_build_observed_failures",
+  "selected_build_observed_duration_ms", "build_measured_sessions",
+  "build_unattributed_calls", "accepted_quality", "content_integrity",
 ] as const;
 
 function csvCell(value: string | number | null): string {

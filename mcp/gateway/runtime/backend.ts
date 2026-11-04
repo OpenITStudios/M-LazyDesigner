@@ -869,6 +869,11 @@ export class BlockitRuntimeBackend {
       const projectTransition =
         capabilityMetadata.effects.projectAffinity === "adopt_created_project";
       await this.ensureCatalogUnsafe(!projectTransition, projectTransition);
+      // Reuse the already-verified catalog/health lease. No extra
+      // Runtime request. Capture before a phase change closes the client.
+      const buildEvidence = this.observedManagedCatalogEvidence();
+      const observedRuntimeBuildIdentity = buildEvidence.catalog_ready
+        ? buildEvidence.runtime_build_identity : null;
       const tool = this.catalog.get(capability);
       if (!tool) {
         throw new GatewayBackendError(
@@ -997,6 +1002,8 @@ export class BlockitRuntimeBackend {
             ),
             readOnly: tool.annotations?.readOnlyHint === true,
             verifiedProjectUuid: this.projectUuid,
+            ...(observedRuntimeBuildIdentity
+              ? { observedRuntimeBuildIdentity } : {}),
             phaseBefore: priorAuthoringPhase,
             effectApplication: application,
           };
@@ -1006,6 +1013,8 @@ export class BlockitRuntimeBackend {
           result: managed,
           readOnly: tool.annotations?.readOnlyHint === true,
           verifiedProjectUuid: null,
+          ...(observedRuntimeBuildIdentity
+            ? { observedRuntimeBuildIdentity } : {}),
           phaseBefore: priorAuthoringPhase,
           effectApplication: application,
         };

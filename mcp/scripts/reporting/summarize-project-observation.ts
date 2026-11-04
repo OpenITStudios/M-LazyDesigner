@@ -1,6 +1,11 @@
+import { createHash } from "node:crypto";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { renderProjectObservationHtml } from "./render-project-observation";
+import {
+  validateAcceptedGoldenSessionReport,
+  type FinalGoldenSessionReport,
+} from "./compare-golden-sessions";
 import type {
   ProjectObservationSnapshot,
   ProjectObservationSummary,
@@ -155,6 +160,45 @@ function validate(snapshot: unknown): asserts snapshot is ProjectObservationSnap
         throw new Error("Invalid finalization checkpoint references.");
       }
     }
+    if (p.observed_runtime_build_calls !== undefined) {
+      const mapped = p.observed_runtime_build_calls;
+      if (!mapped || typeof mapped !== "object" || Array.isArray(mapped) ||
+          Object.keys(mapped).length > 9 ||
+          typeof p.runtime_build_call_counts_capped !== "boolean") {
+        throw new Error("Invalid bounded per-build operation counts.");
+      }
+      const unknown = number(
+        p.runtime_build_unattributed_calls, "runtime_build_unattributed_calls");
+      let attributed = 0, attributedDuration = 0;
+      for (const [key, bucket] of Object.entries(mapped)) {
+        if ((key !== "OTHER" && !/^[0-9a-f]{64}$/.test(key)) ||
+            !bucket || typeof bucket !== "object" || Array.isArray(bucket)) {
+          throw new Error("Invalid per-build observation key.");
+        }
+        number(bucket.calls, "build.calls");
+        number(bucket.failures, "build.failures");
+        number(bucket.duration_sum_ms, "build.duration_sum_ms");
+        if (bucket.failures > bucket.calls) {
+          throw new Error("Invalid per-build failure counts.");
+        }
+        attributed += bucket.calls;
+        attributedDuration += bucket.duration_sum_ms;
+      }
+      if (attributed + unknown !== p.counters.calls ||
+          attributedDuration > p.counters.duration_sum_ms) {
+        throw new Error("Per-build observations do not reconcile to project calls.");
+      }
+    }
+    if (p.observed_task_context_hashes !== undefined) {
+      if (!Array.isArray(p.observed_task_context_hashes) ||
+          p.observed_task_context_hashes.length > 32 ||
+          new Set(p.observed_task_context_hashes).size !== p.observed_task_context_hashes.length ||
+          p.observed_task_context_hashes.some(key => !/^[a-f0-9]{64}$/.test(key)) ||
+          typeof p.task_context_hashes_capped !== "boolean" ||
+          p.observed_task_context_hashes.length > p.observed_distinct_task_contexts) {
+        throw new Error("Invalid bounded task context provenance.");
+      }
+    }
     number(p.observed_distinct_task_contexts, "observed_distinct_task_contexts");
     if (p.observed_distinct_task_contexts > 64 ||
         typeof p.task_contexts_capped !== "boolean") {
@@ -200,6 +244,14 @@ type ProjectReport = {
   matched_checkpoint_sha256_refs?: string[];
   checkpoint_refs_capped?: boolean;
   checkpoint_identity_scope?: "MATCHED_NATIVE_FINALIZATION_CONTENT_NOT_PROJECT_ID";
+  observed_runtime_build_calls?: Record<string, {
+    calls: number; failures: number; duration_sum_ms: number;
+  }>;
+  runtime_build_unattributed_calls?: number;
+  runtime_build_call_counts_capped?: boolean;
+  runtime_build_measured_sessions?: number;
+  observed_task_context_hashes?: string[];
+  task_context_hashes_capped?: boolean;
 };
 
 function emptyProject(key: string): ProjectReport {
@@ -316,6 +368,50 @@ export function summarizeProjectObservation(snapshots: readonly unknown[]) {
         }
         if (p.checkpoint_refs_capped) target.checkpoint_refs_capped = true;
       }
+      // Only count sessions that actually provide per-call build attribution.
+      // Older snapshots are retained without retroactively assigning their calls.
+      if (p.observed_runtime_build_calls !== undefined) {
+        target.observed_runtime_build_calls ??=
+          Object.create(null) as NonNullable<ProjectReport["observed_runtime_build_calls"]>;
+        target.runtime_build_unattributed_calls ??= 0;
+        target.runtime_build_call_counts_capped ??= false;
+        target.runtime_build_measured_sessions ??= 0;
+        target.runtime_build_measured_sessions++;
+        target.runtime_build_unattributed_calls +=
+          p.runtime_build_unattributed_calls ?? 0;
+        const byBuild = target.observed_runtime_build_calls;
+        for (const [key, bucket] of Object.entries(p.observed_runtime_build_calls)) {
+          const existing = Object.hasOwn(byBuild, key);
+          const count = Object.keys(byBuild).filter(item => item !== "OTHER").length;
+          const targetKey = key === "OTHER" || existing || count >= 16
+            ? (key === "OTHER" || !existing ? "OTHER" : key) : key;
+          if (targetKey === "OTHER" && key !== "OTHER") {
+            target.runtime_build_call_counts_capped = true;
+          }
+          const row = byBuild[targetKey] ?? {
+            calls: 0, failures: 0, duration_sum_ms: 0,
+          };
+          row.calls += bucket.calls;
+          row.failures += bucket.failures;
+          row.duration_sum_ms += bucket.duration_sum_ms;
+          byBuild[targetKey] = row;
+        }
+        if (p.runtime_build_call_counts_capped) {
+          target.runtime_build_call_counts_capped = true;
+        }
+      }
+      if (p.observed_task_context_hashes !== undefined) {
+        target.observed_task_context_hashes ??= [];
+        target.task_context_hashes_capped ??= false;
+        for (const value of p.observed_task_context_hashes) {
+          if (!target.observed_task_context_hashes.includes(value)) {
+            if (target.observed_task_context_hashes.length < 64) {
+              target.observed_task_context_hashes.push(value);
+            } else target.task_context_hashes_capped = true;
+          }
+        }
+        if (p.task_context_hashes_capped) target.task_context_hashes_capped = true;
+      }
       for (const [tool, count] of Object.entries(p.counters.by_tool)) {
         target.by_tool[tool as ProjectObservationTool] += count;
       }
@@ -359,6 +455,72 @@ export function summarizeProjectObservation(snapshots: readonly unknown[]) {
   };
 }
 
+/**
+ * Correlate an independently accepted LIVE Golden receipt to one L0 session.
+ * Four identities must co-occur inside the *same* bounded project snapshot;
+ * unioning project identities across sessions would create false acceptance.
+ * Even a match is NOT evidence that all L0 calls belong to that Golden task.
+ */
+export function linkAcceptedGoldenSession(
+  snapshots: readonly unknown[],
+  golden: FinalGoldenSessionReport
+) {
+  summarizeProjectObservation(snapshots); // Reuse existing schema and dedup gate.
+  validateAcceptedGoldenSessionReport(golden);
+  const digest = (domain: string, value: string) => createHash("sha256")
+    .update(domain + value).digest("hex");
+  const project = digest("lazydesigner-native-project:",
+    golden.pipeline_provenance.input_project_uuid!);
+  const build = digest("lazydesigner-observed-runtime-build:",
+    golden.pipeline_provenance.runtime_build_identity!);
+  const task = digest("lazydesigner-task-context:",
+    golden.pipeline_provenance.control_task_context_id!);
+  const checkpoint = golden.pipeline_provenance.artifact_revision!;
+  const sessionMatches: string[] = [];
+  for (const session of snapshots as ProjectObservationSnapshot[]) {
+    for (const item of session.projects) {
+      if (item.project_key === project &&
+          item.runtime_build_keys?.includes(build) &&
+          item.observed_task_context_hashes?.includes(task) &&
+          item.matched_checkpoint_sha256_refs?.includes(checkpoint)) {
+        sessionMatches.push(session.session_id);
+      }
+    }
+  }
+  const state = sessionMatches.length === 1
+    ? "ACCEPTED_ARTIFACT_CORRELATED" as const
+    : sessionMatches.length > 1
+      ? "AMBIGUOUS_MULTIPLE_MATCHED_SESSIONS" as const
+      : "NO_SAME_SESSION_EVIDENCE" as const;
+  return {
+    schema: 1,
+    report: "project-accepted-evidence-link",
+    state,
+    golden: {
+      task_id: golden.task_id,
+      source_sha: golden.source_sha,
+      proof_scope: golden.proof_scope,
+      quality_verdict: golden.quality_verdict,
+      accepted_result: true as const,
+      artifact_revision: checkpoint,
+      golden_metrics: golden.metrics,
+    },
+    l0: {
+      project_key: project,
+      matching_session_ids: sessionMatches,
+      project_identity: "GOLDEN_INPUT_NATIVE_UUID_HASH_MATCH_ONLY",
+      build_identity: "OBSERVED_SAME_SESSION_RUNTIME_BUILD_HASH",
+      context_identity: "OBSERVED_SAME_SESSION_CONTROL_CONTEXT_HASH",
+      checkpoint_identity: "MATCHED_SAVED_CONTENT_DIGEST",
+      operation_scope: "L0_PROJECT_TOTALS_NOT_GOLDEN_TASK_CALL_COUNTS",
+      source_sha: null,
+    },
+    interpretation: state === "ACCEPTED_ARTIFACT_CORRELATED"
+      ? "Independent Golden PASS and same-session L0 project/build/context/checkpoint evidence agree. L0 call counts and durations are NOT attributed to this Golden task."
+      : "Do not join Golden quality or time/token metrics to L0 project calls. The supplied session evidence is missing or ambiguous.",
+  };
+}
+
 /** Read-only access to the canonical bounded L0 cache window.
  * Retain exact bytes so explicit research archives can fingerprint the source
  * without round-tripping JSON or copying native/private model files.
@@ -389,16 +551,28 @@ export async function readProjectObservationSnapshotFiles(directory: string) {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const html = args.length === 2 && args[1] === "--html";
-  if (args.length !== 1 && !html) {
-    throw new Error("Usage: bun run report:project-analytics -- <local-analytics-directory> [--html]");
+  const option = args[1] ?? null;
+  const html = option === "--html";
+  const acceptedPath = typeof option === "string" &&
+    option.startsWith("--golden-final=")
+    ? option.slice("--golden-final=".length) : null;
+  if (!args[0] || args.length > 2 ||
+      (option !== null && !html && !acceptedPath)) {
+    throw new Error("Usage: bun run report:project-analytics -- <local-analytics-directory> [--html|--golden-final=<accepted-final.json>]");
   }
-  const directory = args[0]!;
-  const capture = await readProjectObservationSnapshotFiles(directory);
-  const report = summarizeProjectObservation(capture.files.map(file => file.snapshot));
+  const capture = await readProjectObservationSnapshotFiles(args[0]);
+  const snapshots = capture.files.map(file => file.snapshot);
+  const report = summarizeProjectObservation(snapshots);
+  if (acceptedPath !== null) {
+    const golden = await Bun.file(acceptedPath).json() as FinalGoldenSessionReport;
+    console.log(JSON.stringify({
+      ...report,
+      accepted_evidence: linkAcceptedGoldenSession(snapshots, golden),
+    }, null, 2));
+    return;
+  }
   console.log(html ? renderProjectObservationHtml(report) : JSON.stringify(report, null, 2));
 }
-
 if (import.meta.main) {
   main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));

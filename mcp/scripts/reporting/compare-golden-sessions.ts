@@ -136,6 +136,16 @@ function validateAcceptedReport(
   }
 }
 
+/** Canonical single-run gate reused by analytics. It verifies the supplied
+ * Golden receipt's contract; caller still must correlate the receipt with
+ * independent L0 evidence before claiming the same project/task.
+ */
+export function validateAcceptedGoldenSessionReport(
+  value: FinalGoldenSessionReport
+): void {
+  validateAcceptedReport(value, "golden");
+}
+
 export function compareAcceptedGoldenSessions(input: {
   baseline: FinalGoldenSessionReport;
   candidate: FinalGoldenSessionReport;

@@ -507,6 +507,54 @@ signature. For cross-language or signed provenance, define and verify a
 separate canonical signed receipt rather than retroactively redefining the
 archive format.
 
+## Per-build Calls and Accepted Evidence (bounded Analytics L0)
+
+Normal Gateway invocations now reuse the existing serialized Runtime catalog
+preflight's verified managed build identity. **No additional status, health,
+MCP or AI calls** are made for telemetry. With trustworthy build evidence, L0
+groups observed Gateway calls by Runtime build fingerprint (counts, failures,
+summed call duration), up to eight exact build keys per native project and an
+explicit OTHER overflow. Calls without verified build evidence remain in
+`runtime_build_unattributed_calls`; old snapshots do not acquire invented
+per-build measurements. Aggregation reports the number of captured sessions,
+so partial coverage and calls from older sessions cannot be presented as
+complete per-build metrics. Build IDs are not automatically Git source SHAs.
+
+To correlate a separately accepted Golden final report **without attaching
+quality PASS to Gateway L0 totals**, the existing reporter has an optional
+offline input:
+
+```text
+bun run report:project-analytics -- <l0-cache-dir> --golden-final=<accepted-golden-final.json>
+```
+
+An archived dataset can use the same Golden final without relying on the
+rolling Gateway cache:
+
+```text
+bun run research:archive -- verify <archive-dir> --golden-final=<accepted-golden-final.json>
+```
+
+Both explicit offline routes may return `accepted_evidence`. The archive
+route first checks the source snapshot hashes, then applies the same strict
+linkage gate. This result requires the canonical accepted LIVE
+Golden report plus a matching **single L0 session** containing the same
+verified native project UUID hash, observed Runtime build hash, Control task
+context digest and MATCHED saved checkpoint SHA-256. If the evidence is
+missing or different across sessions, it reports no link (or ambiguity),
+never silent PASS. Even a positive match means only *artifact evidence is
+correlated*: it does not allocate L0 operation counts, latencies or tokens
+to the Golden task. Source Git SHA comes only from the supplied Golden
+receipt, not L0 or build fingerprints, and the local files are not
+cryptographically producer-authenticated. No automatic approval occurs.
+
+Control context IDs are persisted only as capped SHA-256 digests (32 per
+session/project), not raw handles. These hashes are still potentially
+linkable metadata rather than anonymous data; do not export the full L0
+archive without the user's deliberate request. No source code, native
+asset, screenshot, prompt text, or project path is copied by this change.
+The original four Gateway tools and Golden acceptance owner remain intact.
+
 ## Context / Result Economy
 
 Context handles use SHA-256 identities of current canonical repository files. `known_context_ids` suppresses unchanged Skill/profile content and invalidates changed members of the same family.

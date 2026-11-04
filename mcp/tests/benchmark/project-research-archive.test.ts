@@ -3,6 +3,8 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ProjectObservationRecorder } from "../../gateway/execution/projectObservation";
+import { linkAcceptedGoldenSession } from "../../scripts/reporting/summarize-project-observation";
+import type { FinalGoldenSessionReport } from "../../scripts/reporting/compare-golden-sessions";
 import {
   archiveProjectObservation,
   listResearchManifests,
@@ -239,6 +241,11 @@ describe("explicit L0 research archive and ephemeral index", () => {
       delete project.runtime_build_keys_capped;
       delete project.matched_checkpoint_sha256_refs;
       delete project.checkpoint_refs_capped;
+      delete project.observed_runtime_build_calls;
+      delete project.runtime_build_unattributed_calls;
+      delete project.runtime_build_call_counts_capped;
+      delete project.observed_task_context_hashes;
+      delete project.task_context_hashes_capped;
     }
     await writeFile(file, JSON.stringify(legacy), "utf8");
     const archived = await archiveProjectObservation(cache, archiveRoot, "Legacy Schema 1");
@@ -249,6 +256,171 @@ describe("explicit L0 research archive and ephemeral index", () => {
     await expect(verifyResearchArchive(archived.archive_path)).resolves.toMatchObject({
       verification: "LOCAL_SOURCE_CHECKSUMS_MATCH",
     });
+  });
+
+  function acceptedGolden(
+    inputUuid: string, build: string, taskContext: string,
+    savedSha: string
+  ): FinalGoldenSessionReport {
+    return {
+      schema: 1,
+      report: "golden-session-final",
+      task_id: "golden-full-asset-authoring",
+      source_sha: "a".repeat(40),
+      proof_scope: "LIVE_BLOCKBENCH",
+      state: "ACCEPTED",
+      quality_verdict: "PASS",
+      accepted_result: true,
+      pipeline_provenance: {
+        input_asset_sha256: "c".repeat(64),
+        output_asset_sha256: savedSha,
+        input_project_uuid: inputUuid,
+        reference_package_fingerprint: "b".repeat(64),
+        control_task_context_id: taskContext,
+        runtime_build_identity: build,
+        artifact_revision: "sha256:" + savedSha,
+      },
+      metrics: {
+        tool_calls_to_accepted_result: 2,
+        decision_required_calls: 1,
+        search_calls: 0, describe_calls: 0, inspect_calls: 1,
+        mutate_calls: 1, verify_calls: 0, recovery_calls: 0,
+        redundant_readbacks: 0, correction_rounds: 0,
+        user_corrections: 0, wall_time_ms: 110,
+        accepted_result_ms: 100, tool_result_bytes: 120,
+        total_tokens: null,
+      },
+    };
+  }
+
+  function observedGoldenStatus(
+    uuid: string, build: string, task: string,
+    savedSha: string | null
+  ) {
+    return {
+      structuredContent: {
+        runtime: { mcp_client_ready: true,
+          identity: { build_identity: build } },
+        affinity: { project_uuid: uuid, authoring_phase: "geometry" },
+        control: {
+          project: { binding: "BOUND" },
+          task_context_id: task,
+          ...(savedSha ? { workspace: {
+            finalization_native_revision: {
+              state: "MATCHED",
+              accepted_sha256: "sha256:" + savedSha,
+              observed_sha256: "sha256:" + savedSha,
+            },
+          }} : {}),
+        },
+      },
+    };
+  }
+
+  test("correlates accepted Golden quality only when all identities occur in one L0 session", () => {
+    const uuid = "native-accepted-project";
+    const build = "sha256:" + "d".repeat(64);
+    const context = "task:abcdef1234567890abcd";
+    const output = "e".repeat(64);
+    const obs = new ProjectObservationRecorder("/nonexistent-test-research");
+    obs.record({
+      tool: "status", args: {},
+      result: observedGoldenStatus(uuid, build, context, output),
+      durationMs: 4,
+    });
+    const linked = linkAcceptedGoldenSession(
+      [obs.snapshot()], acceptedGolden(uuid, build, context, output));
+    expect(linked.state).toBe("ACCEPTED_ARTIFACT_CORRELATED");
+    expect(linked.golden).toMatchObject({
+      accepted_result: true,
+      quality_verdict: "PASS",
+      proof_scope: "LIVE_BLOCKBENCH",
+    });
+    expect(linked.l0.matching_session_ids).toHaveLength(1);
+    expect(linked.l0.source_sha).toBeNull();
+    expect(linked.l0.operation_scope).toBe(
+      "L0_PROJECT_TOTALS_NOT_GOLDEN_TASK_CALL_COUNTS");
+  });
+
+  test("verifies archived file bytes before linking a supplied accepted Golden report", async () => {
+    const { cache, archiveRoot } = await workspace();
+    const uuid = "native-archived-accepted";
+    const build = "sha256:" + "d".repeat(64);
+    const context = "task:abcdef1234567890abcd";
+    const output = "e".repeat(64);
+    const obs = new ProjectObservationRecorder(cache);
+    obs.record({
+      tool: "status", args: {},
+      result: observedGoldenStatus(uuid, build, context, output),
+      durationMs: 2,
+    });
+    await obs.flush(true);
+    const archived = await archiveProjectObservation(cache, archiveRoot, "Accepted Artifact");
+    const linked = await verifyResearchArchive(
+      archived.archive_path, acceptedGolden(uuid, build, context, output));
+    expect(linked.verification).toBe("LOCAL_SOURCE_CHECKSUMS_MATCH");
+    expect(linked.accepted_evidence?.state).toBe("ACCEPTED_ARTIFACT_CORRELATED");
+    expect(linked.quality_acceptance).toBe("UNVERIFIED");
+  });
+
+  test("does not link Golden quality when project, build, task or saved content differs", () => {
+    const uuid = "native-golden-project";
+    const build = "sha256:" + "d".repeat(64);
+    const context = "task:abcdef1234567890abcd";
+    const output = "e".repeat(64);
+    const obs = new ProjectObservationRecorder("/nonexistent-test-research");
+    obs.record({
+      tool: "status", args: {},
+      result: observedGoldenStatus(uuid, build, context, output),
+      durationMs: 2,
+    });
+    const original = acceptedGolden(uuid, build, context, output);
+    const alternatives = [
+      { ...original, pipeline_provenance: {
+        ...original.pipeline_provenance, input_project_uuid: "another-native-project",
+      }},
+      { ...original, pipeline_provenance: {
+        ...original.pipeline_provenance, runtime_build_identity: "sha256:" + "f".repeat(64),
+      }},
+      { ...original, pipeline_provenance: {
+        ...original.pipeline_provenance, control_task_context_id: "task:00000000000000000000",
+      }},
+      { ...original, pipeline_provenance: {
+        ...original.pipeline_provenance, output_asset_sha256: "f".repeat(64),
+        artifact_revision: "sha256:" + "f".repeat(64),
+      }},
+    ];
+    for (const report of alternatives) {
+      const link = linkAcceptedGoldenSession([obs.snapshot()], report);
+      expect(link.state).toBe("NO_SAME_SESSION_EVIDENCE");
+      expect(link.l0.matching_session_ids).toHaveLength(0);
+    }
+  });
+
+  test("never combines different sessions to forge an accepted-result link", () => {
+    const uuid = "native-split-project";
+    const build = "sha256:" + "d".repeat(64);
+    const context = "task:abcdef1234567890abcd";
+    const output = "e".repeat(64);
+    const first = new ProjectObservationRecorder("/nonexistent-test-research");
+    const second = new ProjectObservationRecorder("/nonexistent-test-research");
+    first.record({
+      tool: "status", args: {},
+      result: observedGoldenStatus(uuid, build, context, null),
+      durationMs: 4,
+    });
+    second.record({
+      tool: "status", args: {},
+      result: observedGoldenStatus(uuid, build, "task:00000000000000000000", output),
+      durationMs: 4,
+    });
+    const doc = acceptedGolden(uuid, build, context, output);
+    const linked = linkAcceptedGoldenSession([first.snapshot(), second.snapshot()], doc);
+    expect(linked.state).toBe("NO_SAME_SESSION_EVIDENCE");
+    expect(linked.l0.matching_session_ids).toHaveLength(0);
+    doc.proof_scope = "LOCAL_CODE";
+    expect(() => linkAcceptedGoldenSession([first.snapshot(), second.snapshot()], doc))
+      .toThrow("requires LIVE_BLOCKBENCH proof");
   });
 
   test("rejects unexpected files inside an archive during verification", async () => {

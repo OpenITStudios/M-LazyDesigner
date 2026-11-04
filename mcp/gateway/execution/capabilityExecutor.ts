@@ -106,7 +106,8 @@ export class GatewayCapabilityExecutor {
       trustedProjectUuid: string | null = null,
       observedPhaseAfter: string | null = null,
       observedDomain: string | null = null,
-      verificationClass: string | null = null
+      verificationClass: string | null = null,
+      observedRuntimeBuildIdentity: string | null = null
     ): void => {
       if (!this.projectObservation?.active) return;
       try {
@@ -125,6 +126,7 @@ export class GatewayCapabilityExecutor {
           nativePhaseAfter: observedPhaseAfter,
           nativeDomain: observedDomain,
           nativeVerificationClass: verificationClass,
+          nativeRuntimeBuildIdentity: observedRuntimeBuildIdentity,
         });
       } catch { /* L0 can never alter the native result or recovery. */ }
     };
@@ -322,7 +324,8 @@ export class GatewayCapabilityExecutor {
           runtimeInvocation !== null ? verifiedProjectUuid : null,
           receipt.phaseAfter,
           controlDelta.authoring_domain,
-          controlDelta.verification_class
+          controlDelta.verification_class,
+          runtimeInvocation?.observedRuntimeBuildIdentity ?? null
         );
         return response;
       }
@@ -374,7 +377,8 @@ export class GatewayCapabilityExecutor {
         runtimeInvocation !== null ? verifiedProjectUuid : null,
         receipt.phaseAfter,
         controlDelta.authoring_domain,
-        controlDelta.verification_class
+        controlDelta.verification_class,
+        runtimeInvocation?.observedRuntimeBuildIdentity ?? null
       );
       return response;
     } catch (error) {

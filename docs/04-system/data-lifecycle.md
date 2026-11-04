@@ -215,6 +215,35 @@ cause model tracking usage. In absence of actual local filesystem/command
 access, an AI client cannot access research archives merely because this
 code exists.
 
+## Build-attributed operation metrics and Golden linkage
+
+For an executed native capability, Gateway reuses the already verified
+catalog/Runtime health evidence to obtain the *observed* managed build
+identity. The L0 collector groups only attributable calls and their
+duration/failures by a bounded hashed build key; missing proof increments a
+separate unknown counter. A project that contains multiple builds or legacy
+snapshots is never presented as a complete per-build benchmark unless the
+measured session coverage supports that narrow claim. No monitoring
+requests or model calls are added. Build hashes alone do not attest an
+installed source Git commit.
+
+L0 also retains a small number of source-correlatable hashed Control task
+handles, never raw task handles. The canonical
+`report:project-analytics --golden-final=<path>` option, as well as the
+explicit archive `verify <archive-dir> --golden-final=<path>` option,
+independently
+validates a LIVE accepted/PASS Golden final report and demands one L0
+session in which native project, build, task context and saved checkpoint
+match its provenance. A matching artifact does **not** imply every L0
+operation in that session belongs to the Golden task. Without the complete
+same-session evidence, the offline report remains unlinked. L0 itself
+never changes approval, Geometry/Texturing/Animation readiness, QA policy,
+or the native asset.
+
+Older v1 snapshot and archive formats remain readable; additional build and
+task correlations are optional and never backfilled from guesses. Local
+archive byte checksums validate consistency, not origin/authenticity.
+
 ## Review / verification
 
 Inventory tests own classification, alias resolution and the no-workspace-read
