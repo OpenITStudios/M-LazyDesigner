@@ -129,6 +129,22 @@ describe("Reference Preparation content contract", () => {
     expect(load).toContain("Locator → parent Group/Bone → animation ownership");
     expect(load).toContain("Do not add Control packet fields for them");
   });
+  test("reference reconstruction QA never replaces paired-model visual acceptance", async () => {
+    const [standard, validation] = await Promise.all([
+      text("../docs/02-reference/image/standard.md"),
+      text("../docs/03-authoring/validation/visual.md"),
+    ]);
+    expect(standard).toContain("## Multi-View Consistency & Reconstruction Readiness QA");
+    expect(standard).toContain("source-occluded/UNKNOWN");
+    expect(standard).toContain("part_world_constraints");
+    expect(standard).toContain("not a new schema");
+    expect(standard).toContain("not a visual-quality PASS on a Blockbench asset");
+    expect(validation).toContain("### Reference Coverage → Model Reconstruction Pair Review");
+    expect(validation).toContain("partCorrespondence");
+    expect(validation).toContain("An unreviewed generative sheet");
+    expect(validation).toContain("one view or multiple views");
+  });
+
   test("reference handoff stays compact and delegates exact contracts", async () => {
     const handoff = await text("../docs/02-reference/package/handoff.md");
 

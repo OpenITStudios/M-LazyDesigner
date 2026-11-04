@@ -18,6 +18,8 @@ import {
   type TextureTreatmentPlanInput,
 } from "../../lib/texture/treatmentPlan";
 
+import { summarizeReferencePartRegions } from "../../lib/reference/imageRegionEvidence";
+
 const RED_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQoAHxcCAk+Uzr4AAAAASUVORK5CYII=", "base64"
 );
@@ -224,6 +226,148 @@ describe("actual reference image evidence — Control owner", () => {
       state: "unavailable", reason: "SOURCE_VIEW_NOT_APPROVED_OR_VERIFIED",
     });
     expect(pending.readiness.geometry).toBe("BLOCKED");
+  });
+
+  test("source-occluded required rear support stays Geometry BLOCKED despite verified front PNG", async () => {
+    const images = [{
+      id: "IMG_FRONT", file: "images/front.png", view: "front",
+      used_by: ["GEOMETRY"], status: "APPROVED",
+      regions: [{
+        id: "rear_hidden", part_id: "rear_support",
+        evidence_role: "PRIMARY_VOLUME", visibility: "OCCLUDED", box_uv: null,
+      }],
+    }];
+    const root = await packageRoot(images);
+    await writeFile(join(root, "REFERENCE.json"), JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "Generic frame", kind: "MODEL", profile: "GENERIC" },
+      parts: [{ id: "body", role: "GEOMETRY" }, { id: "rear_support", role: "GEOMETRY" }],
+      unknowns: {
+        blocking: ["required rear support attachment remains unobserved"], non_blocking: [],
+      },
+      readiness: {
+        overall: "BLOCKED", geometry: "BLOCKED", texture: "READY", animation: "NOT_REQUIRED",
+      },
+      images,
+    }));
+    const reference = await readReferencePackageProjection(root);
+    expect(reference.images[0]).toMatchObject({
+      integrity: "VERIFIED", view: "front",
+      sha256: createHash("sha256").update(RED_PNG).digest("hex"),
+    });
+    const source = await readReferenceImageEvidence(reference, ["IMG_FRONT"]);
+    expect(source[0].regions).toMatchObject([{
+      part_id: "rear_support", visibility: "OCCLUDED", box_uv: null,
+    }]);
+    const grounding = summarizeReferencePartRegions(reference.images, [
+      { id: "body", role: "GEOMETRY" }, { id: "rear_support", role: "GEOMETRY" },
+    ]);
+    expect(grounding.visual_verdict).toBe("NOT_EVALUATED");
+    expect(grounding.parts.find(x => x.part_id === "rear_support")).toMatchObject({
+      directly_visible_views: [], occluded_views: ["front"],
+      hidden_shape_status: "UNVERIFIED",
+    });
+    expect(reference.cross_view_evidence).toBeUndefined();
+    const geometry = buildControlStageContext({ domain: "GEOMETRY", reference, workspace });
+    expect(geometry.stage_readiness).toBe("BLOCKED");
+    expect(geometry.blocking_unknowns).toContain("required rear support attachment remains unobserved");
+    const texture = buildControlStageContext({ domain: "TEXTURING", reference, workspace });
+    expect(texture.stage_readiness).toBe("READY");
+    expect(texture.blocking_unknowns).toEqual([]);
+  });
+
+  test("front/back source constraints can match without becoming visual reconstruction PASS", async () => {
+    const images = [{
+      id: "IMG_FRONT", file: "images/front.png", view: "front",
+      status: "APPROVED", used_by: ["GEOMETRY"],
+      part_world_constraints: [{
+        part_id: "body", dimensions: { x: 8, y: 10 },
+        attachment_parent: null, required: true,
+      }],
+      regions: [{
+        id: "rear_hidden", part_id: "rear_support",
+        evidence_role: "PRIMARY_VOLUME", visibility: "OCCLUDED", box_uv: null,
+      }],
+    }, {
+      id: "IMG_BACK", file: "images/back.png", view: "back",
+      status: "APPROVED", used_by: ["GEOMETRY"],
+      part_world_constraints: [{
+        part_id: "body", dimensions: { x: 8, y: 10 },
+        attachment_parent: null, required: true,
+      }, { part_id: "rear_support", attachment_parent: "body", required: true }],
+      regions: [{
+        id: "rear_visible", part_id: "rear_support",
+        evidence_role: "PRIMARY_VOLUME", visibility: "DIRECT",
+        box_uv: [0.15, 0.2, 0.55, 0.8],
+      }],
+    }];
+    const root = await packageRoot(images);
+    await writeFile(join(root, "images/back.png"), BLUE_PNG);
+    await writeFile(join(root, "REFERENCE.json"), JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "Generic frame", kind: "MODEL", profile: "GENERIC" },
+      parts: [{ id: "body", role: "GEOMETRY" }, { id: "rear_support", role: "GEOMETRY" }],
+      readiness: { overall: "READY", geometry: "READY", texture: "READY" },
+      images,
+    }));
+    const reference = await readReferencePackageProjection(root);
+    expect(reference.images.map(x => x.integrity)).toEqual(["VERIFIED", "VERIFIED"]);
+    expect(reference.images[0].sha256).not.toBe(reference.images[1].sha256);
+    expect(reference.cross_view_evidence).toMatchObject({
+      state: "available", readiness: "consistent_with_available_constraints",
+      comparable_dimension_count: 2, attachment_comparison_count: 1,
+      conflict_count: 0, visual_verdict: "not_evaluated",
+    });
+    const evidence = await readReferenceImageEvidence(reference, ["IMG_FRONT", "IMG_BACK"]);
+    expect(evidence.map(x => x.view)).toEqual(["front", "back"]);
+    const grounding = summarizeReferencePartRegions(reference.images, [
+      { id: "body", role: "GEOMETRY" }, { id: "rear_support", role: "GEOMETRY" },
+    ]);
+    expect(grounding.parts.find(x => x.part_id === "rear_support")).toMatchObject({
+      occluded_views: ["front"], directly_visible_views: ["back"],
+      hidden_shape_status: "UNVERIFIED",
+    });
+    expect(grounding.visual_verdict).toBe("NOT_EVALUATED");
+    expect(reference.readiness.geometry).toBe("READY");
+  });
+
+  test("conflicting rear attachment blocks Geometry although front/back bounds match", async () => {
+    const images = [{
+      id: "IMG_FRONT", file: "images/front.png", view: "front",
+      status: "APPROVED", used_by: ["GEOMETRY"],
+      part_world_constraints: [{
+        part_id: "body", dimensions: { x: 8, y: 10 }, attachment_parent: null,
+      }, { part_id: "rear_support", attachment_parent: "body", required: true }],
+    }, {
+      id: "IMG_BACK", file: "images/back.png", view: "back",
+      status: "APPROVED", used_by: ["GEOMETRY"],
+      part_world_constraints: [{
+        part_id: "body", dimensions: { x: 8, y: 10 }, attachment_parent: null,
+      }, { part_id: "rear_support", attachment_parent: "frame", required: true }],
+    }];
+    const root = await packageRoot(images);
+    await writeFile(join(root, "images/back.png"), BLUE_PNG);
+    await writeFile(join(root, "REFERENCE.json"), JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "Generic frame", kind: "MODEL", profile: "GENERIC" },
+      parts: [
+        { id: "body", role: "GEOMETRY" }, { id: "frame", role: "GEOMETRY" },
+        { id: "rear_support", role: "GEOMETRY" },
+      ],
+      readiness: { overall: "READY", geometry: "READY", texture: "READY" },
+      images,
+    }));
+    const reference = await readReferencePackageProjection(root);
+    expect(reference.cross_view_evidence).toMatchObject({
+      state: "available", readiness: "conflicting", conflict_count: 1,
+      visual_verdict: "not_evaluated",
+      conflict_examples: [{ kind: "attachment_conflict", part_id: "rear_support" }],
+    });
+    expect(reference.readiness.geometry).toBe("BLOCKED");
+    expect(reference.readiness.texture).toBe("READY");
+    const geometry = buildControlStageContext({ domain: "GEOMETRY", reference, workspace });
+    expect(geometry.stage_readiness).toBe("BLOCKED");
+    expect(geometry.blocking_unknowns).toContain("REFERENCE_CROSS_VIEW_CONFLICT");
   });
 
   test("fresh image content invalidates stage fingerprint when REFERENCE.json is unchanged", async () => {

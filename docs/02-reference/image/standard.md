@@ -232,6 +232,39 @@ Existing stage-readiness vocabulary applies without creating a new schema:
 
 The temporary inventory is not a handoff artifact. Preserve only necessary unresolved facts in existing package `unknowns` and `readiness`; do not create another registry, validator, tool or top-level manifest field.
 
+## Multi-View Consistency & Reconstruction Readiness QA
+
+Review the **actual generated reference**, not merely its panel labels. This section applies the Surface Coverage Gate; it creates no image classifier, extra score, 3D solver or mandatory turnaround.
+
+### Review sequence
+
+1. **Pin authority.** Preserve user requirements, approved source evidence, Sheet 01 Identity/Scale Locks, object FRONT and object-left/right. In faithful reconstruction, hidden source-critical structure remains UNKNOWN; in an original concept, unseen surfaces may be coherent `PROVISIONAL` creative choices pending review.
+2. **Examine P1 construction decisions.** Look at actual pixels for the whole silhouette, primary/secondary volumes, depth/width/height, attachments, openings, negative spaces, support/ground contact and identity-critical surface markings. Every decision has actual evidence, an approved explicit constraint, or an unresolved owner. The strongest front view does not automatically cover the back.
+3. **Compare only relevant paired views.** When a decision depends on them, examine front/back, object-left/right and top/side. The camera rotates around the *same* object, not different designs. Two-dimensional outlines can legitimately change with camera angle; underlying part identity/count, proportions, attachments, openings, material continuity and side-specific marks must not contradict.
+4. **Assess buildability.** A builder should be able to identify which forms are meaningful voxel volumes, layered/plane-like shapes, texture-only marks, intentional gaps and attachment relationships. Do not demand exact Cube inventories, UV coordinates, pivots, hidden depth or animation keyframes at reference time. A beautiful render with unresolvable primary masses is not reconstruction-ready.
+5. **Decide stage-specific readiness.** `READY` requires sufficient P1 support plus required visual approval; `NEEDS_REVIEW` retains nonblocking provisional choices; `BLOCKED` preserves missing or contradictory P1 decisions. Independent stages do not inherit unrelated blockers. A supported plain back is valid; decorative filler is not structural evidence.
+6. **Correct the smallest real issue.** Name the defective view and evidence-backed mismatch, preserve unrelated approved content, and inspect all touched views. Stop repeating unsuccessful identical correction directions without new evidence.
+
+| Scenario | Reference-stage outcome / limitation |
+| --- | --- |
+| One view already explains all P1 volume/contact decisions | May reach `READY` after review; no extra view required |
+| Front looks complete, required rear support remains source-occluded/UNKNOWN | Geometry `BLOCKED` on that decision; never invent an observed rear attachment |
+| A plain back is confirmed by source or approved original design | Can be `READY`; do not add ornamental filler |
+| Front/back have matching bounds but contradict rear attachment | Geometry `BLOCKED`; equal envelope is not topology proof |
+| Distinct images declare consistent world constraints | Control `images[].part_world_constraints` can compare claims, but visual agreement remains `NOT_EVALUATED` until inspected |
+| One composite image is relabelled as separate canonical camera files | Not independent source evidence; manually inspect relevant panels |
+| An original concept needs an undescribed rear form | Only a `PROVISIONAL` design choice before acceptance |
+| Front model view matches, required side/back model capture fails or is absent | Whole-form model `FAIL` or `UNVERIFIED`, never `PASS` from front alone |
+
+For a material P1 issue, keep a short transient trace:
+
+```text
+construction decision → supporting source panel/view → discrepancy or UNKNOWN
+→ owning Geometry/Texture/Animation stage → smallest required evidence/correction
+```
+
+This temporary review trace is not a new schema or default exported document. Use the existing `unknowns`, `readiness`, visual images and stage Markdown for requested handoff. Reference `READY` means eligible *input* to modelling, not a visual-quality PASS on a Blockbench asset.
+
 ## Critical Detail Panels
 
 Create a detail panel only when a high-risk relationship is not already clear.

@@ -352,6 +352,18 @@ front PASS + conflicting side/top reference -> BLOCKED if the conflict materiall
 
 Do not promote the strongest-looking view to represent the whole 3D model. For each material mismatch/approval, name the paired view that supports it and keep unsupported axes provisional or unverified.
 
+### Reference Coverage → Model Reconstruction Pair Review
+
+Reference Surface Coverage and reference-stage `READY` do **not** establish a Blockbench model `PASS`. For each material P1 claim that depends on more than one view, pair actual approved reference pixels with fresh current-model shaded capture pixels using compatible canonical view identity, front direction and framing. Retain existing image IDs/SHA or current capture handles; do not create a new evidence registry.
+
+- **Primary mass and depth:** front agreement cannot clear a required rear silhouette, side thickness, opening or negative space. A missing *model capture* for a supported source claim leaves it `UNVERIFIED`. Unknown *source structure* cannot justify inventing geometry to force a match.
+- **Attachment/contact:** a visibly contradictory rear support, object-left/right reversal or open/closed gap is `FAIL` for that claim, even when total dimensions match. Do not add decorative Cubes to disguise a wrong topology.
+- **Surface/material:** verify only source-supported markings and material continuity; missing evidence about underside color or rear decoration is not automatic Texture failure.
+- **Evidence limits:** `part_world_constraints` agreement, PNG SHA/format, source `APPROVED` status, `OCCLUDED` regions and `partCorrespondence` matches are not visual proof of unobserved geometry or complete model fidelity.
+- **Decision:** output `PASS | FAIL | UNVERIFIED` for scoped inspected claims. A true discrepancy uses the existing `StructuredVisualObservation` criterion, correct owning stage, paired views and distinct source/current image evidence. Unknown cause requests evidence, not speculative Cube operations; block only a materially dependent decision.
+
+Whole-form `PASS` requires **every required view for the claims in scope**, which can be one view or multiple views, never a fixed four-/six-view quota. An unreviewed generative sheet or source-only scripted regression is not visual acceptance.
+
 ### Blocked validation
 
 `BLOCKED` is not a visual quality grade. It means a valid visual verdict cannot currently be reached without guessing because the actual approved image is unavailable, view pairing cannot be resolved, material reference evidence conflicts, required observation/capability is unavailable, or repeated failed work has exhausted the bounded correction direction.
