@@ -39,3 +39,32 @@ export function acquirePublicationRenderDirectoryLease(
     released = true;
   };
 }
+
+/**
+ * Short-lived exclusive handoff use lease. Reading a GLB is protected against
+ * an explicit delete in another Gateway process. No daemon, no stale lock
+ * expiry; the lease lives inside the already user-approved handoff directory.
+ */
+export const PUBLICATION_HANDOFF_USE_LEASE_NAME = ".lazydesigner-handoff-active";
+
+export function acquirePublicationHandoffUseLease(
+  fs: RenderDirectoryLeaseFs,
+  handoffDirectory: string,
+): () => void {
+  const lock = join(handoffDirectory, PUBLICATION_HANDOFF_USE_LEASE_NAME);
+  try {
+    fs.mkdirSync(lock);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    throw new Error(
+      "PUBLICATION_BLENDER_HANDOFF_IN_USE: another Gateway may be reading or " +
+        "releasing this GLB. Do not break an orphaned lease automatically.",
+    );
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    fs.rmdirSync(lock);
+    released = true;
+  };
+}

@@ -6,7 +6,11 @@ import { randomBytes, createHash } from "node:crypto";
 import * as childProcess from "node:child_process";
 import * as nodeFs from "node:fs";
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { acquirePublicationRenderDirectoryLease } from "@/lib/publication/renderDirectoryLease";
+import {
+  acquirePublicationHandoffUseLease,
+  acquirePublicationRenderDirectoryLease,
+  PUBLICATION_HANDOFF_USE_LEASE_NAME,
+} from "@/lib/publication/renderDirectoryLease";
 import {
   BLENDER_COMPLETION_SUFFIX, MAX_BLENDER_COMPLETION_BYTES,
   MAX_BLENDER_PNG_BYTES, MAX_BLENDER_PREVIEW_BYTES,
@@ -158,16 +162,20 @@ function assertRunning(job: Job): void {
   }
 }
 
-async function verifyHandoff(path: string): Promise<{
-  document: PublicationHandoff;
-  glb: Buffer;
-  directory: string;
-}> {
+function requireHandoffPath(path: string): void {
   if (!isAbsoluteFilesystemPath(path) || basename(path) !== "handoff.json" ||
       !HANDOFF_DIR.test(basename(dirname(path))) ||
       /[\x00-\x1f]/.test(path)) {
     throw new Error("PUBLICATION_BLENDER_HANDOFF_PATH_INVALID");
   }
+}
+
+async function readVerifiedHandoff(path: string): Promise<{
+  document: PublicationHandoff;
+  glb: Buffer;
+  directory: string;
+}> {
+  requireHandoffPath(path);
   const directory = dirname(path);
   const [dirStat, jsonStat, canonical] = await Promise.all([
     lstat(directory), lstat(path), realpath(path),
@@ -225,6 +233,17 @@ async function verifyHandoff(path: string): Promise<{
     }
   }
   return { document, glb, directory };
+}
+
+/** Protect the short-lived verified read against release in another Gateway. */
+async function verifyHandoff(path: string): ReturnType<typeof readVerifiedHandoff> {
+  requireHandoffPath(path);
+  const release = acquirePublicationHandoffUseLease(nodeFs, dirname(path));
+  try {
+    return await readVerifiedHandoff(path);
+  } finally {
+    release();
+  }
 }
 
 /** One Gateway-owned process, not a persistent render farm or native editor. */
@@ -629,23 +648,33 @@ export class BlenderRenderProvider {
       throw new Error("PUBLICATION_BLENDER_HANDOFF_IN_USE");
     }
     this.releasingHandoffs.add(handoffPath);
+    let releaseLease: (() => void) | null = null;
     try {
-      const { document, directory } = await verifyHandoff(handoffPath);
+      const directory = dirname(handoffPath);
+      // Acquire BEFORE reading. Another Gateway currently verifying this
+      // handoff prevents deletion; a concurrent new reader fails closed.
+      releaseLease = acquirePublicationHandoffUseLease(nodeFs, directory);
+      const { document } = await readVerifiedHandoff(handoffPath);
       const contents = (await readdir(directory)).sort();
-      if (contents.length !== 2 ||
-          contents[0] !== "handoff.json" || contents[1] !== "model.glb") {
+      if (contents.join("\0") !== [
+        PUBLICATION_HANDOFF_USE_LEASE_NAME, "handoff.json", "model.glb",
+      ].sort().join("\0")) {
         throw new Error("PUBLICATION_BLENDER_HANDOFF_CONTAINS_UNOWNED_FILES");
       }
-      // Only exact, verified handoff-owned filenames; no recursive rm.
+      // Exact owned files only; do not recursively delete other user assets.
       nodeFs.unlinkSync(join(directory, "handoff.json"));
       nodeFs.unlinkSync(join(directory, "model.glb"));
+      releaseLease();
+      releaseLease = null;
       nodeFs.rmdirSync(directory);
       return {
         released: true, source_project_uuid: document.project_uuid,
         source_sha256: document.source_sha256, handoff_path: handoffPath,
       };
     } finally {
-      this.releasingHandoffs.delete(handoffPath);
+      // Safe even if verification fails or a partial handoff is encountered.
+      try { releaseLease?.(); }
+      finally { this.releasingHandoffs.delete(handoffPath); }
     }
   }
 

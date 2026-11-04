@@ -61,7 +61,7 @@ A Gateway-local Blender **render MCP capability** is introduced without adding a
 
 ## Gateway-owned recovery and bounded resource admission
 
-Both render entrypoints share the atomic `.lazydesigner-cycles-active` directory lease when using the **same output directory**. The lease remains after an unconfirmed subprocess exit; no stale lock is auto-broken. It is NOT a host-wide GPU/CPU scheduler.
+Both render entrypoints share the atomic `.lazydesigner-cycles-active` directory lease when using the **same output directory**. A per-user/home lock is NOT acquired: Blockbench's fs permission is scoped to the explicitly chosen output directory. To coordinate Cycles across multiple output directories, a separate common lock location must be user-authorized; no hidden additional permission is requested. The output lease remains after an unconfirmed subprocess exit and is not auto-broken. This is NOT a GPU scheduler. Gateway handoff verification and explicit release additionally share a short-lived `.lazydesigner-handoff-active` lease within the approved handoff folder, preventing other cooperating Gateway readers from racing its deletion.
 
 Gateway-owned renders now publish a final PNG, small verified PNG preview and bounded factual JSON receipt. The receipt is the LAST output commit marker and carries worker/source/GLB/PNG hashes and factual render observations. `blender_render(operation=recover)` can verify and restore a **completed** result after Gateway restart; active jobs are still cancelled on shutdown and cannot be resumed. `blender_render(operation=release)` explicitly removes only a complete, verified GLB handoff that is no longer active. None of these are claims of installed Blender/native proof.
 
