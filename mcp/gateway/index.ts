@@ -15,6 +15,7 @@ import { GatewaySessionState } from "./session/state";
 import { publishManagedGatewayLeaseEvidence } from "./session/leaseEvidence";
 import type { GatewayToolContext } from "./execution/gatewayErrors";
 import { GatewayCapabilityExecutor } from "./execution/capabilityExecutor";
+import { createNativePublicationHandoff } from "./execution/renderOrchestration";
 import { BenchmarkTraceRecorder } from "./execution/benchmarkTrace";
 
 const session = new GatewaySessionState();
@@ -23,24 +24,9 @@ const backend = new BlockitRuntimeBackend(undefined, undefined, {
   onRuntimeGenerationChange: (event) => session.onRuntimeGenerationChange(event.project_uuid),
   onRuntimeUnavailable: () => session.onRuntimeUnavailable(),
 });
-const localCapabilities = new LocalCapabilityRegistry(async (directory, signal) => {
-  // Native Blockbench is accessed only through the existing serialized backend.
-  // An interrupted export is never automatically retried.
-  const invocation = await backend.invokeCapabilityWithMetadata(
-    "render_publication", { operation: "handoff", request: { directory } },
-    undefined, signal,
-  );
-  const data = invocation.result.structuredContent;
-  if (invocation.result.isError === true || !data ||
-      typeof data !== "object" || Array.isArray(data) ||
-      typeof (data as Record<string, unknown>).handoff_path !== "string") {
-    throw new Error(
-      "PUBLICATION_AUTO_HANDOFF_UNCONFIRMED: native handoff did not return an authoritative path. " +
-      "Inspect existing artifacts before any new export.",
-    );
-  }
-  return (data as { handoff_path: string }).handoff_path;
-});
+const localCapabilities = new LocalCapabilityRegistry(
+  createNativePublicationHandoff(backend),
+);
 const benchmarkTrace = BenchmarkTraceRecorder.fromEnvironment();
 const executor = new GatewayCapabilityExecutor(
   backend,

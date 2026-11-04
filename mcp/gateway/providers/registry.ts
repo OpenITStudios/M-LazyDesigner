@@ -1,5 +1,6 @@
 import { summarizeCapability } from "../capabilities/catalog";
-import { BLENDER_RENDER_TOOL, BlenderRenderProvider, shouldProbeBlenderRender, type NativePublicationHandoff } from "./blenderRender";
+import { BLENDER_RENDER_TOOL, BlenderRenderProvider, blenderRenderControlParameters, shouldProbeBlenderRender } from "./blenderRender";
+import { startAutomaticPublication, type NativePublicationHandoff } from "../execution/renderOrchestration";
 import type {
   BackendTool,
   CapabilitySummary,
@@ -28,8 +29,8 @@ export class LocalCapabilityRegistry {
   private readonly providers: readonly LocalCapabilityProvider[];
   private readonly blender: BlenderRenderProvider;
 
-  constructor(prepareNativeHandoff?: NativePublicationHandoff) {
-    this.blender = new BlenderRenderProvider(prepareNativeHandoff);
+  constructor(private readonly prepareNativeHandoff?: NativePublicationHandoff) {
+    this.blender = new BlenderRenderProvider();
     const vanilla = new VanillaEntityReferenceProvider();
     this.providers = [
       {
@@ -101,6 +102,23 @@ export class LocalCapabilityRegistry {
   ): Promise<LocalCapabilityCallResult | null> {
     const provider = this.providerFor(capability);
     if (!provider) return null;
+    if (capability === BLENDER_RENDER_TOOL.name && args.operation === "auto") {
+      const command = blenderRenderControlParameters.parse(args);
+      if (command.operation !== "auto") {
+        throw new Error("PUBLICATION_AUTO_SCHEMA_BRANCH_MISMATCH");
+      }
+      const started = startAutomaticPublication(
+        this.blender, this.prepareNativeHandoff, command.options,
+      );
+      return {
+        content: [{
+          type: "text",
+          text: "Automatic Blockbench-to-Blender Cycles job started: " + started.job_id +
+            ". Check blender_render operation=status and request one real PNG preview when complete.",
+        }],
+        structuredContent: started,
+      };
+    }
     return provider.invoke(args);
   }
 }

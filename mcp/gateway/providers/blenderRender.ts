@@ -24,7 +24,7 @@ import {
 import { basename, dirname, join, resolve, extname } from "node:path";
 import {
   publicationRenderParameters, publicationAutomaticOptions,
-  makeAutomaticPublicationRequest, makePublicationJob, type PublicationRenderRequest,
+  makePublicationJob, type PublicationRenderRequest,
 } from "@/lib/publication/contracts";
 import { MAX_PUBLICATION_HANDOFF_BYTES, MAX_PUBLICATION_HANDOFF_GLB_BYTES, parsePublicationHandoff, type PublicationHandoff } from "@/lib/publication/handoffContract";
 import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
@@ -260,11 +260,8 @@ async function verifyHandoff(path: string): ReturnType<typeof readVerifiedHandof
   }
 }
 
-export type NativePublicationHandoff = (directory: string, signal: AbortSignal) => Promise<string>;
-
 /** One Gateway-owned process, not a persistent render farm or native editor. */
 export class BlenderRenderProvider {
-  constructor(private readonly prepareNativeHandoff?: NativePublicationHandoff) {}
   private current: Job | null = null;
   private retired = false;
   private readonly releasingHandoffs = new Set<string>();
@@ -561,38 +558,23 @@ export class BlenderRenderProvider {
     return this.launchJob(handoffPath, job => this.execute(job, handoffPath, request));
   }
 
-  /** A single intent captures Blockbench and renders via the existing Cycles worker. */
-  startAutomatic(
-    options: unknown,
-    config: { blender_executable?: string; output_directory?: string } = {
-      blender_executable: process.env.LAZYDESIGNER_BLENDER_EXECUTABLE,
-      output_directory: process.env.LAZYDESIGNER_RENDER_OUTPUT_DIRECTORY,
-    },
+  /** Accept an execution-owned prepared handoff; do not inspect the native editor. */
+  startPreparedHandoff(
+    prepare: (signal: AbortSignal) => Promise<{
+      handoff_path: string;
+      request: PublicationRenderRequest;
+    }>,
   ): JsonRecord {
-    if (!this.prepareNativeHandoff) throw new Error("PUBLICATION_AUTO_NATIVE_RUNTIME_UNAVAILABLE");
-    const { directory, request } = makeAutomaticPublicationRequest(
-      options, config, randomBytes(12).toString("hex"),
-    );
-    try {
-      const out = nodeFs.lstatSync(directory);
-      const blender = nodeFs.lstatSync(request.blender_executable);
-      if (!out.isDirectory() || out.isSymbolicLink() ||
-          !blender.isFile() || blender.isSymbolicLink()) {
-        throw new Error("INVALID_FILESYSTEM_TARGET");
-      }
-    } catch {
-      throw new Error("PUBLICATION_AUTO_CONFIG_PATH_UNAVAILABLE: configure an existing shared output folder and installed Blender executable.");
-    }
     return this.launchJob(null, async job => {
       assertRunning(job);
-      const path = await this.prepareNativeHandoff!(directory, job.controller.signal);
-      requireHandoffPath(path);
-      if (resolve(dirname(dirname(path))) !== resolve(directory)) {
-        throw new Error("PUBLICATION_AUTO_HANDOFF_OUTSIDE_CONFIGURED_DIRECTORY");
-      }
-      job.handoff_path = path;
+      const prepared = await prepare(job.controller.signal);
+      requireHandoffPath(prepared.handoff_path);
+      // Keep the known owned path even when cancellation arrives during the
+      // serialized native export, so terminal cleanup can act safely.
+      job.handoff_path = prepared.handoff_path;
       assertRunning(job);
-      return this.execute(job, path, request);
+      const request = publicationRenderParameters.parse(prepared.request);
+      return this.execute(job, prepared.handoff_path, request);
     }, true);
   }
 
@@ -795,18 +777,10 @@ export class BlenderRenderProvider {
   async invoke(args: JsonRecord): Promise<Result> {
     const operation = blenderRenderControlParameters.parse(args);
     switch (operation.operation) {
-      case "auto": {
-        const started = this.startAutomatic(operation.options);
-        return {
-          content: [{
-            type: "text",
-            text: "Automatic Blockbench-to-Blender Cycles job started: " + started.job_id +
-              ". Check blender_render operation=status, then request preview after RENDERED_DRAFT. " +
-              "This does not certify a completed PNG or visual quality.",
-          }],
-          structuredContent: started,
-        };
-      }
+      case "auto":
+        // auto is routed by the local capability registry through the
+        // Gateway execution owner; the Blender adapter never calls Blockbench.
+        throw new Error("PUBLICATION_AUTO_GATEWAY_EXECUTION_REQUIRED");
       case "start": {
         const started = this.start(operation.handoff_path, operation.request);
         return {

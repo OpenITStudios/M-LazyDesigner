@@ -29,7 +29,7 @@ permissions, guessed paths, downloaded assets, second MCP server or GPU farm.
 With the current Bedrock Entity project open, the AI can call the existing
 `invoke_capability` with `{"capability":"blender_render","arguments":{"operation":"auto"}}`.
 Optional `options` select quality, aspect, background, device or color view
-transform. The Gateway requests `render_publication(operation=handoff)` once,
+transform. The Gateway execution owner (`mcp/gateway/execution/renderOrchestration.ts`) requests `render_publication(operation=handoff)` once, requires the source project UUID to match the backend-verified active project,
 verifies the immutable GLB, starts the independent Cycles worker and returns
 a job ID. AI then uses `status` and one real `preview` after
 `RENDERED_DRAFT`; it never treats a started job as successful PNG publication.

@@ -9,6 +9,7 @@ import {
 } from "@/lib/publication/handoffContract";
 import { expectedPublicationGltfMaterial } from "@/lib/publication/materialContract";
 import { makeAutomaticPublicationRequest, publicationAutomaticOptions } from "@/lib/publication/contracts";
+import { createNativePublicationHandoff, startAutomaticPublication, type NativePublicationHandoff } from "../execution/renderOrchestration";
 import {
   BLENDER_RENDER_TOOL,
   BlenderRenderProvider,
@@ -187,6 +188,49 @@ describe("Independent Gateway Blender MCP control contract", () => {
     }
   });
 
+  test("native handoff accepts only project-matched verified Gateway receipts", async () => {
+    const path = "/tmp/.lazydesigner-blender-handoff-" + "a".repeat(24) + "/handoff.json";
+    const receipt = {
+      handoff_path: path, handoff_kind: PUBLICATION_HANDOFF_KIND,
+      project_uuid: "project-a", source_sha256: sha("a"), glb_sha256: sha("b"),
+    };
+    let calls = 0;
+    const backend = {
+      invokeCapabilityWithMetadata: async (
+        capability: string, args: unknown, _meta: unknown, _signal: AbortSignal,
+      ) => {
+        calls++;
+        expect(capability).toBe("render_publication");
+        expect(args).toMatchObject({ operation: "handoff", request: { directory: "/tmp" } });
+        return {
+          result: { isError: false, structuredContent: receipt },
+          verifiedProjectUuid: "project-a",
+        };
+      },
+    } as unknown as Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">;
+    const handoff = createNativePublicationHandoff(backend);
+    await expect(handoff("/tmp", new AbortController().signal)).resolves.toBe(path);
+    expect(calls).toBe(1);
+    const wrong = {
+      invokeCapabilityWithMetadata: async () => ({
+        result: { isError: false, structuredContent: receipt },
+        verifiedProjectUuid: "some-other-project",
+      }),
+    } as unknown as Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">;
+    await expect(createNativePublicationHandoff(wrong)(
+      "/tmp", new AbortController().signal,
+    )).rejects.toThrow("SOURCE_AFFINITY_MISMATCH");
+    const missing = {
+      invokeCapabilityWithMetadata: async () => ({
+        result: { isError: false, structuredContent: { ...receipt, glb_sha256: "bad" } },
+        verifiedProjectUuid: "project-a",
+      }),
+    } as unknown as Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">;
+    await expect(createNativePublicationHandoff(missing)(
+      "/tmp", new AbortController().signal,
+    )).rejects.toThrow("HANDOFF_UNCONFIRMED");
+  });
+
   test("auto mode derives safe output without guessing local permissions", () => {
     expect(publicationAutomaticOptions.parse({})).toMatchObject({
       quality: "publication", aspect: "square", background: "dark",
@@ -214,7 +258,7 @@ describe("Independent Gateway Blender MCP control contract", () => {
     }, nonce)).toThrow();
     expect(() => makeAutomaticPublicationRequest({}, config, "invalid")).toThrow("AUTO_JOB_ID_INVALID");
     expect(publicationAutomaticOptions.safeParse({ overwrite: true }).success).toBe(false);
-    expect(() => new BlenderRenderProvider().startAutomatic({})).toThrow("AUTO_NATIVE_RUNTIME_UNAVAILABLE");
+    expect(() => startAutomaticPublication(new BlenderRenderProvider(), undefined, {})).toThrow("AUTO_NATIVE_RUNTIME_UNAVAILABLE");
   });
 
   test("status reports actual output path, failure reason and cleanup uncertainty", async () => {
@@ -273,12 +317,13 @@ describe("Independent Gateway Blender MCP control contract", () => {
     const blender = join(dir, "blender");
     await writeFile(blender, "test-only fake executable, never launched");
     const calls: string[] = [];
-    const provider = new BlenderRenderProvider(async directory => {
+    const provider = new BlenderRenderProvider();
+    const native: NativePublicationHandoff = async directory => {
       calls.push(directory);
       throw new Error("NATIVE_HANDOFF_FAILED");
-    });
+    };
     try {
-      const job = provider.startAutomatic({ quality: "preview" }, {
+      const job = startAutomaticPublication(provider, native, { quality: "preview" }, {
         blender_executable: blender, output_directory: dir,
       });
       expect(job.state).toBe("RUNNING");
@@ -301,12 +346,13 @@ describe("Independent Gateway Blender MCP control contract", () => {
     let finish!: (path: string) => void;
     const pendingHandoff = new Promise<string>(resolve => { finish = resolve; });
     let handoffCalls = 0;
-    const provider = new BlenderRenderProvider(async () => {
+    const provider = new BlenderRenderProvider();
+    const native: NativePublicationHandoff = async () => {
       handoffCalls += 1;
       return pendingHandoff;
-    });
+    };
     try {
-      const job = provider.startAutomatic({}, {
+      const job = startAutomaticPublication(provider, native, {}, {
         blender_executable: blender, output_directory: dir,
       });
       await Promise.resolve();

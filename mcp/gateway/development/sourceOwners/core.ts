@@ -47,6 +47,16 @@ export const CORE_SOURCE_OWNERS: Record<string, DevelopmentSourceOwner> = {
     specialist: null,
     anchor_test: "mcp/tests/inspection-export-capability-baseline.test.ts",
   },
+  render_publication: {
+    source: "mcp/server/tools/inspection/publication.ts",
+    specialist: null,
+    anchor_test: "mcp/tests/publication-render-contract.test.ts",
+  },
+  blender_render: {
+    source: "mcp/gateway/providers/blenderRender.ts",
+    specialist: null,
+    anchor_test: "mcp/gateway/providers/blenderRender.test.ts",
+  },
   undo: {
     source: "mcp/server/tools/state/history.ts",
     specialist: null,

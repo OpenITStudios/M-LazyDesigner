@@ -135,6 +135,14 @@ describe("Control source-owner registry", () => {
       source: "mcp/server/runtime/phaseControl.ts",
       specialist: null,
     });
+    expect(sourceOwnerForCapability("render_publication")).toMatchObject({
+      source: "mcp/server/tools/inspection/publication.ts",
+      resolution: undefined,
+    });
+    expect(sourceOwnerForCapability("blender_render")).toMatchObject({
+      source: "mcp/gateway/providers/blenderRender.ts",
+      resolution: undefined,
+    });
   });
 
   test("all explicit capability owners have real canonical source, regression anchor and specialist files", async () => {
