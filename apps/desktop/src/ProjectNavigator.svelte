@@ -5,8 +5,10 @@
   export let navigation: ProjectNavigation;
   export let busy = false;
   export let canOpenModel = true;
+  // Native .bbmodel browsing remains available when AI status is unverified.
+  export let canBrowseModel = true;
   export let canEditProjectPrefs = true;
-  export let onOpenModel: (id: string) => void | Promise<void>;
+  export let onOpenModel: (id?: string) => void | Promise<void>;
   export let onAddProjectFolder: () => void | Promise<void>;
   export let onDeleteProject: (id: string) => void | Promise<void>;
   export let onFocusEditor: () => void | Promise<void>;
@@ -22,8 +24,14 @@
   $: recentTargets = recentModelTargets(navigation);
   $: targetToContinue = continueTarget(navigation);
 
+  // Null defaults to the active project; an empty ID records a user collapse
+  // and persists across Workspace/Support navigation via the parent binding.
+  function isProjectExpanded(id: string): boolean {
+    return expandedProjectId === id || (expandedProjectId === null && navigation.active?.project_id === id);
+  }
+
   function toggleProject(id: string) {
-    expandedProjectId = expandedProjectId === id ? null : id;
+    expandedProjectId = isProjectExpanded(id) ? '' : id;
   }
 </script>
 
@@ -44,7 +52,10 @@
 {#if navigation.active}
   {@const active = navigation.active}
   <section class="content-section">
-    <div class="section-heading"><div><h2>Current Model</h2></div></div>
+    <div class="section-heading">
+      <div><h2>Current Model</h2></div>
+      <button class="secondary-button small-button" onclick={() => onOpenModel()} disabled={!canBrowseModel}>Open Model…</button>
+    </div>
     <div class="project-list">
       <div class="project-row active-project-row">
         <div class="project-main">
@@ -97,7 +108,7 @@
         <div class="project-actions">
           <button class="secondary-button small-button" aria-label={`Open folder for project ${project.name}`} onclick={() => onProjectAction('open-project-folder', project.id)} disabled={!project.available || busy}>Open Folder</button>
           {#if !projectSearch.trim()}
-            <button class="quiet-button" aria-label={`${expandedProjectId === project.id ? 'Hide' : 'Show'} models for project ${project.name}`} aria-expanded={expandedProjectId === project.id} onclick={() => toggleProject(project.id)}>{expandedProjectId === project.id ? 'Hide models' : 'Show models'}</button>
+            <button class="quiet-button" aria-label={`${isProjectExpanded(project.id) ? 'Hide' : 'Show'} models for project ${project.name}`} aria-expanded={isProjectExpanded(project.id)} onclick={() => toggleProject(project.id)}>{isProjectExpanded(project.id) ? 'Hide models' : 'Show models'}</button>
           {/if}
           <details class="more-menu">
             <summary aria-label={`Actions for project ${project.name}`}>•••</summary>
@@ -111,7 +122,7 @@
           </details>
         </div>
       </div>
-      {#if expandedProjectId === project.id || projectSearch.trim()}
+      {#if isProjectExpanded(project.id) || projectSearch.trim()}
         <div class="project-details">
           {#if !project.available}
             <div class="project-empty">The folder has moved or is unavailable. The shortcut was preserved.</div>
@@ -125,7 +136,7 @@
                 </div>
                 <div class="model-actions">
                   {#if model.active}
-                    <button class="secondary-button small-button" aria-label={`Go to Blockbench for ${model.name}`} onclick={onFocusEditor} disabled={busy}>Go to Blockbench</button>
+                    <span class="current-model-tag">Current model</span>
                   {:else}
                     <button class="secondary-button small-button" aria-label={`Open model ${model.name}`} onclick={() => onOpenModel(model.id)} disabled={!model.exists || busy || !canOpenModel}>Open</button>
                   {/if}
@@ -185,6 +196,7 @@
 {/if}
 
 <style>
+  .current-model-tag{color:var(--muted-2);font-size:var(--font-xs);font-weight:650;white-space:nowrap}
   .preferences-recovery{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elevated);font-size:var(--font-sm)}
   .preferences-recovery>div{display:grid;gap:5px}.preferences-recovery span{font-size:var(--font-sm);color:var(--muted)}
   .content-section{margin-bottom:34px}

@@ -44,6 +44,7 @@
     bind:showAllProjects
     bind:projectSearch
     busy={busyAction !== null || statusProbeFailures >= 2}
+    canBrowseModel={busyAction === null}
     canOpenModel={statusProbeFailures < 2}
     canEditProjectPrefs={statusProbeFailures < 2}
     onOpenModel={openModel}
@@ -68,6 +69,7 @@
     </section>
   {/if}
 
+  {#if !status.project_navigation.active}
   <section class="content-section">
     <div class="section-heading">
       <div><h2>Open a model</h2><p>Choose an existing .bbmodel file. AI connection is optional.</p></div>
@@ -76,6 +78,7 @@
       </button>
     </div>
   </section>
+  {/if}
 
   {#if productMode(status) === 'welcome'}
     {#if status.project_navigation.projects.length > 0}

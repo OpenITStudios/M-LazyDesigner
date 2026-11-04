@@ -67,8 +67,17 @@ def inspect(page):
 def inspect_action_states(page, fixture, view):
     """Check only decisions introduced by the current UI refinement."""
     expected = {
+        ("ready", "workspace"): {
+            "Open Model…": True,
+            "Go to Blockbench for Modern Chair": True,
+            "Hide models for project Furniture": True,
+        },
         ("ready-no-active", "workspace"): {
+            "Open Model…": True,
             "Open Blockbench": True,
+        },
+        ("ready", "support"): {
+            "Refresh": True,
         },
         ("status-unverified", "workspace"): {
             "Open Model…": True,
@@ -92,6 +101,24 @@ def inspect_action_states(page, fixture, view):
         elif button.is_enabled() != should_be_enabled:
             issues.append(f"'{name}' enabled={not should_be_enabled}, expected {should_be_enabled}")
     return {"checked": len(expected), "issues": issues}
+
+
+def inspect_project_expansion(page, fixture, view):
+    """Check default expansion, explicit collapse and tab-state continuity."""
+    if (fixture, view) != ("ready", "workspace"):
+        return []
+    errors = []
+    collapse = page.get_by_role("button", name="Hide models for project Furniture", exact=True)
+    if collapse.count() != 1:
+        return ["active project should start expanded"]
+    collapse.click()
+    if page.get_by_role("button", name="Show models for project Furniture", exact=True).count() != 1:
+        errors.append("active project did not collapse")
+    page.get_by_role("button", name="Support", exact=True).click()
+    page.get_by_role("button", name="Workspace", exact=True).click()
+    if page.get_by_role("button", name="Show models for project Furniture", exact=True).count() != 1:
+        errors.append("explicit project collapse was lost after navigation")
+    return errors
 
 
 def main():
@@ -152,6 +179,11 @@ def main():
                             failures.append(name + ": viewport size mismatch")
                         if snapshot["horizontalOverflow"] or snapshot["offscreenControls"]:
                             failures.append(name + ": horizontal overflow or clipped controls")
+                        navigation_issues = inspect_project_expansion(page, fixture, view)
+                        if fixture == "ready" and view == "workspace":
+                            entry["navigationChecks"] = {"checked": 3, "issues": navigation_issues}
+                        for issue in navigation_issues:
+                            failures.append(name + ": " + issue)
                         if page_errors:
                             failures.append(name + ": JS errors: " + "; ".join(page_errors[:3]))
                             entry["pageErrors"] = page_errors
