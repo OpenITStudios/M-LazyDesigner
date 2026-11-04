@@ -124,6 +124,61 @@ describe("source-image region → semantic-part evidence", () => {
     });
   });
 
+
+  test("one approved image SHA relabelled as FRONT and BACK yields no trusted part-view coverage", () => {
+    const region = parseReferenceImageRegions([{
+      id: "main", part_id: "body", evidence_role: "PRIMARY_VOLUME",
+      visibility: "DIRECT", box_uv: [0.1, 0.1, 0.9, 0.9],
+    }])!;
+    const sameSha = "a".repeat(64);
+    const result = summarizeReferencePartRegions([
+      { id: "front", status: "APPROVED", view: "front", sha256: sameSha, regions: region },
+      { id: "back", status: "APPROVED", view: "back", sha256: sameSha, regions: region },
+    ], [{ id: "body", role: "GEOMETRY" }]);
+    expect(result).toMatchObject({
+      state: "NO_ANNOTATIONS", part_count: 0, region_count: 0,
+      visual_verdict: "NOT_EVALUATED",
+    });
+  });
+
+  test("a DRAFT view alias cannot invalidate a separate approved view", () => {
+    const region = parseReferenceImageRegions([{
+      id: "mass", part_id: "body", evidence_role: "PRIMARY_VOLUME",
+      visibility: "DIRECT", box_uv: [0.2, 0.15, 0.8, 0.85],
+    }])!;
+    const result = summarizeReferencePartRegions([
+      { id: "front", status: "APPROVED", view: "front", sha256: "a".repeat(64), regions: region },
+      { id: "draft-back", status: "DRAFT", view: "back", sha256: "a".repeat(64), regions: region },
+      { id: "prose-alias", status: "APPROVED", view: "left", sha256: "unverified", regions: region },
+    ], [{ id: "body", role: "GEOMETRY" }]);
+    expect(result.state).toBe("ANNOTATED");
+    expect(result.parts[0]).toMatchObject({
+      directly_visible_views: ["front"], geometry_region_ids: ["front:mass"],
+      hidden_shape_status: "UNVERIFIED",
+    });
+    expect(result.visual_verdict).toBe("NOT_EVALUATED");
+  });
+
+  test("distinct current approved images can contribute separate views without visual PASS", () => {
+    const region = parseReferenceImageRegions([{
+      id: "mass", part_id: "body", evidence_role: "PRIMARY_VOLUME",
+      visibility: "DIRECT", box_uv: [0.1, 0.2, 0.9, 0.9],
+    }])!;
+    const result = summarizeReferencePartRegions([
+      { id: "front", status: "APPROVED", view: "front", sha256: "a".repeat(64), regions: region },
+      { id: "back", status: "APPROVED", view: "back", sha256: "b".repeat(64), regions: region },
+      { id: "composite", status: "APPROVED", view: null, sha256: "c".repeat(64), regions: region },
+    ], [{ id: "body", role: "GEOMETRY" }]);
+    expect(result).toMatchObject({
+      state: "ANNOTATED", part_count: 1, region_count: 2,
+      visual_verdict: "NOT_EVALUATED",
+    });
+    expect(result.parts[0]).toMatchObject({
+      directly_visible_views: ["front", "back"],
+      geometry_region_ids: ["front:mass", "back:mass"],
+      hidden_shape_status: "UNVERIFIED",
+    });
+  });
   test("distinct images with the same view never fabricate independent multi-view support", () => {
     const region = parseReferenceImageRegions([
       { id: "seat", part_id: "seat", evidence_role: "PRIMARY_VOLUME",

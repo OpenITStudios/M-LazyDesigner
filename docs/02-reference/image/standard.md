@@ -265,6 +265,22 @@ construction decision → supporting source panel/view → discrepancy or UNKNOW
 
 This temporary review trace is not a new schema or default exported document. Use the existing `unknowns`, `readiness`, visual images and stage Markdown for requested handoff. Reference `READY` means eligible *input* to modelling, not a visual-quality PASS on a Blockbench asset.
 
+### Panel-Level Visual Review — Composite and Multi-Sheet
+
+Use this procedure only when a material P1/P2 decision spans more than one panel or an ambiguous panel needs focused inspection. It is a **temporary review method** for the actual image shown to the reviewer; it does not require panel segmentation software, create new package fields, or pretend that a composite image is several independent source files.
+
+1. **Ground the whole sheet first.** Inspect the current full image, its actual identity/revision when available, layout and selected P1/P2 panel plan. Never accept a title or `FRONT/BACK` text as proof that the pictured camera and object-space orientation are correct.
+2. **Locate only decision-changing panels.** Keep a temporary `PANEL_ID | parent image ID/SHA | observed panel bounds | intended camera/subject | P1/P2 claim | outcome` map. Bounds are visual-review focus coordinates, not `REFERENCE.json images[].regions` on a composite and not calibrated camera data. Do not invent bounding boxes when actual pixels are unavailable.
+3. **Inspect the actual focused pixels.** Use the original image and, when available and helpful, a readable zoom/crop of the same existing bytes. Retain the full sheet as context. A zoom/crop never creates an independent source view, changes the underlying world scale, or promotes a panel label to a verified camera pose. If a critical panel cannot be inspected at readable size, mark the dependent claim `UNVERIFIED` and request only the missing compatible view, not an unrelated complete redesign.
+4. **Pair by physical object side, not page position.** For the relevant pairs, compare primary mass/part count, silhouette at the correct camera angle, attachment/contact/opening topology, depth continuation, left/right asymmetry and identity-critical material marks. A different 2D outline is expected as the camera rotates; mirrored accessories, incompatible attachment direction, a front panel copied as a fake back, and invented hidden rear detail are not equivalent views.
+5. **Separate evidence from intent.** A SOURCE_REFERENCE with unseen rear structure remains UNKNOWN. A new original design may propose the rear as `PROVISIONAL` until the actual result is reviewed. A plain back supported by the approved design is valid; do not manufacture filler for visual balance.
+6. **Review revision impact.** Identify the changed semantic part and every panel where it appears or changes depth, contact, scale, material, or symmetry. Check all materially affected panels after editing; also inspect the full sheet for unintended changes outside the requested region. For a new image revision, re-ground panel locations from actual pixels instead of assuming old crop bounds still refer to the same content. Sheet 02+ remains bound to current approved Sheet 01 Identity/Scale Locks.
+7. **Deliver one bounded verdict per material claim:** `CONSISTENT`, `LOCAL_VIEW_DEFECT`, `MULTI_VIEW_CONTRADICTION`, or `INSUFFICIENT_EVIDENCE`. A contradiction triggers a scoped `CHANGE + PRESERVE` correction and re-review; it is not automatically a final Geometry operation. Numeric/hash/source identity consistency alone never grants visual `PASS` or authorizes unreviewed images as `APPROVED`.
+
+**Negative scenarios:** a two-view image duplicated under two filenames with identical bytes is still one source; a DRAFT panel does not count as approved coverage; labels can be swapped; cropping can hide a missing body part or wrong attachment; and a localized edit can accidentally alter another panel. Fail closed on these claims rather than treating a clean composition as proof of 3D consistency.
+
+The existing `imageRegionEvidence` owner rejects source hash reuse under conflicting canonical views when computing approved semantic-part coverage. This is a **metadata integrity guard**, not perceptual panel inspection. For a composite, review visible panels manually and keep their evidence under the original parent image. The parser does not accept composite-image region annotations as if they belonged to independent orthographic cameras.
+
 ## Critical Detail Panels
 
 Create a detail panel only when a high-risk relationship is not already clear.

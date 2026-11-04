@@ -313,6 +313,12 @@ CROSS-VIEW CONSISTENCY
 If the changed feature appears in multiple views, update every materially affected view coherently.
 Do not leave the old version in another panel.
 
+PANEL-LEVEL RECHECK
+- <affected PANEL_IDs and associated P1/P2 evidence decisions>
+- Re-ground panel boundaries against the new image; do not reuse stale crop/label assumptions.
+- Inspect the complete sheet for collateral changes outside the targeted edit.
+- A zoom/crop is only a focus on the same parent image, not independent source authority.
+
 SCALE REVISION RULE
 If the user changes scale materially, treat it as a new Scale Lock and update every affected panel/sheet coherently.
 Do not modify scale accidentally during an unrelated correction.
@@ -424,6 +430,8 @@ pre-generation approval is satisfied only when explicitly requested
 ```
 
 # Post-Call Visual Inspection
+
+For a multi-panel sheet, inspect the actual complete image first and keep a compact per-panel review focus (PANEL_ID, current parent image, intended object side, specific P1/P2 claim). Compare paired panels by object-space view instead of their page labels alone; a focus/crop does not create a new approved image or camera. Re-evaluate the entire sheet after any edit for accidental changes to untouched panels. Never reuse review focus coordinates after a layout-changing revision without observing the new pixels.
 
 ChatGPT image generation may show the result immediately. Inspect the actual generated pixels when available **after generation**; do not promise a hidden pre-display QA gate.
 

@@ -198,6 +198,25 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(standard).toContain("block only that stage");
   });
 
+
+  test("panel-level review keeps a composite sheet one authority and rechecks changed panels", async () => {
+    const [standard, prompt, templates] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+    ]);
+    expect(standard).toContain("panel-level visual review");
+    expect(standard).toContain("parent image id/sha");
+    expect(standard).toContain("full sheet");
+    expect(standard).toContain("fake back");
+    expect(standard).toContain("insufficient_evidence");
+    expect(prompt).toContain("same composite bytes");
+    expect(prompt).toContain("re-ground panel focus locations");
+    expect(templates).toContain("panel-level recheck");
+    expect(templates).toContain("collateral changes");
+    expect(templates).not.toContain("create a new reference panel validator");
+  });
+
   test("coverage review cannot turn declared metadata or unobserved images into visual PASS", async () => {
     const [standard, prompt, templates, skill] = await Promise.all([
       read("../docs/02-reference/image/standard.md"),

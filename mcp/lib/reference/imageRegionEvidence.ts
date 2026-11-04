@@ -115,6 +115,20 @@ export function summarizeReferencePartRegions(
 } {
   const parts = new Map<string, ReferencePartGrounding>();
   const roleById = new Map(declaredParts.map((row) => [row.id, row.role?.toUpperCase() ?? null]));
+  // One SHA-labelled source cannot supply two independently grounded camera
+  // views. A composite sheet duplicated under FRONT/BACK aliases must not
+  // count as distinct view coverage, even when its boxes look well-formed.
+  // Draft images cannot invalidate a separately APPROVED source view.
+  const sourceViewsBySha = new Map<string, Set<ModelView>>();
+  for (const image of images) {
+    if (!image.view || !image.sha256 || !/^[a-f0-9]{64}$/.test(image.sha256) ||
+        (image.status !== undefined && image.status !== "APPROVED")) continue;
+    const views = sourceViewsBySha.get(image.sha256) ?? new Set<ModelView>();
+    views.add(image.view);
+    sourceViewsBySha.set(image.sha256, views);
+  }
+  const ambiguousSourceHashes = new Set([...sourceViewsBySha.entries()]
+    .filter(([, views]) => views.size > 1).map(([sha]) => sha));
   const ownershipIssues: Array<{
     part_id: string;
     image_region_id: string;
@@ -123,8 +137,10 @@ export function summarizeReferencePartRegions(
   let regionCount = 0;
   for (const image of images) {
     // Legacy metadata-only callers may omit status; a supplied DRAFT/null is
-    // never approved coverage. Approval still does not prove pixel similarity.
-    if (!image.view || !image.sha256 ||
+    // never approved coverage. An ambiguous image hash is not two cameras.
+    // Neither a valid hash nor a view label proves actual visual agreement.
+    if (!image.view || !image.sha256 || !/^[a-f0-9]{64}$/.test(image.sha256) ||
+        ambiguousSourceHashes.has(image.sha256) ||
         (image.status !== undefined && image.status !== "APPROVED")) continue;
     for (const region of image.regions ?? []) {
       regionCount++;

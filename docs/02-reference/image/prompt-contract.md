@@ -283,6 +283,14 @@ For an edit, identify the faulty panel and one concrete mismatch; preserve all u
 
 Do not create an extra sheet, proxy mesh, camera engine, part registry, or validation score to satisfy this clause. Metadata agreement is not visual PASS; missing P1 evidence blocks only its dependent modelling decision. A simple asset whose one view already answers the task does not need any multi-view work.
 
+#### Panel-Level Review Evidence — Composite Sheets
+
+When a sheet contains multiple panels, use the current **actual image** as the sole parent visual authority. Associate each review focus with its panel ID, current parent image/revision, intended object-space view and one specific P1/P2 decision. A panel label, crop, duplicated sheet file, or declared CAMERA name is not an independently verified view. Never add synthetic camera-specific `REFERENCE.json` entries by reusing the same composite bytes.
+
+After generation, inspect the full sheet before zooming into decision-critical panels. Compare the paired panels against the *same* Identity/Scale and part/attachment locks; inspect whether FRONT/BACK and object LEFT/RIGHT labels correspond to their actual visible directions. If the necessary panel is too small, ambiguous or missing, mark the corresponding claim `INSUFFICIENT_EVIDENCE`; separate a view only when it is essential and retain the original approved identity. A real, supported plain back is valid.
+
+After a bounded correction, re-ground panel focus locations against the **new image** and inspect every dependent panel plus the full composition for unintended changes. Do not carry old focus coordinates, prior-review results, source approval, or assumed unchanged pixels forward without actual evidence. No extra public tool, mandatory multi-view quota, similarity threshold or image classifier is introduced.
+
 ## 9. Negative / Do-Not-Change Rules
 
 Use only likely current failure modes.
