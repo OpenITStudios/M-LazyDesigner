@@ -510,6 +510,126 @@
         "path": "mcp/keys/sign.p12"
       },
       "expected": "deny"
+    },
+    {
+      "id": "develop-render-owned",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "branch": "Render",
+        "path": "mcp/server/publication/jobs.ts",
+        "authorized_scope": true,
+        "task_scope_paths": [
+          "mcp/server/publication/jobs.ts"
+        ]
+      },
+      "expected": "allow"
+    },
+    {
+      "id": "develop-render-not-authorized",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "branch": "Render",
+        "path": "mcp/server/publication/jobs.ts",
+        "authorized_scope": false,
+        "task_scope_paths": [
+          "mcp/server/publication/jobs.ts"
+        ]
+      },
+      "expected": "ask"
+    },
+    {
+      "id": "develop-render-scope-mismatch",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "branch": "Render",
+        "path": "mcp/server/publication/jobs.ts",
+        "authorized_scope": true,
+        "task_scope_paths": [
+          "mcp/tests/publication-jobs.test.ts"
+        ]
+      },
+      "expected": "deny"
+    },
+    {
+      "id": "develop-render-outside-domain",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "branch": "Render",
+        "path": "docs/README.md",
+        "authorized_scope": true,
+        "task_scope_paths": [
+          "docs/README.md"
+        ]
+      },
+      "expected": "deny"
+    },
+    {
+      "id": "develop-render-generated-artifact",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "branch": "Render",
+        "path": "mcp/docs/api.json",
+        "authorized_scope": true,
+        "task_scope_paths": [
+          "mcp/docs/api.json"
+        ]
+      },
+      "expected": "deny"
+    },
+    {
+      "id": "skill-render-denied",
+      "request": {
+        "lane": "SKILL_SYSTEM",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "branch": "Render",
+        "path": ".agents/skills/lazydesigner-modelling/SKILL.md",
+        "authorized_scope": true,
+        "task_scope_paths": [
+          ".agents/skills/lazydesigner-modelling/SKILL.md"
+        ]
+      },
+      "expected": "deny"
+    },
+    {
+      "id": "unknown-branch-instead-of-render",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "branch": "ExperimentalRender",
+        "path": "mcp/server/publication/jobs.ts",
+        "authorized_scope": true,
+        "task_scope_paths": [
+          "mcp/server/publication/jobs.ts"
+        ]
+      },
+      "expected": "deny"
+    },
+    {
+      "id": "develop-render-policy-scope",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "branch": "Render",
+        "path": ".agents/permissions/preflight.mjs",
+        "authorized_scope": true,
+        "task_scope_paths": [
+          ".agents/permissions/preflight.mjs"
+        ]
+      },
+      "expected": "allow"
     }
   ]
 }

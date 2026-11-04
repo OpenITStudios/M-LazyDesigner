@@ -36,6 +36,22 @@ describe("repository agent permission preflight", () => {
     }).decision).toBe("allow");
   });
 
+  test("explicit Render experiment keeps branch, lane, path and user-authority fences", () => {
+    const base = {
+      lane: "DEVELOPMENT", task: "DEVELOP", action: "source-write",
+      branch: "Render", path: "mcp/server/publication/jobs.ts",
+      task_scope_paths: ["mcp/server/publication/jobs.ts"], authorized_scope: true,
+    };
+    expect(evaluatePreflight(base).decision).toBe("allow");
+    expect(evaluatePreflight({ ...base, authorized_scope: false }).decision).toBe("ask");
+    expect(evaluatePreflight({ ...base, task_scope_paths: [] }).decision).toBe("ask");
+    expect(evaluatePreflight({ ...base, task_scope_paths: ["mcp/server/publication/handoff.ts"] }).decision).toBe("deny");
+    expect(evaluatePreflight({ ...base, path: "README.md", task_scope_paths: ["README.md"] }).decision).toBe("deny");
+    expect(evaluatePreflight({ ...base, branch: "main" }).decision).toBe("ask");
+    expect(evaluatePreflight({ ...base, branch: "Other" }).decision).toBe("deny");
+    expect(evaluatePreflight({ ...base, path: "mcp/docs/api.json", task_scope_paths: ["mcp/docs/api.json"] }).decision).toBe("deny");
+  });
+
   test("specialist selection never enlarges the active work-lane permission", () => {
     const task = { lane: "IN_USE", task: "REPAIR", action: "source-write", path: "mcp/server/net.ts", authorized_scope: true };
     expect(evaluatePreflight(task).decision).toBe("deny");

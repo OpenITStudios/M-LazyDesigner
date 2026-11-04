@@ -37,14 +37,14 @@ Do not add parallel routers, managers, registries, compatibility layers, persist
 
 ## Permission preflight — action, target and capability
 
-For a concrete repository-agent operation use the deterministic, import-safe decision helper `.agents/permissions/preflight.mjs` (also callable with a JSON request from Node). `mcp/tests/fixtures/agent-permission-cases.json` owns its positive/negative/approval fixtures. `lane`, `task`, `action`, explicitly pinned `branch`, exact `path`, `task_scope_paths` (an explicit exact-file list), `execution_context` and explicit `authorized_scope` form the bounded request. An allowed source write requires both `branch: Local` and membership in the task file list; a boolean authorization claim alone cannot select arbitrary files. Unknown operations and unsafe paths fail closed. `ask` is **not** permission; do not invoke a blocked action. This is advisory preflight for AI/tool use, not a GitHub/Blockbench runtime interception layer; claimed authorization must be checked against the actual user request.
+For a concrete repository-agent operation use the deterministic, import-safe decision helper `.agents/permissions/preflight.mjs` (also callable with a JSON request from Node). `mcp/tests/fixtures/agent-permission-cases.json` owns its positive/negative/approval fixtures. `lane`, `task`, `action`, explicitly pinned `branch`, exact `path`, `task_scope_paths` (an explicit exact-file list), `execution_context` and explicit `authorized_scope` form the bounded request. An allowed source write requires an explicitly selected branch and membership in the task file list. `Local` remains the default; the explicitly user-selected `Render` branch is an isolated DEVELOPMENT-only exception limited to `mcp/**`, `experiments/publication-render/**`, and the two named policy owners. `main` remains approval-gated and other branches denied; a boolean authorization claim alone cannot select arbitrary files. Unknown operations and unsafe paths fail closed. `ask` is **not** permission; do not invoke a blocked action. This is advisory preflight for AI/tool use, not a GitHub/Blockbench runtime interception layer; claimed authorization must be checked against the actual user request.
 
 Work lanes and domain specialists do not grant blanket permission. Before writes, network execution, installs, publishing or native mutation, classify:
 
 | Operation | Decision |
 | --- | --- |
 | Read public exact-head repository and selected canonical documents | ALLOW |
-| Edit user-authorized `Local` canonical source, necessary contracts and tests | ALLOW only inside the requested scope and write-once preflight |
+| Edit user-authorized `Local` canonical source, necessary contracts and tests, or explicitly selected scoped `Render` experimental source | ALLOW only inside the requested branch, declared file list and write-once preflight |
 | Execute an existing targeted verifier in a genuinely available environment | ALLOW with bounded proof and no invented results |
 | Access external network, install dependencies or execute third-party code | ASK when provenance/authorization is not established; do not execute untrusted input |
 | Modify `main`, default branch, protection, rulesets, GitHub settings or permissions | ASK for separate explicit authority |
