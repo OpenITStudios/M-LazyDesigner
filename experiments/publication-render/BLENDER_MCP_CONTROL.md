@@ -99,7 +99,7 @@ Completed jobs publish THREE exclusive, non-overwriting files: `asset_publicatio
 }
 ```
 
-Only the verified `handoff.json` and `model.glb` files inside the exact owned directory are removed. The operation refuses while the Gateway's current job uses that handoff, if the handoff cannot pass the source hash checks, or if unrelated files exist in its directory. No recursive user-directory deletion; no silent cleanup of older handoffs.
+Only the verified `handoff.json` and `model.glb` files inside the exact owned directory are removed. The operation refuses while the Gateway's current job uses that handoff, if the handoff cannot pass the source hash checks, or if unrelated files exist in its directory. No recursive user-directory deletion; no silent cleanup of older handoffs. Because `release` deletes files, the combined `blender_render` tool conservatively advertises `destructiveHint=true`; the branch manifest still classifies `status` and `preview` individually as QUERY operations.
 
 ## Exact application and trust boundaries
 

@@ -96,6 +96,8 @@ describe("Independent Gateway Blender MCP control contract", () => {
     expect(shouldProbeBlenderRender("UV paint only")).toBe(false);
     expect(shouldProbeBlenderRender("render this GLB in Blender")).toBe(true);
     expect(BLENDER_RENDER_TOOL.annotations?.readOnlyHint).toBe(false);
+    // The tool contains an explicit file-deleting release branch; report it truthfully.
+    expect(BLENDER_RENDER_TOOL.annotations?.destructiveHint).toBe(true);
     expect(manifestEntriesForCapability("blender_render")
       .map(item => [item.branch?.value, item.operationClass])).toEqual([
         ["start", "EXPORT"], ["status", "QUERY"],

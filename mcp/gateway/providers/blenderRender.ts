@@ -74,7 +74,9 @@ export const blenderRenderControlParameters = z.discriminatedUnion("operation", 
 export const BLENDER_RENDER_TOOL: BackendTool = {
   name: BLENDER_RENDER_CAPABILITY,
   description: "Control the Blender 5.2 Cycles renderer through the main LazyDesigner MCP Gateway, independently of the Blockbench plugin. First use render_publication operation=handoff in Blockbench to export a verified GLB+manifest. Then blender_render operation=start consumes that handoff and starts a Blender child process owned by the Gateway. status, preview and cancel use the returned job ID (status may omit it to recover the latest process-local job); recover reopens a validated completed PNG receipt after Gateway restart, release deletes an explicitly chosen verified handoff. A frozen snapshot is never claimed as the current editor state; the final PNG remains an unapproved DRAFT.",
-  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  // Conservative tool-level metadata: operation=release deletes an explicitly selected handoff.
+  // QUERY branches remain classified individually in the Gateway branch manifest.
+  annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
   // The same Zod contract validates local calls and the schema advertised to AI.
   // Branch selection is sourced from the canonical Gateway branch manifest.
   inputSchema: z.toJSONSchema(blenderRenderControlParameters),
