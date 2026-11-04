@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { publicationDiagnosticsSchema } from "@/lib/publication/diagnostics";
+import { BLENDER_WORKER_SHA256 } from "@/lib/publication/blenderProcess";
 
 const worker = (name: string) =>
   Bun.file(new URL("../server/publication/worker/" + name, import.meta.url)).text();
@@ -26,6 +27,8 @@ describe("Modular Blender Core source owners", () => {
     expect(entry).not.toContain("exec(compile(");
     expect(executor).toContain("BLENDER_CORE_MODULES");
     expect(sharedWorker).toContain("export async function runBlender");
+    expect(BLENDER_WORKER_SHA256).toMatch(/^[a-f0-9]{64}$/);
+    expect(executor).toContain("const workerSha = BLENDER_WORKER_SHA256");
     expect(executor).not.toContain("childProcess.spawn(executable");
     expect(executor).toContain("publicationDiagnosticsSchema.parse");
     expect(executor).toContain("inspectPublicationPng(png");

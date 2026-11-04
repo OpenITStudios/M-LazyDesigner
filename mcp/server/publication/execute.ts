@@ -10,7 +10,10 @@ import {
   type PublicationDiagnostics,
 } from "@/lib/publication/diagnostics";
 
-import { runBlender, BLENDER_CORE_MODULES, BLENDER_PUBLICATION_WORKER as blenderWorker } from "@/lib/publication/blenderProcess";
+import {
+  runBlender, BLENDER_CORE_MODULES, BLENDER_WORKER_SHA256,
+  BLENDER_PUBLICATION_WORKER as blenderWorker,
+} from "@/lib/publication/blenderProcess";
 export { runBlender } from "@/lib/publication/blenderProcess";
 import {
   blenderRenderArgs,
@@ -226,11 +229,8 @@ export async function renderPreparedPublication(
   const moduleFiles = BLENDER_CORE_MODULES.map(([name, source]) => ({
     path: join(workdir, name), source,
   }));
-  // Source identity covers the ENTIRE trusted Blender Core, not only entry.py.
-  const workerSha = hash(
-    [["render.py", blenderWorker], ...BLENDER_CORE_MODULES]
-      .map(([name, source]) => name + "\0" + source).join("\0"),
-  );
+  // Worker source identity is computed exactly once by its canonical owner.
+  const workerSha = BLENDER_WORKER_SHA256;
   let preserveTemporaryJob = false;
   try {
     fs.writeFileSync(glbPath, snapshot.glb, { flag: "wx" });

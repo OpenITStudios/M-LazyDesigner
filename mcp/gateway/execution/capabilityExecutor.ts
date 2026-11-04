@@ -168,11 +168,13 @@ export class GatewayCapabilityExecutor {
       // Project creation supplies a new UUID; ordinary native calls reuse
       // the backend's verified project. Failed or unverified native outcomes
       // cannot assert project identity, and require no status reread.
+      // Gateway-local Blender rendering is not a native Blockbench mutation.
+      // Never attach the currently selected Blockbench project UUID to a
+      // completed handoff render merely because the Gateway has that affinity.
+      // Project identity is authoritative only from an explicit receipt or
+      // a Runtime invocation that verified its bound tab.
       const verifiedProjectUuid = succeeded
-        ? receipt.projectUuid ??
-          (runtimeInvocation === null
-            ? this.session.projectUuid
-            : runtimeInvocation.verifiedProjectUuid ?? null)
+        ? receipt.projectUuid ?? runtimeInvocation?.verifiedProjectUuid ?? null
         : null;
       if (verifiedProjectUuid !== null &&
           verifiedProjectUuid !== this.session.projectUuid) {

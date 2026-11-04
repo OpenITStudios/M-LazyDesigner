@@ -2,6 +2,7 @@
  * One implementation shared by the Blockbench Runtime and the Gateway Blender adapter.
  * No editor globals, user-provided Python, or second render engine.
  */
+import { createHash } from "node:crypto";
 import type { ChildProcess } from "node:child_process";
 import { blenderRenderArgs } from "@/lib/publication/contracts";
 import blenderWorker from "../../server/publication/worker/render.py" with { type: "text" };
@@ -20,6 +21,16 @@ export const BLENDER_CORE_MODULES = [
 ] as const;
 
 export { blenderWorker as BLENDER_PUBLICATION_WORKER };
+
+/** Content identity for the one trusted Python worker bundle, shared by both render owners. */
+export const BLENDER_WORKER_SHA256 = createHash("sha256")
+  .update(
+    [["render.py", blenderWorker], ...BLENDER_CORE_MODULES]
+      .map(([name, source]) => name + "\0" + source)
+      .join("\0"),
+  )
+  .digest("hex");
+
 export async function runBlender(
   childProcess: typeof import("node:child_process"),
   executable: string,

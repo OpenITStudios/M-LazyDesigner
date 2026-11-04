@@ -15,9 +15,13 @@ import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
 import { inspectPublicationPng } from "@/lib/publication/pngIntegrity";
 import { publicationDiagnosticsSchema, compactPublicationDiagnostics } from "@/lib/publication/diagnostics";
 import { validateHdriBytes } from "@/lib/publication/environment";
-import { BLENDER_CORE_MODULES, BLENDER_PUBLICATION_WORKER, runBlender } from "@/lib/publication/blenderProcess";
+import {
+  BLENDER_CORE_MODULES, BLENDER_PUBLICATION_WORKER, BLENDER_WORKER_SHA256,
+  runBlender,
+} from "@/lib/publication/blenderProcess";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
 import type { BackendTool, JsonRecord } from "../contracts/protocol";
+import { z } from "zod";
 
 export const BLENDER_RENDER_CAPABILITY = "blender_render";
 const HANDOFF_DIR = /^\.lazydesigner-blender-handoff-[a-f0-9]{24}$/;
@@ -25,36 +29,34 @@ const ID = /^blender_[a-f0-9]{24}$/;
 const SHA = /^[a-f0-9]{64}$/;
 const hash = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex");
 
+export const blenderRenderControlParameters = z.discriminatedUnion("operation", [
+  z.object({
+    operation: z.literal("start"),
+    handoff_path: z.string().min(1).max(2048),
+    request: publicationRenderParameters,
+  }).strict(),
+  z.object({
+    operation: z.literal("status"),
+    // Omit job_id to recover latest process-local job after a lost start response.
+    job_id: z.string().regex(ID).optional(),
+  }).strict(),
+  z.object({
+    operation: z.literal("preview"),
+    job_id: z.string().regex(ID),
+  }).strict(),
+  z.object({
+    operation: z.literal("cancel"),
+    job_id: z.string().regex(ID),
+  }).strict(),
+]);
+
 export const BLENDER_RENDER_TOOL: BackendTool = {
   name: BLENDER_RENDER_CAPABILITY,
-  description: "Control the Blender 5.2 Cycles renderer through the main LazyDesigner MCP Gateway, independently of the Blockbench plugin. First use render_publication operation=handoff in Blockbench to export a verified GLB+manifest. Then blender_render operation=start consumes that handoff and starts a background Blender child process owned by the Gateway. status, preview, cancel are job operations; no native modeling lock. A frozen snapshot is never claimed as the current editor state, and a PNG is always an unapproved DRAFT.",
+  description: "Control the Blender 5.2 Cycles renderer through the main LazyDesigner MCP Gateway, independently of the Blockbench plugin. First use render_publication operation=handoff in Blockbench to export a verified GLB+manifest. Then blender_render operation=start consumes that handoff and starts a Blender child process owned by the Gateway. status, preview and cancel use the returned job ID (status may omit it to recover the latest process-local job). A frozen snapshot is never claimed as the current editor state; the final PNG remains an unapproved DRAFT.",
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
-  inputSchema: {
-    type: "object", additionalProperties: false, required: ["operation"],
-    properties: {
-      operation: { type: "string", enum: ["start", "status", "preview", "cancel"] },
-      handoff_path: { type: "string", description: "Absolute path of the handoff.json exported from Blockbench." },
-      request: {
-        type: "object", additionalProperties: false,
-        required: ["blender_executable", "output_path"],
-        properties: {
-          blender_executable: { type: "string", description: "Absolute user-approved Blender 5.2 executable." },
-          output_path: { type: "string", description: "New absolute PNG destination; no overwrite." },
-          quality: { type: "string", enum: ["preview", "publication", "high"] },
-          width: { type: "integer", minimum: 256, maximum: 4096 },
-          height: { type: "integer", minimum: 256, maximum: 4096 },
-          background: { type: "string", enum: ["dark", "light", "transparent"] },
-          device: { type: "string", enum: ["auto", "cpu"] },
-          view_transform: { type: "string", enum: ["AgX", "Standard"] },
-          camera: { type: "object", description: "Existing bounded publication camera contract." },
-          look: { type: "object", description: "Existing bounded publication lighting contract." },
-          environment: { type: "object", description: "studio or explicitly selected local HDRI." },
-          overwrite: { type: "boolean", enum: [false] },
-        },
-      },
-      job_id: { type: "string", pattern: "^blender_[a-f0-9]{24}$" },
-    },
-  },
+  // The same Zod contract validates local calls and the schema advertised to AI.
+  // Branch selection is sourced from the canonical Gateway branch manifest.
+  inputSchema: z.toJSONSchema(blenderRenderControlParameters),
 };
 
 export function shouldProbeBlenderRender(query: string): boolean {
@@ -73,6 +75,21 @@ type RenderReceipt = Readonly<{
   source_manifest_sha256: string;
   source_revision: "FROZEN_HANDOFF_NOT_LIVE_EDITOR";
   glb_sha256: string;
+  /** Hash of the exact bundled Python sources that produced this render. */
+  worker_sha256: string;
+  render_settings: Readonly<{
+    quality: PublicationRenderRequest["quality"];
+    width: number;
+    height: number;
+    samples: number;
+    noise_threshold: number;
+    background: PublicationRenderRequest["background"];
+    camera: PublicationRenderRequest["camera"];
+    look: PublicationRenderRequest["look"];
+    device: PublicationRenderRequest["device"];
+    view_transform: PublicationRenderRequest["view_transform"];
+    environment: Readonly<{ mode: "studio" | "hdri"; sha256: string | null }>;
+  }>;
   output_path: string;
   output_png_sha256: string;
   output_png_bytes: number;
@@ -317,6 +334,18 @@ export class BlenderRenderProvider {
         source_manifest_sha256: document.source_manifest_sha256,
         source_revision: "FROZEN_HANDOFF_NOT_LIVE_EDITOR",
         glb_sha256: document.glb_sha256,
+        worker_sha256: BLENDER_WORKER_SHA256,
+        render_settings: {
+          quality: request.quality,
+          width: spec.width, height: spec.height,
+          samples: spec.samples, noise_threshold: spec.noise_threshold,
+          background: spec.background, camera: spec.camera, look: spec.look,
+          device: spec.device, view_transform: spec.view_transform,
+          environment: {
+            mode: spec.environment.mode,
+            sha256: spec.environment.hdri_sha256,
+          },
+        },
         output_path: request.output_path,
         output_png_sha256: hash(png),
         output_png_bytes: png.length,
@@ -379,6 +408,12 @@ export class BlenderRenderProvider {
   }
 
   status(id: unknown): JsonRecord {
+    if (id === undefined) {
+      if (!this.current) {
+        throw new Error("PUBLICATION_BLENDER_JOB_NOT_FOUND_OR_EXPIRED");
+      }
+      return status(this.current);
+    }
     return status(this.requireJob(id));
   }
 
@@ -414,27 +449,43 @@ export class BlenderRenderProvider {
   }
 
   invoke(args: JsonRecord): Result {
-    const operation = args.operation;
-    if (operation === "start") {
-      const started = this.start(args.handoff_path, args.request);
-      return { content: [{ type: "text", text: "Gateway Blender Cycles job started: " +
-        started.job_id + ". Poll blender_render operation=status; this does not confirm a PNG." }],
-        structuredContent: started };
+    const operation = blenderRenderControlParameters.parse(args);
+    switch (operation.operation) {
+      case "start": {
+        const started = this.start(operation.handoff_path, operation.request);
+        return {
+          content: [{
+            type: "text",
+            text: "Gateway Blender Cycles job started: " + started.job_id +
+              ". Poll blender_render operation=status; this does not confirm a PNG.",
+          }],
+          structuredContent: started,
+        };
+      }
+      case "status": {
+        const current = this.status(operation.job_id);
+        return {
+          content: [{
+            type: "text",
+            text: "Blender job " + current.job_id + ": " + current.state +
+              " (" + current.phase + "). No visual approval.",
+          }],
+          structuredContent: current,
+        };
+      }
+      case "cancel": {
+        const current = this.cancel(operation.job_id);
+        return {
+          content: [{
+            type: "text",
+            text: "Blender job " + current.job_id + ": " + current.state +
+              ". Cancellation is not a confirmed process exit.",
+          }],
+          structuredContent: current,
+        };
+      }
+      case "preview": return this.preview(operation.job_id);
     }
-    if (operation === "status") {
-      const current = this.status(args.job_id);
-      return { content: [{ type: "text", text: "Blender job " + current.job_id +
-        ": " + current.state + " (" + current.phase + "). No visual approval." }],
-        structuredContent: current };
-    }
-    if (operation === "cancel") {
-      const current = this.cancel(args.job_id);
-      return { content: [{ type: "text", text: "Blender job " + current.job_id +
-        ": " + current.state + ". Cancellation is not a confirmed process exit." }],
-        structuredContent: current };
-    }
-    if (operation === "preview") return this.preview(args.job_id);
-    throw new Error("PUBLICATION_BLENDER_OPERATION_UNKNOWN");
   }
 
   async close(): Promise<void> {

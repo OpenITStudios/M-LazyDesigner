@@ -8,10 +8,15 @@ import { expectedPublicationGltfMaterial } from "@/lib/publication/materialContr
 import {
   BLENDER_RENDER_TOOL,
   BlenderRenderProvider,
+  blenderRenderControlParameters,
   shouldProbeBlenderRender,
 } from "./blenderRender";
 import { LocalCapabilityRegistry } from "./registry";
 import { manifestEntriesForCapability } from "../capabilities/manifest";
+import { projectCapabilityInputSchema } from "../capabilities/schemaProjection";
+import { GatewayCapabilityExecutor } from "../execution/capabilityExecutor";
+import { GatewaySessionState } from "../session/state";
+import type { BlockitRuntimeBackend } from "../runtime/backend";
 
 const sha = (value: string) => value.repeat(64);
 const snapshot = {
@@ -99,6 +104,78 @@ describe("Independent Gateway Blender MCP control contract", () => {
     await registry.close();
   });
 
+  test("advertised Blender MCP schema matches strict operation-specific validation", () => {
+    const jobId = "blender_" + "a".repeat(24);
+    const path = "/tmp/.lazydesigner-blender-handoff-" +
+      "a".repeat(24) + "/handoff.json";
+    expect(blenderRenderControlParameters.safeParse({
+      operation: "status",
+    }).success).toBe(true);
+    for (const operation of ["status", "preview", "cancel"] as const) {
+      expect(blenderRenderControlParameters.parse({ operation, job_id: jobId }))
+        .toMatchObject({ operation, job_id: jobId });
+    }
+    const expected = blenderRenderControlParameters.parse({
+      operation: "start", handoff_path: path, request,
+    });
+    expect(expected.request).toMatchObject({ quality: "preview", width: 640 });
+    for (const invalid of [
+      { operation: "start", handoff_path: path },
+      { operation: "start", handoff_path: path, request, extra: true },
+      { operation: "start", handoff_path: path, request: {
+        ...request, camera: { framing_padding: 0.1 },
+      } },
+      { operation: "status", job_id: "invalid" },
+      { operation: "status", job_id: jobId, handoff_path: path },
+      { operation: "cancel", job_id: jobId, request },
+      { operation: "unknown", job_id: jobId },
+    ]) {
+      expect(blenderRenderControlParameters.safeParse(invalid).success).toBe(false);
+    }
+    const schema = BLENDER_RENDER_TOOL.inputSchema as Record<string, unknown>;
+    expect(JSON.stringify(schema)).toContain("framing_padding");
+    expect(JSON.stringify(schema)).toContain("glow_strength");
+    expect(JSON.stringify(schema)).toContain("handoff_path");
+    const projectedStart = projectCapabilityInputSchema(
+      "blender_render", schema, { field: "operation", value: "start" },
+    );
+    expect(projectedStart.projected).toBe(true);
+    expect(JSON.stringify(projectedStart.inputSchema)).toContain("framing_padding");
+    const projectedStatus = projectCapabilityInputSchema(
+      "blender_render", schema, { field: "operation", value: "status" },
+    );
+    expect(projectedStatus.projected).toBe(true);
+    expect(JSON.stringify(projectedStatus.inputSchema)).toContain("job_id");
+  });
+
+  test("local Blender output must not impersonate the Gateway's active Blockbench tab", async () => {
+    const session = new GatewaySessionState();
+    session.synchronizeProject("blockbench-current-project");
+    const local = {
+      invoke: async () => ({
+        content: [{ type: "text", text: "Blender job started" }],
+        structuredContent: {
+          job_id: "blender_" + "a".repeat(24),
+          state: "RUNNING",
+          source_project_uuid: "older-handoff-project",
+          source_sha256: sha("a"),
+        },
+      }),
+      readOnlyHint: () => false,
+    } as unknown as LocalCapabilityRegistry;
+    const backend = {
+      invokeCapabilityWithMetadata: () => {
+        throw new Error("Gateway-local Blender must not call Blockbench Runtime");
+      },
+    } as unknown as BlockitRuntimeBackend;
+    const executor = new GatewayCapabilityExecutor(backend, local, session);
+    const result = await executor.invoke("blender_render", { operation: "start" }) as {
+      structuredContent?: { control_delta?: { project_uuid: string | null } };
+    };
+    expect(result.structuredContent?.control_delta?.project_uuid).toBeNull();
+    expect(session.projectUuid).toBe("blockbench-current-project");
+  });
+
   test("Blender start blocks arbitrary paths and unsafe executable/schema inputs", async () => {
     const provider = new BlenderRenderProvider();
     for (const path of [
@@ -115,6 +192,8 @@ describe("Independent Gateway Blender MCP control contract", () => {
     const started = provider.start(path, request);
     expect(started).toMatchObject({ state: "RUNNING", phase: "PREPARING_ASSETS" });
     expect(() => provider.start(path, request)).toThrow("JOB_BUSY");
+    expect(provider.status(undefined).job_id).toBe(started.job_id);
+    expect(() => provider.status("blender_" + "b".repeat(24))).toThrow("NOT_FOUND");
     expect(() => provider.preview(started.job_id)).toThrow("PREVIEW_NOT_READY");
     expect(provider.cancel(started.job_id).state).toBe("CANCELLING");
     await provider.close();

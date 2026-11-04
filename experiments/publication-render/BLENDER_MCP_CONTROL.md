@@ -71,7 +71,7 @@ The `<actual returned id>` notation is explanatory: replace the entire `handoff_
 }
 ```
 
-Use `operation=preview` to return a bounded image from the completed Cycles PNG, or `operation=cancel` to request shutdown. Both use the same job ID. Preview is a **DRAFT**; a source-compatible image is not an artistic approval or Minecraft certification.
+Use `operation=preview` to return a bounded image from the completed Cycles PNG, or `operation=cancel` to request shutdown. Both use the same job ID. If the `start` reply/job ID is lost while the Gateway remains running, call `blender_render` with `{"operation":"status"}` to recover the **latest process-local job ID**; `preview` and `cancel` still require the exact ID. Preview is a **DRAFT**; a source-compatible image is not an artistic approval or Minecraft certification.
 
 ## Exact application and trust boundaries
 
@@ -81,7 +81,9 @@ Use `operation=preview` to return a bounded image from the completed Cycles PNG,
 - The same `lib/publication/blenderProcess.ts` owns worker source bundling and subprocess lifecycle in both render entrypoints. No duplicated camera/lighting/Cycles engine.
 - Gateway uses one job at a time. A new job cannot run while one is pending, cancelling or its child exit is uncertain.
 - Output is an exclusive, non-overwriting PNG write. If the subprocess fails to confirm exit, its temporary directory is retained; success is never assumed.
-- An output receipt contains source project UUID, original source SHA-256, GLB hash, output PNG hash, measured diagnostics and `source_revision=FROZEN_HANDOFF_NOT_LIVE_EDITOR`. It does **not** claim the currently open editor still matches the handoff.
+- An output receipt contains source project UUID, original source SHA-256, GLB hash, **exact trusted worker-bundle SHA-256**, effective image/camera/light/sampling/environment settings, output PNG hash, measured diagnostics and `source_revision=FROZEN_HANDOFF_NOT_LIVE_EDITOR`. It does **not** claim the currently open editor still matches the handoff.
+- The Blender capability's `start/status/preview/cancel` input schema is derived from **one strict Zod discriminated-union contract**: `describe_capability` exposes the same fields used to validate `invoke_capability`. Unknown branches and stray properties are rejected before a subprocess is admitted.
+- A Gateway-local Blender job cannot claim the active Blockbench project's UUID merely because Gateway still has that tab bound. Its receipt always carries the original snapshot project UUID as source provenance, not a native edit claim.
 - The handoff persists until explicitly deleted by the user. Gateway's temporary subprocess files are separate and cleaned only after confirmed process close.
 
 ## Explicit boundaries before use
