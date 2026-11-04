@@ -113,6 +113,8 @@ Use the minimum evidence that reduces downstream uncertainty. Possible modules r
 
 `docs/02-reference/image/standard.md` owns panel economy and layout; `scale-and-escalation.md` owns player/world scale and multi-sheet escalation; prompt construction remains in `prompt-contract.md` + `master-templates.md`.
 
+Apply the **Surface Coverage Gate** owned by `docs/02-reference/image/standard.md` before selecting panels and again after inspecting the actual generated pixels. Keep a temporary P1 inventory for silhouette, rear/side construction continuity, contacts/openings and identity-critical material or articulation; select only views that resolve material decisions. A single view is sufficient when its evidence is sufficient. Source-backed hidden structure stays UNKNOWN and blocks only the dependent decision; original-design continuation may be PROVISIONAL pending review. An omitted back, assumed symmetry, composite sheet or manifest status is not independent visual proof. Do not add a new schema, tool, or mandatory multi-view ritual.
+
 Sheet 01 is the identity/scale anchor when a sheet workflow is needed; Sheet 02+ exists only for real information overflow. Every panel must reduce Geometry, Texture, or Animation ambiguity. Corrections use **CHANGE + PRESERVE against approved authority**.
 
 A generated visual becomes approved visual authority only after explicit user acceptance when visual approval is material.

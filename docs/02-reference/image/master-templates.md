@@ -38,6 +38,7 @@ material_lock
 construction_lock
 sheet_purpose
 panel_plan
+critical_surface_coverage when material
 high_risk_failures
 source_visual_authority when relevant
 ```
@@ -128,6 +129,11 @@ PANELS
 
 For each panel:
 - <PANEL LABEL>: <view/subject> — <single downstream decision purpose>
+
+SURFACE COVERAGE (only if a P1 decision needs a view)
+- <critical mass / back-or-side depth / attachment / opening and the panel supplying evidence>
+- <source-backed hidden construction still UNKNOWN; do not invent>
+- <omitted view justified by confirmed symmetry or other sufficient evidence>
 
 CONSISTENCY
 - same asset proportions in every panel
@@ -411,6 +417,8 @@ the concise visual brief is current (compile formally only when useful)
 source evidence is preserved; optional creative defaults are not called source facts
 scale and identity are resolved enough for the requested artifact
 selected P1/P2 panels are readable and purposeful
+critical rear/side/top/contact P1 coverage is planned or honestly UNKNOWN
+omitted views rely on confirmed evidence, not assumed symmetry
 object-space FRONT / side direction is clear when material to multi-view
 pre-generation approval is satisfied only when explicitly requested
 ```
@@ -424,6 +432,8 @@ identity and scale remain consistent with the user request and visual source
 multi-view panels share one 3D form but may have different projected 2D silhouettes
 required part count and attachment relationships are consistent
 approved side-specific markings, materials and colors do not drift
+P1 rear/side/attachment coverage is actually inspectable or missing information remains UNKNOWN
+an empty back is not decorated solely for visual balance
 later sheets preserve actual approved Sheet 01 visual identity
 motion views use the same object rather than redesigning it
 labels and critical views remain legible, without decorative crowding

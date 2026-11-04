@@ -184,6 +184,54 @@ Do not require all sides ceremonially.
 
 Orthographic/construction views preserve consistent orientation, apparent scale, and proportions.
 
+## Surface Coverage Gate — Construction Evidence
+
+This is an **internal panel-planning and after-generation review gate**, not a mandatory six-view turnaround, new generator, similarity score or new `REFERENCE.json` field. Inspect only regions that can change a downstream Geometry, Texture or Animation decision; do not count every face merely for completeness.
+
+Before selecting views, keep a compact temporary inventory for **P1 decision-critical** parts/surfaces:
+
+```text
+semantic part/region → construction decision (silhouette, width/depth, contact,
+opening, support, articulation or identity-critical material)
+→ strongest actual image/approved source fact + view
+→ SUPPORTED | PROVISIONAL | CONFLICTING | UNAVAILABLE
+→ unresolved decision + required view, or evidence-backed reason to omit it
+```
+
+- `SUPPORTED`: actual visible evidence or an explicit confirmed construction constraint. An image label or a pretty illustration is not visual agreement.
+- `PROVISIONAL`: reversible **original-design** choice; never claim it is observed source geometry.
+- `CONFLICTING`: source/approved views disagree; do not average shape or silently choose one.
+- `UNAVAILABLE` / UNKNOWN: the necessary source-backed hidden geometry or attachment is not evidenced. Do not invent its depth, ornaments, dimensions or materials.
+- P2 supporting views and decision-neutral surfaces may be omitted. An unknown only blocks the dependent decision when it materially changes construction.
+
+Select the **minimum sufficient view set**. A single view can be enough. Add BACK, RIGHT, TOP, BOTTOM or a detail only when it resolves an actual P1/P2 gap. An opposite view may be omitted when **confirmed symmetry**, explicitly known geometry or other adequate visible evidence already covers its construction decisions. **Merely not seeing asymmetry is insufficient.** The existing construction-view guidance is a starting priority, not a prohibition against a necessary rear/side view.
+
+A plain back is **not automatically a defect**. It fails when required depth continuity, rear support, attachment or material identity is missing, contradicts approved evidence, or is presented as known without evidence. Do not add decorations solely to fill a side.
+
+### General Decision Scenarios
+
+```text
+ONE_VIEW_SUFFICIENT       → P1 shape and contact already supported; retain one view.
+REAR_STRUCTURAL_UNKNOWN  → P1 rear depth/attachment unresolved; request source or block dependent Geometry.
+PROVEN_SYMMETRY          → skip opposite view only with supported symmetry evidence.
+RIGHT_SIDE_DIFFERENCE    → include object-RIGHT when confirmed asymmetry changes construction.
+TOP_OR_UNDERSIDE         → include when footprint, opening, support or contact is decision-critical.
+CROSS_VIEW_CONFLICT      → correct contradictory form rather than accept a unified but inconsistent asset.
+COMPOSITE_TURNAROUND     → one composite is not multiple independently verified single-view images.
+ORIGINAL_HIDDEN_SIDE     → coherent creative completion is PROVISIONAL until reviewed, not source truth.
+```
+
+After generation, inspect **actual visible pixels** against the inventory and Identity/Scale Locks: critical part presence, back/side continuity, attachments/openings, object-side orientation and Minecraft/Blockbench buildability. Reinspect all affected panels after an edit; the image may already have been shown to the user.
+
+Existing stage-readiness vocabulary applies without creating a new schema:
+
+- `READY`: P1 construction evidence is adequate, material contradictions are resolved and required visual approval was obtained. This describes **reference-stage** input only.
+- `NEEDS_REVIEW`: provisional/uninspected imagery still requires review without blocking independent decisions.
+- `BLOCKED`: missing or conflicting P1 evidence would force guessing on the dependent modelling decision; block only that stage.
+- Manifest `APPROVED`, image hashes, consistent numerical claims or a composite sheet are **never by themselves visual PASS**, native model acceptance or proof of hidden surfaces.
+
+The temporary inventory is not a handoff artifact. Preserve only necessary unresolved facts in existing package `unknowns` and `readiness`; do not create another registry, validator, tool or top-level manifest field.
+
 ## Critical Detail Panels
 
 Create a detail panel only when a high-risk relationship is not already clear.
@@ -363,6 +411,8 @@ Before user review verify:
 identity matches confirmed brief
 player/world scale matches current Scale Lock
 required parts are present
+P1 surface coverage and omitted-view reasons checked against actual pixels
+hidden rear/side construction is UNKNOWN unless evidenced, not filled by invention
 hero and construction views agree
 proportions do not drift
 attachments/openings agree
@@ -382,6 +432,7 @@ A sheet fails on any material condition:
 
 ```text
 cross-view structural contradiction
+missing P1 rear/side construction evidence presented as READY
 part shape/count changes without approved reason
 player/world scale drifts across views/sheets
 material identity drifts

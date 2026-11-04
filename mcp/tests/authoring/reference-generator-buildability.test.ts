@@ -164,4 +164,55 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(prompt).toContain("approved current visual + change + preserve + affected panels");
     expect(prompt).toContain("bounded editing when possible");
   });
+  test("surface coverage gate keeps view selection evidence-driven without compulsory turnarounds", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    for (const owner of [standard, prompt, skill]) expect(owner).toContain("surface coverage gate");
+    expect(standard).toContain("not a mandatory six-view turnaround");
+    expect(standard).toContain("minimum sufficient view set");
+    expect(standard).toContain("a plain back is not automatically a defect");
+    expect(standard).toContain("merely not seeing asymmetry is insufficient");
+    expect(prompt).toContain("not a new package field");
+    expect(templates).toContain("critical_surface_coverage when material");
+    expect(skill).toContain("a single view is sufficient");
+  });
+
+  test("surface coverage scenarios distinguish hidden source facts from original creative proposals", async () => {
+    const [standard, prompt, templates] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+    ]);
+    for (const scenario of [
+      "one_view_sufficient", "rear_structural_unknown", "proven_symmetry",
+      "right_side_difference", "top_or_underside", "cross_view_conflict",
+      "composite_turnaround", "original_hidden_side",
+    ]) expect(standard).toContain(scenario);
+    expect(prompt).toContain("do not invent rear/hidden source features");
+    expect(prompt).toContain("provisional original form");
+    expect(templates).toContain("source-backed hidden construction still unknown");
+    expect(standard).toContain("block only that stage");
+  });
+
+  test("coverage review cannot turn declared metadata or unobserved images into visual PASS", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("after generation, inspect actual visible pixels");
+    expect(standard).toContain("never by themselves visual pass");
+    expect(standard).toContain("needs_review");
+    expect(standard).toContain("blocked");
+    expect(prompt).toContain("metadata agreement is not visual pass");
+    expect(templates).toContain("critical rear/side/top/contact p1 coverage is planned");
+    expect(templates).toContain("p1 rear/side/attachment coverage is actually inspectable");
+    expect(skill).toContain("after inspecting the actual generated pixels");
+  });
+
 });

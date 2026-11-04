@@ -162,6 +162,20 @@ priority: P1 | P2
 
 A panel without downstream purpose is removed before generation.
 
+### Surface Coverage Gate — Internal Panel Decision
+
+Before compiling a panel list, apply the Surface Coverage Gate in `standard.md`. For each critical P1 region, identify the construction decision, what actual source or approved evidence proves it, whether a view can resolve a gap and why an omitted view is safe. This is a **temporary working inventory**, not a new package field or fixed six-view quota.
+
+```text
+SUPPORTED P1 region       → reuse its view and remove redundant panels.
+UNKNOWN P1 source region  → do not invent rear/hidden source features; ask only if blocking the requested artifact.
+PROVISIONAL original form → continue coherently across views but do not label source-observed.
+CONFLICTING views         → correct the governing contradiction instead of averaging.
+NO MATERIAL VIEW BENEFIT  → omit the panel and keep existing readable construction evidence.
+```
+
+A plain back is allowed when supported; a presumed symmetric back or opposite side is not evidence. An additional BACK, RIGHT, TOP, BOTTOM or detail view is justified by the specific unresolved build decision, not by a quota. Where a view cannot reveal unknown source geometry, retain UNKNOWN instead of generating a fictitious source-backed view. Escalate to Sheet 02 only if decision-critical P1/P2 content would otherwise be unreadable.
+
 ## 7. Panel-Specific Evidence
 
 ### HERO
@@ -253,7 +267,8 @@ Inspect the **actual generated panels** before calling a sheet usable, comparing
 2. consistent underlying width/height/depth relationships and relative spacing, allowing the projected 2D silhouette to differ by viewpoint;
 3. the same attachment/contact topology, openings and negative spaces;
 4. stable object-left/object-right asymmetry without mirroring;
-5. unchanged identity-critical markings and Minecraft-block construction language.
+5. unchanged identity-critical markings and Minecraft-block construction language;
+6. P1 rear/side/top/contact coverage is supported by actual images or remains explicitly UNKNOWN; no omitted view is silently counted as independent evidence.
 
 Choose one bounded response based on visible evidence:
 
@@ -266,7 +281,7 @@ INSUFFICIENT EVIDENCE  → mark affected claim UNVERIFIED; do not invent a PASS
 
 For an edit, identify the faulty panel and one concrete mismatch; preserve all unaffected panels and locked facts. Reinspect every panel touched by the edit, since image edits can affect unintended regions. Repeating the same failed correction direction twice without new evidence is a stop condition, not a reason to keep regenerating.
 
-Do not create an extra sheet, proxy mesh, camera engine, part registry, or validation score to satisfy this clause. A simple asset whose one view already answers the task does not need any multi-view work.
+Do not create an extra sheet, proxy mesh, camera engine, part registry, or validation score to satisfy this clause. Metadata agreement is not visual PASS; missing P1 evidence blocks only its dependent modelling decision. A simple asset whose one view already answers the task does not need any multi-view work.
 
 ## 9. Negative / Do-Not-Change Rules
 
