@@ -301,7 +301,11 @@ function fixtureGlb(options: {
  * each material primitive stores its own group-specific index accessor.
  * This fixture verifies that two material groups preserve original face order.
  */
-function fixtureTwoMaterialPrimitives(corruptSecond = false): {
+function fixtureTwoMaterialPrimitives(
+  corruptSecond = false,
+  extraNodeFields?: Record<string, unknown>,
+  addUnexpectedNode = false,
+): {
   glb: Buffer;
   cube: PublicationCubeManifest;
 } {
@@ -325,6 +329,11 @@ function fixtureTwoMaterialPrimitives(corruptSecond = false): {
     material_names: ["ld_color_tex-1", "ld_color_tex-2"],
   });
   json.nodes[0].extras.lazydesigner_triangle_sha256 = expectedTriangleSha;
+  if (extraNodeFields) Object.assign(json.nodes[0], extraNodeFields);
+  if (addUnexpectedNode) {
+    json.nodes.push({ name: "unexpected_duplicate", mesh: 0 });
+    json.scenes[0].nodes.push(json.nodes.length - 1);
+  }
   json.meshes[0].primitives.push({
     mode: 4, indices: 3, attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 1,
   });
@@ -396,6 +405,33 @@ describe("GLB Cube multi-material triangle fidelity", () => {
     const { glb, cube } = fixtureTwoMaterialPrimitives(true);
     expect(() => inspectPublicationGlb(glb, 1, 2, [cube]))
       .toThrow("PUBLICATION_GLB_SOURCE_INDEX_BYTES_MISMATCH");
+  });
+
+  test("rejects a second transform on already flattened Cube geometry", () => {
+    const nonIdentity = [
+      { translation: [1, 0, 0] },
+      { rotation: [0, 0, 1, 0] },
+      { scale: [2, 1, 1] },
+      { matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.5, 0, 0, 1] },
+      { children: [0] },
+      { skin: 0 },
+    ];
+    for (const fields of nonIdentity) {
+      const { glb, cube } = fixtureTwoMaterialPrimitives(false, fields);
+      expect(() => inspectPublicationGlb(glb, 1, 2, [cube]))
+        .toThrow("PUBLICATION_GLB_SOURCE_NODE_TRANSFORM_UNEXPECTED");
+    }
+  });
+
+  test("accepts explicit identity transforms but refuses unexpected GLB nodes", () => {
+    const identity = {
+      translation: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1],
+    };
+    const { glb, cube } = fixtureTwoMaterialPrimitives(false, identity);
+    expect(inspectPublicationGlb(glb, 1, 2, [cube]).mesh_count).toBe(1);
+    const unexpected = fixtureTwoMaterialPrimitives(false, undefined, true);
+    expect(() => inspectPublicationGlb(unexpected.glb, 1, 2, [unexpected.cube]))
+      .toThrow("PUBLICATION_GLB_SOURCE_EXTRA_NODE_UNSUPPORTED");
   });
 });
 

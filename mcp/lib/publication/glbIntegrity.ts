@@ -409,6 +409,13 @@ export function inspectPublicationGlb(
     if (nodes.some(node => !record(node))) {
       throw new Error("PUBLICATION_GLB_NODE_INVENTORY_INVALID");
     }
+    // The native publication snapshot bakes world transforms into each
+    // detached Cube mesh. Any additional node (including a container or
+    // duplicated instance) would add geometry Blender could import without
+    // a corresponding source Cube in the immutable manifest.
+    if (nodes.length !== expectedCubes.length) {
+      throw new Error("PUBLICATION_GLB_SOURCE_EXTRA_NODE_UNSUPPORTED");
+    }
     const byName = new Map<string, GltfRecord>();
     for (const node of nodes as GltfRecord[]) {
       if (typeof node.name !== "string" || !node.name.startsWith("cube_")) continue;
@@ -426,6 +433,30 @@ export function inspectPublicationGlb(
       const node = byName.get("cube_" + cube.cube_uuid);
       if (!node || !validIndex(node.mesh, meshes.length)) {
         throw new Error("PUBLICATION_GLB_SOURCE_CUBE_NODE_MISSING: " + cube.cube_uuid);
+      }
+      // A non-identity glTF node transform would apply a second transform
+      // after the source Cube geometry has already been flattened/scaled.
+      // The expected bounds stored in extras alone do not prevent this.
+      const identity = {
+        translation: [0, 0, 0],
+        rotation: [0, 0, 0, 1],
+        scale: [1, 1, 1],
+        matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+      } as const;
+      if (node.children !== undefined || node.skin !== undefined ||
+          node.weights !== undefined ||
+          (node.matrix !== undefined && (
+            node.translation !== undefined || node.rotation !== undefined ||
+            node.scale !== undefined
+          )) ||
+          Object.entries(identity).some(([key, expected]) => {
+            const actual = node[key];
+            return actual !== undefined && (
+              !Array.isArray(actual) || actual.length !== expected.length ||
+              actual.some((value, index) => value !== expected[index])
+            );
+          })) {
+        throw new Error("PUBLICATION_GLB_SOURCE_NODE_TRANSFORM_UNEXPECTED: " + cube.cube_uuid);
       }
       const extras = node.extras;
       if (!record(extras) || extras.lazydesigner_cube_uuid !== cube.cube_uuid ||
