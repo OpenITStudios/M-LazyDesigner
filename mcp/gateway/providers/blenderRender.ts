@@ -496,7 +496,13 @@ export class BlenderRenderProvider {
   ): JsonRecord {
     if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
     if (this.recovering) throw new Error("PUBLICATION_BLENDER_RECOVERY_IN_PROGRESS");
-    if (this.current && ["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(this.current.state)) {
+    if (this.current && (
+      ["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(this.current.state) ||
+      this.current.handoff_cleanup === "PENDING"
+    )) {
+      // A completed Cycles frame is not the end of an automatic job while
+      // its owned GLB handoff is still being verified/released. Preserve
+      // this job's cleanup status and source identity until it is terminal.
       throw new Error("PUBLICATION_BLENDER_JOB_BUSY");
     }
     const job: Job = {
@@ -616,7 +622,10 @@ export class BlenderRenderProvider {
    */
   async recover(receiptPath: string): Promise<JsonRecord> {
     if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
-    if (this.current && ["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(this.current.state)) {
+    if (this.current && (
+      ["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(this.current.state) ||
+      this.current.handoff_cleanup === "PENDING"
+    )) {
       throw new Error("PUBLICATION_BLENDER_JOB_BUSY");
     }
     if (!isAbsoluteFilesystemPath(receiptPath) ||
@@ -725,7 +734,10 @@ export class BlenderRenderProvider {
     }
     const current = this.current;
     if (current?.handoff_path === handoffPath &&
-        ["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(current.state)) {
+        (["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(current.state) ||
+          (!internalTerminalCleanup && current.handoff_cleanup === "PENDING"))) {
+      // Automatic release has exclusive ownership until it resolves.
+      // A second explicit release is not permission to race that cleanup.
       throw new Error("PUBLICATION_BLENDER_HANDOFF_IN_USE");
     }
     this.releasingHandoffs.add(handoffPath);

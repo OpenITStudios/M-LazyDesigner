@@ -217,6 +217,27 @@ describe("Independent Gateway Blender MCP control contract", () => {
     expect(() => new BlenderRenderProvider().startAutomatic({})).toThrow("AUTO_NATIVE_RUNTIME_UNAVAILABLE");
   });
 
+  test("pending automatic handoff cleanup retains its job and blocks replacement", async () => {
+    const provider = new BlenderRenderProvider();
+    const path = "/tmp/.lazydesigner-blender-handoff-" + "a".repeat(24) + "/handoff.json";
+    // A synthetic terminal state is enough to exercise the provider's
+    // admission fence without spawning or simulating a successful Blender job.
+    const current = {
+      state: "RENDERED_DRAFT",
+      handoff_cleanup: "PENDING",
+      handoff_path: path,
+    };
+    (provider as unknown as { current: unknown }).current = current;
+    expect(() => provider.start(path, request)).toThrow("JOB_BUSY");
+    await expect(provider.recover("/tmp/render.png.lazydesigner.json"))
+      .rejects.toThrow("JOB_BUSY");
+    await expect(provider.releaseHandoff(path)).rejects.toThrow("HANDOFF_IN_USE");
+    current.handoff_cleanup = "RELEASED";
+    // Once cleanup completes, the old terminal state no longer blocks
+    // recovery admission (which now reaches path/file validation).
+    await expect(provider.recover("relative")).rejects.toThrow("COMPLETION_PATH_INVALID");
+  });
+
   test("auto handoff failure uses exactly one native attempt and no Blender fallback", async () => {
     const dir = await mkdtemp(join(tmpdir(), "ld-render-auto-"));
     const blender = join(dir, "blender");
