@@ -173,9 +173,13 @@
     busyAction = 'project-action';
     clearActionFeedback();
     try {
-      await invoke<ProjectNavigationActionResult>('project_navigation_action', { action, id });
+      const result = await invoke<ProjectNavigationActionResult>('project_navigation_action', { action, id });
       if (action === 'pin-project' || action === 'unpin-project' ||
           action === 'remove-project-folder' || action === 'restore-project-preferences') await refresh();
+      if (result.status === 'REMOVED_FROM_LIST') showSuccessToast('Removed from Workspace. Your files were not deleted.');
+      else if (result.status === 'PINNED') showSuccessToast('Project pinned.');
+      else if (result.status === 'UNPINNED') showSuccessToast('Project unpinned.');
+      else if (result.status === 'RESTORED') showSuccessToast('Project shortcuts restored. Your model files were not changed.');
     } catch (cause) {
       reportError(cause);
     } finally {
@@ -575,11 +579,9 @@
 
 </script>
 
-{#snippet navIcon(item: Page)}
+{#snippet navIcon(item: 'Overview' | 'Support')}
   {#if item === 'Overview'}
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8 9h8M8 13h5"/></svg>
-  {:else if item === 'Analytics'}
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V13M10 20V6M16 20V10M22 20V3"/></svg>
   {:else}
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h14M7.5 11h9M9.5 15.5h5"/><circle cx="12" cy="19" r="1"/></svg>
   {/if}
@@ -603,9 +605,6 @@
       <nav class="global-nav">
         <button class:active={page === 'Overview'} aria-current={page === 'Overview' ? 'page' : undefined} onclick={() => navigate('Overview')}>
           <span class="nav-icon">{@render navIcon('Overview')}</span><span>Workspace</span>
-        </button>
-        <button class:active={page === 'Analytics'} aria-current={page === 'Analytics' ? 'page' : undefined} onclick={() => navigate('Analytics')}>
-          <span class="nav-icon">{@render navIcon('Analytics')}</span><span>Analytics</span>
         </button>
         <button class:active={page === 'Support'} aria-current={page === 'Support' ? 'page' : undefined} onclick={() => navigate('Support')}>
           <span class="nav-icon">{@render navIcon('Support')}</span><span>Support</span>
@@ -667,7 +666,8 @@
           {migrationConflict} {migrationConflictKind} {error} {errorDetail} {operations}
           {refresh} {showRetiredPluginFile} {chooseBlockbenchExecutable}
           {showPluginFile} {exportDiagnostics} {runManagedAction}
-            migrateLegacySetup={() => performInstall(true)}
+          openAnalytics={() => navigate('Analytics')}
+          migrateLegacySetup={() => performInstall(true)
         />
       {/if}
     </section>

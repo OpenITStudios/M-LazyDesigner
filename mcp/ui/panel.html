@@ -25,47 +25,24 @@
     </div>
   </section>
 
-  <nav class="ld-tabs" role="tablist" aria-label="LazyDesigner authoring tools">
-    <button v-for="category in ['geometry', 'texture', 'animation']"
-      :key="category" :id="'ld-tab-' + category" type="button" role="tab"
-      :aria-selected="activeCategory === category" :aria-controls="'ld-authoring-panel'"
-      :tabindex="activeCategory === category ? 0 : -1"
-      :class="{ active: activeCategory === category }"
-      @keydown.left.prevent="cycleCategory(-1)"
-      @keydown.right.prevent="cycleCategory(1)"
-      @click="selectCategory(category)">{{categoryLabel(category)}}</button>
-  </nav>
-
-  <section class="ld-workspace" id="ld-authoring-panel" role="tabpanel" :aria-labelledby="'ld-tab-' + activeCategory">
-    <template v-if="activeCategory === 'geometry'">
-      <div class="ld-section-title">Geometry Review</div>
-      <p class="ld-description">Inspect the last applied Cube edit from native Undo history, or locate a technical issue.</p>
-      <div class="ld-tool-actions">
-        <button type="button" class="user-action primary" :disabled="!project.open || busy" @click="inspectLatestEdit">{{busy ? 'Checking...' : 'Review Latest Edit'}}</button>
-        <button type="button" class="user-action" :disabled="!project.open || busy" @click="inspectActive">Find Geometry Issues</button>
-      </div>
-      <details class="ld-utilities">
-        <summary>Geometry utility</summary>
-        <p class="section-hint">Round selected Cube bounds or rotation only after reviewing the native dry-run and UV risk.</p>
-        <button type="button" class="user-action" :disabled="!canCleanup || busy" @click="openCleanup">Safe Cube Cleanup</button>
-        <p class="section-hint" v-if="!canCleanup && project.open">Requires 1–32 selected Cubes and the active Geometry stage.</p>
-      </details>
-    </template>
-
-    <template v-else-if="activeCategory === 'texture'">
-      <div class="ld-section-title">Texture</div>
-      <p class="ld-description">Native Blockbench handles texture lists and palettes. AI texture authoring remains available through MCP; no duplicate editor controls are added here.</p>
-    </template>
-
-    <template v-else>
-      <div class="ld-section-title">Animation</div>
-      <p class="ld-description">Use Blockbench's native Timeline for manual editing and the existing MCP capabilities for AI authoring. No inventory-only buttons.</p>
-    </template>
-
-    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project before reviewing Geometry.</p>
+  <section class="ld-workspace" aria-label="Geometry tools">
+    <div class="ld-section-title">Geometry checks</div>
+    <p class="ld-description">Review recent Cube changes or find issues without editing the model. Cleanup requires a separate preview and confirmation.</p>
+    <div class="ld-tool-actions">
+      <button type="button" class="user-action primary" :disabled="!project.isBedrock || busy" @click="inspectLatestEdit">{{busy ? 'Checking…' : 'Review Latest Edit'}}</button>
+      <button type="button" class="user-action" :disabled="!project.isBedrock || busy" @click="inspectActive">Find Geometry Issues</button>
+    </div>
+    <details class="ld-utilities">
+      <summary>Geometry utility</summary>
+      <p class="section-hint">Round selected Cube bounds or rotation only after reviewing the native dry-run and UV risk.</p>
+      <button type="button" class="user-action" :disabled="!canCleanup || busy" @click="openCleanup">Safe Cube Cleanup</button>
+      <p class="section-hint" v-if="!canCleanup && project.isBedrock">Requires 1–32 selected Cubes and the active Geometry stage.</p>
+    </details>
+    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project to use Geometry checks.</p>
+    <p v-else-if="!project.isBedrock" class="ld-empty-state">Geometry checks require a Bedrock Model project.</p>
     <div v-if="error" class="ld-error" role="alert">{{error}}</div>
 
-    <section v-if="editReview && activeCategory === 'geometry'" class="ld-review" aria-live="polite" aria-label="Native geometry change review">
+    <section v-if="editReview" class="ld-review" aria-live="polite" aria-label="Native geometry change review">
       <div class="ld-review-title">{{editReview.heading}}</div>
       <p class="ld-review-summary">{{editReview.action}} — {{editReview.summary}}</p>
       <div v-if="editReview.cubes.length" class="ld-findings">
@@ -92,7 +69,7 @@
       <p class="ld-review-note">{{editReview.note}}</p>
     </section>
 
-    <section v-if="review && activeCategory === 'geometry'" class="ld-review" aria-live="polite" aria-label="Geometry diagnostic results">
+    <section v-if="review" class="ld-review" aria-live="polite" aria-label="Geometry diagnostic results">
       <div class="ld-review-title">{{review.heading}}</div>
       <p class="ld-review-summary">{{review.summary}}</p>
 
@@ -117,5 +94,5 @@
     </section>
   </section>
 
-  <p class="panel-note">AI works through the existing MCP Gateway. Switching tabs does not change its authoring stage.</p>
+  <p class="panel-note">Texture and animation editing stay in Blockbench. AI authoring is available through your connected AI client.</p>
 </div>

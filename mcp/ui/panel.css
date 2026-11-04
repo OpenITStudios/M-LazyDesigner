@@ -4,7 +4,7 @@
   overflow: auto;
   padding: 10px;
   color: var(--color-text);
-  font-size: 13px;
+  font-size: 14px;
 }
 .mcp-panel .ld-header,
 .mcp-panel .ld-workspace {
@@ -39,7 +39,7 @@
 .mcp-panel .ld-review-note {
   color: var(--color-subtle_text);
   line-height: 1.4;
-  font-size: .82em;
+  font-size: .88em;
 }
 .mcp-panel .runtime-subtitle { margin-top: 2px; }
 .mcp-panel .ld-project-row {
@@ -49,7 +49,7 @@
   justify-content: space-between;
 }
 .mcp-panel .section-label {
-  font-size: .73em;
+  font-size: .9em;
   color: var(--color-subtle_text);
   font-weight: 600;
   text-transform: uppercase;
@@ -65,32 +65,8 @@
 .mcp-panel .project-name.muted { color: var(--color-subtle_text); }
 .mcp-panel .section-hint { margin-top: 4px; }
 .mcp-panel .runtime-help { border-top: 1px solid var(--color-border); margin-top: 10px; padding-top: 10px; }
-.mcp-panel .runtime-help-title { font-size: .83em; font-weight: 600; }
-.mcp-panel .runtime-help-text { font-size: .8em; color: var(--color-subtle_text); margin-top: 3px; }
-.mcp-panel .ld-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 3px;
-  margin-block: 11px 8px;
-  border-bottom: 1px solid var(--color-border);
-}
-.mcp-panel .ld-tabs button {
-  min-inline-size: 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  padding: 9px 2px 8px;
-  color: var(--color-subtle_text);
-  font: inherit;
-  font-size: .88em;
-  cursor: pointer;
-}
-.mcp-panel .ld-tabs button.active {
-  border-bottom-color: var(--color-accent);
-  color: var(--color-text);
-  font-weight: 600;
-}
-.mcp-panel .ld-tabs button:hover { color: var(--color-text); }
+.mcp-panel .runtime-help-title { font-size: .9em; font-weight: 600; }
+.mcp-panel .runtime-help-text { font-size: .88em; color: var(--color-subtle_text); margin-top: 3px; }
 .mcp-panel button:focus-visible,
 .mcp-panel input:focus-visible {
   outline: 2px solid var(--color-accent);
@@ -106,7 +82,7 @@
   margin-top: 10px;
 }
 .mcp-panel .user-action {
-  min-block-size: 30px;
+  min-block-size: 34px;
   max-inline-size: 100%;
   border: 1px solid var(--color-border);
   border-radius: 5px;
@@ -114,7 +90,7 @@
   background: var(--color-button);
   color: var(--color-text);
   font: inherit;
-  font-size: .84em;
+  font-size: .9em;
   cursor: pointer;
 }
 .mcp-panel .user-action.primary { border-color: var(--color-accent); }
@@ -134,7 +110,7 @@
 .mcp-panel .ld-diagnostic-details summary {
   cursor: pointer;
   color: var(--color-subtle_text);
-  font-size: .82em;
+  font-size: .88em;
   font-weight: 600;
 }
 .mcp-panel .ld-utilities .user-action { margin-top: 9px; }
@@ -146,7 +122,7 @@
   min-width: 0;
 }
 .mcp-panel .ld-finding-title {
-  font-size: .85em;
+  font-size: .92em;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -155,7 +131,7 @@
   font-weight: 400;
 }
 .mcp-panel .ld-finding-description {
-  font-size: .82em;
+  font-size: .88em;
   line-height: 1.42;
   margin: 6px 0 10px;
   color: var(--color-subtle_text);
@@ -170,7 +146,7 @@
   grid-template-columns: 54px minmax(0, 1fr) 12px minmax(0, 1fr);
   align-items: start;
   gap: 5px;
-  font-size: .77em;
+  font-size: .86em;
   line-height: 1.35;
   min-width: 0;
 }
@@ -188,17 +164,17 @@
   color: var(--color-subtle_text);
   text-align: center;
 }
-.mcp-panel .ld-empty-state { font-size: .84em; color: var(--color-subtle_text); margin-top: 12px; }
+.mcp-panel .ld-empty-state { font-size: .9em; color: var(--color-subtle_text); margin-top: 12px; }
 .mcp-panel .ld-error {
   margin-top: 10px;
   border-left: 2px solid var(--color-error);
   padding: 4px 8px;
-  font-size: .84em;
+  font-size: .9em;
   overflow-wrap: anywhere;
 }
 .mcp-panel .ld-review { border-top: 1px solid var(--color-border); margin-top: 12px; padding-top: 11px; }
 .mcp-panel .ld-review-title { font-weight: 600; font-size: .92em; }
-.mcp-panel .ld-review-summary { margin-top: 4px; font-size: .84em; }
+.mcp-panel .ld-review-summary { margin-top: 4px; font-size: .9em; }
 .mcp-panel .ld-review-rows { margin: 10px 0 0; }
 .mcp-panel .ld-review-rows > div {
   display: flex;
@@ -207,7 +183,7 @@
   gap: 12px;
   border-bottom: 1px solid var(--color-border);
   padding: 5px 0;
-  font-size: .83em;
+  font-size: .9em;
 }
 .mcp-panel .ld-review-rows dt { color: var(--color-subtle_text); }
 .mcp-panel .ld-review-rows dd {

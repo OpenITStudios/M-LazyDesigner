@@ -19,6 +19,7 @@
   export let exportDiagnostics: () => Promise<void>;
   export let runManagedAction: (action: ManagedAction) => Promise<void>;
   export let migrateLegacySetup: () => Promise<void>;
+  export let openAnalytics: () => void;
 </script>
 
 <main class="page-content settings-content">
@@ -119,6 +120,14 @@
         </div>
       </details>
     {/if}
+  </section>
+
+  <section class="settings-section">
+    <details class="advanced-recovery">
+      <summary><span><strong>Technical activity</strong><small>Optional local AI usage and error counts</small></span><span>Show</span></summary>
+      <p>Session analytics are diagnostic, not a measure of model quality. No data is uploaded.</p>
+      <button class="secondary-button" onclick={openAnalytics}>View analytics</button>
+    </details>
   </section>
 
   {#if operations.length > 0}

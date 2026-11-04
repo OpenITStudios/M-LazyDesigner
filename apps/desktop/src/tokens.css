@@ -41,10 +41,10 @@
   --page-pad: 24px;
 
   /* Shared Desktop type scale; semantic sizes prevent microtext drift. */
-  --font-xs: 11px;
-  --font-sm: 12px;
-  --font-ui: 13px;
-  --font-title: 14px;
+  --font-xs: 12px;
+  --font-sm: 13px;
+  --font-ui: 14px;
+  --font-title: 16px;
 
   --control-height: 38px;
   --rail-width: 72px;

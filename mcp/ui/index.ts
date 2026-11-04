@@ -22,7 +22,6 @@ import {
   inspectGeometryIssues,
   locateGeometryIssue,
   locateExactGeometryTarget,
-  type AuthoringCategory,
   type GeometryIssue,
   type GeometryIssueReview,
 } from "@/ui/authoringTools";
@@ -63,6 +62,7 @@ type HumanProjectState = {
   open: boolean;
   name: string;
   hasFolder: boolean;
+  isBedrock: boolean;
 };
 
 type HumanPanelContext = {
@@ -71,7 +71,6 @@ type HumanPanelContext = {
     detail: string;
   };
   project: HumanProjectState;
-  activeCategory: AuthoringCategory;
   review: GeometryIssueReview | null;
   editReview: GeometryEditReview | null;
   busy: boolean;
@@ -83,7 +82,7 @@ type HumanPanelContext = {
 
 function readHumanProjectState(): HumanProjectState {
   if (typeof Project === "undefined" || !Project) {
-    return { open: false, name: "No project open", hasFolder: false };
+    return { open: false, name: "No project open", hasFolder: false, isBedrock: false };
   }
 
   const rawName = String(Project.name ?? "").trim();
@@ -91,6 +90,7 @@ function readHumanProjectState(): HumanProjectState {
     open: true,
     name: rawName || "Untitled project",
     hasFolder: Boolean(Project.save_path || Project.export_path),
+    isBedrock: Project.format?.id === "bedrock",
   };
 }
 
@@ -213,11 +213,13 @@ export function uiSetup(input: UiSetupInput) {
           vm.project.open = next.open;
           vm.project.name = next.name;
           vm.project.hasFolder = next.hasFolder;
+          vm.project.isBedrock = next.isBedrock;
           vm.selectionLabel = readHumanSelection();
           vm.canCleanup = canOpenCubeCleanup();
           // Selecting a diagnosed object is navigation, not a geometry edit.
           // Keep the issue list so the user can locate several findings in sequence.
-          if (event === "update_selection" || event === "added_to_selection" ||
+          // Saving or selecting does not invalidate a reviewed geometry edit.
+          if (event === "save_project" || event === "update_selection" || event === "added_to_selection" ||
               event === "update_keyframe_selection" ||
               event === "update_texture_selection" ||
               event === "select_animation" || event === "select_mode") return;
@@ -241,7 +243,6 @@ export function uiSetup(input: UiSetupInput) {
         runtime: getStatusBarState(),
         project: readHumanProjectState(),
         canReload: canReloadLazyDesignerPlugin(),
-        activeCategory: "geometry" as AuthoringCategory,
         selectionLabel: readHumanSelection(),
         canCleanup: canOpenCubeCleanup(),
         busy: false,
@@ -251,29 +252,8 @@ export function uiSetup(input: UiSetupInput) {
         inspectionVersion: 0,
       }),
       methods: {
-        selectCategory(this: HumanPanelContext, category: AuthoringCategory): void {
-          this.activeCategory = category;
-          this.canCleanup = canOpenCubeCleanup();
-          this.inspectionVersion += 1;
-          this.busy = false;
-          this.review = null;
-          this.editReview = null;
-          this.error = "";
-        },
-        categoryLabel(category: AuthoringCategory): string {
-          return category === "geometry" ? "Geometry" :
-            category === "texture" ? "Texture" : "Animation";
-        },
-        cycleCategory(this: HumanPanelContext & { selectCategory(category: AuthoringCategory): void }, step: number): void {
-          const categories: AuthoringCategory[] = ["geometry", "texture", "animation"];
-          const current = categories.indexOf(this.activeCategory);
-          const next = categories[(current + step + categories.length) % categories.length];
-          this.selectCategory(next);
-          document.getElementById("ld-tab-" + next)?.focus();
-        },
         async inspectActive(this: HumanPanelContext): Promise<void> {
-          if (this.busy || this.activeCategory !== "geometry") return;
-          const category = this.activeCategory;
+          if (this.busy) return;
           const project = typeof Project !== "undefined" ? Project : null;
           const generation = getRuntimeLifecycleSnapshot().owner_generation;
           if (!project || generation === null) {
@@ -295,12 +275,12 @@ export function uiSetup(input: UiSetupInput) {
             });
             if (requestVersion === this.inspectionVersion && mountedEpoch === uiEpoch &&
                 isRuntimeGenerationCurrent(generation) &&
-                Project === project && this.activeCategory === category) {
+                Project === project) {
               this.review = result;
             }
           } catch (error) {
             if (requestVersion === this.inspectionVersion && mountedEpoch === uiEpoch &&
-                Project === project && this.activeCategory === category) {
+                Project === project) {
               this.error = error instanceof Error ? error.message : String(error);
             }
           } finally {
@@ -310,7 +290,7 @@ export function uiSetup(input: UiSetupInput) {
           }
         },
         async inspectLatestEdit(this: HumanPanelContext): Promise<void> {
-          if (this.busy || this.activeCategory !== "geometry") return;
+          if (this.busy) return;
           const project = typeof Project !== "undefined" ? Project : null;
           const generation = getRuntimeLifecycleSnapshot().owner_generation;
           if (!project || generation === null) {
@@ -332,7 +312,7 @@ export function uiSetup(input: UiSetupInput) {
               return reviewCurrentGeometryEdit();
             });
             if (epoch === uiEpoch && version === this.inspectionVersion &&
-                Project === project && this.activeCategory === "geometry") {
+                Project === project) {
               this.editReview = result;
             }
           } catch (error) {
@@ -346,7 +326,6 @@ export function uiSetup(input: UiSetupInput) {
         async locateEditedCube(this: HumanPanelContext, change: GeometryEditCubeDiff): Promise<void> {
           const reviewed = this.editReview;
           if (this.busy || !reviewed || !change.canLocate ||
-              this.activeCategory !== "geometry" ||
               !reviewed.cubes.some(c => c.uuid === change.uuid && c.kind === change.kind)) return;
           const project = typeof Project !== "undefined" ? Project : null;
           const generation = getRuntimeLifecycleSnapshot().owner_generation;
@@ -379,7 +358,7 @@ export function uiSetup(input: UiSetupInput) {
           openCubeCleanupDialog();
         },
         async locateIssue(this: HumanPanelContext, issue: GeometryIssue): Promise<void> {
-          if (this.busy || !this.review || this.activeCategory !== "geometry") return;
+          if (this.busy || !this.review) return;
           const project = typeof Project !== "undefined" ? Project : null;
           const generation = getRuntimeLifecycleSnapshot().owner_generation;
           if (!project || generation === null) {

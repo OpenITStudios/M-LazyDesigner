@@ -103,29 +103,23 @@ describe("human-facing Blockbench UI", () => {
     expect(app).not.toContain('aria-label="Blockbench actions"');
   });
 
-  test("three-stage editor panel stays compact and hides MCP internals", async () => {
+  test("human panel exposes actionable Geometry tools without empty tabs and preserves review on save", async () => {
     const [panel, ui] = await Promise.all([source("ui/panel.html"), source("ui/index.ts")]);
 
-    expect(panel).toContain("LazyDesigner status");
-    expect(panel).toContain("Current project");
-    expect(panel).toContain("Open the project folder");
-    expect(panel).toContain('role="tablist"');
-    expect(panel).toContain("['geometry', 'texture', 'animation']");
-    expect(panel).toContain("Safe Cube Cleanup");
+    expect(panel).toContain('aria-label="Geometry tools"');
+    expect(panel).toContain("Review Latest Edit");
     expect(panel).toContain("Find Geometry Issues");
+    expect(panel).toContain("Safe Cube Cleanup");
     expect(panel).toContain("Locate in Outliner");
-    expect(panel).toContain("Geometry utility");
-    expect(panel).not.toContain("Inspect Textures");
-    expect(panel).not.toContain("Inspect Animations");
-    expect(panel).not.toContain("Preview Palette");
-    expect(panel).toContain("Switching tabs does not change its authoring stage.");
-    expect(ui).toContain('activeCategory: "geometry"');
+    expect(panel).toContain('v-else-if="!project.isBedrock"');
+    expect(panel).not.toContain('role="tablist"');
+    expect(panel).not.toContain("Coming soon");
+    expect(panel).not.toContain("Tool catalog");
+    expect(ui).toContain('isBedrock: Project.format?.id === "bedrock"');
+    expect(ui).toContain('event === "save_project" ||');
     expect(ui).toContain("runRuntimeOperationExclusive(generation");
+    expect(ui).not.toContain("activeCategory");
     expect(ui).not.toContain("setActiveMcpAuthoringStage(");
-
-    for (const internal of ["Advanced details", "Resources", "Runtime endpoint", "Tool catalog", "Coming soon"]) {
-      expect(panel).not.toContain(internal);
-    }
   });
 
   test("status wording stays simple and actionable", async () => {

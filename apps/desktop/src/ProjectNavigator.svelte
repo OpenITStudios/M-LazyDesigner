@@ -100,7 +100,7 @@
             <button class="quiet-button" aria-expanded={expandedProjectId === project.id} onclick={() => toggleProject(project.id)}>{expandedProjectId === project.id ? 'Hide models' : 'Show models'}</button>
           {/if}
           <details class="more-menu">
-            <summary aria-label="Project actions">•••</summary>
+            <summary aria-label={`Actions for project ${project.name}`}>•••</summary>
             <div class="menu-popover">
               <button onclick={() => onProjectAction(project.pinned ? 'unpin-project' : 'pin-project', project.id)} disabled={busy || !canEditProjectPrefs}>{project.pinned ? 'Unpin project' : 'Pin project'}</button>
               {#if project.registered}
@@ -130,7 +130,7 @@
                     <button class="secondary-button small-button" onclick={() => onOpenModel(model.id)} disabled={!model.exists || busy || !canOpenModel}>Open</button>
                   {/if}
                   <details class="more-menu">
-                    <summary aria-label="Model actions">•••</summary>
+                    <summary aria-label={`Actions for model ${model.name}`}>•••</summary>
                     <div class="menu-popover">
                       <button onclick={() => onProjectAction('reveal-model', model.id)} disabled={!model.exists || busy}>Show in Explorer</button>
                       <button onclick={() => onCopyPath(model.id)} disabled={busy}>Copy path</button>

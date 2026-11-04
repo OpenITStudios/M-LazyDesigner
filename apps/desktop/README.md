@@ -17,7 +17,7 @@ Support's explicit legacy migration requests the manager's backed-up, session-sa
 
 ## Analytics (read-only, in the main Desktop)
 
-The top navigation now provides **Workspace · Analytics · Support**.
+The main navigation provides **Workspace · Support**. Read-only Analytics remains available from **Support → Technical activity**, without occupying a primary tab.
 `src/AnalyticsPage.svelte` is a small read-only view, not another
 dashboard service. `src/App.svelte` makes two explicit Tauri IPC requests:
 `analytics_overview` only on entering Analytics or selecting Refresh,
