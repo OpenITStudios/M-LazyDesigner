@@ -435,7 +435,19 @@ Frontend development builds support deterministic UI state fixtures through:
 
 Fixtures are development-only and can render in the Vite browser **without Tauri, Bun, a running editor or a real local AI connection**. Their data comes from `src/desktopFixtures.ts`; no native status, managed-progress, update check, or Analytics IPC is requested when a fixture is selected. They do not change machine state or user files. Native commands (including opening models and setup) are intentionally not exercised in fixture mode; synthetic Analytics export also refuses to write.
 
-For visual review, visit `http://127.0.0.1:1421/?fixture=<name>` with the normal existing Vite frontend server. Check at **780×560** (minimum supported Desktop size), **980×680** (default), and a wider size; inspect both Workspace and Support, the Analytics subpage reached from Support, scroll/overflow, text readability, keyboard focus and disclosure menus. Test `fresh-install`, `ready`, `approval-required`, `plugin-modified`, `runtime-offline`, and `unsupported` as representative states. Record screenshots for layout evidence only; these fixtures cannot prove native window focus, Tauri behavior, plugin lifecycle or usable work in Blockbench. Do not introduce an additional source-of-truth, live telemetry, or automatic quality PASS from fixture screenshots.
+For visual review, visit `http://127.0.0.1:1421/?fixture=<name>` with the existing Vite frontend server. An optional `&view=support` or `&view=analytics` parameter selects subpages in development fixture mode only; production ignores these parameters. The page adds `data-qa-fixture` only for a selected development fixture.
+
+A bounded, optional screenshot helper uses Playwright already available in the QA environment; it does **not** introduce a production dependency or modify the frontend lockfile:
+
+```text
+# With the existing Vite server running from apps/desktop:
+python scripts/capture-ui.py
+# Optional: --browser <path-to-Chrome-or-Chromium> --out <temporary-qa-directory>
+```
+
+The script captures Workspace, Support and Analytics at **780×560** (minimum) and **980×680** (default), plus the most relevant failure/setup states. It records horizontal overflow, offscreen controls, browser JS errors, and top/bottom screenshots when scrolling is needed. Output is temporary and never written back to the repository automatically. It is intentionally manual-triggered (not CI or telemetry), and restricts the origin to local HTTP. The script needs an already-installed Playwright Python package and Chromium browser in the execution environment.
+
+Screenshot capture alone **does not** certify UX. Review the images for readability, disabled actions, controls, dialogs and keyboard focus. Native Windows focus/Recycle Bin operations, live Blockbench editor-panel behavior, MCP lifecycle, and actual user comprehension require separate matching-build acceptance.
 
 ## Blockbench profile ambiguity
 

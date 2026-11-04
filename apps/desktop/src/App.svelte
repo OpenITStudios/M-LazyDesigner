@@ -81,11 +81,12 @@
     if (page === 'Overview' && workspaceMain) workspaceScrollTop = workspaceMain.scrollTop;
     page = next;
     if (next === 'Analytics') void refreshAnalytics();
-    if (next === 'Overview') {
-      void tick().then(() => {
-        if (page === 'Overview' && workspaceMain) workspaceMain.scrollTop = workspaceScrollTop;
-      });
-    }
+    void tick().then(() => {
+      if (page !== next) return;
+      if (next === 'Overview' && workspaceMain) workspaceMain.scrollTop = workspaceScrollTop;
+      // The previous page's trigger may no longer exist. Announce the new view.
+      document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();
+    });
   }
 
   function closeUtilityMenu() {
@@ -554,6 +555,15 @@
     };
     const onFocus = () => { connectionMonitor.request(); };
     devFixture = devFixtureFromLocation(import.meta.env.DEV, window.location.search);
+    if (devFixture) {
+      // A direct, development-only view selector for deterministic screenshots.
+      const view = new URLSearchParams(window.location.search).get('view');
+      if (view === 'support') page = 'Support';
+      else if (view === 'analytics') {
+        page = 'Analytics';
+        void refreshAnalytics();
+      }
+    }
     if (devFixture === 'approval-required') {
       pluginApprovalNeeded = true;
       readinessReason = 'RUNTIME_TIMEOUT_WITH_HEALTHY_PLUGIN';
@@ -608,7 +618,7 @@
 {:else}
   <a class="skip-link" href="#main-content">Skip to content</a>
 
-  <div class="desktop-shell">
+  <div class="desktop-shell" data-qa-fixture={devFixture ?? undefined}>
     <aside class="navigation" aria-label="LazyDesigner navigation">
       <div class="navigation-brand">
         <span class="brand-mark" aria-hidden="true"></span>
@@ -619,7 +629,7 @@
         <button class:active={page === 'Overview'} aria-current={page === 'Overview' ? 'page' : undefined} onclick={() => navigate('Overview')}>
           <span class="nav-icon">{@render navIcon('Overview')}</span><span>Workspace</span>
         </button>
-        <button class:active={page === 'Support' || page === 'Analytics'} aria-current={page === 'Support' ? 'page' : undefined} onclick={() => navigate('Support')}>
+        <button class:active={page === 'Support' || page === 'Analytics'} aria-current={page === 'Support' || page === 'Analytics' ? 'page' : undefined} onclick={() => navigate('Support')}>
           <span class="nav-icon">{@render navIcon('Support')}</span><span>Support</span>
         </button>
       </nav>
@@ -627,7 +637,7 @@
 
     <section id="main-content" class="main-view" tabindex="-1">
       <header class="page-toolbar">
-        <h1>{page === 'Overview' ? 'Workspace' : page}</h1>
+        <h1 tabindex="-1">{page === 'Overview' ? 'Workspace' : page}</h1>
         <div class="toolbar-actions">
           {#if devFixture}<span class="fixture-badge">Fixture · {devFixture}</span>{/if}
           {#if statusProbeFailures >= 2}<span class="status-probe-warning" role="status">AI status needs verification · Files remain accessible</span>{/if}

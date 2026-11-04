@@ -105,6 +105,16 @@ describe("human-facing Blockbench UI", () => {
     expect(support).toContain("{#if errorDetail}");
     expect(analytics).toContain("Back to Support");
     expect(app).toContain("backToSupport={() => navigate('Support')}");
+    expect(app).toContain('data-qa-fixture={devFixture ?? undefined}');
+    expect(app).toContain("if (view === 'support') page = 'Support'");
+    expect(app).toContain("else if (view === 'analytics')");
+    expect(app).toContain("document.querySelector<HTMLElement>('.page-toolbar h1')?.focus()");
+    expect(app).toContain('<h1 tabindex="-1">');
+    const capture = await Bun.file(new URL("../../apps/desktop/scripts/capture-ui.py", import.meta.url)).text();
+    expect(capture).toContain('nativeOrVisualApproval');
+    expect(capture).toContain('("fresh-install", "workspace")');
+    expect(capture).toContain('("ready", "analytics")');
+    expect(capture).toContain('VIEWPORTS = ((780, 560), (980, 680))');
   });
 
   test("late-mounted plugin panels never default to false Runtime-ready status", async () => {
