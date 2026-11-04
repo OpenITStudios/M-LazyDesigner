@@ -11,7 +11,7 @@
   import { createEditorOperations } from './editorOperations';
   import { createMaintenanceOperations, planManagedAction } from './maintenanceOperations';
   import { subscribeManagedProgress } from './managedProgress';
-  import { applyDevFixture, devFixtureFromLocation, type DevFixture } from './desktopFixtures';
+  import { createDevFixtureStatus, createDevAnalyticsFixture, devFixtureFromLocation, type DevFixture } from './desktopFixtures';
   import { observeStatus } from './statusObservation';
   import type { ProjectAction, ProjectDeletePreview, ProjectDeleteResult } from './projectNavigationTypes';
   import type {
@@ -148,9 +148,14 @@
     loading = true;
     error = '';
     errorDetail = null;
+    // Development-only visual fixtures render without Tauri, Runtime, or filesystem access.
+    if (devFixture) {
+      status = createDevFixtureStatus(devFixture);
+      loading = false;
+      return;
+    }
     try {
       status = await observeStatus(invoke<SystemStatus>('system_status'), 30_000);
-      if (status && devFixture) status = applyDevFixture(status, devFixture);
       setupStaged = !status?.manager_available && status?.bootstrap_pending === true;
       connectionMonitor.fullStatusSucceeded();
     } catch (cause) {
@@ -428,7 +433,7 @@
     analyticsError = '';
     analytics = null; // Never show a stale snapshot as if it were current.
     try {
-      analytics = await invoke<AnalyticsOverview>('analytics_overview');
+      analytics = devFixture ? createDevAnalyticsFixture() : await invoke<AnalyticsOverview>('analytics_overview');
     } catch {
       analyticsError = 'The local Gateway analytics cache could not be read. Select Refresh to retry.';
     } finally {
@@ -448,6 +453,10 @@
 
   async function exportAnalyticsJson(): Promise<void> {
     if (!analytics || analyticsLoading || analyticsExporting) return;
+    if (devFixture) {
+      analyticsError = 'Visual preview only. Export is unavailable in fixtures.';
+      return;
+    }
     analyticsExporting = true;
     analyticsError = '';
     try {
@@ -555,11 +564,15 @@
     window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibilityChange);
-    void refresh().then(() => {
-      void checkManagedUpdateOnce();
-      connectionMonitor.request();
-    });
-    const stopProgressListener = subscribeManagedProgress(
+    if (devFixture) {
+      void refresh();
+    } else {
+      void refresh().then(() => {
+        void checkManagedUpdateOnce();
+        connectionMonitor.request();
+      });
+    }
+    const stopProgressListener = devFixture ? () => {} : subscribeManagedProgress(
       receive => listen<ManagedProgress>('managed-progress', event => receive(event.payload)),
       progress => {
         if (busyAction && progress.action === busyAction) progressStage = progress.stage;
@@ -606,7 +619,7 @@
         <button class:active={page === 'Overview'} aria-current={page === 'Overview' ? 'page' : undefined} onclick={() => navigate('Overview')}>
           <span class="nav-icon">{@render navIcon('Overview')}</span><span>Workspace</span>
         </button>
-        <button class:active={page === 'Support'} aria-current={page === 'Support' ? 'page' : undefined} onclick={() => navigate('Support')}>
+        <button class:active={page === 'Support' || page === 'Analytics'} aria-current={page === 'Support' ? 'page' : undefined} onclick={() => navigate('Support')}>
           <span class="nav-icon">{@render navIcon('Support')}</span><span>Support</span>
         </button>
       </nav>
@@ -633,7 +646,8 @@
       {#if page === 'Analytics'}
         <AnalyticsPage data={analytics} loading={analyticsLoading}
           error={analyticsError} exporting={analyticsExporting}
-          refresh={refreshAnalytics} copyJson={copyAnalyticsJson} exportJson={exportAnalyticsJson}/>
+          refresh={refreshAnalytics} copyJson={copyAnalyticsJson} exportJson={exportAnalyticsJson}
+          backToSupport={() => navigate('Support')}/>
       {:else if !status}
         <main class="page-content">
           <section class="message-state">
@@ -667,7 +681,7 @@
           {refresh} {showRetiredPluginFile} {chooseBlockbenchExecutable}
           {showPluginFile} {exportDiagnostics} {runManagedAction}
           openAnalytics={() => navigate('Analytics')}
-          migrateLegacySetup={() => performInstall(true)
+          migrateLegacySetup={() => performInstall(true)}
         />
       {/if}
     </section>

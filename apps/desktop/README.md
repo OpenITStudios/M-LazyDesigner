@@ -433,7 +433,9 @@ Frontend development builds support deterministic UI state fixtures through:
 ?fixture=repair-blocked
 ```
 
-Fixtures are a development-only presentation overlay. They do not alter machine state and are disabled from connection watching while active.
+Fixtures are development-only and can render in the Vite browser **without Tauri, Bun, a running editor or a real local AI connection**. Their data comes from `src/desktopFixtures.ts`; no native status, managed-progress, update check, or Analytics IPC is requested when a fixture is selected. They do not change machine state or user files. Native commands (including opening models and setup) are intentionally not exercised in fixture mode; synthetic Analytics export also refuses to write.
+
+For visual review, visit `http://127.0.0.1:1421/?fixture=<name>` with the normal existing Vite frontend server. Check at **780×560** (minimum supported Desktop size), **980×680** (default), and a wider size; inspect both Workspace and Support, the Analytics subpage reached from Support, scroll/overflow, text readability, keyboard focus and disclosure menus. Test `fresh-install`, `ready`, `approval-required`, `plugin-modified`, `runtime-offline`, and `unsupported` as representative states. Record screenshots for layout evidence only; these fixtures cannot prove native window focus, Tauri behavior, plugin lifecycle or usable work in Blockbench. Do not introduce an additional source-of-truth, live telemetry, or automatic quality PASS from fixture screenshots.
 
 ## Blockbench profile ambiguity
 

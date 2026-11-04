@@ -76,6 +76,37 @@ describe("human-facing Blockbench UI", () => {
     expect(support).toContain("operation.outcome === 'unchanged' ? 'No change'");
   });
 
+  test("Desktop visual fixtures render offline and separate Analytics from native commands", async () => {
+    const { createDevFixtureStatus, createDevAnalyticsFixture, devFixtureFromLocation } =
+      await import("../../apps/desktop/src/desktopFixtures");
+
+    expect(createDevFixtureStatus("fresh-install").product_state).toBe("welcome");
+    expect(createDevFixtureStatus("fresh-install").project_navigation.projects).toHaveLength(0);
+    expect(createDevFixtureStatus("ready").product_state).toBe("ready");
+    expect(createDevFixtureStatus("ready").project_navigation.projects).toHaveLength(1);
+    expect(createDevFixtureStatus("plugin-modified").plugin_integrity).toBe("modified");
+    expect(createDevFixtureStatus("unsupported").blockbench.compatibility?.status).toBe("unsupported");
+    expect(createDevAnalyticsFixture().state).toBe("PARTIAL");
+    expect(createDevAnalyticsFixture().projects).toHaveLength(1);
+    expect(devFixtureFromLocation(false, "?fixture=ready")).toBeNull();
+    expect(devFixtureFromLocation(true, "?fixture=ready")).toBe("ready");
+
+    const [app, support, analytics] = await Promise.all([
+      Bun.file(new URL("../../apps/desktop/src/App.svelte", import.meta.url)).text(),
+      Bun.file(new URL("../../apps/desktop/src/SupportPage.svelte", import.meta.url)).text(),
+      Bun.file(new URL("../../apps/desktop/src/AnalyticsPage.svelte", import.meta.url)).text(),
+    ]);
+    expect(app).toContain("status = createDevFixtureStatus(devFixture)");
+    expect(app).toContain("devFixture ? createDevAnalyticsFixture()");
+    expect(app).toContain("const stopProgressListener = devFixture ? () => {} : subscribeManagedProgress(");
+    expect(app).not.toContain("applyDevFixture(status, devFixture)");
+    expect(app).toContain("migrateLegacySetup={() => performInstall(true)}");
+    expect(support).toContain("{#if error}");
+    expect(support).toContain("{#if errorDetail}");
+    expect(analytics).toContain("Back to Support");
+    expect(app).toContain("backToSupport={() => navigate('Support')}");
+  });
+
   test("late-mounted plugin panels never default to false Runtime-ready status", async () => {
     const [ui, bar] = await Promise.all([source("ui/index.ts"), source("ui/statusBar.ts")]);
     expect(bar).toContain("export function getStatusBarState()");

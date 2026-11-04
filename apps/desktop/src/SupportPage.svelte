@@ -49,14 +49,16 @@
       {/if}
     </section>
   {/if}
-  {#if error && errorDetail}
+  {#if error}
     <section class="settings-section">
       <h2>Last unsuccessful action</h2>
-      <p>{error}</p>
-      <details class="advanced-recovery">
-        <summary><span><strong>Technical details</strong><small>For troubleshooting only. No information is uploaded.</small></span><span>Show</span></summary>
-        <div class="recovery-list"><code>{errorDetail}</code></div>
-      </details>
+      <p role="alert">{error}</p>
+      {#if errorDetail}
+        <details class="advanced-recovery">
+          <summary><span><strong>Technical details</strong><small>For troubleshooting only. No information is uploaded.</small></span><span>Show</span></summary>
+          <div class="recovery-list"><code>{errorDetail}</code></div>
+        </details>
+      {/if}
     </section>
   {/if}
   <section class="settings-section">

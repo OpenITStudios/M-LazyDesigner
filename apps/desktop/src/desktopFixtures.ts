@@ -1,4 +1,4 @@
-import type { SystemStatus } from './desktopTypes';
+import type { SystemStatus, AnalyticsOverview } from './desktopTypes';
 
 export type DevFixture = 'ready' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
 
@@ -106,6 +106,87 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
     blocked_reason: fixture === 'repair-blocked' ? 'Runtime or Gateway is active.' : null,
   };
   return next;
+}
+
+/** Browser-only baseline. Never treated as an authoritative machine observation. */
+export function createDevFixtureStatus(fixture: DevFixture): SystemStatus {
+  const baseline: SystemStatus = {
+    schema: 1,
+    product_state: 'welcome',
+    plugin_integrity: 'unknown',
+    observed_at_unix_ms: 0,
+    readiness: { state: 'setup-required', summary: 'Development fixture only.', ready: false },
+    blockbench: { running: false, version: null, compatibility: null, diagnostic: null },
+    gateway: { ownership: 'client-owned', state: 'idle', action: null },
+    maintenance: {
+      update: false, rollback: false, repair: false, recover: false,
+      setup_tls: false, blocked_reason: null,
+    },
+    manager_available: false,
+    bootstrap_available: true,
+    runtime_listener_live: false,
+    runtime_endpoint_match: null,
+    runtime_ready: false,
+    managed: null,
+    project_navigation: {
+      revision: null, session_live: false, continue_model_id: null,
+      recent_model_ids: [], preferences_issue: null, active: null, projects: [],
+    },
+    diagnostic: null,
+  };
+  return applyDevFixture(baseline, fixture);
+}
+
+/** Synthetic data for inspecting the read-only Analytics layout, not real usage evidence. */
+export function createDevAnalyticsFixture(): AnalyticsOverview {
+  return {
+    schema: 1,
+    report: 'desktop-analytics-overview',
+    source: 'GATEWAY_L0_BOUNDED_SNAPSHOTS',
+    state: 'PARTIAL',
+    observed_sessions: 3,
+    observed_calls: 18,
+    failures: 2,
+    unbound_calls: 1,
+    open_or_unclean_sessions: 1,
+    invalid_snapshots: 0,
+    older_snapshots_omitted: 0,
+    capture_failures: 0,
+    persist_failures: 0,
+    overflow_project_observations: 0,
+    projects: [{
+      project_key: '0000000000000000000000000000000000000000000000000000000000000001',
+      observed_sessions: 2,
+      observed_calls: 14,
+      failures: 1,
+      duration_sum_ms: 2150,
+      domains: {
+        geometry: { calls: 11, failures: 1, duration_sum_ms: 1500 },
+        texture: { calls: 3, failures: 0, duration_sum_ms: 650 },
+      },
+      capabilities: [
+        { name: 'manage_cubes', calls: 9 },
+        { name: 'inspect_model', calls: 5 },
+      ],
+      error_codes: [{ name: 'FIXTURE_ERROR', calls: 1 }],
+      by_tool: {},
+      build_calls: {
+        'fixture-build': { calls: 14, failures: 1, duration_sum_ms: 2150 },
+      },
+      build_unattributed_calls: 0,
+      build_measured_sessions: 2,
+      build_overflow: false,
+    }],
+    limits: {
+      retrospective_scope: 'Synthetic fixture; not a project history.',
+      project_identity: 'Synthetic non-user identity.',
+      duration: 'Illustrative cumulative call duration only.',
+      source_sha: null,
+      provider_tokens: null,
+      accepted_quality: 'UNVERIFIED',
+      build_coverage: 'Synthetic fixture only.',
+    },
+  };
 }
 
 export function devFixtureFromLocation(development: boolean, search: string): DevFixture | null {

@@ -8,6 +8,7 @@
   export let refresh: () => Promise<void>;
   export let copyJson: () => Promise<void>;
   export let exportJson: () => Promise<void>;
+  export let backToSupport: () => void;
 
   let selectedKey = '';
   let selected: AnalyticsProject | null = null;
@@ -21,6 +22,7 @@
 </script>
 
 <main class="page-content analytics-content">
+  <button class="analytics-back" onclick={backToSupport}>← Back to Support</button>
   <div class="analytics-heading">
     <div>
       <h2>Gateway analytics</h2>
@@ -161,6 +163,8 @@
 
 <style>
   .analytics-content{max-width:1180px;min-width:0}
+  .analytics-back{min-height:34px;margin:0 0 12px;padding:0;background:transparent;color:var(--text-soft);font-size:var(--font-sm);font-weight:650;cursor:pointer}
+  .analytics-back:hover{color:var(--text)}
   .analytics-heading{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-bottom:18px}
   .analytics-heading h2{font-size:19px;margin:0}
   .analytics-heading p,.analytics-subtle,.analytics-details p{font-size:var(--font-sm);color:var(--muted);margin:5px 0 12px}
