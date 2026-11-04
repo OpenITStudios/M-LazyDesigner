@@ -35,11 +35,15 @@ AI client
 
 The Gateway is the normal AI-client boundary. Direct Runtime access exists for Inspector/conformance/focused debugging and must not be treated as an Internet-facing service.
 
-Runtime and Gateway network connections are intentionally loopback-only. The Runtime currently relies on loopback isolation plus HTTP Host/Origin validation; it does **not** currently provide cryptographic authentication against another process running as the same local user. This is a documented residual risk and must be reconsidered before any network exposure beyond loopback or before treating untrusted same-user processes as part of the threat model.
+Runtime and Gateway connections are intentionally loopback-only. The managed native Runtime uses HTTPS with a machine-local TLS identity and requires a separate, randomly generated 256-bit authorization token for its health and MCP requests. The canonical Gateway Runtime client verifies the loopback certificate and supplies this local token in a request header; HTTP Host/Origin checks remain additional safeguards. Isolated protocol-test fixtures may use plain HTTP without the managed native credential and must never be treated as an exposed production Runtime.
+
+**Credential authentication is not same-user process isolation.** Untrusted native code running as the same OS user may be able to access the same user's local credential material or processes. The existing TLS/token scheme does not authorize a network-facing Runtime or establish resistance to malicious same-user code. Either change to the trust model requires a separate design review and matching native security proof.
 
 ## Security invariants
 
-- Gateway and Runtime remain loopback-only unless a separately reviewed authentication design is introduced.
+- Gateway and Runtime remain loopback-only; broader network exposure requires a separately reviewed transport, authentication, authorization and threat model.
+- Native Runtime requires its machine-local authorization token for health and MCP requests; missing or invalid credentials fail closed.
+- Native Runtime HTTPS uses its machine-local certificate/key; the canonical Gateway client verifies the certificate and must not bypass TLS validation or distribute the private key.
 - HTTP/1.1 requests fail closed on missing/ambiguous Host routing data, duplicate Host/Origin headers, malformed headers, unsupported Transfer-Encoding, and oversized headers/bodies.
 - A present browser Origin must resolve to loopback.
 - Runtime mutations remain serialized where Blockbench global state requires it.
@@ -66,7 +70,7 @@ Passing a functional export/import test is not by itself proof that these cases 
 
 ## Network / protocol threat surface
 
-The local Runtime transport is security-sensitive because it can expose mutation-capable MCP tools. Relevant risks include:
+The local Runtime transport is security-sensitive because it can expose mutation-capable MCP tools. Its current HTTPS and credential checks do not replace the remaining transport and same-user threat boundaries. Relevant risks include:
 
 - DNS rebinding/browser-origin abuse;
 - malformed or ambiguous HTTP framing;
@@ -92,9 +96,9 @@ Those require matching local/live security verification.
 
 ## Dependency advisory policy — Windows x64 only
 
-LazyDesigner Desktop is supported only on `x86_64-pc-windows-msvc`. The existing `Dependency Security` workflow uses pinned Rust 1.98.1 and `cargo-audit 0.22.2` to scan the **complete** Cargo.lock with a freshly fetched RustSec advisory database. It checks each reported package name/version against `cargo metadata --locked --filter-platform x86_64-pc-windows-msvc`.
+LazyDesigner Desktop currently targets `x86_64-pc-windows-msvc`. The `Dependency Security` verification workflow is **disabled on `Local`** and retained as inert source under `.github/disabled-workflows/dependency-security.yml`. It does not provide an active/current-SHA CI verdict. Its retained source policy uses pinned Rust 1.98.1 and `cargo-audit 0.22.2` to scan the **complete** Cargo.lock with a fresh RustSec advisory database, comparing reported package name/version against `cargo metadata --locked --filter-platform x86_64-pc-windows-msvc`.
 
-Every Windows-resolved vulnerability, unmaintained, unsound or yanked advisory **blocks Windows CI**. Issues exclusive to unsupported platforms are disclosed by advisory ID and crate identity without blocking Windows. This is platform scope, not an advisory exception: no `--ignore`, disabled advisory category, skipped database fetch or malformed scan is accepted. Missing or inconsistent graph/scan evidence also fails.
+When that verification is separately authorized and executed, every Windows-resolved vulnerability, unmaintained, unsound or yanked advisory **blocks the Windows security gate**. Issues exclusive to unsupported platforms are disclosed by advisory ID and crate identity without blocking Windows. This is platform scope, not an advisory exception: no `--ignore`, disabled advisory category, skipped database fetch or malformed scan is accepted. Missing or inconsistent graph/scan evidence also fails. Historical security runs cannot be used as proof for the current `Local` HEAD.
 
 Linux/macOS or other architectures require separate safety approval if introduced. A Windows RustSec PASS does not prove integrated installer/update/rollback, signing, or live Blockbench correctness.
 
