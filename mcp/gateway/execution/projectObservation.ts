@@ -218,19 +218,21 @@ export class ProjectObservationRecorder {
       const affinity = recordValue(gatewayStatus?.affinity);
       const controlProject = recordValue(
         recordValue(gatewayStatus?.control)?.project);
-      const statusBound = gatewayStatus !== null &&
+      const statusBound = !failed && gatewayStatus !== null &&
         runtime?.mcp_client_ready === true &&
         controlProject?.binding === "BOUND";
-      const delta = input.tool === "invoke_capability" && !failed
+      const delta = input.tool === "invoke_capability" &&
+        input.nativeIdentityVerified === true && !failed
         ? recordValue(structured?.control_delta) : null;
 
       // Never attribute an unverified/error result to a previously known tab.
-      const uuid = input.tool === "invoke_capability" &&
-        input.nativeIdentityVerified === true
-        ? input.nativeProjectUuid
-        : statusBound
-          ? affinity?.project_uuid
-          : delta?.project_uuid;
+      // Only canonical bound status or the executor's verified native
+      // preflight may attribute an operation to a project. A Control Delta
+      // appearing in arbitrary response metadata is not identity proof.
+      const uuid = input.tool === "invoke_capability"
+        ? (input.nativeIdentityVerified === true
+          ? input.nativeProjectUuid : null)
+        : statusBound ? affinity?.project_uuid : null;
       const verifiedUuid = typeof uuid === "string" && uuid.length <= 160 &&
         uuid.trim().length > 0 ? uuid : null;
       const observedPhase = verifiedUuid === null ? null

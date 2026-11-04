@@ -17,7 +17,9 @@ compare-geometry-knowledge.ts (opt-in R5 source-aligned pairing only)
 ```
 
 The AI-first reader returns a bounded page or one allowlisted complete L0
-snapshot with on-demand byte-checksum verification. No tool-payload text,
+snapshot with on-demand byte-checksum verification. Archive-level summaries
+are also field-allowlisted and validated before use; build-key filters
+select projects, not calls attributable to one build. No tool-payload text,
 unrecognized JSON fields or prompt instructions enter this output. Read
 the catalog first and follow `next_cursor` to access all retained data;
 opaque cursors refuse stale collections. Source SHA and workspace identity

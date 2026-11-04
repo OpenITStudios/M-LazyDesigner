@@ -478,6 +478,14 @@ not treated as a Git source SHA. A MATCHED finalization saved-file digest
 is evidence of checkpoint content, not stable cross-UUID asset identity or
 human-approved visual quality. Historical snapshots without new optional
 build/checkpoint fields remain readable and keep their prior summary hash.
+A build filter only selects project summaries where that build was observed;
+the L0 call totals are not separated by Runtime build and must not be cited
+as build-level benchmark results. A failed status or an arbitrary returned
+`control_delta` is never enough to bind an observation to a project:
+only Control BOUND status or the executor's verified native preflight can do so.
+AI archive overviews use a fixed allowlist of validated aggregate fields;
+request a single session for complete official L0 counters. Historical
+checksums remain local file integrity evidence, not signed provenance.
 Do not silently compare builds, merge cloned assets, or claim saved AI tokens.
 
 A client without explicit local filesystem/command access does not gain

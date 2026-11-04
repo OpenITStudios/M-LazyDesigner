@@ -72,6 +72,11 @@ describe("bounded always-on project observation", () => {
         arguments: { token: "SECRET", project_path: "C:/private/asset" },
       },
       result: invocation("native-project-A", "TEXTURING", "texturing"),
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "native-project-A",
+      nativePhaseAfter: "texturing",
+      nativeDomain: "TEXTURING",
+      nativeVerificationClass: "visual",
       durationMs: 19,
     });
     await observer.flush(true);
@@ -178,6 +183,47 @@ describe("bounded always-on project observation", () => {
     expect(obs.snapshot().unbound.calls).toBe(1);
   });
 
+  test("rejects failed status and unverified delta as project evidence", () => {
+    const obs = new ProjectObservationRecorder("/disposable-test-root");
+    const invalidStatus = { ...status("spoof-status"), isError: true };
+    obs.record({
+      tool: "status", args: {}, result: invalidStatus, durationMs: 1,
+    });
+    obs.record({
+      tool: "invoke_capability",
+      args: { capability: "manage_cubes" },
+      result: invocation("spoof-delta"),
+      durationMs: 2,
+    });
+    const observed = obs.snapshot();
+    expect(observed.projects).toHaveLength(0);
+    expect(observed.unbound).toMatchObject({
+      calls: 2, failures: 1,
+      verification_required: 0,
+      acceptance_gate_invalidations: 0,
+      downstream_recheck_requests: 0,
+    });
+    expect(observed.observed_calls).toBe(2);
+
+    obs.record({
+      tool: "invoke_capability",
+      args: { capability: "manage_cubes" },
+      result: invocation("verified-native"),
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "verified-native",
+      nativeDomain: "GEOMETRY",
+      nativeVerificationClass: "visual",
+      durationMs: 3,
+    });
+    expect(obs.snapshot().projects).toHaveLength(1);
+    expect(obs.snapshot().projects[0]!.counters).toMatchObject({
+      calls: 1,
+      verification_required: 1,
+      acceptance_gate_invalidations: 1,
+      downstream_recheck_requests: 1,
+    });
+  });
+
   test("does not assign stale status or failed operations to another project", () => {
     const obs = new ProjectObservationRecorder("/disposable-test-root");
     obs.record({
@@ -214,6 +260,9 @@ describe("bounded always-on project observation", () => {
           task_context_id: "task:" + i.toString(16).padStart(20, "0"),
         },
         result: invocation("native-one"),
+        nativeIdentityVerified: true,
+        nativeProjectUuid: "native-one",
+        nativeDomain: "GEOMETRY",
         durationMs: 1,
       });
     }
@@ -319,6 +368,10 @@ describe("bounded always-on project observation", () => {
       tool: "invoke_capability",
       args: { capability: "manage_cubes" },
       result: invocation("same-native-project"),
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "same-native-project",
+      nativeDomain: "GEOMETRY",
+      nativeVerificationClass: "visual",
       durationMs: 20,
     });
     second.record({

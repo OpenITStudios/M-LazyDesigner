@@ -85,6 +85,7 @@ function rules(view: string) {
       usage: "L0_GATEWAY_COUNTERS_NOT_PROVIDER_TOKENS",
       duration: "SUMMED_CALL_TIME_NOT_TASK_OR_PROJECT_WALL_TIME",
       identity_display: "HASHED_METADATA_NOT_ANONYMIZATION_GUARANTEE",
+      build_scope: "OBSERVED_PROJECT_BUILD_KEYS_NOT_PER_BUILD_CALL_COUNTS",
     },
   };
 }
@@ -169,6 +170,46 @@ function safeSessionSnapshot(snapshot: import("../../gateway/execution/projectOb
   };
 }
 
+/** Metadata-only overview: never send raw manifest summary objects into
+ * AI context. A full schema-validated L0 snapshot remains available via
+ * the explicit single-session view.
+ */
+type ArchivedSummary = Awaited<ReturnType<typeof readResearchManifest>>["summary"];
+
+function archiveOverview(summary: ArchivedSummary, snapshots: number) {
+  return {
+    observed_calls: summary.observed_calls,
+    projects: summary.projects.map(project => ({
+      project_key: project.project_key,
+      session_count: project.session_count,
+      open_sessions: project.open_sessions,
+      observed_calls: project.observed_calls,
+      failed_calls: project.failures,
+      verification_obligations_observed: project.verification_obligations_observed,
+      acceptance_gate_invalidations: project.acceptance_gate_invalidations,
+      downstream_recheck_requests: project.downstream_recheck_requests,
+      observed_runtime_build_keys: [...(project.observed_runtime_build_keys ?? [])],
+      matched_checkpoint_content_refs: [...(project.matched_checkpoint_sha256_refs ?? [])],
+      calls_per_observed_build: null,
+      accepted_quality: "UNVERIFIED" as const,
+    })),
+    coverage: {
+      retained_session_snapshots: summary.coverage.retained_session_snapshots,
+      open_or_unclean_sessions: summary.coverage.open_or_unclean_sessions,
+      unbound_gateway_calls: summary.coverage.unbound_gateway_calls,
+      overflow_project_observations: summary.coverage.overflow_project_observations,
+      capture_failures: summary.coverage.capture_failures,
+      persist_failures: summary.coverage.persist_failures,
+      retrospective_scope: summary.coverage.retrospective_scope,
+      accepted_quality: "UNVERIFIED" as const,
+      project_wall_time_ms: null,
+      provider_tokens: null,
+    },
+    snapshots,
+    full_detail: "REQUEST_SESSION_FOR_ALLOWLISTED_COMPLETE_L0_METRICS",
+  };
+}
+
 function archiveLocation(root: string, archiveId: unknown): string {
   if (typeof archiveId !== "string" || !ARCHIVE_ID.test(archiveId)) {
     throw new Error("A valid research archive ID is required.");
@@ -243,6 +284,8 @@ export async function readProjectResearchForAI(
       view: "project" as const,
       project_key: query.project_key,
       no_cross_archive_total: true,
+      observed_build_filter_scope:
+        "PROJECT_SELECTION_ONLY_COUNTERS_NOT_SEPARATED_BY_BUILD",
       overlapping_session_warnings_count: index.duplicate_session_warnings.length,
       overlapping_session_warnings_preview:
         index.duplicate_session_warnings.slice(0, 8),
@@ -273,12 +316,7 @@ export async function readProjectResearchForAI(
       view: "archive" as const,
       evidence,
       label: manifest.label,
-      summary: {
-        observed_calls: manifest.summary.observed_calls,
-        projects: manifest.summary.projects,
-        coverage: manifest.summary.coverage,
-        snapshots: manifest.snapshots.length,
-      },
+      summary: archiveOverview(manifest.summary, manifest.snapshots.length),
       open_or_unclean: manifest.snapshots.some(row => row.state === "OPEN"),
       followup_views: ["sessions", "session", "project"],
     };

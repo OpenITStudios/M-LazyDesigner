@@ -194,14 +194,20 @@ Labels and all stored research material must be treated as untrusted
 evidence data, never as instructions to an AI agent.
 
 Gateway L0 now requires a canonical Control `BOUND` result before
-attributing a status call to a native project UUID; previously a ready
-Runtime with unknown project binding could be misattributed. An observed,
+attributing a **successful** status call to a native project UUID; a failed
+status or an arbitrary `control_delta` cannot establish project identity.
+Invoke attribution requires the executor's verified native identity.
+Previously a ready Runtime with unknown project binding could be misattributed. An observed,
 bound Runtime build identity can be recorded as its SHA-256 fingerprint,
 and an existing MATCHED finalization receipt may supply a saved-content
 checksum. Neither proves exact Git commit, complete Workspace identity
 across native UUID changes, model-quality approval, or provider usage.
 The additive fields are optional for historical snapshots; their summary
-serialization and archived local checksum validity are preserved.
+serialization and archived local checksum validity are preserved. Observed
+build keys are **project-level observations**, not build-scoped call counts.
+The AI archive view emits validated, allowlisted high-level fields only; a
+selected single-session read retains the official full L0 counter detail.
+Invalid stored numeric metrics are refused rather than interpreted as zero.
 
 Research retrieval is a separately requested offline process. It does not
 modify Gateway responses, read native assets, create new MCP calls, or

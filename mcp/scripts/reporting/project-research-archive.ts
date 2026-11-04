@@ -55,7 +55,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function safeInteger(value: unknown, max: number): boolean {
+function safeInteger(value: unknown, max: number): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) &&
     value >= 0 && value <= max;
 }
@@ -116,6 +116,7 @@ function archiveManifest(value: unknown): ProjectResearchArchiveManifest {
       !HEX_SHA.test(value.summary_sha256) || !isRecord(value.summary) ||
       value.summary.report !== "project-observation-summary" ||
       value.summary.schema !== 1 ||
+      value.summary.source !== "GATEWAY_L0_BOUNDED_SNAPSHOT" ||
       !safeInteger(value.summary.observed_calls, Number.MAX_SAFE_INTEGER) ||
       !Array.isArray(value.summary.projects) ||
       !isRecord(value.summary.coverage) ||
@@ -124,8 +125,23 @@ function archiveManifest(value: unknown): ProjectResearchArchiveManifest {
       value.summary.coverage.project_completion !== "UNVERIFIED" ||
       value.summary.coverage.provider_tokens !== null ||
       value.summary.coverage.project_wall_time_ms !== null ||
+      value.summary.coverage.retrospective_scope !==
+        "RECENT_FILES_ONLY_NOT_FULL_PROJECT_HISTORY" ||
       value.summary_sha256 !== sha256(JSON.stringify(value.summary))) {
     throw new Error("Research summary has invalid shape, coverage or checksum.");
+  }
+  for (const field of [
+    "retained_session_snapshots", "open_or_unclean_sessions",
+    "unbound_gateway_calls", "overflow_project_observations",
+    "capture_failures", "persist_failures",
+  ]) {
+    if (!safeInteger(value.summary.coverage[field], Number.MAX_SAFE_INTEGER)) {
+      throw new Error("Research archive coverage contains an invalid counter.");
+    }
+  }
+  if (Number(value.summary.coverage.open_or_unclean_sessions) > value.snapshots.length ||
+      Number(value.summary.coverage.unbound_gateway_calls) > value.summary.observed_calls) {
+    throw new Error("Research archive coverage is inconsistent.");
   }
   for (const project of value.summary.projects) {
     if (!isRecord(project) || typeof project.project_key !== "string" ||
@@ -135,6 +151,22 @@ function archiveManifest(value: unknown): ProjectResearchArchiveManifest {
         project.failures > project.observed_calls ||
         !safeInteger(project.session_count, MAX_ARCHIVE_SNAPSHOTS)) {
       throw new Error("Research project index contains an invalid identity or count.");
+    }
+    for (const name of [
+      "closed_sessions", "open_sessions", "observed_call_duration_sum_ms",
+      "verification_obligations_observed", "acceptance_gate_invalidations",
+      "downstream_recheck_requests", "user_delta_status_observations",
+      "task_context_count_per_session_sum", "phase_changes_observed",
+    ]) {
+      if (!safeInteger(project[name], Number.MAX_SAFE_INTEGER)) {
+        throw new Error("Research project contains an invalid metric.");
+      }
+    }
+    if (Number(project.open_sessions) + Number(project.closed_sessions) !== project.session_count ||
+        Number(project.verification_obligations_observed) > project.observed_calls ||
+        Number(project.acceptance_gate_invalidations) > project.observed_calls ||
+        Number(project.user_delta_status_observations) > project.observed_calls) {
+      throw new Error("Research project contains inconsistent observations.");
     }
     if (project.observed_runtime_build_keys !== undefined) {
       if (!Array.isArray(project.observed_runtime_build_keys) ||

@@ -159,6 +159,7 @@ export function indexProjectResearch(
     scope: "EXPLICIT_ARCHIVE_MANIFESTS_ONLY",
     integrity_scope: "METADATA_CHECKS_ONLY_USE_RESEARCH_VERIFY_FOR_FILE_HASHES",
     join_policy: "NO_CROSS_ARCHIVE_SUMS_OR_AUTO_NATIVE_IDENTITY_MERGE",
+    build_filter_scope: "OBSERVED_PROJECT_BUILD_MEMBERSHIP_ONLY_NOT_PER_BUILD_CALLS",
     filters: { ...query },
     archive_count: matched.length,
     rows,
