@@ -29,7 +29,7 @@ describe("Modular Blender Core source owners", () => {
     expect(executor).not.toContain("childProcess.spawn(executable");
     expect(executor).toContain("publicationDiagnosticsSchema.parse");
     expect(executor).toContain("inspectPublicationPng(png");
-    expect(executor).toContain("verifyPublicationSourceCurrent(");
+    expect(executor).toContain("publicationSourceRevisionAtDelivery(");
     const importSource = await worker("core_assets.py");
     const entrySource = await worker("render.py");
     expect(entrySource).toContain("PUBLICATION_JOB_IMPORT_PNG_PROVENANCE_REQUIRED");
