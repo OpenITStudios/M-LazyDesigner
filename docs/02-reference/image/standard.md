@@ -126,6 +126,8 @@ FOUR SIDES FIX THE BASELINE FOR FINAL 3D MODEL CONSTRUCTION
 
 ### Balanced Four-Side Construction — Default after LazyBuilder Study
 
+The first user-approved LazyDesigner four-side visual exemplar is cataloged in [reference-samples.md](reference-samples.md) as **MD-REF-01**. It is a layout/visual-treatment guideline with its actual PNG bytes stored in ChatGPT Library, **not** an automatically loaded image or a transferable SUV-design template. A new subject still owns all object-specific geometry, materials and hidden-side uncertainty.
+
 M-LazyBuilder's EX-REF-02/03 approved exteriors establish a useful **presentation pattern**: four balanced large subject views, clean neutral background, thin dividers and short labels. This does **not** approve their house architecture, materials, roof shapes, block-building scale or ornaments as reusable Blockbench model style. Do not claim those example pixels were inspected in a particular generation unless actually accessible.
 
 **Four-side MODEL baseline:** FRONT top-left, RIGHT top-right, BACK bottom-left, LEFT bottom-right. Directions are object-relative, not image-left/right or arbitrary label aliases. One frozen object-space brief must own component count, widths/depths/heights, contacts, gaps, color and material ownership, and orientation; only the camera moves. Image-generation text can request nominal orthographic views, **not prove calibrated 90° camera rotations or true 3D topology**. No side is replaced by a HERO even when the model is visually symmetric or simple.
