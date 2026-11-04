@@ -366,7 +366,7 @@ export function registerCoreGatewayTools(
                 semantic_part_grounding: summarizeReferencePartRegions(
                   referenceEvidence.map((image) => ({
                     id: image.id, view: image.view, sha256: image.sha256,
-                    regions: image.regions,
+                    status: image.status, regions: image.regions,
                   })),
                   referencePartRoles
                 ),

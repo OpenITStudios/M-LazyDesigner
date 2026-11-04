@@ -94,6 +94,36 @@ describe("source-image region → semantic-part evidence", () => {
     expect(parseReferenceImageRegions(undefined)).toEqual([]);
   });
 
+  test("DRAFT and unapproved regions cannot contaminate approved coverage", () => {
+    const region = parseReferenceImageRegions([{
+      id: "main", part_id: "body", evidence_role: "PRIMARY_VOLUME",
+      visibility: "DIRECT", box_uv: [0.1, 0.15, 0.8, 0.85],
+    }])!;
+    const images = [{
+      id: "approved", view: "front" as const, status: "APPROVED",
+      sha256: "a".repeat(64), regions: region,
+    }, {
+      id: "draft", view: "back" as const, status: "DRAFT",
+      sha256: "b".repeat(64), regions: region,
+    }, {
+      id: "unknown", view: "left" as const, status: null,
+      sha256: "c".repeat(64), regions: region,
+    }];
+    const summary = summarizeReferencePartRegions(images, [{ id: "body", role: "GEOMETRY" }]);
+    expect(summary.region_count).toBe(1);
+    expect(summary.parts[0]).toMatchObject({
+      directly_visible_views: ["front"],
+      geometry_region_ids: ["approved:main"],
+      hidden_shape_status: "UNVERIFIED",
+    });
+    expect(summary.visual_verdict).toBe("NOT_EVALUATED");
+    const draftOnly = summarizeReferencePartRegions(images.slice(1));
+    expect(draftOnly).toMatchObject({
+      state: "NO_ANNOTATIONS", part_count: 0, region_count: 0,
+      visual_verdict: "NOT_EVALUATED",
+    });
+  });
+
   test("distinct images with the same view never fabricate independent multi-view support", () => {
     const region = parseReferenceImageRegions([
       { id: "seat", part_id: "seat", evidence_role: "PRIMARY_VOLUME",

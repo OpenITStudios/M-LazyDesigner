@@ -430,6 +430,10 @@ motion:   STATIC | RIGID | ARTICULATED | FLEXIBLE | UNKNOWN
 evidence: SUPPORTED | PROVISIONAL | CONFLICTING | UNAVAILABLE
 ```
 
+**Source-declared P1 integrity:** when an existing `images[].part_world_constraints[]` entry explicitly has `required: true` for a `GEOMETRY` part and that `parts[].evidence` is `UNAVAILABLE` or `CONFLICTING`, Control blocks Geometry readiness even if the manifest claims `READY`. This is a contradiction in **authored source facts**, not automatic pixel interpretation. Unknown parts without an explicit `required` claim, occlusion alone, and legitimate single-view designs do not trigger this blocker. A nonempty `unknowns.blocking` invalidates an `overall: READY` declaration but does not arbitrarily assign an unscoped unknown to an unrelated stage.
+
+**Image approval and coverage:** when every image declared for an otherwise-`READY` stage is `DRAFT` or lacks `APPROVED` status, Control yields `NEEDS_REVIEW` for that stage. An optional DRAFT alongside sufficient approved evidence does not invalidate independent READY work. Annotations from a declared DRAFT/non-approved image are not counted as approved semantic-part view coverage; their bytes may still be delivered for review. None of these checks visually verifies a generated panel or native Blockbench model.
+
 ### `articulation`
 
 Use only when Geometry/Animation decisions depend on a joint/relationship. Record motion intent, pivot region, supported axis/bend direction, overlap/clearance/contact constraints and risk; never invent final pivot coordinates or motion limits.

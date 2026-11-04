@@ -364,6 +364,43 @@ export function parseReferencePackage(
     }
   }
 
+  // Only an explicitly required world-space part with an explicitly unresolved
+  // GEOMETRY evidence state is a P1 readiness contradiction. Do not guess
+  // importance from a missing annotation or from an occluded source view.
+  // Inspect ALL parts in the source, not the capped semantic_facts projection.
+  const requiredGeometryPartIds = new Set(images.flatMap((image) =>
+    (image.part_world_constraints ?? []).filter((claim) =>
+      claim.required === true
+    ).map((claim) => claim.part_id)
+  ));
+  const unresolvedRequiredGeometry = (Array.isArray(root.parts) ? root.parts : [])
+    .flatMap((entry) => {
+      const part = record(entry);
+      const id = stringValue(part?.id);
+      const role = stringValue(part?.role)?.toUpperCase();
+      const evidence = stringValue(part?.evidence)?.toUpperCase();
+      return id && role === "GEOMETRY" && requiredGeometryPartIds.has(id) &&
+        (evidence === "UNAVAILABLE" || evidence === "CONFLICTING")
+        ? [id] : [];
+    });
+  const declaredBlocking = stringList(unknowns?.blocking);
+  const sourceBlockers = unresolvedRequiredGeometry.map((id) =>
+    "REFERENCE_REQUIRED_GEOMETRY_EVIDENCE_UNRESOLVED:" + id
+  );
+  const blockingUnknowns = [...new Set([...declaredBlocking, ...sourceBlockers])];
+  const hasDeclaredBlocking = Array.isArray(unknowns?.blocking) &&
+    unknowns.blocking.length > 0;
+  // An unscoped blocking unknown invalidates an overall READY claim, not
+  // an unrelated, explicitly READY stage. Only P1 Geometry evidence above
+  // is strong enough to select and block its owning stage.
+  const overallReadiness = stringValue(readiness?.overall);
+  const geometryReadiness = stringValue(readiness?.geometry);
+  const correctedOverall = unresolvedRequiredGeometry.length > 0 ||
+    (hasDeclaredBlocking && overallReadiness?.toUpperCase() === "READY")
+    ? "BLOCKED" : overallReadiness;
+  const correctedGeometry = unresolvedRequiredGeometry.length > 0
+    ? "BLOCKED" : geometryReadiness;
+
   return {
     available: true,
     source_path: sourcePath,
@@ -390,8 +427,8 @@ export function parseReferencePackage(
       animation_required: boolOrNull(requirements?.animation_required),
     },
     readiness: {
-      overall: stringValue(readiness?.overall),
-      geometry: stringValue(readiness?.geometry),
+      overall: correctedOverall,
+      geometry: correctedGeometry,
       texture: stringValue(readiness?.texture),
       animation: stringValue(readiness?.animation),
     },
@@ -417,7 +454,7 @@ export function parseReferencePackage(
             review_state: stringValue(particle?.review_state),
           }
         : null,
-    blocking_unknowns: stringList(unknowns?.blocking),
+    blocking_unknowns: blockingUnknowns,
     non_blocking_unknowns: stringList(unknowns?.non_blocking),
     truncated_sections: truncatedSections,
     documents: {

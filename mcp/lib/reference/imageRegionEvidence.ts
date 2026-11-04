@@ -72,6 +72,8 @@ export function parseReferenceImageRegions(input: unknown): ReferenceImageRegion
 
 export type ReferenceRegionImage = {
   id: string;
+  /** When supplied by an actual package, only APPROVED authorizes coverage. */
+  status?: string | null;
   view?: ModelView | null;
   sha256?: string | null;
   regions?: readonly ReferenceImageRegion[];
@@ -120,7 +122,10 @@ export function summarizeReferencePartRegions(
   }> = [];
   let regionCount = 0;
   for (const image of images) {
-    if (!image.view || !image.sha256) continue;
+    // Legacy metadata-only callers may omit status; a supplied DRAFT/null is
+    // never approved coverage. Approval still does not prove pixel similarity.
+    if (!image.view || !image.sha256 ||
+        (image.status !== undefined && image.status !== "APPROVED")) continue;
     for (const region of image.regions ?? []) {
       regionCount++;
       let row = parts.get(region.part_id);

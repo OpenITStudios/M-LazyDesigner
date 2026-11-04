@@ -424,6 +424,68 @@ describe("Control reference parser", () => {
     }] })).toBeNull();
   });
 
+  test("explicit required P1 Geometry evidence cannot remain READY when UNAVAILABLE or CONFLICTING", () => {
+    const build = (evidence: string, required = true, fillerCount = 0) => ({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "Generic assembly", kind: "MODEL", profile: "GENERIC" },
+      parts: [
+        ...Array.from({ length: fillerCount }, (_, index) => ({
+          id: "other_" + index, role: "GEOMETRY", evidence: "SUPPORTED",
+        })),
+        { id: "rear_support", role: "GEOMETRY", evidence },
+      ],
+      images: [{
+        id: "IMG_FRONT", file: "images/front.png", view: "front",
+        status: "APPROVED", used_by: ["GEOMETRY"],
+        part_world_constraints: [{
+          part_id: "rear_support", attachment_parent: "body", required,
+        }],
+      }],
+      readiness: {
+        overall: "READY", geometry: "READY", texture: "READY",
+        animation: "NOT_REQUIRED",
+      },
+    });
+    const parse = (doc: unknown) =>
+      parseReferencePackage(JSON.stringify(doc), "/pkg/REFERENCE.json", "/pkg");
+    for (const evidence of ["UNAVAILABLE", "CONFLICTING"]) {
+      const result = parse(build(evidence));
+      expect(result?.readiness).toMatchObject({
+        overall: "BLOCKED", geometry: "BLOCKED", texture: "READY",
+      });
+      expect(result?.blocking_unknowns).toContain(
+        "REFERENCE_REQUIRED_GEOMETRY_EVIDENCE_UNRESOLVED:rear_support"
+      );
+    }
+    // The source-level check must not lose the 25th part to the compact
+    // 24-row stage projection.
+    const overflow = parse(build("UNAVAILABLE", true, 25));
+    expect(overflow?.truncated_sections).toContain("parts");
+    expect(overflow?.readiness.geometry).toBe("BLOCKED");
+
+    // A non-required/fully supported part is not a reason to invent a P1
+    // blocker; unknown source views alone are not a geometry inference.
+    expect(parse(build("UNAVAILABLE", false))?.readiness.geometry).toBe("READY");
+    expect(parse(build("SUPPORTED"))?.readiness.geometry).toBe("READY");
+  });
+
+  test("unscoped blocking unknowns invalidate overall READY but preserve independent stages", () => {
+    const result = parseReferencePackage(JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "Generic assembly", kind: "MODEL", profile: "GENERIC" },
+      unknowns: {
+        blocking: ["exact texture region still undecided"], non_blocking: [],
+      },
+      readiness: {
+        overall: "READY", geometry: "READY", texture: "NEEDS_REVIEW",
+      },
+    }), "/pkg/REFERENCE.json", "/pkg");
+    expect(result?.readiness).toMatchObject({
+      overall: "BLOCKED", geometry: "READY", texture: "NEEDS_REVIEW",
+    });
+    expect(result?.blocking_unknowns).toContain("exact texture region still undecided");
+  });
+
   test("empty reference keeps a stable unavailable shape", () => {
     expect(emptyReference("REFERENCE_NOT_FOUND")).toMatchObject({
       available: false,

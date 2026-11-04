@@ -370,6 +370,80 @@ describe("actual reference image evidence — Control owner", () => {
     expect(geometry.blocking_unknowns).toContain("REFERENCE_CROSS_VIEW_CONFLICT");
   });
 
+  test("unapproved-only stage images cannot silently inherit declared READY", async () => {
+    const root = await packageRoot([{
+      id: "DRAFT_GEOMETRY", file: "images/front.png", view: "front",
+      status: "DRAFT", used_by: ["GEOMETRY"],
+    }]);
+    await writeFile(join(root, "REFERENCE.json"), JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "Generic frame", kind: "MODEL", profile: "GENERIC" },
+      readiness: {
+        overall: "READY", geometry: "READY",
+        texture: "READY", animation: "NOT_REQUIRED",
+      },
+      images: [{
+        id: "DRAFT_GEOMETRY", file: "images/front.png", view: "front",
+        status: "DRAFT", used_by: ["GEOMETRY"],
+      }],
+    }));
+    const ref = await readReferencePackageProjection(root);
+    expect(ref.images[0]).toMatchObject({
+      id: "DRAFT_GEOMETRY", integrity: "VERIFIED", status: "DRAFT",
+    });
+    expect(ref.readiness).toMatchObject({
+      overall: "NEEDS_REVIEW", geometry: "NEEDS_REVIEW", texture: "READY",
+    });
+    expect(ref.non_blocking_unknowns).toContain(
+      "REFERENCE_STAGE_IMAGE_APPROVAL_PENDING:GEOMETRY"
+    );
+    expect(buildControlStageContext({
+      domain: "GEOMETRY", reference: ref, workspace,
+    }).stage_readiness).toBe("NEEDS_REVIEW");
+    // DRAFT bytes can still be delivered for review. Their status never
+    // becomes approval/visual quality proof.
+    expect((await readReferenceImageEvidence(ref, ["DRAFT_GEOMETRY"]))[0].status)
+      .toBe("DRAFT");
+  });
+
+  test("optional DRAFT alongside approved front does not block independent Geometry", async () => {
+    const images = [{
+      id: "IMG_FRONT", file: "images/front.png", view: "front",
+      status: "APPROVED", used_by: ["GEOMETRY"],
+      regions: [{ id: "body", part_id: "body",
+        evidence_role: "PRIMARY_VOLUME", visibility: "DIRECT",
+        box_uv: [0.1, 0.1, 0.9, 0.9] }],
+    }, {
+      id: "IMG_BACK_DRAFT", file: "images/back.png", view: "back",
+      status: "DRAFT", used_by: ["GEOMETRY"],
+      regions: [{ id: "rear", part_id: "body",
+        evidence_role: "PRIMARY_VOLUME", visibility: "DIRECT",
+        box_uv: [0.1, 0.1, 0.9, 0.9] }],
+    }];
+    const root = await packageRoot(images);
+    await writeFile(join(root, "images/back.png"), BLUE_PNG);
+    await writeFile(join(root, "REFERENCE.json"), JSON.stringify({
+      schema: "lazydesigner-reference-v1",
+      asset: { name: "Generic frame", kind: "MODEL", profile: "GENERIC" },
+      parts: [{ id: "body", role: "GEOMETRY" }],
+      readiness: { overall: "READY", geometry: "READY" },
+      images,
+    }));
+    const ref = await readReferencePackageProjection(root);
+    expect(ref.readiness.geometry).toBe("READY");
+    expect(ref.cross_view_evidence).toBeUndefined();
+    const delivered = await readReferenceImageEvidence(ref, ["IMG_FRONT", "IMG_BACK_DRAFT"]);
+    expect(delivered.map((image) => image.status)).toEqual(["APPROVED", "DRAFT"]);
+    const coverage = summarizeReferencePartRegions(ref.images, [
+      { id: "body", role: "GEOMETRY" },
+    ]);
+    expect(coverage.parts[0]).toMatchObject({
+      directly_visible_views: ["front"], geometry_region_ids: ["IMG_FRONT:body"],
+      hidden_shape_status: "UNVERIFIED",
+    });
+    expect(coverage.visual_verdict).toBe("NOT_EVALUATED");
+  });
+
   test("fresh image content invalidates stage fingerprint when REFERENCE.json is unchanged", async () => {
     const root = await packageRoot();
     const initial = await readReferencePackageProjection(root);

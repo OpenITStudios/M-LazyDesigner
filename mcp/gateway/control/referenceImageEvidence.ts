@@ -200,6 +200,23 @@ export async function inspectReferenceImages(
     if (image.used_by.includes("TEXTURE")) readiness.texture = "BLOCKED";
     if (image.used_by.includes("ANIMATION")) readiness.animation = "BLOCKED";
   }
+  // A stage whose declared source images are ALL unapproved cannot claim
+  // image-backed READY. One approved view may be sufficient; an optional
+  // DRAFT does not invalidate it. This never assesses pixels or adds a view quota.
+  const pendingImageStages: string[] = [];
+  for (const [stage, field] of [
+    ["GEOMETRY", "geometry"],
+    ["TEXTURE", "texture"],
+    ["ANIMATION", "animation"],
+  ] as const) {
+    const relevant = images.filter((image) => image.used_by.includes(stage));
+    if (relevant.length > 0 &&
+        relevant.every((image) => image.status !== "APPROVED") &&
+        readiness[field]?.trim().toUpperCase() === "READY") {
+      readiness[field] = "NEEDS_REVIEW";
+      pendingImageStages.push(stage);
+    }
+  }
   const crossView = summarizeDeclaredCrossViewConstraints(images);
   const crossViewBlocker = crossView?.state === "unavailable"
     ? "REFERENCE_CROSS_VIEW_UNAVAILABLE:" + crossView.reason
@@ -207,8 +224,12 @@ export async function inspectReferenceImages(
       ? "REFERENCE_CROSS_VIEW_CONFLICT"
       : null;
   if (crossViewBlocker) readiness.geometry = "BLOCKED";
-  if ((broken.length || crossViewBlocker) && readiness.overall === "READY") {
+  if ((broken.length || crossViewBlocker) &&
+      readiness.overall?.trim().toUpperCase() === "READY") {
     readiness.overall = "BLOCKED";
+  } else if (pendingImageStages.length > 0 &&
+      readiness.overall?.trim().toUpperCase() === "READY") {
+    readiness.overall = "NEEDS_REVIEW";
   }
   return {
     ...projection,
@@ -220,6 +241,14 @@ export async function inspectReferenceImages(
         ...projection.blocking_unknowns,
         ...broken.map((image) => "REFERENCE_IMAGE_" + image.integrity + ":" + image.id),
         ...(crossViewBlocker ? [crossViewBlocker] : []),
+      ]),
+    ],
+    non_blocking_unknowns: [
+      ...new Set([
+        ...projection.non_blocking_unknowns,
+        ...pendingImageStages.map((stage) =>
+          "REFERENCE_STAGE_IMAGE_APPROVAL_PENDING:" + stage
+        ),
       ]),
     ],
     fingerprint: createHash("sha256").update(canonicalJson({
