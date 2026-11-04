@@ -535,6 +535,23 @@ export const FIXTURE_CONTRACT_TESTS_BY_PATH: Readonly<Record<string, readonly st
 };
 
 function sharedContractTestsForPath(path: string): readonly string[] {
+  // Canonical capability graph/manifest owners affect both search readiness
+  // and direct-invocation preconditions. Project Graph typecheck alone cannot
+  // prove their behavior. Reuse existing focused tests, never a broad sweep.
+  if (path === "mcp/gateway/capabilities/graph.ts") {
+    return [
+      "mcp/gateway/capabilities/graph.test.ts",
+      "mcp/tests/gateway-precondition-execution.test.ts",
+    ];
+  }
+  if (path === "mcp/gateway/capabilities/manifest.ts") {
+    return [
+      "mcp/gateway/capabilities/manifest.test.ts",
+      "mcp/gateway/capabilities/graph.test.ts",
+      "mcp/tests/gateway-precondition-execution.test.ts",
+      "mcp/tests/capability-semantic-registry.test.ts",
+    ];
+  }
   const goldenReportTests = GOLDEN_REPORT_TESTS_BY_PATH[path];
   if (goldenReportTests) return goldenReportTests;
   if (path === "mcp/docs/GOLDEN_TASKS.md") {

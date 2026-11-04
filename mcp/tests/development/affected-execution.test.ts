@@ -1393,6 +1393,45 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("canonical graph and manifest changes select actual prerequisite and semantic regressions", async () => {
+    const cases: Array<[string, string[], boolean]> = [
+      ["mcp/gateway/capabilities/graph.ts", [
+        "mcp/gateway/capabilities/graph.test.ts",
+        "mcp/tests/gateway-precondition-execution.test.ts",
+      ], false],
+      ["mcp/gateway/capabilities/manifest.ts", [
+        "mcp/gateway/capabilities/manifest.test.ts",
+        "mcp/gateway/capabilities/graph.test.ts",
+        "mcp/tests/gateway-precondition-execution.test.ts",
+        "mcp/tests/capability-semantic-registry.test.ts",
+      ], true],
+    ];
+    for (const [source, regressions, generatedDocsAffected] of cases) {
+      const plan = planAffectedExecution({
+        changedPaths: [source], semanticImpact: impact(),
+      });
+      expect(plan.fallback_full_verify, source).toBe(false);
+      expect(plan.checks, source).toContain("PROJECT_GRAPH");
+      expect(plan.checks, source).toContain("TARGETED_TESTS");
+      expect(plan.checks.includes("DOCS_FRESHNESS"), source)
+        .toBe(generatedDocsAffected);
+      expect(plan.targeted_tests, source).toEqual([...regressions].sort());
+      expect(plan.commands, source).toContain(
+        `bun test ${[...regressions].sort().map(p => p.slice(4)).join(" ")}`
+      );
+      for (const regression of regressions) {
+        expect(await Bun.file(regression.slice(4)).exists(), regression).toBe(true);
+      }
+    }
+    // The full builder also reports the graph-source semantic revision gap;
+    // selecting tests does not make a generator-coupled source edit safe.
+    const graphPlan = buildAffectedExecutionPlan([
+      "mcp/gateway/capabilities/graph.ts",
+    ]);
+    expect(graphPlan.semantic_source_alignment?.generator_sync_required).toBe(true);
+    expect(graphPlan.semantic_source_alignment?.status).toBe("SNAPSHOT_REQUIRED");
+  });
+
   test("development and knowledge owners select their exact consumer regression tests", async () => {
     const scenarios: Array<[string, string[]]> = [
       ["mcp/lib/semantic/knowledge.ts", [
