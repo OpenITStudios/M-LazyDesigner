@@ -407,7 +407,7 @@ These are test-plan acceptance scenarios **not executed**. A source-only unit te
 | P0-4 | Stable Group ancestry and source mesh/face manifest | snapshot.ts + pure contract type in mcp/lib/publication | versioned compact source manifest, no duplicate parser |
 | P0-5 | Full GLB primitive/texture semantic parity | glbIntegrity.ts + worker/core_assets.py | assert material slot and UV correspondence, defer visual comparison to native gate |
 | P1-1 | Historical snapshot validity vs CURRENT project status | execute.ts + snapshot.ts | SOURCE-AUTHORED: publish provenance-labeled historical PNG, fail closed on cancelled/uncertain subprocess |
-| P1-2 | Persistent render sidecar and recovery states | execute.ts | bounded metadata and safe output commit transaction |
+| P1-2 | Persistent render sidecar and recovery states | gateway/providers/blenderRender.ts + lib/publication/renderCompletion.ts | SOURCE-AUTHORED: bounded completed-outcome JSON+preview and SHA-checked recover; active job restart recovery is intentionally NOT built |
 | P1-3 | Per-operation retry/read-only contract | Gateway interruptionPolicy + branch manifest | SOURCE-AUTHORED: status/preview retryable after interrupted transport, start/cancel remain OUTCOME_UNKNOWN |
 | P1-4 | Actual camera/material/light visual quality | worker/*.py + manual/AI image review | compare real Cycles PNGs; no fake scoring |
 | P2 | Optional render-only crop evidence optimization | quality_report.py / existing preview operation | only when a specific visible detail cannot be judged at 384px |

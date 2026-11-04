@@ -2,6 +2,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { inspectPublicationPng } from "@/lib/publication/pngIntegrity";
+import { acquirePublicationRenderDirectoryLease } from "@/lib/publication/renderDirectoryLease";
 import { getRuntimeLifecycleSnapshot, runRuntimeOperationExclusive } from "@/lib/runtime/lifecycle";
 import { validateHdriBytes } from "@/lib/publication/environment";
 import {
@@ -219,6 +220,14 @@ export async function renderPreparedPublication(
   const workdir = join(outputDirectory, ".lazydesigner-render-" + randomBytes(12).toString("hex"));
   // Unique fresh workdir: never reuse or follow paths provided by a model.
   fs.mkdirSync(workdir);
+  let releaseDirectoryLease: () => void;
+  try {
+    releaseDirectoryLease = acquirePublicationRenderDirectoryLease(fs, outputDirectory);
+  } catch (error) {
+    // This failed before any worker files existed; remove only our empty dir.
+    try { fs.rmdirSync(workdir); } catch { /* Diagnostic-only cleanup. */ }
+    throw error;
+  }
   const glbPath = join(workdir, "model.glb");
   const workerPath = join(workdir, "render.py");
   const jobPath = join(workdir, "job.json");
@@ -384,6 +393,8 @@ export async function renderPreparedPublication(
       } catch {
         console.warn("[LazyDesigner Render] Temporary render job cleanup failed:", workdir);
       }
+      try { releaseDirectoryLease(); }
+      catch { console.warn("[LazyDesigner Render] Directory-scoped Cycles lease cleanup failed:", outputDirectory); }
     }
   }
 }

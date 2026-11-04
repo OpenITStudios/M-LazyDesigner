@@ -4,9 +4,18 @@
  */
 import { randomBytes, createHash } from "node:crypto";
 import * as childProcess from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import * as nodeFs from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { acquirePublicationRenderDirectoryLease } from "@/lib/publication/renderDirectoryLease";
+import {
+  BLENDER_COMPLETION_SUFFIX, MAX_BLENDER_COMPLETION_BYTES,
+  MAX_BLENDER_PNG_BYTES, MAX_BLENDER_PREVIEW_BYTES,
+  BLENDER_COMPLETION_KIND, blenderCompletionPaths, blenderCompletionSchema,
+ 
+} from "@/lib/publication/renderCompletion";
 import {
   lstat, stat, readFile, writeFile, mkdtemp, rm, realpath,
+  readdir,
 } from "node:fs/promises";
 import { basename, dirname, join, resolve, extname } from "node:path";
 import { publicationRenderParameters, makePublicationJob, type PublicationRenderRequest } from "@/lib/publication/contracts";
@@ -48,11 +57,19 @@ export const blenderRenderControlParameters = z.discriminatedUnion("operation", 
     operation: z.literal("cancel"),
     job_id: z.string().regex(ID),
   }).strict(),
+  z.object({
+    operation: z.literal("recover"),
+    receipt_path: z.string().min(1).max(2048),
+  }).strict(),
+  z.object({
+    operation: z.literal("release"),
+    handoff_path: z.string().min(1).max(2048),
+  }).strict(),
 ]);
 
 export const BLENDER_RENDER_TOOL: BackendTool = {
   name: BLENDER_RENDER_CAPABILITY,
-  description: "Control the Blender 5.2 Cycles renderer through the main LazyDesigner MCP Gateway, independently of the Blockbench plugin. First use render_publication operation=handoff in Blockbench to export a verified GLB+manifest. Then blender_render operation=start consumes that handoff and starts a Blender child process owned by the Gateway. status, preview and cancel use the returned job ID (status may omit it to recover the latest process-local job). A frozen snapshot is never claimed as the current editor state; the final PNG remains an unapproved DRAFT.",
+  description: "Control the Blender 5.2 Cycles renderer through the main LazyDesigner MCP Gateway, independently of the Blockbench plugin. First use render_publication operation=handoff in Blockbench to export a verified GLB+manifest. Then blender_render operation=start consumes that handoff and starts a Blender child process owned by the Gateway. status, preview and cancel use the returned job ID (status may omit it to recover the latest process-local job); recover reopens a validated completed PNG receipt after Gateway restart, release deletes an explicitly chosen verified handoff. A frozen snapshot is never claimed as the current editor state; the final PNG remains an unapproved DRAFT.",
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   // The same Zod contract validates local calls and the schema advertised to AI.
   // Branch selection is sourced from the canonical Gateway branch manifest.
@@ -91,6 +108,8 @@ type RenderReceipt = Readonly<{
     environment: Readonly<{ mode: "studio" | "hdri"; sha256: string | null }>;
   }>;
   output_path: string;
+  /** Durable completion sidecar, distinct from the immutable source handoff. */
+  completion_receipt_path: string;
   output_png_sha256: string;
   output_png_bytes: number;
   preview_sha256: string;
@@ -106,6 +125,7 @@ type Job = {
   state: State;
   phase: Phase;
   started_at: string;
+  handoff_path: string | null;
   error_code: string | null;
   source_sha256: string | null;
   controller: AbortController;
@@ -211,6 +231,8 @@ async function verifyHandoff(path: string): Promise<{
 export class BlenderRenderProvider {
   private current: Job | null = null;
   private retired = false;
+  private readonly releasingHandoffs = new Set<string>();
+  private recovering = false;
 
   async isAvailable(): Promise<boolean> {
     // Discoverable even when Blockbench is offline. The explicit Blender
@@ -242,18 +264,24 @@ export class BlenderRenderProvider {
     if (!outDir.isDirectory() || !executable.isFile()) {
       throw new Error("PUBLICATION_BLENDER_OUTPUT_OR_EXECUTABLE_INVALID");
     }
-    if (existsSync(request.output_path)) {
-      throw new Error("PUBLICATION_OUTPUT_EXISTS: overwrite disabled.");
+    const completionPaths = blenderCompletionPaths(request.output_path);
+    if (existsSync(request.output_path) ||
+        existsSync(completionPaths.receipt_path) ||
+        existsSync(completionPaths.preview_path)) {
+      throw new Error("PUBLICATION_OUTPUT_EXISTS: PNG or durable receipt already exists; overwrite disabled.");
     }
-    const workdir = await mkdtemp(join(outputDirectory, ".lazydesigner-blender-job-"));
-    const glbPath = join(workdir, "model.glb");
-    const workerPath = join(workdir, "render.py");
-    const jobPath = join(workdir, "job.json");
-    const outputPath = join(workdir, "output.png");
-    const reportPath = join(workdir, "report.json");
-    const evidencePath = join(workdir, "evidence.png");
+    const releaseDirectoryLease =
+      acquirePublicationRenderDirectoryLease(nodeFs, outputDirectory);
+    let workdir: string | null = null;
     let preserve = false;
     try {
+      workdir = await mkdtemp(join(outputDirectory, ".lazydesigner-blender-job-"));
+      const glbPath = join(workdir, "model.glb");
+      const workerPath = join(workdir, "render.py");
+      const jobPath = join(workdir, "job.json");
+      const outputPath = join(workdir, "output.png");
+      const reportPath = join(workdir, "report.json");
+      const evidencePath = join(workdir, "evidence.png");
       assertRunning(job);
       await Promise.all([
         writeFile(glbPath, glb, { flag: "wx" }),
@@ -316,15 +344,64 @@ export class BlenderRenderProvider {
       inspectPublicationPng(evidence,
         report.preview.dimensions[0], report.preview.dimensions[1]);
       assertRunning(job);
-      job.phase = "PUBLISHING";
-      // Deliberately synchronous no-overwrite output promotion: cancel
-      // cannot interleave between the final check and atomic exclusive write.
-      if (existsSync(request.output_path)) {
-        throw new Error("PUBLICATION_BLENDER_OUTPUT_RACE_COLLISION");
+      // A completed receipt is reconstructible after Gateway restart without
+      // asserting that the native editor still matches its immutable handoff.
+      const completion = blenderCompletionSchema.parse({
+        kind: BLENDER_COMPLETION_KIND,
+        schema_version: 1,
+        job_id: job.id,
+        started_at: job.started_at,
+        completed_at: new Date().toISOString(),
+        source_project_uuid: document.project_uuid,
+        source_sha256: document.source_sha256,
+        source_manifest_sha256: document.source_manifest_sha256,
+        glb_sha256: document.glb_sha256,
+        worker_sha256: BLENDER_WORKER_SHA256,
+        cube_count: document.cube_count,
+        material_count: document.material_count,
+        request,
+        output_png_sha256: hash(png),
+        output_png_bytes: png.length,
+        preview_sha256: hash(evidence),
+        preview_bytes: evidence.length,
+        preview_dimensions: [
+          report.preview.dimensions[0], report.preview.dimensions[1],
+        ],
+        diagnostics: report,
+      });
+      const completionBytes = Buffer.from(JSON.stringify(completion));
+      if (completionBytes.length > MAX_BLENDER_COMPLETION_BYTES) {
+        throw new Error("PUBLICATION_BLENDER_COMPLETION_RECEIPT_OVERSIZED");
       }
-      writeFileSync(request.output_path, png, { flag: "wx" });
-      if (hash(readFileSync(request.output_path)) !== hash(png)) {
-        throw new Error("PUBLICATION_BLENDER_OUTPUT_READBACK_MISMATCH");
+      assertRunning(job);
+      job.phase = "PUBLISHING";
+      // Write only known, exclusive files. Sidecar last is the commit marker
+      // for completed outcome recovery after a Gateway restart.
+      const published: Array<{ path: string; sha256: string }> = [];
+      try {
+        for (const [path, bytes] of [
+          [request.output_path, png],
+          [completionPaths.preview_path, evidence],
+          [completionPaths.receipt_path, completionBytes],
+        ] as const) {
+          writeFileSync(path, bytes, { flag: "wx" });
+          published.push({ path, sha256: hash(bytes) });
+          if (hash(readFileSync(path)) !== hash(bytes)) {
+            throw new Error("PUBLICATION_BLENDER_OUTPUT_READBACK_MISMATCH:" + path);
+          }
+        }
+      } catch (error) {
+        // Revert only bytes exactly matching this attempted publication.
+        // Never delete a file replaced by another actor during a failure.
+        for (const item of published.reverse()) {
+          try {
+            if (existsSync(item.path) &&
+                hash(readFileSync(item.path)) === item.sha256) {
+              unlinkSync(item.path);
+            }
+          } catch { /* Preserve uncertain files for explicit inspection. */ }
+        }
+        throw error;
       }
       job.preview = Buffer.from(evidence);
       return {
@@ -347,6 +424,7 @@ export class BlenderRenderProvider {
           },
         },
         output_path: request.output_path,
+        completion_receipt_path: completionPaths.receipt_path,
         output_png_sha256: hash(png),
         output_png_bytes: png.length,
         preview_sha256: hash(evidence),
@@ -365,18 +443,24 @@ export class BlenderRenderProvider {
       if (preserve) {
         console.warn("[LazyDesigner Blender MCP] Unconfirmed process exit; retained isolated assets:", workdir);
       } else {
-        try { await rm(workdir, { recursive: true, force: true }); }
-        catch { console.warn("[LazyDesigner Blender MCP] Isolated job cleanup failed:", workdir); }
+        if (workdir) {
+          try { await rm(workdir, { recursive: true, force: true }); }
+          catch { console.warn("[LazyDesigner Blender MCP] Isolated job cleanup failed:", workdir); }
+        }
+        try { releaseDirectoryLease(); }
+        catch { console.warn("[LazyDesigner Blender MCP] Directory-scoped Cycles lease cleanup failed:", outputDirectory); }
       }
     }
   }
 
   start(handoffPath: unknown, requestArgs: unknown): JsonRecord {
     if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
+    if (this.recovering) throw new Error("PUBLICATION_BLENDER_RECOVERY_IN_PROGRESS");
     if (this.current && ["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(this.current.state)) {
       throw new Error("PUBLICATION_BLENDER_JOB_BUSY");
     }
     if (typeof handoffPath !== "string" ||
+        this.releasingHandoffs.has(handoffPath) ||
         !isAbsoluteFilesystemPath(handoffPath) ||
         basename(handoffPath) !== "handoff.json" ||
         !HANDOFF_DIR.test(basename(dirname(handoffPath)))) {
@@ -386,7 +470,8 @@ export class BlenderRenderProvider {
     const job: Job = {
       id: "blender_" + randomBytes(12).toString("hex"),
       state: "RUNNING", phase: "PREPARING_ASSETS",
-      started_at: new Date().toISOString(), error_code: null,
+      started_at: new Date().toISOString(), handoff_path: handoffPath,
+      error_code: null,
       source_sha256: null, controller: new AbortController(),
       receipt: null, preview: null, task: null,
     };
@@ -427,6 +512,143 @@ export class BlenderRenderProvider {
     return status(job);
   }
 
+  /**
+   * Recover only a COMPLETED job from its durable, exclusive receipt marker.
+   * This never resurrects Blender after Gateway restart or claims a live model.
+   */
+  async recover(receiptPath: string): Promise<JsonRecord> {
+    if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
+    if (this.current && ["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(this.current.state)) {
+      throw new Error("PUBLICATION_BLENDER_JOB_BUSY");
+    }
+    if (!isAbsoluteFilesystemPath(receiptPath) ||
+        !receiptPath.endsWith(BLENDER_COMPLETION_SUFFIX) ||
+        receiptPath.length > 2048 || /[\x00-\x1f]/.test(receiptPath)) {
+      throw new Error("PUBLICATION_BLENDER_COMPLETION_PATH_INVALID");
+    }
+    if (this.recovering) throw new Error("PUBLICATION_BLENDER_RECOVERY_IN_PROGRESS");
+    this.recovering = true;
+    try {
+    const st = await lstat(receiptPath);
+    if (!st.isFile() || st.isSymbolicLink() ||
+        st.size < 64 || st.size > MAX_BLENDER_COMPLETION_BYTES) {
+      throw new Error("PUBLICATION_BLENDER_COMPLETION_FILE_INVALID");
+    }
+    const bytes = await readFile(receiptPath);
+    if (bytes.length > MAX_BLENDER_COMPLETION_BYTES) {
+      throw new Error("PUBLICATION_BLENDER_COMPLETION_OVERSIZED");
+    }
+    let parsed: unknown;
+    try { parsed = JSON.parse(bytes.toString("utf8")); }
+    catch { throw new Error("PUBLICATION_BLENDER_COMPLETION_JSON_INVALID"); }
+    const data = blenderCompletionSchema.parse(parsed);
+    const paths = blenderCompletionPaths(data.request.output_path);
+    if (paths.receipt_path !== receiptPath) {
+      throw new Error("PUBLICATION_BLENDER_COMPLETION_OUTPUT_AFFINITY_MISMATCH");
+    }
+    const [pngInfo, previewInfo] = await Promise.all([
+      lstat(data.request.output_path), lstat(paths.preview_path),
+    ]);
+    if (!pngInfo.isFile() || pngInfo.isSymbolicLink() ||
+        pngInfo.size !== data.output_png_bytes ||
+        pngInfo.size > MAX_BLENDER_PNG_BYTES ||
+        !previewInfo.isFile() || previewInfo.isSymbolicLink() ||
+        previewInfo.size !== data.preview_bytes ||
+        previewInfo.size > MAX_BLENDER_PREVIEW_BYTES) {
+      throw new Error("PUBLICATION_BLENDER_COMPLETION_OUTPUT_INVENTORY_INVALID");
+    }
+    const [png, previewBytes] = await Promise.all([
+      readFile(data.request.output_path), readFile(paths.preview_path),
+    ]);
+    if (hash(png) !== data.output_png_sha256 ||
+        hash(previewBytes) !== data.preview_sha256) {
+      throw new Error("PUBLICATION_BLENDER_COMPLETION_OUTPUT_SHA_MISMATCH");
+    }
+    inspectPublicationPng(png, data.request.width, data.request.height);
+    inspectPublicationPng(previewBytes,
+      data.preview_dimensions[0], data.preview_dimensions[1]);
+    const renderReceipt: RenderReceipt = {
+      state: "RENDERED_DRAFT",
+      source_project_uuid: data.source_project_uuid,
+      source_sha256: data.source_sha256,
+      source_manifest_sha256: data.source_manifest_sha256,
+      source_revision: "FROZEN_HANDOFF_NOT_LIVE_EDITOR",
+      glb_sha256: data.glb_sha256,
+      worker_sha256: data.worker_sha256,
+      render_settings: {
+        quality: data.request.quality,
+        width: data.request.width, height: data.request.height,
+        samples: data.diagnostics.render.sampling.samples,
+        noise_threshold: data.diagnostics.render.sampling.adaptive_threshold,
+        background: data.request.background, camera: data.request.camera,
+        look: data.request.look, device: data.request.device,
+        view_transform: data.request.view_transform,
+        environment: {
+          mode: data.request.environment.mode,
+          sha256: data.diagnostics.lighting.hdri_sha256,
+        },
+      },
+      output_path: data.request.output_path,
+      completion_receipt_path: receiptPath,
+      output_png_sha256: data.output_png_sha256,
+      output_png_bytes: data.output_png_bytes,
+      preview_sha256: data.preview_sha256,
+      preview_dimensions: data.preview_dimensions,
+      blender_target: "5.2.x", engine: "CYCLES",
+      diagnostics: compactPublicationDiagnostics(data.diagnostics),
+      visual_quality: "NOT_EVALUATED",
+    };
+    const record: Job = {
+      id: data.job_id, state: "RENDERED_DRAFT", phase: "FINISHED",
+      started_at: data.started_at, handoff_path: null,
+      source_sha256: data.source_sha256,
+      error_code: null, controller: new AbortController(),
+      receipt: renderReceipt, preview: Buffer.from(previewBytes),
+      task: Promise.resolve(),
+    };
+    if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
+    this.current = record;
+    return status(record);
+    } finally {
+      this.recovering = false;
+    }
+  }
+
+  /** Explicit, source-verified cleanup. Never recursively delete user folders. */
+  async releaseHandoff(handoffPath: string): Promise<JsonRecord> {
+    if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
+    if (!isAbsoluteFilesystemPath(handoffPath) ||
+        basename(handoffPath) !== "handoff.json" ||
+        !HANDOFF_DIR.test(basename(dirname(handoffPath))) ||
+        this.releasingHandoffs.has(handoffPath)) {
+      throw new Error("PUBLICATION_BLENDER_HANDOFF_PATH_INVALID");
+    }
+    const current = this.current;
+    if (current?.handoff_path === handoffPath &&
+        ["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(current.state)) {
+      throw new Error("PUBLICATION_BLENDER_HANDOFF_IN_USE");
+    }
+    this.releasingHandoffs.add(handoffPath);
+    try {
+      const { document, directory } = await verifyHandoff(handoffPath);
+      const contents = (await readdir(directory)).sort();
+      if (contents.length !== 2 ||
+          contents[0] !== "handoff.json" || contents[1] !== "model.glb") {
+        throw new Error("PUBLICATION_BLENDER_HANDOFF_CONTAINS_UNOWNED_FILES");
+      }
+      // Only exact, verified handoff-owned filenames; no recursive rm.
+      nodeFs.unlinkSync(join(directory, "handoff.json"));
+      nodeFs.unlinkSync(join(directory, "model.glb"));
+      nodeFs.rmdirSync(directory);
+      return {
+        released: true, source_project_uuid: document.project_uuid,
+        source_sha256: document.source_sha256, handoff_path: handoffPath,
+      };
+    } finally {
+      this.releasingHandoffs.delete(handoffPath);
+    }
+  }
+
   preview(id: unknown): Result {
     const job = this.requireJob(id);
     const receipt = job.receipt;
@@ -448,7 +670,7 @@ export class BlenderRenderProvider {
     };
   }
 
-  invoke(args: JsonRecord): Result {
+  async invoke(args: JsonRecord): Promise<Result> {
     const operation = blenderRenderControlParameters.parse(args);
     switch (operation.operation) {
       case "start": {
@@ -485,6 +707,27 @@ export class BlenderRenderProvider {
         };
       }
       case "preview": return this.preview(operation.job_id);
+      case "recover": {
+        const current = await this.recover(operation.receipt_path);
+        return {
+          content: [{
+            type: "text",
+            text: "Validated completed Blender PNG receipt restored: " +
+              current.job_id + ". This does not restart Blender or approve visual quality.",
+          }],
+          structuredContent: current,
+        };
+      }
+      case "release": {
+        const result = await this.releaseHandoff(operation.handoff_path);
+        return {
+          content: [{
+            type: "text",
+            text: "Explicit verified Blockbench GLB handoff released: " + operation.handoff_path,
+          }],
+          structuredContent: result,
+        };
+      }
     }
   }
 

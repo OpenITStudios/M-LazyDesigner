@@ -59,6 +59,12 @@ A Gateway-local Blender **render MCP capability** is introduced without adding a
 | ../jobs.ts | One process-local start/status/cancel controller |
 | ../../../lib/publication/ | Pure render contracts, GLB/PNG validation, material channels, atlas coverage, HDRI/source digest and report schema |
 
+## Gateway-owned recovery and bounded resource admission
+
+Both render entrypoints share the atomic `.lazydesigner-cycles-active` directory lease when using the **same output directory**. The lease remains after an unconfirmed subprocess exit; no stale lock is auto-broken. It is NOT a host-wide GPU/CPU scheduler.
+
+Gateway-owned renders now publish a final PNG, small verified PNG preview and bounded factual JSON receipt. The receipt is the LAST output commit marker and carries worker/source/GLB/PNG hashes and factual render observations. `blender_render(operation=recover)` can verify and restore a **completed** result after Gateway restart; active jobs are still cancelled on shutdown and cannot be resumed. `blender_render(operation=release)` explicitly removes only a complete, verified GLB handoff that is no longer active. None of these are claims of installed Blender/native proof.
+
 ## Render lifecycle
 
 1. Start under existing LazyDesigner MCP Runtime (four public Gateway methods, NO fifth method).

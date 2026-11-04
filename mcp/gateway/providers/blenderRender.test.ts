@@ -100,6 +100,7 @@ describe("Independent Gateway Blender MCP control contract", () => {
       .map(item => [item.branch?.value, item.operationClass])).toEqual([
         ["start", "EXPORT"], ["status", "QUERY"],
         ["preview", "QUERY"], ["cancel", "CONTROL"],
+        ["recover", "CONTROL"], ["release", "CONTROL"],
       ]);
     await registry.close();
   });
@@ -110,6 +111,12 @@ describe("Independent Gateway Blender MCP control contract", () => {
       "a".repeat(24) + "/handoff.json";
     expect(blenderRenderControlParameters.safeParse({
       operation: "status",
+    }).success).toBe(true);
+    expect(blenderRenderControlParameters.safeParse({
+      operation: "recover", receipt_path: "/tmp/render.png.lazydesigner.json",
+    }).success).toBe(true);
+    expect(blenderRenderControlParameters.safeParse({
+      operation: "release", handoff_path: path,
     }).success).toBe(true);
     for (const operation of ["status", "preview", "cancel"] as const) {
       expect(blenderRenderControlParameters.parse({ operation, job_id: jobId }))
@@ -129,6 +136,9 @@ describe("Independent Gateway Blender MCP control contract", () => {
       { operation: "status", job_id: jobId, handoff_path: path },
       { operation: "cancel", job_id: jobId, request },
       { operation: "unknown", job_id: jobId },
+      { operation: "recover" },
+      { operation: "recover", receipt_path: "relative", unexpected: true },
+      { operation: "release", handoff_path: path, job_id: jobId },
     ]) {
       expect(blenderRenderControlParameters.safeParse(invalid).success).toBe(false);
     }
@@ -146,6 +156,15 @@ describe("Independent Gateway Blender MCP control contract", () => {
     );
     expect(projectedStatus.projected).toBe(true);
     expect(JSON.stringify(projectedStatus.inputSchema)).toContain("job_id");
+    for (const [branch, field] of [
+      ["recover", "receipt_path"], ["release", "handoff_path"],
+    ] as const) {
+      const projection = projectCapabilityInputSchema(
+        "blender_render", schema, { field: "operation", value: branch },
+      );
+      expect(projection.projected).toBe(true);
+      expect(JSON.stringify(projection.inputSchema)).toContain(field);
+    }
   });
 
   test("local Blender output must not impersonate the Gateway's active Blockbench tab", async () => {
@@ -195,6 +214,8 @@ describe("Independent Gateway Blender MCP control contract", () => {
     expect(provider.status(undefined).job_id).toBe(started.job_id);
     expect(() => provider.status("blender_" + "b".repeat(24))).toThrow("NOT_FOUND");
     expect(() => provider.preview(started.job_id)).toThrow("PREVIEW_NOT_READY");
+    await expect(provider.releaseHandoff(path)).rejects.toThrow("HANDOFF_IN_USE");
+    await expect(provider.recover("relative-receipt.json")).rejects.toThrow("COMPLETION_PATH_INVALID");
     expect(provider.cancel(started.job_id).state).toBe("CANCELLING");
     await provider.close();
     expect(provider.status(started.job_id).state).toBe("CANCELLED");
