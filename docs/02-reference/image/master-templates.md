@@ -73,6 +73,51 @@ Neutral/dark studio background, coherent identity; no infographic by default.
 
 When the source is real-world/non-Minecraft, the final production sheet still shows the Minecraft/Blockbench target only unless the user explicitly requests otherwise.
 
+
+## Controlled Image Invocation — `M-LD-REF / 1.0`
+
+This is the **single compact copy-ready invocation** of existing visual-reference rules. It is not a new image engine, Skill, schema, ChatGPT Project activation or substitute for the Template A/B/C continuation/correction contracts below. Fill only applicable facts after inspecting actual images; keep the version label for fair before/after pilots.
+
+```text
+M-LD-REF — CONTROLLED REFERENCE REQUEST v1.0
+INTENT = <faithful source | new creative asset | approved bounded revision>
+SUBJECT_SOURCE = <visible source identity, MACRO proportions/parts, real contact
+  and void relations, material ownership, side-specific asymmetry; UNKNOWN if hidden>
+STYLE_EXAMPLE = <actual image pixels if available; MESO cuboid layers and MICRO
+  hand-painted face-pixel clusters, material separation, visual quiet; STYLE ONLY>
+PRESENTATION_EXAMPLE = <actual image pixels if available; framing/layout ONLY,
+  never the sample's shape, color, motifs or material palette>
+APPROVED_TARGET = <actual accepted HERO/sheet if any, preserving identity/scale>
+TARGET = Minecraft-stylized Blockbench model; composed cuboids, meaningful angular
+  detail, painted texture ON faces; no smooth product CGI or raised texel cubes
+OBJECT_LOCK = <same physical asset; approved front, object-left/right, relative
+  width/depth/height, part count, contacts, openings and confirmed colors>
+STAGE = <HERO_STYLE_CHECK | MINIMUM_CONSTRUCTION | FOUR_SIDE_CONSTRUCTION>
+DRAW =
+  HERO_STYLE_CHECK: ONE full-size uncropped 3/4 asset, neutral studio; no labels,
+    typography, palette, infographic, dimensions or extra thumbnails.
+  MINIMUM_CONSTRUCTION: only P1/P2 views that actually resolve the next physical
+    ambiguity, with readable scale; no default six-view turnaround.
+  FOUR_SIDE_CONSTRUCTION: ONLY when all four sides are requested or P1-critical;
+    clean equal 2x2 Front top-left / Right top-right / Back bottom-left /
+    Left bottom-right, object-relative; ONLY direction labels, no fifth HERO,
+    title, palette, details row, scene clutter, invented measurements or QA badge.
+SINGLE_OBJECT = rotate camera around one unchanged form; do not mirror parts,
+  shift attachments, invent the other side as observed or change surface identity.
+SOURCE_HIDDEN = UNKNOWN in faithful reconstruction; PROVISIONAL when designing a
+  coherent new concept, never masquerading as source-observed or approved.
+POST_IMAGE_REVIEW = inspect actual pixels: first subject identity and MACRO;
+  then MESO geometry/contact, MICRO painted texture/rest and material separation;
+  then cameras, panel readability and conditional presentation.
+CORRECTION = one first-observed failure, CHANGE it and PRESERVE unaffected
+  source/approved facts; one bounded correction and recheck touched views.
+NO_FALSE_PASS = no visual approval, native Blockbench/UV/Bedrock or exact-camera
+  claim from image labels, hash, generated text, or a static source test.
+```
+
+A style-mismatch report selects `HERO_STYLE_CHECK` before any multi-panel expansion; otherwise choose the smallest useful stage directly. After a HERO is visually accepted, reuse its **actual pixels** as the next stage's anchor. The four-side construction option follows Builder's **clean layout only**, never its building subject or world-block construction style. If the user needs no four-sided coverage, do not generate it. A ChatGPT Project must be explicitly configured by the user; this GitHub text cannot install prompts or attach images automatically.
+
+
 ---
 
 ### Style-Calibrating HERO-Only Pass (when style feedback is the blocker)
@@ -183,7 +228,7 @@ DO NOT CHANGE / HIGH-RISK FAILURES
 - <small targeted list only>
 
 PRESENTATION
-- one dominant hero when useful
+- one dominant hero when useful, omitted entirely from a four-side construction-only sheet
 - construction views aligned and consistently scaled
 - no paragraph text
 - no palette box unless decision-critical

@@ -119,6 +119,16 @@ Sheet 01 is the identity/scale anchor when a sheet workflow is needed; Sheet 02+
 
 A generated visual becomes approved visual authority only after explicit user acceptance when visual approval is material.
 
+
+### Builder-Learned Execution Discipline
+
+Use the versioned `M-LD-REF / 1.0` invocation in `docs/02-reference/image/master-templates.md` for ChatGPT model-reference generation. Explicitly separate `SUBJECT_SOURCE`, `STYLE_EXAMPLE`, `PRESENTATION_EXAMPLE` and `APPROVED_TARGET` roles: a style example never supplies the object's identity, and presentation samples supply layout only. Only call an exemplar loaded when its **actual image pixels** are available; GitHub catalogs, image IDs and hashes are insufficient. A missing pixel exemplar leaves visual-match claims `UNVERIFIED`.
+
+Take from M-LazyBuilder EX-REF-02/03 the restrained balanced **four-side layout** only where four physical sides are genuinely needed, not its Minecraft architectural parts or materials. When the user rejects a generated style, first inspect the defect and keep the next attempt to one large unlabelled HERO. Then generate only needed P1/P2 construction views, or a clean Front/Right/Back/Left 2×2 **construction-only** sheet if explicitly requested/decision-critical; no fifth HERO or poster rows. After generation, compare actual pixels against source identity first, MACRO/MESO structure second, MICRO paint/rest/material third, and presentation/cross-view consistency last. Fix the **first observed failure** with one bounded `CHANGE + PRESERVE`, then recheck affected views and STOP if it repeats.
+
+No new runtime, schema, automatic scorer, global approved sample corpus or installed Project is implied. Existing static source checks validate authored contracts only; visual-quality improvement and native Blockbench output remain **UNVERIFIED** without real tests.
+
+
 ### ChatGPT Image Generator execution path
 
 In the **VISUAL / MODEL** route, **ChatGPT is the image-generation actor** and M-LazyDesigner/Blockbench is the downstream consumer, not the image generator. Reuse the shared object-space brief in `prompt-contract.md`, the existing minimum-useful panel plan, and `master-templates.md`. Do not route a merely weak generated image into MCP/Control development without a proved integration defect.
@@ -126,8 +136,9 @@ In the **VISUAL / MODEL** route, **ChatGPT is the image-generation actor** and M
 ```text
 USER IMAGE REQUEST + SOURCE / APPROVED VISUALS
 → resolve only BLOCKING facts; distinguish source fidelity from original creation
+→ inspect actual accessible SUBJECT_SOURCE / STYLE_EXAMPLE / PRESENTATION_EXAMPLE pixels separately
 → compile one shared object-space build brief (volumes, contacts, voids, surfaces)
-→ select minimum useful camera directions and panel-specific evidence targets
+→ select a style HERO for a proven style mismatch, otherwise minimum P1/P2 views; optional four sides only if relevant
 → invoke image generation once when authorized using the compact compiled prompt
 → review ACTUAL generated pixels after generation for form, sides, material, P1 coverage
 → if a visible material defect exists, bounded CHANGE + PRESERVE image correction

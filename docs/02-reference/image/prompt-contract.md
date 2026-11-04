@@ -19,6 +19,23 @@ CURRENT USER IMAGE REQUEST
 
 Never generate directly from the uncontrolled conversation when a compiled brief exists.
 
+
+## Source–Style–Presentation Authority Firewall
+
+Assign each **actual visible** image one explicit role before generating; file names, hashes, GitHub Markdown and image IDs are not the same as inspected pixels.
+
+| Image role | Authority | Must never transfer |
+| --- | --- | --- |
+| `SUBJECT_SOURCE` | Target identity, silhouette, source-visible proportions, part/contact relationships, material colors and asymmetry | Unobserved back/underside, unmeasured numbers |
+| `STYLE_EXAMPLE` | Blockbench MACRO/MESO/MICRO art language, hand-painted face clusters, material hierarchy and quiet regions | Example identity, color placement, accessories or target proportions |
+| `PRESENTATION_EXAMPLE` | Camera/panel arrangement, neutral framing, labels and visual economy | Example construction, roof, palette, geometry density or architecture |
+| `APPROVED_TARGET` | Existing user-approved model visual/scale used as an actual anchor for continuation | Automatic approval of a new generated revision |
+
+**New source always wins over example content.** When sample architecture or decorations appear in an unrelated subject, call it `SOURCE_IDENTITY_LEAK` and reject that output before polishing surface detail. In particular, the M-LazyBuilder EX-REF-02/03 house samples may illustrate clean 2×2 **presentation**, never the reusable texture, shapes, timber roofs, towers or chimneys of a Blockbench model. Their approval within Builder does not grant global LazyDesigner approval.
+
+Load only the actually accessible current subject and material examples. A sample URL/catalog/SHA does not prove ChatGPT image generation saw the example. With absent exemplar pixels, use the written standard without a claim of visual match and mark the example comparison `UNVERIFIED`. No new permanent approved baseline is created without explicit user acceptance; no GitHub file automatically configures a ChatGPT Project or supplies its attached images.
+
+
 ## Inputs
 
 Use only the minimum relevant subset of:
@@ -418,11 +435,13 @@ Add asset-specific negatives only where they prevent a known high-risk error.
 Adaptive composition:
 
 ```text
-HEADER
-HERO + CONSTRUCTION VIEWS
+HERO only when material to source identity or style calibration
+CONSTRUCTION VIEWS only for selected P1/P2 physical decisions
 CRITICAL DETAILS when needed
 MOTION STRIP when needed
 ```
+
+If the current model really needs four construction sides, render only a balanced 2×2 Front/Right/Back/Left sheet, object-relative, same scale and neutral background. Do not squeeze a fifth HERO, banner, material legend, imagined exact dimensions or PASS/QA labels into it. This is conditional, not a default four-view quota.
 
 Image text is limited to asset title, view labels, short detail labels, and short pose labels.
 

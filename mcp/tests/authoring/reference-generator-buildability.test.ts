@@ -371,4 +371,42 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(skill).toContain("after inspecting the actual generated pixels");
   });
 
+
+  test("Builder examples are presentation-only and do not contaminate model identity", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    for (const role of ["subject_source", "style_example", "presentation_example", "approved_target"]) {
+      expect(prompt).toContain(role);
+      expect(templates).toContain(role);
+      expect(skill).toContain(role);
+    }
+    expect(prompt).toContain("source_identity_leak");
+    expect(prompt).toContain("builder does not grant global lazydesigner approval");
+    expect(standard).toContain("not an approved lazydesigner");
+    expect(skill).toContain("visual-match claims \`unverified\`");
+  });
+
+  test("versioned request bounds four-side layout and style HERO without false QA", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    const core = templates.split("m-ld-ref — controlled reference request v1.0")[1]?.split("a style-mismatch report")[0] ?? "";
+    for (const token of ["hero_style_check", "minimum_construction", "four_side_construction",
+      "front top-left / right top-right / back bottom-left", "only direction labels",
+      "one first-observed failure", "one bounded correction", "no_false_pass"]) {
+      expect(core).toContain(token);
+    }
+    expect(standard).toContain("universal turnaround quota");
+    expect(prompt).toContain("do not squeeze a fifth hero");
+    expect(skill).toContain("construction-only");
+    expect(skill).toContain("remain \`unverified\` without real tests");
+  });
+
 });

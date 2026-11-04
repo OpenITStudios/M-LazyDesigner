@@ -133,13 +133,25 @@ CONTENT DECIDES LAYOUT
 NOT LAYOUT FORCES CONTENT
 ```
 
+
+### Balanced Four-Side Construction — Learned from LazyBuilder
+
+M-LazyBuilder's approved EX-REF-02/03 exterior images demonstrate a **presentation pattern** (large subjects, balanced panels, short labels and neutral framing), not an approved LazyDesigner **model style or architecture source**. Their roofs, towers, chimneys, palettes, facade decoration and full-block building conventions must never leak into a model's identity. The actual PNG pixels must be accessible before claiming this visual pattern was inspected for a generation.
+
+Use a clean **2×2 Front / Right / Back / Left construction-only sheet** only if all four sides are explicitly requested or materially resolve P1 construction uncertainty. Orient labels by **object-space** sides, not page-relative handedness. Keep the same model, primary masses, part inventory, contacts, material ownership, apparent scale and restrained light. Do not add a fifth HERO, detached detail panels, a title bar, swatches, decorative infographic, invented dimensions or on-image PASS badges. Check real output pixels for contradictions; four labeled panels are not calibrated camera evidence.
+
+For simpler props, vehicles, creatures or characters, continue using the **minimum sufficient views**. A single accepted HERO plus a focused view can be enough; a needed top, underside, rig, animation or material explanation may get a separate purposeful sheet rather than shrinking all four panels. This is an optional visual layout, **not a new camera engine or universal turnaround quota**.
+
+
 ## Header
 
-Required:
+When a main multi-panel production sheet genuinely needs a header:
 
 ```text
 ASSET NAME
 ```
+
+A HERO-only style calibration has no header or labels. A balanced four-side construction-only sheet uses short direction labels only, without an extra poster title. The layout must not force decorative text onto otherwise sufficient construction views.
 
 Optional small subtitle only when it materially helps orientation.
 
