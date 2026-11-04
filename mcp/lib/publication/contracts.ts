@@ -93,6 +93,42 @@ export function publicationImageSizeForPreset(
 
 
 
+/** Strict, once-configured Gateway preset; manual render parameters remain unchanged. */
+export const publicationAutomaticOptions = z.object({
+  quality: z.enum(["preview", "publication", "high"]).default("publication"),
+  aspect: z.enum(["square", "landscape_16_9", "landscape_4_3", "portrait_4_5"]).default("square"),
+  background: z.enum(["dark", "light", "transparent"]).default("dark"),
+  device: z.enum(["auto", "cpu"]).default("auto"),
+  view_transform: z.enum(["AgX", "Standard"]).default("AgX"),
+}).strict().default({});
+
+export function makeAutomaticPublicationRequest(
+  rawOptions: unknown,
+  config: { blender_executable?: string; output_directory?: string },
+  nonce: string,
+): { directory: string; request: PublicationRenderRequest } {
+  const options = publicationAutomaticOptions.parse(rawOptions ?? {});
+  const directory = config.output_directory;
+  if (!directory || directory.length > 1800 ||
+      !isAbsoluteFilesystemPath(directory) ||
+      /[\x00-\x1f]/.test(directory) ||
+      /(?:^|[\\/])\.\.(?:[\\/]|$)/.test(directory)) {
+    throw new Error("PUBLICATION_AUTO_CONFIG_REQUIRED: configure the shared LAZYDESIGNER_RENDER_OUTPUT_DIRECTORY.");
+  }
+  if (!/^[a-f0-9]{24}$/.test(nonce)) throw new Error("PUBLICATION_AUTO_JOB_ID_INVALID");
+  const dimensions = publicationImageSizeForPreset(options.quality, options.aspect);
+  return {
+    directory,
+    request: publicationRenderParameters.parse({
+      blender_executable: config.blender_executable ?? "",
+      output_path: join(directory, "lazydesigner_render_" + nonce + ".png"),
+      quality: options.quality, ...dimensions,
+      background: options.background, device: options.device,
+      view_transform: options.view_transform,
+    }),
+  };
+}
+
 export const PUBLICATION_QUALITY = Object.freeze({
   preview: { samples: 32, noise_threshold: 0.08 },
   publication: { samples: 128, noise_threshold: 0.02 },

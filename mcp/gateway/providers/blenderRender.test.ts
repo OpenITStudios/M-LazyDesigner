@@ -5,6 +5,7 @@ import {
   parsePublicationHandoff,
 } from "@/lib/publication/handoffContract";
 import { expectedPublicationGltfMaterial } from "@/lib/publication/materialContract";
+import { makeAutomaticPublicationRequest, publicationAutomaticOptions } from "@/lib/publication/contracts";
 import {
   BLENDER_RENDER_TOOL,
   BlenderRenderProvider,
@@ -95,12 +96,14 @@ describe("Independent Gateway Blender MCP control contract", () => {
     expect((await registry.describe("blender_render"))?.name).toBe("blender_render");
     expect(shouldProbeBlenderRender("UV paint only")).toBe(false);
     expect(shouldProbeBlenderRender("render this GLB in Blender")).toBe(true);
+    expect(shouldProbeBlenderRender("render objek ini")).toBe(true);
+    expect(shouldProbeBlenderRender("paint model texture")).toBe(false);
     expect(BLENDER_RENDER_TOOL.annotations?.readOnlyHint).toBe(false);
     // The tool contains an explicit file-deleting release branch; report it truthfully.
     expect(BLENDER_RENDER_TOOL.annotations?.destructiveHint).toBe(true);
     expect(manifestEntriesForCapability("blender_render")
       .map(item => [item.branch?.value, item.operationClass])).toEqual([
-        ["start", "EXPORT"], ["status", "QUERY"],
+        ["auto", "EXPORT"], ["start", "EXPORT"], ["status", "QUERY"],
         ["preview", "QUERY"], ["cancel", "CONTROL"],
         ["recover", "CONTROL"], ["release", "CONTROL"],
       ]);
@@ -111,6 +114,18 @@ describe("Independent Gateway Blender MCP control contract", () => {
     const jobId = "blender_" + "a".repeat(24);
     const path = "/tmp/.lazydesigner-blender-handoff-" +
       "a".repeat(24) + "/handoff.json";
+    expect(blenderRenderControlParameters.safeParse({
+      operation: "auto",
+    }).success).toBe(true);
+    expect(blenderRenderControlParameters.safeParse({
+      operation: "auto", options: { quality: "preview", aspect: "landscape_16_9" },
+    }).success).toBe(true);
+    expect(blenderRenderControlParameters.safeParse({
+      operation: "auto", options: { quality: "invalid" },
+    }).success).toBe(false);
+    expect(blenderRenderControlParameters.safeParse({
+      operation: "auto", handoff_path: path,
+    }).success).toBe(false);
     expect(blenderRenderControlParameters.safeParse({
       operation: "status",
     }).success).toBe(true);
@@ -159,7 +174,7 @@ describe("Independent Gateway Blender MCP control contract", () => {
     expect(projectedStatus.projected).toBe(true);
     expect(JSON.stringify(projectedStatus.inputSchema)).toContain("job_id");
     for (const [branch, field] of [
-      ["recover", "receipt_path"], ["release", "handoff_path"],
+      ["auto", "options"], ["recover", "receipt_path"], ["release", "handoff_path"],
     ] as const) {
       const projection = projectCapabilityInputSchema(
         "blender_render", schema, { field: "operation", value: branch },
@@ -167,6 +182,36 @@ describe("Independent Gateway Blender MCP control contract", () => {
       expect(projection.projected).toBe(true);
       expect(JSON.stringify(projection.inputSchema)).toContain(field);
     }
+  });
+
+  test("auto mode derives safe output without guessing local permissions", () => {
+    expect(publicationAutomaticOptions.parse({})).toMatchObject({
+      quality: "publication", aspect: "square", background: "dark",
+    });
+    const config = {
+      blender_executable: "/opt/blender-5.2/blender",
+      output_directory: "/tmp/lazydesigner",
+    };
+    const nonce = "a".repeat(24);
+    const ready = makeAutomaticPublicationRequest({
+      quality: "preview", aspect: "landscape_16_9",
+    }, config, nonce);
+    expect(ready.request).toMatchObject({
+      quality: "preview", width: 640, height: 360,
+      output_path: "/tmp/lazydesigner/lazydesigner_render_" + nonce + ".png",
+    });
+    expect(() => makeAutomaticPublicationRequest({}, {
+      ...config, output_directory: "../unsafe",
+    }, nonce)).toThrow("AUTO_CONFIG_REQUIRED");
+    expect(() => makeAutomaticPublicationRequest({}, {
+      ...config, output_directory: "/tmp/../escape",
+    }, nonce)).toThrow("AUTO_CONFIG_REQUIRED");
+    expect(() => makeAutomaticPublicationRequest({}, {
+      ...config, blender_executable: "blender",
+    }, nonce)).toThrow();
+    expect(() => makeAutomaticPublicationRequest({}, config, "invalid")).toThrow("AUTO_JOB_ID_INVALID");
+    expect(publicationAutomaticOptions.safeParse({ overwrite: true }).success).toBe(false);
+    expect(() => new BlenderRenderProvider().startAutomatic({})).toThrow("AUTO_NATIVE_RUNTIME_UNAVAILABLE");
   });
 
   test("local Blender output must not impersonate the Gateway's active Blockbench tab", async () => {

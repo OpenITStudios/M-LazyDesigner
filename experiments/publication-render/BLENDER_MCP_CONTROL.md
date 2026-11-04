@@ -12,11 +12,37 @@ Two explicitly distinct application owners:
 | Owner | MCP capability / operation | Runtime boundary |
 | --- | --- | --- |
 | Blockbench native Runtime | `render_publication`, `operation=handoff` | Captures a validated immutable Bedrock Cube/UV/PBR GLB, writes `model.glb` and `handoff.json` to an explicitly authorized directory, then releases the native modeling queue |
-| Gateway-local Blender adapter | `blender_render`, `operation=start/status/preview/cancel/recover/release` | Reads and verifies the handoff, launches the **same trusted** Blender 5.2 Cycles worker in a separate headless subprocess, owns its job, returns status, real PNG preview, completed-job recovery and explicit handoff cleanup |
+| Gateway-local Blender adapter | `blender_render`, `operation=auto/start/status/preview/cancel/recover/release` | One-call `auto` obtains the Blockbench GLB handoff and launches the **same trusted** Cycles worker; explicit `start` still consumes a prepared handoff. Completion, preview and cleanup retain their existing safety contracts |
 
 The existing Blockbench-owned `render_publication` `start/status/preview/cancel` convenience path remains for compatibility. It still requires Blockbench to remain loaded and cancels when its plugin unloads. Both entrypoints now use a **cooperative atomic directory lease** when writing into the *same output directory*. Different output directories DO NOT share this lock: do not schedule concurrent GPU-heavy renders to distinct directories until resource budgets are measured. There is no host-wide scheduler.
 
 The Gateway-local Blender job **does not require Blockbench to remain open after its immutable handoff has completed**. Gateway itself must stay running for an **active** render. **Completed** jobs persist a bounded receipt and verified preview next to the final PNG and can be restored with `operation=recover` after Gateway restart; unfinished or unconfirmed subprocesses cannot be resurrected. There is no interactive Blender scene-editing API, arbitrary user Python, second MCP server, GPU scheduler or background service/daemon. Gateway shutdown requests cancellation and awaits the child-process close contract.
+
+## One-request render workflow (source-authored; NOT runtime-tested)
+
+Configure the existing Gateway host **once** outside this repository:
+`LAZYDESIGNER_BLENDER_EXECUTABLE` is an installed absolute Blender 5.2 executable,
+and `LAZYDESIGNER_RENDER_OUTPUT_DIRECTORY` is an existing explicit user-approved
+folder visible to the Gateway **and** native Blockbench. No implicit filesystem
+permissions, guessed paths, downloaded assets, second MCP server or GPU farm.
+
+With the current Bedrock Entity project open, the AI can call the existing
+`invoke_capability` with `{"capability":"blender_render","arguments":{"operation":"auto"}}`.
+Optional `options` select quality, aspect, background, device or color view
+transform. The Gateway requests `render_publication(operation=handoff)` once,
+verifies the immutable GLB, starts the independent Cycles worker and returns
+a job ID. AI then uses `status` and one real `preview` after
+`RENDERED_DRAFT`; it never treats a started job as successful PNG publication.
+
+Auto-owned handoffs are source-verified and released after confirmed terminal
+worker closure; interrupted/uncertain outcomes retain available evidence for
+review rather than repeating the native mutation. Output PNG/preview/receipt
+are exclusive and not deleted by handoff cleanup. Gateway must remain running
+until completion. This is a Gateway subprocess, not background ChatGPT work.
+Visual quality remains `NOT_EVALUATED` until separately reviewed.
+
+**Proof ceiling:** Gateway/Runtime/worker code and regressions are authored, not
+Bun/typecheck, native installed Blockbench/Blender or artistic QA verified.
 
 ## Operator workflow (once approved for local validation)
 

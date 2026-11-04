@@ -68,6 +68,21 @@ const CAPABILITY_BRANCH_SPECS: readonly Omit<
 >[] = [
   {
     capability: "blender_render",
+    branch: { field: "operation", value: "auto" },
+    schemaFields: ["operation", "options"],
+    operationClass: "EXPORT",
+    executionClass: "heavy",
+    verificationClass: "receipt_only",
+    semantic: {
+      intents: ["render the current Blockbench model automatically with Blender Cycles in one request"],
+      nouns: ["render", "model", "Blockbench", "asset", "Blender", "Cycles"],
+      verbs: ["render", "start", "create"],
+      excludes: ["generate AI image", "edit geometry", "skip fidelity checks"],
+      examples: ["render the current Blockbench model automatically", "render objek ini"],
+    },
+  },
+  {
+    capability: "blender_render",
     branch: { field: "operation", value: "start" },
     schemaFields: ["operation", "handoff_path", "request"],
     operationClass: "EXPORT",

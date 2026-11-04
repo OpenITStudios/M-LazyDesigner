@@ -22,7 +22,10 @@ import {
   readdir,
 } from "node:fs/promises";
 import { basename, dirname, join, resolve, extname } from "node:path";
-import { publicationRenderParameters, makePublicationJob, type PublicationRenderRequest } from "@/lib/publication/contracts";
+import {
+  publicationRenderParameters, publicationAutomaticOptions,
+  makeAutomaticPublicationRequest, makePublicationJob, type PublicationRenderRequest,
+} from "@/lib/publication/contracts";
 import { MAX_PUBLICATION_HANDOFF_BYTES, MAX_PUBLICATION_HANDOFF_GLB_BYTES, parsePublicationHandoff, type PublicationHandoff } from "@/lib/publication/handoffContract";
 import { inspectPublicationGlb } from "@/lib/publication/glbIntegrity";
 import { inspectPublicationPng } from "@/lib/publication/pngIntegrity";
@@ -43,6 +46,10 @@ const SHA = /^[a-f0-9]{64}$/;
 const hash = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex");
 
 export const blenderRenderControlParameters = z.discriminatedUnion("operation", [
+  z.object({
+    operation: z.literal("auto"),
+    options: publicationAutomaticOptions.optional(),
+  }).strict(),
   z.object({
     operation: z.literal("start"),
     handoff_path: z.string().min(1).max(2048),
@@ -73,7 +80,7 @@ export const blenderRenderControlParameters = z.discriminatedUnion("operation", 
 
 export const BLENDER_RENDER_TOOL: BackendTool = {
   name: BLENDER_RENDER_CAPABILITY,
-  description: "Control the Blender 5.2 Cycles renderer through the main LazyDesigner MCP Gateway, independently of the Blockbench plugin. First use render_publication operation=handoff in Blockbench to export a verified GLB+manifest. Then blender_render operation=start consumes that handoff and starts a Blender child process owned by the Gateway. status, preview and cancel use the returned job ID (status may omit it to recover the latest process-local job); recover reopens a validated completed PNG receipt after Gateway restart, release deletes an explicitly chosen verified handoff. A frozen snapshot is never claimed as the current editor state; the final PNG remains an unapproved DRAFT.",
+  description: "Cycles rendering through the existing LazyDesigner Gateway. operation=auto prepares a native Blockbench GLB handoff and starts the same independent Blender worker with one call, using LAZYDESIGNER_BLENDER_EXECUTABLE and LAZYDESIGNER_RENDER_OUTPUT_DIRECTORY configured once on a shared host. Manual start/status/preview/cancel/recover/release remain available. Failed native exports are not auto-retried, and a PNG is always an unapproved DRAFT.",
   // Conservative tool-level metadata: operation=release deletes an explicitly selected handoff.
   // QUERY branches remain classified individually in the Gateway branch manifest.
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
@@ -83,7 +90,7 @@ export const BLENDER_RENDER_TOOL: BackendTool = {
 };
 
 export function shouldProbeBlenderRender(query: string): boolean {
-  return /\bblender\b|\bcycles\b|blender_render|blender mcp|glb handoff/i.test(query);
+  return /\bblender\b|\bcycles\b|blender_render|blender mcp|glb handoff|\b(?:render|rendering)\b.*\b(?:model|asset|objek|blockbench)\b|\b(?:model|asset|objek|blockbench)\b.*\b(?:render|rendering)\b/i.test(query);
 }
 
 type State = "RUNNING" | "CANCELLING" | "RENDERED_DRAFT" |
@@ -138,6 +145,8 @@ type Job = {
   receipt: RenderReceipt | null;
   preview: Buffer | null;
   task: Promise<void> | null;
+  automatic: boolean;
+  handoff_cleanup: "NOT_APPLICABLE" | "PENDING" | "RELEASED" | "REQUIRES_REVIEW";
 };
 
 type Result = JsonRecord & {
@@ -155,6 +164,9 @@ function status(job: Job): JsonRecord {
     error_code: job.error_code,
     receipt: job.receipt,
     output_is_visual_qa: false,
+    handoff_cleanup: job.handoff_cleanup,
+    ...(job.handoff_cleanup === "REQUIRES_REVIEW" && job.handoff_path
+      ? { handoff_path: job.handoff_path } : {}),
   };
 }
 
@@ -248,8 +260,11 @@ async function verifyHandoff(path: string): ReturnType<typeof readVerifiedHandof
   }
 }
 
+export type NativePublicationHandoff = (directory: string, signal: AbortSignal) => Promise<string>;
+
 /** One Gateway-owned process, not a persistent render farm or native editor. */
 export class BlenderRenderProvider {
+  constructor(private readonly prepareNativeHandoff?: NativePublicationHandoff) {}
   private current: Job | null = null;
   private retired = false;
   private readonly releasingHandoffs = new Set<string>();
@@ -474,31 +489,32 @@ export class BlenderRenderProvider {
     }
   }
 
-  start(handoffPath: unknown, requestArgs: unknown): JsonRecord {
+  private launchJob(
+    handoffPath: string | null,
+    render: (job: Job) => Promise<RenderReceipt>,
+    automatic = false,
+  ): JsonRecord {
     if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
     if (this.recovering) throw new Error("PUBLICATION_BLENDER_RECOVERY_IN_PROGRESS");
     if (this.current && ["RUNNING", "CANCELLING", "EXIT_UNCONFIRMED"].includes(this.current.state)) {
       throw new Error("PUBLICATION_BLENDER_JOB_BUSY");
     }
-    if (typeof handoffPath !== "string" ||
-        this.releasingHandoffs.has(handoffPath) ||
-        !isAbsoluteFilesystemPath(handoffPath) ||
-        basename(handoffPath) !== "handoff.json" ||
-        !HANDOFF_DIR.test(basename(dirname(handoffPath)))) {
-      throw new Error("PUBLICATION_BLENDER_HANDOFF_PATH_INVALID");
-    }
-    const request = publicationRenderParameters.parse(requestArgs);
     const job: Job = {
       id: "blender_" + randomBytes(12).toString("hex"),
       state: "RUNNING", phase: "PREPARING_ASSETS",
       started_at: new Date().toISOString(), handoff_path: handoffPath,
-      error_code: null,
-      source_sha256: null, controller: new AbortController(),
-      receipt: null, preview: null, task: null,
+      error_code: null, source_sha256: null, controller: new AbortController(),
+      receipt: null, preview: null, task: null, automatic,
+      handoff_cleanup: automatic ? "PENDING" : "NOT_APPLICABLE",
     };
     this.current = job;
-    job.task = Promise.resolve().then(() => this.execute(job, handoffPath, request))
+    job.task = Promise.resolve().then(() => render(job))
       .then(receipt => {
+        if (job.controller.signal.aborted || job.state === "CANCELLING") {
+          job.state = "CANCELLED";
+          job.phase = "CANCELLED";
+          return;
+        }
         job.receipt = receipt;
         job.state = "RENDERED_DRAFT";
         job.phase = "FINISHED";
@@ -509,8 +525,67 @@ export class BlenderRenderProvider {
           ? "EXIT_UNCONFIRMED"
           : job.controller.signal.aborted ? "CANCELLED" : "FAILED";
         job.phase = job.state === "CANCELLED" ? "CANCELLED" : "FAILED";
+      }).finally(async () => {
+        if (!job.automatic) return;
+        if (!job.handoff_path || job.state === "EXIT_UNCONFIRMED") {
+          job.handoff_cleanup = "REQUIRES_REVIEW";
+          return;
+        }
+        try {
+          // Only a verified, owned handoff is released after terminal Cycles
+          // process closure. PNG and completed receipt remain untouched.
+          await this.releaseHandoff(job.handoff_path);
+          job.handoff_cleanup = "RELEASED";
+        } catch (error) {
+          job.handoff_cleanup = "REQUIRES_REVIEW";
+          console.warn("[LazyDesigner Blender MCP] Automatic handoff cleanup needs review:", error);
+        }
       });
     return status(job);
+  }
+
+  start(handoffPath: unknown, requestArgs: unknown): JsonRecord {
+    if (typeof handoffPath !== "string" || this.releasingHandoffs.has(handoffPath)) {
+      throw new Error("PUBLICATION_BLENDER_HANDOFF_PATH_INVALID");
+    }
+    requireHandoffPath(handoffPath);
+    const request = publicationRenderParameters.parse(requestArgs);
+    return this.launchJob(handoffPath, job => this.execute(job, handoffPath, request));
+  }
+
+  /** A single intent captures Blockbench and renders via the existing Cycles worker. */
+  startAutomatic(
+    options: unknown,
+    config: { blender_executable?: string; output_directory?: string } = {
+      blender_executable: process.env.LAZYDESIGNER_BLENDER_EXECUTABLE,
+      output_directory: process.env.LAZYDESIGNER_RENDER_OUTPUT_DIRECTORY,
+    },
+  ): JsonRecord {
+    if (!this.prepareNativeHandoff) throw new Error("PUBLICATION_AUTO_NATIVE_RUNTIME_UNAVAILABLE");
+    const { directory, request } = makeAutomaticPublicationRequest(
+      options, config, randomBytes(12).toString("hex"),
+    );
+    try {
+      const out = nodeFs.lstatSync(directory);
+      const blender = nodeFs.lstatSync(request.blender_executable);
+      if (!out.isDirectory() || out.isSymbolicLink() ||
+          !blender.isFile() || blender.isSymbolicLink()) {
+        throw new Error("INVALID_FILESYSTEM_TARGET");
+      }
+    } catch {
+      throw new Error("PUBLICATION_AUTO_CONFIG_PATH_UNAVAILABLE: configure an existing shared output folder and installed Blender executable.");
+    }
+    return this.launchJob(null, async job => {
+      assertRunning(job);
+      const path = await this.prepareNativeHandoff!(directory, job.controller.signal);
+      requireHandoffPath(path);
+      if (resolve(dirname(dirname(path))) !== resolve(directory)) {
+        throw new Error("PUBLICATION_AUTO_HANDOFF_OUTSIDE_CONFIGURED_DIRECTORY");
+      }
+      job.handoff_path = path;
+      assertRunning(job);
+      return this.execute(job, path, request);
+    }, true);
   }
 
   status(id: unknown): JsonRecord {
@@ -625,7 +700,7 @@ export class BlenderRenderProvider {
       source_sha256: data.source_sha256,
       error_code: null, controller: new AbortController(),
       receipt: renderReceipt, preview: Buffer.from(previewBytes),
-      task: Promise.resolve(),
+      task: Promise.resolve(), automatic: false, handoff_cleanup: "NOT_APPLICABLE",
     };
     if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
     this.current = record;
@@ -704,6 +779,18 @@ export class BlenderRenderProvider {
   async invoke(args: JsonRecord): Promise<Result> {
     const operation = blenderRenderControlParameters.parse(args);
     switch (operation.operation) {
+      case "auto": {
+        const started = this.startAutomatic(operation.options);
+        return {
+          content: [{
+            type: "text",
+            text: "Automatic Blockbench-to-Blender Cycles job started: " + started.job_id +
+              ". Check blender_render operation=status, then request preview after RENDERED_DRAFT. " +
+              "This does not certify a completed PNG or visual quality.",
+          }],
+          structuredContent: started,
+        };
+      }
       case "start": {
         const started = this.start(operation.handoff_path, operation.request);
         return {

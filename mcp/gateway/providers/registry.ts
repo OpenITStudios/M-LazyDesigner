@@ -1,5 +1,5 @@
 import { summarizeCapability } from "../capabilities/catalog";
-import { BLENDER_RENDER_TOOL, BlenderRenderProvider, shouldProbeBlenderRender } from "./blenderRender";
+import { BLENDER_RENDER_TOOL, BlenderRenderProvider, shouldProbeBlenderRender, type NativePublicationHandoff } from "./blenderRender";
 import type {
   BackendTool,
   CapabilitySummary,
@@ -26,9 +26,10 @@ type LocalCapabilityProvider = {
 
 export class LocalCapabilityRegistry {
   private readonly providers: readonly LocalCapabilityProvider[];
-  private readonly blender = new BlenderRenderProvider();
+  private readonly blender: BlenderRenderProvider;
 
-  constructor() {
+  constructor(prepareNativeHandoff?: NativePublicationHandoff) {
+    this.blender = new BlenderRenderProvider(prepareNativeHandoff);
     const vanilla = new VanillaEntityReferenceProvider();
     this.providers = [
       {

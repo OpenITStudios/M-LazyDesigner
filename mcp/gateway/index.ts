@@ -23,7 +23,24 @@ const backend = new BlockitRuntimeBackend(undefined, undefined, {
   onRuntimeGenerationChange: (event) => session.onRuntimeGenerationChange(event.project_uuid),
   onRuntimeUnavailable: () => session.onRuntimeUnavailable(),
 });
-const localCapabilities = new LocalCapabilityRegistry();
+const localCapabilities = new LocalCapabilityRegistry(async (directory, signal) => {
+  // Native Blockbench is accessed only through the existing serialized backend.
+  // An interrupted export is never automatically retried.
+  const invocation = await backend.invokeCapabilityWithMetadata(
+    "render_publication", { operation: "handoff", request: { directory } },
+    undefined, signal,
+  );
+  const data = invocation.result.structuredContent;
+  if (invocation.result.isError === true || !data ||
+      typeof data !== "object" || Array.isArray(data) ||
+      typeof (data as Record<string, unknown>).handoff_path !== "string") {
+    throw new Error(
+      "PUBLICATION_AUTO_HANDOFF_UNCONFIRMED: native handoff did not return an authoritative path. " +
+      "Inspect existing artifacts before any new export.",
+    );
+  }
+  return (data as { handoff_path: string }).handoff_path;
+});
 const benchmarkTrace = BenchmarkTraceRecorder.fromEnvironment();
 const executor = new GatewayCapabilityExecutor(
   backend,
@@ -35,7 +52,7 @@ const executor = new GatewayCapabilityExecutor(
 // Runtime resources and prompts are not proxied. Stable-four remains the
 // production default; Hybrid-4 is an explicit experimental startup profile.
 const GATEWAY_INSTRUCTIONS =
-  "LazyDesigner Gateway. status only for missing/stale orientation; assets pass reference_package_path. Load active Skill/profile via Control handles; reuse while content survives compaction. Geometry/Texturing share AUTHORING; Animation handoff. Known capability/schema: invoke directly. Unknown: search; uncertain schema: describe required branch. READY=usable; UNKNOWN=Runtime-check; BLOCKED=prerequisites. Cohorts reuse task_context_id; cohort_boundary=CONTINUE then COMPLETE. Follow control_delta: receipt_only=no reread; focused_read=missing evidence only; visual=decision-changing evidence. Sample before bulk visual edits; mutation success is not visual approval. Never auto-retry interrupted mutations. Development: status(task_mode=SYSTEM_DEVELOPMENT,task_intent). Omitted reference facts: paged status(reference_fact_request) with fingerprint.";
+  "LazyDesigner Gateway. status only for missing/stale orientation; assets pass reference_package_path. Load active Skill/profile via Control handles; reuse while content survives compaction. Geometry/Texturing share AUTHORING; Animation handoff. Known capability/schema: invoke directly. Unknown: search; uncertain schema: describe required branch. READY=usable; UNKNOWN=Runtime-check; BLOCKED=prerequisites. Cohorts reuse task_context_id; cohort_boundary=CONTINUE then COMPLETE. Follow control_delta: receipt_only=no reread; focused_read=missing evidence only; visual=decision-changing evidence. Sample before bulk visual edits; mutation success is not visual approval. Never auto-retry interrupted mutations. Development: status(task_mode=SYSTEM_DEVELOPMENT,task_intent). Omitted reference facts: paged status(reference_fact_request) with fingerprint. For publication rendering, prefer blender_render operation=auto on a configured shared host; then status and one real PNG preview. Do not invent filesystem paths, retry uncertain exports, or assert artistic approval.";
 
 type ExperimentalHybridRegistrar = (input: {
   server: McpServer;
