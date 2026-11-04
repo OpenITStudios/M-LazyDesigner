@@ -4,6 +4,62 @@ export type DesktopInvoke = typeof import('@tauri-apps/api/core').invoke;
 
 export type DesktopBusyAction = ManagedActionResult['action'] | 'install' | 'connect-blockbench' | 'show-plugin' | 'export-diagnostics' | 'project-action' | 'open-editor' | 'browse-model' | 'choose-editor';
 
+/** Read-only projection of the canonical bounded Gateway L0 snapshots.
+ * This is not a persistent native Workspace ID, Golden PASS, or full history.
+ */
+export type AnalyticsMetric = {
+  calls: number;
+  failures: number;
+  duration_sum_ms: number;
+};
+
+export type AnalyticsNamedCount = { name: string; calls: number };
+
+export type AnalyticsProject = {
+  project_key: string;
+  observed_sessions: number;
+  observed_calls: number;
+  failures: number;
+  duration_sum_ms: number;
+  domains: Record<string, AnalyticsMetric>;
+  capabilities: AnalyticsNamedCount[];
+  error_codes: AnalyticsNamedCount[];
+  by_tool: Record<string, number>;
+  build_calls: Record<string, AnalyticsMetric>;
+  build_unattributed_calls: number | null;
+  build_measured_sessions: number;
+  build_overflow: boolean;
+};
+
+export type AnalyticsOverview = {
+  schema: 1;
+  report: 'desktop-analytics-overview';
+  source: 'GATEWAY_L0_BOUNDED_SNAPSHOTS';
+  state: 'NO_DATA' | 'PARTIAL' | 'RECORDED';
+  observed_sessions: number;
+  observed_calls: number;
+  failures: number;
+  unbound_calls: number;
+  open_or_unclean_sessions: number;
+  invalid_snapshots: number;
+  older_snapshots_omitted: number;
+  capture_failures: number;
+  persist_failures: number;
+  overflow_project_observations: number;
+  projects: AnalyticsProject[];
+  limits: {
+    retrospective_scope: string;
+    project_identity: string;
+    duration: string;
+    source_sha: null;
+    provider_tokens: null;
+    accepted_quality: 'UNVERIFIED';
+    build_coverage: string;
+  };
+};
+
+export type AnalyticsExportResult = { status: 'EXPORTED' | 'CANCELLED' };
+
 export type DesktopOperationRecord = {
   action: string;
   outcome: 'success' | 'pending' | 'unchanged' | 'failed';

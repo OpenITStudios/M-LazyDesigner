@@ -5,6 +5,7 @@
   import WorkspacePage from './WorkspacePage.svelte';
   import ProjectDeleteDialog from './ProjectDeleteDialog.svelte';
   import SupportPage from './SupportPage.svelte';
+  import AnalyticsPage from './AnalyticsPage.svelte';
   import { createSetupOperations } from './setupOperations';
   import { createConnectionMonitor } from './connectionMonitor';
   import { createEditorOperations } from './editorOperations';
@@ -18,6 +19,7 @@
     ManagedUpdateCheck, EnsureReadyResult,
     DesktopCommandError, DiagnosticExportResult, ProjectNavigationActionResult,
     ProjectPathResult, ManagedProgress, BlockbenchSelectionResult,
+    AnalyticsOverview, AnalyticsExportResult,
   } from './desktopTypes';
   import { productMode, progressLabel, managedActionLabel, connectionReadinessError, installationReadinessError, desktopErrorNotice } from './desktopPresentation';
 
@@ -49,8 +51,12 @@
   const editorOperations = createEditorOperations(invoke);
   const setupOperations = createSetupOperations(invoke);
   const maintenanceOperations = createMaintenanceOperations(invoke);
-  type Page = 'Overview' | 'Support';
+  type Page = 'Overview' | 'Analytics' | 'Support';
   let page: Page = 'Overview';
+  let analytics: AnalyticsOverview | null = null;
+  let analyticsLoading = false;
+  let analyticsError = '';
+  let analyticsExporting = false;
   // Ephemeral view preferences survive Workspace/Support navigation only.
   let expandedProjectId: string | null = null;
   let showAllProjects = false;
@@ -74,6 +80,7 @@
     if (next === page) return;
     if (page === 'Overview' && workspaceMain) workspaceScrollTop = workspaceMain.scrollTop;
     page = next;
+    if (next === 'Analytics') void refreshAnalytics();
     if (next === 'Overview') {
       void tick().then(() => {
         if (page === 'Overview' && workspaceMain) workspaceMain.scrollTop = workspaceScrollTop;
@@ -411,6 +418,46 @@
     }
   }
 
+  async function refreshAnalytics(): Promise<void> {
+    if (analyticsLoading) return;
+    analyticsLoading = true;
+    analyticsError = '';
+    analytics = null; // Never show a stale snapshot as if it were current.
+    try {
+      analytics = await invoke<AnalyticsOverview>('analytics_overview');
+    } catch {
+      analyticsError = 'The local Gateway analytics cache could not be read. Select Refresh to retry.';
+    } finally {
+      analyticsLoading = false;
+    }
+  }
+
+  async function copyAnalyticsJson(): Promise<void> {
+    if (!analytics || analyticsLoading) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(analytics, null, 2));
+      showSuccessToast('Analytics JSON copied. No data was uploaded.');
+    } catch {
+      analyticsError = 'Could not copy Analytics. You can use Export JSON instead.';
+    }
+  }
+
+  async function exportAnalyticsJson(): Promise<void> {
+    if (!analytics || analyticsLoading || analyticsExporting) return;
+    analyticsExporting = true;
+    analyticsError = '';
+    try {
+      const result = await invoke<AnalyticsExportResult>('export_analytics');
+      if (result.status === 'EXPORTED') {
+        showSuccessToast('Analytics JSON exported. No data was uploaded.');
+      }
+    } catch {
+      analyticsError = 'Could not export Analytics to the selected file.';
+    } finally {
+      analyticsExporting = false;
+    }
+  }
+
   async function exportDiagnostics() {
     if (busyAction) return;
     closeUtilityMenu();
@@ -531,6 +578,8 @@
 {#snippet navIcon(item: Page)}
   {#if item === 'Overview'}
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8 9h8M8 13h5"/></svg>
+  {:else if item === 'Analytics'}
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V13M10 20V6M16 20V10M22 20V3"/></svg>
   {:else}
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h14M7.5 11h9M9.5 15.5h5"/><circle cx="12" cy="19" r="1"/></svg>
   {/if}
@@ -555,6 +604,9 @@
         <button class:active={page === 'Overview'} aria-current={page === 'Overview' ? 'page' : undefined} onclick={() => navigate('Overview')}>
           <span class="nav-icon">{@render navIcon('Overview')}</span><span>Workspace</span>
         </button>
+        <button class:active={page === 'Analytics'} aria-current={page === 'Analytics' ? 'page' : undefined} onclick={() => navigate('Analytics')}>
+          <span class="nav-icon">{@render navIcon('Analytics')}</span><span>Analytics</span>
+        </button>
         <button class:active={page === 'Support'} aria-current={page === 'Support' ? 'page' : undefined} onclick={() => navigate('Support')}>
           <span class="nav-icon">{@render navIcon('Support')}</span><span>Support</span>
         </button>
@@ -563,7 +615,7 @@
 
     <section id="main-content" class="main-view" tabindex="-1">
       <header class="page-toolbar">
-        <h1>{page === 'Overview' ? 'Workspace' : 'Support'}</h1>
+        <h1>{page === 'Overview' ? 'Workspace' : page}</h1>
         <div class="toolbar-actions">
           {#if devFixture}<span class="fixture-badge">Fixture · {devFixture}</span>{/if}
           {#if statusProbeFailures >= 2}<span class="status-probe-warning" role="status">AI status needs verification · Files remain accessible</span>{/if}
@@ -579,7 +631,11 @@
         </div>
       </header>
 
-      {#if !status}
+      {#if page === 'Analytics'}
+        <AnalyticsPage data={analytics} loading={analyticsLoading}
+          error={analyticsError} exporting={analyticsExporting}
+          refresh={refreshAnalytics} copyJson={copyAnalyticsJson} exportJson={exportAnalyticsJson}/>
+      {:else if !status}
         <main class="page-content">
           <section class="message-state">
             <div class="message-icon danger">!</div>

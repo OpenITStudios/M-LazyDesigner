@@ -15,6 +15,40 @@ Support's explicit legacy migration requests the manager's backed-up, session-sa
 - supervise bounded user-requested lifecycle actions and safe self-healing;
 - keep lightweight Runtime/Blockbench connection readiness current while Desktop is active without spawning the managed CLI on every heartbeat.
 
+## Analytics (read-only, in the main Desktop)
+
+The top navigation now provides **Workspace · Analytics · Support**.
+`src/AnalyticsPage.svelte` is a small read-only view, not another
+dashboard service. `src/App.svelte` makes two explicit Tauri IPC requests:
+`analytics_overview` only on entering Analytics or selecting Refresh,
+and `export_analytics` only after the user selects Export JSON.
+Copy JSON copies the currently displayed summary to the clipboard.
+Analytics remains available when Blockbench or the managed client is offline.
+
+`src-tauri/src/analytics.rs` reads **only** matching, bounded Gateway L0
+session snapshots from the existing per-user local Analytics cache. No Bun,
+local repo checkout, Runtime health request, live model inspection, Codex
+session file, database, background watcher, telemetry upload, or AI call is
+needed. It validates L0 session identities, counts and scopes, rejects
+symlinks/non-files and oversized snapshots, skips corrupt files with an
+explicit invalid-file count, and never uses project names or paths inferred
+from metadata. A native UUID SHA-256 is not a verified Workspace identity.
+
+The view shows call/failure counts, coverage, authoring-domain call-duration
+sums, capability counts, and bounded build attribution where measured.
+It does **not** infer stage elapsed time, task wall time, visual approval,
+provider tokens, or full project history. Unknown builds, prior unmeasured
+sessions, open/unclean snapshots, and storage errors remain explicit.
+Desktop output is a **display/AI-export projection** of the same L0 source
+that the offline AI reader consumes; it is not a second data owner or
+replacement for full Golden evidence/archival trace inspection.
+
+Source tests in `analytics.rs` cover bounded aggregation, corrupt-file
+handling, duplicated session refusal, native identity isolation and
+unknown JSON field exclusion. Installed Desktop UI/UX behavior and native
+acceptance require their own matching-build evidence; a source commit
+alone is not such proof.
+
 ## Explicit non-ownership
 
 Desktop does **not** own:

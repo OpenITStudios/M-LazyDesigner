@@ -6,6 +6,7 @@ compile_error!("native-acceptance is debug-only and must never ship in a release
 #[cfg(all(feature = "native-acceptance", debug_assertions))]
 mod native_acceptance;
 
+mod analytics;
 mod blockbench;
 mod desktop_error;
 mod desktop_instance;
@@ -235,6 +236,25 @@ fn export_diagnostics() -> Result<DiagnosticExportResult, DesktopError> {
     diagnostics::export()
 }
 
+#[tauri::command]
+async fn analytics_overview() -> Result<analytics::AnalyticsOverview, DesktopError> {
+    // Cached snapshot reads stay off Tauri's IPC event thread.
+    tauri::async_runtime::spawn_blocking(analytics::overview)
+        .await
+        .map_err(|_| DesktopError::recoverable(
+            "ANALYTICS_READ_FAILED", "Unable to read local Analytics.".to_owned()
+        ))?
+}
+
+#[tauri::command]
+async fn export_analytics() -> Result<analytics::AnalyticsExportResult, DesktopError> {
+    tauri::async_runtime::spawn_blocking(analytics::export)
+        .await
+        .map_err(|_| DesktopError::recoverable(
+            "ANALYTICS_EXPORT_FAILED", "Unable to export local Analytics.".to_owned()
+        ))?
+}
+
 fn main() {
     let _instance_guard = match desktop_instance::acquire()
         .expect("LazyDesigner Desktop instance ownership failed")
@@ -271,7 +291,9 @@ fn main() {
             project_navigation_path,
             show_plugin_file,
             show_retired_plugin_file,
-            export_diagnostics
+            export_diagnostics,
+            analytics_overview,
+            export_analytics
         ])
         .build(tauri::generate_context!())
         .expect("error while building LazyDesigner Desktop")
