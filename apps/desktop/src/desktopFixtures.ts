@@ -1,11 +1,12 @@
 import type { SystemStatus, AnalyticsOverview } from './desktopTypes';
 
-export type DevFixture = 'ready' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
+export type DevFixture = 'ready' | 'ready-no-active' | 'status-unverified' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
 
 export function applyDevFixture(base: SystemStatus, fixture: DevFixture): SystemStatus {
   const next = structuredClone(base);
-  const runtimeOnline = ['ready', 'client-wait', 'repair-blocked'].includes(fixture);
-  const gatewayActive = ['ready', 'repair-blocked'].includes(fixture);
+  const ready = ['ready', 'ready-no-active', 'status-unverified'].includes(fixture);
+  const runtimeOnline = ready || ['client-wait', 'repair-blocked'].includes(fixture);
+  const gatewayActive = ready || fixture === 'repair-blocked';
 
   next.manager_available = fixture !== 'fresh-install';
   next.bootstrap_available = true;
@@ -38,7 +39,7 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
 
   next.gateway = {
     ownership: 'client-owned',
-    state: fixture === 'ready' ? 'healthy'
+    state: ready ? 'healthy'
       : fixture === 'client-wait' ? 'client-disconnected'
       : fixture === 'repair-blocked' ? 'healthy'
       : fixture === 'runtime-offline' || fixture === 'approval-required' || fixture === 'plugin-missing' ? 'runtime-offline'
@@ -47,15 +48,15 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
   };
 
   next.readiness = {
-    ready: fixture === 'ready',
-    state: fixture === 'ready' ? 'ready'
+    ready,
+    state: ready ? 'ready'
       : fixture === 'fresh-install' ? 'setup-required'
       : fixture === 'client-wait' || fixture === 'runtime-offline' || fixture === 'approval-required' || fixture === 'plugin-missing' ? 'needs-connection'
       : 'needs-attention',
-    summary: fixture === 'ready' ? 'LazyDesigner is ready.' : 'Fixture state.',
+    summary: ready ? 'LazyDesigner is ready.' : 'Fixture state.',
   };
 
-  next.product_state = fixture === 'ready' ? 'ready'
+  next.product_state = ready ? 'ready'
     : fixture === 'fresh-install' ? 'welcome'
     : fixture === 'unsupported' ? 'unsupported'
     : fixture === 'plugin-modified' ? 'attention'
@@ -67,10 +68,10 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
   next.project_navigation = {
     revision: 'fixture:1',
     session_live: fixture !== 'fresh-install' && fixture !== 'runtime-offline',
-    continue_model_id: fixture === 'fresh-install' ? null : 'model-fixture',
+    continue_model_id: fixture === 'fresh-install' || fixture === 'ready-no-active' ? null : 'model-fixture',
     recent_model_ids: fixture === 'fresh-install' ? [] : ['model-fixture-2'],
     preferences_issue: null,
-    active: fixture === 'fresh-install' ? null : {
+    active: fixture === 'fresh-install' || fixture === 'ready-no-active' ? null : {
       project_id: 'project-fixture',
       project_name: 'Furniture',
       model_id: 'model-fixture',
@@ -96,6 +97,16 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
       ],
     }],
   };
+
+  if (fixture === 'ready-no-active') {
+    const project = next.project_navigation.projects[0];
+    if (project) {
+      project.active = false;
+      project.models = project.models.map(model => ({
+        ...model, active: false, open: false, dirty: false,
+      }));
+    }
+  }
 
   next.maintenance = {
     ...next.maintenance,
@@ -192,7 +203,7 @@ export function createDevAnalyticsFixture(): AnalyticsOverview {
 export function devFixtureFromLocation(development: boolean, search: string): DevFixture | null {
   if (!development) return null;
   const value = new URLSearchParams(search).get('fixture');
-  const allowed: DevFixture[] = ['ready','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
+  const allowed: DevFixture[] = ['ready','ready-no-active','status-unverified','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
   return allowed.includes(value as DevFixture) ? value as DevFixture : null;
 }
 

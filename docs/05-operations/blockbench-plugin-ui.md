@@ -1,16 +1,16 @@
 # LazyDesigner Blockbench Plugin UI — product-value gate
 
-Source context: `Local`, baseline `de589d7f5024a2054f6ca57f4408a6f17116b315` on 2026-11-03. This specification describes **source-authored changes**, not verified installed-plugin behavior.
+Source authority: current `Local` implementation in `mcp/ui/panel.html` and `mcp/ui/index.ts`. This specifies **source-authored UI**, not verified installed-plugin behavior.
 
 ## Product rule: no nonproductive UI
 
 The normal AI workflow uses the existing four-tool Gateway and canonical Runtime capabilities directly. The user only needs the native editor panel when it improves a specific **human decision or action**. The plugin shall not recreate Blockbench's Texture list, palette controls, Animation clip list or Timeline as trivial copies.
 
-Keep exactly three navigation categories: **Geometry**, **Texture**, **Animation**. Switching categories never changes the active MCP Stage or exposed capability surface. Tabs with no uniquely useful action contain brief, truthful text rather than fake controls. No second Gateway, route registry, progress engine, polling loop or screenshot-as-QA.
+The docked human panel presents Runtime status, current project and actionable **Geometry checks** only. No empty Texture or Animation tabs are rendered; those native editing tasks remain in Blockbench while AI invokes the existing Gateway capabilities. Geometry/Texturing/Animation remain semantic authoring Stages, **not** human-panel navigation tabs. No second Gateway, route registry, progress engine, polling loop or screenshot-as-QA.
 
 ## Shipped-source scope in this slice
 
-| Category | Visible feature | Input | Output / real outcome | Proof ceiling |
+| Area | Visible feature | Input | Output / real outcome | Proof ceiling |
 | --- | --- | --- | --- | --- |
 | Geometry | **Geometry Change Review** | Current Bedrock Project + latest applied native Undo edit | Read actual `before.elements` and `post.elements` snapshots, compare Cube transforms/face mapping, report exact changed Cube UUIDs; **Locate Cube** selects the corresponding native object | Source-authored; installed native Undo data and selection unverified |
 | Geometry | **Geometry Issue Navigator** | Current Bedrock Project + native Cube and Group inventories | Canonical geometry diagnostic findings tied to exact Cube/Group UUIDs; one-click **Locate in Outliner** selects the native object and scrolls it into view | Source-authored; installed native navigation unverified |
@@ -60,7 +60,7 @@ On a disposable asset with at least 100 Cubes, run the same AI geometry edit and
 4. **Context isolation:** Switching project, editing the source Cube, deleting/replacing an UUID, or plugin reload invalidates stale findings. Queue a simultaneous AI edit and user locate; they must serialize without stale replay.
 5. **Review honesty:** Limit and truncation are disclosed; no visual or export acceptance is inferred from technical checks.
 6. **Cleanup:** Preview has no Undo; explicit Apply has one Undo unit and correct Redo. Block mapped-texture/Box UV hazards; re-open/save preserves the asset.
-7. **Normal UX:** Three categories remain navigable by keyboard; no redundant palette/clip list, no abandoned dialogs/actions after reload, no raw MCP schemas in the human panel.
+7. **Normal UX:** Docked panel, Geometry actions and disclosures are keyboard-operable; no empty tabs, redundant palette/clip lists, abandoned dialogs/actions after reload, or raw MCP schemas in the human panel.
 8. **Value benchmark (not yet run):** Measure time and clicks to find an exact problem Cube in a 100+ Cube asset with and without the Issue Navigator. Keep the feature only if it demonstrates an objective gain without mistaken targets.
 
 ## Verification state / boundary

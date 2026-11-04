@@ -4,6 +4,7 @@
 
   export let review: ProjectDeletePreview;
   export let busy: boolean;
+  export let confirmBlocked = false;
   export let onCancel: () => void;
   export let onConfirm: () => Promise<void>;
   let dialog: HTMLElement | undefined;
@@ -57,9 +58,12 @@
     </div>
     <p>Save your work and close every Blockbench window first. This operation does not permanently delete files,
       but recovery depends on Windows Recycle Bin settings.</p>
+    {#if confirmBlocked}
+      <p role="status">Desktop status needs verification. Cancel, refresh Workspace, and review the project again before deleting it.</p>
+    {/if}
     <div class="project-delete-actions">
       <button class="secondary-button" bind:this={cancelButton} onclick={onCancel} disabled={busy}>Cancel</button>
-      <button class="project-delete-confirm" onclick={onConfirm} disabled={busy}>
+      <button class="project-delete-confirm" onclick={onConfirm} disabled={busy || confirmBlocked}>
         {busy ? 'Moving…' : 'Move to Recycle Bin'}
       </button>
     </div>

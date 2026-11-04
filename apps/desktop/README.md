@@ -644,8 +644,11 @@ required before stronger copy or focus behavior is introduced.
 
 After two failed lightweight connection probes **or one failed full**
 `system_status` with a previous observation, Desktop preserves that last
-observation for context but disables launch, project navigation and managed
-mutations that depend on fresh machine state. A subsequent successful
+observation for context but disables project-ID actions, Blockbench launch,
+folder/path mutations and managed operations that depend on fresh machine
+state. Direct `Open Model…` browsing remains available because its selected
+file is validated by Rust independently of the stale project list. An open
+Recycle Bin confirmation keeps Cancel usable but blocks confirmation. A subsequent successful
 lightweight probe cannot clear this gate; only the user's explicit `Refresh`
 with successful full `system_status` restores the action affordances. The
 initial state with no successful observation remains the unavailable screen.
@@ -657,12 +660,16 @@ and safety checks; they do not change Gateway ownership or authorize repair.
 
 When there is an observed active or recent project and the canonical Desktop
 state is `ready` or `client-wait`, Workspace compresses the healthy connection
-panel into one status line ahead of model navigation. On first use with no
-projects, the normal Blockbench launch card remains visible. Other
+panel into one status line ahead of model navigation. When there are registered
+projects but no active model, the summary also offers `Open Blockbench` to
+begin a new model without hiding existing project shortcuts. On first use with
+no projects, the normal Blockbench launch card remains visible. Other
 connection/setup states keep their existing detailed guidance. On probe
 uncertainty, the line reports an unverified state and retains Refresh.
 Managed-component update notices remain visible when reported, but healthy
-technical details stay under Support.
+technical details stay under Support. The development-only fixture capture
+includes `ready-no-active` and `status-unverified` views; these are coverage
+inputs, not a build, screenshot or native acceptance result.
 
 ### Explicit native Blockbench window focus
 

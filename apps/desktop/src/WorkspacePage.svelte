@@ -43,9 +43,9 @@
     bind:expandedProjectId
     bind:showAllProjects
     bind:projectSearch
-    busy={busyAction !== null}
-    canOpenModel={true}
-    canEditProjectPrefs={true}
+    busy={busyAction !== null || statusProbeFailures >= 2}
+    canOpenModel={statusProbeFailures < 2}
+    canEditProjectPrefs={statusProbeFailures < 2}
     onOpenModel={openModel}
     onAddProjectFolder={addProjectFolder}
     onDeleteProject={beginDeleteProject}
@@ -133,13 +133,18 @@
       <section class="workspace-connection" aria-label="Connection status">
         <span class="connection-dot" class:waiting={productMode(status) === 'client-wait'} class:unknown={statusProbeFailures >= 2} aria-hidden="true"></span>
         <div class="connection-copy">
-          <strong>{statusProbeFailures >= 2 ? 'AI status unverified' : productMode(status) === 'ready' ? 'MCP recently verified' : status.gateway.state === 'gateway-detected' ? 'Gateway detected · MCP unverified' : 'Blockbench ready'}</strong>
-          <span>{statusProbeFailures >= 2 ? 'AI status is unverified. You can still open models; Refresh before AI or maintenance actions.' : productMode(status) === 'ready' ? 'A recent MCP request confirmed a matching Runtime catalog. Idle connections may become unverified until the next request.' : status.gateway.state === 'gateway-detected' ? 'Blockbench and Gateway are running; verify MCP connection and tools in your AI client.' : 'Editing is available. Connect the AI client when needed.'}</span>
+          <strong>{statusProbeFailures >= 2 ? 'AI connection unverified' : productMode(status) === 'ready' ? 'AI connection recently verified' : status.gateway.state === 'gateway-detected' ? 'AI connection needs confirmation' : 'Blockbench ready'}</strong>
+          <span>{statusProbeFailures >= 2 ? 'The connection status is out of date. You can still browse for a .bbmodel file; Refresh before project or maintenance actions.' : productMode(status) === 'ready' ? 'A recent AI request verified the matching tools. Idle connections may need verification again.' : status.gateway.state === 'gateway-detected' ? 'Blockbench and the AI service are detected. Confirm the connection in your AI client.' : 'Editing is available. Connect the AI client when needed.'}</span>
         </div>
         {#if statusProbeFailures >= 2}
           <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
         {:else}
-          <button class="quiet-link" onclick={() => navigate('Support')}>Connection details</button>
+          <div class="connection-actions">
+            {#if !status.project_navigation.active}
+              <button class="secondary-button small-button" onclick={openBlockbenchEditor} disabled={busyAction !== null || statusProbeFailures >= 2}>Open Blockbench</button>
+            {/if}
+            <button class="quiet-link" onclick={() => navigate('Support')}>Connection details</button>
+          </div>
         {/if}
       </section>
     {:else}
@@ -164,17 +169,17 @@
           </div>
 
           <div class="resource-actions">
-            <button class="secondary-button" onclick={chooseBlockbenchExecutable} disabled={busyAction !== null} title="Choose an installed Blockbench.exe (self-extracting portable wrappers are not supported yet)">Select installation</button>
+            <button class="secondary-button" onclick={chooseBlockbenchExecutable} disabled={busyAction !== null || statusProbeFailures >= 2} title="Choose an installed Blockbench.exe (self-extracting portable wrappers are not supported yet)">Select installation</button>
             {#if productMode(status) === 'ready'}
-              <button class="secondary-button" onclick={openBlockbenchEditor} disabled={busyAction !== null}>Open</button>
+              <button class="secondary-button" onclick={openBlockbenchEditor} disabled={busyAction !== null || statusProbeFailures >= 2}>Open Blockbench</button>
             {:else if productMode(status) === 'ready-start'}
-              <button class="primary-button" onclick={openBlockbenchEditor} disabled={busyAction !== null}>{busyAction === 'open-editor' ? 'Opening…' : 'Open'}</button>
+              <button class="primary-button" onclick={openBlockbenchEditor} disabled={busyAction !== null || statusProbeFailures >= 2}>{busyAction === 'open-editor' ? 'Opening…' : 'Open Blockbench'}</button>
             {:else if productMode(status) === 'plugin-setup'}
-              <button class="secondary-button" onclick={openBlockbenchEditor} disabled={busyAction !== null}>Open</button>
+              <button class="secondary-button" onclick={openBlockbenchEditor} disabled={busyAction !== null || statusProbeFailures >= 2}>Open Blockbench</button>
             {:else if productMode(status) === 'unsupported'}
               <button class="secondary-button" onclick={refresh} disabled={loading || busyAction !== null}>Check again</button>
             {:else}
-              <button class="secondary-button" onclick={openBlockbenchEditor} disabled={busyAction !== null}>Open</button>
+              <button class="secondary-button" onclick={openBlockbenchEditor} disabled={busyAction !== null || statusProbeFailures >= 2}>Open Blockbench</button>
             {/if}
           </div>
         </div>
@@ -293,7 +298,8 @@
   .connection-copy{display:grid;flex:1;min-width:0;gap:2px}
   .connection-copy strong{font-size:var(--font-ui);font-weight:700}
   .connection-copy span{font-size:var(--font-sm);color:var(--muted)}
+  .connection-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
   .quiet-link{min-height:34px;flex:none;padding:4px 6px;border-radius:6px;background:transparent;color:var(--text-soft);font-size:var(--font-sm);font-weight:650;cursor:pointer}
   .quiet-link:hover{background:var(--surface-2);color:var(--text)}
-  @media(max-width:760px){.workspace-connection{flex-wrap:wrap}.workspace-connection .quiet-link{margin-left:18px}}
+  @media(max-width:760px){.workspace-connection{flex-wrap:wrap}.connection-actions{justify-content:flex-start}}
 </style>

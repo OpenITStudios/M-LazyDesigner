@@ -52,7 +52,7 @@
           <div class="project-meta">{active.project_name || (active.saved ? 'Saved model' : 'Not saved yet')}{active.dirty ? ' · Modified' : ''}</div>
         </div>
         <div class="project-actions">
-          <button class="primary-button small-button" onclick={onFocusEditor} disabled={busy}>Go to Blockbench</button>
+          <button class="primary-button small-button" aria-label={`Go to Blockbench for ${active.model_name}`} onclick={onFocusEditor} disabled={busy}>Go to Blockbench</button>
         </div>
       </div>
     </div>
@@ -69,7 +69,7 @@
             <div class="project-meta">{target.project.name}</div>
           </div>
           <div class="project-actions">
-            <button class="primary-button small-button" onclick={() => onOpenModel(target.model.id)} disabled={busy || !canOpenModel}>Continue</button>
+            <button class="primary-button small-button" aria-label={`Continue model ${target.model.name}`} onclick={() => onOpenModel(target.model.id)} disabled={busy || !canOpenModel}>Continue</button>
           </div>
         </div>
       </div>
@@ -95,9 +95,9 @@
           </div>
         </div>
         <div class="project-actions">
-          <button class="secondary-button small-button" onclick={() => onProjectAction('open-project-folder', project.id)} disabled={!project.available || busy}>Open Folder</button>
+          <button class="secondary-button small-button" aria-label={`Open folder for project ${project.name}`} onclick={() => onProjectAction('open-project-folder', project.id)} disabled={!project.available || busy}>Open Folder</button>
           {#if !projectSearch.trim()}
-            <button class="quiet-button" aria-expanded={expandedProjectId === project.id} onclick={() => toggleProject(project.id)}>{expandedProjectId === project.id ? 'Hide models' : 'Show models'}</button>
+            <button class="quiet-button" aria-label={`${expandedProjectId === project.id ? 'Hide' : 'Show'} models for project ${project.name}`} aria-expanded={expandedProjectId === project.id} onclick={() => toggleProject(project.id)}>{expandedProjectId === project.id ? 'Hide models' : 'Show models'}</button>
           {/if}
           <details class="more-menu">
             <summary aria-label={`Actions for project ${project.name}`}>•••</summary>
@@ -125,15 +125,15 @@
                 </div>
                 <div class="model-actions">
                   {#if model.active}
-                    <button class="secondary-button small-button" onclick={onFocusEditor} disabled={busy}>Go to Blockbench</button>
+                    <button class="secondary-button small-button" aria-label={`Go to Blockbench for ${model.name}`} onclick={onFocusEditor} disabled={busy}>Go to Blockbench</button>
                   {:else}
-                    <button class="secondary-button small-button" onclick={() => onOpenModel(model.id)} disabled={!model.exists || busy || !canOpenModel}>Open</button>
+                    <button class="secondary-button small-button" aria-label={`Open model ${model.name}`} onclick={() => onOpenModel(model.id)} disabled={!model.exists || busy || !canOpenModel}>Open</button>
                   {/if}
                   <details class="more-menu">
                     <summary aria-label={`Actions for model ${model.name}`}>•••</summary>
                     <div class="menu-popover">
-                      <button onclick={() => onProjectAction('reveal-model', model.id)} disabled={!model.exists || busy}>Show in Explorer</button>
-                      <button onclick={() => onCopyPath(model.id)} disabled={busy}>Copy path</button>
+                      <button aria-label={`Show model ${model.name} in Explorer`} onclick={() => onProjectAction('reveal-model', model.id)} disabled={!model.exists || busy}>Show in Explorer</button>
+                      <button aria-label={`Copy path for model ${model.name}`} onclick={() => onCopyPath(model.id)} disabled={busy}>Copy path</button>
                     </div>
                   </details>
                 </div>
@@ -146,7 +146,7 @@
               <div class="project-details-heading folder-heading"><span>Project folders</span></div>
               <div class="folder-shortcuts">
                 {#each project.folders as folder (folder.id)}
-                  <button class="folder-shortcut" onclick={() => onProjectAction('open-folder', folder.id)} disabled={busy}>{folder.label}</button>
+                  <button class="folder-shortcut" aria-label={`Open ${folder.label} folder for project ${project.name}`} onclick={() => onProjectAction('open-folder', folder.id)} disabled={busy}>{folder.label}</button>
                 {/each}
               </div>
             {/if}
@@ -176,7 +176,7 @@
             <div class="project-meta">{target.project.name}</div>
           </div>
           <div class="project-actions">
-            <button class="secondary-button small-button" onclick={() => onOpenModel(target.model.id)} disabled={busy || !canOpenModel}>Open</button>
+            <button class="secondary-button small-button" aria-label={`Open recent model ${target.model.name} from ${target.project.name}`} onclick={() => onOpenModel(target.model.id)} disabled={busy || !canOpenModel}>Open</button>
           </div>
         </div>
       {/each}

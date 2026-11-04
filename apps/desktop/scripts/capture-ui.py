@@ -15,6 +15,8 @@ from urllib.parse import urlencode, urlsplit
 SCENARIOS = (
     ("fresh-install", "workspace"),
     ("ready", "workspace"),
+    ("ready-no-active", "workspace"),
+    ("status-unverified", "workspace"),
     ("ready", "support"),
     ("ready", "analytics"),
     ("approval-required", "workspace"),
@@ -96,6 +98,10 @@ def main():
                         page.locator(f'[data-qa-fixture="{fixture}"]').wait_for(timeout=15000)
                         if view == "analytics":
                             page.get_by_text("Gateway analytics", exact=True).wait_for(timeout=10000)
+                        if fixture == "ready-no-active":
+                            page.get_by_role("button", name="Open Blockbench").wait_for(timeout=10000)
+                        if fixture == "status-unverified":
+                            page.get_by_text("AI connection unverified", exact=True).wait_for(timeout=10000)
                         snapshot = inspect(page)
                         top_name = name + "-top.png"
                         page.screenshot(path=str(out / top_name), animations="disabled")

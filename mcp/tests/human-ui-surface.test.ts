@@ -84,12 +84,21 @@ describe("human-facing Blockbench UI", () => {
     expect(createDevFixtureStatus("fresh-install").project_navigation.projects).toHaveLength(0);
     expect(createDevFixtureStatus("ready").product_state).toBe("ready");
     expect(createDevFixtureStatus("ready").project_navigation.projects).toHaveLength(1);
+    const noActive = createDevFixtureStatus("ready-no-active");
+    expect(noActive.product_state).toBe("ready");
+    expect(noActive.project_navigation.active).toBeNull();
+    expect(noActive.project_navigation.continue_model_id).toBeNull();
+    expect(noActive.project_navigation.projects).toHaveLength(1);
+    expect(noActive.project_navigation.projects[0].models.every(model => !model.active)).toBe(true);
+    expect(createDevFixtureStatus("status-unverified").product_state).toBe("ready");
     expect(createDevFixtureStatus("plugin-modified").plugin_integrity).toBe("modified");
     expect(createDevFixtureStatus("unsupported").blockbench.compatibility?.status).toBe("unsupported");
     expect(createDevAnalyticsFixture().state).toBe("PARTIAL");
     expect(createDevAnalyticsFixture().projects).toHaveLength(1);
     expect(devFixtureFromLocation(false, "?fixture=ready")).toBeNull();
     expect(devFixtureFromLocation(true, "?fixture=ready")).toBe("ready");
+    expect(devFixtureFromLocation(true, "?fixture=ready-no-active")).toBe("ready-no-active");
+    expect(devFixtureFromLocation(true, "?fixture=status-unverified")).toBe("status-unverified");
 
     const [app, support, analytics] = await Promise.all([
       Bun.file(new URL("../../apps/desktop/src/App.svelte", import.meta.url)).text(),
@@ -114,7 +123,37 @@ describe("human-facing Blockbench UI", () => {
     expect(capture).toContain('nativeOrVisualApproval');
     expect(capture).toContain('("fresh-install", "workspace")');
     expect(capture).toContain('("ready", "analytics")');
+    expect(capture).toContain('("ready-no-active", "workspace")');
+    expect(capture).toContain('("status-unverified", "workspace")');
     expect(capture).toContain('VIEWPORTS = ((780, 560), (980, 680))');
+  });
+
+
+  test("Workspace blocks stale project decisions without blocking direct model browsing", async () => {
+    const [app, workspace, navigator, deleteDialog, pluginDoc] = await Promise.all([
+      Bun.file(new URL("../../apps/desktop/src/App.svelte", import.meta.url)).text(),
+      Bun.file(new URL("../../apps/desktop/src/WorkspacePage.svelte", import.meta.url)).text(),
+      Bun.file(new URL("../../apps/desktop/src/ProjectNavigator.svelte", import.meta.url)).text(),
+      Bun.file(new URL("../../apps/desktop/src/ProjectDeleteDialog.svelte", import.meta.url)).text(),
+      Bun.file(new URL("../../docs/05-operations/blockbench-plugin-ui.md", import.meta.url)).text(),
+    ]);
+    expect(workspace).toContain("canOpenModel={statusProbeFailures < 2}");
+    expect(workspace).toContain("canEditProjectPrefs={statusProbeFailures < 2}");
+    expect(workspace).toContain("busy={busyAction !== null || statusProbeFailures >= 2}");
+    expect(workspace).toContain("{#if !status.project_navigation.active}");
+    expect(workspace).toContain("Open Blockbench</button>");
+    expect(workspace).toContain('onclick={() => openModel()} disabled={busyAction !== null}');
+    expect(app).toContain("(id !== undefined && statusProbeFailures >= 2)");
+    expect(app).toContain("async function runProjectAction(action: ProjectAction, id: string) {\n    if (devFixture || busyAction || statusProbeFailures >= 2) return;");
+    expect(app).toContain("async function confirmDeleteProject() {\n    if (devFixture || busyAction || !deleteReview || statusProbeFailures >= 2) return;");
+    expect(app).toContain("confirmBlocked={statusProbeFailures >= 2}");
+    expect(app).toContain("if (devFixture === 'status-unverified') statusProbeFailures = 2;");
+    expect(deleteDialog).toContain("disabled={busy || confirmBlocked}");
+    expect(deleteDialog).toContain("onclick={onCancel} disabled={busy}");
+    expect(navigator).toContain('aria-label={`Open model ${model.name}`}');
+    expect(navigator).toContain('aria-label={`Open folder for project ${project.name}`}');
+    expect(pluginDoc).toContain("No empty Texture or Animation tabs");
+    expect(pluginDoc).not.toContain("Keep exactly three navigation categories");
   });
 
   test("late-mounted plugin panels never default to false Runtime-ready status", async () => {

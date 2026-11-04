@@ -170,7 +170,7 @@
   }
 
   async function runProjectAction(action: ProjectAction, id: string) {
-    if (devFixture || busyAction) return;
+    if (devFixture || busyAction || statusProbeFailures >= 2) return;
     // Local project bookmarks, selected-folder shortcuts and file actions
     // are revalidated by Rust. They never require the AI manager or Gateway.
     if (action === 'restore-project-preferences' &&
@@ -194,7 +194,7 @@
   }
 
   async function addProjectFolder() {
-    if (devFixture || busyAction) return;
+    if (devFixture || busyAction || statusProbeFailures >= 2) return;
     closeActionDisclosures(true);
     busyAction = 'project-action';
     clearActionFeedback();
@@ -214,7 +214,7 @@
   }
 
   async function beginDeleteProject(id: string) {
-    if (devFixture || busyAction || deleteReview) return;
+    if (devFixture || busyAction || deleteReview || statusProbeFailures >= 2) return;
     closeActionDisclosures(true);
     busyAction = 'project-action';
     clearActionFeedback();
@@ -234,7 +234,7 @@
   }
 
   async function confirmDeleteProject() {
-    if (devFixture || busyAction || !deleteReview) return;
+    if (devFixture || busyAction || !deleteReview || statusProbeFailures >= 2) return;
     const review = deleteReview;
     busyAction = 'project-action';
     clearActionFeedback();
@@ -255,7 +255,7 @@
   }
 
   async function openModel(id?: string) {
-    if (devFixture || busyAction) return;
+    if (devFixture || busyAction || (id !== undefined && statusProbeFailures >= 2)) return;
     busyAction = id === undefined ? 'browse-model' : 'project-action';
     clearActionFeedback();
     try {
@@ -272,13 +272,13 @@
   }
 
   async function focusCurrentEditor() {
-    if (devFixture || busyAction) return;
+    if (devFixture || busyAction || statusProbeFailures >= 2) return;
     const focused = await editorOperations.focus();
     if (!focused) showSuccessToast('Select your Blockbench window from the taskbar.');
   }
 
   async function chooseBlockbenchExecutable() {
-    if (devFixture || busyAction) return;
+    if (devFixture || busyAction || statusProbeFailures >= 2) return;
     busyAction = 'choose-editor';
     clearActionFeedback();
     try {
@@ -295,7 +295,7 @@
   }
 
   async function openBlockbenchEditor() {
-    if (devFixture || busyAction) return;
+    if (devFixture || busyAction || statusProbeFailures >= 2) return;
     busyAction = 'open-editor';
     clearActionFeedback();
     try {
@@ -310,7 +310,7 @@
   }
 
   async function copyNavigationPath(id: string) {
-    if (devFixture || busyAction) return;
+    if (devFixture || busyAction || statusProbeFailures >= 2) return;
     try {
       closeActionDisclosures(true);
       const result = await invoke<ProjectPathResult>('project_navigation_path', { id });
@@ -575,7 +575,9 @@
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onVisibilityChange);
     if (devFixture) {
-      void refresh();
+      void refresh().then(() => {
+        if (devFixture === 'status-unverified') statusProbeFailures = 2;
+      });
     } else {
       void refresh().then(() => {
         void checkManagedUpdateOnce();
@@ -699,7 +701,7 @@
 {/if}
 
 {#if deleteReview}
-  <ProjectDeleteDialog review={deleteReview} busy={busyAction !== null} onCancel={cancelDeleteProject} onConfirm={confirmDeleteProject} />
+  <ProjectDeleteDialog review={deleteReview} busy={busyAction !== null} confirmBlocked={statusProbeFailures >= 2} onCancel={cancelDeleteProject} onConfirm={confirmDeleteProject} />
 {/if}
 
 {#if error || actionMessage || (busyAction && progressStage && busyAction !== 'repair')}
