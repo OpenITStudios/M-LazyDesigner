@@ -106,7 +106,7 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(policy).toContain("minimum evidence that materially reduces downstream uncertainty");
     expect(standard).toContain("four mandatory object-relative sides");
     expect(standard).toContain("right → object\'s right-side silhouette");
-    expect(standard).toContain("top   → only when footprint/depth/layout matters");
+    expect(standard).toContain("top → only when footprint/depth/layout matters");
   });
 
   test("Minecraft player-relative scale is canonical without inventing exact dimensions", async () => {
@@ -244,7 +244,7 @@ describe("LazyDesigner reference preparation contract", () => {
       "source_hidden_invention",
     ]) expect(prompt).toContain(scenario);
     expect(prompt).toContain("cannot guarantee true 3d consistency");
-    expect(prompt).toContain("not quotas");
+    expect(prompt).toContain("the four views front, right, back and left are required");
     expect(standard).toContain("shadow or dark paint interpreted as unsupported geometric depth");
     expect(templates).toContain("back is the same underlying object volume");
     expect(templates).not.toContain("six views are mandatory");
@@ -307,7 +307,7 @@ describe("LazyDesigner reference preparation contract", () => {
       read(REFERENCE_SKILL),
     ]);
     expect(standard).toContain("one large, uncropped 3/4 model");
-    expect(standard).toContain("two targeted retries");
+    expect(standard).toContain("if a generator ignores the same presentation correction twice");
     expect(prompt).toContain("no infographic");
     expect(prompt).toContain("16×7×7 claims");
     expect(templates).toContain("style-calibrating hero-only pass");
@@ -348,7 +348,7 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(standard).toContain("micro-pixels must not become separate protruding cubes");
     expect(prompt).toContain("correct silhouette but checkerboard surfaces");
     expect(prompt).toContain("without adding meso cubes");
-    expect(standard).toContain("the supplied angular off-road vehicle image");
+    expect(standard).toContain("supplied angular off-road vehicle image");
     expect(standard).toContain("do not transplant this vehicle");
     expect(skill).toContain("only promote observed");
     expect(skill).toContain("do not compensate by making the render busier");
@@ -386,7 +386,7 @@ describe("LazyDesigner reference preparation contract", () => {
     }
     expect(prompt).toContain("source_identity_leak");
     expect(prompt).toContain("builder does not grant global lazydesigner approval");
-    expect(standard).toContain("not an approved lazydesigner");
+    expect(standard).toContain("does not approve their house architecture");
     expect(skill).toContain("visual-match claims \`unverified\`");
   });
 
