@@ -1,65 +1,41 @@
 # LazyDesigner Next Action
 
-This file owns continuation only. Proof interpretation: [current-validation.md](current-validation.md); local/native acceptance: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns completed work history. Test ownership: [test-architecture.md](../04-system/test-architecture.md).
+This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
-## Primary next — Cluster Control readiness (2026-11-02)
+## Primary next — Capability source stabilization (2026-11-04)
 
-**DECISION:** Freeze Geometry. Reuse one paint executor/Undo, four
-Gateway tools and generated API. No new UI, CI or release.
+**Goal:** preserve existing useful Geometry, Texture and Animation capabilities while resolving inaccurate readiness/ownership. No feature expansion, new framework, CI activation or mass cleanup.
 
-**SOURCE:** Compact cluster schema, PNG/part-byte verifier,
-native Cube/UV guards and existing paint/Undo remain.
-Control checks Geometry APPROVED, UV PASS, READY reference
-and no Workspace blockers; source proof now requires a trusted
-fresh Control observation after asynchronous PNG reads.
-Project/generation/Workspace drift is refused. Receipt is
-still NOT mutation authority; no public route is registered.
+**Source authority at the current `Local` branch:**
+- `lib/capabilities/manifest.ts` + `gateway/capabilities/manifest.ts` declare metadata, semantics and prerequisites, **not** executable registration.
+- `server/runtime/registration.ts` decides enabled tools for profile/Stage. Gateway `runtime/backend.ts` discovers/describes from the actual Runtime catalog; absent exact identities fail closed.
+- `gateway/capabilities/graph.ts` currently defaults to `READY` when no graph entry is found. This remains an **internal branch-readiness ambiguity**, not Runtime availability or native proof.
+- `gateway/control/capabilities.ts` already presents ambiguous branches with qualified prerequisites as `UNKNOWN` in AI search while retaining `BLOCKED`. This only safeguards **discovery presentation**, not graph execution.
+- `manage_cubes` and `paint_texture_transaction` have registered routes. `construct_geometry`, `manage_uv_layout`, painted-atlas migration and Cluster authoring remain **UNREGISTERED**.
 
-**PROOF:** GitHub source/tests authored. Bun/typecheck/generator/CI,
-native Blockbench/Undo, save/export, Golden visual QA NOT EXECUTED.
-Verification CI disabled.
+**Next complete implementation unit:** reconcile unknown/branchless graph readiness with exact branch semantics, canonical semantic revision, owning regressions and generated API/HTML **together**, then verify at the same SHA. The existing affected runner refuses unsynchronized semantic implementation changes. No partial graph edit or manual editing of generator-owned outputs. A generator-capable cloud/development context is needed for that bounded unit; **do not ask the user to local-test**.
 
-**RECOLOR:** Face-local protection and source-ramp sampling source-authored.
+Until such execution is available, continue only independent GitHub source/consumer audits, non-behavioral documentation synchronization and proof-safe prep. Do not label these executable PASS.
 
-**CLUSTER PROJECT BINDING:** Internal native entry requires trusted
-Control UUID, unique Blockbench tab object and scoped Texturing
-Stage through Undo. Regression definitions authored, NOT EXECUTED.
+## Deferred capability-specific work
 
-**LIMIT:** Cluster workflow UNREGISTERED. Activation needs canonical
-generated capability API and secure serialized Control→Runtime source
-authority. No inference of visual/reference-to-face correspondence.
+- **Cluster Control:** current source preflight requires Geometry APPROVED, UV PASS, READY Reference, no Workspace blockers and a fresh trusted Control observation after reference PNG reads. Project/generation/Workspace drift fails closed. Cube/UV/bitmap, face-local recolor/source-ramp and native paint/Undo guards are source-authored. **No registered public route, no native execution/visual proof.** A preflight receipt is not mutation authority. Keep Geometry frozen; reuse the existing paint executor.
+- **Geometry:** `construct_geometry` is unregistered (historical v12–14 work `addfb6a008b9af8baf0417ff23435046df7285d4`). Do not publish merely because its source exists.
+- **UV/Texture:** `manage_uv_layout` and painted-atlas migration remain unregistered. Native Texture ownership, updated UV receipt and target recheck guards must survive integration; no synthetic readiness promotion.
+- **Workspace:** historical Active project READMEs may omit approval/lifecycle fields; ask for current evidence only for the selected asset. Never bulk-rewrite or invent approval/fingerprint values.
+- **Native QA:** LD-Q01 silhouette, LD-Q02 atlas seams, LD-Q03 rotated pivots, LD-Q04 animation restoration, particle playback, save/reopen/export and Golden visual acceptance require the matching installed build and real evidence. No automatic MP4 route (retired).
 
-**NEXT:** Canonical generator-capable branch integration, source gate,
-then distinct native/visual acceptance. No user-PC prerequisite.
+## Gateway / compatibility invariants
 
-**GEOMETRY HOLD:** `construct_geometry` UNREGISTERED;
-v12–14 `addfb6a008b9af8baf0417ff23435046df7285d4`.
+Exactly four normal Gateway tools: `status`, `search_capabilities`, `describe_capability`, `invoke_capability`. Gateway retains reconnect/project/Stage and interrupted-mutation safety; Runtime/Plugin own native mutation; Control owns readiness, Stage context and `control_delta`. Geometry/Texturing share AUTHORING; Animation has an explicit handoff. Never replay uncertain mutations or promote `hybrid_4_experimental` from static evidence.
 
-## GitHub boundary and historical local recovery
+Root `lib/*` and Gateway facades can be intentional compatibility re-exports. Do **not** delete based on size or appearance. First prove zero source/test/external consumers and migration-safe public exports. Do not delete Workspace assets or historical research from static estimates.
 
-- `Local` is the current remote working authority. Re-pin its HEAD before edits; this ChatGPT/GitHub context does not establish a local checkout, Bun or live Blockbench.
-- Historical 2026-10-27 machine-local handoff: a primary checkout was dirty at `44b03b52`; 52 recovery payloads and 438 missing Crimson Sentinel paths were recorded. This is **not** proof of the user's present PC state. Do not touch or discard those historical assets.
-- CI DISABLED: verification definitions remain inert. Do not enable workflows, change `main`/settings or publish releases.
+## Execution and proof ceiling
 
-## Current source / installed proof boundary
+- `Local` is the only authorized working branch; `main` and release settings remain unchanged.
+- CI verification was disabled on 2026-10-20. Latest Bun, TypeScript, docs generator, CI, native Blockbench, Undo, Windows installer, Golden and performance acceptance: **NOT EXECUTED** in this GitHub-only reconciliation. Historical installed build `7b45bd69` / Desktop 0.1.1 evidence does not qualify current `Local`.
+- The prior 2026-10-27 machine-local recovery noted 52 payloads and 438 Crimson Sentinel paths; these are **historical**, not proof about the user's current PC. Preserve all user assets.
+- Generated API docs, hybrid schemas and Runtime prompts must be changed only through canonical generators. No release, new public capability, CI reactivation or local-PC prerequisites.
 
-Gateway Stage receipt consistency and historical Golden/affected-test guards are source-authored, but NOT active Knowledge research work; Bun/native proof remains NOT EXECUTED. Prior installed `7b45bd69` / Desktop 0.1.1 evidence is historical. See [current-validation.md](current-validation.md). Protect user assets; no deployment, CI or release.
-
-## Deferred Gateway integration context
-
-**P0 integration:** Gateway verifies Stage/surface/target receipts. Rejected successful affinity mutations now require state inspection, not replay. Normal Control Delta uses the backend-verified project UUID for task-cohort continuity. Stage-before now comes from the same queued native preflight, without a separate status probe. Binding, catalog, same-Stage no-op and generation guards remain. Native proof/cost pending; no new routing or benchmark.
-
-Production Gateway remains status, search_capabilities, describe_capability and invoke_capability. Retain direct-first routing, branch-specific schema retrieval, authoritative receipts and conservative OUTCOME_UNKNOWN recovery. Do not promote hybrid_4_experimental from static replay. control_delta and continuation contain intentional versioned recovery overlap; do not delete it for payload savings. Host search/compaction/model settings remain host-owned.
-
-## Deferred capability-specific residue
-
-- Legacy Active Workspace READMEs contain ambiguous or missing lifecycle fields; Control correctly requests orientation rather than inferring approval. Reconcile only the explicitly selected asset against its current native state; never bulk-rewrite historical models or fabricate approval/checkpoint hashes.
-- UV apply receipt authority now governs both Graph readiness and UV/Texture recheck scope; contradictory receipts cannot narrow seam verification. Native Atlas audit reviews orphaned/blank Texture UUIDs; unregistered painted-atlas migration checks both moved-face Texture ownership and resolved native Texture object identity without rejecting valid material overrides. `manage_uv_layout` and painted-atlas migration remain unregistered pending generator and native proof.
-- LIVE_BLOCKBENCH is not yet established in this reconciliation. LD-Q01 silhouette, LD-Q02 atlas seams, LD-Q03 rotated pivots, LD-Q04 animation restoration, particle playback, saved-model/reference quality and Golden F retain existing proof boundaries. Use the native runbook only with a matching installed build, functioning Gateway and authorized disposable fixture.
-- Windows installer/OS interactions, narrow viewport and real AI token/latency comparisons are separate from source tests. Historical security/dependency results are not current audits. A particular native residue needs its own bounded task; availability of the PC alone is not proof or activation.
-
-## System boundaries and STOP
-
-The persistent Gateway owns client stability and Runtime recovery; Control owns context/readiness; Runtime and Plugin own Blockbench-native state. Geometry and Texturing share AUTHORING; Animation handoff is explicit. Never replay an uncertain mutation.
-
-Only the canonical generators may update these artifacts: API docs, hybrid schemas and Runtime prompts. Keep this document below 6,000 UTF-8 bytes. Stop after source reconciliation, relevant proof and coherent continuity; no release, new public capability or unsolicited asset work.
+**STOP** after a coherent scoped source unit and actual available proof; hand off only unavoidable generator/native residue. Do not expand the task merely because more source exists.

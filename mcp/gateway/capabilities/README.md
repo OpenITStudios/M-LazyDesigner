@@ -13,6 +13,22 @@ This folder owns AI-facing capability discovery and routing.
 - `semanticDependencyMatrix.ts` — product semantic-surface dependency and refresh mapping.
 - `semanticFreshness.ts` — deterministic consumer freshness against semantic catalog revisions.
 
+### Registration versus readiness
+
+The core/branch manifests may include planned or unregistered operations.
+Only the Runtime registration/profile/Stage descriptor establishes the native
+surface. Gateway backend search and exact-name describe use the actual
+refreshed Runtime catalog; a schema or lifecycle tier does not register a
+tool. `manage_uv_layout` and `construct_geometry` remain unregistered.
+
+Graph `READY / UNKNOWN / BLOCKED` assesses known prerequisites, **not**
+registration or visual approval. A missing internal graph match currently
+defaults to `READY`; Control's AI-facing search projection marks unresolved
+branches with qualified prerequisites `UNKNOWN` and preserves `BLOCKED`.
+This mitigation does not fix the core graph. A graph implementation change
+needs aligned semantic revision, consumer regressions and generator-owned
+API/HTML before it can be promoted. No parallel readiness table is allowed.
+
 ### Capability dependency graph semantics
 
 ```text
