@@ -43,9 +43,10 @@
     bind:expandedProjectId
     bind:showAllProjects
     bind:projectSearch
-    busy={busyAction !== null || statusProbeFailures >= 2}
+    busy={busyAction !== null}
     canBrowseModel={busyAction === null}
-    canOpenModel={statusProbeFailures < 2}
+    canOpenModel={true}
+    canFocusCurrentEditor={statusProbeFailures < 2}
     canEditProjectPrefs={statusProbeFailures < 2}
     onOpenModel={openModel}
     onAddProjectFolder={addProjectFolder}
@@ -137,7 +138,7 @@
         <span class="connection-dot" class:waiting={productMode(status) === 'client-wait'} class:unknown={statusProbeFailures >= 2} aria-hidden="true"></span>
         <div class="connection-copy">
           <strong>{statusProbeFailures >= 2 ? 'AI connection unverified' : productMode(status) === 'ready' ? 'AI connection recently verified' : status.gateway.state === 'gateway-detected' ? 'AI connection needs confirmation' : 'Blockbench ready'}</strong>
-          <span>{statusProbeFailures >= 2 ? 'The connection status is out of date. You can still browse for a .bbmodel file; Refresh before project or maintenance actions.' : productMode(status) === 'ready' ? 'A recent AI request verified the matching tools. Idle connections may need verification again.' : status.gateway.state === 'gateway-detected' ? 'Blockbench and the AI service are detected. Confirm the connection in your AI client.' : 'Editing is available. Connect the AI client when needed.'}</span>
+          <span>{statusProbeFailures >= 2 ? 'AI status is out of date. Models and folders remain available; Refresh before changing project shortcuts or managed components.' : productMode(status) === 'ready' ? 'A recent AI request verified the matching tools. Idle connections may need verification again.' : status.gateway.state === 'gateway-detected' ? 'Blockbench and the AI service are detected. Confirm the connection in your AI client.' : 'Editing is available. Connect the AI client when needed.'}</span>
         </div>
         {#if statusProbeFailures >= 2}
           <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>

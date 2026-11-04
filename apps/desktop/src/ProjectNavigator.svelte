@@ -5,6 +5,7 @@
   export let navigation: ProjectNavigation;
   export let busy = false;
   export let canOpenModel = true;
+  export let canFocusCurrentEditor = true;
   // Native .bbmodel browsing remains available when AI status is unverified.
   export let canBrowseModel = true;
   export let canEditProjectPrefs = true;
@@ -63,7 +64,7 @@
           <div class="project-meta">{active.project_name || (active.saved ? 'Saved model' : 'Not saved yet')}{active.dirty ? ' · Modified' : ''}</div>
         </div>
         <div class="project-actions">
-          <button class="primary-button small-button" aria-label={`Go to Blockbench for ${active.model_name}`} onclick={onFocusEditor} disabled={busy}>Go to Blockbench</button>
+          <button class="primary-button small-button" aria-label={`Go to Blockbench for ${active.model_name}`} onclick={onFocusEditor} disabled={busy || !canFocusCurrentEditor}>Go to Blockbench</button>
         </div>
       </div>
     </div>
@@ -116,7 +117,7 @@
               <button onclick={() => onProjectAction(project.pinned ? 'unpin-project' : 'pin-project', project.id)} disabled={busy || !canEditProjectPrefs}>{project.pinned ? 'Unpin project' : 'Pin project'}</button>
               {#if project.registered}
                 <button onclick={() => onProjectAction('remove-project-folder', project.id)} disabled={busy || !canEditProjectPrefs}>Remove from Workspace</button>
-                <button class="menu-danger" onclick={() => onDeleteProject(project.id)} disabled={!project.available || busy}>Delete Project…</button>
+                <button class="menu-danger" onclick={() => onDeleteProject(project.id)} disabled={!project.available || busy || !canEditProjectPrefs}>Delete Project…</button>
               {/if}
             </div>
           </details>

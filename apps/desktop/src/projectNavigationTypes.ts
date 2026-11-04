@@ -53,6 +53,13 @@ export type ProjectAction =
   | 'remove-project-folder'
   | 'restore-project-preferences';
 
+/** Explorer-only actions: Rust resolves the opaque ID again before using the filesystem.
+ * Project preference changes and model launch are deliberately excluded.
+ */
+export function isSafeFileNavigationAction(action: ProjectAction): boolean {
+  return action === 'open-project-folder' || action === 'open-folder' || action === 'reveal-model';
+}
+
 /** One-time native confirmation; the client never supplies an arbitrary path to deletion. */
 export type ProjectDeletePreview = {
   token: string;

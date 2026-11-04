@@ -82,7 +82,8 @@ def inspect_action_states(page, fixture, view):
         ("status-unverified", "workspace"): {
             "Open Model…": True,
             "Go to Blockbench for Modern Chair": False,
-            "Open folder for project Furniture": False,
+            "Open folder for project Furniture": True,
+            "Open model Sofa": True,
             "Add Project Folder": False,
             "Refresh": True,
         },
@@ -119,6 +120,26 @@ def inspect_project_expansion(page, fixture, view):
     if page.get_by_role("button", name="Show models for project Furniture", exact=True).count() != 1:
         errors.append("explicit project collapse was lost after navigation")
     return errors
+
+
+def inspect_stale_file_navigation(page, fixture, view):
+    """Read-only shortcuts work when AI is unverified; project mutations remain blocked."""
+    if (fixture, view) != ("status-unverified", "workspace"):
+        return []
+    issues = []
+    def check_control(name, enabled):
+        button = page.get_by_role("button", name=name, exact=True)
+        if button.count() != 1 or button.is_enabled() != enabled:
+            issues.append(f"'{name}' expected enabled={enabled}")
+    check_control("Open References folder for project Furniture", True)
+    page.locator('summary[aria-label="Actions for project Furniture"]').click()
+    check_control("Unpin project", False)
+    check_control("Remove from Workspace", False)
+    check_control("Delete Project…", False)
+    page.locator('summary[aria-label="Actions for model Sofa"]').click()
+    check_control("Show model Sofa in Explorer", True)
+    check_control("Copy path for model Sofa", True)
+    return issues
 
 
 def main():
@@ -183,6 +204,11 @@ def main():
                         if fixture == "ready" and view == "workspace":
                             entry["navigationChecks"] = {"checked": 3, "issues": navigation_issues}
                         for issue in navigation_issues:
+                            failures.append(name + ": " + issue)
+                        stale_action_issues = inspect_stale_file_navigation(page, fixture, view)
+                        if fixture == "status-unverified" and view == "workspace":
+                            entry["staleFileNavigationChecks"] = {"checked": 6, "issues": stale_action_issues}
+                        for issue in stale_action_issues:
                             failures.append(name + ": " + issue)
                         if page_errors:
                             failures.append(name + ": JS errors: " + "; ".join(page_errors[:3]))

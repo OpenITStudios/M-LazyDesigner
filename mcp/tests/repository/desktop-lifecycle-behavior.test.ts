@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { connectionChanged, type ConnectionBaseline, type ConnectionObservation } from "../../../apps/desktop/src/connectionWatch";
 import { createConnectionMonitor } from "../../../apps/desktop/src/connectionMonitor";
 import { createEditorOperations } from "../../../apps/desktop/src/editorOperations";
+import { isSafeFileNavigationAction, type ProjectAction } from "../../../apps/desktop/src/projectNavigationTypes";
 import type { DesktopInvoke } from "../../../apps/desktop/src/desktopTypes";
 import { createSetupOperations } from "../../../apps/desktop/src/setupOperations";
 import { subscribeManagedProgress } from "../../../apps/desktop/src/managedProgress";
@@ -56,9 +57,28 @@ describe("Desktop native editor operations", () => {
       calls.push(command);
       return { status: command === "focus_blockbench_window" ? "DENIED" : "LAUNCHED_UNVERIFIED" } as never;
     };
-    const message = await createEditorOperations(invoke).openModel(id);
+    const feedback = await createEditorOperations(invoke).openModel(id);
     expect(calls).toEqual([id === undefined ? "browse_model" : "project_navigation_action", "focus_blockbench_window"]);
-    expect(message).toContain("active tab not verified");
+    expect(feedback?.verification).toBe("launched-unverified");
+    expect(feedback?.message).toContain("active tab is not verified");
+  });
+
+  test("a verified model remains confirmed even when window focus is denied", async () => {
+    const invoke: DesktopInvoke = async command => ({
+      status: command === "focus_blockbench_window" ? "DENIED" : "CONFIRMED_ACTIVE"
+    }) as never;
+    const feedback = await createEditorOperations(invoke).openModel("saved-model");
+    expect(feedback?.verification).toBe("confirmed-active");
+    expect(feedback?.message).toContain("confirmed active");
+  });
+
+  test("a focused Blockbench window is not proof of model activation", async () => {
+    const invoke: DesktopInvoke = async command => ({
+      status: command === "focus_blockbench_window" ? "FOCUSED" : "LAUNCHED_UNVERIFIED"
+    }) as never;
+    const feedback = await createEditorOperations(invoke).openModel();
+    expect(feedback?.verification).toBe("launched-unverified");
+    expect(feedback?.message).toContain("model tab is not verified");
   });
 
   test("cancelled browsing never focuses the editor; invalid recent launch is rejected", async () => {
@@ -72,6 +92,19 @@ describe("Desktop native editor operations", () => {
     await expect(operations.openModel("recent-model")).rejects.toThrow("did not acknowledge");
     expect(calls).toEqual(["browse_model", "project_navigation_action"]);
   });
+});
+
+describe("Desktop project navigation without AI status", () => {
+  test.each(["open-project-folder", "open-folder", "reveal-model"] as ProjectAction[])(
+    "%s is a read-only Explorer action", action => {
+      expect(isSafeFileNavigationAction(action)).toBe(true);
+    }
+  );
+  test.each(["pin-project", "unpin-project", "remove-project-folder", "restore-project-preferences"] as ProjectAction[])(
+    "%s is a project-preference mutation", action => {
+      expect(isSafeFileNavigationAction(action)).toBe(false);
+    }
+  );
 });
 
 describe("Desktop passive connection lifecycle", () => {

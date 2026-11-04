@@ -356,7 +356,7 @@ describe("Desktop control-plane ownership", () => {
     expect(rust).toContain("blockbench.running && manager_available");
     expect(await workspaceSource).toContain("Models and folders stay accessible.");
     expect(await workspaceSource).toContain("canOpenModel={true}");
-    expect(await workspaceSource).toContain("canEditProjectPrefs={true}");
+    expect(await workspaceSource).toContain("canEditProjectPrefs={statusProbeFailures < 2}");
     expect(nav).toContain("!canOpenModel");
     expect(nav).toContain("!canEditProjectPrefs");
   });
@@ -674,13 +674,13 @@ describe("Desktop stale connection action admission", () => {
     for (const button of launchButtons) expect(button).toContain("disabled={!status.manager_available ||");
   });
 
-  test("keeps stale status visible but guards project, launch and managed mutation", async () => {
+  test("keeps file navigation usable while guarding preference and managed mutation", async () => {
     const app = await Bun.file("../apps/desktop/src/App.svelte").text();
     const monitor = await source("../apps/desktop/src/connectionMonitor.ts");
     expect(monitor).toContain("setFailures(Math.min(failures + 1, 2))");
     expect(app).toContain("AI status needs verification · Files remain accessible");
     expect(await workspaceSource).toContain("busy={busyAction !== null}");
-    expect(await workspaceSource).toContain("canEditProjectPrefs={true}");
+    expect(await workspaceSource).toContain("canEditProjectPrefs={statusProbeFailures < 2}");
     for (const action of ["connectBlockbench", "installLazyDesigner", "runManagedAction"]) {
       const start = app.indexOf(`async function ${action}`);
       expect(start).toBeGreaterThan(0);
@@ -691,9 +691,14 @@ describe("Desktop stale connection action admission", () => {
     expect(model).not.toContain("ensure_ready");
     expect(model).not.toContain("manager_available");
     expect(model).toContain("editorOperations.openModel(id)");
-    const readOnly = app.slice(app.indexOf("async function runProjectAction("), app.indexOf("async function openModel("));
-    expect(readOnly).toContain("'project_navigation_action'");
-    expect(readOnly).not.toContain("statusProbeFailures >= 2");
+    const projectActions = app.slice(app.indexOf("async function runProjectAction("), app.indexOf("async function openModel("));
+    expect(projectActions).toContain("'project_navigation_action'");
+    expect(projectActions).toContain("statusProbeFailures >= 2 && !isSafeFileNavigationAction(action)");
+    expect(app).toContain("import { isSafeFileNavigationAction");
+    expect(await workspaceSource).toContain("canFocusCurrentEditor={statusProbeFailures < 2}");
+    expect(await workspaceSource).toContain("canOpenModel={true}");
+    expect(await workspaceSource).toContain("canEditProjectPrefs={statusProbeFailures < 2}");
+    expect(await source("../apps/desktop/src/ProjectNavigator.svelte")).toContain("disabled={!project.available || busy || !canEditProjectPrefs}>Delete Project…");
     expect(app).toContain("onclick={() => openModel()}");
     expect(app).toContain("disabled={loading || busyAction !== null} onclick={refresh}");
     expect(app).toContain("connectionMonitor.fullStatusSucceeded()");
@@ -885,7 +890,7 @@ describe("Desktop full-status freshness and nullable project revision", () => {
     expect(watcher.indexOf("if (disposed || failures >= 2) return;"))
       .toBeLessThan(watcher.indexOf("else setFailures(0);"));
     expect(await workspaceSource).toContain("busy={busyAction !== null}");
-    expect(await workspaceSource).toContain("canEditProjectPrefs={true}");
+    expect(await workspaceSource).toContain("canEditProjectPrefs={statusProbeFailures < 2}");
   });
 });
 

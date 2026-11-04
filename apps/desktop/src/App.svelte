@@ -13,7 +13,7 @@
   import { subscribeManagedProgress } from './managedProgress';
   import { createDevFixtureStatus, createDevAnalyticsFixture, devFixtureFromLocation, type DevFixture } from './desktopFixtures';
   import { observeStatus } from './statusObservation';
-  import type { ProjectAction, ProjectDeletePreview, ProjectDeleteResult } from './projectNavigationTypes';
+  import { isSafeFileNavigationAction, type ProjectAction, type ProjectDeletePreview, type ProjectDeleteResult } from './projectNavigationTypes';
   import type {
     SystemStatus, ConnectionStatus, PluginFileActionResult, DesktopBusyAction, DesktopOperationRecord,
     ManagedUpdateCheck, EnsureReadyResult,
@@ -37,7 +37,7 @@
   let actionMessage = '';
   let actionMessageKind: 'success' | 'pending' | 'unchanged' = 'success';
   let progressStage = '';
-  let successToastTimer: number | null = null;
+  let actionToastTimer: number | null = null;
   let utilityMenuOpen = false;
   let statusProbeFailures = 0;
   let devFixture: DevFixture | null = null;
@@ -102,9 +102,9 @@
     if (restoreFocus) focusedDisclosure?.querySelector<HTMLElement>('summary')?.focus();
   }
 
-  function clearSuccessToast() {
-    if (successToastTimer !== null) window.clearTimeout(successToastTimer);
-    successToastTimer = null;
+  function clearActionToast() {
+    if (actionToastTimer !== null) window.clearTimeout(actionToastTimer);
+    actionToastTimer = null;
     actionMessage = '';
     actionMessageKind = 'success';
   }
@@ -112,19 +112,19 @@
   function clearActionFeedback() {
     error = '';
     errorDetail = null;
-    clearSuccessToast();
+    clearActionToast();
   }
 
-  function showSuccessToast(
+  function showActionToast(
     message: string,
     kind: 'success' | 'pending' | 'unchanged' = 'success'
   ) {
-    if (successToastTimer !== null) window.clearTimeout(successToastTimer);
+    if (actionToastTimer !== null) window.clearTimeout(actionToastTimer);
     actionMessageKind = kind;
     actionMessage = message;
-    successToastTimer = window.setTimeout(() => {
+    actionToastTimer = window.setTimeout(() => {
       actionMessage = '';
-      successToastTimer = null;
+      actionToastTimer = null;
     }, 6500);
   }
 
@@ -170,9 +170,9 @@
   }
 
   async function runProjectAction(action: ProjectAction, id: string) {
-    if (devFixture || busyAction || statusProbeFailures >= 2) return;
-    // Local project bookmarks, selected-folder shortcuts and file actions
-    // are revalidated by Rust. They never require the AI manager or Gateway.
+    if (devFixture || busyAction || (statusProbeFailures >= 2 && !isSafeFileNavigationAction(action))) return;
+    // Explorer-only actions re-resolve opaque IDs in Rust and remain available
+    // while AI status is unverified; preference mutations still require Refresh.
     if (action === 'restore-project-preferences' &&
         !window.confirm('Restore the last saved project pins? The damaged settings file will be retained.')) return;
     closeActionDisclosures(true);
@@ -182,10 +182,10 @@
       const result = await invoke<ProjectNavigationActionResult>('project_navigation_action', { action, id });
       if (action === 'pin-project' || action === 'unpin-project' ||
           action === 'remove-project-folder' || action === 'restore-project-preferences') await refresh();
-      if (result.status === 'REMOVED_FROM_LIST') showSuccessToast('Removed from Workspace. Your files were not deleted.');
-      else if (result.status === 'PINNED') showSuccessToast('Project pinned.');
-      else if (result.status === 'UNPINNED') showSuccessToast('Project unpinned.');
-      else if (result.status === 'RESTORED') showSuccessToast('Project shortcuts restored. Your model files were not changed.');
+      if (result.status === 'REMOVED_FROM_LIST') showActionToast('Removed from Workspace. Your files were not deleted.');
+      else if (result.status === 'PINNED') showActionToast('Project pinned.');
+      else if (result.status === 'UNPINNED') showActionToast('Project unpinned.');
+      else if (result.status === 'RESTORED') showActionToast('Project shortcuts restored. Your model files were not changed.');
     } catch (cause) {
       reportError(cause);
     } finally {
@@ -202,7 +202,7 @@
       const result = await invoke<ProjectNavigationActionResult>('add_project_folder');
       if (result.status === 'ADDED' || result.status === 'ALREADY_ADDED') {
         await refresh();
-        showSuccessToast(result.status === 'ADDED'
+        showActionToast(result.status === 'ADDED'
           ? 'Project folder added. Your files were not changed.'
           : 'This folder is already in your projects.');
       }
@@ -244,7 +244,7 @@
       expandedProjectId = null;
       await refresh();
       recordOperation('Move Project to Recycle Bin', 'success', result.status);
-      showSuccessToast(result.message, result.status === 'RECYCLED' ? 'success' : 'pending');
+      showActionToast(result.message, result.status === 'RECYCLED' ? 'success' : 'pending');
     } catch (cause) {
       deleteReview = null;
       recordOperation('Move Project to Recycle Bin', 'failed', errorCode(cause));
@@ -255,14 +255,17 @@
   }
 
   async function openModel(id?: string) {
-    if (devFixture || busyAction || (id !== undefined && statusProbeFailures >= 2)) return;
+    if (devFixture || busyAction) return;
     busyAction = id === undefined ? 'browse-model' : 'project-action';
     clearActionFeedback();
     try {
-      const message = await editorOperations.openModel(id);
-      if (message !== null) {
+      const feedback = await editorOperations.openModel(id);
+      if (feedback !== null) {
         await refresh();
-        showSuccessToast(message);
+        showActionToast(
+          feedback.message,
+          feedback.verification === 'confirmed-active' ? 'success' : 'pending',
+        );
       }
     } catch (cause) {
       reportError(cause);
@@ -274,7 +277,7 @@
   async function focusCurrentEditor() {
     if (devFixture || busyAction || statusProbeFailures >= 2) return;
     const focused = await editorOperations.focus();
-    if (!focused) showSuccessToast('Select your Blockbench window from the taskbar.');
+    if (!focused) showActionToast('Select your Blockbench window from the taskbar.', 'pending');
   }
 
   async function chooseBlockbenchExecutable() {
@@ -285,7 +288,7 @@
       const result = await invoke<BlockbenchSelectionResult>('choose_blockbench_executable');
       if (result.status === 'SELECTED') {
         await refresh();
-        showSuccessToast('Blockbench installation selected. No model files or managed plugins were changed.');
+        showActionToast('Blockbench installation selected. No model files or managed plugins were changed.');
       }
     } catch (cause) {
       reportError(cause);
@@ -301,7 +304,7 @@
     try {
       const message = await editorOperations.openEditor();
       await refresh();
-      showSuccessToast(message);
+      showActionToast(message);
     } catch (cause) {
       reportError(cause);
     } finally {
@@ -310,12 +313,12 @@
   }
 
   async function copyNavigationPath(id: string) {
-    if (devFixture || busyAction || statusProbeFailures >= 2) return;
+    if (devFixture || busyAction) return;
     try {
       closeActionDisclosures(true);
       const result = await invoke<ProjectPathResult>('project_navigation_path', { id });
       await navigator.clipboard.writeText(result.path);
-      showSuccessToast('Path copied.');
+      showActionToast('Path copied.');
     } catch (cause) {
       reportError(cause);
     }
@@ -339,7 +342,7 @@
         const connection = result.reason === 'MCP_SESSION_UNVERIFIED'
           ? 'Gateway process detected; verify the MCP session in your AI client.'
           : result.status === 'READY' ? 'AI connection is ready.' : 'AI client can connect when needed.';
-        showSuccessToast(focused
+        showActionToast(focused
           ? `Blockbench window focus confirmed. ${connection}`
           : `Blockbench is ready. Select it from the taskbar if needed. ${connection}`);
       } else if (result.status === 'NEEDS_ATTENTION' && result.reason !== 'PLUGIN_MISSING_WHILE_BLOCKBENCH_RUNNING') {
@@ -356,7 +359,7 @@
     if (busyAction) return;
     try {
       await invoke<PluginFileActionResult>('show_retired_plugin_file');
-      showSuccessToast('Existing plugin file selected in File Explorer. No files were changed.');
+      showActionToast('Existing plugin file selected in File Explorer. No files were changed.');
     } catch (cause) {
       reportError(cause);
     }
@@ -385,11 +388,11 @@
       }, migrateLegacy);
       const ready = outcome.readiness;
       if (!ready) {
-        showSuccessToast(outcome.feedback.message, outcome.feedback.kind);
+        showActionToast(outcome.feedback.message, outcome.feedback.kind);
         return;
       }
-      if (ready.status === 'READY') showSuccessToast('Setup complete. LazyDesigner is ready.');
-      else if (ready.status === 'RUNTIME_READY') showSuccessToast('Setup complete. Blockbench is ready.');
+      if (ready.status === 'READY') showActionToast('Setup complete. LazyDesigner is ready.');
+      else if (ready.status === 'RUNTIME_READY') showActionToast('Setup complete. Blockbench is ready.');
       else if (ready.status === 'NEEDS_ATTENTION') {
         error = installationReadinessError(ready);
       }
@@ -418,7 +421,7 @@
     errorDetail = null;
     try {
       await invoke<PluginFileActionResult>('show_plugin_file');
-      showSuccessToast(pluginApprovalNeeded && productMode(status) === 'plugin-setup'
+      showActionToast(pluginApprovalNeeded && productMode(status) === 'plugin-setup'
         ? 'Plugin file highlighted. Approve it in Blockbench if prompted.'
         : 'Plugin file highlighted in File Explorer.');
     } catch (cause) {
@@ -446,7 +449,7 @@
     if (!analytics || analyticsLoading) return;
     try {
       await navigator.clipboard.writeText(JSON.stringify(analytics, null, 2));
-      showSuccessToast('Analytics JSON copied. No data was uploaded.');
+      showActionToast('Analytics JSON copied. No data was uploaded.');
     } catch {
       analyticsError = 'Could not copy Analytics. You can use Export JSON instead.';
     }
@@ -463,7 +466,7 @@
     try {
       const result = await invoke<AnalyticsExportResult>('export_analytics');
       if (result.status === 'EXPORTED') {
-        showSuccessToast('Analytics JSON exported. No data was uploaded.');
+        showActionToast('Analytics JSON exported. No data was uploaded.');
       }
     } catch {
       analyticsError = 'Could not export Analytics to the selected file.';
@@ -479,7 +482,7 @@
     clearActionFeedback();
     try {
       const result = await invoke<DiagnosticExportResult>('export_diagnostics');
-      if (result.status === 'EXPORTED') showSuccessToast('Diagnostics exported successfully.');
+      if (result.status === 'EXPORTED') showActionToast('Diagnostics exported successfully.');
       else actionMessage = '';
     } catch (cause) {
       reportError(cause);
@@ -511,7 +514,7 @@
     clearActionFeedback();
     try {
       const feedback = await maintenanceOperations.execute(request);
-      showSuccessToast(feedback.message, feedback.kind);
+      showActionToast(feedback.message, feedback.kind);
       recordOperation(actionLabel, feedback.kind, feedback.status);
       await refresh();
       if (action === 'update') {
@@ -594,7 +597,7 @@
       if (deleteReview) cancelDeleteProject();
       connectionMonitor.dispose();
       stopProgressListener();
-      if (successToastTimer !== null) window.clearTimeout(successToastTimer);
+      if (actionToastTimer !== null) window.clearTimeout(actionToastTimer);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('focus', onFocus);
@@ -710,7 +713,7 @@
     <div class="attention-copy"><strong>{error ? errorTitle : actionMessage ? (actionMessageKind === 'pending' ? 'Next step' : actionMessageKind === 'unchanged' ? 'No change' : 'Done') : 'Working'}</strong><span>{error || actionMessage || progressLabel(progressStage)}</span></div>
     <div class="attention-actions">
       {#if error}<button onclick={() => navigate('Support')}>Support</button>{/if}
-      {#if error || actionMessage}<button class="dismiss" aria-label="Dismiss notification" onclick={() => { error=''; clearSuccessToast(); }}>×</button>{/if}
+      {#if error || actionMessage}<button class="dismiss" aria-label="Dismiss notification" onclick={() => { error=''; clearActionToast(); }}>×</button>{/if}
     </div>
   </aside>
 {/if}
