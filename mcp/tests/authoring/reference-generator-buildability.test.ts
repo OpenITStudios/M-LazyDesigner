@@ -406,7 +406,7 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(standard).toContain("universal turnaround quota");
     expect(prompt).toContain("do not squeeze a fifth hero");
     expect(skill).toContain("construction-only");
-    expect(skill).toContain("remain \`unverified\` without real tests");
+    expect(skill).toContain("remain unverified without real tests");
   });
 
 });
