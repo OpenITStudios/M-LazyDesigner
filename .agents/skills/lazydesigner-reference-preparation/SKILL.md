@@ -128,6 +128,8 @@ Take from M-LazyBuilder EX-REF-02/03 the restrained balanced **four-side layout*
 
 No new runtime, schema, automatic scorer, global approved sample corpus or installed Project is implied. Existing static source checks validate authored contracts only; visual-quality improvement and native Blockbench output remain **UNVERIFIED** without real tests.
 
+**Five-pair visual QA:** inspect actual FRONT ↔ RIGHT, RIGHT ↔ BACK, BACK ↔ LEFT, LEFT ↔ FRONT and RIGHT ↔ LEFT physical continuity following `standard.md`. Check corners, part counts, contacts, handedness and source-hidden uncertainty before declaring reference-stage READY. Unequal panel pixel widths are acceptable; they cannot justify changed object proportions. A label-only composite is not a set of calibrated 3D views and does not establish native Blockbench PASS.
+
 
 ### ChatGPT Image Generator execution path
 

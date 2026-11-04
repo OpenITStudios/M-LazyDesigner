@@ -99,9 +99,12 @@ DRAW =
   MINIMUM_CONSTRUCTION: scoped partial/repair image ONLY, not the completed MODEL
     four-side handoff; choose only the relevant visible P1/P2 view(s).
   FOUR_SIDE_CONSTRUCTION: DEFAULT final 3D MODEL reference; exactly four
-    equal clean 2x2 panels: Front top-left / Right top-right / Back bottom-left /
-    Left bottom-right, object-relative; ONLY direction labels, no fifth HERO,
-    title, palette, details row, scene clutter, invented measurements or QA badge.
+    visually balanced 2x2 panels: Front top-left / Right top-right / Back
+    bottom-left / Left bottom-right, object-relative. Unequal panel pixel widths
+    may accommodate long side profiles while preserving aligned ground lines,
+    readable silhouettes and identical underlying physical proportions.
+    ONLY direction labels, no fifth HERO, title, palette, detail row, invented
+    measurements or QA badges.
 SINGLE_OBJECT = rotate camera around one unchanged form; do not mirror parts,
   shift attachments, invent the other side as observed or change surface identity.
 SOURCE_HIDDEN = UNKNOWN in faithful reconstruction; PROVISIONAL when designing a

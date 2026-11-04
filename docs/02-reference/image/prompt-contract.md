@@ -441,7 +441,7 @@ CRITICAL DETAILS when needed
 MOTION STRIP when needed
 ```
 
-For a **completed 3D MODEL construction reference**, render a balanced **2×2 Front/Right/Back/Left** sheet by default, object-relative, same scale and neutral background. The four-side MODEL baseline is not optional because an earlier HERO looks sufficient. Do not squeeze a fifth HERO, banner, material legend, imagined exact dimensions or PASS/QA labels into it. A user-requested HERO-only preview stays a separate, incomplete-for-construction image.
+For a **completed 3D MODEL construction reference**, render a balanced **2×2 Front/Right/Back/Left** sheet by default, object-relative, with consistent physical object scale and neutral background. **Equal panel pixel widths are not required:** allow wider side profiles when needed without changing actual model proportions. Apply the mandatory five-pair cross-panel evidence check from `standard.md` to real pixels before reference-stage READY. The four-side MODEL baseline is not optional because an earlier HERO looks sufficient. Do not squeeze a fifth HERO, banner, material legend, imagined exact dimensions or PASS/QA labels into it. A user-requested HERO-only preview stays a separate, incomplete-for-construction image.
 
 Image text is limited to asset title, view labels, short detail labels, and short pose labels.
 

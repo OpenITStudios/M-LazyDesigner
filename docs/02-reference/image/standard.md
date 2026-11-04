@@ -117,7 +117,7 @@ For a final 3D MODEL reference sheet, use the balanced **2×2 four-side baseline
 └───────────────────────┴───────────────────────┘
 ```
 
-Keep similar object height, neutral background and restrained lighting, comparable camera distance and only short direction labels. The model must fill each panel clearly. No fifth HERO, title bar, floating parts, palette, moodboard, instructions or badge on the four-side sheet. HERO style calibration is an optional **separate** one-image stage; extra top/bottom views, localized details, UV/material or animation evidence use separate sheets when needed.
+Keep similar apparent object height and 3D model scale, neutral background, restrained lighting and only short direction labels. **Balanced 2×2 does not mean equal pixel widths:** a long side profile may need a wider panel than a compact front/back view. Keep aligned rows, ground baselines and readable uncropped models without changing the physical proportions. Different panel pixel widths are a presentation decision, not evidence of a different object scale. No fifth HERO, title bar, floating parts, palette, moodboard, instructions or badge on the four-side sheet. HERO style calibration is an optional **separate** one-image stage; extra top/bottom views, localized details, UV/material or animation evidence use separate sheets when needed.
 
 ```text
 CONTENT DECIDES LAYOUT FOR ADDITIONAL EVIDENCE
@@ -327,6 +327,21 @@ Existing stage-readiness vocabulary applies without creating a new schema:
 The temporary inventory is not a handoff artifact. Preserve only necessary unresolved facts in existing package `unknowns` and `readiness`; do not create another registry, validator, tool or top-level manifest field.
 
 ## Multi-View Consistency & Reconstruction Readiness QA
+
+### Mandatory Five-Pair Cross-Panel Evidence Check
+
+For a completed four-side MODEL reference, compare **actual full-resolution image pixels** against the same source/approved object-space brief, rather than relying on panel labels:
+
+1. `FRONT ↔ RIGHT`: near-front corner, front identity, body height, primary contacts and attachment count.
+2. `RIGHT ↔ BACK`: rear corner, body depth, roof/ground support and rear attachment continuity.
+3. `BACK ↔ LEFT`: rear silhouette, opposite rear corner, contacts and openings.
+4. `LEFT ↔ FRONT`: return to the same front width, left-forward corner and non-mirrored features.
+5. `RIGHT ↔ LEFT`: wheel/limb/branch/connector count, spacing, shared depth and real asymmetry.
+
+Record `MATCH`, `LOCAL_VIEW_DEFECT`, `CROSS_VIEW_CONFLICT` or `NOT_ASSESSABLE` only for decision-critical relations. A first observed P1 contradiction blocks its dependent construction claim; issue one bounded `CHANGE + PRESERVE` correction and reinspect every affected panel. A four-panel generated composite remains **one uncalibrated image**, not four independent 3D camera proofs. A source-hidden rear remains `UNKNOWN / NOT_ASSESSABLE` for source fidelity, even where the generated BACK panel is a `PROVISIONAL` creative completion. Do not misinterpret painted shadows as physical holes, or substitute decorative detail for missing topology.
+
+MD-REF-01 remains approved as a **visual guideline only**. Its frozen PNG/ZIP are not to be changed or reclassified as native Blockbench verification.
+
 
 Review the **actual generated reference**, not merely its panel labels. This section applies the Surface Coverage Gate; it creates no image classifier, extra score, 3D solver or mandatory turnaround.
 

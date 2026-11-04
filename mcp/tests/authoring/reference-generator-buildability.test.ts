@@ -453,4 +453,54 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(skill).toContain("do not generate every module by default");
   });
 
+
+  test("four-side panels are visually balanced without requiring equal pixel widths", async () => {
+    const [standard, prompt, templates, catalog, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read("../docs/02-reference/image/reference-samples.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("balanced 2×2 does not mean equal pixel widths");
+    expect(prompt).toContain("equal panel pixel widths are not required");
+    expect(templates).toContain("unequal panel pixel widths");
+    expect(catalog).toContain("balanced does not mean equal panel pixel widths");
+    expect(skill).toContain("unequal panel pixel widths are acceptable");
+    expect(standard).toContain("four mandatory object-relative sides");
+  });
+
+  test("mandatory five-pair visual QA checks physical continuity and hidden-source limits", async () => {
+    const [standard, prompt, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    for (const pair of ["front ↔ right", "right ↔ back", "back ↔ left", "left ↔ front", "right ↔ left"]) {
+      expect(standard).toContain(pair);
+      expect(skill).toContain(pair);
+    }
+    expect(standard).toContain("mandatory five-pair cross-panel evidence check");
+    expect(standard).toContain("cross_view_conflict");
+    expect(standard).toContain("not_assessable");
+    expect(prompt).toContain("mandatory five-pair cross-panel evidence check");
+  });
+
+  test("MD-REF-01 catalog pins frozen archive hashes and verifies actual-file handoff", async () => {
+    const catalog = await read("../docs/02-reference/image/reference-samples.md");
+    for (const hash of [
+      "59b782b580d6ae6c6c2bd9fe6cb6e728af2be6739f94aa11a5fc4eaa25bce782",
+      "5475a0dd470520a607460055209cbee1b8d2e310a1774f6841120b8eed7b93eb",
+      "9c2dc84c550d4d7dc7079b530f2b49d46a8789f92bfbed1c10cff47208bae87b",
+    ]) expect(catalog).toContain(hash);
+    expect(catalog).toContain("get-filehash -algorithm sha256");
+    expect(catalog).toContain("expand-archive -literalpath");
+    expect(catalog).toContain("approved_four_sides.png");
+    expect(catalog).toContain("input_source.png");
+    expect(catalog).toContain("manifest.json");
+    expect(catalog).toContain("cannot verify external chatgpt library image bytes");
+    expect(catalog).toContain("provisional");
+  });
+
+
 });
