@@ -32,6 +32,7 @@ struct Counts {
     calls: u64,
     failures: u64,
     duration_sum_ms: u64,
+    max_duration_ms: u64,
     by_tool: ToolCounts,
     capabilities: BTreeMap<String, u64>,
     error_codes: BTreeMap<String, u64>,
@@ -57,6 +58,8 @@ struct BuildCounts {
 struct Project {
     project_key: String,
     identity_scope: String,
+    first_seen_ms: u64,
+    last_seen_ms: u64,
     counters: Counts,
     by_domain: BTreeMap<String, DomainCounts>,
     #[serde(default)]
@@ -79,6 +82,9 @@ struct Snapshot {
     session_id: String,
     state: String,
     capture_scope: String,
+    recorded_at_ms: u64,
+    first_seen_ms: Option<u64>,
+    last_seen_ms: Option<u64>,
     observed_calls: u64,
     unbound: Counts,
     projects: Vec<Project>,
@@ -230,12 +236,15 @@ fn valid_counts(counts: &Counts) -> bool {
     counts.acceptance_gate_invalidations <= counts.calls &&
     counts.user_delta_status_observations <= counts.calls &&
     counts.duration_sum_ms <= MAX_COUNT &&
+    counts.max_duration_ms <= counts.duration_sum_ms &&
+    counts.downstream_recheck_requests <= MAX_COUNT &&
     counts.by_tool.sum() == Some(counts.calls) &&
     counts.capabilities.len() <= 25 &&
     counts.error_codes.len() <= 13 &&
     counts.capabilities.iter().all(|(key, val)| category(key, false) && *val <= counts.calls) &&
     counts.error_codes.iter().all(|(key, val)| category(key, true) && *val <= counts.calls) &&
-    counts.capabilities.values().copied().sum::<u64>() <= counts.by_tool.invoke_capability &&
+    // L0 records exactly one bounded capability bucket per invocation.
+    counts.capabilities.values().copied().sum::<u64>() == counts.by_tool.invoke_capability &&
     counts.error_codes.values().copied().sum::<u64>() <= counts.failures
 }
 
@@ -250,6 +259,13 @@ fn parse_snapshot(bytes: &[u8]) -> Option<Snapshot> {
         item.retention.max_snapshot_bytes != MAX_FILE_BYTES ||
         item.retention.max_projects_per_session != 12 ||
         item.retention.checkpoint_every_calls != 64 ||
+        item.recorded_at_ms == 0 ||
+        (item.observed_calls > 0 && (item.first_seen_ms.is_none() ||
+                                     item.last_seen_ms.is_none())) ||
+        (item.observed_calls == 0 && (item.first_seen_ms.is_some() ||
+                                      item.last_seen_ms.is_some())) ||
+        item.first_seen_ms.zip(item.last_seen_ms)
+            .is_some_and(|(first, last)| first > last) ||
         !valid_counts(&item.unbound) {
         return None;
     }
@@ -259,12 +275,15 @@ fn parse_snapshot(bytes: &[u8]) -> Option<Snapshot> {
         if !is_hex_lower(&project.project_key, 64) ||
             project.identity_scope != "VERIFIED_NATIVE_UUID_ONLY" ||
             !identities.insert(&project.project_key) ||
+            project.first_seen_ms > project.last_seen_ms ||
             !valid_counts(&project.counters) {
             return None;
         }
         attributed = attributed.checked_add(project.counters.calls)?;
         let mut domain_total = 0u64;
         let mut domain_duration = 0u64;
+        let mut domain_failures = 0u64;
+        let mut domain_verification = 0u64;
         for (stage, counts) in &project.by_domain {
             if !["CORE", "GEOMETRY", "TEXTURING", "ANIMATION"].contains(&stage.as_str()) ||
                 counts.failures > counts.calls ||
@@ -274,9 +293,14 @@ fn parse_snapshot(bytes: &[u8]) -> Option<Snapshot> {
             }
             domain_total = domain_total.checked_add(counts.calls)?;
             domain_duration = domain_duration.checked_add(counts.duration_sum_ms)?;
+            domain_failures = domain_failures.checked_add(counts.failures)?;
+            domain_verification =
+                domain_verification.checked_add(counts.verification_required)?;
         }
         if domain_total > project.counters.calls ||
-            domain_duration > project.counters.duration_sum_ms {
+            domain_duration > project.counters.duration_sum_ms ||
+            domain_failures > project.counters.failures ||
+            domain_verification > project.counters.verification_required {
             return None;
         }
         if let Some(ref by_build) = project.observed_runtime_build_calls {
@@ -286,6 +310,7 @@ fn parse_snapshot(bytes: &[u8]) -> Option<Snapshot> {
             let unknown = project.runtime_build_unattributed_calls?;
             let mut recorded = unknown;
             let mut duration = 0u64;
+            let mut failures = 0u64;
             for (key, value) in by_build {
                 if (key != "OTHER" && !is_hex_lower(key, 64)) ||
                     value.failures > value.calls ||
@@ -294,9 +319,11 @@ fn parse_snapshot(bytes: &[u8]) -> Option<Snapshot> {
                 }
                 recorded = recorded.checked_add(value.calls)?;
                 duration = duration.checked_add(value.duration_sum_ms)?;
+                failures = failures.checked_add(value.failures)?;
             }
             if recorded != project.counters.calls ||
-                duration > project.counters.duration_sum_ms {
+                duration > project.counters.duration_sum_ms ||
+                failures > project.counters.failures {
                 return None;
             }
         }
@@ -522,6 +549,9 @@ mod tests {
             "session_id": "abcdef1234567890",
             "state": "CLOSED",
             "capture_scope": "RECENT_BOUNDED_GATEWAY_L0",
+            "recorded_at_ms": 1700000000020u64,
+            "first_seen_ms": 1700000000000u64,
+            "last_seen_ms": 1700000000010u64,
             "observed_calls": calls + 1,
             "unbound": {
                 "calls": 1, "failures": 0, "duration_sum_ms": 3,
@@ -535,6 +565,8 @@ mod tests {
             "projects": [{
                 "project_key": uuid,
                 "identity_scope": "VERIFIED_NATIVE_UUID_ONLY",
+                "first_seen_ms": 1700000000000u64,
+                "last_seen_ms": 1700000000010u64,
                 "counters": {
                     "calls": calls, "failures": 0,
                     "duration_sum_ms": calls * 8, "max_duration_ms": 8,
@@ -569,6 +601,34 @@ mod tests {
     }
 
     #[test]
+    fn incomplete_or_contradictory_l0_metrics_are_rejected() {
+        let key = "a".repeat(64);
+        let original = sample(&key, 2);
+
+        let mut missing_time = original.clone();
+        missing_time.as_object_mut().unwrap().remove("recorded_at_ms");
+        assert!(parse_snapshot(missing_time.to_string().as_bytes()).is_none());
+
+        let mut bad_period = original.clone();
+        bad_period["projects"][0]["first_seen_ms"] = json!(1700000000030u64);
+        assert!(parse_snapshot(bad_period.to_string().as_bytes()).is_none());
+
+        let mut wrong_capability = original.clone();
+        wrong_capability["projects"][0]["counters"]["capabilities"]["manage_cubes"] =
+            json!(1);
+        assert!(parse_snapshot(wrong_capability.to_string().as_bytes()).is_none());
+
+        let mut impossible_peak = original.clone();
+        impossible_peak["projects"][0]["counters"]["max_duration_ms"] = json!(1000);
+        assert!(parse_snapshot(impossible_peak.to_string().as_bytes()).is_none());
+
+        let mut invalid_rechecks = original;
+        invalid_rechecks["unbound"]["downstream_recheck_requests"] =
+            json!(1_000_000_000_001u64);
+        assert!(parse_snapshot(invalid_rechecks.to_string().as_bytes()).is_none());
+    }
+
+    #[test]
     fn aggregates_only_separate_native_identities_and_source_metrics() {
         let mut summary = AnalyticsOverview::empty();
         let mut groups = BTreeMap::new();
@@ -589,11 +649,29 @@ mod tests {
         record["projects"][0]["observed_runtime_build_calls"] = json!({});
         let build = "a".repeat(64);
         record["projects"][0]["observed_runtime_build_calls"][build.as_str()] = json!({
-            "calls": 1, "failures": 0, "duration_sum_ms": 3
+            "calls": 2, "failures": 0, "duration_sum_ms": 16
         });
         record["projects"][0]["runtime_build_unattributed_calls"] = json!(0);
         record["projects"][0]["runtime_build_call_counts_capped"] = json!(false);
+        assert!(parse_snapshot(record.to_string().as_bytes()).is_some());
+        // The same valid schema becomes invalid if one call is falsely lost.
+        record["projects"][0]["observed_runtime_build_calls"][build.as_str()]["calls"] = json!(1);
         assert!(parse_snapshot(record.to_string().as_bytes()).is_none());
+    }
+
+    #[test]
+    fn rejects_false_domain_and_build_failure_breakdowns() {
+        let mut domain = sample(&"a".repeat(64), 2);
+        domain["projects"][0]["by_domain"]["GEOMETRY"]["failures"] = json!(1);
+        assert!(parse_snapshot(domain.to_string().as_bytes()).is_none());
+
+        let mut build = sample(&"a".repeat(64), 2);
+        build["projects"][0]["observed_runtime_build_calls"] = json!({
+            "OTHER": { "calls": 2, "failures": 1, "duration_sum_ms": 12 }
+        });
+        build["projects"][0]["runtime_build_unattributed_calls"] = json!(0);
+        build["projects"][0]["runtime_build_call_counts_capped"] = json!(true);
+        assert!(parse_snapshot(build.to_string().as_bytes()).is_none());
     }
 
     #[test]
@@ -648,6 +726,30 @@ mod tests {
         assert_eq!(report.state, "PARTIAL");
         assert_eq!(report.invalid_snapshots, 1);
         assert_eq!(report.observed_sessions, 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn caps_recent_session_window_and_marks_older_data_outside_scope() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "lazy-analytics-retention-test-{}-{unique}", std::process::id()
+        ));
+        fs::create_dir(&root).unwrap();
+        for i in 0..17u64 {
+            let session = format!("{i:016x}");
+            let mut data = sample(&"a".repeat(64), 2);
+            data["session_id"] = json!(session);
+            let name = format!("session-1700000000000-{session}.json");
+            fs::write(root.join(name), data.to_string()).unwrap();
+        }
+        let report = read_from_directory(&root).unwrap();
+        assert_eq!(report.state, "PARTIAL");
+        assert_eq!(report.observed_sessions, 16);
+        assert_eq!(report.older_snapshots_omitted, 1);
+        assert_eq!(report.invalid_snapshots, 0);
+        assert_eq!(report.observed_calls, 48);
         fs::remove_dir_all(root).unwrap();
     }
 
