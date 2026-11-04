@@ -303,7 +303,6 @@ export async function renderPreparedPublication(
       diagnostics.preview.dimensions[0],
       diagnostics.preview.dimensions[1],
     );
-    onPhase?.("PUBLISHING");
     // The render belongs to the immutable, source-verified GLB revision.
     // Allow modeling to continue while Cycles runs. A changed/unavailable
     // editor may never be described as the CURRENT revision.
@@ -317,6 +316,10 @@ export async function renderPreparedPublication(
         throw new Error("PUBLICATION_OUTPUT_RACE_COLLISION");
       }
       assertActive();
+      // The PUBLISHING phase begins only at the synchronous commit point.
+      // Waiting for the native queue stays cancellable; once this callback
+      // starts publishing, cancellation cannot interleave with write/readback.
+      onPhase?.("PUBLISHING");
       fs.writeFileSync(request.output_path, png, { flag: "wx" });
       const result = fs.readFileSync(request.output_path);
       const persisted = Buffer.isBuffer(result) ? result : Buffer.from(result);

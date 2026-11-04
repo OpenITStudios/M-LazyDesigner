@@ -203,6 +203,70 @@ describe("Nonblocking publication jobs through one serialized native preparation
     expect(jobs.status(started.job_id).receipt).toBeNull();
   });
 
+
+  test("late worker success cannot undo an accepted cancellation", async () => {
+    let finish!: (value: PublicationRenderReceipt) => void;
+    const jobs = new PublicationRenderJobs(
+      () => new Promise<PublicationRenderReceipt>(resolve => { finish = resolve; }),
+      prepared,
+    );
+    const started = await jobs.start(REQUEST);
+    await drain();
+    expect(jobs.cancel(started.job_id).state).toBe("CANCELLING");
+    finish(receipt);
+    await drain();
+    expect(jobs.status(started.job_id)).toMatchObject({
+      state: "CANCELLED", phase: "CANCELLED", receipt: null,
+      output_is_visual_qa: false,
+    });
+    expect(() => jobs.evidence(started.job_id)).toThrow("PUBLICATION_RENDER_EVIDENCE_NOT_READY");
+  });
+
+  test("publication commit phase cannot be cancelled or aborted by plugin teardown", async () => {
+    let notify!: (phase: "VERIFYING_OUTPUT" | "PUBLISHING") => void;
+    let finish!: (value: PublicationRenderReceipt) => void;
+    const jobs = new PublicationRenderJobs(
+      (_prepared, _signal, onPhase) => new Promise<PublicationRenderReceipt>(resolve => {
+        notify = onPhase as typeof notify;
+        finish = resolve;
+      }), prepared,
+    );
+    const started = await jobs.start(REQUEST);
+    await drain();
+    notify("PUBLISHING");
+    expect(jobs.cancel(started.job_id)).toMatchObject({
+      state: "RUNNING", phase: "PUBLISHING",
+    });
+    jobs.retire();
+    expect(jobs.status(started.job_id)).toMatchObject({
+      state: "RUNNING", phase: "PUBLISHING",
+    });
+    finish(receipt);
+    await drain();
+    expect(jobs.status(started.job_id).state).toBe("RENDERED_DRAFT");
+    await expect(jobs.start(REQUEST)).rejects.toThrow("PUBLICATION_RENDER_RUNTIME_RETIRED");
+  });
+
+  test("cancellation remains effective before the exclusive publication commit", async () => {
+    let notify!: (phase: "VERIFYING_OUTPUT" | "PUBLISHING") => void;
+    let finish!: (value: PublicationRenderReceipt) => void;
+    const jobs = new PublicationRenderJobs(
+      (_prepared, _signal, onPhase) => new Promise<PublicationRenderReceipt>(resolve => {
+        notify = onPhase as typeof notify;
+        finish = resolve;
+      }), prepared,
+    );
+    const started = await jobs.start(REQUEST);
+    await drain();
+    notify("VERIFYING_OUTPUT");
+    expect(jobs.cancel(started.job_id).state).toBe("CANCELLING");
+    finish(receipt);
+    await drain();
+    expect(jobs.status(started.job_id)).toMatchObject({
+      state: "CANCELLED", receipt: null,
+    });
+  });
+
   test("uncertain process exit blocks second render instead of hiding the worker", async () => {
     const jobs = new PublicationRenderJobs(async () => {
       throw new Error("PUBLICATION_BLENDER_EXIT_UNCONFIRMED");

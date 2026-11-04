@@ -124,6 +124,13 @@ export class PublicationRenderJobs {
       },
     ))
       .then(receipt => {
+        // An accepted cancel must not be overwritten by a late worker success.
+        if (job.controller.signal.aborted || job.state === "CANCELLING") {
+          job.state = "CANCELLED";
+          job.phase = "CANCELLED";
+          job.receipt = null;
+          return;
+        }
         job.state = "RENDERED_DRAFT";
         job.phase = "FINISHED";
         job.receipt = receipt;
@@ -170,7 +177,7 @@ export class PublicationRenderJobs {
   retire(): void {
     this.retired = true;
     const job = this.current;
-    if (job && job.state === "RUNNING") {
+    if (job && job.state === "RUNNING" && job.phase !== "PUBLISHING") {
       job.state = "CANCELLING";
       job.phase = "CANCELLING";
       job.controller.abort();
@@ -179,7 +186,7 @@ export class PublicationRenderJobs {
 
   cancel(jobId: string): PublicationRenderJobStatus {
     const job = this.requireJob(jobId);
-    if (job.state === "RUNNING") {
+    if (job.state === "RUNNING" && job.phase !== "PUBLISHING") {
       job.state = "CANCELLING";
       job.phase = "CANCELLING";
       job.controller.abort();
