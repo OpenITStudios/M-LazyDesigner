@@ -267,8 +267,10 @@ function assessCorrectionConvergence(
   // demonstrable safe convergence, including mixed improvement/regression.
   // No image quality verdict is inferred from categorical severity changes.
   if (regressed) return "PLATEAU";
-  if (improved) return "IMPROVED";
+  // A changed diagnosis is not proof that the previous cause was corrected,
+  // even when the newly reported severity is lower.
   if (causeChanged) return "CAUSE_CHANGED";
+  if (improved) return "IMPROVED";
   return "PLATEAU";
 }
 
@@ -782,7 +784,13 @@ export class CorrectionLoopRegistry {
     if (record.observation_origin === "STRUCTURED_VISUAL" &&
         record.pending_target_discrepancy_codes.length > 0) {
       const recovered = new Set(options.recovered_views ?? []);
-      const missing = record.pending_stale_views.filter((view) => !recovered.has(view));
+      // Incoming review claims also need fresh views; otherwise a new handle
+      // would relabel an untouched non-target view as current evidence.
+      const required = new Set<ModelView>([
+        ...record.pending_stale_views,
+        ...discrepancies.flatMap((item) => item.views ?? []),
+      ]);
+      const missing = [...required].filter((view) => !recovered.has(view));
       if (missing.length > 0) {
         throw new Error(
           "VISUAL_CORRECTION_VIEW_RECHECK_REQUIRED: recheck affected views " +
@@ -878,11 +886,26 @@ export class CorrectionLoopRegistry {
     const incoming = [...structuredClone(discrepancies)];
     const pendingTargetCodes = [...record.pending_target_discrepancy_codes];
     if (pendingTargetCodes.length > 0) {
-      record.convergence_state = assessCorrectionConvergence(
-        record.last_attempt_target_snapshot,
-        incoming,
-        pendingTargetCodes
-      );
+      // A newly observed BLOCKING issue or a worsened known non-target issue
+      // means net improvement is not established. Do not attribute cause to
+      // this edit or auto-repair; just retain the existing conservative PLATEAU.
+      const knownBefore = new Map(record.discrepancies.map((item) => [item.code, item]));
+      const unresolvedRegression = record.observation_origin === "STRUCTURED_VISUAL" &&
+        incoming.some((item) => {
+          if (pendingTargetCodes.includes(item.code)) return false;
+          const previous = knownBefore.get(item.code);
+          return previous
+            ? CONVERGENCE_SEVERITY_RANK[item.severity] >
+              CONVERGENCE_SEVERITY_RANK[previous.severity]
+            : item.severity === "BLOCKING";
+        });
+      record.convergence_state = unresolvedRegression
+        ? "PLATEAU"
+        : assessCorrectionConvergence(
+            record.last_attempt_target_snapshot,
+            incoming,
+            pendingTargetCodes
+          );
       record.convergence_target_codes = pendingTargetCodes;
     } else {
       record.convergence_state = "UNASSESSED";

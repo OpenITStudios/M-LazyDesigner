@@ -2414,6 +2414,98 @@ describe("zero-waste correction loop reuse", () => {
     );
   });
 
+  test("structured visual convergence rejects unreviewed or worsened side evidence", () => {
+    const base = {
+      code: "ARM_WIDTH",
+      criterion: "SILHOUETTE_PROPORTION" as const,
+      severity: "BLOCKING" as const,
+      summary: "The arm is too narrow in the approved front view.",
+      evidence: {
+        current_evidence_ref: "model:front:before",
+        reference_evidence_ref: "source:front:approved",
+        views: ["front" as const],
+      },
+      cause_family: "SIZE_MISMATCH" as const,
+    };
+    const side = {
+      code: "SIDE_CONTACT",
+      criterion: "TOPOLOGY_ATTACHMENT" as const,
+      severity: "INFO" as const,
+      summary: "A minor side attachment gap is visible.",
+      evidence: {
+        current_evidence_ref: "model:left:before",
+        reference_evidence_ref: "source:left:approved",
+        views: ["left" as const],
+      },
+      cause_family: "CONTACT_GAP" as const,
+    };
+    // Distinguish a verified non-target worsening from a newly discovered
+    // blocker. Neither is evidence that the Geometry correction improved
+    // the whole reviewed scope.
+    for (const knownBefore of [true, false]) {
+      const registry = new SyntheticAppliedCorrectionLoopRegistry();
+      const started = registry.startFromObservations({
+        recipe_id: "asset", base_recipe: recipe(),
+        verification_request: {
+          domain: "GEOMETRY", source: "capture_model_views",
+          verification_risk: "MEDIUM", views: ["front", "left"],
+          views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+          size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+          scope_instance_ids: ["arms:0", "arms:1"],
+        },
+        verification_evidence_handle: "verificationevidence:visual-before",
+        observations: knownBefore ? [base, side] : [base],
+      });
+      expect(started.unverified).toEqual([]);
+      const handle = started.handle!;
+      const plan = registry.planGeometryCorrection(handle, [{
+        id: "resize-arm", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+        patch: {
+          target_discrepancy_codes: ["ARM_WIDTH"], correction_family: "RESIZE",
+          intent: {
+            target: { semantic_group: "upper_arm" },
+            operation: {
+              kind: "RESIZE_AXIS", axis: "X", mode: "ADD",
+              value: 1, anchor: "MIN",
+            },
+          },
+        },
+      }]);
+      expect(plan).toMatchObject({
+        state: "CORRECTION_READY",
+        evidence_reuse: { stale_views: ["front"] },
+      });
+
+      const reviewed = [
+        { ...base, severity: "REVIEW" as const,
+          summary: "Arm width improved but is still imperfect.",
+          evidence: { ...base.evidence, current_evidence_ref: "model:front:after" },
+        },
+        { ...side, severity: "BLOCKING" as const,
+          summary: "Side contact now needs urgent review.",
+          evidence: { ...side.evidence, current_evidence_ref: "model:left:after" },
+        },
+      ];
+      const pending = registry.projectContinuation(handle);
+      expect(() => registry.updateEvidenceFromObservations(
+        handle, "verificationevidence:visual-after", reviewed,
+        { recovered_views: ["front"] }
+      )).toThrow("VISUAL_CORRECTION_VIEW_RECHECK_REQUIRED");
+      expect(registry.projectContinuation(handle)).toEqual(pending);
+
+      expect(registry.updateEvidenceFromObservations(
+        handle, "verificationevidence:visual-after", reviewed,
+        { recovered_views: ["front", "left"] }
+      )).toMatchObject({ applied: true, accepted_count: 2, unverified: [] });
+      const after = registry.projectContinuation(handle);
+      expect(after).toMatchObject({
+        state: "BLOCKED",
+        quality_focus: { code: "SIDE_CONTACT", severity: "BLOCKING" },
+        convergence: { state: "PLATEAU", target_discrepancy_codes: ["ARM_WIDTH"] },
+      });
+    }
+  });
+
   test("new evidence changing the diagnosed cause breaks plateau and allows a new route", () => {
     const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
@@ -2464,7 +2556,8 @@ describe("zero-waste correction loop reuse", () => {
     registry.planGeometryCorrection(handle, [resizeCandidate]);
     registry.updateEvidence(handle, "verificationevidence:cause-1", [{
       code: "ARM_MISMATCH",
-      severity: "REVIEW",
+      // A lower severity must not hide a changed diagnosis.
+      severity: "INFO",
       summary: "Fresh side evidence shows position, not size, owns the mismatch.",
       quality_class: "PRIMARY_FORM",
       owner: "GEOMETRY",

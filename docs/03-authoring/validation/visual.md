@@ -768,6 +768,16 @@ IMPROVED | UNCHANGED | REGRESSED
 
 A correction counts as progress only when the target mismatch is `IMPROVED` and no previously supported material claim/view is `REGRESSED`. `UNCHANGED` or `REGRESSED` is not progress. If one paired view improves while another material paired view regresses, reject that correction direction; change the causal diagnosis or reopen the owning Primary Form Hypothesis rather than patching around the regression.
 
+For a structured visual correction, every view cited by a newly submitted
+post-correction finding must also appear in `recovered_views`; otherwise its
+previous capture cannot silently become fresh evidence. A newly reported
+`BLOCKING` claim, or increased severity of a known non-target claim, prevents
+net convergence from being marked `IMPROVED` or `RESOLVED`. The existing
+`PLATEAU` result means safe improvement has not been established; it does not
+attribute the new problem to the edit. If the target's diagnosed cause changes,
+`CAUSE_CHANGED` takes priority over a simultaneous severity decrease.
+Neither rule adds a visual quality score or automatic approval.
+
 This is a qualitative difference-first delta, not a scalar similarity score. Do not aggregate view outcomes into a numeric fidelity score or let one improved view cancel a material regression elsewhere.
 
 ## Rotation Review
