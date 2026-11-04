@@ -9,6 +9,8 @@ type FakeOutcome =
   | "nonzero"
   | "timeout_closed"
   | "timeout_unconfirmed"
+  | "error_unconfirmed"
+  | "manual"
   | "spawn_failure";
 
 class FakeChild extends EventEmitter {
@@ -40,6 +42,9 @@ function stubProcess(outcome: FakeOutcome): {
       expect(options.cwd).toBe("/isolated/render-job");
       args = [...argv];
       child = new FakeChild(outcome);
+      if (outcome === "error_unconfirmed") {
+        queueMicrotask(() => child?.emit("error", new Error("simulated broken pipe")));
+      }
       if (outcome === "success" || outcome === "nonzero") {
         queueMicrotask(() => {
           if (!child) return;
@@ -78,6 +83,29 @@ describe("Blender worker process lifecycle", () => {
   test("rejects launch failures and nonzero exit without claiming render", async () => {
     await expect(run("spawn_failure").promise).rejects.toThrow("PUBLICATION_BLENDER_LAUNCH_FAILED");
     await expect(run("nonzero").promise).rejects.toThrow("PUBLICATION_BLENDER_RENDER_FAILED");
+  });
+
+  test("process error cannot settle or clean up before the child's close event", async () => {
+    const job = run("manual", 1000);
+    const child = job.getChild()!;
+    let settled = false;
+    void job.promise.then(
+      () => { settled = true; },
+      () => { settled = true; },
+    );
+    child.emit("error", new Error("synthetic stdout failure"));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    // Even an apparent success receipt cannot overwrite the earlier failure.
+    child.stdout.emit("data", "LAZYDESIGNER_RENDER_OUTPUT=/isolated/render-job/output.png\n");
+    child.emit("close", 0, null);
+    await expect(job.promise).rejects.toThrow("PUBLICATION_BLENDER_PROCESS_ERROR");
+  });
+
+  test("process error without close marks exit uncertain and preserves input files", async () => {
+    const job = run("error_unconfirmed", 1000);
+    await expect(job.promise).rejects.toThrow("PUBLICATION_BLENDER_EXIT_UNCONFIRMED");
+    expect(job.getChild()).not.toBeNull();
   });
 
   test("timeout waits for confirmed process close before reporting failure", async () => {

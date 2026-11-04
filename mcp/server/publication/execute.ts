@@ -168,6 +168,7 @@ export async function runBlender(
 
     let settled = false;
     let stopReason: "TIMEOUT" | "CANCELLED" | null = null;
+    let processError: Error | null = null;
     let stderr = "";
     let stdout = "";
     let graceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -187,6 +188,8 @@ export async function runBlender(
       if (settled || stopReason) return;
       stopReason = reason;
       try { child.kill(); } catch { /* exit may remain uncertain */ }
+      // A prior process 'error' may already be waiting for close.
+      if (graceTimer !== null) clearTimeout(graceTimer);
       graceTimer = setTimeout(() => finish(new Error(
         "PUBLICATION_BLENDER_EXIT_UNCONFIRMED: Blender did not close after termination. " +
         "The isolated job directory must be retained.",
@@ -200,15 +203,22 @@ export async function runBlender(
     child.stdout?.on("data", chunk => { stdout = collect(chunk, stdout); });
     child.stderr?.on("data", chunk => { stderr = collect(chunk, stderr); });
     child.on("error", error => {
-      if (!stopReason) finish(new Error(
-        "PUBLICATION_BLENDER_PROCESS_ERROR: " + error.message,
-      ));
+      if (settled || stopReason || processError) return;
+      // Node can emit 'error' before 'close'. The latter confirms both the
+      // subprocess and its stdio are no longer using our temporary GLB.
+      processError = new Error("PUBLICATION_BLENDER_PROCESS_ERROR: " + error.message);
+      graceTimer = setTimeout(() => finish(new Error(
+        "PUBLICATION_BLENDER_EXIT_UNCONFIRMED: Blender process error without confirmed close. " +
+        "The isolated job directory must be retained.",
+      )), terminationGraceMs);
     });
     child.on("close", (code, signalName) => {
       if (stopReason === "TIMEOUT") {
         finish(new Error("PUBLICATION_BLENDER_TIMEOUT: Cycles render exceeded the configured deadline."));
       } else if (stopReason === "CANCELLED") {
         finish(new Error("PUBLICATION_BLENDER_CANCELLED: output was not promoted."));
+      } else if (processError) {
+        finish(processError);
       } else if (code !== 0) {
         finish(new Error(
           "PUBLICATION_BLENDER_RENDER_FAILED: exit=" + String(code) +
