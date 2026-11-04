@@ -305,6 +305,8 @@ function fixtureTwoMaterialPrimitives(
   corruptSecond = false,
   extraNodeFields?: Record<string, unknown>,
   addUnexpectedNode = false,
+  selectedSceneRoots?: number[],
+  addAnimation = false,
 ): {
   glb: Buffer;
   cube: PublicationCubeManifest;
@@ -334,6 +336,8 @@ function fixtureTwoMaterialPrimitives(
     json.nodes.push({ name: "unexpected_duplicate", mesh: 0 });
     json.scenes[0].nodes.push(json.nodes.length - 1);
   }
+  if (selectedSceneRoots) json.scenes[0].nodes = selectedSceneRoots;
+  if (addAnimation) json.animations = [{ channels: [], samplers: [] }];
   json.meshes[0].primitives.push({
     mode: 4, indices: 3, attributes: { POSITION: 0, TEXCOORD_0: 1 }, material: 1,
   });
@@ -421,6 +425,17 @@ describe("GLB Cube multi-material triangle fidelity", () => {
       expect(() => inspectPublicationGlb(glb, 1, 2, [cube]))
         .toThrow("PUBLICATION_GLB_SOURCE_NODE_TRANSFORM_UNEXPECTED");
     }
+  });
+
+  test("fails closed when the active GLB scene omits or repeats source Cubes", () => {
+    for (const roots of [[], [0, 0], [7]]) {
+      const { glb, cube } = fixtureTwoMaterialPrimitives(false, undefined, false, roots);
+      expect(() => inspectPublicationGlb(glb, 1, 2, [cube]))
+        .toThrow("PUBLICATION_GLB_SOURCE_SCENE_ROOTS_INVALID");
+    }
+    const animated = fixtureTwoMaterialPrimitives(false, undefined, false, undefined, true);
+    expect(() => inspectPublicationGlb(animated.glb, 1, 2, [animated.cube]))
+      .toThrow("PUBLICATION_GLB_SOURCE_ANIMATED_SNAPSHOT_UNSUPPORTED");
   });
 
   test("accepts explicit identity transforms but refuses unexpected GLB nodes", () => {

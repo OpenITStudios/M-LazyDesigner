@@ -416,6 +416,24 @@ export function inspectPublicationGlb(
     if (nodes.length !== expectedCubes.length) {
       throw new Error("PUBLICATION_GLB_SOURCE_EXTRA_NODE_UNSUPPORTED");
     }
+    // A detached still GLB must expose exactly these flattened Cube nodes in
+    // its selected scene. Merely finding a Cube in json.nodes is insufficient:
+    // Blender imports the active scene, not all orphaned nodes.
+    const scenes = Array.isArray(json.scenes) ? json.scenes : [];
+    const activeScene = validIndex(json.scene, scenes.length)
+      ? scenes[json.scene as number] : null;
+    const roots = record(activeScene) && Array.isArray(activeScene.nodes)
+      ? activeScene.nodes : null;
+    if (scenes.length !== 1 || !roots ||
+        roots.length !== expectedCubes.length ||
+        new Set(roots).size !== expectedCubes.length ||
+        roots.some(id => !validIndex(id, nodes.length))) {
+      throw new Error("PUBLICATION_GLB_SOURCE_SCENE_ROOTS_INVALID");
+    }
+    if (json.animations !== undefined &&
+        (!Array.isArray(json.animations) || json.animations.length !== 0)) {
+      throw new Error("PUBLICATION_GLB_SOURCE_ANIMATED_SNAPSHOT_UNSUPPORTED");
+    }
     const byName = new Map<string, GltfRecord>();
     for (const node of nodes as GltfRecord[]) {
       if (typeof node.name !== "string" || !node.name.startsWith("cube_")) continue;

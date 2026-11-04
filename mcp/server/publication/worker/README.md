@@ -12,13 +12,13 @@ Input is the **immutable Bedrock Cube GLB snapshot** authored/exported through L
 LazyDesigner MCP Gateway (four public tools)
        ├── Blockbench Runtime: render_publication(operation=handoff)
        │      ↓ verified immutable model.glb + handoff.json
-       └── Gateway local provider: blender_render(start/status/preview/cancel)
+       └── Gateway local provider: blender_render(auto/start/status/preview/cancel)
               ↓ same shared Blender 5.2 trusted Cycles worker
               ↓ PNG + small real evidence + factual receipt
 ```
 
 - **One public control owner:** existing LazyDesigner Gateway, exactly four public methods. No Blender MCP server or second Blockbench plugin.
-- **Two application boundaries:** Blockbench `render_publication` is in the native **export** family; independent Gateway-local `blender_render` owns Cycles start/status/preview/cancel after handoff. Editor `capture_model_views` remains independent camera QA.
+- **Two application boundaries:** Blockbench `render_publication` is in the native **export** family; Gateway `blender_render(operation=auto)` orchestrates native handoff and Cycles in one request while preserving separate `start/status/preview/cancel/recover/release` operations. Editor `capture_model_views` remains independent camera QA.
 - **One job owner per renderer entry:** Blockbench's existing convenience job remains process-local to the plugin; independent Gateway Blender jobs live exclusively in `gateway/providers/blenderRender.ts`. Both reuse `lib/publication/blenderProcess.ts` for trusted Python bundling/process lifecycle. No background queue service or second renderer implementation. 
 - **One immutable render source:** only real native Cube geometry/face UV/texture pixels and explicitly authored PBR maps. No broad Blender modeling API, generated scenery, semantic asset categories or user-written Python.
 - **One final rendering engine:** Cycles preview and publication modes differ only in resolution and samples. Studio lighting/HDRI, camera and compositor affect presentation, not authored geometry.

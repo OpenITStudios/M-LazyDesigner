@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   MAX_PUBLICATION_HANDOFF_BYTES,
   PUBLICATION_HANDOFF_KIND,
@@ -212,6 +215,62 @@ describe("Independent Gateway Blender MCP control contract", () => {
     expect(() => makeAutomaticPublicationRequest({}, config, "invalid")).toThrow("AUTO_JOB_ID_INVALID");
     expect(publicationAutomaticOptions.safeParse({ overwrite: true }).success).toBe(false);
     expect(() => new BlenderRenderProvider().startAutomatic({})).toThrow("AUTO_NATIVE_RUNTIME_UNAVAILABLE");
+  });
+
+  test("auto handoff failure uses exactly one native attempt and no Blender fallback", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ld-render-auto-"));
+    const blender = join(dir, "blender");
+    await writeFile(blender, "test-only fake executable, never launched");
+    const calls: string[] = [];
+    const provider = new BlenderRenderProvider(async directory => {
+      calls.push(directory);
+      throw new Error("NATIVE_HANDOFF_FAILED");
+    });
+    try {
+      const job = provider.startAutomatic({ quality: "preview" }, {
+        blender_executable: blender, output_directory: dir,
+      });
+      expect(job.state).toBe("RUNNING");
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(calls).toEqual([dir]);
+      expect(provider.status(job.job_id)).toMatchObject({
+        state: "FAILED", handoff_cleanup: "REQUIRES_REVIEW",
+      });
+      expect(() => provider.preview(job.job_id)).toThrow("PREVIEW_NOT_READY");
+      await provider.close();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("cancelling during the native handoff never starts Cycles", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "ld-render-cancel-"));
+    const blender = join(dir, "blender");
+    await writeFile(blender, "test-only fake executable, never launched");
+    let finish!: (path: string) => void;
+    const pendingHandoff = new Promise<string>(resolve => { finish = resolve; });
+    let handoffCalls = 0;
+    const provider = new BlenderRenderProvider(async () => {
+      handoffCalls += 1;
+      return pendingHandoff;
+    });
+    try {
+      const job = provider.startAutomatic({}, {
+        blender_executable: blender, output_directory: dir,
+      });
+      await Promise.resolve();
+      expect(provider.cancel(job.job_id).state).toBe("CANCELLING");
+      finish(join(dir, ".lazydesigner-blender-handoff-" + "a".repeat(24), "handoff.json"));
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(handoffCalls).toBe(1);
+      expect(provider.status(job.job_id)).toMatchObject({
+        state: "CANCELLED", handoff_cleanup: "REQUIRES_REVIEW",
+        receipt: null,
+      });
+      await provider.close();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("local Blender output must not impersonate the Gateway's active Blockbench tab", async () => {

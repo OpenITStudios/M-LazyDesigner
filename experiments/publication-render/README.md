@@ -7,7 +7,7 @@
 
 ## Current Blender MCP control boundary
 
-**[BLENDER_MCP_CONTROL.md](./BLENDER_MCP_CONTROL.md)** is the current integration contract for the two applications: one unchanged main MCP Gateway, an explicit Blockbench GLB `handoff` operation, and the Gateway-local `blender_render` controller (start/status/preview/cancel). It reuses the same trusted Blender worker and has its own job lifecycle, so the Blockbench session can close after handoff. No native/local tests have run and `Local` must remain untouched.
+**[BLENDER_MCP_CONTROL.md](./BLENDER_MCP_CONTROL.md)** is the current integration contract for the two applications: one unchanged main MCP Gateway, an explicit Blockbench GLB `handoff` operation, and the Gateway-local `blender_render` controller (auto/start/status/preview/cancel/recover/release). The `auto` path now requests the native handoff with configured shared-host paths from one AI invocation; this is source-authored, NOT yet runtime-tested. It reuses the same trusted Blender worker and has its own job lifecycle, so the Blockbench session can close after handoff. No native/local tests have run and `Local` must remain untouched.
 
 ## Authoritative Object-to-Render Contract (ADR-R01)
 

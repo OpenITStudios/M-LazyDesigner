@@ -534,7 +534,9 @@ export class BlenderRenderProvider {
         try {
           // Only a verified, owned handoff is released after terminal Cycles
           // process closure. PNG and completed receipt remain untouched.
-          await this.releaseHandoff(job.handoff_path);
+          // Internal terminal cleanup must remain allowed during Gateway
+          // shutdown, after the owned worker has definitively exited.
+          await this.releaseHandoff(job.handoff_path, true);
           job.handoff_cleanup = "RELEASED";
         } catch (error) {
           job.handoff_cleanup = "REQUIRES_REVIEW";
@@ -711,8 +713,10 @@ export class BlenderRenderProvider {
   }
 
   /** Explicit, source-verified cleanup. Never recursively delete user folders. */
-  async releaseHandoff(handoffPath: string): Promise<JsonRecord> {
-    if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
+  async releaseHandoff(handoffPath: string, internalTerminalCleanup = false): Promise<JsonRecord> {
+    if (this.retired && !internalTerminalCleanup) {
+      throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
+    }
     if (!isAbsoluteFilesystemPath(handoffPath) ||
         basename(handoffPath) !== "handoff.json" ||
         !HANDOFF_DIR.test(basename(dirname(handoffPath))) ||
