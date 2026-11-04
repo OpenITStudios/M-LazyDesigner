@@ -2,6 +2,21 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-04 — AI-facing ambiguous branch readiness guard (source-only)
+
+Control's existing `search_capabilities` projection now returns `UNKNOWN`
+when a registered tool has branch-qualified prerequisite graphs but the
+returned operation branch is missing or not recognized. Confirmed `BLOCKED`
+readiness is preserved; known branches and branch-independent tools retain
+their existing behavior. No Runtime registration, core graph implementation,
+semantic manifest, generated API, native executor, model or asset changed.
+
+Proof: exact-HEAD GitHub source and focused regression authored against real
+catalog and output-schema contracts; Bun/TypeScript/CI/native Blockbench
+NOT EXECUTED. Internal branchless/unknown-branch graph behavior remains
+unresolved for actual routing implementation and requires generator-owned
+semantic/API alignment before it can be changed.
+
 ## 2026-11-04 — Capability registration/discovery reconciliation (source-only)
 
 The current Runtime registration/profile descriptor remains the only source

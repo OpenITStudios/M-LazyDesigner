@@ -57,7 +57,14 @@ lifecycle entry) may be prewired while absent from the registered Runtime
 surface; only the actual catalog can establish availability. For example,
 `manage_uv_layout` and `construct_geometry` remain unregistered, while
 `manage_cubes` and `paint_texture_transaction` use registered executors.
-Do not infer activation from a schema, source module, Skill, or manifest.  Never infer
+Do not infer activation from a schema, source module, Skill, or manifest.
+The AI-facing Control search projection additionally marks `UNKNOWN` when
+branch-specific prerequisites exist but the operation branch is absent or
+unrecognized; it retains `BLOCKED` when already established. The caller must
+describe/select the operation before interpreting readiness. This is a
+discovery presentation guard, **not a change to graph evaluation, native
+schema acceptance or semantic revision**. The graph-owner correction still
+requires generator-aligned semantic/API evidence.  Never infer
 source ownership from a capability's semantic similarity or a diagram arrow.
 If the exact owner exists, do not traverse document navigation again.
 

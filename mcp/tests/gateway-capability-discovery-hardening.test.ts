@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { projectCapabilitiesForSearch } from "@/gateway/control/capabilities";
+import { gatewaySearchSuccessOutputSchema } from "@/gateway/contracts/outputSchemas";
 import {
   classifyCapabilityTier,
   searchCapabilityCatalog,
@@ -75,6 +77,63 @@ describe("BlockIT Gateway capability discovery hardening", () => {
       .map((entry) => entry.capability_id)).toContain("manage_cubes");
     expect(searchCapabilityCatalog(tools, "create geometry cubes", 5)
       .map((entry) => entry.capability_id)).toContain("manage_cubes");
+  });
+
+  test("search projection never implies READY for an unresolved operation branch", () => {
+    // This is a registered capability. The exact-name catalog result has no
+    // operation discriminator, while the manifest has branch-specific facts.
+    const [exact] = searchCapabilityCatalog(tools, "manage_cubes", 5);
+    expect(exact).toBeDefined();
+    const [unresolved] = projectCapabilitiesForSearch([exact!]);
+    expect(unresolved?.capability_id).toBe("manage_cubes");
+    expect(unresolved?.eligibility).toBe("UNKNOWN");
+    expect(unresolved?.why).toContain("describe the exact operation");
+    expect(gatewaySearchSuccessOutputSchema.safeParse({
+      capabilities: [unresolved],
+    }).success).toBe(true);
+
+    // Unsupported explicit branches are not promoted by branchless fallback.
+    const [unknown] = projectCapabilitiesForSearch([{
+      ...exact!,
+      branch: { field: "operation", value: "future_unsupported" },
+      eligibility: "READY",
+    }]);
+    expect(unknown?.eligibility).toBe("UNKNOWN");
+    expect(unknown?.branch).toEqual({
+      field: "operation",
+      value: "future_unsupported",
+    });
+
+    // A known selected operation remains focused and does not need a
+    // redundant UNKNOWN banner when its existing graph says READY.
+    const [known] = projectCapabilitiesForSearch([{
+      ...exact!,
+      branch: { field: "operation", value: "create" },
+      eligibility: "READY",
+    }]);
+    expect(known?.eligibility).toBeUndefined();
+    expect(known?.why).toBeUndefined();
+
+    // An authoritative blocked condition cannot be softened by projection.
+    const [blocked] = projectCapabilitiesForSearch([{
+      ...exact!,
+      eligibility: "BLOCKED",
+      requires: ["project_bound"],
+    }]);
+    expect(blocked?.eligibility).toBe("BLOCKED");
+    expect(blocked?.requires).toEqual(["project_bound"]);
+
+    // A capability with no branch-qualified graph stays unchanged.
+    const [plain] = projectCapabilitiesForSearch([{
+      capability_id: "get_project_info",
+      description: "Inspect the project.",
+      tier: "support",
+      read_only: true,
+      destructive: false,
+      idempotent: true,
+      eligibility: "READY",
+    }]);
+    expect(plain?.eligibility).toBeUndefined();
   });
 
   test("exact capability name short-circuits to exactly one result", () => {

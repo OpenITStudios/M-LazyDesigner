@@ -1,6 +1,9 @@
 import type { CapabilitySummary } from "../contracts/protocol";
 import { getCapabilityMetadata } from "../../lib/capabilities/metadata";
-import { manifestEntryForBranch } from "../capabilities/manifest";
+import {
+  manifestEntriesForCapability,
+  manifestEntryForBranch,
+} from "../capabilities/manifest";
 import {
   authoringDomainForCapability,
   sourceOwnerForCapability,
@@ -58,6 +61,26 @@ function compactCapabilityHint(description: string): string | undefined {
     : `${firstSentence.slice(0, maxChars - 1).trimEnd()}…`;
 }
 
+/**
+ * Search is orientation, not a Runtime invocation. Where branch-qualified
+ * prerequisites exist without a selected graph, a missing/unsupported
+ * operation must not inherit implicit READY from the graph's no-entry path.
+ * This uses the canonical branch manifest, not a duplicate capability table.
+ */
+function unresolvedSearchBranch(capability: CapabilitySummary): boolean {
+  const entries = manifestEntriesForCapability(capability.capability_id);
+  if (!entries.some((entry) =>
+    entry.branch && (entry.graph?.requires?.length ?? 0) > 0
+  )) return false;
+  if (capability.branch) {
+    return !entries.some((entry) =>
+      entry.branch?.field === capability.branch?.field &&
+      entry.branch.value === capability.branch?.value
+    );
+  }
+  return !entries.some((entry) => !entry.branch && entry.graph);
+}
+
 /** AI-facing search only needs the canonical domain, not source-owner
  * enrichment discarded by the transport. Decorated callers remain supported. */
 export function projectCapabilitiesForSearch(
@@ -81,13 +104,26 @@ export function projectCapabilitiesForSearch(
       ...(capability.idempotent ? ["idempotent" as const] : []),
     ];
     const hint = compactCapabilityHint(capability.description);
+    const branchUnresolved = unresolvedSearchBranch(capability);
+    // Preserve confirmed BLOCKED; otherwise mark unresolved branch routing
+    // UNKNOWN only for the AI-facing search projection. Native executors and
+    // graph facts are not modified by this presentation guard.
+    const eligibility = branchUnresolved && capability.eligibility !== "BLOCKED"
+      ? "UNKNOWN" as const
+      : capability.eligibility;
+    const why = branchUnresolved
+      ? [
+          capability.why,
+          "Operation branch not resolved; describe the exact operation before invoking.",
+        ].filter(Boolean).join(" ")
+      : capability.why;
     return {
       capability_id: capability.capability_id,
       ...(hint ? { hint } : {}),
       ...(capability.branch ? { branch: capability.branch } : {}),
-      ...(capability.why ? { why: capability.why } : {}),
-      ...(capability.eligibility && capability.eligibility !== "READY"
-        ? { eligibility: capability.eligibility }
+      ...(why ? { why } : {}),
+      ...(eligibility && eligibility !== "READY"
+        ? { eligibility }
         : {}),
       ...(capability.requires && capability.requires.length > 0
         ? { requires: capability.requires }
