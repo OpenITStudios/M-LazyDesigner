@@ -220,6 +220,15 @@ describe("Independent Gateway Blender MCP control contract", () => {
     await expect(createNativePublicationHandoff(wrong)(
       "/tmp", new AbortController().signal,
     )).rejects.toThrow("SOURCE_AFFINITY_MISMATCH");
+    const unverified = {
+      invokeCapabilityWithMetadata: async () => ({
+        result: { isError: false, structuredContent: receipt },
+        verifiedProjectUuid: null,
+      }),
+    } as unknown as Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">;
+    await expect(createNativePublicationHandoff(unverified)(
+      "/tmp", new AbortController().signal,
+    )).rejects.toThrow("SOURCE_AFFINITY_MISMATCH");
     const missing = {
       invokeCapabilityWithMetadata: async () => ({
         result: { isError: false, structuredContent: { ...receipt, glb_sha256: "bad" } },

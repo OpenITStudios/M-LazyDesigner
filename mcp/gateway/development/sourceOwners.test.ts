@@ -137,12 +137,12 @@ describe("Control source-owner registry", () => {
     });
     expect(sourceOwnerForCapability("render_publication")).toMatchObject({
       source: "mcp/server/tools/inspection/publication.ts",
-      resolution: undefined,
     });
+    expect(sourceOwnerForCapability("render_publication")).not.toHaveProperty("resolution");
     expect(sourceOwnerForCapability("blender_render")).toMatchObject({
       source: "mcp/gateway/providers/blenderRender.ts",
-      resolution: undefined,
     });
+    expect(sourceOwnerForCapability("blender_render")).not.toHaveProperty("resolution");
   });
 
   test("all explicit capability owners have real canonical source, regression anchor and specialist files", async () => {
