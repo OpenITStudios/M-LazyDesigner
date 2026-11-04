@@ -132,6 +132,14 @@ describe("Publication render contract", () => {
 
   test("handoff accepts only an explicit local output directory", () => {
     expect(publicationHandoffParameters.safeParse({ directory: "C:\\Art" }).success).toBe(true);
+    expect(publicationHandoffParameters.safeParse({
+      directory: "C:\\Art", handoff_id: "a".repeat(24),
+    }).success).toBe(true);
+    for (const handoff_id of ["x", "A".repeat(24), "../escape", "a".repeat(25)]) {
+      expect(publicationHandoffParameters.safeParse({
+        directory: "C:\\Art", handoff_id,
+      }).success).toBe(false);
+    }
     for (const directory of ["relative", "../parent", "C:\\Art\\..\\unsafe", "https://example.com/a"]) {
       expect(publicationHandoffParameters.safeParse({ directory }).success).toBe(false);
     }

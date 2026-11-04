@@ -201,7 +201,9 @@ describe("Independent Gateway Blender MCP control contract", () => {
       ) => {
         calls++;
         expect(capability).toBe("render_publication");
-        expect(args).toMatchObject({ operation: "handoff", request: { directory: "/tmp" } });
+        expect(args).toMatchObject({ operation: "handoff", request: {
+          directory: "/tmp", handoff_id: "a".repeat(24),
+        } });
         return {
           result: { isError: false, structuredContent: receipt },
           verifiedProjectUuid: "project-a",
@@ -209,8 +211,19 @@ describe("Independent Gateway Blender MCP control contract", () => {
       },
     } as unknown as Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">;
     const handoff = createNativePublicationHandoff(backend);
-    await expect(handoff("/tmp", new AbortController().signal)).resolves.toBe(path);
+    await expect(handoff("/tmp", new AbortController().signal, "a".repeat(24))).resolves.toBe(path);
     expect(calls).toBe(1);
+    const pathMismatch = {
+      invokeCapabilityWithMetadata: async () => ({
+        result: { isError: false, structuredContent: {
+          ...receipt, handoff_path: "/tmp/other/handoff.json",
+        } },
+        verifiedProjectUuid: "project-a",
+      }),
+    } as unknown as Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">;
+    await expect(createNativePublicationHandoff(pathMismatch)(
+      "/tmp", new AbortController().signal, "a".repeat(24),
+    )).rejects.toThrow("HANDOFF_PATH_MISMATCH");
     const wrong = {
       invokeCapabilityWithMetadata: async () => ({
         result: { isError: false, structuredContent: receipt },
@@ -218,7 +231,7 @@ describe("Independent Gateway Blender MCP control contract", () => {
       }),
     } as unknown as Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">;
     await expect(createNativePublicationHandoff(wrong)(
-      "/tmp", new AbortController().signal,
+      "/tmp", new AbortController().signal, "a".repeat(24),
     )).rejects.toThrow("SOURCE_AFFINITY_MISMATCH");
     const unverified = {
       invokeCapabilityWithMetadata: async () => ({
@@ -227,7 +240,7 @@ describe("Independent Gateway Blender MCP control contract", () => {
       }),
     } as unknown as Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">;
     await expect(createNativePublicationHandoff(unverified)(
-      "/tmp", new AbortController().signal,
+      "/tmp", new AbortController().signal, "a".repeat(24),
     )).rejects.toThrow("SOURCE_AFFINITY_MISMATCH");
     const missing = {
       invokeCapabilityWithMetadata: async () => ({
@@ -236,7 +249,7 @@ describe("Independent Gateway Blender MCP control contract", () => {
       }),
     } as unknown as Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">;
     await expect(createNativePublicationHandoff(missing)(
-      "/tmp", new AbortController().signal,
+      "/tmp", new AbortController().signal, "a".repeat(24),
     )).rejects.toThrow("HANDOFF_UNCONFIRMED");
   });
 
@@ -340,6 +353,7 @@ describe("Independent Gateway Blender MCP control contract", () => {
       expect(calls).toEqual([dir]);
       expect(provider.status(job.job_id)).toMatchObject({
         state: "FAILED", handoff_cleanup: "REQUIRES_REVIEW",
+        handoff_path_status: "EXPECTED_ONLY_UNVERIFIED",
       });
       expect(() => provider.preview(job.job_id)).toThrow("PREVIEW_NOT_READY");
       await provider.close();
@@ -371,6 +385,7 @@ describe("Independent Gateway Blender MCP control contract", () => {
       expect(handoffCalls).toBe(1);
       expect(provider.status(job.job_id)).toMatchObject({
         state: "CANCELLED", handoff_cleanup: "REQUIRES_REVIEW",
+        handoff_path_status: "EXPECTED_ONLY_UNVERIFIED",
         receipt: null,
       });
       await provider.close();

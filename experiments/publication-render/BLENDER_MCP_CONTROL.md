@@ -34,9 +34,12 @@ verifies the immutable GLB, starts the independent Cycles worker and returns
 a job ID. AI then uses `status` and one real `preview` after
 `RENDERED_DRAFT`; it never treats a started job as successful PNG publication.
 
-Auto-owned handoffs are source-verified and released after confirmed terminal
-worker closure; interrupted/uncertain outcomes retain available evidence for
-review rather than repeating the native mutation. Output PNG/preview/receipt
+Auto-owned handoffs use a Gateway-selected 24-hex handoff ID before native export,
+so a lost/failed native response still leaves one **expected inspection path**.
+Only an exact matching native receipt and verified project identity mark that path
+as verified. Unknown/aborted native outcomes retain any existing files; they are
+never released automatically or retried. Verified auto-owned handoffs are
+source-checked and released after confirmed terminal worker closure. Output PNG/preview/receipt
 are exclusive and not deleted by handoff cleanup. Gateway must remain running
 until completion. This is a Gateway subprocess, not background ChatGPT work.
 Visual quality remains `NOT_EVALUATED` until separately reviewed.

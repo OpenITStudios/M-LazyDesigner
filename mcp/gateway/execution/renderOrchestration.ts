@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   makeAutomaticPublicationRequest,
 } from "@/lib/publication/contracts";
@@ -11,7 +11,7 @@ import type { BlenderRenderProvider } from "../providers/blenderRender";
 
 /** One native Blockbench export through the existing serialized Runtime backend. */
 export type NativePublicationHandoff = (
-  directory: string, signal: AbortSignal,
+  directory: string, signal: AbortSignal, handoffId: string,
 ) => Promise<string>;
 
 const SHA = /^[a-f0-9]{64}$/;
@@ -23,10 +23,16 @@ const record = (value: unknown): value is Record<string, unknown> =>
 export function createNativePublicationHandoff(
   backend: Pick<BlockitRuntimeBackend, "invokeCapabilityWithMetadata">,
 ): NativePublicationHandoff {
-  return async (directory, signal) => {
+  return async (directory, signal, handoffId) => {
+    if (!/^[a-f0-9]{24}$/.test(handoffId)) {
+      throw new Error("PUBLICATION_AUTO_HANDOFF_ID_INVALID");
+    }
+    const expected = join(
+      directory, ".lazydesigner-blender-handoff-" + handoffId, "handoff.json",
+    );
     // A native export with uncertain outcome must NOT be replayed.
     const invocation = await backend.invokeCapabilityWithMetadata(
-      "render_publication", { operation: "handoff", request: { directory } },
+      "render_publication", { operation: "handoff", request: { directory, handoff_id: handoffId } },
       undefined, signal,
     );
     const receipt = invocation.result.structuredContent;
@@ -39,6 +45,9 @@ export function createNativePublicationHandoff(
       throw new Error(
         "PUBLICATION_AUTO_HANDOFF_UNCONFIRMED: native export did not return a complete trusted source receipt. Inspect before retrying.",
       );
+    }
+    if (receipt.handoff_path !== expected) {
+      throw new Error("PUBLICATION_AUTO_HANDOFF_PATH_MISMATCH: native returned a different handoff path.");
     }
     if (!invocation.verifiedProjectUuid ||
         invocation.verifiedProjectUuid !== receipt.project_uuid) {
@@ -63,8 +72,12 @@ export function startAutomaticPublication(
   if (!prepareNativeHandoff) {
     throw new Error("PUBLICATION_AUTO_NATIVE_RUNTIME_UNAVAILABLE");
   }
+  const handoffId = randomBytes(12).toString("hex");
   const { directory, request } = makeAutomaticPublicationRequest(
-    options, config, randomBytes(12).toString("hex"),
+    options, config, handoffId,
+  );
+  const expectedHandoffPath = join(
+    directory, ".lazydesigner-blender-handoff-" + handoffId, "handoff.json",
   );
   try {
     const output = fs.lstatSync(directory);
@@ -80,8 +93,8 @@ export function startAutomaticPublication(
   }
   // This callback resolves the source once. It does not create a second job,
   // retry native mutations, or let Blender claim the current editor state.
-  return blender.startPreparedHandoff(async signal => {
-    const handoff_path = await prepareNativeHandoff(directory, signal);
+  return blender.startPreparedHandoff(expectedHandoffPath, async signal => {
+    const handoff_path = await prepareNativeHandoff(directory, signal, handoffId);
     if (basename(handoff_path) !== "handoff.json" ||
         !HANDOFF_DIR.test(basename(dirname(handoff_path))) ||
         resolve(dirname(dirname(handoff_path))) !== resolve(directory)) {

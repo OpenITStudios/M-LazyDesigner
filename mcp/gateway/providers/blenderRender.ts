@@ -139,6 +139,7 @@ type Job = {
   phase: Phase;
   started_at: string;
   handoff_path: string | null;
+  handoff_verified: boolean;
   error_code: string | null;
   source_sha256: string | null;
   controller: AbortController;
@@ -166,7 +167,12 @@ function status(job: Job): JsonRecord {
     output_is_visual_qa: false,
     handoff_cleanup: job.handoff_cleanup,
     ...(job.handoff_cleanup === "REQUIRES_REVIEW" && job.handoff_path
-      ? { handoff_path: job.handoff_path } : {}),
+      ? {
+          handoff_path: job.handoff_path,
+          handoff_path_status: job.handoff_verified
+            ? "VERIFIED_NATIVE_RECEIPT"
+            : "EXPECTED_ONLY_UNVERIFIED",
+        } : {}),
   };
 }
 
@@ -506,6 +512,7 @@ export class BlenderRenderProvider {
       id: "blender_" + randomBytes(12).toString("hex"),
       state: "RUNNING", phase: "PREPARING_ASSETS",
       started_at: new Date().toISOString(), handoff_path: handoffPath,
+      handoff_verified: !automatic,
       error_code: null, source_sha256: null, controller: new AbortController(),
       receipt: null, preview: null, task: null, automatic,
       handoff_cleanup: automatic ? "PENDING" : "NOT_APPLICABLE",
@@ -530,7 +537,8 @@ export class BlenderRenderProvider {
         job.phase = job.state === "CANCELLED" ? "CANCELLED" : "FAILED";
       }).finally(async () => {
         if (!job.automatic) return;
-        if (!job.handoff_path || job.state === "EXIT_UNCONFIRMED") {
+        if (!job.handoff_verified || !job.handoff_path ||
+            job.state === "EXIT_UNCONFIRMED") {
           job.handoff_cleanup = "REQUIRES_REVIEW";
           return;
         }
@@ -560,18 +568,24 @@ export class BlenderRenderProvider {
 
   /** Accept an execution-owned prepared handoff; do not inspect the native editor. */
   startPreparedHandoff(
+    expectedHandoffPath: string,
     prepare: (signal: AbortSignal) => Promise<{
       handoff_path: string;
       request: PublicationRenderRequest;
     }>,
   ): JsonRecord {
-    return this.launchJob(null, async job => {
+    requireHandoffPath(expectedHandoffPath);
+    // The planned location is an inspection hint, NOT proof of a created GLB.
+    return this.launchJob(expectedHandoffPath, async job => {
       assertRunning(job);
       const prepared = await prepare(job.controller.signal);
+      if (prepared.handoff_path !== expectedHandoffPath) {
+        throw new Error("PUBLICATION_AUTO_HANDOFF_PATH_MISMATCH");
+      }
       requireHandoffPath(prepared.handoff_path);
-      // Keep the known owned path even when cancellation arrives during the
-      // serialized native export, so terminal cleanup can act safely.
-      job.handoff_path = prepared.handoff_path;
+      // Only a verified native response allows terminal automatic release.
+      // An unknown/aborted export is never deleted on a guessed path.
+      job.handoff_verified = true;
       assertRunning(job);
       const request = publicationRenderParameters.parse(prepared.request);
       return this.execute(job, prepared.handoff_path, request);
@@ -694,6 +708,7 @@ export class BlenderRenderProvider {
       error_code: null, controller: new AbortController(),
       receipt: renderReceipt, preview: Buffer.from(previewBytes),
       task: Promise.resolve(), automatic: false, handoff_cleanup: "NOT_APPLICABLE",
+      handoff_verified: false,
     };
     if (this.retired) throw new Error("PUBLICATION_BLENDER_GATEWAY_RETIRED");
     this.current = record;
@@ -806,7 +821,7 @@ export class BlenderRenderProvider {
               (receipt ? " PNG saved at " + receipt.output_path + "." : "") +
               (error ? " Error: " + error + "." : "") +
               (cleanup === "REQUIRES_REVIEW"
-                ? " Handoff requires inspection; do not automatically repeat an uncertain native export."
+                ? " Handoff requires inspection; any expected path is NOT proof that a file exists. Do not automatically repeat an uncertain native export."
                 : terminal && cleanup === "PENDING"
                   ? " Automatic handoff cleanup is pending; do not replace this job yet."
                   : "") +

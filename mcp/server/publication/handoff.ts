@@ -14,6 +14,9 @@ import {
 import { snapshotDetachedPublicationGlb } from "./snapshot";
 
 export const publicationHandoffParameters = z.object({
+  // Optional caller-owned nonce makes an interrupted export discoverable
+  // without enumerating unrelated directories or replaying the mutation.
+  handoff_id: z.string().regex(/^[a-f0-9]{24}$/).optional(),
   directory: z.string().min(1).max(2048).refine(
     value => isAbsoluteFilesystemPath(value) &&
       !/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(value) &&
@@ -36,7 +39,7 @@ export async function preparePublicationHandoff(input: unknown): Promise<{
   material_count: number;
   handoff_kind: typeof PUBLICATION_HANDOFF_KIND;
 }> {
-  const { directory } = publicationHandoffParameters.parse(input);
+  const { directory, handoff_id } = publicationHandoffParameters.parse(input);
   if (typeof requireNativeModule !== "function") {
     throw new Error("PUBLICATION_HANDOFF_DESKTOP_PERMISSIONS_REQUIRED");
   }
@@ -69,7 +72,7 @@ export async function preparePublicationHandoff(input: unknown): Promise<{
   }
   const ownerDir = join(
     directory,
-    ".lazydesigner-blender-handoff-" + randomBytes(12).toString("hex"),
+    ".lazydesigner-blender-handoff-" + (handoff_id ?? randomBytes(12).toString("hex")),
   );
   const glbPath = join(ownerDir, "model.glb");
   const handoffPath = join(ownerDir, "handoff.json");
