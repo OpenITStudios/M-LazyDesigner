@@ -202,11 +202,12 @@ export class BlenderRenderProvider {
   }
 
   private requireJob(id: unknown): Job {
+    const current = this.current;
     if (typeof id !== "string" || !ID.test(id) ||
-        this.current?.id !== id) {
+        !current || current.id !== id) {
       throw new Error("PUBLICATION_BLENDER_JOB_NOT_FOUND_OR_EXPIRED");
     }
-    return this.current;
+    return current;
   }
 
   private async execute(job: Job, handoffPath: string, request: PublicationRenderRequest): Promise<RenderReceipt> {
