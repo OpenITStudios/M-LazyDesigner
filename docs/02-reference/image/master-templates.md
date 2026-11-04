@@ -62,17 +62,36 @@ Never convert a relative scale category into invented exact block dimensions.
 Use this once per generated sheet, not repeatedly per panel:
 
 ```text
-Minecraft Bedrock / Blockbench 3D model reference only.
-CLEAN_BLOCKBENCH_FORM by default: coherent large planar/cuboid surfaces,
-intentional geometric parts and only necessary low-poly silhouette facets.
-Do not pixelate every face into mini-cubes or make staircase arcs unless the
-user explicitly selected INTENTIONAL_VOXEL_BLOCK_ART. Neutral light background,
-clear model geometry, consistent proportions and materials, minimal decoration.
+Minecraft/Blockbench hand-crafted game-asset reference.
+MINECRAFT_STYLIZED_BLOCKBENCH by default: composed cuboid geometry, selected
+layered/rotated structural parts, purposeful angled silhouettes, hand-painted
+pixel-art face textures and recognizable source proportions.
+Not a smooth real-world product render, LEGO/terrain blocks or raised texel cubes.
+Use CLEAN_BLOCKBENCH_FORM or INTENTIONAL_VOXEL_BLOCK_ART only if selected.
+Neutral/dark studio background, coherent identity; no infographic by default.
 ```
 
 When the source is real-world/non-Minecraft, the final production sheet still shows the Minecraft/Blockbench target only unless the user explicitly requests otherwise.
 
 ---
+
+### Style-Calibrating HERO-Only Pass (when style feedback is the blocker)
+
+Before generating a new multi-view sheet following a user-supplied Minecraft-style example, resolve the STYLE mismatch with **one large 3/4 model only**, using this temporary panel selection inside the existing image workflow:
+
+```text
+CREATE ONE MINECRAFT-STYLE BLOCKBENCH 3D MODEL IMAGE.
+SUBJECT = <source object's recognizable parts, colors, silhouette and proportions>
+STYLE  = <actual style example's cuboid construction and hand-painted face texture>
+GEOMETRY = <primary masses, angular trims, useful attachment depth, limited facets>
+PRESERVE = <source identity, confirmed size relationships and part details>
+BACKGROUND = neutral or dark studio; full asset visible and uncropped.
+ONLY IMAGE = one isolated front-left or matching 3/4 hero asset.
+NO INFOGRAPHIC, NO TEXT/LABELS, NO DIMENSIONS, NO SWATCHES,
+NO WIREFRAME, NO SECONDARY VIEWS OR DETAIL THUMBNAILS.
+```
+
+This is not a new style registry, tool route, or required extra image. When the style is accepted, resume the normal Sheet 01 view plan if the user needs construction evidence. Never invent measurements or claim image-generative consistency is native Blockbench proof.
 
 # TEMPLATE A — SHEET 01 / MAIN_REFERENCE
 
@@ -122,11 +141,12 @@ CONSTRUCTION LOCK — ONE SHARED OBJECT-SPACE FORM
 - <UNKNOWN hidden source geometry or original-design PROVISIONAL facts when material>
 
 VISUAL LANGUAGE
-Minecraft Bedrock / Blockbench stylized low-poly model reference.
-Use CLEAN_BLOCKBENCH_FORM: large clean planar/cuboid volumes and selective
-faceting; no raised pixel grid, no staircase silhouette, restrained texture.
-INTENTIONAL_VOXEL_BLOCK_ART is used only when explicitly requested.
-Neutral background/lighting, readable source shape and minimal labels.
+Minecraft/Blockbench handcrafted, stylized cuboid-built game-asset reference.
+MINECRAFT_STYLIZED_BLOCKBENCH: primary cuboids with selective angular layers,
+visible structural depth, and hand-painted pixel-art shading ON the faces.
+Do not create miniature raised cubes per painted pixel or a glossy real vehicle.
+Preserve subject identity; the style example provides style only.
+Clean dark/neutral studio lighting; no large title, stats or decorative notes.
 
 SHEET PURPOSE
 MAIN_REFERENCE — establish canonical identity, scale and core construction.
@@ -158,7 +178,7 @@ PRESENTATION
 - construction views aligned and consistently scaled
 - no paragraph text
 - no palette box unless decision-critical
-- no decorative panels or large infographic note blocks
+- no decorative panels, inferred measurements, large infographic note blocks or unnecessary color swatches
 - omit rows that carry no useful evidence
 ```
 
@@ -450,8 +470,9 @@ required part count and attachment relationships are consistent
 approved side-specific markings, materials and colors do not drift
 P1 rear/side/attachment coverage is actually inspectable or missing information remains UNKNOWN
 painted shadows/highlights are not mistaken for extra voxel depth or true openings
-no mini-cube mosaics on broad surfaces or staircase curves/wheel arches
-rounded parts remain readable as simple low-poly forms, not square pixel icons
+no mini-cube mosaics built from individual texture pixels
+macro cuboid structural layers remain visible: do not flatten into ordinary smooth CGI
+rounded parts remain readable with purposeful Blockbench-style facets, not perfect real-world curves
 back is the same underlying object volume, not a copied front or new asset
 an empty back is not decorated solely for visual balance
 later sheets preserve actual approved Sheet 01 visual identity

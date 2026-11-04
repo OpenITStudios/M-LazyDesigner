@@ -139,11 +139,15 @@ Keep the underlying object fixed across panels; only the view and visibility cha
 
 A generative image may become visible to the user before inspection. Never claim a hidden pre-display quality pass. These Skill instructions do not change image-model weights, execute automatic pixel inspection, or themselves prove visual correctness.
 
-### Blockbench Model Style vs Pixelated Voxel Art
+### Minecraft-Style Blockbench 3D — Source and Style Separation
 
-For VISUAL / MODEL image generation, default to `CLEAN_BLOCKBENCH_FORM` from `docs/02-reference/image/standard.md`: coherent planar/cuboid masses, limited silhouette-critical faceting, controlled angles, surface-level material detail, and recognizable source proportions. A Cube is a Blockbench authoring primitive, **not a mandatory visible Minecraft block pixel**. A user-selected `INTENTIONAL_VOXEL_BLOCK_ART` style may deliberately show a small-cube grid, but never force that on every 3D model. Standalone Pixel Art retains its separate route.
+For VISUAL / MODEL references requested in Minecraft style, default to `MINECRAFT_STYLIZED_BLOCKBENCH` from `docs/02-reference/image/standard.md`: intentionally constructed cuboid shapes, layered and rotated details, appropriate angular/faceted contours, with **hand-painted pixel-art textures on the model's faces**. Do not render a smooth photorealistic vehicle or a plain conventional low-poly product just because the user rejected a mini-cube grid. Equally, do not make a physical Cube out of every texture pixel.
 
-If the user criticizes an output as `pixelated cube`, make a **geometry style correction**: preserve the original source silhouette, proportions, part identity and relevant views; remove mini-cube tessellation, staircase arches, decorative stacked plates and squared pixel-wheel icons. Do not overcorrect into photorealistic high-poly rendering or pretend smooth mesh export has been verified. Use the actual source and rejected render as references for bounded CHANGE + PRESERVE image correction, inspect the result and ask for visual acceptance when needed.
+When given a real-object photo plus a stylized Minecraft example, treat the photo as **subject identity authority** and the other image as **style-only authority**. Preserve the original object's proportions, major components and color unless the user authorizes a change; never copy the example's unrelated model silhouette or accessories. An example showing layered panels and hand-painted shading is not an instruction to reproduce hundreds of tiny world blocks.
+
+**Repair a rejected style before expanding views:** produce one isolated large 3/4 HERO with a plain dark/neutral studio background and no infographic, dimensions, labels, parts legend, palettes, wireframe or extra thumbnails. The style check is a single-panel evidence decision in the existing workflow, not a new artifact type or mandatory additional generation for ordinary accepted work. Only after the user accepts the style, provide minimum-sufficient orthographic views if useful. Never invent numeric dimensions from the source photograph or style image.
+
+Use actual source images as anchors for CHANGE + PRESERVE, inspect the pixels after generation, and stop repeated same-direction failure after two attempts instead of hiding the fault with a larger poster. Native Blockbench fidelity and real exportability remain separate downstream proof.
 
 ## Pixel-art branch
 

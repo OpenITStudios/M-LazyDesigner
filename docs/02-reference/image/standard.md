@@ -145,41 +145,52 @@ Optional small subtitle only when it materially helps orientation.
 
 Do not add quotes, slogans, model-info paragraphs, or technical prose inside the image.
 
-## Blockbench Geometry Rendering Standard — Not Pixelated Cubes
+## Minecraft-Style Blockbench Model Grammar — Geometry AND Hand-Painted Texture
 
-For 3D visual/model reference images, default to **CLEAN_BLOCKBENCH_FORM**: a stylized low-poly Blockbench model with large coherent planar/cuboid surfaces, purposeful rotated parts and selective silhouette-critical facets. Do **not** turn every face into a mosaic of miniature Minecraft blocks merely because the target is Blockbench/Bedrock. Respect the user's actual visual example or approved style when it differs.
+For ChatGPT visual/model generation, the default Minecraft-style 3D reference is **MINECRAFT_STYLIZED_BLOCKBENCH**: deliberately built, chunky **cuboid-based game asset geometry** with selected rotated/angular parts, layered depth and **hand-painted pixel-art texturing on the faces**. It is not a real-world object render with a Minecraft label, nor a world-scale sculpture made of hundreds of individual tiny cubes. When the user supplies a visual style example, **use that actual example as the style authority**, while retaining the separate subject/source image as identity and proportion authority.
 
 ```text
-CLEAN_BLOCKBENCH_FORM (default for 3D model references)
-→ uninterrupted principal planar faces, intentional cuboids and restrained rotations
-→ curve/arch/wheel contours expressed with only the necessary broad low-poly facets
-→ stable major mass, clean edge rhythm, readable attachments and source silhouette
-→ material colors, highlights and shadows on the surfaces, not extra raised mini-cubes
+MINECRAFT_STYLIZED_BLOCKBENCH (default for Minecraft 3D asset references)
+→ strong recognizable silhouette built from composed cuboids / broad geometric masses
+→ selected beams, inset panels, trims and attachments with visible structural depth
+→ angled faces / stepped arcs ONLY where macro geometry or silhouette requires them
+→ readable angular/segmented rounded forms, not smoothly shaded CGI cylinders
+→ hand-painted face textures: purposeful pixel-color clusters, banded lights/shadows,
+  differentiated wood/metal/glass/cloth/stone, restrained surface pixel variation
+→ texture pixels stay painted ON surfaces: never one physical Cube per painted pixel
 
-INTENTIONAL_VOXEL_BLOCK_ART (only when the user explicitly wants stepped block art)
-→ intentionally visible voxel-grid facets and staircase silhouettes at the chosen granularity
+CLEAN_BLOCKBENCH_FORM (alternate when user explicitly wants simpler, flatter geometry)
+→ fewer broad cuboids, restrained facet/detail density; still a 3D game model
+
+INTENTIONAL_VOXEL_BLOCK_ART (alternate when user explicitly wants world-scale blocks)
+→ exposed regular stepped voxel grid is a chosen geometry style, not universal
 
 STANDALONE_PIXEL_ART
-→ handled by the separate Pixel Art reference branch, not the default 3D model style
+→ separate 2D Pixel Art reference branch, never a 3D object render default
 ```
 
-**Cube is an authoring primitive, not a mandatory visible pixel.** Blockbench Bedrock geometry commonly relies on cubes, rotations, bones and pivots. The reference must be practical to interpret through the intended native model format, but a picture does not prove that arbitrary smooth meshes, cylinders, bevels, boolean holes or wedge shapes export natively. Simplify curves into a small number of meaningful facets only where the outline needs them; keep unsupported exportability claims UNVERIFIED.
+**Distinguish three scales:** (1) whole-object silhouette and proportion, (2) meaningful Blockbench geometry pieces such as panels/frames/joints, and (3) texture-pixel clusters painted *onto those pieces*. Do not collapse scale 2 into scale 3 by extruding every highlight. Do not remove scale 2 entirely in pursuit of smooth product-render surfaces. Cube is a construction primitive, **not a visible pixel-per-Cube rule**.
 
-A painted panel seam, metallic reflection, shadow or texture cluster does not imply a physical extrusion, hole or additional Cube. Preserve continuous body/surface mass unless true shape depth is supported by source evidence. Do not compensate for missing structure by adding many tiny voxels.
+The user's object photograph is **subject authority** (recognizable identity, overall proportions, functional parts and confirmed colors). A second visual example can be **style-only authority** (cuboid detail density, painted material shading, angular construction and rendering treatment). Do not copy the example vehicle's identity, body layout, color, logo, accessories or dimensions when it was supplied only to demonstrate style. Preserve UNKNOWN source-hidden details; the illustrative style example cannot reveal them.
 
-### Failure patterns
+### Negative and acceptance examples
 
 ```text
-PIXELATED_CUBE_GRID     → subdivided tiny cubic tessellation on otherwise plain faces
-STAIRCASE_ARCS          → overly stepped pixel-size wheel arches, limbs or curved contours
-CHUNKY_TILED_BODY       → layers of artificial decorative voxel plates
-SQUARE_FAKE_CIRCLES     → rounded features reduced to square pixel-art icons
-SHADING_AS_VOXEL_DEPTH  → every painted highlight becomes a 3D raised piece
-INFOGRAPHIC_OVER_FORM   → text-heavy decorative panels displace model geometry
-HIGH_POLY_PHOTO_REALISM → slick photorealistic 3D instead of feasible stylized Blockbench form
+PHOTOREALISTIC_CAR_RENDER → smooth reflective CGI product with no Minecraft geometry identity
+PIXELATED_CUBE_GRID      → a mini-cube mosaic or Minecraft terrain blocks posing as a model
+FLAT_LOW_POLY_PRODUCT    → conventional smooth low-poly object with all authored voxel character removed
+INVENTED_SOURCE_DETAILS  → style example's accessories, dimensions or colors copied to another source
+SHADING_AS_VOXEL_DEPTH   → physically extruded texture pixels / every shadow a raised block
+FAKE_ROUND_GEOMETRY      → perfect glossy cylinders/curves unsupported by the target format
+INFOGRAPHIC_OVER_FORM    → poster labels, palettes, invented dimensions, wireframe or notes dominate image
+MULTI_VIEW_BEFORE_STYLE  → many views consume pixels before the intended style has been accepted
 ```
 
-Use these rules across every object profile; this is not a vehicle-only preset. Verify actual form and silhouette first, before presentation or surface texture polish.
+**Style-calibration first:** when a user says a generated 3D object does not match a supplied Minecraft style, the next image defaults to ONE large, uncropped 3/4 model on a neutral/dark studio background with **no infographic, labels, dimensions, color swatches, wireframe, extra orthographic views or technical notes**. This is a temporary focused **HERO-only panel plan**, not a new generator mode or permanent ban on orthographic references. Add only the minimum useful views after the actual main style is judged correct. If a generator ignores the same presentation correction twice, stop blindly repeating and report what remains unresolved.
+
+Bedrock/Blockbench target compatibility is a design constraint, not a claim of actual native export. A picture of a rotated cuboid, faceted round feature or painterly texture is not proof that an arbitrary mesh, boolean cut or exact UV has been implemented. Use the existing later model/visual verification for that evidence.
+
+Use this grammar across object categories, not just vehicles.
 
 ## Hero View
 
@@ -436,8 +447,9 @@ An enlarged detail panel may change presentation size without changing underlyin
 clean light/neutral background
 neutral studio-like lighting
 clear Minecraft/Blockbench target construction
-readable Blockbench low-poly form with large coherent planar/cuboid surfaces
-no default pixelated cube-grid; show block art only when specifically requested
+readable MINECRAFT_STYLIZED_BLOCKBENCH form: intentional cuboid-built structure and hand-painted face textures
+style-authoritative example drives geometry and texture language; subject photo drives identity
+no default smooth photorealistic product render, no mini-cube-per-texture-pixel mosaic
 high edge/silhouette clarity
 low visual noise
 consistent scale within related views
@@ -479,7 +491,7 @@ Do not include by default:
 ```text
 color palette box
 generic model-info block
-text-heavy infographic decorations that compete with the model
+text-heavy infographic decorations, invented dimensions or swatches that compete with the model
 decorative quote/tagline
 scale illustration unless decision-critical
 RIGHT when identical to LEFT
@@ -498,7 +510,7 @@ Before user review verify:
 identity matches confirmed brief
 player/world scale matches current Scale Lock
 required parts are present
-no unintended pixelated cube-grid, staircase arcs or chunky tiled bodies
+no unrequested smooth product-render look, mini-cube tessellation or style-example identity copying
 P1 surface coverage and omitted-view reasons checked against actual pixels
 hidden rear/side construction is UNKNOWN unless evidenced, not filled by invention
 hero and construction views agree

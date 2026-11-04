@@ -265,38 +265,55 @@ describe("LazyDesigner reference preparation contract", () => {
   });
 
 
-  test("3D Blockbench reference rendering defaults to clean planar forms instead of pixelated cube art", async () => {
+  test("Minecraft Blockbench references preserve styled cuboid geometry and hand-painted face textures", async () => {
     const [standard, prompt, templates, skill] = await Promise.all([
       read("../docs/02-reference/image/standard.md"),
       read("../docs/02-reference/image/prompt-contract.md"),
       read("../docs/02-reference/image/master-templates.md"),
       read(REFERENCE_SKILL),
     ]);
-    for (const content of [standard, prompt, templates, skill]) {
-      expect(content).toContain("clean_blockbench_form");
-      expect(content).toContain("intentional_voxel_block_art");
+    for (const document of [standard, prompt, templates, skill]) {
+      expect(document).toContain("minecraft_stylized_blockbench");
+      expect(document).toContain("clean_blockbench_form");
+      expect(document).toContain("intentional_voxel_block_art");
+      expect(document).toContain("hand-painted");
     }
-    expect(standard).toContain("cube is an authoring primitive, not a mandatory visible pixel");
-    expect(prompt).toContain("not visible miniature voxel-block tessellation");
-    expect(templates).toContain("large clean planar/cuboid volumes");
-    expect(skill).toContain("not a mandatory visible minecraft block pixel");
+    expect(standard).toContain("three scales");
+    expect(prompt).toContain("the middle");
+    expect(skill).toContain("subject identity authority");
+    expect(templates).toContain("not a smooth real-world product render");
   });
 
-  test("pixel-art rejection preserves geometry style and does not promise unsupported Bedrock meshes", async () => {
-    const [standard, prompt, skill] = await Promise.all([
+  test("source object remains distinct from the style example and no invented dimensions appear", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
       read("../docs/02-reference/image/standard.md"),
       read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
       read(REFERENCE_SKILL),
     ]);
-    for (const pattern of [
-      "pixelated_cube_grid", "staircase_arcs", "chunky_tiled_body",
-      "square_fake_circles", "shading_as_voxel_depth",
-      "infographic_over_form", "high_poly_photo_realism",
-    ]) expect(standard).toContain(pattern);
-    expect(prompt).toContain("not a requirement to model every specular reflection");
-    expect(skill).toContain("geometry style correction");
-    expect(skill).toContain("do not overcorrect into photorealistic high-poly rendering");
-    expect(standard).toContain("every object profile");
+    expect(standard).toContain("style-only authority");
+    expect(standard).toContain("invented_source_details");
+    expect(prompt).toContain("subject_source");
+    expect(prompt).toContain("style_example");
+    expect(templates).toContain("subject =");
+    expect(skill).toContain("never invent numeric dimensions");
+  });
+
+  test("style correction defaults to one hero with no infographic or unwanted views", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("one large, uncropped 3/4 model");
+    expect(standard).toContain("two targeted retries");
+    expect(prompt).toContain("no infographic");
+    expect(prompt).toContain("16×7×7 claims");
+    expect(templates).toContain("style-calibrating hero-only pass");
+    expect(templates).toContain("no secondary views or detail thumbnails");
+    expect(skill).toContain("repair a rejected style before expanding views");
+    expect(skill).toContain("no infographic, dimensions, labels");
   });
 
   test("coverage review cannot turn declared metadata or unobserved images into visual PASS", async () => {

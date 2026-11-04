@@ -76,8 +76,8 @@ For source-faithful reconstruction, do not invent lore, environment, accessories
 
 ```text
 Minecraft/Blockbench target only
-clean low-poly Blockbench cuboid/planar geometry with continuous faces by default
-no pixelated cube-grid unless explicitly selected
+Minecraft-stylized Blockbench cuboid model with purposeful layered geometry and hand-painted face texture
+not a photorealistic product render or pixel-cube-per-texel sculpture
 neutral studio-like lighting
 light neutral background
 high silhouette and edge clarity
@@ -88,24 +88,37 @@ minimal decorative styling
 
 Do not embed the original real-world source into the final production sheet by default.
 
-### Blockbench Low-Poly Geometry Style Gate
+### Minecraft-Style Hand-Painted Cuboid Model Gate
 
-Select visual **geometry rendering style** before composing the image prompt. For normal Blockbench/Bedrock **3D models**, use `CLEAN_BLOCKBENCH_FORM`, not visible miniature voxel-block tessellation. Only select `INTENTIONAL_VOXEL_BLOCK_ART` when the user requests that look or explicitly approves an example showing it. Standalone 2D pixel art remains a different specialist branch.
+The ChatGPT generator should interpret **Minecraft model style** as `MINECRAFT_STYLIZED_BLOCKBENCH` unless the user supplied or selected a different style. A second picture supplied as a *style example* controls the visual construction grammar, **not the source object's silhouette, dimensions or colors**. Separate the two image authorities explicitly.
 
 ```text
-CLEAN_BLOCKBENCH_FORM
-= large clean uninterrupted planar/cuboid surfaces
-+ deliberate rotated parts and limited low-poly facets where silhouette needs them
-+ credible source proportions and subtle surface-level material treatment
-!= 1-pixel cube staircase, raised pixel mosaic, chunky plated body, square icon wheels
-
-INTENTIONAL_VOXEL_BLOCK_ART
-= exposed small-block stepping only if the requested visual style demands it
+SUBJECT_SOURCE (what to model): source-object identity, major volumes,
+proportions, distinctive functional parts and known materials/colors.
+STYLE_EXAMPLE (how to render/model): cuboid piece density, controlled angular
+contours, hand-painted pixel-art surface treatment, layered joints/trim,
+contrast, and overall Minecraft/Blockbench game-asset visual language.
 ```
 
-The source photograph establishes shape, layout, recognizable mass and details—not a requirement to model every specular reflection or pixel. A dark painted mark need not be an opening; a highlight does not become a new Cube. Approximate curved features with few well-chosen facets rather than many grid blocks. Do not replace low-poly with photorealistic high-poly 3D or claim arbitrary meshes/bevels/cylinders are Bedrock Entity export-ready.
+```text
+MINECRAFT_STYLIZED_BLOCKBENCH
+= composed primary cuboids + selected rotated layers/frames + purposeful
+faceted transitions + intentionally visible block-derived depth
++ detailed hand-painted pixel clusters shaded ON model faces
+!= smooth photorealistic car CGI or generic polished conventional low-poly
+!= LEGO bricks, Minecraft world terrain, one raised mini-cube per pixel
 
-For `CLEAN_BLOCKBENCH_FORM`, use a targeted negative clause: no world-scale Minecraft blocks; no regular tiny cube grid; no staircase wheel arches/limbs; no chunky extruded texture pixels; no square wheel icons; no excessive infographic title, notes or decorative detail strips. This is a general style rule, not an object-specific template. Actual visual inspection remains necessary after generation.
+CLEAN_BLOCKBENCH_FORM          = optional flatter/simpler appearance if requested
+INTENTIONAL_VOXEL_BLOCK_ART    = optional regularly stepped blocks if requested
+```
+
+**Object-space lock:** preserve the source's true long/short proportions, part count, contact, and view-side attachments. Distinguish structural cuboids from painted face pixels; keep body panels purposeful and avoid cosmetic cube clutter. Make angular/rounded approximations plausible for Blockbench, but do not claim a perfect curved mesh or native export proof.
+
+**Style repair without overcorrecting:** after a user rejects both pixelated block sculptures and smooth real-world product renders, target the **middle**: handcrafted Minecraft game-asset geometry with cuboid layering and painterly/pixel face texture, matching the actual style example. Do not replace it with an untextured low-poly object.
+
+**Style-calibration delivery:** for a correction specifically about visual style, the *next generation* should default to one LARGE hero 3/4 object on a plain neutral or dark studio background. **NO INFOGRAPHIC**: no title, labels, material palette, dimensions, 16×7×7 claims, color-coded construction guide, detached part closeups, or extra front/back/side/top/bottom thumbnails. The hero is the whole reference for that call. Once style is reviewed, use the normal minimum-sufficient sheet/view rules only if construction needs them. Do not silently add an infographic because the word `reference` appeared.
+
+An actual image model can ignore even correct instructions; its pixels still require after-generation inspection. If two targeted retries repeat the same layout defect, stop that direction rather than regenerate a third nearly identical sheet.
 
 ## 3. Identity Lock
 
@@ -285,7 +298,7 @@ same accessories
 same approved materials/colors
 same left/right orientation
 same structural attachment logic
-same selected Blockbench geometry style and surface texture/detail language
+same selected Minecraft cuboid geometry density and hand-painted face-texture/detail language
 ```
 
 Orthographic panels are views of one asset, not independently redesigned illustrations.
