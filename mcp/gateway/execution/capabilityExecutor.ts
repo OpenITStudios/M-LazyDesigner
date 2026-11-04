@@ -1,4 +1,5 @@
 import type { BlockitRuntimeBackend } from "../runtime/backend";
+import { maybeDeferPaintCohortImage } from "../presentation/paintEvidenceDelivery";
 import { GatewayBackendError } from "../runtime/backendContract";
 import type { JsonRecord } from "../contracts/protocol";
 import {
@@ -180,6 +181,14 @@ export class GatewayCapabilityExecutor {
           verifiedProjectUuid !== this.session.projectUuid) {
         this.session.synchronizeProject(verifiedProjectUuid);
       }
+      // Match the main Gateway's transport-level paint proof and bounded
+      // cohort delivery. Never suppress images from unverified projects.
+      const deliveredContent = maybeDeferPaintCohortImage({
+        capability, succeeded, taskContextId: controlOptions?.taskContextId,
+        cohortBoundary: controlOptions?.cohortBoundary,
+        projectUuid: runtimeInvocation !== null ? verifiedProjectUuid : null,
+        structuredContent: result.structuredContent, content: result.content,
+      });
 
       // The Backend already validated a successful phase-transition receipt.
       // Retire facts/evidence/continuation before the next request, not only
@@ -209,6 +218,7 @@ export class GatewayCapabilityExecutor {
         projectUuid: verifiedProjectUuid,
         succeeded,
         result: result.structuredContent,
+        content: deliveredContent,
       });
 
       const attachControlDelta = shouldAttachGatewayControlDelta(
@@ -244,6 +254,7 @@ export class GatewayCapabilityExecutor {
       if (result.structuredContent === undefined) {
         const response = {
           ...result,
+          content: deliveredContent,
           ...(gatewayControlDelta
             ? { structuredContent: { control_delta: gatewayControlDelta } }
             : {}),
@@ -274,7 +285,7 @@ export class GatewayCapabilityExecutor {
       const compactedContent = compactGatewayCapabilityContent(
         capability,
         result.structuredContent,
-        result.content,
+        deliveredContent,
         controlDelta.verification_class,
         effectiveReadOnly,
         succeeded

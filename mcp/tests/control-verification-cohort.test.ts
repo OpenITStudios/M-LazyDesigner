@@ -87,6 +87,38 @@ function animationDelta(start: number, end: number) {
 }
 
 describe("Control verification cohort", () => {
+  test("Cube visual debt remains while automatic screenshot recommendation is removed", () => {
+    const next = reduceControlExecutionState(
+      null, cubeDelta("cube-a", "rotation", -1, 1)
+    ).continuation.next_action;
+    expect(next).toMatchObject({
+      kind: "VERIFY_VISUAL", recommended_capability: null,
+      verification_scope: { kind: "CUBE_TARGETS", cube_uuids: ["cube-a"] },
+    });
+    expect(next.reason).toContain("capture_model_views");
+    expect(next.reason).toContain("Do not capture per Cube");
+  });
+  test("Texture and animation maintain existing required review routes", () => {
+    const tex = reduceControlExecutionState(
+      null, textureDelta([1, 2, 3, 4], "sha256:rev", false)
+    ).continuation.next_action;
+    expect(tex).toMatchObject({
+      kind: "VERIFY_VISUAL", recommended_capability: "get_texture",
+    });
+    const anim = reduceControlExecutionState(
+      null, animationDelta(0, 1)
+    ).continuation.next_action;
+    expect(anim.kind).toBe("VERIFY_VISUAL");
+    expect(anim.reason).toContain("not every keyframe");
+    expect(anim.reason).toContain("Temporal motion stays UNVERIFIED");
+    expect(anim.reason).toContain("MP4");
+    expect(anim.recommended_capability).toBeNull();
+    const unbounded = reduceControlExecutionState(
+      null, { ...animationDelta(0, 1), verification_scope: null }
+    ).continuation.next_action;
+    expect(unbounded.reason).toContain("Temporal motion stays UNVERIFIED");
+    expect(unbounded.reason).toContain("MP4");
+  });
   test("default COMPLETE behavior keeps one-call verification semantics", () => {
     const delta = cubeDelta("cube-a", "rotation", -1, 1);
     const result = reduceControlExecutionState(null, delta);
@@ -160,7 +192,7 @@ describe("Control verification cohort", () => {
     expect(completed.state.pending_verification).toBeNull();
   });
 
-  test("the latest full-cover texture image can replace another read safely", () => {
+  test("metadata-only latest full-cover claim cannot replace an actual PNG read", () => {
     const first = reduceControlExecutionState(
       null,
       textureDelta([3, 3, 5, 5], "sha256:rev-1"),
@@ -172,11 +204,12 @@ describe("Control verification cohort", () => {
       { taskContextId: "texture-cohort", cohortBoundary: "COMPLETE" }
     );
     expect(completed.continuation.next_action).toMatchObject({
-      kind: "REVIEW_RETURNED_EVIDENCE",
+      kind: "VERIFY_VISUAL",
+      recommended_capability: "get_texture",
       verification_scope: {
         affected_rect: [2, 1, 8, 9],
         revision: "sha256:rev-2",
-        evidence_source: "mutation_response",
+        evidence_source: "follow_up_read",
       },
     });
   });
@@ -266,6 +299,20 @@ describe("Control verification cohort", () => {
     expect(second.continuation.freshness.stale).toEqual([
       "GEOMETRY_STRUCTURE",
     ]);
+  });
+
+  test("unbound project cannot defer visual review even with a task_context_id", () => {
+    const original = textureDelta([1, 2, 3, 4], "sha256:rev-1", false);
+    const outcome = reduceControlExecutionState(null, {
+      ...original,
+      project_uuid: null,
+    }, {
+      taskContextId: "texture-cohort",
+      cohortBoundary: "CONTINUE",
+    });
+    expect(outcome.continuation.cohort?.deferred).toBe(false);
+    expect(outcome.state.pending_verification).toBeNull();
+    expect(outcome.continuation.next_action.kind).toBe("VERIFY_VISUAL");
   });
 
   test("hard boundaries cannot defer uncertain mutation recovery", () => {

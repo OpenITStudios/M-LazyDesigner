@@ -1,3 +1,4 @@
+import { planFocusedTextureEvidenceRequest } from "./evidenceSelection";
 import type {
   ControlAuthoringDomain,
   ControlDelta,
@@ -20,6 +21,8 @@ export type ControlNextAction = {
   recommended_capability: string | null;
   target_domain: ControlAuthoringDomain | null;
   verification_scope: ControlVerificationScope | null;
+  /** Executable argument hint, not an automatic evidence tool call. */
+  evidence_request?: NonNullable<ReturnType<typeof planFocusedTextureEvidenceRequest>>;
 };
 
 export type ControlCohortBoundary = "CONTINUE" | "COMPLETE";
@@ -72,7 +75,8 @@ function visualRecommendedCapability(
   scope: ControlVerificationScope | null
 ): string | null {
   if (!scope) return null;
-  if (scope.kind === "CUBE_TARGETS") return "capture_model_views";
+  // Visual verification remains owed, but one Cube edit is not an image gate.
+  if (scope.kind === "CUBE_TARGETS") return null;
   if (scope.kind === "TEXTURE_REGION") {
     return scope.evidence_source === "follow_up_read" ? "get_texture" : null;
   }
@@ -134,12 +138,20 @@ export function nextActionForControlDelta(delta: ControlDelta): ControlNextActio
       };
     }
 
+    const evidenceRequest=planFocusedTextureEvidenceRequest(delta.verification_scope);
     return {
       kind: "VERIFY_VISUAL",
-      reason: "decision-changing visual evidence is required",
+      reason: delta.verification_scope?.kind === "CUBE_TARGETS"
+        ? "Geometry visual review remains owed. Reuse fresh mutation receipts and native diagnostics; inspect_model_bounds only for missing structural facts. Do not capture per Cube. At the next material reference/quality gate, use capture_model_views for only unresolved compatible views; never infer visual PASS from numeric evidence."
+        : delta.verification_scope?.kind === "ANIMATION_RANGE"
+          ? "Animation technical, static-pose and temporal-motion review are separate obligations. Reuse keyframe/contact diagnostics and inspect only affected clip/bone/time windows, not every keyframe. A pose PNG or successful Timeline playback command NEVER proves continuous motion. Temporal motion stays UNVERIFIED on the current automated evidence surface; independent observed native playback is required for motion review. Do not generate periodic screenshots or invent motion PASS."
+          : delta.authoring_domain === "ANIMATION"
+            ? "Animation review remains owed but the precise changed clip/range is unverified. Technical data or pose PNG cannot establish continuous motion. Temporal motion stays UNVERIFIED without independently observed native playback. No fake playback success, screenshot sampling, or media PASS."
+            : "decision-changing visual evidence is required",
       recommended_capability: visualRecommendedCapability(delta.verification_scope),
       target_domain: delta.authoring_domain,
       verification_scope: delta.verification_scope,
+      ...(evidenceRequest ? { evidence_request:evidenceRequest } : {}),
     };
   }
 
@@ -380,6 +392,7 @@ export function reduceControlExecutionState(
 
   const defer =
     taskContextId !== null &&
+    delta.project_uuid !== null && delta.project_uuid.trim().length > 0 &&
     cohortBoundary === "CONTINUE" &&
     !hardBoundary;
 
