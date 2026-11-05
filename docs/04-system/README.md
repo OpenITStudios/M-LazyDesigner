@@ -66,7 +66,7 @@ Which data is canonical, derived or user-owned, and how is Desktop metadata prot
 What development discipline, permission and STOP checks apply?
 → development-operating-standard.md
 
-Which seven engineering/design methods are considered, and how can another repo adopt the portable contract?
+Where are LazyDesigner's optional seven-source Agent Rules reference details?
 → agent-rules.md
 
 How are Bun tests inventoried, selected, modernized and retired without losing coverage?

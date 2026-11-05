@@ -36,8 +36,15 @@ describe("repository instruction/context efficiency", () => {
     ]);
     expect(root).toContain("docs/04-system/development-operating-standard.md");
     expect(standard).toContain("agent-rules.md");
-    expect(root).toContain("## Agent Rules — seven-source bootstrap");
+    expect(standard).toContain("root `AGENTS.md`");
+    expect(root).toContain("## Agent Rules — independent seven-method root");
+    expect(root).toContain("The user selects the branch manually");
+    expect(root).toContain("complete local decision policy");
+    expect(root).not.toContain("github.com/OpenITStudios/M-LazyDesigner/blob/");
     expect(systemIndex).toContain("agent-rules.md");
+    expect(portable).toContain("Every other repository owns its **own root Agent Rules**");
+    expect(portable).toContain("only the user selects which branch to work on");
+    expect(portable).not.toContain("per-repository adapter is a short");
     for (const url of [
       "https://github.com/dietrichgebert/ponytail",
       "https://github.com/cursor/plugins",

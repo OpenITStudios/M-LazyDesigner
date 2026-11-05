@@ -24,7 +24,7 @@ Before material mutation, identify Goal, Success Metric, First Evidence, First W
 
 ## Agent Rules — seven-source adaptive development
 
-For material development and UI/UX decisions, apply [Agent Rules](agent-rules.md): **Karpathy Guidelines, Ponytail, Pstack/Poteto Mode, Harness², DeepSeek Harness, REA and UI UX Pro Max**. Assess all seven lenses, load only decision-relevant upstream sources, and keep current repository governance, Control ownership, permissions, native safety and actual proof authority. This method does not install external executors, run recursive experiments, promote Skills, generate UI, or make unrelated new ChatGPT sessions automatically open this repository. Normal asset authoring retains its existing Control-specialist hot path.
+For material development and UI/UX decisions, apply the **complete Agent Rules in root `AGENTS.md`**: **Karpathy Guidelines, Ponytail, Pstack/Poteto Mode, Harness², DeepSeek Harness, REA and UI UX Pro Max**. Consult [local reference details](agent-rules.md) only when they change the decision. Assess all seven lenses, load only decision-relevant upstream sources, and keep current repository governance, Control ownership, permissions, native safety and actual proof authority. This method does not install external executors, run recursive experiments, promote Skills, generate UI, or make unrelated new ChatGPT sessions automatically open this repository. Normal asset authoring retains its existing Control-specialist hot path.
 
 ## Minimum complete change
 
