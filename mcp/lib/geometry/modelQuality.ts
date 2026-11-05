@@ -16,8 +16,12 @@ function roundMetric(value: number): number {
   return Number(value.toFixed(METRIC_PRECISION));
 }
 
-function finiteVec3(value: readonly number[]): QualityVec3 | null {
-  if (value.length < 3 || !value.slice(0, 3).every(Number.isFinite)) return null;
+function finiteVec3(value: unknown): QualityVec3 | null {
+  if (!Array.isArray(value) || value.length < 3 ||
+      !value.slice(0, 3).every(entry =>
+        typeof entry === "number" && Number.isFinite(entry))) {
+    return null;
+  }
   return [value[0], value[1], value[2]];
 }
 
@@ -28,7 +32,18 @@ function normalizeBounds(
   const min = finiteVec3(value.min);
   const max = finiteVec3(value.max);
   if (!min || !max) return null;
-  if (max.some((entry, axis) => entry <= min[axis])) return null;
+  const spans = max.map((entry, axis) => entry - min[axis]);
+  // Finite coordinates alone do not guarantee representable AABB metrics:
+  // subtraction may overflow or a positive volume may underflow to zero.
+  // No arbitrary size limit or geometry-style restriction is introduced.
+  if (spans.some(span => !Number.isFinite(span) || span <= 0)) return null;
+  const products = [
+    spans[0] * spans[1], spans[0] * spans[2],
+    spans[1] * spans[2], spans[0] * spans[1] * spans[2],
+  ];
+  if (products.some(product => !Number.isFinite(product) || product <= 0)) {
+    return null;
+  }
   return { min, max };
 }
 
@@ -66,12 +81,12 @@ function rectangleMetrics(
   const intersection = overlapWidth * overlapHeight;
   const union = modelArea + referenceArea - intersection;
   const modelCenter: [number, number] = [
-    (model.min[0] + model.max[0]) / 2,
-    (model.min[1] + model.max[1]) / 2,
+    model.min[0] / 2 + model.max[0] / 2,
+    model.min[1] / 2 + model.max[1] / 2,
   ];
   const referenceCenter: [number, number] = [
-    (reference.min[0] + reference.max[0]) / 2,
-    (reference.min[1] + reference.max[1]) / 2,
+    reference.min[0] / 2 + reference.max[0] / 2,
+    reference.min[1] / 2 + reference.max[1] / 2,
   ];
 
   return {
@@ -118,14 +133,14 @@ function volumeMetrics(model: QualityBounds, reference: QualityBounds) {
   const intersection = overlap[0] * overlap[1] * overlap[2];
   const union = modelVolume + referenceVolume - intersection;
   const modelCenter: QualityVec3 = [
-    (model.min[0] + model.max[0]) / 2,
-    (model.min[1] + model.max[1]) / 2,
-    (model.min[2] + model.max[2]) / 2,
+    model.min[0] / 2 + model.max[0] / 2,
+    model.min[1] / 2 + model.max[1] / 2,
+    model.min[2] / 2 + model.max[2] / 2,
   ];
   const referenceCenter: QualityVec3 = [
-    (reference.min[0] + reference.max[0]) / 2,
-    (reference.min[1] + reference.max[1]) / 2,
-    (reference.min[2] + reference.max[2]) / 2,
+    reference.min[0] / 2 + reference.max[0] / 2,
+    reference.min[1] / 2 + reference.max[1] / 2,
+    reference.min[2] / 2 + reference.max[2] / 2,
   ];
 
   return {
@@ -143,6 +158,35 @@ function volumeMetrics(model: QualityBounds, reference: QualityBounds) {
       length: roundMetric(modelSize[2] / referenceSize[2]),
     },
   };
+}
+
+/**
+ * Two individually finite AABBs can overflow when their projected areas or
+ * volumes are summed to form a union. That would silently turn a perfectly
+ * matching envelope into IoU=0. Refuse non-representable arithmetic rather
+ * than claiming a valid comparison; this is scale-neutral, not a size quota.
+ */
+function comparableEnvelopeArithmetic(model: QualityBounds, reference: QualityBounds) {
+  const spans = (bounds: QualityBounds) =>
+    bounds.max.map((high, axis) => high - bounds.min[axis]);
+  const left = spans(model), right = spans(reference);
+  const overlap = [0, 1, 2].map(axis => Math.max(
+    0, Math.min(model.max[axis], reference.max[axis]) -
+       Math.max(model.min[axis], reference.min[axis])
+  ));
+  for (const axes of [[0, 1], [2, 1], [0, 2], [0, 1, 2]]) {
+    const product = (values: readonly number[]) => axes.reduce(
+      (value, axis) => value * values[axis], 1
+    );
+    const first = product(left), second = product(right);
+    const intersection = product(overlap);
+    const fullyOverlapping = axes.every(axis => overlap[axis] > 0);
+    const union = first + second - intersection;
+    if (!Number.isFinite(intersection) ||
+        (fullyOverlapping && intersection <= 0) ||
+        !Number.isFinite(union) || union <= 0) return false;
+  }
+  return true;
 }
 
 /**
@@ -169,6 +213,13 @@ export function analyzeProjectedEnvelopeFidelity(input: {
     };
   }
 
+  if (!comparableEnvelopeArithmetic(model, reference)) {
+    return {
+      state: "unavailable" as const,
+      reason: "numeric_envelope_metrics_unavailable" as const,
+    };
+  }
+
   const views = {
     front: {
       axes: ["x", "y"] as const,
@@ -183,6 +234,29 @@ export function analyzeProjectedEnvelopeFidelity(input: {
       ...rectangleMetrics(rectForView(model, "top"), rectForView(reference, "top")),
     },
   };
+
+  const volumeEnvelope = volumeMetrics(model, reference);
+  // The union, ratio or center delta of two individually valid envelopes
+  // can still overflow. Do not declare an "available" metric that JSON
+  // serialization could turn into a misleading null/invalid value.
+  const observed = [
+    ...VIEW_ORDER.flatMap(view => {
+      const metric = views[view];
+      return [
+        metric.iou, metric.source_coverage, metric.model_precision,
+        ...metric.model_size, ...metric.reference_size, ...metric.center_delta,
+      ];
+    }),
+    volumeEnvelope.iou, volumeEnvelope.source_coverage,
+    volumeEnvelope.model_precision, ...volumeEnvelope.center_delta,
+    ...Object.values(volumeEnvelope.dimension_ratio),
+  ];
+  if (observed.some(value => !Number.isFinite(value))) {
+    return {
+      state: "unavailable" as const,
+      reason: "numeric_envelope_metrics_unavailable" as const,
+    };
+  }
 
   const reviewOrder = [...VIEW_ORDER].sort(
     (left, right) =>
@@ -202,7 +276,7 @@ export function analyzeProjectedEnvelopeFidelity(input: {
     average_iou: roundMetric(averageIou),
     worst_view: reviewOrder[0],
     review_order: reviewOrder,
-    volume_envelope: volumeMetrics(model, reference),
+    volume_envelope: volumeEnvelope,
     note:
       "Coarse envelope alignment only. Use fresh canonical model views/reference comparison for visual fidelity; raw 3D reference bounds must not redefine target dimensions.",
   };

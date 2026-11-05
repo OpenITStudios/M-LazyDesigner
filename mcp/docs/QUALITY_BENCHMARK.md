@@ -48,6 +48,15 @@ explicit user facts / dimensions
 
 Paths, memory, tool success, coordinates, bounds, hierarchy, cube count, keyframe count, or a generated similarity number are not visual proof by themselves.
 
+**Coarse envelope numerical representability gate:** the existing
+`analyzeProjectedEnvelopeFidelity` projection is advisory, not a
+silhouette-quality scorer. If finite input bounds nevertheless produce
+overflowing/underflowing widths, areas, volumes, unions, ratios or center
+deltas, the projection now returns `unavailable` instead of a fabricated
+IoU or `NaN`/Infinity. Malformed reference vectors also remain unavailable.
+This check has no shape-specific dimension limit, does not clamp authored
+Cubes, and does not change visual approval or native Blockbench state.
+
 A dimension is:
 
 - `PASS` only when current evidence supports it and no material defect remains;

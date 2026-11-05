@@ -203,6 +203,95 @@ describe("bounded authoring quality intelligence", () => {
     expect(result.volume_envelope.dimension_ratio.length).toBe(0.5);
   });
 
+  test("coarse envelope fidelity refuses unrepresentable numeric geometry instead of claiming usable IoU", () => {
+    const bounds = (x: number, y: number, z: number) => ({
+      min: [0, 0, 0],
+      max: [x, y, z],
+    });
+    // Every coordinate is finite, but a 3D product overflows, or underflows
+    // to zero, so a reported 0.0000 IoU would be numerically misleading.
+    expect(analyzeProjectedEnvelopeFidelity({
+      model_bounds: bounds(1e150, 1e150, 1e150),
+      reference_bounds: bounds(16, 16, 16),
+    })).toMatchObject({
+      state: "unavailable",
+      reason: "model_bounds_unavailable_or_non_positive",
+    });
+    expect(analyzeProjectedEnvelopeFidelity({
+      model_bounds: bounds(1e-150, 1e-150, 1e-150),
+      reference_bounds: bounds(16, 16, 16),
+    })).toMatchObject({
+      state: "unavailable",
+      reason: "model_bounds_unavailable_or_non_positive",
+    });
+
+    // Individually valid volume products can overflow when summed to
+    // compute an overlapping union. Matching inputs must not report IoU=0.
+    const giant = bounds(5e102, 5e102, 5e102);
+    expect(analyzeProjectedEnvelopeFidelity({
+      model_bounds: giant, reference_bounds: giant,
+    })).toMatchObject({
+      state: "unavailable",
+      reason: "numeric_envelope_metrics_unavailable",
+    });
+
+    // Incorrect external bounds shape must not crash the quality
+    // projection or turn unknown reference content into available metrics.
+    expect(analyzeProjectedEnvelopeFidelity({
+      model_bounds: { min: null, max: [4, 4, 4] } as unknown as {
+        min: readonly number[]; max: readonly number[];
+      },
+      reference_bounds: bounds(4, 4, 4),
+    })).toMatchObject({
+      state: "unavailable",
+      reason: "model_bounds_unavailable_or_non_positive",
+    });
+    expect(analyzeProjectedEnvelopeFidelity({
+      model_bounds: bounds(4, 4, 4),
+      reference_bounds: { min: [0, 0, 0], max: "bad-vector" } as unknown as {
+        min: readonly number[]; max: readonly number[];
+      },
+    })).toMatchObject({
+      state: "unavailable",
+      reason: "reference_bounds_unavailable_or_non_positive",
+    });
+
+    // Reversed extreme x offsets have individually valid dimensions, but
+    // the between-center delta cannot be represented by finite doubles.
+    const farPositive = { min: [1e308, 0, 0], max: [1e308 + 2e292, 1, 1] };
+    const farNegative = { min: [-1e308, 0, 0], max: [-1e308 + 2e292, 1, 1] };
+    expect(analyzeProjectedEnvelopeFidelity({
+      model_bounds: farPositive, reference_bounds: farNegative,
+    })).toMatchObject({
+      state: "unavailable",
+      reason: "numeric_envelope_metrics_unavailable",
+    });
+  });
+
+  test("valid large and offset geometry remains comparable without a fixed object-size limit", () => {
+    const large = { min: [0, 0, 0], max: [1e6, 4e5, 2e5] };
+    const comparison = analyzeProjectedEnvelopeFidelity({
+      model_bounds: large, reference_bounds: large,
+    });
+    expect(comparison.state).toBe("available");
+    if (comparison.state !== "available") throw new Error("expected numeric fidelity");
+    expect(comparison.views.front.iou).toBe(1);
+    expect(comparison.volume_envelope.iou).toBe(1);
+    expect(comparison.volume_envelope.center_delta).toEqual([0, 0, 0]);
+    expect(comparison.visual_verdict).toBe("not_evaluated");
+
+    // Stable half-sums avoid overflow in midpoint calculations when the
+    // bounds themselves still admit a finite-area/volume comparison.
+    const largeOffset = { min: [1e308, 0, 0], max: [1e308 + 2e292, 1, 1] };
+    const sameOffset = analyzeProjectedEnvelopeFidelity({
+      model_bounds: largeOffset, reference_bounds: largeOffset,
+    });
+    expect(sameOffset.state).toBe("available");
+    if (sameOffset.state !== "available") throw new Error("expected stable midpoint");
+    expect(sameOffset.volume_envelope.iou).toBe(1);
+    expect(sameOffset.volume_envelope.center_delta).toEqual([0, 0, 0]);
+  });
+
   test("surface warnings become a compact machine-readable risk summary", () => {
     const result = summarizeSurfaceQualityWarnings([
       "1 hidden/non-rendered Cube(s) were excluded from rendered bounds.",

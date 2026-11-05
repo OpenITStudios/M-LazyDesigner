@@ -2,6 +2,24 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Scale-neutral projected Geometry metric integrity (source-only)
+
+The canonical geometry `analyzeProjectedEnvelopeFidelity` helper previously
+accepted finite AABB coordinates even when derived widths/areas/volumes,
+area/volume unions or center deltas overflowed or underflowed numeric
+precision. It could then return an `available` coarse envelope review
+containing NaN/Infinity or misleading zero-overlap scores. The existing
+projection now fails closed for nonrepresentable geometry and malformed
+vectors. Stable midpoint arithmetic preserves valid large-offset models
+when calculations remain representable; no object preset, native geometry
+size quota, automatic Cube mutation or additional quality scorer was added.
+
+Proof: pinned `Local` source audit and focused positive/negative quality
+regressions AUTHORED for ordinary large Geometry, finite-but-extreme
+numbers, overflow unions, underflow, malformed bounds and stable offsets.
+Bun, TypeScript, Codex, CI, native Blockbench and actual visual fidelity
+NOT EXECUTED under the user's explicit testing hold.
+
 ## 2026-11-05 — Golden-to-Harness recorder session correlation (source-only)
 
 The existing Golden draft/finalizer and shared accepted-session comparator
