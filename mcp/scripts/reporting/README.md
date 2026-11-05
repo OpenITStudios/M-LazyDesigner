@@ -33,6 +33,14 @@ quality PASS or time-to-acceptance from L0 counters. Per-build metrics
 include only calls with verified preflight evidence and state measured
 session coverage and unknown-build counts.
 
+The read-only Gateway trace report validates event kinds, timestamps and
+result byte counts before computing diagnostics. Missing byte counts and
+unsafe aggregate integer totals stay unknown, not zero or an efficiency
+improvement. Invalid input fails closed rather than producing distorted
+per-capability or total response-byte measurements. This is trace-source
+integrity only; it does not verify the Runtime, accepted artistic quality,
+or whether an AI processed the reported media.
+
 Reporting consumes benchmark/evaluation evidence; it does not own Runtime behavior or acceptance truth.
 The explicit Research archive is a selected copy of L0 cache evidence, not
 a competing project history or authoring state owner. It never runs on the

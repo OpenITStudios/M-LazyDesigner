@@ -2,6 +2,22 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Strict Gateway trace core-metric validation (source-only)
+
+The existing offline Gateway benchmark trace reporter now rejects invalid
+event kinds, invalid/missing timestamps and missing, negative, fractional,
+non-numeric or unsafe per-event `result_bytes` instead of reporting
+distorted diagnostic metrics. Legitimate `result_bytes: null` remains
+unknown. Totals that would exceed JavaScript's safe integer precision are
+reported as unknown rather than a measured cost/efficiency improvement.
+No Runtime transport, recorder schema, capture output, agent loop or
+public Gateway tool changed.
+
+Proof: exact pinned `Local` source review plus positive/negative
+trace-report regression cases AUTHORED; Bun, TypeScript, Codex, CI,
+native Blockbench and actual model-quality tests NOT EXECUTED.
+The user's instruction to defer local/Codex testing remains in effect.
+
 ## 2026-11-05 — Golden evidence gated on complete image delivery (source-only)
 
 The opt-in Gateway benchmark recorder previously checked each labeled

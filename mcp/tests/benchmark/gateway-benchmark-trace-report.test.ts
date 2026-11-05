@@ -208,6 +208,58 @@ describe("gateway benchmark trace report", () => {
     expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify(row))).toThrow("invalid error_code");
   });
 
+  test("rejects malformed core trace byte and kind measurements", () => {
+    const base = JSON.parse(event(0, "mutate")) as Record<string, unknown>;
+    for (const invalid of [
+      -1, 1.5, "100", undefined, Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify({
+        ...base, result_bytes: invalid,
+      }))).toThrow("invalid result_bytes");
+    }
+    for (const kind of ["unknown", null, 123]) {
+      expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify({
+        ...base, kind,
+      }))).toThrow("invalid kind");
+    }
+    for (const timestamp of [null, "not-a-date", undefined]) {
+      expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify({
+        ...base, timestamp,
+      }))).toThrow("invalid timestamp");
+    }
+  });
+
+  test("retains nullable legacy bytes and refuses unsafe aggregated precision", () => {
+    const first = {
+      ...JSON.parse(event(0, "mutate")),
+      result_bytes: null,
+    };
+    const second = {
+      ...JSON.parse(event(1, "mutate")),
+      result_bytes: 100,
+    };
+    const partial = summarizeGatewayBenchmarkTrace(
+      [first, second].map(row => JSON.stringify(row)).join("\n")
+    );
+    expect(partial.payload.result_bytes).toBeNull();
+    expect(partial.diagnostics.top_capabilities_by_observed_latency[0]
+      ?.response_bytes).toBeNull();
+
+    // Individual events may carry safe integers, while their sum is no
+    // longer exactly representable. Never show that total as measured.
+    const overflow = [0, 1].map(index => ({
+      ...JSON.parse(event(index, "mutate")),
+      result_bytes: Number.MAX_SAFE_INTEGER,
+    }));
+    const report = summarizeGatewayBenchmarkTrace(
+      overflow.map(row => JSON.stringify(row)).join("\n")
+    );
+    expect(report.payload.result_bytes).toBeNull();
+    expect(report.diagnostics.top_capabilities_by_observed_latency[0]
+      ?.response_bytes).toBeNull();
+    expect(report.calls.total).toBe(2);
+  });
+
   test("rejects non-contiguous sequence", () => {
     expect(() =>
       summarizeGatewayBenchmarkTrace([

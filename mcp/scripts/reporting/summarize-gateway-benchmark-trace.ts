@@ -3,6 +3,13 @@ import type {
   BenchmarkTraceKind,
 } from "../../gateway/runtime/benchmarkTrace";
 
+// The report is a consumer of a recorded trace, never a validator of
+// artistic quality. Unknown/malformed event kinds cannot be silently
+// omitted from the per-kind totals.
+const TRACE_KINDS: readonly BenchmarkTraceKind[] = [
+  "search", "describe", "inspect", "mutate", "verify", "recovery",
+];
+
 function parseTrace(text: string): BenchmarkTraceEvent[] {
   const lines = text
     .split(/\r?\n/)
@@ -40,6 +47,19 @@ function parseTrace(text: string): BenchmarkTraceEvent[] {
     }
     if (typeof event.success !== "boolean") {
       throw new Error(`Trace line ${index + 1} has an invalid success flag.`);
+    }
+    if (!TRACE_KINDS.includes(event.kind)) {
+      throw new Error(`Trace line ${index + 1} has an invalid kind.`);
+    }
+    if (event.result_bytes !== null &&
+        (!Number.isSafeInteger(event.result_bytes) || event.result_bytes < 0)) {
+      // Missing, negative, fractional or string payload sizes must not be
+      // counted as measured bytes or become NaN in summary calculations.
+      throw new Error(`Trace line ${index + 1} has invalid result_bytes.`);
+    }
+    if (typeof event.timestamp !== "string" ||
+        !Number.isFinite(Date.parse(event.timestamp))) {
+      throw new Error(`Trace line ${index + 1} has an invalid timestamp.`);
     }
     if (event.mcp_images !== undefined && event.mcp_images !== null) {
       const row = event.mcp_images;
@@ -101,10 +121,13 @@ function percentile(values: readonly number[], fraction: number): number | null 
 
 function sum(values: readonly (number | null)[]): number | null {
   if (values.some((value) => value === null)) return null;
-  return values.reduce<number>(
+  const total = values.reduce<number>(
     (total, value) => total + (value ?? 0),
     0
   );
+  // Many individually safe sizes can overflow a JS exact integer when
+  // aggregated; report unknown instead of an imprecise efficiency claim.
+  return Number.isSafeInteger(total) ? total : null;
 }
 
 function count(
@@ -179,7 +202,8 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     failures: row.failures,
     observed_latency_sum_ms: row.latencies.reduce((sum, n) => sum + n, 0),
     latency_p95_ms: percentile(row.latencies, 0.95),
-    response_bytes: row.allBytesKnown ? row.responseBytes : null,
+    response_bytes: row.allBytesKnown && Number.isSafeInteger(row.responseBytes)
+      ? row.responseBytes : null,
   })).sort((a, b) =>
     b.observed_latency_sum_ms - a.observed_latency_sum_ms ||
     a.capability.localeCompare(b.capability)
