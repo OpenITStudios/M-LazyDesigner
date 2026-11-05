@@ -431,6 +431,12 @@ no redundant view
 Add asset-specific negatives only where they prevent a known high-risk error.
 
 ## 10. Presentation Rules
+### Quality Review Priority — No Format-as-Quality Proxy
+
+Inspect actual source and generated pixels in this order: `P1_SOURCE_IDENTITY` (distinctive form/face/proportions) → `P1_MINECRAFT_BLOCKBENCH_CRAFT` (purposeful Cubes, material-aware hand-painted faces, visual rest) → `P1_CROSS_VIEW_TOPOLOGY` (contacts and tool/shield hand ownership, including legitimate occlusion) → layout. A successful 2x2 crop, source SHA, saved ZIP, four text labels or static Bun contract **never** repairs a P1 visual failure. Correct the FIRST observed causal defect, not the easiest infographic/presentation symptom.
+
+When P1 fails, set the image `REJECTED_VISUAL_QUALITY` for positive example use. If user explicitly requests preservation, place it only in rejected historical QA, never as `STYLE_EXAMPLE` or `PRESENTATION_EXAMPLE`. Source-hidden facts remain `UNKNOWN / NOT_ASSESSABLE` (not a fabricated PASS or automatic FAIL), and a proposed back remains `PROVISIONAL`.
+
 
 Adaptive composition:
 

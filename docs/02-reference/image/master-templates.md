@@ -74,12 +74,12 @@ Neutral/dark studio background, coherent identity; no infographic by default.
 When the source is real-world/non-Minecraft, the final production sheet still shows the Minecraft/Blockbench target only unless the user explicitly requests otherwise.
 
 
-## Controlled Image Invocation — `M-LD-REF / 1.1`
+## Controlled Image Invocation — `M-LD-REF / 1.2`
 
 This is the **single compact copy-ready invocation** of existing visual-reference rules. It is not a new image engine, Skill, schema, ChatGPT Project activation or substitute for the Template A/B/C continuation/correction contracts below. Fill only applicable facts after inspecting actual images; keep the version label for fair before/after pilots.
 
 ```text
-M-LD-REF — CONTROLLED REFERENCE REQUEST v1.1
+M-LD-REF — CONTROLLED REFERENCE REQUEST v1.2
 INTENT = <faithful source | new creative asset | approved bounded revision>
 SUBJECT_SOURCE = <visible source identity, MACRO proportions/parts, real contact
   and void relations, material ownership, side-specific asymmetry; UNKNOWN if hidden>
@@ -109,16 +109,23 @@ SINGLE_OBJECT = rotate camera around one unchanged form; do not mirror parts,
   shift attachments, invent the other side as observed or change surface identity.
 SOURCE_HIDDEN = UNKNOWN in faithful reconstruction; PROVISIONAL when designing a
   coherent new concept, never masquerading as source-observed or approved.
-POST_IMAGE_REVIEW = inspect actual pixels: first subject identity and MACRO;
-  then MESO geometry/contact, MICRO painted texture/rest and material separation;
-  then cameras, panel readability and conditional presentation.
-CORRECTION = one first-observed failure, CHANGE it and PRESERVE unaffected
-  source/approved facts; one bounded correction and recheck touched views.
+POST_IMAGE_REVIEW = inspect ACTUAL source and output pixels in order:
+  P1 source identity/MACRO → P1 intentional Blockbench MESO plus MICRO hand-painted
+  materials and visual rest → P1 part/grip/attachment continuity across four views
+  → only then P2 layout, labels and readability.
+QUALITY_GATE = Any observed material P1 defect REJECTS this positive exemplar,
+  even when the 2x2 crop, checksum, labels and archived files look correct.
+  Source-hidden back/rig is UNKNOWN, proposed completion is PROVISIONAL.
+CORRECTION = first observed defect only; CHANGE it and PRESERVE correct parts.
+  Cropping a poster repairs presentation ONLY. Stop repeated failed direction.
+ARCHIVE_RULE = REJECTED_VISUAL_QUALITY may be kept as HISTORICAL_NEGATIVE_QA
+  only by explicit request; never reuse as positive STYLE_EXAMPLE or
+  PRESENTATION_EXAMPLE for a new object.
 NO_FALSE_PASS = no visual approval, native Blockbench/UV/Bedrock or exact-camera
   claim from image labels, hash, generated text, or a static source test.
 ```
 
-A style-mismatch report selects `HERO_STYLE_CHECK` before the four-side sheet; an explicit request for one HERO or scoped repair also stays within that bounded output. Otherwise, a completed 3D MODEL reference **defaults to `FOUR_SIDE_CONSTRUCTION`**. After a HERO is visually accepted, reuse its **actual pixels** as the four-view sheet's anchor. The four-side layout borrows Builder's **clean presentation only**, never its building subject, architecture, or world-block construction style. Rear/right geometry unseen by the source remains UNKNOWN for fidelity and may only be a PROVISIONAL construction proposal; the image is not a calibrated 3D proof. A ChatGPT Project must be configured by the user; this GitHub text cannot install prompts or attach images automatically.
+A style-mismatch report selects `HERO_STYLE_CHECK` before the four-side sheet; an explicit request for one HERO or scoped repair also stays within that bounded output. Otherwise, a completed 3D MODEL reference **defaults to `FOUR_SIDE_CONSTRUCTION`**. After a HERO is visually accepted, reuse its **actual pixels** as the four-view sheet's anchor. The four-side layout borrows Builder's **clean presentation only**, never its building subject, architecture, or world-block construction style. Rear/right geometry unseen by the source remains UNKNOWN for fidelity and may only be a PROVISIONAL construction proposal; the image is not a calibrated 3D proof. A ChatGPT Project must be configured by the user; this GitHub text cannot install prompts or attach images automatically. Historical v1.1 generated outputs keep their original provenance; this v1.2 source update does not claim the image generator or Blockbench was tested.
 
 
 ---

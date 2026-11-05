@@ -120,9 +120,12 @@ Sheet 01 is the identity/scale anchor when a sheet workflow is needed; Sheet 02+
 A generated visual becomes approved visual authority only after explicit user acceptance when visual approval is material.
 
 
+**Quality-before-archive gate:** use `standard.md#quality-acceptance-firewall--model-value-before-presentation` to review actual source/output **identity → Minecraft/Blockbench craft → physical part/weapon/shield attachment across four sides → presentation**. P1 failure stops positive exemplar promotion; hashes, labels or a cropped poster cannot cure it. Preserve failed imagery only as rejected historical negative QA on explicit request, never as an approved/backup style or presentation example. Distinguish unknown source back from observed inconsistent grip or geometry. No automatic model/native proof.
+
+
 ### Builder-Learned Execution Discipline
 
-Use the versioned `M-LD-REF / 1.1` invocation in `docs/02-reference/image/master-templates.md` for ChatGPT model-reference generation. Explicitly separate `SUBJECT_SOURCE`, `STYLE_EXAMPLE`, `PRESENTATION_EXAMPLE` and `APPROVED_TARGET` roles: a style example never supplies the object's identity, and presentation samples supply layout only. Only call an exemplar loaded when its **actual image pixels** are available; GitHub catalogs, image IDs and hashes are insufficient. A missing pixel exemplar leaves visual-match claims `UNVERIFIED`.
+Use the versioned `M-LD-REF / 1.2` invocation in `docs/02-reference/image/master-templates.md` for ChatGPT model-reference generation. Explicitly separate `SUBJECT_SOURCE`, `STYLE_EXAMPLE`, `PRESENTATION_EXAMPLE` and `APPROVED_TARGET` roles: a style example never supplies the object's identity, and presentation samples supply layout only. Only call an exemplar loaded when its **actual image pixels** are available; GitHub catalogs, image IDs and hashes are insufficient. A missing pixel exemplar leaves visual-match claims `UNVERIFIED`.
 
 Take from M-LazyBuilder EX-REF-02/03 the restrained balanced **four-side layout** as the DEFAULT completed 3D MODEL sheet, never its house architecture or material motifs. When the user rejects a generated style, inspect the defect and keep the next attempt to one large unlabelled HERO. Once accepted and full construction is requested, generate the clean Front/Right/Back/Left 2×2 **construction-only** sheet regardless of apparent symmetry; no fifth HERO or poster rows. A request explicitly limited to HERO/one corrective view remains a partial artifact, not completed construction reference. After generation, compare actual pixels against source identity first, MACRO/MESO structure second, MICRO paint/rest/material third, and presentation/cross-view consistency last. Fix the **first observed failure** with one bounded `CHANGE + PRESERVE`, then recheck affected views and STOP if it repeats.
 
@@ -142,15 +145,15 @@ USER IMAGE REQUEST + SOURCE / APPROVED VISUALS
 → compile one shared object-space build brief (volumes, contacts, voids, surfaces)
 → select a single HERO only for style calibration or explicit single-view request; otherwise four-side FRONT/RIGHT/BACK/LEFT by default for completed 3D MODEL construction
 → invoke image generation once when authorized using the compact compiled prompt
-→ review ACTUAL generated pixels after generation for form, sides, material, P1 coverage
+→ review ACTUAL source/output pixels for P1 identity, Minecraft craft, physical four-view contacts and only then P2 presentation
 → if a visible material defect exists, bounded CHANGE + PRESERVE image correction
-→ reinspect all affected panels, then obtain user visual approval as appropriate
-→ package ONLY when explicitly requested
+→ reinspect all affected panels; any remaining P1 failure is REJECTED_VISUAL_QUALITY for positive reference use
+→ obtain user approval only for a supported visual candidate; package ONLY when explicitly requested
 ```
 
 Keep the underlying object fixed across panels; only the view and visibility change. Do not confuse a dark painted patch with an opening, shading with a protrusion or a front-facing feature with a backside feature. For source reconstruction, unknown hidden features remain UNKNOWN; for an original creative request, optional plausible completions remain PROVISIONAL until reviewed. An approved prior sheet/image should be supplied as the **actual visual anchor** for correction/continuation whenever possible; filenames and prose are insufficient replacements.
 
-A generative image may become visible to the user before inspection. Never claim a hidden pre-display quality pass. These Skill instructions do not change image-model weights, execute automatic pixel inspection, or themselves prove visual correctness.
+Review actual generated pixels after generation using the quality acceptance firewall; a beautiful composite is not a quality PASS. A generative image may become visible to the user before inspection. Never claim a hidden pre-display quality pass. These Skill instructions do not change image-model weights, execute automatic pixel inspection, or themselves prove visual correctness.
 
 ### Minecraft-Style Blockbench 3D — Source and Style Separation
 

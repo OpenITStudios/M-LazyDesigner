@@ -1,8 +1,8 @@
-# Four-Side Model Reference Samples — Approved and Backup Candidates
+# Four-Side Model Reference Samples — Approved and Rejected Historical
 
 **Approval scope confirmed 2026-11-05:** **MD-REF-01 (Silver Luxury SUV)** remains the **sole approved** VISUAL GUIDELINE for clean four-panel layout and restrained Minecraft-stylized Blockbench presentation. Its SUV shape, wheel geometry, grille, colors and accessories must never transfer to another subject.
 
-**Backup status (not approved):** **MD-REF-02 (Roman Legionary)** was generated and saved on explicit user request as a **BACKUP_CANDIDATE_NEEDS_USER_REVIEW**. Its generated four-side sheet is useful for comparison but has unresolved equipment and hidden-side fidelity. Saving the files is not visual acceptance or a native model PASS. New source evidence and user-approved constraints override either example.
+**Rejected-quality archive:** **MD-REF-02 (Roman Legionary)** was re-audited using the actual source and generated pixels and is now **REJECTED_VISUAL_QUALITY**, not a backup candidate. Source-identity drift, inadequate purposeful Minecraft/Blockbench craft and P1 sword/shield-continuity issues invalidate positive exemplar use even though the 2x2 layout and SHA hashes are correct. Its original bytes are preserved under the separate Library `Rejected/` folder as negative QA evidence only. No new model should load it as a STYLE_EXAMPLE or PRESENTATION_EXAMPLE.
 
 This catalog follows [M-LazyBuilder's approved-reference storage discipline](https://github.com/OpenITStudios/M-LazyBuilder-MCP/blob/develop/docs/03-authoring/exterior/reference-samples.md): original full-resolution image **bytes stay in ChatGPT Library**, GitHub contains the durable catalog/rules/identifiers. GitHub Markdown, hashes and image-generation IDs do **not** supply the actual pixels to ChatGPT or local Codex. No new GitHub image-generation engine, auto-loader, Project installation, runtime schema, or persistent model state is introduced.
 
@@ -22,7 +22,7 @@ This catalog follows [M-LazyBuilder's approved-reference storage discipline](htt
 | `manifest.json` | Exact hashes, dimensions, approval scope, provenance and limitations | JSON |
 
 - **Visual generation ID:** `f1d746b2-0eda-4359-8b23-83bdf2ecfb93`.
-- **Current authoring contract:** `M-LD-REF / 1.1` in [master-templates.md](master-templates.md). This is the **current guidance**, **not proof** that the historical output used the exact frozen prompt.
+- **Current authoring contract:** `M-LD-REF / 1.2` in [master-templates.md](master-templates.md), including the quality acceptance firewall. This is **current forward-looking guidance**, not proof that historical MD-REF-01/02 images were made or tested with v1.2.
 - **Approval:** for visual reference guidance only. **Not executed/verified:** native Blockbench import, part dimensions, UV/rig, Bedrock export, or calibrated orthographic camera consistency.
 - **Source-hidden rear:** the source photograph provides only one three-quarter exterior angle; the image's BACK panel is **PROVISIONAL creative completion**, not observed original geometry. RIGHT/LEFT source-fidelity claims are similarly limited where occluded.
 - **Visual caveats:** wheel segmentation, mirror/door/trim alignment and exact lamps/grille may differ from the source. Do not promote these details into universal model-construction rules.
@@ -43,35 +43,32 @@ This catalog follows [M-LazyBuilder's approved-reference storage discipline](htt
 
 **C. Local Codex/Blockbench use.** Explicitly export/download the approved PNG from Library or the approved ZIP to the development workspace and verify actual bytes with the commands below. A repository path, Markdown catalog, or SHA by itself is not an image file. Preserve `MD-REF-01` provenance and approval scope on handoff; do not claim tested native geometry or approval of new models.
 
-**Sample promotion policy:** new sample approval and persistent Library saves require explicit user authorization. Save authorization alone does not promote a new sample. **MD-REF-01 remains the sole approved baseline; MD-REF-02 is a separately stored backup candidate awaiting visual review.** Do not use rejected poster-heavy images as approved baselines.
+**Sample promotion policy:** saving is not visual acceptance. A new positive exemplar needs actual-image review for P1 source identity, Minecraft/Blockbench craft and part/grip continuity **before** layout or approval; explicit user approval remains separate. MD-REF-01 remains the sole approved sample. **MD-REF-02 is rejected, quarantined, and prohibited as a positive example even if explicitly selected as a generic backup.** A correction must become a new, separately reviewed artifact; never silently promote the old PNG.
 
 
 
-## MD-REF-02 — Roman Legionary (BACKUP CANDIDATE, NOT APPROVED)
+## MD-REF-02 — Roman Legionary (REJECTED_VISUAL_QUALITY)
 
-**User instruction on 2026-11-05:** generate another four-side model reference from the uploaded Roman-soldier photograph and save it as a **backup example using the same storage format**. This authorizes the archive, **not promotion to APPROVED_VISUAL_GUIDELINE**. The MD-REF-01 approved PNG/ZIP remain immutable and unchanged; the original v1 approved ZIP intentionally contains **only MD-REF-01**.
+**Current status, audit 2026-11-05:** `REJECTED_VISUAL_QUALITY`. It was previously `BACKUP_CANDIDATE_NEEDS_USER_REVIEW` when first stored on explicit user request; that prior status has been superseded by actual-image QA. It is not an approved or eligible backup reference.
 
-**ChatGPT Library sample folder:** `/M-LazyDesigner/Reference Samples/Model Four Sides/MD-REF-02_roman-legionary/`
+**Quarantined Library path:** `/M-LazyDesigner/Reference Samples/Rejected/MD-REF-02_roman-legionary/` (not the active `Model Four Sides` folder). The active Library root `manifest.json` v3 lists `approved_samples = [MD-REF-01]`, `backup_candidates = []`, and `rejected_samples = [MD-REF-02]`.
 
-**Separate backup ZIP:** `M_LazyDesigner_Roman_Legionary_Backup_MD-REF-02_v1.zip`
+**Frozen historical ZIP:** `/M-LazyDesigner/Reference Samples/Rejected/M_LazyDesigner_Roman_Legionary_Backup_MD-REF-02_v1.zip`; ZIP SHA-256 `6f64d9ca6ed365ef34fe9dce62a757cfdc50efaa003a05d1c525204f247309bd`, size 1,261,415 bytes. The ZIP is **unchanged historical evidence** and contains **outdated candidate-status metadata**; do not use the ZIP's old manifest as current classification. Current truth is this GitHub catalog and the updated Library root/sample manifests.
 
-- ZIP SHA-256: `6f64d9ca6ed365ef34fe9dce62a757cfdc50efaa003a05d1c525204f247309bd`; size **1,261,415 bytes**; ZIP integrity verified against exact Library-readback bytes.
-- `candidate_four_sides.png`: **1448 × 1086**, **707,894 bytes**; SHA-256 `8a886d4d004c077a62e9237e8201d2c206ecf3227c249ce86090dad18d48b853`.
-- `input_source.png`: user-provided Roman legionary photograph, **415 × 739**, **551,467 bytes**; SHA-256 `4f024d5ba1be92490b3cae5870ef2ba6795b3a7ff8245f0e054640969cf421cf`.
-- `REPRODUCE.md`: source-specific instructions, provenance and P1/P2 visual QA findings; **not** the original hidden image prompt or a reproducible seed.
-- `manifest.json`: candidate status, exact hashes, source/visual role, provenance and unverified claims. Library-root `manifest.json` **v2** indexes both MD-REF-01 (approved) and MD-REF-02 (backup candidate) separately.
+**Preserved source/artifact bytes (unchanged):**
+- `candidate_four_sides.png`: 1448 × 1086, 707,894 bytes, SHA-256 `8a886d4d004c077a62e9237e8201d2c206ecf3227c249ce86090dad18d48b853`.
+- `input_source.png`: 415 × 739, 551,467 bytes, SHA-256 `4f024d5ba1be92490b3cae5870ef2ba6795b3a7ff8245f0e054640969cf421cf`.
+- `REPRODUCE.md` and `manifest.json`: updated **QA/rejection metadata**; no new image, `.bbmodel`, native proof or retouched model was produced.
 
-**Image provenance:** user subject photo is the **SUBJECT_SOURCE**. ChatGPT generated a four-side strip in a poster-style sheet with source generation ID `242549b3-cfba-480a-a1a0-57fd2094a21e`. Two image-model attempts included unrequested infographic panels; after repeated failure, the four generated directional panels from the first output were **cropped and deterministically reassembled** into the clean 2×2 candidate. This is a **presentation-only transform**, not new 3D modelling, corrected anatomy, independently generated orthographic views, calibrated rotations or a claim that the underlying generator obeyed the requested sheet specification.
+**Provenance:** source generation ID `242549b3-cfba-480a-a1a0-57fd2094a21e` contained a larger infographic. Following repeated poster-generation failures, the four directional images were cropped and deterministically reassembled into a 2x2 layout. This **presentation-only transform** changed no underlying anatomy, weapon grip, armor topology, painted material or original perspective. It **must not** be considered a successful Minecraft model correction.
 
-**Current four-side order:** `FRONT | RIGHT` / `BACK | LEFT`, with no fifth HERO, generated dimensions, palette or poster footer. Hand-painted faceted metal, red cloth, leather straps and the upright shield read visually, but do not copy their design to unrelated new subjects.
+**Reasons for rejection, based on inspected pixels:**
+- **P1_SOURCE_IDENTITY:** visible age/face character, shield scale and original armor silhouette were simplified or changed into a generic ornamented soldier rather than source-grounded stylization.
+- **P1_MINECRAFT_BLOCKBENCH_CRAFT:** excessive metallic/gold visual noise, generic repeats and ambiguous decoration-versus-geometry prevent confident, deliberate Blockbench cuboid/hand-painted interpretation. Minecraft HD style does not mean merely pixelated rendering.
+- **P1_CROSS_VIEW_TOPOLOGY:** the soldier's right-hand sword is shown in FRONT/BACK but is not clearly carried through the RIGHT-side view; shield/left-arm connection and grip are unresolved. A displayed side label cannot make physical contacts consistent.
+- **NOT_ASSESSABLE (different from failure):** rear armor and hidden joints are not visible in the source photo. Any illustrated BACK is provisional; exact UV, rig/pivots, camera calibration and native Bedrock export remain untested.
 
-**Open P1/P2 QA:**
-- **P1:** the sword held in the soldier's **right hand** is shown in FRONT and BACK but not clearly carried through the RIGHT-side view; its grip/contact relationship is `NOT_ASSESSABLE`. Do **not** mark all four views `CONSISTENT` or geometry-ready.
-- **P1:** shield/left-arm attachment is partly obscured in the side/rear views; do not invent a validated shield pivot/rig.
-- **P1:** the source photograph reveals only the front-three-quarter side; rear helmet/strap/armor geometry is **PROVISIONAL**, not SOURCE-OBSERVED or exact reconstruction.
-- **P2:** panel images are generated and reassembled illustration, not native Blockbench orthographic camera captures; element inventory, UV, rig, exact texture scale and Bedrock export are `NOT_EXECUTED / UNVERIFIED`.
-
-**Use policy:** MD-REF-02 is available as an explicitly selected **backup presentation/style experiment**, but it is **not the default globally approved sample**. The new object's own `SUBJECT_SOURCE` still owns silhouette, parts, colors and materials. Do not load the archived Roman input photo as identity for other projects. Before any future promotion, review actual candidate/corrected pixels and resolve the P1 sword/attachment failures, then obtain explicit user acceptance and version the artifact rather than overwriting it silently.
+**Use restriction:** This image and its old backup ZIP may be opened **only for an explicit failed-example / negative QA audit**. **NEVER load MD-REF-02 as STYLE_EXAMPLE, PRESENTATION_EXAMPLE, or a positive authoring baseline.** Do not add it to a configured ChatGPT Project's positive visual examples, and do not let Codex infer geometry from it. Do not delete the preserved bytes. A newly corrected Roman-character candidate would need a new image/revision, P1 visual review and separate explicit user approval; updating a status label does not fix this saved image.
 
 ## Byte-verified local Codex handoff (Windows PowerShell)
 

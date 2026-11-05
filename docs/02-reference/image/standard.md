@@ -343,6 +343,24 @@ Record `MATCH`, `LOCAL_VIEW_DEFECT`, `CROSS_VIEW_CONFLICT` or `NOT_ASSESSABLE` o
 MD-REF-01 remains approved as a **visual guideline only**. Its frozen PNG/ZIP are not to be changed or reclassified as native Blockbench verification.
 
 
+### Quality Acceptance Firewall — Model Value Before Presentation
+
+**Observed failure in MD-REF-02:** a clean 2x2 crop and valid archive hashes were treated as progress despite the Roman soldier's source-identity drift, unconvincing Minecraft game-model craft, missing right-hand sword continuity and uncertain shield contact. Presentation and preservation are not artistic acceptance.
+
+For every new 3D MODEL reference, compare actual source and generated pixels in this **P1-first** order:
+
+1. **SOURCE IDENTITY / MACRO — P1.** Preserve source-defining silhouette, facial character/expression when material, proportional shield/tool size, major armor/clothing masses, part inventory and side-specific asymmetry. Stylization may simplify surfaces but must not replace a distinctive subject with a generic archetype or transplant another sample's ornaments.
+2. **MINECRAFT / BLOCKBENCH CRAFT — P1.** Recognize purposeful primary cuboids, layered plates, joints, negative space and restrained angled parts plausibly expressible in Blockbench. Separate real MESO structural thickness from painted MICRO highlights. Require material-specific hand-painted texture clusters and deliberate quiet surfaces, not global checkerboard/glitter, pointless rivet/gold spam, smooth CGI curves or one raised Cube per pixel. HD styling need not imitate strict vanilla texture limits.
+3. **PART / GRIP / CROSS-VIEW TOPOLOGY — P1.** Trace major parts and their contacts across Front/Right/Back/Left using the existing five-pair review. For humanoids, check helmet/torso/shoulder/arm/waist/leg articulation and actual ownership of tools and shield by the right/left hands; for vehicles, trace wheels, doors and attachments. A truly occluded item is `NOT_ASSESSABLE` rather than obligatorily visible, but an unexplained disappearance, changed ownership, or contradictory attachment is a P1 defect.
+4. **PRESENTATION — P2 AFTER P1.** Only after P1 review, check four readable sides, balanced panel widths, labels and visual economy. Cropping or reassembling a failed infographic repairs **layout only**; it cannot correct missing sword, changed face, texture, weapon contact or silhouette.
+5. **APPROVAL / PROOF.** User acceptance is separate from upload/save authorization; even a good image is not a proven `.bbmodel`, rig, UV atlas, calibrated camera or native Bedrock export.
+
+**Failure outcome:** an observed material P1 identity, craft or physical-continuity failure makes the current output `REJECTED_VISUAL_QUALITY` as a positive exemplar. If one bounded `CHANGE + PRESERVE` correction fails in the same direction, stop; do not generate more posters or camouflage the fault with a crop. If explicitly asked to save, preserve the unmodified failed source/output only as `HISTORICAL_NEGATIVE_QA` away from active positive samples; never load as a reusable `STYLE_EXAMPLE` or `PRESENTATION_EXAMPLE`. Static source tests, hash checks and pretty poster badges do not upgrade this verdict.
+
+**Unknown vs failure:** unseen rear armor/rig, exact scale/UV/camera and source-occluded contacts remain `UNKNOWN / NOT_ASSESSABLE`, not automatically FAILED nor falsely SOURCE-OBSERVED. Creative completion may be `PROVISIONAL`. Block only the dependent modelling decision. A positive visual guideline must have supported quality at the actual image level and separate user approval. This is a human/agent evidence gate, not an automated image classifier or new persistent schema.
+
+
+
 Review the **actual generated reference**, not merely its panel labels. This section applies the Surface Coverage Gate; it creates no image classifier, extra score, 3D solver or mandatory turnaround.
 
 ### Review sequence

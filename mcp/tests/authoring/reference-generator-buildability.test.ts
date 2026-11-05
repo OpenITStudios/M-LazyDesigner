@@ -397,7 +397,7 @@ describe("LazyDesigner reference preparation contract", () => {
       read("../docs/02-reference/image/master-templates.md"),
       read(REFERENCE_SKILL),
     ]);
-    const core = templates.split("m-ld-ref — controlled reference request v1.1")[1]?.split("a style-mismatch report")[0] ?? "";
+    const core = templates.split("m-ld-ref — controlled reference request v1.2")[1]?.split("a style-mismatch report")[0] ?? "";
     for (const token of ["hero_style_check", "minimum_construction", "four_side_construction",
       "front top-left / right top-right / back bottom-left", "only direction labels",
       "one first-observed failure", "one bounded correction", "no_false_pass"]) {
@@ -504,28 +504,55 @@ describe("LazyDesigner reference preparation contract", () => {
 
 
 
-  test("MD-REF-02 candidate is archived separately and cannot silently replace the approved SUV", async () => {
+  test("P1 visual quality outranks a tidy 2x2 and byte-perfect packaging", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    for (const term of ["quality acceptance firewall", "source identity / macro", "minecraft / blockbench craft", "part / grip / cross-view topology", "presentation — p2 after p1", "rejected_visual_quality", "historical_negative_qa"]) expect(standard).toContain(term);
+    for (const term of ["p1_source_identity", "p1_minecraft_blockbench_craft", "p1_cross_view_topology", "never"]) expect(prompt).toContain(term);
+    expect(templates).toContain("quality_gate");
+    expect(templates).toContain("cropping a poster repairs presentation only");
+    expect(templates).toContain("archive_rule");
+    expect(skill).toContain("quality-before-archive gate");
+  });
+
+  test("unknown unseen source is not a P1 mismatch and crop cannot repair physical contacts", async () => {
+    const [standard, prompt, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("unknown vs failure");
+    expect(standard).toContain("not_assessable");
+    expect(standard).toContain("one raised cube per pixel");
+    expect(standard).toContain("cropping or reassembling");
+    expect(prompt).toContain("unknown / not_assessable");
+    expect(skill).toContain("rejected historical negative qa");
+  });
+
+  test("MD-REF-02 is a rejected historical negative, never a positive generation exemplar", async () => {
     const [catalog, imageReadme] = await Promise.all([
       read("../docs/02-reference/image/reference-samples.md"),
       read("../docs/02-reference/image/README.md"),
     ]);
     expect(catalog).toContain("md-ref-01 remains the sole approved");
-    expect(catalog).toContain("md-ref-02 — roman legionary (backup candidate, not approved)");
-    expect(catalog).toContain("backup_candidate_needs_user_review");
-    expect(catalog).toContain("candidate_four_sides.png");
-    expect(catalog).toContain("input_source.png");
-    expect(catalog).toContain("reproduce.md");
-    expect(catalog).toContain("manifest.json");
+    expect(catalog).toContain("md-ref-02 — roman legionary (rejected_visual_quality)");
+    expect(catalog).toContain("backup_candidates = []");
+    expect(catalog).toContain("rejected_samples = [md-ref-02]");
+    expect(catalog).toContain("historical evidence");
+    expect(catalog).toContain("outdated candidate-status metadata");
     for (const hash of [
       "8a886d4d004c077a62e9237e8201d2c206ecf3227c249ce86090dad18d48b853",
       "4f024d5ba1be92490b3cae5870ef2ba6795b3a7ff8245f0e054640969cf421cf",
       "6f64d9ca6ed365ef34fe9dce62a757cfdc50efaa003a05d1c525204f247309bd",
     ]) expect(catalog).toContain(hash);
+    expect(catalog).toContain("never load md-ref-02 as style_example, presentation_example");
     expect(catalog).toContain("presentation-only transform");
-    expect(catalog).toContain("not clearly carried through the right-side view");
-    expect(catalog).toContain("provisional");
-    expect(imageReadme).toContain("md-ref-01 is currently the sole approved default");
-    expect(imageReadme).toContain("backup candidate requiring review");
+    expect(imageReadme).toContain("md-ref-02 is rejected_visual_quality");
   });
+
 
 });
