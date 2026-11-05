@@ -1,3 +1,7 @@
+import {
+  evaluateHarnessProbe,
+  type HarnessProbeInput,
+} from "../../scripts/evaluate/evaluate-harness-candidate";
 import { describe, expect, test } from "bun:test";
 import {
   compareAcceptedGoldenSessions,
@@ -284,6 +288,109 @@ describe("accepted golden session comparison", () => {
 
 });
 
+
+
+describe("Harness² candidate evidence gate (authored contracts)", () => {
+  const SHA = "1234567890abcdef1234567890abcdef12345678";
+  function probe(): HarnessProbeInput {
+    const baseline = accepted(SHA, 5);
+    const candidate = accepted(SHA, 3);
+    baseline.usage = { model: "same-model", telemetry_source: "observed", total_tokens: 5000 };
+    candidate.usage = { model: "same-model", telemetry_source: "observed", total_tokens: 5000 };
+    return {
+      schema: 1, proposal_id: "geometry-context-01", domain: "GEOMETRY",
+      baseline_harness_sha256: "1".repeat(64),
+      candidate_harness_sha256: "2".repeat(64),
+      baseline, candidate,
+    };
+  }
+
+  test("accepted same-input probe is review-only with existing per-metric deltas", () => {
+    const assessed = evaluateHarnessProbe(probe());
+    expect(assessed.status).toBe("REVIEW_REQUIRED");
+    expect(assessed.comparison?.quality_gate).toBe("BOTH_ACCEPTED_PASS_SAME_REFERENCE");
+    expect(assessed.comparison?.metrics.tool_calls_to_accepted_result
+      .delta_candidate_minus_baseline).toBe(-2);
+    expect(assessed).not.toHaveProperty("score");
+    expect(assessed).not.toHaveProperty("winner");
+    expect(assessed).not.toHaveProperty("promoted");
+    expect(assessed.evidence).toBe("SUPPLIED_GOLDEN_REPORTS_NOT_INDEPENDENTLY_CORRELATED");
+  });
+
+  test("live quality FAIL vetoes cheaper candidate without comparing partial cost", () => {
+    const input = probe();
+    input.candidate.quality_verdict = "FAIL";
+    input.candidate.state = "INCOMPLETE";
+    input.candidate.accepted_result = false;
+    input.candidate.metrics = null;
+    const assessed = evaluateHarnessProbe(input);
+    expect(assessed.status).toBe("REJECTED_QUALITY");
+    expect(assessed.reasons).toContain("CANDIDATE_QUALITY_FAIL");
+    expect(assessed.comparison).toBeNull();
+  });
+
+  test("unverified candidate, even with fewer calls, remains inconclusive", () => {
+    const input = probe();
+    input.candidate.quality_verdict = "UNVERIFIED";
+    input.candidate.state = "INCOMPLETE";
+    input.candidate.accepted_result = null;
+    expect(evaluateHarnessProbe(input).status).toBe("INCONCLUSIVE");
+    input.candidate.proof_scope = "LOCAL_CODE";
+    expect(evaluateHarnessProbe(input).reasons).toContain("NATIVE_PROOF_MISSING");
+  });
+
+  test("mismatched task, source, reference, starting bytes and runtime invalidate the pair", () => {
+    const corruptions: Array<[string, (value: HarnessProbeInput) => void]> = [
+      ["TASK_MISMATCH", v => { v.candidate.task_id = "unrelated-task"; }],
+      ["SOURCE_SHA_MISMATCH", v => { v.candidate.source_sha = "a".repeat(40); }],
+      ["REFERENCE_MISMATCH", v => {
+        v.candidate.pipeline_provenance.reference_package_fingerprint = "d".repeat(64);
+      }],
+      ["START_ASSET_MISMATCH", v => {
+        v.candidate.pipeline_provenance.input_asset_sha256 = "d".repeat(64);
+      }],
+      ["RUNTIME_MISMATCH", v => {
+        v.candidate.pipeline_provenance.runtime_build_identity = "different-runtime";
+      }],
+    ];
+    for (const [reason, corrupt] of corruptions) {
+      const input = probe();
+      corrupt(input);
+      const assessed = evaluateHarnessProbe(input);
+      expect(assessed.status).toBe("INCONCLUSIVE");
+      expect(assessed.reasons).toContain(reason);
+      expect(assessed.comparison).toBeNull();
+    }
+  });
+
+  test("unknown or changed model cannot silently support a causal harness gain", () => {
+    const input = probe();
+    input.candidate.usage!.model = null;
+    expect(evaluateHarnessProbe(input).reasons).toContain("MODEL_IDENTITY_UNKNOWN");
+    input.candidate.usage!.model = "different-model";
+    expect(evaluateHarnessProbe(input).reasons).toContain("MODEL_MISMATCH");
+  });
+
+  test("bad or unchanged context hashes and source-only baselines fail closed", () => {
+    const input = probe();
+    input.candidate_harness_sha256 = input.baseline_harness_sha256;
+    expect(() => evaluateHarnessProbe(input)).toThrow("distinct declared context SHA-256");
+    input.candidate_harness_sha256 = "invalid";
+    expect(() => evaluateHarnessProbe(input)).toThrow("distinct declared context SHA-256");
+    input.candidate_harness_sha256 = "2".repeat(64);
+    input.baseline.proof_scope = "LOCAL_CODE";
+    expect(() => evaluateHarnessProbe(input)).toThrow("requires LIVE_BLOCKBENCH");
+  });
+
+  test("contradictory FAIL and missing saved artifact cannot be promoted", () => {
+    const invalid = probe();
+    invalid.candidate.quality_verdict = "FAIL";
+    expect(() => evaluateHarnessProbe(invalid)).toThrow("FAIL candidate cannot claim ACCEPTED");
+    const unsaved = probe();
+    unsaved.candidate.pipeline_provenance.output_asset_sha256 = null;
+    expect(() => evaluateHarnessProbe(unsaved)).toThrow("valid changed output_asset_sha256");
+  });
+});
 
 describe("R5 Geometry Knowledge controlled Golden comparison (synthetic contract only)", () => {
   const sourcePath = "docs/03-authoring/modelling/decision-cases.md";

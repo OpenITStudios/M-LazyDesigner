@@ -38,6 +38,7 @@
     "benchmark:zero-waste-bottlenecks": "bun run ./scripts/benchmark/benchmark-zero-waste-bottlenecks.ts",
     "benchmark:zero-waste-total": "bun run ./scripts/benchmark/benchmark-zero-waste-total-context.ts",
     "eval:quality-benchmark": "bun test tests/benchmark/quality-benchmark-contract.test.ts",
+    "eval:harness-candidate": "bun run ./scripts/evaluate/evaluate-harness-candidate.ts",
     "eval:astra-usage": "bun run ./scripts/evaluate/validate-astra-usage.ts",
     "eval:session-policy": "bun run ./scripts/evaluate/evaluate-codex-session-policy.ts",
     "verify:astra-usage-ready": "bun run ./scripts/verify/verify-astra-usage-ready.ts",

@@ -303,3 +303,27 @@ captured responses and any remaining experimental confounders. Failed,
 incomplete, simulated or source-only runs must never be presented as a
 measured Geometry gain. This R5 code is source preparation only;
 **no R5 live pairs were executed or accepted**.
+
+## Harness² candidate probe (opt-in development evaluation)
+
+The evaluation script eval:harness-candidate reads one JSON proposal with a
+canonical baseline and candidate golden-session-final report. This is an
+offline, read-only quality gate; it does not run a second agent, modify
+Skills, or promote candidates.
+
+- Declare distinct SHA-256 values for baseline/candidate harness context.
+  These identities are caller-supplied, NOT verified against context bytes.
+- The baseline must meet the existing accepted Golden report contract.
+  Both reports must describe the same task, initial asset, approved Reference,
+  source commit, installed Runtime build and observed model identity.
+- A matched LIVE_BLOCKBENCH quality FAIL rejects the candidate regardless
+  of cheaper or incomplete execution metrics. UNVERIFIED, mismatched or
+  source-only evidence is INCONCLUSIVE.
+- Two matched accepted PASS reports are REVIEW_REQUIRED, using the existing
+  Golden per-metric comparator. No aggregate score, causal improvement
+  claim, automatic update of Skills or bypass of human/native review.
+- A Golden finalizer report is itself contract evidence. Independent
+  native/visual/session correlation remains necessary for acceptance.
+
+The script implements only the evidence gate of a Propose-Probe-Compose
+experiment, not an installed upstream Harness² optimizer.

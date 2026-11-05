@@ -2,6 +2,23 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Harness candidate evidence gate (source-only)
+
+An opt-in read-only evaluator for a Harness²-inspired candidate probe was
+authored in the existing mcp/scripts/evaluate/ owner. It reuses the canonical
+Golden acceptance validator and comparison; mismatched task/source/reference/
+initial asset/Runtime/model, unknown quality and missing native proof cannot
+yield reviewable cost deltas. Confirmed reported LIVE quality FAIL vetoes
+efficiency claims, and accepted PASS remains REVIEW_REQUIRED, not auto-promoted.
+Declared context hashes are not authenticated payloads; report labels are not
+independently correlated evidence.
+
+Proof: exact-source/static checks and focused positive/negative regression
+cases AUTHORED. Bun/TypeScript/CI, native Blockbench, visual acceptance,
+real candidate probes, and measured cost-to-accepted-result NOT EXECUTED.
+Verification CI remains disabled. P0 semantic/graph/generated-artifact
+synchronization remains open, with no Runtime or Gateway mutation here.
+
 ## 2026-11-04 — AI-facing ambiguous branch readiness guard (source-only)
 
 Control's existing `search_capabilities` projection now returns `UNKNOWN`
