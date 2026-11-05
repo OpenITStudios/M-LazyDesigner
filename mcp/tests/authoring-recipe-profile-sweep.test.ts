@@ -5,7 +5,10 @@ import {
   geometryMathProgramSchema,
   type GeometryMathProfileSweepPart,
 } from "@/lib/authoringRecipe/geometryMathLanguage";
-import { sweepMathProfileVolume } from "@/lib/authoringRecipe/geometryMathProfileSweep";
+import {
+  requireProfileSweepSequentialContact,
+  sweepMathProfileVolume,
+} from "@/lib/authoringRecipe/geometryMathProfileSweep";
 import {
   buildAdvancedGeometryRecipeCandidate,
   reviewStoredAdvancedGeometrySource,
@@ -135,6 +138,50 @@ describe("R3z v13 morphology with no shape presets", () => {
     expect(() => geometryMathProfileSweepPartSchema.parse(profile({
       stations: [station([0, 0, 0], 0.5), station([8, 0, 0])],
     }))).toThrow();
+  });
+
+  test("consecutive segment contact rejects hidden disconnections behind a globally connected mass", () => {
+    // Each voxel is occupied and the overall 4-cell line is 6-connected,
+    // but the authored segment order is A -> B -> C while material follows
+    // A -> C -> B. A and B do not even share a voxel or a full face.
+    const globallyConnected = new Uint8Array([
+      0b001, 0b100, 0b100, 0b010,
+    ]);
+    expect(() => requireProfileSweepSequentialContact(
+      globallyConnected, [4, 1, 1], 3
+    )).toThrow("GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED: 0 -> 1");
+  });
+
+  test("accepts shared or face-contact stations but not diagonal-only contact", () => {
+    expect(() => requireProfileSweepSequentialContact(
+      new Uint8Array([0b001, 0b010]), [2, 1, 1], 2
+    )).not.toThrow();
+    expect(() => requireProfileSweepSequentialContact(
+      new Uint8Array([0b011]), [1, 1, 1], 2
+    )).not.toThrow();
+    expect(() => requireProfileSweepSequentialContact(
+      new Uint8Array([0b001, 0b011, 0b110, 0b100]), [4, 1, 1], 3
+    )).not.toThrow();
+    const diagonal = new Uint8Array([0b001, 0, 0, 0b010]);
+    expect(() => requireProfileSweepSequentialContact(
+      diagonal, [2, 2, 1], 2
+    )).toThrow("GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED");
+  });
+
+  test("a multistation straight taper preserves one source Recipe and its ordered joins", () => {
+    const multi = profile({
+      stations: [
+        station([0, 0, 0], 2, 1),
+        station([4, 0, 0], 2, 1),
+        station([8, 0, 0], 2, 1),
+      ],
+    });
+    const before = structuredClone(multi);
+    const same = sweepMathProfileVolume(multi);
+    expect(same).toEqual(sweepMathProfileVolume(profile()));
+    const produced = compileAuthoringRecipe(candidate(multi));
+    expect(produced.metrics.realized_cube_count).toBe(1);
+    expect(multi).toEqual(before);
   });
 
   test("strict v13 opt-in and legacy v12 rejection preserve frozen contracts", () => {

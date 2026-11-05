@@ -1,6 +1,10 @@
 import type { RecipeVec3 } from "./contracts";
 import type { GeometryMathProfileSweepPart } from "./geometryMathLanguage";
-import { partitionMathVoxelVolume, type MathCuboid } from "./geometryMathVoxel";
+import {
+  MATH_PROGRAM_MAX_VOXELS,
+  partitionMathVoxelVolume,
+  type MathCuboid,
+} from "./geometryMathVoxel";
 
 /**
  * Opt-in v13 source-local elliptical/rectangular section sweep.
@@ -168,6 +172,53 @@ function insideSegment(
   return u * u + v * v <= 1 + EPS;
 }
 
+/**
+ * The global 6-connected mass check cannot establish that each authored
+ * consecutive sweep segment is connected to the next. For instance a third
+ * nonadjacent segment may connect two disjoint contributions elsewhere.
+ *
+ * Each 1-unit raster cell carries a 7-bit segment-membership mask (at most
+ * eight stations). Adjacent segments must share an occupied voxel OR have
+ * occupied voxels touching through a full face. A mere edge/corner touch
+ * is not a native-Cuboid volume connection. This is source structure,
+ * not a visual, tangent-continuity or material/rig quality verdict.
+ */
+export function requireProfileSweepSequentialContact(
+  ownership: Uint8Array,
+  grid: readonly [number, number, number],
+  segmentCount: number
+): void {
+  const [nx, ny, nz] = grid;
+  for (let segment = 0; segment + 1 < segmentCount; segment++) {
+    const first = 1 << segment;
+    const second = 1 << (segment + 1);
+    let linked = false;
+    for (let index = 0; index < ownership.length && !linked; index++) {
+      if (!(ownership[index]! & first)) continue;
+      if (ownership[index]! & second) {
+        linked = true;
+        break;
+      }
+      const x = index % nx;
+      const z = Math.floor(index / nx) % nz;
+      const y = Math.floor(index / (nx * nz));
+      linked =
+        (x > 0 && Boolean(ownership[index - 1]! & second)) ||
+        (x + 1 < nx && Boolean(ownership[index + 1]! & second)) ||
+        (z > 0 && Boolean(ownership[index - nx]! & second)) ||
+        (z + 1 < nz && Boolean(ownership[index + nx]! & second)) ||
+        (y > 0 && Boolean(ownership[index - nx * nz]! & second)) ||
+        (y + 1 < ny && Boolean(ownership[index + nx * nz]! & second));
+    }
+    if (!linked) {
+      throw new Error(
+        "GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED: " +
+        segment + " -> " + (segment + 1)
+      );
+    }
+  }
+}
+
 export function sweepMathProfileVolume(
   part: GeometryMathProfileSweepPart
 ): MathCuboid[] {
@@ -183,13 +234,23 @@ export function sweepMathProfileVolume(
   ) as Vec3;
   const grid = [0, 1, 2].map(d => high[d]! - low[d]!)
     as [number, number, number];
+  // Respect the SAME shared voxel grid budget BEFORE allocating a compact
+  // segment membership bitmap. This is 1 byte/cell, not a second raster.
+  const volume = grid[0] * grid[1] * grid[2];
+  if (grid.some(n => !Number.isSafeInteger(n) || n < 1 || n > 64) ||
+      !Number.isSafeInteger(volume) || volume > MATH_PROGRAM_MAX_VOXELS) {
+    throw new Error("GEOMETRY_MATH_VOXEL_GRID_BUDGET");
+  }
+  const ownership = new Uint8Array(volume);
   const represented = new Uint8Array(segments.length);
   const boxes = partitionMathVoxelVolume(low, grid, (x, y, z) => {
     const point: Vec3 = [low[0] + x + 0.5,
       low[1] + y + 0.5, low[2] + z + 0.5];
     let included = false;
+    const index = (y * grid[2] + z) * grid[0] + x;
     for (let i = 0; i < segments.length; i++) {
       if (!insideSegment(point, segments[i]!, part.cross_section)) continue;
+      ownership[index] |= 1 << i;
       represented[i] = 1;
       included = true;
     }
@@ -201,5 +262,6 @@ export function sweepMathProfileVolume(
       "a declared path segment is absent at one-model-unit resolution."
     );
   }
+  requireProfileSweepSequentialContact(ownership, grid, segments.length);
   return boxes;
 }

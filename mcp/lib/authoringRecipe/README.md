@@ -1004,6 +1004,37 @@ Bedrock export or visual/source verification was executed.
 Public `construct_geometry` remains UNREGISTERED pending canonical
 generator-owned Runtime/API documentation.
 
+### R3z — Ordered PROFILE_SWEEP joint continuity (source only)
+
+The existing v13+ `PROFILE_SWEEP` kernel already requires every declared
+segment to contribute one-unit sampled voxels and the *overall* voxel
+solid to be six-neighbour connected. That does not by itself show the
+**authored sequence of segment joints** was retained: a later/nonadjacent
+segment can bridge two contributions that do not touch each other.
+
+The existing voxel predicate now records a compact segment-membership
+bitmask (one byte per already-budgeted cell, at most seven segments).
+After the same canonical voxel partition, each **consecutive** segment
+pair must share an occupied voxel or have occupied voxels touching
+through a full face. Edge/corner-only contact is insufficient.
+A missing join fails with
+`GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED`, rather than
+silently treating some other part of the union as that segment's join.
+The check adds **no second raster, synthetic filler Cubes, remeshing,
+sampling-density reduction or second Recipe engine**.
+
+Existing valid single-segment and multistation source shapes retain
+their original deterministic Cuboid partition and native Recipe owner.
+Stored v13+ sources whose only global connectivity came from a
+non-consecutive path shortcut may now fail reconstruction; no saved
+Recipe is automatically migrated. This validates the discrete joint
+topology only, NOT fidelity of a continuous CAD surface, the exact
+declared pen-width/taper at every station, tangent smoothness, UV
+ownership, native Blockbench or visual reference acceptance.
+
+Bun/TypeScript/Codex/native tests and visual QA remain NOT EXECUTED
+under the user's testing hold; regressions are authored only.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

@@ -2,6 +2,33 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — PROFILE_SWEEP ordered joint topology (source-only)
+
+The existing v13+ source-local `PROFILE_SWEEP` voxelizer already checks
+that each semantic path segment contributes some voxels and the full
+generated mass is face-connected. Neither proves that each consecutive
+authored segment pair retains contact when another/nonadjacent segment
+can bridge its missing joint. The existing one-pass raster predicate
+now also records a bounded 1-byte-per-cell segment membership mask.
+After the canonical disjoint-Cuboid partition it requires an actual
+shared occupied cell or full-face voxel adjacency for every adjacent
+segment pair. A missing joint rejects the candidate with
+`GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED`, not a misleading
+continuous-section assertion.
+
+No new runtime tool, second voxelization/mesh, global collision owner,
+auto-fill geometry or generator-owned API change. Existing valid
+Geometry stays on the same Cuboid Recipe realization path; v13+
+saved source with missing sequential joints may be newly rejected.
+This does not verify authored taper/section dimensions at pixel level,
+native visual quality, actual performance or reference acceptance.
+
+Proof: pinned `Local` source review and authored positive/negative
+unit/canonical-Recipe regressions for ordered adjacency, diagonal-only
+contact and globally connected but out-of-order segment masks. Bun,
+TypeScript, Codex, native Blockbench and QA NOT EXECUTED under the
+user's explicit testing hold.
+
 ## 2026-11-05 — Connector native-radius contact budget (source-only)
 
 The existing v6 Geometry Construction CONNECT first checks waypoint
