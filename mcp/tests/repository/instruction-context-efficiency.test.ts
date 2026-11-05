@@ -31,23 +31,29 @@ describe("repository instruction/context efficiency", () => {
       text("../AGENTS.md"),
       text("../docs/04-system/development-operating-standard.md"),
       text("../docs/04-system/README.md"),
-      text("../docs/04-system/universal-engineering-harness.md"),
+      text("../docs/04-system/agent-rules.md"),
       text("scripts/evaluate/README.md"),
     ]);
     expect(root).toContain("docs/04-system/development-operating-standard.md");
-    expect(standard).toContain("universal-engineering-harness.md");
-    expect(systemIndex).toContain("universal-engineering-harness.md");
+    expect(standard).toContain("agent-rules.md");
+    expect(root).toContain("## Agent Rules — seven-source bootstrap");
+    expect(systemIndex).toContain("agent-rules.md");
     for (const url of [
       "https://github.com/dietrichgebert/ponytail",
+      "https://github.com/cursor/plugins",
+      "https://github.com/multica-ai/andrej-karpathy-skills",
       "https://github.com/google-research/harness2",
       "https://github.com/deepseek-ai/deepseek-harness",
       "https://github.com/morluto/rea",
       "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
     ]) expect(portable).toContain(url);
     for (const guard of [
-      "five-lens applicability check",
-      "not as five always-running executors",
+      "seven-lens applicability check",
+      "not as seven always-running executors",
       "not automatically load this document",
+      "No automatic merge",
+      "NOT_LOADED",
+      "32 KiB",
       "target-repo rules",
       "NOT_EXECUTED",
       "no automatic multi-run recursion",

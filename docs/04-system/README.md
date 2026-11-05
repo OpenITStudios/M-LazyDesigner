@@ -16,7 +16,7 @@ implementation-map.md
 module-boundaries.md
 data-lifecycle.md
 development-operating-standard.md
-universal-engineering-harness.md
+agent-rules.md
 test-architecture.md
 skill-taxonomy.md
 compatibility-identifiers.md
@@ -66,8 +66,8 @@ Which data is canonical, derived or user-owned, and how is Desktop metadata prot
 What development discipline, permission and STOP checks apply?
 → development-operating-standard.md
 
-Which five external engineering/design methods are considered, and how can another repo adopt the portable contract?
-→ universal-engineering-harness.md
+Which seven engineering/design methods are considered, and how can another repo adopt the portable contract?
+→ agent-rules.md
 
 How are Bun tests inventoried, selected, modernized and retired without losing coverage?
 → test-architecture.md

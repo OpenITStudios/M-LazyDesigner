@@ -2,6 +2,10 @@
 
 User-authorized autonomy replaces approval waits with verified checkpoints; never claim user approval.
 
+## Agent Rules — seven-source bootstrap
+
+For development/UI, use a **cheap seven-source applicability check**. **Karpathy Guidelines + Ponytail** are concise coding discipline; **Pstack / Poteto Mode** provides task playbooks if available; **Harness²** informs optional measured agent experiments; **DeepSeek Harness** informs plugin/tool/session lifecycle; **REA** informs authorized opaque-runtime investigation; **UI UX Pro Max** informs usability/accessibility/UI work. Read relevant detail only from [Agent Rules](docs/04-system/agent-rules.md), not all upstream repositories. No auto-install, CI, merge, model switch, extra agent loop, visible MCP UI or unrelated repo write. Root `AGENTS.md` works only when a compatible host actually loads this repo; generic ChatGPT chats do not automatically load GitHub files.
+
 ## Instruction priority
 
 - Current user intent takes precedence over workflow guidance in `AGENTS.md` and Skills; repository safety/integrity rules and actual capability limits still apply.
@@ -17,34 +21,15 @@ User-authorized autonomy replaces approval waits with verified checkpoints; neve
 
 ## Execution Context Gate
 
-Classify by **actual capability**, not product/UI name:
-
+Choose the lowest **proven** context, not an intended label:
 ```text
-CONTEXT: REMOTE_GITHUB
-CONTEXT: LOCAL_CODE
-CONTEXT: LIVE_BLOCKBENCH
+CONTEXT: REMOTE_GITHUB | LOCAL_CODE | LIVE_BLOCKBENCH
 SWITCH CONTEXT: <REMOTE_GITHUB | LOCAL_CODE | LIVE_BLOCKBENCH>
+REMOTE_GITHUB   = GitHub source/commits only; verification CI disabled, no executed tests
+LOCAL_CODE      = actual checkout + Bun/tests/build/generators
+LIVE_BLOCKBENCH = LOCAL_CODE + installed, connected LazyDesigner Gateway/Runtime
 ```
-
-A marker is intent, not proof. Without a marker, choose the lowest sufficient provable context. Never infer `LOCAL_CODE` from “Codex”; never infer `LIVE_BLOCKBENCH` from mentioning Blockbench. `LIVE_BLOCKBENCH` is never assumed.
-
-```text
-REMOTE_GITHUB   = ChatGPT + GitHub source/commit operations; no executable test evidence (verification CI is currently disabled)
-LOCAL_CODE      = local checkout + Bun/tests/build/generators/filesystem
-LIVE_BLOCKBENCH = LOCAL_CODE + deployed LazyDesigner runtime + functioning Gateway/runtime connection
-```
-
-Proof ceiling follows actual context; exact-commit source acceptance follows `GITHUB_RULES.md`.
-
-Two-surface operating sequence: ChatGPT develops and delivers to `Local`; Codex later checks out the exact SHA to test, use the authoring tools and report genuine results. Native Blockbench is available only if Codex actually connects to it. Send Codex defects and reproducible evidence back into ChatGPT's source-development lane. Do not pretend test cases written in ChatGPT were executed in Codex.
-
-```text
-REMOTE_GITHUB → exhaust source/static/CI-verifiable work first
-higher-context dependency → partition; prepare independent tests/harness/evidence here
-handoff only the minimum higher-context residue
-never transfer the whole task because one residue needs more capability
-covered source result complete → accept CI proof; label only genuinely missing higher-context proof
-```
+Codex is not automatically LOCAL_CODE; Blockbench text does not imply LIVE_BLOCKBENCH. ChatGPT performs independent remote source work; Codex/local/native testing remains on user hold until explicitly reauthorized (2026-11-05). Tests authored now are `NOT_EXECUTED`. No PC instructions, extra cloud test prerequisite, unsupported PASS or whole-task transfer for one higher-context residue. Follow `GITHUB_RULES.md` for exact-commit proof.
 
 ### Observe / recover context
 
@@ -59,35 +44,7 @@ AGENTS.md → GITHUB_RULES.md Core Rules
 
 ### Repository / Plugin Work
 
-```text
-AGENTS.md → GITHUB_RULES.md Core Rules → EXECUTION CONTEXT
-→ Bounded | Standard | Complex
-→ nearest AGENTS.md + exact owner
-→ only evidence/continuity that can change the decision
-```
-
-#### Development Execution Gate
-
-**Bounded contract**
-```text
-Goal
-Failure Classification / first wrong owner
-Acceptance
-Proof Required
-STOP Condition
-```
-
-**Standard contract**
-```text
-Goal
-Success Metric
-Forbidden Proxy / Non-Goal
-First Evidence Required / first wrong owner
-In Scope / Out of Scope
-Execution Partition / higher-context residue
-Proof Required
-STOP Condition
-```
+`AGENTS.md → GITHUB_RULES.md → actual context → Bounded | Standard | Complex → nearest owner`. Bounded requires Goal, first wrong owner, Acceptance, Proof and STOP. Standard adds metric, forbidden proxy, first evidence, in/out scope and higher-context residue. Read only decision-changing evidence.
 
 ### Bounded Maintenance
 
@@ -107,57 +64,16 @@ Cross lane only with evidence: IN_USE defects stay with the active owner; proved
 
 ### Reference Preparation
 
-Reference generation belongs in **ChatGPT** through `.agents/skills/lazydesigner-reference-preparation/SKILL.md`; Codex consumes the approved/usable artifact rather than recreating that workflow. Use `docs/02-reference/README.md` and load only the selected branch:
-
-```text
-smooth visual/model reference → image reference branch
-strict pixel icon/sprite/tile  → lazydesigner-pixel-art-authoring
-Bedrock/Snowstorm particle     → lazydesigner-particle-reference-authoring
-```
-
-Generate minimum useful evidence. Pixel Art does not own Blockbench atlas/UV/Painter mutation; mapped texture production remains `lazydesigner-texturing`.
+ChatGPT prepares references via `.agents/skills/lazydesigner-reference-preparation/SKILL.md` and `docs/02-reference/README.md`; Codex consumes approved artifacts. Icons/sprites use `lazydesigner-pixel-art-authoring`; particle references use `lazydesigner-particle-reference-authoring`; native atlas/UV/Painter remain Texturing. Produce minimum useful evidence and no sibling preload.
 
 ### Asset Authoring
 
-LazyDesigner Control is the canonical routing/context authority. There is no separate asset-router Skill in the normal authoring path.
-
+LazyDesigner Control is the **only** normal asset router: one specialist per active stage, no sibling preload. Geometry/rig/pivots/UV → `lazydesigner-modelling`; atlas/material/PBR → `lazydesigner-texturing`; animation/motion → `lazydesigner-animation`. Reuse `known_context_ids` and fresh `control_delta`. Geometry and Texturing share AUTHORING; Animation crosses an explicit Runtime handoff. Use Stage GEOMETRY/TEXTURING/ANIMATION; `phase` identifiers remain compatibility names.
 ```text
-current AGENTS.md
-→ LazyDesigner Control
-→ active stage context + required handles
-→ exactly one active specialist
-
-Geometry / rig / pivots / UV Layout → lazydesigner-modelling
-Texture Atlas / Styling / PBR      → lazydesigner-texturing
-Animation / motion                  → lazydesigner-animation
+Geometry APPROVED + UV Layout PASS → Texturing APPROVED → Animation eligibility
+approved reference + current delta → Control → exact capability → mutate → fresh evidence
 ```
-
-Do not preload sibling specialists or all profiles. Reuse unchanged `known_context_ids`; load another specialist only when semantic ownership changes.
-
-Lifecycle remains:
-
-```text
-Geometry APPROVED + UV Layout PASS
-→ Texturing APPROVED
-→ Animation eligibility / AUTHORING↔Animation handoff when required
-```
-
-Geometry↔Texturing share the AUTHORING Runtime Surface; Animation is the Runtime Surface handoff boundary. Use `Stage` for GEOMETRY/TEXTURING/ANIMATION; existing `phase` identifiers remain compatibility names.
-
-Hot path:
-
-```text
-approved reference + current delta
-→ Control stage/context
-→ exact known capability
-→ mutate
-→ reuse returned state/control_delta
-→ minimum verdict-changing evidence
-```
-
-Use status/search/describe only for stale/unknown orientation, capability identity, or real schema uncertainty—not progress ceremony. Normal asset authoring does not load repository history, source/tests/CI, or `lazydesigner-development-brief` unless bounded evidence proves a product/runtime defect.
-
-At `FINALIZATION`, load only `docs/03-authoring/finalization/standard.md`.
+Do status/search/describe only for real unknown/stale capability, never as progress ceremony. Normal authoring skips source/tests/history/development brief. Native approval needs matching evidence; at FINALIZATION load `docs/03-authoring/finalization/standard.md`.
 
 ### ChatGPT + GitHub/cloud-only continuity
 
@@ -197,35 +113,9 @@ LazyDesigner authors Bedrock visual assets, not Minecraft add-on development. `b
 
 ## Canonical Owners
 
-```text
-documentation entry point → docs/README.md
-product/flow              → docs/01-product/
-reference preparation     → docs/02-reference/
-asset authoring           → docs/03-authoring/
-system/ownership          → docs/04-system/
-current operations        → docs/05-operations/
-asset continuity          → workspace/active/<project>/README.md
-stable project facts      → CONTEXT.md
-GitHub execution          → GITHUB_RULES.md
-research                  → experiments/
-managed distribution      → distribution/
-```
-
-Do not create duplicate navigation, review archives, decision logs, roadmaps, or parallel state systems.
+`docs/README.md` routes product `01-product/`, reference `02-reference/`, authoring `03-authoring/`, system `04-system/`, operations `05-operations/`. Project assets `workspace/active/<project>/README.md`, facts `CONTEXT.md`, Git rules `GITHUB_RULES.md`. One owner per durable fact; no duplicate ledgers.
 
 ## Repository Top-Level Discipline
 
-Follow [README Root Policy](README.md#repository-root-policy); root layout tests enforce its allowlist.
+Follow `README.md#repository-root-policy` and `docs/04-system/canonical-vocabulary.md`. Source under `mcp/apps/distribution`, instructions under `.agents/docs`, assets under `workspace`. Lowercase kebab-case directories; aliases only for compatibility, new docs extend current owner.
 
-Allowed top-level domains are `.agents/`, `.github/`, `apps/`, `distribution/`, `docs/`, `mcp/`, `workspace/`, and `experiments/`, plus repository-wide entrypoint/governance/toolchain files.
-
-Keep source in mcp/apps/distribution, working instructions in .agents/docs, and assets in workspace; never create parallel development/authoring trees.
-
-Naming:
-- directories use lowercase kebab-case;
-- one semantic concept has one canonical name;
-- aliases exist only for compatibility and must be explicitly identified as such;
-- new documentation must extend an existing owner rather than create a parallel owner.
-
-
-Canonical architecture vocabulary: `docs/04-system/terminology.md`.

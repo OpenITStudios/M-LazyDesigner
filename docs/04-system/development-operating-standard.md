@@ -22,9 +22,9 @@ NORMALIZE intent, constraints, acceptance and non-goals
 
 Before material mutation, identify Goal, Success Metric, First Evidence, First Wrong Owner, In Scope / Out of Scope, Forbidden Proxy, Required Proof, Execution Context and STOP. Read 1–3 decision-changing owners by default; broaden only to resolve a material unknown. Follow `docs/04-system/ai-context-loading.md` REQUIRED / CONDITIONAL / EXCLUDED bundles.
 
-## Conditional upstream engineering methods — no per-chat repository list
+## Agent Rules — seven-source adaptive development
 
-For material development and UI/UX decisions, apply the [Universal Engineering Harness v0.1](universal-engineering-harness.md): **Ponytail, Harness², DeepSeek Harness, REA and UI UX Pro Max**. Assess all five lenses, load only decision-relevant upstream sources, and keep current repository governance, Control ownership, permissions, native safety and actual proof authority. This method does not install external executors, run recursive experiments, promote Skills, generate UI, or make unrelated new ChatGPT sessions automatically open this repository. Normal asset authoring retains its existing Control-specialist hot path.
+For material development and UI/UX decisions, apply [Agent Rules](agent-rules.md): **Karpathy Guidelines, Ponytail, Pstack/Poteto Mode, Harness², DeepSeek Harness, REA and UI UX Pro Max**. Assess all seven lenses, load only decision-relevant upstream sources, and keep current repository governance, Control ownership, permissions, native safety and actual proof authority. This method does not install external executors, run recursive experiments, promote Skills, generate UI, or make unrelated new ChatGPT sessions automatically open this repository. Normal asset authoring retains its existing Control-specialist hot path.
 
 ## Minimum complete change
 
