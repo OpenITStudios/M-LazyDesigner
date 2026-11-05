@@ -6,6 +6,61 @@ import { resolveGatewayCapabilityEffects } from "@/gateway/capabilities/effects"
 import { gatewayOrchestrationRecoveryState } from "@/gateway/session/orchestrationRecoveryState";
 
 describe("stable Gateway invoke prerequisite enforcement", () => {
+  test("only verified native project identities reach the observation recorder", async () => {
+    const observed: Array<{ nativeIdentityVerified: boolean; nativeProjectUuid: string | null }> = [];
+    const recorder = {
+      active: true,
+      record: (event: { nativeIdentityVerified: boolean; nativeProjectUuid: string | null }) => {
+        observed.push({
+          nativeIdentityVerified: event.nativeIdentityVerified,
+          nativeProjectUuid: event.nativeProjectUuid,
+        });
+      },
+    } as any;
+    const invoke = async (
+      nativeProjectUuid: string | null,
+      { local = false, blocked = false } = {}
+    ) => {
+      const session = new GatewaySessionState();
+      session.replaceFacts(seedCapabilityFacts({ projectBound: !blocked }));
+      let calls = 0;
+      const executor = new GatewayCapabilityExecutor(
+        { invokeCapabilityWithMetadata: async () => {
+          calls++;
+          return {
+            result: { content: [], structuredContent: { execution: "applied" } },
+            readOnly: true,
+            verifiedProjectUuid: nativeProjectUuid,
+          };
+        } } as any,
+        { invoke: async () => local
+          ? { content: [], structuredContent: { execution: "applied" } }
+          : null, readOnlyHint: () => true } as any,
+        session,
+        null,
+        recorder
+      );
+      await executor.invoke(
+        blocked ? "manage_cubes" : "inspect_elements",
+        blocked ? { operation: "create" } : { mode: "outline" }
+      );
+      return calls;
+    };
+
+    expect(await invoke("native-project")).toBe(1);
+    expect(observed.at(-1)).toEqual({
+      nativeIdentityVerified: true, nativeProjectUuid: "native-project",
+    });
+    expect(await invoke(null)).toBe(1);
+    expect(observed.at(-1)).toEqual({
+      nativeIdentityVerified: false, nativeProjectUuid: null,
+    });
+    expect(await invoke(null, { local: true })).toBe(0);
+    expect(observed.at(-1)?.nativeIdentityVerified).toBe(false);
+    expect(await invoke(null, { blocked: true })).toBe(0);
+    expect(observed.at(-1)?.nativeIdentityVerified).toBe(false);
+  });
+
   test("known-absent prerequisites block before any Runtime or local mutation", async () => {
     let invoked = 0;
     const session = new GatewaySessionState();

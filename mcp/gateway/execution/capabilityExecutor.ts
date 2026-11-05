@@ -135,7 +135,11 @@ export class GatewayCapabilityExecutor {
           },
           result: response,
           durationMs: performance.now() - observationStartedAt,
-          nativeIdentityVerified: true,
+          // An unbound or local-provider response is not native identity
+          // evidence, even when a successful Control Delta was produced.
+          nativeIdentityVerified:
+            typeof trustedProjectUuid === "string" &&
+            trustedProjectUuid.trim().length > 0,
           nativeProjectUuid: trustedProjectUuid,
           nativePhaseAfter: observedPhaseAfter,
           nativeDomain: observedDomain,
