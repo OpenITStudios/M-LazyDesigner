@@ -36,8 +36,12 @@ Do not move transport/reconnect state, authored state, or capability metadata ow
 
 The opt-in Golden capture digest and the MCP image-delivery counter use the
 same strict Base64 byte validation (at most 128 MCP content items and 64 MiB
-of encoded characters per image). A malformed/oversized response can no
-longer produce a capture digest when delivery metrics are invalid. This is
+of encoded characters per image). The opt-in recorder measures *all* delivered
+images once and shares that result with its Golden capture gate. A malformed
+extra image (including a silhouette, four-side sheet or ingestion probe)
+suppresses model-view capture evidence even if the primary labeled PNG is
+valid. Valid extra images remain permitted. A malformed/oversized response
+cannot produce a capture digest when delivery metrics are invalid. This is
 content integrity, **not** a claim that an AI viewed the images or that the
 pixels passed visual review. Trace rows store digests and metadata, not pixels.
 

@@ -2,6 +2,23 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Golden evidence gated on complete image delivery (source-only)
+
+The opt-in Gateway benchmark recorder previously checked each labeled
+model-view PNG before issuing a capture digest but could ignore a malformed
+*additional* image in the same response (for example a silhouette, native
+four-side sheet or ingestion probe). The recorder now reuses one complete
+MCP-image-delivery measurement as a prerequisite for creating the model-view
+capture digest. An invalid extra image suppresses Golden capture evidence;
+well-formed companion images remain allowed and are not reclassified as
+model views. This changes benchmark evidence interpretation only, not native
+camera rendering, transport, Control, Runtime tools or reference authority.
+
+Proof: pinned `Local` source review, Git blob identity and focused positive/
+negative regression cases AUTHORED in the existing trace test. Bun, TypeScript,
+Codex, native Blockbench and live model quality NOT EXECUTED. User's hold on
+local/Codex testing remains in force.
+
 ## 2026-11-05 — Canonical image byte evidence parity (source-only)
 
 The opt-in Gateway benchmark recorder now uses one canonical, bounded Base64

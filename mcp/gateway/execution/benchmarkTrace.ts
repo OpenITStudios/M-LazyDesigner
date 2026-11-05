@@ -160,9 +160,13 @@ function canonicalMcpImageBytes(value: unknown): Buffer | null {
 /** Only returned PNGs, not a pre-existing path or a tool's claimed digest. */
 function captureProofFromResult(
   result: unknown,
-  fingerprint: string | null
+  fingerprint: string | null,
+  imageDelivery: BenchmarkMcpImageDelivery | null
 ): BenchmarkCaptureEvidence | null {
-  if (!fingerprint) return null;
+  // Every image item in this MCP response must pass the same delivery
+  // validation, including silhouette/sheet/probe images not named by views.
+  // Otherwise one valid view could attest a partially malformed response.
+  if (!fingerprint || imageDelivery === null) return null;
   const response = recordValue(result);
   const structured = recordValue(response?.structuredContent);
   const project = recordValue(structured?.project);
@@ -349,9 +353,16 @@ export class BenchmarkTraceRecorder {
   }): void {
     if (!this.options) return;
 
+    // Shared, opt-in observation of the entire returned content. Reuse the
+    // result for both traffic metrics and the Golden proof gate rather than
+    // validating one set of images but ignoring malformed extras.
+    const imageDelivery = input.result === undefined
+      ? null : measureMcpImageDelivery(input.result);
     const captured = input.success && input.kind === "verify" &&
       input.capability === "capture_model_views"
-      ? captureProofFromResult(input.result, this.options.referenceFingerprint)
+      ? captureProofFromResult(
+          input.result, this.options.referenceFingerprint, imageDelivery
+        )
       : null;
     const savedArtifact = input.success && input.kind === "mutate" &&
       input.capability === "export_model"
@@ -385,7 +396,7 @@ export class BenchmarkTraceRecorder {
       result_bytes:
         input.result === undefined ? null : payloadBytes(input.result),
       ...(input.result === undefined ? {} : {
-        mcp_images: measureMcpImageDelivery(input.result),
+        mcp_images: imageDelivery,
       }),
       read_only: input.readOnly ?? null,
       verification_class: input.verificationClass ?? null,

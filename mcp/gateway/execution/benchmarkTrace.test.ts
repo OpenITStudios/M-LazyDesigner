@@ -169,9 +169,31 @@ describe("Gateway benchmark trace recorder", () => {
       ],
       structuredContent,
     };
-    expect(measureMcpImageDelivery(malformed)).toBeNull();
-    expect(measureMcpImageDelivery(oversizedList)).toBeNull();
-    for (const result of [malformed, oversizedList]) {
+    // Native capture may include a silhouette, four-side sheet or an
+    // optional ingestion probe in addition to its labeled MODEL PNG. A
+    // malformed extra image must invalidate the response's Golden proof.
+    const brokenCompanion = {
+      content: [
+        label, image, { type: "text", text: "SILHOUETTE VIEW front" },
+        { ...image, data: payload + "A" },
+      ],
+      structuredContent,
+    };
+    const validCompanion = {
+      content: [
+        label, image, { type: "text", text: "SILHOUETTE VIEW front" },
+        { ...image, data: payload },
+      ],
+      structuredContent,
+    };
+    for (const result of [malformed, oversizedList, brokenCompanion]) {
+      expect(measureMcpImageDelivery(result)).toBeNull();
+    }
+    expect(measureMcpImageDelivery(validCompanion)).toMatchObject({
+      delivered_count: 2,
+      png_count: 2,
+    });
+    for (const result of [malformed, oversizedList, brokenCompanion, validCompanion]) {
       recorder.record({
         startedAt: recorder.startedAt(), kind: "verify",
         capability: "capture_model_views", success: true, result,
@@ -180,11 +202,20 @@ describe("Gateway benchmark trace recorder", () => {
     await recorder.flush();
     const events = (await readFile(path, "utf8")).trim().split("\n")
       .map(line => JSON.parse(line));
-    expect(events).toHaveLength(2);
-    for (const event of events) {
+    expect(events).toHaveLength(4);
+    for (const event of events.slice(0, 3)) {
       expect(event.mcp_images).toBeNull();
       expect(event.capture_evidence).toBeUndefined();
     }
+    // Legitimate additional images are allowed, and only the model view
+    // is fingerprinted as the canonical view evidence.
+    expect(events[3].mcp_images).toMatchObject({
+      delivered_count: 2, png_count: 2,
+    });
+    expect(events[3].capture_evidence.views).toEqual([{
+      view: "front",
+      png_sha256: createHash("sha256").update(png).digest("hex"),
+    }]);
   });
 
   test("native project export receipt is bound to readback-matched bytes without leaking local paths", async () => {
