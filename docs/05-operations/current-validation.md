@@ -2,6 +2,22 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — L0 provenance and failure-count reconciliation (source-only)
+
+The existing offline project-observation summary now rejects snapshots whose
+per-capability counts do not equal observed `invoke_capability` calls, whose
+named error-code totals exceed failed calls, or whose classified domain calls,
+failures, duration or verification obligations exceed verified project
+totals. Unknown/unclassified failures and unassigned domain calls remain
+permitted, and historical optional build/context fields retain their
+existing semantics. No new diagnostic pipeline, record schema, Runtime,
+Gateway tool or native mutation was added.
+
+Proof: pinned GitHub source audit and focused positive/negative L0 snapshot
+regressions AUTHORED. Bun, TypeScript, CI, Codex, native Blockbench, visual
+quality and actual performance tests NOT EXECUTED. User's prohibition on
+local/Codex testing requests remains in force.
+
 ## 2026-11-05 — Strict Gateway trace core-metric validation (source-only)
 
 The existing offline Gateway benchmark trace reporter now rejects invalid

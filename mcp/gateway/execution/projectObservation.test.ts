@@ -533,6 +533,93 @@ describe("bounded always-on project observation", () => {
     expect(html).not.toContain("<iframe");
   });
 
+  test("reconciles L0 capability and named error buckets to recorded calls", () => {
+    const obs = new ProjectObservationRecorder("/disposable-test-root");
+    obs.record({
+      tool: "invoke_capability",
+      args: { capability: "manage_cubes" },
+      result: invocation("native-project"),
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "native-project",
+      nativeDomain: "GEOMETRY",
+      nativeVerificationClass: "visual",
+      durationMs: 10,
+    });
+    obs.record({
+      tool: "status", args: {},
+      result: {
+        isError: true,
+        structuredContent: { code: "BACKEND_UNAVAILABLE" },
+      },
+      durationMs: 2,
+    });
+    const clean = obs.snapshot();
+    expect(() => summarizeProjectObservation([clean])).not.toThrow();
+
+    const fabricatedCapability = structuredClone(clean);
+    const capabilityCounts = fabricatedCapability.projects[0]!.counters.capabilities;
+    capabilityCounts.manage_cubes = (capabilityCounts.manage_cubes ?? 0) + 1;
+    expect(() => summarizeProjectObservation([fabricatedCapability]))
+      .toThrow("capability counts do not match invoke calls");
+
+    const missingCapability = structuredClone(clean);
+    delete missingCapability.projects[0]!.counters.capabilities.manage_cubes;
+    expect(() => summarizeProjectObservation([missingCapability]))
+      .toThrow("capability counts do not match invoke calls");
+
+    const fabricatedFailure = structuredClone(clean);
+    fabricatedFailure.unbound.error_codes.BACKEND_UNAVAILABLE = 2;
+    expect(() => summarizeProjectObservation([fabricatedFailure]))
+      .toThrow("named error counts exceed observed failures");
+
+    // Failed calls without a named error code remain unclassified.
+    const unclassified = structuredClone(clean);
+    unclassified.unbound.error_codes = {};
+    expect(() => summarizeProjectObservation([unclassified])).not.toThrow();
+  });
+
+  test("refuses domain breakdowns exceeding verified project totals", () => {
+    const obs = new ProjectObservationRecorder("/disposable-test-root");
+    obs.record({
+      tool: "invoke_capability",
+      args: { capability: "manage_cubes" },
+      result: invocation("native-project"),
+      nativeIdentityVerified: true,
+      nativeProjectUuid: "native-project",
+      nativeDomain: "GEOMETRY",
+      nativeVerificationClass: "visual",
+      durationMs: 10,
+    });
+    const clean = obs.snapshot();
+    expect(() => summarizeProjectObservation([clean])).not.toThrow();
+
+    const extraCalls = structuredClone(clean);
+    extraCalls.projects[0]!.by_domain.CORE = {
+      calls: 1, failures: 0, duration_sum_ms: 0,
+      verification_required: 0,
+    };
+    expect(() => summarizeProjectObservation([extraCalls]))
+      .toThrow("Project domain counts exceed observed totals");
+
+    const inventedFailure = structuredClone(clean);
+    inventedFailure.projects[0]!.by_domain.GEOMETRY!.failures = 1;
+    expect(() => summarizeProjectObservation([inventedFailure]))
+      .toThrow("Project domain counts exceed observed totals");
+
+    const inventedDuration = structuredClone(clean);
+    inventedDuration.projects[0]!.by_domain.GEOMETRY!.duration_sum_ms = 11;
+    expect(() => summarizeProjectObservation([inventedDuration]))
+      .toThrow("Project domain counts exceed observed totals");
+
+    const inventedVerification = structuredClone(clean);
+    inventedVerification.projects[0]!.by_domain.CORE = {
+      calls: 0, failures: 0, duration_sum_ms: 0,
+      verification_required: 1,
+    };
+    expect(() => summarizeProjectObservation([inventedVerification]))
+      .toThrow("Invalid domain failures or verification counts");
+  });
+
   test("rejects duplicate or malformed snapshot summaries", () => {
     const obs = new ProjectObservationRecorder("/disposable-test-root");
     obs.record({

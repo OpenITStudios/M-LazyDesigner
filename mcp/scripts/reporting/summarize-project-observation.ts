@@ -50,6 +50,8 @@ function counters(value: unknown, name: string): asserts value is ProjectObserva
   if (toolSum !== item.calls) {
     throw new Error(name + " has inconsistent tool count.");
   }
+  let capabilityCount = 0;
+  let namedFailureCount = 0;
   for (const [category, map] of [
     ["capabilities", item.capabilities], ["error_codes", item.error_codes],
   ] as const) {
@@ -65,8 +67,20 @@ function counters(value: unknown, name: string): asserts value is ProjectObserva
         : !/^[A-Z][A-Z0-9_]{0,79}$/.test(key)) {
         throw new Error(name + " has invalid category key.");
       }
-      number(value, name + "." + category + "." + key);
+      const observed = number(value, name + "." + category + "." + key);
+      if (category === "capabilities") capabilityCount += observed;
+      else namedFailureCount += observed;
     }
+  }
+  // Each invoke contributes exactly one capability label (including OTHER
+  // or UNKNOWN_CAPABILITY); only failed calls contribute named error codes.
+  // L0 is bounded observation, not an arbitrary narrative claim. Refuse
+  // inflated per-label numbers instead of emitting fictitious hotspots.
+  if (capabilityCount !== item.by_tool.invoke_capability) {
+    throw new Error(name + " capability counts do not match invoke calls.");
+  }
+  if (namedFailureCount > item.failures) {
+    throw new Error(name + " named error counts exceed observed failures.");
   }
 }
 
@@ -115,6 +129,10 @@ function validate(snapshot: unknown): asserts snapshot is ProjectObservationSnap
     if (!p.by_domain || typeof p.by_domain !== "object") {
       throw new Error("Project domain breakdown missing.");
     }
+    let domainCalls = 0;
+    let domainFailures = 0;
+    let domainDuration = 0;
+    let domainVerification = 0;
     for (const [name, metrics] of Object.entries(p.by_domain)) {
       if (!["CORE", "GEOMETRY", "TEXTURING", "ANIMATION"].includes(name) ||
           !metrics || typeof metrics !== "object") {
@@ -125,7 +143,22 @@ function validate(snapshot: unknown): asserts snapshot is ProjectObservationSnap
       ] as const) {
         number(metrics[field], "by_domain." + name + "." + field);
       }
-      if (metrics.failures > metrics.calls) throw new Error("Invalid domain failures.");
+      if (metrics.failures > metrics.calls ||
+          metrics.verification_required > metrics.calls) {
+        throw new Error("Invalid domain failures or verification counts.");
+      }
+      domainCalls += metrics.calls;
+      domainFailures += metrics.failures;
+      domainDuration += metrics.duration_sum_ms;
+      domainVerification += metrics.verification_required;
+    }
+    // Domain classification is optional per call, so sums may be smaller,
+    // never larger, than the corresponding project-wide observations.
+    if (domainCalls > p.counters.calls ||
+        domainFailures > p.counters.failures ||
+        domainDuration > p.counters.duration_sum_ms ||
+        domainVerification > p.counters.verification_required) {
+      throw new Error("Project domain counts exceed observed totals.");
     }
     if (!Array.isArray(p.phase_observations) || p.phase_observations.length > 24 ||
         (p.observed_phase !== null &&

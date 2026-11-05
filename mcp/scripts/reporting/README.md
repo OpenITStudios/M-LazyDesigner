@@ -41,6 +41,22 @@ per-capability or total response-byte measurements. This is trace-source
 integrity only; it does not verify the Runtime, accepted artistic quality,
 or whether an AI processed the reported media.
 
+## L0 counter reconciliation
+
+The existing L0 project-observation reader validates a snapshot's per-tool,
+capability, named-error and classified-domain totals before they contribute
+to a diagnostic report. Every observed `invoke_capability` is labeled once
+(including `OTHER` and `UNKNOWN_CAPABILITY`), named error-code counts cannot
+exceed observed failures, and partial domain breakdowns may be smaller than
+project totals but never larger. Missing error codes remain unclassified;
+a domain is not invented for calls without verified domain identity.
+Corrupted/inconsistent snapshots are rejected instead of creating misleading
+failure hotspots, accepted-result metrics, or fabricated project provenance.
+
+This is offline source-data integrity only: the recorder, Runtime, Gateway,
+asset bytes, user Workspace and approval authority are unchanged. No actual
+Codex/native test proof is implied by the authored regressions.
+
 Reporting consumes benchmark/evaluation evidence; it does not own Runtime behavior or acceptance truth.
 The explicit Research archive is a selected copy of L0 cache evidence, not
 a competing project history or authoring state owner. It never runs on the
