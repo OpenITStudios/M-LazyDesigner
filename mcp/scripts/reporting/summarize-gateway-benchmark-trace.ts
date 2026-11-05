@@ -137,6 +137,31 @@ function count(
   return events.filter((event) => event.kind === kind).length;
 }
 
+type ErrorGroupingBasis = "TASK_CONTEXT_HASH" | "TRACE_ID" | "LEGACY_UNSCOPED";
+
+/**
+ * Preserve correlation boundaries without persisting new identities.
+ * A task context takes precedence over a trace ID: a single client trace
+ * may span multiple Control tasks. With no task context, a trace is only
+ * an observational grouping. Historical rows without correlation form
+ * their own unscoped, investigative-only cohort.
+ */
+function failureCorrelationScope(
+  event: BenchmarkTraceEvent
+): { key: string; basis: ErrorGroupingBasis } {
+  const correlation = event.correlation;
+  if (correlation?.task_context_ref) {
+    return {
+      key: "context:" + correlation.task_context_ref,
+      basis: "TASK_CONTEXT_HASH",
+    };
+  }
+  if (correlation) {
+    return { key: "trace:" + correlation.trace_id, basis: "TRACE_ID" };
+  }
+  return { key: "legacy:unscoped", basis: "LEGACY_UNSCOPED" };
+}
+
 export function summarizeGatewayBenchmarkTrace(text: string) {
   const events = parseTrace(text);
   const taskIds = new Set(events.map((event) => event.task_id));
@@ -173,7 +198,9 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     responseBytes: number; allBytesKnown: boolean;
   }>();
   const repeatedErrors = new Map<string, {
-    capability: string; error_code: string; sequences: number[];
+    capability: string; error_code: string;
+    grouping_basis: ErrorGroupingBasis;
+    sequences: number[];
   }>();
   for (const event of ordered) {
     if (typeof event.capability !== "string" || !event.capability) continue;
@@ -188,9 +215,15 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     else row.responseBytes += event.result_bytes;
     capabilityRows.set(event.capability, row);
     if (!event.success && event.error_code) {
-      const key = JSON.stringify([event.capability, event.error_code]);
+      const scope = failureCorrelationScope(event);
+      const key = JSON.stringify([
+        event.capability, event.error_code, scope.key,
+      ]);
       const group = repeatedErrors.get(key) ?? {
-        capability: event.capability, error_code: event.error_code, sequences: [],
+        capability: event.capability,
+        error_code: event.error_code,
+        grouping_basis: scope.basis,
+        sequences: [],
       };
       group.sequences.push(event.sequence);
       repeatedErrors.set(key, group);
@@ -214,6 +247,8 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     disposition: "INVESTIGATE_ONLY";
     capability: string | null;
     error_code: string | null;
+    /** Only present for correlated repeat-error groups, never invented for legacy. */
+    grouping_basis?: "TASK_CONTEXT_HASH" | "TRACE_ID";
     observed_events: number;
     example_sequences: number[];
   }> = [...repeatedErrors.values()]
@@ -227,6 +262,8 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
       disposition: "INVESTIGATE_ONLY" as const,
       capability: row.capability,
       error_code: row.error_code,
+      ...(row.grouping_basis === "LEGACY_UNSCOPED"
+        ? {} : { grouping_basis: row.grouping_basis }),
       observed_events: row.sequences.length,
       example_sequences: row.sequences.slice(0, 6),
     }));
@@ -323,7 +360,7 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
     )],
     diagnostics: {
       scope: "RECORDED_GATEWAY_EVENTS_ONLY",
-      interpretation: "Observed tool latency is summed across calls, not wall time. Findings require investigation; none proves waste, root cause, provider token usage or quality acceptance.",
+      interpretation: "Observed tool latency is summed across calls, not wall time. Repeated errors are grouped within matching Control task-context hashes, or trace IDs when context is unavailable; historical unscoped events remain exploratory and are never merged with correlated events. Findings require investigation and do not prove a common root cause, waste, provider token usage or quality acceptance.",
       top_capabilities_by_observed_latency: topCapabilities,
       findings: findings.slice(0, 4),
       accepted_result: "UNVERIFIED",

@@ -41,6 +41,17 @@ per-capability or total response-byte measurements. This is trace-source
 integrity only; it does not verify the Runtime, accepted artistic quality,
 or whether an AI processed the reported media.
 
+Repeated error diagnostics are partitioned using *existing* correlation
+metadata, not just matching capability and error code. An observed Control
+task-context digest takes precedence over the trace ID. If that context
+is unavailable, the trace ID is used; historical events with no correlation
+are grouped separately for exploratory backward compatibility. Scoped and
+unscoped failures never combine into a fabricated repeat. The optional
+`grouping_basis` field on correlated findings identifies `TASK_CONTEXT_HASH`
+or `TRACE_ID`, without revealing new task identities. These groups are
+`INVESTIGATE_ONLY`: a matching hash/trace is not proof of one native
+incident, causal defect, or retry permission.
+
 ## L0 counter reconciliation
 
 The existing L0 project-observation reader validates a snapshot's per-tool,

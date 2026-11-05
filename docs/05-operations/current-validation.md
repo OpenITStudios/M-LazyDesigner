@@ -2,6 +2,23 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Scoped repeat-error findings in Gateway trace (source-only)
+
+The existing offline Gateway trace reporter previously grouped repeated
+errors by capability and error code alone, potentially combining unrelated
+Control tasks or client traces. It now separates failures by observed task
+context hash when present, otherwise by trace ID; historical uncorrelated
+events remain in their own legacy investigation bucket. Correlated repeat
+findings add `grouping_basis` (`TASK_CONTEXT_HASH` or `TRACE_ID`).
+Total failures by code and ordinary per-capability/latency statistics remain
+unchanged. This is bounded diagnostic correlation only; no shared root cause,
+replay safety, runtime quality, or native asset identity is inferred.
+
+Proof: pinned `Local` source reviewed and positive/negative regression
+cases AUTHORED for mixed contexts, traces and legacy events. Bun,
+TypeScript, Codex, CI, Blockbench and live QA NOT EXECUTED. The user's
+prohibition on local/Codex testing requests remains active.
+
 ## 2026-11-05 — L0 provenance and failure-count reconciliation (source-only)
 
 The existing offline project-observation summary now rejects snapshots whose

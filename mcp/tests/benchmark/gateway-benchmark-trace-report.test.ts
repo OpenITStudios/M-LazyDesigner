@@ -20,6 +20,27 @@ function event(sequence: number, kind: "search" | "inspect" | "mutate" | "verify
   });
 }
 
+/** Synthetic metadata only: these are not native Runtime receipts. */
+function correlatedError(
+  sequence: number,
+  traceDigit: string,
+  contextDigit: string | null
+) {
+  return {
+    ...JSON.parse(event(sequence, "mutate")),
+    success: false,
+    error_code: "OUTCOME_UNKNOWN",
+    correlation: {
+      trace_id: traceDigit.repeat(32),
+      span_id: (sequence + 1).toString(16).padStart(16, "0"),
+      parent_span_id: null,
+      origin: "GATEWAY_LOCAL",
+      task_context_ref: contextDigit === null ? null : contextDigit.repeat(64),
+      cohort_boundary: null,
+    },
+  };
+}
+
 describe("gateway benchmark trace report", () => {
   test("summarizes objective metadata", () => {
     const report = summarizeGatewayBenchmarkTrace([
@@ -197,6 +218,94 @@ describe("gateway benchmark trace report", () => {
     expect(unknown.diagnostics.top_capabilities_by_observed_latency[0])
       .toMatchObject({ response_bytes: 100 });
     expect(unknown.diagnostics.interpretation).toContain("not wall time");
+  });
+
+  test("separates same-code errors across Control task contexts even under one trace", () => {
+    const separateContexts = [
+      correlatedError(0, "a", "1"),
+      correlatedError(1, "a", "2"),
+    ];
+    const unrelated = summarizeGatewayBenchmarkTrace(
+      separateContexts.map(row => JSON.stringify(row)).join("\n")
+    );
+    expect(unrelated.failures.by_code).toEqual({ OUTCOME_UNKNOWN: 2 });
+    expect(unrelated.diagnostics.findings).toEqual([]);
+
+    // Different W3C traces may still belong to the same Control task.
+    // Partition by the existing task-context digest before trace identity.
+    const matchedContext = summarizeGatewayBenchmarkTrace([
+      ...separateContexts,
+      correlatedError(2, "b", "1"),
+    ].map(row => JSON.stringify(row)).join("\n"));
+    expect(matchedContext.failures.by_code).toEqual({ OUTCOME_UNKNOWN: 3 });
+    expect(matchedContext.diagnostics.findings).toEqual([{
+      code: "REPEATED_ERROR_CODE",
+      disposition: "INVESTIGATE_ONLY",
+      capability: "manage_cubes",
+      error_code: "OUTCOME_UNKNOWN",
+      grouping_basis: "TASK_CONTEXT_HASH",
+      observed_events: 2,
+      example_sequences: [0, 2],
+    }]);
+    expect(matchedContext.diagnostics.interpretation)
+      .toContain("do not prove a common root cause");
+  });
+
+  test("does not merge trace-only, task-scoped and legacy-unscoped error groups", () => {
+    const independentTraces = [
+      correlatedError(0, "a", null),
+      correlatedError(1, "b", null),
+    ];
+    const separate = summarizeGatewayBenchmarkTrace(
+      independentTraces.map(row => JSON.stringify(row)).join("\n")
+    );
+    expect(separate.diagnostics.findings).toEqual([]);
+
+    const repeatedTrace = summarizeGatewayBenchmarkTrace([
+      ...independentTraces,
+      correlatedError(2, "a", null),
+    ].map(row => JSON.stringify(row)).join("\n"));
+    expect(repeatedTrace.diagnostics.findings).toEqual([{
+      code: "REPEATED_ERROR_CODE",
+      disposition: "INVESTIGATE_ONLY",
+      capability: "manage_cubes",
+      error_code: "OUTCOME_UNKNOWN",
+      grouping_basis: "TRACE_ID",
+      observed_events: 2,
+      example_sequences: [0, 2],
+    }]);
+
+    const legacy = {
+      ...JSON.parse(event(0, "mutate")),
+      success: false,
+      error_code: "OUTCOME_UNKNOWN",
+    };
+    const unscopedAndCorrelated = summarizeGatewayBenchmarkTrace([
+      legacy, correlatedError(1, "a", null),
+    ].map(row => JSON.stringify(row)).join("\n"));
+    expect(unscopedAndCorrelated.diagnostics.findings).toEqual([]);
+
+    // Backward-compatible exploratory legacy grouping retains the old
+    // result shape, without inventing a task or a trace identifier.
+    const historical = summarizeGatewayBenchmarkTrace([
+      legacy, { ...legacy, sequence: 1 },
+    ].map(row => JSON.stringify(row)).join("\n"));
+    expect(historical.diagnostics.findings).toEqual([{
+      code: "REPEATED_ERROR_CODE",
+      disposition: "INVESTIGATE_ONLY",
+      capability: "manage_cubes",
+      error_code: "OUTCOME_UNKNOWN",
+      observed_events: 2,
+      example_sequences: [0, 1],
+    }]);
+
+    // Same trace is insufficient when one event has an explicit task
+    // context and the other does not.
+    const partiallyScoped = summarizeGatewayBenchmarkTrace([
+      correlatedError(0, "a", "1"),
+      correlatedError(1, "a", null),
+    ].map(row => JSON.stringify(row)).join("\n"));
+    expect(partiallyScoped.diagnostics.findings).toEqual([]);
   });
 
   test("rejects private paths masquerading as error codes", () => {
