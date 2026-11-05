@@ -313,9 +313,11 @@ function buildVoxelCylinder(
     throw new Error("ADVANCED_GEOMETRY_VOXEL_CYLINDER_EMPTY");
   }
 
-  // Four-neighbour topology in the voxel cross-section. Diagonal contact
-  // alone is not a reliable material connection for a Blockbench model.
-  const neighbours = (point: number): number[] => {
+  // Dual digital topology: solid must be 4-connected through full faces,
+  // while an empty cavity must be 8-disconnected from the exterior.
+  // Using four neighbours for BOTH lets an empty corner touch the outside
+  // diagonally yet be wrongly labelled a sealed tube hole.
+  const neighbours = (point: number, includeDiagonals: boolean): number[] => {
     const row = Math.floor(point / diameter);
     const column = point % diameter;
     const result: number[] = [];
@@ -323,6 +325,14 @@ function buildVoxelCylinder(
     if (column + 1 < diameter) result.push(point + 1);
     if (row > 0) result.push(point - diameter);
     if (row + 1 < diameter) result.push(point + diameter);
+    if (includeDiagonals) {
+      if (row > 0 && column > 0) result.push(point - diameter - 1);
+      if (row > 0 && column + 1 < diameter) result.push(point - diameter + 1);
+      if (row + 1 < diameter && column > 0) result.push(point + diameter - 1);
+      if (row + 1 < diameter && column + 1 < diameter) {
+        result.push(point + diameter + 1);
+      }
+    }
     return result;
   };
   const traversable = (point: number, filled: boolean) =>
@@ -337,7 +347,8 @@ function buildVoxelCylinder(
       }
     }
     for (let cursor = 0; cursor < queue.length; cursor++) {
-      for (const neighbour of neighbours(queue[cursor]!)) {
+      // Face-connected material, eight-connected empty/background.
+      for (const neighbour of neighbours(queue[cursor]!, !filled)) {
         if (visited.has(neighbour) || !traversable(neighbour, filled)) continue;
         visited.add(neighbour);
         queue.push(neighbour);
@@ -363,12 +374,24 @@ function buildVoxelCylinder(
       }
     }
     const outside = flood(outsideSeeds, false);
-    const innerVoid = cells.flat().reduce((count, filled, index) =>
-      count + (!filled && !outside.has(index) ? 1 : 0), 0);
-    if (innerVoid === 0) {
+    const insideVoidIndices = cells.flat().flatMap((filled, index) =>
+      !filled && !outside.has(index) ? [index] : []
+    );
+    if (insideVoidIndices.length === 0) {
       throw new Error(
         "ADVANCED_GEOMETRY_VOXEL_CYLINDER_HOLE_NOT_ENCLOSED: " +
-        "choose a wider wall or a smaller inner_radius."
+        "a diagonal corner leak is not a sealed void; widen the wall " +
+        "or reduce inner_radius."
+      );
+    }
+    // A hollow cylinder declares one central cavity, not unrelated blank
+    // pockets inside the same cross-section. Every enclosed empty cell must
+    // belong to the same 8-connected cavity component.
+    if (flood([insideVoidIndices[0]!], false).size !==
+        insideVoidIndices.length) {
+      throw new Error(
+        "ADVANCED_GEOMETRY_VOXEL_CYLINDER_HOLE_DISCONNECTED: " +
+        "the rasterized central cavity has multiple empty components."
       );
     }
   }

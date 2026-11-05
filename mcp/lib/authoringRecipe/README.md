@@ -182,8 +182,13 @@ explicit caller parameters, not inferred from image pixels.
 The builder samples a one-unit voxel cross-section and compresses each
 contiguous occupied row-run into one native Cuboid. It emits no freeform
 mesh, no one-Cube-per-cell output and no overlapping run volume.
-A bounded 4-neighbour flood rejects disconnected solid walls; for a
-tube, an exterior flood rejects a missing or exterior-connected hole.
+A bounded 4-neighbour flood rejects disconnected solid walls. For a
+tube, the exterior/void check now uses 8-neighbour background connectivity,
+consistent with the dual topology already used in the versioned Geometry
+Math profile system. A cavity touching the exterior through voxel corners
+is **not** accepted as a sealed hole. The enclosed empty cells must also
+form one connected cavity. These checks reject bad candidates instead of
+silently filling holes, thickening walls, deleting detail or adding Cubes.
 All authored axes must retain Box UV-compatible spans.
 
 Patterns have stable source-scoped `shape:voxel_cylinder` IDs and reuse

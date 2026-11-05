@@ -2,6 +2,31 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Voxel-cylinder negative-space topology correction (source-only)
+
+The canonical source-only Advanced Geometry `voxel_cylinder` builder
+previously checked both material and background with 4-neighbour
+connectivity. A small annular cross-section (for example outer radius
+2, inner radius 1) leaves corner-adjacent empty cells connecting the
+declared cavity to the exterior, but the 4-neighbour exterior flood
+could falsely call the opening enclosed. The existing builder now
+keeps 4-connected solid material and uses 8-connected void/exterior
+background, rejecting corner-leaking cavities and disjoint interior
+void components. Valid solid cylinders and hollow tubes with a
+well-separated central cavity remain compiled to the same bounded,
+disjoint native Cuboid Recipe patterns; no geometry is silently added.
+
+This is a geometry-construction source correction for arbitrary
+voxelized radial forms, not a new tool, shape-specific generated
+preset, automatic Cube deletion, or visual evidence. The
+`construct_geometry` public Runtime capability remains unregistered.
+
+Proof: exact pinned `Local` source plus dedicated positive/negative
+topology and deterministic Recipe regressions AUTHORED. Bun, TypeScript,
+Codex, CI, native Blockbench and visual-quality checks NOT EXECUTED;
+the user's test hold remains active. No claim of a measured artistic
+improvement or verified persisted legacy-model migration.
+
 ## 2026-11-05 — Scale-neutral projected Geometry metric integrity (source-only)
 
 The canonical geometry `analyzeProjectedEnvelopeFidelity` helper previously
