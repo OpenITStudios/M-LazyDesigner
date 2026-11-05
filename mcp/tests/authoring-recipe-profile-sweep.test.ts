@@ -168,6 +168,65 @@ describe("R3z v13 morphology with no shape presets", () => {
     )).toThrow("GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED");
   });
 
+  test("rejects out-of-station contact even when the entire mass is connected", () => {
+    // The X-line is globally face-connected. Segment 0 occupies x=0..4;
+    // segment 1 occupies x=4..5; their only contact occurs at x=4,
+    // whereas their declared shared station is near x=1.5.
+    const ownership = new Uint8Array([
+      0b001, 0b001, 0b001, 0b001, 0b011, 0b010,
+    ]);
+    expect(() => requireProfileSweepSequentialContact(
+      ownership, [6, 1, 1], 2
+    )).not.toThrow(); // Earlier global-only source semantics.
+    const joints = [
+      station([0, 0.5, 0.5], 1, 1),
+      station([1.5, 0.5, 0.5], 1, 1),
+      station([6, 0.5, 0.5], 1, 1),
+    ];
+    expect(() => requireProfileSweepSequentialContact(
+      ownership, [6, 1, 1], 2, { low: [0, 0, 0], stations: joints }
+    )).toThrow(
+      "GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED: 0 -> 1;reason=OFF_STATION"
+    );
+  });
+
+  test("retains full-face station contact and rejects only misplaced joint evidence", () => {
+    const actualJoin = new Uint8Array([
+      0b001, 0b001, 0b001, 0b010, 0b010, 0b010,
+    ]);
+    const joints = [
+      station([0, 0.5, 0.5], 1, 1),
+      station([2.5, 0.5, 0.5], 1, 1),
+      station([6, 0.5, 0.5], 1, 1),
+    ];
+    expect(() => requireProfileSweepSequentialContact(
+      actualJoin, [6, 1, 1], 2, { low: [0, 0, 0], stations: joints }
+    )).not.toThrow();
+    // Invalid station count must not accidentally disable local grounding.
+    expect(() => requireProfileSweepSequentialContact(
+      actualJoin, [6, 1, 1], 2,
+      { low: [0, 0, 0], stations: joints.slice(1) }
+    )).toThrow("GEOMETRY_MATH_PROFILE_SWEEP_JOINT_CONTEXT_INVALID");
+  });
+
+  test("a bent, explicitly twisted profile stays deterministic with station-local joins", () => {
+    const bent = profile({
+      cross_section: "RECTANGLE",
+      stations: [
+        station([0, 0, 0], 2, 1, 0),
+        station([6, 0, 0], 2, 1, 30),
+        station([6, 0, 6], 2, 1, 60),
+      ],
+    });
+    const before = structuredClone(bent);
+    const cubes = sweepMathProfileVolume(bent);
+    expect(cubes.length).toBeGreaterThan(0);
+    expect(cubes).toEqual(sweepMathProfileVolume(bent));
+    expect(bent).toEqual(before);
+    // This proves only a bounded source/voxel invariant if executed,
+    // not smoothness or visual resemblance to the reference.
+  });
+
   test("a multistation straight taper preserves one source Recipe and its ordered joins", () => {
     const multi = profile({
       stations: [

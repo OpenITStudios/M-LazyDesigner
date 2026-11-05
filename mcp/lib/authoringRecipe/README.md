@@ -1035,6 +1035,36 @@ ownership, native Blockbench or visual reference acceptance.
 Bun/TypeScript/Codex/native tests and visual QA remain NOT EXECUTED
 under the user's testing hold; regressions are authored only.
 
+### R3z — PROFILE_SWEEP station-local joint contact (source only)
+
+The v13+ `PROFILE_SWEEP` segment bitmask already verifies contact
+between adjacent *source sequence* segments. Previously that contact
+could occur anywhere on a looping/bent/twisted sweep, even when the
+declared shared station had no native voxel connection. A remote
+self-contact is not proof that the intended corner joint survived.
+
+The existing contact helper now receives the authored stations and
+voxel-grid origin from the same source-local raster. Each consecutive
+pair must share a voxel or full-face adjacency **near its declared
+shared station**. The conservative search radius is the station's
+rectangular cross-section corner distance
+`hypot(half_width, half_height)` plus half the unit-voxel diagonal
+`sqrt(3)/2`. Contacts only at distant crossings no longer satisfy
+the joint. The existing
+`GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED` error includes
+`reason=OFF_STATION` for this bounded failure. A three-argument
+source-only contact helper call retains its prior unscoped behavior;
+the canonical sweep always supplies station coordinates.
+
+This is **geometric localization of discrete voxel contact**, not
+proof of continuous smooth transitions, exact pen-width, correct
+twist orientation, unobstructed rigging or visual/reference fidelity.
+No second voxelization, geometry filler, new source schema, native
+operation, public Gateway tool or new engine is introduced. Some
+previously stored v13+ sources whose only segment contact was at a
+remote loop may now fail reconstruction without automatic migration.
+Regressions are authored, not executed.
+
 ### R3z — Material taper visibility after PROFILE_SWEEP voxelization (source only)
 
 The existing v13+ `PROFILE_SWEEP` raster now checks whether a

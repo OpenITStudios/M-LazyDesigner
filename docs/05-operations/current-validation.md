@@ -2,6 +2,31 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Station-local bent PROFILE_SWEEP joint contact (source-only)
+
+The existing v13+ `PROFILE_SWEEP` joint test checked shared voxels
+or face adjacency between each sequential segment pair, but accepted
+such contact **anywhere** in the whole raster. On bent/twisted or
+looping source shapes, a remote crossing could therefore mask a missing
+joint at the declared shared station. The canonical source raster now
+passes the station positions and grid origin to the same membership-mask
+contact owner. It requires pairwise shared/face-connected voxels
+within the station's explicit cross-section corner radius plus half
+a voxel diagonal. Missing station-local contact refuses with
+`GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED: ...;reason=OFF_STATION`.
+
+No new voxel raster, extra Cuboids, runtime API or visual-quality
+score. The prior three-argument helper remains backward compatible
+for isolated source callers; the actual sweep always checks location.
+Stored v13+ designs joined only through remote self-contact may newly
+reject at reconstruction. The guard proves discrete structural contact,
+not exact curvature, twist, thickness or target-reference quality.
+
+Proof: pinned `Local` source and focused positive/negative
+synthetic voxel-grid and bent/twisted Recipe regressions AUTHORED,
+not run. Bun, TypeScript, Codex, native Blockbench, CI and visual
+acceptance remain NOT EXECUTED under the user's test hold.
+
 ## 2026-11-05 — PROFILE_SWEEP material taper representability (source-only)
 
 The existing v13+ `PROFILE_SWEEP` now checks whether material

@@ -185,22 +185,58 @@ function insideSegment(
  * Each 1-unit raster cell carries a 7-bit segment-membership mask (at most
  * eight stations). Adjacent segments must share an occupied voxel OR have
  * occupied voxels touching through a full face. A mere edge/corner touch
- * is not a native-Cuboid volume connection. This is source structure,
- * not a visual, tangent-continuity or material/rig quality verdict.
+ * is not a native-Cuboid volume connection.
+ *
+ * When given the canonical sweep station context, contact also has to occur
+ * NEAR the declared shared station, not at another distant loop crossing.
+ * A conservative joint envelope uses that station's rectangle corner radius
+ * plus a half-voxel diagonal. The original three-argument helper retains
+ * its earlier global-only behavior for source-only callers.
  */
 export function requireProfileSweepSequentialContact(
   ownership: Uint8Array,
   grid: readonly [number, number, number],
-  segmentCount: number
+  segmentCount: number,
+  jointContext?: {
+    low: Vec3;
+    stations: readonly Station[];
+  }
 ): void {
   const [nx, ny, nz] = grid;
+  if (jointContext && (
+    jointContext.stations.length !== segmentCount + 1 ||
+    jointContext.low.some(value => !Number.isFinite(value))
+  )) {
+    throw new Error("GEOMETRY_MATH_PROFILE_SWEEP_JOINT_CONTEXT_INVALID");
+  }
   for (let segment = 0; segment + 1 < segmentCount; segment++) {
     const first = 1 << segment;
     const second = 1 << (segment + 1);
+    const station = jointContext?.stations[segment + 1];
+    // A voxel center may lie up to sqrt(3)/2 model units from a point
+    // in its own voxel; the cross-section's furthest rectangle corner is
+    // at hypot(half_width, half_height) from its station center.
+    const radius = station
+      ? Math.hypot(station.half_width, station.half_height) +
+        Math.sqrt(3) / 2 + EPS
+      : Number.POSITIVE_INFINITY;
+    const radiusSquared = radius * radius;
+    const nearStation = (index: number): boolean => {
+      if (!station) return true;
+      const x = index % nx;
+      const z = Math.floor(index / nx) % nz;
+      const y = Math.floor(index / (nx * nz));
+      const dx = jointContext!.low[0] + x + 0.5 - station.position[0];
+      const dy = jointContext!.low[1] + y + 0.5 - station.position[1];
+      const dz = jointContext!.low[2] + z + 0.5 - station.position[2];
+      return dx * dx + dy * dy + dz * dz <= radiusSquared;
+    };
+    const touchesSecond = (index: number): boolean =>
+      Boolean(ownership[index]! & second) && nearStation(index);
     let linked = false;
     for (let index = 0; index < ownership.length && !linked; index++) {
-      if (!(ownership[index]! & first)) continue;
-      if (ownership[index]! & second) {
+      if (!(ownership[index]! & first) || !nearStation(index)) continue;
+      if (touchesSecond(index)) {
         linked = true;
         break;
       }
@@ -208,17 +244,18 @@ export function requireProfileSweepSequentialContact(
       const z = Math.floor(index / nx) % nz;
       const y = Math.floor(index / (nx * nz));
       linked =
-        (x > 0 && Boolean(ownership[index - 1]! & second)) ||
-        (x + 1 < nx && Boolean(ownership[index + 1]! & second)) ||
-        (z > 0 && Boolean(ownership[index - nx]! & second)) ||
-        (z + 1 < nz && Boolean(ownership[index + nx]! & second)) ||
-        (y > 0 && Boolean(ownership[index - nx * nz]! & second)) ||
-        (y + 1 < ny && Boolean(ownership[index + nx * nz]! & second));
+        (x > 0 && touchesSecond(index - 1)) ||
+        (x + 1 < nx && touchesSecond(index + 1)) ||
+        (z > 0 && touchesSecond(index - nx)) ||
+        (z + 1 < nz && touchesSecond(index + nx)) ||
+        (y > 0 && touchesSecond(index - nx * nz)) ||
+        (y + 1 < ny && touchesSecond(index + nx * nz));
     }
     if (!linked) {
       throw new Error(
         "GEOMETRY_MATH_PROFILE_SWEEP_JOINT_DISCONNECTED: " +
-        segment + " -> " + (segment + 1)
+        segment + " -> " + (segment + 1) +
+        (station ? ";reason=OFF_STATION" : "")
       );
     }
   }
@@ -361,7 +398,10 @@ export function sweepMathProfileVolume(
       "a declared path segment is absent at one-model-unit resolution."
     );
   }
-  requireProfileSweepSequentialContact(ownership, grid, segments.length);
+  requireProfileSweepSequentialContact(ownership, grid, segments.length, {
+    low,
+    stations: part.stations,
+  });
   requireMaterialTaperSignal(segments, taperObservations);
   return boxes;
 }
