@@ -250,6 +250,64 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
       .toBe(before);
   });
 
+  test("unselected, unrecognized and graphless operations reach Runtime validation", async () => {
+    // P0 may change implicit READY to UNKNOWN for these cases. Neither state
+    // can safely become a Gateway-level BLOCKED result without a proven
+    // missing prerequisite on the exact operation. Runtime owns schema and
+    // installed tool availability, not this metadata-only Graph.
+    for (const { capability, args } of [
+      { capability: "manage_cubes", args: {} },
+      { capability: "manage_cubes", args: { operation: "unknown_future_branch" } },
+      { capability: "manage_material", args: { operation: "assign_channel" } },
+      { capability: "manage_material_instances", args: { operation: "list" } },
+    ]) {
+      const session = new GatewaySessionState();
+      session.replaceFacts(seedCapabilityFacts({ projectBound: false }));
+      let runtimeCalls = 0;
+      const executor = new GatewayCapabilityExecutor(
+        {
+          invokeCapabilityWithMetadata: async () => {
+            runtimeCalls++;
+            throw new Error("Runtime owns exact tool and branch validation.");
+          },
+        } as any,
+        { invoke: async () => null } as any,
+        session
+      );
+      const response = await executor.invoke(capability, args) as any;
+      expect(runtimeCalls, `${capability} ${JSON.stringify(args)}`).toBe(1);
+      expect(response?.structuredContent?.code)
+        .not.toBe("CAPABILITY_PRECONDITION_BLOCKED");
+      expect(session.facts.project_bound).toBe(false);
+    }
+  });
+
+  test("confirmed false prerequisites still block a known exact branch", async () => {
+    let invocations = 0;
+    const session = new GatewaySessionState();
+    session.replaceFacts({
+      ...seedCapabilityFacts({ projectBound: false }),
+      geometry_available: "unknown",
+    });
+    const executor = new GatewayCapabilityExecutor(
+      {
+        invokeCapabilityWithMetadata: async () => {
+          invocations++;
+          throw new Error("Blocked request must not reach Runtime.");
+        },
+      } as any,
+      { invoke: async () => { invocations++; return null; } } as any,
+      session
+    );
+    const response = await executor.invoke(
+      "manage_cubes", { operation: "update" }
+    ) as any;
+    expect(response?.structuredContent?.code)
+      .toBe("CAPABILITY_PRECONDITION_BLOCKED");
+    expect(response?.structuredContent?.requires).toContain("project_bound");
+    expect(invocations).toBe(0);
+  });
+
   test("unknown preconditions retain Runtime authority instead of false blocking", async () => {
     let called = false;
     const session = new GatewaySessionState();
