@@ -359,7 +359,13 @@ For a completed four-side MODEL reference, compare **actual full-resolution imag
 
 Record `MATCH`, `LOCAL_VIEW_DEFECT`, `CROSS_VIEW_CONFLICT` or `NOT_ASSESSABLE` only for decision-critical relations. A first observed P1 contradiction blocks its dependent construction claim; issue one bounded `CHANGE + PRESERVE` correction and reinspect every affected panel. A four-panel generated composite remains **one uncalibrated image**, not four independent 3D camera proofs. A source-hidden rear remains `UNKNOWN / NOT_ASSESSABLE` for source fidelity, even where the generated BACK panel is a `PROVISIONAL` creative completion. Do not misinterpret painted shadows as physical holes, or substitute decorative detail for missing topology.
 
-MD-REF-01 remains approved as a **visual guideline only**. Its frozen PNG/ZIP are not to be changed or reclassified as native Blockbench verification.
+MD-REF-01 remains approved as a **visual guideline only**. Its **historical v1 ZIP and original 1448 × 1086 PNG inside that archive remain frozen**. The **active Library copy** can be resized/recompressed only upon explicit user request, with updated hashes/manifests/catalog and a clearly differentiated image identity; it must never be reclassified as native Blockbench verification.
+
+### Lossless PNG and Storage-Efficient Reference Rule
+
+Save 3D MODEL reference sheets as **losslessly encoded PNG** by default. Optimize PNG filtering/DEFLATE compression without palette reduction, lossy quantization, or visual-style changes. Select the smallest **readable** dimensions appropriate to the asset and 2×2 construction panels instead of imposing one resolution on every profile. Preserve the approved panel order, uncropped construction evidence and source identity.
+
+When explicitly requested, a reference can be downscaled to a smaller raster and then losslessly PNG-compressed. State the distinction: **resizing removes spatial detail; lossless PNG compression preserves the resulting pixels exactly**. Update the active file's actual dimensions, byte count and SHA; avoid extra active copies. Keep a frozen historical original when reproduction/provenance depends on those bytes. Source photographs remain independent source evidence and must not be silently rescaled or overwritten.
 
 
 ### Quality Acceptance Firewall — Model Value Before Presentation
