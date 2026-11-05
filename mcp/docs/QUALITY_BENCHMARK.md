@@ -342,23 +342,30 @@ Use only with disposable Golden inputs and a real testable Codex Runtime.
    Reference fingerprint and initial `.bbmodel` bytes constant. Reset an
    independent disposable Golden seed before each run; never reuse a live
    user Workspace as a benchmark fixture.
-3. Pin and verify the actual context bytes/digests outside this evaluator.
-   The present JSON fields `baseline_harness_sha256` and
-   `candidate_harness_sha256` are caller-declared; they are not authenticated
-   source evidence. Final Golden reports also require independent session
-   and native visual/human evidence correlation.
+3. Declare actual context byte digests in `baseline_harness_sha256` and
+   `candidate_harness_sha256`. The optional CLI file arguments can now
+   independently check **selected file bytes** against those declarations.
+   A matching selected file still does not prove that the agent loaded or
+   followed the instructions. Independently correlate Golden report sessions,
+   native evidence and human visual acceptance.
 4. Once Codex has two canonical final reports, evaluate their contract:
 
 ```bash
 cd mcp
 bun test tests/benchmark/golden-session-comparison.test.ts
-bun run eval:harness-candidate -- <probe.json>
+bun run eval:harness-candidate -- <probe.json> [<baseline-context-file> <candidate-context-file>]
 ```
 
 The Bun test above validates **only the comparator code**, not actual model
 quality. `REJECTED_QUALITY` vetoes the candidate; `INCONCLUSIVE` proves no
 winner; `REVIEW_REQUIRED` is still not approval, causality or auto-promotion.
 ChatGPT may edit a production Skill only after separate decision and tests.
+
+**Byte-check status:** when explicit context files are provided, the CLI
+reports `SELECTED_BYTES_MATCH_DECLARATIONS_NOT_AGENT_CONSUMPTION`.
+When omitted, it reports `NOT_CHECKED`; neither status is evidence that
+Codex received the chosen context, nor is it visual/quality acceptance.
+Context inputs are read-only, explicit and capped at 256 KiB each.
 
 **Source isolation:** This evaluator intentionally requires identical
 `baseline.source_sha` and `candidate.source_sha`. Comparing two commits

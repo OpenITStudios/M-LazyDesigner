@@ -2,6 +2,22 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Optional Harness context-byte identity check (source-only)
+
+The existing read-only Harness candidate evaluator now optionally hashes the
+actual bytes of two explicitly selected context files and rejects swapped,
+tampered, identical or oversized inputs (256 KiB maximum per context). Without
+files the evaluator continues to report declared, unverified context IDs;
+with matching files it reports only that selected bytes match the claimed
+SHA-256, NOT that Codex loaded/used them or produced a better asset. The
+canonical Golden acceptance/quality gates and comparison remain unchanged;
+no new agent runner, Gateway tool, model weight, dependency or Runtime hook.
+
+Proof: pinned source changes and Git blob readbacks, focused pure helper
+positive/negative Bun regressions AUTHORED. Bun/TypeScript, real Codex
+sessions, native Blockbench, visual approval and real A/B model probes
+NOT EXECUTED. User's suspension of any local/Codex test requests remains active.
+
 ## 2026-11-05 — Explicit unknown branch without graph prerequisites (source-only)
 
 The existing Control search-only ambiguity guard now protects an unsupported

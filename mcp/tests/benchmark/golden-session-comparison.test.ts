@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import {
   evaluateHarnessProbe,
+  verifyHarnessContextBytes,
   type HarnessProbeInput,
 } from "../../scripts/evaluate/evaluate-harness-candidate";
 import { describe, expect, test } from "bun:test";
@@ -380,6 +382,43 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
     input.candidate_harness_sha256 = "2".repeat(64);
     input.baseline.proof_scope = "LOCAL_CODE";
     expect(() => evaluateHarnessProbe(input)).toThrow("requires LIVE_BLOCKBENCH");
+  });
+
+
+  test("selected context bytes must match declared SHA-256 before treating them as verified input", () => {
+    const input = probe();
+    const original = Buffer.from("baseline-geometry-guidance-v1", "utf8");
+    const revised = Buffer.from("candidate-geometry-guidance-v1", "utf8");
+    input.baseline_harness_sha256 = createHash("sha256").update(original).digest("hex");
+    input.candidate_harness_sha256 = createHash("sha256").update(revised).digest("hex");
+    const result = verifyHarnessContextBytes(input, original, revised);
+    expect(result).toEqual({
+      status: "SELECTED_BYTES_MATCH_DECLARATIONS_NOT_AGENT_CONSUMPTION",
+      baseline_bytes: original.byteLength,
+      candidate_bytes: revised.byteLength,
+    });
+    expect(evaluateHarnessProbe(input).status).toBe("REVIEW_REQUIRED");
+
+    expect(() => verifyHarnessContextBytes(input, revised, original))
+      .toThrow("HARNESS_CONTEXT_BYTE_IDENTITY_MISMATCH");
+    expect(() => verifyHarnessContextBytes(input,
+      Buffer.from("tampered-baseline"), revised
+    )).toThrow("HARNESS_CONTEXT_BYTE_IDENTITY_MISMATCH");
+    expect(() => verifyHarnessContextBytes(input, Buffer.alloc(0), revised))
+      .toThrow("1..262144 bytes");
+    expect(() => verifyHarnessContextBytes(input, original, Buffer.alloc(262145)))
+      .toThrow("1..262144 bytes");
+  });
+
+  test("identical context bytes are not a second candidate", () => {
+    const input = probe();
+    const same = Buffer.from("same-guidance", "utf8");
+    const hash = createHash("sha256").update(same).digest("hex");
+    input.baseline_harness_sha256 = hash;
+    input.candidate_harness_sha256 = hash;
+    expect(() => verifyHarnessContextBytes(input, same, same))
+      .toThrow("HARNESS_CONTEXT_IDENTICAL_BYTES");
+    expect(() => evaluateHarnessProbe(input)).toThrow("distinct declared context SHA-256");
   });
 
   test("contradictory FAIL and missing saved artifact cannot be promoted", () => {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   compareAcceptedGoldenSessions,
   validateAcceptedGoldenSessionReport,
@@ -32,6 +33,47 @@ const GIT_SHA = /^[a-f0-9]{40}$/;
 const DOMAINS: readonly HarnessProbeDomain[] = [
   "GEOMETRY", "TEXTURING", "ANIMATION", "CONTROL",
 ];
+
+/** An explicit selected file's SHA does not prove which context an AI consumed. */
+export type HarnessContextByteCheck = {
+  status: "SELECTED_BYTES_MATCH_DECLARATIONS_NOT_AGENT_CONSUMPTION";
+  baseline_bytes: number;
+  candidate_bytes: number;
+};
+
+const MAX_CONTEXT_BYTES = 256 * 1024;
+
+/**
+ * Pure, bounded file-byte integrity check for an opt-in A/B experiment.
+ * The CLI reads explicit paths; this function neither discovers files nor
+ * authenticates whether Codex actually loaded the checked instructions.
+ */
+export function verifyHarnessContextBytes(
+  input: HarnessProbeInput,
+  baseline: Uint8Array,
+  candidate: Uint8Array
+): HarnessContextByteCheck {
+  if (!(baseline instanceof Uint8Array) || !(candidate instanceof Uint8Array) ||
+      baseline.byteLength === 0 || candidate.byteLength === 0 ||
+      baseline.byteLength > MAX_CONTEXT_BYTES ||
+      candidate.byteLength > MAX_CONTEXT_BYTES) {
+    throw new Error("Harness context byte inputs must be 1..262144 bytes each.");
+  }
+  const baselineSha = createHash("sha256").update(baseline).digest("hex");
+  const candidateSha = createHash("sha256").update(candidate).digest("hex");
+  if (baselineSha !== input.baseline_harness_sha256 ||
+      candidateSha !== input.candidate_harness_sha256) {
+    throw new Error("HARNESS_CONTEXT_BYTE_IDENTITY_MISMATCH: declared SHA-256 does not match selected file bytes.");
+  }
+  if (baselineSha === candidateSha) {
+    throw new Error("HARNESS_CONTEXT_IDENTICAL_BYTES: no variant was supplied.");
+  }
+  return {
+    status: "SELECTED_BYTES_MATCH_DECLARATIONS_NOT_AGENT_CONSUMPTION",
+    baseline_bytes: baseline.byteLength,
+    candidate_bytes: candidate.byteLength,
+  };
+}
 
 function result(
   input: HarnessProbeInput,
@@ -118,13 +160,42 @@ export function evaluateHarnessProbe(input: HarnessProbeInput): HarnessProbeResu
 }
 
 async function main(): Promise<void> {
-  const path = process.argv[2];
-  if (!path) throw new Error("Usage: bun run eval:harness-candidate -- <probe.json>");
-  const file = Bun.file(path);
-  if (!(await file.exists())) throw new Error("Probe not found: " + path);
-  console.log(JSON.stringify(evaluateHarnessProbe(
-    (await file.json()) as HarnessProbeInput
-  ), null, 2));
+  const args = process.argv.slice(2);
+  if (args.length !== 1 && args.length !== 3) {
+    throw new Error("Usage: bun run eval:harness-candidate -- <probe.json> [<baseline-context-file> <candidate-context-file>]");
+  }
+  const file = Bun.file(args[0]!);
+  if (!(await file.exists())) throw new Error("Probe not found: " + args[0]);
+  const probe = (await file.json()) as HarnessProbeInput;
+  const evaluated = evaluateHarnessProbe(probe);
+  let contextByteCheck: HarnessContextByteCheck | null = null;
+
+  // File-byte verification is explicitly opt-in and is never called on the
+  // Gateway hot path. No raw context, private path or model transcript is logged.
+  if (args.length === 3) {
+    const baselineFile = Bun.file(args[1]!);
+    const candidateFile = Bun.file(args[2]!);
+    if (!(await baselineFile.exists()) || !(await candidateFile.exists())) {
+      throw new Error("Both selected harness context files must exist.");
+    }
+    if (baselineFile.size === 0 || candidateFile.size === 0 ||
+        baselineFile.size > MAX_CONTEXT_BYTES ||
+        candidateFile.size > MAX_CONTEXT_BYTES) {
+      throw new Error("Harness context file sizes must be 1..262144 bytes each.");
+    }
+    const [baselineBytes, candidateBytes] = await Promise.all([
+      baselineFile.arrayBuffer(),
+      candidateFile.arrayBuffer(),
+    ]);
+    contextByteCheck = verifyHarnessContextBytes(
+      probe, new Uint8Array(baselineBytes), new Uint8Array(candidateBytes)
+    );
+  }
+
+  console.log(JSON.stringify({
+    ...evaluated,
+    context_file_check: contextByteCheck ?? { status: "NOT_CHECKED" },
+  }, null, 2));
 }
 
 if (import.meta.main) {

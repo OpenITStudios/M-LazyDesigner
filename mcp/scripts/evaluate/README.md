@@ -15,7 +15,7 @@ evaluate-harness-candidate.ts (opt-in Harness²-style candidate evidence gate; r
 
 ## Harness candidate evidence gate
 
-`bun run eval:harness-candidate -- <probe.json>` reads a proposal ID,
+`bun run eval:harness-candidate -- <probe.json> [<baseline-context-file> <candidate-context-file>]` reads a proposal ID,
 domain, distinct declared context SHA-256 hashes, and two complete
 `golden-session-final` reports. It does not run an agent, change Skills,
 connect to Blockbench, or promote candidates.
@@ -25,6 +25,11 @@ Run the focused comparator source test in Codex when available:
 ```bash
 bun test tests/benchmark/golden-session-comparison.test.ts
 ```
+
+Optional selected context files (maximum 256 KiB each) are checked against
+both declared SHA-256 values, without logging their contents. This verifies
+file bytes, **not** which instructions were consumed by an agent. Without
+files, the evaluator explicitly reports `NOT_CHECKED`.
 
 The comparator requires the same source SHA, task, initial asset, approved
 Reference, Runtime build and known model identity. A matched accepted pair
