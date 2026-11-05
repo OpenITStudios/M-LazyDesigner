@@ -1092,6 +1092,41 @@ fail reconstruction; no automatic migration is performed.
 Focused tests are AUTHORED_NOT_RUN; Bun, TypeScript, Codex and native
 Blockbench visual acceptance remain NOT EXECUTED.
 
+### R3z — Significant PROFILE_SWEEP twist representation (source only)
+
+The existing v13+ `PROFILE_SWEEP` applies caller-declared
+`twist_degrees` when sampling its transported cross-sections.
+Until now, connected mass, station-local joints and material taper
+checks could all pass even if a strongly twisted **anisotropic**
+section yielded exactly the same native voxel occupancy as the
+section held at its starting angle.
+
+The SAME existing one-unit voxel predicate now checks **whether any
+cell's inclusion differs** from that segment with
+`start.twist_degrees` held constant. This counterfactual shares
+the same profile, source positions, dimensions, bend frames and cell
+coordinates; only twist interpolation differs. It does not perform a
+second raster or generate alternative Cuboids. The comparison runs
+only for source segments whose declared twist changes by at least
+45 degrees and whose width/height anisotropy reaches one model unit
+at either end. Once a difference is observed, extra comparisons for
+that segment stop. If no difference survives sampling, the source
+refuses with `GEOMETRY_MATH_PROFILE_SWEEP_TWIST_UNREPRESENTED`.
+
+Rotationally symmetric or subthreshold source shapes retain their
+earlier behavior: the guard neither claims their twist is visible nor
+rejects them based on a meaningless occupancy difference. The
+result proves only a nonzero voxel occupancy response to the
+declared twist. It does NOT prove the exact angle, intermediate
+curve/tangent smoothness, texture orientation, UV correctness or
+reference visual fidelity. No fill Cubes, geometry smoothing,
+additional geometry engine, native API or source schema is added.
+Stored v13+ source whose significant anisotropic twist was
+completely aliased by voxel resolution can now fail reconstruction.
+
+Regressions are AUTHORED_NOT_RUN; Bun, TypeScript, Codex, installed
+Blockbench and visual acceptance remain NOT EXECUTED.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

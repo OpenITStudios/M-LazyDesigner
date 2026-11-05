@@ -2,6 +2,36 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Significant PROFILE_SWEEP twist occupancy proof (source-only)
+
+The existing v13+ `PROFILE_SWEEP` source kernel had no post-raster
+check that declared twist affected voxel geometry. A large anisotropic
+rotation could be aliased by one-unit quantization, even while all
+source segments, station-local joints, and material taper checks pass.
+For source segments with angular change >=45 degrees and declared
+half-width/half-height asymmetry >=1 model unit, the existing voxel
+predicate now compares its actual occupancy with a counterfactual
+held at the authored START twist. The same cell, bend/tangent frame,
+dimension and profile are used; it only varies the twist angle. A
+single changed occupancy decision demonstrates a representable twist
+signal; a fully aliased segment fails closed with
+`GEOMETRY_MATH_PROFILE_SWEEP_TWIST_UNREPRESENTED`.
+
+No second voxel allocation/raster, new geometry or output form,
+native mutation, Gateway tool, runtime replacement or
+generator-coupled API change. Symmetric or small-angle source remains
+eligible without claiming visible rotational evidence. This is a
+binary discretization diagnostic, not angle-accuracy validation,
+continuous loft proof, UV/texturing orientation or reference-based
+visual acceptance. v13+ stored sources with completely aliased
+large twists may now reject on reconstruction.
+
+Proof: pinned exact `Local` source and regression cases AUTHORED
+for a one-layer 360-degree alias, source-retained positive/negative
+handed anisotropic turns and rotationally symmetric/small-angle
+compatibility. Source-only; Bun, TypeScript, Codex, installed
+Blockbench and visual quality NOT EXECUTED per the user's test hold.
+
 ## 2026-11-05 — Station-local bent PROFILE_SWEEP joint contact (source-only)
 
 The existing v13+ `PROFILE_SWEEP` joint test checked shared voxels

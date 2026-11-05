@@ -320,6 +320,73 @@ describe("R3z v13 morphology with no shape presets", () => {
     // Source acceptance does not claim visible sub-voxel fidelity.
   });
 
+  test("rejects a full authored twist erased by one axial voxel", () => {
+    const lost = profile({
+      stations: [
+        station([0, 0, 0], 3, 1, -180),
+        station([1, 0, 0], 3, 1, 180),
+      ],
+    });
+    const unchanged = structuredClone(lost);
+    expect(geometryMathProfileSweepPartSchema.parse(lost)).toEqual(lost);
+    // The only occupied x-cell is at t=0.5. At that sample the
+    // interpolated twist is 0 degrees, geometrically identical to
+    // the -180-degree starting rectangle. No angular change survives
+    // the native one-unit raster despite 360 degrees of source twist.
+    expect(() => sweepMathProfileVolume(lost))
+      .toThrow("GEOMETRY_MATH_PROFILE_SWEEP_TWIST_UNREPRESENTED: segment=0");
+    expect(() => candidate(lost))
+      .toThrow("GEOMETRY_MATH_PROFILE_SWEEP_TWIST_UNREPRESENTED");
+    expect(lost).toEqual(unchanged);
+  });
+
+  test("keeps pronounced anisotropic twist with distinct raster handedness", () => {
+    const positive = profile({
+      stations: [
+        station([0, 0, 0], 2, 1, 0),
+        station([8, 0, 0], 2, 1, 90),
+      ],
+    });
+    const negative = profile({
+      stations: [
+        station([0, 0, 0], 2, 1, 0),
+        station([8, 0, 0], 2, 1, -90),
+      ],
+    });
+    const before = structuredClone(positive);
+    const a = sweepMathProfileVolume(positive);
+    const b = sweepMathProfileVolume(negative);
+    expect(a.length).toBeGreaterThan(0);
+    expect(b.length).toBeGreaterThan(0);
+    expect(a).not.toEqual(b);
+    expect(a).toEqual(sweepMathProfileVolume(positive));
+    expect(compileAuthoringRecipe(candidate(positive))
+      .metrics.realized_cube_count).toBe(a.length);
+    expect(positive).toEqual(before);
+  });
+
+  test("preserves symmetry and subthreshold turns without inventing rotational evidence", () => {
+    const circular = profile({
+      cross_section: "ELLIPSE",
+      stations: [
+        station([0, 0, 0], 2, 2, -180),
+        station([1, 0, 0], 2, 2, 180),
+      ],
+    });
+    // A circular section cannot expose its twist by occupancy; do not
+    // arbitrarily reject valid rotationally symmetric source geometry.
+    expect(sweepMathProfileVolume(circular).length).toBeGreaterThan(0);
+
+    const subtle = profile({
+      stations: [
+        station([0, 0, 0], 2, 1, 0),
+        station([1, 0, 0], 2, 1, 30),
+      ],
+    });
+    expect(sweepMathProfileVolume(subtle).length).toBeGreaterThan(0);
+    // A source pass is not proof that small twist is visually rendered.
+  });
+
   test("strict v13 opt-in and legacy v12 rejection preserve frozen contracts", () => {
     const item = profile();
     expect(geometryMathProgramSchema.parse(rawProgram(item)).version).toBe(13);

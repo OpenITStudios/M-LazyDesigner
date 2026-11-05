@@ -41,6 +41,11 @@ const TAU_DEGREES = Math.PI / 180;
 // representability guard, not a new style/geometry-size policy.
 const MATERIAL_TAPER_DELTA = 1;
 const MIN_OBSERVED_TAPER = 0.5;
+// A material twist on an anisotropic section should affect the one-unit
+// occupancy. Tiny turns and rotationally symmetric sections have no
+// universal visually distinct voxel representation; leave those unclaimed.
+const MATERIAL_TWIST_DEGREES = 45;
+const MATERIAL_TWIST_ANISOTROPY = 1;
 const dot = (a: Vec3, b: Vec3) =>
   a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const sub = (a: Vec3, b: Vec3): Vec3 =>
@@ -142,7 +147,8 @@ function segmentFrames(part: GeometryMathProfileSweepPart): Segment[] {
 function insideSegment(
   position: Vec3,
   segment: Segment,
-  profile: GeometryMathProfileSweepPart["cross_section"]
+  profile: GeometryMathProfileSweepPart["cross_section"],
+  constantTwistDegrees?: number
 ): boolean {
   if ([0, 1, 2].some(d =>
     position[d]! < segment.low[d]! - EPS ||
@@ -161,10 +167,10 @@ function insideSegment(
     (segment.end.half_width - segment.start.half_width) * t;
   const height = segment.start.half_height +
     (segment.end.half_height - segment.start.half_height) * t;
-  const twist = (
+  const twist = (constantTwistDegrees ?? (
     segment.start.twist_degrees +
     (segment.end.twist_degrees - segment.start.twist_degrees) * t
-  ) * TAU_DEGREES;
+  )) * TAU_DEGREES;
   const sin = Math.sin(twist), cos = Math.cos(twist);
   const n = add(mul(segment.normal, cos), mul(segment.binormal, sin));
   const b = add(mul(segment.binormal, cos), mul(segment.normal, -sin));
@@ -376,13 +382,34 @@ export function sweepMathProfileVolume(
     start: { cells: 0, radial_width: 0, radial_height: 0 },
     end: { cells: 0, radial_width: 0, radial_height: 0 },
   }));
+  // Compare actual occupied-cell decisions with the SAME segment held at
+  // its authored starting angle. No second raster, alternate geometry,
+  // extra voxel bitmaps, source rewriting or physical rotation estimate.
+  // This detects completely aliased material twist, not angular accuracy.
+  const needsTwistReview = segments.map(segment =>
+    Math.abs(segment.end.twist_degrees -
+      segment.start.twist_degrees) >= MATERIAL_TWIST_DEGREES &&
+    Math.max(
+      Math.abs(segment.start.half_width - segment.start.half_height),
+      Math.abs(segment.end.half_width - segment.end.half_height)
+    ) >= MATERIAL_TWIST_ANISOTROPY
+  );
+  const representedTwist = new Uint8Array(segments.length);
   const boxes = partitionMathVoxelVolume(low, grid, (x, y, z) => {
     const point: Vec3 = [low[0] + x + 0.5,
       low[1] + y + 0.5, low[2] + z + 0.5];
     let included = false;
     const index = (y * grid[2] + z) * grid[0] + x;
     for (let i = 0; i < segments.length; i++) {
-      if (!insideSegment(point, segments[i]!, part.cross_section)) continue;
+      const occupied = insideSegment(point, segments[i]!, part.cross_section);
+      if (needsTwistReview[i] && !representedTwist[i] &&
+          occupied !== insideSegment(
+            point, segments[i]!, part.cross_section,
+            segments[i]!.start.twist_degrees
+          )) {
+        representedTwist[i] = 1;
+      }
+      if (!occupied) continue;
       ownership[index] |= 1 << i;
       represented[i] = 1;
       if (needsTaperReview[i]) {
@@ -403,5 +430,12 @@ export function sweepMathProfileVolume(
     stations: part.stations,
   });
   requireMaterialTaperSignal(segments, taperObservations);
+  for (let i = 0; i < segments.length; i++) {
+    if (needsTwistReview[i] && !representedTwist[i]) {
+      throw new Error(
+        "GEOMETRY_MATH_PROFILE_SWEEP_TWIST_UNREPRESENTED: segment=" + i
+      );
+    }
+  }
   return boxes;
 }
