@@ -383,6 +383,16 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
         `${prefix} accepted result requires a post-authoring native readback-matched project save receipt matching output_asset_sha256.`
       );
     }
+    // An intervening mutation, even a failed/uncertain one, may have changed
+    // the live authored project AFTER the matching .bbmodel was saved.
+    // The later final view capture only observes current pixels; it does
+    // not retroactively update the prior persisted file. Fail closed until
+    // the LAST native mutation is the readback-matched project export.
+    if (savedIndex !== lastMutationIndex) {
+      throw new Error(
+        `${prefix} accepted result requires the final project save to follow the last native mutation.`
+      );
+    }
     // Opt-in benchmark evidence: the last post-mutation shaded capture must
     // come from the live Golden project and current approved reference.
     // It identifies returned PNGs; it never replaces human visual acceptance.

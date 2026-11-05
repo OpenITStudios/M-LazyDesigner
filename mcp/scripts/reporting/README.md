@@ -61,6 +61,18 @@ optional Golden evidence fields remain readable; only contradictory
 claims of capture/save proof fail closed. No new Runtime/agent hooks or
 additional instrumentation run during ordinary MCP authoring.
 
+## Golden final-save ordering
+
+`evaluate-golden-authoring-runs.ts` now requires the final readback-matched
+`export_model` event to be the **last recorded mutation** for an accepted
+Golden result. A newer mutation after the saved file, even if reported
+failed or unrelated to a specific authoring phase, prevents declaring the
+previous file the final artifact. The accepted final capture must still
+occur after that last mutation. A fresh save restores the order if its
+receipt and output digest match; read-only inspection does not invalidate
+the save. This is a stricter acceptance-only gate, not a new save operation,
+auto-retry, native state replay, or independent visual verdict.
+
 ## Code-only failure classification
 
 The existing offline Gateway trace reporter adds a bounded

@@ -221,6 +221,57 @@ describe("golden authoring accepted-result benchmark", () => {
     expect(() => validateGoldenAuthoringDocument(draft)).not.toThrow();
   });
 
+  test("final saved artifact must follow every later native mutation", () => {
+    const base = acceptedRun();
+    expect(() => validateGoldenAuthoringDocument(base)).not.toThrow();
+
+    // A phase/control mutation after the valid native .bbmodel save may
+    // change project state without being a task-phase authoring mutation.
+    // The final capture is fresh, but the earlier file is not guaranteed to
+    // represent the captured model anymore.
+    const stale = structuredClone(base);
+    stale.runs[0]!.trace.splice(5, 0, {
+      index: 5, kind: "mutate", success: true,
+      capability: "switch_authoring_phase",
+      required_for_decision: true, result_bytes: 100, latency_ms: 10,
+    });
+    stale.runs[0]!.trace.forEach((event, i) => { event.index = i; });
+    expect(() => validateGoldenAuthoringDocument(stale))
+      .toThrow("final project save to follow the last native mutation");
+
+    // A failed native call is not proof of no effect; the last mutation
+    // can be uncertain. A newer capture alone must not clear that debt.
+    const uncertain = structuredClone(base);
+    uncertain.runs[0]!.trace.splice(5, 0, {
+      index: 5, kind: "mutate", success: false,
+      capability: "switch_authoring_phase",
+      required_for_decision: true, result_bytes: 100, latency_ms: 10,
+    });
+    uncertain.runs[0]!.trace.forEach((event, i) => { event.index = i; });
+    expect(() => validateGoldenAuthoringDocument(uncertain))
+      .toThrow("final project save to follow the last native mutation");
+
+    // A fresh readback-matched save after the intervening mutation restores
+    // the ordering contract. The human/native quality gate still applies.
+    const resaved = structuredClone(stale);
+    resaved.runs[0]!.trace.splice(6, 0, {
+      ...structuredClone(resaved.runs[0]!.trace[4]!),
+      index: 6,
+    });
+    resaved.runs[0]!.trace.forEach((event, i) => { event.index = i; });
+    expect(() => validateGoldenAuthoringDocument(resaved)).not.toThrow();
+
+    // Read-only inspection after the save does not invalidate persistence.
+    const inspected = structuredClone(base);
+    inspected.runs[0]!.trace.splice(5, 0, {
+      index: 5, kind: "inspect", success: true,
+      capability: "get_project_info",
+      required_for_decision: true, result_bytes: 100, latency_ms: 10,
+    });
+    inspected.runs[0]!.trace.forEach((event, i) => { event.index = i; });
+    expect(() => validateGoldenAuthoringDocument(inspected)).not.toThrow();
+  });
+
   test("final view evidence rejects stale source, wrong project or incomplete returned images", () => {
     const base = acceptedRun();
     expect(() => validateGoldenAuthoringDocument(base)).not.toThrow();

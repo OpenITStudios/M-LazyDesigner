@@ -2,6 +2,26 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Golden final artifact saved after last mutation (source-only)
+
+The canonical Golden accepted-result validator already required final shaded
+capture after the latest native mutation, a post-authoring native save
+receipt, and matching output .bbmodel digest. It still allowed a separate
+mutate operation after that save (for example a Stage/control transition)
+and before the final capture. The validator now refuses ACCEPTED unless
+the last recorded native mutation is the matching readback-matched project
+export. Both successful and failed/uncertain later mutations invalidate
+the earlier saved receipt for acceptance; a fresh final save after the
+mutation restores sequence validity. Read-only inspection remains allowed.
+The validator does not inspect actual model bytes or certify visual
+fidelity; independent native/visual evidence remains mandatory.
+
+Proof: pinned `Local` source review and targeted acceptance regression
+AUTHORED for later successful/failed mutations, resave and read-only
+inspection. Bun, TypeScript, Codex, native Blockbench and live quality
+NOT EXECUTED. No additional Gateway tools, Runtime change, CI activation,
+generated API, asset mutation or local-test request.
+
 ## 2026-11-05 — Offline Golden trace evidence binding validation (source-only)
 
 The existing read-only Gateway benchmark trace reporter previously allowed

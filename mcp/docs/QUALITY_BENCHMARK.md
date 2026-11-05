@@ -127,6 +127,17 @@ Measure efficiency only after or alongside quality evidence. Record:
 
 The target is **Cost to Accepted Result**, not minimum tool calls in isolation.
 
+**Golden save/capture ordering:** the native project save must be the final
+recorded `mutate` event supporting an `ACCEPTED` Golden report, not merely
+the last successful geometry/texture/animation edit. Any later mutation
+(including failed or outcome-uncertain calls, or non-authoring Stage/control
+operations) makes an earlier .bbmodel readback stale for acceptance. Save
+again with a matching content digest, then capture the final reference-bound
+views after that last native mutation. An intervening read-only inspection
+does not by itself invalidate the saved artifact. These are sequence and
+declared receipt checks, not proof of native byte/visual equality without
+independent evidence.
+
 ### Actual image usage with the existing quality-first Golden task
 
 Record `capture_model_views.image_transport` values: delivered image
