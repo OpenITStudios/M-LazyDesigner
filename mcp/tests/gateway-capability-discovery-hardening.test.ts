@@ -182,6 +182,49 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     }]);
     expect(independent?.eligibility).toBeUndefined();
   });
+  test("unsupported explicit branches without graph prerequisites remain UNKNOWN", () => {
+    // Material-instance branches are canonical semantic operations but
+    // intentionally have no dependency graphs. An invented operation is
+    // not silently validated by a branchless metadata fallback.
+    const base = {
+      capability_id: "manage_material_instances",
+      description: "Inspect or set material instances.",
+      tier: "primary" as const,
+      read_only: false, destructive: false, idempotent: false,
+    };
+    const [unsupported] = projectCapabilitiesForSearch([{
+      ...base, branch: { field: "operation", value: "future_unsupported" },
+      eligibility: "READY",
+    }]);
+    expect(unsupported?.eligibility).toBe("UNKNOWN");
+    expect(unsupported?.why).toContain("describe the exact operation");
+    expect(gatewaySearchSuccessOutputSchema.safeParse({
+      capabilities: [unsupported],
+    }).success).toBe(true);
+
+    // Known branch semantics and confirmed negative evidence survive.
+    const [known] = projectCapabilitiesForSearch([{
+      ...base, branch: { field: "operation", value: "list" },
+      eligibility: "READY",
+    }]);
+    expect(known?.eligibility).toBeUndefined();
+    const [blocked] = projectCapabilitiesForSearch([{
+      ...base, branch: { field: "operation", value: "future_unsupported" },
+      eligibility: "BLOCKED", requires: ["project_bound"],
+    }]);
+    expect(blocked?.eligibility).toBe("BLOCKED");
+    expect(blocked?.requires).toEqual(["project_bound"]);
+
+    // No branch manifest means there is no reason to infer a new gate.
+    const [branchIndependent] = projectCapabilitiesForSearch([{
+      capability_id: "get_project_info", description: "Inspect project.",
+      tier: "support" as const, read_only: true,
+      destructive: false, idempotent: true,
+      branch: { field: "operation", value: "caller_specific" },
+      eligibility: "READY",
+    }]);
+    expect(branchIndependent?.eligibility).toBeUndefined();
+  });
   test("exact capability name short-circuits to exactly one result", () => {
     const exact = searchCapabilityCatalog(tools, "manage_cubes", 50);
     expect(exact).toHaveLength(1);

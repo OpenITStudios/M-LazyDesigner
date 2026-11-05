@@ -69,20 +69,22 @@ function compactCapabilityHint(description: string): string | undefined {
  */
 function unresolvedSearchBranch(capability: CapabilitySummary): boolean {
   const entries = manifestEntriesForCapability(capability.capability_id);
-  if (!entries.some((entry) =>
-    entry.branch && (entry.graph?.requires?.length ?? 0) > 0
-  )) return false;
   if (capability.branch) {
+    // Unknown explicit operations cannot borrow a plausible READY label from
+    // branch-only semantic metadata, even when no graph prerequisites exist.
+    // Leave truly branch-independent capabilities alone.
+    if (!entries.some((entry) => entry.branch)) return false;
     return !entries.some((entry) =>
       entry.branch?.field === capability.branch?.field &&
       entry.branch.value === capability.branch?.value
     );
   }
-  // A branchless graph can provide shared prerequisites, but it does not
-  // choose an operation. Exact-name search skips graph evaluation, so an
-  // unresolved qualified branch must not be presented as READY even when
-  // shared fallback metadata exists (for example Animation timeline).
-  return true;
+  // Only an unselected capability with real branch-qualified prerequisites
+  // needs the ambiguity hint. A generic branchless graph is not a selected
+  // operation, and is not evidence that any specific operation is READY.
+  return entries.some((entry) =>
+    entry.branch && (entry.graph?.requires?.length ?? 0) > 0
+  );
 }
 
 /** AI-facing search only needs the canonical domain, not source-owner

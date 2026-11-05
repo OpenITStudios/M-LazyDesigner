@@ -2,6 +2,22 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Explicit unknown branch without graph prerequisites (source-only)
+
+The existing Control search-only ambiguity guard now protects an unsupported
+explicit operation whenever canonical branch metadata exists, even if the
+branches have **no dependency graph** (e.g. material-instance operations).
+An unknown explicit operation is `UNKNOWN`; a known selected operation keeps
+its original readiness, a confirmed `BLOCKED` stays blocked, and tools with
+no qualified manifest are not newly gated. This is a Control presentation
+correction only. No manifest, semantic revision, schema, four-tool Gateway,
+Runtime, registration, or generated API was changed.
+
+Proof: exact pinned GitHub source readback and positive/negative search-boundary
+regressions AUTHORED. Bun/TypeScript, Codex, CI, Blockbench and visual
+acceptance NOT EXECUTED. User explicitly deferred any local/Codex testing
+requests until later authorization.
+
 ## 2026-11-05 — Qualified-branch search readiness with fallback (source-only)
 
 Control's AI-facing `search_capabilities` projection previously allowed an
