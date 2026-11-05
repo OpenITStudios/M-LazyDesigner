@@ -61,6 +61,25 @@ optional Golden evidence fields remain readable; only contradictory
 claims of capture/save proof fail closed. No new Runtime/agent hooks or
 additional instrumentation run during ordinary MCP authoring.
 
+## Accepted Golden metric reconciliation
+
+The canonical `compare-golden-sessions.ts` gate now rejects externally
+supplied `ACCEPTED` final reports whose integer tool-call totals disagree
+with the six recorded call kinds (search, describe, inspect, mutate,
+verify, recovery). `decision_required_calls` must not exceed total
+calls; `redundant_readbacks` must not exceed inspected calls; accepted
+runs require at least one mutation and verification. When both durations
+are available, time-to-acceptance cannot exceed observed wall time.
+
+This reuses metrics already produced by
+`evaluate-golden-authoring-runs.ts` and applies to direct pair comparisons
+as well as the existing Harness² and Geometry Knowledge evaluation paths.
+Missing/non-integer breakdowns are rejected for `ACCEPTED` comparisons;
+legitimately unmeasured token/time metrics remain `null`. This does
+**not** authenticate final-report origin, prove separate benchmark sessions,
+or establish a quality/efficiency improvement from synthetic input. Exact
+source SHA, actual native project and independent run evidence still matter.
+
 ## Golden final-save ordering
 
 `evaluate-golden-authoring-runs.ts` now requires the final readback-matched

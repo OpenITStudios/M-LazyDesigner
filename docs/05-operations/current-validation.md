@@ -2,6 +2,27 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Cross-session accepted call metric reconciliation (source-only)
+
+The existing Golden session comparator previously checked individual
+non-negative metrics and accepted artifact/source identities but did not
+reconcile per-kind call counts with the claimed accepted-result total.
+An externally supplied candidate could therefore claim fewer tool calls
+than its own breakdown. The shared comparator now requires six known
+non-negative integer call-kind counters summing to the accepted total,
+bounds decision-required and redundant inspect counts, requires at
+least one mutation and verification, and rejects time-to-acceptance
+greater than measured wall time. Existing legitimately unmeasured
+time/token metrics remain nullable.
+
+This source-only guard is reused by the Harness² candidate and Geometry
+Knowledge comparison paths; it does not independently establish distinct
+sessions, actual native executions, artifact lineage or visual PASS.
+
+Proof: pinned GitHub `Local` source and authored positive/negative
+regressions; Bun, TypeScript, Codex, live Blockbench and model quality
+NOT EXECUTED. User's local-testing hold remains in force.
+
 ## 2026-11-05 — Golden final artifact saved after last mutation (source-only)
 
 The canonical Golden accepted-result validator already required final shaded

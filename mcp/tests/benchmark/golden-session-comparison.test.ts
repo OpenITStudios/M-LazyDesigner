@@ -43,7 +43,9 @@ function accepted(sha: string, calls: number): FinalGoldenSessionReport {
     metrics: {
       tool_calls_to_accepted_result: calls,
       decision_required_calls: calls - 1,
-      search_calls: 0,
+      // Synthetic accepted runs have exactly 'calls' events across kinds,
+      // not an invented total disconnected from the per-tool breakdown.
+      search_calls: calls - 3,
       describe_calls: 0,
       inspect_calls: 1,
       mutate_calls: 1,
@@ -259,6 +261,69 @@ describe("accepted golden session comparison", () => {
     candidate.metrics!.tool_calls_to_accepted_result = Number.NaN;
     expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
       .toThrow("invalid tool_calls_to_accepted_result metric");
+  });
+
+  test("rejects tampered accepted call totals even when both reports claim PASS", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+    const unchanged = compareAcceptedGoldenSessions({ baseline, candidate });
+    expect(unchanged.metrics.tool_calls_to_accepted_result
+      .delta_candidate_minus_baseline).toBe(-2);
+
+    const phantomSavings = structuredClone(candidate);
+    phantomSavings.metrics!.tool_calls_to_accepted_result = 2;
+    expect(() => compareAcceptedGoldenSessions({
+      baseline, candidate: phantomSavings,
+    })).toThrow("call metrics do not reconcile");
+
+    const fabricatedBreakdown = structuredClone(candidate);
+    fabricatedBreakdown.metrics!.search_calls = 5;
+    expect(() => compareAcceptedGoldenSessions({
+      baseline, candidate: fabricatedBreakdown,
+    })).toThrow("call metrics do not reconcile");
+
+    const missingBreakdown = structuredClone(candidate);
+    missingBreakdown.metrics!.verify_calls = null;
+    expect(() => compareAcceptedGoldenSessions({
+      baseline, candidate: missingBreakdown,
+    })).toThrow("requires complete non-negative integer call metrics");
+  });
+
+  test("rejects contradictory decision/readback and timing claims in accepted reports", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+
+    for (const invalid of [
+      { key: "decision_required_calls" as const, value: 4 },
+      { key: "redundant_readbacks" as const, value: 2 },
+      { key: "mutate_calls" as const, value: 0 },
+      { key: "verify_calls" as const, value: 0 },
+    ]) {
+      const row = structuredClone(candidate);
+      row.metrics![invalid.key] = invalid.value;
+      expect(() => compareAcceptedGoldenSessions({
+        baseline, candidate: row,
+      })).toThrow("call metrics do not reconcile");
+    }
+
+    const fractional = structuredClone(candidate);
+    fractional.metrics!.inspect_calls = 0.5;
+    expect(() => compareAcceptedGoldenSessions({
+      baseline, candidate: fractional,
+    })).toThrow("requires complete non-negative integer call metrics");
+
+    const impossibleTime = structuredClone(candidate);
+    impossibleTime.metrics!.accepted_result_ms = 1100;
+    expect(() => compareAcceptedGoldenSessions({
+      baseline, candidate: impossibleTime,
+    })).toThrow("accepted_result_ms exceeds wall_time_ms");
+
+    // Unknown wall time does not authorize a fabricated zero.
+    const unmeasured = structuredClone(candidate);
+    unmeasured.metrics!.wall_time_ms = null;
+    expect(() => compareAcceptedGoldenSessions({
+      baseline, candidate: unmeasured,
+    })).not.toThrow();
   });
 
   test("comparison refuses malformed reference and Control provenance hashes", () => {

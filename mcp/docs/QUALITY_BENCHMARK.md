@@ -127,6 +127,15 @@ Measure efficiency only after or alongside quality evidence. Record:
 
 The target is **Cost to Accepted Result**, not minimum tool calls in isolation.
 
+Cross-session report metrics must reconcile before comparing savings:
+accepted `tool_calls_to_accepted_result` must equal the sum of the six
+actual call-kind counters, with bounded decision-required and redundant
+readback counts. Otherwise no apparent candidate savings are admitted
+from contradictory supplied JSON. This is an offline report-integrity
+gate, not proof that two sessions were independent, the model was
+sourced from a real Codex run or a native result passed visual review.
+
+
 **Golden save/capture ordering:** the native project save must be the final
 recorded `mutate` event supporting an `ACCEPTED` Golden report, not merely
 the last successful geometry/texture/animation edit. Any later mutation

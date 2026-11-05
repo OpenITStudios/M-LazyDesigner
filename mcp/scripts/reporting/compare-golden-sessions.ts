@@ -103,6 +103,46 @@ function validateAcceptedReport(
       throw new Error(`${label} accepted Golden comparison has invalid ${key} metric.`);
     }
   }
+  // These counts come from the canonical Golden trace summarizer. A report
+  // with an invented smaller total must never show an apparent cost win.
+  // For accepted sessions every tool-kind count is known, even when
+  // token/wall-time metrics are not measured.
+  const counts = [
+    "search_calls", "describe_calls", "inspect_calls", "mutate_calls",
+    "verify_calls", "recovery_calls",
+  ] as const;
+  const totalCalls = value.metrics.tool_calls_to_accepted_result;
+  const byKind = counts.map(key => value.metrics![key]);
+  const required = value.metrics.decision_required_calls;
+  const redundant = value.metrics.redundant_readbacks;
+  if (!Number.isSafeInteger(totalCalls) || totalCalls! < 2 ||
+      !byKind.every(n => Number.isSafeInteger(n) && n! >= 0) ||
+      !Number.isSafeInteger(required) || required! < 0 ||
+      !Number.isSafeInteger(redundant) || redundant! < 0) {
+    throw new Error(
+      `${label} accepted Golden comparison requires complete non-negative integer call metrics.`
+    );
+  }
+  const countedCalls = byKind.reduce<number>(
+    (total, calls) => total + calls!, 0
+  );
+  if (!Number.isSafeInteger(countedCalls) ||
+      countedCalls !== totalCalls ||
+      required! > totalCalls! ||
+      redundant! > value.metrics.inspect_calls! ||
+      value.metrics.mutate_calls! < 1 ||
+      value.metrics.verify_calls! < 1) {
+    throw new Error(
+      `${label} accepted Golden comparison call metrics do not reconcile to recorded tool kinds.`
+    );
+  }
+  if (value.metrics.wall_time_ms !== null &&
+      value.metrics.accepted_result_ms !== null &&
+      value.metrics.accepted_result_ms > value.metrics.wall_time_ms) {
+    throw new Error(
+      `${label} accepted Golden comparison accepted_result_ms exceeds wall_time_ms.`
+    );
+  }
   if (value.proof_scope !== "LIVE_BLOCKBENCH") {
     throw new Error(
       `${label} accepted Golden comparison requires LIVE_BLOCKBENCH proof; source-only or unknown scope is not comparable.`
