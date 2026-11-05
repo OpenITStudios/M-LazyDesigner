@@ -340,7 +340,9 @@ Use only with disposable Golden inputs and a real testable Codex Runtime.
 2. In Codex, compare a baseline context and a temporary candidate context
    under **one fixed source SHA**. Hold model, usage telemetry source,
    Runtime build, task, approved Reference fingerprint and initial `.bbmodel`
-   bytes constant. Reset an
+   bytes constant. Keep the canonical Control task context identity constant
+   as well; distinct disposable project UUIDs may occur, but each run must
+   identify its actual project and independently establish the reset. Reset an
    independent disposable Golden seed before each run; never reuse a live
    user Workspace as a benchmark fixture.
 3. Declare actual context byte digests in `baseline_harness_sha256` and

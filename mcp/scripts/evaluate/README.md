@@ -32,7 +32,9 @@ file bytes, **not** which instructions were consumed by an agent. Without
 files, the evaluator explicitly reports `NOT_CHECKED`.
 
 The comparator requires the same source SHA, task, initial asset, approved
-Reference, Runtime build and known model identity. A matched accepted pair
+Reference, canonical Control task context, Runtime build, and known model
+identity. The candidate must also carry a live project UUID; its value may
+differ between independently reset disposable sessions. A matched accepted pair
 remains `REVIEW_REQUIRED` until separate native/visual evidence review.
 Source-only tests and invented Golden JSON cannot demonstrate quality gain.
 See `mcp/docs/QUALITY_BENCHMARK.md` for the controlled A/B protocol.

@@ -2,6 +2,22 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Harness Control context isolation (source-only)
+
+The opt-in Harness² evaluator now refuses comparative efficiency reporting
+when a candidate's canonical Control task context ID differs from the
+accepted baseline or the candidate lacks a bounded live project UUID.
+Matching source, reference, starting bytes and Runtime alone cannot establish
+that the same Control stage/task was used. A different disposable project
+UUID may be legitimate; an absent UUID is not live provenance. An unbound
+reported FAIL stays INCONCLUSIVE instead of being called a controlled quality
+regression. Matching metadata is still not independent runtime attestation.
+
+Proof: exact pinned Local source and regression cases AUTHORED for changed,
+missing and restored Control task context and for unbound/matched project
+identity. Bun, Codex, CI, Blockbench, visual acceptance and real Harness²
+runs NOT EXECUTED. User-requested testing suspension remains in force.
+
 ## 2026-11-05 — Controlled Harness telemetry provenance (source-only)
 
 The existing optional Harness candidate comparator now refuses per-metric

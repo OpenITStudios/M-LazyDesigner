@@ -132,6 +132,21 @@ export function evaluateHarnessProbe(input: HarnessProbeInput): HarnessProbeResu
       after.runtime_build_identity !== before.runtime_build_identity) {
     reasons.push("RUNTIME_MISMATCH");
   }
+  // A fixed source/reference/seed is not enough when Control routed the two
+  // attempts under different task contexts. These IDs are canonical Golden
+  // provenance, not invented experiment IDs.
+  if (after?.control_task_context_id !== before.control_task_context_id) {
+    reasons.push("CONTROL_TASK_CONTEXT_MISMATCH");
+  }
+  // A FAIL report without an observed live project cannot be taken as a
+  // controlled negative result; independent capture correlation is still
+  // required even when this field is present.
+  const candidateProjectId = after?.input_project_uuid;
+  if (typeof candidateProjectId !== "string" ||
+      !candidateProjectId.trim() ||
+      candidateProjectId !== candidateProjectId.trim()) {
+    reasons.push("CANDIDATE_PROJECT_UNBOUND");
+  }
   const baselineModel = baseline.usage?.model?.trim() || null;
   const candidateModel = candidate.usage?.model?.trim() || null;
   if (!baselineModel || !candidateModel) reasons.push("MODEL_IDENTITY_UNKNOWN");

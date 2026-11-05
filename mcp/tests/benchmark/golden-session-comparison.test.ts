@@ -365,6 +365,47 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
     }
   });
 
+  test("Control task context and candidate project provenance cannot drift", () => {
+    const input = probe();
+    // A different Control packet may have selected a different stage or
+    // authoring authority even when the starting model and reference match.
+    input.candidate.pipeline_provenance.control_task_context_id =
+      "task:" + "d".repeat(20);
+    const changed = evaluateHarnessProbe(input);
+    expect(changed.status).toBe("INCONCLUSIVE");
+    expect(changed.reasons).toContain("CONTROL_TASK_CONTEXT_MISMATCH");
+    expect(changed.comparison).toBeNull();
+
+    // Missing candidate Control authority is also incomparable.
+    input.candidate.pipeline_provenance.control_task_context_id = null;
+    expect(evaluateHarnessProbe(input).reasons)
+      .toContain("CONTROL_TASK_CONTEXT_MISMATCH");
+
+    // A claimed live FAIL with no project identity is not an anchored negative.
+    input.candidate.pipeline_provenance.control_task_context_id =
+      input.baseline.pipeline_provenance.control_task_context_id;
+    input.candidate.state = "INCOMPLETE";
+    input.candidate.quality_verdict = "FAIL";
+    input.candidate.accepted_result = false;
+    input.candidate.metrics = null;
+    input.candidate.pipeline_provenance.input_project_uuid = null;
+    const unboundFailure = evaluateHarnessProbe(input);
+    expect(unboundFailure.status).toBe("INCONCLUSIVE");
+    expect(unboundFailure.reasons).toContain("CANDIDATE_PROJECT_UNBOUND");
+
+    // A distinct disposable project UUID is allowed when its starting
+    // bytes, Control context and other independent evidence still match.
+    input.candidate.pipeline_provenance.input_project_uuid =
+      "separate-disposable-project";
+    expect(evaluateHarnessProbe(input).status).toBe("REJECTED_QUALITY");
+
+    input.candidate.state = "ACCEPTED";
+    input.candidate.quality_verdict = "PASS";
+    input.candidate.accepted_result = true;
+    input.candidate.metrics = structuredClone(input.baseline.metrics);
+    expect(evaluateHarnessProbe(input).status).toBe("REVIEW_REQUIRED");
+  });
+
   test("unknown or changed model cannot silently support a causal harness gain", () => {
     const input = probe();
     input.candidate.usage!.model = null;
