@@ -184,6 +184,83 @@ describe("R3z v13 morphology with no shape presets", () => {
     expect(multi).toEqual(before);
   });
 
+  test("rejects a material taper collapsed into one voxel-length section", () => {
+    const unresolved = profile({
+      stations: [station([0, 0, 0], 1, 1), station([1, 0, 0], 2, 1)],
+    });
+    expect(geometryMathProfileSweepPartSchema.parse(unresolved)).toEqual(unresolved);
+    const before = structuredClone(unresolved);
+    // One occupied x-cell cannot represent distinct early/late radial bands.
+    expect(() => sweepMathProfileVolume(unresolved))
+      .toThrow("GEOMETRY_MATH_PROFILE_SWEEP_TAPER_UNREPRESENTED");
+    expect(() => candidate(unresolved))
+      .toThrow("GEOMETRY_MATH_PROFILE_SWEEP_TAPER_UNREPRESENTED");
+    expect(unresolved).toEqual(before);
+  });
+
+  test("rejects source taper whose early and late voxel sections are identical", () => {
+    // At x=0.5 the authored half-width is 1.5625; at x=7.5 it
+    // is 2.4375. Both sections still rasterize only y=±0.5,±1.5.
+    // The declared +1 model-unit change has disappeared entirely.
+    const widthLost = profile({
+      stations: [
+        station([0, 0, 0], 1.5, 1),
+        station([8, 0, 0], 2.5, 1),
+      ],
+    });
+    expect(() => sweepMathProfileVolume(widthLost))
+      .toThrow("GEOMETRY_MATH_PROFILE_SWEEP_TAPER_UNREPRESENTED: segment=0;axis=WIDTH");
+
+    const heightLost = profile({
+      stations: [
+        station([0, 0, 0], 1, 1.5),
+        station([8, 0, 0], 1, 2.5),
+      ],
+    });
+    expect(() => sweepMathProfileVolume(heightLost))
+      .toThrow("GEOMETRY_MATH_PROFILE_SWEEP_TAPER_UNREPRESENTED: segment=0;axis=HEIGHT");
+  });
+
+  test("preserves independent resolved width and height taper signals", () => {
+    const shaped = profile({
+      stations: [station([0, 0, 0], 1, 3), station([8, 0, 0], 3, 1)],
+    });
+    const before = structuredClone(shaped);
+    const boxes = sweepMathProfileVolume(shaped);
+    const widthsAt = (x: number) => {
+      const ys = new Set<number>(), zs = new Set<number>();
+      for (let y = -5; y < 5; y++) for (let z = -5; z < 5; z++) {
+        if (boxes.some(box =>
+          x + 0.5 >= box.from[0] && x + 0.5 < box.to[0] &&
+          y + 0.5 >= box.from[1] && y + 0.5 < box.to[1] &&
+          z + 0.5 >= box.from[2] && z + 0.5 < box.to[2])) {
+          ys.add(y); zs.add(z);
+        }
+      }
+      return {width: ys.size, height: zs.size};
+    };
+    const start = widthsAt(0), end = widthsAt(7);
+    expect(end.width).toBeGreaterThan(start.width);
+    expect(end.height).toBeLessThan(start.height);
+    expect(sweepMathProfileVolume(shaped)).toEqual(boxes);
+    expect(compileAuthoringRecipe(candidate(shaped)).metrics.realized_cube_count)
+      .toBe(boxes.length);
+    expect(shaped).toEqual(before);
+  });
+
+  test("retains smaller-than-one-unit variation without inventing visible taper", () => {
+    const subtle = profile({
+      stations: [station([0, 0, 0], 1, 1), station([1, 0, 0], 1.25, 1)],
+    });
+    const before = structuredClone(subtle);
+    const boxes = sweepMathProfileVolume(subtle);
+    expect(boxes.length).toBeGreaterThan(0);
+    expect(boxes.every(box => [0, 1, 2].every(axis =>
+      box.to[axis]! > box.from[axis]!))).toBe(true);
+    expect(subtle).toEqual(before);
+    // Source acceptance does not claim visible sub-voxel fidelity.
+  });
+
   test("strict v13 opt-in and legacy v12 rejection preserve frozen contracts", () => {
     const item = profile();
     expect(geometryMathProgramSchema.parse(rawProgram(item)).version).toBe(13);

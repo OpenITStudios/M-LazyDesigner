@@ -2,6 +2,36 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — PROFILE_SWEEP material taper representability (source-only)
+
+The existing v13+ `PROFILE_SWEEP` now checks whether material
+half-width/half-height taper survives the existing one-unit
+voxel raster. Previously a connected, fully represented segment
+could have identical radial voxel extents in both endpoint bands
+even though the source declared a one-model-unit change (e.g.
+1.5→2.5 over eight units). The same raster pass now collects bounded
+near-endpoint occupied voxel-center extents in the segment's actual
+transported/twisted cross-section frame, only for axes with material
+half-extent change of at least one model unit. A change of at least
+0.5 model unit in the intended direction is required. Missing
+endpoint-band samples or a collapsed/reversed raster signal refuses
+the source with `GEOMETRY_MATH_PROFILE_SWEEP_TAPER_UNREPRESENTED`.
+
+This is limited source/voxel representability, not exact pen-width,
+reference-artistic resemblance or smooth CAD. Smaller changes are
+not asserted visible. Source owner, deterministic disjoint Cuboids,
+ordered joint checks and v1–v12 behavior remain. No second raster,
+filler geometry, optimizer score, new public Gateway/Runtime tool,
+generated API edit or native mutation. Stored v13+ sources with
+unrepresented taper may now be rejected during reconstruction.
+
+Proof: pinned GitHub `Local` and authored focused regressions for
+insufficient endpoint sampling, nominal width/height changes erased
+by voxel centers, visible anisotropic taper and small unclassified
+variation. Exact staged Git blob readback before committing.
+Bun, TypeScript, Codex, live Blockbench and visual acceptance
+NOT EXECUTED per user instruction.
+
 ## 2026-11-05 — PROFILE_SWEEP ordered joint topology (source-only)
 
 The existing v13+ source-local `PROFILE_SWEEP` voxelizer already checks

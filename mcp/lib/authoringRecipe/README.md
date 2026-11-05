@@ -1035,6 +1035,33 @@ ownership, native Blockbench or visual reference acceptance.
 Bun/TypeScript/Codex/native tests and visual QA remain NOT EXECUTED
 under the user's testing hold; regressions are authored only.
 
+### R3z — Material taper visibility after PROFILE_SWEEP voxelization (source only)
+
+The existing v13+ `PROFILE_SWEEP` raster now checks whether a
+source-declared material half-width or half-height change survives
+one-model-unit voxel sampling. Before this change a taper could become
+equal-size axial sections despite valid mass and ordered joints.
+
+For each segment/axis with **at least one model unit** of half-extent
+change, the SAME voxel-predicate pass records near-start/end voxel-center
+radial extents in that segment's transported/twisted section frame.
+Sampling bands cover `min(1, segment_length/3)` model units.
+A **0.5-unit minimum change in the authored direction** is required.
+Missing endpoint samples or collapsed/opposite-direction taper fails
+with `GEOMETRY_MATH_PROFILE_SWEEP_TAPER_UNREPRESENTED`.
+
+This is a coarse discrete representability gate, **not** exact
+thickness, loft smoothness, UV, rig, reference or visual PASS.
+Changes smaller than one native half-extent unit are left as caller
+declarations and not promoted to visible evidence. No additional
+voxel raster, filler Cube, re-meshing, persistent state or public tool.
+Existing valid Cuboid partitions and v1–v12 version behavior remain
+unchanged. A stored v13+ source with unrepresented taper may newly
+fail reconstruction; no automatic migration is performed.
+
+Focused tests are AUTHORED_NOT_RUN; Bun, TypeScript, Codex and native
+Blockbench visual acceptance remain NOT EXECUTED.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`

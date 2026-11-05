@@ -36,6 +36,11 @@ type Segment = {
 
 const EPS = 1e-8;
 const TAU_DEGREES = Math.PI / 180;
+// Half-extent changes of at least one native model unit should produce a
+// visible radial difference at the one-unit voxel scale. This is a
+// representability guard, not a new style/geometry-size policy.
+const MATERIAL_TAPER_DELTA = 1;
+const MIN_OBSERVED_TAPER = 0.5;
 const dot = (a: Vec3, b: Vec3) =>
   a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const sub = (a: Vec3, b: Vec3): Vec3 =>
@@ -219,6 +224,85 @@ export function requireProfileSweepSequentialContact(
   }
 }
 
+type TaperBand = {
+  cells: number;
+  radial_width: number;
+  radial_height: number;
+};
+type TaperObservation = { start: TaperBand; end: TaperBand };
+
+function observeTaperVoxel(
+  point: Vec3, segment: Segment, observation: TaperObservation
+): void {
+  // Check just the first/last native axial model-unit neighbourhood.
+  // Short segments may lack distinct samples; that is insufficient
+  // resolution to claim a material taper survived voxelization.
+  const axial = dot(sub(point, segment.start.position), segment.tangent);
+  const band = Math.min(1, segment.length / 3);
+  const nearStart = axial <= band + EPS;
+  const nearEnd = segment.length - axial <= band + EPS;
+  if (!nearStart && !nearEnd) return;
+
+  const t = Math.max(0, Math.min(1, axial / segment.length));
+  const center = add(segment.start.position,
+    mul(segment.tangent, segment.length * t));
+  const angle = (segment.start.twist_degrees +
+    (segment.end.twist_degrees - segment.start.twist_degrees) * t
+  ) * TAU_DEGREES;
+  const sin = Math.sin(angle), cos = Math.cos(angle);
+  const normal = add(mul(segment.normal, cos), mul(segment.binormal, sin));
+  const binormal = add(mul(segment.binormal, cos), mul(segment.normal, -sin));
+  const relative = sub(point, center);
+  const width = Math.abs(dot(relative, normal));
+  const height = Math.abs(dot(relative, binormal));
+  const record = (target: TaperBand): void => {
+    target.cells++;
+    target.radial_width = Math.max(target.radial_width, width);
+    target.radial_height = Math.max(target.radial_height, height);
+  };
+  if (nearStart) record(observation.start);
+  if (nearEnd) record(observation.end);
+}
+
+function requireMaterialTaperSignal(
+  segments: readonly Segment[],
+  observations: readonly TaperObservation[]
+): void {
+  for (let index = 0; index < segments.length; index++) {
+    const segment = segments[index]!;
+    const deltaWidth = segment.end.half_width - segment.start.half_width;
+    const deltaHeight = segment.end.half_height - segment.start.half_height;
+    const significantWidth = Math.abs(deltaWidth) >= MATERIAL_TAPER_DELTA;
+    const significantHeight = Math.abs(deltaHeight) >= MATERIAL_TAPER_DELTA;
+    if (!significantWidth && !significantHeight) continue;
+    const observed = observations[index]!;
+    if (observed.start.cells === 0 || observed.end.cells === 0) {
+      throw new Error(
+        "GEOMETRY_MATH_PROFILE_SWEEP_TAPER_UNREPRESENTED: segment=" +
+        index + ";reason=ENDPOINT_BAND_MISSING"
+      );
+    }
+    for (const [axis, expected, field] of [
+      ["WIDTH", deltaWidth, "radial_width"],
+      ["HEIGHT", deltaHeight, "radial_height"],
+    ] as const) {
+      if (Math.abs(expected) < MATERIAL_TAPER_DELTA) continue;
+      // Use each cell's actual local twisted section frame, not a global
+      // XYZ bounding box that can hide anisotropic taper and curvature.
+      const observedDelta = (
+        observed.end[field] - observed.start[field]
+      ) * Math.sign(expected);
+      if (!Number.isFinite(observedDelta) ||
+          observedDelta < MIN_OBSERVED_TAPER - EPS) {
+        throw new Error(
+          "GEOMETRY_MATH_PROFILE_SWEEP_TAPER_UNREPRESENTED: segment=" +
+          index + ";axis=" + axis
+        );
+      }
+    }
+  }
+}
+
 export function sweepMathProfileVolume(
   part: GeometryMathProfileSweepPart
 ): MathCuboid[] {
@@ -243,6 +327,18 @@ export function sweepMathProfileVolume(
   }
   const ownership = new Uint8Array(volume);
   const represented = new Uint8Array(segments.length);
+  // Only inspect endpoint-band samples for declared material tapers.
+  // No extra voxel raster, persisted geometry source, or native action.
+  const needsTaperReview = segments.map(segment =>
+    Math.abs(segment.end.half_width - segment.start.half_width) >=
+      MATERIAL_TAPER_DELTA ||
+    Math.abs(segment.end.half_height - segment.start.half_height) >=
+      MATERIAL_TAPER_DELTA
+  );
+  const taperObservations: TaperObservation[] = segments.map(() => ({
+    start: { cells: 0, radial_width: 0, radial_height: 0 },
+    end: { cells: 0, radial_width: 0, radial_height: 0 },
+  }));
   const boxes = partitionMathVoxelVolume(low, grid, (x, y, z) => {
     const point: Vec3 = [low[0] + x + 0.5,
       low[1] + y + 0.5, low[2] + z + 0.5];
@@ -252,6 +348,9 @@ export function sweepMathProfileVolume(
       if (!insideSegment(point, segments[i]!, part.cross_section)) continue;
       ownership[index] |= 1 << i;
       represented[i] = 1;
+      if (needsTaperReview[i]) {
+        observeTaperVoxel(point, segments[i]!, taperObservations[i]!);
+      }
       included = true;
     }
     return included;
@@ -263,5 +362,6 @@ export function sweepMathProfileVolume(
     );
   }
   requireProfileSweepSequentialContact(ownership, grid, segments.length);
+  requireMaterialTaperSignal(segments, taperObservations);
   return boxes;
 }
