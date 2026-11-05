@@ -2,6 +2,19 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Controlled Harness telemetry provenance (source-only)
+
+The existing optional Harness candidate comparator now refuses per-metric
+efficiency interpretation when baseline and candidate report missing or
+different usage telemetry sources, even when the model name matches.
+Results remain `INCONCLUSIVE` with distinct `TELEMETRY_SOURCE_UNKNOWN` or
+`TELEMETRY_SOURCE_MISMATCH` reasons. This reuses existing report fields;
+no new telemetry collection, score engine, Gateway, Runtime or model API.
+
+Proof: pinned Local source review and focused positive/negative regression
+AUTHORED. Bun/TypeScript/Codex/native visual/model-backed execution
+NOT EXECUTED. User's explicit testing-request hold remains active.
+
 ## 2026-11-05 — Optional Harness context-byte identity check (source-only)
 
 The existing read-only Harness candidate evaluator now optionally hashes the

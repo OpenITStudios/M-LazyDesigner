@@ -338,8 +338,9 @@ Use only with disposable Golden inputs and a real testable Codex Runtime.
    Reference authority or modify canonical production Skills for a speculative
    experiment.
 2. In Codex, compare a baseline context and a temporary candidate context
-   under **one fixed source SHA**. Hold model, Runtime build, task, approved
-   Reference fingerprint and initial `.bbmodel` bytes constant. Reset an
+   under **one fixed source SHA**. Hold model, usage telemetry source,
+   Runtime build, task, approved Reference fingerprint and initial `.bbmodel`
+   bytes constant. Reset an
    independent disposable Golden seed before each run; never reuse a live
    user Workspace as a benchmark fixture.
 3. Declare actual context byte digests in `baseline_harness_sha256` and

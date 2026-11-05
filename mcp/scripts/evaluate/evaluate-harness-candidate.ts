@@ -136,6 +136,16 @@ export function evaluateHarnessProbe(input: HarnessProbeInput): HarnessProbeResu
   const candidateModel = candidate.usage?.model?.trim() || null;
   if (!baselineModel || !candidateModel) reasons.push("MODEL_IDENTITY_UNKNOWN");
   else if (baselineModel !== candidateModel) reasons.push("MODEL_MISMATCH");
+  // Codex and model-provider usage counters are not interchangeable merely
+  // because a model label matches. Reject incomplete or mixed provenance
+  // before allowing a per-metric efficiency interpretation.
+  const baselineTelemetry = baseline.usage?.telemetry_source?.trim() || null;
+  const candidateTelemetry = candidate.usage?.telemetry_source?.trim() || null;
+  if (!baselineTelemetry || !candidateTelemetry) {
+    reasons.push("TELEMETRY_SOURCE_UNKNOWN");
+  } else if (baselineTelemetry !== candidateTelemetry) {
+    reasons.push("TELEMETRY_SOURCE_MISMATCH");
+  }
   if (candidate.proof_scope !== "LIVE_BLOCKBENCH") {
     reasons.push("NATIVE_PROOF_MISSING");
   }

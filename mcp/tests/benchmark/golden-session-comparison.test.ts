@@ -373,6 +373,25 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
     expect(evaluateHarnessProbe(input).reasons).toContain("MODEL_MISMATCH");
   });
 
+
+  test("telemetry provenance must be comparable for a controlled efficiency result", () => {
+    const input = probe();
+    input.candidate.usage!.telemetry_source = null;
+    const noSource = evaluateHarnessProbe(input);
+    expect(noSource.status).toBe("INCONCLUSIVE");
+    expect(noSource.reasons).toContain("TELEMETRY_SOURCE_UNKNOWN");
+    expect(noSource.comparison).toBeNull();
+
+    input.candidate.usage!.telemetry_source = "different-provider-estimate";
+    const differentSource = evaluateHarnessProbe(input);
+    expect(differentSource.status).toBe("INCONCLUSIVE");
+    expect(differentSource.reasons).toContain("TELEMETRY_SOURCE_MISMATCH");
+    expect(differentSource.comparison).toBeNull();
+
+    input.candidate.usage!.telemetry_source = input.baseline.usage!.telemetry_source;
+    expect(evaluateHarnessProbe(input).status).toBe("REVIEW_REQUIRED");
+  });
+
   test("bad or unchanged context hashes and source-only baselines fail closed", () => {
     const input = probe();
     input.candidate_harness_sha256 = input.baseline_harness_sha256;
