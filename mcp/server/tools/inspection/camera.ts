@@ -7,6 +7,12 @@ import { createTool, type ToolSpec } from "@/lib/factories";
 import { captureScreenshot, captureAppScreenshot } from "@/lib/blockbench/capture";
 import { captureNativeCubeSilhouette } from "@/lib/blockbench/silhouetteCapture";
 import { extractVerifiedPngAlpha } from "@/lib/reference/pngAlphaEvidence";
+import {
+  composeNativeFourSideSheet,
+  FOUR_SIDE_CAPTURE_ORDER,
+  type FourSideCaptureImage,
+  type FourSideCaptureView,
+} from "@/lib/reference/fourSideSheet";
 import { imageContent } from "@/lib/protocol/imageContent";
 import { createNativeVisualIngestionProbe } from "@/lib/protocol/visualIngestionProbe";
 import { assessVisualPartCorrespondence } from "@/lib/reference/partCorrespondence";
@@ -266,7 +272,7 @@ function readNativeVisualCaptureSnapshot(referenceBinding: unknown): VisualNativ
  * not image tokens or Codex billing. No additional renderer calls.
  */
 export type CaptureImageTrafficRow = Readonly<{
-  kind: "MODEL" | "SILHOUETTE";
+  kind: "MODEL" | "SILHOUETTE" | "FOUR_SIDE_SHEET";
   png_bytes: number;
   delivery: "DELIVERED" | "EXACT_REUSE" | "DIAGNOSTIC_NOT_SENT";
 }>;
@@ -274,7 +280,7 @@ export type CaptureImageTrafficRow = Readonly<{
 export function summarizeCaptureImageTraffic(rows: readonly CaptureImageTrafficRow[]) {
   if (rows.some(row =>
     !Number.isSafeInteger(row.png_bytes) || row.png_bytes < 0 ||
-    !["MODEL", "SILHOUETTE"].includes(row.kind) ||
+    !["MODEL", "SILHOUETTE", "FOUR_SIDE_SHEET"].includes(row.kind) ||
     !["DELIVERED", "EXACT_REUSE", "DIAGNOSTIC_NOT_SENT"].includes(row.delivery)
   )) throw new Error("CAPTURE_IMAGE_TRAFFIC_INVALID");
   const bytes = (filter: (row: CaptureImageTrafficRow) => boolean) =>
@@ -292,6 +298,7 @@ export function summarizeCaptureImageTraffic(rows: readonly CaptureImageTrafficR
     diagnostic_not_sent_png_bytes: bytes(row => row.delivery === "DIAGNOSTIC_NOT_SENT"),
     model_image_count: rows.filter(row => row.kind === "MODEL").length,
     silhouette_image_count: rows.filter(row => row.kind === "SILHOUETTE").length,
+    four_side_sheet_image_count: rows.filter(row => row.kind === "FOUR_SIDE_SHEET").length,
     api_token_usage: null as null,
   };
 }
@@ -1185,6 +1192,11 @@ export function registerCameraTools() {
         );
       }
       const selectedViews = selection.views;
+      // Request-specific, never triggered by arbitrary info-gain camera selection.
+      const explicitFourSideCapture = Boolean(
+        views?.length === FOUR_SIDE_CAPTURE_ORDER.length &&
+        FOUR_SIDE_CAPTURE_ORDER.every(view => views.includes(view))
+      );
       const silhouetteCaptureViews = selectSilhouetteCaptureViews(
         selectedViews, evidence_targets as VisualEvidenceTarget[] | undefined,
         Boolean(views?.length)
@@ -1275,6 +1287,7 @@ export function registerCameraTools() {
         };
       }> = [];
 
+      const nativeFourSidePngs: FourSideCaptureImage[] = [];
       for (const view of selectedViews) {
         const spec = cameraSpec(
           capturePreview,
@@ -1293,6 +1306,14 @@ export function registerCameraTools() {
           imageLedger, "MODEL", view, image.data
         );
         const modelPngBytes = encodedPngBytes(image.data);
+        if (explicitFourSideCapture && FOUR_SIDE_CAPTURE_ORDER.some(side => side === view)) {
+          nativeFourSidePngs.push({
+            view: view as FourSideCaptureView,
+            projection: spec.projection,
+            image_sha256: modelImageDelivery.image_sha256,
+            png_bytes: Buffer.from(image.data, "base64"),
+          });
+        }
         imageTraffic.push({
           kind: "MODEL", png_bytes: modelPngBytes,
           delivery: modelImageDelivery.send_image ? "DELIVERED" : "EXACT_REUSE",
@@ -1414,6 +1435,46 @@ export function registerCameraTools() {
           "MODEL_CAPTURE_STALE: project/geometry/UV/texture/pose or " +
           "presentation changed while capturing. Repeat affected views."
         );
+      }
+
+      // Deterministic 2x2 from four captures of ONE already authored native model.
+      // No image generation, new view, retouching, or additional camera render.
+      // A failed receipt leaves the four original observations intact, but
+      // produces NO presentation sheet and cannot be called reference READY.
+      const fourSideSheetResult = explicitFourSideCapture
+        ? composeNativeFourSideSheet({
+            project_uuid_before: captureProjectUuid,
+            project_uuid_after: Project.uuid,
+            dependency_freshness: dependencyFreshness.state,
+            images: nativeFourSidePngs,
+          })
+        : null;
+      if (fourSideSheetResult?.state === "AVAILABLE") {
+        imageTraffic.push({
+          kind: "FOUR_SIDE_SHEET",
+          png_bytes: fourSideSheetResult.png_bytes.byteLength,
+          delivery: "DELIVERED",
+        });
+        content.push({
+          type: "text",
+          text: "FOUR_SIDE_SHEET: deterministic FRONT|RIGHT / BACK|LEFT image " +
+            "assembled from exactly four native orthographic Blockbench captures " +
+            "in this same project invocation. It is a presentation image ONLY: " +
+            "source comparison, geometry quality, rig, UV, Bedrock export and " +
+            "user approval remain NOT_EVALUATED.",
+        });
+        content.push({
+          type: "image",
+          data: Buffer.from(fourSideSheetResult.png_bytes).toString("base64"),
+          mimeType: "image/png",
+        });
+      } else if (fourSideSheetResult) {
+        content.push({
+          type: "text",
+          text: "FOUR_SIDE_SHEET_UNVERIFIED: " + fourSideSheetResult.reason +
+            ". Existing single-view captures are retained, but no final 2x2 " +
+            "sheet or visual approval is asserted.",
+        });
       }
 
       let partCorrespondenceEvidence = null;
@@ -1552,6 +1613,31 @@ export function registerCameraTools() {
           selected_size: captureSize,
         },
         captures,
+        ...(fourSideSheetResult ? {
+          four_side_sheet: fourSideSheetResult.state === "AVAILABLE"
+            ? {
+                state: "AVAILABLE" as const,
+                layout: "FRONT|RIGHT;BACK|LEFT" as const,
+                source_views: fourSideSheetResult.source_views,
+                source_image_sha256: fourSideSheetResult.source_image_sha256,
+                source_project_uuid: captureProjectUuid,
+                source_dependency_sha256: dependencyBefore.dependency_sha256,
+                image_sha256: fourSideSheetResult.image_sha256,
+                width: fourSideSheetResult.width,
+                height: fourSideSheetResult.height,
+                png_bytes: fourSideSheetResult.png_bytes.byteLength,
+                provenance: fourSideSheetResult.provenance,
+                visual_verdict: "NOT_EVALUATED" as const,
+                authoring_ready: false as const,
+                extra_camera_views: 0 as const,
+              }
+            : {
+                state: "UNVERIFIED" as const,
+                reason: fourSideSheetResult.reason,
+                visual_verdict: "NOT_EVALUATED" as const,
+                authoring_ready: false as const,
+              },
+        } : {}),
         ...(ingestionProbe?{ai_image_ingestion_probe:ingestionProbe.receipt}:{}),
         ...(partCorrespondenceEvidence
           ? { part_correspondence: partCorrespondenceEvidence }

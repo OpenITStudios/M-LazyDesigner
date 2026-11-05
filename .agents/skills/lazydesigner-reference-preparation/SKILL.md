@@ -109,7 +109,7 @@ camera. A fully occluded region has no box and no invented hidden geometry.
 This is source-image evidence for the downstream reviewer, not running
 Grounding DINO/SAM, user approval or a Blockbench Cube plan.
 
-For a completed **3D MODEL** construction reference, always generate the four cardinal object views **FRONT, RIGHT, BACK, LEFT** on the same balanced 2×2 sheet; a single HERO/style preview alone is insufficient for final construction. Keep other modules `CONCEPT | TURNAROUND | STRUCTURAL_DETAIL | MATERIAL_TEXTURE | RIG_DEFORMATION | POSE_ACTION | EXPRESSION_FACE | ANIMATION_KEYFRAME` conditional; **do not generate every module by default**.
+For a completed **3D MODEL** construction reference, require the four cardinal object views **FRONT, RIGHT, BACK, LEFT** on a balanced 2×2 sheet **captured from ONE actual Blockbench model**. The native camera/compositor owns those four pixels and layout, not the ChatGPT image generator. A single HERO/style preview or four independent illustrative images alone are insufficient for verified construction. Keep other modules `CONCEPT | TURNAROUND | STRUCTURAL_DETAIL | MATERIAL_TEXTURE | RIG_DEFORMATION | POSE_ACTION | EXPRESSION_FACE | ANIMATION_KEYFRAME` conditional; **do not generate every module by default**.
 
 `docs/02-reference/image/standard.md` owns panel economy and layout; `scale-and-escalation.md` owns player/world scale and multi-sheet escalation; prompt construction remains in `prompt-contract.md` + `master-templates.md`.
 
@@ -121,6 +121,11 @@ A generated visual becomes approved visual authority only after explicit user ac
 
 
 **Quality-before-archive gate:** use `standard.md#quality-acceptance-firewall--model-value-before-presentation` to review actual source/output **identity → Minecraft/Blockbench craft → physical part/weapon/shield attachment across four sides → presentation**. P1 failure stops positive exemplar promotion; hashes, labels or a cropped poster cannot cure it. Preserve failed imagery only as rejected historical negative QA on explicit request, never as an approved/backup style or presentation example. Distinguish unknown source back from observed inconsistent grip or geometry. No automatic model/native proof.
+
+**Geometry-first production handoff:** classify a request for a reliable/built-from-one-model four-side sheet as `NATIVE_4V`, distinct from `ILLUSTRATIVE_CONCEPT`. If an authored Blockbench model and live native MCP tool are available, call `capture_model_views` once with `views: ["front","right","back","left"]`, the explicitly supported `front_direction`, `framing: { mode: "model" }` and `size: 512`. The tool preserves four orthographic source captures and returns a deterministic `four_side_sheet` PNG and receipt when project/freshness/PNG evidence matches. Check `state: AVAILABLE` and matching evidence freshness before *visual review*. The receipt explicitly retains `authoring_ready: false` and `visual_verdict: NOT_EVALUATED`; NEVER claim model-fidelity, source-back accuracy, animation, UV or Bedrock approval solely from it.
+
+When no actual Blockbench model or LIVE_BLOCKBENCH connection is available, do **not** invoke ChatGPT image generation again to fabricate a production four-side model. Provide the concise source-anchored brief and `NATIVE_MODEL_REQUIRED` dependency for existing Geometry authoring; this is a legitimate bounded handoff, not permission to ask for localtest repeatedly or create a fake model. A user who explicitly asks only for an illustrative image may still select `ILLUSTRATIVE_CONCEPT` under the unchanged bounded image QA (P0/P1) and must not receive a claim of native 3D consistency. Preserve the independent Pixel Art/Particle paths.
+
 
 
 ### Builder-Learned Execution Discipline
@@ -136,13 +141,16 @@ No new runtime, schema, automatic scorer, global approved sample corpus or insta
 
 ### ChatGPT Image Generator execution path
 
-In the **VISUAL / MODEL** route, **ChatGPT is the image-generation actor** and M-LazyDesigner/Blockbench is the downstream consumer, not the image generator. Reuse the shared object-space brief in `prompt-contract.md`, the existing minimum-useful panel plan, and `master-templates.md`. Do not route a merely weak generated image into MCP/Control development without a proved integration defect.
+In the **ILLUSTRATIVE_CONCEPT** route, **ChatGPT is the image-generation actor** and M-LazyDesigner/Blockbench is the downstream consumer, not the image generator; follow the shared object-space brief in `prompt-contract.md` and the bounded image QA. In the **NATIVE_4V** route, a real model is the source and existing Blockbench `capture_model_views` is the rendering actor; do not substitute image-generation prompts or claim a model exists from four illustration panels. Native capture does not fix an incorrectly built model; the subsequent visual/source QA still owns that decision. Do not route a merely weak illustration into MCP development without a proved runtime defect.
 
 ```text
 USER IMAGE REQUEST + SOURCE / APPROVED VISUALS
 → resolve only BLOCKING facts; distinguish source fidelity from original creation
 → inspect actual accessible SUBJECT_SOURCE / STYLE_EXAMPLE / PRESENTATION_EXAMPLE pixels separately
 → compile one shared object-space build brief (volumes, contacts, voids, surfaces)
+→ classify output: NATIVE_4V verified-model construction vs ILLUSTRATIVE_CONCEPT image-only
+→ NATIVE_4V: if no actual native model, hand off source brief as NATIVE_MODEL_REQUIRED to Geometry, STOP reference generation; if connected, capture four native views and inspect four_side_sheet
+→ ILLUSTRATIVE_CONCEPT only: use selected bounded image payload, never claim native 3D source
 → lock FOUR_SIDE_CONSTRUCTION for four-side requests and all their style corrections; select HERO only for an explicit single-view request
 → invoke image generation once when authorized using only the selected isolated output payload, never a mixed-mode master or rejected poster prompt
 → review ACTUAL source/output pixels for P1 identity, Minecraft craft, physical four-view contacts and only then P2 presentation

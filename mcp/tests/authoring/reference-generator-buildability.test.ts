@@ -425,7 +425,7 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(standard).toContain("no side is replaced by a hero");
     expect(prompt).toContain("four canonical sides are not optional");
     expect(prompt).toContain("the four-side model baseline is not optional");
-    expect(templates).toContain("four_side_construction: default final 3d model reference");
+    expect(templates).toContain("four_side_construction: default four-side illustrative concept");
     expect(templates).toContain("exactly four balanced 2×2 panels");
     expect(skill).toContain("a single hero is not a complete construction sheet");
   });
@@ -587,6 +587,48 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(templates).toContain("after one bounded correction that repeats");
     expect(skill).toContain("then stop if the same defect recurs");
     expect(standard).toContain("rejected_visual_quality");
+  });
+
+
+  test("buildable four-side reference requires a single native model and a true four-view capture receipt", async () => {
+    const [standard, flow, skill, readme, prompt, templates] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/flow.md"),
+      read(REFERENCE_SKILL),
+      read("../docs/02-reference/image/README.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+    ]);
+    for (const value of ["geometry-first four-side capture", "capture_model_views", "native_4v_unverified",
+      "single real blockbench cube/group model", "illustrative_concept", "not automatically construction-ready"]) {
+      // Independent of file naming and sheet labels; no source-only quality claims.
+      expect(standard).toContain(value);
+    }
+    expect(flow).toContain("native_model_required");
+    expect(flow).toContain("production four-side exception");
+    expect(skill).toContain("native_4v");
+    expect(skill).toContain("one actual blockbench model");
+    expect(skill).toContain("capture_model_views");
+    expect(readme).toContain("automatically assembled native 2×2 png");
+    expect(prompt).toContain("image-only scope vs native four-side construction");
+    expect(templates).toContain("default four-side illustrative concept");
+    expect(templates).toContain("for production native_4v");
+  });
+
+  test("native four-side camera code never claims artistic PASS and cannot be replaced by an image-only prompt", async () => {
+    const [standard, flow, prompt, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/flow.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("evidence_freshness.state = matched");
+    expect(standard).toContain("source-backed");
+    expect(standard).toContain("provisional");
+    expect(flow).toContain("do not repeatedly invoke image generation");
+    expect(prompt).toContain("do not send this image-generation prompt");
+    expect(skill).toContain("must not receive a claim of native 3d consistency");
+    expect(skill).toContain("authoring_ready");
   });
 
 });

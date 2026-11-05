@@ -55,6 +55,25 @@ Additional sheets never redesign or rescale the asset.
 
 **Mandatory MODEL construction baseline:** for any completed Minecraft/Blockbench **3D model reference**, Sheet 01 presents all **four mandatory object-relative sides: FRONT, RIGHT, BACK, LEFT**, using a balanced 2×2 layout. This applies to vehicles, props, humanoids, creatures, mechanical assets and foliage models. A HERO-only image remains valid only for an explicitly requested single-view deliverable; it is not an automatic preliminary step triggered by style complaints and is never a completed four-side construction reference. The separate Pixel Art/Particle branches are unchanged. User instructions requesting only a HERO or an isolated correction take precedence over the default full-sheet deliverable.
 
+## Geometry-First Four-Side Capture — Verified Production Route
+
+**First wrong boundary learned from the Roman legionary pilots:** a text-to-image model can draw a four-view *illustration*, but it does not maintain a shared model-space object or obey a guaranteed panel compositor. Even an image with exactly four labels is not the production geometric reference. No further prompt adjective or HERO fallback is a substitute for one Blockbench model.
+
+For **construction-quality four-side reference output**, use the **same actual native Blockbench project** as the single source of geometry. Author/repair a coarse but meaningful Blockbench Cube/group model through the existing Geometry stage first; preserve the user's source image for identity. Then request the existing `capture_model_views` native tool with **explicit** `views: ["front","right","back","left"]`, an approved object-relative `front_direction`, `framing: { "mode": "model" }`, `size: 512`, and diagnostic extras disabled. The same native capture invocation now deterministically assembles its four verified PNG observations into one 2×2 image. **No additional image-generation call** produces the production sheet; camera direction, 2×2 placement, labels and reuse of those four pixels are controlled by code.
+
+```text
+SOURCE PHOTO / USER-APPROVED INTENT
+→ single real Blockbench Cube/group model (Geometry owner, not image illusion)
+→ capture_model_views: four explicit orthographic views from one current project
+→ same-project, tracked-freshness, source-PNG SHA, view-set and projection checks
+→ deterministic 2×2 sheet with Front|Right / Back|Left and no HERO/sidebar
+→ actual-pixel P1 source/craft/part-contact review + user visual approval
+```
+
+The native board is usable for **visual review**, not automatically construction-ready. `structuredContent.four_side_sheet.state = AVAILABLE` means only that the four capture PNGs were composed with matching internal evidence. Check `evidence_freshness.state = MATCHED`, native image SHA-256 identities and actual visual content. If the model is unavailable, model scope changes mid-capture, texture dependency tracking is incomplete, a view is missing/wrong projection, or a source PNG cannot be decoded, return **NATIVE_4V_UNVERIFIED** rather than pretending an AI drawing is a certified rear/side. Do not use a generated crop as fallback. If a source photograph never showed the BACK, the *model's authored rear* remains PROVISIONAL relative to the source even when native capture is physically consistent.
+
+**Separate non-production concept:** ChatGPT image generation can still produce an `ILLUSTRATIVE_CONCEPT` when the user explicitly wants an illustrative image. It cannot be marked as a verified native four-side construction reference, nor used to prove stable right/left geometry, rig, UV or Bedrock export. The prior approved MD-REF-01 remains a **presentation-only** exemplar, not retroactively a native capture. This route applies only to 3D MODEL work; Pixel Art and Particle remain independent.
+
 ## Information Priority
 
 When space is constrained:

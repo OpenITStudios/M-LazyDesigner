@@ -76,7 +76,9 @@ When the source is real-world/non-Minecraft, the final production sheet still sh
 
 ## Controlled Image Invocation — `M-LD-REF / 1.3`
 
-This is the **single compact copy-ready invocation** of existing visual-reference rules. It is not a new image engine, Skill, schema, ChatGPT Project activation or substitute for the Template A/B/C continuation/correction contracts below. Fill only applicable facts after inspecting actual images; keep the version label for fair before/after pilots.
+This is the **single compact copy-ready invocation** of existing visual-reference rules. It is not a new image engine, Skill, schema, ChatGPT Project activation or substitute for the Template A/B/C continuation/correction contracts below.
+
+**Scope:** this instruction is for ChatGPT **illustrative concept images** only. It cannot create a real four-view Blockbench construction receipt. For production geometry-first four sides, author one native model and use `capture_model_views` (explicit Front/Right/Back/Left) with the deterministic 2×2 compositor. Do not run image generation again merely to get a production four-side reference. Fill only applicable facts after inspecting actual images; keep the version label for fair before/after pilots.
 
 ```text
 M-LD-REF — CONTROLLED REFERENCE REQUEST v1.3
@@ -98,7 +100,7 @@ DRAW =
     typography, palette, infographic, dimensions or extra thumbnails.
   MINIMUM_CONSTRUCTION: scoped partial/repair image ONLY, not the completed MODEL
     four-side handoff; choose only the relevant visible P1/P2 view(s).
-  FOUR_SIDE_CONSTRUCTION: DEFAULT final 3D MODEL reference; exactly four
+  FOUR_SIDE_CONSTRUCTION: DEFAULT four-side ILLUSTRATIVE concept, not native proof; exactly four
     visually balanced 2x2 panels: Front top-left / Right top-right / Back
     bottom-left / Left bottom-right, object-relative. Unequal panel pixel widths
     may accommodate long side profiles while preserving aligned ground lines,
@@ -125,12 +127,12 @@ NO_FALSE_PASS = no visual approval, native Blockbench/UV/Bedrock or exact-camera
   claim from image labels, hash, generated text, or a static source test.
 ```
 
-**Routing lock:** style feedback on a selected FOUR_SIDE_CONSTRUCTION task stays FOUR_SIDE_CONSTRUCTION; never automatically route it to HERO_STYLE_CHECK. Only an explicit single-view user request can select HERO. The multi-mode block above is INTERNAL reasoning, not the image prompt; **do not send the entire block to the image generator**. For four-sided work send only the isolated four-side payload below, filled with source-backed facts and permitted actual visual anchors, not historical poster material. An unknown source rear stays UNKNOWN or separately PROVISIONAL. GitHub cannot install a ChatGPT Project, and this written v1.3 update does not prove output compliance.
+**Routing lock:** style feedback on a selected four-side ILLUSTRATIVE_CONCEPT task stays FOUR_SIDE_CONSTRUCTION; never automatically route it to HERO_STYLE_CHECK. For production NATIVE_4V, do not use this image payload at all: use one Blockbench model and the existing camera capture tool. Only an explicit single-view user request can select HERO. The multi-mode block above is INTERNAL reasoning, not the image prompt; **do not send the entire block to the image generator**. For four-sided work send only the isolated four-side payload below, filled with source-backed facts and permitted actual visual anchors, not historical poster material. An unknown source rear stays UNKNOWN or separately PROVISIONAL. GitHub cannot install a ChatGPT Project, and this written v1.3 update does not prove output compliance.
 
 
 ### Isolated Four-Side Generation Payload — One Selected Output
 
-For a four-sided reference or any correction to an existing four-sided sheet, fill and send **only the content between the two markers below**, plus the actual source/approved image pixels when available. Never send the multi-mode planning contract above, old poster images, sample-specific reproduction instructions, or alternate output templates. The output is one picture containing four physical sides of the same unchanged subject.
+For a four-sided reference or any correction to an existing four-sided sheet, fill and send **only the content between the two markers below**, plus the actual source/approved image pixels when available. Never send the multi-mode planning contract above, old poster images, sample-specific reproduction instructions, or alternate output templates. The output requests an illustrative picture of four conceptual directions, NOT a verified shared 3D model. The actual physical model and four orthographic camera views must come from native Blockbench capture for construction-grade use.
 
 ```text
 FOUR_SIDE_IMAGE_PROMPT_BEGIN

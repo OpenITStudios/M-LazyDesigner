@@ -108,6 +108,34 @@ describe("actual PNG transport accounting", () => {
       { kind: "MODEL", png_bytes: -1, delivery: "DELIVERED" },
     ])).toThrow("CAPTURE_IMAGE_TRAFFIC_INVALID");
   });
+  test("four-side native assembly is counted as an actual image without extra camera views", async () => {
+    const tally = summarizeCaptureImageTraffic([
+      { kind: "MODEL", png_bytes: 120, delivery: "DELIVERED" },
+      { kind: "MODEL", png_bytes: 120, delivery: "DELIVERED" },
+      { kind: "MODEL", png_bytes: 120, delivery: "DELIVERED" },
+      { kind: "MODEL", png_bytes: 120, delivery: "DELIVERED" },
+      { kind: "FOUR_SIDE_SHEET", png_bytes: 360, delivery: "DELIVERED" },
+    ]);
+    expect(tally).toMatchObject({
+      generated_image_count: 5,
+      delivered_image_count: 5,
+      generated_png_bytes: 840,
+      delivered_png_bytes: 840,
+      model_image_count: 4,
+      four_side_sheet_image_count: 1,
+      silhouette_image_count: 0,
+    });
+    const source = await Bun.file("server/tools/inspection/camera.ts").text();
+    expect(source).toContain("const explicitFourSideCapture = Boolean(");
+    expect(source).toContain("dependency_freshness: dependencyFreshness.state");
+    expect(source).toContain("composeNativeFourSideSheet({");
+    expect(source).toContain("FOUR_SIDE_SHEET_UNVERIFIED");
+    expect(source).toContain('layout: "FRONT|RIGHT;BACK|LEFT"');
+    expect(source).toContain('visual_verdict: "NOT_EVALUATED"');
+    expect(source).toContain("authoring_ready: false");
+    expect(source).toContain("extra_camera_views: 0");
+  });
+
   test("runtime exposes measured image traffic and no estimated tokens", async () => {
     const src = await Bun.file("server/tools/inspection/camera.ts").text();
     expect(src).toContain("...summarizeCaptureImageTraffic(imageTraffic)");

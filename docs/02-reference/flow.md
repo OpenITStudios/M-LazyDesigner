@@ -182,7 +182,11 @@ A Resource Pack/ZIP, README, manifest, or `REFERENCE.json` is delivery output an
 
 Generation uses the smallest branch-ready authority set, not the uncontrolled full conversation.
 
-Visual/model generation uses a concise current brief (compiled when useful), any actual source/reference image, and a scale lock when material. Keep source-observed facts distinct from creative design defaults. If the result is already requested and adequately specified, proceed directly.
+Visual/model **illustrative concept** generation uses a concise current brief (compiled when useful), any actual source/reference image, and a scale lock when material. Keep source-observed facts distinct from creative design defaults. A clear image-only request may proceed directly, but its output is not a verified 3D construction reference.
+
+**Production four-side exception — geometry first:** when the user needs a buildable/consistent Minecraft Blockbench model reference in Front/Right/Back/Left, do not repeatedly invoke image generation to invent four coherent physical views. If a real Blockbench model is already present and the native Runtime is connected, use the existing `capture_model_views` tool once with explicit views `["front","right","back","left"]`, an agreed `front_direction`, and `framing: { mode: "model" }`. Its deterministic 2×2 sheet is a same-model presentation derived from those four captured PNGs, never an AI-generated fifth view. Review actual source likeness, model geometry/texture and tool/shield contacts independently; receipt `AVAILABLE` is not visual PASS.
+
+If no real model or LIVE_BLOCKBENCH access exists, the independent ChatGPT reference task stops at a source-grounded brief with `NATIVE_MODEL_REQUIRED` for the Geometry owner. Preserve confirmed shape/part/scale facts and meaningful uncertainties; do not declare a final four-side image from a speculative poster or ask for endless local tests. Existing authoring can continue separately with user authorization. A one-view photograph cannot prove unseen geometry; authored completions remain PROVISIONAL. Do not use an empty proxy model, edited crop or a source-string test to manufacture readiness. The Pixel Art and Particle routes are unchanged.
 
 Particle/VFX authoring uses the normalized particle brief with BLOCKING ambiguity resolved, the minimum required particle knowledge owner(s), and reversible provisional choices where allowed.
 

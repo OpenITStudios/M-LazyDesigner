@@ -4,6 +4,10 @@ Updated: 2026-09-11
 
 This document owns the internal prompt structure used by ChatGPT Reference Preparation for generated reference images. It converts already-confirmed decisions into a compact generation instruction; it does not replace user authority, the Prompt Compiler, or the Unified Image Reference Standard.
 
+## Image-Only Scope vs Native Four-Side Construction
+
+This contract compiles prompts for **ILLUSTRATIVE_CONCEPT** images only. A source photograph and an image model cannot establish four physically identical sides or a calibrated Blockbench camera. For a production/buildable four-side model reference, follow the Geometry-first route in `standard.md` and `../flow.md`: one real Blockbench model → existing `capture_model_views` four orthographic observations → deterministic 2×2 `four_side_sheet`. **Do not send this image-generation prompt to substitute for missing native model/camera evidence.** The current M-LD-REF v1.3 four-side payload remains available for user-requested illustration, but is not a native construction or Source BACK verification receipt.
+
 ## Core Principle
 
 ```text
@@ -456,7 +460,7 @@ CRITICAL DETAILS when needed
 MOTION STRIP when needed
 ```
 
-For a **completed 3D MODEL construction reference**, render a balanced **2×2 Front/Right/Back/Left** sheet by default, object-relative, with consistent physical object scale and neutral background. **Equal panel pixel widths are not required:** allow wider side profiles when needed without changing actual model proportions. Apply the mandatory five-pair cross-panel evidence check from `standard.md` to real pixels before reference-stage READY. The four-side MODEL baseline is not optional because an earlier HERO looks sufficient. Do not squeeze a fifth HERO, banner, material legend, imagined exact dimensions or PASS/QA labels into it. A user-requested HERO-only preview stays a separate, incomplete-for-construction image.
+For an explicitly requested **illustrative four-side 3D MODEL concept**, ask for a balanced **2×2 Front/Right/Back/Left** sheet, object-relative, with intended consistent physical object scale and neutral background. A completed production four-side model must instead come from actual native Blockbench captures, not from this prompt. **Equal panel pixel widths are not required:** allow wider side profiles when needed without changing actual model proportions. Apply the mandatory five-pair cross-panel evidence check from `standard.md` to real pixels before reference-stage READY. The four-side MODEL baseline is not optional because an earlier HERO looks sufficient. Do not squeeze a fifth HERO, banner, material legend, imagined exact dimensions or PASS/QA labels into it. A user-requested HERO-only preview stays a separate, incomplete-for-construction image.
 
 Image text is limited to asset title, view labels, short detail labels, and short pose labels.
 
