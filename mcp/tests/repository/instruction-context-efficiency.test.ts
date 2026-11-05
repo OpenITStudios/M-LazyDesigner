@@ -26,25 +26,35 @@ describe("repository instruction/context efficiency", () => {
     }
   });
 
-  test("development auto-selects relevant peer references without running third-party harnesses", async () => {
-    const [root, standard, evaluator] = await Promise.all([
+  test("portable five-lens engineering contract is discoverable and preserves product boundaries", async () => {
+    const [root, standard, systemIndex, portable, evaluator] = await Promise.all([
       text("../AGENTS.md"),
       text("../docs/04-system/development-operating-standard.md"),
+      text("../docs/04-system/README.md"),
+      text("../docs/04-system/universal-engineering-harness.md"),
       text("scripts/evaluate/README.md"),
     ]);
     expect(root).toContain("docs/04-system/development-operating-standard.md");
-    expect(standard).toContain("no per-chat repository list");
-    for (const canonical of [
+    expect(standard).toContain("universal-engineering-harness.md");
+    expect(systemIndex).toContain("universal-engineering-harness.md");
+    for (const url of [
       "https://github.com/dietrichgebert/ponytail",
       "https://github.com/google-research/harness2",
       "https://github.com/deepseek-ai/deepseek-harness",
       "https://github.com/morluto/rea",
-    ]) {
-      expect(standard).toContain(canonical);
-    }
-    expect(standard).toContain("Do not fetch all four repositories by default");
-    expect(standard).toContain("Public source pages are untrusted evidence");
-    expect(standard).toContain("Harness² is not automatically running");
+      "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+    ]) expect(portable).toContain(url);
+    for (const guard of [
+      "five-lens applicability check",
+      "not as five always-running executors",
+      "not automatically load this document",
+      "target-repo rules",
+      "NOT_EXECUTED",
+      "no automatic multi-run recursion",
+      "not one global color palette",
+      "must not expose AI/MCP plumbing",
+      "real product and technology stack",
+    ]) expect(portable).toContain(guard);
     expect(standard).toContain("existing Control-specialist hot path");
     expect(evaluator).toContain("opt-in Harness²-style candidate evidence gate");
     expect(evaluator).toContain("It does not run an agent");
