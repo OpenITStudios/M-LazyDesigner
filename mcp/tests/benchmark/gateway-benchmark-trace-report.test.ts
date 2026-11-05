@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { summarizeGatewayBenchmarkTrace } from "../../scripts/reporting/summarize-gateway-benchmark-trace";
+import {
+  benchmarkCaptureEvidenceRef,
+  benchmarkArtifactEvidenceRef,
+} from "../../gateway/execution/benchmarkTrace";
 
 const SHA = "1234567890abcdef1234567890abcdef12345678";
 
@@ -444,6 +448,106 @@ describe("gateway benchmark trace report", () => {
     expect(report.diagnostics.top_capabilities_by_observed_latency[0]
       ?.response_bytes).toBeNull();
     expect(report.calls.total).toBe(2);
+  });
+
+  test("checks Golden PNG evidence shape and digest before returning trace events", () => {
+    const captured = {
+      project_uuid: "disposable-golden",
+      reference_package_fingerprint: "a".repeat(64),
+      front_direction: "-z" as const,
+      shading: true,
+      diagnostic_missing_texture_highlight: false,
+      views: [
+        { view: "front", png_sha256: "b".repeat(64) },
+        { view: "left", png_sha256: "c".repeat(64) },
+      ],
+    };
+    const proof = { ...captured, evidence_ref: benchmarkCaptureEvidenceRef(captured) };
+    const row = {
+      ...JSON.parse(event(0, "verify")),
+      capability: "capture_model_views",
+      mcp_images: {
+        delivered_count: 2, delivered_bytes: 1024,
+        png_count: 2, png_bytes: 1024,
+      },
+      capture_evidence: proof,
+    };
+    const valid = summarizeGatewayBenchmarkTrace(JSON.stringify(row));
+    expect(valid.events[0]?.capture_evidence).toEqual(proof);
+    expect(valid.diagnostics.accepted_result).toBe("UNVERIFIED");
+
+    for (const invalid of [
+      {
+        ...row,
+        capture_evidence: {
+          ...proof,
+          views: [{ view: "front", png_sha256: "d".repeat(64) }, captured.views[1]],
+        },
+      },
+      { ...row, capture_evidence: { ...proof, evidence_ref: "golden-capture:v1:" + "0".repeat(64) } },
+    ]) {
+      expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify(invalid)))
+        .toThrow("invalid capture_evidence digest binding");
+    }
+    for (const invalid of [
+      { ...row, kind: "mutate" },
+      { ...row, capability: "get_project_info" },
+      { ...row, mcp_images: null },
+      { ...row, mcp_images: { ...row.mcp_images, png_count: 1 } },
+      { ...row, capture_evidence: {
+        ...proof, views: [captured.views[0], captured.views[0]],
+      } },
+      { ...row, capture_evidence: {
+        ...proof, views: [{ view: "unknown", png_sha256: "b".repeat(64) }],
+      } },
+      { ...row, capture_evidence: {
+        ...proof, private_note: "unbound text",
+      } },
+    ]) {
+      expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify(invalid)))
+        .toThrow("invalid capture_evidence");
+    }
+  });
+
+  test("checks Golden persisted artifact receipts without claiming native authentication", () => {
+    const payload = {
+      project_uuid: "disposable-golden",
+      codec_id: "project" as const,
+      save_behavior: "NATIVE_PROJECT_SAVE" as const,
+      file_integrity_state: "READBACK_MATCHED" as const,
+      compiled_payload_sha256: "sha256:" + "d".repeat(64),
+      written_file_sha256: "sha256:" + "d".repeat(64),
+    };
+    const proof = { ...payload, evidence_ref: benchmarkArtifactEvidenceRef(payload) };
+    const row = {
+      ...JSON.parse(event(0, "mutate")),
+      capability: "export_model",
+      artifact_evidence: proof,
+    };
+    const valid = summarizeGatewayBenchmarkTrace(JSON.stringify(row));
+    expect(valid.events[0]?.artifact_evidence).toEqual(proof);
+    expect(valid.diagnostics.accepted_result).toBe("UNVERIFIED");
+    for (const invalid of [
+      { ...row, artifact_evidence: {
+        ...proof, written_file_sha256: "sha256:" + "e".repeat(64),
+      } },
+      { ...row, kind: "verify" },
+      { ...row, capability: "capture_model_views" },
+      { ...row, artifact_evidence: {
+        ...proof, file_integrity_state: "SIZE_ONLY",
+      } },
+      { ...row, artifact_evidence: {
+        ...proof, source_path: "/private/user/model.bbmodel",
+      } },
+    ]) {
+      expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify(invalid)))
+        .toThrow("invalid artifact_evidence");
+    }
+    expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify({
+      ...row, artifact_evidence: {
+        ...proof, evidence_ref: "golden-artifact:v1:" + "0".repeat(64),
+      },
+    }))).toThrow("invalid artifact_evidence digest binding");
   });
 
   test("rejects non-contiguous sequence", () => {

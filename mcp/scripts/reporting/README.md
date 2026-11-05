@@ -41,6 +41,26 @@ per-capability or total response-byte measurements. This is trace-source
 integrity only; it does not verify the Runtime, accepted artistic quality,
 or whether an AI processed the reported media.
 
+## Golden trace evidence integrity
+
+The existing offline `summarize-gateway-benchmark-trace.ts` parser now checks
+optional `capture_evidence` and `artifact_evidence` entries before passing
+recorded events into diagnostic/Golden workflows. It reuses canonical
+`benchmarkCaptureEvidenceRef` and `benchmarkArtifactEvidenceRef` to
+recalculate content-bound handles, and rejects malformed or unexpected
+fields, duplicate/unknown model views, mismatched image-delivery counts,
+wrong capability/kind/success, and inconsistent saved-project digests.
+
+**Proof boundary:** a matching digest binds values within a supplied trace;
+it does **not** authenticate the original Gateway writer, recover PNG pixels,
+confirm a native Blockbench save, establish a same-project capture/save pair,
+or approve reference fidelity. A fully forged but internally consistent
+report still requires independent exact-SHA/native/session correlation and
+actual visual review. Historical trace events that do not contain these
+optional Golden evidence fields remain readable; only contradictory
+claims of capture/save proof fail closed. No new Runtime/agent hooks or
+additional instrumentation run during ordinary MCP authoring.
+
 ## Code-only failure classification
 
 The existing offline Gateway trace reporter adds a bounded

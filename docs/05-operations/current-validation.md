@@ -2,6 +2,28 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Offline Golden trace evidence binding validation (source-only)
+
+The existing read-only Gateway benchmark trace reporter previously allowed
+optional `capture_evidence` and `artifact_evidence` values to pass through
+in reported events without independently checking their internal digest
+bindings. It now uses the recorder's own fingerprint functions, validates
+bounded recognized views/project-save fields, verifies that claimed proof
+comes from the appropriate successful capability/kind, and requires actual
+recorded PNG-delivery counts for captured model views. Unknown extra fields
+within claimed proof are rejected. Legacy trace rows without these optional
+Golden proof fields remain supported.
+
+This is supplied-JSON consistency only: a recomputed evidence hash cannot
+authenticate the sender, PNG contents, saved `.bbmodel` bytes, same-project
+runtime lineage, human approval or artistic quality. No Gateway hot-path,
+native Runtime, Reference authority, CI or generated API change.
+
+Proof: pinned `Local` source review; focused valid/tampered capture and save
+receipt regression cases AUTHORED, not executed. Bun, TypeScript, Codex,
+Blockbench native, Golden and visual acceptance remain NOT EXECUTED.
+The user-requested hold on local/Codex tests remains active.
+
 ## 2026-11-05 — Code-only Gateway failure evidence classification (source-only)
 
 The existing read-only Gateway trace reporter now adds a bounded

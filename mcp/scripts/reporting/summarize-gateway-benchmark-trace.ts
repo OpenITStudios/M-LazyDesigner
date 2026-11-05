@@ -1,7 +1,10 @@
-import type {
-  BenchmarkTraceEvent,
-  BenchmarkTraceKind,
-} from "../../gateway/runtime/benchmarkTrace";
+import {
+  benchmarkCaptureEvidenceRef,
+  benchmarkArtifactEvidenceRef,
+  type BenchmarkTraceEvent,
+  type BenchmarkTraceKind,
+} from "../../gateway/execution/benchmarkTrace";
+import { MODEL_VIEWS } from "../../lib/reference/visualEvidence";
 
 // The report is a consumer of a recorded trace, never a validator of
 // artistic quality. Unknown/malformed event kinds cannot be silently
@@ -9,6 +12,76 @@ import type {
 const TRACE_KINDS: readonly BenchmarkTraceKind[] = [
   "search", "describe", "inspect", "mutate", "verify", "recovery",
 ];
+const SHA256 = /^[a-f0-9]{64}$/;
+const ARTIFACT_SHA256 = /^sha256:[a-f0-9]{64}$/;
+
+/**
+ * Read-only integrity gate for opt-in Golden metadata. The recorder hashes
+ * actual returned PNGs or consumes native save readback receipts; this parser
+ * sees only recorded JSON. Matching a self-declared evidence ref is NOT
+ * independent native or visual authentication.
+ */
+function validateTraceEvidence(event: BenchmarkTraceEvent, line: number): void {
+  if (event.capture_evidence !== undefined) {
+    const proof = event.capture_evidence;
+    if (!proof || typeof proof !== "object" || Array.isArray(proof) ||
+        event.kind !== "verify" || event.success !== true ||
+        event.capability !== "capture_model_views" ||
+        typeof proof.project_uuid !== "string" || !proof.project_uuid.trim() ||
+        typeof proof.reference_package_fingerprint !== "string" ||
+        !SHA256.test(proof.reference_package_fingerprint) ||
+        (proof.front_direction !== "-z" && proof.front_direction !== "+z") ||
+        typeof proof.shading !== "boolean" ||
+        typeof proof.diagnostic_missing_texture_highlight !== "boolean" ||
+        !Array.isArray(proof.views) ||
+        proof.views.length < 1 || proof.views.length > 5 ||
+        Object.keys(proof).some(key => ![
+          "project_uuid", "reference_package_fingerprint", "front_direction",
+          "shading", "diagnostic_missing_texture_highlight", "views",
+          "evidence_ref",
+        ].includes(key)) ||
+        proof.views.some(row => !row || typeof row !== "object" ||
+          typeof row.view !== "string" ||
+          !(MODEL_VIEWS as readonly string[]).includes(row.view) ||
+          typeof row.png_sha256 !== "string" || !SHA256.test(row.png_sha256) ||
+          Object.keys(row).some(key => key !== "view" && key !== "png_sha256")) ||
+        new Set(proof.views.map(row => row.view)).size !== proof.views.length ||
+        !event.mcp_images ||
+        event.mcp_images.png_count < proof.views.length ||
+        event.mcp_images.png_bytes <= 0) {
+      throw new Error(`Trace line ${line} has invalid capture_evidence.`);
+    }
+    const { evidence_ref: declared, ...data } = proof;
+    if (declared !== benchmarkCaptureEvidenceRef(data)) {
+      throw new Error(`Trace line ${line} has invalid capture_evidence digest binding.`);
+    }
+  }
+  if (event.artifact_evidence !== undefined) {
+    const proof = event.artifact_evidence;
+    if (!proof || typeof proof !== "object" || Array.isArray(proof) ||
+        event.kind !== "mutate" || event.success !== true ||
+        event.capability !== "export_model" ||
+        typeof proof.project_uuid !== "string" || !proof.project_uuid.trim() ||
+        proof.codec_id !== "project" ||
+        (proof.save_behavior !== "NATIVE_PROJECT_SAVE" &&
+         proof.save_behavior !== "NATIVE_PROJECT_SAVE_AS") ||
+        proof.file_integrity_state !== "READBACK_MATCHED" ||
+        typeof proof.compiled_payload_sha256 !== "string" ||
+        !ARTIFACT_SHA256.test(proof.compiled_payload_sha256) ||
+        proof.written_file_sha256 !== proof.compiled_payload_sha256 ||
+        Object.keys(proof).some(key => ![
+          "project_uuid", "codec_id", "save_behavior",
+          "file_integrity_state", "compiled_payload_sha256",
+          "written_file_sha256", "evidence_ref",
+        ].includes(key))) {
+      throw new Error(`Trace line ${line} has invalid artifact_evidence.`);
+    }
+    const { evidence_ref: declared, ...data } = proof;
+    if (declared !== benchmarkArtifactEvidenceRef(data)) {
+      throw new Error(`Trace line ${line} has invalid artifact_evidence digest binding.`);
+    }
+  }
+}
 
 function parseTrace(text: string): BenchmarkTraceEvent[] {
   const lines = text
@@ -114,6 +187,7 @@ function parseTrace(text: string): BenchmarkTraceEvent[] {
       // operations. Contradictory rows must not enter failure classification.
       throw new Error(`Trace line ${index + 1} has error_code on a successful event.`);
     }
+    validateTraceEvidence(event, index + 1);
     return event;
   });
 }
