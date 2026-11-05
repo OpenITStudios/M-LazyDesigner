@@ -68,10 +68,9 @@ export class GatewayCapabilityExecutor {
     // CAPABILITY_PRECONDITION_BLOCKED result.
     const entries = manifestEntriesForCapability(capability);
     if (entries.some((entry) => entry.branch) &&
-        (!branch || !entries.some((entry) =>
-          entry.branch?.field === branch.field &&
-          entry.branch.value === branch.value
-        ))) {
+        !entries.some((entry) =>
+          entry.branch && args[entry.branch.field] === entry.branch.value
+        )) {
       return null;
     }
 

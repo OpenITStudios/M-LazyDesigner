@@ -291,7 +291,7 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
       { capability: "manage_animation_timeline", args: {} },
       { capability: "manage_animation_timeline", args: { operation: "future_unsupported" } },
       { capability: "manage_animation_controller", args: {
-        action: "edit", resource_kind: "client_entity",
+        action: "edit", resource_kind: "future_unsupported",
       } },
     ]) {
       const session = new GatewaySessionState();
@@ -322,6 +322,11 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
     for (const { capability, args } of [
       { capability: "manage_animation_timeline", args: { operation: "keyframes" } },
       { capability: "manage_animation_timeline", args: { operation: "timeline", action: "play" } },
+      // resource_kind is the manifest discriminator. An unrelated 'action'
+      // field must not hide a recognized operation's existing graph guard.
+      { capability: "manage_animation_controller", args: {
+        action: "edit", resource_kind: "client_entity",
+      } },
       { capability: "create_animation", args: { name: "model.walk" } },
     ]) {
       const session = new GatewaySessionState();
