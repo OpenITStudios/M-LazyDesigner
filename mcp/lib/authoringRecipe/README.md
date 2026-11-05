@@ -544,12 +544,24 @@ their exact declared operations and historical native-Cuboid output.
   intervals also fail closed, instead of reporting a safe route. Existing
   endpoint/waypoint/voxel/contact checks all remain in place.
 
-  This is bounded **centerline** validation against the two declared
-  source-part Cube inventories, not a radius-expanded swept-volume
-  clearance, continuous all-scene collision test, or reference/visual/UV
-  approval. Repeated source copies use the original solved source boxes.
-  Version 5 retains its historical semantics and derived geometry.
-  No new geometry construction method or native mutation is introduced.
+  After the original SWEEP realizes its disjoint one-unit voxel Cuboids,
+  the v6 source preflight now checks **actual native-volume overlap** with
+  the two solved endpoint-part Cube inventories. Legitimate attachment
+  penetration stays permitted only inside a local contact cap: the declared
+  endpoint radius plus half a voxel diagonal (sqrt(3)/2 model units)
+  to account for cell-centre quantization. A deeper overlap outside that
+  cap is refused with `GEOMETRY_MATH_CONNECT_NATIVE_VOLUME_EXCEEDS_CONTACT`.
+  The check uses each endpoint's own cap and actual Cuboids, including
+  repeated source copies, rather than treating a hollow bounding envelope
+  as solid. No second raster or all-scene collision traversal is introduced.
+
+  The continuous centerline preflight remains separate. The new check
+  bounds overlap in the **emitted voxel-native Cuboid volume**, not the
+  ideal continuous radius-expanded spline, third-party scene obstacles,
+  animated geometry or reference/visual/UV approval. Large sections
+  remain allowed where they do not intrude too far into the two endpoint
+  source parts. Version 5 retains its historical interpretation and
+  derived geometry. No new shape method or native mutation is introduced.
 
 Illustrative source snippet (not executed):
 

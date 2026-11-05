@@ -127,6 +127,55 @@ describe("face-aware CONNECT source-material waypoint preflight", () => {
       .toBeGreaterThan(0);
   });
 
+  test("prevents radius-expanded native overlap far beyond the declared attachment cap", () => {
+    // Both centerline segments travel from the outward start face to the
+    // outward end face without entering either source. The intermediate
+    // sphere is much thicker than the START cap and intrudes into the
+    // START Cube far from the one-unit-radius attachment neighborhood.
+    const bulging = connector([{
+      fraction: 0.25, offset: [0, 0, 0], radius: 2.5,
+    }]);
+    expect(geometryMathConnectorPartSchema.parse(bulging)).toEqual(bulging);
+    const original = structuredClone(bulging);
+    expect(() => buildMathConnector(bulging, sources(), 6))
+      .toThrow("GEOMETRY_MATH_CONNECT_NATIVE_VOLUME_EXCEEDS_CONTACT: joined-beam");
+    expect(bulging).toEqual(original);
+  });
+
+  test("preserves a legitimate radius-thick contact cap and unchanged v5 generation", () => {
+    const ordinary = connector();
+    ordinary.radius = [2, 2];
+    const original = structuredClone(ordinary);
+    const current = buildMathConnector(ordinary, sources(), 6);
+    expect(current.length).toBeGreaterThan(0);
+    // Ordinary spherical end-caps do penetrate the endpoint faces
+    // slightly by design. Their bounded voxel envelope is permitted.
+    expect(current.every(box => [0, 1, 2].every(axis =>
+      box.to[axis]! > box.from[axis]!
+    ))).toBe(true);
+    expect(ordinary).toEqual(original);
+    // The new cap budget is v6-only and must not migrate stored v5
+    // source geometry or reinterpret an old caller's radius choices.
+    expect(buildMathConnector(ordinary, sources(), 5).length)
+      .toBeGreaterThan(0);
+  });
+
+  test("retains larger sections that remain away from both endpoint solids", () => {
+    // Thickness away from endpoint material is deliberate Geometry, not
+    // a defect. The centerline detours into exterior space before
+    // widening, without an invented global-scene obstacle.
+    const exterior = connector([{
+      fraction: 0.5, offset: [0, 5, 0], radius: 2,
+    }]);
+    const slenderSources = new Map([
+      ["start", source("start", vec(-6, -0.5, -0.5), vec(-2, 0.5, 0.5))],
+      ["end", source("end", vec(2, -0.5, -0.5), vec(6, 0.5, 0.5))],
+    ]);
+    const built = buildMathConnector(exterior, slenderSources, 6);
+    expect(built.length).toBeGreaterThan(0);
+    expect(built).toEqual(buildMathConnector(exterior, slenderSources, 6));
+  });
+
   test("does not retroactively change v5 connector source semantics", () => {
     const detour = connector([
       { fraction: 0.25, offset: [4, 0, 0], radius: 1 },

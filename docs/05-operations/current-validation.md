@@ -2,6 +2,36 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Connector native-radius contact budget (source-only)
+
+The existing v6 Geometry Construction CONNECT first checks waypoint
+and full centerline exteriority, and then uses the original SWEEP
+kernel to produce voxel-native Cuboids. That still allowed a correct
+centerline to produce too much **radius-expanded overlap** with actual
+endpoint part material. The CONNECT source owner now reviews each
+positive-volume intersection between these already-generated Cuboids
+and the two solved/repeated endpoint Cube inventories. The overlap
+must fit within that endpoint's original joint anchor radius plus a
+half-voxel diagonal (sqrt(3)/2 model-unit quantization margin).
+Excess penetration yields
+`GEOMETRY_MATH_CONNECT_NATIVE_VOLUME_EXCEEDS_CONTACT`.
+Hollow bounding envelopes are never interpreted as occupied material.
+
+The guard permits ordinary physical joint caps and deliberate thick
+sections away from endpoint parts. It adds no second voxelization,
+global scene scanner, style preset, auto-thickening, extra public
+Gateway tool, Runtime change or generator-coupled API revision.
+Stored v5 semantics are untouched; v6+ sources containing distant
+material penetration can now be rejected during reconstruction.
+
+Proof: pinned `Local` source review and authored positive/negative
+regressions for an oversized bulging connector, ordinary face-cap
+contact and exterior thick sections, plus exact staged Git blob readback.
+Bun/TypeScript, Codex, native Blockbench, visual QA
+and real performance results NOT EXECUTED under the user's testing hold.
+The check covers emitted native voxel geometry against just the two
+declared endpoint parts, not ideal continuous-spline volume clearance.
+
 ## 2026-11-05 — Continuous Connector centerline source review (source-only)
 
 The v6+ Geometry Construction `CONNECT` preflight now examines full

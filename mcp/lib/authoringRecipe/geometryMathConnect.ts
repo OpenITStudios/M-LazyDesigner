@@ -162,6 +162,65 @@ function connectedNativeVolume(
 }
 
 /**
+ * A native SWEEP samples its source at unit-voxel centers and emits disjoint
+ * Cuboids covering those full voxels. The furthest point of a voxel is at
+ * most sqrt(3)/2 model units from its center. Normal face attachment
+ * therefore needs a bounded radius + voxel-diagonal cap at EACH endpoint.
+ *
+ * Inspect only overlap between the already-generated connector Cuboids and
+ * actual solved/repeated endpoint Cuboids. Every corner of that overlap
+ * must fit within its OWN endpoint contact cap. This avoids rejecting a
+ * legitimate radius-thick seam while refusing material intrusion further
+ * away from the joint. Convexity of the sphere makes the corner bound a
+ * sufficient check for the entire overlapping rectangular solid.
+ *
+ * This is a native-voxel contact budget, NOT a proof about a continuous
+ * spline's swept volume, material opacity or third-party scene obstacles.
+ */
+const HALF_VOXEL_DIAGONAL = Math.sqrt(3) / 2;
+type ConnectorNativeBox = { from: RecipeVec3; to: RecipeVec3 };
+function requireLocalConnectorVolumeContact(
+  generated: readonly MathCuboid[],
+  endpoints: readonly {
+    point: RecipeVec3;
+    radius: number;
+    boxes: readonly ConnectorNativeBox[];
+  }[],
+  partId: string
+): void {
+  for (const endpoint of endpoints) {
+    const allowance = endpoint.radius + HALF_VOXEL_DIAGONAL + EPSILON;
+    for (const source of endpoint.boxes) {
+      for (const built of generated) {
+        const low = [0, 1, 2].map(axis =>
+          Math.max(source.from[axis]!, built.from[axis]!)
+        );
+        const high = [0, 1, 2].map(axis =>
+          Math.min(source.to[axis]!, built.to[axis]!)
+        );
+        // Face/edge contact has no positive common material volume.
+        if ([0, 1, 2].some(axis =>
+          high[axis]! - low[axis]! <= EPSILON
+        )) continue;
+        // The farthest AABB corner from the anchor is calculated by
+        // selecting the maximum absolute displacement on every axis.
+        const farthest = Math.hypot(...[0, 1, 2].map(axis =>
+          Math.max(
+            Math.abs(low[axis]! - endpoint.point[axis]!),
+            Math.abs(high[axis]! - endpoint.point[axis]!)
+          )
+        ));
+        if (!Number.isFinite(farthest) || farthest > allowance) {
+          throw new Error(
+            "GEOMETRY_MATH_CONNECT_NATIVE_VOLUME_EXCEEDS_CONTACT: " + partId
+          );
+        }
+      }
+    }
+  }
+}
+
+/**
  * A v5 CONNECT describes attachment constraints, not freehand world
  * coordinates. A start/end part, explicit bbox-face anchor, radius and
  * optionally authored intermediate offsets form an existing v2+ SWEEP.
@@ -260,6 +319,14 @@ export function buildMathConnector(
     throw new Error(
       "GEOMETRY_MATH_CONNECT_NATIVE_CONTACT_MISSING: " + part.id
     );
+  }
+  if (version === 6) {
+    // Native SWEEP already produced this voxelized geometry; do not
+    // duplicate rasterization or add a world-wide collision scan.
+    requireLocalConnectorVolumeContact(boxes, [
+      { point: start.point, radius: part.radius[0], boxes: start.boxes },
+      { point: end.point, radius: part.radius[1], boxes: end.boxes },
+    ], part.id);
   }
   return boxes;
 }
