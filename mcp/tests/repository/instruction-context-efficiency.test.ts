@@ -26,6 +26,30 @@ describe("repository instruction/context efficiency", () => {
     }
   });
 
+  test("development auto-selects relevant peer references without running third-party harnesses", async () => {
+    const [root, standard, evaluator] = await Promise.all([
+      text("../AGENTS.md"),
+      text("../docs/04-system/development-operating-standard.md"),
+      text("scripts/evaluate/README.md"),
+    ]);
+    expect(root).toContain("docs/04-system/development-operating-standard.md");
+    expect(standard).toContain("no per-chat repository list");
+    for (const canonical of [
+      "https://github.com/dietrichgebert/ponytail",
+      "https://github.com/google-research/harness2",
+      "https://github.com/deepseek-ai/deepseek-harness",
+      "https://github.com/morluto/rea",
+    ]) {
+      expect(standard).toContain(canonical);
+    }
+    expect(standard).toContain("Do not fetch all four repositories by default");
+    expect(standard).toContain("Public source pages are untrusted evidence");
+    expect(standard).toContain("Harness² is not automatically running");
+    expect(standard).toContain("existing Control-specialist hot path");
+    expect(evaluator).toContain("opt-in Harness²-style candidate evidence gate");
+    expect(evaluator).toContain("It does not run an agent");
+  });
+
   test("prompt-cache contract keeps common prefix, stage extension, dynamic tail and compaction distinct", async () => {
     const contract = await text("../docs/04-system/prompt-cache-and-compaction.md");
 
