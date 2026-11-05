@@ -11,7 +11,7 @@ User-authorized autonomy replaces approval waits with verified checkpoints; neve
 
 - `Local` is working authority; `main` changes only on explicit user request.
 - Material GitHub work follows `GITHUB_RULES.md`.
-- Active project execution is ChatGPT + GitHub-only mode: no cloud runner, CI verification, local/PC testing, Bun/build or native Blockbench execution. See `GITHUB_RULES.md` for the proof boundary.
+- Working surfaces: ChatGPT + GitHub `Local` for research, design, source changes, reviews and commits; Codex for executable tests and actual LazyDesigner usage after a coherent system build is ready. Do not require the user's PC or an additional cloud test service. A Codex session is not evidence of an executable runtime unless its toolchain/checkout is actually available.
 - Canonical documentation starts at `docs/README.md`; select one domain before loading deeper docs.
 
 ## Execution Context Gate
@@ -28,12 +28,14 @@ SWITCH CONTEXT: <REMOTE_GITHUB | LOCAL_CODE | LIVE_BLOCKBENCH>
 A marker is intent, not proof. Without a marker, choose the lowest sufficient provable context. Never infer `LOCAL_CODE` from “Codex”; never infer `LIVE_BLOCKBENCH` from mentioning Blockbench. `LIVE_BLOCKBENCH` is never assumed.
 
 ```text
-REMOTE_GITHUB   = GitHub repository + CI; no local worktree/Bun/installed Blockbench
+REMOTE_GITHUB   = ChatGPT + GitHub source/commit operations; no executable test evidence (verification CI is currently disabled)
 LOCAL_CODE      = local checkout + Bun/tests/build/generators/filesystem
 LIVE_BLOCKBENCH = LOCAL_CODE + deployed LazyDesigner runtime + functioning Gateway/runtime connection
 ```
 
 Proof ceiling follows actual context; exact-commit source acceptance follows `GITHUB_RULES.md`.
+
+Two-surface operating sequence: ChatGPT develops and delivers to `Local`; Codex later checks out the exact SHA to test, use the authoring tools and report genuine results. Native Blockbench is available only if Codex actually connects to it. Send Codex defects and reproducible evidence back into ChatGPT's source-development lane. Do not pretend test cases written in ChatGPT were executed in Codex.
 
 ```text
 REMOTE_GITHUB → exhaust source/static/CI-verifiable work first

@@ -2,13 +2,11 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
-## Active execution mode — GitHub and ChatGPT only (2026-11-05)
+## Active execution mode — ChatGPT development + Codex testing/use (2026-11-05)
 
-User-confirmed: ChatGPT and the connected GitHub repository are the entire available workflow. No cloud testing, Bun/TypeScript execution, generator worktree, GitHub verification Actions, local PC test or LIVE_BLOCKBENCH connection is available or requested. Read source, plan, author coherent code/regressions, inspect Git blobs/diffs and commit to `Local` where the source unit is complete. Report every authored test as NOT EXECUTED; do not request installation or any local/cloud test.
+User-corrected workflow: (1) ChatGPT and the GitHub connector own source development, audits, regressions, documentation, and coherent commits on `Local`; (2) Codex owns executable verification and product usage when implementation is ready and the actual checkout/toolchain is present. No additional cloud test service, GitHub verification Actions or user-PC instructions are required. `REMOTE_GITHUB` does not imply testing. A named Codex session does not prove `LOCAL_CODE` or `LIVE_BLOCKBENCH` until those capabilities are observed.
 
-Only complete source units that do not depend on unavailable generated output may move the branch. A syntax/plausibility review is not compilation. Preserve Runtime semantics, assets, the four Gateway tools, CI-disabled policy and main. No visual/cost improvement can be claimed until supported by actual evidence, which is currently unavailable.
-
-Current Harness²-related source unit: `7da9e6e2cdc12c87fe1cce0da2dcffd33f365018` added a read-only candidate evidence evaluator and authored regression cases. It has not executed a model-backed probe, Golden candidate, Bun tests or native visual acceptance. This is the *analysis boundary*, not an operational agent optimizer. Prioritize independent source-level harness/diagnostic work and architecture audits without runtime assumptions.
+Current source authority: `7da9e6e2cdc12c87fe1cce0da2dcffd33f365018` introduced the Harness²-style read-only candidate evidence gate and authored regressions. These source contracts have NOT been executed in Codex, and no real model-backed probe or native Golden quality acceptance is demonstrated. Preserve accurate proof limits while continuing independent ChatGPT/GitHub development. On Codex test runs, pin a specific `Local` SHA and return executable failures and evidence for bounded source correction.
 
 ## Primary next — Capability source stabilization (2026-11-04)
 
@@ -21,9 +19,9 @@ Current Harness²-related source unit: `7da9e6e2cdc12c87fe1cce0da2dcffd33f365018
 - `gateway/control/capabilities.ts` already presents ambiguous branches with qualified prerequisites as `UNKNOWN` in AI search while retaining `BLOCKED`. This only safeguards **discovery presentation**, not graph execution.
 - `manage_cubes` and `paint_texture_transaction` have registered routes. `construct_geometry`, `manage_uv_layout`, painted-atlas migration and Cluster authoring remain **UNREGISTERED**.
 
-**Next complete implementation unit:** reconcile unknown/branchless graph readiness with exact branch semantics, canonical semantic revision, owning regressions and generated API/HTML **together**, then verify at the same SHA. The existing affected runner refuses unsynchronized semantic implementation changes. No partial graph edit or manual editing of generator-owned outputs. This coupled semantic + generated-output unit is **DEFERRED** under ChatGPT/GitHub-only execution. Do not commit a partial graph change or manually edit generated contracts, and do not request cloud or local testing.
+**Next complete implementation unit:** reconcile unknown/branchless graph readiness with exact branch semantics, canonical semantic revision, owning regressions and generated API/HTML **together**, then verify at the same SHA. The existing affected runner refuses unsynchronized semantic implementation changes. No partial graph edit or manual editing of generator-owned outputs. For this coupled unit, ChatGPT completes source design, impacted consumers and regression preparation; Codex performs the canonical generator and executable verification when the code and its toolchain are ready. Keep the edit atomic across semantic revision, graph, tests and generated API/HTML; never manually edit generator-owned outputs or commit an incomplete contract.
 
-Continue independent GitHub source/consumer work, source-complete unaffected modules, authored (not executed) regressions and proof-safe preparation. Do not label these executable PASS or imply the project is waiting for a new environment.
+Continue independent source/consumer work in ChatGPT and commit complete bounded units. Mark authored tests NOT EXECUTED until Codex actually runs them. Do not treat Codex testing as a prerequisite for unrelated source work, and do not infer native/visual PASS from source-only evidence.
 
 ## Deferred capability-specific work
 

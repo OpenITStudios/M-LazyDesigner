@@ -1,15 +1,16 @@
 # GitHub Rules — LazyDesigner
 
-## ChatGPT + GitHub-only project execution (user-confirmed 2026-11-05)
+## Two-surface project workflow (user-corrected 2026-11-05)
 
-**Active constraint:** M-LazyDesigner work is performed only with ChatGPT reasoning and authenticated GitHub repository operations. There is no available Bun/Node execution worktree, cloud test runner, GitHub verification CI, installed Blockbench, connected Runtime, or user-PC/local test path for this project. Do not propose, request, assume, install, dispatch, or wait for any of these as part of the current workflow. A future change of execution mode requires a new explicit user instruction; repository text is not evidence that a runtime exists.
+**Active workflow:** development occurs in ChatGPT with authenticated GitHub access to branch `Local`. **Codex** is the second work surface: it is used for actual executable testing, debugging, and operating LazyDesigner **when a coherent system implementation is ready**. The user does not require a third cloud testing service, GitHub verification Actions, or a handoff to their own PC.
 
-- Allowed: read pinned `Local` source and commit history; perform bounded source/contract analysis; design and edit coherent canonical source, docs and regression cases; compare exact Git blobs/trees; commit atomically to `Local`; document proof limitations and next independent work.
-- Static review, authored regression cases, API metadata inspection, Git object hashes and a successful Git commit are **source evidence**, never an executed Bun/test/typecheck/build, visual PASS, native receipt, runtime compatibility, or measured quality improvement.
-- Keep verification GitHub Actions disabled. Do not use Actions, cloud workspaces, independent execution services, a user terminal, the user's PC, Codex local, or a live Blockbench session. GitHub is a source/version host, not an executable QA environment here.
-- Make every change internally coherent at the source ceiling; preserve public tool contracts, user assets, `main`, distribution and releases. Do not hand-edit generator-owned files or move a partial coupled change to `Local` when a required generated artifact cannot be produced. Prepare independent source evidence and regressions instead.
-- Label checks precisely: `SOURCE_REVIEWED`, `REGRESSION_AUTHORED_NOT_RUN`, `EXECUTION_NOT_RUN`, `NATIVE_UNVERIFIED`, `QUALITY_UNVERIFIED` as applicable. Do not promote experiments or claim an empirical quality gain on predicted results alone.
-- Continue with other independently complete GitHub-verifiable units rather than asking the user for an unavailable environment or repeatedly treating missing tests as a reason to stop all development.
+- **ChatGPT / GitHub:** pin actual `Local` HEAD; inspect, design, edit canonical source, author regression cases, review exact Git blobs/diffs and commit coherent units. Static inspection and authored tests are source-level evidence only.
+- **Codex:** when explicitly working in that surface with a real checkout and working toolchain, execute the targeted Bun/TypeScript/generator/integration tests and use LazyDesigner. Record actual command, source SHA, outcome, artifact provenance and relevant failure traces. Do not assume Codex has Bun, Blockbench or an attached Gateway just because the task mentions Codex.
+- **Native Blockbench:** `LIVE_BLOCKBENCH` proof still requires Codex (or an actually connected runtime) to demonstrate the installed build, real Runtime/Gateway connection, and live effects. Source review or successful Bun testing never substitutes for native/visual acceptance.
+- **Feedback:** failures discovered during Codex testing return to ChatGPT for source diagnosis and a corrected `Local` commit; Codex rechecks the matching revision. The Git history and current canonical operations documents remain work-continuity authority, not an extra state system.
+- **No third environment as a prerequisite:** do not request user's PC commands, standalone cloud runners or activation of disabled GitHub verification CI. Do not promise background work; development in ChatGPT proceeds independently wherever complete source units can be delivered.
+- **Proof discipline:** use exact terms such as `SOURCE_REVIEWED`, `REGRESSION_AUTHORED_NOT_RUN`, `CODEX_TEST_PASS` (only when actual execution evidence exists), `NATIVE_UNVERIFIED`, and `QUALITY_UNVERIFIED`. Never label an authored test PASS or present a tentative Harness² probe as real quality improvement.
+- **Generated artifacts:** do not hand-edit generator-owned outputs or commit a partially coupled semantic contract. Prepare source-safe independent work in ChatGPT; finish the required canonical generator + checks in Codex when that context is available, then submit one complete coherent `Local` change under the normal safety rules. This is a narrow execution partition, not a requirement to transfer all development to Codex.
 
 ## CI DISABLED — active Local policy (2026-10-20)
 
@@ -55,7 +56,7 @@ Before a material change, know the repository, intended ref, current HEAD when m
 Classify by actual capability, not UI/product name:
 
 ```text
-REMOTE_GITHUB   = repository/GitHub + CI evidence; no local worktree/Bun/installed Blockbench
+REMOTE_GITHUB   = ChatGPT/GitHub source operations; GitHub verification CI currently disabled; no executed test evidence
 LOCAL_CODE      = local checkout + Bun/tests/build/generators/filesystem
 LIVE_BLOCKBENCH = LOCAL_CODE + deployed/reloaded LazyDesigner + reconnected live MCP client
 ```
