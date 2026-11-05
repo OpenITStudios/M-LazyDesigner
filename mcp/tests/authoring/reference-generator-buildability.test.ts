@@ -296,24 +296,23 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(prompt).toContain("subject_source");
     expect(prompt).toContain("style_example");
     expect(templates).toContain("subject =");
-    expect(skill).toContain("never invent numeric dimensions");
+    expect(skill).toContain("never invent dimensions from a photograph");
   });
 
-  test("style correction defaults to one hero with no infographic or unwanted views", async () => {
+  test("four-side style correction retains four sides and never automatically selects HERO", async () => {
     const [standard, prompt, templates, skill] = await Promise.all([
       read("../docs/02-reference/image/standard.md"),
       read("../docs/02-reference/image/prompt-contract.md"),
       read("../docs/02-reference/image/master-templates.md"),
       read(REFERENCE_SKILL),
     ]);
-    expect(standard).toContain("one large, uncropped 3/4 model");
-    expect(standard).toContain("if a generator ignores the same presentation correction twice");
-    expect(prompt).toContain("no infographic");
-    expect(prompt).toContain("16×7×7 claims");
-    expect(templates).toContain("style-calibrating hero-only pass");
+    expect(standard).toContain("style feedback never authorizes an output-format switch");
+    expect(prompt).toContain("style repair preserves the selected output type");
+    expect(prompt).toContain("the one-view hero template applies only when the user explicitly requests");
+    expect(templates).toContain("style-calibrating hero-only pass (explicit single-view requests only)");
     expect(templates).toContain("no secondary views or detail thumbnails");
-    expect(skill).toContain("repair a rejected style before expanding views");
-    expect(skill).toContain("no infographic, dimensions, labels");
+    expect(skill).toContain("repair style within the selected output");
+    expect(skill).toContain("hero only for an explicit single-view request");
   });
 
 
@@ -390,22 +389,25 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(skill).toContain("visual-match claims \`unverified\`");
   });
 
-  test("versioned request bounds four-side layout and style HERO without false QA", async () => {
+  test("four-side image instruction excludes other mode triggers even though internal master supports them", async () => {
     const [standard, prompt, templates, skill] = await Promise.all([
       read("../docs/02-reference/image/standard.md"),
       read("../docs/02-reference/image/prompt-contract.md"),
       read("../docs/02-reference/image/master-templates.md"),
       read(REFERENCE_SKILL),
     ]);
-    const core = templates.split("m-ld-ref — controlled reference request v1.2")[1]?.split("a style-mismatch report")[0] ?? "";
-    for (const token of ["hero_style_check", "minimum_construction", "four_side_construction",
-      "front top-left / right top-right / back bottom-left", "only direction labels",
-      "one first-observed failure", "one bounded correction", "no_false_pass"]) {
-      expect(core).toContain(token);
+    expect(templates).toContain("m-ld-ref — controlled reference request v1.3");
+    expect(templates).toContain("do not send the entire block to the image generator");
+    const payload = templates.split("four_side_image_prompt_begin")[1]?.split("four_side_image_prompt_end")[0] ?? "";
+    for (const direction of ["top left: front", "top right: right", "bottom left: back", "bottom right: left"]) {
+      expect(payload).toContain(direction);
+    }
+    for (const forbidden of ["hero", "3/4", "infographic", "palette", "dimensions", "close-up", "swatches", "sidebar", "badge", "notes", "fifth"]) {
+      expect(payload).not.toContain(forbidden);
     }
     expect(standard).toContain("four-side model baseline");
-    expect(prompt).toContain("do not squeeze a fifth hero");
-    expect(skill).toContain("construction-only");
+    expect(prompt).toContain("selected-output isolation");
+    expect(skill).toContain("only the isolated");
     expect(skill).toContain("remain unverified without real tests");
   });
 
@@ -438,7 +440,7 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(standard).toContain("provisional");
     expect(standard).toContain("not prove calibrated 90° camera rotations");
     expect(prompt).toContain("never present generated hidden geometry as observed");
-    expect(templates).toContain("a provisional construction proposal");
+    expect(templates).toContain("unknown or separately provisional");
     expect(templates).toContain("no_false_pass");
   });
 
@@ -449,7 +451,7 @@ describe("LazyDesigner reference preparation contract", () => {
     ]);
     expect(standard).toContain("the separate pixel art/particle branches are unchanged");
     expect(standard).toContain("no fifth hero");
-    expect(skill).toContain("a request explicitly limited to hero/one corrective view");
+    expect(skill).toContain("hero only for an explicit single-view request");
     expect(skill).toContain("do not generate every module by default");
   });
 
@@ -554,5 +556,37 @@ describe("LazyDesigner reference preparation contract", () => {
     expect(imageReadme).toContain("md-ref-02 is rejected_visual_quality");
   });
 
+
+
+  test("Roman poster-plus-four-panels is a P0 rejection, not a crop-and-pass candidate", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("p0_output_shape");
+    expect(standard).toContain("p0_format_fail");
+    expect(standard).toContain("do not crop/reassemble");
+    expect(prompt).toContain("hard pre-call refusal");
+    expect(prompt).toContain("fifth panel or decorative poster sections");
+    expect(templates).toContain("do not crop a failed poster");
+    expect(skill).toContain("a fifth view or poster section");
+    expect(standard).toContain("a true 3d camera-render workflow needs separately verified");
+  });
+
+  test("a repeated failed four-view repair stops without implicit HERO and without positive archive promotion", async () => {
+    const [standard, prompt, templates, skill] = await Promise.all([
+      read("../docs/02-reference/image/standard.md"),
+      read("../docs/02-reference/image/prompt-contract.md"),
+      read("../docs/02-reference/image/master-templates.md"),
+      read(REFERENCE_SKILL),
+    ]);
+    expect(standard).toContain("allow at most one evidence-led correction");
+    expect(prompt).toContain("if one bounded correction reproduces");
+    expect(templates).toContain("after one bounded correction that repeats");
+    expect(skill).toContain("then stop if the same defect recurs");
+    expect(standard).toContain("rejected_visual_quality");
+  });
 
 });

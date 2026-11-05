@@ -125,9 +125,9 @@ A generated visual becomes approved visual authority only after explicit user ac
 
 ### Builder-Learned Execution Discipline
 
-Use the versioned `M-LD-REF / 1.2` invocation in `docs/02-reference/image/master-templates.md` for ChatGPT model-reference generation. Explicitly separate `SUBJECT_SOURCE`, `STYLE_EXAMPLE`, `PRESENTATION_EXAMPLE` and `APPROVED_TARGET` roles: a style example never supplies the object's identity, and presentation samples supply layout only. Only call an exemplar loaded when its **actual image pixels** are available; GitHub catalogs, image IDs and hashes are insufficient. A missing pixel exemplar leaves visual-match claims `UNVERIFIED`.
+Use the versioned `M-LD-REF / 1.3` invocation in `docs/02-reference/image/master-templates.md` for ChatGPT model-reference generation. Explicitly separate `SUBJECT_SOURCE`, `STYLE_EXAMPLE`, `PRESENTATION_EXAMPLE` and `APPROVED_TARGET` roles: a style example never supplies the object's identity, and presentation samples supply layout only. Only call an exemplar loaded when its **actual image pixels** are available; GitHub catalogs, image IDs and hashes are insufficient. A missing pixel exemplar leaves visual-match claims `UNVERIFIED`.
 
-Take from M-LazyBuilder EX-REF-02/03 the restrained balanced **four-side layout** as the DEFAULT completed 3D MODEL sheet, never its house architecture or material motifs. When the user rejects a generated style, inspect the defect and keep the next attempt to one large unlabelled HERO. Once accepted and full construction is requested, generate the clean Front/Right/Back/Left 2×2 **construction-only** sheet regardless of apparent symmetry; no fifth HERO or poster rows. A request explicitly limited to HERO/one corrective view remains a partial artifact, not completed construction reference. After generation, compare actual pixels against source identity first, MACRO/MESO structure second, MICRO paint/rest/material third, and presentation/cross-view consistency last. Fix the **first observed failure** with one bounded `CHANGE + PRESERVE`, then recheck affected views and STOP if it repeats.
+Take from M-LazyBuilder EX-REF-02/03 the restrained balanced four-side layout as the DEFAULT completed 3D MODEL sheet, never its house architecture or material motifs. **Never route a selected four-side reference or its style correction to HERO.** HERO is permitted only after an explicit single-view user request. Compile the image call using **only** the isolated `FOUR_SIDE_IMAGE_PROMPT_BEGIN`/`FOUR_SIDE_IMAGE_PROMPT_END` payload in `master-templates.md`, filled with source-backed facts; never send the full multi-mode contract, old poster prompts or rejected Roman example. Examine the actual result for P0 shape before P1 identity, Minecraft craft, equipment contacts and physical consistency. A fifth view or poster section is `P0_FORMAT_FAIL`; do not crop and promote it. Allow one bounded `CHANGE + PRESERVE` correction, then STOP if the same defect recurs.
 
 No new runtime, schema, automatic scorer, global approved sample corpus or installed Project is implied. Existing static source checks validate authored contracts only; visual-quality improvement and native Blockbench output remain **UNVERIFIED** without real tests.
 
@@ -143,8 +143,8 @@ USER IMAGE REQUEST + SOURCE / APPROVED VISUALS
 → resolve only BLOCKING facts; distinguish source fidelity from original creation
 → inspect actual accessible SUBJECT_SOURCE / STYLE_EXAMPLE / PRESENTATION_EXAMPLE pixels separately
 → compile one shared object-space build brief (volumes, contacts, voids, surfaces)
-→ select a single HERO only for style calibration or explicit single-view request; otherwise four-side FRONT/RIGHT/BACK/LEFT by default for completed 3D MODEL construction
-→ invoke image generation once when authorized using the compact compiled prompt
+→ lock FOUR_SIDE_CONSTRUCTION for four-side requests and all their style corrections; select HERO only for an explicit single-view request
+→ invoke image generation once when authorized using only the selected isolated output payload, never a mixed-mode master or rejected poster prompt
 → review ACTUAL source/output pixels for P1 identity, Minecraft craft, physical four-view contacts and only then P2 presentation
 → if a visible material defect exists, bounded CHANGE + PRESERVE image correction
 → reinspect all affected panels; any remaining P1 failure is REJECTED_VISUAL_QUALITY for positive reference use
@@ -165,7 +165,7 @@ When given a real-object photo plus a stylized Minecraft example, treat the phot
 
 This is skill/prompt **learning**, not weight training or a guarantee that future image generation will obey the instructions. Static repository checks establish consistent wording, not actual improved visual quality. If the next correction is a repeat of an already-failed approach, stop and explain the unresolved visual mismatch instead of issuing another blind generation.
 
-**Repair a rejected style before expanding views:** produce one isolated large 3/4 HERO with a plain dark/neutral studio background and no infographic, dimensions, labels, parts legend, palettes, wireframe or extra thumbnails. The style check is a single-panel evidence decision in the existing workflow, not a new artifact type or mandatory additional generation for ordinary accepted work. Only after the user accepts the style, provide minimum-sufficient orthographic views if useful. Never invent numeric dimensions from the source photograph or style image.
+**Repair style within the selected output:** an existing or requested four-side model stays FRONT/RIGHT/BACK/LEFT throughout correction; never make a separate HERO as a default repair. Use the isolated one-view template only for explicit single-view user intent; that output is not a completed 3D construction reference. Reject repeated poster extras and stop instead of cropping to fabricate success. Never invent dimensions from a photograph.
 
 Use actual source images as anchors for CHANGE + PRESERVE, inspect the pixels after generation, and stop repeated same-direction failure after two attempts instead of hiding the fault with a larger poster. Native Blockbench fidelity and real exportability remain separate downstream proof.
 

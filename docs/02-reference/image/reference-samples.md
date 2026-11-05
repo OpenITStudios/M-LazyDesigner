@@ -22,7 +22,7 @@ This catalog follows [M-LazyBuilder's approved-reference storage discipline](htt
 | `manifest.json` | Exact hashes, dimensions, approval scope, provenance and limitations | JSON |
 
 - **Visual generation ID:** `f1d746b2-0eda-4359-8b23-83bdf2ecfb93`.
-- **Current authoring contract:** `M-LD-REF / 1.2` in [master-templates.md](master-templates.md), including the quality acceptance firewall. This is **current forward-looking guidance**, not proof that historical MD-REF-01/02 images were made or tested with v1.2.
+- **Current authoring contract:** `M-LD-REF / 1.3` in [master-templates.md](master-templates.md), including an isolated four-side-only image payload, explicit single-view opt-in and quality acceptance firewall. This is **current forward-looking guidance**, not proof that historical MD-REF-01/02 images were generated or tested with v1.3.
 - **Approval:** for visual reference guidance only. **Not executed/verified:** native Blockbench import, part dimensions, UV/rig, Bedrock export, or calibrated orthographic camera consistency.
 - **Source-hidden rear:** the source photograph provides only one three-quarter exterior angle; the image's BACK panel is **PROVISIONAL creative completion**, not observed original geometry. RIGHT/LEFT source-fidelity claims are similarly limited where occluded.
 - **Visual caveats:** wheel segmentation, mirror/door/trim alignment and exact lamps/grille may differ from the source. Do not promote these details into universal model-construction rules.

@@ -53,7 +53,7 @@ Sheet 02+ = bounded elaboration / overflow only
 
 Additional sheets never redesign or rescale the asset.
 
-**Mandatory MODEL construction baseline:** for any completed Minecraft/Blockbench **3D model reference**, Sheet 01 presents all **four mandatory object-relative sides: FRONT, RIGHT, BACK, LEFT**, using a balanced 2×2 layout. This applies to vehicles, props, humanoids, creatures, mechanical assets and foliage models. A HERO-only image remains valid for an explicitly requested single image or preliminary style calibration, but is **not** a completed four-side construction reference. The separate Pixel Art/Particle branches are unchanged. User instructions requesting only a HERO or an isolated correction take precedence over the default full-sheet deliverable.
+**Mandatory MODEL construction baseline:** for any completed Minecraft/Blockbench **3D model reference**, Sheet 01 presents all **four mandatory object-relative sides: FRONT, RIGHT, BACK, LEFT**, using a balanced 2×2 layout. This applies to vehicles, props, humanoids, creatures, mechanical assets and foliage models. A HERO-only image remains valid only for an explicitly requested single-view deliverable; it is not an automatic preliminary step triggered by style complaints and is never a completed four-side construction reference. The separate Pixel Art/Particle branches are unchanged. User instructions requesting only a HERO or an isolated correction take precedence over the default full-sheet deliverable.
 
 ## Information Priority
 
@@ -232,7 +232,7 @@ INFOGRAPHIC_OVER_FORM    → poster labels, palettes, invented dimensions, wiref
 MULTI_VIEW_BEFORE_STYLE  → many views consume pixels before the intended style has been accepted
 ```
 
-**Style-calibration first:** when a user says a generated 3D object does not match a supplied Minecraft style, the next image defaults to ONE large, uncropped 3/4 model on a neutral/dark studio background with **no infographic, labels, dimensions, color swatches, wireframe, extra orthographic views or technical notes**. This is a temporary focused **HERO-only panel plan**, not a new generator mode or permanent ban on orthographic references. Once style is accepted and the task requires a completed 3D MODEL reference, generate the balanced FRONT/RIGHT/BACK/LEFT construction sheet next; extras remain minimum-useful. If a generator ignores the same presentation correction twice, stop blindly repeating and report what remains unresolved.
+**Stay on the selected output shape during style repair.** A user asking to correct the visual style of a four-side model has not requested a separate HERO. Maintain FRONT/RIGHT/BACK/LEFT for that correction. A large, uncropped 3/4 model view is available only when the user explicitly requests a single-view deliverable. If two attempts reproduce an added-panel/poster or material P1 geometry defect, stop the image-generation direction; do not crop or keep generating.
 
 Bedrock/Blockbench target compatibility is a design constraint, not a claim of actual native export. A picture of a rotated cuboid, faceted round feature or painterly texture is not proof that an arbitrary mesh, boolean cut or exact UV has been implemented. Use the existing later model/visual verification for that evidence.
 
@@ -344,6 +344,11 @@ MD-REF-01 remains approved as a **visual guideline only**. Its frozen PNG/ZIP ar
 
 
 ### Quality Acceptance Firewall — Model Value Before Presentation
+
+**P0_OUTPUT_SHAPE — hard rejection before artistic grading:** for a four-side reference, only four object-relative views FRONT/RIGHT/BACK/LEFT belong in the generated sheet. A fifth feature view, close-up gallery, material swatches, measurements, title banner, status stamp, or notes strip makes the result `P0_FORMAT_FAIL` even if the four directional views appear. Do not crop/reassemble and treat the output as an accepted reference; layout repairs cannot resolve underlying equipment, source-identity, or model-geometry errors. Allow at most ONE evidence-led correction of a repeated output-format error, then STOP rather than produce a third similar poster. A true 3D camera-render workflow needs separately verified model/camera support; a generated image alone is not that proof.
+
+**Output selection precedence:** the current requested artifact type outranks style-error heuristics and former prompt modes. A request for four sides remains four sides throughout any revision; style feedback never authorizes an output-format switch.
+
 
 **Observed failure in MD-REF-02:** a clean 2x2 crop and valid archive hashes were treated as progress despite the Roman soldier's source-identity drift, unconvincing Minecraft game-model craft, missing right-hand sword continuity and uncertain shield contact. Presentation and preservation are not artistic acceptance.
 

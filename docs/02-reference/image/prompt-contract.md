@@ -62,6 +62,15 @@ Do not include rejected alternatives, unrelated discussion, system-development c
 
 ## Prompt Layers
 
+### Selected-output isolation — P0 before image generation
+
+Resolve exactly ONE output type from the current user request. Four-side generation and corrections to an existing four-side image select `FOUR_SIDE_CONSTRUCTION`. Pass to image generation **only** the source-filled text between `FOUR_SIDE_IMAGE_PROMPT_BEGIN` and `FOUR_SIDE_IMAGE_PROMPT_END` in `master-templates.md`; surrounding multi-mode planning prose is NOT part of the generation prompt. Only the current subject and actually available permitted visual anchors may accompany it.
+
+**Hard pre-call refusal:** a supposed four-side prompt requesting any additional feature/3/4 view, close-up, palette, dimensions, player-scale diagram, sidebar, header banner or note strip is invalid and must be rewritten before invoking image generation. Do not accidentally include alternate stages, rejected poster images or legacy template instructions in the call. A style complaint never changes the selected output type.
+
+**P0 output rejection:** if the actual result includes a fifth panel or decorative poster sections, mark `P0_FORMAT_FAIL` regardless of how attractive the four main views are. Do not salvage by cropping; check P1 identity, Minecraft craft and part/hand continuity independently. If one bounded correction reproduces the same poster or P1 failure, STOP rather than repeat the generation. This is an authored prompt/QA requirement, not a guaranteed image-model enforcement mechanism.
+
+
 Build prompts in this order:
 
 ```text
@@ -155,7 +164,7 @@ STYLE_LOCK          = <example's artistic treatment, not its object identity>
 
 **Style repair without overcorrecting:** after a user rejects both pixelated block sculptures and smooth real-world product renders, target the **middle**: handcrafted Minecraft game-asset geometry with cuboid layering and painterly/pixel face texture, matching the actual style example. Do not replace it with an untextured low-poly object.
 
-**Style-calibration delivery:** for a correction specifically about visual style, the *next generation* should default to one LARGE hero 3/4 object on a plain neutral or dark studio background. **NO INFOGRAPHIC**: no title, labels, material palette, dimensions, 16×7×7 claims, color-coded construction guide, detached part closeups, or extra front/back/side/top/bottom thumbnails. The hero is the whole reference for that call. Once style is reviewed, a completed 3D MODEL reference uses the standard four-side FRONT/RIGHT/BACK/LEFT construction sheet; only supplementary views remain minimum-sufficient. Do not silently add an infographic because the word `reference` appeared.
+**Style repair preserves the selected output type:** a FOUR_SIDE_CONSTRUCTION request stays four-side during source/style/weapon corrections. Do not produce a separate HERO as an automatic preflight or replacement. The one-view HERO template applies only when the user explicitly requests a single image. For four sides, compile only the isolated four-view payload in `master-templates.md`; never send unused modes, the entire master document, a previous infographic prompt, or a rejected example to the image generator.
 
 An actual image model can ignore even correct instructions; its pixels still require after-generation inspection. If two targeted retries repeat the same layout defect, stop that direction rather than regenerate a third nearly identical sheet.
 
@@ -522,6 +531,7 @@ all panels P1/P2
 identity lock explicit
 scale lock explicit when material
 no superseded instruction remains
+four-side image payload has no alternate output type or additional panel instructions
 no fabricated source facts or overwritten approved design; creative defaults remain provisional
 ```
 
@@ -544,6 +554,7 @@ critical details useful
 motion poses preserve model identity + scale
 labels minimal/correct
 no redundant/decorative panel displaced useful evidence
+no fifth panel or decorated poster sections for a four-side request (P0_FORMAT_FAIL)
 ```
 
 For Sheet 02+, compare the actual output directly against the approved Sheet 01 image when accessible. If a visible material mismatch exists, use bounded CHANGE + PRESERVE editing where possible and reinspect touched panels; stop repeated corrections without new evidence. User review determines final reference approval.

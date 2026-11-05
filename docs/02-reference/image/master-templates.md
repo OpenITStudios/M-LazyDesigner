@@ -74,12 +74,12 @@ Neutral/dark studio background, coherent identity; no infographic by default.
 When the source is real-world/non-Minecraft, the final production sheet still shows the Minecraft/Blockbench target only unless the user explicitly requests otherwise.
 
 
-## Controlled Image Invocation — `M-LD-REF / 1.2`
+## Controlled Image Invocation — `M-LD-REF / 1.3`
 
 This is the **single compact copy-ready invocation** of existing visual-reference rules. It is not a new image engine, Skill, schema, ChatGPT Project activation or substitute for the Template A/B/C continuation/correction contracts below. Fill only applicable facts after inspecting actual images; keep the version label for fair before/after pilots.
 
 ```text
-M-LD-REF — CONTROLLED REFERENCE REQUEST v1.2
+M-LD-REF — CONTROLLED REFERENCE REQUEST v1.3
 INTENT = <faithful source | new creative asset | approved bounded revision>
 SUBJECT_SOURCE = <visible source identity, MACRO proportions/parts, real contact
   and void relations, material ownership, side-specific asymmetry; UNKNOWN if hidden>
@@ -92,9 +92,9 @@ TARGET = Minecraft-stylized Blockbench model; composed cuboids, meaningful angul
   detail, painted texture ON faces; no smooth product CGI or raised texel cubes
 OBJECT_LOCK = <same physical asset; approved front, object-left/right, relative
   width/depth/height, part count, contacts, openings and confirmed colors>
-STAGE = <FOUR_SIDE_CONSTRUCTION (default completed 3D MODEL) | HERO_STYLE_CHECK (preview/style repair) | MINIMUM_CONSTRUCTION (scoped partial correction only)>
+STAGE = <FOUR_SIDE_CONSTRUCTION (default completed 3D MODEL, also style corrections) | HERO_STYLE_CHECK (explicit single-view only) | MINIMUM_CONSTRUCTION (explicit partial correction only)>
 DRAW =
-  HERO_STYLE_CHECK: ONE full-size uncropped 3/4 asset, neutral studio; no labels,
+  HERO_STYLE_CHECK: only after explicit single-view request, ONE uncropped 3/4 asset, neutral studio; no labels,
     typography, palette, infographic, dimensions or extra thumbnails.
   MINIMUM_CONSTRUCTION: scoped partial/repair image ONLY, not the completed MODEL
     four-side handoff; choose only the relevant visible P1/P2 view(s).
@@ -125,14 +125,42 @@ NO_FALSE_PASS = no visual approval, native Blockbench/UV/Bedrock or exact-camera
   claim from image labels, hash, generated text, or a static source test.
 ```
 
-A style-mismatch report selects `HERO_STYLE_CHECK` before the four-side sheet; an explicit request for one HERO or scoped repair also stays within that bounded output. Otherwise, a completed 3D MODEL reference **defaults to `FOUR_SIDE_CONSTRUCTION`**. After a HERO is visually accepted, reuse its **actual pixels** as the four-view sheet's anchor. The four-side layout borrows Builder's **clean presentation only**, never its building subject, architecture, or world-block construction style. Rear/right geometry unseen by the source remains UNKNOWN for fidelity and may only be a PROVISIONAL construction proposal; the image is not a calibrated 3D proof. A ChatGPT Project must be configured by the user; this GitHub text cannot install prompts or attach images automatically. Historical v1.1 generated outputs keep their original provenance; this v1.2 source update does not claim the image generator or Blockbench was tested.
+**Routing lock:** style feedback on a selected FOUR_SIDE_CONSTRUCTION task stays FOUR_SIDE_CONSTRUCTION; never automatically route it to HERO_STYLE_CHECK. Only an explicit single-view user request can select HERO. The multi-mode block above is INTERNAL reasoning, not the image prompt; **do not send the entire block to the image generator**. For four-sided work send only the isolated four-side payload below, filled with source-backed facts and permitted actual visual anchors, not historical poster material. An unknown source rear stays UNKNOWN or separately PROVISIONAL. GitHub cannot install a ChatGPT Project, and this written v1.3 update does not prove output compliance.
 
+
+### Isolated Four-Side Generation Payload — One Selected Output
+
+For a four-sided reference or any correction to an existing four-sided sheet, fill and send **only the content between the two markers below**, plus the actual source/approved image pixels when available. Never send the multi-mode planning contract above, old poster images, sample-specific reproduction instructions, or alternate output templates. The output is one picture containing four physical sides of the same unchanged subject.
+
+```text
+FOUR_SIDE_IMAGE_PROMPT_BEGIN
+Draw a Minecraft-stylized Blockbench reference of:
+<subject identity, source-backed main silhouette, unique parts, and material roles>.
+
+Depict ONE unchanged physical model, observed from exactly four
+object-relative directions in a clean balanced two-by-two composition.
+TOP LEFT: FRONT.
+TOP RIGHT: RIGHT.
+BOTTOM LEFT: BACK.
+BOTTOM RIGHT: LEFT.
+
+In each panel show the complete same object and stable physical proportions.
+Use a quiet dark-neutral backdrop, simple dividers, and short direction labels.
+Preserve the same part counts, surfaces, contact points, tools, accessories,
+right/left handedness, materials and connections from every viewpoint.
+Use purposeful cuboid and angular forms with restrained hand-painted
+material-specific textures painted onto model faces.
+Finish the image after exactly those four directional views.
+FOUR_SIDE_IMAGE_PROMPT_END
+```
+
+**P0 prompt lint:** no extra visual sections, unrelated interface decoration, or alternate-stage instructions may be included in the extracted image payload. After generation inspect actual pixels; a fifth or extraneous section is `P0_FORMAT_FAIL`, not a successful four-view reference. Do not crop a failed poster to create apparent acceptance. After one bounded correction that repeats the same issue, STOP. A real 3D model with camera renders would require independent geometry/runtime proof.
 
 ---
 
-### Style-Calibrating HERO-Only Pass (when style feedback is the blocker)
+### Style-Calibrating HERO-Only Pass (explicit single-view requests only)
 
-Before generating a new multi-view sheet following a user-supplied Minecraft-style example, resolve the STYLE mismatch with **one large 3/4 model only**, using this temporary panel selection inside the existing image workflow:
+Use this isolated style-preview option ONLY when the user explicitly requests one large single view. Never treat a style complaint about four sides as permission to switch the output format:
 
 ```text
 CREATE ONE MINECRAFT-STYLE BLOCKBENCH 3D MODEL IMAGE.
@@ -239,7 +267,7 @@ DO NOT CHANGE / HIGH-RISK FAILURES
 - <small targeted list only>
 
 PRESENTATION
-- one dominant hero when useful, omitted entirely from a four-side construction-only sheet
+- no additional feature render or alternate-view panel in the four-side construction-only sheet
 - construction views aligned and consistently scaled
 - no paragraph text
 - no palette box unless decision-critical
@@ -503,7 +531,7 @@ Never inject the entire profile guide into a generation prompt.
 
 # Generation Decision and Pre-Call Gate
 
-Generate one useful image/sheet in one pass by default. Use staged generation only when materially complex multi-view evidence cannot fit readably or a concrete output failure requires separating views. Do not invent extra images, 3D proxies or intermediate assets.
+Generate one useful image/sheet in one pass by default. For a four-sided user request, send only the isolated FOUR_SIDE_IMAGE_PROMPT body and preserve that shape across bounded corrections; do not preface it with an unrequested single-view render or alternate stage. Do not invent extra images, 3D proxies or intermediate assets.
 
 Proceed when:
 
