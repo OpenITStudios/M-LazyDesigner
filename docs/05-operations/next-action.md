@@ -7,6 +7,19 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 User-corrected workflow: (1) ChatGPT and the GitHub connector own source development, audits, regressions, documentation, and coherent commits on `Local`; (2) Codex owns executable verification and product usage when implementation is ready and the actual checkout/toolchain is present. No additional cloud test service, GitHub verification Actions or user-PC instructions are required. `REMOTE_GITHUB` does not imply testing. A named Codex session does not prove `LOCAL_CODE` or `LIVE_BLOCKBENCH` until those capabilities are observed.
 
 Current source authority: `7da9e6e2cdc12c87fe1cce0da2dcffd33f365018` introduced the Harness²-style read-only candidate evidence gate and authored regressions. These source contracts have NOT been executed in Codex, and no real model-backed probe or native Golden quality acceptance is demonstrated. Preserve accurate proof limits while continuing independent ChatGPT/GitHub development. On Codex test runs, pin a specific `Local` SHA and return executable failures and evidence for bounded source correction.
+Harness candidate Codex evaluation handoff: use the focused source regression
+`bun test tests/benchmark/golden-session-comparison.test.ts` on a clean
+checkout at the exact tested SHA. Do not call this a visual/model-quality
+test. An optional A/B experiment uses two isolated temporary candidate
+contexts under one fixed source revision and disposable Golden inputs, per
+`mcp/docs/QUALITY_BENCHMARK.md`. Comparison across different committed Skills
+is not currently isolated. The evaluator is source-complete but no actual
+Codex, Golden or native result is yet verified; there is no automatic
+promotion. System code stays developed in ChatGPT; Codex only verifies and
+operates the MCP. P0 readiness synchronization remains the current primary
+product implementation priority.
+
+
 
 ## Primary next — Capability source stabilization (2026-11-04)
 

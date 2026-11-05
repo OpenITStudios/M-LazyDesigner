@@ -327,3 +327,44 @@ Skills, or promote candidates.
 
 The script implements only the evidence gate of a Propose-Probe-Compose
 experiment, not an installed upstream Harness² optimizer.
+
+### Controlled ChatGPT-to-Codex Harness probe
+
+This opt-in experiment is **not** part of daily Codex asset authoring.
+Use only with disposable Golden inputs and a real testable Codex Runtime.
+
+1. ChatGPT identifies an observed authoring/routing defect and authors one
+   narrowly scoped candidate instruction/context. Do not override approved
+   Reference authority or modify canonical production Skills for a speculative
+   experiment.
+2. In Codex, compare a baseline context and a temporary candidate context
+   under **one fixed source SHA**. Hold model, Runtime build, task, approved
+   Reference fingerprint and initial `.bbmodel` bytes constant. Reset an
+   independent disposable Golden seed before each run; never reuse a live
+   user Workspace as a benchmark fixture.
+3. Pin and verify the actual context bytes/digests outside this evaluator.
+   The present JSON fields `baseline_harness_sha256` and
+   `candidate_harness_sha256` are caller-declared; they are not authenticated
+   source evidence. Final Golden reports also require independent session
+   and native visual/human evidence correlation.
+4. Once Codex has two canonical final reports, evaluate their contract:
+
+```bash
+cd mcp
+bun test tests/benchmark/golden-session-comparison.test.ts
+bun run eval:harness-candidate -- <probe.json>
+```
+
+The Bun test above validates **only the comparator code**, not actual model
+quality. `REJECTED_QUALITY` vetoes the candidate; `INCONCLUSIVE` proves no
+winner; `REVIEW_REQUIRED` is still not approval, causality or auto-promotion.
+ChatGPT may edit a production Skill only after separate decision and tests.
+
+**Source isolation:** This evaluator intentionally requires identical
+`baseline.source_sha` and `candidate.source_sha`. Comparing two commits
+returns `SOURCE_SHA_MISMATCH` / `INCONCLUSIVE`. First test temporary context
+variants under one fixed revision; promote an accepted instruction through
+ChatGPT as a new canonical source change and revalidate that new revision.
+Cross-commit comparison would require independent Git-diff isolation proof,
+not a self-reported file allowlist.
+

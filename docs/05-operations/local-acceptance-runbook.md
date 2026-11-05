@@ -8,6 +8,37 @@ This procedure is now **ACTIVE** for the current Local handoff. `LIVE_BLOCKBENCH
 
 Use only for native residue; prepare source proof and deterministic fixtures first.
 
+## ChatGPT-to-Codex acceptance boundary
+
+**System development:** ChatGPT writes and reviews coherent source changes
+and commits them to GitHub `Local`. **Executable verification and daily
+usage:** Codex checks out the exact delivered SHA, verifies with its actual
+Bun/TypeScript toolchain, and uses the normal four-tool MCP Gateway with
+Blockbench when a real Runtime connection exists. No separate cloud test
+service or GitHub verification Actions are required. This is a Codex
+acceptance procedure, not a user-PC handoff.
+
+For a clean exact-SHA checkout, reuse the existing affected runner:
+
+```bash
+cd mcp
+bun run verify:affected -- --auto --expect-sha <40-hex Local SHA>
+```
+
+`--auto` selects the **latest commit** on a clean checkout. If the feature
+being verified predates a documentation-only commit, run its **owning test**
+directly; a docs-only affected plan does not verify that earlier feature.
+Do not infer any live Blockbench result from successful source tests.
+
+Codex should return to ChatGPT: exact source SHA, clean/dirty status,
+commands actually executed and their results, first failing assertion
+or observed Runtime defect, and native/visual proof only when captured.
+ChatGPT then repairs the first wrong owner and delivers a new bounded commit.
+Never auto-replay an interrupted native mutation with uncertain outcome.
+
+Verification workflows under `.github/disabled-workflows/` remain inactive;
+historical CI guidance below is not evidence of a current-SHA CI PASS.
+
 ## 1. Acceptance Contract
 
 ```text
@@ -39,10 +70,10 @@ git rev-parse HEAD
 ```
 
 Record the 40-character HEAD, and require a clean source checkout *before*
-creating any machine-only test configuration. Check this same SHA against
-the GitHub Actions run and build provenance; a manual-only workflow not yet
-executed on this SHA is `UNVERIFIED`, not PASS. An accepted CI result for
-another SHA never transfers to this checkout.
+creating any machine-only test configuration. Verification GitHub Actions
+are disabled; use actual Codex command results and matching source/build
+provenance instead. An unexecuted test is `UNVERIFIED`, never PASS.
+Evidence from another SHA never transfers to this checkout.
 
 
 ## 3. Source Closure
