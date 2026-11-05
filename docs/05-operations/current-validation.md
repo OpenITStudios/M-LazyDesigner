@@ -2,6 +2,28 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Code-only Gateway failure evidence classification (source-only)
+
+The existing read-only Gateway trace reporter now adds a bounded
+`diagnostics.failure_evidence` grouping of recorded error identifiers,
+distinguishing uncertain mutation outcome, interrupted read transport,
+lost project affinity, capability prerequisite/discovery, queue admission,
+Reference errors and unknown failure codes. Because traces do not retain
+native `receipt_issue` or full recovery detail, `BACKEND_UNAVAILABLE`
+stays explicitly AMBIGUOUS instead of being misidentified as offline
+Runtime or a safe-to-repeat mutation. A contradictory successful trace
+event bearing a non-null error code is rejected as invalid.
+
+Failure totals and source/Control trace correlation remain unchanged.
+No new Runtime error policy, retry engine, agent, public MCP tool, CI,
+generated API or Workspace mutation is introduced. This classification
+does not independently attest native state, attribution or quality.
+
+Proof: pinned `Local` source and exact Git blob readback, positive/negative
+Bun regression cases AUTHORED. Bun, TypeScript, Codex, native Blockbench
+and visual/model acceptance NOT EXECUTED. The user's Codex/local testing
+hold remains in force.
+
 ## 2026-11-05 — Scoped repeat-error findings in Gateway trace (source-only)
 
 The existing offline Gateway trace reporter previously grouped repeated

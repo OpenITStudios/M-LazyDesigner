@@ -308,6 +308,83 @@ describe("gateway benchmark trace report", () => {
     expect(partiallyScoped.diagnostics.findings).toEqual([]);
   });
 
+  test("classifies failures only to the extent supported by recorded error codes", () => {
+    // These are known code identities, not native receipt or root-cause data.
+    const codes: Array<string | null> = [
+      "OUTCOME_UNKNOWN",
+      "BACKEND_CALL_INTERRUPTED",
+      "PROJECT_CONTEXT_LOST",
+      "CAPABILITY_PRECONDITION_BLOCKED",
+      "CAPABILITY_NOT_FOUND",
+      "GATEWAY_BUSY",
+      "GATEWAY_QUEUE_EXPIRED",
+      "GATEWAY_QUEUE_CANCELLED",
+      "REFERENCE_AMBIGUOUS",
+      "BACKEND_UNAVAILABLE",
+      "GATEWAY_ERROR",
+      "UNREGISTERED_NATIVE_CODE",
+      null,
+    ];
+    const rows = codes.map((code, index) => ({
+      ...JSON.parse(event(index, "mutate")),
+      success: false,
+      error_code: code,
+    }));
+    const report = summarizeGatewayBenchmarkTrace(
+      rows.map(row => JSON.stringify(row)).join("\n")
+    );
+    expect(report.calls.failed).toBe(codes.length);
+    expect(report.failures.unclassified).toBe(1);
+    expect(report.failures.by_code.BACKEND_UNAVAILABLE).toBe(1);
+    expect(report.diagnostics.failure_evidence).toEqual({
+      scope: "RECORDED_ERROR_CODES_ONLY_NO_NATIVE_RECEIPT_DETAILS",
+      by_class: {
+        NATIVE_OUTCOME_UNCERTAIN: 1,
+        READ_TRANSPORT_INTERRUPTED: 1,
+        PROJECT_AFFINITY_LOST: 1,
+        CAPABILITY_PRECONDITION_BLOCKED: 1,
+        CAPABILITY_NOT_FOUND: 1,
+        QUEUE_PRE_EXECUTION: 3,
+        REFERENCE_CONSTRAINT: 1,
+        BACKEND_UNAVAILABLE_AMBIGUOUS: 1,
+        OTHER_UNCLASSIFIED: 3,
+      },
+      ambiguous_or_unclassified_events: 4,
+      interpretation: expect.stringContaining(
+        "trace data cannot distinguish them"
+      ),
+    });
+    expect(report.diagnostics.failure_evidence.interpretation)
+      .toContain("No retry permission");
+    expect(report.diagnostics.accepted_result).toBe("UNVERIFIED");
+  });
+
+  test("does not classify contradictory success and error-code trace rows", () => {
+    const succeeded = {
+      ...JSON.parse(event(0, "mutate")),
+      success: true,
+      error_code: "OUTCOME_UNKNOWN",
+    };
+    expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify(succeeded)))
+      .toThrow("error_code on a successful event");
+
+    const valid = { ...succeeded, error_code: null };
+    const report = summarizeGatewayBenchmarkTrace(JSON.stringify(valid));
+    expect(report.calls.failed).toBe(0);
+    expect(report.diagnostics.failure_evidence.by_class).toEqual({});
+    expect(report.diagnostics.failure_evidence.ambiguous_or_unclassified_events)
+      .toBe(0);
+
+    // Unnamed failed errors remain unknown rather than being assigned a
+    // guessed Runtime cause, even on a familiar capability.
+    const unnamed = {
+      ...succeeded, success: false, error_code: null,
+    };
+    const unresolved = summarizeGatewayBenchmarkTrace(JSON.stringify(unnamed));
+    expect(unresolved.diagnostics.failure_evidence.by_class)
+      .toEqual({ OTHER_UNCLASSIFIED: 1 });
+  });
+
   test("rejects private paths masquerading as error codes", () => {
     const row = {
       ...(JSON.parse(event(0, "mutate")) as Record<string, unknown>),

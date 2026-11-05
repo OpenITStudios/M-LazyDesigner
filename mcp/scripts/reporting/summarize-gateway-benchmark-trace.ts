@@ -109,6 +109,11 @@ function parseTrace(text: string): BenchmarkTraceEvent[] {
          !/^[A-Z][A-Z0-9_]{0,79}$/.test(event.error_code))) {
       throw new Error(`Trace line ${index + 1} has an invalid error_code.`);
     }
+    if (event.success && event.error_code != null) {
+      // The Gateway's opt-in trace recorder always stores null for successful
+      // operations. Contradictory rows must not enter failure classification.
+      throw new Error(`Trace line ${index + 1} has error_code on a successful event.`);
+    }
     return event;
   });
 }
@@ -160,6 +165,47 @@ function failureCorrelationScope(
     return { key: "trace:" + correlation.trace_id, basis: "TRACE_ID" };
   }
   return { key: "legacy:unscoped", basis: "LEGACY_UNSCOPED" };
+}
+
+/**
+ * Offline *code-label* classification, not a second Gateway recovery policy.
+ * The trace omits receipt_issue, safeToRetry and native outcome evidence.
+ * In particular BACKEND_UNAVAILABLE can mean an offline Runtime OR a
+ * mutation that occurred before its authority receipt was rejected.
+ */
+type RecordedFailureClass =
+  | "NATIVE_OUTCOME_UNCERTAIN"
+  | "READ_TRANSPORT_INTERRUPTED"
+  | "PROJECT_AFFINITY_LOST"
+  | "CAPABILITY_PRECONDITION_BLOCKED"
+  | "CAPABILITY_NOT_FOUND"
+  | "QUEUE_PRE_EXECUTION"
+  | "REFERENCE_CONSTRAINT"
+  | "BACKEND_UNAVAILABLE_AMBIGUOUS"
+  | "OTHER_UNCLASSIFIED";
+
+function recordedFailureClass(code: string | null | undefined): RecordedFailureClass {
+  switch (code) {
+    case "OUTCOME_UNKNOWN":
+      return "NATIVE_OUTCOME_UNCERTAIN";
+    case "BACKEND_CALL_INTERRUPTED":
+      return "READ_TRANSPORT_INTERRUPTED";
+    case "PROJECT_CONTEXT_LOST":
+      return "PROJECT_AFFINITY_LOST";
+    case "CAPABILITY_PRECONDITION_BLOCKED":
+      return "CAPABILITY_PRECONDITION_BLOCKED";
+    case "CAPABILITY_NOT_FOUND":
+      return "CAPABILITY_NOT_FOUND";
+    case "GATEWAY_BUSY":
+    case "GATEWAY_QUEUE_EXPIRED":
+    case "GATEWAY_QUEUE_CANCELLED":
+      return "QUEUE_PRE_EXECUTION";
+    case "BACKEND_UNAVAILABLE":
+      return "BACKEND_UNAVAILABLE_AMBIGUOUS";
+    default:
+      return code?.startsWith("REFERENCE_")
+        ? "REFERENCE_CONSTRAINT" : "OTHER_UNCLASSIFIED";
+  }
 }
 
 export function summarizeGatewayBenchmarkTrace(text: string) {
@@ -283,10 +329,13 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
   }
   const failed = ordered.filter((event) => !event.success);
   const failuresByCode: Record<string, number> = {};
+  const failureClasses: Partial<Record<RecordedFailureClass, number>> = {};
   for (const event of failed) {
     if (event.error_code) {
       failuresByCode[event.error_code] = (failuresByCode[event.error_code] ?? 0) + 1;
     }
+    const failureClass = recordedFailureClass(event.error_code);
+    failureClasses[failureClass] = (failureClasses[failureClass] ?? 0) + 1;
   }
   const latencies = ordered.map((event) => event.latency_ms);
   const knownMedia = ordered.filter(event => event.mcp_images != null);
@@ -363,6 +412,14 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
       interpretation: "Observed tool latency is summed across calls, not wall time. Repeated errors are grouped within matching Control task-context hashes, or trace IDs when context is unavailable; historical unscoped events remain exploratory and are never merged with correlated events. Findings require investigation and do not prove a common root cause, waste, provider token usage or quality acceptance.",
       top_capabilities_by_observed_latency: topCapabilities,
       findings: findings.slice(0, 4),
+      failure_evidence: {
+        scope: "RECORDED_ERROR_CODES_ONLY_NO_NATIVE_RECEIPT_DETAILS" as const,
+        by_class: failureClasses,
+        ambiguous_or_unclassified_events:
+          (failureClasses.BACKEND_UNAVAILABLE_AMBIGUOUS ?? 0) +
+          (failureClasses.OTHER_UNCLASSIFIED ?? 0),
+        interpretation: "These groups classify recorded error identifiers only. BACKEND_UNAVAILABLE may represent offline transport or an incomplete native authority receipt; trace data cannot distinguish them. No retry permission, root-cause inference, executed mutation outcome, accepted quality or native visual proof is derived.",
+      },
       accepted_result: "UNVERIFIED",
       provider_token_usage: null,
     },

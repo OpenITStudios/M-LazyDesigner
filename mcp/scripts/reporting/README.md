@@ -41,6 +41,26 @@ per-capability or total response-byte measurements. This is trace-source
 integrity only; it does not verify the Runtime, accepted artistic quality,
 or whether an AI processed the reported media.
 
+## Code-only failure classification
+
+The existing offline Gateway trace reporter adds a bounded
+`diagnostics.failure_evidence` view. It classifies recorded failure codes
+only: uncertain native outcome, interrupted read transport, lost project
+affinity, blocked prerequisites, missing capability, pre-execution queue
+control, Reference constraint, ambiguous backend unavailability, or
+unclassified/unknown error. Each failed event contributes to one category,
+including errors without a named code; `failures.by_code` remains unchanged.
+
+**Critical limitation:** Gateway trace events carry an error code but do not
+record `receipt_issue`, the original native receipt, mutation commit status,
+or the recovery policy's full detail. `BACKEND_UNAVAILABLE` therefore
+remains `BACKEND_UNAVAILABLE_AMBIGUOUS`: it may be a connectivity failure
+or an invalid project/Stage receipt after a native mutation. No default
+retry action, state-inspection substitute, root-cause claim, or quality
+verdict is generated from these bins. Unknown codes fail into
+`OTHER_UNCLASSIFIED`. A successful event cannot claim a non-null error
+code in the reader; contradictory trace input fails closed.
+
 Repeated error diagnostics are partitioned using *existing* correlation
 metadata, not just matching capability and error code. An observed Control
 task-context digest takes precedence over the trace ID. If that context
