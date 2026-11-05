@@ -76,9 +76,11 @@ export function gatewayErrorResult(error: unknown) {
         { type: "text" as const, text: `${known.code}: ${known.message}` },
       ],
       structuredContent: {
+        // Details add diagnostics only: never allow a nested tool/transport
+        // payload to replace the authoritative error identity or recovery.
+        ...known.details,
         code: known.code,
         message: known.message,
-        ...known.details,
         recovery,
       },
     };

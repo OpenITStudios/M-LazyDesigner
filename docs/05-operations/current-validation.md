@@ -2,6 +2,20 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Gateway error identity cannot be overwritten by diagnostics (source-only)
+
+The existing Gateway error adapter now applies diagnostic detail fields before
+the authoritative `code`, `message`, and computed `recovery` fields. A
+nested error detail can no longer impersonate a different failure or advise
+automatic replay of an `OUTCOME_UNKNOWN` mutation. Existing capability and
+native receipt-issue detail fields remain visible; no new error category,
+agent runtime, retry loop, public Gateway tool or generated API was added.
+
+Proof: pinned `Local` source review and an existing recovery-test owner's
+positive/negative regression AUTHORED. Bun/TypeScript/Codex/CI/Blockbench
+execution and native behavior NOT EXECUTED. User-requested suspension of all
+local/Codex test requests remains active.
+
 ## 2026-11-05 — Branchless fallback surfaced in impact audit (source-only)
 
 The existing read-only affected-execution planner previously omitted

@@ -132,6 +132,70 @@ describe("gateway recovery semantics", () => {
     });
   });
 
+  test("diagnostic details cannot impersonate the canonical error identity", () => {
+    const output = gatewayErrorResult(new GatewayBackendError(
+      "OUTCOME_UNKNOWN",
+      "Native mutation outcome cannot be confirmed.",
+      false,
+      {
+        code: "BACKEND_CALL_INTERRUPTED",
+        message: "Safe to retry immediately.",
+        recovery: {
+          category: "TRANSPORT",
+          safe_to_retry: true,
+          state_uncertain: false,
+        },
+        capability: "manage_cubes",
+        receipt_issue: "DIAGNOSTIC_ONLY",
+      }
+    ));
+
+    expect(output.isError).toBe(true);
+    expect(output.content[0]).toEqual({
+      type: "text",
+      text: "OUTCOME_UNKNOWN: Native mutation outcome cannot be confirmed.",
+    });
+    expect(output.structuredContent).toMatchObject({
+      code: "OUTCOME_UNKNOWN",
+      message: "Native mutation outcome cannot be confirmed.",
+      capability: "manage_cubes",
+      receipt_issue: "DIAGNOSTIC_ONLY",
+      recovery: {
+        category: "TRANSPORT",
+        safe_to_retry: false,
+        state_uncertain: true,
+        requires_status_refresh: true,
+      },
+    });
+    expect(output.structuredContent.recovery.action).toContain(
+      "inspect current Blockbench state"
+    );
+
+    // Preserve the strict native-affinity receipt recovery even when a
+    // diagnostic payload carries conflicting top-level fields.
+    const affinity = gatewayErrorResult(new GatewayBackendError(
+      "BACKEND_UNAVAILABLE",
+      "Native phase receipt is incomplete.",
+      false,
+      {
+        code: "CAPABILITY_NOT_FOUND",
+        message: "This capability is not installed.",
+        receipt_issue: "MISSING_AUTHORING_PHASE",
+        capability: "switch_authoring_phase",
+      }
+    ));
+    expect(affinity.structuredContent).toMatchObject({
+      code: "BACKEND_UNAVAILABLE",
+      message: "Native phase receipt is incomplete.",
+      receipt_issue: "MISSING_AUTHORING_PHASE",
+      recovery: {
+        category: "AFFINITY",
+        safe_to_retry: false,
+        state_uncertain: true,
+      },
+    });
+  });
+
   test("keeps read-only transport interruption retryable", () => {
     const recovery = recoveryForGatewayError("BACKEND_CALL_INTERRUPTED", true);
     expect(recovery.safe_to_retry).toBe(true);
