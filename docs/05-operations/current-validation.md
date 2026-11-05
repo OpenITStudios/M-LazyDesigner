@@ -2,6 +2,25 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Qualified-branch search readiness with fallback (source-only)
+
+Control's AI-facing `search_capabilities` projection previously allowed an
+exact capability-name result to omit `UNKNOWN` when the manifest contained
+both branch-qualified prerequisites and a generic branchless graph. The
+generic graph does not choose an operation; in particular, an unselected
+`manage_animation_timeline` search must not imply operation readiness.
+Control now projects `UNKNOWN` until a known branch is selected, even when
+a generic graph exists. Known selected branches, confirmed `BLOCKED`, and
+branch-independent tools are unchanged. Unsupported branches also remain
+`UNKNOWN`. This only changes `gateway/control/capabilities.ts` search
+presentation; core graph evaluation, Runtime registration, Gateway schema,
+semantic manifests, generated API/HTML and native execution are unchanged.
+
+Proof: Pinned `Local` source/blob review and targeted positive/negative Bun
+regression AUTHORED in the existing discovery-hardening test. Bun/typecheck,
+Codex, live Gateway, Blockbench and visual QA NOT EXECUTED. This does not
+close the existing graph-level branchless readiness/semantic sync work.
+
 ## 2026-11-05 — Harness candidate evidence gate (source-only)
 
 An opt-in read-only evaluator for a Harness²-inspired candidate probe was

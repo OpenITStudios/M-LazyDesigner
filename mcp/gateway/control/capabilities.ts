@@ -78,7 +78,11 @@ function unresolvedSearchBranch(capability: CapabilitySummary): boolean {
       entry.branch.value === capability.branch?.value
     );
   }
-  return !entries.some((entry) => !entry.branch && entry.graph);
+  // A branchless graph can provide shared prerequisites, but it does not
+  // choose an operation. Exact-name search skips graph evaluation, so an
+  // unresolved qualified branch must not be presented as READY even when
+  // shared fallback metadata exists (for example Animation timeline).
+  return true;
 }
 
 /** AI-facing search only needs the canonical domain, not source-owner

@@ -136,6 +136,52 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     expect(plain?.eligibility).toBeUndefined();
   });
 
+  test("branchless Animation fallback does not certify an unselected operation", () => {
+    // The timeline has both explicit operation graphs and a generic
+    // branchless graph. Exact-name search still has no selected operation.
+    const [exact] = searchCapabilityCatalog([
+      { name: "manage_animation_timeline",
+        description: "Edit animation timeline and keyframes." },
+    ], "manage_animation_timeline", 4);
+    expect(exact).toBeDefined();
+    expect(exact?.branch).toBeUndefined();
+    const [unselected] = projectCapabilitiesForSearch([exact!]);
+    expect(unselected?.eligibility).toBe("UNKNOWN");
+    expect(unselected?.why).toContain("describe the exact operation");
+    expect(gatewaySearchSuccessOutputSchema.safeParse({
+      capabilities: [unselected],
+    }).success).toBe(true);
+
+    // A manifest-known operation is not masked by the search safeguard.
+    const [selected] = projectCapabilitiesForSearch([{
+      ...exact!, branch: { field: "operation", value: "keyframes" },
+      eligibility: "READY",
+    }]);
+    expect(selected?.eligibility).toBeUndefined();
+    expect(selected?.why).toBeUndefined();
+
+    // Branchless fallback also cannot validate a fabricated operation.
+    const [unsupported] = projectCapabilitiesForSearch([{
+      ...exact!, branch: { field: "operation", value: "future_nonexistent" },
+      eligibility: "READY",
+    }]);
+    expect(unsupported?.eligibility).toBe("UNKNOWN");
+
+    // A known failed prerequisite remains BLOCKED, never downgraded.
+    const [blocked] = projectCapabilitiesForSearch([{
+      ...exact!, eligibility: "BLOCKED", requires: ["animation_available"],
+    }]);
+    expect(blocked?.eligibility).toBe("BLOCKED");
+    expect(blocked?.requires).toEqual(["animation_available"]);
+
+    // Branch-independent graph tools retain their existing presentation.
+    const [independent] = projectCapabilitiesForSearch([{
+      capability_id: "create_animation", description: "Create animation.",
+      tier: "primary", read_only: false, destructive: false, idempotent: false,
+      eligibility: "READY",
+    }]);
+    expect(independent?.eligibility).toBeUndefined();
+  });
   test("exact capability name short-circuits to exactly one result", () => {
     const exact = searchCapabilityCatalog(tools, "manage_cubes", 50);
     expect(exact).toHaveLength(1);
