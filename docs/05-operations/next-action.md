@@ -21,6 +21,12 @@ product implementation priority.
 
 
 
+## Temporary Codex verification hold (user-confirmed 2026-11-05)
+
+Codex is **not accessible to the user yet**. Do not ask for local/Codex testing, native Blockbench operation, a manual test command or any handoff until the user expressly permits it. Continue all independently coherent code, routing, evaluation, focused regression, documentation and source-readback work through ChatGPT + GitHub `Local`. Commit only complete scoped changes; keep their authored regressions `NOT_EXECUTED` and all model-quality/Runtime acceptance `UNVERIFIED`. Do not pretend CI is available or change the disabled workflows. Generator-coupled changes must not be partially committed while the generator cannot run; perform adjacent independent work instead.
+
+Codex remains the eventual second surface for executable validation and daily MCP use when the user reauthorizes testing. This is a temporary suspension of testing requests, not a permanent architectural removal of Codex.
+
 ## Primary next — Capability source stabilization (2026-11-04)
 
 **Goal:** preserve existing useful Geometry, Texture and Animation capabilities while resolving inaccurate readiness/ownership. No feature expansion, new framework, CI activation or mass cleanup.

@@ -12,6 +12,7 @@ User-authorized autonomy replaces approval waits with verified checkpoints; neve
 - `Local` is working authority; `main` changes only on explicit user request.
 - Material GitHub work follows `GITHUB_RULES.md`.
 - Working surfaces: ChatGPT + GitHub `Local` for research, design, source changes, reviews and commits; Codex for executable tests and actual LazyDesigner usage after a coherent system build is ready. Do not require the user's PC or an additional cloud test service. A Codex session is not evidence of an executable runtime unless its toolchain/checkout is actually available.
+- Codex access is temporarily unavailable by user's instruction (2026-11-05). Continue complete independent ChatGPT/GitHub development; do not request, schedule, or require local/Codex/native tests, test handoffs or PC actions until the user explicitly reauthorizes them. Authored tests remain `NOT_EXECUTED`.
 - Canonical documentation starts at `docs/README.md`; select one domain before loading deeper docs.
 
 ## Execution Context Gate
