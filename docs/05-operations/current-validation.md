@@ -2,6 +2,21 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Branchless fallback surfaced in impact audit (source-only)
+
+The existing read-only affected-execution planner previously omitted
+multi-operation prerequisite graphs whenever a generic branchless graph
+was present. It now preserves the diagnostic for Animation timeline and
+records `branchless_fallback_present`, without inferring that a manifest
+entry is registered in Runtime. The diagnostic is also selected when the
+Control capability search projection changes. No Gateway executor, semantic
+manifest, capability graph, generated API or native Runtime changed.
+
+Proof: exact Local source analysis and focused positive/negative regression
+AUTHORED in the existing affected-execution test owner. Bun/TypeScript,
+Codex, GitHub verification CI, Blockbench and live quality NOT EXECUTED.
+User-requested suspension of local/Codex test requests remains active.
+
 ## 2026-11-05 — Harness candidate session identity isolation (source-only)
 
 The read-only Harness candidate evaluator now requires two distinct, bounded,

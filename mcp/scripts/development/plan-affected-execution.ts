@@ -73,17 +73,18 @@ function semanticSourceRevisionAlignment(
 
 
 /**
- * Read-only audit of graph branches that require an explicit discriminator.
- * Without a branch, manifestEntryForBranch has no graph for these entries,
- * so search-time readiness can default to READY even when an operation is
- * unknown. This diagnosis never changes Runtime eligibility or source hashes.
+ * Read-only audit of qualified graph prerequisites. A shared branchless
+ * fallback does not choose which operation was requested, and must not hide
+ * an unresolved branch in the impact report. This is manifest-derived advice
+ * only, never Runtime catalog availability or executable readiness.
  */
 function graphBranchReadinessReview(changedPaths: readonly string[]) {
   const changed = new Set(changedPaths.map((path) =>
     path.replaceAll("\\", "/").replace(/^\.\//, "")
   ));
   if (!changed.has("mcp/gateway/capabilities/graph.ts") &&
-      !changed.has("mcp/gateway/capabilities/manifest.ts")) return null;
+      !changed.has("mcp/gateway/capabilities/manifest.ts") &&
+      !changed.has("mcp/gateway/control/capabilities.ts")) return null;
 
   const byCapability = new Map<
     string, typeof CAPABILITY_BRANCH_MANIFEST[number][]
@@ -95,12 +96,15 @@ function graphBranchReadinessReview(changedPaths: readonly string[]) {
   }
 
   const candidates = [...byCapability].flatMap(([capability, entries]) => {
-    // Do not invent ambiguity for registered extensions, a truly branchless
-    // graph, or a single explicitly supported operation.
+    // A shared, branchless graph can coexist with multiple qualified
+    // operations; it must not mask the need for a discriminator. Continue
+    // excluding a truly branch-independent graph and a single known variant
+    // from this multi-branch diagnostic.
     const variants = entries.filter((entry) => entry.branch && entry.graph);
-    if (variants.length < 2 || entries.some((entry) => !entry.branch && entry.graph)) {
-      return [];
-    }
+    if (variants.length < 2) return [];
+    const branchlessFallbackPresent = entries.some(
+      (entry) => !entry.branch && Boolean(entry.graph)
+    );
     const prerequisites = [...new Set(variants.flatMap(
       (entry) => [...(entry.graph?.requires ?? [])]
     ))].sort();
@@ -109,12 +113,14 @@ function graphBranchReadinessReview(changedPaths: readonly string[]) {
       capability,
       branch_count: variants.length,
       possible_branches: variants.map((entry) => entry.branch!),
+      branchless_fallback_present: branchlessFallbackPresent,
       prerequisites,
     }];
   }).sort((a, b) => a.capability.localeCompare(b.capability));
   return {
     status: "OPEN_BRANCH_SELECTION_REVIEW" as const,
     source_only: true,
+    catalog_authority: "MANIFEST_ONLY_NOT_RUNTIME_EXPOSURE" as const,
     candidates: candidates.slice(0, 12),
     omitted_count: Math.max(0, candidates.length - 12),
     // Generation and native execution have not been performed.

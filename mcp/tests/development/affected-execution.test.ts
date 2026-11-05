@@ -1393,6 +1393,48 @@ describe("affected execution planner", () => {
     }
   });
 
+  test("branchless fallback remains visible in read-only readiness impact", () => {
+    // A generic fallback is shared metadata, not an operation selector.
+    const graph = buildAffectedExecutionPlan([
+      "mcp/gateway/capabilities/graph.ts",
+    ]);
+    const review = graph.graph_branch_readiness_review;
+    expect(review?.status).toBe("OPEN_BRANCH_SELECTION_REVIEW");
+    expect(review?.source_only).toBe(true);
+    expect(review?.catalog_authority).toBe("MANIFEST_ONLY_NOT_RUNTIME_EXPOSURE");
+
+    const timeline = review?.candidates.find(
+      entry => entry.capability === "manage_animation_timeline"
+    );
+    expect(timeline?.branchless_fallback_present).toBe(true);
+    expect(timeline?.branch_count).toBeGreaterThan(1);
+    expect(timeline?.possible_branches).toContainEqual({
+      field: "operation", value: "timeline",
+    });
+    expect(timeline?.prerequisites).toContain("animation_available");
+
+    // Contrast a capability whose qualified graphs have no shared fallback.
+    const cubes = review?.candidates.find(
+      entry => entry.capability === "manage_cubes"
+    );
+    expect(cubes?.branchless_fallback_present).toBe(false);
+    expect(cubes?.prerequisites).toContain("project_bound");
+
+    // Discovery projection changes must also get a bounded impact review;
+    // this read-only diagnostic does not claim graph semantic revision proof.
+    const projection = buildAffectedExecutionPlan([
+      "mcp/gateway/control/capabilities.ts",
+    ]);
+    expect(projection.graph_branch_readiness_review?.candidates.some(
+      entry => entry.capability === "manage_animation_timeline"
+    )).toBe(true);
+    expect(projection.semantic_source_alignment).toBeUndefined();
+
+    expect(buildAffectedExecutionPlan([
+      "docs/03-authoring/modelling/decision-cases.md",
+    ]).graph_branch_readiness_review).toBeUndefined();
+  });
+
   test("canonical graph and manifest changes select actual prerequisite and semantic regressions", async () => {
     const cases: Array<[string, string[], boolean]> = [
       ["mcp/gateway/capabilities/graph.ts", [

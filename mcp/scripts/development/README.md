@@ -14,6 +14,18 @@ plan-semantic-invalidation.ts    semantic diff → invalidation/check plan
 snapshot-semantic-registry.ts    canonical semantic registry snapshot
 ```
 
+## Read-only branch readiness impact
+
+`plan:affected` reuses the canonical capability manifest to show qualified
+prerequisites that may be obscured by an unselected operation, including
+`manage_animation_timeline` with its shared fallback graph. The diagnostic
+is emitted for graph/manifest changes and Control search-projection changes.
+Its `catalog_authority: MANIFEST_ONLY_NOT_RUNTIME_EXPOSURE` field means
+that planned or unregistered capabilities are **not** asserted executable.
+The plan does not change capability facts, regenerate API contracts or run
+tests. Semantic source revisions still require their canonical generator and
+matching proof; this read-only result cannot override that gate.
+
 These scripts may consume canonical Gateway/lib owners, but product/runtime source must never depend on this directory.
 
 Prefer the package commands rather than invoking files directly:
