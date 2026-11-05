@@ -1,10 +1,6 @@
 import { analyzeSemanticImpact } from "../../gateway/development/impact";
 import { planAffectedExecution } from "../../gateway/development/affectedExecution";
-import {
-  CAPABILITY_BRANCH_MANIFEST,
-  type CapabilityBranchManifestEntry,
-} from "../../gateway/capabilities/manifest";
-import { CONSOLIDATED_EXECUTOR_ROUTES } from "../../server/runtime/consolidatedRoutes";
+import { CAPABILITY_BRANCH_MANIFEST } from "../../gateway/capabilities/manifest";
 import { listExplicitSourceOwners } from "../../gateway/development/sourceOwners";
 import {
   CAPABILITY_SEMANTIC_REGISTRY,
@@ -77,50 +73,10 @@ function semanticSourceRevisionAlignment(
 
 
 /**
- * Source-only comparison of promised semantic branches against retained
- * consolidated executor routes. Not installed Runtime, schema or native proof.
- */
-export function reviewConsolidatedBranchRoutes(
-  manifest: readonly Pick<CapabilityBranchManifestEntry, "capability" | "branch">[],
-  routes: Readonly<Record<string, {
-    discriminator: string;
-    routes: Readonly<Record<string, string>>;
-  }>>
-) {
-  return Object.entries(routes).flatMap(([capability, route]) => {
-    const declared = manifest
-      .filter((entry) => entry.capability === capability && entry.branch)
-      .map((entry) => entry.branch!);
-    const manifestOnly = declared
-      .filter((branch) =>
-        branch.field !== route.discriminator ||
-        !Object.prototype.hasOwnProperty.call(route.routes, branch.value)
-      )
-      .sort((a, b) =>
-        (a.field + ":" + a.value).localeCompare(b.field + ":" + b.value)
-      );
-    const routeOnly = Object.keys(route.routes)
-      .filter((operation) => !declared.some((branch) =>
-        branch.field === route.discriminator && branch.value === operation
-      ))
-      .sort((a, b) => a.localeCompare(b));
-    return manifestOnly.length || routeOnly.length
-      ? [{
-          capability,
-          discriminator: route.discriminator,
-          manifest_only: manifestOnly,
-          route_only: routeOnly,
-        }]
-      : [];
-  }).sort((a, b) => a.capability.localeCompare(b.capability));
-}
-
-/**
  * Read-only audit of qualified graph prerequisites. A shared branchless
  * fallback does not choose which operation was requested, and must not hide
  * an unresolved branch in the impact report. This is manifest-derived advice
- * only, never installed Runtime catalog availability or executable readiness.
- * Consolidated source-route parity is separately labelled below.
+ * only, never Runtime catalog availability or executable readiness.
  */
 function graphBranchReadinessReview(changedPaths: readonly string[]) {
   const changed = new Set(changedPaths.map((path) =>
@@ -128,8 +84,7 @@ function graphBranchReadinessReview(changedPaths: readonly string[]) {
   ));
   if (!changed.has("mcp/gateway/capabilities/graph.ts") &&
       !changed.has("mcp/gateway/capabilities/manifest.ts") &&
-      !changed.has("mcp/gateway/control/capabilities.ts") &&
-      !changed.has("mcp/server/runtime/consolidatedRoutes.ts")) return null;
+      !changed.has("mcp/gateway/control/capabilities.ts")) return null;
 
   const byCapability = new Map<
     string, typeof CAPABILITY_BRANCH_MANIFEST[number][]
@@ -169,11 +124,6 @@ function graphBranchReadinessReview(changedPaths: readonly string[]) {
     status: "OPEN_BRANCH_SELECTION_REVIEW" as const,
     source_only: true,
     catalog_authority: "MANIFEST_ONLY_NOT_RUNTIME_EXPOSURE" as const,
-    consolidated_route_authority: "SOURCE_ROUTE_TABLE_NOT_INSTALLED_RUNTIME" as const,
-    consolidated_route_gaps: reviewConsolidatedBranchRoutes(
-      CAPABILITY_BRANCH_MANIFEST,
-      CONSOLIDATED_EXECUTOR_ROUTES
-    ),
     candidates: candidates.slice(0, 12),
     omitted_count: Math.max(0, candidates.length - 12),
     // Generation and native execution have not been performed.

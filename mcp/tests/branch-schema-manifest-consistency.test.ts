@@ -34,6 +34,20 @@ describe("branch schema and semantic manifest consistency", () => {
     expect(timeline.parameterSchema.safeParse({
       operation: "properties",
     }).success).toBe(false);
+
+    // Runtime extensions compose after consolidated registration; the base
+    // route table is not the final capability schema.
+    for (const operation of [
+      "keyframes", "graph", "timeline", "batch", "copy_paste", "properties",
+    ]) {
+      expect(
+        timeline.inputSchema.operation.safeParse(operation).success,
+        operation
+      ).toBe(true);
+    }
+    expect(
+      timeline.inputSchema.operation.safeParse("future_unsupported").success
+    ).toBe(false);
   });
 
   test("composed create_texture schema preserves all semantic type branches, including variant", () => {
