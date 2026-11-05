@@ -2,6 +2,14 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Active execution mode — GitHub and ChatGPT only (2026-11-05)
+
+User-confirmed: ChatGPT and the connected GitHub repository are the entire available workflow. No cloud testing, Bun/TypeScript execution, generator worktree, GitHub verification Actions, local PC test or LIVE_BLOCKBENCH connection is available or requested. Read source, plan, author coherent code/regressions, inspect Git blobs/diffs and commit to `Local` where the source unit is complete. Report every authored test as NOT EXECUTED; do not request installation or any local/cloud test.
+
+Only complete source units that do not depend on unavailable generated output may move the branch. A syntax/plausibility review is not compilation. Preserve Runtime semantics, assets, the four Gateway tools, CI-disabled policy and main. No visual/cost improvement can be claimed until supported by actual evidence, which is currently unavailable.
+
+Current Harness²-related source unit: `7da9e6e2cdc12c87fe1cce0da2dcffd33f365018` added a read-only candidate evidence evaluator and authored regression cases. It has not executed a model-backed probe, Golden candidate, Bun tests or native visual acceptance. This is the *analysis boundary*, not an operational agent optimizer. Prioritize independent source-level harness/diagnostic work and architecture audits without runtime assumptions.
+
 ## Primary next — Capability source stabilization (2026-11-04)
 
 **Goal:** preserve existing useful Geometry, Texture and Animation capabilities while resolving inaccurate readiness/ownership. No feature expansion, new framework, CI activation or mass cleanup.
@@ -13,9 +21,9 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 - `gateway/control/capabilities.ts` already presents ambiguous branches with qualified prerequisites as `UNKNOWN` in AI search while retaining `BLOCKED`. This only safeguards **discovery presentation**, not graph execution.
 - `manage_cubes` and `paint_texture_transaction` have registered routes. `construct_geometry`, `manage_uv_layout`, painted-atlas migration and Cluster authoring remain **UNREGISTERED**.
 
-**Next complete implementation unit:** reconcile unknown/branchless graph readiness with exact branch semantics, canonical semantic revision, owning regressions and generated API/HTML **together**, then verify at the same SHA. The existing affected runner refuses unsynchronized semantic implementation changes. No partial graph edit or manual editing of generator-owned outputs. A generator-capable cloud/development context is needed for that bounded unit; **do not ask the user to local-test**.
+**Next complete implementation unit:** reconcile unknown/branchless graph readiness with exact branch semantics, canonical semantic revision, owning regressions and generated API/HTML **together**, then verify at the same SHA. The existing affected runner refuses unsynchronized semantic implementation changes. No partial graph edit or manual editing of generator-owned outputs. This coupled semantic + generated-output unit is **DEFERRED** under ChatGPT/GitHub-only execution. Do not commit a partial graph change or manually edit generated contracts, and do not request cloud or local testing.
 
-Until such execution is available, continue only independent GitHub source/consumer audits, non-behavioral documentation synchronization and proof-safe prep. Do not label these executable PASS.
+Continue independent GitHub source/consumer work, source-complete unaffected modules, authored (not executed) regressions and proof-safe preparation. Do not label these executable PASS or imply the project is waiting for a new environment.
 
 ## Deferred capability-specific work
 

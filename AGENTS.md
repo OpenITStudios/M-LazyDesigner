@@ -11,6 +11,7 @@ User-authorized autonomy replaces approval waits with verified checkpoints; neve
 
 - `Local` is working authority; `main` changes only on explicit user request.
 - Material GitHub work follows `GITHUB_RULES.md`.
+- Active project execution is ChatGPT + GitHub-only mode: no cloud runner, CI verification, local/PC testing, Bun/build or native Blockbench execution. See `GITHUB_RULES.md` for the proof boundary.
 - Canonical documentation starts at `docs/README.md`; select one domain before loading deeper docs.
 
 ## Execution Context Gate

@@ -1,5 +1,16 @@
 # GitHub Rules — LazyDesigner
 
+## ChatGPT + GitHub-only project execution (user-confirmed 2026-11-05)
+
+**Active constraint:** M-LazyDesigner work is performed only with ChatGPT reasoning and authenticated GitHub repository operations. There is no available Bun/Node execution worktree, cloud test runner, GitHub verification CI, installed Blockbench, connected Runtime, or user-PC/local test path for this project. Do not propose, request, assume, install, dispatch, or wait for any of these as part of the current workflow. A future change of execution mode requires a new explicit user instruction; repository text is not evidence that a runtime exists.
+
+- Allowed: read pinned `Local` source and commit history; perform bounded source/contract analysis; design and edit coherent canonical source, docs and regression cases; compare exact Git blobs/trees; commit atomically to `Local`; document proof limitations and next independent work.
+- Static review, authored regression cases, API metadata inspection, Git object hashes and a successful Git commit are **source evidence**, never an executed Bun/test/typecheck/build, visual PASS, native receipt, runtime compatibility, or measured quality improvement.
+- Keep verification GitHub Actions disabled. Do not use Actions, cloud workspaces, independent execution services, a user terminal, the user's PC, Codex local, or a live Blockbench session. GitHub is a source/version host, not an executable QA environment here.
+- Make every change internally coherent at the source ceiling; preserve public tool contracts, user assets, `main`, distribution and releases. Do not hand-edit generator-owned files or move a partial coupled change to `Local` when a required generated artifact cannot be produced. Prepare independent source evidence and regressions instead.
+- Label checks precisely: `SOURCE_REVIEWED`, `REGRESSION_AUTHORED_NOT_RUN`, `EXECUTION_NOT_RUN`, `NATIVE_UNVERIFIED`, `QUALITY_UNVERIFIED` as applicable. Do not promote experiments or claim an empirical quality gain on predicted results alone.
+- Continue with other independently complete GitHub-verifiable units rather than asking the user for an unavailable environment or repeatedly treating missing tests as a reason to stop all development.
+
 ## CI DISABLED — active Local policy (2026-10-20)
 
 All nine verification workflows have been removed from GitHub Actions discovery and preserved as inert source under `.github/disabled-workflows/`. No CI runs automatically or can be dispatched from this branch. The only active workflow definitions are **manual distribution/release** entries, not verification; no release is authorized by this change. Commands for targeted local validation remain available. Older CI guidance and workflow pass records below are historical evidence, not current configuration.
