@@ -536,10 +536,20 @@ their exact declared operations and historical native-Cuboid output.
   An empty location inside a hollow source's bounding box is not treated
   as material; boundary/tangent waypoints are not automatically blocked.
   Existing SWEEP, voxel and 3D contact guards still own realization.
-  This is a **waypoint-only endpoint-source material check**, not a
-  certificate for the continuously interpolated spline, a global scene
-  collision test, or reference/visual/UV approval. V5 connector
-  interpretation remains unchanged.
+  The source-only check now also covers **every centerline interval**:
+  LINEAR chords use exact open-box intersection, while Catmull–Rom
+  intervals reuse the canonical SWEEP cubic controls and conservative
+  de Casteljau subdivision. A proven centerline entry into the actual
+  endpoint Cube material is refused; numerically unresolved close
+  intervals also fail closed, instead of reporting a safe route. Existing
+  endpoint/waypoint/voxel/contact checks all remain in place.
+
+  This is bounded **centerline** validation against the two declared
+  source-part Cube inventories, not a radius-expanded swept-volume
+  clearance, continuous all-scene collision test, or reference/visual/UV
+  approval. Repeated source copies use the original solved source boxes.
+  Version 5 retains its historical semantics and derived geometry.
+  No new geometry construction method or native mutation is introduced.
 
 Illustrative source snippet (not executed):
 

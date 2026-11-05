@@ -89,13 +89,15 @@ function pointSegmentDistance(
  *
  * Midpoint-only or quarter-sample errors do NOT provide this guarantee.
  */
-function cubicChordDeviationBound(
+function cubicBezierControls(
   evaluate: (t: number) => Sample,
   fromT: number,
   start: Sample,
   toT: number,
   end: Sample
-): number {
+): [RecipeVec3, RecipeVec3, RecipeVec3, RecipeVec3] {
+  // The same exact cubic control recovery is used by the existing
+  // conservative sampling bound and the opt-in connector path preflight.
   const third = (toT - fromT) / 3;
   const p1 = evaluate(fromT + third).position;
   const p2 = evaluate(fromT + 2 * third).position;
@@ -111,6 +113,19 @@ function cubicChordDeviationBound(
     const second = 27 * p2[axis]! - a - 8 * d;
     return (2 * second - first) / 18;
   }) as RecipeVec3;
+  return [start.position, control1, control2, end.position];
+}
+
+function cubicChordDeviationBound(
+  evaluate: (t: number) => Sample,
+  fromT: number,
+  start: Sample,
+  toT: number,
+  end: Sample
+): number {
+  const [, control1, control2] = cubicBezierControls(
+    evaluate, fromT, start, toT, end
+  );
   const bound = Math.max(
     Math.sqrt(pointSegmentDistance(
       control1, start.position, end.position
@@ -267,6 +282,137 @@ function insideSphereSweep(
   const t = -b / (2 * a);
   return t > 0 && t < 1 &&
     (a * t + b) * t + c <= SURFACE_EPS;
+}
+
+/**
+ * V6+ CONNECT-only read-only centerline check against the exact solved Cube
+ * material of its declared endpoint parts. LINEAR chords use open-AABB slab
+ * intersection; Catmull–Rom uses the canonical cubic control points above
+ * and conservative de Casteljau subdivision. No arbitrary scene traversal.
+ *
+ * Crucially this verifies the CENTERLINE, not the radius-expanded swept
+ * volume, alpha/visibility, third-party obstacles, or visual quality.
+ * Borderline cubic intervals fail as UNVERIFIED, never as "clear".
+ */
+type ConnectorSourceBox = { from: RecipeVec3; to: RecipeVec3 };
+const CONNECT_CLEARANCE_EPS = 1e-7;
+const CONNECT_CURVE_MAX_DEPTH = 12;
+const CONNECT_CURVE_MAX_VISITS = 8192;
+
+function strictInterior(p: RecipeVec3, box: ConnectorSourceBox): boolean {
+  return [0, 1, 2].every(axis =>
+    p[axis]! > box.from[axis]! + CONNECT_CLEARANCE_EPS &&
+    p[axis]! < box.to[axis]! - CONNECT_CLEARANCE_EPS
+  );
+}
+
+function segmentEntersBoxInterior(
+  from: RecipeVec3, to: RecipeVec3, box: ConnectorSourceBox
+): boolean {
+  let enter = 0, leave = 1;
+  for (let axis = 0; axis < 3; axis++) {
+    const low = box.from[axis]! + CONNECT_CLEARANCE_EPS;
+    const high = box.to[axis]! - CONNECT_CLEARANCE_EPS;
+    if (low >= high) return false;
+    const direction = to[axis]! - from[axis]!;
+    if (direction === 0) {
+      if (from[axis]! <= low || from[axis]! >= high) return false;
+      continue;
+    }
+    const first = (low - from[axis]!) / direction;
+    const second = (high - from[axis]!) / direction;
+    enter = Math.max(enter, Math.min(first, second));
+    leave = Math.min(leave, Math.max(first, second));
+    if (enter >= leave) return false;
+  }
+  return enter < 1 && leave > 0 && enter < leave;
+}
+
+type CubicControls = [RecipeVec3, RecipeVec3, RecipeVec3, RecipeVec3];
+function bisectCubic(control: CubicControls): [CubicControls, CubicControls] {
+  const between = (a: RecipeVec3, b: RecipeVec3) =>
+    lerp3(a, b, 0.5);
+  const a = between(control[0], control[1]);
+  const b = between(control[1], control[2]);
+  const c = between(control[2], control[3]);
+  const d = between(a, b), e = between(b, c);
+  const middle = between(d, e);
+  return [
+    [control[0], a, d, middle],
+    [middle, e, c, control[3]],
+  ];
+}
+
+function inspectCubicAgainstBox(
+  controls: CubicControls,
+  box: ConnectorSourceBox,
+  counter: { visits: number },
+  depth = 0
+): "CLEAR" | "INTERIOR" | "UNVERIFIED" {
+  counter.visits++;
+  if (counter.visits > CONNECT_CURVE_MAX_VISITS) return "UNVERIFIED";
+  // Bézier curve is contained within the convex hull of its controls.
+  // If any axis lies entirely outside the STRICT material interior, the
+  // whole cubic interval is proven clear on that axis.
+  if ([0, 1, 2].some(axis => {
+    const minimum = Math.min(...controls.map(p => p[axis]!));
+    const maximum = Math.max(...controls.map(p => p[axis]!));
+    return maximum <= box.from[axis]! + CONNECT_CLEARANCE_EPS ||
+      minimum >= box.to[axis]! - CONNECT_CLEARANCE_EPS;
+  })) return "CLEAR";
+  if (strictInterior(controls[0], box) ||
+      strictInterior(controls[3], box)) return "INTERIOR";
+  const [left, right] = bisectCubic(controls);
+  if (strictInterior(left[3], box)) return "INTERIOR";
+  if (depth >= CONNECT_CURVE_MAX_DEPTH) return "UNVERIFIED";
+  const one = inspectCubicAgainstBox(left, box, counter, depth + 1);
+  if (one === "INTERIOR") return one;
+  const two = inspectCubicAgainstBox(right, box, counter, depth + 1);
+  return two === "INTERIOR" ? two :
+    one === "UNVERIFIED" || two === "UNVERIFIED" ? "UNVERIFIED" : "CLEAR";
+}
+
+export function requireSweepCenterlineOutsideSourceMaterial(
+  sweep: Sweep,
+  endpointBoxes: readonly ConnectorSourceBox[],
+  connectorId: string
+): void {
+  // The connector schema bounds knot count and coordinates. This function
+  // accepts no new independent shape/sample authority and does no voxel work.
+  const nodes = sweep.knots;
+  const counter = { visits: 0 };
+  for (let i = 0; i + 1 < nodes.length; i++) {
+    const from = nodes[i]!.position, to = nodes[i + 1]!.position;
+    // Recover each cubic just ONCE per source knot interval, not for each
+    // (possibly repeated) native source Cube. Linear chords need none.
+    let controls: CubicControls | null = null;
+    if (sweep.interpolation !== "LINEAR") {
+      const evaluate = (t: number): Sample => ({
+        position: centripetalSegment(nodes, i, t),
+        radius: nodes[i]!.radius +
+          (nodes[i + 1]!.radius - nodes[i]!.radius) * t,
+      });
+      controls = cubicBezierControls(evaluate, 0, evaluate(0), 1, evaluate(1));
+    }
+    for (const box of endpointBoxes) {
+      if (controls === null) {
+        if (segmentEntersBoxInterior(from, to, box)) {
+          throw new Error(
+            "GEOMETRY_MATH_CONNECT_CENTERLINE_INSIDE_SOURCE: " + connectorId
+          );
+        }
+        continue;
+      }
+      const outcome = inspectCubicAgainstBox(controls, box, counter);
+      if (outcome !== "CLEAR") {
+        throw new Error(
+          (outcome === "INTERIOR"
+            ? "GEOMETRY_MATH_CONNECT_CENTERLINE_INSIDE_SOURCE: "
+            : "GEOMETRY_MATH_CONNECT_CENTERLINE_UNVERIFIED: ") + connectorId
+        );
+      }
+    }
+  }
 }
 
 /**

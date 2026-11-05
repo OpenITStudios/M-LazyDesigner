@@ -2,6 +2,35 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Continuous Connector centerline source review (source-only)
+
+The v6+ Geometry Construction `CONNECT` preflight now examines full
+source-declared centerline intervals against the actual solved/repeated
+Cube material of the two endpoint parts. Previously only authored
+intermediate waypoints and start/end directions were reviewed, leaving
+straight chords or interpolated Catmull–Rom curves free to re-enter
+endpoint material between valid waypoints. LINEAR uses exact open-box
+slab intersection; Catmull–Rom reuses the canonical SWEEP cubic-control
+reconstruction and a bounded conservative Bézier subdivision. A proven
+entry fails with `GEOMETRY_MATH_CONNECT_CENTERLINE_INSIDE_SOURCE`;
+unresolved near-surface intervals fail with
+`GEOMETRY_MATH_CONNECT_CENTERLINE_UNVERIFIED`, never fabricated PASS.
+The preexisting undeclared `sourceBoxes` TypeScript type reference in
+`resolveEndpoint` was also corrected to the actual
+`expandGeometrySourceBoxes` function.
+
+Only centerline vs. endpoint-source material is reviewed; finite swept
+radius, third-party obstacles, collision along native animation,
+reference correctness, material/UV and native Blockbench outcomes
+remain UNVERIFIED. The existing v5 behavior, native Cuboid SWEEP
+kernel, Recipe application, four Gateway tools, generator-owned API
+and source schemas remain unchanged.
+
+Proof: pinned `Local` source review, exact staged Git blobs and three
+focused positive/negative CONNECT regressions AUTHORED (not run).
+Bun, TypeScript, Codex, native Blockbench, CI and visual acceptance
+NOT EXECUTED per user instruction.
+
 ## 2026-11-05 — Face-aware connector waypoint exteriority (source-only)
 
 The existing `geometryMathConnect.ts` v6 face-aware connector already

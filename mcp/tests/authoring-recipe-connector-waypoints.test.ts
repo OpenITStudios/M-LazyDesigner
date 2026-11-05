@@ -83,6 +83,50 @@ describe("face-aware CONNECT source-material waypoint preflight", () => {
     expect(detour).toEqual(original);
   });
 
+  test("checks all LINEAR centerline segments, not only waypoint samples", () => {
+    // The route begins outward and approaches the target from the correct
+    // side, while neither waypoint is inside a source Cube. Its middle
+    // chord nevertheless crosses the START solid between the two points.
+    const crossing = connector([
+      { fraction: 0.25, offset: [1, 4, 0], radius: 1 }, // [0,4,0]
+      { fraction: 0.75, offset: [-9, -4, 0], radius: 1 }, // [-8,-4,0]
+    ]);
+    expect(geometryMathConnectorPartSchema.parse(crossing)).toEqual(crossing);
+    const before = structuredClone(crossing);
+    expect(() => buildMathConnector(crossing, sources(), 6))
+      .toThrow("GEOMETRY_MATH_CONNECT_CENTERLINE_INSIDE_SOURCE: joined-beam");
+    expect(crossing).toEqual(before);
+  });
+
+  test("proves curved centerline intervals from the canonical Catmull-Rom controls", () => {
+    // All authored points are to the right of the start solid's x=-2
+    // boundary, and every straight chord is exterior. The Catmull-Rom
+    // tangent between the two nearly aligned -1.999 samples overshoots
+    // back through the START source mass in between those knots.
+    const looping = connector([
+      { fraction: 0.2, offset: [2.2, 0, 0], radius: 1 },   // [1,0,0]
+      { fraction: 0.5, offset: [-1.999, 0, 0], radius: 1 }, // [-1.999,0,0]
+      { fraction: 0.8, offset: [-3.199, 1, 0], radius: 1 }, // [-1.999,1,0]
+    ]);
+    looping.interpolation = "CENTRIPETAL_CATMULL_ROM";
+    expect(geometryMathConnectorPartSchema.parse(looping)).toEqual(looping);
+    expect(() => buildMathConnector(looping, sources(), 6))
+      .toThrow(/GEOMETRY_MATH_CONNECT_CENTERLINE_(INSIDE_SOURCE|UNVERIFIED)/);
+  });
+
+  test("keeps genuinely exterior Catmull-Rom and LINEAR connections eligible", () => {
+    const outside = connector([{
+      fraction: 0.5, offset: [0, 3, 0], radius: 1,
+    }]);
+    outside.interpolation = "CENTRIPETAL_CATMULL_ROM";
+    expect(geometryMathConnectorPartSchema.parse(outside)).toEqual(outside);
+    const result = buildMathConnector(outside, sources(), 6);
+    expect(result.length).toBeGreaterThan(0);
+    const linear = connector();
+    expect(buildMathConnector(linear, sources(), 6).length)
+      .toBeGreaterThan(0);
+  });
+
   test("does not retroactively change v5 connector source semantics", () => {
     const detour = connector([
       { fraction: 0.25, offset: [4, 0, 0], radius: 1 },

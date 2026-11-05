@@ -4,7 +4,10 @@ import type {
   GeometryMathPart,
 } from "./geometryMathLanguage";
 import type { MathCuboid } from "./geometryMathVoxel";
-import { sweepMathVolume } from "./geometryMathSweep";
+import {
+  requireSweepCenterlineOutsideSourceMaterial,
+  sweepMathVolume,
+} from "./geometryMathSweep";
 
 const AXES = ["X", "Y", "Z"] as const;
 const EPSILON = 1e-7;
@@ -75,7 +78,7 @@ function resolveEndpoint(
   version: 5 | 6
 ): {
   point: RecipeVec3;
-  boxes: ReturnType<typeof sourceBoxes>;
+  boxes: ReturnType<typeof expandGeometrySourceBoxes>;
   normal: RecipeVec3 | null;
 } {
   const source = sources.get(endpoint.part_id);
@@ -242,6 +245,15 @@ export function buildMathConnector(
     knots,
     max_chord_error: part.max_chord_error,
   };
+  // V6+ face-aware routing must also check every centerline interval,
+  // not merely the waypoint positions. This reuses the SWEEP kernel's
+  // actual Catmull-Rom curve math and checks endpoint Cuboid material
+  // only; it is NOT a global collision or swept-radius clearance proof.
+  if (version === 6) {
+    requireSweepCenterlineOutsideSourceMaterial(
+      sweep, [...start.boxes, ...end.boxes], part.id
+    );
+  }
   const boxes = sweepMathVolume(sweep, version);
   if (!connectedNativeVolume(boxes, start.boxes) ||
     !connectedNativeVolume(boxes, end.boxes)) {
