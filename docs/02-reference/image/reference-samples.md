@@ -4,24 +4,25 @@
 
 **Rejected-quality archive:** **MD-REF-02 (Roman Legionary)** was re-audited using the actual source and generated pixels and is now **REJECTED_VISUAL_QUALITY**, not a backup candidate. Source-identity drift, inadequate purposeful Minecraft/Blockbench craft and P1 sword/shield-continuity issues invalidate positive exemplar use even though the 2x2 layout and SHA hashes are correct. Its original bytes are preserved under the separate Library `Rejected/` folder as negative QA evidence only. No new model should load it as a STYLE_EXAMPLE or PRESENTATION_EXAMPLE.
 
-This catalog follows [M-LazyBuilder's approved-reference storage discipline](https://github.com/OpenITStudios/M-LazyBuilder-MCP/blob/develop/docs/03-authoring/exterior/reference-samples.md): original full-resolution image **bytes stay in ChatGPT Library**, GitHub contains the durable catalog/rules/identifiers. GitHub Markdown, hashes and image-generation IDs do **not** supply the actual pixels to ChatGPT or local Codex. No new GitHub image-generation engine, auto-loader, Project installation, runtime schema, or persistent model state is introduced.
+This catalog follows [M-LazyBuilder's approved-reference storage discipline](https://github.com/OpenITStudios/M-LazyBuilder-MCP/blob/develop/docs/03-authoring/exterior/reference-samples.md): original full-resolution image **bytes remain in the frozen Library v1 ZIP**, while the active Library PNG may be a user-requested optimized derivative; GitHub contains the durable catalog/rules/identifiers. GitHub Markdown, hashes and image-generation IDs do **not** supply the actual pixels to ChatGPT or local Codex. No new GitHub image-generation engine, auto-loader, Project installation, runtime schema, or persistent model state is introduced.
 
 ## Approved Library archive
 
 **ChatGPT Library root:** `/M-LazyDesigner/Reference Samples/Model Four Sides/`
 
-**Approved bundle:** `M_LazyDesigner_Approved_Four_Side_References_v1.zip` (one sample, MD-REF-01). ZIP SHA-256: `9c2dc84c550d4d7dc7079b530f2b49d46a8789f92bfbed1c10cff47208bae87b`. The root also holds `README.md` and `manifest.json`.
+**Approved frozen historical bundle:** `M_LazyDesigner_Approved_Four_Side_References_v1.zip` (original 1448 × 1086 image retained; one sample, MD-REF-01). ZIP SHA-256: `9c2dc84c550d4d7dc7079b530f2b49d46a8789f92bfbed1c10cff47208bae87b`. The root also holds `README.md` and `manifest.json`.
 
 **Sample folder:** `MD-REF-01_silver-luxury-suv/`
 
 | File | Purpose | Evidence |
 | --- | --- | --- |
-| `approved_four_sides.png` | Frozen original user-approved visual guideline; **do not edit this baseline in place** | PNG, **1448 × 1086**, **1,725,051** bytes; SHA-256 `59b782b580d6ae6c6c2bd9fe6cb6e728af2be6739f94aa11a5fc4eaa25bce782` |
+| `approved_four_sides.png` | **Active, user-requested 1080 × 810 derivative** of the approved visual guideline; losslessly encoded RGB PNG, with the unresized original retained in frozen v1 ZIP | PNG, **1080 × 810**, **882,406** bytes; SHA-256 `ef0e79aba5fc21de9a9873ce0320c1afbe9107e42f3978510fbda08070c6b18b` |
 | `input_source.png` | User-provided silver SUV photo; source identity for **this example only** | PNG, **1600 × 840**, **3,348,125** bytes; SHA-256 `5475a0dd470520a607460055209cbee1b8d2e310a1774f6841120b8eed7b93eb` |
 | `REPRODUCE.md` | Reconstructed sample-specific reproduction constraints; not the hidden original prompt/seed | Text |
 | `manifest.json` | Exact hashes, dimensions, approval scope, provenance and limitations | JSON |
 
-- **Visual generation ID:** `f1d746b2-0eda-4359-8b23-83bdf2ecfb93`.
+- **Visual generation ID:** `f1d746b2-0eda-4359-8b23-83bdf2ecfb93` (historical original).
+- **Storage revision (2026-11-05):** at the user's request the active Library PNG was resized from 1448 × 1086 to **1080 × 810** with Lanczos resampling and encoded as **lossless RGB PNG with Zopfli/DEFLATE** (1,725,051 → 882,406 bytes, approximately 49% fewer bytes). **Resizing itself discards spatial resolution; only the PNG encoding/compression is lossless.** Frozen original 1448 × 1086 and its original SHA-256 `59b782b580d6ae6c6c2bd9fe6cb6e728af2be6739f94aa11a5fc4eaa25bce782` remain inside the unchanged v1 ZIP. The Library sample/root manifests describe the active optimized PNG.
 - **Current authoring contract:** `M-LD-REF / 1.3` in [master-templates.md](master-templates.md), including an isolated four-side-only image payload, explicit single-view opt-in and quality acceptance firewall. This is **current forward-looking guidance**, not proof that historical MD-REF-01/02 images were generated or tested with v1.3.
 - **Approval:** for visual reference guidance only. **Not executed/verified:** native Blockbench import, part dimensions, UV/rig, Bedrock export, or calibrated orthographic camera consistency.
 - **Source-hidden rear:** the source photograph provides only one three-quarter exterior angle; the image's BACK panel is **PROVISIONAL creative completion**, not observed original geometry. RIGHT/LEFT source-fidelity claims are similarly limited where occluded.
@@ -39,9 +40,9 @@ This catalog follows [M-LazyBuilder's approved-reference storage discipline](htt
 
 **A. New subject (default).** Inspect the actual `approved_four_sides.png` pixels if accessible as a **PRESENTATION_EXAMPLE**. If invoking its broader style, keep a separate **STYLE_EXAMPLE** decision restricted to general cuboid/face-painted treatment; never inherit its vehicle geometry or materials. Inspect the user's new source as `SUBJECT_SOURCE` and respect the [source–style–presentation authority firewall](prompt-contract.md#sourcestylepresentation-authority-firewall). Do **not** load this sample's `input_source.png` or `REPRODUCE.md` into new-subject generation; they are source-specific and invite SUV-identity leakage.
 
-**B. Audit/reproduce MD-REF-01 (explicit request only).** Load `approved_four_sides.png` **and** its matching `input_source.png`, `REPRODUCE.md`, and `manifest.json`. Exact reuse means reusing preserved PNG bytes. The reconstructed text is not an original prompt/seed and cannot promise pixel-identical regeneration.
+**B. Audit/reproduce MD-REF-01 (explicit request only).** For the active 1080 × 810 sample load its current Library `approved_four_sides.png`, `input_source.png`, `REPRODUCE.md`, and current `manifest.json`. For exact original historical v1 reproduction use the **frozen ZIP**; its PNG and manifest intentionally have the original SHA-256 and dimensions. Exact reuse requires actual preserved PNG bytes. The reconstructed text is not an original prompt/seed and cannot promise pixel-identical regeneration.
 
-**C. Local Codex/Blockbench use.** Explicitly export/download the approved PNG from Library or the approved ZIP to the development workspace and verify actual bytes with the commands below. A repository path, Markdown catalog, or SHA by itself is not an image file. Preserve `MD-REF-01` provenance and approval scope on handoff; do not claim tested native geometry or approval of new models.
+**C. Local Codex/Blockbench use.** Explicitly export/download the active PNG from Library (**1080 × 810**, SHA-256 `ef0e79aba5fc21de9a9873ce0320c1afbe9107e42f3978510fbda08070c6b18b`) or the frozen v1 ZIP containing the original PNG (**1448 × 1086**); these are **different byte identities**. Verify against the matching manifest. The commands below verify the **historical frozen ZIP** only. A repository path, Markdown catalog, or SHA by itself is not an image file. Preserve `MD-REF-01` provenance and approval scope on handoff; do not claim tested native geometry or approval of new models.
 
 **Sample promotion policy:** saving is not visual acceptance. A new positive exemplar needs actual-image review for P1 source identity, Minecraft/Blockbench craft and part/grip continuity **before** layout or approval; explicit user approval remains separate. MD-REF-01 remains the sole approved sample. **MD-REF-02 is rejected, quarantined, and prohibited as a positive example even if explicitly selected as a generic backup.** A correction must become a new, separately reviewed artifact; never silently promote the old PNG.
 
