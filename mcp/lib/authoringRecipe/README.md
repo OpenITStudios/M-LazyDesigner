@@ -528,9 +528,18 @@ their exact declared operations and historical native-Cuboid output.
   normal, and a point lying on a real source Cuboid face rather than
   an empty bounding-envelope coordinate. The outgoing path must depart
   the start face; the incoming path must enter the target from outside
-  its corresponding face. Existing SWEEP, voxel and 3D contact guards
-  still own realization. These are source/structural checks only:
-  neither collision-free routing nor reference/visual/UV approval.
+  its corresponding face. A curved/waypoint route can otherwise
+  reverse into the interior of a source Cube between those correctly
+  oriented endpoint segments. The v6 source preflight now rejects an
+  authored intermediate waypoint strictly inside any actually occupied
+  Cuboid of the start or end part (including repeated source copies).
+  An empty location inside a hollow source's bounding box is not treated
+  as material; boundary/tangent waypoints are not automatically blocked.
+  Existing SWEEP, voxel and 3D contact guards still own realization.
+  This is a **waypoint-only endpoint-source material check**, not a
+  certificate for the continuously interpolated spline, a global scene
+  collision test, or reference/visual/UV approval. V5 connector
+  interpretation remains unchanged.
 
 Illustrative source snippet (not executed):
 

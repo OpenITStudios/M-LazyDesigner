@@ -196,9 +196,25 @@ export function buildMathConnector(
   knots.push({ position: end.point, radius: part.radius[1] });
 
   if (version === 6) {
+    // A route may start and finish in the outward direction while an
+    // intermediate authored waypoint loops INSIDE either endpoint part.
+    // Check the exact solved Cuboid mass, not the coarse enclosing AABB:
+    // a waypoint inside a declared hollow opening is not material.
+    // Strict interior permits genuine exterior/face-tangent waypoints.
+    const endpointMaterial = [...start.boxes, ...end.boxes];
+    const insideMaterial = (point: RecipeVec3) =>
+      endpointMaterial.some(box => [0, 1, 2].every(axis =>
+        point[axis]! > box.from[axis]! + EPSILON &&
+        point[axis]! < box.to[axis]! - EPSILON
+      ));
+    if (knots.slice(1, -1).some(knot => insideMaterial(knot.position))) {
+      throw new Error(
+        "GEOMETRY_MATH_CONNECT_WAYPOINT_INSIDE_SOURCE: " + part.id
+      );
+    }
     // The outgoing path must depart the start's exposed outward face,
-    // then approach the end from outside its exposed face. This excludes
-    // connectors that secretly tunnel through the wrong side of a part.
+    // then approach the end from outside its exposed face. The existing
+    // endpoint direction check and voxel connectivity guard remain required.
     const startVector = [0, 1, 2].map(i =>
       knots[1]!.position[i]! - start.point[i]!
     );

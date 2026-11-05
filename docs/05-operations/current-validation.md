@@ -2,6 +2,29 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Face-aware connector waypoint exteriority (source-only)
+
+The existing `geometryMathConnect.ts` v6 face-aware connector already
+required exactly oriented outward start/end segments and native-voxel
+contact with both source parts. It still allowed a curved route whose
+intermediate declared waypoint fell strictly **inside an endpoint
+source's actual Cube mass** before returning to an outward-facing
+terminal segment. The kernel now rejects those waypoints, using
+real solved and repeated Cuboid bounds rather than a coarse source
+envelope. Genuine empty holes, tangent/boundary points and ordinary
+external curved connectors are not automatically classified as
+penetration. V5 source semantics remain unchanged.
+
+This is not an all-segment spline self-intersection proof, global scene
+collision validation or visual/rig/UV quality certification. No new
+Geometry preset, solver, native tool, API or state store was added.
+
+Proof: exact pinned `Local` source and focused positive/negative
+connector regressions AUTHORED for direct and curved contacts,
+outward-direction-valid interior loops, old v5 behavior and genuine
+bounding-box void. Bun, TypeScript, Codex, CI, native Blockbench and
+visual/model quality NOT EXECUTED; the user's testing hold remains active.
+
 ## 2026-11-05 — Voxel-cylinder negative-space topology correction (source-only)
 
 The canonical source-only Advanced Geometry `voxel_cylinder` builder
