@@ -2,6 +2,34 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Initial PROFILE_SWEEP frame roll stability (source-only)
+
+The existing v13+ `PROFILE_SWEEP` derives its initial normal by
+projecting the declared `up_axis` perpendicular to the first tangent.
+Nearly parallel/antiparallel directions could yield a very small
+projected vector, so microscopic positive versus negative transverse
+offsets flipped the normal and therefore all later transported frames
+without a source-authored twist. The source constructor now refuses
+projection sine below `1e-4` after retaining the prior exact-parallel
+error. It reports
+`GEOMETRY_MATH_PROFILE_SWEEP_UP_AXIS_UNSTABLE` rather than guessing
+an alternative up direction. Previously valid sources with a near-
+singular initial frame can newly refuse to rebuild until an explicit
+better `up_axis` is authored.
+
+This is a local numerical representation guard, not a bend smoothing
+algorithm, visual fidelity evaluator, second frame solver or style
+quota. All non-degenerate paths continue to use original parallel
+transport, section twist and one-unit source raster. No extra
+native mutation, Gateway tool, generated API, CI or release.
+
+Proof: exact pinned GitHub `Local` source review, documented small
+dimensionless stability threshold and focused positive/negative
+regressions AUTHORED (not executed) for tiny signed transverse
+offsets, antiparallel input, previous exactly parallel error and
+valid X/Z/Y-axis straight/bent paths. Bun, TypeScript, Codex,
+native Blockbench and visual QA NOT EXECUTED under the user's hold.
+
 ## 2026-11-05 — Significant PROFILE_SWEEP twist occupancy proof (source-only)
 
 The existing v13+ `PROFILE_SWEEP` source kernel had no post-raster

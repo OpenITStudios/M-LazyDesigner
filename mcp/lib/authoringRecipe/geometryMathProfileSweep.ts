@@ -36,6 +36,11 @@ type Segment = {
 
 const EPS = 1e-8;
 const TAU_DEGREES = Math.PI / 180;
+// Initial up-axis projection becomes ill-conditioned when the first tangent
+// is almost parallel to the caller's chosen axis. Do not invent a fallback
+// axis: require an explicit stable source frame instead. This is a small
+// numerical singularity margin, NOT a stylistic bend-angle restriction.
+const MIN_INITIAL_UP_AXIS_SINE = 1e-4;
 // Half-extent changes of at least one native model unit should produce a
 // visible radial difference at the one-unit voxel scale. This is a
 // representability guard, not a new style/geometry-size policy.
@@ -97,11 +102,20 @@ function segmentFrames(part: GeometryMathProfileSweepPart): Segment[] {
     const tangent = mul(delta, 1 / span);
     let normal: Vec3;
     if (previousTangent === null || previousNormal === null) {
-      // Authored up axis is required; no guessed fallback or arbitrary roll.
-      normal = normalized(
-        sub(axis, mul(tangent, dot(axis, tangent))),
-        "GEOMETRY_MATH_PROFILE_SWEEP_UP_AXIS_PARALLEL"
-      );
+      // The starting roll is authored through up_axis. A nearly parallel
+      // direction makes its projection tiny: reversing a microscopic
+      // transverse offset would flip the chosen normal by 180 degrees,
+      // then propagate that unintended roll through all later bends.
+      // Refuse numerical ambiguity rather than guessing another axis.
+      const projectedUp = sub(axis, mul(tangent, dot(axis, tangent)));
+      const projectionSine = length(projectedUp);
+      if (!Number.isFinite(projectionSine) || projectionSine < EPS) {
+        throw new Error("GEOMETRY_MATH_PROFILE_SWEEP_UP_AXIS_PARALLEL");
+      }
+      if (projectionSine < MIN_INITIAL_UP_AXIS_SINE) {
+        throw new Error("GEOMETRY_MATH_PROFILE_SWEEP_UP_AXIS_UNSTABLE");
+      }
+      normal = mul(projectedUp, 1 / projectionSine);
     } else {
       const cosine = Math.max(-1, Math.min(1, dot(previousTangent, tangent)));
       if (cosine < -1 + EPS) {

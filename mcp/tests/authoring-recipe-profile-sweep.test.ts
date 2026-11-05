@@ -387,6 +387,66 @@ describe("R3z v13 morphology with no shape presets", () => {
     // A source pass is not proof that small twist is visually rendered.
   });
 
+  test("rejects numerically ambiguous initial up-axis roll without guessing a fallback", () => {
+    // These input paths are valid, physically separated station pairs.
+    // Their tiny opposite transverse offsets would derive *opposite*
+    // normals from the same nearly parallel caller-specified up_axis.
+    for (const signedOffset of [0.00005, -0.00005]) {
+      const nearParallel = profile({
+        stations: [
+          station([0, 0, 0]),
+          station([signedOffset, 8, 0]),
+        ],
+        up_axis: "Y",
+      });
+      expect(geometryMathProfileSweepPartSchema.parse(nearParallel))
+        .toEqual(nearParallel);
+      const before = structuredClone(nearParallel);
+      expect(() => sweepMathProfileVolume(nearParallel))
+        .toThrow("GEOMETRY_MATH_PROFILE_SWEEP_UP_AXIS_UNSTABLE");
+      expect(() => candidate(nearParallel))
+        .toThrow("GEOMETRY_MATH_PROFILE_SWEEP_UP_AXIS_UNSTABLE");
+      expect(nearParallel).toEqual(before);
+    }
+    // The opposite direction is also a projection singularity; an
+    // "up" vector antiparallel to the first tangent is not an axis hint.
+    expect(() => sweepMathProfileVolume(profile({
+      stations: [station([0, 0, 0]), station([0.00005, -8, 0])],
+    }))).toThrow("GEOMETRY_MATH_PROFILE_SWEEP_UP_AXIS_UNSTABLE");
+
+    // Perfect parallel continues to have its original exact code.
+    expect(() => sweepMathProfileVolume(profile({
+      stations: [station([0, 0, 0]), station([0, 8, 0])],
+    }))).toThrow("GEOMETRY_MATH_PROFILE_SWEEP_UP_AXIS_PARALLEL");
+  });
+
+  test("preserves explicit stable up axes across ordinary straight and bent profiles", () => {
+    const examples = [
+      profile({
+        up_axis: "X",
+        stations: [station([0, 0, 0]), station([0, 8, 0])],
+      }),
+      profile({
+        up_axis: "Z",
+        stations: [station([0, 0, 0]), station([8, 0, 0])],
+      }),
+      profile({
+        up_axis: "Y",
+        stations: [
+          station([0, 0, 0]), station([6, 0, 0]),
+          station([6, 0, 6]),
+        ],
+      }),
+    ];
+    for (const example of examples) {
+      const before = structuredClone(example);
+      const first = sweepMathProfileVolume(example);
+      expect(first.length).toBeGreaterThan(0);
+      expect(sweepMathProfileVolume(example)).toEqual(first);
+      expect(example).toEqual(before);
+    }
+  });
+
   test("strict v13 opt-in and legacy v12 rejection preserve frozen contracts", () => {
     const item = profile();
     expect(geometryMathProgramSchema.parse(rawProgram(item)).version).toBe(13);

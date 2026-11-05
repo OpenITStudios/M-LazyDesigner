@@ -1127,6 +1127,37 @@ completely aliased by voxel resolution can now fail reconstruction.
 Regressions are AUTHORED_NOT_RUN; Bun, TypeScript, Codex, installed
 Blockbench and visual acceptance remain NOT EXECUTED.
 
+### R3z — Stable initial PROFILE_SWEEP frame at bends (source only)
+
+The source-owned v13+ `PROFILE_SWEEP` parallel-transports the initial
+cross-section normal through consecutive path tangents, then applies
+the caller's explicitly authored twist. If the **first path tangent**
+is almost parallel or antiparallel to the chosen `up_axis`, the
+initial orthogonal projection has vanishing magnitude. A microscopic
+signed transverse offset can then reverse the normalized frame by
+180 degrees, propagating unintended cross-section roll along later
+bends even when no twist was declared.
+
+The canonical frame constructor now refuses this near-singular
+numeric source when the sine of the angle between `up_axis` and the
+first tangent is below `1e-4` (about 0.0057 degrees), with
+`GEOMETRY_MATH_PROFILE_SWEEP_UP_AXIS_UNSTABLE`. Exact parallel still
+uses the existing `UP_AXIS_PARALLEL` error. An explicit different
+`up_axis` is required; LazyDesigner does **not** guess a fallback,
+silently rotate Cubes, change the twist parameters or modify geometry.
+Ordinary slanted/orthogonal and bent source paths retain the same
+frames and deterministic voxel/Cuboid compiler.
+
+This protects a narrow numerical singularity, not every possible
+visual orientation discontinuity. It neither verifies actual
+reference alignment, UV texture rotation, seamless shape surface,
+nor native Blockbench output. No new schema/version, solver,
+voxel raster, public Gateway tool, generated API or native action
+was introduced. Persisted v13+ sources with near-singular initial
+`up_axis` may newly refuse reconstruction until revised explicitly.
+Focused regressions are AUTHORED_NOT_RUN; Codex, Bun, TypeScript,
+live Blockbench and visual QA remain NOT EXECUTED.
+
 ### R4: existing Geometry fidelity diagnostics, scoped to a selected Recipe feature
 
 `geometryFidelity.ts` composes the existing `geometry/surfaceEvidence.ts`
