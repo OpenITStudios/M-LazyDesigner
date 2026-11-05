@@ -16,9 +16,14 @@ evaluate-harness-candidate.ts (opt-in Harness²-style candidate evidence gate; r
 ## Harness candidate evidence gate
 
 `bun run eval:harness-candidate -- <probe.json> [<baseline-context-file> <candidate-context-file>]` reads a proposal ID,
-domain, distinct declared context SHA-256 hashes, and two complete
-`golden-session-final` reports, and declared distinct session handles
-under `session_pair`. It does not run an agent, change Skills,
+domain, distinct declared context SHA-256 hashes, two complete
+`golden-session-final` reports and two `session_pair` handles. Current
+Harness A/B evaluation requires each handle to match the 32-hex-character
+`gateway_session_id` carried from the opt-in Gateway recorder through
+the Golden draft and finalizer. Missing, reused, malformed or swapped
+recorder IDs make the pair `INCONCLUSIVE`. Matching supplied IDs still
+does not cryptographically authenticate the trace producer or prove
+independent native runs. It does not run an agent, change Skills,
 connect to Blockbench, or promote candidates.
 
 Run the focused comparator source test in Codex when available:

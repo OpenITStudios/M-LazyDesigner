@@ -128,6 +128,7 @@ export function finalizeGoldenSession(input: {
     report: "golden-session-final",
     task_id: run.task_id,
     source_sha: run.source_sha,
+    gateway_session_id: run.gateway_session_id ?? null,
     proof_scope: run.proof_scope,
     state: accepted ? "ACCEPTED" : "INCOMPLETE",
     quality_verdict: run.quality_verdict,

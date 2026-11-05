@@ -268,6 +268,29 @@ describe("golden session finalizer", () => {
     expect(report.metrics?.tool_calls_to_accepted_result).toBe(5);
   });
 
+  test("finalizer carries bounded recorder identity without upgrading acceptance", () => {
+    const legacy = finalizeGoldenSession({ golden: golden() });
+    expect(legacy.gateway_session_id).toBeNull();
+    expect(legacy.state).toBe("INCOMPLETE");
+
+    const draft = golden();
+    draft.runs[0]!.gateway_session_id = "a".repeat(32);
+    draft.runs[0]!.trace[0]!.gateway_session_id = "a".repeat(32);
+    const unresolved = finalizeGoldenSession({ golden: draft });
+    expect(unresolved.gateway_session_id).toBe("a".repeat(32));
+    expect(unresolved.state).toBe("INCOMPLETE");
+    expect(unresolved.metrics).toBeNull();
+
+    const accepted = acceptedGolden();
+    accepted.runs[0]!.gateway_session_id = "b".repeat(32);
+    for (const event of accepted.runs[0]!.trace) {
+      event.gateway_session_id = "b".repeat(32);
+    }
+    const result = finalizeGoldenSession({ golden: accepted });
+    expect(result.gateway_session_id).toBe("b".repeat(32));
+    expect(result.state).toBe("ACCEPTED");
+  });
+
   test("incomplete Golden drafts may retain SHA-unknown telemetry only as diagnostics", () => {
     const partialUsage = usage("1234567890abcdef1234567890abcdef12345678");
     partialUsage.source_sha = null;

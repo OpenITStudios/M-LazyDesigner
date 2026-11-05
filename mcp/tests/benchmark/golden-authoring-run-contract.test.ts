@@ -168,6 +168,38 @@ describe("golden authoring accepted-result benchmark", () => {
     }
   });
 
+  test("Golden authoring report rejects borrowed or inconsistent recorder session IDs", () => {
+    const original = acceptedRun();
+    expect(() => validateGoldenAuthoringDocument(original)).not.toThrow();
+    const marked = structuredClone(original);
+    const session = "a".repeat(32);
+    marked.runs[0]!.gateway_session_id = session;
+    for (const row of marked.runs[0]!.trace) {
+      row.gateway_session_id = session;
+    }
+    expect(() => validateGoldenAuthoringDocument(marked)).not.toThrow();
+
+    const borrowed = structuredClone(marked);
+    borrowed.runs[0]!.trace.at(-1)!.gateway_session_id = "b".repeat(32);
+    expect(() => validateGoldenAuthoringDocument(borrowed))
+      .toThrow("Gateway session identities do not match");
+
+    const unanchored = structuredClone(marked);
+    unanchored.runs[0]!.gateway_session_id = null;
+    expect(() => validateGoldenAuthoringDocument(unanchored))
+      .toThrow("Gateway session identities do not match");
+
+    const malformed = structuredClone(marked);
+    malformed.runs[0]!.gateway_session_id = "session-human-label";
+    expect(() => validateGoldenAuthoringDocument(malformed))
+      .toThrow("must be a 32-character recorder nonce");
+
+    const partial = structuredClone(marked);
+    delete partial.runs[0]!.trace[0]!.gateway_session_id;
+    expect(() => validateGoldenAuthoringDocument(partial))
+      .toThrow("Gateway session identities do not match");
+  });
+
   test("only a matching post-authoring native project-save readback can support accepted artifact identity", () => {
     const accepted = acceptedRun();
     expect(() => validateGoldenAuthoringDocument(accepted)).not.toThrow();

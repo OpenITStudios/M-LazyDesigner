@@ -80,6 +80,28 @@ legitimately unmeasured token/time metrics remain `null`. This does
 or establish a quality/efficiency improvement from synthetic input. Exact
 source SHA, actual native project and independent run evidence still matter.
 
+## Recorder-to-Golden final session propagation
+
+The canonical Golden runner derives its optional `gateway_session_id`
+only from uniform trace-event identities, and copies that ID onto each
+draft event and its parent run. The authoring validator rejects missing,
+mixed or forged-looking per-event ID mismatches when the run claims an
+identity. The Golden finalizer carries the same field into the final report.
+The shared accepted-session comparator rejects reuse of the *same* known
+recorder ID as two accepted attempts; entirely legacy reports without it
+remain eligible only for prior non-causal per-metric comparisons.
+
+Harness² candidate evaluation further requires the declared baseline/
+candidate `session_pair` to exactly match two distinct recorder-derived
+IDs in the supplied Golden final reports. Missing IDs produce
+`RECORDED_GATEWAY_SESSION_MISSING`; a repeated ID produces
+`RECORDED_GATEWAY_SESSION_REUSED`; swapping or relabeling IDs produces
+`RECORDED_GATEWAY_SESSION_MISMATCH`. All make the experiment inconclusive
+rather than proving a quality regression or a cheaper candidate.
+These are field/lineage consistency checks on supplied files, NOT
+independent signed process attestation, proof that an AI used selected
+context, or automatic quality adoption.
+
 ## Recorder session identity in Gateway traces
 
 The opt-in Gateway trace reporter now exposes a single

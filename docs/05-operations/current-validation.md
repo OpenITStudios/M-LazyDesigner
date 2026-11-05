@@ -2,6 +2,27 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Golden-to-Harness recorder session correlation (source-only)
+
+The existing Golden draft/finalizer and shared accepted-session comparator
+now preserve the opt-in Gateway recorder's own `gateway_session_id`.
+A Golden run bearing an ID must agree with every event's recorded ID;
+mixed/partial sequences are rejected. Two accepted reports with the same
+known recorder ID are rejected as reused evidence. Harness² requires
+two distinct baseline/candidate IDs matching both the declared pair
+and the values from the supplied Golden final reports. Missing,
+malformed, repeated or swapped identities return INCONCLUSIVE rather
+than an A/B reviewable result. Entirely legacy v1 Golden records
+without recorder IDs remain compatible with general reporting, but not
+reviewable under the stricter Harness² A/B gate.
+
+Proof: pinned GitHub `Local` source, exact blob readback and focused
+runner, accepted Golden, finalizer, direct comparison and Harness
+regressions AUTHORED. Bun, TypeScript, Codex, native Blockbench and
+model-quality acceptance NOT EXECUTED. These are supplied-metadata
+correlation checks, not cryptographically signed native session proof.
+User's prohibition on local/Codex test requests remains active.
+
 ## 2026-11-05 — Recorder-owned Gateway trace session identity (source-only)
 
 The existing opt-in Gateway trace recorder already owned a fresh random

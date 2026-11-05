@@ -23,6 +23,8 @@ export type GoldenTraceKind =
 export type GoldenTraceEvent = {
   index: number;
   kind: GoldenTraceKind;
+  /** From an opt-in Gateway recorder; absent on historical/manual v1 traces. */
+  gateway_session_id?: string;
   /** Recorded Gateway outcome; missing means unverified legacy/manual trace. */
   success?: boolean;
   capability?: string;
@@ -56,6 +58,8 @@ export type GoldenPipelineProvenance = {
 export type GoldenAuthoringRun = {
   task_id: string;
   source_sha: string;
+  /** Matches every recorded event when supplied; not signed live proof. */
+  gateway_session_id?: string | null;
   proof_scope: "LOCAL_CODE" | "LIVE_BLOCKBENCH";
   model: string | null;
   pipeline_provenance: GoldenPipelineProvenance;
@@ -154,6 +158,19 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
   requireNonNegativeNullable(run.accepted_result_ms, `${prefix}.accepted_result_ms`);
 
   if (!Array.isArray(run.trace)) throw new Error(`${prefix}.trace must be an array.`);
+  if (run.gateway_session_id != null &&
+      (typeof run.gateway_session_id !== "string" ||
+       !/^[a-f0-9]{32}$/.test(run.gateway_session_id))) {
+    throw new Error(`${prefix}.gateway_session_id must be a 32-character recorder nonce.`);
+  }
+  const eventSessions = new Set(run.trace.map(
+    event => event.gateway_session_id ?? null
+  ));
+  if (eventSessions.size > 1 ||
+      (run.gateway_session_id ?? null) !==
+        (eventSessions.size ? [...eventSessions][0] : null)) {
+    throw new Error(`${prefix} Golden trace and run Gateway session identities do not match.`);
+  }
   const traceIndices = run.trace.map((event) => event.index);
   if (new Set(traceIndices).size !== traceIndices.length) {
     throw new Error(`${prefix}.trace indices must be unique.`);
@@ -167,6 +184,11 @@ function validateRun(run: GoldenAuthoringRun, index: number): void {
     }
     if (event.success !== undefined && typeof event.success !== "boolean") {
       throw new Error(`${prefix}.trace[${eventIndex}].success must be boolean when present.`);
+    }
+    if (event.gateway_session_id !== undefined &&
+        (typeof event.gateway_session_id !== "string" ||
+         !/^[a-f0-9]{32}$/.test(event.gateway_session_id))) {
+      throw new Error(`${prefix}.trace[${eventIndex}].gateway_session_id is invalid.`);
     }
     if (
       event.required_for_decision !== null &&

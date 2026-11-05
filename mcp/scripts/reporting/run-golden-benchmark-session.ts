@@ -355,7 +355,19 @@ export function buildGoldenRunDraft(input: {
       !/^[0-9a-f]{64}$/.test(input.referencePackageFingerprint)) {
     throw new Error("Golden referencePackageFingerprint must be a lowercase SHA-256 fingerprint.");
   }
-  // Never borrow events from another task or source revision.
+  // Never borrow events from another task, source revision or Gateway
+  // recorder session. Historical input without a recorder nonce remains
+  // explicitly unverified; mixing it with current events is a splice.
+  const sessionIds = new Set(
+    input.traceEvents.map(event => event.gateway_session_id ?? null)
+  );
+  if (sessionIds.size > 1) {
+    throw new Error("Golden session trace contains mixed Gateway recorder identities.");
+  }
+  const gatewaySessionId = input.traceEvents[0]?.gateway_session_id ?? null;
+  if (gatewaySessionId !== null && !/^[a-f0-9]{32}$/.test(gatewaySessionId)) {
+    throw new Error("Golden session trace has an invalid Gateway recorder identity.");
+  }
   for (const event of input.traceEvents) {
     if (event.source_sha !== input.sourceSha || event.task_id !== input.task.id) {
       throw new Error("Golden session trace does not match the selected task_id and source SHA.");
@@ -364,6 +376,7 @@ export function buildGoldenRunDraft(input: {
   const trace: GoldenTraceEvent[] = input.traceEvents.map((event) => ({
     index: event.sequence,
     kind: event.kind,
+    ...(event.gateway_session_id ? { gateway_session_id: event.gateway_session_id } : {}),
     success: event.success,
     ...(event.capability ? { capability: event.capability } : {}),
     required_for_decision: null,
@@ -379,6 +392,7 @@ export function buildGoldenRunDraft(input: {
       {
         task_id: input.task.id,
         source_sha: input.sourceSha,
+        gateway_session_id: gatewaySessionId,
         proof_scope: "LIVE_BLOCKBENCH",
         model: null,
         pipeline_provenance: {

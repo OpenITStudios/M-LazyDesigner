@@ -23,6 +23,8 @@ export type FinalGoldenSessionReport = {
   report: "golden-session-final";
   task_id: string;
   source_sha: string;
+  /** Recorder-created Gateway identity when trace evidence is available. Legacy reports omit it. */
+  gateway_session_id?: string | null;
   /** Emitted by the canonical Golden session finalizer. */
   proof_scope?: "LOCAL_CODE" | "LIVE_BLOCKBENCH";
   state: "ACCEPTED" | "INCOMPLETE";
@@ -89,6 +91,11 @@ function validateAcceptedReport(
   }
   if (!/^[0-9a-f]{40}$/.test(value.source_sha)) {
     throw new Error(`${label}.source_sha must be an exact 40-character Git SHA.`);
+  }
+  if (value.gateway_session_id != null &&
+      (typeof value.gateway_session_id !== "string" ||
+       !/^[a-f0-9]{32}$/.test(value.gateway_session_id))) {
+    throw new Error(`${label} accepted Golden report has an invalid Gateway recorder session ID.`);
   }
   if (value.schema !== 1 ||
       !goldenCorpus.tasks.some(task => task.id === value.task_id)) {
@@ -192,6 +199,15 @@ export function compareAcceptedGoldenSessions(input: {
 }) {
   validateAcceptedReport(input.baseline, "baseline");
   validateAcceptedReport(input.candidate, "candidate");
+
+  // A single Gateway recorder session cannot be two independent Golden
+  // attempts. Old final reports without the optional nonce retain their
+  // historical non-causal comparison semantics.
+  if (input.baseline.gateway_session_id &&
+      input.candidate.gateway_session_id &&
+      input.baseline.gateway_session_id === input.candidate.gateway_session_id) {
+    throw new Error("Accepted-session comparison cannot reuse the same Gateway recorder session.");
+  }
 
   if (input.baseline.task_id !== input.candidate.task_id) {
     throw new Error("Accepted-session comparison requires the same golden task_id.");

@@ -261,6 +261,49 @@ describe("golden benchmark session runner", () => {
     }
   });
 
+  test("Golden draft binds all trace events to one Gateway recorder session", () => {
+    const sha = "f".repeat(40);
+    const build = (sessionId?: string) => ({
+      schema: "lazydesigner-gateway-benchmark-trace-v1" as const,
+      task_id: task.id, source_sha: sha,
+      timestamp: "2026-11-05T00:00:00.000Z",
+      kind: "inspect" as const, capability: "get_project_info",
+      success: true, latency_ms: 2, result_bytes: 50,
+      read_only: true, verification_class: "focused_read",
+      ...(sessionId ? { gateway_session_id: sessionId } : {}),
+    });
+    const a = "a".repeat(32);
+    const b = "b".repeat(32);
+    const first = [{ ...build(a), sequence: 0 }, { ...build(a), sequence: 1 }];
+    const draft = buildGoldenRunDraft({
+      task, sourceSha: sha, traceEvents: first, wallTimeMs: 20,
+    });
+    expect(draft.runs[0]!.gateway_session_id).toBe(a);
+    expect(draft.runs[0]!.trace.map(e => e.gateway_session_id)).toEqual([a, a]);
+    expect(draft.runs[0]!.accepted_result).toBeNull();
+
+    const legacy = buildGoldenRunDraft({
+      task, sourceSha: sha,
+      traceEvents: [{ ...build(), sequence: 0 }], wallTimeMs: 20,
+    });
+    expect(legacy.runs[0]!.gateway_session_id).toBeNull();
+    expect(legacy.runs[0]!.trace[0]!.gateway_session_id).toBeUndefined();
+
+    for (const mixed of [
+      [{ ...build(a), sequence: 0 }, { ...build(b), sequence: 1 }],
+      [{ ...build(a), sequence: 0 }, { ...build(), sequence: 1 }],
+    ]) {
+      expect(() => buildGoldenRunDraft({
+        task, sourceSha: sha, traceEvents: mixed, wallTimeMs: 20,
+      })).toThrow("mixed Gateway recorder identities");
+    }
+    expect(() => buildGoldenRunDraft({
+      task, sourceSha: sha,
+      traceEvents: [{ ...build("NOT-A-RECORDER-NONCE"), sequence: 0 }],
+      wallTimeMs: 20,
+    })).toThrow("invalid Gateway recorder identity");
+  });
+
   test("draft retains native project-save receipts but never upgrades acceptance", () => {
     const payload = {
       project_uuid: "native-project-1",

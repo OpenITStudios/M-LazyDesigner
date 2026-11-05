@@ -35,7 +35,8 @@ export type HarnessProbeResult = {
 };
 const SHA256 = /^[a-f0-9]{64}$/;
 const GIT_SHA = /^[a-f0-9]{40}$/;
-const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9:_-]{2,127}$/;
+// New opt-in Golden reports carry the recorder's 128-bit local nonce.
+const SESSION_ID = /^[a-f0-9]{32}$/;
 const DOMAINS: readonly HarnessProbeDomain[] = [
   "GEOMETRY", "TEXTURING", "ANIMATION", "CONTROL",
 ];
@@ -130,12 +131,31 @@ export function evaluateHarnessProbe(input: HarnessProbeInput): HarnessProbeResu
   // This checks declarations only, not whether two native runs occurred.
   const baselineSessionId = input.session_pair?.baseline_session_id;
   const candidateSessionId = input.session_pair?.candidate_session_id;
-  if (typeof baselineSessionId !== "string" ||
-      typeof candidateSessionId !== "string" ||
-      !SESSION_ID.test(baselineSessionId) || !SESSION_ID.test(candidateSessionId)) {
+  const declaredPairValid = typeof baselineSessionId === "string" &&
+    typeof candidateSessionId === "string" &&
+    SESSION_ID.test(baselineSessionId) && SESSION_ID.test(candidateSessionId);
+  if (!declaredPairValid) {
     reasons.push("SESSION_IDENTITIES_MISSING");
   } else if (baselineSessionId === candidateSessionId) {
     reasons.push("SESSION_REUSE_SUSPECTED");
+  }
+  // Verify declarations against IDs carried through the recorder -> Golden
+  // draft -> final report path. A caller inventing two names alone is no
+  // longer sufficient for REVIEW_REQUIRED or controlled quality rejection.
+  // A matching supplied nonce is still not a signed native-run attestation.
+  const recordedBaseline = baseline.gateway_session_id;
+  const recordedCandidate = candidate.gateway_session_id;
+  if (typeof recordedBaseline !== "string" ||
+      typeof recordedCandidate !== "string" ||
+      !SESSION_ID.test(recordedBaseline) ||
+      !SESSION_ID.test(recordedCandidate)) {
+    reasons.push("RECORDED_GATEWAY_SESSION_MISSING");
+  } else if (recordedBaseline === recordedCandidate) {
+    reasons.push("RECORDED_GATEWAY_SESSION_REUSED");
+  } else if (declaredPairValid &&
+             (recordedBaseline !== baselineSessionId ||
+              recordedCandidate !== candidateSessionId)) {
+    reasons.push("RECORDED_GATEWAY_SESSION_MISMATCH");
   }
   if (baseline.task_id !== candidate.task_id) reasons.push("TASK_MISMATCH");
   if (baseline.source_sha !== candidate.source_sha) reasons.push("SOURCE_SHA_MISMATCH");

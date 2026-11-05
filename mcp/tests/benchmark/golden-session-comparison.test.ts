@@ -84,6 +84,30 @@ describe("accepted golden session comparison", () => {
     expect(report).not.toHaveProperty("winner");
   });
 
+  test("direct accepted comparison refuses identical recorded Gateway sessions", () => {
+    const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
+    const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
+    baseline.gateway_session_id = "a".repeat(32);
+    candidate.gateway_session_id = "a".repeat(32);
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("cannot reuse the same Gateway recorder session");
+
+    candidate.gateway_session_id = "b".repeat(32);
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .not.toThrow();
+
+    candidate.gateway_session_id = "NOT-A-RECORDER-NONCE";
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .toThrow("invalid Gateway recorder session ID");
+
+    // Historical final reports lacking this opt-in field still permit
+    // a non-causal, per-metric comparison without claimed run attestation.
+    baseline.gateway_session_id = undefined;
+    candidate.gateway_session_id = undefined;
+    expect(() => compareAcceptedGoldenSessions({ baseline, candidate }))
+      .not.toThrow();
+  });
+
   test("accepted comparison rejects artifact_revision not matching the saved output digest", () => {
     const baseline = accepted("1234567890abcdef1234567890abcdef12345678", 5);
     const candidate = accepted("abcdef1234567890abcdef1234567890abcdef12", 3);
@@ -362,6 +386,8 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
   function probe(): HarnessProbeInput {
     const baseline = accepted(SHA, 5);
     const candidate = accepted(SHA, 3);
+    baseline.gateway_session_id = "a".repeat(32);
+    candidate.gateway_session_id = "b".repeat(32);
     baseline.usage = { model: "same-model", telemetry_source: "observed", total_tokens: 5000 };
     candidate.usage = { model: "same-model", telemetry_source: "observed", total_tokens: 5000 };
     return {
@@ -369,8 +395,8 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
       baseline_harness_sha256: "1".repeat(64),
       candidate_harness_sha256: "2".repeat(64),
       session_pair: {
-        baseline_session_id: "golden-baseline-01",
-        candidate_session_id: "golden-candidate-01",
+        baseline_session_id: "a".repeat(32),
+        candidate_session_id: "b".repeat(32),
       },
       baseline, candidate,
     };
@@ -452,13 +478,13 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
     expect(unknown.reasons).toContain("SESSION_IDENTITIES_MISSING");
 
     input.session_pair = {
-      baseline_session_id: "golden-baseline-01",
+      baseline_session_id: "a".repeat(32),
       candidate_session_id: "../unsafe-path",
     };
     expect(evaluateHarnessProbe(input).reasons)
       .toContain("SESSION_IDENTITIES_MISSING");
 
-    input.session_pair.candidate_session_id = "golden-candidate-02";
+    input.session_pair.candidate_session_id = "b".repeat(32);
     expect(evaluateHarnessProbe(input).status).toBe("REVIEW_REQUIRED");
 
     input.candidate.state = "INCOMPLETE";
@@ -468,6 +494,43 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
     expect(evaluateHarnessProbe(input).status).toBe("REJECTED_QUALITY");
     input.session_pair = undefined;
     expect(evaluateHarnessProbe(input).status).toBe("INCONCLUSIVE");
+  });
+
+  test("requires declared sessions to match recorder-derived Golden IDs", () => {
+    const good = probe();
+    expect(evaluateHarnessProbe(good).status).toBe("REVIEW_REQUIRED");
+
+    const swapped = probe();
+    swapped.session_pair!.baseline_session_id = "b".repeat(32);
+    swapped.session_pair!.candidate_session_id = "a".repeat(32);
+    const mismatch = evaluateHarnessProbe(swapped);
+    expect(mismatch.status).toBe("INCONCLUSIVE");
+    expect(mismatch.reasons).toContain("RECORDED_GATEWAY_SESSION_MISMATCH");
+    expect(mismatch.comparison).toBeNull();
+
+    const missing = probe();
+    missing.candidate.gateway_session_id = null;
+    const unknown = evaluateHarnessProbe(missing);
+    expect(unknown.status).toBe("INCONCLUSIVE");
+    expect(unknown.reasons).toContain("RECORDED_GATEWAY_SESSION_MISSING");
+
+    const reused = probe();
+    reused.candidate.gateway_session_id = reused.baseline.gateway_session_id;
+    expect(evaluateHarnessProbe(reused).reasons)
+      .toContain("RECORDED_GATEWAY_SESSION_REUSED");
+
+    const legacy = probe();
+    delete legacy.baseline.gateway_session_id;
+    delete legacy.candidate.gateway_session_id;
+    expect(evaluateHarnessProbe(legacy).status).toBe("INCONCLUSIVE");
+
+    // Even a reported quality FAIL cannot be called a controlled result
+    // if the candidate session identity cannot be correlated.
+    missing.candidate.quality_verdict = "FAIL";
+    missing.candidate.state = "INCOMPLETE";
+    missing.candidate.accepted_result = false;
+    missing.candidate.metrics = null;
+    expect(evaluateHarnessProbe(missing).status).toBe("INCONCLUSIVE");
   });
 
   test("Control task context and candidate project provenance cannot drift", () => {

@@ -394,6 +394,17 @@ When omitted, it reports `NOT_CHECKED`; neither status is evidence that
 Codex received the chosen context, nor is it visual/quality acceptance.
 Context inputs are read-only, explicit and capped at 256 KiB each.
 
+**Recorder session correlation:** Current opt-in Gateway benchmark
+traces now include one random recorder nonce per Gateway instance. The
+Golden runner/draft/finalizer retain `gateway_session_id` from the
+trace; an A/B Harness `session_pair` must match the two recorded 32-hex
+IDs and the two IDs must differ. Two invented caller labels, a mixed
+legacy/new trace, a reused run, or two swapped labels can no longer
+reach `REVIEW_REQUIRED`. This guards against accidental evidence
+reuse; a determined author can still forge internally consistent
+metadata, so independent checkout/runtime/capture evidence and blinded
+visual review remain necessary.
+
 **Session isolation:** The optional probe envelope now requires
 `session_pair.baseline_session_id` and
 `session_pair.candidate_session_id` to be distinct, bounded handles for a
