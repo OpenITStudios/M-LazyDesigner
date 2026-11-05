@@ -5,6 +5,7 @@ import {
   CONSOLIDATED_EXECUTOR_ROUTES,
   getConsolidatedExecutor,
   getConsolidatedExecutors,
+  getConsolidatedFamily,
 } from "@/server/runtime/consolidatedRoutes";
 
 describe("Consolidated capability zero-loss contract", () => {
@@ -45,6 +46,21 @@ describe("Consolidated capability zero-loss contract", () => {
     expect(() =>
       getConsolidatedExecutor("manage_animation_timeline", "unknown")
     ).toThrow();
+  });
+
+  test("rejects undeclared capability identities in every consolidated accessor", () => {
+    for (const invalid of [
+      "__proto__", "constructor", "toString", "valueOf", "hasOwnProperty", "not_a_capability",
+    ]) {
+      // A TypeScript type is not runtime validation for a string from a caller.
+      const candidate = invalid as keyof typeof CONSOLIDATED_EXECUTOR_ROUTES;
+      expect(() => getConsolidatedExecutor(candidate, "list"))
+        .toThrow("Unknown consolidated capability:");
+      expect(() => getConsolidatedExecutors(candidate))
+        .toThrow("Unknown consolidated capability:");
+      expect(() => getConsolidatedFamily(candidate))
+        .toThrow("Unknown consolidated capability:");
+    }
   });
 
   test("rejects inherited Object.prototype names as executor branches", () => {

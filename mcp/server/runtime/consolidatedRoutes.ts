@@ -62,11 +62,19 @@ const CONSOLIDATED_EXECUTOR_LISTS = Object.freeze(
   )
 ) as Readonly<Record<ConsolidatedCapability, readonly string[]>>;
 
+/** Require an own catalog entry before selecting any retained native executor. */
+function requireConsolidatedRoute(capability: ConsolidatedCapability) {
+  if (!Object.prototype.hasOwnProperty.call(CONSOLIDATED_EXECUTOR_ROUTES, capability)) {
+    throw new Error(`Unknown consolidated capability: ${capability}.`);
+  }
+  return CONSOLIDATED_EXECUTOR_ROUTES[capability];
+}
+
 export function getConsolidatedExecutor(
   capability: ConsolidatedCapability,
   discriminatorValue: string
 ): string {
-  const route = CONSOLIDATED_EXECUTOR_ROUTES[capability];
+  const route = requireConsolidatedRoute(capability);
   const routes = route.routes as Record<string, string>;
   // Input discriminators are external schema values. Never resolve inherited
   // Object.prototype names as executor identities when validating a branch.
@@ -84,11 +92,12 @@ export function getConsolidatedExecutor(
 export function getConsolidatedExecutors(
   capability: ConsolidatedCapability
 ): readonly string[] {
+  requireConsolidatedRoute(capability);
   return CONSOLIDATED_EXECUTOR_LISTS[capability];
 }
 
 export function getConsolidatedFamily(
   capability: ConsolidatedCapability
 ): McpRegistrationFamily {
-  return CONSOLIDATED_EXECUTOR_ROUTES[capability].family;
+  return requireConsolidatedRoute(capability).family;
 }
