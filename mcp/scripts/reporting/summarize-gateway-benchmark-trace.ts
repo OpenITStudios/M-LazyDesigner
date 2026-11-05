@@ -115,6 +115,13 @@ function parseTrace(text: string): BenchmarkTraceEvent[] {
     if (!/^[0-9a-f]{40}$/.test(event.source_sha)) {
       throw new Error(`Trace line ${index + 1} has an invalid source_sha.`);
     }
+    // New opt-in recorder instances write one stable random 128-bit ID.
+    // Historical trace rows without this field remain readable.
+    if (event.gateway_session_id !== undefined &&
+        (typeof event.gateway_session_id !== "string" ||
+         !/^[0-9a-f]{32}$/.test(event.gateway_session_id))) {
+      throw new Error(`Trace line ${index + 1} has an invalid gateway_session_id.`);
+    }
     if (!Number.isFinite(event.latency_ms) || event.latency_ms < 0) {
       throw new Error(`Trace line ${index + 1} has an invalid latency_ms.`);
     }
@@ -292,6 +299,15 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
   if (sourceShas.size !== 1) {
     throw new Error("Benchmark trace must contain exactly one source_sha.");
   }
+  // A single report is one recorder run. Never silently join two restarted
+  // gateways (or a mix of legacy/current rows) into one accepted experiment.
+  const gatewaySessionIds = new Set(
+    events.map(event => event.gateway_session_id ?? null)
+  );
+  if (gatewaySessionIds.size !== 1) {
+    throw new Error("Benchmark trace contains mixed Gateway recorder session identities.");
+  }
+  const gatewaySessionId = events[0]!.gateway_session_id ?? null;
 
   const ordered = [...events].sort((a, b) => a.sequence - b.sequence);
   for (let index = 0; index < ordered.length; index += 1) {
@@ -425,6 +441,10 @@ export function summarizeGatewayBenchmarkTrace(text: string) {
       "Objective Gateway execution metadata only. This report does not prove accepted-result quality, reference fidelity, or live visual correctness.",
     task_id: ordered[0]!.task_id,
     source_sha: ordered[0]!.source_sha,
+    gateway_session_id: gatewaySessionId,
+    gateway_session_identity_scope: gatewaySessionId
+      ? "RECORDER_NONCE_IN_SUPPLIED_TRACE_NOT_AUTHENTICATED"
+      : "LEGACY_SESSION_ID_MISSING",
     calls: {
       total: ordered.length,
       search: count(ordered, "search"),

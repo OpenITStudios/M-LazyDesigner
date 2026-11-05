@@ -80,6 +80,18 @@ legitimately unmeasured token/time metrics remain `null`. This does
 or establish a quality/efficiency improvement from synthetic input. Exact
 source SHA, actual native project and independent run evidence still matter.
 
+## Recorder session identity in Gateway traces
+
+The opt-in Gateway trace reporter now exposes a single
+`gateway_session_id` from the recorder's own 128-bit random nonce,
+regardless of client-supplied trace IDs. A trace containing mixed
+recorder IDs, or a mixture of current and legacy event identities, is
+rejected as a cross-run splice. Historical traces entirely lacking
+the optional field retain `gateway_session_id: null` with scope
+`LEGACY_SESSION_ID_MISSING`. A matching supplied JSON nonce is an
+identity consistency check, not authentication of the trace producer,
+live Blockbench session, or a successful native model operation.
+
 ## Golden final-save ordering
 
 `evaluate-golden-authoring-runs.ts` now requires the final readback-matched

@@ -39,6 +39,8 @@ export type BenchmarkTraceEvent = {
   sequence: number;
   task_id: string;
   source_sha: string;
+  /** Optional on legacy rows; random Gateway-recorder instance identity, not a client traceparent. */
+  gateway_session_id?: string;
   timestamp: string;
   /** Absent on historical v1 trace rows. */
   started_at?: string;
@@ -385,6 +387,9 @@ export class BenchmarkTraceRecorder {
       sequence: this.sequence++,
       task_id: this.options.taskId,
       source_sha: this.options.sourceSha,
+      // The existing local nonce belongs to this Gateway recorder instance.
+      // A client traceparent can change correlation.trace_id, not this ID.
+      gateway_session_id: this.localTraceId!,
       timestamp: new Date().toISOString(),
       started_at: new Date(input.startedAt).toISOString(),
       correlation,

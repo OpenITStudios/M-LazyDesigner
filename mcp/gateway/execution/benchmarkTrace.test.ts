@@ -50,6 +50,46 @@ describe("Gateway benchmark trace recorder", () => {
     await recorder.flush();
   });
 
+  test("uses a stable recorder nonce across client-parented and local trace spans", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gateway-session-nonce-"));
+    temporaryDirectories.push(dir);
+    const source = "a".repeat(40);
+    const make = (path: string) => BenchmarkTraceRecorder.fromEnvironment({
+      LAZYDESIGNER_BENCHMARK_TRACE_PATH: path,
+      LAZYDESIGNER_BENCHMARK_TASK_ID: "golden-full-asset-authoring",
+      LAZYDESIGNER_BENCHMARK_SOURCE_SHA: source,
+    });
+    const firstPath = join(dir, "session-a.ndjson");
+    const secondPath = join(dir, "session-b.ndjson");
+    const a = make(firstPath);
+    const b = make(secondPath);
+    const record = (recorder: BenchmarkTraceRecorder, traceparent?: string) => {
+      recorder.record({
+        startedAt: recorder.startedAt(),
+        kind: "inspect", success: true, capability: "get_project_info",
+        result: { structuredContent: { project: { uuid: "no-raw-identity" } } },
+        traceparent,
+      });
+    };
+    record(a, "00-" + "1".repeat(32) + "-" + "2".repeat(16) + "-01");
+    record(a);
+    record(b);
+    await Promise.all([a.flush(), b.flush()]);
+    const parse = async (path: string) =>
+      (await readFile(path, "utf8")).trim().split("\n")
+        .map((line: string) => JSON.parse(line));
+    const first = await parse(firstPath);
+    const second = await parse(secondPath);
+    const session = first[0].gateway_session_id;
+    expect(session).toMatch(/^[a-f0-9]{32}$/);
+    expect(first[1].gateway_session_id).toBe(session);
+    expect(first[0].correlation.trace_id).toBe("1".repeat(32));
+    expect(first[1].correlation.trace_id).toBe(session);
+    expect(second[0].gateway_session_id).toMatch(/^[a-f0-9]{32}$/);
+    expect(second[0].gateway_session_id).not.toBe(session);
+    expect(first[0].gateway_session_id).not.toBe(first[0].correlation.trace_id);
+  });
+
   test("fails closed when an enabled trace lacks task or exact source identity", () => {
     expect(() =>
       BenchmarkTraceRecorder.fromEnvironment({

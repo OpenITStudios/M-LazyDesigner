@@ -550,6 +550,46 @@ describe("gateway benchmark trace report", () => {
     }))).toThrow("invalid artifact_evidence digest binding");
   });
 
+  test("separates recorder session identity from client traceparent and legacy rows", () => {
+    const first = {
+      ...JSON.parse(event(0, "mutate")),
+      gateway_session_id: "a".repeat(32),
+      correlation: {
+        trace_id: "b".repeat(32), span_id: "c".repeat(16),
+        parent_span_id: null, origin: "CLIENT_TRACEPARENT",
+        task_context_ref: null, cohort_boundary: null,
+      },
+    };
+    const second = {
+      ...JSON.parse(event(1, "verify")),
+      gateway_session_id: first.gateway_session_id,
+    };
+    const report = summarizeGatewayBenchmarkTrace(
+      [first, second].map(row => JSON.stringify(row)).join("\n")
+    );
+    expect(report.gateway_session_id).toBe(first.gateway_session_id);
+    expect(report.gateway_session_id).not.toBe(first.correlation.trace_id);
+    expect(report.gateway_session_identity_scope)
+      .toBe("RECORDER_NONCE_IN_SUPPLIED_TRACE_NOT_AUTHENTICATED");
+    const legacy = summarizeGatewayBenchmarkTrace(event(0, "search"));
+    expect(legacy.gateway_session_id).toBeNull();
+    expect(legacy.gateway_session_identity_scope).toBe("LEGACY_SESSION_ID_MISSING");
+
+    for (const invalid of [
+      { ...second, gateway_session_id: "d".repeat(32) },
+      { ...second, gateway_session_id: undefined },
+    ]) {
+      expect(() => summarizeGatewayBenchmarkTrace(
+        [first, invalid].map(row => JSON.stringify(row)).join("\n")
+      )).toThrow("mixed Gateway recorder session identities");
+    }
+    for (const bad of [null, "gateway-user-name", "A".repeat(32), "a".repeat(31)]) {
+      expect(() => summarizeGatewayBenchmarkTrace(JSON.stringify({
+        ...first, gateway_session_id: bad,
+      }))).toThrow("invalid gateway_session_id");
+    }
+  });
+
   test("rejects non-contiguous sequence", () => {
     expect(() =>
       summarizeGatewayBenchmarkTrace([

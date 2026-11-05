@@ -2,6 +2,23 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Recorder-owned Gateway trace session identity (source-only)
+
+The existing opt-in Gateway trace recorder already owned a fresh random
+128-bit local trace nonce, but client `traceparent` can override the
+reported trace ID. Each new recorder event now also emits that stable
+`gateway_session_id`, independent of the client trace. The existing
+read-only reporter requires that every event in one report has the same
+bounded recorder ID, refuses mixed legacy/current and multiple-recorder
+traces, and retains fully legacy v1 inputs with a null identity and
+explicit `LEGACY_SESSION_ID_MISSING` scope. This is source/metadata
+consistency, **not** authenticated two-run independence or native proof.
+
+Proof: pinned `Local` exact blob readbacks and two focused positive/
+negative regressions AUTHORED in existing trace owner tests. Bun,
+TypeScript, Codex, native Blockbench, and model-quality acceptance
+NOT EXECUTED; user's local-test hold remains active.
+
 ## 2026-11-05 — Cross-session accepted call metric reconciliation (source-only)
 
 The existing Golden session comparator previously checked individual

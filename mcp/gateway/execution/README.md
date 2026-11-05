@@ -32,6 +32,18 @@ Do not move transport/reconnect state, authored state, or capability metadata ow
 
 `gatewayErrors.ts` owns AI-facing error/result adaptation and trace metadata extraction for Gateway tool execution. Runtime owns backend error contracts and recovery policy inputs, not MCP result shaping.
 
+## Recorder-owned Golden session identity
+
+When opt-in Gateway benchmark trace recording is enabled, each recorder
+instance writes `gateway_session_id`, the recorder's existing random
+128-bit local nonce, on every trace event. This is independent of a client
+`traceparent`; two client traces can share a Gateway recorder instance
+while two recorder instances obtain different session IDs. The field is
+not emitted on the normal disabled hot path, and older v1 rows omit it.
+It is *recorded correlation metadata*, not a signed identity or proof
+of actual native model quality. No prompts, raw project UUIDs, paths or
+images are added to trace metadata.
+
 ## Canonical image evidence boundaries
 
 The opt-in Golden capture digest and the MCP image-delivery counter use the
