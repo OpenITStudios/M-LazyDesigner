@@ -8,6 +8,7 @@ import {
 } from "../../gateway/development/affectedExecution";
 import {
   buildAffectedExecutionPlan,
+  reviewConsolidatedBranchRoutes,
   parseAffectedExecutionArguments,
   parseGitNameOnlyPaths,
   assertExpectedSourceSha,
@@ -1433,6 +1434,50 @@ describe("affected execution planner", () => {
     expect(buildAffectedExecutionPlan([
       "docs/03-authoring/modelling/decision-cases.md",
     ]).graph_branch_readiness_review).toBeUndefined();
+  });
+
+  test("consolidated branch parity reports semantic/route gaps without prototype fallback", () => {
+    const routes = {
+      sample: {
+        discriminator: "operation",
+        routes: { create: "native_create", update: "native_update" },
+      },
+    };
+    expect(reviewConsolidatedBranchRoutes([
+      { capability: "sample", branch: { field: "operation", value: "create" } },
+      { capability: "sample", branch: { field: "operation", value: "properties" } },
+      { capability: "sample", branch: { field: "action", value: "mirror" } },
+      { capability: "sample", branch: { field: "operation", value: "toString" } },
+      { capability: "sample" },
+    ], routes)).toEqual([{
+      capability: "sample",
+      discriminator: "operation",
+      manifest_only: [
+        { field: "action", value: "mirror" },
+        { field: "operation", value: "properties" },
+        { field: "operation", value: "toString" },
+      ],
+      route_only: ["update"],
+    }]);
+    expect(reviewConsolidatedBranchRoutes([
+      { capability: "sample", branch: { field: "operation", value: "create" } },
+    ], { sample: { discriminator: "operation", routes: { create: "native_create" } } }))
+      .toEqual([]);
+
+    // No installed Runtime tool or native acceptance is inferred.
+    const plan = buildAffectedExecutionPlan([
+      "mcp/server/runtime/consolidatedRoutes.ts",
+    ]);
+    const report = plan.graph_branch_readiness_review;
+    expect(report?.source_only).toBe(true);
+    expect(report?.consolidated_route_authority)
+      .toBe("SOURCE_ROUTE_TABLE_NOT_INSTALLED_RUNTIME");
+    expect(report?.consolidated_route_gaps).toBeDefined();
+    // Future generator-backed reconciliation removes this drift naturally.
+    for (const mismatch of report?.consolidated_route_gaps ?? []) {
+      expect(mismatch.manifest_only.length + mismatch.route_only.length)
+        .toBeGreaterThan(0);
+    }
   });
 
   test("canonical graph and manifest changes select actual prerequisite and semantic regressions", async () => {
