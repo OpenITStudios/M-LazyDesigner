@@ -67,7 +67,12 @@ export function getConsolidatedExecutor(
   discriminatorValue: string
 ): string {
   const route = CONSOLIDATED_EXECUTOR_ROUTES[capability];
-  const executor = (route.routes as Record<string, string>)[discriminatorValue];
+  const routes = route.routes as Record<string, string>;
+  // Input discriminators are external schema values. Never resolve inherited
+  // Object.prototype names as executor identities when validating a branch.
+  const executor = Object.prototype.hasOwnProperty.call(routes, discriminatorValue)
+    ? routes[discriminatorValue]
+    : undefined;
   if (!executor) {
     throw new Error(
       `Consolidated capability ${capability} has no executor for ${route.discriminator}=${discriminatorValue}.`

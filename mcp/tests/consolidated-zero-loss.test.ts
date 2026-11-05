@@ -46,4 +46,17 @@ describe("Consolidated capability zero-loss contract", () => {
       getConsolidatedExecutor("manage_animation_timeline", "unknown")
     ).toThrow();
   });
+
+  test("rejects inherited Object.prototype names as executor branches", () => {
+    for (const capability of Object.keys(CONSOLIDATED_EXECUTOR_ROUTES)) {
+      for (const unregistered of [
+        "__proto__", "constructor", "toString", "valueOf", "hasOwnProperty",
+      ]) {
+        expect(() => getConsolidatedExecutor(
+          capability as keyof typeof CONSOLIDATED_EXECUTOR_ROUTES,
+          unregistered
+        )).toThrow("has no executor for");
+      }
+    }
+  });
 });
