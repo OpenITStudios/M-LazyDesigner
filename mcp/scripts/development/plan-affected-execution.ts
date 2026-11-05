@@ -96,11 +96,9 @@ function graphBranchReadinessReview(changedPaths: readonly string[]) {
   }
 
   const candidates = [...byCapability].flatMap(([capability, entries]) => {
-    // A shared, branchless graph can coexist with multiple qualified
-    // operations; it must not mask the need for a discriminator. Continue
-    // excluding a truly branch-independent graph and a single known variant
-    // from this multi-branch diagnostic.
-    const variants = entries.filter((entry) => entry.branch && entry.graph);
+    // Count all declared branches. A sibling without Graph prerequisites
+    // is still a legitimate operation and belongs in this source-only audit.
+    const variants = entries.filter((entry) => Boolean(entry.branch));
     if (variants.length < 2) return [];
     const branchlessFallbackPresent = entries.some(
       (entry) => !entry.branch && Boolean(entry.graph)
@@ -108,11 +106,16 @@ function graphBranchReadinessReview(changedPaths: readonly string[]) {
     const prerequisites = [...new Set(variants.flatMap(
       (entry) => [...(entry.graph?.requires ?? [])]
     ))].sort();
+    // A wholly graphless capability has no prerequisite review to perform.
     if (prerequisites.length === 0) return [];
     return [{
       capability,
       branch_count: variants.length,
       possible_branches: variants.map((entry) => entry.branch!),
+      // This is not a native availability/validation verdict.
+      branches_without_declared_graph: variants
+        .filter((entry) => !entry.graph)
+        .map((entry) => entry.branch!),
       branchless_fallback_present: branchlessFallbackPresent,
       prerequisites,
     }];

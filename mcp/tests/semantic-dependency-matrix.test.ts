@@ -173,6 +173,25 @@ describe("semantic dependency matrix", () => {
     expect(uv?.possible_branches).toContainEqual({
       field: "operation", value: "apply",
     });
+    // Inventory the full material operation space: two branches do not
+    // declare Graph prerequisites but are still supported operations.
+    const material = review?.candidates.find((entry) =>
+      entry.capability === "manage_material"
+    );
+    expect(material?.branch_count).toBe(4);
+    expect(material?.possible_branches).toEqual(expect.arrayContaining([
+      { field: "operation", value: "create" },
+      { field: "operation", value: "configure" },
+      { field: "operation", value: "assign_channel" },
+      { field: "operation", value: "save" },
+    ]));
+    expect(material?.branches_without_declared_graph).toEqual([
+      { field: "operation", value: "assign_channel" },
+      { field: "operation", value: "save" },
+    ]);
+    expect(review?.candidates.some((entry) =>
+      entry.capability === "inspect_elements"
+    )).toBe(false);
     // A diagnostic does not remove source revision or generated API gates.
     expect(plan.semantic_source_alignment?.generator_sync_required).toBe(true);
     expect(() => assertSemanticSourceAlignedForAffectedRun(plan))
