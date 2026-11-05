@@ -143,6 +143,20 @@ function recordValue(value: unknown): Record<string, unknown> | null {
     ? value as Record<string, unknown> : null;
 }
 
+// Shared image payload integrity for both delivery metrics and Golden proof.
+// Buffer.from(base64) is permissive; only canonical, bounded bytes qualify.
+const MAX_MCP_IMAGE_ITEMS = 128;
+const MAX_MCP_IMAGE_BASE64_CHARS = 64 * 1024 * 1024;
+function canonicalMcpImageBytes(value: unknown): Buffer | null {
+  if (typeof value !== "string" ||
+      value.length < 4 || value.length % 4 !== 0 ||
+      value.length > MAX_MCP_IMAGE_BASE64_CHARS ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return null;
+  const bytes = Buffer.from(value, "base64");
+  return bytes.length > 0 && bytes.toString("base64") === value
+    ? bytes : null;
+}
+
 /** Only returned PNGs, not a pre-existing path or a tool's claimed digest. */
 function captureProofFromResult(
   result: unknown,
@@ -158,6 +172,7 @@ function captureProofFromResult(
   if (!project || typeof project.uuid !== "string" || !project.uuid.trim() ||
       !Array.isArray(captures) || captures.length < 1 ||
       captures.length > 5 || !Array.isArray(content) ||
+      content.length > MAX_MCP_IMAGE_ITEMS ||
       (structured?.front_direction !== "-z" &&
        structured?.front_direction !== "+z") ||
       typeof render?.shading !== "boolean" ||
@@ -180,11 +195,9 @@ function captureProofFromResult(
     });
     const image = labelIndex >= 0 ? recordValue(content[labelIndex + 1]) : null;
     if (!image || image.type !== "image" ||
-        image.mimeType !== "image/png" ||
-        typeof image.data !== "string" ||
-        !/^[A-Za-z0-9+/]+={0,2}$/.test(image.data)) return null;
-    const png = Buffer.from(image.data, "base64");
-    if (png.length <= 8 ||
+        image.mimeType !== "image/png") return null;
+    const png = canonicalMcpImageBytes(image.data);
+    if (!png || png.length <= 8 ||
         [137,80,78,71,13,10,26,10].some((n,i) => png[i] !== n) ||
         (typeof row?.png_bytes === "number" &&
          row.png_bytes !== png.length)) return null;
@@ -228,7 +241,7 @@ function payloadBytes(value: unknown): number | null {
  */
 export function measureMcpImageDelivery(result: unknown): BenchmarkMcpImageDelivery | null {
   const items = recordValue(result)?.content;
-  if (!Array.isArray(items) || items.length > 128) return null;
+  if (!Array.isArray(items) || items.length > MAX_MCP_IMAGE_ITEMS) return null;
   let delivered_count = 0;
   let delivered_bytes = 0;
   let png_count = 0;
@@ -236,15 +249,10 @@ export function measureMcpImageDelivery(result: unknown): BenchmarkMcpImageDeliv
   for (const part of items) {
     const item = recordValue(part);
     if (item?.type !== "image") continue;
-    if (typeof item.data !== "string" ||
-        typeof item.mimeType !== "string" ||
-        !/^image\/[a-z0-9.+-]{1,64}$/.test(item.mimeType) ||
-        item.data.length < 4 || item.data.length % 4 !== 0 ||
-        item.data.length > 64 * 1024 * 1024 ||
-        !/^[A-Za-z0-9+/]+={0,2}$/.test(item.data)) return null;
-    const bytes = Buffer.from(item.data, "base64");
-    if (bytes.length === 0 || bytes.toString("base64") !== item.data)
-      return null;
+    if (typeof item.mimeType !== "string" ||
+        !/^image\/[a-z0-9.+-]{1,64}$/.test(item.mimeType)) return null;
+    const bytes = canonicalMcpImageBytes(item.data);
+    if (!bytes) return null;
     delivered_count++;
     delivered_bytes += bytes.length;
     if (item.mimeType === "image/png") {

@@ -32,6 +32,15 @@ Do not move transport/reconnect state, authored state, or capability metadata ow
 
 `gatewayErrors.ts` owns AI-facing error/result adaptation and trace metadata extraction for Gateway tool execution. Runtime owns backend error contracts and recovery policy inputs, not MCP result shaping.
 
+## Canonical image evidence boundaries
+
+The opt-in Golden capture digest and the MCP image-delivery counter use the
+same strict Base64 byte validation (at most 128 MCP content items and 64 MiB
+of encoded characters per image). A malformed/oversized response can no
+longer produce a capture digest when delivery metrics are invalid. This is
+content integrity, **not** a claim that an AI viewed the images or that the
+pixels passed visual review. Trace rows store digests and metadata, not pixels.
+
 ## Error identity and diagnostic provenance
 
 Gateway error adaptation may preserve bounded native/transport diagnostic

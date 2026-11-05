@@ -131,6 +131,62 @@ describe("Gateway benchmark trace recorder", () => {
     expect(events[1].capture_evidence).toBeUndefined();
   });
 
+  test("capture evidence refuses malformed and oversized MCP image lists", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "golden-strict-image-trace-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "trace.ndjson");
+    const recorder = BenchmarkTraceRecorder.fromEnvironment({
+      LAZYDESIGNER_BENCHMARK_TRACE_PATH: path,
+      LAZYDESIGNER_BENCHMARK_TASK_ID: "golden-full-asset-authoring",
+      LAZYDESIGNER_BENCHMARK_SOURCE_SHA: "b".repeat(40),
+      LAZYDESIGNER_BENCHMARK_REFERENCE_FINGERPRINT: "a".repeat(64),
+    });
+    const png = Buffer.from("89504e470d0a1a0a00000000", "hex");
+    const payload = png.toString("base64");
+    const label = { type: "text", text: "VIEW front" };
+    const image = { type: "image", mimeType: "image/png", data: payload };
+    const structuredContent = {
+      project: { uuid: "disposable-golden" },
+      front_direction: "-z",
+      render_evidence: {
+        shading: true, diagnostic_missing_texture_highlight: false,
+      },
+      captures: [{ view: "front", png_bytes: png.length }],
+    };
+
+    // Buffer.from(base64) is permissive enough to silently ignore some
+    // trailing characters. A Golden hash requires canonical delivered bytes.
+    const malformed = {
+      content: [label, { ...image, data: payload + "A" }],
+      structuredContent,
+    };
+    const oversizedList = {
+      content: [
+        label, image,
+        ...Array.from({ length: 127 }, (_, index) => ({
+          type: "text", text: "extra-" + index,
+        })),
+      ],
+      structuredContent,
+    };
+    expect(measureMcpImageDelivery(malformed)).toBeNull();
+    expect(measureMcpImageDelivery(oversizedList)).toBeNull();
+    for (const result of [malformed, oversizedList]) {
+      recorder.record({
+        startedAt: recorder.startedAt(), kind: "verify",
+        capability: "capture_model_views", success: true, result,
+      });
+    }
+    await recorder.flush();
+    const events = (await readFile(path, "utf8")).trim().split("\n")
+      .map(line => JSON.parse(line));
+    expect(events).toHaveLength(2);
+    for (const event of events) {
+      expect(event.mcp_images).toBeNull();
+      expect(event.capture_evidence).toBeUndefined();
+    }
+  });
+
   test("native project export receipt is bound to readback-matched bytes without leaking local paths", async () => {
     const dir = await mkdtemp(join(tmpdir(), "golden-project-export-trace-"));
     temporaryDirectories.push(dir);

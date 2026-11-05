@@ -2,6 +2,19 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Canonical image byte evidence parity (source-only)
+
+The opt-in Gateway benchmark recorder now uses one canonical, bounded Base64
+decoder for MCP image-delivery metrics and Golden capture digests. Malformed
+Base64 or a content list exceeding 128 items cannot yield a Golden capture
+hash while delivery is unmeasurable; the existing 64 MiB encoded-image limit
+also applies to captures. This is a source-level evidence consistency guard,
+not native rendering, AI image consumption, or visual approval.
+
+Proof: pinned Local source review and positive/negative trace regression
+AUTHORED. Bun, TypeScript, Codex, GitHub CI and native Blockbench tests
+NOT EXECUTED. The user still prohibits local/Codex test requests.
+
 ## 2026-11-05 — Gateway error identity cannot be overwritten by diagnostics (source-only)
 
 The existing Gateway error adapter now applies diagnostic detail fields before
