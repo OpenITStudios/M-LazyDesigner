@@ -26,7 +26,7 @@ describe("repository instruction/context efficiency", () => {
     }
   });
 
-  test("portable five-lens engineering contract is discoverable and preserves product boundaries", async () => {
+  test("Agent Rules seven-source contract is discoverable and preserves product boundaries", async () => {
     const [root, standard, systemIndex, portable, evaluator] = await Promise.all([
       text("../AGENTS.md"),
       text("../docs/04-system/development-operating-standard.md"),
