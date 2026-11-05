@@ -282,6 +282,73 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
     }
   });
 
+  test("unselected or unsupported branches cannot borrow a shared Graph BLOCKED result", async () => {
+    // The timeline has a generic Graph fallback even though native execution
+    // requires an operation. An invented/missing operation belongs to Runtime
+    // schema validation, not the fallback's project/animation prerequisites.
+    // A non-branch discriminator must not invent an exact branch either.
+    for (const { capability, args } of [
+      { capability: "manage_animation_timeline", args: {} },
+      { capability: "manage_animation_timeline", args: { operation: "future_unsupported" } },
+      { capability: "manage_animation_controller", args: {
+        action: "edit", resource_kind: "client_entity",
+      } },
+    ]) {
+      const session = new GatewaySessionState();
+      session.replaceFacts({
+        ...seedCapabilityFacts({ projectBound: false }),
+        animation_available: false,
+      });
+      let nativeCalls = 0;
+      const executor = new GatewayCapabilityExecutor(
+        {
+          invokeCapabilityWithMetadata: async () => {
+            nativeCalls++;
+            throw new Error("Runtime decides exact native schema and catalog.");
+          },
+        } as any,
+        { invoke: async () => null } as any,
+        session
+      );
+      const response = await executor.invoke(capability, args) as any;
+      expect(nativeCalls, `${capability} ${JSON.stringify(args)}`).toBe(1);
+      expect(response?.structuredContent?.code)
+        .not.toBe("CAPABILITY_PRECONDITION_BLOCKED");
+      expect(session.facts.project_bound).toBe(false);
+    }
+  });
+
+  test("declared timeline operations and branch-independent facts still block when proven false", async () => {
+    for (const { capability, args } of [
+      { capability: "manage_animation_timeline", args: { operation: "keyframes" } },
+      { capability: "manage_animation_timeline", args: { operation: "timeline", action: "play" } },
+      { capability: "create_animation", args: { name: "model.walk" } },
+    ]) {
+      const session = new GatewaySessionState();
+      session.replaceFacts({
+        ...seedCapabilityFacts({ projectBound: false }),
+        animation_available: false,
+        geometry_available: false,
+      });
+      let calls = 0;
+      const executor = new GatewayCapabilityExecutor(
+        {
+          invokeCapabilityWithMetadata: async () => {
+            calls++;
+            throw new Error("Known missing prerequisites must block early.");
+          },
+        } as any,
+        { invoke: async () => { calls++; return null; } } as any,
+        session
+      );
+      const response = await executor.invoke(capability, args) as any;
+      expect(response?.structuredContent?.code)
+        .toBe("CAPABILITY_PRECONDITION_BLOCKED");
+      expect(response?.structuredContent?.requires).toContain("project_bound");
+      expect(calls).toBe(0);
+    }
+  });
+
   test("confirmed false prerequisites still block a known exact branch", async () => {
     let invocations = 0;
     const session = new GatewaySessionState();

@@ -21,6 +21,7 @@ import {
   evaluateCapabilityPreconditions,
 } from "../capabilities/graph";
 import {
+  manifestEntriesForCapability,
   manifestEntryForBranch,
   nestedOperationClassForArguments,
 } from "../capabilities/manifest";
@@ -59,6 +60,20 @@ export class GatewayCapabilityExecutor {
       this.session.facts
     );
     if (evaluation.eligibility !== "BLOCKED") return null;
+
+    // A branchless Graph is a semantic fallback, not evidence that an
+    // unselected or unsupported operation has the same prerequisites.
+    // Reject early only for an exact declared operation. Otherwise let the
+    // Runtime catalog and input schema decide, without exposing a false
+    // CAPABILITY_PRECONDITION_BLOCKED result.
+    const entries = manifestEntriesForCapability(capability);
+    if (entries.some((entry) => entry.branch) &&
+        (!branch || !entries.some((entry) =>
+          entry.branch?.field === branch.field &&
+          entry.branch.value === branch.value
+        ))) {
+      return null;
+    }
 
     return {
       isError: true,
