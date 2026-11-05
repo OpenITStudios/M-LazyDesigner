@@ -2,6 +2,20 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-05 — Harness candidate session identity isolation (source-only)
+
+The read-only Harness candidate evaluator now requires two distinct, bounded,
+caller-declared `session_pair` IDs before offering a REVIEW_REQUIRED
+comparison or a controlled negative result. Missing/malformed IDs produce
+`SESSION_IDENTITIES_MISSING`; repeated IDs produce
+`SESSION_REUSE_SUSPECTED`, both INCONCLUSIVE. Identifiers alone cannot prove
+independent run execution, reset semantics, captured image provenance or human
+review. No new runner, Workspace owner, agent Runtime, Gateway or tool.
+
+Proof: pinned Local source review and positive/negative Golden regression
+AUTHORED; executable Bun/TypeScript/Codex/native/model proof NOT EXECUTED.
+User explicitly deferred any test requests until authorization.
+
 ## 2026-11-05 — Harness Control context isolation (source-only)
 
 The opt-in Harness² evaluator now refuses comparative efficiency reporting

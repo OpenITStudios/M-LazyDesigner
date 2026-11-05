@@ -346,8 +346,12 @@ Use only with disposable Golden inputs and a real testable Codex Runtime.
    independent disposable Golden seed before each run; never reuse a live
    user Workspace as a benchmark fixture.
 3. Declare actual context byte digests in `baseline_harness_sha256` and
-   `candidate_harness_sha256`. The optional CLI file arguments can now
-   independently check **selected file bytes** against those declarations.
+   `candidate_harness_sha256`. Supply `session_pair` with two distinct
+   opaque session IDs, recorded from independently initiated Golden runs.
+   Missing, malformed or repeated IDs make a candidate INCONCLUSIVE; distinct
+   caller-declared IDs alone cannot authenticate independent execution.
+   The optional CLI file arguments can independently check **selected file
+   bytes** against those declarations.
    A matching selected file still does not prove that the agent loaded or
    followed the instructions. Independently correlate Golden report sessions,
    native evidence and human visual acceptance.
@@ -369,6 +373,13 @@ reports `SELECTED_BYTES_MATCH_DECLARATIONS_NOT_AGENT_CONSUMPTION`.
 When omitted, it reports `NOT_CHECKED`; neither status is evidence that
 Codex received the chosen context, nor is it visual/quality acceptance.
 Context inputs are read-only, explicit and capped at 256 KiB each.
+
+**Session isolation:** The optional probe envelope now requires
+`session_pair.baseline_session_id` and
+`session_pair.candidate_session_id` to be distinct, bounded handles for a
+reviewable result. These are assertions, not verified capture identities.
+A repeated or missing pair returns `INCONCLUSIVE` rather than an apparent
+quality regression or measured efficiency comparison.
 
 **Source isolation:** This evaluator intentionally requires identical
 `baseline.source_sha` and `candidate.source_sha`. Comparing two commits

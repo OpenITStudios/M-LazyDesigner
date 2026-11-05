@@ -303,6 +303,10 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
       schema: 1, proposal_id: "geometry-context-01", domain: "GEOMETRY",
       baseline_harness_sha256: "1".repeat(64),
       candidate_harness_sha256: "2".repeat(64),
+      session_pair: {
+        baseline_session_id: "golden-baseline-01",
+        candidate_session_id: "golden-candidate-01",
+      },
       baseline, candidate,
     };
   }
@@ -363,6 +367,42 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
       expect(assessed.reasons).toContain(reason);
       expect(assessed.comparison).toBeNull();
     }
+  });
+
+  test("session reuse and missing independent run identifiers are inconclusive", () => {
+    const input = probe();
+    expect(evaluateHarnessProbe(input).status).toBe("REVIEW_REQUIRED");
+
+    // Repeating the same result under two labels is not a paired native run.
+    input.session_pair!.candidate_session_id =
+      input.session_pair!.baseline_session_id;
+    const same = evaluateHarnessProbe(input);
+    expect(same.status).toBe("INCONCLUSIVE");
+    expect(same.reasons).toContain("SESSION_REUSE_SUSPECTED");
+    expect(same.comparison).toBeNull();
+
+    input.session_pair = undefined;
+    const unknown = evaluateHarnessProbe(input);
+    expect(unknown.status).toBe("INCONCLUSIVE");
+    expect(unknown.reasons).toContain("SESSION_IDENTITIES_MISSING");
+
+    input.session_pair = {
+      baseline_session_id: "golden-baseline-01",
+      candidate_session_id: "../unsafe-path",
+    };
+    expect(evaluateHarnessProbe(input).reasons)
+      .toContain("SESSION_IDENTITIES_MISSING");
+
+    input.session_pair.candidate_session_id = "golden-candidate-02";
+    expect(evaluateHarnessProbe(input).status).toBe("REVIEW_REQUIRED");
+
+    input.candidate.state = "INCOMPLETE";
+    input.candidate.quality_verdict = "FAIL";
+    input.candidate.accepted_result = false;
+    input.candidate.metrics = null;
+    expect(evaluateHarnessProbe(input).status).toBe("REJECTED_QUALITY");
+    input.session_pair = undefined;
+    expect(evaluateHarnessProbe(input).status).toBe("INCONCLUSIVE");
   });
 
   test("Control task context and candidate project provenance cannot drift", () => {

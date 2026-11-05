@@ -13,6 +13,11 @@ export type HarnessProbeInput = {
   domain: HarnessProbeDomain;
   baseline_harness_sha256: string;
   candidate_harness_sha256: string;
+  /** Caller-declared distinct Golden sessions; not independent live proof. */
+  session_pair?: {
+    baseline_session_id: string;
+    candidate_session_id: string;
+  };
   baseline: FinalGoldenSessionReport;
   candidate: FinalGoldenSessionReport;
 };
@@ -30,6 +35,7 @@ export type HarnessProbeResult = {
 };
 const SHA256 = /^[a-f0-9]{64}$/;
 const GIT_SHA = /^[a-f0-9]{40}$/;
+const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9:_-]{2,127}$/;
 const DOMAINS: readonly HarnessProbeDomain[] = [
   "GEOMETRY", "TEXTURING", "ANIMATION", "CONTROL",
 ];
@@ -91,7 +97,7 @@ function result(
     reasons,
     comparison,
     evidence: "SUPPLIED_GOLDEN_REPORTS_NOT_INDEPENDENTLY_CORRELATED",
-    interpretation: "No automatic adoption, aggregate score or causal quality claim. Match independent native/visual evidence before accepting a variant.",
+    interpretation: "No automatic adoption, aggregate score or causal quality claim. Declared distinct session IDs do not attest independent native runs or visual approval.",
   };
 }
 
@@ -119,6 +125,18 @@ export function evaluateHarnessProbe(input: HarnessProbeInput): HarnessProbeResu
   const before = baseline.pipeline_provenance;
   const after = candidate.pipeline_provenance;
   const reasons: string[] = [];
+  // Identical/absent runner session handles cannot support a controlled A/B
+  // interpretation, even if report metadata and final artifact bytes match.
+  // This checks declarations only, not whether two native runs occurred.
+  const baselineSessionId = input.session_pair?.baseline_session_id;
+  const candidateSessionId = input.session_pair?.candidate_session_id;
+  if (typeof baselineSessionId !== "string" ||
+      typeof candidateSessionId !== "string" ||
+      !SESSION_ID.test(baselineSessionId) || !SESSION_ID.test(candidateSessionId)) {
+    reasons.push("SESSION_IDENTITIES_MISSING");
+  } else if (baselineSessionId === candidateSessionId) {
+    reasons.push("SESSION_REUSE_SUSPECTED");
+  }
   if (baseline.task_id !== candidate.task_id) reasons.push("TASK_MISMATCH");
   if (baseline.source_sha !== candidate.source_sha) reasons.push("SOURCE_SHA_MISMATCH");
   if (!after || after.reference_package_fingerprint !== before.reference_package_fingerprint) {

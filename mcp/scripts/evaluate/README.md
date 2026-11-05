@@ -17,7 +17,8 @@ evaluate-harness-candidate.ts (opt-in Harness²-style candidate evidence gate; r
 
 `bun run eval:harness-candidate -- <probe.json> [<baseline-context-file> <candidate-context-file>]` reads a proposal ID,
 domain, distinct declared context SHA-256 hashes, and two complete
-`golden-session-final` reports. It does not run an agent, change Skills,
+`golden-session-final` reports, and declared distinct session handles
+under `session_pair`. It does not run an agent, change Skills,
 connect to Blockbench, or promote candidates.
 
 Run the focused comparator source test in Codex when available:
