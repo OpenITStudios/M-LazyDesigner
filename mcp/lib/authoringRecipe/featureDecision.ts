@@ -246,7 +246,16 @@ export function assessCompiledRecipeFeatureOptimization(
     if (!current || decision.route === "REVIEW_REQUIRED") {
       action = "REFERENCE_REVIEW_REQUIRED";
     } else if (decision.route === "GEOMETRY") {
-      action = instanceIds.length > 0 ? "KEEP_GEOMETRY" : "GEOMETRY_CREATION_REQUIRED";
+      // A pure negative-space feature describes an opening, not a solid
+      // to insert. Inspect the surrounding structure before claiming a
+      // missing Cube; mixed positive-form reasons retain creation review.
+      const voidOnly = decision.geometry_reasons.length === 1 &&
+        decision.geometry_reasons[0] === "NEGATIVE_SPACE";
+      action = instanceIds.length > 0
+        ? "KEEP_GEOMETRY"
+        : voidOnly
+          ? "REFERENCE_REVIEW_REQUIRED"
+          : "GEOMETRY_CREATION_REQUIRED";
     } else if (instanceIds.length > 0) {
       // Never silently convert already-authored 3D Geometry to Texture/Omit.
       // When another feature still needs its constraint endpoint, the

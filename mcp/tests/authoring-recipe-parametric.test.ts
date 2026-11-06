@@ -392,6 +392,54 @@ describe("read-only feature representation impact for compiled Recipe geometry",
   });
 
 
+  test("void-only uninstantiated features require structural review instead of filler Cubes", () => {
+    const recipe = featureRecipe();
+    const before = structuredClone(recipe);
+    const proposal = {
+      id: "crest_mark", label: "Opening between crest pieces",
+      visual_role: "THREE_DIMENSIONAL" as const, evidence: "SUPPORTED" as const,
+      evidence_refs: ["image:front:crest-gap"],
+      geometry_reasons: ["NEGATIVE_SPACE" as const],
+    };
+    const report = assessRecipeFeatureOptimization(recipe, [proposal]);
+    expect(report).toMatchObject({
+      state: "review_required",
+      scope: "COMPILED_RECIPE_ONLY",
+      native_mutation_executed: false,
+      estimated_native_cube_savings: null,
+      review_required_count: 1,
+      possible_native_removal_review_instance_count: 0,
+      candidates: [{
+        feature_id: "crest_mark",
+        current_route: "TEXTURE",
+        proposed_route: "GEOMETRY",
+        action: "REFERENCE_REVIEW_REQUIRED",
+        realized_recipe_cube_count: 0,
+        proposed_native_cube_deletion: false,
+      }],
+    });
+
+    // A silhouette requirement as well as a void still needs real Geometry.
+    const positiveForm = assessRecipeFeatureOptimization(recipe, [{
+      ...proposal,
+      geometry_reasons: ["NEGATIVE_SPACE" as const, "SILHOUETTE" as const],
+    }]);
+    expect(positiveForm.candidates[0]).toMatchObject({
+      action: "GEOMETRY_CREATION_REQUIRED",
+      realized_recipe_cube_count: 0,
+    });
+    // A suggestion is not native construction or permission to compile an
+    // unresolved 3D feature with no owning pattern.
+    const unsupportedRecipe = structuredClone(recipe);
+    unsupportedRecipe.feature_intents = unsupportedRecipe.feature_intents!.map(
+      (feature) => feature.id === proposal.id ? proposal : feature
+    );
+    expect(() => compileAuthoringRecipe(unsupportedRecipe))
+      .toThrow("FEATURE_GEOMETRY_UNREALIZED");
+    expect(recipe).toEqual(before);
+    expect(compileAuthoringRecipe(recipe).metrics.realized_cube_count).toBe(3);
+  });
+
   test("a retained dependent feature blocks Geometry-to-Texture handoff before native removal", () => {
     const recipe = featureRecipe();
     recipe.prototypes.push({

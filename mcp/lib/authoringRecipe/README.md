@@ -1221,6 +1221,13 @@ before expanding native Cubes when the feature contract is present.
   handoff**, not a Cube; an unreferenced or conflicting feature needs review.
 - A supported horn/joint/part with silhouette, contact, transform or motion
   value remains Geometry. This does not choose its final Cube count or pivot.
+- A proposed 3D feature whose sole purpose is `NEGATIVE_SPACE` and which
+  has no owned Recipe instance must not be interpreted as a solid Cube to
+  add. The read-only optimization response is `REFERENCE_REVIEW_REQUIRED`
+  for inspection of the surrounding structure; combined silhouette/volume
+  requirements still retain `GEOMETRY_CREATION_REQUIRED`. Neither action
+  bypasses the compiler's required feature ownership or authorizes a native
+  carve, mutation or visual PASS.
 - Pattern ownership pointing at Texture/Omit is **rejected**, never silently
   discarded. An unresolved feature with no Cube pattern stays deferred rather
   than blocking unrelated supported structural Geometry; a Cube depending on
