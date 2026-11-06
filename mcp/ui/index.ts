@@ -583,7 +583,12 @@ export function uiSetup(input: UiSetupInput) {
         },
         studioCheck(this: HumanPanelContext): void {
           if (!Project) return;
-          this.studioNote = studioPreviewStatus(Project);
+          this.studioError = "";
+          try {
+            this.studioNote = studioPreviewStatus(Project, this.studioLoaded);
+          } catch (error) {
+            this.studioError = error instanceof Error ? error.message : String(error);
+          }
         },
         async studioAttach(this: HumanPanelContext): Promise<void> {
           if (this.studioBusy || !Project || !this.studioLoaded) return;

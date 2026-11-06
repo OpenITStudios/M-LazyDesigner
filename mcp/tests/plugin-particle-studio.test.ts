@@ -4,6 +4,7 @@ import { tools } from "../lib/factories";
 import { getActiveMcpAuthoringStage, setActiveMcpAuthoringStage } from "../lib/capabilities/authoringStage";
 import {
   studioDefaults, studioOutputPath, studioParticleFoldersForModel,
+  studioExpectedTexturePath,
   studioBootstrapOperations, readStudioEffect,
   studioChangeOperations, compileStudioDraft, prepareStudioParticleDraft,
   requireStudioCommittedWrite, refreshRegisteredStudioParticle,
@@ -49,6 +50,32 @@ describe("Particle Studio quick authoring contracts", () => {
     });
     expect(() => studioParticleFoldersForModel("relative/model.bbmodel", path as never))
       .toThrow(/Save the Bedrock model/);
+  });
+
+  test("custom texture lookup follows the particle pack root, not the .bbmodel folder", () => {
+    const path = {
+      dirname: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+      basename: (value: string) => value.slice(value.lastIndexOf("/") + 1),
+      join: (...parts: string[]) => parts.join("/"),
+    };
+    expect(studioExpectedTexturePath(
+      "/pack/particles/fire.particle.json", "textures/particle/flame_blue", path as never,
+    )).toBe("/pack/textures/particle/flame_blue.png");
+    expect(studioExpectedTexturePath(
+      "/old/models/entity/particles/fire.particle.json", "textures/particle/flame_blue", path as never,
+    )).toBe("/old/models/entity/textures/particle/flame_blue.png");
+    expect(studioExpectedTexturePath(
+      "/pack/particles/fire.particle.json", "textures/particle/particles", path as never,
+    )).toBeNull(); // Vanilla texture is provided by Wintersky.
+    expect(studioExpectedTexturePath(
+      "/pack/particles/fire.particle.json", "textures/particle/../../escape", path as never,
+    )).toBeNull();
+  });
+
+  test("no active emitter never masquerades as visible viewport evidence", () => {
+    const draft = readStudioEffect("", serialized(sample()));
+    const note = studioPreviewStatus({} as never, draft);
+    expect(note).toContain("preview not active");
   });
 
   test("bootstrap writes only known preset component fields", () => {
@@ -258,7 +285,7 @@ describe("Particle Studio quick authoring contracts", () => {
       expect(live).toBe(1);
       expect(deleted).toBe(1);
       expect(disposed).toBe(1);
-      expect(studioPreviewStatus(project as never)).toContain("unsaved preview");
+      expect(studioPreviewStatus(project as never, loaded)).toContain("unsaved preview");
       expect(startStudioPreview(project as never, loaded, "", { ...settings, size: 0.4 }))
         .toContain("up to date");
       expect(deleted).toBe(1); // Identical slider values are coalesced.
@@ -270,7 +297,7 @@ describe("Particle Studio quick authoring contracts", () => {
       expect(deleted).toBe(3);
       expect(disposed).toBe(3);
       expect(written).toBe(0);
-      expect(fileReads).toBe(0);
+      expect(fileReads).toBe(1); // Only explicit Check Preview reads source.
     } finally {
       stopStudioPreview();
       setActiveMcpAuthoringStage(beforeStage);

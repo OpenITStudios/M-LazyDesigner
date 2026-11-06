@@ -8,6 +8,7 @@ import {
   type JsonObject, type ParticleMutationOperation,
 } from "@/lib/particle/document";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
+import { isCanonicalParticleTextureReference } from "@/lib/particle/resourceLayout";
 import { loadNativeParticlePreview } from "@/server/tools/particle/inspection";
 
 /** Human controls over existing Particle and Animation executors, not a second authoring engine. */
@@ -410,6 +411,7 @@ type StudioScene = { global_options: { tick_rate: number } };
 type StudioPreview = {
   project: ModelProject;
   file: string;
+  source_content: string;
   signature: string;
   dirty: boolean;
   emitter: NativeStudioEmitter;
@@ -480,7 +482,10 @@ export function startStudioPreview(
     // Do not mount a second copy directly into the Blockbench Canvas scene.
     emitter.playLoop();
     stopStudioPreview();
-    preview = { project, file: loaded.path, signature, dirty: draft.dirty, emitter, config };
+    preview = {
+      project, file: loaded.path, source_content: loaded.content,
+      signature, dirty: draft.dirty, emitter, config,
+    };
   } catch (error) {
     if (emitter) disposeStudioEmitter(emitter, config);
     else config.texture?.dispose();
@@ -491,19 +496,70 @@ export function startStudioPreview(
     : "Standalone emitter started. Viewport appearance is still unverified.";
 }
 
-export function studioPreviewStatus(project: ModelProject): string {
-  if (!preview || preview.project !== project) return "Preview stopped.";
-  const { emitter, config, dirty } = preview;
-  if (config.texture_source_category === "placeholder") {
-    return "Texture placeholder: the referenced PNG did not resolve.";
-  }
-  const count = Array.isArray(emitter.particles) ? emitter.particles.length : 0;
-  if (!emitter.enabled || count === 0) {
-    return "No active particles observed. Check emission, lifetime and playback.";
-  }
-  return count + " active particle(s)" + (dirty ? " (unsaved preview)" : "") +
-    "; viewport appearance still requires visual review.";
+const STUDIO_BUILTIN_TEXTURES = new Set([
+  "textures/particle/particles",
+  "textures/flame_atlas",
+  "textures/particle/flame_atlas",
+  "textures/particle/soul",
+  "textures/particle/campfire_smoke",
+]);
+
+/** Match native Blockbench's nearest particles/ parent, never arbitrary paths. */
+export function studioExpectedTexturePath(
+  particlePath: string, textureReference: string, path: StudioPath,
+): string | null {
+  if (!isAbsoluteFilesystemPath(particlePath) ||
+      !isCanonicalParticleTextureReference(textureReference) ||
+      STUDIO_BUILTIN_TEXTURES.has(textureReference)) return null;
+  const particleFolder = path.dirname(particlePath);
+  if (path.basename(particleFolder).toLowerCase() !== "particles") return null;
+  return path.join(path.dirname(particleFolder), ...textureReference.split("/")) + ".png";
 }
+
+/**
+ * Explicit read-only preflight for the already-selected asset. Preview
+ * invocation and an emitter count are never promoted into visible-pixel proof.
+ */
+export function studioPreviewStatus(project: ModelProject, loaded?: StudioEffect | null): string {
+  if (!loaded) return "Choose a particle or prepare a new effect before checking preview.";
+  const summary = inspectParticleDocument(parseParticleDocument(loaded.content));
+  const invalid = summary.diagnostics.find(entry => entry.severity === "error");
+  if (invalid) return "Particle document invalid: " + invalid.message;
+
+  if (loaded.path) {
+    const { fs, path } = nativeFiles();
+    if (!fs.existsSync(loaded.path)) return "Particle JSON file is missing. Reopen or locate the effect.";
+    if (fs.readFileSync(loaded.path, "utf8") !== loaded.content) {
+      return "Particle file changed outside Studio. Reopen it before editing or attaching.";
+    }
+    const textureRef = summary.texture;
+    if (textureRef) {
+      const expected = studioExpectedTexturePath(loaded.path, textureRef, path);
+      if (expected && !fs.existsSync(expected)) {
+        return "Custom texture missing: " + textureRef + ".png. Place it under the corresponding Resource Pack textures/particle folder.";
+      }
+      if (expected && (!fs.lstatSync(expected).isFile() || fs.lstatSync(expected).isSymbolicLink())) {
+        return "Particle texture reference points to a non-regular file: " + textureRef + ".png.";
+      }
+    }
+  }
+  const active = preview;
+  if (!active || active.project !== project || active.file !== loaded.path ||
+      active.source_content !== loaded.content) {
+    return "Particle file preflight clear; preview not active for this effect. Play it to inspect.";
+  }
+  if (active.config.texture_source_category === "placeholder") {
+    return "Renderer texture unresolved or still loading: " +
+      (summary.texture ?? "unknown") + ". Check the texture asset and native preview.";
+  }
+  const count = Array.isArray(active.emitter.particles) ? active.emitter.particles.length : 0;
+  if (!active.emitter.enabled || count === 0) {
+    return "No active particles at this instant. Check emitter lifetime, emission and timeline.";
+  }
+  return count + " active particle(s)" + (active.dirty ? " (unsaved preview)" : "") +
+    "; actual viewport appearance remains unverified.";
+}
+
 export async function attachStudioParticle(project: ModelProject, loaded: StudioEffect, locatorName: string): Promise<string> {
   return inStudioQueue(project, async () => {
     if (!tools.manage_animation_effects?.enabled) throw new Error("Animation effects are unavailable in this stage.");
