@@ -192,6 +192,55 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     }]);
     expect(independent?.eligibility).toBeUndefined();
   });
+  test("unselected branch cannot borrow a shared fallback's BLOCKED verdict", () => {
+    // Actual catalog -> Control search path, not just hand-authored projection.
+    // Empty intent leaves the operation unselected; fallback Graph still sees
+    // known-false project/animation prerequisites.
+    const [raw] = searchCapabilityCatalog([{
+      name: "manage_animation_timeline",
+      description: "Edit animation timeline and keyframes.",
+    }], "", 4, {
+      facts: { project_bound: false, animation_available: false },
+    });
+    expect(raw?.branch).toBeUndefined();
+    expect(raw?.eligibility).toBe("BLOCKED");
+    expect(raw?.requires).toContain("animation_available");
+
+    const [projected] = projectCapabilitiesForSearch([{
+      ...raw!,
+      predecessor: { capability: "create_animation" },
+    }]);
+    expect(projected?.eligibility).toBe("UNKNOWN");
+    expect(projected?.requires).toBeUndefined();
+    expect(projected?.predecessor).toBeUndefined();
+    expect(projected?.why).toContain("not selected");
+    expect(gatewaySearchSuccessOutputSchema.safeParse({
+      capabilities: [projected],
+    }).success).toBe(true);
+
+    // A known exact operation still exposes genuine negative prerequisites.
+    const [selected] = projectCapabilitiesForSearch([{
+      ...raw!,
+      branch: { field: "operation", value: "keyframes" },
+    }]);
+    expect(selected?.eligibility).toBe("BLOCKED");
+    expect(selected?.requires).toContain("animation_available");
+
+    // Branch-independent capabilities are not affected by this guard.
+    const [independent] = projectCapabilitiesForSearch([{
+      capability_id: "create_animation",
+      description: "Create animation.",
+      tier: "primary",
+      read_only: false,
+      destructive: false,
+      idempotent: false,
+      eligibility: "BLOCKED",
+      requires: ["project_bound"],
+    }]);
+    expect(independent?.eligibility).toBe("BLOCKED");
+    expect(independent?.requires).toEqual(["project_bound"]);
+  });
+
   test("unsupported explicit branches without graph prerequisites remain UNKNOWN", () => {
     // Material-instance branches are canonical semantic operations but
     // intentionally have no dependency graphs. An invented operation is

@@ -110,10 +110,12 @@ export function projectCapabilitiesForSearch(
     ];
     const hint = compactCapabilityHint(capability.description);
     const branchHint = searchBranchReadinessHint(capability, operationClass);
-    // Only a declared operation can preserve exact BLOCKED/dependency facts.
-    // Unsupported identities may have inherited unrelated fallback metadata.
+    // Missing selection and unsupported identity both lack an exact Graph
+    // operation. Neither may inherit a shared fallback's BLOCKED/requirements.
+    const unresolvedBranch = branchHint === "UNSELECTED_OPERATION" ||
+      branchHint === "UNSUPPORTED_OPERATION";
     const unsupportedBranch = branchHint === "UNSUPPORTED_OPERATION";
-    const eligibility = unsupportedBranch
+    const eligibility = unresolvedBranch
       ? "UNKNOWN" as const
       : branchHint && capability.eligibility !== "BLOCKED"
         ? "UNKNOWN" as const
@@ -136,10 +138,10 @@ export function projectCapabilitiesForSearch(
       ...(eligibility && eligibility !== "READY"
         ? { eligibility }
         : {}),
-      ...(!unsupportedBranch && capability.requires && capability.requires.length > 0
+      ...(!unresolvedBranch && capability.requires && capability.requires.length > 0
         ? { requires: capability.requires }
         : {}),
-      ...(!unsupportedBranch && capability.predecessor
+      ...(!unresolvedBranch && capability.predecessor
         ? { predecessor: capability.predecessor }
         : {}),
       tier: capability.tier,
