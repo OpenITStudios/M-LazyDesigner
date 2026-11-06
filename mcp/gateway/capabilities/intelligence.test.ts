@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { searchCapabilityCatalog } from "./catalog";
+import { capabilityGraphForSearchImpact, searchCapabilityCatalog } from "./catalog";
 import {
   bestSemanticMatchForTool,
   bm25CapabilityScores,
@@ -253,6 +253,39 @@ describe("capability intelligence routing", () => {
       "make the chair leg taller", 4, { authoringPhase: "geometry" }
     );
     expect(result?.branch).toEqual({ field: "operation", value: "update" });
+  });
+
+
+  test("compound-step impact never borrows a generic Graph for an unselected branch", () => {
+    const expectUnknownImpact = [
+      ["manage_animation_timeline", undefined],
+      ["manage_animation_timeline", { field: "operation", value: "future" }],
+      ["manage_cubes", undefined],
+      ["manage_cubes", { field: "operation", value: "future" }],
+      ["manage_material", { field: "operation", value: "assign_channel" }],
+      ["manage_material", { field: "operation", value: "save" }],
+      ["manage_material", { field: "operation", value: "future" }],
+      ["reparent_element", undefined],
+      ["paint_with_brush", { field: "operation", value: "unsupported" }],
+    ] as const;
+    for (const [capability, branch] of expectUnknownImpact) {
+      expect(capabilityGraphForSearchImpact(capability, branch), capability)
+        .toBeNull();
+    }
+  });
+
+  test("compound-step impact retains exact branches and actual branchless effects", () => {
+    expect(capabilityGraphForSearchImpact("manage_cubes", {
+      field: "operation", value: "update",
+    })?.invalidates).toContain("uv_plan_available");
+    expect(capabilityGraphForSearchImpact("manage_material", {
+      field: "operation", value: "create",
+    })?.produces).toContain("material_available");
+    expect(capabilityGraphForSearchImpact("manage_animation_timeline", {
+      field: "operation", value: "timeline",
+    })?.invalidates).toContain("visual_evidence_current");
+    expect(capabilityGraphForSearchImpact("paint_with_brush")
+      ?.invalidates).toContain("visual_evidence_current");
   });
 
   test("separately discovers geometry and texture capabilities in intent order", () => {

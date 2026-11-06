@@ -81,6 +81,31 @@ function searchPreconditions(
 }
 
 
+
+/**
+ * Compound search only predicts the possible impact of a selected, declared
+ * operation. A shared branchless Graph is not evidence that an unselected,
+ * unsupported, or graphless native branch produced or invalidated facts.
+ * This is advisory discovery only; Runtime remains execution authority.
+ */
+export function capabilityGraphForSearchImpact(
+  capability: string,
+  branch?: CapabilityBranchHint
+): ReturnType<typeof capabilityGraphEntry> {
+  const declaredBranches = manifestEntriesForCapability(capability)
+    .filter(entry => entry.branch);
+  if (declaredBranches.length === 0) {
+    // A branch-independent Graph cannot attest an invented branch identity.
+    return branch ? null : capabilityGraphEntry(capability);
+  }
+  if (!branch) return null;
+  const selected = declaredBranches.find(entry =>
+    entry.branch?.field === branch.field &&
+    entry.branch.value === branch.value
+  );
+  return selected?.graph ? capabilityGraphEntry(capability, branch) : null;
+}
+
 /** Exact-name discovery bypasses ranking, not prerequisite integrity.
  * Use the same source-only Graph projection as ranked discovery, with no
  * selected operation, and leave actual native execution to Runtime.
@@ -506,7 +531,7 @@ export function searchCapabilityCatalog(
         // change what a later step requires, but never proves that fact true.
         const potentiallyChanged = new Set<CapabilityFact>();
         return selected.map((result, index): CapabilitySummary => {
-          const graph = capabilityGraphEntry(result.capability_id, result.branch);
+          const graph = capabilityGraphForSearchImpact(result.capability_id, result.branch);
           const affected = (graph?.requires ?? []).filter((fact) =>
             potentiallyChanged.has(fact)
           );
@@ -517,8 +542,10 @@ export function searchCapabilityCatalog(
             if (cautiousFacts[fact] !== false) cautiousFacts[fact] = "unknown";
           }
           const readiness = affected.length > 0
-            ? evaluateCapabilityPreconditions(
-                result.capability_id, result.branch, cautiousFacts
+            ? searchPreconditions(
+                result.capability_id, result.branch,
+                getCapabilityMetadata(result.capability_id).operationClass,
+                cautiousFacts
               )
             : null;
           const projection: CapabilitySummary = {
