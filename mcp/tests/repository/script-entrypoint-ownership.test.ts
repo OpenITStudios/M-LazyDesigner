@@ -32,11 +32,36 @@ describe("script entrypoint ownership", () => {
       }
     }
 
-    const helpers = new Set(["verify/live-e2e-common.ts", "generate/internal/docs-manifest.ts", "generate/internal/doc-schema.ts", "benchmark/fixtures/gateway-replay-corpus.ts"]);
+    // These renderers are legitimate internal modules of package-owned CLI
+    // entrypoints, not independent scripts. Verify their exact import owners
+    // instead of mislabeling them as unused or auto-deleting report features.
+    const rendererOwners: Readonly<Record<string, string>> = {
+      "reporting/render-observability-report.ts":
+        "reporting/compare-observability-sessions.ts",
+      "reporting/render-project-observation.ts":
+        "reporting/summarize-project-observation.ts",
+    };
+    const helpers = new Set([
+      "verify/live-e2e-common.ts",
+      "generate/internal/docs-manifest.ts",
+      "generate/internal/doc-schema.ts",
+      "benchmark/fixtures/gateway-replay-corpus.ts",
+      ...Object.keys(rendererOwners),
+    ]);
     const unowned = files.filter(
       (name) => !referenced.has(name) && !helpers.has(name)
     );
     expect(unowned).toEqual([]);
+
+    for (const [helper, owner] of Object.entries(rendererOwners)) {
+      // A future removed/renamed importer must reopen the review. Declaring
+      // a helper here is not blanket permission for orphaned source files.
+      expect(referenced.has(owner), owner).toBe(true);
+      expect(files.includes(helper), helper).toBe(true);
+      const stem = helper.split("/").at(-1)!.replace(/\.ts$/, "");
+      const body = await Bun.file(`scripts/${owner}`).text();
+      expect(body, owner).toContain(`from "./${stem}"`);
+    }
 
     const scriptBodies = await Promise.all(
       files
