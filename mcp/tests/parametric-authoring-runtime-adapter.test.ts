@@ -104,7 +104,7 @@ function automaticUntexturedCubeSurface() {
     mirror_uv: false,
     uv_offset: [0, 0],
     faces: Object.fromEntries(FACE_KEYS.map(key => [key, {
-      enabled: true, texture: false, material_name: "", rotation: 0,
+      enabled: true, texture: false as false | string, material_name: "", rotation: 0,
     }])),
   };
 }
