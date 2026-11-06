@@ -51,7 +51,7 @@
       </div>
       <div v-if="!studioLoaded" class="ld-studio-row">
         <label for="ld-studio-preset">Starting shape</label>
-        <select id="ld-studio-preset" v-model="studioSettings.preset" :disabled="studioBusy">
+        <select id="ld-studio-preset" v-model="studioSettings.preset" @change="studioPresetChanged" :disabled="studioBusy">
           <option value="steady">Continuous</option>
           <option value="burst">Burst</option>
           <option value="trail">Trail</option>

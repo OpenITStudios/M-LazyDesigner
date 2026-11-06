@@ -139,6 +139,23 @@ describe("single-emitter authoring viewport workload (no FPS claims)", () => {
     expect(inspectParticleDocument(invalid).preview_workload.state).toBe("blocked");
   });
 
+  test("nonfinite loop period from finite inputs remains unestimated, not falsely lightweight", () => {
+    const extreme = applyParticleOperations(createParticleDocument({
+      identifier: "test:overlong_period", preset: "burst",
+    }), [
+      { op: "set_component", component: "minecraft:emitter_lifetime_looping",
+        value: { active_time: 1e308, sleep_time: 1e308 } },
+      { op: "remove_component", component: "minecraft:emitter_lifetime_once" },
+    ]);
+    const result = inspectParticleDocument(extreme).preview_workload;
+    expect(result).toMatchObject({
+      state: "manual_only", estimated_active_particles: null,
+      looped_burst_particles_per_second: null,
+    });
+    expect(result.reason).toContain("cannot be estimated numerically");
+    expect(JSON.stringify(result)).not.toContain("Infinity");
+  });
+
   test("fast low-population loops still respect spawn-work budgets and remain finite", () => {
     const base = applyParticleOperations(createParticleDocument({
       identifier: "test:rapid_small", preset: "burst",

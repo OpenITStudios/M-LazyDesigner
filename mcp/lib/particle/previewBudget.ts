@@ -40,8 +40,12 @@ export function assessParticlePreviewWorkload(
   const active = nonnegative(looping?.active_time);
   const sleep = looping?.sleep_time === undefined ? 0
     : nonnegative(looping.sleep_time);
-  const period = looping && active !== null && sleep !== null
+  const rawPeriod = looping && active !== null && sleep !== null
     ? active + sleep : null;
+  // Two finite authored values may overflow to Infinity when added.
+  // Unknown period must not silently behave like an infinite sleep time.
+  const period = rawPeriod !== null && Number.isFinite(rawPeriod)
+    ? rawPeriod : null;
   // Clamp arithmetic before exposing it to a JSON receipt. Finite authored
   // values can overflow on division/multiplication; zero * Infinity is NaN.
   const loopedRate = looping && count !== null && period !== null && period > 0

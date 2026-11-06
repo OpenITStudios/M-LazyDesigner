@@ -236,6 +236,21 @@ export function readStudioEffect(path: string, content: string): StudioEffect {
     },
   };
 }
+/**
+ * New-effect controls reflect actual canonical Bedrock preset physics,
+ * rather than generic slider fallbacks. Called on preset choice/create only,
+ * never in the live-preview slider loop.
+ */
+export function studioPresetSettings(preset: StudioPreset): StudioSettings {
+  const defaults = studioDefaults();
+  const document = createParticleDocument({
+    identifier: defaults.identifier, preset,
+    texture: "textures/particle/particles",
+  });
+  const loaded = readStudioEffect("", serializeParticleDocument(document));
+  // A collision_splash rate is also instant; retain its exact chosen family.
+  return { ...loaded.settings, preset };
+}
 function patch(component: string, field: string, value: unknown) {
   return { op: "patch", path: ["components", component, field], value };
 }
@@ -260,7 +275,7 @@ export function studioBootstrapOperations(settings: StudioSettings): object[] {
   // New drafts preserve their chosen physical preset until an ADVANCED field
   // is explicitly changed from the generic creation defaults. Never turn a
   // point source into a disc or erase its built-in force as a side effect.
-  const baseline = studioDefaults();
+  const baseline = studioPresetSettings(settings.preset);
   if (settings.radius !== baseline.radius) {
     const shape = settings.preset === "ambient" || settings.preset === "burst"
       ? "minecraft:emitter_shape_sphere"

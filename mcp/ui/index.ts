@@ -43,7 +43,7 @@ import {
 } from "@/lib/runtime/lifecycle";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
 import {
-  studioDefaults, listStudioParticles, prepareStudioParticleDraft,
+  studioDefaults, studioPresetSettings, listStudioParticles, prepareStudioParticleDraft,
   createStudioParticle, openStudioParticle,
   saveStudioParticle, studioChangeOperations, startStudioPreview,
   stopStudioPreview, studioPreviewStatus, attachStudioParticle,
@@ -382,7 +382,7 @@ export function uiSetup(input: UiSetupInput) {
         review: null as GeometryIssueReview | null,
         editReview: null as GeometryEditReview | null,
         inspectionVersion: 0,
-        studioSettings: studioDefaults(),
+        studioSettings: studioPresetSettings("steady"),
         studioLoaded: null as StudioEffect | null,
         studioFiles: [] as StudioFile[],
         studioChoice: "",
@@ -394,6 +394,12 @@ export function uiSetup(input: UiSetupInput) {
         studioPlaying: false,
       }),
       methods: {
+        studioPresetChanged(this: HumanPanelContext): void {
+          if (this.studioBusy || this.studioLoaded) return;
+          const { identifier, preset } = this.studioSettings;
+          this.studioSettings = { ...studioPresetSettings(preset), identifier };
+          this.studioError = "";
+        },
         studioLiveChanged(this: HumanPanelContext): void {
           scheduleStudioLivePreview(this);
         },
@@ -437,7 +443,7 @@ export function uiSetup(input: UiSetupInput) {
           if (this.studioBusy) return;
           cancelStudioLivePreview();
           stopStudioPreview();
-          this.studioSettings = studioDefaults();
+          this.studioSettings = studioPresetSettings("steady");
           this.studioLoaded = null;
           this.studioChoice = "";
           this.studioPlaying = false;

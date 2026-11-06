@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { createParticleDocument, serializeParticleDocument } from "../lib/particle/document";
+import { applyParticleOperations, createParticleDocument, serializeParticleDocument } from "../lib/particle/document";
 import { tools } from "../lib/factories";
 import { getActiveMcpAuthoringStage, setActiveMcpAuthoringStage } from "../lib/capabilities/authoringStage";
 import {
-  studioDefaults, studioOutputPath, studioParticleFoldersForModel,
+  studioDefaults, studioPresetSettings, studioOutputPath, studioParticleFoldersForModel,
   studioExpectedTexturePath, isRegularStudioFile, listStudioParticles,
   studioBootstrapOperations, readStudioEffect,
   studioChangeOperations, compileStudioDraft, prepareStudioParticleDraft,
@@ -13,7 +13,7 @@ import {
 } from "../ui/particleStudio";
 
 const sample = (overrides: Partial<StudioSettings> = {}) =>
-  ({ ...studioDefaults(), ...overrides });
+  ({ ...studioPresetSettings(overrides.preset ?? "steady"), ...overrides });
 const serialized = (input: StudioSettings) => serializeParticleDocument(createParticleDocument({
   identifier: input.identifier, preset: input.preset, texture: "textures/particle/particles",
 }));
@@ -151,6 +151,27 @@ describe("Particle Studio quick authoring contracts", () => {
     }
   });
 
+  test("starting settings follow canonical preset parameters instead of generic slider defaults", () => {
+    const expectations = [
+      { preset: "steady", emission: 16, vertical_acceleration: 0.5 },
+      { preset: "burst", emission: 12, vertical_acceleration: -1 },
+      { preset: "trail", emission: 24, vertical_acceleration: 0 },
+      { preset: "ambient", emission: 4, radius: 1, vertical_acceleration: 0.05 },
+      { preset: "collision_splash", emission: 10, radius: 0.15, vertical_acceleration: -4 },
+    ] as const;
+    for (const { preset, ...values } of expectations) {
+      const settings = studioPresetSettings(preset);
+      expect(settings).toMatchObject({ preset, ...values });
+      const authored = applyParticleOperations(createParticleDocument({
+        identifier: settings.identifier, preset,
+      }), studioBootstrapOperations(settings) as never);
+      const reopened = readStudioEffect("", serializeParticleDocument(authored));
+      expect(reopened.settings.vertical_acceleration).toBe(settings.vertical_acceleration);
+      expect(reopened.settings.emission).toBe(settings.emission);
+    }
+    expect(studioDefaults().vertical_acceleration).toBe(0); // Neutral fallback is not a preset.
+  });
+
   test("bootstrap writes only known preset component fields", () => {
     const ops = studioBootstrapOperations(sample({ preset: "burst", emission: 20, speed: 1.5 }));
     expect(ops).toContainEqual({
@@ -250,7 +271,7 @@ describe("Particle Studio quick authoring contracts", () => {
 
   test("editing tint cannot accidentally rewrite speed, emission or motion", () => {
     const loaded = readStudioEffect("/model/particles/magic_flame.particle.json", serialized(sample()));
-    const next = sample({ color: "#8040ff" });
+    const next = { ...loaded.settings, color: "#8040ff" };
     const ops = studioChangeOperations(loaded, next);
     expect(ops).toHaveLength(1);
     expect(ops[0]).toMatchObject({ op: "set_component", component: "minecraft:particle_appearance_tinting" });
@@ -499,6 +520,8 @@ describe("Particle Studio quick authoring contracts", () => {
     expect(panel.match(/@input="studioLiveChanged"/g)).toHaveLength(8);
     expect(panel).toContain('studioRevert');
     expect(panel).toContain("Preview New Effect");
+    expect(panel).toContain('@change="studioPresetChanged"');
+    expect(ui).toContain("studioPresetSettings(preset)");
     expect(panel).toContain("Save Particle");
     expect(ui).toContain("prepareStudioParticleDraft(project");
     expect(ui).toContain("() => true, true");
