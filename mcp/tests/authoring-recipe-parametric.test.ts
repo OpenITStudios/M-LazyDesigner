@@ -511,16 +511,28 @@ describe("read-only feature representation impact for compiled Recipe geometry",
       },
     });
 
-    // Even if both features are explicitly reclassified, their ANCHOR must
-    // be separately resolved. No Recipe/Undo mutation or native savings claim.
+    // Reclassifying both parts does not delete their existing ANCHOR.
+    // Review both ends before planning a coherent native modification.
     const both = assessRecipeFeatureOptimization(recipe, [hornProposal, legProposal]);
-    expect(both.constraint_dependency_review_feature_count).toBe(0);
+    expect(both).toMatchObject({
+      state: "review_required",
+      constraint_dependency_review_feature_count: 2,
+      native_mutation_executed: false,
+      estimated_native_cube_savings: null,
+    });
     expect(both.candidates.every((item) =>
-      item.action === "NATIVE_REMOVAL_REVIEW_REQUIRED"
+      item.action === "CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED"
     )).toBe(true);
     expect(both.candidates.map((item) =>
       item.constraint_impact?.constraint_count
     )).toEqual([1, 1]);
+    expect(both.candidates.map((item) =>
+      item.constraint_impact?.retained_peer_constraint_count
+    )).toEqual([1, 1]);
+    // Proposed downstream routes are advisory; actual compiled links remain.
+    expect(both.candidates.map((item) =>
+      item.constraint_impact?.examples[0]?.peer_route
+    )).toEqual(["OMIT", "TEXTURE"]);
     expect(recipe).toEqual(baseline);
     expect(compileAuthoringRecipe(recipe).metrics.realized_cube_count).toBe(4);
   });

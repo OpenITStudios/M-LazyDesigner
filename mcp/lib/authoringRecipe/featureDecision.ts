@@ -233,11 +233,11 @@ export function assessCompiledRecipeFeatureOptimization(
     const current = currentDecisions.get(decision.id);
     const instanceIds = instancesByFeature.get(decision.id) ?? [];
     const impactedConstraints = dependencyByFeature.get(decision.id) ?? [];
-    // "REVIEW_REQUIRED" on the peer is not permission to delete its anchor:
-    // treat unknown retained geometry conservatively until its owner resolves.
+    // A proposed TEXTURE/OMIT route does not remove compiled Cubes or ANCHORs.
+    // Keep external peer dependencies until an actual coherent native apply
+    // resolves them, even when both owners are proposed for reclassification.
     const retainedPeers = impactedConstraints.filter((row) =>
-      row.peer_feature_id !== decision.id &&
-      !["TEXTURE", "OMIT"].includes(peerRoute(row.peer_feature_id))
+      row.peer_feature_id !== decision.id
     );
     const retainedDependents = retainedPeers.filter(
       (row) => row.role === "ANCHOR_TARGET"

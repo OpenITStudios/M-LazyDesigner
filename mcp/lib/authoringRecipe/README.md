@@ -1252,11 +1252,13 @@ Recipe without explicit feature ownership cannot be auto-optimized.
 The read-only report also traces canonical `ANCHOR` constraint endpoints through
 the compiled instance-to-feature identity map, including Recipe-owned symmetry
 instances. A proposed Geometry→Texture/Omit change that leaves a constraint
-connected to another retained/unresolved feature is marked
-`CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED`. The summary distinguishes constraints
-with retained peer features from constraints wholly internal to the proposed
-change. Neither case authorizes native deletion, ignores dependent rigs/UVs,
-or proves an atlas can replace the geometry. Coordinates or display names do
+connected to another **currently compiled** feature is marked
+`CONSTRAINT_DEPENDENCY_REVIEW_REQUIRED`, even when both peer features are
+proposed for Texture/Omit. A proposal does not remove existing native Cubes or
+ANCHORs; their endpoints need coherent dependency review before any apply.
+The summary distinguishes currently retained cross-feature relationships from
+constraints wholly internal to one feature. Neither case authorizes native
+deletion, ignores dependent rigs/UVs, or proves an atlas can replace geometry. Coordinates or display names do
 not establish dependency ownership.
 
 Reference-driven correction planning reuses the canonical Cube geometry
