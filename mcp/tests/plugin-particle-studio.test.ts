@@ -416,6 +416,15 @@ describe("Particle Studio quick authoring contracts", () => {
     expect(ui).toContain("() => true, true");
     expect(studio).toContain("preview: false");
     expect(studio).not.toContain('preview_load_call !== "INVOKED"');
+    const createPath = studio.slice(studio.indexOf("export async function createStudioParticle"),
+      studio.indexOf("export async function openStudioParticle"));
+    const savePath = studio.slice(studio.indexOf("export async function saveStudioParticle"),
+      studio.indexOf("/**\n * The live draft"));
+    for (const owner of [createPath, savePath]) {
+      expect(owner.indexOf("await canonicalParticleWrite(")).toBeGreaterThan(0);
+      expect(owner.indexOf("stopStudioPreview();"))
+        .toBeGreaterThan(owner.indexOf("await canonicalParticleWrite("));
+    }
     expect(ui).toContain('cancelStudioLivePreview()');
     expect(ui).toContain("requestEpoch !== studioLiveGeneration");
     expect(ui).toContain("studioLivePendingVM");

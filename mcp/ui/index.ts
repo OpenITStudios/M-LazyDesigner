@@ -544,7 +544,8 @@ export function uiSetup(input: UiSetupInput) {
           } catch (error) {
             if (epoch === uiEpoch && Project === project) {
               this.studioError = error instanceof Error ? error.message : String(error);
-              this.studioPlaying = false;
+              // The existing valid preview remains alive when a Save is refused.
+              // Do not claim playback stopped without an actual stop receipt.
             }
           } finally {
             if (epoch === uiEpoch && Project === project) this.studioBusy = false;

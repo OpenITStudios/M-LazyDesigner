@@ -357,12 +357,14 @@ export async function createStudioParticle(project: ModelProject, settings: Stud
       throw new Error("This particle already exists in the project's current or previous folder. Open it instead.");
     }
     fs.mkdirSync(directory, { recursive: true });
-    stopStudioPreview();
     await canonicalParticleWrite({
       create: { identifier: draft.settings.identifier, preset: draft.settings.preset,
         texture: "textures/particle/particles", material: "particles_alpha" },
       operations: studioBootstrapOperations(settings), output: { path: file }, preview: false,
     }, file);
+    // A rejected write must not destroy the current preview. Only a verified
+    // committed write may retire the draft emitter.
+    stopStudioPreview();
     return readFileEffect(fs, path, file);
   });
 }
@@ -401,11 +403,12 @@ export async function saveStudioParticle(project: ModelProject, loaded: StudioEf
     }
     const operations = studioChangeOperations(loaded, next);
     if (!operations.length) throw new Error("No particle settings changed.");
-    stopStudioPreview();
     await canonicalParticleWrite({
       source: { path: loaded.path }, operations,
       output: { path: loaded.path }, preview: false,
     }, loaded.path);
+    // No preview/lifecycle mutation before the canonical receipt confirms Save.
+    stopStudioPreview();
     const updated = readFileEffect(fs, path, loaded.path);
     const refreshWarning = refreshRegisteredStudioParticle(loaded.path, updated.content);
     return refreshWarning ? { ...updated, refresh_warning: refreshWarning } : updated;
