@@ -39,7 +39,7 @@ bun run plan:affected -- --auto
 bun run verify:affected -- --auto --expect-sha <exact-Local-HEAD>
 bun run analyze:semantic-impact -- <path>
 bun run audit:data # optional --strict fails on authored broken links/alias chains
-bun run audit:reachability # optional --sample-limit=0..100, never auto-delete
+bun run audit:reachability # optional --sample-limit=0..100 --review-offset=N, never auto-delete
 ```
 
 ## Source reachability and orphan review
@@ -53,10 +53,20 @@ erased `import type`/`export type` and import-type queries, for source
 ownership. The `TYPE_ONLY_REFERENCED` class preserves compile-time
 dependencies rather than falsely claiming they are bundled or orphaned.
 Test-only modules, external compatibility candidates and unreferenced
-source **review candidates** remain separate. Unresolved local imports,
-missing declared roots and nonliteral dynamic imports are reported rather
-than silently ignored. A syntactic value import still does not prove
-emitted JavaScript, installed Runtime registration or actual execution.
+source **review candidates** remain separate. Standalone JavaScript CLI
+files under `scripts/` (including `.mjs`) and compatibility sources are
+included even when they are outside TypeScript config globs; an unreferenced
+manual CLI is a review item, not automatic dead-code evidence. The existing
+script-entrypoint ownership test explicitly retains the manual AI image
+ingestion QA probe and checks its diagnostic-only scope.
+Unreferenced review candidates appear **before** compatible facades, with
+`review_candidate_count`, `review_offset`, and `review_next_offset` for
+deterministic bounded pagination. `--sample-limit=0` gives counts only;
+use `--review-offset=<number>` to page until `review_next_offset=null`.
+Unresolved local imports, missing declared roots and nonliteral dynamic
+imports are reported rather than silently ignored. A syntactic value import
+still does not prove emitted JavaScript, installed Runtime registration or
+actual execution.
 This audit also cannot prove external consumers, model quality or safe deletion. Pair its findings with
 existing `audit:unused`, exact owner tests, manifest/Runtime inventory
 and focused production caller review. No new Runtime module, cleanup

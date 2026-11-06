@@ -7,7 +7,7 @@
  * Absence of a static edge is REVIEW_REQUIRED, never proof of dead code.
  */
 import ts from "typescript-compat";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,6 +33,10 @@ export type SourceReachabilitySummary = {
   total_source_modules: number;
   classes: Record<SourceReachabilityClass, number>;
   missing_roots: string[];
+  review_candidate_count: number;
+  /** Offset of this deterministic orphan-first review page. */
+  review_offset: number;
+  review_next_offset: number | null;
   review_examples: string[];
   review_examples_truncated: boolean;
   unresolved_local_imports: string[];
@@ -81,10 +85,14 @@ export function summarizeSourceReachability(
   dynamicImportFiles: readonly string[] = [],
   sampleLimit = 20,
   auditedPaths?: readonly string[],
-  allSourceImports: SourceReachabilityGraph = graph
+  allSourceImports: SourceReachabilityGraph = graph,
+  reviewOffset = 0
 ): SourceReachabilitySummary {
   if (!Number.isInteger(sampleLimit) || sampleLimit < 0 || sampleLimit > 100) {
     throw new Error("Source reachability sample limit must be 0..100.");
+  }
+  if (!Number.isSafeInteger(reviewOffset) || reviewOffset < 0) {
+    throw new Error("Source reachability review offset must be a non-negative safe integer.");
   }
   const paths = uniqueSorted(auditedPaths ?? Object.keys(graph));
   if (paths.some((path) =>
@@ -108,7 +116,8 @@ export function summarizeSourceReachability(
   const facades = new Set(facadeCandidates);
   const classes = Object.fromEntries(CLASS_ORDER.map((value) => [value, 0]))
     as Record<SourceReachabilityClass, number>;
-  const review: string[] = [];
+  const unreferenced: string[] = [];
+  const compatibility: string[] = [];
   for (const path of paths) {
     const state: SourceReachabilityClass =
       runtime.has(path) ? "RUNTIME_REACHABLE" :
@@ -118,19 +127,28 @@ export function summarizeSourceReachability(
       facades.has(path) ? "EXTERNAL_COMPATIBILITY_REVIEW" :
       "UNREFERENCED_REVIEW";
     classes[state]++;
-    if (state === "EXTERNAL_COMPATIBILITY_REVIEW" ||
-        state === "UNREFERENCED_REVIEW") {
-      review.push(path);
-    }
+    if (state === "UNREFERENCED_REVIEW") unreferenced.push(path);
+    if (state === "EXTERNAL_COMPATIBILITY_REVIEW") compatibility.push(path);
   }
+  // Never let numerous intentional compatibility facades hide the actual
+  // unreferenced candidates from the first page. Alphabetical per cohort.
+  const review = [...unreferenced, ...compatibility];
+  const page = review.slice(reviewOffset, reviewOffset + sampleLimit);
+  const nextOffset = sampleLimit > 0 && reviewOffset + page.length < review.length
+    ? reviewOffset + page.length : null;
   return {
     schema: "lazydesigner-source-reachability-v1",
     authority: "STATIC_IMPORT_GRAPH_REVIEW_ONLY",
     total_source_modules: paths.length,
     classes,
     missing_roots: missingRoots,
-    review_examples: review.slice(0, sampleLimit),
-    review_examples_truncated: review.length > sampleLimit,
+    review_candidate_count: review.length,
+    review_offset: reviewOffset,
+    review_next_offset: nextOffset,
+    review_examples: page,
+    // A zero-sized page intentionally yields no next cursor, but candidates
+    // are still present and must not be reported as fully displayed.
+    review_examples_truncated: reviewOffset + page.length < review.length,
     unresolved_local_imports: uniqueSorted(unresolvedLocalImports).slice(0, sampleLimit),
     unresolved_local_imports_truncated:
       new Set(unresolvedLocalImports).size > sampleLimit,
@@ -152,7 +170,9 @@ type ParsedSourceImports = {
 export function readSourceImports(source: string, path = "fixture.ts"): ParsedSourceImports {
   const file = ts.createSourceFile(
     path, source, ts.ScriptTarget.Latest, true,
-    path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+    path.endsWith(".tsx") ? ts.ScriptKind.TSX :
+      /\.(?:mjs|cjs|js)$/.test(path) ? ts.ScriptKind.JS :
+      ts.ScriptKind.TS
   );
   const imports = new Set<string>();
   const runtime = new Set<string>();
@@ -228,12 +248,12 @@ function configuredProject(path: string) {
 function localModulePath(root: string, fullPath: string): string | null {
   const result = relative(root, fullPath).split(sep).join("/");
   return result.startsWith("../") || result === ".." ||
-    !/\.tsx?$/.test(result) || /\.d\.ts$/.test(result)
+    !/\.(?:tsx?|mjs|cjs|js)$/.test(result) || /\.d\.(?:ts|mts|cts)$/.test(result)
     ? null : result;
 }
 
 function isAuditedSource(path: string): boolean {
-  return /^(?:lib|gateway|server|plugin|ui|macros|scripts|build)\//.test(path) ||
+  return /^(?:lib|gateway|server|plugin|ui|macros|scripts|build|compatibility)\//.test(path) ||
     path === "index.ts";
 }
 
@@ -258,16 +278,46 @@ function scriptEntrypoints(scripts: Record<string, string>): string[] {
   return uniqueSorted(entries);
 }
 
+/** Audits standalone JS CLI helpers ignored by the TypeScript tsconfig
+ * globs. These are REVIEW candidates until a package/script/manual owner
+ * is proven; neither no importer nor no package script licenses deletion.
+ */
+async function standaloneScriptSources(dir: string, root: string): Promise<string[]> {
+  const found: string[] = [];
+  const visit = async (folder: string): Promise<void> => {
+    for (const entry of await readdir(folder, { withFileTypes: true })) {
+      const path = resolve(folder, entry.name);
+      if (entry.isDirectory()) {
+        if (!["node_modules", "dist", ".cache"].includes(entry.name)) {
+          await visit(path);
+        }
+      } else if (entry.isFile() && /\.(?:mjs|cjs|js)$/.test(entry.name)) {
+        const local = localModulePath(root, path);
+        if (local) found.push(local);
+      }
+    }
+  };
+  await visit(dir);
+  return uniqueSorted(found);
+}
+
 export async function auditRepositorySourceReachability(
   root: string,
-  sampleLimit = 20
+  sampleLimit = 20,
+  reviewOffset = 0
 ): Promise<SourceReachabilitySummary> {
   const absoluteRoot = resolve(root);
   const runtime = configuredProject(resolve(absoluteRoot, "tsconfig.json"));
   const gateway = configuredProject(resolve(absoluteRoot, "gateway/tsconfig.json"));
-  const files = uniqueSorted([...runtime.fileNames, ...gateway.fileNames]
-    .map((path) => localModulePath(absoluteRoot, path))
-    .filter((path): path is string => path !== null));
+  const standalone = await standaloneScriptSources(
+    resolve(absoluteRoot, "scripts"), absoluteRoot
+  );
+  const files = uniqueSorted([
+    ...[...runtime.fileNames, ...gateway.fileNames]
+      .map((path) => localModulePath(absoluteRoot, path))
+      .filter((path): path is string => path !== null),
+    ...standalone,
+  ]);
   // Two projections over one parsed source: the executable value-import
   // graph and the complete compilation/reference graph. The latter retains
   // type-only source owners and prevents false orphan classifications.
@@ -323,21 +373,26 @@ export async function auditRepositorySourceReachability(
   const report = summarizeSourceReachability(
     graph, roots, facades, unresolved, dynamic, sampleLimit,
     files.filter((path) => isAuditedSource(path) && !isTestSource(path)),
-    sourceGraph
+    sourceGraph,
+    reviewOffset
   );
   return report;
 }
 
 async function main(): Promise<void> {
-  if (process.argv.slice(2).some((arg) => !/^--sample-limit=\d+$/.test(arg))) {
-    throw new Error("Only --sample-limit=0..100 is supported.");
+  const args = process.argv.slice(2);
+  if (args.some((arg) =>
+    !/^--(?:sample-limit|review-offset)=\d+$/.test(arg)
+  ) || args.filter((arg) => arg.startsWith("--sample-limit=")).length > 1 ||
+       args.filter((arg) => arg.startsWith("--review-offset=")).length > 1) {
+    throw new Error("Only one --sample-limit=0..100 and --review-offset=N are supported.");
   }
-  const arg = process.argv.slice(2).find((item) =>
-    item.startsWith("--sample-limit=")
-  );
-  const limit = arg ? Number(arg.split("=")[1]) : 20;
+  const sample = args.find((item) => item.startsWith("--sample-limit="));
+  const offset = args.find((item) => item.startsWith("--review-offset="));
+  const limit = sample ? Number(sample.split("=")[1]) : 20;
+  const reviewOffset = offset ? Number(offset.split("=")[1]) : 0;
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-  const report = await auditRepositorySourceReachability(root, limit);
+  const report = await auditRepositorySourceReachability(root, limit, reviewOffset);
   console.log(JSON.stringify(report, null, 2));
 }
 

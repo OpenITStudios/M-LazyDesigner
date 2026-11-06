@@ -9,7 +9,7 @@ async function scriptFiles(dir: string): Promise<string[]> {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await scriptFiles(path)));
-    } else if (entry.isFile() && path.endsWith(".ts")) {
+    } else if (entry.isFile() && /\.(?:ts|mjs|cjs|js)$/.test(path)) {
       files.push(relative("scripts", path).replace(/\\/g, "/"));
     }
   }
@@ -41,6 +41,12 @@ describe("script entrypoint ownership", () => {
       "reporting/render-project-observation.ts":
         "reporting/summarize-project-observation.ts",
     };
+    // A separately invoked, read-only AI ingestion diagnostic is not a
+    // package-owned Bun entrypoint. Ratchet its explicit manual ownership
+    // instead of silently omitting .mjs from the inventory.
+    const manualEntrypoints = new Set([
+      "qa/verify-mcp-image-probe.mjs",
+    ]);
     const helpers = new Set([
       "verify/live-e2e-common.ts",
       "generate/internal/docs-manifest.ts",
@@ -49,9 +55,18 @@ describe("script entrypoint ownership", () => {
       ...Object.keys(rendererOwners),
     ]);
     const unowned = files.filter(
-      (name) => !referenced.has(name) && !helpers.has(name)
+      (name) => !referenced.has(name) &&
+        !helpers.has(name) && !manualEntrypoints.has(name)
     );
     expect(unowned).toEqual([]);
+
+    for (const manual of manualEntrypoints) {
+      expect(files.includes(manual), manual).toBe(true);
+      const source = await Bun.file(`scripts/${manual}`).text();
+      expect(source.startsWith("#!/usr/bin/env node")).toBe(true);
+      expect(source).toContain("AI_PIXEL_INGESTION_CHALLENGE");
+      expect(source).toContain("A match does not certify asset fidelity");
+    }
 
     for (const [helper, owner] of Object.entries(rendererOwners)) {
       // A future removed/renamed importer must reopen the review. Declaring
@@ -65,7 +80,7 @@ describe("script entrypoint ownership", () => {
 
     const scriptBodies = await Promise.all(
       files
-        .filter((name) => !helpers.has(name))
+        .filter((name) => !helpers.has(name) && !manualEntrypoints.has(name))
         .map((name) => Bun.file(`scripts/${name}`).text())
     );
     expect(

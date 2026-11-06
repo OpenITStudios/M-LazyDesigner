@@ -44,13 +44,53 @@ describe("source reachability is a review-only dependency audit", () => {
         UNREFERENCED_REVIEW: 1,
       },
       missing_roots: [],
-      review_examples: ["lib/compat.ts", "lib/orphan.ts"],
+      review_candidate_count: 2,
+      review_offset: 0,
+      review_next_offset: null,
+      // Orphan candidates MUST precede legitimate facade review entries,
+      // even when compatibility names sort first alphabetically.
+      review_examples: ["lib/orphan.ts", "lib/compat.ts"],
       review_examples_truncated: false,
     });
     expect(result.limitations).toContain("Never auto-remove");
     expect(summarizeSourceReachability(
       graph, roots, ["lib/compat.ts"], [], [], 20, owners
     )).toEqual(result);
+  });
+
+  test("orphan-first pages expose all candidates beyond the bounded first page", () => {
+    const first = summarizeSourceReachability(
+      graph, roots, ["lib/compat.ts"], [], [], 1, owners
+    );
+    expect(first).toMatchObject({
+      review_candidate_count: 2, review_offset: 0,
+      review_next_offset: 1, review_examples: ["lib/orphan.ts"],
+      review_examples_truncated: true,
+    });
+    const second = summarizeSourceReachability(
+      graph, roots, ["lib/compat.ts"], [], [], 1, owners, graph, 1
+    );
+    expect(second).toMatchObject({
+      review_candidate_count: 2, review_offset: 1,
+      review_next_offset: null, review_examples: ["lib/compat.ts"],
+      review_examples_truncated: false,
+    });
+    expect(summarizeSourceReachability(
+      graph, roots, ["lib/compat.ts"], [], [], 1, owners, graph, 2
+    ).review_examples).toEqual([]);
+    const countOnly = summarizeSourceReachability(
+      graph, roots, ["lib/compat.ts"], [], [], 0, owners
+    );
+    expect(countOnly.review_candidate_count).toBe(2);
+    expect(countOnly.review_examples).toEqual([]);
+    expect(countOnly.review_examples_truncated).toBe(true);
+    expect(countOnly.review_next_offset).toBeNull();
+    expect(() => summarizeSourceReachability(
+      graph, roots, [], [], [], 1, owners, graph, -1
+    )).toThrow("review offset");
+    expect(() => summarizeSourceReachability(
+      graph, roots, [], [], [], 1, owners, graph, 1.5
+    )).toThrow("review offset");
   });
 
   test("source paths absent from graph and missing entrypoints are never silently cleared", () => {
@@ -162,6 +202,23 @@ describe("source reachability is a review-only dependency audit", () => {
       ["lib/definitions.ts", "lib/nested-definition.ts", "lib/loaded.ts", "lib/test-only.ts"]
     );
     expect(incomplete.classes.UNREFERENCED_REVIEW).toBe(2);
+  });
+
+  test("manual JavaScript modules are parseable as source but not auto-certified Runtime", () => {
+    const js = readSourceImports(`
+      import { createHash } from "node:crypto";
+      import "./manual-helper.mjs";
+      const optional = import("./optional/" + extension);
+    `, "scripts/qa/manual.mjs");
+    expect(js.runtimeSpecifiers).toContain("./manual-helper.mjs");
+    expect(js.hasNonLiteralImport).toBe(true);
+    const manual = summarizeSourceReachability(
+      { ...graph, "scripts/qa/manual.mjs": [] }, roots, [], [], [], 20,
+      ["scripts/qa/manual.mjs"]
+    );
+    expect(manual.classes.UNREFERENCED_REVIEW).toBe(1);
+    expect(manual.review_examples).toEqual(["scripts/qa/manual.mjs"]);
+    expect(manual.limitations).toContain("Never auto-remove");
   });
 
   test("a compatibility facade is a review candidate, not auto-deleted dead code", () => {
