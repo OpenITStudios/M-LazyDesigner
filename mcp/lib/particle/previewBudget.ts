@@ -115,6 +115,62 @@ export type ParticleGameCostReview = {
   scene_concurrency_verified: false;
 };
 
+/** Resolve only event names actually referenced by a lifetime owner. */
+function eventNames(value: JsonValue | undefined): string[] {
+  if (typeof value === "string") return [value];
+  return Array.isArray(value) ? value.filter(
+    (name): name is string => typeof name === "string"
+  ) : [];
+}
+function lifetimeEventNames(component: JsonObject | null): Set<string> {
+  const refs = new Set<string>();
+  if (!component) return refs;
+  for (const name of [...eventNames(component.creation_event),
+                      ...eventNames(component.expiration_event)]) refs.add(name);
+  for (const key of ["timeline", "travel_distance_events"]) {
+    const timeline = object(component[key]);
+    if (!timeline) continue;
+    for (const value of Object.values(timeline))
+      for (const name of eventNames(value)) refs.add(name);
+  }
+  if (Array.isArray(component.looping_travel_distance_events)) {
+    for (const entry of component.looping_travel_distance_events) {
+      const nameList = eventNames(object(entry)?.effects);
+      for (const name of nameList) refs.add(name);
+    }
+  }
+  return refs;
+}
+function eventSpawnsChild(value: JsonValue | undefined): boolean {
+  // Bounded read-only traversal of one declared event. Overflow errs toward
+  // review, not toward saying an unknown event cannot spawn children.
+  const pending: Array<JsonValue | undefined> = [value];
+  for (let inspected = 0; pending.length > 0; inspected += 1) {
+    if (inspected >= 256) return true;
+    const current = pending.pop();
+    if (Array.isArray(current)) {
+      pending.push(...current);
+      continue;
+    }
+    const node = object(current);
+    if (!node) continue;
+    if (object(node.particle_effect)) return true;
+    pending.push(...Object.values(node));
+  }
+  return false;
+}
+function collisionEventNames(collision: JsonObject | null): Set<string> {
+  const refs = new Set<string>();
+  if (!collision || collision.enabled === false) return refs;
+  const events = collision.events;
+  const nodes = Array.isArray(events) ? events : events === undefined ? [] : [events];
+  for (const entry of nodes) {
+    const event = object(entry)?.event;
+    for (const name of eventNames(event)) refs.add(name);
+  }
+  return refs;
+}
+
 export function assessParticleGameCost(
   document: JsonObject,
   previewWorkload: ParticlePreviewWorkload,
@@ -174,12 +230,22 @@ export function assessParticleGameCost(
   if (previewWorkload.looped_burst_particles_per_second !== null &&
       previewWorkload.looped_burst_particles_per_second > 64)
     drivers.push("high_repeating_burst_rate");
-  if (childIdentifiers.length > 0 && emitterLoop && emitterEvents)
-    drivers.push("repeating_emitter_child_events");
   if (childIdentifiers.length > 0) {
     drivers.push("nested_effect_activation_cost");
-    if (components?.["minecraft:particle_lifetime_events"] !== undefined ||
-        (collision && collision.events !== undefined))
+    const events = object(effect?.events);
+    const childEvents = new Set(Object.entries(events ?? {})
+      .filter(([, value]) => eventSpawnsChild(value))
+      .map(([name]) => name));
+    // A named child event alone does not imply a per-particle spawn. Match
+    // actual event references to the emitter/particle/collision owners.
+    const emitterRefs = lifetimeEventNames(emitterEvents);
+    if (emitterLoop && [...childEvents].some(name => emitterRefs.has(name)))
+      drivers.push("repeating_emitter_child_events");
+    const particleRefs = lifetimeEventNames(
+      object(components?.["minecraft:particle_lifetime_events"])
+    );
+    const collisionRefs = collisionEventNames(collision);
+    if ([...childEvents].some(name => particleRefs.has(name) || collisionRefs.has(name)))
       drivers.push("per_particle_nested_event_risk");
   }
   return {

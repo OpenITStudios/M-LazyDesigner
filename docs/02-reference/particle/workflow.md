@@ -164,6 +164,8 @@ constant
 
 Use the first level that satisfies the requested behavior cleanly.
 
+**Design quality decision:** Decide which component creates the focal visual read *before* tuning particle count: silhouette, timing, contrast, motion direction, age-based fade and texture readability. Reuse one emitter for related motion/material roles when possible; split only genuinely different physics or timing. A fast low-count burst that loops can still be heavy. Avoid mistaking unrelated particle lifetime events for per-particle child spawning: trace named event references before proposing changes.
+
 **Game quality-to-cost gate:** optimize the visual role per particle, not merely total count. After a first pass, inspect the existing `game_cost` signals and correct any unnecessary lifetime, excessive blend/overdraw, collision, per-render math or nested event fan-out while protecting the reference-approved silhouette, color, focal flash and motion timing. Projected simultaneous game instances and target-device FPS are unknown until supplied or observed. `preview_workload` limits authoring preview only and must not be used as a Minecraft runtime limit.
 
 ### Motion

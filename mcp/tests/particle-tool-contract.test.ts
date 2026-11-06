@@ -197,5 +197,10 @@ describe("particle reference resource contract", () => {
     expect(composed.mode).toBe("SMALL_EXISTING_EVENT_GRAPH_NO_AUTOMATIC_MULTI_PREVIEW");
     expect(composed.author.join(" ")).toContain("minecraft:emitter_lifetime_events");
     expect(composed.efficiency.join(" ")).toContain("One native Studio preview owner");
+    const design = (getParticleReferencePayload("workflow") as any).design_quality_decisions;
+    expect(design.order).toHaveLength(6);
+    expect(design.order.join(" ")).toContain("before choosing spawn count");
+    expect(design.failure_contrasts.join(" ")).toContain("0.1 seconds");
+    expect(design.proof).toContain("do not auto-reduce");
   });
 });

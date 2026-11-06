@@ -155,6 +155,38 @@ describe("single-emitter authoring viewport workload (no FPS claims)", () => {
     expect(JSON.stringify(source)).toBe(prior);
   });
 
+  test("child fan-out risks follow triggering event names instead of unrelated components", () => {
+    const root = createParticleDocument({ identifier: "test:event_owners", preset: "ambient" });
+    const base = applyParticleOperations(root, [
+      { op: "set_event", name: "emit_child", value: {
+        particle_effect: { effect: "test:child", type: "emitter" },
+      } },
+      { op: "set_event", name: "harmless", value: { expression: "variable.a = 1;" } },
+      { op: "set_component", component: "minecraft:emitter_lifetime_events",
+        value: { creation_event: "emit_child" } },
+      { op: "set_component", component: "minecraft:particle_lifetime_events",
+        value: { creation_event: "harmless" } },
+    ]);
+    const first = inspectParticleDocument(base).game_cost.cost_drivers;
+    expect(first).toContain("nested_effect_activation_cost");
+    expect(first).toContain("repeating_emitter_child_events");
+    expect(first).not.toContain("per_particle_nested_event_risk");
+
+    const repeatPerParticle = applyParticleOperations(base, [
+      { op: "patch", path: ["components", "minecraft:particle_lifetime_events", "creation_event"],
+        value: "emit_child" },
+    ]);
+    expect(inspectParticleDocument(repeatPerParticle).game_cost.cost_drivers)
+      .toContain("per_particle_nested_event_risk");
+
+    const detachedEmitter = applyParticleOperations(base, [
+      { op: "patch", path: ["components", "minecraft:emitter_lifetime_events", "creation_event"],
+        value: "harmless" },
+    ]);
+    expect(inspectParticleDocument(detachedEmitter).game_cost.cost_drivers)
+      .not.toContain("repeating_emitter_child_events");
+  });
+
   test("nested effects require manual review and direct recursion blocks native preview", () => {
     const nested = (target: string) => applyParticleOperations(
       createParticleDocument({ identifier: "test:root", preset: "burst" }), [

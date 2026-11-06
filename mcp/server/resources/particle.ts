@@ -109,6 +109,24 @@ const PARTICLE_WORKFLOW_REFERENCE = {
     "save verified .particle.json",
     "bind through manage_animation_effects with explicit time/effect and locator when attachment is required",
   ],
+  design_quality_decisions: {
+    principle: "Choose the smallest physical/visual explanation that preserves the approved reference at the intended in-game viewing distance.",
+    order: [
+      "Identify the primary read: silhouette/shape, intensity/contrast, direction and moment of impact. Keep a secondary role only when visually distinct.",
+      "Specify source region, motion impulse vs acceleration, world/local ownership and lifetime envelopes before choosing spawn count.",
+      "Choose texture/alpha/UV/flipbook or color progression based on appearance readability; use stable per-particle age/random values rather than emitter-age switching when persistent identity matters.",
+      "Tune event timing and optional child roles by the causal animation/impact clock; prefer an emitter event for a single shared beat, not per-particle full child emitters.",
+      "Optimize repeated bursts, lifetime, large blended overlap, collision and per-render math before weakening the focal flash or approved silhouette.",
+      "Review inspect_particle summary.game_cost and actual source diagnostics; treat unknown Molang, concurrency and game FPS as UNVERIFIED.",
+    ],
+    failure_contrasts: [
+      "An unreadable explosion with many particles often needs a clearer flash/texture and event ordering, not higher emission.",
+      "Large translucent billboards can cost more fill-rate than numerous small opaque sprites; screen-space cost cannot be certified by JSON.",
+      "Two physically distinct roles may justify two emitter files; two identical motions with only colors changed usually do not justify extra child effects.",
+      "A small instant count repeated every 0.1 seconds is not equivalent to a single one-shot burst.",
+    ],
+    proof: "Source quality and native preview invocation do not prove reference fidelity or Minecraft FPS. Protect artist-approved motion and do not auto-reduce authored production JSON.",
+  },
   composed_effects: {
     mode: "SMALL_EXISTING_EVENT_GRAPH_NO_AUTOMATIC_MULTI_PREVIEW",
     purpose: "Only separate materially distinct physical roles; one emitter with curves first.",

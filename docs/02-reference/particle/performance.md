@@ -41,6 +41,8 @@ The existing `inspectParticleDocument` now provides **`game_cost`** alongside `p
 5. Consider actual concurrent use: copies per mob, projectiles, players, arenas, near-camera effects and simultaneous activations. One efficient emitter multiplied dozens of times may be expensive. No exact concurrency may be invented.
 6. Judge the **same** game target at matched viewing distance, scene count, settings and device class: preserve readability and event timing while measuring representative frame-time/FPS and observing worst-case overlaps. Texture/alpha quality and game parity require visual evidence; static diagnostics cannot certify them.
 
+**Event trigger ownership:** A nested effect definition by itself does not prove child spawning per parent particle. Resolve the actual event name from emitter lifetime, particle lifetime, and collision event references. The read-only `game_cost` inspector now flags `per_particle_nested_event_risk` and `repeating_emitter_child_events` only when a child-spawning event is referenced by that owner. Unknown or unreachable event branches remain source-review issues; this does not simulate randomization or prove real event frequency.
+
 **No automatic visual downgrading:** `game_cost` is advisory. It must not mutate particle JSON, replace authored material, strip a curve, remove an effect layer, change event timing, force a global spawn cap, or prevent Save merely to obtain a small metric.
 
 ### Preventing game performance incidents

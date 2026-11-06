@@ -167,6 +167,36 @@ describe("Particle Studio quick authoring contracts", () => {
     expect(ops).toHaveLength(6);
   });
 
+  test("new particle drafts apply expressly changed advanced fields without replacing preset behavior", () => {
+    const source = createParticleDocument({ identifier: "mivubi:new_burst", preset: "burst" });
+    const defaultOps = studioBootstrapOperations(sample({ preset: "burst" }));
+    expect(defaultOps).toHaveLength(6);
+    const changed = studioBootstrapOperations(sample({
+      preset: "burst", radius: 0.55, vertical_acceleration: -2.5,
+    }));
+    expect(changed).toContainEqual({
+      op: "patch", path: ["components", "minecraft:emitter_shape_sphere", "radius"],
+      value: 0.55,
+    });
+    expect(changed).toContainEqual({
+      op: "patch", path: ["components", "minecraft:particle_motion_dynamic", "linear_acceleration"],
+      value: [0, -2.5, 0],
+    });
+    const result = applyParticleOperations(source, changed as never);
+    const effect = result.particle_effect as Record<string, any>;
+    expect(effect.components["minecraft:emitter_shape_sphere"].radius).toBe(0.55);
+    expect(effect.components["minecraft:particle_motion_dynamic"].linear_acceleration).toEqual([0, -2.5, 0]);
+    expect(effect.components["minecraft:emitter_lifetime_once"]).toBeDefined();
+
+    const untouched = applyParticleOperations(source, defaultOps as never);
+    expect((untouched.particle_effect as any).components["minecraft:particle_motion_dynamic"].linear_acceleration)
+      .toEqual([0, -1, 0]); // Creation must not silently erase preset physics.
+    expect(() => studioBootstrapOperations(sample({ preset: "steady", radius: 0.6 })))
+      .toThrow(/does not support emitter radius/);
+    expect(() => studioBootstrapOperations(sample({ preset: "trail", vertical_acceleration: 2 })))
+      .toThrow(/does not have dynamic acceleration/);
+  });
+
   test("advanced quick controls remain lossless and never create a second emitter", () => {
     const source = createParticleDocument({ identifier: "mivubi:advanced", preset: "burst" });
     const withColor = applyParticleOperations(source, [

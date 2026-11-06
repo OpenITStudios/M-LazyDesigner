@@ -241,7 +241,7 @@ function patch(component: string, field: string, value: unknown) {
 }
 export function studioBootstrapOperations(settings: StudioSettings): object[] {
   const burst = settings.preset === "burst" || settings.preset === "collision_splash";
-  return [
+  const operations: object[] = [
     patch(burst ? "minecraft:emitter_rate_instant" : "minecraft:emitter_rate_steady",
       burst ? "num_particles" : "spawn_rate", finite(settings.emission, 1, 120, "Emission")),
     { op: "patch", path: ["components", "minecraft:particle_initial_speed"],
@@ -257,6 +257,26 @@ export function studioBootstrapOperations(settings: StudioSettings): object[] {
     { op: "set_component", component: "minecraft:particle_appearance_tinting",
       value: { color: [...rgb(settings.color), finite(settings.opacity, 0, 1, "Opacity")] } },
   ];
+  // New drafts preserve their chosen physical preset until an ADVANCED field
+  // is explicitly changed from the generic creation defaults. Never turn a
+  // point source into a disc or erase its built-in force as a side effect.
+  const baseline = studioDefaults();
+  if (settings.radius !== baseline.radius) {
+    const shape = settings.preset === "ambient" || settings.preset === "burst"
+      ? "minecraft:emitter_shape_sphere"
+      : settings.preset === "collision_splash"
+        ? "minecraft:emitter_shape_disc" : null;
+    if (!shape) throw new Error("This preset does not support emitter radius. Choose a sphere or disc preset.");
+    operations.push(patch(shape, "radius", finite(settings.radius, 0.01, 2, "Radius")));
+  }
+  if (settings.vertical_acceleration !== baseline.vertical_acceleration) {
+    if (settings.preset === "trail") {
+      throw new Error("This preset does not have dynamic acceleration. Use AI particle tools for advanced motion.");
+    }
+    operations.push(patch("minecraft:particle_motion_dynamic",
+      "linear_acceleration", [0, finite(settings.vertical_acceleration, -8, 8, "Vertical acceleration"), 0]));
+  }
+  return operations;
 }
 export function studioChangeOperations(loaded: StudioEffect, next: StudioSettings): object[] {
   if (loaded.settings.identifier !== next.identifier) {
