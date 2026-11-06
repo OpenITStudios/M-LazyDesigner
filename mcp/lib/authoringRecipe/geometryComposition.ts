@@ -215,6 +215,38 @@ export function reviewStoredAdvancedGeometrySource(recipe: AuthoringRecipe): {
 }
 
 /**
+ * Native revise must be grounded in the exact persisted Advanced Geometry
+ * source cohort, not just a coincident feature_intents label. A legacy Recipe
+ * may remain readable/editable by its existing primitive owner, but its
+ * missing shape parameters cannot authorize parametric replacement.
+ *
+ * Pure source gate only: native Cube identity, project state and Undo are
+ * independently checked by the current Runtime transaction.
+ */
+export function requireStoredAdvancedGeometryRevisionSource(
+  recipe: AuthoringRecipe,
+  selectedFeatureIds: readonly string[]
+): void {
+  const review = reviewStoredAdvancedGeometrySource(recipe);
+  if (review.state === "SOURCE_RECIPE_MISMATCH") {
+    throw new Error(
+      "ADVANCED_GEOMETRY_SAVED_SOURCE_DRIFT: do not revise until stored parameters match the Recipe."
+    );
+  }
+  if (review.state !== "AVAILABLE_MATCHED_SOURCE") {
+    throw new Error(
+      "ADVANCED_GEOMETRY_SAVED_SOURCE_REQUIRED: legacy Recipe has no verified Advanced Geometry parameters."
+    );
+  }
+  const owned = new Set(review.source_features.map(feature => feature.id));
+  if (selectedFeatureIds.some(id => !owned.has(id))) {
+    throw new Error(
+      "ADVANCED_GEOMETRY_REVISION_FEATURE_NOT_OWNED: select an exact persisted Advanced Geometry source feature."
+    );
+  }
+}
+
+/**
  * One feature-level planner, not a new Recipe engine or Blockbench mutation
  * path. All shapes become existing Recipe v1 prototypes and patterns.
  * Previous unrelated feature structure and native identifiers are preserved.

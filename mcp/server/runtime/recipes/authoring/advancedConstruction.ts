@@ -6,6 +6,7 @@ import type { AuthoringRecipe } from "@/lib/authoringRecipe/contracts";
 import {
   buildAdvancedGeometryRecipeCandidate,
   reviewStoredAdvancedGeometrySource,
+  requireStoredAdvancedGeometryRevisionSource,
   type AdvancedGeometryFeature,
 } from "@/lib/authoringRecipe/geometryComposition";
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
@@ -409,18 +410,11 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
     if (!stored) {
       throw new Error("ADVANCED_GEOMETRY_RECIPE_NOT_STORED: inspect the exact Recipe ID.");
     }
-    const sourceReview = reviewStoredAdvancedGeometrySource(stored);
-    if (sourceReview.state === "SOURCE_RECIPE_MISMATCH") {
-      throw new Error(
-        "ADVANCED_GEOMETRY_SAVED_SOURCE_DRIFT: do not revise until the stored parameters and Cube Recipe agree."
-      );
-    }
-    const selected = new Set((stored.feature_intents ?? []).map(feature => feature.id));
-    if (input.features.some(feature => !selected.has(feature.id))) {
-      throw new Error(
-        "ADVANCED_GEOMETRY_REVISION_FEATURE_NOT_OWNED: add new features in a separately planned cohort."
-      );
-    }
+    // A feature_intents label is not authority to rewrite a legacy/manual
+    // Recipe. Only source-verified Advanced Geometry feature IDs may revise.
+    requireStoredAdvancedGeometryRevisionSource(
+      stored, input.features.map(feature => feature.id)
+    );
     requireRecipeParentScope(stored.id, input.parent_group_uuid, stored);
     previous_recipe = stored;
     features = input.features.map(feature => ({...feature, replace_generated: true}));
