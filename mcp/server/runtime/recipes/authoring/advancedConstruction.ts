@@ -51,6 +51,58 @@ const MAX_SCENE_CUBES = 4096;
 const MAX_SCENE_GROUPS = 1024;
 const SOURCE_CONTRACT = 2;
 
+/**
+ * An advanced Recipe revision can change a Cube's dimensions without
+ * migrating its native UV pixels. Refuse explicit authored surface controls
+ * before entering the shared Recipe transaction. This is a bounded native
+ * state classification, not proof of a visually correct automatic UV layout.
+ */
+export function classifyAdvancedGeometryRevisionSurface(surface: {
+  autouv?: unknown;
+  mirror_uv?: unknown;
+  uv_offset?: unknown;
+  faces?: unknown;
+}): "AUTO_UV_UNTEXTURED" | "TEXTURE_OR_MATERIAL_OWNED" |
+   "CUSTOM_OR_UNVERIFIED_UV" {
+  const faceKeys = ["north", "south", "east", "west", "up", "down"] as const;
+  if (!surface.faces || typeof surface.faces !== "object" ||
+      Array.isArray(surface.faces)) return "CUSTOM_OR_UNVERIFIED_UV";
+  const faces = surface.faces as Record<string, unknown>;
+  for (const key of faceKeys) {
+    const face = faces[key];
+    if (!face || typeof face !== "object" || Array.isArray(face)) {
+      return "CUSTOM_OR_UNVERIFIED_UV";
+    }
+    const state = face as Record<string, unknown>;
+    if ((state.texture !== null && state.texture !== undefined &&
+         state.texture !== false) ||
+        (state.material_name !== null && state.material_name !== undefined &&
+         state.material_name !== "")) {
+      return "TEXTURE_OR_MATERIAL_OWNED";
+    }
+  }
+  if (surface.autouv !== 1 ||
+      (surface.mirror_uv !== undefined && surface.mirror_uv !== false)) {
+    return "CUSTOM_OR_UNVERIFIED_UV";
+  }
+  const offset = surface.uv_offset;
+  if (offset !== undefined && offset !== null &&
+      (!Array.isArray(offset) || offset.length !== 2 ||
+       offset.some(value => typeof value !== "number" ||
+         !Number.isFinite(value) || value !== 0))) {
+    return "CUSTOM_OR_UNVERIFIED_UV";
+  }
+  for (const key of faceKeys) {
+    const state = faces[key] as Record<string, unknown>;
+    if (state.enabled === false ||
+        (state.enabled !== undefined && state.enabled !== true) ||
+        (state.rotation !== undefined && state.rotation !== 0)) {
+      return "CUSTOM_OR_UNVERIFIED_UV";
+    }
+  }
+  return "AUTO_UV_UNTEXTURED";
+}
+
 export type AdvancedNativeConstructionInput = {
   /** Exact UUID returned by the current Project tool; never inferred. */
   expected_project_uuid: string;
@@ -423,18 +475,12 @@ function prepareNativeConstruction(input: AdvancedNativeConstructionInput): Nati
       .map(cube => cube.uuid));
     for (const cube of Cube.all ?? []) {
       if (!affectedNativeIds.has(cube.uuid)) continue;
-      const faces = cube.faces ?? {};
-      const hasOwnedSurface = Object.values(faces).some(face =>
-        face && (
-          (face.texture !== null && face.texture !== undefined &&
-            face.texture !== false) ||
-          (face.material_name !== null && face.material_name !== undefined &&
-            face.material_name !== "")
-        )
-      );
-      if (hasOwnedSurface || cube.autouv === 0) {
+      const surfaceState = classifyAdvancedGeometryRevisionSurface(cube);
+      if (surfaceState !== "AUTO_UV_UNTEXTURED") {
         throw new Error(
-          "ADVANCED_GEOMETRY_TEXTURED_REVISION_REQUIRES_UV_REMAP: preserve existing Texture/material/UV ownership; revise before UV/paint."
+          "ADVANCED_GEOMETRY_TEXTURED_REVISION_REQUIRES_UV_REMAP: " +
+          surfaceState + "; preserve existing Texture/material/UV ownership; " +
+          "revise before UV/paint."
         );
       }
     }

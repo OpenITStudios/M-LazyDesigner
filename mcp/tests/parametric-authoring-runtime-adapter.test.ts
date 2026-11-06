@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { classifyAdvancedGeometryRevisionSurface } from
+  "../server/runtime/recipes/authoring/advancedConstruction";
 
 describe("Blockbench parametric recipe adapter ownership", () => {
   test("runtime adapter is a narrow native boundary, not another planner or MCP surface", async () => {
@@ -68,13 +70,14 @@ describe("Blockbench parametric recipe adapter ownership", () => {
     const upsert = source.slice(begin, source.indexOf("remove: (instanceId", begin));
     expect(upsert.slice(upsert.indexOf("if (existingUuid)"),
       upsert.indexOf("const cube = new Cube({"))).not.toContain("addTo(");
-    expect(upsert).toContain('cube.addTo("root")');
+    expect(upsert).toContain("cube.addTo(cubeParent)");
+    expect(upsert).toContain('createParentGroupUuid === undefined');
     expect(snapshot).not.toContain("Undo.initEdit");
   });
 
   test("native Undo snapshots retain updated elements and encode deletions", async () => {
     const source = await Bun.file("server/runtime/recipes/authoring/runtime.ts").text();
-    const before = source.indexOf("Undo.initEdit({");
+    const before = source.indexOf("Undo.initEdit(aspects)");
     const post = source.indexOf('Undo.finishEdit("LazyDesigner parametric recipe"');
     expect(before).toBeGreaterThanOrEqual(0);
     expect(post).toBeGreaterThan(before);
@@ -90,5 +93,93 @@ describe("Blockbench parametric recipe adapter ownership", () => {
     const cubes = await Bun.file("server/tools/geometry/cubes.ts").text();
     expect(cubes).toContain('name: "manage_cubes"');
     expect(cubes).not.toContain("createBlockbenchAuthoringRecipeApplyAdapter");
+  });
+});
+
+const FACE_KEYS = ["north", "south", "east", "west", "up", "down"] as const;
+
+function automaticUntexturedCubeSurface() {
+  return {
+    autouv: 1,
+    mirror_uv: false,
+    uv_offset: [0, 0],
+    faces: Object.fromEntries(FACE_KEYS.map(key => [key, {
+      enabled: true, texture: false, material_name: "", rotation: 0,
+    }])),
+  };
+}
+
+describe("advanced Geometry revision native surface preflight", () => {
+  test("unpainted automatic UV stays revisable without claiming visual correctness", () => {
+    expect(classifyAdvancedGeometryRevisionSurface(
+      automaticUntexturedCubeSurface()
+    )).toBe("AUTO_UV_UNTEXTURED");
+    expect(classifyAdvancedGeometryRevisionSurface({
+      ...automaticUntexturedCubeSurface(), uv_offset: undefined,
+    })).toBe("AUTO_UV_UNTEXTURED");
+  });
+
+  test("texture and per-face material ownership refuse a geometry-only revision", () => {
+    const textured = automaticUntexturedCubeSurface();
+    textured.faces.north!.texture = "atlas-uuid";
+    expect(classifyAdvancedGeometryRevisionSurface(textured))
+      .toBe("TEXTURE_OR_MATERIAL_OWNED");
+    const material = automaticUntexturedCubeSurface();
+    material.faces.down!.material_name = "emissive";
+    expect(classifyAdvancedGeometryRevisionSurface(material))
+      .toBe("TEXTURE_OR_MATERIAL_OWNED");
+    const disabledTextured = automaticUntexturedCubeSurface();
+    disabledTextured.faces.east!.enabled = false;
+    disabledTextured.faces.east!.texture = "atlas-uuid";
+    expect(classifyAdvancedGeometryRevisionSurface(disabledTextured))
+      .toBe("TEXTURE_OR_MATERIAL_OWNED");
+  });
+
+  test("manual modes and explicit UV controls cannot silently survive a resize", () => {
+    for (const autouv of [0, 2, undefined]) {
+      expect(classifyAdvancedGeometryRevisionSurface({
+        ...automaticUntexturedCubeSurface(), autouv,
+      })).toBe("CUSTOM_OR_UNVERIFIED_UV");
+    }
+    for (const override of [
+      { mirror_uv: true },
+      { uv_offset: [4, 0] },
+      { uv_offset: [Number.NaN, 0] },
+      { uv_offset: [0] },
+    ]) {
+      expect(classifyAdvancedGeometryRevisionSurface({
+        ...automaticUntexturedCubeSurface(), ...override,
+      })).toBe("CUSTOM_OR_UNVERIFIED_UV");
+    }
+    const rotated = automaticUntexturedCubeSurface();
+    rotated.faces.west!.rotation = 90;
+    expect(classifyAdvancedGeometryRevisionSurface(rotated))
+      .toBe("CUSTOM_OR_UNVERIFIED_UV");
+    const hidden = automaticUntexturedCubeSurface();
+    hidden.faces.up!.enabled = false;
+    expect(classifyAdvancedGeometryRevisionSurface(hidden))
+      .toBe("CUSTOM_OR_UNVERIFIED_UV");
+  });
+
+  test("partial native face inventories do not count as safe automatic UV", () => {
+    const partial = automaticUntexturedCubeSurface();
+    delete partial.faces.north;
+    expect(classifyAdvancedGeometryRevisionSurface(partial))
+      .toBe("CUSTOM_OR_UNVERIFIED_UV");
+    expect(classifyAdvancedGeometryRevisionSurface({
+      ...automaticUntexturedCubeSurface(), faces: null,
+    })).toBe("CUSTOM_OR_UNVERIFIED_UV");
+  });
+
+  test("revision path checks the affected native Cube surface before applying Undo", async () => {
+    const source = await Bun.file(
+      "server/runtime/recipes/authoring/advancedConstruction.ts"
+    ).text();
+    const prepare = source.slice(source.indexOf("function prepareNativeConstruction("),
+      source.indexOf("function boundPlan("));
+    expect(prepare).toContain("classifyAdvancedGeometryRevisionSurface(cube)");
+    expect(prepare).toContain("ADVANCED_GEOMETRY_TEXTURED_REVISION_REQUIRES_UV_REMAP");
+    expect(source.indexOf("function prepareNativeConstruction("))
+      .toBeLessThan(source.indexOf("export async function createAdvancedGeometryNative("));
   });
 });
