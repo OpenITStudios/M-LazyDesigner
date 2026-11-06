@@ -28,7 +28,12 @@ describe("Particle Studio quick authoring contracts", () => {
     expect(ops).toContainEqual({
       op: "patch", path: ["components", "minecraft:particle_initial_speed"], value: 1.5,
     });
-    expect(ops).toHaveLength(5);
+    expect(ops).toContainEqual({
+      op: "patch",
+      path: ["components", "minecraft:particle_appearance_billboard", "uv"],
+      value: { texture_width: 128, texture_height: 128, uv: [40, 80], uv_size: [8, 8] },
+    });
+    expect(ops).toHaveLength(6);
   });
 
   test("editing tint cannot accidentally rewrite speed, emission or motion", () => {

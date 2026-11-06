@@ -177,6 +177,10 @@ export function studioBootstrapOperations(settings: StudioSettings): object[] {
       finite(settings.lifetime, 0.1, 10, "Lifetime")),
     patch("minecraft:particle_appearance_billboard", "size",
       Array(2).fill(finite(settings.size, 0.01, 2, "Size"))),
+    // The built-in particles texture is a 128x128 atlas, not a 16x16 sprite.
+    // Select the documented 8x8 trail cell instead of displaying the whole sheet.
+    patch("minecraft:particle_appearance_billboard", "uv",
+      { texture_width: 128, texture_height: 128, uv: [40, 80], uv_size: [8, 8] }),
     { op: "set_component", component: "minecraft:particle_appearance_tinting",
       value: { color: [...rgb(settings.color), 1] } },
   ];
