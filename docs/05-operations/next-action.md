@@ -1,8 +1,8 @@
-- **Particle Studio (2026-11-06; source authored, not executed):** Particle file-to-keyframe unique matching, native texture-cache invalidation, and the in-Blockbench Particle Studio authoring/preview panel are implemented at the existing Animation/Particle owners. Bounded regression cases are authored. Runtime Build/Wintersky playback, PNG replacement, UI interactions, keyframe Undo, and visual appearance remain NOT EXECUTED / NATIVE_UNVERIFIED until the existing test hold is lifted. No new public tool, plugin dependency, second renderer or release was created.
-
 # LazyDesigner Next Action
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
+
+- **Particle Studio (2026-11-06; source authored, not executed):** Particle file-to-keyframe unique matching, native texture-cache invalidation, and the in-Blockbench Particle Studio authoring/preview panel are implemented at the existing Animation/Particle owners. Bounded regression cases are authored. Runtime Build/Wintersky playback, PNG replacement, UI interactions, keyframe Undo, and visual appearance remain NOT EXECUTED / NATIVE_UNVERIFIED until the existing test hold is lifted. No new public tool, plugin dependency, second renderer or release was created.
 
 ## Active execution mode — ChatGPT development + Codex testing/use (2026-11-05)
 

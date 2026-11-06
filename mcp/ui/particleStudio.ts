@@ -372,6 +372,14 @@ export async function attachStudioParticle(project: ModelProject, loaded: Studio
     const time = typeof Timeline !== "undefined" ? Timeline.time : 0;
     const snappedTime = Timeline.snapTime(time, selected);
     const effectName = loaded.settings.identifier.split(":")[1];
+    const registry = (Animator as unknown as {
+      particle_effects?: Record<string, { config?: { identifier?: string } }>;
+    }).particle_effects ?? {};
+    const matchingFiles = Object.entries(registry).filter(([, entry]) =>
+      entry.config?.identifier?.split(":")[1] === effectName);
+    if (matchingFiles.length !== 1 || matchingFiles[0][0] !== loaded.path) {
+      throw new Error("The particle short name is missing or ambiguous in Blockbench. Reopen the effect or use a unique name before attaching.");
+    }
     const keyframes = selected.animators.effects?.particle ?? [];
     const sameTime = keyframes.filter(key => Math.abs(key.time - snappedTime) < 0.001);
     if (sameTime.length > 1) {
