@@ -42,6 +42,12 @@ import {
   runRuntimeOperationExclusive,
 } from "@/lib/runtime/lifecycle";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
+import {
+  studioDefaults, listStudioParticles, createStudioParticle, openStudioParticle,
+  saveStudioParticle, studioChangeOperations, startStudioPreview,
+  stopStudioPreview, studioPreviewStatus, attachStudioParticle,
+  type StudioEffect, type StudioFile, type StudioSettings,
+} from "@/ui/particleStudio";
 
 let panel: Panel | undefined;
 let runtimeStatusListener: (() => void) | undefined;
@@ -78,6 +84,16 @@ type HumanPanelContext = {
   selectionLabel: string;
   canCleanup: boolean;
   inspectionVersion: number;
+  studioSettings: StudioSettings;
+  studioLoaded: StudioEffect | null;
+  studioFiles: StudioFile[];
+  studioChoice: string;
+  studioLocator: string;
+  studioLocators: string[];
+  studioBusy: boolean;
+  studioError: string;
+  studioNote: string;
+  studioPlaying: boolean;
 };
 
 function readHumanProjectState(): HumanProjectState {
@@ -168,6 +184,17 @@ async function copyPlainText(text: string): Promise<boolean> {
   }
 }
 
+async function startPanelParticlePreview(project: ModelProject, effect: StudioEffect, locator: string): Promise<string> {
+  const generation = getRuntimeLifecycleSnapshot().owner_generation;
+  if (generation === null) throw new Error("LazyDesigner Runtime is unavailable.");
+  return runRuntimeOperationExclusive(generation, async () => {
+    if (!isRuntimeGenerationCurrent(generation) || Project !== project) {
+      throw new Error("Project or plugin changed before particle playback.");
+    }
+    return startStudioPreview(project, effect, locator);
+  });
+}
+
 export function uiSetup(input: UiSetupInput) {
   // Keep the public setup contract stable even though normal human UI no longer
   // exposes Runtime registries or AI workflow internals.
@@ -216,6 +243,21 @@ export function uiSetup(input: UiSetupInput) {
           vm.project.isBedrock = next.isBedrock;
           vm.selectionLabel = readHumanSelection();
           vm.canCleanup = canOpenCubeCleanup();
+          vm.studioLocators = next.isBedrock && typeof Locator !== "undefined"
+            ? [...new Set(Locator.all.map(locator => locator.name).filter(Boolean))].sort()
+            : [];
+          if (["select_project", "new_project", "setup_project", "load_project", "close_project"].includes(event ?? "")) {
+            stopStudioPreview();
+            vm.studioLoaded = null;
+            vm.studioSettings = studioDefaults();
+            vm.studioFiles = [];
+            vm.studioChoice = "";
+            vm.studioLocator = "";
+            vm.studioPlaying = false;
+            vm.studioNote = "";
+            vm.studioError = "";
+            vm.studioBusy = false;
+          }
           // Selecting a diagnosed object is navigation, not a geometry edit.
           // Keep the issue list so the user can locate several findings in sequence.
           // Saving or selecting does not invalidate a reviewed geometry edit.
@@ -234,6 +276,7 @@ export function uiSetup(input: UiSetupInput) {
         refreshProject();
       },
       beforeDestroy() {
+        stopStudioPreview();
         runtimeStatusListener?.();
         runtimeStatusListener = undefined;
         projectStateListener?.();
@@ -250,8 +293,182 @@ export function uiSetup(input: UiSetupInput) {
         review: null as GeometryIssueReview | null,
         editReview: null as GeometryEditReview | null,
         inspectionVersion: 0,
+        studioSettings: studioDefaults(),
+        studioLoaded: null as StudioEffect | null,
+        studioFiles: [] as StudioFile[],
+        studioChoice: "",
+        studioLocator: "",
+        studioLocators: [] as string[],
+        studioBusy: false,
+        studioError: "",
+        studioNote: "",
+        studioPlaying: false,
       }),
       methods: {
+        studioStageReady(this: HumanPanelContext): boolean {
+          return this.project.isBedrock && this.project.hasFolder &&
+            getActiveMcpAuthoringStage() === "animation";
+        },
+        studioRefresh(this: HumanPanelContext): void {
+          try {
+            if (!Project) throw new Error("Open and save a Bedrock model first.");
+            this.studioFiles = listStudioParticles(Project);
+            this.studioError = "";
+            this.studioNote = this.studioFiles.length
+              ? "Choose an existing particle, or create a new one."
+              : "No particle files found beside this model. Create one below.";
+          } catch (error) {
+            this.studioError = error instanceof Error ? error.message : String(error);
+          }
+        },
+        studioReset(this: HumanPanelContext): void {
+          if (this.studioBusy) return;
+          stopStudioPreview();
+          this.studioSettings = studioDefaults();
+          this.studioLoaded = null;
+          this.studioChoice = "";
+          this.studioPlaying = false;
+          this.studioError = "";
+          this.studioNote = "Ready to create a new particle.";
+        },
+        async studioCreate(this: HumanPanelContext): Promise<void> {
+          if (this.studioBusy || !Project) return;
+          const project = Project;
+          const epoch = uiEpoch;
+          this.studioBusy = true;
+          this.studioError = "";
+          this.studioNote = "";
+          try {
+            const loaded = await createStudioParticle(project, { ...this.studioSettings });
+            if (epoch !== uiEpoch || Project !== project) return;
+            this.studioLoaded = loaded;
+            this.studioSettings = { ...loaded.settings };
+            this.studioChoice = loaded.path;
+            this.studioFiles = [...this.studioFiles.filter(file => file.path !== loaded.path),
+              { path: loaded.path, label: loaded.settings.identifier.split(":")[1] }]
+              .sort((a, b) => a.label.localeCompare(b.label));
+            this.studioNote = "Particle created beside the model.";
+            try {
+              this.studioNote = await startPanelParticlePreview(project, loaded, this.studioLocator);
+              this.studioPlaying = true;
+            } catch (error) {
+              this.studioNote += " Preview: " + (error instanceof Error ? error.message : String(error));
+              this.studioPlaying = false;
+            }
+          } catch (error) {
+            if (epoch === uiEpoch && Project === project) {
+              this.studioError = error instanceof Error ? error.message : String(error);
+            }
+          } finally {
+            if (epoch === uiEpoch && Project === project) this.studioBusy = false;
+          }
+        },
+        async studioOpen(this: HumanPanelContext): Promise<void> {
+          if (this.studioBusy || !Project || !this.studioChoice) return;
+          const project = Project, epoch = uiEpoch;
+          this.studioBusy = true;
+          this.studioError = "";
+          try {
+            const loaded = await openStudioParticle(project, this.studioChoice);
+            if (epoch !== uiEpoch || Project !== project) return;
+            this.studioLoaded = loaded;
+            this.studioSettings = { ...loaded.settings };
+            this.studioNote = "Particle file loaded. Unsupported advanced fields are preserved.";
+            try {
+              this.studioNote = await startPanelParticlePreview(project, loaded, this.studioLocator);
+              this.studioPlaying = true;
+            } catch (error) {
+              this.studioNote += " Preview: " + (error instanceof Error ? error.message : String(error));
+              this.studioPlaying = false;
+            }
+          } catch (error) {
+            if (epoch === uiEpoch && Project === project) {
+              this.studioError = error instanceof Error ? error.message : String(error);
+            }
+          } finally {
+            if (epoch === uiEpoch && Project === project) this.studioBusy = false;
+          }
+        },
+        async studioSave(this: HumanPanelContext): Promise<void> {
+          if (this.studioBusy || !Project || !this.studioLoaded) return;
+          const project = Project, epoch = uiEpoch;
+          const loaded = this.studioLoaded;
+          const changes = { ...this.studioSettings };
+          this.studioBusy = true;
+          this.studioError = "";
+          try {
+            const updated = await saveStudioParticle(project, loaded, changes);
+            if (epoch !== uiEpoch || Project !== project) return;
+            this.studioLoaded = updated;
+            this.studioSettings = { ...updated.settings };
+            this.studioNote = "Particle settings saved.";
+            this.studioPlaying = false;
+            try {
+              this.studioNote = await startPanelParticlePreview(project, updated, this.studioLocator);
+              this.studioPlaying = true;
+            } catch (error) {
+              this.studioNote += " Preview: " + (error instanceof Error ? error.message : String(error));
+            }
+          } catch (error) {
+            if (epoch === uiEpoch && Project === project) {
+              this.studioError = error instanceof Error ? error.message : String(error);
+              this.studioPlaying = false;
+            }
+          } finally {
+            if (epoch === uiEpoch && Project === project) this.studioBusy = false;
+          }
+        },
+        async studioPlay(this: HumanPanelContext): Promise<void> {
+          if (this.studioBusy || !Project || !this.studioLoaded) return;
+          const project = Project, epoch = uiEpoch;
+          this.studioBusy = true;
+          this.studioError = "";
+          try {
+            if (studioChangeOperations(this.studioLoaded, this.studioSettings).length) {
+              throw new Error("Apply your changes before previewing the saved particle.");
+            }
+            const note = await startPanelParticlePreview(project, this.studioLoaded, this.studioLocator);
+            if (epoch === uiEpoch && Project === project) {
+              this.studioPlaying = true;
+              this.studioNote = note;
+            }
+          } catch (error) {
+            if (epoch === uiEpoch && Project === project) {
+              this.studioPlaying = false;
+              this.studioError = error instanceof Error ? error.message : String(error);
+            }
+          } finally {
+            if (epoch === uiEpoch && Project === project) this.studioBusy = false;
+          }
+        },
+        studioStop(this: HumanPanelContext): void {
+          stopStudioPreview();
+          this.studioPlaying = false;
+          this.studioNote = "Standalone preview stopped.";
+        },
+        studioCheck(this: HumanPanelContext): void {
+          if (!Project) return;
+          this.studioNote = studioPreviewStatus(Project);
+        },
+        async studioAttach(this: HumanPanelContext): Promise<void> {
+          if (this.studioBusy || !Project || !this.studioLoaded) return;
+          const project = Project, epoch = uiEpoch;
+          this.studioBusy = true;
+          this.studioError = "";
+          try {
+            if (studioChangeOperations(this.studioLoaded, this.studioSettings).length) {
+              throw new Error("Apply your changes before attaching this particle.");
+            }
+            const note = await attachStudioParticle(project, this.studioLoaded, this.studioLocator);
+            if (epoch === uiEpoch && Project === project) this.studioNote = note;
+          } catch (error) {
+            if (epoch === uiEpoch && Project === project) {
+              this.studioError = error instanceof Error ? error.message : String(error);
+            }
+          } finally {
+            if (epoch === uiEpoch && Project === project) this.studioBusy = false;
+          }
+        },
         async inspectActive(this: HumanPanelContext): Promise<void> {
           if (this.busy) return;
           const project = typeof Project !== "undefined" ? Project : null;
@@ -497,6 +714,7 @@ export function uiTeardown(): void {
   // A broken optional legacy dialog must not prevent current Panel/Action cleanup.
   release("Prompt override dialog", () => overrideDialogTeardown());
   release("Cube cleanup dialog", () => cubeCleanupDialogTeardown());
+  release("Particle Studio preview", stopStudioPreview);
   release("Tool test dialog", () => toolTestDialogTeardown());
   release("Prompt preview dialog", () => promptPreviewDialogTeardown());
 

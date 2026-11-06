@@ -6,7 +6,7 @@ Source authority: current `Local` implementation in `mcp/ui/panel.html` and `mcp
 
 The normal AI workflow uses the existing four-tool Gateway and canonical Runtime capabilities directly. The user only needs the native editor panel when it improves a specific **human decision or action**. The plugin shall not recreate Blockbench's Texture list, palette controls, Animation clip list or Timeline as trivial copies.
 
-The docked human panel presents Runtime status, current project and actionable **Geometry checks** only. No empty Texture or Animation tabs are rendered; those native editing tasks remain in Blockbench while AI invokes the existing Gateway capabilities. Geometry/Texturing/Animation remain semantic authoring Stages, **not** human-panel navigation tabs. No second Gateway, route registry, progress engine, polling loop or screenshot-as-QA.
+The docked human panel presents Runtime status, current project, actionable **Geometry checks** and the opt-in **Particle Studio** for a real in-editor particle authoring/preview workflow. No empty Texture or Animation tabs are rendered; those native editing tasks remain in Blockbench while AI invokes the existing Gateway capabilities. Geometry/Texturing/Animation remain semantic authoring Stages, **not** human-panel navigation tabs. No second Gateway, route registry, progress engine, polling loop or screenshot-as-QA.
 
 ## Shipped-source scope in this slice
 
@@ -16,7 +16,8 @@ The docked human panel presents Runtime status, current project and actionable *
 | Geometry | **Geometry Issue Navigator** | Current Bedrock Project + native Cube and Group inventories | Canonical geometry diagnostic findings tied to exact Cube/Group UUIDs; one-click **Locate in Outliner** selects the native object and scrolls it into view | Source-authored; installed native navigation unverified |
 | Geometry | **Safe Cube Cleanup** (secondary utility) | 1–32 selected Cubes, selected increment/field | Existing `manage_cubes(operation=simplify)` dry-run, UV and hierarchy review, native Apply and Undo | Existing executable path; exact installed Undo/visual preservation unverified |
 | Texture | No duplicate editor feature | — | AI continues using the current Texturing MCP surface; Blockbench owns native texture editor | Not a new feature |
-| Animation | No duplicate editor feature | — | AI continues using existing Animation MCP surface; Blockbench owns native timeline | Not a new feature |
+| Animation | Native timeline remains the editor | — | AI continues using existing Animation MCP surface | Not a duplicate timeline |
+| Particle | **Particle Studio** | Saved Bedrock .bbmodel, Animation Stage, explicit effect controls or project-local particle | Uses existing `manage_particle` and `manage_animation_effects`; quick creation, targeted changes, standalone Wintersky preview, bounded status, and attach at native playhead | SOURCE_AUTHORED; live emitter, textures, native playback and visual quality unverified |
 
 The previous `Texture Inventory`, `Preview Palette` and `Animation Inventory` buttons were removed from the human panel because they did not edit assets or improve a review decision, and duplicated native editor information. **The underlying MCP capabilities were not removed.**
 
@@ -81,3 +82,26 @@ On a disposable asset with at least 100 Cubes, run the same AI geometry edit and
 - `mcp/lib/runtime/lifecycle.ts`: shared queue.
 - Official plugin guide: https://blockbench.net/wiki/docs/plugin/
 - Official native API: https://web.blockbench.net/docs/
+
+## Particle Studio — source-authored human experience (2026-11-06)
+
+Particle is not a new Authoring Stage, Gateway tool, resource-pack assembler, texture pipeline, or separate renderer.
+
+- Available in the **Animation Stage** on saved Bedrock Model projects in Blockbench desktop. Files are kept in a `particles/` sibling folder beside the saved model; the user does not need to enter an absolute path. No Behavior Pack, manifest or client-entity mapping is created.
+- A simple effect can be created from an existing Bedrock preset using the vanilla particle texture. The panel exposes emission, speed, size, lifetime and tint; it edits only changed fields of the loaded document through the existing `manage_particle` transaction. Advanced/Molang-owned values are displayed as locked controls, not overwritten with fake defaults.
+- Existing `*.particle.json` files in the current model's `particles/` folder can be opened explicitly. There is no recursive asset crawl or new filesystem watcher. The studio checks the source text before edits, rejects stale externally changed files and never silently overwrites a colliding new filename.
+- Studio preview uses the existing Blockbench Wintersky scene/Emitter (native host, no second renderer). Preview emitter is owned and stopped/deleted on replay, project change or plugin teardown. Loader invocation and observed particle count are **not** visual acceptance.
+- The Attach action invokes the canonical Animation effects tool at the selected native playhead. Its existing owner binds the uniquely loaded file identity; ambiguous names remain unpreviewed. The user still selects an Animation in Blockbench.
+- A missing custom PNG, native/Wintersky incompatibility or an unavailable emitter is surfaced as an actionable error; this UI does not author bitmaps or bypass the Stage/Gateway readiness boundary.
+- Known upstream risks for live acceptance: Blockbench issue #2377 (stale texture reload even in 5.2.2), #3822 (texture placeholder after Animation save), and world/entity/locator space differences. The new read-only diagnostics do not pretend to measure rendered pixels.
+
+### Targeted acceptance (not executed)
+
+1. Create and replay a steady and a burst particle with builtin texture; ensure one owned emitter, no extra animation keys, no leaked scene objects after stop/project switch.
+2. Change only tint, then only speed; verify the other JSON fields/unknown components and original resource identity are preserved; stale source/refused duplicate must not write.
+3. Reopen a file with Molang size/gradient and confirm those controls cannot destructively overwrite authored expressions.
+4. Attach at the native playhead and locator; verify exact keyframe file path/Undo/Redo and persistence after save/reopen.
+5. Reproduce missing PNG and stale texture conditions, check source-category diagnostic; do not claim VIEWPORT_VISIBLE without actual image evidence.
+6. Confirm project, stage, generation/queue and UI teardown safety. No new public Gateway surface or additional running service.
+
+**Proof ceiling:** GitHub source and authored test cases only. Bun/TypeScript/native Blockbench execution is NOT EXECUTED under the existing Codex hold; visual quality is UNVERIFIED.

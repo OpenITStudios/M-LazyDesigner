@@ -25,6 +25,91 @@
     </div>
   </section>
 
+  <section class="ld-workspace ld-particle" aria-label="Particle Studio">
+    <div class="ld-section-title">Particle Studio</div>
+    <p class="ld-description">Create, preview and adjust Bedrock particles here. AI particle generation remains available through your connected client.</p>
+    <p v-if="!project.isBedrock" class="ld-empty-state">Open a Bedrock Model project.</p>
+    <p v-else-if="!project.hasFolder" class="ld-empty-state">Save the model once as a .bbmodel before creating particle files.</p>
+    <p v-else-if="!studioStageReady()" class="ld-empty-state">Particle tools are available in the Animation stage after the normal authoring handoff.</p>
+    <div v-else class="ld-studio-body">
+      <div class="ld-studio-row">
+        <button class="user-action" type="button" :disabled="studioBusy" @click="studioRefresh">Find Particles</button>
+        <button class="user-action" type="button" :disabled="studioBusy" @click="studioReset">New Effect</button>
+      </div>
+      <div class="ld-studio-row" v-if="studioFiles.length">
+        <label for="ld-studio-available">Existing particle</label>
+        <select id="ld-studio-available" v-model="studioChoice" :disabled="studioBusy">
+          <option value="">Choose an effect…</option>
+          <option v-for="file in studioFiles" :key="file.path" :value="file.path">{{file.label}}</option>
+        </select>
+        <button class="user-action" type="button" :disabled="!studioChoice || studioBusy" @click="studioOpen">Open</button>
+      </div>
+      <div class="ld-studio-row">
+        <label for="ld-studio-id">Particle identifier</label>
+        <input id="ld-studio-id" type="text" autocomplete="off" spellcheck="false"
+          v-model.trim="studioSettings.identifier" :disabled="!!studioLoaded || studioBusy" placeholder="mypack:magic_flame"/>
+      </div>
+      <div v-if="!studioLoaded" class="ld-studio-row">
+        <label for="ld-studio-preset">Starting shape</label>
+        <select id="ld-studio-preset" v-model="studioSettings.preset" :disabled="studioBusy">
+          <option value="steady">Continuous</option>
+          <option value="burst">Burst</option>
+          <option value="trail">Trail</option>
+          <option value="ambient">Ambient</option>
+          <option value="collision_splash">Splash</option>
+        </select>
+        <button type="button" class="user-action primary" :disabled="studioBusy" @click="studioCreate">Create &amp; Preview</button>
+      </div>
+      <div v-if="studioLoaded" class="ld-studio-edit">
+        <div class="section-hint">Editing {{studioLoaded.settings.identifier}}. Only changed simple fields are updated; advanced authored values remain intact.</div>
+        <div class="ld-studio-control">
+          <label for="ld-studio-emission">Particles: {{studioSettings.emission}}</label>
+          <input id="ld-studio-emission" type="range" min="1" max="120" step="1" v-model.number="studioSettings.emission"
+            :disabled="studioBusy || !studioLoaded.editable.emission"/>
+        </div>
+        <div class="ld-studio-control">
+          <label for="ld-studio-size">Size: {{studioSettings.size}}</label>
+          <input id="ld-studio-size" type="range" min="0.01" max="2" step="0.01" v-model.number="studioSettings.size"
+            :disabled="studioBusy || !studioLoaded.editable.size"/>
+        </div>
+        <div class="ld-studio-control">
+          <label for="ld-studio-speed">Speed: {{studioSettings.speed}}</label>
+          <input id="ld-studio-speed" type="range" min="0" max="8" step="0.05" v-model.number="studioSettings.speed"
+            :disabled="studioBusy || !studioLoaded.editable.speed"/>
+        </div>
+        <div class="ld-studio-control">
+          <label for="ld-studio-lifetime">Lifetime (s): {{studioSettings.lifetime}}</label>
+          <input id="ld-studio-lifetime" type="range" min="0.1" max="10" step="0.1" v-model.number="studioSettings.lifetime"
+            :disabled="studioBusy || !studioLoaded.editable.lifetime"/>
+        </div>
+        <div class="ld-studio-row">
+          <label for="ld-studio-color">Tint</label>
+          <input id="ld-studio-color" type="color" v-model="studioSettings.color"
+            :disabled="studioBusy || !studioLoaded.editable.color"/>
+        </div>
+        <div class="ld-studio-row">
+          <button class="user-action primary" type="button" :disabled="studioBusy" @click="studioSave">Apply Changes</button>
+        </div>
+        <div class="ld-studio-row">
+          <label for="ld-studio-locator">Attach to</label>
+          <select id="ld-studio-locator" v-model="studioLocator" :disabled="studioBusy">
+            <option value="">Model origin</option>
+            <option v-for="name in studioLocators" :key="name" :value="name">{{name}}</option>
+          </select>
+        </div>
+        <div class="ld-studio-row">
+          <button type="button" class="user-action" :disabled="studioBusy" @click="studioPlay">Play / Replay</button>
+          <button type="button" class="user-action" :disabled="!studioPlaying" @click="studioStop">Stop</button>
+          <button type="button" class="user-action" :disabled="studioBusy" @click="studioCheck">Check Preview</button>
+        </div>
+        <button type="button" class="user-action" :disabled="studioBusy" @click="studioAttach">Attach at Animation Playhead</button>
+        <p class="section-hint">Select an Animation in Blockbench before attaching. Viewport appearance still requires visual review.</p>
+      </div>
+      <p v-if="studioNote" class="ld-studio-note" role="status" aria-live="polite">{{studioNote}}</p>
+      <p v-if="studioError" class="ld-error" role="alert">{{studioError}}</p>
+    </div>
+  </section>
+
   <section class="ld-workspace" aria-label="Geometry tools">
     <div class="ld-section-title">Geometry checks</div>
     <p class="ld-description">Review recent Cube changes or find issues without editing the model. Cleanup requires a separate preview and confirmation.</p>
@@ -94,5 +179,5 @@
     </section>
   </section>
 
-  <p class="panel-note">Texture and animation editing stay in Blockbench. AI authoring is available through your connected AI client.</p>
+  <p class="panel-note">Geometry and particle controls use the current Blockbench project. Texture painting and Animation timeline editing remain native.</p>
 </div>
