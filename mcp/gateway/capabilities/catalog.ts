@@ -80,6 +80,35 @@ function searchPreconditions(
   return evaluateCapabilityPreconditions(capability, branch, facts);
 }
 
+
+/** Exact-name discovery bypasses ranking, not prerequisite integrity.
+ * Use the same source-only Graph projection as ranked discovery, with no
+ * selected operation, and leave actual native execution to Runtime.
+ */
+function summarizeExactCapability(
+  tool: BackendTool,
+  context?: CapabilitySearchContext
+): CapabilitySummary {
+  const preconditions = searchPreconditions(
+    tool.name, undefined, getCapabilityMetadata(tool.name).operationClass,
+    context?.facts
+  );
+  return {
+    ...summarizeCapability(tool),
+    ...(preconditions.eligibility !== "READY" ? {
+      eligibility: preconditions.eligibility,
+      ...(preconditions.missing.length > 0
+        ? { requires: preconditions.missing }
+        : preconditions.unknown.length > 0
+          ? { requires: preconditions.unknown }
+          : {}),
+      ...(preconditions.predecessor
+        ? { predecessor: preconditions.predecessor }
+        : {}),
+    } : {}),
+  };
+}
+
 /**
  * Remove generic agent/tool vocabulary before semantic and BM25 discovery.
  * Preserve meaningful short authoring terms (UV, IK, 3D, UI, FX): discarding
@@ -317,7 +346,7 @@ function searchSingleIntentCatalog(
   context?: CapabilitySearchContext
 ): CapabilitySummary[] {
   const exact = exactCapabilityMatch(tools, query);
-  if (exact) return [summarizeCapability(exact)];
+  if (exact) return [summarizeExactCapability(exact, context)];
 
   const boundedLimit = Math.max(
     1,
@@ -444,7 +473,7 @@ export function searchCapabilityCatalog(
   context?: CapabilitySearchContext
 ): CapabilitySummary[] {
   const exact = exactCapabilityMatch(tools, query);
-  if (exact) return [summarizeCapability(exact)];
+  if (exact) return [summarizeExactCapability(exact, context)];
 
   const clauses = independentActionClauses(query);
   if (clauses.length >= 2 && clauses.length <= 3) {

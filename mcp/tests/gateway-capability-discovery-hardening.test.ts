@@ -451,6 +451,46 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     expect(graphed?.eligibility).toBeUndefined();
   });
 
+  test("exact-name search preserves graph truth and does not certify an unselected operation", () => {
+    const animation = [{
+      name: "create_animation", description: "Create an animation clip.",
+    }];
+    const [blocked] = searchCapabilityCatalog(animation, "create_animation", 5, {
+      facts: { project_bound: false, geometry_available: true },
+    });
+    expect(blocked?.eligibility).toBe("BLOCKED");
+    expect(blocked?.requires).toEqual(["project_bound"]);
+    expect(projectCapabilitiesForSearch([blocked!])[0]?.eligibility).toBe("BLOCKED");
+
+    const [unobserved] = searchCapabilityCatalog(animation, "create_animation", 5);
+    expect(unobserved?.eligibility).toBe("UNKNOWN");
+    expect(unobserved?.requires).toEqual(["project_bound", "geometry_available"]);
+
+    const [ready] = searchCapabilityCatalog(animation, "create_animation", 5, {
+      facts: { project_bound: true, geometry_available: true },
+    });
+    expect(ready?.eligibility).toBeUndefined();
+
+    const [branchless] = searchCapabilityCatalog([{
+      name: "add_group", description: "Add a model group.",
+    }], "add_group", 5);
+    expect(branchless?.eligibility).toBe("UNKNOWN");
+    expect(branchless?.requires).toBeUndefined();
+
+    const [unselected] = searchCapabilityCatalog([{
+      name: "manage_cubes", description: "Create or update model Cubes.",
+    }], "manage_cubes", 5, { facts: { project_bound: false } });
+    expect(unselected?.branch).toBeUndefined();
+    expect(unselected?.eligibility).toBe("UNKNOWN");
+    expect(unselected?.requires).toBeUndefined();
+
+    // Read-only Graphless discovery remains metadata-light.
+    const [query] = searchCapabilityCatalog([{
+      name: "get_project_info", description: "Inspect project information.",
+    }], "get_project_info", 5);
+    expect(query?.eligibility).toBeUndefined();
+  });
+
   test("exact capability name short-circuits to exactly one result", () => {
     const exact = searchCapabilityCatalog(tools, "manage_cubes", 50);
     expect(exact).toHaveLength(1);
