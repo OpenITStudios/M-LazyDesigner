@@ -309,6 +309,57 @@ function validateFlipbook(diagnostics: ParticleDiagnostic[], components: JsonObj
   }
 }
 
+/**
+ * Authoring-only visual visibility/timing clues from literal fields.
+ * No Molang evaluation, PNG decode, pixel claim or texture-simulation loop.
+ */
+function inspectStaticAppearance(diagnostics: ParticleDiagnostic[], effect: JsonObject, components: JsonObject): void {
+  const appearance = obj(components["minecraft:particle_appearance_billboard"]);
+  const size = appearance?.size;
+  if (Array.isArray(size) && size.length === 2 &&
+      size.some(value => typeof value === "number" && value === 0)) {
+    emit(diagnostics, "warning", "particle_billboard_zero_axis",
+      "A constant zero billboard axis may make the sprite invisible. Verify it is deliberate.",
+      "particle_effect.components.minecraft:particle_appearance_billboard.size");
+  }
+
+  const tint = obj(components["minecraft:particle_appearance_tinting"]);
+  const color = tint?.color;
+  const zeroAlpha = (Array.isArray(color) && color.length === 4 &&
+      typeof color[3] === "number" && color[3] === 0) ||
+    (typeof color === "string" && /^#[0-9a-fA-F]{6}00$/.test(color));
+  if (zeroAlpha) {
+    emit(diagnostics, "warning", "particle_constant_zero_tint_alpha",
+      "Static tint has zero alpha. Depending on particle material, the sprite may be invisible; confirm intent in the target renderer.",
+      "particle_effect.components.minecraft:particle_appearance_tinting.color");
+  }
+
+  const uv = obj(appearance?.uv);
+  const flipbook = obj(uv?.flipbook);
+  if (!flipbook) return;
+  const frameCount = typeof flipbook.max_frame === "number" &&
+      Number.isFinite(flipbook.max_frame) ? flipbook.max_frame : null;
+  const fps = flipbook.frames_per_second === undefined ? 0
+    : typeof flipbook.frames_per_second === "number" && Number.isFinite(flipbook.frames_per_second)
+      ? flipbook.frames_per_second : null;
+  if (frameCount === null || frameCount <= 1 || flipbook.stretch_to_lifetime === true) return;
+  if (fps === 0) {
+    emit(diagnostics, "warning", "particle_flipbook_static_frames",
+      "Multi-frame flipbook has no effective frame rate or lifetime stretch; verify the intended animation is not frozen.",
+      "particle_effect.components.minecraft:particle_appearance_billboard.uv.flipbook.frames_per_second");
+    return;
+  }
+  if (fps === null || fps < 0 || flipbook.loop === true) return;
+  const lifetimeComponent = obj(components["minecraft:particle_lifetime_expression"]);
+  const lifetime = lifetimeComponent?.max_lifetime;
+  if (typeof lifetime === "number" && Number.isFinite(lifetime) && lifetime > 0 &&
+      fps * lifetime + 1e-9 < frameCount - 1) {
+    emit(diagnostics, "warning", "particle_flipbook_lifetime_too_short",
+      "Literal particle lifetime and flipbook FPS may expire before the final frame. Confirm the intended visual ending.",
+      "particle_effect.components.minecraft:particle_appearance_billboard.uv.flipbook");
+  }
+}
+
 function validateCurves(diagnostics: ParticleDiagnostic[], curves: JsonObject): void {
   for (const [name, raw] of Object.entries(curves)) {
     const curve = obj(raw);
@@ -413,6 +464,7 @@ export function analyzeBedrockParticleSemantics(document: JsonObject): ParticleD
 
   validateKnownMathSlots(diagnostics, components);
   validateFlipbook(diagnostics, components);
+  inspectStaticAppearance(diagnostics, effect, components);
   validateCurves(diagnostics, curves);
   for (const [name, event] of Object.entries(events)) {
     validateRandomizeWeights(diagnostics, event, `particle_effect.events.${name}`);

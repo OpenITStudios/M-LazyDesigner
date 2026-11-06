@@ -112,6 +112,8 @@ loop
 
 Flipbook animates texture frames; it does not replace physical motion or particle-class ownership.
 
+**Source-only visibility sanity:** The existing particle semantic inspector warns when a literal billboard dimension is zero, a static tint has zero alpha, a multi-frame flipbook has no FPS/lifetime stretch, or numeric lifetime is shorter than the known frame sequence at its authored FPS. These are *warnings*, not rendering verdicts: transparent materials, hidden/visible source PNG pixels, MoLang expressions, camera and engine-specific blending still require a native visual check. No frame simulation or texture rasterizer is introduced.
+
 ## Tinting forms
 
 `minecraft:particle_appearance_tinting` supports multiple official representations.

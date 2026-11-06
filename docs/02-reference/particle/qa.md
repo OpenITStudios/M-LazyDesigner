@@ -79,6 +79,10 @@ Check relevant texture concerns when pixel data or direct visual inspection is a
 
 Skip atlas/flipbook checks for a single static sprite with no atlas.
 
+### Static temporal visibility clues
+
+The existing `inspect_particle` semantics now reports optional `particle_billboard_zero_axis`, `particle_constant_zero_tint_alpha`, `particle_flipbook_static_frames` and `particle_flipbook_lifetime_too_short` warnings for literal values. Use them to catch obvious invisible/frozen/truncated effects **without** treating a source heuristic as visible-pixel evidence or blocking intentionally hidden assets. Unknown MoLang and PNG alpha content remain unverified. Only perform these checks when the effect actually has that appearance/flipbook input.
+
 ## Gate 7 — Collision / environmental termination — conditional
 
 When collision or environmental expiration is used, check:

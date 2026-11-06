@@ -145,6 +145,61 @@ describe("Bedrock particle advanced semantics", () => {
     ).toBe(true);
   });
 
+  test("warns on obviously invisible literal billboards without rejecting valid authored assets", () => {
+    const initial = createParticleDocument({ identifier: "blockit:visual_read" });
+    const zeroSize = applyParticleOperations(initial, [
+      { op: "patch", path: ["components", "minecraft:particle_appearance_billboard", "size"],
+        value: [0, 0.2] },
+      { op: "set_component", component: "minecraft:particle_appearance_tinting",
+        value: { color: [1, 0.2, 0, 0] } },
+    ]);
+    const diagnostics = inspectParticleDocument(zeroSize).diagnostics;
+    expect(diagnostics.map(d => d.code)).toContain("particle_billboard_zero_axis");
+    expect(diagnostics.map(d => d.code)).toContain("particle_constant_zero_tint_alpha");
+    expect(diagnostics.some(d => d.severity === "error")).toBe(false);
+
+    const dynamic = applyParticleOperations(initial, [
+      { op: "patch", path: ["components", "minecraft:particle_appearance_billboard", "size"],
+        value: ["variable.particle_age * 0.2", 0.2] },
+      { op: "set_component", component: "minecraft:particle_appearance_tinting",
+        value: { color: "#ffffff00" } },
+    ]);
+    const dynamicCodes = inspectParticleDocument(dynamic).diagnostics.map(d => d.code);
+    expect(dynamicCodes).not.toContain("particle_billboard_zero_axis");
+    expect(dynamicCodes).toContain("particle_constant_zero_tint_alpha");
+  });
+
+  test("detects frozen or unreachable flipbook frames only when literal timing is available", () => {
+    const base = createParticleDocument({ identifier: "blockit:visual_flipbook" });
+    const motion = applyParticleOperations(base, [
+      { op: "patch", path: ["components", "minecraft:particle_appearance_billboard", "uv"],
+        value: { texture_width: 64, texture_height: 16,
+          flipbook: { base_UV: [0, 0], size_UV: [16, 16], step_UV: [16, 0],
+            frames_per_second: 12, max_frame: 4, loop: false } } },
+      { op: "patch", path: ["components", "minecraft:particle_lifetime_expression", "max_lifetime"],
+        value: 0.15 },
+    ]);
+    const codes = (document: typeof base) => inspectParticleDocument(document).diagnostics.map(d => d.code);
+    expect(codes(motion)).toContain("particle_flipbook_lifetime_too_short");
+    expect(codes(applyParticleOperations(motion, [
+      { op: "patch", path: ["components", "minecraft:particle_lifetime_expression", "max_lifetime"],
+        value: 1 },
+    ]))).not.toContain("particle_flipbook_lifetime_too_short");
+    expect(codes(applyParticleOperations(motion, [
+      { op: "patch", path: ["components", "minecraft:particle_appearance_billboard", "uv",
+        "flipbook", "stretch_to_lifetime"], value: true },
+    ]))).not.toContain("particle_flipbook_lifetime_too_short");
+    expect(codes(applyParticleOperations(motion, [
+      { op: "patch", path: ["components", "minecraft:particle_appearance_billboard", "uv",
+        "flipbook", "frames_per_second"], value: 0 },
+    ]))).toContain("particle_flipbook_static_frames");
+    const dynamic = applyParticleOperations(motion, [
+      { op: "patch", path: ["components", "minecraft:particle_lifetime_expression", "max_lifetime"],
+        value: "variable.dynamic_lifetime" },
+    ]);
+    expect(codes(dynamic)).not.toContain("particle_flipbook_lifetime_too_short");
+  });
+
   test("semantic diagnostic cap cannot erase a late invalid event", () => {
     const source = createParticleDocument({ identifier: "blockit:overflow_semantics" });
     const effect = source.particle_effect as Record<string, any>;

@@ -26,6 +26,8 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 - **Looping-burst numeric safety follow-up (2026-11-07; SOURCE_AUTHORED / NOT_EXECUTED):** Preview admission checks repeated instant particle work rate as well as population (high-frequency tiny bursts no longer slip through) and clamps mathematical overflow/zero multiplication before reporting finite estimates. Source regression AUTHORED_NOT_RUN. Runtime and game performance still unverified.
 
+- **Particle visual semantic preflight (2026-11-07; SOURCE_AUTHORED / NOT_EXECUTED):** The existing bounded semantic inspector now emits advisory visibility/time warnings for literal zero billboard axes or tint alpha, frozen multi-frame flipbook, and literal FPS/lifetime that does not reach the last frame. It never evaluates MoLang, simulates rendering or blocks intentionally hidden effects. Positive/negative deterministic tests AUTHORED_NOT_RUN; actual visual/fidelity acceptance still requires native evidence when authorized.
+
 ## Active execution mode — ChatGPT development + Codex testing/use (2026-11-05)
 
 User-corrected workflow: (1) ChatGPT and the GitHub connector own source development, audits, regressions, documentation, and coherent commits on `Local`; (2) Codex owns executable verification and product usage when implementation is ready and the actual checkout/toolchain is present. No additional cloud test service, GitHub verification Actions or user-PC instructions are required. `REMOTE_GITHUB` does not imply testing. A named Codex session does not prove `LOCAL_CODE` or `LIVE_BLOCKBENCH` until those capabilities are observed.
