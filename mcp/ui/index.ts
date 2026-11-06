@@ -206,9 +206,13 @@ async function startPanelParticlePreview(
   replay = false,
 ): Promise<string> {
   const generation = getRuntimeLifecycleSnapshot().owner_generation;
+  const requestEpoch = studioLiveGeneration;
   if (generation === null) throw new Error("LazyDesigner Runtime is unavailable.");
   return runRuntimeOperationExclusive(generation, async () => {
-    if (!isRuntimeGenerationCurrent(generation) || Project !== project || !stillCurrent()) {
+    // Stop, Discard, switching effects or unloading the plugin retires
+    // all queued preview requests, including explicit Play/Replay actions.
+    if (!isRuntimeGenerationCurrent(generation) || Project !== project ||
+        requestEpoch !== studioLiveGeneration || !stillCurrent()) {
       throw new Error("Particle preview request became stale before playback.");
     }
     return startStudioPreview(project, effect, locator, settings, replay);

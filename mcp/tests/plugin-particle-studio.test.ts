@@ -278,6 +278,8 @@ describe("Particle Studio quick authoring contracts", () => {
     expect(studio).toContain("preview: false");
     expect(studio).not.toContain('preview_load_call !== "INVOKED"');
     expect(ui).toContain('cancelStudioLivePreview()');
+    expect(ui).toContain("requestEpoch !== studioLiveGeneration");
+    expect(ui).toContain("studioLivePendingVM");
     expect(ui).toContain('studioLiveExecuting');
     expect(ui).toContain('startPanelParticlePreview(');
     expect(studio).toContain("new host.Wintersky.Config(scene, draft.document");
