@@ -675,10 +675,25 @@ describe("zero-waste correction loop reuse", () => {
     )).toThrow("CORRECTION_STALE_VIEW_RECHECK_REQUIRED");
     expect(registry.projectContinuation(handle)).toEqual(pending);
 
-    registry.updateEvidence(
+    // Declaring both cameras recovered is not an updated observation of
+    // the non-target attachment whose left view was invalidated.
+    expect(() => registry.updateEvidence(
       handle, "verificationevidence:anchored-after",
       [{ code: "SEAT_WIDTH", severity: "INFO",
         summary: "Width improved.", views: ["front"] }],
+      { recovered_views: ["front", "left"] }
+    )).toThrow("CORRECTION_STALE_NON_TARGET_RECHECK_REQUIRED");
+    expect(registry.projectContinuation(handle)).toEqual(pending);
+
+    registry.updateEvidence(
+      handle, "verificationevidence:anchored-after",
+      [
+        { code: "SEAT_WIDTH", severity: "INFO",
+          summary: "Width improved.", views: ["front"] },
+        { code: "LEG_CONTACT", severity: "REVIEW",
+          summary: "Fresh left view still needs contact review.",
+          views: ["left"], evidence_targets: ["attachment"] },
+      ],
       { recovered_views: ["front", "left"] }
     );
     const after = registry.projectContinuation(handle);
@@ -2680,6 +2695,94 @@ describe("zero-waste correction loop reuse", () => {
         convergence: { state: "PLATEAU", target_discrepancy_codes: ["ARM_WIDTH"] },
       });
     }
+  });
+
+  test("shared stale view requires updated non-target visual observation", () => {
+    const main = {
+      code: "ARM_WIDTH",
+      criterion: "SILHOUETTE_PROPORTION" as const,
+      severity: "BLOCKING" as const,
+      summary: "Arm width differs from the approved reference.",
+      evidence: {
+        current_evidence_ref: "model:front:before",
+        reference_evidence_ref: "source:front:approved",
+        views: ["front" as const],
+      },
+      cause_family: "SIZE_MISMATCH" as const,
+    };
+    const contact = {
+      code: "ARM_CONTACT",
+      criterion: "TOPOLOGY_ATTACHMENT" as const,
+      severity: "REVIEW" as const,
+      summary: "Arm attachment has an unresolved gap.",
+      evidence: {
+        current_evidence_ref: "model:front:before",
+        reference_evidence_ref: "source:front:approved",
+        views: ["front" as const],
+      },
+      cause_family: "CONTACT_GAP" as const,
+    };
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
+    const started = registry.startFromObservations({
+      recipe_id: "asset", base_recipe: recipe(),
+      verification_request: {
+        domain: "GEOMETRY", source: "capture_model_views",
+        verification_risk: "MEDIUM", views: ["front"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["arms:0", "arms:1"],
+      },
+      verification_evidence_handle: "verificationevidence:before",
+      observations: [main, contact],
+    });
+    expect(started.unverified).toEqual([]);
+    const handle = started.handle!;
+    const plan = registry.planGeometryCorrection(handle, [{
+      id: "resize", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["ARM_WIDTH"],
+        correction_family: "RESIZE",
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: { kind: "RESIZE_AXIS", axis: "X",
+            mode: "ADD", value: 1, anchor: "MIN" },
+        },
+      },
+    }]);
+    expect(plan.state).toBe("CORRECTION_READY");
+    expect(plan.evidence_reuse?.stale_views).toEqual(["front"]);
+    const pending = registry.projectContinuation(handle);
+    const mainAfter = {
+      ...main,
+      severity: "REVIEW" as const,
+      summary: "Width improved, but requires further review.",
+      evidence: { ...main.evidence, current_evidence_ref: "model:front:after" },
+    };
+    expect(() => registry.updateEvidenceFromObservations(
+      handle, "verificationevidence:after", [mainAfter],
+      { recovered_views: ["front"] }
+    )).toThrow("CORRECTION_STALE_NON_TARGET_RECHECK_REQUIRED");
+    expect(registry.projectContinuation(handle)).toEqual(pending);
+
+    const accepted = registry.updateEvidenceFromObservations(
+      handle, "verificationevidence:after", [
+        mainAfter,
+        {
+          ...contact,
+          evidence: {
+            ...contact.evidence,
+            current_evidence_ref: "model:front:after",
+          },
+        },
+      ], { recovered_views: ["front"] }
+    );
+    expect(accepted).toMatchObject({
+      applied: true, accepted_count: 2, unverified: [],
+    });
+    expect(registry.projectContinuation(handle)).toMatchObject({
+      state: "READY",
+      convergence: { state: "IMPROVED", target_discrepancy_codes: ["ARM_WIDTH"] },
+    });
   });
 
   test("new evidence changing the diagnosed cause breaks plateau and allows a new route", () => {

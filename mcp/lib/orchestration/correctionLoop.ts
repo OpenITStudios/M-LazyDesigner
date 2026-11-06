@@ -820,6 +820,27 @@ export class CorrectionLoopRegistry {
     // Missing findings are not proof of resolution. In a targeted correction,
     // only pending codes are in scope; otherwise the full current batch is.
     const incomingCodes = new Set(discrepancies.map((item) => item.code));
+    if (record.pending_target_discrepancy_codes.length > 0 &&
+        record.pending_stale_views.length > 0) {
+      // An affected camera may contain other known Geometry discrepancies.
+      // Recovered view labels alone cannot prove their prior quality remains
+      // unchanged. Require a fresh claim only for non-targets in stale views.
+      const targetCodes = new Set(record.pending_target_discrepancy_codes);
+      const staleViews = new Set(record.pending_stale_views);
+      const unreviewed = record.discrepancies
+        .filter((item) =>
+          !targetCodes.has(item.code) &&
+          !incomingCodes.has(item.code) &&
+          item.views?.some((view) => staleViews.has(view))
+        )
+        .map((item) => item.code);
+      if (unreviewed.length > 0) {
+        throw new Error(
+          "CORRECTION_STALE_NON_TARGET_RECHECK_REQUIRED: refresh affected " +
+          "non-target observations " + unreviewed.join(", ") + "."
+        );
+      }
+    }
     const inScope = record.pending_target_discrepancy_codes.length
       ? record.pending_target_discrepancy_codes
       : record.discrepancies.map((item) => item.code);
