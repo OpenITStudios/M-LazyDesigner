@@ -3,7 +3,8 @@ import { createParticleDocument, serializeParticleDocument } from "../lib/partic
 import { tools } from "../lib/factories";
 import { getActiveMcpAuthoringStage, setActiveMcpAuthoringStage } from "../lib/capabilities/authoringStage";
 import {
-  studioDefaults, studioOutputPath, studioBootstrapOperations, readStudioEffect,
+  studioDefaults, studioOutputPath, studioParticleFoldersForModel,
+  studioBootstrapOperations, readStudioEffect,
   studioChangeOperations, compileStudioDraft, prepareStudioParticleDraft,
   requireStudioCommittedWrite,
   startStudioPreview, stopStudioPreview, studioPreviewStatus,
@@ -23,6 +24,31 @@ describe("Particle Studio quick authoring contracts", () => {
       .toBe("/model/particles/blue_flame.particle.json");
     expect(() => studioOutputPath("/model", "mivubi:../../evil", path as never)).toThrow();
     expect(() => studioOutputPath("/model", "MIVUBI:Blue", path as never)).toThrow();
+  });
+
+  test("maps conventional Bedrock model folders to the resource-pack particle root", () => {
+    const path = {
+      dirname: (value: string) => value.slice(0, value.lastIndexOf("/")) || "/",
+      basename: (value: string) => value.slice(value.lastIndexOf("/") + 1),
+      join: (...parts: string[]) => parts.join("/"),
+    };
+    const entity = studioParticleFoldersForModel(
+      "/workspace/resource_pack/models/entity/robot.bbmodel", path as never,
+    );
+    expect(entity).toEqual({
+      output: "/workspace/resource_pack/particles",
+      discovery: [
+        "/workspace/resource_pack/particles",
+        "/workspace/resource_pack/models/entity/particles",
+      ],
+    });
+    expect(studioParticleFoldersForModel("/pack/models/robot.bbmodel", path as never).output)
+      .toBe("/pack/particles");
+    expect(studioParticleFoldersForModel("/work/robot.bbmodel", path as never)).toEqual({
+      output: "/work/particles", discovery: ["/work/particles"],
+    });
+    expect(() => studioParticleFoldersForModel("relative/model.bbmodel", path as never))
+      .toThrow(/Save the Bedrock model/);
   });
 
   test("bootstrap writes only known preset component fields", () => {

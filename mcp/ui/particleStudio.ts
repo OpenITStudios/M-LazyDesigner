@@ -53,12 +53,36 @@ function nativeFiles(): { fs: StudioFs; path: StudioPath } {
   if (!fs || !path) throw new Error("Particle Studio needs Blockbench desktop file access.");
   return { fs, path };
 }
-function studioFolder(project: ModelProject, path: StudioPath): string {
-  const file = project.save_path || project.export_path;
-  if (!file || !isAbsoluteFilesystemPath(file)) {
-    throw new Error("Save the Bedrock model as a .bbmodel first; Particle Studio then uses its folder.");
+/**
+ * Detect only unambiguous Bedrock Resource Pack layouts. Other project
+ * locations stay beside the saved .bbmodel; never guess an arbitrary pack root.
+ * The old sibling path remains a read-only discovery location.
+ */
+export function studioParticleFoldersForModel(modelPath: string, path: StudioPath): {
+  output: string;
+  discovery: string[];
+} {
+  if (!isAbsoluteFilesystemPath(modelPath)) {
+    throw new Error("Save the Bedrock model as a .bbmodel first to persist particle files.");
   }
-  return path.join(path.dirname(file), "particles");
+  const modelFolder = path.dirname(modelPath);
+  const parentName = path.basename(modelFolder).toLowerCase();
+  const grandparent = path.dirname(modelFolder);
+  const canonicalRoot = parentName === "entity" &&
+    path.basename(grandparent).toLowerCase() === "models"
+    ? path.dirname(grandparent)
+    : parentName === "models" ? grandparent : modelFolder;
+  const output = path.join(canonicalRoot, "particles");
+  const previousSibling = path.join(modelFolder, "particles");
+  return {
+    output,
+    discovery: output === previousSibling ? [output] : [output, previousSibling],
+  };
+}
+
+function studioFolders(project: ModelProject, path: StudioPath) {
+  const modelPath = project.save_path || project.export_path;
+  return studioParticleFoldersForModel(modelPath ?? "", path);
 }
 function studioEffectSlug(identifier: string): string {
   const match = /^[a-z0-9_.-]+:([a-z0-9_.-]+)$/.exec(identifier);
@@ -238,13 +262,25 @@ export function studioChangeOperations(loaded: StudioEffect, next: StudioSetting
 export function listStudioParticles(project: ModelProject): StudioFile[] {
   requireStudioProject(project);
   const { fs, path } = nativeFiles();
-  const directory = studioFolder(project, path);
-  if (!fs.existsSync(directory)) return [];
-  return fs.readdirSync(directory)
-    .filter(name => /^[a-z0-9_.-]+\.particle\.json$/.test(name))
-    .sort()
-    .slice(0, 64)
-    .map(name => ({ path: path.join(directory, name), label: name.replace(/\.particle\.json$/, "") }));
+  const folders = studioFolders(project, path).discovery;
+  const found: StudioFile[] = [];
+  for (const directory of folders) {
+    if (!fs.existsSync(directory)) continue;
+    const entries = fs.readdirSync(directory)
+      .filter(name => /^[a-z0-9_.-]+\.particle\.json$/.test(name))
+      .sort();
+    for (const name of entries) {
+      const candidate = path.join(directory, name);
+      if (!fs.lstatSync(candidate).isFile() || fs.lstatSync(candidate).isSymbolicLink()) continue;
+      found.push({
+        path: candidate,
+        label: name.replace(/\.particle\.json$/, "") +
+          (directory === folders[0] ? "" : " (previous location)"),
+      });
+      if (found.length >= 64) return found;
+    }
+  }
+  return found;
 }
 function readFileEffect(fs: StudioFs, file: string): StudioEffect {
   if (!fs.existsSync(file) || !fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink()) {
@@ -277,9 +313,13 @@ export async function createStudioParticle(project: ModelProject, settings: Stud
     // Same compiler as Preview; never save a second, subtly different effect.
     const draft = prepareStudioParticleDraft(project, settings);
     const { fs, path } = nativeFiles();
-    const directory = studioFolder(project, path);
+    const folders = studioFolders(project, path);
+    const directory = folders.output;
     const file = studioOutputPath(directory, draft.settings.identifier, path);
-    if (fs.existsSync(file)) throw new Error("This particle already exists. Open it instead of replacing it.");
+    if (folders.discovery.some(folder =>
+      fs.existsSync(studioOutputPath(folder, draft.settings.identifier, path)))) {
+      throw new Error("This particle already exists in the project's current or previous folder. Open it instead.");
+    }
     fs.mkdirSync(directory, { recursive: true });
     stopStudioPreview();
     await canonicalParticleWrite({
