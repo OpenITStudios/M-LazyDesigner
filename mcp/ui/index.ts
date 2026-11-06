@@ -246,6 +246,10 @@ export function uiSetup(input: UiSetupInput) {
           vm.studioLocators = next.isBedrock && typeof Locator !== "undefined"
             ? [...new Set(Locator.all.map(locator => locator.name).filter(Boolean))].sort()
             : [];
+          if (event === "select_mode") {
+            stopStudioPreview();
+            vm.studioPlaying = false;
+          }
           if (["select_project", "new_project", "setup_project", "load_project", "close_project"].includes(event ?? "")) {
             stopStudioPreview();
             vm.studioLoaded = null;

@@ -297,11 +297,17 @@ export function stopStudioPreview(): void {
   preview = null;
   if (!active) return;
   try { active.emitter.stopLoop(); }
-  finally { active.emitter.delete(); }
+  catch (error) { console.warn("[LazyDesigner] Particle preview stop failed", error); }
+  try { active.emitter.delete(); }
+  catch (error) { console.warn("[LazyDesigner] Particle preview disposal failed", error); }
 }
 export function startStudioPreview(project: ModelProject, loaded: StudioEffect, locatorName: string): string {
   requireStudioProject(project);
   stopStudioPreview();
+  const { fs } = nativeFiles();
+  if (!fs.existsSync(loaded.path) || fs.readFileSync(loaded.path, "utf8") !== loaded.content) {
+    throw new Error("Particle source changed. Reopen the effect before starting preview.");
+  }
   const host = globalThis as unknown as {
     Wintersky?: { Emitter: new (scene: StudioScene, config: Record<string, unknown>) => NativeStudioEmitter };
     WinterskyScene?: StudioScene;
