@@ -982,12 +982,23 @@ export class CorrectionLoopRegistry {
       record.discrepancies = incoming;
     }
 
+    // Numeric discrepancy updates and a new evidence handle do not prove a
+    // fresh image. Only explicitly recovered views may acquire that handle;
+    // other views keep their previous provenance. An invalidated view with
+    // no declared recovery loses its stale handle, not its numeric diagnosis.
+    const recoveredViews = new Set(options.recovered_views ?? []);
     for (const view of record.pending_stale_views) {
-      record.view_evidence_handles[view] = evidenceHandle;
+      if (recoveredViews.has(view)) {
+        record.view_evidence_handles[view] = evidenceHandle;
+      } else {
+        delete record.view_evidence_handles[view];
+      }
     }
     for (const discrepancy of incoming) {
       for (const view of discrepancy.views ?? []) {
-        record.view_evidence_handles[view] = evidenceHandle;
+        if (recoveredViews.has(view)) {
+          record.view_evidence_handles[view] = evidenceHandle;
+        }
       }
     }
 

@@ -1757,6 +1757,87 @@ describe("zero-waste correction loop reuse", () => {
     });
   });
 
+  test("numeric re-verification updates only explicitly recovered camera evidence", () => {
+    const run = (recoveredViews?: readonly ("front" | "left")[]) => {
+      const registry = new SyntheticAppliedCorrectionLoopRegistry();
+      const handle = registry.start({
+        recipe_id: "asset", base_recipe: recipe(),
+        verification_request: {
+          domain: "GEOMETRY", source: "capture_model_views",
+          verification_risk: "MEDIUM", views: ["front", "left"],
+          views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+          size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+          scope_instance_ids: ["arms:0", "arms:1"],
+        },
+        verification_evidence_handle: "verificationevidence:before",
+        discrepancies: [
+          { code: "WIDTH_LOW", severity: "REVIEW",
+            summary: "Width needs a bounded edit.", views: ["front"] },
+          { code: "SHOULDER_CONTACT", severity: "REVIEW",
+            summary: "Side contact still needs review.", views: ["left"] },
+        ],
+      });
+      const plan = registry.planGeometryCorrection(handle, [{
+        id: "widen-arms", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+        patch: {
+          target_discrepancy_codes: ["WIDTH_LOW"],
+          intent: {
+            target: { semantic_group: "upper_arm" },
+            operation: {
+              kind: "RESIZE_AXIS", axis: "X",
+              mode: "ADD", value: 1, anchor: "MIN",
+            },
+          },
+        },
+      }]);
+      expect(plan.state).toBe("CORRECTION_READY");
+      expect(plan.evidence_reuse?.stale_views).toEqual(["front"]);
+      const findings = [
+        { code: "WIDTH_LOW", severity: "INFO" as const,
+          summary: "Numerically improved width.", views: ["front" as const] },
+        { code: "SHOULDER_CONTACT", severity: "REVIEW" as const,
+          summary: "Side contact remains under review.", views: ["left" as const] },
+      ];
+      registry.updateEvidence(
+        handle, "verificationevidence:numeric-after", findings,
+        recoveredViews ? { recovered_views: recoveredViews } : {}
+      );
+      return { registry, handle, findings, result: registry.projectContinuation(handle) };
+    };
+
+    // A valid numeric update may progress the correction loop, but cannot
+    // manufacture a captured front image or relabel the untouched side.
+    const numericOnly = run();
+    expect(numericOnly.result).toMatchObject({
+      state: "READY", convergence: { state: "IMPROVED" },
+      verification: { pending: false },
+    });
+    expect(numericOnly.result.fresh_view_evidence).toEqual([
+      { view: "left", handle: "verificationevidence:before" },
+    ]);
+    // A later raw update must not resurrect the missing front image either.
+    numericOnly.registry.updateEvidence(
+      numericOnly.handle, "verificationevidence:numeric-followup",
+      numericOnly.findings
+    );
+    expect(numericOnly.registry.projectContinuation(
+      numericOnly.handle
+    ).fresh_view_evidence).toEqual([
+      { view: "left", handle: "verificationevidence:before" },
+    ]);
+
+    // Declaring a front recapture must not silently renew the left view
+    // merely because its unchanged discrepancy is present in the payload.
+    expect(run(["front"]).result.fresh_view_evidence).toEqual([
+      { view: "front", handle: "verificationevidence:numeric-after" },
+      { view: "left", handle: "verificationevidence:before" },
+    ]);
+    expect(run(["front", "left"]).result.fresh_view_evidence).toEqual([
+      { view: "front", handle: "verificationevidence:numeric-after" },
+      { view: "left", handle: "verificationevidence:numeric-after" },
+    ]);
+  });
+
   test("falls back to recapturing all request views when discrepancy view provenance is missing", () => {
     const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const handle = registry.start({
