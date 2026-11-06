@@ -183,6 +183,30 @@ describe("Bedrock particle stable schema coverage", () => {
     expect(diagnostics).toContain("particle_number_out_of_range");
   });
 
+  test("schema diagnostics remain fail-closed after the bounded result limit", () => {
+    const source = createParticleDocument({ identifier: "blockit:overflow_schema" });
+    const effect = source.particle_effect as Record<string, any>;
+    const events: Record<string, unknown> = {};
+    for (let index = 0; index < 78; index += 1) {
+      events["future_" + index] = {
+        particle_effect: { effect: "blockit:child", type: "future_type" },
+      };
+    }
+    effect.events = events;
+    const warningOnly = inspectParticleDocument(source);
+    expect(warningOnly.diagnostics.some(entry =>
+      entry.code === "particle_schema_diagnostics_truncated" &&
+      entry.severity === "info")).toBe(true);
+    expect(warningOnly.diagnostics.some(entry => entry.severity === "error")).toBe(false);
+
+    events.last_bad = { sequence: [7] };
+    const withError = inspectParticleDocument(source);
+    expect(withError.diagnostics.some(entry =>
+      entry.code === "particle_schema_diagnostics_truncated_with_errors" &&
+      entry.severity === "error")).toBe(true);
+    expect(withError.diagnostics.length).toBeLessThan(90);
+  });
+
   test("keeps unknown future components lossless without treating them as malformed known components", () => {
     const document = applyParticleOperations(
       createParticleDocument({ identifier: "blockit:future_component" }),

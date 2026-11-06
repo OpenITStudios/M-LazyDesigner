@@ -109,6 +109,36 @@ describe("single-emitter authoring viewport workload (no FPS claims)", () => {
     });
   });
 
+  test("short repeat loops estimate burst overlap and work rate rather than single count", () => {
+    const doc = applyParticleOperations(createParticleDocument({
+      identifier: "test:burst_overlap", preset: "burst",
+    }), [
+      { op: "set_component", component: "minecraft:emitter_lifetime_looping",
+        value: { active_time: 0.1, sleep_time: 0 } },
+      { op: "remove_component", component: "minecraft:emitter_lifetime_once" },
+    ]);
+    const result = inspectParticleDocument(doc);
+    expect(result.preview_workload).toMatchObject({
+      instant_burst_particles: 12,
+      looped_burst_particles_per_second: 120,
+      estimated_active_particles: 72,
+      state: "within_budget",
+    });
+    expect(result.game_cost.cost_drivers).toContain("high_repeating_burst_rate");
+    const uncertain = applyParticleOperations(doc, [
+      { op: "patch", path: ["components", "minecraft:emitter_lifetime_looping", "active_time"],
+        value: "variable.delay" },
+    ]);
+    expect(inspectParticleDocument(uncertain).preview_workload).toMatchObject({
+      state: "manual_only", estimated_active_particles: null,
+    });
+    const invalid = applyParticleOperations(doc, [
+      { op: "patch", path: ["components", "minecraft:emitter_lifetime_looping", "active_time"],
+        value: 0 },
+    ]);
+    expect(inspectParticleDocument(invalid).preview_workload.state).toBe("blocked");
+  });
+
   test("repeating bursts are game-cost risks even with a tiny per-burst population", () => {
     const source = applyParticleOperations(createParticleDocument({
       identifier: "test:loop_burst", preset: "burst",
@@ -119,7 +149,7 @@ describe("single-emitter authoring viewport workload (no FPS claims)", () => {
     ]);
     const prior = JSON.stringify(source);
     const summary = inspectParticleDocument(source);
-    expect(summary.preview_workload.estimated_active_particles).toBe(12);
+    expect(summary.preview_workload.estimated_active_particles).toBe(72);
     expect(summary.game_cost.cost_drivers).toContain("repeating_burst_emission");
     expect(summary.game_cost.device_fps_verified).toBe(false);
     expect(JSON.stringify(source)).toBe(prior);

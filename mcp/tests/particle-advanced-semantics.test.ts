@@ -145,6 +145,29 @@ describe("Bedrock particle advanced semantics", () => {
     ).toBe(true);
   });
 
+  test("semantic diagnostic cap cannot erase a late invalid event", () => {
+    const source = createParticleDocument({ identifier: "blockit:overflow_semantics" });
+    const effect = source.particle_effect as Record<string, any>;
+    const events: Record<string, any> = {};
+    for (let index = 0; index < 40; index += 1) {
+      events["wide_" + index] = {
+        sequence: Array.from({ length: 7 }, () => ({
+          particle_effect: { effect: "blockit:child", type: "emitter" },
+        })),
+      };
+    }
+    effect.events = events;
+    expect(inspectParticleDocument(source).diagnostics.some(entry =>
+      entry.code === "particle_semantic_diagnostics_truncated" &&
+      entry.severity === "info")).toBe(true);
+
+    events.last_bad = { randomize: [{ weight: -1 }] };
+    const inspected = inspectParticleDocument(source);
+    expect(inspected.diagnostics.some(entry =>
+      entry.code === "particle_semantic_diagnostics_truncated_with_errors" &&
+      entry.severity === "error")).toBe(true);
+  });
+
   test("rejects invalid randomize weights and surfaces high event fan-out", () => {
     let document = createParticleDocument({ identifier: "blockit:event_quality" });
     document = applyParticleOperations(document, [

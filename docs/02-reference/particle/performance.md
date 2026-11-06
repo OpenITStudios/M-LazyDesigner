@@ -45,6 +45,8 @@ The existing `inspectParticleDocument` now provides **`game_cost`** alongside `p
 
 ### Preventing game performance incidents
 
+For an authored instant emitter with numeric looping interval `T = active_time + sleep_time > 0`, particle lifetime `L`, and burst size `N`, the source inspector estimates `burst_work_rate ≈ N / T` and `active_burst_population ≈ N × ceil(L / T)`. This is a bounded overlap heuristic, not an exact simulator (loop boundary timing, engine scheduling, child emitters, and game concurrency remain unknown). Missing or dynamic values are marked unestimated; a zero-period instant loop cannot be automatically previewed. The editor preview admission remains **separate** from actual Minecraft performance.
+
 Do not confuse a small per-emitter count with a small **gameplay workload**. A burst can repeat every emitter loop; an event can create children; one effect can have many simultaneous instances across players, mobs, projectiles or arenas. The authoring game-cost inspector flags *repeating_burst_emission* and *repeating_emitter_child_events* in addition to its existing continuous spawn/lifetime/overdraw/MoLang/collision risks. These are conservative source warnings, not proof that the effect will lag.
 
 For a known gameplay scenario, reason about `sum(estimated single-emitter active particles × concurrently active instances)` as an **illustrative lower-information workload estimate**, never a proven simultaneous peak: event repetition, dynamic expressions, GPU fill-rate and scene visibility may dominate. Do not invent concurrency values. The gameplay caller must establish how often/where effects are triggered; this asset-only tool does not change gameplay scripts or automatically disable an authored effect.

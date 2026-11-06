@@ -4,6 +4,10 @@ import type { JsonObject, JsonValue } from "../jsonValue";
 export type ParticlePreviewWorkload = {
   state: "within_budget" | "unestimated" | "manual_only" | "blocked";
   estimated_active_particles: number | null;
+  /** Per-loop instant burst size, when a numeric value is authored. */
+  instant_burst_particles: number | null;
+  /** Numeric looping burst average; not a measured runtime frame rate. */
+  looped_burst_particles_per_second: number | null;
   reason: string | null;
   scope: "single_emitter_static_heuristic";
 };
@@ -23,14 +27,29 @@ export function assessParticlePreviewWorkload(
   const rate = object(components?.["minecraft:emitter_rate_steady"]);
   const burst = object(components?.["minecraft:emitter_rate_instant"]);
   const lifetime = object(components?.["minecraft:particle_lifetime_expression"]);
+  const looping = object(components?.["minecraft:emitter_lifetime_looping"]);
   const spawnRate = nonnegative(rate?.spawn_rate);
   const count = nonnegative(burst?.num_particles);
   const cap = nonnegative(rate?.max_particles);
   const seconds = nonnegative(lifetime?.max_lifetime);
-  // Missing fields and Molang expressions are unknown, never silently
-  // defaulted or evaluated by the editor. A cap limits visible population,
-  // but a very high spawn rate still creates per-frame work.
-  const estimated = count !== null ? count
+  // Bedrock emits instant num_particles once EACH emitter loop. A repeated
+  // 12-particle burst every 0.1 seconds is not a permanent population of 12.
+  // For finite numeric values, estimate the overlap of recent loop bursts.
+  // Omitted sleep_time is documented by Bedrock as zero; an unknown active
+  // time, MoLang rate/lifetime, or nonpositive period remains unevaluated.
+  const active = nonnegative(looping?.active_time);
+  const sleep = looping?.sleep_time === undefined ? 0
+    : nonnegative(looping.sleep_time);
+  const period = looping && active !== null && sleep !== null
+    ? active + sleep : null;
+  const loopedRate = looping && count !== null && period !== null && period > 0
+    ? count / period : null;
+  const estimated = count !== null
+    ? looping
+      ? period !== null && period > 0 && seconds !== null
+        ? Math.min(Number.MAX_SAFE_INTEGER, count * Math.ceil(seconds / period))
+        : null
+      : count
     : spawnRate !== null && seconds !== null
       ? Math.min(spawnRate * seconds, cap ?? Infinity) : null;
   const identifier = object(effect?.description)?.identifier;
@@ -40,6 +59,12 @@ export function assessParticlePreviewWorkload(
   if (children.some(id => id === identifier)) {
     state = "blocked";
     reason = "self-referencing particle event may spawn recursively";
+  } else if (looping && count !== null && period === 0) {
+    state = "blocked";
+    reason = "zero-period looping instant burst has unbounded repetition risk";
+  } else if (looping && count !== null && (period === null || seconds === null)) {
+    state = "manual_only";
+    reason = "looping burst period or particle lifetime cannot be estimated numerically";
   } else if ((estimated !== null && estimated > 1024) ||
              (spawnRate !== null && spawnRate > 5000)) {
     state = "blocked";
@@ -51,8 +76,10 @@ export function assessParticlePreviewWorkload(
       ? "child-effect population is outside the single-emitter estimate"
       : "particle population or emission rate exceeds automatic preview budget";
   }
-  return { state, estimated_active_particles: estimated, reason,
-    scope: "single_emitter_static_heuristic" };
+  return { state, estimated_active_particles: estimated,
+    instant_burst_particles: count,
+    looped_burst_particles_per_second: loopedRate,
+    reason, scope: "single_emitter_static_heuristic" };
 }
 
 /**
@@ -75,7 +102,8 @@ export type ParticleGameCostDriver =
   | "nested_effect_activation_cost"
   | "per_particle_nested_event_risk"
   | "repeating_burst_emission"
-  | "repeating_emitter_child_events";
+  | "repeating_emitter_child_events"
+  | "high_repeating_burst_rate";
 
 export type ParticleGameCostReview = {
   state: "REVIEW_FACTORS" | "NO_STATIC_RISKS_FLAGGED";
@@ -143,6 +171,9 @@ export function assessParticleGameCost(
   // the per-burst count alone cannot establish a safe total game workload.
   if (burst && emitterLoop)
     drivers.push("repeating_burst_emission");
+  if (previewWorkload.looped_burst_particles_per_second !== null &&
+      previewWorkload.looped_burst_particles_per_second > 64)
+    drivers.push("high_repeating_burst_rate");
   if (childIdentifiers.length > 0 && emitterLoop && emitterEvents)
     drivers.push("repeating_emitter_child_events");
   if (childIdentifiers.length > 0) {

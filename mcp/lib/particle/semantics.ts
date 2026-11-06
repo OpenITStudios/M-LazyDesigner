@@ -58,7 +58,24 @@ function emit(
   message: string,
   path: string
 ): void {
-  if (diagnostics.length < LIMIT) diagnostics.push({ severity, code, message, path });
+  if (diagnostics.length < LIMIT - 1) {
+    diagnostics.push({ severity, code, message, path });
+    return;
+  }
+  // An error beyond the output window is still a blocking error. Never
+  // turn the last error into an informational truncation message.
+  const hiddenError = severity === "error" ||
+    diagnostics[LIMIT - 1]?.severity === "error";
+  diagnostics[LIMIT - 1] = {
+    severity: hiddenError ? "error" : "info",
+    code: hiddenError
+      ? "particle_semantic_diagnostics_truncated_with_errors"
+      : "particle_semantic_diagnostics_truncated",
+    message: hiddenError
+      ? "Advanced particle diagnostics exceeded the limit with errors; document is not valid."
+      : `Advanced particle diagnostics were bounded to ${LIMIT} entries.`,
+    path: "particle_effect",
+  };
 }
 
 function legacyMolang(value: JsonValue | undefined): boolean {
@@ -411,6 +428,5 @@ export function analyzeBedrockParticleSemantics(document: JsonObject): ParticleD
   const cap = capOwner?.max_particles;
   if (components["minecraft:particle_motion_parametric"] !== undefined && typeof cap === "number" && Number.isFinite(cap) && cap > 512) emit(diagnostics, "warning", "parametric_particle_budget", `Parametric per-frame motion is combined with max_particles=${cap}; profile target hardware.`, "particle_effect.components");
 
-  if (diagnostics.length >= LIMIT) diagnostics[LIMIT - 1] = { severity: "info", code: "particle_semantic_diagnostics_truncated", message: `Advanced particle diagnostics were bounded to ${LIMIT} entries.`, path: "particle_effect" };
   return diagnostics;
 }

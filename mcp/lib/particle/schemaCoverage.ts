@@ -48,9 +48,24 @@ function emit(
   message: string,
   path: string
 ): void {
-  if (diagnostics.length < DIAGNOSTIC_LIMIT) {
+  if (diagnostics.length < DIAGNOSTIC_LIMIT - 1) {
     diagnostics.push({ severity, code, message, path });
+    return;
   }
+  // Reserve the final bounded slot for overflow evidence. A validation
+  // error after 63 prior warnings must NEVER be hidden by an info marker.
+  const hiddenError = severity === "error" ||
+    diagnostics[DIAGNOSTIC_LIMIT - 1]?.severity === "error";
+  diagnostics[DIAGNOSTIC_LIMIT - 1] = {
+    severity: hiddenError ? "error" : "info",
+    code: hiddenError
+      ? "particle_schema_diagnostics_truncated_with_errors"
+      : "particle_schema_diagnostics_truncated",
+    message: hiddenError
+      ? "Particle schema diagnostic limit exceeded with error(s); document is not valid."
+      : `Particle schema diagnostics were bounded to ${DIAGNOSTIC_LIMIT} entries.`,
+    path: "particle_effect",
+  };
 }
 
 function legacyMolang(value: JsonValue | undefined): boolean {
@@ -1244,13 +1259,5 @@ export function analyzeBedrockParticleSchemaCoverage(
   validateCollision(diagnostics, components);
   validateEvents(diagnostics, events);
 
-  if (diagnostics.length >= DIAGNOSTIC_LIMIT) {
-    diagnostics[DIAGNOSTIC_LIMIT - 1] = {
-      severity: "info",
-      code: "particle_schema_diagnostics_truncated",
-      message: `Particle schema diagnostics were bounded to ${DIAGNOSTIC_LIMIT} entries.`,
-      path: "particle_effect",
-    };
-  }
   return diagnostics;
 }
