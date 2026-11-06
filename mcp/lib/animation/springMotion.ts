@@ -1,4 +1,5 @@
 import type { MotionPose, MotionRecipe, MotionVec3 } from "@/lib/animation/motionRecipe";
+import { eulerArcNeedsExplicitIntent } from "@/lib/animation/rotationArc";
 
 export type SpringMotionLink={
   parent_bone:string;
@@ -94,9 +95,9 @@ export function compileSpringSecondaryMotion(recipe:MotionRecipe,links:readonly 
     // Cyclic playback must reject such wraps for both drive modes.
     if((driveMode==="parent_delta"||loopStrategy==="periodic")&&
       link.channel==="rotation"&&
-      samples.some((sample,index)=>index>0&&sample.value.some((value,axis)=>
-        Math.abs(value-samples[index-1].value[axis])>180
-      ))) throw new Error("SPRING_ROTATION_WRAP_UNRESOLVED");
+      samples.some((sample,index)=>index>0&&
+        eulerArcNeedsExplicitIntent(samples[index-1].value,sample.value)
+      )) throw new Error("SPRING_ROTATION_WRAP_UNRESOLVED");
     if(loopStrategy==="periodic"){
       const start=samples[0],end=samples[samples.length-1];
       if(duration<=0||!Number.isSafeInteger(sampleRate)||

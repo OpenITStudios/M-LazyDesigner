@@ -114,6 +114,8 @@ Locators are not direct animation targets in the current authoring path; a movin
 
 ## Motion Design Contract
 
+**Conditional math authority:** When phase/stride, Euler winding, interpolation/derivatives, sample-rate, IK/contact, spring response, or Animation-to-Particle event timing actually needs derivation, read `docs/03-authoring/animation/math-motion-reference.md` (included in the managed package) and use its smallest relevant decision section. Preserve its negative gates and proof limits; it is not a second solver or a request to run native tests. **NO_DEEP_REFERENCE** for a pre-agreed numeric key with known identity and timing; do not preload the math guide, research catalog, or sibling Skills. This implements the existing Animation Standard rather than redefining it.
+
 Before keys, define only applicable motion causes:
 
 ```text

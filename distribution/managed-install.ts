@@ -18,6 +18,7 @@ export const sameInstalledPath = (a: string, b: string): boolean =>
 export const SKILLS = ["lazydesigner-modelling", "lazydesigner-texturing", "lazydesigner-animation"];
 export const PACKAGE_SOURCE_PATHS = [
   "LICENSE", "workspace/README.md", "docs/03-authoring/finalization/standard.md",
+  "docs/03-authoring/animation/math-motion-reference.md",
   ...SKILLS.map(skill => `.agents/skills/${skill}/SKILL.md`),
   ...Object.values(PROFILE_PATHS),
   ".agents/skills/lazydesigner-modelling/references/correction.md",

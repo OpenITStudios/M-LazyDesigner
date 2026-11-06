@@ -52,6 +52,20 @@ describe("managed Skill package reference integrity", () => {
     }
   });
 
+  test("conditional Animation math guide is shipped and routed without a second Skill", async () => {
+    const path = "docs/03-authoring/animation/math-motion-reference.md";
+    expect(PACKAGE_SOURCE_PATHS).toContain(path);
+    const skill = await Bun.file("../.agents/skills/lazydesigner-animation/SKILL.md").text();
+    const math = await Bun.file("../" + path).text();
+    expect(skill).toContain(path);
+    expect(skill).toContain("NO_DEEP_REFERENCE");
+    expect(skill).toContain("Conditional math authority");
+    expect(math).toContain("## 5. Euler winding");
+    expect(math).toContain("## 6. Contact");
+    expect(math).toContain("## 7. Secondary motion");
+    expect(math).toContain("NOT_EXECUTED/UNVERIFIED");
+  });
+
   test("package drift is observable for new, renamed and retired modules", () => {
     const old = ".agents/skills/lazydesigner-texturing/references/legacy.md";
     const updated = ".agents/skills/lazydesigner-texturing/references/material.md";

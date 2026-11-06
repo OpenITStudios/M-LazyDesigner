@@ -486,6 +486,11 @@ describe("native-safe spring follow-through and semantic Gateway plans", () => {
     Object.assign(turning.poses[1]!.bones.body, { rotation: [-179, 0, 0] });
     expect(() => compileSpringSecondaryMotion(turning, [spring()]))
       .toThrow("SPRING_ROTATION_WRAP_UNRESOLVED");
+    const halfTurn = source();
+    Object.assign(halfTurn.poses[0]!.bones.body, { rotation: [0, 0, 0] });
+    Object.assign(halfTurn.poses[1]!.bones.body, { rotation: [180, 0, 0] });
+    expect(() => compileSpringSecondaryMotion(halfTurn, [spring()]))
+      .toThrow("SPRING_ROTATION_WRAP_UNRESOLVED");
     const duplicate = source();
     duplicate.poses[1]!.time = 0;
     expect(() => compileSpringSecondaryMotion(duplicate, [spring()]))
