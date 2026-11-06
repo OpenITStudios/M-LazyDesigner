@@ -4,7 +4,7 @@ import { tools } from "../lib/factories";
 import { getActiveMcpAuthoringStage, setActiveMcpAuthoringStage } from "../lib/capabilities/authoringStage";
 import {
   studioDefaults, studioOutputPath, studioParticleFoldersForModel,
-  studioExpectedTexturePath,
+  studioExpectedTexturePath, isRegularStudioFile, listStudioParticles,
   studioBootstrapOperations, readStudioEffect,
   studioChangeOperations, compileStudioDraft, prepareStudioParticleDraft,
   requireStudioCommittedWrite, refreshRegisteredStudioParticle,
@@ -78,6 +78,79 @@ describe("Particle Studio quick authoring contracts", () => {
     expect(note).toContain("preview not active");
   });
 
+  test("ScopedFS Dirent rejects symlink and directory leaves without lstatSync", () => {
+    const path = {
+      basename: (name: string) => name.split("/").pop()!,
+      dirname: (name: string) => name.slice(0, name.lastIndexOf("/")) || "/",
+      join: (...parts: string[]) => parts.join("/"),
+    };
+    const file = "/pack/particles/normal.particle.json";
+    const dirents = [
+      { name: "normal.particle.json", isFile: () => true, isSymbolicLink: () => false },
+      { name: "linked.particle.json", isFile: () => false, isSymbolicLink: () => true },
+      { name: "folder.particle.json", isFile: () => false, isSymbolicLink: () => false },
+    ];
+    const scopedFs = {
+      existsSync: (_file: string) => true,
+      readdirSync: (_folder: string, opts: { withFileTypes: true }) => {
+        expect(opts).toEqual({ withFileTypes: true });
+        return dirents;
+      },
+      // No lstatSync exists in Blockbench's actual ScopedFS capability.
+    };
+    expect(isRegularStudioFile(scopedFs, path as never, file)).toBe(true);
+    expect(isRegularStudioFile(scopedFs, path as never,
+      "/pack/particles/linked.particle.json")).toBe(false);
+    expect(isRegularStudioFile(scopedFs, path as never,
+      "/pack/particles/folder.particle.json")).toBe(false);
+  });
+
+  test("project particle listing consumes supported ScopedFS Dirent entries", () => {
+    const former = ["Project", "requireNativeModule"].map(
+      key => Object.getOwnPropertyDescriptor(globalThis, key));
+    const stage = getActiveMcpAuthoringStage();
+    const tool = Object.getOwnPropertyDescriptor(tools, "manage_particle");
+    const project = { format: { id: "bedrock" }, save_path: "/pack/models/entity/mob.bbmodel" };
+    const path = {
+      basename: (name: string) => name.split("/").pop()!,
+      dirname: (name: string) => name.slice(0, name.lastIndexOf("/")) || "/",
+      join: (...parts: string[]) => parts.join("/"),
+    };
+    const data = [
+      { name: "sparks.particle.json", isFile: () => true, isSymbolicLink: () => false },
+      { name: "link.particle.json", isFile: () => false, isSymbolicLink: () => true },
+    ];
+    const fs = {
+      existsSync: (folder: string) => folder === "/pack/particles",
+      readdirSync: (folder: string, opts: { withFileTypes: true }) => {
+        expect(folder).toBe("/pack/particles");
+        expect(opts.withFileTypes).toBe(true);
+        return data;
+      },
+    };
+    try {
+      Object.defineProperty(globalThis, "Project", { configurable: true, value: project });
+      Object.defineProperty(globalThis, "requireNativeModule", {
+        configurable: true, value: (name: string) => name === "fs" ? fs : path,
+      });
+      Object.defineProperty(tools, "manage_particle", {
+        configurable: true, value: { enabled: true },
+      });
+      setActiveMcpAuthoringStage("animation");
+      expect(listStudioParticles(project as never)).toEqual([
+        { path: "/pack/particles/sparks.particle.json", label: "sparks" },
+      ]);
+    } finally {
+      setActiveMcpAuthoringStage(stage);
+      if (tool) Object.defineProperty(tools, "manage_particle", tool);
+      else Reflect.deleteProperty(tools, "manage_particle");
+      for (const [index, key] of ["Project", "requireNativeModule"].entries()) {
+        if (former[index]) Object.defineProperty(globalThis, key, former[index]!);
+        else Reflect.deleteProperty(globalThis, key);
+      }
+    }
+  });
+
   test("bootstrap writes only known preset component fields", () => {
     const ops = studioBootstrapOperations(sample({ preset: "burst", emission: 20, speed: 1.5 }));
     expect(ops).toContainEqual({
@@ -136,22 +209,27 @@ describe("Particle Studio quick authoring contracts", () => {
       .toThrow(/advanced-authored/);
   });
 
-  test("file Save remains successful even if optional native preview fails", () => {
+  test("committed-file evidence requires a canonical matching atomic write receipt", () => {
     const path = "/model/particles/blue.particle.json";
-    expect(() => requireStudioCommittedWrite({
-      valid: true,
-      artifact_ready: true,
-      wrote_to_path: path,
-      preview_load_call: "ERROR",
+    const valid = {
+      valid: true, artifact_ready: true,
+      source_path: null, wrote_to_path: path, preview_path: null,
       preview_error: "Texture preview did not load",
-    }, path)).not.toThrow();
-    expect(() => requireStudioCommittedWrite({
-      valid: true, artifact_ready: true, wrote_to_path: null,
-      preview_load_call: "INVOKED", preview_error: null,
-    }, path)).toThrow(/not committed/);
-    expect(() => requireStudioCommittedWrite({
-      valid: false, artifact_ready: false, wrote_to_path: path,
-    }, path)).toThrow(/not committed/);
+      preview_load_call: "ERROR",
+      byte_length: 32, operation_count: 1,
+      summary: { identifier: "mivubi:blue", component_count: 3, diagnostics: [] },
+      writes: [{ kind: "particle", path, byte_length: 32, replaced_existing: false }],
+    };
+    expect(() => requireStudioCommittedWrite(valid, path)).not.toThrow();
+    expect(() => requireStudioCommittedWrite(
+      { ...valid, writes: [] }, path)).toThrow(/not committed/);
+    expect(() => requireStudioCommittedWrite(
+      { ...valid, writes: [{ ...valid.writes[0], path: "/other/blue.particle.json" }] }, path))
+      .toThrow(/not committed/);
+    expect(() => requireStudioCommittedWrite(
+      { ...valid, valid: false }, path)).toThrow(/not committed/);
+    expect(() => requireStudioCommittedWrite(
+      { ...valid, wrote_to_path: null }, path)).toThrow(/not committed/);
   });
 
   test("native refresh targets only previously registered Animation effects", () => {
@@ -267,8 +345,13 @@ describe("Particle Studio quick authoring contracts", () => {
       define("Wintersky", { Config: FakeConfig, Emitter: FakeEmitter });
       define("requireNativeModule", (name: string) => name === "fs"
         ? { existsSync: () => true, readFileSync: () => { fileReads += 1; return loaded.content; },
+            readdirSync: () => [{ name: "magic_flame.particle.json",
+              isFile: () => true, isSymbolicLink: () => false }],
             writeFileSync: () => { written += 1; } }
-        : name === "path" ? { dirname: () => "/model", join: (...args: string[]) => args.join("/") } : undefined);
+        : name === "path" ? {
+            dirname: () => "/model", basename: (value: string) => value.split("/").pop()!,
+            join: (...args: string[]) => args.join("/"),
+          } : undefined);
       expect(startStudioPreview(project as never, loaded, "", { ...settings, size: 0.3 }))
         .toContain("not saved");
       expect(live).toBe(1);

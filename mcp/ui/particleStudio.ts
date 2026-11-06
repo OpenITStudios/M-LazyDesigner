@@ -1,5 +1,6 @@
 /// <reference types="blockbench-types" />
 import { getAllToolDefinitions, tools } from "@/lib/factories";
+import { isVerifiedParticleWriteReceipt } from "@/lib/receipts/particleMutation";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
 import { getRuntimeLifecycleSnapshot, isRuntimeGenerationCurrent, runRuntimeOperationExclusive } from "@/lib/runtime/lifecycle";
 import {
@@ -39,12 +40,17 @@ export function studioDefaults(): StudioSettings {
     emission: 16, speed: 0.5, size: 0.1, lifetime: 1, color: "#ffffff" };
 }
 
+/** Only filesystem operations actually exposed by Blockbench ScopedFS. */
+type StudioDirent = {
+  name: string;
+  isFile(): boolean;
+  isSymbolicLink(): boolean;
+};
 type StudioFs = {
   existsSync(path: string): boolean;
   mkdirSync(path: string, options: { recursive: boolean }): void;
-  readdirSync(path: string): string[];
+  readdirSync(path: string, options: { withFileTypes: true }): StudioDirent[];
   readFileSync(path: string, encoding: "utf8"): string;
-  lstatSync(path: string): { isFile(): boolean; isSymbolicLink(): boolean };
 };
 type StudioPath = { dirname(path: string): string; join(...paths: string[]): string; basename(path: string): string };
 function nativeFiles(): { fs: StudioFs; path: StudioPath } {
@@ -125,9 +131,10 @@ function receiptOf(value: unknown): Record<string, unknown> {
 }
 /** A completed file write is independent of renderer success or failure. */
 export function requireStudioCommittedWrite(receipt: Record<string, unknown>, path: string): void {
-  if (receipt.valid !== true || receipt.artifact_ready !== true || receipt.wrote_to_path !== path) {
+  // Use canonical receipt proof, including the matching atomic writes[] entry.
+  if (!isVerifiedParticleWriteReceipt(receipt) || receipt.wrote_to_path !== path) {
     throw new Error("Particle was not committed: " +
-      String(receipt.preview_error || "check the structured write receipt and diagnostics"));
+      String(receipt.preview_error || "check the verified particle write receipt"));
   }
 }
 
@@ -262,6 +269,33 @@ export function studioChangeOperations(loaded: StudioEffect, next: StudioSetting
   }
   return operations;
 }
+/**
+ * ScopedFS does not expose lstatSync. A directory entry supplies its
+ * non-following file kind, so symlink leaves can be rejected safely.
+ */
+export function isRegularStudioFile(
+  fs: Pick<StudioFs, "existsSync" | "readdirSync">,
+  path: StudioPath,
+  file: string,
+): boolean {
+  if (!fs.existsSync(file)) return false;
+  const name = path.basename(file);
+  return fs.readdirSync(path.dirname(file), { withFileTypes: true }).some(
+    entry => entry.name === name && entry.isFile() && !entry.isSymbolicLink(),
+  );
+}
+
+function requireStudioExistingFile(
+  project: ModelProject, fs: StudioFs, path: StudioPath, file: string,
+): void {
+  const folders = studioFolders(project, path).discovery;
+  if (!folders.includes(path.dirname(file)) ||
+      !/^[a-z0-9_.-]+\.particle\.json$/.test(path.basename(file)) ||
+      !isRegularStudioFile(fs, path, file)) {
+    throw new Error("Particle path is outside this project's regular files. Choose an effect from this project.");
+  }
+}
+
 export function listStudioParticles(project: ModelProject): StudioFile[] {
   requireStudioProject(project);
   const { fs, path } = nativeFiles();
@@ -269,15 +303,14 @@ export function listStudioParticles(project: ModelProject): StudioFile[] {
   const found: StudioFile[] = [];
   for (const directory of folders) {
     if (!fs.existsSync(directory)) continue;
-    const entries = fs.readdirSync(directory)
-      .filter(name => /^[a-z0-9_.-]+\.particle\.json$/.test(name))
-      .sort();
-    for (const name of entries) {
-      const candidate = path.join(directory, name);
-      if (!fs.lstatSync(candidate).isFile() || fs.lstatSync(candidate).isSymbolicLink()) continue;
+    const entries = fs.readdirSync(directory, { withFileTypes: true })
+      .filter(entry => entry.isFile() && !entry.isSymbolicLink() &&
+        /^[a-z0-9_.-]+\.particle\.json$/.test(entry.name))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
       found.push({
-        path: candidate,
-        label: name.replace(/\.particle\.json$/, "") +
+        path: path.join(directory, entry.name),
+        label: entry.name.replace(/\.particle\.json$/, "") +
           (directory === folders[0] ? "" : " (previous location)"),
       });
       if (found.length >= 64) return found;
@@ -285,8 +318,8 @@ export function listStudioParticles(project: ModelProject): StudioFile[] {
   }
   return found;
 }
-function readFileEffect(fs: StudioFs, file: string): StudioEffect {
-  if (!fs.existsSync(file) || !fs.lstatSync(file).isFile() || fs.lstatSync(file).isSymbolicLink()) {
+function readFileEffect(fs: StudioFs, path: StudioPath, file: string): StudioEffect {
+  if (!isRegularStudioFile(fs, path, file)) {
     throw new Error("The selected particle file is missing or not a regular file.");
   }
   return readStudioEffect(file, fs.readFileSync(file, "utf8"));
@@ -330,18 +363,16 @@ export async function createStudioParticle(project: ModelProject, settings: Stud
         texture: "textures/particle/particles", material: "particles_alpha" },
       operations: studioBootstrapOperations(settings), output: { path: file }, preview: false,
     }, file);
-    return readFileEffect(fs, file);
+    return readFileEffect(fs, path, file);
   });
 }
 export async function openStudioParticle(project: ModelProject, file: string): Promise<StudioEffect> {
   return inStudioQueue(project, async () => {
-    if (!listStudioParticles(project).some(item => item.path === file)) {
-      throw new Error("Choose a particle from this project's list.");
-    }
-    const { fs } = nativeFiles();
+    const { fs, path } = nativeFiles();
+    requireStudioExistingFile(project, fs, path, file);
     // Reading a particle must not depend on native rendering or touch an
     // Animation registry. Attachment explicitly loads the effect when needed.
-    return readFileEffect(fs, file);
+    return readFileEffect(fs, path, file);
   });
 }
 /** Refresh only an already native-loaded effect, without registering unrelated files. */
@@ -362,10 +393,9 @@ export function refreshRegisteredStudioParticle(path: string, content: string): 
 
 export async function saveStudioParticle(project: ModelProject, loaded: StudioEffect, next: StudioSettings): Promise<StudioEffect> {
   return inStudioQueue(project, async () => {
-    if (!listStudioParticles(project).some(item => item.path === loaded.path)) {
-      throw new Error("Particle file is no longer in the current project.");
-    }
-    const { fs } = nativeFiles();
+    const { fs, path } = nativeFiles();
+    // The 64-item UI listing is not an authority to reject a saved effect.
+    requireStudioExistingFile(project, fs, path, loaded.path);
     if (fs.readFileSync(loaded.path, "utf8") !== loaded.content) {
       throw new Error("The particle file changed outside Particle Studio. Reopen it before editing.");
     }
@@ -376,7 +406,7 @@ export async function saveStudioParticle(project: ModelProject, loaded: StudioEf
       source: { path: loaded.path }, operations,
       output: { path: loaded.path }, preview: false,
     }, loaded.path);
-    const updated = readFileEffect(fs, loaded.path);
+    const updated = readFileEffect(fs, path, loaded.path);
     const refreshWarning = refreshRegisteredStudioParticle(loaded.path, updated.content);
     return refreshWarning ? { ...updated, refresh_warning: refreshWarning } : updated;
   });
@@ -529,6 +559,9 @@ export function studioPreviewStatus(project: ModelProject, loaded?: StudioEffect
   if (loaded.path) {
     const { fs, path } = nativeFiles();
     if (!fs.existsSync(loaded.path)) return "Particle JSON file is missing. Reopen or locate the effect.";
+    if (!isRegularStudioFile(fs, path, loaded.path)) {
+      return "Particle JSON is not a regular file. Reopen an existing effect.";
+    }
     if (fs.readFileSync(loaded.path, "utf8") !== loaded.content) {
       return "Particle file changed outside Studio. Reopen it before editing or attaching.";
     }
@@ -538,7 +571,7 @@ export function studioPreviewStatus(project: ModelProject, loaded?: StudioEffect
       if (expected && !fs.existsSync(expected)) {
         return "Custom texture missing: " + textureRef + ".png. Place it under the corresponding Resource Pack textures/particle folder.";
       }
-      if (expected && (!fs.lstatSync(expected).isFile() || fs.lstatSync(expected).isSymbolicLink())) {
+      if (expected && !isRegularStudioFile(fs, path, expected)) {
         return "Particle texture reference points to a non-regular file: " + textureRef + ".png.";
       }
     }
