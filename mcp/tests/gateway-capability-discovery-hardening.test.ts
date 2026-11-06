@@ -247,6 +247,58 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     expect(independent?.requires).toEqual(["project_bound"]);
   });
 
+  test("branch-independent graphless mutations do not borrow READY from absent Graph facts", () => {
+    // add_group has native registration, but no declared Gateway Graph.
+    // A stale/unknown project fact is not an invented readiness certificate.
+    const [group] = searchCapabilityCatalog([{
+      name: "add_group",
+      description: "Add a group to the geometry hierarchy.",
+    }], "add group", 4, {
+      facts: { project_bound: false, geometry_available: false },
+    });
+    expect(group?.capability_id).toBe("add_group");
+    expect(group?.eligibility).toBe("UNKNOWN");
+    expect(group?.requires).toBeUndefined();
+    const [projected] = projectCapabilitiesForSearch([group!]);
+    expect(projected?.eligibility).toBe("UNKNOWN");
+    expect(projected?.why).toContain("prerequisites are not declared");
+    expect(gatewaySearchSuccessOutputSchema.safeParse({
+      capabilities: [projected],
+    }).success).toBe(true);
+
+    // Even the exact-name fast path must not turn the Graphless mutation READY.
+    const [exact] = searchCapabilityCatalog([{
+      name: "add_group", description: "Add a geometry group.",
+    }], "add_group", 4);
+    const [direct] = projectCapabilitiesForSearch([{
+      ...exact!, eligibility: "READY",
+    }]);
+    expect(direct?.eligibility).toBe("UNKNOWN");
+
+    // A real graphed mutation retains its exact missing prerequisites.
+    const [blocked] = searchCapabilityCatalog([{
+      name: "create_animation", description: "Create animation.",
+    }], "create animation", 4, {
+      facts: { project_bound: false, geometry_available: true },
+    });
+    expect(blocked?.eligibility).toBe("BLOCKED");
+    expect(blocked?.requires).toContain("project_bound");
+    expect(projectCapabilitiesForSearch([blocked!])[0]?.eligibility).toBe("BLOCKED");
+
+    // Graphless read-only and Control operations remain lightweight.
+    for (const [name, description] of [
+      ["get_project_info", "Inspect project information."],
+      ["create_brush_preset", "Create a brush preset."],
+    ]) {
+      const [readOrControl] = searchCapabilityCatalog([{
+        name, description,
+      }], name, 4);
+      expect(readOrControl?.eligibility).toBeUndefined();
+      expect(projectCapabilitiesForSearch([readOrControl!])[0]?.eligibility)
+        .toBeUndefined();
+    }
+  });
+
   test("graphless material mutations do not get an implicit READY search bonus", () => {
     const [mutation] = searchCapabilityCatalog([{
       name: "manage_material",

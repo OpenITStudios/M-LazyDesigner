@@ -4,6 +4,7 @@ import {
   manifestEntriesForCapability,
   manifestEntryForBranch,
 } from "../capabilities/manifest";
+import { capabilityGraphEntry } from "../capabilities/graph";
 import {
   authoringDomainForCapability,
   sourceOwnerForCapability,
@@ -74,7 +75,14 @@ function searchBranchReadinessHint(
    "UNDECLARED_MUTATION_GRAPH" | null {
   const branches = manifestEntriesForCapability(capability.capability_id)
     .filter((entry) => entry.branch);
-  if (branches.length === 0) return null;
+  if (branches.length === 0) {
+    // The selected operation has no branch semantics. A native mutation
+    // with no Graph entry is UNKNOWN, not implicitly READY.
+    return operationClass === "MUTATION" &&
+      !capabilityGraphEntry(capability.capability_id, capability.branch)
+      ? "UNDECLARED_MUTATION_GRAPH"
+      : null;
+  }
   if (!capability.branch) return "UNSELECTED_OPERATION";
   const exact = branches.find((entry) =>
     entry.branch?.field === capability.branch?.field &&

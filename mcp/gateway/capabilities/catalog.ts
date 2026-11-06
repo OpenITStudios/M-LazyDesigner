@@ -71,6 +71,12 @@ function searchPreconditions(
       return { eligibility: "UNKNOWN", missing: [], unknown: [] };
     }
   }
+  // A branch-independent mutation without declared Graph facts must not
+  // earn an implicit READY search bonus. Execution still belongs to Runtime.
+  if (operationClass === "MUTATION" &&
+      !capabilityGraphEntry(capability, branch)) {
+    return { eligibility: "UNKNOWN", missing: [], unknown: [] };
+  }
   return evaluateCapabilityPreconditions(capability, branch, facts);
 }
 
