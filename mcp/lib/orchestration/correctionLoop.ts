@@ -277,6 +277,23 @@ function assessCorrectionConvergence(
   return "PLATEAU";
 }
 
+/** Missing reference/model evidence for a declared critical visual defect
+ * cannot be silently omitted while lower-severity supported observations
+ * advance planning or post-Apply convergence. It is not proof of the defect;
+ * it is an unresolved blocker requiring fresh review.
+ */
+function hasUnverifiedBlockingVisualClaim(
+  observations: readonly StructuredVisualObservation[],
+  unverified: readonly { code: string }[]
+): boolean {
+  if (unverified.length === 0) return false;
+  const codes = new Set(unverified.map((item) => item.code));
+  return observations.some((item) =>
+    item?.severity === "BLOCKING" &&
+    codes.has(typeof item.code === "string" ? item.code.trim() : "")
+  );
+}
+
 export class CorrectionLoopRegistry {
   private readonly entries = new Map<CorrectionLoopHandle, CorrectionLoopRecord>();
   private scopeIdentity = "unbound:0";
@@ -428,7 +445,8 @@ export class CorrectionLoopRegistry {
     const compiled = compileStructuredVisualObservations(
       input.observations
     );
-    if (compiled.supported.length === 0) {
+    if (compiled.supported.length === 0 ||
+        hasUnverifiedBlockingVisualClaim(input.observations, compiled.unverified)) {
       return { handle: null, unverified: compiled.unverified };
     }
 
@@ -840,7 +858,11 @@ export class CorrectionLoopRegistry {
       (entry) => pendingTargets.has(entry.code)
     );
 
-    if (unresolvedTargetClaim) {
+    if (unresolvedTargetClaim ||
+        hasUnverifiedBlockingVisualClaim(observations, compiled.unverified)) {
+      // A newly discovered but unverified critical visual issue is not
+      // evidence that the target correction converged. Keep the prior
+      // Recipe/evidence state intact until the critical review is resolved.
       return {
         applied: false,
         accepted_count: compiled.supported.length,

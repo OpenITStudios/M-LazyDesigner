@@ -3127,6 +3127,113 @@ describe("zero-waste correction loop reuse", () => {
   });
 
 
+  test("unverified blocking image observations cannot be hidden by a supported correction", () => {
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
+    const current = {
+      code: "WIDTH_LOW",
+      criterion: "SILHOUETTE_PROPORTION" as const,
+      severity: "REVIEW" as const,
+      summary: "Primary arm mass differs from the approved source.",
+      evidence: {
+        current_evidence_ref: "model:front:before",
+        reference_evidence_ref: "source:front:approved",
+        views: ["front" as const],
+      },
+      cause_family: "SIZE_MISMATCH" as const,
+    };
+    const unverifiedCritical = {
+      code: "MISSING_HEAD",
+      criterion: "REQUIRED_PART_COMPLETENESS" as const,
+      severity: "BLOCKING" as const,
+      summary: "Required head mass may be absent.",
+      evidence: {
+        current_evidence_ref: "model:front:before",
+        views: ["front" as const],
+      },
+      cause_family: "MISSING_REQUIRED_PART" as const,
+    };
+    const request = {
+      domain: "GEOMETRY" as const, source: "capture_model_views" as const,
+      verification_risk: "LOW" as const, views: ["front" as const],
+      views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
+      size: 256 as const, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
+      scope_instance_ids: ["arms:0", "arms:1"],
+    };
+    const source = [current, unverifiedCritical];
+    const original = structuredClone(source);
+    const blockedStart = registry.startFromObservations({
+      recipe_id: "asset", base_recipe: recipe(),
+      verification_request: request,
+      verification_evidence_handle: "verificationevidence:before",
+      observations: source,
+    });
+    expect(blockedStart.handle).toBeNull();
+    expect(blockedStart.unverified).toEqual([
+      { code: "MISSING_HEAD", reason: "REFERENCE_EVIDENCE_REQUIRED" },
+    ]);
+    expect(registry.size()).toBe(0);
+    expect(source).toEqual(original);
+
+    const started = registry.startFromObservations({
+      recipe_id: "asset", base_recipe: recipe(),
+      verification_request: request,
+      verification_evidence_handle: "verificationevidence:before",
+      observations: [current],
+    });
+    const handle = started.handle!;
+    expect(handle).not.toBeNull();
+    const decision = registry.planGeometryCorrection(handle, [{
+      id: "resize-arm", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["WIDTH_LOW"], correction_family: "RESIZE",
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: {
+            kind: "RESIZE_AXIS", axis: "X", mode: "ADD",
+            value: 1, anchor: "MIN",
+          },
+        },
+      },
+    }]);
+    expect(decision.state).toBe("CORRECTION_READY");
+    const pending = registry.projectContinuation(handle);
+    const improvement = {
+      ...current,
+      severity: "INFO" as const,
+      summary: "Arm width appears improved.",
+      evidence: { ...current.evidence, current_evidence_ref: "model:front:after" },
+    };
+    const blockedUpdate = registry.updateEvidenceFromObservations(
+      handle, "verificationevidence:after",
+      [improvement, unverifiedCritical], { recovered_views: ["front"] }
+    );
+    expect(blockedUpdate).toEqual({
+      applied: false, accepted_count: 1,
+      unverified: [{ code: "MISSING_HEAD", reason: "REFERENCE_EVIDENCE_REQUIRED" }],
+    });
+    expect(registry.projectContinuation(handle)).toEqual(pending);
+
+    // Once the critical claim is independently supported, it is retained as
+    // a new blocker rather than erased by the apparent width improvement.
+    const confirmedCritical = {
+      ...unverifiedCritical,
+      evidence: {
+        ...unverifiedCritical.evidence,
+        reference_evidence_ref: "source:front:approved",
+      },
+    };
+    const reviewed = registry.updateEvidenceFromObservations(
+      handle, "verificationevidence:after",
+      [improvement, confirmedCritical], { recovered_views: ["front"] }
+    );
+    expect(reviewed).toEqual({ applied: true, accepted_count: 2, unverified: [] });
+    expect(registry.projectContinuation(handle)).toMatchObject({
+      state: "BLOCKED",
+      convergence: { state: "PLATEAU", target_discrepancy_codes: ["WIDTH_LOW"] },
+      quality_focus: { code: "MISSING_HEAD", severity: "BLOCKING" },
+    });
+  });
+
   test("structured observations enter correction only after evidence compilation", () => {
     const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const result = registry.startFromObservations({
