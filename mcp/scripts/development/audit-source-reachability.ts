@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 export type SourceReachabilityClass =
   | "RUNTIME_REACHABLE"
   | "TOOLING_REACHABLE"
+  | "TYPE_ONLY_REFERENCED"
   | "TEST_ONLY"
   | "EXTERNAL_COMPATIBILITY_REVIEW"
   | "UNREFERENCED_REVIEW";
@@ -41,12 +42,12 @@ export type SourceReachabilitySummary = {
 };
 
 const CLASS_ORDER: readonly SourceReachabilityClass[] = [
-  "RUNTIME_REACHABLE", "TOOLING_REACHABLE", "TEST_ONLY",
+  "RUNTIME_REACHABLE", "TOOLING_REACHABLE", "TYPE_ONLY_REFERENCED", "TEST_ONLY",
   "EXTERNAL_COMPATIBILITY_REVIEW", "UNREFERENCED_REVIEW",
 ];
 const LIMITATIONS =
   "A static import graph does not prove dead code or live execution. " +
-  "Dynamic/nonliteral imports, type-only edges, externally consumed facades, " +
+  "Dynamic/nonliteral imports, unobserved Runtime registrations, externally consumed facades, " +
   "Runtime registrations and generated artifacts require separate review. " +
   "Never auto-remove a flagged module or call an unexecuted audit a PASS.";
 
@@ -79,13 +80,16 @@ export function summarizeSourceReachability(
   unresolvedLocalImports: readonly string[] = [],
   dynamicImportFiles: readonly string[] = [],
   sampleLimit = 20,
-  auditedPaths?: readonly string[]
+  auditedPaths?: readonly string[],
+  allSourceImports: SourceReachabilityGraph = graph
 ): SourceReachabilitySummary {
   if (!Number.isInteger(sampleLimit) || sampleLimit < 0 || sampleLimit > 100) {
     throw new Error("Source reachability sample limit must be 0..100.");
   }
   const paths = uniqueSorted(auditedPaths ?? Object.keys(graph));
-  if (paths.some((path) => !Object.hasOwn(graph, path))) {
+  if (paths.some((path) =>
+    !Object.hasOwn(graph, path) || !Object.hasOwn(allSourceImports, path)
+  )) {
     throw new Error("SOURCE_AUDIT_UNKNOWN_REVIEW_PATH: graph omits a requested source.");
   }
   const declaredRoots = uniqueSorted([
@@ -94,7 +98,13 @@ export function summarizeSourceReachability(
   const missingRoots = declaredRoots.filter((path) => !Object.hasOwn(graph, path));
   const runtime = walkDependencies(graph, roots.runtime);
   const tooling = walkDependencies(graph, roots.tooling);
-  const tests = walkDependencies(graph, roots.tests);
+  // Type-only imports are source dependencies, NOT executable JavaScript
+  // edges. Preserve their ownership even when they are never bundled by
+  // the Plugin/Gateway. Tests count as source consumers, not Runtime proof.
+  const referencedAtCompileTime = walkDependencies(
+    allSourceImports, [...roots.runtime, ...roots.tooling]
+  );
+  const tests = walkDependencies(allSourceImports, roots.tests);
   const facades = new Set(facadeCandidates);
   const classes = Object.fromEntries(CLASS_ORDER.map((value) => [value, 0]))
     as Record<SourceReachabilityClass, number>;
@@ -103,6 +113,7 @@ export function summarizeSourceReachability(
     const state: SourceReachabilityClass =
       runtime.has(path) ? "RUNTIME_REACHABLE" :
       tooling.has(path) ? "TOOLING_REACHABLE" :
+      referencedAtCompileTime.has(path) ? "TYPE_ONLY_REFERENCED" :
       tests.has(path) ? "TEST_ONLY" :
       facades.has(path) ? "EXTERNAL_COMPATIBILITY_REVIEW" :
       "UNREFERENCED_REVIEW";
@@ -129,7 +140,12 @@ export function summarizeSourceReachability(
 }
 
 type ParsedSourceImports = {
+  /** All source dependencies, including erased TypeScript type imports. */
   specifiers: string[];
+  /** Module specifiers that may load during JavaScript execution. */
+  runtimeSpecifiers: string[];
+  /** Dependencies referenced only by erased type imports/exports. */
+  typeOnlySpecifiers: string[];
   hasNonLiteralImport: boolean;
 };
 
@@ -139,33 +155,62 @@ export function readSourceImports(source: string, path = "fixture.ts"): ParsedSo
     path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   );
   const imports = new Set<string>();
+  const runtime = new Set<string>();
   let hasNonLiteralImport = false;
-  const collect = (value: ts.Node | undefined) => {
+  const collect = (value: ts.Node | undefined, runtimeEdge: boolean) => {
     if (value && ts.isStringLiteral(value)) {
       imports.add(value.text);
+      if (runtimeEdge) runtime.add(value.text);
     } else {
       hasNonLiteralImport = true;
     }
   };
+  const importIsOnlyTypes = (clause: ts.ImportClause | undefined) => {
+    if (clause?.isTypeOnly) return true;
+    if (!clause || clause.name || !clause.namedBindings ||
+        !ts.isNamedImports(clause.namedBindings)) return false;
+    return clause.namedBindings.elements.length > 0 &&
+      clause.namedBindings.elements.every((item) => item.isTypeOnly);
+  };
+  const exportIsOnlyTypes = (node: ts.ExportDeclaration) =>
+    node.isTypeOnly || (
+      node.exportClause !== undefined &&
+      ts.isNamedExports(node.exportClause) &&
+      node.exportClause.elements.length > 0 &&
+      node.exportClause.elements.every((item) => item.isTypeOnly)
+    );
   const visit = (node: ts.Node): void => {
-    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-      if (node.moduleSpecifier) collect(node.moduleSpecifier);
+    if (ts.isImportDeclaration(node)) {
+      if (node.moduleSpecifier) {
+        collect(node.moduleSpecifier, !importIsOnlyTypes(node.importClause));
+      }
+    } else if (ts.isExportDeclaration(node)) {
+      if (node.moduleSpecifier) {
+        collect(node.moduleSpecifier, !exportIsOnlyTypes(node));
+      }
     } else if (ts.isImportEqualsDeclaration(node) &&
                ts.isExternalModuleReference(node.moduleReference)) {
-      collect(node.moduleReference.expression);
+      collect(node.moduleReference.expression, !node.isTypeOnly);
     } else if (ts.isImportTypeNode(node) &&
                ts.isLiteralTypeNode(node.argument)) {
-      collect(node.argument.literal);
+      collect(node.argument.literal, false);
     } else if (ts.isCallExpression(node) &&
         (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
          ts.isIdentifier(node.expression) &&
          node.expression.text === "require")) {
-      collect(node.arguments[0]);
+      collect(node.arguments[0], true);
     }
     ts.forEachChild(node, visit);
   };
   visit(file);
-  return { specifiers: uniqueSorted(imports), hasNonLiteralImport };
+  return {
+    specifiers: uniqueSorted(imports),
+    runtimeSpecifiers: uniqueSorted(runtime),
+    typeOnlySpecifiers: uniqueSorted([...imports].filter(
+      (specifier) => !runtime.has(specifier)
+    )),
+    hasNonLiteralImport,
+  };
 }
 
 function configuredProject(path: string) {
@@ -223,7 +268,11 @@ export async function auditRepositorySourceReachability(
   const files = uniqueSorted([...runtime.fileNames, ...gateway.fileNames]
     .map((path) => localModulePath(absoluteRoot, path))
     .filter((path): path is string => path !== null));
+  // Two projections over one parsed source: the executable value-import
+  // graph and the complete compilation/reference graph. The latter retains
+  // type-only source owners and prevents false orphan classifications.
   const graph: Record<string, string[]> = {};
+  const sourceGraph: Record<string, string[]> = {};
   const raw = new Map<string, string>();
   const unresolved: string[] = [];
   const dynamic: string[] = [];
@@ -232,10 +281,13 @@ export async function auditRepositorySourceReachability(
     const text = await readFile(resolve(absoluteRoot, path), "utf8");
     raw.set(path, text);
     graph[path] = [];
+    sourceGraph[path] = [];
   }
   for (const path of files) {
     const contents = raw.get(path)!;
-    const { specifiers, hasNonLiteralImport } = readSourceImports(contents, path);
+    const { specifiers, runtimeSpecifiers, hasNonLiteralImport } =
+      readSourceImports(contents, path);
+    const runtimeSpecifiersSet = new Set(runtimeSpecifiers);
     if (hasNonLiteralImport) dynamic.push(path);
     if (isFacadeCandidate(path, contents)) facades.push(path);
     const options = path.startsWith("gateway/") ? gateway.options : runtime.options;
@@ -247,12 +299,16 @@ export async function auditRepositorySourceReachability(
       const local = resolved &&
         localModulePath(absoluteRoot, resolved.resolvedFileName);
       if (local && Object.hasOwn(graph, local)) {
-        graph[path]!.push(local);
+        sourceGraph[path]!.push(local);
+        if (runtimeSpecifiersSet.has(specifier)) {
+          graph[path]!.push(local);
+        }
       } else if (!resolved && !/\.(?:svg|md|css|html|json|png|webp)$/.test(specifier)) {
         unresolved.push(path + " -> " + specifier);
       }
     }
     graph[path] = uniqueSorted(graph[path]!);
+    sourceGraph[path] = uniqueSorted(sourceGraph[path]!);
   }
   const manifest = JSON.parse(
     await readFile(resolve(absoluteRoot, "package.json"), "utf8")
@@ -266,7 +322,8 @@ export async function auditRepositorySourceReachability(
   // that a source module is used by the deployed native Plugin/Gateway.
   const report = summarizeSourceReachability(
     graph, roots, facades, unresolved, dynamic, sampleLimit,
-    files.filter((path) => isAuditedSource(path) && !isTestSource(path))
+    files.filter((path) => isAuditedSource(path) && !isTestSource(path)),
+    sourceGraph
   );
   return report;
 }

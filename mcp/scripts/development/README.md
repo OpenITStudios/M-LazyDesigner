@@ -46,13 +46,18 @@ bun run audit:reachability # optional --sample-limit=0..100, never auto-delete
 
 `audit:reachability` is an **on-demand read-only** TypeScript graph inspection.
 It starts from the actual Plugin `index.ts`, Gateway `gateway/index.ts`,
-package.json-owned script entrypoints, and test imports. It separates
-production-reachable modules, tooling-owned modules, test-only modules,
-external compatibility candidates and unreferenced source **review
-candidates**. Unresolved local imports, missing declared roots and
-nonliteral dynamic imports are reported rather than silently ignored.
-It cannot prove actual Runtime route registration, external consumers,
-code execution, model quality or safe deletion. Pair its findings with
+package.json-owned script entrypoints, and test imports. It tracks two
+projections of the same TypeScript AST: syntactic **value imports** for
+potential Runtime/CLI reachability and **all source imports**, including
+erased `import type`/`export type` and import-type queries, for source
+ownership. The `TYPE_ONLY_REFERENCED` class preserves compile-time
+dependencies rather than falsely claiming they are bundled or orphaned.
+Test-only modules, external compatibility candidates and unreferenced
+source **review candidates** remain separate. Unresolved local imports,
+missing declared roots and nonliteral dynamic imports are reported rather
+than silently ignored. A syntactic value import still does not prove
+emitted JavaScript, installed Runtime registration or actual execution.
+This audit also cannot prove external consumers, model quality or safe deletion. Pair its findings with
 existing `audit:unused`, exact owner tests, manifest/Runtime inventory
 and focused production caller review. No new Runtime module, cleanup
 automation, CI workflow or persistent graph is created.

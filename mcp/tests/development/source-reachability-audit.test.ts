@@ -38,6 +38,7 @@ describe("source reachability is a review-only dependency audit", () => {
       classes: {
         RUNTIME_REACHABLE: 3,
         TOOLING_REACHABLE: 1,
+        TYPE_ONLY_REFERENCED: 0,
         TEST_ONLY: 1,
         EXTERNAL_COMPATIBILITY_REVIEW: 1,
         UNREFERENCED_REVIEW: 1,
@@ -89,7 +90,78 @@ describe("source reachability is a review-only dependency audit", () => {
       "./compatibility", "./dynamic", "./other",
       "./required", "./typeOnly", "./typeReference", "@/lib/live",
     ].sort((left, right) => left.localeCompare(right)));
+    expect(value.runtimeSpecifiers).toEqual([
+      "./compatibility", "./dynamic", "./other", "./required", "@/lib/live",
+    ].sort((left, right) => left.localeCompare(right)));
+    expect(value.typeOnlySpecifiers).toEqual([
+      "./typeOnly", "./typeReference",
+    ].sort((left, right) => left.localeCompare(right)));
     expect(value.hasNonLiteralImport).toBe(true);
+  });
+
+  test("mixed clauses retain value edges while type-only reexports never impersonate Runtime imports", () => {
+    const parsed = readSourceImports(`
+      import { type X, type Y } from "./type-components";
+      export { type Private } from "./type-exports";
+      export type * from "./type-star";
+      import type DefaultType from "./type-default";
+      import { type Label, liveFunction } from "./mixed";
+      export { type SourceType, service } from "./mixed-exports";
+      import "./side-effects";
+      import type { Alias } from "./dual";
+      import { used } from "./dual";
+      const lazy = import("./lazy-runtime");
+    `);
+    expect(parsed.runtimeSpecifiers).toEqual([
+      "./dual", "./lazy-runtime", "./mixed",
+      "./mixed-exports", "./side-effects",
+    ].sort((left, right) => left.localeCompare(right)));
+    expect(parsed.typeOnlySpecifiers).toEqual([
+      "./type-components", "./type-default",
+      "./type-exports", "./type-star",
+    ].sort((left, right) => left.localeCompare(right)));
+    expect(parsed.specifiers).toContain("./dual");
+    expect(parsed.hasNonLiteralImport).toBe(false);
+  });
+
+  test("type-only compiled modules are owned but not counted as live Runtime imports", () => {
+    const valueGraph = {
+      "index.ts": ["lib/loaded.ts"],
+      "lib/loaded.ts": [],
+      "lib/definitions.ts": [],
+      "lib/nested-definition.ts": [],
+      "tests/policy.test.ts": ["lib/test-only.ts"],
+      "lib/test-only.ts": [],
+    };
+    const sourceGraph = {
+      ...valueGraph,
+      "index.ts": ["lib/loaded.ts", "lib/definitions.ts"],
+      "lib/definitions.ts": ["lib/nested-definition.ts"],
+    };
+    const report = summarizeSourceReachability(
+      valueGraph,
+      { runtime: ["index.ts"], tooling: [], tests: ["tests/policy.test.ts"] },
+      [], [], [], 20,
+      ["lib/loaded.ts", "lib/definitions.ts", "lib/nested-definition.ts", "lib/test-only.ts"],
+      sourceGraph
+    );
+    expect(report.classes).toMatchObject({
+      RUNTIME_REACHABLE: 1,
+      TOOLING_REACHABLE: 0,
+      TYPE_ONLY_REFERENCED: 2,
+      TEST_ONLY: 1,
+      UNREFERENCED_REVIEW: 0,
+    });
+    expect(report.review_examples).toEqual([]);
+    // Without the complete source graph, a type-only module would be an
+    // orphan candidate. With source edges it retains a compile-time owner.
+    const incomplete = summarizeSourceReachability(
+      valueGraph,
+      { runtime: ["index.ts"], tooling: [], tests: ["tests/policy.test.ts"] },
+      [], [], [], 20,
+      ["lib/definitions.ts", "lib/nested-definition.ts", "lib/loaded.ts", "lib/test-only.ts"]
+    );
+    expect(incomplete.classes.UNREFERENCED_REVIEW).toBe(2);
   });
 
   test("a compatibility facade is a review candidate, not auto-deleted dead code", () => {
