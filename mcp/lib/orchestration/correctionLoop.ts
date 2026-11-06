@@ -294,14 +294,16 @@ export class CorrectionLoopRegistry {
   }
 
 
-  /** Validate stored canonical capture metadata before an image view can be
-   * refreshed. The registry owns the record; this is not pixel/image review,
-   * not a cross-invocation Recipe revision proof, and not a new store. */
+  /** Check the stored native capture, including the exact post-Apply Recipe
+   * fingerprint when requested. This is not independent pixel review or a
+   * cross-invocation installed-state attestation; no new registry is created. */
   private assertStoredCaptureViews(
     handle: VerificationEvidenceHandle,
     request: VerificationEvidenceRequest,
     expectedProjectUuid: string | null,
-    views: readonly ModelView[]
+    views: readonly ModelView[],
+    expectedNativeFingerprint: string | null = null,
+    expectedRecipeId: string | null = null
   ): void {
     if (!this.captureEvidenceRegistry || views.length === 0) return;
     const mismatch = (): never => {
@@ -345,6 +347,7 @@ export class CorrectionLoopRegistry {
       mismatch();
     }
     const observed = new Set<ModelView>();
+    const imageDigests = new Map<ModelView, string>();
     for (const raw of captures) {
       const row = obj(raw);
       if (!row || !MODEL_VIEWS.includes(row.view as ModelView) ||
@@ -352,9 +355,43 @@ export class CorrectionLoopRegistry {
           !digest.test(String(row.image_sha256 ?? "")) ||
           !digest.test(String(row.capture_contract_sha256 ?? ""))) mismatch();
       observed.add(row.view as ModelView);
+      imageDigests.set(row.view as ModelView, row.image_sha256 as string);
     }
     if (selected.some((view: unknown) => !observed.has(view as ModelView)) ||
         views.some((view) => !observed.has(view))) mismatch();
+
+    // The native part-correspondence capture and Recipe Apply use the same
+    // canonical native-source fingerprint. Do NOT compare the unrelated
+    // scene-dependency digest, or equate matching project/view IDs to revision
+    // freshness. This strict branch is optional, never the numeric hot path.
+    if (expectedNativeFingerprint !== null) {
+      const correspondence = obj(result?.part_correspondence);
+      const modelImages = correspondence?.model_images;
+      const snapshot = /^sha256:[a-f0-9]{64}$/;
+      if (!correspondence ||
+          correspondence.recipe_id !== expectedRecipeId ||
+          correspondence.project_uuid !== uuid ||
+          correspondence.native_scope !== "RECIPE_OWNED_CUBES_ONLY" ||
+          correspondence.capture_scene_scope !== "ALL_NATIVE_CUBES" ||
+          correspondence.recipe_owned_snapshot_stable_during_capture !== true ||
+          correspondence.capture_dependencies_stable_during_capture !== true ||
+          !snapshot.test(String(correspondence.native_snapshot_fingerprint ?? "")) ||
+          correspondence.native_snapshot_fingerprint !== expectedNativeFingerprint ||
+          !snapshot.test(String(correspondence.capture_dependency_fingerprint ?? "")) ||
+          !/^modelcapture:[a-f0-9]{64}$/.test(
+            String(correspondence.model_capture_evidence_handle ?? "")
+          ) ||
+          !Array.isArray(modelImages) ||
+          modelImages.length !== imageDigests.size) mismatch();
+      const verifiedImages = new Set<ModelView>();
+      for (const value of modelImages) {
+        const item = obj(value);
+        if (!item || !MODEL_VIEWS.includes(item.view as ModelView) ||
+            verifiedImages.has(item.view as ModelView) ||
+            item.sha256 !== imageDigests.get(item.view as ModelView)) mismatch();
+        verifiedImages.add(item.view as ModelView);
+      }
+    }
   }
 
   startFromObservations(
@@ -859,7 +896,8 @@ export class CorrectionLoopRegistry {
     // Opt-in capture-backed recovery is checked before any state transition.
     this.assertStoredCaptureViews(
       evidenceHandle, record.verification_request,
-      record.last_native_project_uuid, options.recovered_views ?? []
+      record.last_native_project_uuid, options.recovered_views ?? [],
+      record.last_native_source_fingerprint, record.recipe_id
     );
 
     if (record.evidence_recovery_required) {

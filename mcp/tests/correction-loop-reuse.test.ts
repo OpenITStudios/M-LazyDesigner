@@ -1849,10 +1849,19 @@ describe("zero-waste correction loop reuse", () => {
       size: 256 as const, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
       scope_instance_ids: ["arms:0", "arms:1"],
     };
+    // First synthetic acknowledged Apply produces this Recipe-owned snapshot
+    // fingerprint; capture dependencies have a distinct fingerprint domain.
+    const nativeAfter = "sha256:" + "1".padStart(64, "0");
     const capture = (views: readonly ("front" | "left")[], {
       project = "synthetic-project", freshness = "MATCHED",
       imageHash = "b".repeat(64), scope = request.scope_instance_ids,
-    }: { project?: string; freshness?: string; imageHash?: string; scope?: string[] } = {}) =>
+      nativeRevision = nativeAfter, correspondence = true,
+      modelImageHash = imageHash, stable = true,
+    }: {
+      project?: string; freshness?: string; imageHash?: string;
+      scope?: string[]; nativeRevision?: string; correspondence?: boolean;
+      modelImageHash?: string; stable?: boolean;
+    } = {}) =>
       evidence.put({
         request: { ...request, scope_instance_ids: [...scope] },
         result: { structuredContent: {
@@ -1869,6 +1878,17 @@ describe("zero-waste correction loop reuse", () => {
             view, image_sha256: imageHash,
             capture_contract_sha256: "c".repeat(64),
           })),
+          ...(correspondence ? { part_correspondence: {
+            project_uuid: project, recipe_id: "asset",
+            native_scope: "RECIPE_OWNED_CUBES_ONLY",
+            capture_scene_scope: "ALL_NATIVE_CUBES",
+            native_snapshot_fingerprint: nativeRevision,
+            capture_dependency_fingerprint: "sha256:" + "d".repeat(64),
+            model_capture_evidence_handle: "modelcapture:" + "e".repeat(64),
+            recipe_owned_snapshot_stable_during_capture: stable,
+            capture_dependencies_stable_during_capture: stable,
+            model_images: views.map((view) => ({ view, sha256: modelImageHash })),
+          }} : {}),
         }},
       });
     const registry = new SyntheticAppliedCorrectionLoopRegistry(evidence);
@@ -1904,6 +1924,12 @@ describe("zero-waste correction loop reuse", () => {
       capture(["front"], { freshness: "UNVERIFIED" }),
       capture(["front"], { imageHash: "invalid" }),
       capture(["front"], { scope: ["another-asset"] }),
+      // Matching project and camera is insufficient without exact post-Apply
+      // native Recipe revision, correspondence scope and image identities.
+      capture(["front"], { nativeRevision: "sha256:" + "0".repeat(64) }),
+      capture(["front"], { correspondence: false }),
+      capture(["front"], { modelImageHash: "f".repeat(64) }),
+      capture(["front"], { stable: false }),
     ];
     for (const candidate of invalid) {
       expect(() => registry.updateEvidence(
