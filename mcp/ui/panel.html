@@ -87,6 +87,30 @@
           <input id="ld-studio-color" type="color" v-model="studioSettings.color" @input="studioLiveChanged"
             :disabled="studioBusy || !studioLoaded.editable.color"/>
         </div>
+        <details class="ld-utilities" aria-label="Advanced particle visual and motion controls">
+          <summary>Advanced visual / motion (numeric-only)</summary>
+          <div class="ld-studio-edit">
+            <div class="ld-studio-control">
+              <label for="ld-studio-opacity">Opacity: {{studioSettings.opacity}}</label>
+              <input id="ld-studio-opacity" type="range" min="0" max="1" step="0.05"
+                v-model.number="studioSettings.opacity" @input="studioLiveChanged"
+                :disabled="studioBusy || !studioLoaded.editable.opacity"/>
+            </div>
+            <div class="ld-studio-control">
+              <label for="ld-studio-radius">Emitter radius: {{studioSettings.radius}}</label>
+              <input id="ld-studio-radius" type="range" min="0.01" max="2" step="0.01"
+                v-model.number="studioSettings.radius" @input="studioLiveChanged"
+                :disabled="studioBusy || !studioLoaded.editable.radius"/>
+            </div>
+            <div class="ld-studio-control">
+              <label for="ld-studio-vertical">Vertical acceleration: {{studioSettings.vertical_acceleration}}</label>
+              <input id="ld-studio-vertical" type="range" min="-8" max="8" step="0.1"
+                v-model.number="studioSettings.vertical_acceleration" @input="studioLiveChanged"
+                :disabled="studioBusy || !studioLoaded.editable.vertical_acceleration"/>
+            </div>
+            <p class="section-hint">Unsupported shape, gradient or MoLang fields remain unchanged. No additional emitters are created.</p>
+          </div>
+        </details>
         <div class="ld-studio-row">
           <button class="user-action primary" type="button" :disabled="studioBusy || !project.hasFolder || !studioHasChanges()" @click="studioSave">{{studioLoaded.path ? 'Apply Changes' : 'Save Particle'}}</button>
           <button class="user-action" type="button" :disabled="studioBusy || !studioHasChanges()" @click="studioRevert">Discard Draft</button>

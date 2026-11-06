@@ -167,6 +167,57 @@ describe("Particle Studio quick authoring contracts", () => {
     expect(ops).toHaveLength(6);
   });
 
+  test("advanced quick controls remain lossless and never create a second emitter", () => {
+    const source = createParticleDocument({ identifier: "mivubi:advanced", preset: "burst" });
+    const withColor = applyParticleOperations(source, [
+      { op: "set_component", component: "minecraft:particle_appearance_tinting",
+        value: { color: [0.1, 0.2, 0.3, 0.8], keep: { zero: 0 } } },
+      { op: "set_component", component: "minecraft:particle_motion_dynamic",
+        value: { linear_acceleration: ["math.sin(variable.particle_age)", -1, 0],
+          linear_drag_coefficient: 0.1 } },
+    ]);
+    const loaded = readStudioEffect("/pack/particles/advanced.particle.json",
+      serializeParticleDocument(withColor));
+    expect(loaded.editable).toMatchObject({
+      opacity: true, radius: true, vertical_acceleration: true,
+    });
+    const updates = studioChangeOperations(loaded, { ...loaded.settings,
+      opacity: 0.5, color: "#ff0000", radius: 0.5, vertical_acceleration: -3 });
+    expect(updates).toContainEqual({ op: "patch",
+      path: ["components", "minecraft:emitter_shape_sphere", "radius"], value: 0.5 });
+    expect(updates).toContainEqual({ op: "patch",
+      path: ["components", "minecraft:particle_motion_dynamic", "linear_acceleration"],
+      value: ["math.sin(variable.particle_age)", -3, 0] });
+    const tintOps = updates.filter((item: any) =>
+      JSON.stringify(item).includes("minecraft:particle_appearance_tinting"));
+    expect(tintOps).toHaveLength(1);
+    const after = applyParticleOperations(withColor, updates as never);
+    const components = (after.particle_effect as any).components;
+    expect(components["minecraft:particle_appearance_tinting"]).toEqual({
+      color: [1, 0, 0, 0.5], keep: { zero: 0 },
+    });
+    expect(components["minecraft:particle_motion_dynamic"].linear_drag_coefficient).toBe(0.1);
+    expect(JSON.stringify(source)).not.toContain("math.sin");
+  });
+
+  test("advanced fields are read-only when author-owned values cannot be safely represented", () => {
+    const original = createParticleDocument({ identifier: "mivubi:gradient", preset: "steady" });
+    const withGradient = applyParticleOperations(original, [
+      { op: "set_component", component: "minecraft:particle_appearance_tinting",
+        value: { color: { gradient: ["#000000", "#ffffff"], interpolant: "v.age" } } },
+    ]);
+    const loaded = readStudioEffect("", serializeParticleDocument(withGradient));
+    expect(loaded.editable.opacity).toBe(false);
+    expect(loaded.editable.radius).toBe(false);
+    expect(() => studioChangeOperations(loaded, { ...loaded.settings, opacity: 0.5 }))
+      .toThrow(/advanced-authored/);
+    const burst = readStudioEffect("", serializeParticleDocument(createParticleDocument({
+      identifier: "mivubi:burst", preset: "burst",
+    })));
+    expect(burst.settings.radius).toBe(0.25);
+    expect(burst.settings.vertical_acceleration).toBe(-1);
+  });
+
   test("editing tint cannot accidentally rewrite speed, emission or motion", () => {
     const loaded = readStudioEffect("/model/particles/magic_flame.particle.json", serialized(sample()));
     const next = sample({ color: "#8040ff" });
@@ -415,7 +466,7 @@ describe("Particle Studio quick authoring contracts", () => {
       expect(panel).toContain('@click="' + action + '"');
     }
     expect(ui).toContain("runRuntimeOperationExclusive(generation");
-    expect(panel.match(/@input="studioLiveChanged"/g)).toHaveLength(5);
+    expect(panel.match(/@input="studioLiveChanged"/g)).toHaveLength(8);
     expect(panel).toContain('studioRevert');
     expect(panel).toContain("Preview New Effect");
     expect(panel).toContain("Save Particle");

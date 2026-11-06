@@ -16,7 +16,7 @@ import { loadNativeParticlePreview } from "@/server/tools/particle/inspection";
 /** Human controls over existing Particle and Animation executors, not a second authoring engine. */
 export const STUDIO_PRESETS = ["steady", "burst", "trail", "ambient", "collision_splash"] as const;
 export type StudioPreset = (typeof STUDIO_PRESETS)[number];
-export type StudioField = "emission" | "speed" | "size" | "lifetime" | "color";
+export type StudioField = "emission" | "speed" | "size" | "lifetime" | "color" | "opacity" | "radius" | "vertical_acceleration";
 export type StudioSettings = {
   identifier: string;
   preset: StudioPreset;
@@ -25,6 +25,9 @@ export type StudioSettings = {
   size: number;
   lifetime: number;
   color: string;
+  opacity: number;
+  radius: number;
+  vertical_acceleration: number;
 };
 export type StudioEffect = {
   path: string;
@@ -38,7 +41,8 @@ export type StudioFile = { path: string; label: string };
 
 export function studioDefaults(): StudioSettings {
   return { identifier: "lazydesigner:magic_flame", preset: "steady",
-    emission: 16, speed: 0.5, size: 0.1, lifetime: 1, color: "#ffffff" };
+    emission: 16, speed: 0.5, size: 0.1, lifetime: 1, color: "#ffffff",
+    opacity: 1, radius: 0.25, vertical_acceleration: 0 };
 }
 
 /** Only filesystem operations actually exposed by Blockbench ScopedFS. */
@@ -192,6 +196,22 @@ export function readStudioEffect(path: string, content: string): StudioEffect {
   const tint = object(components["minecraft:particle_appearance_tinting"]);
   const colorValue = "minecraft:particle_appearance_tinting" in components
     ? hex(tint.color) : "#ffffff";
+  const alpha = Array.isArray(tint.color) && tint.color.length === 4
+    ? numeric(tint.color[3]) : null;
+  const opacityValue = "minecraft:particle_appearance_tinting" in components
+    ? alpha !== null && alpha >= 0 && alpha <= 1 && colorValue !== null ? alpha : null
+    : 1;
+  const shape = object(components["minecraft:emitter_shape_sphere"] ??
+    components["minecraft:emitter_shape_disc"]);
+  const rawRadius = numeric(shape.radius);
+  const radiusValue = rawRadius !== null && rawRadius >= 0.01 && rawRadius <= 2
+    ? rawRadius : null;
+  const dynamics = object(components["minecraft:particle_motion_dynamic"]);
+  const acceleration = dynamics.linear_acceleration;
+  const rawVertical = Array.isArray(acceleration) && acceleration.length === 3
+    ? numeric(acceleration[1]) : null;
+  const verticalValue = rawVertical !== null && rawVertical >= -8 && rawVertical <= 8
+    ? rawVertical : null;
   const defaults = studioDefaults();
   return {
     path, content,
@@ -204,10 +224,15 @@ export function readStudioEffect(path: string, content: string): StudioEffect {
       size: sizeValue ?? defaults.size,
       lifetime: lifetimeValue ?? defaults.lifetime,
       color: colorValue ?? defaults.color,
+      opacity: opacityValue ?? defaults.opacity,
+      radius: radiusValue ?? defaults.radius,
+      vertical_acceleration: verticalValue ?? defaults.vertical_acceleration,
     },
     editable: {
       emission: emissionValue !== null, speed: speedValue !== null, size: sizeValue !== null,
       lifetime: lifetimeValue !== null, color: colorValue !== null,
+      opacity: opacityValue !== null, radius: radiusValue !== null,
+      vertical_acceleration: verticalValue !== null,
     },
   };
 }
@@ -230,14 +255,14 @@ export function studioBootstrapOperations(settings: StudioSettings): object[] {
     patch("minecraft:particle_appearance_billboard", "uv",
       { texture_width: 128, texture_height: 128, uv: [40, 80], uv_size: [8, 8] }),
     { op: "set_component", component: "minecraft:particle_appearance_tinting",
-      value: { color: [...rgb(settings.color), 1] } },
+      value: { color: [...rgb(settings.color), finite(settings.opacity, 0, 1, "Opacity")] } },
   ];
 }
 export function studioChangeOperations(loaded: StudioEffect, next: StudioSettings): object[] {
   if (loaded.settings.identifier !== next.identifier) {
     throw new Error("A particle identifier cannot be renamed from the quick controls.");
   }
-  const fields: StudioField[] = ["emission", "speed", "size", "lifetime", "color"];
+  const fields: StudioField[] = ["emission", "speed", "size", "lifetime", "color", "opacity", "radius", "vertical_acceleration"];
   const changes = fields.filter(field => loaded.settings[field] !== next[field]);
   for (const field of changes) {
     if (!loaded.editable[field]) throw new Error(field + " is advanced-authored. Edit it through the AI particle tools.");
@@ -259,14 +284,35 @@ export function studioChangeOperations(loaded: StudioEffect, next: StudioSetting
     } else if (field === "lifetime") {
       operations.push(patch("minecraft:particle_lifetime_expression", "max_lifetime",
         finite(next.lifetime, 0.1, 10, "Lifetime")));
-    } else if (field === "color") {
-      const tint = object(components["minecraft:particle_appearance_tinting"]);
-      const previous = Array.isArray(tint.color) && tint.color.length === 4 ? tint.color[3] : 1;
-      const color = [...rgb(next.color), previous];
-      operations.push("minecraft:particle_appearance_tinting" in components
-        ? patch("minecraft:particle_appearance_tinting", "color", color)
-        : { op: "set_component", component: "minecraft:particle_appearance_tinting", value: { color } });
+    } else if (field === "radius") {
+      const shape = "minecraft:emitter_shape_sphere" in components
+        ? "minecraft:emitter_shape_sphere" : "minecraft:emitter_shape_disc";
+      operations.push(patch(shape, "radius", finite(next.radius, 0.01, 2, "Radius")));
+    } else if (field === "vertical_acceleration") {
+      const dynamics = object(components["minecraft:particle_motion_dynamic"]);
+      const source = dynamics.linear_acceleration;
+      // Retain horizontal MoLang/forces and every unrelated dynamic field.
+      if (!Array.isArray(source) || source.length !== 3)
+        throw new Error("Vertical acceleration cannot replace an advanced motion vector.");
+      operations.push(patch("minecraft:particle_motion_dynamic", "linear_acceleration",
+        [source[0], finite(next.vertical_acceleration, -8, 8, "Vertical acceleration"), source[2]]));
     }
+  }
+  if (changes.includes("color") || changes.includes("opacity")) {
+    const tint = object(components["minecraft:particle_appearance_tinting"]);
+    const previous = tint.color;
+    const sourceRgb = Array.isArray(previous) && previous.length >= 3
+      ? previous.slice(0, 3) : rgb(loaded.settings.color);
+    const sourceAlpha = Array.isArray(previous) && previous.length === 4 ? previous[3] : 1;
+    const color = [
+      ...(changes.includes("color") ? rgb(next.color) : sourceRgb),
+      changes.includes("opacity") ? finite(next.opacity, 0, 1, "Opacity") : sourceAlpha,
+    ];
+    // A simultaneous RGB+alpha edit is one coherent patch, never two writes
+    // that each reuse stale original tint values.
+    operations.push("minecraft:particle_appearance_tinting" in components
+      ? patch("minecraft:particle_appearance_tinting", "color", color)
+      : { op: "set_component", component: "minecraft:particle_appearance_tinting", value: { color } });
   }
   return operations;
 }

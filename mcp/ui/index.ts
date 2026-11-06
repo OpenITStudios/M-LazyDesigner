@@ -413,7 +413,7 @@ export function uiSetup(input: UiSetupInput) {
           if (!loaded) return false;
           if (!loaded.path) return true; // New draft has never been saved.
           // This runs during Vue rendering; never parse JSON on every drag tick.
-          return (["identifier", "emission", "speed", "size", "lifetime", "color"] as const)
+          return (["identifier", "emission", "speed", "size", "lifetime", "color", "opacity", "radius", "vertical_acceleration"] as const)
             .some(field => loaded.settings[field] !== this.studioSettings[field]);
         },
         studioRefresh(this: HumanPanelContext): void {

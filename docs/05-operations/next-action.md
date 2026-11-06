@@ -12,6 +12,8 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 - **Particle preview budget (2026-11-07; SOURCE_AUTHORED / NOT_EXECUTED):** Existing inspect/Studio/manage now receive bounded, single-emitter numeric preview workload estimates; high automatic previews pause, explicit Replay uses a higher ceiling, and native manage_particle blocks excessive preview without discarding a valid file write. Unknown MoLang remains unestimated; nested child effects require manual preview. No second renderer, runtime polling, added public tool, or new cache. Source regressions authored, not executed.
 
+- **Particle Studio advanced quick controls (2026-11-07; SOURCE_AUTHORED / NOT_EXECUTED):** Existing panel adds collapsible opacity, sphere/disc radius and vertical acceleration; changes remain targeted/lossless, preserve horizontal MoLang, alpha and advanced authored fields, and use the same coalesced single Wintersky emitter with budget admission. No new timer, renderer, Stage, background service or tool. Source regressions AUTHORED_NOT_RUN.
+
 ## Active execution mode — ChatGPT development + Codex testing/use (2026-11-05)
 
 User-corrected workflow: (1) ChatGPT and the GitHub connector own source development, audits, regressions, documentation, and coherent commits on `Local`; (2) Codex owns executable verification and product usage when implementation is ready and the actual checkout/toolchain is present. No additional cloud test service, GitHub verification Actions or user-PC instructions are required. `REMOTE_GITHUB` does not imply testing. A named Codex session does not prove `LOCAL_CODE` or `LIVE_BLOCKBENCH` until those capabilities are observed.
