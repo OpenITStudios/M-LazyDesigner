@@ -154,13 +154,22 @@ function eventSpawnsChild(value: JsonValue | undefined): boolean {
     if (inspected >= 256) return true;
     const current = pending.pop();
     if (Array.isArray(current)) {
-      pending.push(...current);
+      for (const child of current) {
+        if (pending.length >= 256) return true;
+        pending.push(child);
+      }
       continue;
     }
     const node = object(current);
     if (!node) continue;
     if (object(node.particle_effect)) return true;
-    pending.push(...Object.values(node));
+    // Never spread an untrusted, arbitrarily wide JSON event into arguments
+    // or accumulate more than the bounded preview-inspection budget.
+    for (const key in node) {
+      if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
+      if (pending.length >= 256) return true;
+      pending.push(node[key]);
+    }
   }
   return false;
 }

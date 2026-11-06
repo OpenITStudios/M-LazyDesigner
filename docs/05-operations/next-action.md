@@ -30,6 +30,8 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 - **Particle six-case visual/game acceptance protocol (2026-11-07; SOURCE_AUTHORED / NOT_EXECUTED):** Canonical QA Gate 10 covers flame, smoke, magic aura, impact, moving trail and collision, plus temporal/distance fidelity, actual Minecraft baseline vs concurrent-load comparison and separate visual/FPS verdicts. The existing local acceptance runbook routes to that owner. No new runner, Golden, or runtime monitoring; native/game evidence remains UNVERIFIED under the user hold.
 
+- **Particle QA contract + bounded event walk (2026-11-07; SOURCE_AUTHORED / NOT_EXECUTED):** Repository contract now guards the six-case visual/game acceptance and its native-proof boundary. Existing child-event source inspection no longer spreads arbitrarily wide untrusted event arrays/objects into pending stack operations; >256 event nodes conservatively trigger review without doing an unbounded expansion. Positive/negative tests AUTHORED_NOT_RUN; game FPS still UNVERIFIED.
+
 ## Active execution mode — ChatGPT development + Codex testing/use (2026-11-05)
 
 User-corrected workflow: (1) ChatGPT and the GitHub connector own source development, audits, regressions, documentation, and coherent commits on `Local`; (2) Codex owns executable verification and product usage when implementation is ready and the actual checkout/toolchain is present. No additional cloud test service, GitHub verification Actions or user-PC instructions are required. `REMOTE_GITHUB` does not imply testing. A named Codex session does not prove `LOCAL_CODE` or `LIVE_BLOCKBENCH` until those capabilities are observed.

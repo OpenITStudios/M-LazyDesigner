@@ -29,6 +29,26 @@ describe("particle reference authoring contract", () => {
     expect(emitter).toContain("Do not confuse emitter activation with individual particle lifetime");
   });
 
+  test("canonical six-case visual/game QA protects proof boundaries", async () => {
+    const [qa, runbook] = await Promise.all([
+      source("../docs/02-reference/particle/qa.md"),
+      source("../docs/05-operations/local-acceptance-runbook.md"),
+    ]);
+    expect(qa).toContain("Six-case particle visual and Minecraft game-load acceptance matrix");
+    for (const scenario of ["Flame (continuous)", "Smoke / plume", "Magic aura",
+      "Impact / explosion", "Moving projectile trail", "Collision splash / reactive"]) {
+      expect(qa).toContain(scenario);
+    }
+    expect(qa).toContain("baseline effect off");
+    expect(qa).toContain("worst-reasonable-case");
+    expect(qa).toContain("median, p95/p99 frame time");
+    expect(qa).toContain("visual PASS/FAIL/UNVERIFIED");
+    expect(qa).toContain("performance PASS/FAIL/UNVERIFIED");
+    expect(runbook).toContain("six-case matrix");
+    expect(runbook).toContain("visual claim remains `not_evaluated`");
+    expect(runbook).toContain("testing hold remains active");
+  });
+
   test("particle authoring remains minimal and does not promote flipbook or reactivity by default", async () => {
     const [skill, spec] = await Promise.all([
       source("../.agents/skills/lazydesigner-particle-reference-authoring/SKILL.md"),

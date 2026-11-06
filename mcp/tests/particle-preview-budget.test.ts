@@ -223,6 +223,23 @@ describe("single-emitter authoring viewport workload (no FPS claims)", () => {
       .not.toContain("repeating_emitter_child_events");
   });
 
+  test("very wide event payload remains bounded without a spread-argument explosion", () => {
+    const wide = applyParticleOperations(createParticleDocument({
+      identifier: "test:wide_event", preset: "burst",
+    }), [
+      { op: "set_event", name: "wide", value: {
+        sequence: Array.from({ length: 400 }, (_, index) => index === 399
+          ? { particle_effect: { effect: "test:child", type: "emitter" } }
+          : { log: "bounded" }),
+      } },
+      { op: "set_component", component: "minecraft:particle_lifetime_events",
+        value: { creation_event: "wide" } },
+    ]);
+    const report = inspectParticleDocument(wide);
+    expect(report.game_cost.cost_drivers).toContain("per_particle_nested_event_risk");
+    expect(report.game_cost.device_fps_verified).toBe(false);
+  });
+
   test("nested effects require manual review and direct recursion blocks native preview", () => {
     const nested = (target: string) => applyParticleOperations(
       createParticleDocument({ identifier: "test:root", preset: "burst" }), [
