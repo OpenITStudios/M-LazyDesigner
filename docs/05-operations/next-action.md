@@ -28,6 +28,8 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 - **Particle visual semantic preflight (2026-11-07; SOURCE_AUTHORED / NOT_EXECUTED):** The existing bounded semantic inspector now emits advisory visibility/time warnings for literal zero billboard axes or tint alpha, frozen multi-frame flipbook, and literal FPS/lifetime that does not reach the last frame. It never evaluates MoLang, simulates rendering or blocks intentionally hidden effects. Positive/negative deterministic tests AUTHORED_NOT_RUN; actual visual/fidelity acceptance still requires native evidence when authorized.
 
+- **Particle six-case visual/game acceptance protocol (2026-11-07; SOURCE_AUTHORED / NOT_EXECUTED):** Canonical QA Gate 10 covers flame, smoke, magic aura, impact, moving trail and collision, plus temporal/distance fidelity, actual Minecraft baseline vs concurrent-load comparison and separate visual/FPS verdicts. The existing local acceptance runbook routes to that owner. No new runner, Golden, or runtime monitoring; native/game evidence remains UNVERIFIED under the user hold.
+
 ## Active execution mode — ChatGPT development + Codex testing/use (2026-11-05)
 
 User-corrected workflow: (1) ChatGPT and the GitHub connector own source development, audits, regressions, documentation, and coherent commits on `Local`; (2) Codex owns executable verification and product usage when implementation is ready and the actual checkout/toolchain is present. No additional cloud test service, GitHub verification Actions or user-PC instructions are required. `REMOTE_GITHUB` does not imply testing. A named Codex session does not prove `LOCAL_CODE` or `LIVE_BLOCKBENCH` until those capabilities are observed.

@@ -118,6 +118,28 @@ Check the relevant physical facts: spawn rate × lifetime versus numeric cap, su
 
 **Production-safety rule:** A structurally valid pack with a cycle, missing child, unbounded dynamic expression or suspected per-particle event fan-out requires targeted source review before game delivery. A clean static inspection still requires gameplay evidence; neither verdict may claim safe FPS. Check replayed instant bursts, emitter timeline repetition, simultaneous player/mob/projectile activations, overlapping transparent sprites and lower-spec devices. Optimize the minimal visually redundant cost, not the focal effect. `analyzeBedrockParticlePack.gameplay_release_review` is a read-only warning owner and does not certify an actual release gate or replace runtime observation.
 
+
+### Six-case particle visual and Minecraft game-load acceptance matrix
+
+This is a **future authorized native evidence procedure**, not a new test runner or proof that these effects have been played. Use relevant cases only; do not rerun all six for an unrelated particle change.
+
+| Case | Visual observation | Minecraft game-load risk |
+| --- | --- | --- |
+| Flame (continuous) | Stable silhouette, source anchoring, lifetime fade | Many flames; spawn rate, lifetime and occlusion |
+| Smoke / plume | Soft translucency, atlas edges, rising motion, intentional tail | Overlapping blend sprites and screen-space overdraw |
+| Magic aura | Stable age-based pulse/color, attachment and rotation | Many players/mobs with persistent effects and MoLang |
+| Impact / explosion | Flash visibility, ordered fragments/dust, clean decay | Concurrent bursts, looping emission and child event fan-out |
+| Moving projectile trail | Motion continuity, trail length, correct space/attachment | Multiple projectiles, rapid spawn cadence, movement/retrigger |
+| Collision splash / reactive | Correct contact, bounce/expiry, one-shot intent | Repeated collisions and child-effect amplification |
+
+For each selected case use an approved or explicitly provisional visual target, known particle/texture identity and relevant source diagnostics. Observe creation, midlife, expiration/tail, and at least three consecutive cycles when the emitter loops. Compare close and intended distant views against a contrasting background; add a second background only when alpha/contrast is material. For moving/attached effects compare stationary and moving behavior. **A few frozen screenshots cannot prove temporal visual quality.**
+
+**Game-load comparison:** record the same Bedrock version, pack SHA, device (including actual supported low-end hardware), world/scene, render distance and graphics settings. Compare baseline effect off, one effect, typical concurrent uses and worst-reasonable-case uses across real gameplay players/mobs/projectiles. Count simultaneous instances using actual game behavior; do not invent numbers. Collect measured FPS/frame-time distribution (median, p95/p99 frame time when available), stutter/freeze symptoms, run duration and warmup. Use the project's own target-device performance budget rather than a universal numerical limit. Missing metrics remain UNVERIFIED.
+
+**Optimization acceptance:** preserve the primary silhouette, flash, texture readability and timing while first eliminating redundant/occluded work, long-lived overlap, uncontrolled event fan-out, and unnecessary per-render math/collision. After a change, compare the candidate and prior reference at matched conditions. Do not pass an inferior-looking effect because it emits fewer particles.
+
+**Existing evidence record only:** exact source SHA/build, approved reference provenance, effect files, selected scenario, measured game environment, baseline and game-load results, visual PASS/FAIL/UNVERIFIED, performance PASS/FAIL/UNVERIFIED, and unresolved limitations. No new manifest, screenshot archive, Golden identity or recorder is required.
+
 ## Gate 11 — Package integrity
 
 Before delivery verify:

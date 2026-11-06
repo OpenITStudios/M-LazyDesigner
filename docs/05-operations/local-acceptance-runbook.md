@@ -519,6 +519,8 @@ bun run verify:animation-live -- --confirm-disposable
 bun run verify:particle-live -- --confirm-disposable
 ```
 
+**Particle-specific acceptance:** The existing live verifier checks the native load/readback path, not visual quality or Minecraft FPS (visual claim remains `not_evaluated`). When particle visual or game performance is the acceptance target, follow the six-case matrix in `docs/02-reference/particle/qa.md` Gate 10. Record target-device baseline and concurrent-game results only when a real authorized Minecraft environment is available. The user's testing hold remains active; this is source preparation, not a request to run tests.
+
 Persistence is two-stage:
 
 ```bash
