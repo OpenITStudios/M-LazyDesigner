@@ -47,6 +47,41 @@ describe("Bedrock particle pack dependency analysis", () => {
     expect(result.valid).toBe(true);
   });
 
+  test("composed workload reuses bounded source estimates without inventing runtime peaks", () => {
+    const root = nestedParticle("blockit:root", "blockit:spark");
+    const spark = nestedParticle("blockit:spark");
+    const result = analyzeBedrockParticlePack({
+      particles: [root, spark].map(document => ({ document })),
+    });
+    expect(result.composition_workload).toMatchObject({
+      state: "single_instance_numeric", numeric_effect_count: 2,
+      unevaluated_effect_count: 0, known_single_instance_particle_sum: 24,
+      child_dependency_count: 1, runtime_fps_verified: false,
+    });
+  });
+
+  test("missing MoLang count and cycle paths remain reviewable, not fabricated FPS", () => {
+    const dynamic = applyParticleOperations(nestedParticle("blockit:dynamic"), [
+      { op: "patch", path: ["components", "minecraft:particle_lifetime_expression", "max_lifetime"],
+        value: "variable.dynamic_lifetime" },
+    ]);
+    const partial = analyzeBedrockParticlePack({ particles: [
+      { document: nestedParticle("blockit:root", "blockit:dynamic") },
+      { document: dynamic },
+    ] });
+    expect(partial.composition_workload).toMatchObject({
+      state: "partial", numeric_effect_count: 1, unevaluated_effect_count: 1,
+      known_single_instance_particle_sum: 12, runtime_fps_verified: false,
+    });
+    const cycle = analyzeBedrockParticlePack({ particles: [
+      { document: nestedParticle("blockit:a", "blockit:b") },
+      { document: nestedParticle("blockit:b", "blockit:a") },
+    ] });
+    expect(cycle.composition_workload).toMatchObject({
+      state: "cycle_review", budget_review: true, runtime_fps_verified: false,
+    });
+  });
+
   test("detects cross-file dependency cycles without treating them as structural invalidity", () => {
     const result = analyzeBedrockParticlePack({
       particles: [

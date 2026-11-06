@@ -12,6 +12,7 @@ The read-only `preview_workload` in existing particle inspection uses a **single
 
 **Engineering-only viewport admission:** >256 estimated particles or >500/s steady emission pauses automatic Studio preview; nested effects also require explicit Play/Replay. >1024 estimated particles or >5000/s steady emission, and direct self-recursion, prevent native preview. `manage_particle(preview=true)` still commits a valid JSON artifact when native preview is blocked and returns `preview_load_call=BLOCKED`. Exact thresholds are protective editor defaults, **not Minecraft limits or measured device FPS**; live output/render/overdraw remains unverified. Avoid disabling authoring merely because a preview needs to be lighter.
 
+## Performance model
 
 Particle performance is the combined cost of:
 

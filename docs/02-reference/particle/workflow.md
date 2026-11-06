@@ -124,6 +124,16 @@ Split only when layers differ materially in:
 
 Use pattern composition sparingly. After decomposition, do not repeatedly redesign architecture while authoring unless a contradiction is discovered.
 
+### Composed effects without a second renderer
+
+When the target genuinely requires different flash/sparks/smoke material, motion or timing, use the already supported **Bedrock event** and JSON owners, not a new composition service. First author each child `.particle.json` with `manage_particle(preview=false)`; create unique identifiers, texture references and bounded numeric rates/caps. Then author the root with named `particle_effect.events` and `minecraft:emitter_lifetime_events.creation_event` or its emitter-relative `timeline` (seconds). The root lifetime must cover each scheduled event. A looping emitter repeats timeline triggers; `particle_lifetime_events` can multiply child emitters *per particle* and is not the default for one-shot multi-layer effects.
+
+Start with one root and up to two materially distinct child roles as a reversible **authoring heuristic**, not a Bedrock limit. When a new role is necessary, compare its visual function with the existing emitters before increasing density. For each role, prefer a shared atlas if the rendering contract permits, validate all references and avoid event recursion or unbounded lifetime. Use `emitter` vs `emitter_bound` only with known attachment semantics. Apply changes with existing `set_event`, `patch`, and `set_component`; preserve existing unrelated event definitions and timing.
+
+The existing `analyzeBedrockParticlePack` computes a read-only `composition_workload` from independently inspected numeric single-emitter counts. Its subtotal **is not** the instantaneous concurrency, multiplied child emission, FPS, or visual quality. Unknown MoLang and cycles remain review cases. Do not preview every child automatically in Blockbench: its Particle Studio deliberately owns one emitter and pauses high/nested preview. Validate children individually, wire the root once, inspect the complete pack when available, and attach only the intended root effect at the known Animation time.
+
+Official event semantics: https://learn.microsoft.com/en-us/minecraft/creator/reference/content/particlesreference/particlecomponents/minecraftemitter_lifetime_events?view=minecraft-bedrock-stable and https://learn.microsoft.com/en-us/minecraft/creator/reference/content/particlesreference/particleeffectevents?view=minecraft-bedrock-stable.
+
 ## 6. Choose the knowledge bundle after pattern selection
 
 Start from the causal owner implied by the selected physical problem.

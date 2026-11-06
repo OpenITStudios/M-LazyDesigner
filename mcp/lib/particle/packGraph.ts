@@ -37,6 +37,16 @@ export type ParticlePackAnalysis = {
   identifiers: string[];
   dependency_edges: ParticleDependencyEdge[];
   dependency_cycles: string[][];
+  /** Sum of isolated single-emitter numeric estimates, NEVER predicted game FPS. */
+  composition_workload: {
+    state: "single_instance_numeric" | "partial" | "cycle_review";
+    numeric_effect_count: number;
+    unevaluated_effect_count: number;
+    known_single_instance_particle_sum: number;
+    child_dependency_count: number;
+    budget_review: boolean;
+    runtime_fps_verified: false;
+  };
   texture_dependencies: string[];
   sound_dependencies: string[];
   diagnostics: ParticlePackDiagnostic[];
@@ -319,6 +329,26 @@ export function analyzeBedrockParticlePack(input: ParticlePackAnalysisInput): Pa
     }
   }
 
+  // Only existing summaries: no additional reads, GPU work or nested
+  // renderer simulation. Trigger multiplicity cannot be reconstructed here.
+  const estimates = [...summaries.values()].map(s =>
+    s.preview_workload.estimated_active_particles);
+  const subtotal = estimates.reduce<number>((sum, count) =>
+    count === null ? sum : Math.min(Number.MAX_SAFE_INTEGER, sum + count), 0);
+  const unknown = estimates.filter(value => value === null).length;
+  const missingChild = edges.some(edge => !known.has(edge.to));
+  const compositionWorkload: ParticlePackAnalysis["composition_workload"] = {
+    state: cycles.length ? "cycle_review"
+      : unknown || missingChild ? "partial" : "single_instance_numeric",
+    numeric_effect_count: estimates.length - unknown,
+    unevaluated_effect_count: unknown,
+    known_single_instance_particle_sum: subtotal,
+    child_dependency_count: edges.length,
+    budget_review: cycles.length > 0 || missingChild || edges.length > 3 ||
+      subtotal > 256 ||
+      [...summaries.values()].some(s => s.preview_workload.state !== "within_budget"),
+    runtime_fps_verified: false,
+  };
   const diagnostics = finalizeDiagnostics(diagnosticState);
   return {
     particle_count: input.particles.length,
@@ -326,6 +356,7 @@ export function analyzeBedrockParticlePack(input: ParticlePackAnalysisInput): Pa
     identifiers,
     dependency_edges: edges,
     dependency_cycles: cycles,
+    composition_workload: compositionWorkload,
     texture_dependencies: stableUnique(textureDependencies),
     sound_dependencies: stableUnique(soundDependencies),
     diagnostics,

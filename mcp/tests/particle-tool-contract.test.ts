@@ -193,5 +193,9 @@ describe("particle reference resource contract", () => {
     ]);
     expect((getParticleReferencePayload("materials") as any).materials.particles_base).toBeTruthy();
     expect((getParticleReferencePayload("molang") as any).variables["variable.particle_age"]).toBeTruthy();
+    const composed = (getParticleReferencePayload("workflow") as any).composed_effects;
+    expect(composed.mode).toBe("SMALL_EXISTING_EVENT_GRAPH_NO_AUTOMATIC_MULTI_PREVIEW");
+    expect(composed.author.join(" ")).toContain("minecraft:emitter_lifetime_events");
+    expect(composed.efficiency.join(" ")).toContain("One native Studio preview owner");
   });
 });

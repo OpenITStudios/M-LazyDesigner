@@ -109,6 +109,23 @@ const PARTICLE_WORKFLOW_REFERENCE = {
     "save verified .particle.json",
     "bind through manage_animation_effects with explicit time/effect and locator when attachment is required",
   ],
+  composed_effects: {
+    mode: "SMALL_EXISTING_EVENT_GRAPH_NO_AUTOMATIC_MULTI_PREVIEW",
+    purpose: "Only separate materially distinct physical roles; one emitter with curves first.",
+    author: [
+      "Author each child with manage_particle and preview=false before wiring the root.",
+      "Assign unique IDs and use named particle_effect.events for child emitters.",
+      "For one-shot VFX use minecraft:emitter_lifetime_events.creation_event or timeline seconds; ensure root lifetime reaches all scheduled beats.",
+      "Keep emitter vs emitter_bound ownership explicit; avoid per-particle triggers that multiply full child emitters.",
+      "Inspect each JSON and, when all files are available, the existing pack graph composition_workload.",
+    ],
+    efficiency: [
+      "Start with one root and at most two distinct child roles as a reversible heuristic, never a universal Bedrock limit.",
+      "Recheck alpha/overdraw, collision, rate*lifetime cap and nested event cycles before increasing density.",
+      "One native Studio preview owner remains; expensive or nested auto-preview is paused, not silently simplified.",
+      "The pack subtotal excludes repeated event activations and is NOT a measured peak count or FPS.",
+    ],
+  },
   ownership: {
     particle_asset: "inspect_particle / manage_particle",
     texture_canvas: "create_texture",
