@@ -42,16 +42,19 @@ export function assessParticlePreviewWorkload(
     : nonnegative(looping.sleep_time);
   const period = looping && active !== null && sleep !== null
     ? active + sleep : null;
+  // Clamp arithmetic before exposing it to a JSON receipt. Finite authored
+  // values can overflow on division/multiplication; zero * Infinity is NaN.
   const loopedRate = looping && count !== null && period !== null && period > 0
-    ? count / period : null;
+    ? Math.min(Number.MAX_SAFE_INTEGER, count / period) : null;
   const estimated = count !== null
     ? looping
       ? period !== null && period > 0 && seconds !== null
-        ? Math.min(Number.MAX_SAFE_INTEGER, count * Math.ceil(seconds / period))
+        ? count === 0 ? 0
+          : Math.min(Number.MAX_SAFE_INTEGER, count * Math.ceil(seconds / period))
         : null
       : count
     : spawnRate !== null && seconds !== null
-      ? Math.min(spawnRate * seconds, cap ?? Infinity) : null;
+      ? Math.min(Number.MAX_SAFE_INTEGER, spawnRate * seconds, cap ?? Number.MAX_SAFE_INTEGER) : null;
   const identifier = object(effect?.description)?.identifier;
   let state: ParticlePreviewWorkload["state"] = estimated === null
     ? "unestimated" : "within_budget";
@@ -66,11 +69,13 @@ export function assessParticlePreviewWorkload(
     state = "manual_only";
     reason = "looping burst period or particle lifetime cannot be estimated numerically";
   } else if ((estimated !== null && estimated > 1024) ||
-             (spawnRate !== null && spawnRate > 5000)) {
+             (spawnRate !== null && spawnRate > 5000) ||
+             (loopedRate !== null && loopedRate > 5000)) {
     state = "blocked";
     reason = "particle population or emission rate exceeds manual preview ceiling";
   } else if (children.length || (estimated !== null && estimated > 256) ||
-             (spawnRate !== null && spawnRate > 500)) {
+             (spawnRate !== null && spawnRate > 500) ||
+             (loopedRate !== null && loopedRate > 500)) {
     state = "manual_only";
     reason = children.length
       ? "child-effect population is outside the single-emitter estimate"

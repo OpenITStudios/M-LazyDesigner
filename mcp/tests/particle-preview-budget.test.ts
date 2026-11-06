@@ -139,6 +139,42 @@ describe("single-emitter authoring viewport workload (no FPS claims)", () => {
     expect(inspectParticleDocument(invalid).preview_workload.state).toBe("blocked");
   });
 
+  test("fast low-population loops still respect spawn-work budgets and remain finite", () => {
+    const base = applyParticleOperations(createParticleDocument({
+      identifier: "test:rapid_small", preset: "burst",
+    }), [
+      { op: "patch", path: ["components", "minecraft:emitter_rate_instant", "num_particles"],
+        value: 1 },
+      { op: "set_component", component: "minecraft:emitter_lifetime_looping",
+        value: { active_time: 0.001, sleep_time: 0 } },
+      { op: "remove_component", component: "minecraft:emitter_lifetime_once" },
+      { op: "patch", path: ["components", "minecraft:particle_lifetime_expression", "max_lifetime"],
+        value: 0.001 },
+    ]);
+    const manual = inspectParticleDocument(base).preview_workload;
+    expect(manual).toMatchObject({
+      estimated_active_particles: 1, looped_burst_particles_per_second: 1000,
+      state: "manual_only",
+    });
+    const blocked = applyParticleOperations(base, [
+      { op: "patch", path: ["components", "minecraft:emitter_lifetime_looping", "active_time"],
+        value: 0.0001 },
+    ]);
+    expect(inspectParticleDocument(blocked).preview_workload.state).toBe("blocked");
+    const hugeRange = applyParticleOperations(base, [
+      { op: "patch", path: ["components", "minecraft:emitter_rate_instant", "num_particles"],
+        value: 0 },
+      { op: "patch", path: ["components", "minecraft:particle_lifetime_expression", "max_lifetime"],
+        value: 1e308 },
+      { op: "patch", path: ["components", "minecraft:emitter_lifetime_looping", "active_time"],
+        value: 1e-308 },
+    ]);
+    const finite = inspectParticleDocument(hugeRange).preview_workload;
+    expect(finite.estimated_active_particles).toBe(0);
+    expect(finite.looped_burst_particles_per_second).toBe(0);
+    expect(Number.isFinite(finite.estimated_active_particles)).toBe(true);
+  });
+
   test("repeating bursts are game-cost risks even with a tiny per-burst population", () => {
     const source = applyParticleOperations(createParticleDocument({
       identifier: "test:loop_burst", preset: "burst",
