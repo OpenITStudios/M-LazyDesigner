@@ -1,4 +1,5 @@
 import type { CompiledMotionRecipe, MotionPchipTarget, MotionVec3 } from "@/lib/animation/motionRecipe";
+import { eulerArcNeedsExplicitIntent } from "@/lib/animation/rotationArc";
 
 export type AnimationMotionChannel = "position" | "rotation" | "scale";
 
@@ -123,6 +124,21 @@ function analyzeTrack(track: AnimationMotionTrackInput) {
     };
   }
   const samples = sorted;
+  // A 170 -> -170 (or 0 -> 360) key pair is not proof of a 20-degree
+  // shortest-path rotation. Without explicit winding/interpolation evidence,
+  // angular velocity, jerk and path length must remain unavailable.
+  if (track.channel === "rotation" && samples.some((sample, index) =>
+    index > 0 && eulerArcNeedsExplicitIntent(samples[index - 1].value, sample.value)
+  )) {
+    return {
+      state: "unavailable" as const,
+      reason: "ambiguous_euler_rotation_path" as const,
+      group_uuid: track.group_uuid,
+      group_name: track.group_name,
+      channel: track.channel,
+      numeric_keyframes: samples.length,
+    };
+  }
 
   if (samples.length < 2) {
     return {

@@ -146,7 +146,7 @@ describe("Bedrock animation native intelligence", () => {
     ).toBe(false);
   });
 
-  test("motion dynamics use shortest rotation deltas and bounded numeric evidence", () => {
+  test("motion dynamics withhold unverified Euler winding and keep clean position evidence", () => {
     const result = analyzeAnimationMotionDynamics({
       loop_mode: "loop",
       tracks: [
@@ -178,7 +178,32 @@ describe("Bedrock animation native intelligence", () => {
     const head = result.examples.find((entry) => entry.group_uuid === "head");
     expect(root?.path_length).toBe(16);
     expect(root?.boundary_velocity_delta).toBe(0);
-    expect(head?.path_length).toBe(20);
+    expect(head).toBeUndefined();
+    expect(result.unevaluated_track_count).toBe(1);
+    expect(result.unevaluated_examples[0]).toMatchObject({
+      group_uuid: "head", reason: "ambiguous_euler_rotation_path",
+    });
+  });
+
+  test("Euler half turns and full revolutions are not silently measured as shortest arcs", () => {
+    for (const endpoint of [180, -180, 270, 360]) {
+      const result = analyzeAnimationMotionDynamics({
+        loop_mode: "once",
+        tracks: [{
+          group_uuid: "wheel", group_name: "wheel", channel: "rotation",
+          keyframes: [{ time: 0, value: [0, 0, 0] }, { time: 1, value: [0, endpoint, 0] }],
+        }],
+      });
+      expect(result.state).toBe("unavailable");
+      expect(result.unevaluated_examples[0].reason).toBe("ambiguous_euler_rotation_path");
+    }
+    const safe = analyzeAnimationMotionDynamics({
+      loop_mode: "once",
+      tracks: [{ group_uuid: "arm", group_name: "arm", channel: "rotation",
+        keyframes: [{ time: 0, value: [0, 0, 0] }, { time: 1, value: [0, 20, 0] }] }],
+    });
+    expect(safe.state).toBe("available");
+    if (safe.state === "available") expect(safe.examples[0].path_length).toBe(20);
   });
 
   test("motion diagnostics never bridge expressions and report bounded omissions", () => {

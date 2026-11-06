@@ -274,6 +274,34 @@ describe("usage-efficient authoring intelligence", () => {
     );
   });
 
+  test("full-turn Euler loop endpoints require arc review instead of a false continuous seam", () => {
+    const result = analyzeAnimationQuality({
+      loop_mode: "loop", length: 1,
+      tracks: [{
+        group_uuid: "wheel", group_name: "wheel", is_root: false,
+        channel: "rotation",
+        keyframes: [{ time: 0, value: [0, 0, 0] }, { time: 1, value: [0, 360, 0] }],
+      }],
+    });
+    expect(result.state).toBe("available");
+    if (result.state !== "available") throw new Error("expected quality diagnostics");
+    expect(result.loop_seam.numeric_evaluated_track_count).toBe(0);
+    expect(result.loop_seam.review_track_count).toBe(1);
+    expect(result.loop_seam.unresolved_rotation_arc_track_count).toBe(1);
+    expect(result.loop_seam.examples[0]).toMatchObject({
+      classification: "rotation_arc_unresolved", delta: null, delta_magnitude: null,
+    });
+
+    const keys = [0, 90, 180].map((value, index) => ({
+      time: index * 0.5, value: [0, value, 0],
+      interpolation: "linear", has_multiple_data_points: false,
+    }));
+    expect(planLinearKeyframeReduction("rotation", keys).candidate_count).toBe(0);
+    expect(planLinearKeyframeReduction("rotation", [
+      ...keys.map((key, index) => ({ ...key, value: [0, index * 10, 0] })),
+    ]).candidate_count).toBe(1);
+  });
+
   test("create-animation compaction removes exact collinear channel keys without changing other tracks", () => {
     const original = [0, 0.25, 0.5, 0.75, 1].map((time) => ({
       time,

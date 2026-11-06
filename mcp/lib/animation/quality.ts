@@ -1,3 +1,5 @@
+import { eulerArcNeedsExplicitIntent } from "@/lib/animation/rotationArc";
+
 export type AnimationQualityChannel = "position" | "rotation" | "scale";
 
 export type AnimationQualityTrackInput = {
@@ -105,11 +107,10 @@ export function planLinearKeyframeReduction(
   const protectedTimes = new Set(options.protected_times ?? []);
   const candidates = new Set<number>();
   let maxError = 0;
-  const difference = (a: number, b: number) =>
-    Math.max(...[0, 1, 2].map((axis) => Math.abs(numeric[a][axis] - numeric[b][axis])));
   const projectedError = (start: number, middle: number, end: number) => {
-    // Euler wrap is unsafe without native-specific shortest-path evaluation.
-    if (channel === "rotation" && difference(start, end) > 180) return Infinity;
+    // Even exactly 180 degrees or a complete turn is not a safe reduction
+    // interval without a proved native Euler winding/interpolation contract.
+    if (channel === "rotation" && eulerArcNeedsExplicitIntent(numeric[start], numeric[end])) return Infinity;
     const fraction = (frames[middle].time - frames[start].time) /
       (frames[end].time - frames[start].time);
     return Math.max(...[0, 1, 2].map((axis) => Math.abs(
@@ -248,6 +249,7 @@ export function analyzeAnimationQuality(input: {
   let nonNumericBoundaryCount = 0;
   let reviewSeamCount = 0;
   let numericEvaluatedCount = 0;
+  let unresolvedRotationArcCount = 0;
   let insufficientKeyCount = 0;
 
   for (const track of input.tracks) {
@@ -299,6 +301,20 @@ export function analyzeAnimationQuality(input: {
       continue;
     }
 
+    if (track.channel === "rotation" && eulerArcNeedsExplicitIntent(start, end)) {
+      unresolvedRotationArcCount += 1;
+      reviewSeamCount += 1;
+      loopTrackDiagnostics.push({
+        group_uuid: track.group_uuid,
+        group_name: track.group_name,
+        channel: track.channel,
+        root_track: track.is_root,
+        delta: null,
+        delta_magnitude: null,
+        classification: "rotation_arc_unresolved",
+      });
+      continue;
+    }
     const delta = vectorDelta(track.channel, start, end);
     numericEvaluatedCount += 1;
     const deltaMagnitude = magnitude(delta);
@@ -333,13 +349,14 @@ export function analyzeAnimationQuality(input: {
     loop_seam: {
       applicable: input.loop_mode === "loop",
       numeric_evaluated_track_count: numericEvaluatedCount,
+      unresolved_rotation_arc_track_count: unresolvedRotationArcCount,
       insufficient_key_track_count: insufficientKeyCount,
       review_track_count: reviewSeamCount,
       boundary_missing_track_count: boundaryMissingCount,
       non_numeric_boundary_track_count: nonNumericBoundaryCount,
       examples: loopTrackDiagnostics.slice(0, exampleLimit),
       examples_truncated: loopTrackDiagnostics.length > exampleLimit,
-      note: "Numeric endpoint comparison only, not interpolation, playback, contact, foot sliding or weight evaluation. Expressions and insufficient keys remain unevaluated, not passing. Root position displacement is locomotion evidence, not a seam defect.",
+      note: "Numeric endpoint comparison only, not interpolation, playback, contact, foot sliding or weight evaluation. A +/-180-degree or greater authored Euler arc is unresolved, not a measured shortest-path seam. Expressions and insufficient keys remain unevaluated. Root position displacement is locomotion evidence, not a seam defect.",
     },
     keyframe_efficiency: {
       candidate_track_count: candidateTrackCount,

@@ -142,6 +142,8 @@ Interpolation is a means, not a quality target. Prefer the simplest interpolatio
 
 ## Procedural Math / Molang
 
+For a real mathematical choice (time/travel phase, angular arc, easing/derivatives, sampled motion, contact/IK, spring response, or effect synchronization), consult the focused [Animation Math & Motion Reference](math-motion-reference.md). It is a **conditional engineering reference**, not a second policy/solver, mandatory preloaded corpus, new public capability, or native-motion verifier. Select the smallest applicable formula and its rejection gates; protect approved key poses and actual Blockbench/Bedrock semantics over elegant mathematics.
+
 Molang may own transform values, animation timing, blend behavior, controller conditions, and effect scripts when the runtime cause is mathematical or reactive. LazyDesigner preserves authored text; it must not evaluate gameplay truth or invent unknown query values. Explicit authored poses retain identity-critical action/contact/silhouette ownership when procedural math is not the real motion cause.
 
 Molang trigonometric functions use degrees. `q.`, `v.`, `t.`, and `c.` are aliases for query/variable/temp/context namespaces.
