@@ -49,6 +49,66 @@ describe("single-emitter authoring viewport workload (no FPS claims)", () => {
       state: "unestimated", estimated_active_particles: null,
     });
   });
+  test("game review detects blended overdraw independently of preview admission", () => {
+    const source = applyParticleOperations(createParticleDocument({
+      identifier: "test:large_smoke", preset: "steady", material: "particles_blend",
+    }), [
+      { op: "patch", path: ["components", "minecraft:emitter_rate_steady", "spawn_rate"], value: 48 },
+      { op: "patch", path: ["components", "minecraft:emitter_rate_steady", "max_particles"], value: 200 },
+      { op: "patch", path: ["components", "minecraft:particle_lifetime_expression", "max_lifetime"], value: 3 },
+      { op: "patch", path: ["components", "minecraft:particle_appearance_billboard", "size"], value: [1, 1] },
+    ]);
+    const original = JSON.stringify(source);
+    const result = inspectParticleDocument(source);
+    expect(result.preview_workload.state).toBe("within_budget");
+    expect(result.game_cost).toMatchObject({
+      state: "REVIEW_FACTORS", estimated_single_emitter_particles: 144,
+      scope: "single_effect_source_only", device_fps_verified: false,
+      visual_quality_verified: false, scene_concurrency_verified: false,
+    });
+    expect(result.game_cost.cost_drivers).toContain("translucent_billboard_overdraw_potential");
+    expect(result.game_cost.cost_drivers).toContain("high_single_emitter_population");
+    expect(JSON.stringify(source)).toBe(original);
+  });
+
+  test("game review identifies costly effects without auto-changing required visuals", () => {
+    const source = applyParticleOperations(createParticleDocument({ identifier: "test:math" }), [
+      { op: "set_component", component: "minecraft:particle_motion_collision",
+        value: { enabled: true, collision_radius: 0.1 } },
+      { op: "set_component", component: "minecraft:particle_initialization",
+        value: { per_render_expression: "variable.a = math.sin(variable.particle_age);" } },
+      { op: "set_component", component: "minecraft:particle_motion_parametric",
+        value: { relative_position: [0, "variable.particle_age", 0] } },
+      { op: "remove_component", component: "minecraft:particle_motion_dynamic" },
+    ]);
+    const drivers = inspectParticleDocument(source).game_cost.cost_drivers;
+    expect(drivers).toContain("particle_collision_cost");
+    expect(drivers).toContain("parametric_motion_update_cost");
+    expect(drivers).toContain("render_expression_or_curve_cost");
+  });
+
+  test("game review refuses to treat unknown Molang counts as low game cost", () => {
+    const dynamic = applyParticleOperations(createParticleDocument({
+      identifier: "test:unknown", preset: "steady",
+    }), [
+      { op: "patch", path: ["components", "minecraft:emitter_rate_steady", "spawn_rate"],
+        value: "variable.spawn_from_host" },
+      { op: "patch", path: ["components", "minecraft:emitter_rate_steady", "max_particles"],
+        value: "variable.cap_from_host" },
+    ]);
+    const review = inspectParticleDocument(dynamic).game_cost;
+    expect(review.state).toBe("REVIEW_FACTORS");
+    expect(review.estimated_single_emitter_particles).toBeNull();
+    expect(review.cost_drivers).toContain("numeric_emission_unestimated");
+    expect(review.cost_drivers).toContain("steady_cap_not_numeric");
+    expect(review.device_fps_verified).toBe(false);
+    expect(inspectParticleDocument(createParticleDocument({
+      identifier: "test:ordinary",
+    })).game_cost).toMatchObject({
+      state: "NO_STATIC_RISKS_FLAGGED", device_fps_verified: false,
+    });
+  });
+
   test("nested effects require manual review and direct recursion blocks native preview", () => {
     const nested = (target: string) => applyParticleOperations(
       createParticleDocument({ identifier: "test:root", preset: "burst" }), [

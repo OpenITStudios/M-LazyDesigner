@@ -671,8 +671,12 @@ export function studioPreviewStatus(
   if (!active.emitter.enabled || count === 0) {
     return "No active particles at this instant. Check emitter lifetime, emission and timeline.";
   }
+  const gameCostNote = summary.game_cost.cost_drivers.length > 0
+    ? " Game cost review: " + summary.game_cost.cost_drivers.slice(0, 3).join(", ") +
+      (summary.game_cost.cost_drivers.length > 3 ? " (more in inspector)" : "") + "."
+    : " No obvious static game-cost risk flagged; FPS is still unverified.";
   return count + " active particle(s)" + (active.dirty ? " (unsaved preview)" : "") +
-    "; actual viewport appearance remains unverified.";
+    "; actual viewport appearance remains unverified." + gameCostNote;
 }
 
 export async function attachStudioParticle(project: ModelProject, loaded: StudioEffect, locatorName: string): Promise<string> {

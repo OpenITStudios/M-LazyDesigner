@@ -26,6 +26,23 @@ how many particles exist
 
 No single field is a complete performance metric.
 
+## Game/runtime cost versus editor-preview cost — mandatory separation
+
+**Target goal:** reference-matched, readable and intentional VFX *at an acceptable cost in the actual Minecraft scene*. The earlier 256/1024 limits are **editor preview admission thresholds only**. Do not present them as Minecraft performance limits, automatically reduce authored particles to those values, or equate native Blockbench emitter count with game FPS.
+
+The existing `inspectParticleDocument` now provides **`game_cost`** alongside `preview_workload`, without a new renderer or frame loop. It is a low-overhead, static source review of the selected effect. Flags cover numeric population/rate/lifetime, missing or nonnumeric steady cap, potential large additive/blended billboard coverage, collision, parametric motion, per-render expressions/curves, and nested child-event fan-out. An unestimated rate, lifetime, or MoLang field is **UNKNOWN**, not automatically efficient. `NO_STATIC_RISKS_FLAGGED` means no heuristic source condition was detected, **not** game readiness or visual approval.
+
+**Creative/performance optimization order (quality-preserving):**
+
+1. Identify the exact artistic job of each layer (readable impact silhouette, energetic streak, dust tail, ambient cue). Remove redundant invisible or visually duplicated work **before** weakening the focal burst.
+2. Improve shape/contrast/alpha/atlas framing so **fewer** well-designed particles communicate the same effect. Prefer one intentional flash/ring sprite over a dense, overlapping luminous cloud when the approved reference supports that choice.
+3. Choose the shortest lifetime and spawn cadence that still preserve continuity; set an explicit reasonable cap where possible. A cap limits active population, **not** necessarily spawn/update overhead.
+4. Reduce large overlapping blended/additive sprites, unnecessary collision, expensive per-render MoLang, and uncontrolled per-particle child effects. Use emitter-time events for shared one-shot phases, not one full child emitter for every parent particle unless intentional.
+5. Consider actual concurrent use: copies per mob, projectiles, players, arenas, near-camera effects and simultaneous activations. One efficient emitter multiplied dozens of times may be expensive. No exact concurrency may be invented.
+6. Judge the **same** game target at matched viewing distance, scene count, settings and device class: preserve readability and event timing while measuring representative frame-time/FPS and observing worst-case overlaps. Texture/alpha quality and game parity require visual evidence; static diagnostics cannot certify them.
+
+**No automatic visual downgrading:** `game_cost` is advisory. It must not mutate particle JSON, replace authored material, strip a curve, remove an effect layer, change event timing, force a global spawn cap, or prevent Save merely to obtain a small metric.
+
 ## Visible population estimate
 
 **HEURISTIC**

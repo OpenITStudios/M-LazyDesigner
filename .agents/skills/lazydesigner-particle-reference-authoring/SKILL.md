@@ -216,6 +216,10 @@ This is Snowstorm/Wintersky-targeted compatibility guidance, not a generic Bedro
 
 Before final JSON, resolve only what is material: billboard orientation follows visual role (camera-facing vs direction-aligned); static UV vs flipbook is explicit; flipbook timing has one owner (`frames_per_second` or `stretch_to_lifetime`); emitter `activation_expression` owns emission state, not living-particle age progression. Physical travel stays in motion components, never flipbook animation.
 
+## In-game quality-to-cost discipline
+
+An effect is not professionally finished merely because it looks good in Snowstorm/Blockbench, nor because it has a small emitter count. For a production Minecraft effect, preserve its visual role, contrast, silhouette and causal timing while inspecting the existing `game_cost` diagnostics. Start with redundant/occluded particles, excess lifetime, large overlapping translucent billboards, collision and per-particle child-event fan-out. Avoid inventing exact target device, number of simultaneous mobs/effects, measured FPS or real in-game screenshots. `preview_workload` protects **the editor only**, not game performance. A static source review never overrides quality or prevents a needed visual layer; target-game FPS and visual approval remain UNVERIFIED until observed.
+
 ## Single-pass QA rule
 
 Near finalization, run only applicable `qa.md` gates once. After a targeted revision, rerun the causal QA gate; rerun package-integrity checks only when a package exists.

@@ -46,6 +46,9 @@ export type ParticlePackAnalysis = {
     child_dependency_count: number;
     budget_review: boolean;
     runtime_fps_verified: false;
+    /** Risk across the selected files; not concurrent scene/gameplay cost. */
+    game_cost_review_effect_count: number;
+    game_cost_drivers: string[];
   };
   texture_dependencies: string[];
   sound_dependencies: string[];
@@ -348,6 +351,14 @@ export function analyzeBedrockParticlePack(input: ParticlePackAnalysisInput): Pa
       subtotal > 256 ||
       [...summaries.values()].some(s => s.preview_workload.state !== "within_budget"),
     runtime_fps_verified: false,
+    game_cost_review_effect_count: [...summaries.values()].filter(
+      summary => summary.game_cost.cost_drivers.length > 0
+    ).length,
+    // Bounded, deduplicated and deterministic. Reuse the already-computed
+    // document summaries rather than evaluating new event graph simulations.
+    game_cost_drivers: stableUnique(
+      [...summaries.values()].flatMap(summary => summary.game_cost.cost_drivers)
+    ).slice(0, 11),
   };
   const diagnostics = finalizeDiagnostics(diagnosticState);
   return {

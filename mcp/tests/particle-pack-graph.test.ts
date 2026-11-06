@@ -60,6 +60,23 @@ describe("Bedrock particle pack dependency analysis", () => {
     });
   });
 
+  test("multi-layer review aggregates factors without pretending to measure game FPS", () => {
+    const dense = applyParticleOperations(nestedParticle("blockit:dense"), [
+      { op: "patch", path: ["components", "minecraft:particle_lifetime_expression", "max_lifetime"],
+        value: 4 },
+      { op: "set_component", component: "minecraft:particle_motion_collision",
+        value: { enabled: true, collision_radius: 0.1 } },
+    ]);
+    const root = nestedParticle("blockit:root", "blockit:dense");
+    const report = analyzeBedrockParticlePack({ particles: [
+      { document: root }, { document: dense },
+    ] });
+    expect(report.composition_workload.game_cost_review_effect_count).toBe(2);
+    expect(report.composition_workload.game_cost_drivers).toContain("nested_effect_activation_cost");
+    expect(report.composition_workload.game_cost_drivers).toContain("particle_collision_cost");
+    expect(report.composition_workload.runtime_fps_verified).toBe(false);
+  });
+
   test("missing MoLang count and cycle paths remain reviewable, not fabricated FPS", () => {
     const dynamic = applyParticleOperations(nestedParticle("blockit:dynamic"), [
       { op: "patch", path: ["components", "minecraft:particle_lifetime_expression", "max_lifetime"],

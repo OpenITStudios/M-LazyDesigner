@@ -104,11 +104,13 @@ This is not a substitute for Minecraft collision/attachment simulation.
 
 When target viewing distance matters, use particle size versus distance only as a warning signal. FOV, display resolution, contrast, alpha, motion, background, and scene salience remain visual-review concerns.
 
-## Gate 10 — Performance budget — conditional heuristic
+## Gate 10 — Visual quality **and in-game performance** — conditionally required before game-readiness
 
-Estimate conservative visible load from available spawn-rate/lifetime/max-particle/event-fan-out information. Include translucent overdraw, collision, Molang, nested effects, and large billboards when material.
+**Goal:** effects must communicate the approved role clearly **without** avoidable Minecraft runtime cost. The Blockbench preview threshold is not the game budget. Review `inspect_particle.summary.game_cost` and, when multiple effects are available, `analyzeBedrockParticlePack.composition_workload.game_cost_drivers`. Report flags and unknowns, not a fabricated performance score.
 
-Do not claim FPS or device performance from static estimates.
+Check the relevant physical facts: spawn rate × lifetime versus numeric cap, sustained emitters, blend/additive billboard screen-coverage risk, collision/parametric/per-render complexity, event/child multiplicity and **how many instances may coexist** during actual gameplay. Unknown MoLang, viewing distance and target device remain unresolved. Begin optimization with redundant/occluded work, alpha/texture readability, excess lifetime, overlap and fan-out. Preserve focal flash, silhouette, important animation timing and stylistic consistency; do not reduce quality solely to make a static count smaller.
+
+**Acceptance is separate:** reference-matched visual readability, correct in-game particle/event behavior and target-hardware frame-time/FPS evidence under representative concurrent load. Until those are observed, status is `GAME_PERFORMANCE_UNVERIFIED` and `VISUAL_QUALITY_UNVERIFIED` even when JSON/schema and static cost checks are clear. Do not demand tests while the user test hold is active; retain the evidence boundary.
 
 ## Gate 11 — Package integrity
 
