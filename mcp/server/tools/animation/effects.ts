@@ -28,6 +28,34 @@ type EffectPointSnapshot = {
   file: string;
 };
 
+/**
+ * Use only the unique native-loaded particle identity when making a new
+ * animation effect. A Bedrock short name is not a filesystem identity.
+ * Ambiguous or absent matches remain exportable but unpreviewed.
+ */
+export function resolveUniqueParticlePreviewFile(
+  effect: string,
+  entries: readonly { path: string; identifier: string }[]
+): string | null {
+  const name = effect.trim();
+  if (!name) return null;
+  const matches = entries.filter(({ path, identifier }) =>
+    Boolean(path && identifier) &&
+    (identifier === name || (!name.includes(":") && identifier.split(":")[1] === name))
+  );
+  return matches.length === 1 ? matches[0].path : null;
+}
+
+function loadedParticlePreviewFile(effect: string): string | null {
+  if (typeof Animator === "undefined") return null;
+  const loaded = (Animator as unknown as {
+    particle_effects?: Record<string, { config?: { identifier?: string } }>;
+  }).particle_effects ?? {};
+  return resolveUniqueParticlePreviewFile(effect, Object.entries(loaded).map(
+    ([path, entry]) => ({ path, identifier: entry?.config?.identifier ?? "" })
+  ));
+}
+
 const meaningfulTextSchema = (label: string) =>
   z.string().refine((value) => value.trim().length > 0, {
     message: `${label} must contain a non-whitespace authored value.`,
@@ -316,6 +344,9 @@ export function registerAnimationEffectTools() {
             if (operation.operation === "add") {
               const targetTime = snappedTime!;
               const snapshot = applyEffectPayload(operation.channel, { effect: "", locator: "", bind_to_actor: true, script: "", file: "" }, operation);
+              if (operation.channel === "particle") {
+                snapshot.file = loadedParticlePreviewFile(snapshot.effect) ?? "";
+              }
               const effects = ensureEffects();
               // Same-time collision parity with particle/sound: merge into
               // the existing keyframe instead of stacking silent duplicates.
@@ -385,6 +416,10 @@ export function registerAnimationEffectTools() {
             }
 
             const next = applyEffectPayload(operation.channel, effectPointSnapshot(point), operation);
+            if (operation.channel === "particle" && operation.effect !== undefined) {
+              // Never keep a stale preview file for a renamed effect.
+              next.file = loadedParticlePreviewFile(next.effect) ?? "";
+            }
             if (snappedTime !== undefined && !animationEffectSameTime(snappedTime, keyframe.time)) {
               if (keyframe.data_points.length === 1) keyframe.remove();
               else keyframe.data_points.splice(runtimeIndex, 1);
@@ -392,6 +427,9 @@ export function registerAnimationEffectTools() {
               if (!moved) throw new Error(`Could not move ${operation.channel} effect data point.`);
               results.push(animationEffectContinuationState(operation.channel, moved, 0));
             } else {
+              if (operation.channel === "particle" && operation.effect !== undefined) {
+                point.file = next.file;
+              }
               writeSnapshot(point, operation.channel, next);
               results.push(animationEffectContinuationState(operation.channel, keyframe, keyframe.data_points.indexOf(point)));
             }

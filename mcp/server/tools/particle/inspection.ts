@@ -151,5 +151,17 @@ export function loadNativeParticlePreview(
   content: string
 ): void {
   assertNativeParticlePreviewAvailable();
-  Animator.loadParticleEmitter(path, content);
+  const loaded = Animator.loadParticleEmitter(path, content) as unknown as {
+    config?: {
+      preview_texture?: string;
+      updateTexture?: () => void;
+    };
+  } | undefined;
+  if (!loaded?.config) {
+    throw new Error("Blockbench rejected the particle document; the native preview was not loaded.");
+  }
+  // A reloaded effect can retain the previous preview_texture path even after
+  // a PNG edit. Re-resolve it through Blockbench's own Wintersky scene loader.
+  if ("preview_texture" in loaded.config) delete loaded.config.preview_texture;
+  loaded.config.updateTexture?.();
 }
