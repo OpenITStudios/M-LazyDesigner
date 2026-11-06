@@ -43,7 +43,8 @@ import {
 } from "@/lib/runtime/lifecycle";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
 import {
-  studioDefaults, listStudioParticles, createStudioParticle, openStudioParticle,
+  studioDefaults, listStudioParticles, prepareStudioParticleDraft,
+  createStudioParticle, openStudioParticle,
   saveStudioParticle, studioChangeOperations, startStudioPreview,
   stopStudioPreview, studioPreviewStatus, attachStudioParticle,
   type StudioEffect, type StudioFile, type StudioSettings,
@@ -61,10 +62,12 @@ let studioLiveTimer: ReturnType<typeof setTimeout> | null = null;
 let studioLiveGeneration = 0;
 let studioLiveInputs = 0;
 let studioLiveExecuting = false;
+let studioLivePendingVM: HumanPanelContext | null = null;
 
 function cancelStudioLivePreview(): void {
   studioLiveGeneration += 1;
   studioLiveInputs += 1;
+  studioLivePendingVM = null;
   if (studioLiveTimer !== null) clearTimeout(studioLiveTimer);
   studioLiveTimer = null;
 }
@@ -200,6 +203,7 @@ async function copyPlainText(text: string): Promise<boolean> {
 async function startPanelParticlePreview(
   project: ModelProject, effect: StudioEffect, locator: string,
   settings: StudioSettings = effect.settings, stillCurrent: () => boolean = () => true,
+  replay = false,
 ): Promise<string> {
   const generation = getRuntimeLifecycleSnapshot().owner_generation;
   if (generation === null) throw new Error("LazyDesigner Runtime is unavailable.");
@@ -207,7 +211,7 @@ async function startPanelParticlePreview(
     if (!isRuntimeGenerationCurrent(generation) || Project !== project || !stillCurrent()) {
       throw new Error("Particle preview request became stale before playback.");
     }
-    return startStudioPreview(project, effect, locator, settings);
+    return startStudioPreview(project, effect, locator, settings, replay);
   });
 }
 
@@ -215,6 +219,7 @@ function scheduleStudioLivePreview(vm: HumanPanelContext): void {
   const project = typeof Project === "undefined" ? null : Project;
   const loaded = vm.studioLoaded;
   if (!project || !loaded || vm.studioBusy) return;
+  studioLivePendingVM = vm;
   studioLiveInputs += 1;
   if (studioLiveTimer !== null || studioLiveExecuting) return;
   const generation = studioLiveGeneration;
@@ -225,6 +230,7 @@ function scheduleStudioLivePreview(vm: HumanPanelContext): void {
     if (studioLiveGeneration !== generation || mountedEpoch !== uiEpoch ||
         Project !== project || vm.studioLoaded !== loaded || vm.studioBusy) return;
     const sequence = studioLiveInputs;
+    studioLivePendingVM = null;
     const settings = { ...vm.studioSettings };
     const locator = vm.studioLocator;
     studioLiveExecuting = true;
@@ -247,13 +253,24 @@ function scheduleStudioLivePreview(vm: HumanPanelContext): void {
       }
     }).finally(() => {
       studioLiveExecuting = false;
-      if (studioLiveGeneration === generation && mountedEpoch === uiEpoch &&
-          vm.studioLoaded === loaded && !vm.studioBusy && studioLiveInputs !== sequence) {
-        // One latest-value follow-up, not a queue entry for every slider event.
-        scheduleStudioLivePreview(vm);
+      const next = studioLivePendingVM;
+      // A newer project/editor may have queued its first edit while a retired
+      // request was still draining. Do not starve that latest input.
+      if (next && studioLiveTimer === null) {
+        studioLivePendingVM = null;
+        scheduleStudioLivePreview(next);
       }
     });
   }, 100);
+}
+
+/** User-triggered Create/Open/Replay may enter native Animate mode, not a Stage switch. */
+function enterNativeAnimateMode(): void {
+  const host = globalThis as unknown as {
+    Animator?: { open?: boolean };
+    Modes?: { options?: { animate?: { trigger?: () => void } } };
+  };
+  if (!host.Animator?.open) host.Modes?.options?.animate?.trigger?.();
 }
 
 export function uiSetup(input: UiSetupInput) {
@@ -385,21 +402,24 @@ export function uiSetup(input: UiSetupInput) {
           scheduleStudioLivePreview(this);
         },
         studioStageReady(this: HumanPanelContext): boolean {
-          return this.project.isBedrock && this.project.hasFolder &&
-            getActiveMcpAuthoringStage() === "animation";
+          return this.project.isBedrock && getActiveMcpAuthoringStage() === "animation";
         },
         studioHasChanges(this: HumanPanelContext): boolean {
-          if (!this.studioLoaded) return false;
-          try {
-            return studioChangeOperations(this.studioLoaded, this.studioSettings).length > 0;
-          } catch {
-            // Let Apply report why a manually edited field cannot be persisted.
-            return true;
-          }
+          const loaded = this.studioLoaded;
+          if (!loaded) return false;
+          if (!loaded.path) return true; // New draft has never been saved.
+          // This runs during Vue rendering; never parse JSON on every drag tick.
+          return (["identifier", "emission", "speed", "size", "lifetime", "color"] as const)
+            .some(field => loaded.settings[field] !== this.studioSettings[field]);
         },
         studioRefresh(this: HumanPanelContext): void {
           try {
-            if (!Project) throw new Error("Open and save a Bedrock model first.");
+            if (!Project) throw new Error("Open a Bedrock model first.");
+            if (!this.project.hasFolder) {
+              this.studioFiles = [];
+              this.studioNote = "Save the model first to browse its particle files. New effects can already be previewed.";
+              return;
+            }
             this.studioFiles = listStudioParticles(Project);
             this.studioError = "";
             this.studioNote = this.studioFiles.length
@@ -429,16 +449,15 @@ export function uiSetup(input: UiSetupInput) {
           this.studioError = "";
           this.studioNote = "";
           try {
-            const loaded = await createStudioParticle(project, { ...this.studioSettings });
+            const loaded = prepareStudioParticleDraft(project, { ...this.studioSettings });
             if (epoch !== uiEpoch || Project !== project) return;
+            stopStudioPreview();
             this.studioLoaded = loaded;
             this.studioSettings = { ...loaded.settings };
-            this.studioChoice = loaded.path;
-            this.studioFiles = [...this.studioFiles.filter(file => file.path !== loaded.path),
-              { path: loaded.path, label: loaded.settings.identifier.split(":")[1] }]
-              .sort((a, b) => a.label.localeCompare(b.label));
-            this.studioNote = "Particle created beside the model.";
+            this.studioChoice = "";
+            this.studioNote = "Unsaved particle draft ready. Adjust it and Save Particle when satisfied.";
             try {
+              enterNativeAnimateMode();
               this.studioNote = await startPanelParticlePreview(project, loaded, this.studioLocator);
               this.studioPlaying = true;
             } catch (error) {
@@ -466,6 +485,7 @@ export function uiSetup(input: UiSetupInput) {
             this.studioSettings = { ...loaded.settings };
             this.studioNote = "Particle file loaded. Unsupported advanced fields are preserved.";
             try {
+              enterNativeAnimateMode();
               this.studioNote = await startPanelParticlePreview(project, loaded, this.studioLocator);
               this.studioPlaying = true;
             } catch (error) {
@@ -489,11 +509,23 @@ export function uiSetup(input: UiSetupInput) {
           this.studioBusy = true;
           this.studioError = "";
           try {
-            const updated = await saveStudioParticle(project, loaded, changes);
+            if (!this.project.hasFolder) {
+              throw new Error("Save the model as a .bbmodel before saving the particle file.");
+            }
+            const newParticle = !loaded.path;
+            const updated = newParticle
+              ? await createStudioParticle(project, changes)
+              : await saveStudioParticle(project, loaded, changes);
             if (epoch !== uiEpoch || Project !== project) return;
             this.studioLoaded = updated;
             this.studioSettings = { ...updated.settings };
-            this.studioNote = "Particle settings saved.";
+            this.studioChoice = updated.path;
+            if (newParticle) {
+              this.studioFiles = [...this.studioFiles, {
+                path: updated.path, label: updated.settings.identifier.split(":")[1],
+              }].sort((a, b) => a.label.localeCompare(b.label));
+            }
+            this.studioNote = "Particle file saved. Preview remains separate from disk writes.";
             this.studioPlaying = false;
             try {
               this.studioNote = await startPanelParticlePreview(project, updated, this.studioLocator);
@@ -517,8 +549,10 @@ export function uiSetup(input: UiSetupInput) {
           this.studioBusy = true;
           this.studioError = "";
           try {
+            enterNativeAnimateMode();
             const note = await startPanelParticlePreview(
               project, this.studioLoaded, this.studioLocator, { ...this.studioSettings },
+              () => true, true,
             );
             if (epoch === uiEpoch && Project === project) {
               this.studioPlaying = true;
@@ -550,8 +584,11 @@ export function uiSetup(input: UiSetupInput) {
           this.studioBusy = true;
           this.studioError = "";
           try {
+            if (!this.studioLoaded.path) {
+              throw new Error("Save this particle before attaching to an Animation.");
+            }
             if (studioChangeOperations(this.studioLoaded, this.studioSettings).length) {
-              throw new Error("Apply your changes before attaching this particle.");
+              throw new Error("Save your changes before attaching this particle.");
             }
             const note = await attachStudioParticle(project, this.studioLoaded, this.studioLocator);
             if (epoch === uiEpoch && Project === project) this.studioNote = note;

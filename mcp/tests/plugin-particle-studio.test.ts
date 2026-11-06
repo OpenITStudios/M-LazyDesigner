@@ -4,7 +4,8 @@ import { tools } from "../lib/factories";
 import { getActiveMcpAuthoringStage, setActiveMcpAuthoringStage } from "../lib/capabilities/authoringStage";
 import {
   studioDefaults, studioOutputPath, studioBootstrapOperations, readStudioEffect,
-  studioChangeOperations, compileStudioDraft,
+  studioChangeOperations, compileStudioDraft, prepareStudioParticleDraft,
+  requireStudioCommittedWrite,
   startStudioPreview, stopStudioPreview, studioPreviewStatus,
   type StudioSettings,
 } from "../ui/particleStudio";
@@ -82,6 +83,62 @@ describe("Particle Studio quick authoring contracts", () => {
       .toThrow(/advanced-authored/);
   });
 
+  test("file Save remains successful even if optional native preview fails", () => {
+    const path = "/model/particles/blue.particle.json";
+    expect(() => requireStudioCommittedWrite({
+      valid: true,
+      artifact_ready: true,
+      wrote_to_path: path,
+      preview_load_call: "ERROR",
+      preview_error: "Texture preview did not load",
+    }, path)).not.toThrow();
+    expect(() => requireStudioCommittedWrite({
+      valid: true, artifact_ready: true, wrote_to_path: null,
+      preview_load_call: "INVOKED", preview_error: null,
+    }, path)).toThrow(/not committed/);
+    expect(() => requireStudioCommittedWrite({
+      valid: false, artifact_ready: false, wrote_to_path: path,
+    }, path)).toThrow(/not committed/);
+  });
+
+  test("new effects are previewable drafts without filesystem writes or project save paths", () => {
+    const originalKeys = ["Project", "requireNativeModule"];
+    const descriptors = originalKeys.map(key => Object.getOwnPropertyDescriptor(globalThis, key));
+    const originalTool = Object.getOwnPropertyDescriptor(tools, "manage_particle");
+    const originalStage = getActiveMcpAuthoringStage();
+    const project = { format: { id: "bedrock" } };
+    let fileAccess = 0;
+    try {
+      Object.defineProperty(globalThis, "Project", {
+        configurable: true, value: project,
+      });
+      Object.defineProperty(globalThis, "requireNativeModule", {
+        configurable: true, value: () => { fileAccess++; throw new Error("not permitted"); },
+      });
+      Object.defineProperty(tools, "manage_particle", {
+        configurable: true, value: { enabled: true },
+      });
+      setActiveMcpAuthoringStage("animation");
+
+      const initial = sample({ identifier: "mivubi:splash", preset: "collision_splash", size: 0.2 });
+      const draft = prepareStudioParticleDraft(project as never, initial);
+      expect(draft.path).toBe("");
+      expect(draft.settings.preset).toBe("collision_splash");
+      expect(draft.settings.size).toBe(0.2);
+      expect(draft.content).toContain('"minecraft:particle_motion_collision"');
+      expect(fileAccess).toBe(0);
+    } finally {
+      setActiveMcpAuthoringStage(originalStage);
+      if (originalTool) Object.defineProperty(tools, "manage_particle", originalTool);
+      else Reflect.deleteProperty(tools, "manage_particle");
+      originalKeys.forEach((key, index) => {
+        const descriptor = descriptors[index];
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else Reflect.deleteProperty(globalThis, key);
+      });
+    }
+  });
+
   test("live viewport uses an isolated Wintersky config, never mutates file or Animation source", () => {
     const originalKeys = ["Project", "Animator", "Wintersky", "WinterskyScene", "Locator", "requireNativeModule"];
     const before = originalKeys.map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const);
@@ -92,7 +149,7 @@ describe("Particle Studio quick authoring contracts", () => {
     const project = { format: { id: "bedrock" } };
     const existingConfig = Object.freeze({ texture_source_category: "built_in", sentinel: "animation-unchanged" });
     const constructed: any[] = [];
-    let live = 0, disposed = 0, deleted = 0, written = 0;
+    let live = 0, disposed = 0, deleted = 0, written = 0, fileReads = 0;
     const define = (key: string, value: unknown) =>
       Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
     class FakeConfig {
@@ -121,12 +178,13 @@ describe("Particle Studio quick authoring contracts", () => {
       define("Locator", { all: [] });
       define("Animator", {
         open: true,
-        particle_effects: { [loaded.path]: { config: existingConfig } },
+        // Standalone preview must not require native Animation file registration.
+        particle_effects: {},
       });
       define("WinterskyScene", { global_options: { tick_rate: 30 } });
       define("Wintersky", { Config: FakeConfig, Emitter: FakeEmitter });
       define("requireNativeModule", (name: string) => name === "fs"
-        ? { existsSync: () => true, readFileSync: () => loaded.content,
+        ? { existsSync: () => true, readFileSync: () => { fileReads += 1; return loaded.content; },
             writeFileSync: () => { written += 1; } }
         : name === "path" ? { dirname: () => "/model", join: (...args: string[]) => args.join("/") } : undefined);
       expect(startStudioPreview(project as never, loaded, "", { ...settings, size: 0.3 }))
@@ -136,6 +194,7 @@ describe("Particle Studio quick authoring contracts", () => {
         ["minecraft:particle_appearance_billboard"].size).toEqual([0.3, 0.3]);
       expect(existingConfig.sentinel).toBe("animation-unchanged");
       expect(written).toBe(0);
+      expect(fileReads).toBe(0); // Slider preview must not synchronously read disk.
       expect(() => startStudioPreview(project as never, loaded, "", { ...settings, size: 9 }))
         .toThrow(/Size must be/);
       expect(live).toBe(1); // Invalid draft retains the last valid preview.
@@ -145,11 +204,18 @@ describe("Particle Studio quick authoring contracts", () => {
       expect(deleted).toBe(1);
       expect(disposed).toBe(1);
       expect(studioPreviewStatus(project as never)).toContain("unsaved preview");
+      expect(startStudioPreview(project as never, loaded, "", { ...settings, size: 0.4 }))
+        .toContain("up to date");
+      expect(deleted).toBe(1); // Identical slider values are coalesced.
+      expect(startStudioPreview(project as never, loaded, "", { ...settings, size: 0.4 }, true))
+        .toContain("not saved"); // Explicit Replay resets even with identical settings.
+      expect(deleted).toBe(2);
       stopStudioPreview();
       expect(live).toBe(0);
-      expect(deleted).toBe(2);
-      expect(disposed).toBe(2);
+      expect(deleted).toBe(3);
+      expect(disposed).toBe(3);
       expect(written).toBe(0);
+      expect(fileReads).toBe(0);
     } finally {
       stopStudioPreview();
       setActiveMcpAuthoringStage(beforeStage);
@@ -179,6 +245,12 @@ describe("Particle Studio quick authoring contracts", () => {
     expect(ui).toContain("runRuntimeOperationExclusive(generation");
     expect(panel.match(/@input="studioLiveChanged"/g)).toHaveLength(5);
     expect(panel).toContain('studioRevert');
+    expect(panel).toContain("Preview New Effect");
+    expect(panel).toContain("Save Particle");
+    expect(ui).toContain("prepareStudioParticleDraft(project");
+    expect(ui).toContain("() => true, true");
+    expect(studio).toContain("preview: false");
+    expect(studio).not.toContain('preview_load_call !== "INVOKED"');
     expect(ui).toContain('cancelStudioLivePreview()');
     expect(ui).toContain('studioLiveExecuting');
     expect(ui).toContain('startPanelParticlePreview(');

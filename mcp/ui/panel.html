@@ -29,11 +29,11 @@
     <div class="ld-section-title">Particle Studio</div>
     <p class="ld-description">Create, preview and adjust Bedrock particles here. AI particle generation remains available through your connected client.</p>
     <p v-if="!project.isBedrock" class="ld-empty-state">Open a Bedrock Model project.</p>
-    <p v-else-if="!project.hasFolder" class="ld-empty-state">Save the model once as a .bbmodel before creating particle files.</p>
     <p v-else-if="!studioStageReady()" class="ld-empty-state">Particle tools are available in the Animation stage after the normal authoring handoff.</p>
     <div v-else class="ld-studio-body">
+      <p v-if="!project.hasFolder" class="section-hint">You can preview a new particle before saving the model. Save the .bbmodel before saving the particle file.</p>
       <div class="ld-studio-row">
-        <button class="user-action" type="button" :disabled="studioBusy" @click="studioRefresh">Find Particles</button>
+        <button class="user-action" type="button" :disabled="studioBusy || !project.hasFolder" @click="studioRefresh">Find Particles</button>
         <button class="user-action" type="button" :disabled="studioBusy" @click="studioReset">New Effect</button>
       </div>
       <div class="ld-studio-row" v-if="studioFiles.length">
@@ -58,10 +58,10 @@
           <option value="ambient">Ambient</option>
           <option value="collision_splash">Splash</option>
         </select>
-        <button type="button" class="user-action primary" :disabled="studioBusy" @click="studioCreate">Create &amp; Preview</button>
+        <button type="button" class="user-action primary" :disabled="studioBusy" @click="studioCreate">Preview New Effect</button>
       </div>
       <div v-if="studioLoaded" class="ld-studio-edit">
-        <div class="section-hint">Editing {{studioLoaded.settings.identifier}}. Move a slider to preview changes instantly; only Apply Changes writes JSON. Advanced values remain intact.</div>
+        <div class="section-hint">{{studioLoaded.path ? 'Editing' : 'Draft preview:'}} {{studioLoaded.settings.identifier}}. Move sliders to preview changes; only Save writes JSON. Advanced values remain intact.</div>
         <div class="ld-studio-control">
           <label for="ld-studio-emission">Particles: {{studioSettings.emission}}</label>
           <input id="ld-studio-emission" type="range" min="1" max="120" step="1" v-model.number="studioSettings.emission" @input="studioLiveChanged"
@@ -88,7 +88,7 @@
             :disabled="studioBusy || !studioLoaded.editable.color"/>
         </div>
         <div class="ld-studio-row">
-          <button class="user-action primary" type="button" :disabled="studioBusy || !studioHasChanges()" @click="studioSave">Apply Changes</button>
+          <button class="user-action primary" type="button" :disabled="studioBusy || !project.hasFolder || !studioHasChanges()" @click="studioSave">{{studioLoaded.path ? 'Apply Changes' : 'Save Particle'}}</button>
           <button class="user-action" type="button" :disabled="studioBusy || !studioHasChanges()" @click="studioRevert">Discard Draft</button>
         </div>
         <div class="ld-studio-row">
@@ -103,8 +103,8 @@
           <button type="button" class="user-action" :disabled="!studioPlaying" @click="studioStop">Stop</button>
           <button type="button" class="user-action" :disabled="studioBusy" @click="studioCheck">Check Preview</button>
         </div>
-        <button type="button" class="user-action" :disabled="studioBusy" @click="studioAttach">Attach at Animation Playhead</button>
-        <p class="section-hint">Preview is temporary; Apply saves the JSON. Select an Animation before attaching. Viewport appearance still requires visual review.</p>
+        <button type="button" class="user-action" :disabled="studioBusy || !studioLoaded.path" @click="studioAttach">Attach at Animation Playhead</button>
+        <p class="section-hint">Preview never writes JSON. Save the particle before attaching; select an Animation in Blockbench. Viewport appearance still requires visual review.</p>
       </div>
       <p v-if="studioNote" class="ld-studio-note" role="status" aria-live="polite">{{studioNote}}</p>
       <p v-if="studioError" class="ld-error" role="alert">{{studioError}}</p>

@@ -39,13 +39,42 @@ describe("Particle Studio native preview identity", () => {
       preview_texture: "/pack/textures/particle/old.png",
       updateTexture: () => { refreshes += 1; },
     };
+    const effectPath = "/pack/particles/blue.particle.json";
     Object.defineProperty(globalThis, "Animator", {
       configurable: true,
-      value: { loadParticleEmitter: () => ({ config }) },
+      value: {
+        particle_effects: { [effectPath]: { config } },
+        loadParticleEmitter: () => {
+          // Simulates Blockbench's reset().setFromJSON() and its single updateTexture call.
+          expect(config.preview_texture).toBeUndefined();
+          config.updateTexture();
+          return { config };
+        },
+      },
     });
     try {
-      loadNativeParticlePreview("/pack/particles/blue.particle.json", "{}");
+      loadNativeParticlePreview(effectPath, "{}");
       expect(config.preview_texture).toBeUndefined();
+      expect(refreshes).toBe(1);
+    } finally {
+      if (original) Object.defineProperty(globalThis, "Animator", original);
+      else Reflect.deleteProperty(globalThis, "Animator");
+    }
+  });
+
+  test("newly loaded particle does not require duplicate texture refresh", () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, "Animator");
+    let refreshes = 0;
+    const config = { updateTexture: () => { refreshes += 1; } };
+    Object.defineProperty(globalThis, "Animator", {
+      configurable: true,
+      value: {
+        particle_effects: {},
+        loadParticleEmitter: () => { config.updateTexture(); return { config }; },
+      },
+    });
+    try {
+      loadNativeParticlePreview("/pack/particles/new.particle.json", "{}");
       expect(refreshes).toBe(1);
     } finally {
       if (original) Object.defineProperty(globalThis, "Animator", original);

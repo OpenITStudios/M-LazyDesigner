@@ -3,10 +3,12 @@ import { getAllToolDefinitions, tools } from "@/lib/factories";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
 import { getRuntimeLifecycleSnapshot, isRuntimeGenerationCurrent, runRuntimeOperationExclusive } from "@/lib/runtime/lifecycle";
 import {
-  applyParticleOperations, inspectParticleDocument, parseParticleDocument,
+  applyParticleOperations, createParticleDocument, inspectParticleDocument,
+  parseParticleDocument, serializeParticleDocument,
   type JsonObject, type ParticleMutationOperation,
 } from "@/lib/particle/document";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
+import { loadNativeParticlePreview } from "@/server/tools/particle/inspection";
 
 /** Human controls over existing Particle and Animation executors, not a second authoring engine. */
 export const STUDIO_PRESETS = ["steady", "burst", "trail", "ambient", "collision_splash"] as const;
@@ -45,8 +47,9 @@ type StudioPath = { dirname(path: string): string; join(...paths: string[]): str
 function nativeFiles(): { fs: StudioFs; path: StudioPath } {
   // @ts-ignore - Blockbench desktop provides the permission-gated native module API.
   const fs = requireNativeModule("fs", { message: "LazyDesigner Particle Studio reads and saves particles beside the current model." }) as StudioFs | undefined;
-  // @ts-ignore - Native path module belongs to the same desktop-only filesystem boundary.
-  const path = requireNativeModule("path", { message: "LazyDesigner Particle Studio resolves the current model folder." }) as StudioPath | undefined;
+  // The native path module is an unprivileged read-only utility; unlike fs
+  // its documented requireNativeModule overload does not accept a dialog.
+  const path = requireNativeModule("path") as StudioPath | undefined;
   if (!fs || !path) throw new Error("Particle Studio needs Blockbench desktop file access.");
   return { fs, path };
 }
@@ -57,11 +60,14 @@ function studioFolder(project: ModelProject, path: StudioPath): string {
   }
   return path.join(path.dirname(file), "particles");
 }
+function studioEffectSlug(identifier: string): string {
+  const match = /^[a-z0-9_.-]+:([a-z0-9_.-]+)$/.exec(identifier);
+  if (!match) throw new Error("Use a lowercase particle identifier like mypack:blue_flame.");
+  return match[1];
+}
+
 export function studioOutputPath(folder: string, identifier: string, path: StudioPath): string {
-  if (!/^[a-z0-9_.-]+:[a-z0-9_.-]+$/.test(identifier)) {
-    throw new Error("Use a lowercase particle identifier like mypack:blue_flame.");
-  }
-  return path.join(folder, identifier.split(":")[1] + ".particle.json");
+  return path.join(folder, studioEffectSlug(identifier) + ".particle.json");
 }
 function requireStudioProject(project: ModelProject): void {
   if (typeof Project === "undefined" || Project !== project || project.format?.id !== "bedrock") {
@@ -90,15 +96,19 @@ function receiptOf(value: unknown): Record<string, unknown> {
   }
   return receipt as Record<string, unknown>;
 }
-async function canonicalParticle(request: object): Promise<void> {
+/** A completed file write is independent of renderer success or failure. */
+export function requireStudioCommittedWrite(receipt: Record<string, unknown>, path: string): void {
+  if (receipt.valid !== true || receipt.artifact_ready !== true || receipt.wrote_to_path !== path) {
+    throw new Error("Particle was not committed: " +
+      String(receipt.preview_error || "check the structured write receipt and diagnostics"));
+  }
+}
+
+async function canonicalParticleWrite(request: object, path: string): Promise<void> {
   const definition = getAllToolDefinitions().manage_particle;
   if (!definition || !tools.manage_particle?.enabled) throw new Error("Native Particle authoring is unavailable.");
   const receipt = receiptOf(await definition.execute(await definition.parameterSchema.parseAsync(request)));
-  if (receipt.valid !== true || receipt.artifact_ready !== true ||
-      receipt.preview_load_call !== "INVOKED" || receipt.preview_error !== null) {
-    throw new Error("Particle was not ready for native preview: " +
-      String(receipt.preview_error || "check texture dependency and particle diagnostics"));
-  }
+  requireStudioCommittedWrite(receipt, path);
 }
 function finite(value: unknown, min: number, max: number, label: string): number {
   const number = Number(value);
@@ -242,21 +252,41 @@ function readFileEffect(fs: StudioFs, file: string): StudioEffect {
   }
   return readStudioEffect(file, fs.readFileSync(file, "utf8"));
 }
+/** A new particle exists only in memory until the user explicitly saves it. */
+export function prepareStudioParticleDraft(project: ModelProject, settings: StudioSettings): StudioEffect {
+  requireStudioProject(project);
+  studioEffectSlug(settings.identifier);
+  if (!STUDIO_PRESETS.includes(settings.preset)) throw new Error("Unknown Bedrock particle preset.");
+  const source = createParticleDocument({
+    identifier: settings.identifier, preset: settings.preset,
+    texture: "textures/particle/particles", material: "particles_alpha",
+  });
+  const compiled = applyParticleOperations(
+    source, studioBootstrapOperations(settings) as ParticleMutationOperation[],
+  );
+  const errors = inspectParticleDocument(compiled).diagnostics.filter(d => d.severity === "error");
+  if (errors.length) throw new Error("Particle draft is invalid: " + errors[0].message);
+  // The source JSON does not encode which quick-start family authored it.
+  // Preserve the chosen family in the unsaved draft until the first Save.
+  const draft = readStudioEffect("", serializeParticleDocument(compiled));
+  return { ...draft, settings: { ...draft.settings, preset: settings.preset } };
+}
+
 export async function createStudioParticle(project: ModelProject, settings: StudioSettings): Promise<StudioEffect> {
   return inStudioQueue(project, async () => {
-    if (!STUDIO_PRESETS.includes(settings.preset)) throw new Error("Unknown Bedrock particle preset.");
+    // Same compiler as Preview; never save a second, subtly different effect.
+    const draft = prepareStudioParticleDraft(project, settings);
     const { fs, path } = nativeFiles();
     const directory = studioFolder(project, path);
-    const file = studioOutputPath(directory, settings.identifier, path);
+    const file = studioOutputPath(directory, draft.settings.identifier, path);
     if (fs.existsSync(file)) throw new Error("This particle already exists. Open it instead of replacing it.");
-    const operations = studioBootstrapOperations(settings);
     fs.mkdirSync(directory, { recursive: true });
     stopStudioPreview();
-    await canonicalParticle({
-      create: { identifier: settings.identifier, preset: settings.preset,
+    await canonicalParticleWrite({
+      create: { identifier: draft.settings.identifier, preset: draft.settings.preset,
         texture: "textures/particle/particles", material: "particles_alpha" },
-      operations, output: { path: file }, preview: true,
-    });
+      operations: studioBootstrapOperations(settings), output: { path: file }, preview: false,
+    }, file);
     return readFileEffect(fs, file);
   });
 }
@@ -266,10 +296,9 @@ export async function openStudioParticle(project: ModelProject, file: string): P
       throw new Error("Choose a particle from this project's list.");
     }
     const { fs } = nativeFiles();
-    const loaded = readFileEffect(fs, file);
-    stopStudioPreview();
-    await canonicalParticle({ source: { path: file }, preview: true });
-    return loaded;
+    // Reading a particle must not depend on native rendering or touch an
+    // Animation registry. Attachment explicitly loads the effect when needed.
+    return readFileEffect(fs, file);
   });
 }
 export async function saveStudioParticle(project: ModelProject, loaded: StudioEffect, next: StudioSettings): Promise<StudioEffect> {
@@ -284,10 +313,10 @@ export async function saveStudioParticle(project: ModelProject, loaded: StudioEf
     const operations = studioChangeOperations(loaded, next);
     if (!operations.length) throw new Error("No particle settings changed.");
     stopStudioPreview();
-    await canonicalParticle({
+    await canonicalParticleWrite({
       source: { path: loaded.path }, operations,
-      output: { path: loaded.path }, preview: true,
-    });
+      output: { path: loaded.path }, preview: false,
+    }, loaded.path);
     return readFileEffect(fs, loaded.path);
   });
 }
@@ -351,15 +380,14 @@ export function stopStudioPreview(): void {
 export function startStudioPreview(
   project: ModelProject, loaded: StudioEffect, locatorName: string,
   settings: StudioSettings = loaded.settings,
+  replay = false,
 ): string {
   requireStudioProject(project);
-  const { fs } = nativeFiles();
-  if (!fs.existsSync(loaded.path) || fs.readFileSync(loaded.path, "utf8") !== loaded.content) {
-    throw new Error("Particle source changed. Reopen the effect before starting preview.");
-  }
+  // The hot path is intentionally filesystem-free. External file changes are
+  // checked before Save/Attach, never once per slider tick.
   const draft = compileStudioDraft(loaded, settings);
   const signature = JSON.stringify([loaded.path, loaded.content, locatorName, settings]);
-  if (preview?.project === project && preview.signature === signature) {
+  if (!replay && preview?.project === project && preview.signature === signature) {
     return draft.dirty ? "Live preview reflects unsaved changes." : "Preview is already up to date.";
   }
   const host = globalThis as unknown as {
@@ -368,19 +396,14 @@ export function startStudioPreview(
       Emitter: new (scene: StudioScene, config: NativeStudioConfig) => NativeStudioEmitter;
     };
     WinterskyScene?: StudioScene;
-    Animator?: {
-      open?: boolean;
-      particle_effects?: Record<string, { config: { texture_source_category?: string } }>;
-    };
+    Animator?: { open?: boolean };
   };
   const scene = host.WinterskyScene;
-  const source = host.Animator?.particle_effects?.[loaded.path];
-  if (!host.Animator?.open || !scene || !host.Wintersky?.Config || !host.Wintersky.Emitter || !source) {
-    throw new Error("Use Blockbench Animate mode and open the particle before previewing.");
+  if (!host.Animator?.open || !scene || !host.Wintersky?.Config || !host.Wintersky.Emitter) {
+    throw new Error("Switch Blockbench to Animate mode to display Particle Studio preview.");
   }
-  if (source.config.texture_source_category === "placeholder") {
-    throw new Error("Particle texture is unresolved in Blockbench. Check its path or use a built-in texture.");
-  }
+  // New drafts have no file_path; vanilla textures still render from Wintersky.
+  // Saved files retain their real path so native custom-texture resolution works.
   const config = new host.Wintersky.Config(scene, draft.document, { path: loaded.path });
   let emitter: NativeStudioEmitter | null = null;
   try {
@@ -424,6 +447,11 @@ export function studioPreviewStatus(project: ModelProject): string {
 export async function attachStudioParticle(project: ModelProject, loaded: StudioEffect, locatorName: string): Promise<string> {
   return inStudioQueue(project, async () => {
     if (!tools.manage_animation_effects?.enabled) throw new Error("Animation effects are unavailable in this stage.");
+    if (!loaded.path) throw new Error("Save this particle before attaching it to an Animation.");
+    const { fs } = nativeFiles();
+    if (!fs.existsSync(loaded.path) || fs.readFileSync(loaded.path, "utf8") !== loaded.content) {
+      throw new Error("Particle file changed. Reopen it before attaching to an Animation.");
+    }
     const selected = typeof Animation !== "undefined" ? Animation.selected : null;
     if (!selected?.uuid) throw new Error("Select an Animation in Blockbench before attaching this particle.");
     if (locatorName) {
@@ -438,10 +466,17 @@ export async function attachStudioParticle(project: ModelProject, loaded: Studio
     const registry = (Animator as unknown as {
       particle_effects?: Record<string, { config?: { identifier?: string } }>;
     }).particle_effects ?? {};
-    const matchingFiles = Object.entries(registry).filter(([, entry]) =>
-      entry.config?.identifier?.split(":")[1] === effectName);
-    if (matchingFiles.length !== 1 || matchingFiles[0][0] !== loaded.path) {
-      throw new Error("The particle short name is missing or ambiguous in Blockbench. Reopen the effect or use a unique name before attaching.");
+    const conflicts = Object.entries(registry).filter(([path, entry]) =>
+      path !== loaded.path && entry.config?.identifier?.split(":")[1] === effectName);
+    if (conflicts.length) {
+      throw new Error("Another particle uses the same short name. Choose a unique identifier before attaching.");
+    }
+    // The global Animation registry is touched only at explicit attachment,
+    // never by live authoring previews or opening an existing JSON file.
+    loadNativeParticlePreview(loaded.path, loaded.content);
+    const registered = registry[loaded.path]?.config?.identifier;
+    if (registered !== loaded.settings.identifier) {
+      throw new Error("Blockbench registered a different particle identifier. No Animation edit was applied.");
     }
     const keyframes = selected.animators.effects?.particle ?? [];
     const sameTime = keyframes.filter(key => Math.abs(key.time - snappedTime) < 0.001);
