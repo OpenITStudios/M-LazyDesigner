@@ -7,6 +7,7 @@ analyze-semantic-impact.ts       changed paths → affected capability graph
 build-development-symbol-map.ts  intent → bounded TypeScript symbol map
 build-knowledge-index.ts         repository knowledge → deterministic index and optional revision delta
 audit-data-inventory.ts          tracked documents, fixture consumers and aliases → read-only audit
+audit-source-reachability.ts     TypeScript import graph → runtime / tooling / test-only / unreferenced review
 plan-development-context.ts      intent/change set → bounded Codex read targets
 plan-affected-execution.ts       changed paths → minimum safe verification plan
 run-affected-execution.ts        execute the bounded affected plan
@@ -38,7 +39,23 @@ bun run plan:affected -- --auto
 bun run verify:affected -- --auto --expect-sha <exact-Local-HEAD>
 bun run analyze:semantic-impact -- <path>
 bun run audit:data # optional --strict fails on authored broken links/alias chains
+bun run audit:reachability # optional --sample-limit=0..100, never auto-delete
 ```
+
+## Source reachability and orphan review
+
+`audit:reachability` is an **on-demand read-only** TypeScript graph inspection.
+It starts from the actual Plugin `index.ts`, Gateway `gateway/index.ts`,
+package.json-owned script entrypoints, and test imports. It separates
+production-reachable modules, tooling-owned modules, test-only modules,
+external compatibility candidates and unreferenced source **review
+candidates**. Unresolved local imports, missing declared roots and
+nonliteral dynamic imports are reported rather than silently ignored.
+It cannot prove actual Runtime route registration, external consumers,
+code execution, model quality or safe deletion. Pair its findings with
+existing `audit:unused`, exact owner tests, manifest/Runtime inventory
+and focused production caller review. No new Runtime module, cleanup
+automation, CI workflow or persistent graph is created.
 
 ## Cross-repository efficiency adoption
 

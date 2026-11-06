@@ -77,6 +77,7 @@
     "verify:uv-density-live": "bun run ./scripts/verify/verify-uv-density-live.ts",
     "audit:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "audit:unused:gateway": "tsc -p gateway/tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
+    "audit:reachability": "bun run ./scripts/development/audit-source-reachability.ts",
     "verify:texture-runtime-live": "bun run ./scripts/verify/verify-texture-runtime-live.ts",
     "conformance:serve": "bun run ./scripts/operations/serve-conformance-runtime.ts",
     "measure:mcp-efficiency": "bun run ./scripts/measure/measure-mcp-efficiency.ts",
