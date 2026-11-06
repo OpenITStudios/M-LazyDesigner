@@ -87,7 +87,8 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     const [unresolved] = projectCapabilitiesForSearch([exact!]);
     expect(unresolved?.capability_id).toBe("manage_cubes");
     expect(unresolved?.eligibility).toBe("UNKNOWN");
-    expect(unresolved?.why).toContain("describe the exact operation");
+    expect(unresolved?.why).toContain("use a known operation directly");
+    expect(unresolved?.why).toContain("when its schema is unknown");
     expect(gatewaySearchSuccessOutputSchema.safeParse({
       capabilities: [unresolved],
     }).success).toBe(true);
@@ -147,7 +148,7 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     expect(exact?.branch).toBeUndefined();
     const [unselected] = projectCapabilitiesForSearch([exact!]);
     expect(unselected?.eligibility).toBe("UNKNOWN");
-    expect(unselected?.why).toContain("describe the exact operation");
+    expect(unselected?.why).toContain("use a known operation directly");
     expect(gatewaySearchSuccessOutputSchema.safeParse({
       capabilities: [unselected],
     }).success).toBe(true);
@@ -166,6 +167,15 @@ describe("BlockIT Gateway capability discovery hardening", () => {
       eligibility: "READY",
     }]);
     expect(unsupported?.eligibility).toBe("UNKNOWN");
+    expect(unsupported?.operation_class).toBe("UNKNOWN");
+    const [borrowedBlock] = projectCapabilitiesForSearch([{
+      ...exact!, branch: { field: "operation", value: "future_nonexistent" },
+      eligibility: "BLOCKED", requires: ["animation_available"],
+      predecessor: { capability: "create_animation" },
+    }]);
+    expect(borrowedBlock?.eligibility).toBe("UNKNOWN");
+    expect(borrowedBlock?.requires).toBeUndefined();
+    expect(borrowedBlock?.predecessor).toBeUndefined();
 
     // A known failed prerequisite remains BLOCKED, never downgraded.
     const [blocked] = projectCapabilitiesForSearch([{
@@ -197,7 +207,7 @@ describe("BlockIT Gateway capability discovery hardening", () => {
       eligibility: "READY",
     }]);
     expect(unsupported?.eligibility).toBe("UNKNOWN");
-    expect(unsupported?.why).toContain("describe the exact operation");
+    expect(unsupported?.why).toContain("verify the Runtime schema");
     expect(gatewaySearchSuccessOutputSchema.safeParse({
       capabilities: [unsupported],
     }).success).toBe(true);
@@ -208,8 +218,23 @@ describe("BlockIT Gateway capability discovery hardening", () => {
       eligibility: "READY",
     }]);
     expect(known?.eligibility).toBeUndefined();
-    const [blocked] = projectCapabilitiesForSearch([{
+    // Unsupported identities must not borrow false Graph prerequisites.
+    const [unrecognized] = projectCapabilitiesForSearch([{
       ...base, branch: { field: "operation", value: "future_unsupported" },
+      eligibility: "BLOCKED", requires: ["project_bound"],
+      predecessor: { capability: "create_project" },
+    }]);
+    expect(unrecognized?.eligibility).toBe("UNKNOWN");
+    expect(unrecognized?.requires).toBeUndefined();
+    expect(unrecognized?.predecessor).toBeUndefined();
+    expect(unrecognized?.operation_class).toBe("UNKNOWN");
+    expect(gatewaySearchSuccessOutputSchema.safeParse({
+      capabilities: [unrecognized],
+    }).success).toBe(true);
+
+    // Proven missing prerequisites for an exact valid branch still block.
+    const [blocked] = projectCapabilitiesForSearch([{
+      ...base, branch: { field: "operation", value: "set" },
       eligibility: "BLOCKED", requires: ["project_bound"],
     }]);
     expect(blocked?.eligibility).toBe("BLOCKED");
@@ -240,7 +265,7 @@ describe("BlockIT Gateway capability discovery hardening", () => {
       ...base, eligibility: "READY",
     }]);
     expect(unselected?.eligibility).toBe("UNKNOWN");
-    expect(unselected?.why).toContain("describe the exact operation");
+    expect(unselected?.why).toContain("use a known operation directly");
 
     // Read-only list/get do not need invented dependency checks or status calls.
     for (const operation of ["list", "get"]) {

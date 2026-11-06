@@ -62,24 +62,25 @@ function compactCapabilityHint(description: string): string | undefined {
 }
 
 /**
- * Search is orientation, not native availability. Unselected/unsupported
- * branch identities are not a READY operation. A declared mutation with no
- * branch graph also lacks proved prerequisites, even if its schema is valid.
- * Read-only graphless branches remain discoverable without extra ceremony.
+ * Search is orientation, not native availability. An unselected operation
+ * needs an exact choice but not a compulsory describe call if its schema is
+ * known. An unsupported branch cannot inherit Graph failure from a fallback.
+ * Graphless mutations lack confirmed readiness; known queries remain compact.
  */
 function searchBranchReadinessHint(
   capability: CapabilitySummary,
   operationClass: string
-): "UNRESOLVED_OPERATION" | "UNDECLARED_MUTATION_GRAPH" | null {
+): "UNSELECTED_OPERATION" | "UNSUPPORTED_OPERATION" |
+   "UNDECLARED_MUTATION_GRAPH" | null {
   const branches = manifestEntriesForCapability(capability.capability_id)
     .filter((entry) => entry.branch);
   if (branches.length === 0) return null;
-  if (!capability.branch) return "UNRESOLVED_OPERATION";
+  if (!capability.branch) return "UNSELECTED_OPERATION";
   const exact = branches.find((entry) =>
     entry.branch?.field === capability.branch?.field &&
     entry.branch.value === capability.branch?.value
   );
-  if (!exact) return "UNRESOLVED_OPERATION";
+  if (!exact) return "UNSUPPORTED_OPERATION";
   return !exact.graph && operationClass === "MUTATION"
     ? "UNDECLARED_MUTATION_GRAPH"
     : null;
@@ -109,17 +110,22 @@ export function projectCapabilitiesForSearch(
     ];
     const hint = compactCapabilityHint(capability.description);
     const branchHint = searchBranchReadinessHint(capability, operationClass);
-    // Preserve a confirmed BLOCKED verdict. UNKNOWN is AI-facing guidance,
-    // not an early rejection or a change to Runtime schema/Graph authority.
-    const eligibility = branchHint && capability.eligibility !== "BLOCKED"
+    // Only a declared operation can preserve exact BLOCKED/dependency facts.
+    // Unsupported identities may have inherited unrelated fallback metadata.
+    const unsupportedBranch = branchHint === "UNSUPPORTED_OPERATION";
+    const eligibility = unsupportedBranch
       ? "UNKNOWN" as const
-      : capability.eligibility;
+      : branchHint && capability.eligibility !== "BLOCKED"
+        ? "UNKNOWN" as const
+        : capability.eligibility;
     const why = branchHint
       ? [
           capability.why,
-          branchHint === "UNRESOLVED_OPERATION"
-            ? "Operation branch not resolved; describe the exact operation before invoking."
-            : "Mutation prerequisites are not declared in the Graph; Runtime validates the operation.",
+          branchHint === "UNSELECTED_OPERATION"
+            ? "Operation branch not selected; use a known operation directly, or describe it when its schema is unknown."
+            : unsupportedBranch
+              ? "Operation branch is not declared in Gateway semantics; verify the Runtime schema."
+              : "Mutation prerequisites are not declared in the Graph; Runtime validates the operation.",
         ].filter(Boolean).join(" ")
       : capability.why;
     return {
@@ -130,15 +136,15 @@ export function projectCapabilitiesForSearch(
       ...(eligibility && eligibility !== "READY"
         ? { eligibility }
         : {}),
-      ...(capability.requires && capability.requires.length > 0
+      ...(!unsupportedBranch && capability.requires && capability.requires.length > 0
         ? { requires: capability.requires }
         : {}),
-      ...(capability.predecessor
+      ...(!unsupportedBranch && capability.predecessor
         ? { predecessor: capability.predecessor }
         : {}),
       tier: capability.tier,
       authoring_domain: authoringDomainForCapability(capability.capability_id),
-      operation_class: operationClass,
+      operation_class: unsupportedBranch ? "UNKNOWN" as const : operationClass,
       ...(verificationClass !== "not_applicable"
         ? { verification_class: verificationClass }
         : {}),
