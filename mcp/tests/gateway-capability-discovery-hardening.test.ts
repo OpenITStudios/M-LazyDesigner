@@ -194,8 +194,8 @@ describe("BlockIT Gateway capability discovery hardening", () => {
   });
   test("unselected branch cannot borrow a shared fallback's BLOCKED verdict", () => {
     // Actual catalog -> Control search path, not just hand-authored projection.
-    // Empty intent leaves the operation unselected; fallback Graph still sees
-    // known-false project/animation prerequisites.
+    // Empty intent leaves the operation unselected. The catalog refuses
+    // borrowed Graph readiness before ranking and raw metadata are computed.
     const [raw] = searchCapabilityCatalog([{
       name: "manage_animation_timeline",
       description: "Edit animation timeline and keyframes.",
@@ -203,8 +203,8 @@ describe("BlockIT Gateway capability discovery hardening", () => {
       facts: { project_bound: false, animation_available: false },
     });
     expect(raw?.branch).toBeUndefined();
-    expect(raw?.eligibility).toBe("BLOCKED");
-    expect(raw?.requires).toContain("animation_available");
+    expect(raw?.eligibility).toBe("UNKNOWN");
+    expect(raw?.requires).toBeUndefined();
 
     const [projected] = projectCapabilitiesForSearch([{
       ...raw!,
@@ -218,11 +218,17 @@ describe("BlockIT Gateway capability discovery hardening", () => {
       capabilities: [projected],
     }).success).toBe(true);
 
-    // A known exact operation still exposes genuine negative prerequisites.
-    const [selected] = projectCapabilitiesForSearch([{
-      ...raw!,
-      branch: { field: "operation", value: "keyframes" },
-    }]);
+    // An exact known Graph branch still preserves real failed prerequisites.
+    const [exact] = searchCapabilityCatalog([{
+      name: "manage_animation_timeline",
+      description: "Edit animation timeline and keyframes.",
+    }], "edit animation keyframes", 4, {
+      facts: { project_bound: false, animation_available: false },
+    });
+    expect(exact?.branch).toEqual({ field: "operation", value: "keyframes" });
+    expect(exact?.eligibility).toBe("BLOCKED");
+    expect(exact?.requires).toContain("animation_available");
+    const [selected] = projectCapabilitiesForSearch([exact!]);
     expect(selected?.eligibility).toBe("BLOCKED");
     expect(selected?.requires).toContain("animation_available");
 
@@ -239,6 +245,28 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     }]);
     expect(independent?.eligibility).toBe("BLOCKED");
     expect(independent?.requires).toEqual(["project_bound"]);
+  });
+
+  test("graphless material mutations do not get an implicit READY search bonus", () => {
+    const [mutation] = searchCapabilityCatalog([{
+      name: "manage_material",
+      description: "Assign texture channels and configure PBR material.",
+    }], "assign texture channel", 4, {
+      facts: { project_bound: false, material_available: false },
+    });
+    expect(mutation?.branch).toEqual({ field: "operation", value: "assign_channel" });
+    expect(mutation?.eligibility).toBe("UNKNOWN");
+    expect(mutation?.requires).toBeUndefined();
+    const [projected] = projectCapabilitiesForSearch([mutation!]);
+    expect(projected?.eligibility).toBe("UNKNOWN");
+
+    // An existing graphless read branch retains the no-extra-flag path.
+    const [query] = searchCapabilityCatalog([{
+      name: "manage_material_instances",
+      description: "List material instances and their usage.",
+    }], "list material instances", 4);
+    expect(query?.branch).toEqual({ field: "operation", value: "list" });
+    expect(query?.eligibility).toBeUndefined();
   });
 
   test("unsupported explicit branches without graph prerequisites remain UNKNOWN", () => {

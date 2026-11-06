@@ -1,5 +1,8 @@
 import { CAPABILITY_CORE_MANIFEST } from "../../lib/capabilities/manifest";
-import { CAPABILITY_BRANCH_MANIFEST } from "./manifest";
+import {
+  CAPABILITY_BRANCH_MANIFEST,
+  manifestEntriesForCapability,
+} from "./manifest";
 import {
   CAPABILITY_LIFECYCLE_SEARCH_PENALTY,
   CAPABILITY_TIER_BOOST,
@@ -13,8 +16,12 @@ import {
   hasExplicitCapabilityAction,
   independentActionClauses,
 } from "./intelligence";
-import { capabilityGraphEntry, evaluateCapabilityPreconditions } from "./graph";
-import type { CapabilityFact, CapabilityFactState } from "./types";
+import {
+  capabilityGraphEntry,
+  evaluateCapabilityPreconditions,
+  type CapabilityPreconditionEvaluation,
+} from "./graph";
+import type { CapabilityBranchHint, CapabilityFact, CapabilityFactState } from "./types";
 import type {
   BackendTool,
   CapabilitySearchContext,
@@ -40,6 +47,32 @@ export function summarizeCapability(
   };
 }
 
+/**
+ * Readiness in search ranking must describe the exact selected operation.
+ * Shared Graph fallback cannot certify an unselected branch as READY/BLOCKED;
+ * a declared mutation lacking its own Graph must not get a READY bonus.
+ * This changes discovery only, not native routing or Graph evaluation.
+ */
+function searchPreconditions(
+  capability: string,
+  branch: CapabilityBranchHint | undefined,
+  operationClass: string,
+  facts: CapabilityFactState | undefined
+): CapabilityPreconditionEvaluation {
+  const operations = manifestEntriesForCapability(capability)
+    .filter((entry) => entry.branch);
+  if (operations.length > 0) {
+    const selected = branch && operations.find((entry) =>
+      entry.branch?.field === branch.field &&
+      entry.branch.value === branch.value
+    );
+    if (!selected || (!selected.graph &&
+        (selected.operationClass ?? operationClass) === "MUTATION")) {
+      return { eligibility: "UNKNOWN", missing: [], unknown: [] };
+    }
+  }
+  return evaluateCapabilityPreconditions(capability, branch, facts);
+}
 
 /**
  * Remove generic agent/tool vocabulary before semantic and BM25 discovery.
@@ -337,8 +370,8 @@ function searchSingleIntentCatalog(
       return semantic.matched || bm25 > 0 || nearName > 0;
     })
     .map(({ tool, metadata, tier, semantic, bm25, nearName }) => {
-      const preconditions = evaluateCapabilityPreconditions(
-        tool.name, semantic.branch, context?.facts
+      const preconditions = searchPreconditions(
+        tool.name, semantic.branch, metadata.operationClass, context?.facts
       );
       // BLOCKED/UNKNOWN are ranking signals, never silent exclusions.
       const eligibilityAdjustment =
