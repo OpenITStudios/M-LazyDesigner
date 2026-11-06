@@ -168,6 +168,33 @@ describe("LazyDesigner Control continuation hardening", () => {
     });
   });
 
+  test("Control never narrows visual review to Cube IDs contradicted by applied receipts", () => {
+    const result = buildControlDelta({
+      capability: "manage_cubes",
+      phaseBefore: "geometry",
+      phaseAfter: "geometry",
+      projectUuid: "project-a",
+      succeeded: true,
+      result: {
+        execution: "applied",
+        modified: 1,
+        id: "cube-a",
+        before: { uuid: "cube-a" },
+        after: { uuid: "cube-a" },
+        geometry_effect: cubeEffect(["from"]),
+        visual_scope: {
+          // Valid numerical framing cannot compensate for a target mismatch.
+          cube_uuids: ["cube-b"],
+          framing: { min: [-1, 0, -1], max: [1, 2, 1] },
+        },
+      },
+    });
+    expect(result.freshness).toMatchObject({ basis: "PRECISE_EFFECT" });
+    expect(result.verification_class).toBe("visual");
+    expect(result.verification_scope).toBeNull();
+    expect(result.freshness.stale).toContain("GEOMETRY_STRUCTURE");
+  });
+
   test("Cube pivot and rotation changes invalidate animation motion readiness", () => {
     for (const field of ["origin", "rotation"] as const) {
       const delta = buildControlDelta({

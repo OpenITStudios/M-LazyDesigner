@@ -194,6 +194,6 @@ describe("shared Cube mutation receipt contract", () => {
       'cubeVisualScope as validatedCubeVisualScope'
     );
     expect(freshness).toContain("cubeChangedFieldsFromResult");
-    expect(verification).toContain("cubeVisualScopeFromResult");
+    expect(verification).toContain("cubeReceiptBoundVisualScopeFromResult");
   });
 });

@@ -4,6 +4,7 @@ import {
   cubeGeometryEffect,
   cubeVisualScope,
   cubeVisualScopeFromResult,
+  cubeReceiptBoundVisualScopeFromResult,
   cubeSemanticScopesFromChangedFields,
 } from "@/lib/receipts/cubeMutation";
 
@@ -32,6 +33,71 @@ describe("shared Cube mutation evidence contract", () => {
       },
     });
     expect(cubeVisualScopeFromResult({ visual_scope: scope })).toEqual(scope);
+  });
+
+  test("focused Cube scope must match the actually applied native target inventory", () => {
+    const effect = cubeGeometryEffect({
+      changed_fields: ["from"], center_delta: [1, 0, 0],
+      size_delta: [0, 0, 0], origin_delta: [0, 0, 0],
+      rotation_delta: [0, 0, 0], inflate_delta: 0,
+      uv_offset_delta: [0, 0], mirror_uv_changed: false,
+      autouv_changed: false, visibility_changed: false,
+      faces_changed: false,
+    });
+    const framing = { min: [0, 0, 0], max: [8, 8, 8] };
+    const singleScope = { cube_uuids: ["cube-a"], framing };
+    const batchScope = { cube_uuids: ["cube-a", "cube-b"], framing };
+    const beforeAfter = (uuid: string) => ({
+      before: { uuid }, after: { uuid }, geometry_effect: effect,
+    });
+    const update = {
+      execution: "applied", modified: 1, id: "cube-a",
+      ...beforeAfter("cube-a"), visual_scope: singleScope,
+    };
+    expect(cubeReceiptBoundVisualScopeFromResult(update))
+      .toEqual(singleScope);
+
+    const create = {
+      execution: "applied", added: 2,
+      cubes: [
+        { uuid: "cube-a", name: "body", from: [0, 0, 0], to: [4, 4, 4] },
+        { uuid: "cube-b", name: "back", from: [4, 0, 0], to: [8, 4, 4] },
+      ],
+      visual_scope: batchScope,
+    };
+    expect(cubeReceiptBoundVisualScopeFromResult(create))
+      .toEqual(batchScope);
+    const batch = {
+      execution: "applied", modified: 2,
+      effects: [beforeAfter("cube-a"), beforeAfter("cube-b")],
+      visual_scope: batchScope,
+    };
+    expect(cubeReceiptBoundVisualScopeFromResult(batch))
+      .toEqual(batchScope);
+
+    const invalid = [
+      { ...update, visual_scope: { ...singleScope, cube_uuids: ["cube-b"] } },
+      { ...update, visual_scope: { ...singleScope,
+        framing: { min: [8, 0, 0], max: [0, 8, 8] } } },
+      { ...update, execution: "planned" },
+      { ...update, before: { uuid: "cube-b" } },
+      { ...update, geometry_effect: { ...effect, changed_fields: [] } },
+      { ...create, visual_scope: singleScope },
+      { ...create, visual_scope: { ...batchScope,
+        cube_uuids: ["cube-a", "cube-a"] } },
+      { ...batch, visual_scope: singleScope },
+      { ...batch, effects: [beforeAfter("cube-a"),
+        { ...beforeAfter("cube-b"), after: { uuid: "cube-c" } }] },
+      { ...batch, modified: 1 },
+    ];
+    for (const receipt of invalid) {
+      expect(cubeReceiptBoundVisualScopeFromResult(receipt)).toBeNull();
+    }
+    // Existing parser is a shape validator only. Control uses the stronger
+    // receipt-bound helper; a plausible but unrelated label is not proof.
+    expect(cubeVisualScopeFromResult(invalid[0])).toEqual(
+      invalid[0]!.visual_scope
+    );
   });
 
   test("extracts changed fields from single and batch Cube receipts", () => {
@@ -125,6 +191,6 @@ describe("shared Cube mutation evidence contract", () => {
 
     expect(producer).toContain('from "@/lib/receipts/cubeMutation"');
     expect(freshness).toContain("cubeChangedFieldsFromResult");
-    expect(verification).toContain("cubeVisualScopeFromResult");
+    expect(verification).toContain("cubeReceiptBoundVisualScopeFromResult");
   });
 });

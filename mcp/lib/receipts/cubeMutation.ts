@@ -30,6 +30,10 @@ export const cubeVisualScopeSchema = z.object({
     min: vector3Schema,
     max: vector3Schema,
   }),
+}).refine((scope) =>
+  new Set(scope.cube_uuids).size === scope.cube_uuids.length &&
+  scope.framing.min.every((min, axis) => min <= scope.framing.max[axis]), {
+  message: "Cube visual scope requires unique native UUIDs and ordered bounds.",
 });
 
 /**
@@ -141,6 +145,66 @@ export function cubeVisualScopeFromResult(value: unknown) {
   // Re-parsing the same receipt wastes work and can re-read mutable getters.
   const parsed = cubeVisualScopeSchema.safeParse(root.visual_scope);
   return parsed.success ? parsed.data : null;
+}
+
+const cubeUpdatedIdentitySchema = z.object({
+  before: z.object({ uuid: z.string().trim().min(1) }),
+  after: z.object({ uuid: z.string().trim().min(1) }),
+  geometry_effect: cubeGeometryEffectSchema,
+});
+const cubeBatchUpdatedIdentitySchema =
+  z.array(cubeUpdatedIdentitySchema).min(1).max(32);
+
+/** Authoritative identity closure for the active native manage_cubes route.
+ * A plausible visual_scope alone cannot narrow Control's verification when
+ * the actual applied create/update/batch effect names different Cube UUIDs.
+ * This is receipt-scoped evidence, not visual approval or a native reread.
+ */
+export function cubeReceiptBoundVisualScopeFromResult(value: unknown) {
+  const scope = cubeVisualScopeFromResult(value);
+  if (!scope || !value || typeof value !== "object" ||
+      Array.isArray(value)) return null;
+  const receipt = value as Record<string, unknown>;
+  if (receipt.execution !== "applied") return null;
+
+  let affected: string[] | null = null;
+  if (receipt.cubes !== undefined) {
+    // The create branch supplies the full native Cube identity inventory.
+    if (receipt.effects !== undefined ||
+        receipt.geometry_effect !== undefined ||
+        receipt.id !== undefined) return null;
+    const parsed = cubeCreationReceiptSchema.safeParse(receipt);
+    if (!parsed.success) return null;
+    affected = parsed.data.cubes.map((cube) => cube.uuid);
+  } else if (receipt.effects !== undefined) {
+    // The batch/simplify-apply path carries independently captured before/
+    // after identity and exact per-Cube authored effects.
+    if (receipt.geometry_effect !== undefined ||
+        receipt.id !== undefined || !Array.isArray(receipt.effects)) return null;
+    const parsed = cubeBatchUpdatedIdentitySchema.safeParse(receipt.effects);
+    if (!parsed.success || receipt.modified !== parsed.data.length ||
+        parsed.data.some((item) =>
+          item.before.uuid !== item.after.uuid ||
+          item.geometry_effect.changed_fields.length === 0
+        )) return null;
+    affected = parsed.data.map((item) => item.after.uuid);
+  } else if (receipt.geometry_effect !== undefined) {
+    const parsed = cubeUpdatedIdentitySchema.safeParse(receipt);
+    if (!parsed.success ||
+        receipt.modified !== 1 ||
+        receipt.id !== parsed.data.after.uuid ||
+        parsed.data.before.uuid !== parsed.data.after.uuid ||
+        parsed.data.geometry_effect.changed_fields.length === 0) return null;
+    affected = [parsed.data.after.uuid];
+  }
+
+  // A subset would drop an affected Cube from the visual gate; an extra UUID
+  // would claim unrelated geometry as observed. Neither can be a focused
+  // Control verification scope, even if the bounds are numerically valid.
+  if (!affected || affected.length !== scope.cube_uuids.length ||
+      new Set(affected).size !== affected.length ||
+      affected.some((uuid) => !scope.cube_uuids.includes(uuid))) return null;
+  return scope;
 }
 
 export type CubeSemanticScope =

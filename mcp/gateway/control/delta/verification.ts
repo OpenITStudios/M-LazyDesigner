@@ -1,7 +1,7 @@
 import { getCapabilityMetadata } from "../../../lib/capabilities/metadata";
 import { manifestEntryForBranch } from "../../capabilities/manifest";
 import type { CapabilityBranchHint } from "../../capabilities/types";
-import { cubeVisualScopeFromResult } from "../../../lib/receipts/cubeMutation";
+import { cubeReceiptBoundVisualScopeFromResult } from "../../../lib/receipts/cubeMutation";
 import { assessInlinePaintImageEvidence } from "../../../lib/texture/inlinePaintImageEvidence";
 import type { ControlDelta, ControlVerificationScope } from "../types";
 import { STATE_MUTATIONS } from "./policy";
@@ -14,7 +14,7 @@ import {
 export function cubeVerificationScope(value: unknown): ControlVerificationScope | null {
   const candidate = authoritativeReceipt(value);
   if (!candidate) return null;
-  const scope = cubeVisualScopeFromResult(candidate);
+  const scope = cubeReceiptBoundVisualScopeFromResult(candidate);
   if (!scope) return null;
   return {
     kind: "CUBE_TARGETS",
