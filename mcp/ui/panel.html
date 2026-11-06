@@ -61,38 +61,39 @@
         <button type="button" class="user-action primary" :disabled="studioBusy" @click="studioCreate">Create &amp; Preview</button>
       </div>
       <div v-if="studioLoaded" class="ld-studio-edit">
-        <div class="section-hint">Editing {{studioLoaded.settings.identifier}}. Only changed simple fields are updated; advanced authored values remain intact.</div>
+        <div class="section-hint">Editing {{studioLoaded.settings.identifier}}. Move a slider to preview changes instantly; only Apply Changes writes JSON. Advanced values remain intact.</div>
         <div class="ld-studio-control">
           <label for="ld-studio-emission">Particles: {{studioSettings.emission}}</label>
-          <input id="ld-studio-emission" type="range" min="1" max="120" step="1" v-model.number="studioSettings.emission"
+          <input id="ld-studio-emission" type="range" min="1" max="120" step="1" v-model.number="studioSettings.emission" @input="studioLiveChanged"
             :disabled="studioBusy || !studioLoaded.editable.emission"/>
         </div>
         <div class="ld-studio-control">
           <label for="ld-studio-size">Size: {{studioSettings.size}}</label>
-          <input id="ld-studio-size" type="range" min="0.01" max="2" step="0.01" v-model.number="studioSettings.size"
+          <input id="ld-studio-size" type="range" min="0.01" max="2" step="0.01" v-model.number="studioSettings.size" @input="studioLiveChanged"
             :disabled="studioBusy || !studioLoaded.editable.size"/>
         </div>
         <div class="ld-studio-control">
           <label for="ld-studio-speed">Speed: {{studioSettings.speed}}</label>
-          <input id="ld-studio-speed" type="range" min="0" max="8" step="0.05" v-model.number="studioSettings.speed"
+          <input id="ld-studio-speed" type="range" min="0" max="8" step="0.05" v-model.number="studioSettings.speed" @input="studioLiveChanged"
             :disabled="studioBusy || !studioLoaded.editable.speed"/>
         </div>
         <div class="ld-studio-control">
           <label for="ld-studio-lifetime">Lifetime (s): {{studioSettings.lifetime}}</label>
-          <input id="ld-studio-lifetime" type="range" min="0.1" max="10" step="0.1" v-model.number="studioSettings.lifetime"
+          <input id="ld-studio-lifetime" type="range" min="0.1" max="10" step="0.1" v-model.number="studioSettings.lifetime" @input="studioLiveChanged"
             :disabled="studioBusy || !studioLoaded.editable.lifetime"/>
         </div>
         <div class="ld-studio-row">
           <label for="ld-studio-color">Tint</label>
-          <input id="ld-studio-color" type="color" v-model="studioSettings.color"
+          <input id="ld-studio-color" type="color" v-model="studioSettings.color" @input="studioLiveChanged"
             :disabled="studioBusy || !studioLoaded.editable.color"/>
         </div>
         <div class="ld-studio-row">
-          <button class="user-action primary" type="button" :disabled="studioBusy" @click="studioSave">Apply Changes</button>
+          <button class="user-action primary" type="button" :disabled="studioBusy || !studioHasChanges()" @click="studioSave">Apply Changes</button>
+          <button class="user-action" type="button" :disabled="studioBusy || !studioHasChanges()" @click="studioRevert">Discard Draft</button>
         </div>
         <div class="ld-studio-row">
           <label for="ld-studio-locator">Attach to</label>
-          <select id="ld-studio-locator" v-model="studioLocator" :disabled="studioBusy">
+          <select id="ld-studio-locator" v-model="studioLocator" @change="studioLiveChanged" :disabled="studioBusy">
             <option value="">Model origin</option>
             <option v-for="name in studioLocators" :key="name" :value="name">{{name}}</option>
           </select>
@@ -103,7 +104,7 @@
           <button type="button" class="user-action" :disabled="studioBusy" @click="studioCheck">Check Preview</button>
         </div>
         <button type="button" class="user-action" :disabled="studioBusy" @click="studioAttach">Attach at Animation Playhead</button>
-        <p class="section-hint">Select an Animation in Blockbench before attaching. Viewport appearance still requires visual review.</p>
+        <p class="section-hint">Preview is temporary; Apply saves the JSON. Select an Animation before attaching. Viewport appearance still requires visual review.</p>
       </div>
       <p v-if="studioNote" class="ld-studio-note" role="status" aria-live="polite">{{studioNote}}</p>
       <p v-if="studioError" class="ld-error" role="alert">{{studioError}}</p>

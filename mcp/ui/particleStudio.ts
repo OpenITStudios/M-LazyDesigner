@@ -2,7 +2,10 @@
 import { getAllToolDefinitions, tools } from "@/lib/factories";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
 import { getRuntimeLifecycleSnapshot, isRuntimeGenerationCurrent, runRuntimeOperationExclusive } from "@/lib/runtime/lifecycle";
-import { inspectParticleDocument, parseParticleDocument } from "@/lib/particle/document";
+import {
+  applyParticleOperations, inspectParticleDocument, parseParticleDocument,
+  type JsonObject, type ParticleMutationOperation,
+} from "@/lib/particle/document";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
 
 /** Human controls over existing Particle and Animation executors, not a second authoring engine. */
@@ -288,46 +291,100 @@ export async function saveStudioParticle(project: ModelProject, loaded: StudioEf
     return readFileEffect(fs, loaded.path);
   });
 }
+/**
+ * The live draft is compiled from the exact loaded JSON and never writes it.
+ * Existing curves, events and unknown fields are retained by the same lossless
+ * mutation owner used by manage_particle on Apply.
+ */
+export function compileStudioDraft(
+  loaded: StudioEffect, next: StudioSettings,
+): { document: JsonObject; dirty: boolean } {
+  const operations = studioChangeOperations(loaded, next) as ParticleMutationOperation[];
+  const document = applyParticleOperations(parseParticleDocument(loaded.content), operations);
+  const errors = inspectParticleDocument(document).diagnostics.filter(d => d.severity === "error");
+  if (errors.length) {
+    throw new Error("Particle draft is invalid: " + errors[0].message);
+  }
+  return { document, dirty: operations.length > 0 };
+}
+
+type NativeStudioConfig = {
+  texture_source_category?: string;
+  texture?: { dispose(): void };
+};
 type NativeStudioEmitter = {
   enabled: boolean; particles: unknown[]; parent_mode: string;
   local_space: unknown; global_space: unknown;
   playLoop(): void; stopLoop(): void; delete(): void;
 };
 type StudioScene = { global_options: { tick_rate: number } };
-let preview: { project: ModelProject; file: string; emitter: NativeStudioEmitter; config: Record<string, unknown> } | null = null;
+type StudioPreview = {
+  project: ModelProject;
+  file: string;
+  signature: string;
+  dirty: boolean;
+  emitter: NativeStudioEmitter;
+  config: NativeStudioConfig;
+};
+let preview: StudioPreview | null = null;
+
+function disposeStudioEmitter(emitter: NativeStudioEmitter, config: NativeStudioConfig): void {
+  try { emitter.stopLoop(); }
+  catch (error) { console.warn("[LazyDesigner] Particle preview stop failed", error); }
+  try { emitter.delete(); }
+  catch (error) { console.warn("[LazyDesigner] Particle preview disposal failed", error); }
+  try { config.texture?.dispose(); }
+  catch (error) { console.warn("[LazyDesigner] Particle preview texture cleanup failed", error); }
+}
 
 export function stopStudioPreview(): void {
   const active = preview;
   preview = null;
-  if (!active) return;
-  try { active.emitter.stopLoop(); }
-  catch (error) { console.warn("[LazyDesigner] Particle preview stop failed", error); }
-  try { active.emitter.delete(); }
-  catch (error) { console.warn("[LazyDesigner] Particle preview disposal failed", error); }
+  if (active) disposeStudioEmitter(active.emitter, active.config);
 }
-export function startStudioPreview(project: ModelProject, loaded: StudioEffect, locatorName: string): string {
+
+/**
+ * Preview gets its own Wintersky Config so an unsaved slider edit cannot touch
+ * Animator.particle_effects (including any existing animation keyframes).
+ * Blockbench's Animation mode mounts WinterskyScene.space and updates billboards.
+ */
+export function startStudioPreview(
+  project: ModelProject, loaded: StudioEffect, locatorName: string,
+  settings: StudioSettings = loaded.settings,
+): string {
   requireStudioProject(project);
-  stopStudioPreview();
   const { fs } = nativeFiles();
   if (!fs.existsSync(loaded.path) || fs.readFileSync(loaded.path, "utf8") !== loaded.content) {
     throw new Error("Particle source changed. Reopen the effect before starting preview.");
   }
+  const draft = compileStudioDraft(loaded, settings);
+  const signature = JSON.stringify([loaded.path, loaded.content, locatorName, settings]);
+  if (preview?.project === project && preview.signature === signature) {
+    return draft.dirty ? "Live preview reflects unsaved changes." : "Preview is already up to date.";
+  }
   const host = globalThis as unknown as {
-    Wintersky?: { Emitter: new (scene: StudioScene, config: Record<string, unknown>) => NativeStudioEmitter };
+    Wintersky?: {
+      Config: new (scene: StudioScene, document: JsonObject, options: { path: string }) => NativeStudioConfig;
+      Emitter: new (scene: StudioScene, config: NativeStudioConfig) => NativeStudioEmitter;
+    };
     WinterskyScene?: StudioScene;
-    Animator?: { particle_effects?: Record<string, { config: Record<string, unknown> }> };
-    Canvas?: { scene: { add(node: unknown): void } };
+    Animator?: {
+      open?: boolean;
+      particle_effects?: Record<string, { config: { texture_source_category?: string } }>;
+    };
   };
   const scene = host.WinterskyScene;
   const source = host.Animator?.particle_effects?.[loaded.path];
-  if (!scene || !host.Wintersky?.Emitter || !source?.config || !host.Canvas?.scene) {
-    throw new Error("Blockbench's Wintersky preview is unavailable. Open this effect again in Blockbench desktop.");
+  if (!host.Animator?.open || !scene || !host.Wintersky?.Config || !host.Wintersky.Emitter || !source) {
+    throw new Error("Use Blockbench Animate mode and open the particle before previewing.");
   }
   if (source.config.texture_source_category === "placeholder") {
-    throw new Error("Particle texture is unresolved in Blockbench. Check its texture path or use a built-in texture.");
+    throw new Error("Particle texture is unresolved in Blockbench. Check its path or use a built-in texture.");
   }
-  const emitter = new host.Wintersky.Emitter(scene, source.config);
+  const config = new host.Wintersky.Config(scene, draft.document, { path: loaded.path });
+  let emitter: NativeStudioEmitter | null = null;
   try {
+    emitter = new host.Wintersky.Emitter(scene, config);
     if (locatorName) {
       const locators = typeof Locator === "undefined" ? [] : Locator.all.filter(l => l.name === locatorName);
       if (locators.length !== 1 || !locators[0].mesh) throw new Error("The selected locator no longer exists.");
@@ -336,19 +393,24 @@ export function startStudioPreview(project: ModelProject, loaded: StudioEffect, 
     } else {
       emitter.parent_mode = "entity";
     }
-    host.Canvas.scene.add(emitter.global_space);
+    // Native Emitter.start() mounts global_space into WinterskyScene.space.
+    // Do not mount a second copy directly into the Blockbench Canvas scene.
     emitter.playLoop();
-    preview = { project, file: loaded.path, emitter, config: source.config };
+    stopStudioPreview();
+    preview = { project, file: loaded.path, signature, dirty: draft.dirty, emitter, config };
   } catch (error) {
-    emitter.stopLoop();
-    emitter.delete();
+    if (emitter) disposeStudioEmitter(emitter, config);
+    else config.texture?.dispose();
     throw error;
   }
-  return "Standalone emitter started. Viewport visibility is not yet verified.";
+  return draft.dirty
+    ? "Live preview updated. Changes are not saved yet."
+    : "Standalone emitter started. Viewport appearance is still unverified.";
 }
+
 export function studioPreviewStatus(project: ModelProject): string {
   if (!preview || preview.project !== project) return "Preview stopped.";
-  const { emitter, config } = preview;
+  const { emitter, config, dirty } = preview;
   if (config.texture_source_category === "placeholder") {
     return "Texture placeholder: the referenced PNG did not resolve.";
   }
@@ -356,7 +418,8 @@ export function studioPreviewStatus(project: ModelProject): string {
   if (!emitter.enabled || count === 0) {
     return "No active particles observed. Check emission, lifetime and playback.";
   }
-  return count + " active particle(s); viewport appearance still requires visual review.";
+  return count + " active particle(s)" + (dirty ? " (unsaved preview)" : "") +
+    "; viewport appearance still requires visual review.";
 }
 export async function attachStudioParticle(project: ModelProject, loaded: StudioEffect, locatorName: string): Promise<string> {
   return inStudioQueue(project, async () => {

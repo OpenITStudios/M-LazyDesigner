@@ -55,6 +55,19 @@ let projectStateListener: (() => void) | undefined;
 let panelCssHandle: { delete(): void } | undefined;
 let toolsMenuAction: Action | undefined;
 let uiEpoch = 0;
+// One coalesced, bounded live-preview request for the one native docked panel.
+// The existing Runtime operation queue remains the only native operation owner.
+let studioLiveTimer: ReturnType<typeof setTimeout> | null = null;
+let studioLiveGeneration = 0;
+let studioLiveInputs = 0;
+let studioLiveExecuting = false;
+
+function cancelStudioLivePreview(): void {
+  studioLiveGeneration += 1;
+  studioLiveInputs += 1;
+  if (studioLiveTimer !== null) clearTimeout(studioLiveTimer);
+  studioLiveTimer = null;
+}
 
 type UiSetupInput = {
   tools: Record<string, IMCPTool>;
@@ -184,15 +197,63 @@ async function copyPlainText(text: string): Promise<boolean> {
   }
 }
 
-async function startPanelParticlePreview(project: ModelProject, effect: StudioEffect, locator: string): Promise<string> {
+async function startPanelParticlePreview(
+  project: ModelProject, effect: StudioEffect, locator: string,
+  settings: StudioSettings = effect.settings, stillCurrent: () => boolean = () => true,
+): Promise<string> {
   const generation = getRuntimeLifecycleSnapshot().owner_generation;
   if (generation === null) throw new Error("LazyDesigner Runtime is unavailable.");
   return runRuntimeOperationExclusive(generation, async () => {
-    if (!isRuntimeGenerationCurrent(generation) || Project !== project) {
-      throw new Error("Project or plugin changed before particle playback.");
+    if (!isRuntimeGenerationCurrent(generation) || Project !== project || !stillCurrent()) {
+      throw new Error("Particle preview request became stale before playback.");
     }
-    return startStudioPreview(project, effect, locator);
+    return startStudioPreview(project, effect, locator, settings);
   });
+}
+
+function scheduleStudioLivePreview(vm: HumanPanelContext): void {
+  const project = typeof Project === "undefined" ? null : Project;
+  const loaded = vm.studioLoaded;
+  if (!project || !loaded || vm.studioBusy) return;
+  studioLiveInputs += 1;
+  if (studioLiveTimer !== null || studioLiveExecuting) return;
+  const generation = studioLiveGeneration;
+  const mountedEpoch = uiEpoch;
+  // Rate limit during drag, but do not defer indefinitely until mouse release.
+  studioLiveTimer = setTimeout(() => {
+    studioLiveTimer = null;
+    if (studioLiveGeneration !== generation || mountedEpoch !== uiEpoch ||
+        Project !== project || vm.studioLoaded !== loaded || vm.studioBusy) return;
+    const sequence = studioLiveInputs;
+    const settings = { ...vm.studioSettings };
+    const locator = vm.studioLocator;
+    studioLiveExecuting = true;
+    void startPanelParticlePreview(
+      project, loaded, locator, settings,
+      () => studioLiveGeneration === generation &&
+        mountedEpoch === uiEpoch && vm.studioLoaded === loaded && !vm.studioBusy,
+    ).then(note => {
+      if (studioLiveGeneration === generation && mountedEpoch === uiEpoch &&
+          Project === project && vm.studioLoaded === loaded && sequence === studioLiveInputs) {
+        vm.studioNote = note;
+        vm.studioError = "";
+        vm.studioPlaying = true;
+      }
+    }).catch(error => {
+      if (studioLiveGeneration === generation && mountedEpoch === uiEpoch &&
+          Project === project && vm.studioLoaded === loaded && sequence === studioLiveInputs) {
+        vm.studioError = error instanceof Error ? error.message : String(error);
+        vm.studioPlaying = false;
+      }
+    }).finally(() => {
+      studioLiveExecuting = false;
+      if (studioLiveGeneration === generation && mountedEpoch === uiEpoch &&
+          vm.studioLoaded === loaded && !vm.studioBusy && studioLiveInputs !== sequence) {
+        // One latest-value follow-up, not a queue entry for every slider event.
+        scheduleStudioLivePreview(vm);
+      }
+    });
+  }, 100);
 }
 
 export function uiSetup(input: UiSetupInput) {
@@ -247,10 +308,12 @@ export function uiSetup(input: UiSetupInput) {
             ? [...new Set(Locator.all.map(locator => locator.name).filter(Boolean))].sort()
             : [];
           if (event === "select_mode") {
+            cancelStudioLivePreview();
             stopStudioPreview();
             vm.studioPlaying = false;
           }
           if (["select_project", "new_project", "setup_project", "load_project", "close_project"].includes(event ?? "")) {
+            cancelStudioLivePreview();
             stopStudioPreview();
             vm.studioLoaded = null;
             vm.studioSettings = studioDefaults();
@@ -280,6 +343,7 @@ export function uiSetup(input: UiSetupInput) {
         refreshProject();
       },
       beforeDestroy() {
+        cancelStudioLivePreview();
         stopStudioPreview();
         runtimeStatusListener?.();
         runtimeStatusListener = undefined;
@@ -309,9 +373,29 @@ export function uiSetup(input: UiSetupInput) {
         studioPlaying: false,
       }),
       methods: {
+        studioLiveChanged(this: HumanPanelContext): void {
+          scheduleStudioLivePreview(this);
+        },
+        studioRevert(this: HumanPanelContext): void {
+          if (this.studioBusy || !this.studioLoaded) return;
+          cancelStudioLivePreview();
+          this.studioSettings = { ...this.studioLoaded.settings };
+          this.studioError = "";
+          this.studioNote = "Unsaved changes discarded; restoring the saved preview.";
+          scheduleStudioLivePreview(this);
+        },
         studioStageReady(this: HumanPanelContext): boolean {
           return this.project.isBedrock && this.project.hasFolder &&
             getActiveMcpAuthoringStage() === "animation";
+        },
+        studioHasChanges(this: HumanPanelContext): boolean {
+          if (!this.studioLoaded) return false;
+          try {
+            return studioChangeOperations(this.studioLoaded, this.studioSettings).length > 0;
+          } catch {
+            // Let Apply report why a manually edited field cannot be persisted.
+            return true;
+          }
         },
         studioRefresh(this: HumanPanelContext): void {
           try {
@@ -327,6 +411,7 @@ export function uiSetup(input: UiSetupInput) {
         },
         studioReset(this: HumanPanelContext): void {
           if (this.studioBusy) return;
+          cancelStudioLivePreview();
           stopStudioPreview();
           this.studioSettings = studioDefaults();
           this.studioLoaded = null;
@@ -337,6 +422,7 @@ export function uiSetup(input: UiSetupInput) {
         },
         async studioCreate(this: HumanPanelContext): Promise<void> {
           if (this.studioBusy || !Project) return;
+          cancelStudioLivePreview();
           const project = Project;
           const epoch = uiEpoch;
           this.studioBusy = true;
@@ -369,6 +455,7 @@ export function uiSetup(input: UiSetupInput) {
         },
         async studioOpen(this: HumanPanelContext): Promise<void> {
           if (this.studioBusy || !Project || !this.studioChoice) return;
+          cancelStudioLivePreview();
           const project = Project, epoch = uiEpoch;
           this.studioBusy = true;
           this.studioError = "";
@@ -395,6 +482,7 @@ export function uiSetup(input: UiSetupInput) {
         },
         async studioSave(this: HumanPanelContext): Promise<void> {
           if (this.studioBusy || !Project || !this.studioLoaded) return;
+          cancelStudioLivePreview();
           const project = Project, epoch = uiEpoch;
           const loaded = this.studioLoaded;
           const changes = { ...this.studioSettings };
@@ -424,14 +512,14 @@ export function uiSetup(input: UiSetupInput) {
         },
         async studioPlay(this: HumanPanelContext): Promise<void> {
           if (this.studioBusy || !Project || !this.studioLoaded) return;
+          cancelStudioLivePreview();
           const project = Project, epoch = uiEpoch;
           this.studioBusy = true;
           this.studioError = "";
           try {
-            if (studioChangeOperations(this.studioLoaded, this.studioSettings).length) {
-              throw new Error("Apply your changes before previewing the saved particle.");
-            }
-            const note = await startPanelParticlePreview(project, this.studioLoaded, this.studioLocator);
+            const note = await startPanelParticlePreview(
+              project, this.studioLoaded, this.studioLocator, { ...this.studioSettings },
+            );
             if (epoch === uiEpoch && Project === project) {
               this.studioPlaying = true;
               this.studioNote = note;
@@ -446,6 +534,7 @@ export function uiSetup(input: UiSetupInput) {
           }
         },
         studioStop(this: HumanPanelContext): void {
+          cancelStudioLivePreview();
           stopStudioPreview();
           this.studioPlaying = false;
           this.studioNote = "Standalone preview stopped.";
@@ -456,6 +545,7 @@ export function uiSetup(input: UiSetupInput) {
         },
         async studioAttach(this: HumanPanelContext): Promise<void> {
           if (this.studioBusy || !Project || !this.studioLoaded) return;
+          cancelStudioLivePreview();
           const project = Project, epoch = uiEpoch;
           this.studioBusy = true;
           this.studioError = "";
@@ -705,6 +795,7 @@ export function uiSetup(input: UiSetupInput) {
 }
 
 export function uiTeardown(): void {
+  cancelStudioLivePreview();
   uiEpoch += 1; // Retire all queued inspector callbacks before any UI resource disposal.
   const release = (label: string, cleanup: () => void) => {
     try { cleanup(); }
