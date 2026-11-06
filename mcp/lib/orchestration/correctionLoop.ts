@@ -10,6 +10,7 @@ import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import {
   assessVisualPartCorrespondence,
   type PartCorrespondenceInput,
+  type PartCorrespondenceClaim,
 } from "@/lib/reference/partCorrespondence";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
@@ -122,6 +123,12 @@ type CorrectionLoopRecord = {
   discrepancies: VerificationDiscrepancy[];
   /** Only the structured image-observation entrypoint opts into cause-first mutation. */
   observation_origin?: "STRUCTURED_VISUAL";
+  /** Actual accepted observation source pairs; not a caller-supplied plan label. */
+  visual_observation_sources?: Array<{
+    code: string;
+    current_evidence_ref: string;
+    reference_evidence_ref: string | null;
+  }>;
   attempt: 0 | 1 | 2;
   evidence_fingerprint: string;
   last_attempt_evidence_fingerprint: string | null;
@@ -316,6 +323,25 @@ function hasUnverifiedBlockingVisualClaim(
   );
 }
 
+/** Retain exactly the image IDs associated with compiled structured claims.
+ * Their labels are NOT independent image review, but must match the reviewed
+ * part and current model capture before source-only native targeting.
+ */
+function acceptedVisualObservationSources(
+  observations: readonly StructuredVisualObservation[],
+  supported: readonly VerificationDiscrepancy[]
+): NonNullable<CorrectionLoopRecord["visual_observation_sources"]> {
+  const codes = new Set(supported.map((item) => item.code));
+  return observations.flatMap((item) => {
+    const code = typeof item.code === "string" ? item.code.trim() : "";
+    return codes.has(code) ? [{
+      code,
+      current_evidence_ref: item.evidence.current_evidence_ref!.trim(),
+      reference_evidence_ref: item.evidence.reference_evidence_ref?.trim() ?? null,
+    }] : [];
+  });
+}
+
 export class CorrectionLoopRegistry {
   private readonly entries = new Map<CorrectionLoopHandle, CorrectionLoopRecord>();
   private scopeIdentity = "unbound:0";
@@ -343,7 +369,8 @@ export class CorrectionLoopRegistry {
     views: readonly ModelView[],
     expectedNativeFingerprint: string | null = null,
     expectedRecipeId: string | null = null,
-    expectedCapture: PartCorrespondenceInput["model"]["capture"] | null = null
+    expectedCapture: PartCorrespondenceInput["model"]["capture"] | null = null,
+    expectedPartClaim: PartCorrespondenceClaim | null = null
   ): void {
     if (!this.captureEvidenceRegistry || views.length === 0) return;
     const mismatch = (): never => {
@@ -444,6 +471,54 @@ export class CorrectionLoopRegistry {
             })
           )
         )) mismatch();
+      if (expectedPartClaim) {
+        // The native capture already resolved actual Cube UUIDs to saved
+        // Recipe instance IDs. The later, reviewed client mapping must
+        // preserve those exact pairs; matching project/camera/hash alone
+        // cannot justify editing a different Cube.
+        const rawClaims = correspondence.claims;
+        if (!Array.isArray(rawClaims)) mismatch();
+        const matches = rawClaims.map(obj).filter((row) =>
+          row?.image_id === expectedPartClaim.image_id &&
+          row.region_id === expectedPartClaim.region_id &&
+          row.part_id === expectedPartClaim.part_id
+        );
+        if (matches.length !== 1) mismatch();
+        const nativeClaim = matches[0];
+        if (!nativeClaim) mismatch();
+        const pairs = (ids: unknown, instances: unknown): string[] | null => {
+          if (!Array.isArray(ids) || !Array.isArray(instances) ||
+              ids.length === 0 || ids.length !== instances.length ||
+              ids.some((id) => typeof id !== "string" || !id.trim()) ||
+              instances.some((id) => typeof id !== "string" || !id.trim()) ||
+              new Set(ids).size !== ids.length ||
+              new Set(instances).size !== instances.length) return null;
+          return ids.map((uuid, index) =>
+            JSON.stringify([uuid, instances[index]])
+          ).sort();
+        };
+        const nativePairs = pairs(
+          nativeClaim.native_cube_uuids, nativeClaim.native_instance_ids
+        );
+        const reviewedPairs = pairs(
+          expectedPartClaim.native_cube_uuids, expectedPartClaim.native_instance_ids
+        );
+        if (nativeClaim.state !== "PROVISIONAL" ||
+            nativeClaim.reason !== "IMAGE_REVIEW_NOT_COMPLETE" ||
+            nativeClaim.view !== expectedPartClaim.view ||
+            nativeClaim.owner !== expectedPartClaim.owner ||
+            nativeClaim.evidence_role !== expectedPartClaim.evidence_role ||
+            nativeClaim.visibility !== expectedPartClaim.visibility ||
+            nativeClaim.image_sha256 !== expectedPartClaim.image_sha256 ||
+            nativeClaim.project_uuid !== expectedPartClaim.project_uuid ||
+            nativeClaim.model_evidence_handle !== expectedPartClaim.model_evidence_handle ||
+            nativeClaim.native_snapshot_fingerprint !==
+              expectedPartClaim.native_snapshot_fingerprint ||
+            nativePairs === null || reviewedPairs === null ||
+            JSON.stringify(nativePairs) !== JSON.stringify(reviewedPairs)) {
+          mismatch();
+        }
+      }
     }
   }
 
@@ -452,6 +527,7 @@ export class CorrectionLoopRegistry {
       CorrectionLoopRecord,
       | "discrepancies"
       | "observation_origin"
+      | "visual_observation_sources"
       | "attempt"
       | "evidence_fingerprint"
       | "last_attempt_evidence_fingerprint"
@@ -492,6 +568,9 @@ export class CorrectionLoopRegistry {
         ...recordInput,
         discrepancies: compiled.supported,
         observation_origin: "STRUCTURED_VISUAL",
+        visual_observation_sources: acceptedVisualObservationSources(
+          input.observations, compiled.supported
+        ),
       }),
       unverified: compiled.unverified,
     };
@@ -913,6 +992,21 @@ export class CorrectionLoopRegistry {
       compiled.supported,
       options
     );
+    // Only commit reference pairing after the canonical update accepted the
+    // evidence. Untouched non-target views keep their previous provenance.
+    const accepted = acceptedVisualObservationSources(
+      observations, compiled.supported
+    );
+    const acceptedCodes = new Set(accepted.map((item) => item.code));
+    const remainingCodes = new Set(
+      record.discrepancies.map((item) => item.code)
+    );
+    record.visual_observation_sources = [
+      ...(record.visual_observation_sources ?? []).filter((item) =>
+        remainingCodes.has(item.code) && !acceptedCodes.has(item.code)
+      ),
+      ...accepted,
+    ];
     return {
       applied: true,
       accepted_count: compiled.supported.length,
@@ -1291,7 +1385,13 @@ export class CorrectionLoopRegistry {
           claim.part_id === partBinding.part_id
         );
         const claim = claims.length === 1 ? claims[0] : null;
-        if (!claim || claim.state !== "CONFLICTING" ||
+        const observed = record.visual_observation_sources?.find(
+          (item) => item.code === focus.code
+        );
+        if (!claim || !observed ||
+            observed.current_evidence_ref !== claim.model_evidence_handle ||
+            observed.reference_evidence_ref !== claim.image_id ||
+            claim.state !== "CONFLICTING" ||
             claim.reason !== "VISUAL_MISMATCH_REPORTED" ||
             claim.owner !== "GEOMETRY" || claim.evidence_role !== "PRIMARY_VOLUME" ||
             claim.visibility !== "DIRECT" || !claim.view ||
@@ -1319,7 +1419,8 @@ export class CorrectionLoopRegistry {
           [claim.view],
           claim.native_snapshot_fingerprint,
           record.recipe_id,
-          input.model.capture
+          input.model.capture,
+          claim
         );
         scopedPart = {
           instance_ids: new Set(claim.native_instance_ids),

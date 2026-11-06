@@ -13,7 +13,10 @@ import {
   type AuthoringRecipeNativeSnapshot,
 } from "@/lib/authoringRecipe/nativeState";
 import { parseReferenceImageRegions } from "@/lib/reference/imageRegionEvidence";
-import type { PartCorrespondenceInput } from "@/lib/reference/partCorrespondence";
+import {
+  assessVisualPartCorrespondence,
+  type PartCorrespondenceInput,
+} from "@/lib/reference/partCorrespondence";
 
 function recipe(): AuthoringRecipe {
   return {
@@ -3613,7 +3616,11 @@ describe("opt-in reviewed visual part to exact Recipe correction identity", () =
   const captureHandle = "modelcapture:" + hash("e");
   const renderedHash = hash("f");
 
-  function fixture() {
+  function fixture(options: {
+    nativeClaim?: "MISSING" | "ALTERED";
+    observationCurrentRef?: string;
+    observationReferenceRef?: string;
+  } = {}) {
     const authored: AuthoringRecipe = {
       schema: 1, compiler_version: 1, id: "asset", name: "Grouped prop",
       prototypes: [
@@ -3682,6 +3689,17 @@ describe("opt-in reviewed visual part to exact Recipe correction identity", () =
         },
       }],
     };
+    // The native capture constructs these provisional claims from the saved
+    // Recipe UUID ownership BEFORE an independent visual review occurs.
+    const nativeClaims = assessVisualPartCorrespondence({
+      ...correspondence,
+      proposals: correspondence.proposals.map(
+        ({ review: _review, ...candidate }) => candidate
+      ),
+    }).claims;
+    if (options.nativeClaim === "ALTERED") {
+      nativeClaims[0]!.native_instance_ids = ["other:0"];
+    }
     const request = {
       domain: "GEOMETRY" as const,
       source: "capture_model_views" as const,
@@ -3717,6 +3735,7 @@ describe("opt-in reviewed visual part to exact Recipe correction identity", () =
           capture_dependency_fingerprint: "sha256:" + hash("d"),
           model_capture_evidence_handle: captureHandle,
           model_images: [{ view: "front", sha256: renderedHash }],
+          ...(options.nativeClaim === "MISSING" ? {} : { claims: nativeClaims }),
         },
       }},
     });
@@ -3733,8 +3752,9 @@ describe("opt-in reviewed visual part to exact Recipe correction identity", () =
         severity: "BLOCKING",
         summary: "The reviewed arm is too narrow.",
         evidence: {
-          current_evidence_ref: captureHandle,
-          reference_evidence_ref: "IMG_FRONT", views: ["front"],
+          current_evidence_ref: options.observationCurrentRef ?? captureHandle,
+          reference_evidence_ref: options.observationReferenceRef ?? "IMG_FRONT",
+          views: ["front"],
         },
         cause_family: "SIZE_MISMATCH",
       }],
@@ -3761,6 +3781,7 @@ describe("opt-in reviewed visual part to exact Recipe correction identity", () =
     return {
       authored, correspondence, partBinding, loop, handle: started.handle,
       receiptStore, nativeFingerprint, candidate,
+      captureHandle, verificationHandle,
     };
   }
 
@@ -3784,6 +3805,78 @@ describe("opt-in reviewed visual part to exact Recipe correction identity", () =
     });
     expect(right.rebuild?.preserved_instance_ids).toContain("other:0");
     expect(authored).toEqual(before);
+  });
+
+  test("reviewed UUID-instance pairs must match the stored native capture, not a client relabel", () => {
+    for (const mode of ["MISSING", "ALTERED"] as const) {
+      const { loop, handle, partBinding, candidate } = fixture({ nativeClaim: mode });
+      const before = loop.projectContinuation(handle);
+      const plan = loop.planGeometryCorrection(
+        handle, [candidate("arms:0")], {}, partBinding
+      );
+      expect(plan, mode).toMatchObject({
+        state: "BLOCKED", blocked_reason: "VISUAL_PART_CORRESPONDENCE_UNVERIFIED",
+        attempt: 0,
+      });
+      expect(loop.projectContinuation(handle)).toEqual(before);
+    }
+
+    const { loop, handle, partBinding, candidate } = fixture();
+    const forged = structuredClone(partBinding.input);
+    // A client can relabel a different native UUID as a valid Recipe
+    // instance without changing the model revision or screenshot digest.
+    forged.model.identities.identities[0]!.native_uuid = "cube-uuid-1";
+    forged.proposals[0]!.native_cube_uuids = ["cube-uuid-1"];
+    expect(assessVisualPartCorrespondence(forged).claims[0]).toMatchObject({
+      state: "CONFLICTING", reason: "VISUAL_MISMATCH_REPORTED",
+      native_cube_uuids: ["cube-uuid-1"], native_instance_ids: ["arms:0"],
+    });
+    const before = loop.projectContinuation(handle);
+    expect(loop.planGeometryCorrection(
+      handle, [candidate("arms:0")], {},
+      { ...partBinding, input: forged }
+    )).toMatchObject({
+      state: "BLOCKED", blocked_reason: "VISUAL_PART_CORRESPONDENCE_UNVERIFIED",
+      attempt: 0,
+    });
+    expect(loop.projectContinuation(handle)).toEqual(before);
+  });
+
+  test("reviewed part must match the exact accepted observation and capture source", () => {
+    for (const override of [
+      { observationCurrentRef: "modelcapture:" + hash("7") },
+      { observationReferenceRef: "IMG_OTHER" },
+    ]) {
+      const { loop, handle, candidate, partBinding } = fixture(override);
+      const before = loop.projectContinuation(handle);
+      expect(loop.planGeometryCorrection(
+        handle, [candidate("arms:0")], {}, partBinding
+      )).toMatchObject({
+        state: "BLOCKED", blocked_reason: "VISUAL_PART_CORRESPONDENCE_UNVERIFIED",
+        attempt: 0,
+      });
+      expect(loop.projectContinuation(handle)).toEqual(before);
+    }
+    // Only a successfully accepted visual update can replace the source
+    // pairing; a mere planning argument cannot relabel prior evidence.
+    const {
+      loop, handle, candidate, partBinding, captureHandle, verificationHandle,
+    } = fixture({ observationReferenceRef: "IMG_OTHER" });
+    const updated = loop.updateEvidenceFromObservations(
+      handle, verificationHandle, [{
+        code: "ARM_WIDTH", criterion: "SILHOUETTE_PROPORTION",
+        severity: "BLOCKING", summary: "Reviewed current part remains too narrow.",
+        evidence: {
+          current_evidence_ref: captureHandle,
+          reference_evidence_ref: "IMG_FRONT", views: ["front"],
+        },
+        cause_family: "SIZE_MISMATCH",
+      }]
+    );
+    expect(updated).toMatchObject({ applied: true, accepted_count: 1 });
+    expect(loop.planGeometryCorrection(
+      handle, [candidate("arms:0")], {}, partBinding
+    ).state).toBe("CORRECTION_READY");
   });
 
   test("revision, source review, capture identity and project drift fail closed", () => {
