@@ -225,6 +225,78 @@ describe("BlockIT Gateway capability discovery hardening", () => {
     }]);
     expect(branchIndependent?.eligibility).toBeUndefined();
   });
+  test("graphless mutation readiness stays UNKNOWN while resolved read branches stay lightweight", () => {
+    const base = {
+      capability_id: "manage_material_instances",
+      description: "Inspect or assign face materials.",
+      tier: "primary" as const,
+      read_only: false,
+      destructive: false,
+      idempotent: false,
+    };
+    // An exact-name result without operation cannot claim selected readiness,
+    // even if every declared operation lacks graph prerequisites.
+    const [unselected] = projectCapabilitiesForSearch([{
+      ...base, eligibility: "READY",
+    }]);
+    expect(unselected?.eligibility).toBe("UNKNOWN");
+    expect(unselected?.why).toContain("describe the exact operation");
+
+    // Read-only list/get do not need invented dependency checks or status calls.
+    for (const operation of ["list", "get"]) {
+      const [query] = projectCapabilitiesForSearch([{
+        ...base,
+        branch: { field: "operation", value: operation },
+        eligibility: "READY",
+      }]);
+      expect(query?.eligibility).toBeUndefined();
+      expect(query?.operation_class).toBe("QUERY");
+      expect(query?.why).toBeUndefined();
+    }
+
+    // Valid native mutation branches do not become READY only because the
+    // semantic graph declares no prerequisites. This is not a Runtime block.
+    for (const operation of ["set", "bulk_set", "clear"]) {
+      const [mutation] = projectCapabilitiesForSearch([{
+        ...base,
+        branch: { field: "operation", value: operation },
+        eligibility: "READY",
+      }]);
+      expect(mutation?.eligibility).toBe("UNKNOWN");
+      expect(mutation?.operation_class).toBe("MUTATION");
+      expect(mutation?.why).toContain("prerequisites are not declared");
+      expect(gatewaySearchSuccessOutputSchema.safeParse({
+        capabilities: [mutation],
+      }).success).toBe(true);
+    }
+    const [channel] = projectCapabilitiesForSearch([{
+      ...base,
+      capability_id: "manage_material",
+      branch: { field: "operation", value: "assign_channel" },
+      eligibility: "READY",
+    }]);
+    expect(channel?.eligibility).toBe("UNKNOWN");
+
+    // Native/Graph facts that really block are not softened by the search UI.
+    const [blocked] = projectCapabilitiesForSearch([{
+      ...base,
+      branch: { field: "operation", value: "set" },
+      eligibility: "BLOCKED",
+      requires: ["project_bound" as const],
+    }]);
+    expect(blocked?.eligibility).toBe("BLOCKED");
+    expect(blocked?.requires).toEqual(["project_bound"]);
+
+    // Explicitly graphed operations retain their existing READY presentation.
+    const [graphed] = projectCapabilitiesForSearch([{
+      ...base,
+      capability_id: "manage_cubes",
+      branch: { field: "operation", value: "create" },
+      eligibility: "READY",
+    }]);
+    expect(graphed?.eligibility).toBeUndefined();
+  });
+
   test("exact capability name short-circuits to exactly one result", () => {
     const exact = searchCapabilityCatalog(tools, "manage_cubes", 50);
     expect(exact).toHaveLength(1);

@@ -62,29 +62,27 @@ function compactCapabilityHint(description: string): string | undefined {
 }
 
 /**
- * Search is orientation, not a Runtime invocation. Where branch-qualified
- * prerequisites exist without a selected graph, a missing/unsupported
- * operation must not inherit implicit READY from the graph's no-entry path.
- * This uses the canonical branch manifest, not a duplicate capability table.
+ * Search is orientation, not native availability. Unselected/unsupported
+ * branch identities are not a READY operation. A declared mutation with no
+ * branch graph also lacks proved prerequisites, even if its schema is valid.
+ * Read-only graphless branches remain discoverable without extra ceremony.
  */
-function unresolvedSearchBranch(capability: CapabilitySummary): boolean {
-  const entries = manifestEntriesForCapability(capability.capability_id);
-  if (capability.branch) {
-    // Unknown explicit operations cannot borrow a plausible READY label from
-    // branch-only semantic metadata, even when no graph prerequisites exist.
-    // Leave truly branch-independent capabilities alone.
-    if (!entries.some((entry) => entry.branch)) return false;
-    return !entries.some((entry) =>
-      entry.branch?.field === capability.branch?.field &&
-      entry.branch.value === capability.branch?.value
-    );
-  }
-  // Only an unselected capability with real branch-qualified prerequisites
-  // needs the ambiguity hint. A generic branchless graph is not a selected
-  // operation, and is not evidence that any specific operation is READY.
-  return entries.some((entry) =>
-    entry.branch && (entry.graph?.requires?.length ?? 0) > 0
+function searchBranchReadinessHint(
+  capability: CapabilitySummary,
+  operationClass: string
+): "UNRESOLVED_OPERATION" | "UNDECLARED_MUTATION_GRAPH" | null {
+  const branches = manifestEntriesForCapability(capability.capability_id)
+    .filter((entry) => entry.branch);
+  if (branches.length === 0) return null;
+  if (!capability.branch) return "UNRESOLVED_OPERATION";
+  const exact = branches.find((entry) =>
+    entry.branch?.field === capability.branch?.field &&
+    entry.branch.value === capability.branch?.value
   );
+  if (!exact) return "UNRESOLVED_OPERATION";
+  return !exact.graph && operationClass === "MUTATION"
+    ? "UNDECLARED_MUTATION_GRAPH"
+    : null;
 }
 
 /** AI-facing search only needs the canonical domain, not source-owner
@@ -110,17 +108,18 @@ export function projectCapabilitiesForSearch(
       ...(capability.idempotent ? ["idempotent" as const] : []),
     ];
     const hint = compactCapabilityHint(capability.description);
-    const branchUnresolved = unresolvedSearchBranch(capability);
-    // Preserve confirmed BLOCKED; otherwise mark unresolved branch routing
-    // UNKNOWN only for the AI-facing search projection. Native executors and
-    // graph facts are not modified by this presentation guard.
-    const eligibility = branchUnresolved && capability.eligibility !== "BLOCKED"
+    const branchHint = searchBranchReadinessHint(capability, operationClass);
+    // Preserve a confirmed BLOCKED verdict. UNKNOWN is AI-facing guidance,
+    // not an early rejection or a change to Runtime schema/Graph authority.
+    const eligibility = branchHint && capability.eligibility !== "BLOCKED"
       ? "UNKNOWN" as const
       : capability.eligibility;
-    const why = branchUnresolved
+    const why = branchHint
       ? [
           capability.why,
-          "Operation branch not resolved; describe the exact operation before invoking.",
+          branchHint === "UNRESOLVED_OPERATION"
+            ? "Operation branch not resolved; describe the exact operation before invoking."
+            : "Mutation prerequisites are not declared in the Graph; Runtime validates the operation.",
         ].filter(Boolean).join(" ")
       : capability.why;
     return {
