@@ -370,16 +370,38 @@ export async function attachStudioParticle(project: ModelProject, loaded: Studio
     const def = getAllToolDefinitions().manage_animation_effects;
     if (!def) throw new Error("Native Animation effects tool is unavailable.");
     const time = typeof Timeline !== "undefined" ? Timeline.time : 0;
+    const snappedTime = Timeline.snapTime(time, selected);
+    const effectName = loaded.settings.identifier.split(":")[1];
+    const keyframes = selected.animators.effects?.particle ?? [];
+    const sameTime = keyframes.filter(key => Math.abs(key.time - snappedTime) < 0.001);
+    if (sameTime.length > 1) {
+      throw new Error("Multiple particle keyframes at this time. Resolve ambiguous tracks in Blockbench.");
+    }
+    const matches = sameTime.flatMap(key => key.data_points.map((point, index) =>
+      ({ key, point, index }))).filter(entry =>
+        entry.point.effect === effectName || entry.point.effect === loaded.settings.identifier);
+    if (matches.length > 1) {
+      throw new Error("This effect appears multiple times at the playhead. Select the intended keyframe manually.");
+    }
+    if (matches.length === 1 && matches[0].point.file === loaded.path &&
+        (matches[0].point.locator || "") === locatorName) {
+      return "Particle is already attached at the selected playhead.";
+    }
+    const operation = matches.length === 1
+      ? { operation: "update", channel: "particle",
+          keyframe_uuid: matches[0].key.uuid, data_point_index: matches[0].index,
+          effect: matches[0].point.effect, locator: locatorName || null }
+      : { operation: "add", channel: "particle",
+          time: snappedTime, effect: effectName,
+          ...(locatorName ? { locator: locatorName, bind_to_actor: true } : {}) };
     const request = await def.parameterSchema.parseAsync({
-      animation_id: selected.uuid,
-      operations: [{ operation: "add", channel: "particle",
-        time, effect: loaded.settings.identifier.split(":")[1],
-        ...(locatorName ? { locator: locatorName, bind_to_actor: true } : {}) }],
+      animation_id: selected.uuid, operations: [operation],
     });
     const receipt = receiptOf(await def.execute(request));
     if (!Array.isArray(receipt.results)) {
       throw new Error("Animation edit was not confirmed. Inspect the native timeline before retrying.");
     }
-    return "Particle added at " + time + "s. Minecraft export may require a client-entity short-name mapping.";
+    return (matches.length ? "Existing particle binding repaired at " : "Particle added at ") +
+      snappedTime + "s. Minecraft export may require a client-entity short-name mapping.";
   });
 }

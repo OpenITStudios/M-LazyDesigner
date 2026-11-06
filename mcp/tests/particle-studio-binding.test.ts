@@ -23,6 +23,15 @@ describe("Particle Studio native preview identity", () => {
     ])).toBe(loaded[0].path);
   });
 
+  test("preview binding recheck is separate from exported semantic fields", async () => {
+    const source = await Bun.file("server/tools/animation/effects.ts").text();
+    expect(source).toContain('found.point.snapshot.file === next.file');
+    expect(source).toContain('next.file = loadedParticlePreviewFile(next.effect) ?? ""');
+    const studio = await Bun.file("ui/particleStudio.ts").text();
+    expect(studio).toContain('operation: "update"');
+    expect(studio).toContain('Particle is already attached at the selected playhead.');
+  });
+
   test("native loader clears cached texture and requests refresh", () => {
     const original = Object.getOwnPropertyDescriptor(globalThis, "Animator");
     let refreshes = 0;

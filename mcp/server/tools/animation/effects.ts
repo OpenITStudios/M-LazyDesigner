@@ -301,8 +301,12 @@ export function registerAnimationEffectTools() {
 
           const nextTime = snappedTime ?? found.keyframe.time;
           const next = applyEffectPayload(operation.channel, found.point.snapshot, operation);
+          if (operation.channel === "particle" && operation.effect !== undefined) {
+            next.file = loadedParticlePreviewFile(next.effect) ?? "";
+          }
           if (animationEffectSameTime(nextTime, found.keyframe.time)) {
-            if (snapshotsEffectivelyEqual(operation.channel, found.point.snapshot, next)) {
+            if (snapshotsEffectivelyEqual(operation.channel, found.point.snapshot, next) &&
+                found.point.snapshot.file === next.file) {
               throw new Error(`${operation.channel} update for ${operation.keyframe_uuid}:${operation.data_point_index} is an effective no-op.`);
             }
             found.point.snapshot = next;
