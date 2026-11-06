@@ -112,6 +112,8 @@ Check the relevant physical facts: spawn rate × lifetime versus numeric cap, su
 
 **Acceptance is separate:** reference-matched visual readability, correct in-game particle/event behavior and target-hardware frame-time/FPS evidence under representative concurrent load. Until those are observed, status is `GAME_PERFORMANCE_UNVERIFIED` and `VISUAL_QUALITY_UNVERIFIED` even when JSON/schema and static cost checks are clear. Do not demand tests while the user test hold is active; retain the evidence boundary.
 
+**Production-safety rule:** A structurally valid pack with a cycle, missing child, unbounded dynamic expression or suspected per-particle event fan-out requires targeted source review before game delivery. A clean static inspection still requires gameplay evidence; neither verdict may claim safe FPS. Check replayed instant bursts, emitter timeline repetition, simultaneous player/mob/projectile activations, overlapping transparent sprites and lower-spec devices. Optimize the minimal visually redundant cost, not the focal effect. `analyzeBedrockParticlePack.gameplay_release_review` is a read-only warning owner and does not certify an actual release gate or replace runtime observation.
+
 ## Gate 11 — Package integrity
 
 Before delivery verify:

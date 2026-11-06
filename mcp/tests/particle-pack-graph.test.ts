@@ -99,6 +99,28 @@ describe("Bedrock particle pack dependency analysis", () => {
     });
   });
 
+  test("structurally valid pack never receives an unsupported game-performance approval", () => {
+    const plain = analyzeBedrockParticlePack({
+      particles: [{ document: nestedParticle("blockit:tiny") }],
+    });
+    expect(plain.valid).toBe(true);
+    expect(plain.gameplay_release_review).toEqual({
+      state: "TARGET_GAME_EVIDENCE_REQUIRED", risk_reasons: [],
+      claim_game_performance_safe: false, source_only: true,
+    });
+    const recursive = analyzeBedrockParticlePack({
+      particles: [
+        { document: nestedParticle("blockit:a", "blockit:b") },
+        { document: nestedParticle("blockit:b", "blockit:a") },
+      ],
+    });
+    expect(recursive.valid).toBe(true); // Structure and gameplay readiness differ.
+    expect(recursive.gameplay_release_review).toMatchObject({
+      state: "STATIC_RISKS_REQUIRE_REVIEW", claim_game_performance_safe: false,
+      risk_reasons: expect.arrayContaining(["particle_child_event_cycle"]),
+    });
+  });
+
   test("detects cross-file dependency cycles without treating them as structural invalidity", () => {
     const result = analyzeBedrockParticlePack({
       particles: [

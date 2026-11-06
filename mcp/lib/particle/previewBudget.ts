@@ -73,7 +73,9 @@ export type ParticleGameCostDriver =
   | "parametric_motion_update_cost"
   | "render_expression_or_curve_cost"
   | "nested_effect_activation_cost"
-  | "per_particle_nested_event_risk";
+  | "per_particle_nested_event_risk"
+  | "repeating_burst_emission"
+  | "repeating_emitter_child_events";
 
 export type ParticleGameCostReview = {
   state: "REVIEW_FACTORS" | "NO_STATIC_RISKS_FLAGGED";
@@ -94,6 +96,9 @@ export function assessParticleGameCost(
   const components = object(effect?.components);
   const render = object(object(effect?.description)?.basic_render_parameters);
   const steady = object(components?.["minecraft:emitter_rate_steady"]);
+  const burst = object(components?.["minecraft:emitter_rate_instant"]);
+  const emitterLoop = object(components?.["minecraft:emitter_lifetime_looping"]);
+  const emitterEvents = object(components?.["minecraft:emitter_lifetime_events"]);
   const lifetime = object(components?.["minecraft:particle_lifetime_expression"]);
   const billboard = object(components?.["minecraft:particle_appearance_billboard"]);
   const collision = object(components?.["minecraft:particle_motion_collision"]);
@@ -134,6 +139,12 @@ export function assessParticleGameCost(
        initialization.per_render_expression.trim().length > 0) ||
       (curves !== null && Object.keys(curves).length > 0))
     drivers.push("render_expression_or_curve_cost");
+  // A small instant burst may repeat indefinitely when the emitter loops:
+  // the per-burst count alone cannot establish a safe total game workload.
+  if (burst && emitterLoop)
+    drivers.push("repeating_burst_emission");
+  if (childIdentifiers.length > 0 && emitterLoop && emitterEvents)
+    drivers.push("repeating_emitter_child_events");
   if (childIdentifiers.length > 0) {
     drivers.push("nested_effect_activation_cost");
     if (components?.["minecraft:particle_lifetime_events"] !== undefined ||

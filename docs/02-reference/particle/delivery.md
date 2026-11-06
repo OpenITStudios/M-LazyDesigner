@@ -4,6 +4,18 @@ Deliver a normal Minecraft Bedrock Resource Pack folder or ZIP unless the user e
 
 This file owns **user-facing Particle delivery**. When the same authored particle is intentionally handed to Codex / LazyDesigner MCP, add the canonical LazyDesigner `REFERENCE.json` described by `../package/particle-handoff.md`; do not invent a separate Particle handoff manifest.
 
+## Game-performance safety of delivered particles
+
+A valid Resource Pack or handoff package may be delivered for **review** without implying it is performance-safe in Minecraft. Preserve separate statuses:
+
+- `ASSET_READY_FOR_REVIEW` — JSON/texture/source requirements are complete for the requested artifact;
+- `STATIC_GAME_COST_REVIEW_REQUIRED` — source-level risk drivers or child-event cycles need explicit resolution;
+- `GAME_PERFORMANCE_UNVERIFIED` — no accepted target-game load/FPS result exists.
+
+Do **not** label a package production-safe based solely on JSON validity, a small particle count, Snowstorm/Blockbench preview, or the editor `preview_workload` threshold. For gameplay-facing delivery, record the expected simultaneous player/mob/projectile usage, lower-end target device, the quality-critical visual elements to preserve, and whether a real with/without-effect game performance comparison has been accepted. Missing context remains **unknown**; do not fabricate targets. This is descriptive metadata in an existing README or handoff, not a new manifest, runtime process, or upload block.
+
+Official performance guidance: https://learn.microsoft.com/en-us/minecraft/creator/documents/practices/improvingperformanceandresourceusage?view=minecraft-bedrock-stable
+
 ## 1. Output identity
 
 Resolve one durable package identity before writing files:

@@ -109,6 +109,22 @@ describe("single-emitter authoring viewport workload (no FPS claims)", () => {
     });
   });
 
+  test("repeating bursts are game-cost risks even with a tiny per-burst population", () => {
+    const source = applyParticleOperations(createParticleDocument({
+      identifier: "test:loop_burst", preset: "burst",
+    }), [
+      { op: "set_component", component: "minecraft:emitter_lifetime_looping",
+        value: { active_time: 0.1, sleep_time: 0 } },
+      { op: "remove_component", component: "minecraft:emitter_lifetime_once" },
+    ]);
+    const prior = JSON.stringify(source);
+    const summary = inspectParticleDocument(source);
+    expect(summary.preview_workload.estimated_active_particles).toBe(12);
+    expect(summary.game_cost.cost_drivers).toContain("repeating_burst_emission");
+    expect(summary.game_cost.device_fps_verified).toBe(false);
+    expect(JSON.stringify(source)).toBe(prior);
+  });
+
   test("nested effects require manual review and direct recursion blocks native preview", () => {
     const nested = (target: string) => applyParticleOperations(
       createParticleDocument({ identifier: "test:root", preset: "burst" }), [

@@ -52,6 +52,13 @@ export type ParticlePackAnalysis = {
   };
   texture_dependencies: string[];
   sound_dependencies: string[];
+  /** Advisory game-readiness gate. Structural validity never implies safe FPS. */
+  gameplay_release_review: {
+    state: "STATIC_RISKS_REQUIRE_REVIEW" | "TARGET_GAME_EVIDENCE_REQUIRED";
+    risk_reasons: string[];
+    claim_game_performance_safe: false;
+    source_only: true;
+  };
   diagnostics: ParticlePackDiagnostic[];
   valid: boolean;
 };
@@ -360,6 +367,21 @@ export function analyzeBedrockParticlePack(input: ParticlePackAnalysisInput): Pa
       [...summaries.values()].flatMap(summary => summary.game_cost.cost_drivers)
     ).slice(0, 11),
   };
+  // A valid pack may still have severe runtime fan-out or transparency cost.
+  // Keep the release review independent of JSON structural validity.
+  const gameplayRiskReasons = stableUnique([
+    ...compositionWorkload.game_cost_drivers,
+    ...(cycles.length ? ["particle_child_event_cycle"] : []),
+    ...(missingChild ? ["unresolved_particle_child"] : []),
+    ...(diagnosticState.has_error ? ["particle_pack_static_validation_error"] : []),
+  ]).slice(0, 20);
+  const gameplayReleaseReview: ParticlePackAnalysis["gameplay_release_review"] = {
+    state: gameplayRiskReasons.length
+      ? "STATIC_RISKS_REQUIRE_REVIEW" : "TARGET_GAME_EVIDENCE_REQUIRED",
+    risk_reasons: gameplayRiskReasons,
+    claim_game_performance_safe: false,
+    source_only: true,
+  };
   const diagnostics = finalizeDiagnostics(diagnosticState);
   return {
     particle_count: input.particles.length,
@@ -370,6 +392,7 @@ export function analyzeBedrockParticlePack(input: ParticlePackAnalysisInput): Pa
     composition_workload: compositionWorkload,
     texture_dependencies: stableUnique(textureDependencies),
     sound_dependencies: stableUnique(soundDependencies),
+    gameplay_release_review: gameplayReleaseReview,
     diagnostics,
     valid: !diagnosticState.has_error,
   };

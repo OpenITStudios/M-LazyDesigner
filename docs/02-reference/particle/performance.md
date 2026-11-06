@@ -43,6 +43,16 @@ The existing `inspectParticleDocument` now provides **`game_cost`** alongside `p
 
 **No automatic visual downgrading:** `game_cost` is advisory. It must not mutate particle JSON, replace authored material, strip a curve, remove an effect layer, change event timing, force a global spawn cap, or prevent Save merely to obtain a small metric.
 
+### Preventing game performance incidents
+
+Do not confuse a small per-emitter count with a small **gameplay workload**. A burst can repeat every emitter loop; an event can create children; one effect can have many simultaneous instances across players, mobs, projectiles or arenas. The authoring game-cost inspector flags *repeating_burst_emission* and *repeating_emitter_child_events* in addition to its existing continuous spawn/lifetime/overdraw/MoLang/collision risks. These are conservative source warnings, not proof that the effect will lag.
+
+For a known gameplay scenario, reason about `sum(estimated single-emitter active particles × concurrently active instances)` as an **illustrative lower-information workload estimate**, never a proven simultaneous peak: event repetition, dynamic expressions, GPU fill-rate and scene visibility may dominate. Do not invent concurrency values. The gameplay caller must establish how often/where effects are triggered; this asset-only tool does not change gameplay scripts or automatically disable an authored effect.
+
+**Non-negotiable release review:** A valid particle document, successfully saved resource pack or clean Blockbench preview is not a game-performance approval. The existing pack analysis exposes `gameplay_release_review`: `STATIC_RISKS_REQUIRE_REVIEW` when source hazards are found, otherwise `TARGET_GAME_EVIDENCE_REQUIRED`. In both states `claim_game_performance_safe=false`. Production approval needs recorded representative and worst-reasonable-case concurrent effects, the actual supported low-end target, repeatable frame-time/FPS comparison with and without the effect, and a visual/behavioral equivalence verdict after optimization. Until those facts exist, use `GAME_PERFORMANCE_UNVERIFIED`, not "game-safe".
+
+This is a QA/release decision, not a new runtime service, editor limiter, automatically generated LOD system, shader rewrite, or extra test suite. Source-only warnings remain inexpensive and do not block exploratory authoring.
+
 ## Visible population estimate
 
 **HEURISTIC**
