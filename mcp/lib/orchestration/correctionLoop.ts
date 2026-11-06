@@ -6,6 +6,11 @@ import type {
   AuthoringEvidenceHandle,
 } from "@/lib/authoringRecipe/evidenceRegistry";
 import type { SemanticGeometryEditIntent } from "@/lib/authoringRecipe/semanticEdit";
+import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
+import {
+  assessVisualPartCorrespondence,
+  type PartCorrespondenceInput,
+} from "@/lib/reference/partCorrespondence";
 import { rewriteAuthoringRecipeForSemanticEdit } from "@/lib/authoringRecipe/semanticRewrite";
 import { planIncrementalRecipeRebuild } from "@/lib/authoringRecipe/incremental";
 import {
@@ -56,6 +61,16 @@ type GeometryCorrectionPatch = {
   target_discrepancy_codes?: readonly string[];
 };
 
+/** Opt-in reviewed source region / native part association for one diagnosis.
+ * The stored capture and current Recipe must independently corroborate it. */
+type VisualPartCorrectionBinding = {
+  discrepancy_code: string;
+  image_id: string;
+  region_id: string;
+  part_id: string;
+  input: PartCorrespondenceInput;
+};
+
 type CorrectionConvergenceState =
   | "UNASSESSED"
   | "PENDING_VERIFICATION"
@@ -89,6 +104,11 @@ type PendingGeometryApplication = {
   target_snapshot: VerificationDiscrepancy[];
   stale_views: ModelView[];
   evidence_fingerprint: string;
+  /** Checked against the canonical native Apply receipt before advancing. */
+  part_source?: {
+    project_uuid: string;
+    native_snapshot_fingerprint: string;
+  };
 };
 
 type CorrectionLoopRecord = {
@@ -170,6 +190,8 @@ type CorrectionLoopDecision = {
     | "VISUAL_GEOMETRY_OWNER_MISMATCH"
     | "VISUAL_CAUSE_UNVERIFIED"
     | "VISUAL_CANDIDATE_UNGROUNDED"
+    | "VISUAL_PART_CORRESPONDENCE_UNVERIFIED"
+    | "VISUAL_PART_TARGET_MISMATCH"
     | "QUALITY_PLATEAU_NO_GAIN"
     | "BLOCKING_PLATEAU_REQUIRES_NEW_EVIDENCE"
     | "EVIDENCE_RECOVERY_REQUIRED"
@@ -320,7 +342,8 @@ export class CorrectionLoopRegistry {
     expectedProjectUuid: string | null,
     views: readonly ModelView[],
     expectedNativeFingerprint: string | null = null,
-    expectedRecipeId: string | null = null
+    expectedRecipeId: string | null = null,
+    expectedCapture: PartCorrespondenceInput["model"]["capture"] | null = null
   ): void {
     if (!this.captureEvidenceRegistry || views.length === 0) return;
     const mismatch = (): never => {
@@ -408,6 +431,19 @@ export class CorrectionLoopRegistry {
             item.sha256 !== imageDigests.get(item.view as ModelView)) mismatch();
         verifiedImages.add(item.view as ModelView);
       }
+      // Exact shaded bytes and render dependencies must belong to the same
+      // stored capture, not merely a caller-supplied matching camera label.
+      if (expectedCapture && (
+          correspondence.model_capture_evidence_handle !== expectedCapture.evidence_handle ||
+          correspondence.capture_dependency_fingerprint !== expectedCapture.capture_dependency_fingerprint ||
+          modelImages.length !== expectedCapture.image_digests.length ||
+          expectedCapture.image_digests.some((expected) =>
+            !modelImages.some((raw) => {
+              const item = obj(raw);
+              return item?.view === expected.view && item.sha256 === expected.sha256;
+            })
+          )
+        )) mismatch();
     }
   }
 
@@ -1157,7 +1193,8 @@ export class CorrectionLoopRegistry {
   planGeometryCorrection(
     handle: CorrectionLoopHandle,
     candidates: readonly CorrectionCandidate<GeometryCorrectionPatch>[],
-    options: CorrectionSolverOptions = {}
+    options: CorrectionSolverOptions = {},
+    partBinding?: VisualPartCorrectionBinding
   ): CorrectionLoopDecision {
     const record = this.entries.get(handle);
     if (!record) throw new Error("CORRECTION_LOOP_NOT_FOUND: handle expired.");
@@ -1222,6 +1259,77 @@ export class CorrectionLoopRegistry {
     const prioritized = prioritizeMinecraftDiscrepancies(record.discrepancies);
     const focus = prioritized[0] ?? null;
     const diagnosis = focus ? diagnoseMinecraftDiscrepancy(focus) : null;
+
+    // Optional correspondence binds the diagnosed mismatch to current native
+    // Recipe instances. All provenance is checked through existing owners.
+    // This is source-only target safety, not independent pixel attestation.
+    let scopedPart: {
+      instance_ids: Set<string>;
+      project_uuid: string;
+      native_snapshot_fingerprint: string;
+    } | null = null;
+    if (partBinding !== undefined) {
+      const blocked = (
+        reason: "VISUAL_PART_CORRESPONDENCE_UNVERIFIED" | "VISUAL_PART_TARGET_MISMATCH"
+      ): CorrectionLoopDecision => ({
+        handle, state: "BLOCKED", attempt: record.attempt,
+        verification_request: structuredClone(record.verification_request),
+        blocked_reason: reason,
+      });
+      const input = partBinding.input;
+      if (!focus || record.observation_origin !== "STRUCTURED_VISUAL" ||
+          record.verification_request.domain !== "GEOMETRY" ||
+          !this.captureEvidenceRegistry || !input ||
+          input.model.recipe_id !== record.recipe_id ||
+          partBinding.discrepancy_code !== focus.code) {
+        return blocked("VISUAL_PART_CORRESPONDENCE_UNVERIFIED");
+      }
+      try {
+        const claims = assessVisualPartCorrespondence(input).claims.filter((claim) =>
+          claim.image_id === partBinding.image_id &&
+          claim.region_id === partBinding.region_id &&
+          claim.part_id === partBinding.part_id
+        );
+        const claim = claims.length === 1 ? claims[0] : null;
+        if (!claim || claim.state !== "CONFLICTING" ||
+            claim.reason !== "VISUAL_MISMATCH_REPORTED" ||
+            claim.owner !== "GEOMETRY" || claim.evidence_role !== "PRIMARY_VOLUME" ||
+            claim.visibility !== "DIRECT" || !claim.view ||
+            !focus.views?.includes(claim.view) ||
+            claim.native_instance_ids.length === 0 ||
+            claim.native_cube_uuids.length !== claim.native_instance_ids.length ||
+            claim.native_instance_ids.some((id) =>
+              !record.verification_request.scope_instance_ids.includes(id)
+            ) ||
+            (record.last_native_source_fingerprint !== null &&
+              record.last_native_source_fingerprint !== claim.native_snapshot_fingerprint) ||
+            (record.last_native_project_uuid !== null &&
+              record.last_native_project_uuid !== claim.project_uuid)) {
+          return blocked("VISUAL_PART_CORRESPONDENCE_UNVERIFIED");
+        }
+        const owned = new Set(compileAuthoringRecipe(record.base_recipe)
+          .placements.map((placement) => placement.id));
+        if (claim.native_instance_ids.some((id) => !owned.has(id))) {
+          return blocked("VISUAL_PART_CORRESPONDENCE_UNVERIFIED");
+        }
+        this.assertStoredCaptureViews(
+          record.verification_evidence_handle,
+          record.verification_request,
+          claim.project_uuid,
+          [claim.view],
+          claim.native_snapshot_fingerprint,
+          record.recipe_id,
+          input.model.capture
+        );
+        scopedPart = {
+          instance_ids: new Set(claim.native_instance_ids),
+          project_uuid: claim.project_uuid,
+          native_snapshot_fingerprint: claim.native_snapshot_fingerprint,
+        };
+      } catch {
+        return blocked("VISUAL_PART_CORRESPONDENCE_UNVERIFIED");
+      }
+    }
 
     // Only structured visual observations use this stricter causal contract.
     // Raw/explicit numeric Recipe workflows retain their existing behavior.
@@ -1406,6 +1514,23 @@ export class CorrectionLoopRegistry {
         blocked_reason: "CORRECTION_NO_GEOMETRY_CHANGE",
       };
     }
+    if (scopedPart) {
+      const targetIds = scopedPart.instance_ids;
+      const actualChanges = [
+        ...rebuild.upserts.map((placement) => placement.id),
+        ...rebuild.remove_instance_ids,
+      ];
+      // Shared prototypes and ANCHOR propagation can expand a single named
+      // edit to unrelated Cubes; protect the complete native change set.
+      if (!actualChanges.length ||
+          actualChanges.some((id) => !targetIds.has(id))) {
+        return {
+          handle, state: "BLOCKED", attempt: record.attempt,
+          verification_request: structuredClone(record.verification_request),
+          blocked_reason: "VISUAL_PART_TARGET_MISMATCH",
+        };
+      }
+    }
 
     const geometryRequest =
       record.verification_request.domain === "GEOMETRY"
@@ -1461,6 +1586,10 @@ export class CorrectionLoopRegistry {
       target_snapshot: structuredClone(reverificationDiscrepancies),
       stale_views: [...staleViews],
       evidence_fingerprint: record.evidence_fingerprint,
+      ...(scopedPart ? { part_source: {
+        project_uuid: scopedPart.project_uuid,
+        native_snapshot_fingerprint: scopedPart.native_snapshot_fingerprint,
+      } } : {}),
     };
 
     return {
@@ -1569,7 +1698,12 @@ export class CorrectionLoopRegistry {
       (record.last_native_source_fingerprint !== null &&
         record.last_native_source_fingerprint !== receipt.native_source_fingerprint_before) ||
       (record.last_native_project_uuid !== null &&
-        record.last_native_project_uuid !== provenance.project_uuid)
+        record.last_native_project_uuid !== provenance.project_uuid) ||
+      (pending.part_source !== undefined && (
+        receipt.native_source_fingerprint_before !==
+          pending.part_source.native_snapshot_fingerprint ||
+        provenance?.project_uuid !== pending.part_source.project_uuid
+      ))
     ) {
       throw new Error("CORRECTION_APPLY_RECEIPT_MISMATCH: exact Recipe/Undo provenance required; state unchanged.");
     }

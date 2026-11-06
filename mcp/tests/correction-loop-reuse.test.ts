@@ -6,6 +6,14 @@ import type { SemanticGeometryOperation } from "@/lib/authoringRecipe/semanticEd
 import { correctionContinuationDelta, correctionContinuationId } from "@/lib/orchestration/correctionContinuation";
 import { CorrectionLoopRegistry } from "@/lib/orchestration/correctionLoop";
 import { VerificationEvidenceRegistry } from "@/lib/orchestration/evidenceRegistry";
+import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
+import { resolveSemanticIdentity } from "@/lib/authoringRecipe/semanticIdentity";
+import {
+  fingerprintAuthoringRecipeNativeSnapshot,
+  type AuthoringRecipeNativeSnapshot,
+} from "@/lib/authoringRecipe/nativeState";
+import { parseReferenceImageRegions } from "@/lib/reference/imageRegionEvidence";
+import type { PartCorrespondenceInput } from "@/lib/reference/partCorrespondence";
 
 function recipe(): AuthoringRecipe {
   return {
@@ -3597,4 +3605,254 @@ describe("zero-waste correction loop reuse", () => {
     });
   });
 
+});
+
+
+describe("opt-in reviewed visual part to exact Recipe correction identity", () => {
+  const hash = (value: string) => value.repeat(64);
+  const captureHandle = "modelcapture:" + hash("e");
+  const renderedHash = hash("f");
+
+  function fixture() {
+    const authored: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "asset", name: "Grouped prop",
+      prototypes: [
+        { id: "arm", name: "arm", size: [4, 8, 4], semantic_group: "upper_arm" },
+        { id: "other", name: "other", size: [2, 2, 2], semantic_group: "other" },
+      ],
+      patterns: [
+        { kind: "LINEAR", id: "arms", prototype_id: "arm",
+          count: 1, axis: "X", spacing: 0, semantic_group: "upper_arm" },
+        { kind: "LINEAR", id: "other", prototype_id: "other",
+          count: 1, axis: "X", spacing: 0, start: [12, 0, 0],
+          semantic_group: "other" },
+      ],
+    };
+    const native: AuthoringRecipeNativeSnapshot = {
+      schema: 1, recipe_id: authored.id,
+      cubes: compileAuthoringRecipe(authored).placements.map((cube, i) => ({
+        uuid: "cube-uuid-" + i, recipe_id: authored.id,
+        instance_id: cube.id, name: cube.name,
+        from: [...cube.from], to: [...cube.to],
+        origin: [...cube.origin], rotation: [...cube.rotation],
+        inflate: cube.inflate,
+      })),
+    };
+    const nativeFingerprint = fingerprintAuthoringRecipeNativeSnapshot(native);
+    const correspondence: PartCorrespondenceInput = {
+      reference: {
+        package_fingerprint: hash("a"),
+        current_package_fingerprint: hash("a"),
+        images: [{
+          id: "IMG_FRONT", sha256: hash("b"), integrity: "VERIFIED",
+          status: "APPROVED", view: "front",
+          regions: parseReferenceImageRegions([{
+            id: "arm-volume", part_id: "arm", evidence_role: "PRIMARY_VOLUME",
+            visibility: "DIRECT", box_uv: [0.1, 0.2, 0.9, 0.75],
+          }])!,
+        }],
+        parts: [{ id: "arm", role: "GEOMETRY" }],
+      },
+      model: {
+        project_uuid: "project-bind-1", recipe_id: authored.id,
+        native_snapshot_fingerprint: nativeFingerprint,
+        current_native_snapshot_fingerprint: nativeFingerprint,
+        capture_dependency_fingerprint: "sha256:" + hash("d"),
+        current_capture_dependency_fingerprint: "sha256:" + hash("d"),
+        identities: resolveSemanticIdentity(authored, native, {
+          semantic_group: "upper_arm",
+        }),
+        capture: {
+          project_uuid: "project-bind-1",
+          native_snapshot_fingerprint: nativeFingerprint,
+          capture_dependency_fingerprint: "sha256:" + hash("d"),
+          evidence_handle: captureHandle, views: ["front"],
+          image_digests: [{ view: "front", sha256: renderedHash }],
+        },
+      },
+      proposals: [{
+        image_id: "IMG_FRONT", region_id: "arm-volume", part_id: "arm",
+        native_cube_uuids: ["cube-uuid-0"],
+        review: {
+          outcome: "MISMATCHED", source_image_id: "IMG_FRONT",
+          source_region_id: "arm-volume", source_sha256: hash("b"),
+          model_evidence_handle: captureHandle, model_view: "front",
+          model_image_sha256: renderedHash,
+          source_pixels_inspected: true, model_pixels_inspected: true,
+        },
+      }],
+    };
+    const request = {
+      domain: "GEOMETRY" as const,
+      source: "capture_model_views" as const,
+      verification_risk: "LOW" as const, views: ["front" as const],
+      views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
+      size: 256 as const, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
+      scope_instance_ids: ["arms:0"],
+    };
+    const stored = new VerificationEvidenceRegistry();
+    const verificationHandle = stored.put({
+      request,
+      result: { structuredContent: {
+        project: { uuid: "project-bind-1" },
+        evidence_freshness: {
+          state: "MATCHED", coverage: "TRACKED",
+          project_uuid: "project-bind-1",
+          native_dependency_sha256: hash("d"), unresolved: [],
+        },
+        image_transport: { all_requested_views_captured: true },
+        view_selection: { selected_views: ["front"] },
+        count: 1,
+        captures: [{
+          view: "front", image_sha256: renderedHash,
+          capture_contract_sha256: hash("c"),
+        }],
+        part_correspondence: {
+          project_uuid: "project-bind-1", recipe_id: authored.id,
+          native_scope: "RECIPE_OWNED_CUBES_ONLY",
+          capture_scene_scope: "ALL_NATIVE_CUBES",
+          recipe_owned_snapshot_stable_during_capture: true,
+          capture_dependencies_stable_during_capture: true,
+          native_snapshot_fingerprint: nativeFingerprint,
+          capture_dependency_fingerprint: "sha256:" + hash("d"),
+          model_capture_evidence_handle: captureHandle,
+          model_images: [{ view: "front", sha256: renderedHash }],
+        },
+      }},
+    });
+    const receiptStore = new AuthoringEvidenceRegistry();
+    const loop = new CorrectionLoopRegistry(
+      8, { readEvidence: (handle) => receiptStore.get(handle) }, stored
+    );
+    const started = loop.startFromObservations({
+      recipe_id: authored.id, base_recipe: authored,
+      verification_request: request,
+      verification_evidence_handle: verificationHandle,
+      observations: [{
+        code: "ARM_WIDTH", criterion: "SILHOUETTE_PROPORTION",
+        severity: "BLOCKING",
+        summary: "The reviewed arm is too narrow.",
+        evidence: {
+          current_evidence_ref: captureHandle,
+          reference_evidence_ref: "IMG_FRONT", views: ["front"],
+        },
+        cause_family: "SIZE_MISMATCH",
+      }],
+    });
+    if (!started.handle) throw new Error("Expected an opt-in source correction handle.");
+    const partBinding = {
+      discrepancy_code: "ARM_WIDTH", image_id: "IMG_FRONT",
+      region_id: "arm-volume", part_id: "arm", input: correspondence,
+    };
+    const candidate = (target: string) => ({
+      id: "resize-" + target, predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["ARM_WIDTH"],
+        correction_family: "RESIZE" as const,
+        intent: {
+          target: { instance_ids: [target] },
+          operation: {
+            kind: "RESIZE_AXIS" as const, axis: "X" as const,
+            mode: "ADD" as const, value: 1, anchor: "MIN" as const,
+          },
+        },
+      },
+    });
+    return {
+      authored, correspondence, partBinding, loop, handle: started.handle,
+      receiptStore, nativeFingerprint, candidate,
+    };
+  }
+
+  test("binding refuses editing an unrelated Cube and preserves the reviewed arm scope", () => {
+    const { authored, partBinding, loop, handle, candidate } = fixture();
+    const before = structuredClone(authored);
+    const prior = loop.projectContinuation(handle);
+    const wrong = loop.planGeometryCorrection(handle,
+      [candidate("other:0")], {}, partBinding);
+    expect(wrong).toMatchObject({
+      state: "BLOCKED", attempt: 0,
+      blocked_reason: "VISUAL_PART_TARGET_MISMATCH",
+    });
+    expect(loop.projectContinuation(handle)).toEqual(prior);
+    const right = loop.planGeometryCorrection(handle,
+      [candidate("arms:0")], {}, partBinding);
+    expect(right).toMatchObject({
+      state: "CORRECTION_READY",
+      decision_summary: { selected_candidate_id: "resize-arms:0" },
+      rebuild: { metrics: { native_affected_count: 1 } },
+    });
+    expect(right.rebuild?.preserved_instance_ids).toContain("other:0");
+    expect(authored).toEqual(before);
+  });
+
+  test("revision, source review, capture identity and project drift fail closed", () => {
+    for (const variant of [
+      "stale-model", "matched-not-mismatched", "capture-swap",
+      "image-swap", "wrong-project", "wrong-region",
+    ] as const) {
+      const { partBinding, loop, handle, candidate } = fixture();
+      const input = structuredClone(partBinding.input);
+      if (variant === "stale-model") {
+        input.model.current_native_snapshot_fingerprint = "sha256:" + hash("0");
+      } else if (variant === "matched-not-mismatched") {
+        input.proposals[0]!.review!.outcome = "MATCHED";
+      } else if (variant === "capture-swap") {
+        input.model.capture.evidence_handle = "modelcapture:" + hash("4");
+        input.proposals[0]!.review!.model_evidence_handle = input.model.capture.evidence_handle;
+      } else if (variant === "image-swap") {
+        input.model.capture.image_digests[0]!.sha256 = hash("1");
+        input.proposals[0]!.review!.model_image_sha256 = hash("1");
+      } else if (variant === "wrong-project") {
+        input.model.project_uuid = "other-project";
+        input.model.capture.project_uuid = "other-project";
+      } else {
+        input.proposals[0]!.region_id = "missing-region";
+      }
+      const before = loop.projectContinuation(handle);
+      const result = loop.planGeometryCorrection(handle,
+        [candidate("arms:0")], {}, { ...partBinding, input });
+      expect(result.blocked_reason, variant).toBe(
+        "VISUAL_PART_CORRESPONDENCE_UNVERIFIED");
+      expect(result.attempt, variant).toBe(0);
+      expect(loop.projectContinuation(handle)).toEqual(before);
+    }
+  });
+
+  test("Apply acknowledgement must match the exact pre-correction native revision and project", () => {
+    const { partBinding, loop, handle, candidate, receiptStore, nativeFingerprint } = fixture();
+    const planned = loop.planGeometryCorrection(handle,
+      [candidate("arms:0")], {}, partBinding);
+    expect(planned.state).toBe("CORRECTION_READY");
+    const baseReceipt = syntheticRecipeApplyReceipt(
+      planned, nativeFingerprint, "sha256:" + hash("9"), 1
+    );
+    const receipt = {
+      ...baseReceipt,
+      native_undo_provenance: {
+        ...baseReceipt.native_undo_provenance, project_uuid: "project-bind-1",
+      },
+    };
+    const wrongRevision = receiptStore.put({
+      kind: "APPLY_RECEIPT",
+      value: { ...receipt, native_source_fingerprint_before: "sha256:" + hash("0") },
+    });
+    expect(() => loop.acknowledgeAppliedGeometryCorrection(handle, wrongRevision))
+      .toThrow("CORRECTION_APPLY_RECEIPT_MISMATCH");
+    const wrongProject = receiptStore.put({
+      kind: "APPLY_RECEIPT",
+      value: { ...receipt, native_undo_provenance: {
+        ...receipt.native_undo_provenance, project_uuid: "other-project",
+      } },
+    });
+    expect(() => loop.acknowledgeAppliedGeometryCorrection(handle, wrongProject))
+      .toThrow("CORRECTION_APPLY_RECEIPT_MISMATCH");
+    const valid = receiptStore.put({ kind: "APPLY_RECEIPT", value: receipt });
+    expect(loop.acknowledgeAppliedGeometryCorrection(handle, valid))
+      .toEqual({ state: "VERIFY_PENDING", attempt: 1 });
+    expect(loop.projectContinuation(handle)).toMatchObject({
+      state: "VERIFY_PENDING",
+      verification: { pending: true, stale_views: ["front"] },
+    });
+  });
 });
