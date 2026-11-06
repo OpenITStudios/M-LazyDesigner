@@ -43,7 +43,7 @@ import {
 } from "@/lib/runtime/lifecycle";
 import { getActiveMcpAuthoringStage } from "@/lib/capabilities/authoringStage";
 import {
-  studioDefaults, studioPresetSettings, listStudioParticles, prepareStudioParticleDraft,
+  studioPresetSettings, listStudioParticles, prepareStudioParticleDraft,
   createStudioParticle, openStudioParticle,
   saveStudioParticle, studioChangeOperations, startStudioPreview,
   stopStudioPreview, studioPreviewStatus, attachStudioParticle,

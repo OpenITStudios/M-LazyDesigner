@@ -53,11 +53,7 @@ Official Bedrock semantics outrank editor workarounds. Snowstorm-specific behavi
 - [workflow.md](workflow.md) — authoring sequence
 - [qa.md](qa.md) — static/preflight acceptance
 - [delivery.md](delivery.md) — clean package contract
-- [patterns.md](patterns.md) — reusable physical starting patternsauthoring-spec.md → normalize requested effect
-workflow.md       → authoring sequence
-qa.md             → static/preflight acceptance
-delivery.md       → clean package contract
-patterns.md       → reusable physical starting patterns
+- [patterns.md](patterns.md) — reusable physical starting patterns
 
 Knowledge and workflow stay separate. Deep technical rules belong to the nearest knowledge owner, not duplicated into workflow files.
 

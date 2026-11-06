@@ -49,6 +49,15 @@ describe("particle reference authoring contract", () => {
     expect(runbook).toContain("testing hold remains active");
   });
 
+  test("particle knowledge routing keeps one canonical patterns link", async () => {
+    const map = await source("../docs/02-reference/particle/knowledge-map.md");
+    expect(map.match(/\[patterns\.md\]\(patterns\.md\)/g)).toHaveLength(1);
+    expect(map).not.toContain("patternsauthoring-spec.md");
+    for (const owner of ["authoring-spec.md", "workflow.md", "qa.md", "delivery.md"]) {
+      expect(map).toContain("[" + owner + "](" + owner + ")");
+    }
+  });
+
   test("particle authoring remains minimal and does not promote flipbook or reactivity by default", async () => {
     const [skill, spec] = await Promise.all([
       source("../.agents/skills/lazydesigner-particle-reference-authoring/SKILL.md"),
