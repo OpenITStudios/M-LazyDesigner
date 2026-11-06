@@ -5,6 +5,7 @@ import { AuthoringEvidenceRegistry } from "@/lib/authoringRecipe/evidenceRegistr
 import type { SemanticGeometryOperation } from "@/lib/authoringRecipe/semanticEdit";
 import { correctionContinuationDelta, correctionContinuationId } from "@/lib/orchestration/correctionContinuation";
 import { CorrectionLoopRegistry } from "@/lib/orchestration/correctionLoop";
+import { VerificationEvidenceRegistry } from "@/lib/orchestration/evidenceRegistry";
 
 function recipe(): AuthoringRecipe {
   return {
@@ -74,9 +75,9 @@ class SyntheticAppliedCorrectionLoopRegistry extends CorrectionLoopRegistry {
   private readonly lastNativeByHandle = new Map<string, string>();
   private applySequence = 0;
 
-  constructor() {
+  constructor(captureRegistry: VerificationEvidenceRegistry | null = null) {
     const receipts = new AuthoringEvidenceRegistry();
-    super(8, { readEvidence: (handle) => receipts.get(handle) });
+    super(8, { readEvidence: (handle) => receipts.get(handle) }, captureRegistry);
     this.receipts = receipts;
   }
 
@@ -1836,6 +1837,97 @@ describe("zero-waste correction loop reuse", () => {
       { view: "front", handle: "verificationevidence:numeric-after" },
       { view: "left", handle: "verificationevidence:numeric-after" },
     ]);
+  });
+
+  test("opt-in stored native capture receipts bind declared view provenance", () => {
+    const evidence = new VerificationEvidenceRegistry();
+    const request = {
+      domain: "GEOMETRY" as const, source: "capture_model_views" as const,
+      verification_risk: "MEDIUM" as const,
+      views: ["front" as const, "left" as const],
+      views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
+      size: 256 as const, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS" as const,
+      scope_instance_ids: ["arms:0", "arms:1"],
+    };
+    const capture = (views: readonly ("front" | "left")[], {
+      project = "synthetic-project", freshness = "MATCHED",
+      imageHash = "b".repeat(64), scope = request.scope_instance_ids,
+    }: { project?: string; freshness?: string; imageHash?: string; scope?: string[] } = {}) =>
+      evidence.put({
+        request: { ...request, scope_instance_ids: [...scope] },
+        result: { structuredContent: {
+          project: { uuid: project },
+          evidence_freshness: {
+            state: freshness, coverage: "TRACKED",
+            project_uuid: project, native_dependency_sha256: "a".repeat(64),
+            unresolved: [],
+          },
+          image_transport: { all_requested_views_captured: true },
+          view_selection: { selected_views: [...views] },
+          count: views.length,
+          captures: views.map((view) => ({
+            view, image_sha256: imageHash,
+            capture_contract_sha256: "c".repeat(64),
+          })),
+        }},
+      });
+    const registry = new SyntheticAppliedCorrectionLoopRegistry(evidence);
+    const initial = capture(["front", "left"]);
+    const handle = registry.start({
+      recipe_id: "asset", base_recipe: recipe(),
+      verification_request: request,
+      verification_evidence_handle: initial,
+      discrepancies: [
+        { code: "WIDTH", severity: "REVIEW", summary: "Width differs.", views: ["front"] },
+        { code: "SIDE", severity: "REVIEW", summary: "Side contact under review.", views: ["left"] },
+      ],
+    });
+    const plan = registry.planGeometryCorrection(handle, [{
+      id: "resize", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["WIDTH"],
+        intent: {
+          target: { semantic_group: "upper_arm" },
+          operation: { kind: "RESIZE_AXIS", axis: "X", mode: "ADD",
+            value: 1, anchor: "MIN" },
+        },
+      },
+    }]);
+    expect(plan.state).toBe("CORRECTION_READY");
+    const pending = registry.projectContinuation(handle);
+    const updated = [{ code: "WIDTH", severity: "INFO" as const,
+      summary: "Width improved.", views: ["front" as const] }];
+    const invalid = [
+      "verificationevidence:" + "f".repeat(64),
+      capture(["left"]),
+      capture(["front"], { project: "another-project" }),
+      capture(["front"], { freshness: "UNVERIFIED" }),
+      capture(["front"], { imageHash: "invalid" }),
+      capture(["front"], { scope: ["another-asset"] }),
+    ];
+    for (const candidate of invalid) {
+      expect(() => registry.updateEvidence(
+        handle, candidate as `verificationevidence:${string}`,
+        updated, { recovered_views: ["front"] }
+      )).toThrow();
+      expect(registry.projectContinuation(handle)).toEqual(pending);
+    }
+    const valid = capture(["front"]);
+    registry.updateEvidence(handle, valid, updated, { recovered_views: ["front"] });
+    expect(registry.projectContinuation(handle)).toMatchObject({
+      state: "READY", convergence: { state: "IMPROVED" },
+      fresh_view_evidence: [
+        { view: "front", handle: valid },
+        { view: "left", handle: initial },
+      ],
+    });
+    expect(() => registry.start({
+      recipe_id: "asset", base_recipe: recipe(),
+      verification_request: request,
+      verification_evidence_handle: "verificationevidence:fake",
+      discrepancies: [{ code: "WIDTH", severity: "REVIEW",
+        summary: "Unbound source image.", views: ["front"] }],
+    })).toThrow("VERIFICATION_EVIDENCE_NOT_FOUND");
   });
 
   test("falls back to recapturing all request views when discrepancy view provenance is missing", () => {

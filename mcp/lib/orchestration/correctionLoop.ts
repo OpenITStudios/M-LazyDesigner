@@ -14,7 +14,10 @@ import {
   type CorrectionSolverOptions,
 } from "@/lib/correctionSolver";
 import type { VerificationEvidenceRequest } from "@/lib/orchestration/evidencePlan";
-import type { VerificationEvidenceHandle } from "@/lib/orchestration/evidenceRegistry";
+import type {
+  VerificationEvidenceHandle,
+  VerificationEvidenceRegistry,
+} from "@/lib/orchestration/evidenceRegistry";
 import {
   assertUniqueDiscrepancyCodes,
   diagnoseMinecraftDiscrepancy,
@@ -22,7 +25,7 @@ import {
   prioritizeMinecraftDiscrepancies,
   type VerificationDiscrepancy,
 } from "@/lib/orchestration/compactEvidence";
-import type { ModelView } from "@/lib/reference/visualEvidence";
+import { MODEL_VIEWS, type ModelView } from "@/lib/reference/visualEvidence";
 import {
   assessLandmarkCorrectionDelta,
   type LandmarkCaptureEvidence,
@@ -280,13 +283,79 @@ export class CorrectionLoopRegistry {
 
   constructor(
     private readonly maxEntries = 8,
-    private readonly applyEvidenceSource: CorrectionApplyEvidenceSource | null = null
+    private readonly applyEvidenceSource: CorrectionApplyEvidenceSource | null = null,
+    // Only opt-in callers supply the existing scoped capture evidence owner.
+    // Numeric-only correction remains unchanged.
+    private readonly captureEvidenceRegistry: Pick<VerificationEvidenceRegistry, "get"> | null = null
   ) {
     if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 32) {
       throw new Error("Correction loop registry maxEntries must be 1..32.");
     }
   }
 
+
+  /** Validate stored canonical capture metadata before an image view can be
+   * refreshed. The registry owns the record; this is not pixel/image review,
+   * not a cross-invocation Recipe revision proof, and not a new store. */
+  private assertStoredCaptureViews(
+    handle: VerificationEvidenceHandle,
+    request: VerificationEvidenceRequest,
+    expectedProjectUuid: string | null,
+    views: readonly ModelView[]
+  ): void {
+    if (!this.captureEvidenceRegistry || views.length === 0) return;
+    const mismatch = (): never => {
+      throw new Error("CORRECTION_CAPTURE_RECEIPT_MISMATCH: recovered views " +
+        "require a matching stored native capture receipt.");
+    };
+    if (request.domain !== "GEOMETRY" ||
+        new Set(views).size !== views.length ||
+        views.some((view) => !MODEL_VIEWS.includes(view))) mismatch();
+    const record = this.captureEvidenceRegistry.get(handle);
+    if (record.request.domain !== "GEOMETRY" ||
+        record.request.source !== "capture_model_views" ||
+        record.request.scope_instance_ids.length !== request.scope_instance_ids.length ||
+        new Set(record.request.scope_instance_ids).size !== request.scope_instance_ids.length ||
+        request.scope_instance_ids.some((id) => !record.request.scope_instance_ids.includes(id))) {
+      mismatch();
+    }
+    const obj = (value: unknown): Record<string, unknown> | null =>
+      value !== null && typeof value === "object" && !Array.isArray(value)
+        ? value as Record<string, unknown> : null;
+    const result = obj(obj(record.result)?.structuredContent);
+    const project = obj(result?.project);
+    const freshness = obj(result?.evidence_freshness);
+    const transport = obj(result?.image_transport);
+    const selection = obj(result?.view_selection);
+    const captures = result?.captures;
+    const selected = selection?.selected_views;
+    const unresolved = freshness?.unresolved;
+    const uuid = project?.uuid;
+    const digest = /^[a-f0-9]{64}$/;
+    if (typeof uuid !== "string" || !uuid.trim() ||
+        (expectedProjectUuid !== null && uuid !== expectedProjectUuid) ||
+        freshness?.state !== "MATCHED" ||
+        freshness?.coverage !== "TRACKED" ||
+        freshness?.project_uuid !== uuid ||
+        !digest.test(String(freshness?.native_dependency_sha256 ?? "")) ||
+        !Array.isArray(unresolved) || unresolved.length !== 0 ||
+        transport?.all_requested_views_captured !== true ||
+        !Array.isArray(captures) || !Array.isArray(selected) ||
+        result?.count !== captures.length || selected.length !== captures.length) {
+      mismatch();
+    }
+    const observed = new Set<ModelView>();
+    for (const raw of captures) {
+      const row = obj(raw);
+      if (!row || !MODEL_VIEWS.includes(row.view as ModelView) ||
+          observed.has(row.view as ModelView) ||
+          !digest.test(String(row.image_sha256 ?? "")) ||
+          !digest.test(String(row.capture_contract_sha256 ?? ""))) mismatch();
+      observed.add(row.view as ModelView);
+    }
+    if (selected.some((view: unknown) => !observed.has(view as ModelView)) ||
+        views.some((view) => !observed.has(view))) mismatch();
+  }
 
   startFromObservations(
     input: Omit<
@@ -365,6 +434,12 @@ export class CorrectionLoopRegistry {
       );
     }
     assertUniqueDiscrepancyCodes(input.discrepancies);
+    if (this.captureEvidenceRegistry && input.verification_request.domain === "GEOMETRY") {
+      this.assertStoredCaptureViews(
+        input.verification_evidence_handle, input.verification_request, null,
+        [...new Set(input.discrepancies.flatMap((item) => item.views ?? []))]
+      );
+    }
     const viewEvidenceHandles: Partial<
       Record<ModelView, VerificationEvidenceHandle>
     > = {};
@@ -780,6 +855,12 @@ export class CorrectionLoopRegistry {
     if (record.pending_application !== null) {
       throw new Error("CORRECTION_APPLY_RECEIPT_REQUIRED: acknowledge native Apply before interpreting a new quality observation.");
     }
+
+    // Opt-in capture-backed recovery is checked before any state transition.
+    this.assertStoredCaptureViews(
+      evidenceHandle, record.verification_request,
+      record.last_native_project_uuid, options.recovered_views ?? []
+    );
 
     if (record.evidence_recovery_required) {
       const recovered = new Set(options.recovered_views ?? []);
