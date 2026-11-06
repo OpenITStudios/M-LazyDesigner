@@ -409,6 +409,27 @@ export function reduceControlExecutionState(
       ? immediateAction
       : cohortCompletionAction(delta, mergedPending);
 
+  // A single Cube edit must not trigger screenshot capture. At the explicit
+  // end of a multi-operation, project-stable Geometry cohort, the existing
+  // capture capability can be suggested ONCE for the next material reference
+  // gate. The reducer does not inspect pixels or execute another tool.
+  const completedGeometryCohort =
+    sameCohort &&
+    previous?.pending_verification !== null &&
+    taskContextId !== null &&
+    cohortBoundary === "COMPLETE" &&
+    delta.authoring_domain === "GEOMETRY" &&
+    pendingAction.kind === "VERIFY_VISUAL" &&
+    pendingAction.verification_scope?.kind === "CUBE_TARGETS" &&
+    pendingAction.verification_scope.cube_uuids.length > 0;
+  const nextAction: ControlNextAction = completedGeometryCohort
+    ? {
+        ...pendingAction,
+        recommended_capability: "capture_model_views",
+        reason: "Geometry cohort finished. At the next material reference-quality gate, compare the approved source with one bounded capture of relevant current model views. Do not capture per Cube or treat a capture as visual PASS.",
+      }
+    : pendingAction;
+
   const state: ControlExecutionState = {
     protocol: "lazydesigner-execution-v1",
     revision,
@@ -417,7 +438,7 @@ export function reduceControlExecutionState(
     owner: delta.authoring_domain,
     last_capability: delta.capability,
     last_freshness: delta.freshness,
-    pending_action: pendingAction,
+    pending_action: nextAction,
     task_context_id: taskContextId,
     pending_verification: defer ? mergedPending : null,
   };
@@ -429,7 +450,7 @@ export function reduceControlExecutionState(
       state_revision: revision,
       project_uuid: delta.project_uuid,
       owner: delta.authoring_domain,
-      next_action: pendingAction,
+      next_action: nextAction,
       context: {
         preserve_current: !delta.requires_status_refresh,
         reorient_required: delta.requires_status_refresh,

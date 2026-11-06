@@ -129,10 +129,98 @@ describe("Control orchestration reducer", () => {
     expect(second.continuation.next_action.kind).toBe("CONTINUE");
   });
 
-  test("turns scoped geometry visual verification into an explicit next action", () => {
+  test("a single Cube edit owes visual review but never triggers per-Cube capture", () => {
     const action = nextActionForControlDelta(delta());
     expect(action.kind).toBe("VERIFY_VISUAL");
-    expect(action.recommended_capability).toBe("capture_model_views");
+    expect(action.recommended_capability).toBeNull();
+    expect(action.reason).toContain("Do not capture per Cube");
+    const oneShot = reduceControlExecutionState(null, delta(), {
+      taskContextId: "one-shot", cohortBoundary: "COMPLETE",
+    });
+    expect(oneShot.continuation.next_action.recommended_capability).toBeNull();
+  });
+
+  test("explicit completed Geometry cohort suggests one bounded capture only at its final material gate", () => {
+    const first = reduceControlExecutionState(null, delta(), {
+      taskContextId: "form-assembly", cohortBoundary: "CONTINUE",
+    });
+    expect(first.continuation.next_action.kind).toBe("CONTINUE");
+    expect(first.continuation.next_action.recommended_capability).toBeNull();
+
+    const next = reduceControlExecutionState(first.state, delta({
+      verification_scope: {
+        kind: "CUBE_TARGETS",
+        cube_uuids: ["cube-b"],
+        framing: { min: [4, 0, 0], max: [8, 4, 4] },
+      },
+    }), { taskContextId: "form-assembly", cohortBoundary: "CONTINUE" });
+    expect(next.continuation.next_action.kind).toBe("CONTINUE");
+
+    // The final call has no new visual requirement. It must not erase the
+    // prior two Cube edits' deferred visual review.
+    const finished = reduceControlExecutionState(next.state, delta({
+      verification_class: "receipt_only",
+      verification_scope: null,
+      freshness: {
+        basis: "NO_CHANGE", stale: [],
+        fresh: ["GEOMETRY_STRUCTURE"], unknown: [],
+      },
+    }), { taskContextId: "form-assembly", cohortBoundary: "COMPLETE" });
+    expect(finished.continuation.next_action).toMatchObject({
+      kind: "VERIFY_VISUAL",
+      recommended_capability: "capture_model_views",
+      verification_scope: {
+        kind: "CUBE_TARGETS",
+        cube_uuids: ["cube-a", "cube-b"],
+        framing: { min: [0, 0, 0], max: [8, 4, 4] },
+      },
+    });
+    expect(finished.state.pending_action)
+      .toEqual(finished.continuation.next_action);
+    expect(finished.continuation.next_action.reason).toContain("approved source");
+    expect(finished.state.pending_verification).toBeNull();
+
+    // Reusing the task ID after completion is not an open cohort: do not
+    // manufacture a second capture recommendation for a one-call mutation.
+    const repeated = reduceControlExecutionState(
+      finished.state, delta(),
+      { taskContextId: "form-assembly", cohortBoundary: "COMPLETE" }
+    );
+    expect(repeated.continuation.next_action.recommended_capability).toBeNull();
+  });
+
+  test("unscoped, uncertain, and cross-project cohorts never advertise capture", () => {
+    const first = reduceControlExecutionState(null, delta(), {
+      taskContextId: "visual-batch", cohortBoundary: "CONTINUE",
+    });
+    const finishedUnscoped = reduceControlExecutionState(first.state, delta({
+      verification_scope: null,
+    }), { taskContextId: "visual-batch", cohortBoundary: "COMPLETE" });
+    // A later unscoped visual edit broadens verification, so the scoped
+    // earlier Cube evidence cannot justify a targeted capture hint.
+    expect(finishedUnscoped.continuation.next_action.kind).toBe("VERIFY_VISUAL");
+    expect(finishedUnscoped.continuation.next_action.recommended_capability).toBeNull();
+    const unscopedStart = reduceControlExecutionState(null, delta({
+      verification_scope: null,
+    }), { taskContextId: "unscoped", cohortBoundary: "CONTINUE" });
+    const unscopedEnd = reduceControlExecutionState(unscopedStart.state, delta({
+      verification_scope: null,
+    }), { taskContextId: "unscoped", cohortBoundary: "COMPLETE" });
+    expect(unscopedEnd.continuation.next_action.recommended_capability).toBeNull();
+
+    const uncertain = reduceControlExecutionState(first.state, delta({
+      freshness: {
+        basis: "UNKNOWN_OUTCOME", stale: [], fresh: [],
+        unknown: ["GEOMETRY_STRUCTURE"],
+      },
+    }), { taskContextId: "visual-batch", cohortBoundary: "COMPLETE" });
+    expect(uncertain.continuation.next_action.kind).toBe("RECOVER");
+    expect(uncertain.continuation.next_action.recommended_capability).toBeNull();
+
+    const projectChanged = reduceControlExecutionState(first.state, delta({
+      project_uuid: "project-b",
+    }), { taskContextId: "visual-batch", cohortBoundary: "COMPLETE" });
+    expect(projectChanged.continuation.next_action.recommended_capability).toBeNull();
   });
 
   test("never converts unknown mutation outcome into an automatic retry", () => {

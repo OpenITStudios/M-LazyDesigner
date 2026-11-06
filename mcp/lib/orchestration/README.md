@@ -21,6 +21,8 @@ Orchestration may consume pure authoring/recipe/reference contracts, but it must
 
 `gateway/control/orchestration.ts` is the active Control continuation reducer; it derives next actions from actual `control_delta` results. The normal four-tool Gateway does **not** expose `CorrectionLoopRegistry` entrypoints. `gateway/session/orchestrationRecoveryState.ts` constructs the internal registry with the default null `applyEvidenceSource`, so its stored loops cannot complete a native Apply acknowledgement through that Gateway instance. Source tests of the internal correction solver are not evidence that Codex's normal `invoke_capability` calls pass through it.
 
+The active Control reducer can recommend the **already registered** `capture_model_views` only at the explicit end of a continuing, project-stable Geometry task cohort whose pending verification has scoped Cube targets. Single Cube edits remain visual-review obligations without a per-Cube capture recommendation. This is a next-action hint, not an automatic invocation, screenshot inspection, or visual PASS.
+
 The effective **current** Codex workflow is defined by the active Modelling Skill and conditionally loaded `references/correction.md`, using real Gateway capabilities and their receipts. Do not confuse registry `knownContinuationIds` with public `task_context_id` or Control's `control_delta` continuation. Any future native binding must demonstrate exact Authoring Recipe receipt ownership, project/revision freshness and accepted Golden quality before claiming live automatic correction enforcement.
 
 A correction plan is **not** an executed edit. The canonical
