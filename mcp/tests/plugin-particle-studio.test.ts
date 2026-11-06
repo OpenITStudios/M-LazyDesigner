@@ -368,7 +368,14 @@ describe("Particle Studio quick authoring contracts", () => {
       expect(live).toBe(1);
       expect(deleted).toBe(1);
       expect(disposed).toBe(1);
-      expect(studioPreviewStatus(project as never, loaded)).toContain("unsaved preview");
+      expect(studioPreviewStatus(project as never, loaded, { ...settings, size: 0.4 }))
+        .toContain("unsaved preview");
+      expect(studioPreviewStatus(project as never, loaded, { ...settings, size: 0.3 }))
+        .toContain("preview not active for current draft/locator");
+      expect(studioPreviewStatus(project as never, loaded, { ...settings, size: 0.4 }, "other"))
+        .toContain("preview not active for current draft/locator");
+      expect(() => studioPreviewStatus(project as never, loaded, { ...settings, size: 9 }))
+        .toThrow(/Size must be/);
       expect(startStudioPreview(project as never, loaded, "", { ...settings, size: 0.4 }))
         .toContain("up to date");
       expect(deleted).toBe(1); // Identical slider values are coalesced.
@@ -380,7 +387,7 @@ describe("Particle Studio quick authoring contracts", () => {
       expect(deleted).toBe(3);
       expect(disposed).toBe(3);
       expect(written).toBe(0);
-      expect(fileReads).toBe(1); // Only explicit Check Preview reads source.
+      expect(fileReads).toBe(3); // Only explicit Check Preview reads source; none during slider playback.
     } finally {
       stopStudioPreview();
       setActiveMcpAuthoringStage(beforeStage);

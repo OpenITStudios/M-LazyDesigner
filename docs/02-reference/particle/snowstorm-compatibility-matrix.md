@@ -12,16 +12,16 @@ Evidence classes:
 As of the latest published GitHub release currently available:
 
 ```text
-Snowstorm published release: 3.2.1
-Wintersky paired release:     1.3.3
+Snowstorm published GitHub release: 3.3.0
+Wintersky paired release:          1.4.0
 ```
 
-Current Snowstorm `master` source metadata reports version `3.2.2`, while the latest published release remains `3.2.1`. Treat source-head metadata as unreleased/development state unless an actual release/tag confirms otherwise.
+Snowstorm `master` source metadata reports `3.3.2` at 2026-11-06, while the latest published GitHub release verified here is `3.3.0` (2026-11-04). Source commits/extension publishing are not automatically equivalent to a tagged GitHub release. This is NOT the bundled Blockbench renderer version.
 
 Current `master` dependencies include:
 
 ```text
-wintersky ^1.3.3
+wintersky ^1.4.0
 molangjs  ^1.6.6
 three     ^0.134.0
 ```
@@ -36,8 +36,13 @@ Do not describe unreleased source-head behavior as a published release feature.
 | 3.1.0 | 1.3.x family | Variable placeholders for game-only/undefined variables; VS Code texture auto-save/path creation; fixed export dropping `num_particles: 0`; fixed nested-scope Molang issue. |
 | 3.2.0 | 1.3.2 | Documentation panel, preview loop default Auto, better VS Code texture path lookup, same event multiple times; fixed zero size fields being omitted, slow VS Code ticking, concurrent timeline events, negative-number Molang, expiration-block multiline export, gradient UI issues. |
 | 3.2.1 | 1.3.3 | `math.min_angle`; event-expression undefined-variable detection; fixes for `camera_distance_range_lerp`, expiration event firing at playback start, inconsistent timeline time codes, collision `min_speed`, gradient hue/alpha edit registration, additive black-pixel rendering. |
+| 3.3.0 | 1.4.0 | MoLang gradient colors, versioned Molang reading, corrected particle update expression evaluation order and emitter activation default, blend/additive overlapping particles, expiration freeze, outer UV fallback for flipbooks, warning for negative particle size, reference player and collapsible events. |
 
 This table is editor capability history, not Bedrock format history.
+
+## Blockbench renderer boundary
+
+Blockbench 5.2.2 has its own bundled Wintersky dependency (`^1.3.2` in the upstream package manifest). Snowstorm 3.3.0's Wintersky 1.4.0 fixes cannot be presumed present in Blockbench's native viewport. LazyDesigner's Particle Studio reuses the *actual* Blockbench runtime; do **not** install a second renderer or claim that Snowstorm release behavior applies to Blockbench. For preview discrepancies, pin the installed Blockbench build and effective bundled renderer and distinguish editor limitation from invalid Bedrock JSON.
 
 ## Source-level JSON mapping
 
@@ -240,9 +245,9 @@ When Snowstorm and Bedrock expectations differ:
 
 ## Current recommended target
 
-For review work that depends on event timing, collision events, gradients, additive materials, and current Molang support, prefer Snowstorm `3.2.1` / Wintersky `1.3.3` or a later published release whose release notes have been reviewed.
+For independent Snowstorm review of event timing, collision events, gradients, additive materials and Molang, the verified published GitHub baseline is Snowstorm `3.3.0` / Wintersky `1.4.0`. Blockbench's embedded renderer remains a separate compatibility target.
 
-Do not equate the `master` package version `3.2.2` with a published stable release until a matching release exists.
+Do not equate the `master` package version `3.3.2` with the `3.3.0` published GitHub release; confirm the exact tag/extension separately.
 
 ## Sources
 
@@ -250,6 +255,9 @@ Do not equate the `master` package version `3.2.2` with a published stable relea
 - https://github.com/JannisX11/snowstorm/releases/tag/v3.1.0
 - https://github.com/JannisX11/snowstorm/releases/tag/v3.2.0
 - https://github.com/JannisX11/snowstorm/releases/tag/v3.2.1
+- https://github.com/JannisX11/snowstorm/releases/tag/v3.3.0
+- https://github.com/JannisX11/wintersky/releases/tag/v1.4.0
+- https://github.com/JannisX11/blockbench/blob/ec0b2827104d0799c153bfb5f867579c0c44652f/package.json
 - https://github.com/JannisX11/wintersky/releases/tag/v1.3.0
 - https://github.com/JannisX11/wintersky/releases/tag/v1.3.2
 - https://github.com/JannisX11/wintersky/releases/tag/v1.3.3

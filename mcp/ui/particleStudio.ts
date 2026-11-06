@@ -472,6 +472,12 @@ export function stopStudioPreview(): void {
  * Animator.particle_effects (including any existing animation keyframes).
  * Blockbench's Animation mode mounts WinterskyScene.space and updates billboards.
  */
+function studioPreviewSignature(
+  loaded: StudioEffect, settings: StudioSettings, locatorName: string,
+): string {
+  return JSON.stringify([loaded.path, loaded.content, locatorName, settings]);
+}
+
 export function startStudioPreview(
   project: ModelProject, loaded: StudioEffect, locatorName: string,
   settings: StudioSettings = loaded.settings,
@@ -481,7 +487,7 @@ export function startStudioPreview(
   // The hot path is intentionally filesystem-free. External file changes are
   // checked before Save/Attach, never once per slider tick.
   const draft = compileStudioDraft(loaded, settings);
-  const signature = JSON.stringify([loaded.path, loaded.content, locatorName, settings]);
+  const signature = studioPreviewSignature(loaded, settings, locatorName);
   if (!replay && preview?.project === project && preview.signature === signature) {
     return draft.dirty ? "Live preview reflects unsaved changes." : "Preview is already up to date.";
   }
@@ -553,9 +559,16 @@ export function studioExpectedTexturePath(
  * Explicit read-only preflight for the already-selected asset. Preview
  * invocation and an emitter count are never promoted into visible-pixel proof.
  */
-export function studioPreviewStatus(project: ModelProject, loaded?: StudioEffect | null): string {
-  if (!loaded) return "Choose a particle or prepare a new effect before checking preview.";
-  const summary = inspectParticleDocument(parseParticleDocument(loaded.content));
+export function studioPreviewStatus(
+  project: ModelProject, loaded?: StudioEffect | null,
+  settings: StudioSettings | null = loaded?.settings ?? null,
+  locatorName = "",
+): string {
+  if (!loaded || !settings) return "Choose a particle or prepare a new effect before checking preview.";
+  // Diagnose the currently requested draft, not just the saved JSON. The
+  // renderer may still show the last valid preview when a slider edit fails.
+  const draft = compileStudioDraft(loaded, settings);
+  const summary = inspectParticleDocument(draft.document);
   const invalid = summary.diagnostics.find(entry => entry.severity === "error");
   if (invalid) return "Particle document invalid: " + invalid.message;
 
@@ -581,8 +594,9 @@ export function studioPreviewStatus(project: ModelProject, loaded?: StudioEffect
   }
   const active = preview;
   if (!active || active.project !== project || active.file !== loaded.path ||
-      active.source_content !== loaded.content) {
-    return "Particle file preflight clear; preview not active for this effect. Play it to inspect.";
+      active.source_content !== loaded.content ||
+      active.signature !== studioPreviewSignature(loaded, settings, locatorName)) {
+    return "Particle draft preflight clear; preview not active for current draft/locator. Play it to inspect.";
   }
   if (active.config.texture_source_category === "placeholder") {
     return "Renderer texture unresolved or still loading: " +

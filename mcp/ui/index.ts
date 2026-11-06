@@ -586,7 +586,9 @@ export function uiSetup(input: UiSetupInput) {
           if (!Project) return;
           this.studioError = "";
           try {
-            this.studioNote = studioPreviewStatus(Project, this.studioLoaded);
+            this.studioNote = studioPreviewStatus(
+              Project, this.studioLoaded, { ...this.studioSettings }, this.studioLocator,
+            );
           } catch (error) {
             this.studioError = error instanceof Error ? error.message : String(error);
           }
