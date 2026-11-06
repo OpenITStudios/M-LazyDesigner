@@ -94,6 +94,51 @@ describe("stable Gateway invoke prerequisite enforcement", () => {
     ]);
   });
 
+  test("pre-aborted requests retain cancellation precedence over Graph readiness", async () => {
+    for (const { capability, args, projectBound } of [
+      { capability: "manage_cubes", args: { operation: "create" }, projectBound: false },
+      { capability: "manage_material", args: { operation: "assign_channel" }, projectBound: true },
+    ]) {
+      const controller = new AbortController();
+      controller.abort();
+      const session = new GatewaySessionState();
+      session.replaceFacts(seedCapabilityFacts({ projectBound }));
+      const beforeFacts = { ...session.facts };
+      const records: Array<{ kind: string; success: boolean }> = [];
+      let invocations = 0;
+      const executor = new GatewayCapabilityExecutor(
+        {
+          invokeCapabilityWithMetadata: async () => {
+            invocations++;
+            throw new Error("Cancelled request reached native Runtime.");
+          },
+        } as any,
+        {
+          invoke: async () => { invocations++; return null; },
+        } as any,
+        session,
+        {
+          startedAt: () => Date.now(),
+          record: (event: { kind: string; success: boolean }) => {
+            records.push(event);
+          },
+        } as any
+      );
+      const response = await executor.invoke(capability, args, {
+        mcpReq: { signal: controller.signal },
+      }) as any;
+      expect(response.isError).toBe(true);
+      expect(response.structuredContent.code).toBe("GATEWAY_QUEUE_CANCELLED");
+      expect(response.structuredContent.recovery.safe_to_retry).toBe(true);
+      expect(response.structuredContent.recovery.requires_status_refresh).toBe(false);
+      expect(invocations).toBe(0);
+      expect(session.facts).toEqual(beforeFacts);
+      expect(records).toEqual([
+        expect.objectContaining({ kind: "recovery", success: false }),
+      ]);
+    }
+  });
+
   test("direct-first mutations preserve project across a Control cohort without status calls", async () => {
     const session = new GatewaySessionState();
     let calls = 0;

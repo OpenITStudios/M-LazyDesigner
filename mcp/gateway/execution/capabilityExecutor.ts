@@ -156,6 +156,17 @@ export class GatewayCapabilityExecutor {
     } : undefined;
     let queueTiming: GatewayOperationTiming | null = null;
     try {
+      // A request already cancelled before execution must not be reported as
+      // a Graph prerequisite failure. This performs no native/local mutation.
+      if (context?.mcpReq?.signal?.aborted) {
+        throw new GatewayBackendError(
+          "GATEWAY_QUEUE_CANCELLED",
+          "Gateway request was cancelled before native execution began.",
+          true,
+          { executed: false }
+        );
+      }
+
       // Both stable invoke_capability and explicit experimental direct tools
       // enforce only proven-missing prerequisites; UNKNOWN stays Runtime-owned.
       const blocked = this.directPreconditionBlockedResult(capability, args);
@@ -178,15 +189,6 @@ export class GatewayCapabilityExecutor {
       }
 
       const branch = capabilityBranchFromArguments(args);
-
-      if (context?.mcpReq?.signal?.aborted) {
-        throw new GatewayBackendError(
-          "GATEWAY_QUEUE_CANCELLED",
-          "Gateway request was cancelled before native execution began.",
-          true,
-          { executed: false }
-        );
-      }
       const localResult = await this.localCapabilities.invoke(capability, args);
       const runtimeInvocation = localResult
         ? null
