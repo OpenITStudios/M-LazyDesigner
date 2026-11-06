@@ -857,6 +857,24 @@ export class CorrectionLoopRegistry {
         throw new Error("TARGET_CLEARANCE_VIEW_MISSING: recheck claim views " + missingViews.join(", "));
       }
     }
+    // When a raw caller explicitly declares partial view recovery, do not
+    // silently refresh other stale view handles. Legacy numeric updates with
+    // no recovered_views declaration retain their existing nonvisual path;
+    // structured visual observations already enforce the stronger recheck.
+    if (record.observation_origin !== "STRUCTURED_VISUAL" &&
+        record.pending_target_discrepancy_codes.length > 0 &&
+        options.recovered_views !== undefined) {
+      const recovered = new Set(options.recovered_views);
+      const missing = record.pending_stale_views.filter(
+        (view) => !recovered.has(view)
+      );
+      if (missing.length > 0) {
+        throw new Error(
+          "CORRECTION_STALE_VIEW_RECHECK_REQUIRED: recheck affected views " +
+            missing.join(", ") + "."
+        );
+      }
+    }
     // A changed severity or cause is not new observation evidence. The same
     // handle cannot reverify a pending correction or recover an expired/live
     // Runtime generation, even when the discrepancy still appears in results.
@@ -1239,9 +1257,21 @@ export class CorrectionLoopRegistry {
     const knownEvidenceViews = fullEvidenceHasViewProvenance
       ? (Object.keys(record.view_evidence_handles) as ModelView[])
       : [];
+    // An ANCHOR-dependent Cube changed by this edit can alter other views
+    // even when only one discrepancy was targeted. The incremental plan
+    // already detects this propagation; no extra model inspection is needed.
+    const coupledGeometryChanged =
+      rebuild.constraint_propagated_instance_ids.length > 0;
     const canReuseViews =
-      fullEvidenceHasViewProvenance && targetedEvidenceHasViewProvenance;
-    const staleViews = canReuseViews ? targetedViews : [...fallbackViews];
+      fullEvidenceHasViewProvenance &&
+      targetedEvidenceHasViewProvenance &&
+      !coupledGeometryChanged;
+    const staleViews = canReuseViews
+      ? targetedViews
+      : [...new Set([
+          ...fallbackViews,
+          ...(Object.keys(record.view_evidence_handles) as ModelView[]),
+        ])];
     const reusableViews = canReuseViews
       ? knownEvidenceViews.filter((view) => !staleViews.includes(view))
       : [];

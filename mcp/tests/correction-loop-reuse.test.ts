@@ -599,6 +599,97 @@ describe("zero-waste correction loop reuse", () => {
     });
   });
 
+  test("ANCHOR propagation invalidates other view evidence before re-verification", () => {
+    const anchored: AuthoringRecipe = {
+      schema: 1, compiler_version: 1, id: "anchored", name: "anchored",
+      prototypes: [
+        { id: "seat_proto", name: "seat", size: [8, 2, 8], semantic_group: "seat" },
+        { id: "leg_proto", name: "leg", size: [2, 6, 2], semantic_group: "leg" },
+      ],
+      patterns: [
+        { kind: "LINEAR", id: "seat", prototype_id: "seat_proto",
+          count: 1, axis: "X", spacing: 0, start: [0, 6, 0], semantic_group: "seat" },
+        { kind: "LINEAR", id: "leg", prototype_id: "leg_proto",
+          count: 1, axis: "X", spacing: 0, start: [0, 0, 0], semantic_group: "leg" },
+      ],
+      constraints: [{
+        kind: "ANCHOR", id: "leg_follows_seat",
+        source_instance_id: "leg:0", target_instance_id: "seat:0",
+        axes: ["X"], source_anchor: ["MIN", "MIN", "MIN"],
+        target_anchor: ["MAX", "MIN", "MIN"], offset: [-2, 0, 0],
+      }],
+    };
+    const registry = new SyntheticAppliedCorrectionLoopRegistry();
+    const handle = registry.start({
+      recipe_id: "anchored", base_recipe: anchored,
+      verification_request: {
+        domain: "GEOMETRY", source: "capture_model_views",
+        verification_risk: "MEDIUM", views: ["front", "left"],
+        views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+        scope_instance_ids: ["seat:0", "leg:0"],
+      },
+      verification_evidence_handle: "verificationevidence:anchored-before",
+      discrepancies: [
+        { code: "SEAT_WIDTH", severity: "REVIEW",
+          summary: "Seat width needs correction.", views: ["front"],
+          evidence_targets: ["width", "silhouette"] },
+        { code: "LEG_CONTACT", severity: "REVIEW",
+          summary: "Leg contact is under review.", views: ["left"],
+          evidence_targets: ["attachment"] },
+      ],
+    });
+    const decision = registry.planGeometryCorrection(handle, [{
+      id: "widen-seat", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+      patch: {
+        target_discrepancy_codes: ["SEAT_WIDTH"],
+        intent: {
+          target: { semantic_group: "seat" },
+          operation: { kind: "RESIZE_AXIS", axis: "X",
+            mode: "ADD", value: 4, anchor: "MIN" },
+        },
+      },
+    }]);
+    expect(decision.state).toBe("CORRECTION_READY");
+    expect(decision.rebuild?.constraint_propagated_instance_ids).toEqual(["leg:0"]);
+    expect(decision.evidence_reuse).toEqual({
+      source_handle: "verificationevidence:anchored-before",
+      stale_views: ["front", "left"],
+      reusable_views: [],
+      reusable_evidence: [],
+      basis: "CONSERVATIVE_ALL_VIEWS",
+    });
+
+    const pending = registry.projectContinuation(handle);
+    expect(pending).toMatchObject({
+      state: "VERIFY_PENDING",
+      verification: { stale_views: ["front", "left"] },
+      fresh_view_evidence: [],
+    });
+    // A partial declaration must not let a new handle certify the side view.
+    expect(() => registry.updateEvidence(
+      handle, "verificationevidence:anchored-front-only",
+      [{ code: "SEAT_WIDTH", severity: "INFO",
+        summary: "Width improved.", views: ["front"] }],
+      { recovered_views: ["front"] }
+    )).toThrow("CORRECTION_STALE_VIEW_RECHECK_REQUIRED");
+    expect(registry.projectContinuation(handle)).toEqual(pending);
+
+    registry.updateEvidence(
+      handle, "verificationevidence:anchored-after",
+      [{ code: "SEAT_WIDTH", severity: "INFO",
+        summary: "Width improved.", views: ["front"] }],
+      { recovered_views: ["front", "left"] }
+    );
+    const after = registry.projectContinuation(handle);
+    expect(after.verification.stale_views).toEqual([]);
+    expect(after.fresh_view_evidence).toEqual([
+      { view: "front", handle: "verificationevidence:anchored-after" },
+      { view: "left", handle: "verificationevidence:anchored-after" },
+    ]);
+    expect(after.unresolved.map((item) => item.code)).toContain("LEG_CONTACT");
+  });
+
   test("bounds correction candidate count by verification risk", () => {
     const registry = new SyntheticAppliedCorrectionLoopRegistry();
     const lowHandle = registry.start({
