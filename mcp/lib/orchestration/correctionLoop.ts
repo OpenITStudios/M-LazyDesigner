@@ -922,11 +922,11 @@ export class CorrectionLoopRegistry {
     const pendingTargetCodes = [...record.pending_target_discrepancy_codes];
     if (pendingTargetCodes.length > 0) {
       // A newly observed BLOCKING issue or a worsened known non-target issue
-      // means net improvement is not established. Do not attribute cause to
-      // this edit or auto-repair; just retain the existing conservative PLATEAU.
+      // vetoes net improvement in both raw and structured evidence workflows.
+      // Raw claims remain caller-supplied, not native visual proof; this is
+      // a conservative veto, not a new quality score or causal attribution.
       const knownBefore = new Map(record.discrepancies.map((item) => [item.code, item]));
-      const unresolvedRegression = record.observation_origin === "STRUCTURED_VISUAL" &&
-        incoming.some((item) => {
+      const unresolvedRegression = incoming.some((item) => {
           if (pendingTargetCodes.includes(item.code)) return false;
           const previous = knownBefore.get(item.code);
           return previous

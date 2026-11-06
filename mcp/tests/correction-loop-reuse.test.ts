@@ -2505,6 +2505,91 @@ describe("zero-waste correction loop reuse", () => {
     );
   });
 
+  test("numeric corrections veto non-target regressions without blocking clean improvements", () => {
+    // Previously only STRUCTURED_VISUAL updates guarded non-target quality.
+    // Raw numeric discrepancy claims must not upgrade net convergence while
+    // explicitly reporting a new or worsened critical attachment problem.
+    const side = (severity: "INFO" | "REVIEW" | "BLOCKING") => ({
+      code: "SIDE_CONTACT", severity,
+      summary: "Shoulder attachment review.",
+      quality_class: "TOPOLOGY_ATTACHMENT" as const,
+      owner: "GEOMETRY" as const,
+      cause_family: "CONTACT_GAP" as const,
+      views: ["left" as const],
+    });
+    const main = {
+      code: "MAIN_FORM", severity: "BLOCKING" as const,
+      summary: "Arm silhouette requires a size correction.",
+      quality_class: "PRIMARY_FORM" as const,
+      owner: "GEOMETRY" as const,
+      cause_family: "SIZE_MISMATCH" as const,
+      views: ["front" as const],
+    };
+    for (const scenario of [
+      { name: "unchanged existing side", before: "INFO", after: "INFO",
+        expected: "IMPROVED" },
+      { name: "existing side worsened", before: "INFO", after: "BLOCKING",
+        expected: "PLATEAU" },
+      { name: "new critical side", before: null, after: "BLOCKING",
+        expected: "PLATEAU" },
+      { name: "new noncritical side", before: null, after: "REVIEW",
+        expected: "IMPROVED" },
+    ] as const) {
+      const registry = new SyntheticAppliedCorrectionLoopRegistry();
+      const handle = registry.start({
+        recipe_id: "asset",
+        base_recipe: recipe(),
+        verification_request: {
+          domain: "GEOMETRY", source: "capture_model_views",
+          verification_risk: "MEDIUM", views: ["front", "left"],
+          views_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+          size: 256, size_role: "FALLBACK_IF_NO_GROUNDED_TARGETS",
+          scope_instance_ids: ["arms:0", "arms:1"],
+        },
+        verification_evidence_handle: "verificationevidence:raw-before",
+        discrepancies: [
+          main,
+          ...(scenario.before === null ? [] : [side(scenario.before)]),
+        ],
+      });
+      const candidate = {
+        id: "resize-arms", predicted_error: 0.1, mutation_cost: 0.1, risk: 0.1,
+        patch: {
+          target_discrepancy_codes: ["MAIN_FORM"],
+          correction_family: "RESIZE" as const,
+          intent: {
+            target: { semantic_group: "upper_arm" },
+            operation: {
+              kind: "RESIZE_AXIS" as const,
+              axis: "X" as const, mode: "ADD" as const,
+              value: 1, anchor: "MIN" as const,
+            },
+          },
+        },
+      };
+      expect(registry.planGeometryCorrection(handle, [candidate]).state,
+        scenario.name).toBe("CORRECTION_READY");
+      registry.updateEvidence(handle, "verificationevidence:raw-after", [
+        { ...main, severity: "REVIEW" as const,
+          summary: "Primary form improved but requires further review." },
+        side(scenario.after),
+      ], { recovered_views: ["front", "left"] });
+      const continuation = registry.projectContinuation(handle);
+      expect(continuation.convergence.state, scenario.name)
+        .toBe(scenario.expected);
+      expect(continuation.state, scenario.name)
+        .toBe(scenario.expected === "PLATEAU" ? "BLOCKED" : "READY");
+      if (scenario.expected === "PLATEAU") {
+        expect(continuation.quality_focus).toMatchObject({
+          code: "SIDE_CONTACT", severity: "BLOCKING",
+        });
+        expect(registry.planGeometryCorrection(handle, [candidate]))
+          .toMatchObject({ state: "BLOCKED",
+            blocked_reason: "QUALITY_PLATEAU_NO_GAIN" });
+      }
+    }
+  });
+
   test("structured visual convergence rejects unreviewed or worsened side evidence", () => {
     const base = {
       code: "ARM_WIDTH",
