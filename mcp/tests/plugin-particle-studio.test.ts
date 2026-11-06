@@ -6,7 +6,7 @@ import {
   studioDefaults, studioOutputPath, studioParticleFoldersForModel,
   studioBootstrapOperations, readStudioEffect,
   studioChangeOperations, compileStudioDraft, prepareStudioParticleDraft,
-  requireStudioCommittedWrite,
+  requireStudioCommittedWrite, refreshRegisteredStudioParticle,
   startStudioPreview, stopStudioPreview, studioPreviewStatus,
   type StudioSettings,
 } from "../ui/particleStudio";
@@ -125,6 +125,35 @@ describe("Particle Studio quick authoring contracts", () => {
     expect(() => requireStudioCommittedWrite({
       valid: false, artifact_ready: false, wrote_to_path: path,
     }, path)).toThrow(/not committed/);
+  });
+
+  test("native refresh targets only previously registered Animation effects", () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, "Animator");
+    const particlePath = "/pack/particles/demo.particle.json";
+    const config = { identifier: "mivubi:demo" };
+    const entries: Record<string, { config: typeof config }> = {};
+    let loads = 0;
+    const native = {
+      particle_effects: entries,
+      loadParticleEmitter: () => { loads += 1; return { config }; },
+    };
+    Object.defineProperty(globalThis, "Animator", {
+      configurable: true, value: native,
+    });
+    try {
+      expect(refreshRegisteredStudioParticle(particlePath, "{}")).toBeNull();
+      expect(loads).toBe(0); // Standalone previews never register new keyframes.
+
+      entries[particlePath] = { config };
+      expect(refreshRegisteredStudioParticle(particlePath, "{}")).toBeNull();
+      expect(loads).toBe(1);
+      native.loadParticleEmitter = () => { throw new Error("Renderer unavailable"); };
+      expect(refreshRegisteredStudioParticle(particlePath, "{}")).toContain("Renderer unavailable");
+      // A native warning must not rewrite or undo the committed particle file.
+    } finally {
+      if (previous) Object.defineProperty(globalThis, "Animator", previous);
+      else Reflect.deleteProperty(globalThis, "Animator");
+    }
   });
 
   test("new effects are previewable drafts without filesystem writes or project save paths", () => {

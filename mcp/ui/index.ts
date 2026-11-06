@@ -529,13 +529,17 @@ export function uiSetup(input: UiSetupInput) {
                 path: updated.path, label: updated.settings.identifier.split(":")[1],
               }].sort((a, b) => a.label.localeCompare(b.label));
             }
-            this.studioNote = "Particle file saved. Preview remains separate from disk writes.";
+            const animationWarning = updated.refresh_warning
+              ? " Animation preview refresh unavailable: " + updated.refresh_warning
+              : "";
+            this.studioNote = "Particle file saved." + animationWarning;
             this.studioPlaying = false;
             try {
-              this.studioNote = await startPanelParticlePreview(project, updated, this.studioLocator);
+              const previewNote = await startPanelParticlePreview(project, updated, this.studioLocator);
+              this.studioNote = previewNote + animationWarning;
               this.studioPlaying = true;
             } catch (error) {
-              this.studioNote += " Preview: " + (error instanceof Error ? error.message : String(error));
+              this.studioNote += " Standalone preview: " + (error instanceof Error ? error.message : String(error));
             }
           } catch (error) {
             if (epoch === uiEpoch && Project === project) {

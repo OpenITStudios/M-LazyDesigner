@@ -28,6 +28,8 @@ export type StudioEffect = {
   content: string;
   settings: StudioSettings;
   editable: Record<StudioField, boolean>;
+  /** A native animation refresh warning does not invalidate a committed file. */
+  refresh_warning?: string;
 };
 export type StudioFile = { path: string; label: string };
 
@@ -341,6 +343,22 @@ export async function openStudioParticle(project: ModelProject, file: string): P
     return readFileEffect(fs, file);
   });
 }
+/** Refresh only an already native-loaded effect, without registering unrelated files. */
+export function refreshRegisteredStudioParticle(path: string, content: string): string | null {
+  const host = typeof Animator === "undefined" ? null : Animator as unknown as {
+    particle_effects?: Record<string, unknown>;
+  };
+  if (!host?.particle_effects?.[path]) return null;
+  try {
+    loadNativeParticlePreview(path, content);
+    return null;
+  } catch (error) {
+    // The file write has already succeeded; an optional native reload failure
+    // is not permission to replay or roll back a committed transaction.
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
 export async function saveStudioParticle(project: ModelProject, loaded: StudioEffect, next: StudioSettings): Promise<StudioEffect> {
   return inStudioQueue(project, async () => {
     if (!listStudioParticles(project).some(item => item.path === loaded.path)) {
@@ -357,7 +375,9 @@ export async function saveStudioParticle(project: ModelProject, loaded: StudioEf
       source: { path: loaded.path }, operations,
       output: { path: loaded.path }, preview: false,
     }, loaded.path);
-    return readFileEffect(fs, loaded.path);
+    const updated = readFileEffect(fs, loaded.path);
+    const refreshWarning = refreshRegisteredStudioParticle(loaded.path, updated.content);
+    return refreshWarning ? { ...updated, refresh_warning: refreshWarning } : updated;
   });
 }
 /**
