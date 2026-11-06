@@ -1,5 +1,8 @@
 import type { AuthoringRecipe, RecipeFeatureIntent } from "@/lib/authoringRecipe/contracts";
-import { planRecipeFeatureRepresentations } from "@/lib/authoringRecipe/featureDecision";
+import {
+  hasDeclaredPrimaryFormReason,
+  planRecipeFeatureRepresentations,
+} from "@/lib/authoringRecipe/featureDecision";
 import {
   indexRecipeKnowledge,
   RECIPE_GEOMETRY_CASE_SOURCE_PATH,
@@ -189,10 +192,18 @@ export function suggestRecipeKnowledge(
         ? readExcerpt(matched) : null;
       return {
         feature,
-        priority: (linked.has(feature.id) ? 2 : 0) +
-          (excerpt && !excerpt.guidance_truncated ? 1 : 0),
+        pinned: linked.has(feature.id),
+        // Caller-declared, supported primary-form intent comes before
+        // optional detail guidance, not before an explicit pinned link.
+        // This does not attest that reference pixels were examined.
+        primary: routes.get(feature.id) === "GEOMETRY" &&
+          hasDeclaredPrimaryFormReason(feature.geometry_reasons),
+        matched_case: Boolean(excerpt && !excerpt.guidance_truncated),
       };
-    }).sort((a, b) => b.priority - a.priority ||
+    }).sort((a, b) =>
+      Number(b.pinned) - Number(a.pinned) ||
+      Number(b.primary) - Number(a.primary) ||
+      Number(b.matched_case) - Number(a.matched_case) ||
       a.feature.id.localeCompare(b.feature.id))
       .slice(0, options.auto_focus_limit)
       .map(entry => entry.feature);

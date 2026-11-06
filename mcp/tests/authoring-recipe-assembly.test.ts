@@ -4,6 +4,11 @@ import { reviewDeclaredRecipeAssembly } from "@/lib/authoringRecipe/geometryAsse
 import { compileAuthoringRecipe } from "@/lib/authoringRecipe/compiler";
 import { createAuthoringRecipeService } from "@/lib/authoringRecipe/service";
 import { reviewRecipeKnowledge } from "@/lib/authoringRecipe/knowledgePlanning";
+import type { AdvancedGeometryFeature } from "@/lib/authoringRecipe/geometrySchema";
+import {
+  buildAdvancedGeometryRecipeCandidate,
+  reviewStoredAdvancedGeometrySource,
+} from "@/lib/authoringRecipe/geometryComposition";
 import { readBundledRecipeKnowledgeIndex } from "@/server/runtime/recipes/authoring/knowledgeRuntime";
 
 function assemblyRecipe(): AuthoringRecipe {
@@ -228,5 +233,75 @@ describe("R2 explicit semantic assembly inside existing Recipe", () => {
     expect(hinge?.mutation_authorized).toBe(false);
     expect(plan.summary).toBeDefined();
     expect(next).toEqual(original);
+  });
+});
+
+describe("Structure-first initial Recipe batch using declared form reasons", () => {
+  const blank = (): AuthoringRecipe => ({
+    schema: 1, compiler_version: 1, id: "shape-first-batch",
+    name: "Editable modular prop", prototypes: [], patterns: [],
+  });
+  const detail: AdvancedGeometryFeature = {
+    kind: "cuboid", id: "a-detail", label: "raised side trim",
+    evidence_refs: ["reference:side"], geometry_reasons: ["LAYERING"],
+    from: [8, 0, 0], to: [9, 2, 1],
+  };
+  const body: AdvancedGeometryFeature = {
+    kind: "cuboid", id: "z-body", label: "principal body mass",
+    evidence_refs: ["reference:front"], geometry_reasons: ["SILHOUETTE", "VOLUME"],
+    from: [0, 0, 0], to: [4, 4, 4],
+  };
+
+  test("new blank batch builds principal form first without deleting or reshaping detail", () => {
+    const seed = blank();
+    const original = structuredClone(seed);
+    const features = [detail, body];
+    const unchanged = structuredClone(features);
+    const planned = buildAdvancedGeometryRecipeCandidate(seed, features);
+    expect(planned.next_recipe.patterns.map(pattern => pattern.feature_id))
+      .toEqual(["z-body", "a-detail"]);
+    expect(planned.summary.shape_families.map(row => row.feature_id))
+      .toEqual(["z-body", "a-detail"]);
+    expect(planned.next_recipe.advanced_geometry_source?.map(feature => feature.id))
+      .toEqual(["a-detail", "z-body"]);
+    expect(compileAuthoringRecipe(planned.next_recipe).placements).toHaveLength(2);
+    expect(reviewStoredAdvancedGeometrySource(planned.next_recipe).state)
+      .toBe("AVAILABLE_MATCHED_SOURCE");
+    expect(planned.summary.native_mutation_executed).toBe(false);
+    expect(planned.summary.visual_verdict).toBe("NOT_EVALUATED");
+    expect(seed).toEqual(original);
+    expect(features).toEqual(unchanged);
+  });
+
+  test("existing Recipe revisions keep their supplied feature order", () => {
+    const seed = blank();
+    seed.prototypes.push({ id: "owned-cube", name: "existing", size: [2, 2, 2] });
+    seed.patterns.push({
+      kind: "LINEAR", id: "owned-pattern", prototype_id: "owned-cube",
+      feature_id: "owned", count: 1, axis: "Z", spacing: 0,
+      start: [12, 0, 0],
+    });
+    seed.feature_intents = [{
+      id: "owned", label: "existing structure", visual_role: "THREE_DIMENSIONAL",
+      evidence: "SUPPORTED", evidence_refs: ["reference:rear"],
+      geometry_reasons: ["VOLUME"],
+    }];
+    const untouched = structuredClone(seed);
+    const planned = buildAdvancedGeometryRecipeCandidate(seed, [detail, body]);
+    expect(planned.next_recipe.patterns.map(pattern => pattern.feature_id))
+      .toEqual(["owned", "a-detail", "z-body"]);
+    expect(compileAuthoringRecipe(planned.next_recipe).placements).toHaveLength(3);
+    expect(seed).toEqual(untouched);
+    expect(planned.summary.native_mutation_executed).toBe(false);
+  });
+
+  test("no declared form reason does not invent a primary Cube priority", () => {
+    const unlabeled: AdvancedGeometryFeature = {
+      ...body, geometry_reasons: undefined,
+    };
+    const planned = buildAdvancedGeometryRecipeCandidate(blank(), [detail, unlabeled]);
+    expect(planned.next_recipe.patterns.map(pattern => pattern.feature_id))
+      .toEqual(["a-detail", "z-body"]);
+    expect(planned.summary.visual_verdict).toBe("NOT_EVALUATED");
   });
 });

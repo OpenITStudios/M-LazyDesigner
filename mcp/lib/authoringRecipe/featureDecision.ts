@@ -19,6 +19,16 @@ const EVIDENCE = ["SUPPORTED", "PROVISIONAL", "CONFLICTING", "UNAVAILABLE"] as c
 const MAX_FEATURES = 256;
 const EXAMPLE_LIMIT = 12;
 
+/** A declared construction priority only; no source-image or model-quality proof.
+ * Keep it with the canonical feature representation owner.
+ */
+export function hasDeclaredPrimaryFormReason(
+  reasons: readonly RecipeGeometryReason[] | undefined
+): boolean {
+  return reasons?.includes("SILHOUETTE") === true ||
+    reasons?.includes("VOLUME") === true;
+}
+
 export function planRecipeFeatureRepresentations(
   features: readonly RecipeFeatureIntent[]
 ): { state: "ready" | "review_required"; decisions: RecipeFeatureDecision[]; summary: RecipeFeaturePlanSummary } {

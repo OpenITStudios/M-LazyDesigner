@@ -6,6 +6,7 @@ import type { AdvancedGeometryFeature } from "./geometrySchema";
 export type { AdvancedGeometryFeature } from "./geometrySchema";
 import { buildPlanarCurveRecipeCandidate } from "./geometryCurveConstruction";
 import { compileAuthoringRecipe } from "./compiler";
+import { hasDeclaredPrimaryFormReason } from "./featureDecision";
 import { requireGeometryBoundedRevision } from "./geometryMathVariation";
 import {
   buildGeometryShapePieces,
@@ -235,9 +236,24 @@ export function buildAdvancedGeometryRecipeCandidate(
   if (new Set(ids).size !== ids.length) {
     throw new Error("ADVANCED_GEOMETRY_FEATURE_DUPLICATE");
   }
+  // Only a brand-new, empty Recipe may reorder a batch. Existing authoring
+  // history and source revisions retain caller order and native ownership.
+  // Explicit SILHOUETTE/VOLUME intents precede secondary 3D features; an
+  // absent reason is NOT evidence of primary-form importance.
+  const initialConstruction =
+    source.patterns.length === 0 && source.prototypes.length === 0 &&
+    priorShapeSources.length === 0;
+  const orderedFeatures = initialConstruction
+    ? [
+        ...features.filter(feature =>
+          hasDeclaredPrimaryFormReason(feature.geometry_reasons)),
+        ...features.filter(feature =>
+          !hasDeclaredPrimaryFormReason(feature.geometry_reasons)),
+      ]
+    : features;
   let next = structuredClone(source);
   const rows: AdvancedGeometrySummary["shape_families"] = [];
-  for (const feature of features) {
+  for (const feature of orderedFeatures) {
     // Explicit v14 variation bounds protect already-saved feature identity.
     // Reuse the canonical Recipe revision path, not a separate solver or tool.
     requireGeometryBoundedRevision(

@@ -3,6 +3,7 @@ import type {
   RecipeFeatureRoute,
   RecipeGeometryReason,
 } from "@/lib/authoringRecipe/contracts";
+import { hasDeclaredPrimaryFormReason } from "@/lib/authoringRecipe/featureDecision";
 import {
   RECIPE_GEOMETRY_CASE_SOURCE_PATH,
   type RecipeKnowledgeResolution,
@@ -129,7 +130,7 @@ export function proposeGeometryConstruction(
     recipe, suggestions.map(suggestion => suggestion.feature_id)
   ).map(review => [review.feature_id, review] as const));
 
-  return suggestions.flatMap((suggestion): GeometryConstructionProposal[] => {
+  const proposals = suggestions.flatMap((suggestion): GeometryConstructionProposal[] => {
     const feature = features.get(suggestion.feature_id);
     if (!feature || feature.visual_role !== "THREE_DIMENSIONAL") return [];
     const refs = feature.evidence === "SUPPORTED"
@@ -187,4 +188,17 @@ export function proposeGeometryConstruction(
         ? { curve_review: curveByFeature.get(feature.id)! } : {}),
     }];
   });
+  // AI-facing alternatives lead with source-declared primary 3D form,
+  // irrespective of lexical feature IDs. Unverified details are not silently
+  // promoted, and proposal ordering never authorizes a native change.
+  return proposals.map((proposal, index) => ({
+    proposal, index,
+    primary: proposal.feature_route === "GEOMETRY" &&
+      proposal.reference_claim_ids.length > 0 &&
+      hasDeclaredPrimaryFormReason(
+        features.get(proposal.feature_id)?.geometry_reasons
+      ),
+  })).sort((a, b) =>
+    Number(b.primary) - Number(a.primary) || a.index - b.index
+  ).map(({ proposal }) => proposal);
 }

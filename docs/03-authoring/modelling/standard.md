@@ -261,6 +261,8 @@ Primary geometry is the minimum Cuboids plus **required primary hierarchy/pivots
 
 Secondary complexity is **identity-weighted**. Do not subdivide every region uniformly or add rotation noise to look detailed.
 
+**Structure-first source prioritization:** For implicit Recipe knowledge focus, a supported THREE_DIMENSIONAL feature with explicit `SILHOUETTE` or `VOLUME` reasons and source handles takes priority over unrelated secondary detail within the existing eight-feature budget; explicit feature selection and pinned knowledge links retain their authority. AI-facing construction proposals display those primary features first. In a new *empty* Advanced Geometry Recipe, independent features with explicitly declared primary-form reasons compile before other feature cohorts, while subsequent edits retain the supplied order and all existing owned geometry. Omitted reasons are not silently classified as primary. These are source-intent and ordering decisions, **not image verification**, aesthetic PASS, a Cube-count quota, an automatic visual gate or a new modelling engine. Validate actual primary shape in the reference-matched views before approving secondary elaboration.
+
 ## Cuboid Efficiency
 
 Cube efficiency is representation-first, never a fixed count target.

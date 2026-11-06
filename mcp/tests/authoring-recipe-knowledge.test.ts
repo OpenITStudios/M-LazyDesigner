@@ -622,6 +622,67 @@ describe("G2 retrieval discrimination before the G3 Geometry quality benchmark",
     }
   });
 
+  test("implicit authoring focus preserves primary form before secondary detail under a bounded budget", () => {
+    const corpus = readBundledRecipeKnowledgeIndex()!;
+    const makeDraft = (coreEvidence: "SUPPORTED" | "PROVISIONAL"): AuthoringRecipe => ({
+      schema: 1, compiler_version: 1, id: "shape-first-focus",
+      name: "Editable prop", prototypes: [], patterns: [],
+      feature_intents: [
+        ...Array.from({ length: 8 }, (_, i) => ({
+          id: "a" + String(i).padStart(2, "0"),
+          label: "decorative raised panel " + i,
+          visual_role: "THREE_DIMENSIONAL" as const,
+          evidence: "SUPPORTED" as const,
+          evidence_refs: ["reference:side"],
+          geometry_reasons: ["LAYERING" as const],
+        })),
+        {
+          id: "z-core", label: "main body silhouette",
+          visual_role: "THREE_DIMENSIONAL", evidence: coreEvidence,
+          evidence_refs: ["reference:front"],
+          geometry_reasons: ["SILHOUETTE", "VOLUME"],
+        },
+      ],
+    });
+    const draft = makeDraft("SUPPORTED");
+    const unchanged = structuredClone(draft);
+    const review = reviewRecipeKnowledge(draft, corpus);
+    expect(review.suggestions).toHaveLength(8);
+    expect(review.suggestions.map(entry => entry.feature_id)).toContain("z-core");
+    expect(review.geometry_proposals[0]?.feature_id).toBe("z-core");
+    expect(review.geometry_proposals.every(entry =>
+      entry.mutation_authorized === false && entry.visual_verdict === "NOT_EVALUATED"
+    )).toBe(true);
+    expect(review.omitted_feature_count).toBe(1);
+    expect(draft).toEqual(unchanged);
+
+    // Explicit inspection is exact, even when the selected feature is detail.
+    const scoped = reviewRecipeKnowledge(draft, corpus, {
+      feature_ids: ["a07"],
+    });
+    expect(scoped.suggestions.map(entry => entry.feature_id)).toEqual(["a07"]);
+    expect(scoped.geometry_proposals.map(entry => entry.feature_id)).toEqual(["a07"]);
+
+    // A reason without supported evidence is not an authority to jump queue.
+    const provisional = makeDraft("PROVISIONAL");
+    const weak = suggestRecipeKnowledge(provisional, snapshot(), {
+      auto_focus_limit: 8,
+    });
+    expect(weak.map(entry => entry.feature_id)).not.toContain("z-core");
+
+    // A deliberately pinned knowledge link remains stronger than implicit
+    // primary-form order. Only linked source facts, not matched titles, bind.
+    const pinnedCase = corpus.sections.find(section =>
+      section.heading.startsWith("G-P03 "))!;
+    const pinned = bindRecipeKnowledge(draft, corpus, [{
+      feature_id: "a07", section_id: pinnedCase.id,
+    }]);
+    const oneSlot = suggestRecipeKnowledge(pinned, corpus, {
+      auto_focus_limit: 1,
+    });
+    expect(oneSlot.map(entry => entry.feature_id)).toEqual(["a07"]);
+  });
+
   test("implicit planning prioritizes late, source-matched craft questions without changing the Recipe", () => {
     const corpus = readBundledRecipeKnowledgeIndex()!;
     const draft: AuthoringRecipe = {
