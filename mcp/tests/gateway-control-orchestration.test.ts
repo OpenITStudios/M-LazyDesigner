@@ -178,6 +178,8 @@ describe("Control orchestration reducer", () => {
     expect(finished.state.pending_action)
       .toEqual(finished.continuation.next_action);
     expect(finished.continuation.next_action.reason).toContain("approved source");
+    expect(finished.continuation.next_action.reason).toContain("front_direction");
+    expect(finished.continuation.next_action.reason).toContain("evidence_targets");
     expect(finished.state.pending_verification).toBeNull();
 
     // Reusing the task ID after completion is not an open cohort: do not
@@ -187,6 +189,38 @@ describe("Control orchestration reducer", () => {
       { taskContextId: "form-assembly", cohortBoundary: "COMPLETE" }
     );
     expect(repeated.continuation.next_action.recommended_capability).toBeNull();
+  });
+
+  test("a receipt-only precursor does not turn one later Cube edit into a cohort capture", () => {
+    const first = reduceControlExecutionState(null, delta({
+      verification_class: "receipt_only",
+      verification_scope: null,
+      freshness: {
+        basis: "NO_CHANGE", stale: [], fresh: ["GEOMETRY_STRUCTURE"],
+        unknown: [],
+      },
+    }), { taskContextId: "mixed-cohort", cohortBoundary: "CONTINUE" });
+    expect(first.continuation.next_action.kind).toBe("CONTINUE");
+    expect(first.state.pending_verification).toMatchObject({
+      verification_class: "receipt_only", verification_scope: null,
+    });
+    const final = reduceControlExecutionState(first.state, delta(), {
+      taskContextId: "mixed-cohort", cohortBoundary: "COMPLETE",
+    });
+    expect(final.continuation.next_action.kind).toBe("VERIFY_VISUAL");
+    expect(final.continuation.next_action.recommended_capability).toBeNull();
+    expect(final.state.pending_action).toEqual(final.continuation.next_action);
+  });
+
+  test("a different previous owner cannot authorize Geometry's capture hint", () => {
+    const previous = reduceControlExecutionState(null, delta({
+      authoring_domain: "TEXTURING",
+    }), { taskContextId: "cross-domain", cohortBoundary: "CONTINUE" });
+    const final = reduceControlExecutionState(previous.state, delta(), {
+      taskContextId: "cross-domain", cohortBoundary: "COMPLETE",
+    });
+    expect(final.continuation.next_action.kind).toBe("VERIFY_VISUAL");
+    expect(final.continuation.next_action.recommended_capability).toBeNull();
   });
 
   test("unscoped, uncertain, and cross-project cohorts never advertise capture", () => {

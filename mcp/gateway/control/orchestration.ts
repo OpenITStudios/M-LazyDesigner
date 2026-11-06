@@ -409,13 +409,18 @@ export function reduceControlExecutionState(
       ? immediateAction
       : cohortCompletionAction(delta, mergedPending);
 
-  // A single Cube edit must not trigger screenshot capture. At the explicit
-  // end of a multi-operation, project-stable Geometry cohort, the existing
-  // capture capability can be suggested ONCE for the next material reference
-  // gate. The reducer does not inspect pixels or execute another tool.
-  const completedGeometryCohort =
+  // A prior receipt-only or unscoped action is NOT a deferred Geometry
+  // visual edit. Only an actually pending, scoped Geometry visual cohort
+  // justifies a capture suggestion on completion. This is a next-action
+  // hint, not a capture call or image-quality approval.
+  const priorScopedGeometryVisual =
     sameCohort &&
-    previous?.pending_verification !== null &&
+    previous?.owner === "GEOMETRY" &&
+    previous.pending_verification?.verification_class === "visual" &&
+    previous.pending_verification.verification_scope?.kind === "CUBE_TARGETS" &&
+    previous.pending_verification.verification_scope.cube_uuids.length > 0;
+  const completedGeometryCohort =
+    priorScopedGeometryVisual &&
     taskContextId !== null &&
     cohortBoundary === "COMPLETE" &&
     delta.authoring_domain === "GEOMETRY" &&
@@ -426,7 +431,7 @@ export function reduceControlExecutionState(
     ? {
         ...pendingAction,
         recommended_capability: "capture_model_views",
-        reason: "Geometry cohort finished. At the next material reference-quality gate, compare the approved source with one bounded capture of relevant current model views. Do not capture per Cube or treat a capture as visual PASS.",
+        reason: "Geometry cohort finished. At the next material reference-quality gate, compare approved source pixels with one bounded capture of relevant current model views. Before invoke, supply front_direction from the approved reference and either explicitly matched views or evidence_targets; Cube UUIDs are affected scope, not camera view names. Do not capture per Cube or treat a capture as visual PASS.",
       }
     : pendingAction;
 
