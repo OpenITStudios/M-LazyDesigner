@@ -30,6 +30,14 @@ describe("R01 particle preview proof boundaries", () => {
     expect(src).toContain('...(includeKeyframes ? { keyframes: inspectedKeyframes } : {})');
   });
 
+  test("preview workload guard preserves committed source independently of renderer", async () => {
+    const src = await Bun.file("server/tools/particle/manage.ts").text();
+    expect(src).toContain('const previewBudgetBlocked = preview && artifactReady');
+    expect(src).toContain('!previewBudgetBlocked');
+    expect(src).toContain('const writes = artifactReady ? writeParticleArtifactsAtomically(writePlans) : []');
+    expect(src).toContain('!artifactReady || previewBudgetBlocked ? "BLOCKED"');
+  });
+
   test("particle receipt does not confuse loader invocation with rendering proof", async () => {
     const src = await Bun.file("server/tools/particle/manage.ts").text();
     expect(src).toContain('preview_load_call:');

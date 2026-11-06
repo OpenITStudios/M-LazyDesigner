@@ -575,13 +575,17 @@ export function registerParticleTools(): void {
         const byteLength = Buffer.byteLength(serialized, "utf8");
 
         const intendedPreviewPath = output?.path ?? base.source_path;
+        // Native preview is optional; a predictably unsafe workload must not
+        // downgrade the validity or atomic persistence of authored JSON.
+        const previewBudgetBlocked = preview && artifactReady &&
+          summary.preview_workload.state === "blocked";
         if (preview && artifactReady) {
           if (!intendedPreviewPath) {
             throw new Error(
               "Native particle preview requires an existing source.path or output.path; inline-only documents have no stable Blockbench file identity."
             );
           }
-          assertNativeParticlePreviewAvailable();
+          if (!previewBudgetBlocked) assertNativeParticlePreviewAvailable();
         }
 
         const writePlans: PlannedParticleWrite[] = [];
@@ -606,8 +610,10 @@ export function registerParticleTools(): void {
         const particleWrite = writes.find((entry) => entry.kind === "particle");
 
         let previewPath: string | null = null;
-        let previewError: string | null = null;
-        if (preview && artifactReady && intendedPreviewPath) {
+        let previewError: string | null = previewBudgetBlocked
+          ? "Native preview blocked by authoring budget: " + summary.preview_workload.reason
+          : null;
+        if (preview && artifactReady && intendedPreviewPath && !previewBudgetBlocked) {
           previewPath = intendedPreviewPath;
           try {
             loadNativeParticlePreview(previewPath, serialized);
@@ -632,7 +638,7 @@ export function registerParticleTools(): void {
                 ? `Particle ${summary.identifier ?? "<missing identifier>"} has validation errors; no file write or preview was performed.`
                 : textureDependencyPending
                   ? `Particle ${summary.identifier} requires generated texture ${textureDependency.texture}; author it through existing Texturing tools, finalize the PNG with paint_texture_transaction, then resume manage_particle with texture_dependency.state=ready. No particle write or preview was performed yet.`
-                  : `Prepared particle ${summary.identifier}: ${summary.component_count} components${particleWrite ? "; particle write verified" : ""}${previewPath && !previewError ? "; native preview load invoked" : ""}${previewError ? "; native preview failed after artifact preparation" : ""}.`,
+                  : `Prepared particle ${summary.identifier}: ${summary.component_count} components${particleWrite ? "; particle write verified" : ""}${previewPath && !previewError ? "; native preview load invoked" : ""}${previewBudgetBlocked ? "; native preview deliberately skipped by authoring budget" : previewError ? "; native preview failed after artifact preparation" : ""}.`,
             },
           ],
           structuredContent: particleMutationReceipt({
@@ -645,7 +651,7 @@ export function registerParticleTools(): void {
             preview_error: previewError,
             preview_load_call:
               !preview ? "NOT_REQUESTED"
-                : !artifactReady ? "BLOCKED"
+                : !artifactReady || previewBudgetBlocked ? "BLOCKED"
                   : previewError ? "ERROR" : "INVOKED",
             // Calling loadParticleEmitter cannot establish trigger, active
             // emitter, PNG decode, or viewport visibility.

@@ -6,7 +6,12 @@ Provenance labels:
 - **EMPIRICALLY VERIFIED** — reproduced in accepted authoring work.
 - **HEURISTIC** — authoring guidance.
 
-## Performance model
+## Constant-work authoring preview budget (2026-11-07)
+
+The read-only `preview_workload` in existing particle inspection uses a **single-emitter static heuristic**: instant count or `min(spawn_rate × max_lifetime, max_particles)` when numeric. No recursive pack scan, evaluator, or new renderer is introduced. Unknown MoLang/dynamic rates are `unestimated`, never a claim of safety. Child effects are excluded from numeric population estimates.
+
+**Engineering-only viewport admission:** >256 estimated particles or >500/s steady emission pauses automatic Studio preview; nested effects also require explicit Play/Replay. >1024 estimated particles or >5000/s steady emission, and direct self-recursion, prevent native preview. `manage_particle(preview=true)` still commits a valid JSON artifact when native preview is blocked and returns `preview_load_call=BLOCKED`. Exact thresholds are protective editor defaults, **not Minecraft limits or measured device FPS**; live output/render/overdraw remains unverified. Avoid disabling authoring merely because a preview needs to be lighter.
+
 
 Particle performance is the combined cost of:
 

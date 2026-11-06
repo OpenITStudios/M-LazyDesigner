@@ -1,3 +1,4 @@
+import { assessParticlePreviewWorkload, type ParticlePreviewWorkload } from "./previewBudget";
 import {
   assertJsonValue,
   cloneJsonValue,
@@ -44,6 +45,7 @@ export type ParticleDocumentSummary = {
   events: string[];
   nested_particle_effects: string[];
   estimated_molang_strings: number;
+  preview_workload: ParticlePreviewWorkload;
   diagnostics: ParticleDiagnostic[];
 };
 
@@ -322,7 +324,7 @@ export function inspectParticleDocument(document: JsonObject): ParticleDocumentS
   const nested = new Set<string>(); Object.values(events).forEach((event) => nestedEffects(event, nested)); if (identifier && nested.has(identifier)) diagnostics.push({ severity: "warning", code: "self_recursive_particle_event", message: "An event can spawn the same particle identifier; verify recursion is bounded.", path: "particle_effect.events" });
   const groups = { emitter: [] as string[], particle: [] as string[], appearance: [] as string[], unknown: [] as string[] }, names = Object.keys(components).sort();
   for (const name of names) { if (CATALOG.emitter.has(name)) groups.emitter.push(name); else if (CATALOG.particle.has(name)) groups.particle.push(name); else if (CATALOG.appearance.has(name)) groups.appearance.push(name); else groups.unknown.push(name); }
-  return { format_version: typeof document.format_version === "string" || typeof document.format_version === "number" ? document.format_version : null, identifier, material, texture, component_count: names.length, components: names, component_groups: groups, curves: Object.keys(curves).sort(), events: Object.keys(events).sort(), nested_particle_effects: [...nested].sort(), estimated_molang_strings: molangCount(document), diagnostics };
+  return { format_version: typeof document.format_version === "string" || typeof document.format_version === "number" ? document.format_version : null, identifier, material, texture, component_count: names.length, components: names, component_groups: groups, curves: Object.keys(curves).sort(), events: Object.keys(events).sort(), nested_particle_effects: [...nested].sort(), estimated_molang_strings: molangCount(document), preview_workload: assessParticlePreviewWorkload(document, [...nested]), diagnostics };
 }
 export const particleDocumentIsValid = (document: JsonObject) => !inspectParticleDocument(document).diagnostics.some((entry) => entry.severity === "error");
 export function serializeParticleDocument(document: JsonObject): string { assertJsonValue(document); return `${JSON.stringify(document, null, 2)}\n`; }

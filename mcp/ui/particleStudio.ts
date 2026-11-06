@@ -10,6 +10,7 @@ import {
 } from "@/lib/particle/document";
 import { isAbsoluteFilesystemPath } from "@/lib/core/path";
 import { isCanonicalParticleTextureReference } from "@/lib/particle/resourceLayout";
+import type { ParticlePreviewWorkload } from "@/lib/particle/previewBudget";
 import { loadNativeParticlePreview } from "@/server/tools/particle/inspection";
 
 /** Human controls over existing Particle and Animation executors, not a second authoring engine. */
@@ -421,14 +422,15 @@ export async function saveStudioParticle(project: ModelProject, loaded: StudioEf
  */
 export function compileStudioDraft(
   loaded: StudioEffect, next: StudioSettings,
-): { document: JsonObject; dirty: boolean } {
+): { document: JsonObject; dirty: boolean; preview_workload: ParticlePreviewWorkload } {
   const operations = studioChangeOperations(loaded, next) as ParticleMutationOperation[];
   const document = applyParticleOperations(parseParticleDocument(loaded.content), operations);
-  const errors = inspectParticleDocument(document).diagnostics.filter(d => d.severity === "error");
+  const summary = inspectParticleDocument(document);
+  const errors = summary.diagnostics.filter(d => d.severity === "error");
   if (errors.length) {
     throw new Error("Particle draft is invalid: " + errors[0].message);
   }
-  return { document, dirty: operations.length > 0 };
+  return { document, dirty: operations.length > 0, preview_workload: summary.preview_workload };
 }
 
 type NativeStudioConfig = {
@@ -487,6 +489,14 @@ export function startStudioPreview(
   // The hot path is intentionally filesystem-free. External file changes are
   // checked before Save/Attach, never once per slider tick.
   const draft = compileStudioDraft(loaded, settings);
+  if (draft.preview_workload.state === "blocked") {
+    throw new Error("Native preview blocked by authoring budget: " +
+      draft.preview_workload.reason + ". The particle JSON remains savable.");
+  }
+  if (draft.preview_workload.state === "manual_only" && !replay) {
+    throw new Error("Automatic preview paused by authoring budget: " +
+      draft.preview_workload.reason + ". Use Play / Replay to preview explicitly.");
+  }
   const signature = studioPreviewSignature(loaded, settings, locatorName);
   if (!replay && preview?.project === project && preview.signature === signature) {
     return draft.dirty ? "Live preview reflects unsaved changes." : "Preview is already up to date.";
@@ -593,6 +603,15 @@ export function studioPreviewStatus(
     }
   }
   const active = preview;
+  if (summary.preview_workload.state === "blocked") {
+    return "Native preview blocked by authoring budget: " + summary.preview_workload.reason +
+      ". Particle JSON may still be saved.";
+  }
+  if (summary.preview_workload.state === "manual_only" &&
+      (!active || active.signature !== studioPreviewSignature(loaded, settings, locatorName))) {
+    return "Automatic preview paused by authoring budget: " + summary.preview_workload.reason +
+      ". Use Play / Replay explicitly.";
+  }
   if (!active || active.project !== project || active.file !== loaded.path ||
       active.source_content !== loaded.content ||
       active.signature !== studioPreviewSignature(loaded, settings, locatorName)) {
