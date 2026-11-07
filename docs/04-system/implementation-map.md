@@ -368,6 +368,33 @@ manage_animation_controller
 
 `mcp/server/tools.ts` remains a thin compatibility facade/bootstrap boundary; it is not the owner of Runtime state anymore.
 
+## Visual Asset Expansion — Source to Runtime Closure
+
+**Repository source assessment (2026-11-07):** the approved product scope is in [Visual Asset Expansion](../01-product/visual-asset-expansion.md). This map describes *existing source ownership and true call paths*, not a second feature registry, executable product claim, or a new Control router. All new F0–S1 source regressions remain `NOT_EXECUTED`, and native/Gateway availability requires live Runtime evidence.
+
+| Milestone | Pure contract / nearest source owner | Existing actual Runtime/export relationship | Closure boundary |
+| --- | --- | --- | --- |
+| **F0** | `mcp/lib/bedrock/blockVisualCompatibility.ts` | Pure input to B1/C1; no registered feature/tool by itself | Target-version checks are advisory; no block resource output |
+| **A1** | `mcp/lib/bedrock/attachableBinding.ts` | A2 consumes A1; existing `server/tools/geometry/locators.ts` manages native locators/bones in Bedrock Entity | No attachable binding executor or built holder/slot evidence |
+| **A2** | `mcp/lib/bedrock/attachableContextPreview.ts` | `server/tools/inspection/camera.ts` owns `capture_model_views` of the current model | Model-only images are not holder+equipment first/third-person composite captures |
+| **B1** | `mcp/lib/bedrock/blockVisualPlanning.ts` | C1 consumes B1; `server/tools/project/project.ts` creates `Formats.bedrock` (Entity), not a Block project | No custom-block project format/codec or proven game culling |
+| **I1** | `mcp/lib/texture/itemIconPlanning.ts` | Current `get_texture` and `mcp/lib/texture/pixelCraft.ts` offer native Texture/image evidence and craft diagnostics | No item-atlas/PNG export writer or `item_texture.json` registration |
+| **T1** | `mcp/lib/texture/blockFlipbookPlanning.ts` | Native Texture fields and Pixel Art reference are separate from a Bedrock flipbook resource | No native `flipbook_textures.json` exporter or Resource Pack installer |
+| **V1** | `mcp/lib/texture/appearanceVariantContinuity.ts` + `variantPlan.ts` | **Existing source-wired path:** `server/runtime/registration.ts` → `extensions.ts` → `contracts/texture.ts` wires `create_texture(type=variant)`, invokes `planTextureVariantFromBase`, and returns `structuredContent.variant_creation`; `get_texture` and `list_textures` provide existing reads | Texture-only native variant creation has a real code path, but the *new V1 full continuity planner* is not registered; native execution/visual fidelity remain unverified |
+| **C1** | `mcp/lib/bedrock/blockInteractionBounds.ts` | Pure B1+F0 composition; no physical interaction executor | No Behavior Pack collision/selection writer or gameplay proof |
+| **S1** | `mcp/lib/texture/classicSkinPlanning.ts` | PixelCraft reused; normal `create_project` and `export_model` remain Bedrock Entity | No native Skin project authoring/skin-pack codec or game acceptance |
+
+**Retired scope:** Fog/E1 was removed at user request because it does not belong to the Blockbench asset-authoring workflow. It is not a retained domain, executor, output target or planned capability.
+
+### Closest complete integration path
+
+1. **V1 texture-only first.** Reuse the existing, source-wired `create_texture(type=variant)` and its authoritative `variant_creation` result. The next bounded integration must reconcile **returned texture UUID/group, bitmap dimensions, and current UV/texture evidence** with the V1 input/source revision; a caller-asserted fingerprint alone is not native proof. Preserve the shared `variantPlan.ts` owner and avoid duplicating variant creation.
+2. **Then A1/A2 native equipment evidence.** Keep current Geometry/Locator/Camera ownership; do not promote model-only captures to holder-composite passes. Use a verified holder model/pose and actual perspective capture before a native fit claim.
+3. **Then I1/T1 source-to-texture output.** Build only explicitly authorized, format-correct output adapters from actual Texture/PNG/atlas evidence; do not silently assemble entire Resource/Behavior Packs or route Pixel Art through Animation/Particle.
+4. **B1/C1 and S1 require separate native format/output decisions.** Current `export_model` supports Bedrock Entity geometry, `.bbmodel` project and content-only Bedrock animation. Do not pass off existing Entity codecs as a custom block, collision, or skin pack exporter.
+
+Before authoring any new Runtime schema or capability, inspect the actual registered catalog and dependent generators. Semantic schema changes must move with their generator-owned API outputs; while generators are unavailable, complete independent source/regression work only. Current proof is **SOURCE_REVIEWED**; executable Bun/Blockbench/Minecraft checks are not performed.
+
 ## Shared Runtime Libraries
 
 Canonical shared-library domains:
