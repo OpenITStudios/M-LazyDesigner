@@ -94,9 +94,13 @@ Use **Tool** when discussing MCP registration, schema validation, execution obje
 
 ## Profile vs Family
 
-**Asset Profile** is a distinct product concept: it defines the visual asset
-output intent and which existing Entity lifecycle gates apply. The canonical
-contract is `mcp/lib/product/assetProfiles.ts`. The existing
+**Asset Profile** is a distinct product concept: it defines visual asset
+output intent, allowed authoring domains and applicable quality gates.
+Authoring-domain access and output-quality approval are independent: Particle
+can use the existing ANIMATION Runtime Surface without requiring a model
+Animation clip.
+
+The canonical contract is `mcp/lib/product/assetProfiles.ts`. The existing
 `selected_profile` field still means a **modelling subtype** such as
 `HUMANOID`, not an Asset Profile. Source declaration never proves native
 executor availability or output acceptance.

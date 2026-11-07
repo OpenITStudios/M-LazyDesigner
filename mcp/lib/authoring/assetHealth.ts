@@ -193,7 +193,9 @@ export function buildAssetHealthSummary(input: {
   const finalizing = ["FINALIZATION", "COMPLETE"].includes(
     normalized(input.workspace.current_stage)
   );
-  const nativeFinalization = finalizing
+  // This existing native revision compares an Entity .bbmodel only.
+  // Non-Entity outputs need their own future native artifact readback.
+  const nativeFinalization = finalizing && profileId === "entity"
     ? input.workspace.finalization_native_revision : null;
   if (nativeFinalization?.state === "STALE") {
     blockers.push("FINALIZATION_NATIVE_CHECKPOINT_STALE");
@@ -214,7 +216,8 @@ export function buildAssetHealthSummary(input: {
   const sourceNeedsOrientation =
     profileAnimationConflict ||
     requirementConflict ||
-    (finalizing && nativeFinalization?.state !== "MATCHED") ||
+    (finalizing && profileId === "entity" &&
+      nativeFinalization?.state !== "MATCHED") ||
     (input.workspace.workspace_issues?.length ?? 0) > 0 ||
     (input.workspace.blockers_omitted_count ?? 0) > 0;
   const overall: AssetHealthSummary["overall"] =

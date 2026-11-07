@@ -1,6 +1,7 @@
 import type { ControlReferenceProjection } from "./referenceTypes";
 import {
   getAssetProfileContract,
+  supportsAssetAuthoringDomain,
   type AssetProfileId,
 } from "../../lib/product/assetProfiles";
 import type { ControlWorkspaceProjection } from "./workspace";
@@ -45,9 +46,9 @@ export function lifecycleForDomain(
   }
 
   const requirements = getAssetProfileContract(assetProfileId).stages;
-  const selectedGate = domain === "GEOMETRY" ? "geometry"
-    : domain === "TEXTURING" ? "texturing" : "animation";
-  if (requirements[selectedGate] === "NOT_APPLICABLE") {
+  // Particle tools run on ANIMATION surface without requiring model clip QA.
+  // An output-quality gate must not determine which domain owns authoring.
+  if (!supportsAssetAuthoringDomain(assetProfileId, domain)) {
     return {
       ready: false, blocked: true, orientation_required: false,
       reasons: ["ASSET_PROFILE_STAGE_NOT_APPLICABLE"],
@@ -77,18 +78,27 @@ export function lifecycleForDomain(
   if (requirements.uv_layout !== "NOT_APPLICABLE" && uv !== "PASS") {
     reasons.push("UV_LAYOUT_PASS_REQUIRED");
   }
-  // CONDITIONAL texturing still needs affirmative source evidence before
-  // the dependent stage may skip it; absence is never proof of exemption.
   if (domain === "ANIMATION" &&
-      requirements.texturing !== "NOT_APPLICABLE" &&
+      requirements.texturing === "REQUIRED" &&
       texturing !== "APPROVED") {
     reasons.push("TEXTURE_APPROVAL_REQUIRED");
   }
+  // Particle Texture is conditional. Without a separate verified absence
+  // declaration, an unfinished Texture gate requests orientation, not a
+  // fabricated "not required" or a false failure of Animation clip QA.
+  const conditionalTextureUnknown = domain === "ANIMATION" &&
+    requirements.texturing === "CONDITIONAL" && texturing !== "APPROVED";
+  if (conditionalTextureUnknown) {
+    reasons.push("ASSET_PROFILE_TEXTURE_REQUIREMENT_UNRESOLVED");
+  }
 
+  const hardBlockers = reasons.filter(
+    (reason) => reason !== "ASSET_PROFILE_TEXTURE_REQUIREMENT_UNRESOLVED"
+  );
   return {
     ready: reasons.length === 0,
-    blocked: reasons.length > 0,
-    orientation_required: false,
+    blocked: hardBlockers.length > 0,
+    orientation_required: conditionalTextureUnknown && hardBlockers.length === 0,
     reasons,
   };
 }

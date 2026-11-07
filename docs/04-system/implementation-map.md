@@ -371,11 +371,16 @@ manage_animation_controller
 ## Visual Asset Expansion — Source to Runtime Closure
 
 **Asset Profile source owner:** `mcp/lib/product/assetProfiles.ts` declares
-seven output-intent profiles, category, current Stage applicability and output
-contract identity. `mcp/lib/authoring/assetHealth.ts` and
+seven output-intent profiles, category, authoring-domain eligibility, output
+quality gate applicability and output contract identity. Its source-only
+`resolveAssetProfileSelection` rejects unknown, ambiguous or incompatible
+legacy Reference identities; modelling `selected_profile` never selects an
+Asset Profile. Particle may author on the ANIMATION Runtime Surface without
+a model Animation clip requirement. `mcp/lib/authoring/assetHealth.ts` and
 `mcp/gateway/control/readiness.ts` accept an **explicit internal** profile
-for applicability; legacy calls remain Entity-default. The existing public
-Reference `selected_profile` is a modelling subtype, not an Asset Profile,
+for applicability; legacy calls remain Entity-default. Non-Entity
+Finalization does not accept Entity-only `.bbmodel` checkpoint checks.
+The existing public Reference `selected_profile` is a modelling subtype, not an Asset Profile,
 and no new public `asset_profile_id` is yet generated or selected by Control.
 No non-Entity planner becomes registered by this contract. A real multi-asset
 handoff must update the canonical Reference generator, consumers, semantic

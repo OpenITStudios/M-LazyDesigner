@@ -5,6 +5,8 @@ import {
   getAssetProfileContract,
   isAssetProfileId,
   legacyAssetProfileForReferenceKind,
+  resolveAssetProfileSelection,
+  supportsAssetAuthoringDomain,
 } from "@/lib/product/assetProfiles";
 import { buildAssetHealthSummary } from "@/lib/authoring/assetHealth";
 import { lifecycleForDomain } from "@/gateway/control/readiness";
@@ -93,9 +95,62 @@ describe("seven canonical Asset Profiles (source contract only)", () => {
       ready: false, blocked: true,
       reasons: ["ASSET_PROFILE_STAGE_NOT_APPLICABLE"],
     });
-    expect(lifecycleForDomain("ANIMATION", ws, "particle").reasons).toEqual([
-      "ASSET_PROFILE_STAGE_NOT_APPLICABLE",
-    ]);
+    // Particle's authoring owner is the existing ANIMATION Runtime surface,
+    // but an authoring-domain allowance never implies animation-clip QA.
+    expect(supportsAssetAuthoringDomain("particle", "ANIMATION")).toBe(true);
+    expect(supportsAssetAuthoringDomain("particle", "GEOMETRY")).toBe(false);
+    expect(lifecycleForDomain("ANIMATION", ws, "particle")).toMatchObject({
+      ready: true, blocked: false, orientation_required: false, reasons: [],
+    });
+    ws.gates.texturing = "NOT_STARTED";
+    expect(lifecycleForDomain("ANIMATION", ws, "particle")).toMatchObject({
+      ready: false, blocked: false, orientation_required: true,
+      reasons: ["ASSET_PROFILE_TEXTURE_REQUIREMENT_UNRESOLVED"],
+    });
+    expect(lifecycleForDomain("ANIMATION", ws, "entity").reasons).toContain(
+      "GEOMETRY_APPROVAL_REQUIRED"
+    );
+  });
+
+  test("declared authoring domains are not identical to output approval gates", () => {
+    for (const id of ASSET_PROFILE_IDS) {
+      const contract = getAssetProfileContract(id);
+      expect(new Set(contract.authoring_domains).size).toBe(contract.authoring_domains.length);
+      expect(contract.authoring_domains.length).toBeGreaterThan(0);
+    }
+    expect(ASSET_PROFILE_CONTRACTS.particle.stages.animation).toBe("NOT_APPLICABLE");
+    expect(supportsAssetAuthoringDomain("particle", "ANIMATION")).toBe(true);
+    expect(supportsAssetAuthoringDomain("item_icon", "ANIMATION")).toBe(false);
+    expect(supportsAssetAuthoringDomain("item_icon", "TEXTURING")).toBe(true);
+  });
+
+  test("explicit Asset Profile identity is strict, compatible and never inferred from modelling subtype", () => {
+    expect(resolveAssetProfileSelection({referenceAssetKind:"MODEL"})).toEqual({
+      state:"RESOLVED", asset_profile_id:"entity", basis:"LEGACY_KIND",
+    });
+    expect(resolveAssetProfileSelection({referenceAssetKind:"PARTICLE"})).toEqual({
+      state:"RESOLVED", asset_profile_id:"particle", basis:"LEGACY_KIND",
+    });
+    expect(resolveAssetProfileSelection({explicitAssetProfileId:"attachable",referenceAssetKind:"MODEL"}))
+      .toMatchObject({state:"RESOLVED",asset_profile_id:"attachable",basis:"EXPLICIT"});
+    expect(resolveAssetProfileSelection({explicitAssetProfileId:"item_icon"}))
+      .toMatchObject({state:"RESOLVED",asset_profile_id:"item_icon",basis:"EXPLICIT"});
+    for (const explicitAssetProfileId of ["HUMANOID","bedrock_entity","constructor","__proto__","unknown",""]) {
+      expect(resolveAssetProfileSelection({explicitAssetProfileId,referenceAssetKind:"MODEL"}))
+        .toEqual({state:"CONFLICT",reason:"ASSET_PROFILE_ID_INVALID"});
+    }
+    expect(resolveAssetProfileSelection({explicitAssetProfileId:"item_icon",referenceAssetKind:"MODEL"}))
+      .toEqual({state:"CONFLICT",reason:"ASSET_PROFILE_KIND_CONFLICT"});
+    expect(resolveAssetProfileSelection({explicitAssetProfileId:"entity",referenceAssetKind:"PARTICLE"}))
+      .toEqual({state:"CONFLICT",reason:"ASSET_PROFILE_KIND_CONFLICT"});
+    expect(resolveAssetProfileSelection({explicitAssetProfileId:"particle",referenceAssetKind:"PARTICLE"}))
+      .toMatchObject({state:"RESOLVED",asset_profile_id:"particle"});
+    expect(resolveAssetProfileSelection({referenceAssetKind:"ICON"}))
+      .toEqual({state:"UNRESOLVED",reason:"UNKNOWN_REFERENCE_ASSET_KIND"});
+    expect(resolveAssetProfileSelection({explicitAssetProfileId:"item_icon",referenceAssetKind:"ICON"}))
+      .toEqual({state:"UNRESOLVED",reason:"UNKNOWN_REFERENCE_ASSET_KIND"});
+    expect(resolveAssetProfileSelection({}))
+      .toEqual({state:"UNRESOLVED",reason:"ASSET_PROFILE_ID_MISSING"});
   });
 
   test("non-Entity health omits irrelevant gates but cannot claim output READY", () => {
@@ -122,6 +177,25 @@ describe("seven canonical Asset Profiles (source contract only)", () => {
     });
     expect(explicitEntity).toEqual(legacyEntity);
     expect(legacyEntity.overall).toBe("READY");
+  });
+
+  test("non-Entity finalization never mistakes a stale Entity .bbmodel for its own output", () => {
+    const ws = workspace();
+    ws.current_stage = "FINALIZATION";
+    ws.finalization_native_revision = {
+      state: "STALE", reason: "FINALIZATION_NATIVE_CHECKPOINT_MISMATCH",
+    };
+    const icon = buildAssetHealthSummary({
+      domain: "TEXTURING", workspace: ws, reference: reference(),
+      asset_profile_id: "item_icon",
+    });
+    expect(icon.overall).toBe("INCOMPLETE");
+    expect(icon.blockers).not.toContain("FINALIZATION_NATIVE_CHECKPOINT_STALE");
+    const entity = buildAssetHealthSummary({
+      domain: "TEXTURING", workspace: ws, reference: reference(),
+    });
+    expect(entity.overall).toBe("BLOCKED");
+    expect(entity.blockers).toContain("FINALIZATION_NATIVE_CHECKPOINT_STALE");
   });
 
   test("profile-incompatible animation demand remains unresolved, not dropped", () => {

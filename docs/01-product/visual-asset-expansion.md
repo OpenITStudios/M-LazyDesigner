@@ -14,6 +14,16 @@ The canonical seven-identity Asset Profile contract lives in
 (`HUMANOID`, etc.), Runtime Registration Profile (`bedrock_entity` /
 `extended`), Authoring Stage, Runtime Surface and Capability.
 
+The source contract independently declares allowed existing authoring domains
+and the applicable Entity-style output-quality gates. For example,
+standalone Particle authoring is hosted on the existing ANIMATION Runtime
+Surface even when no model Animation clip is needed; its Texture work is
+conditional. Neither domain eligibility nor a stage gate indicates native
+output availability. A pure intent resolver admits only exact Asset Profile IDs:
+legacy MODEL defaults to Entity, legacy PARTICLE to Particle, and an explicit
+identity that contradicts the existing reference kind is refused. Modelling
+`selected_profile` is never used for this inference.
+
 The source contract declares each profile's existing Entity-stage
 applicability and intended output family. It does **not** establish native
 registrations, a new Stage, a Blockbench project format, profile-specific
@@ -21,7 +31,10 @@ output acceptance, or production readiness. In particular, Skin UV, flipbook
 timing, holder fit, custom-block compatibility and Particle authoring need
 their own evidence even when a model-stage gate is `NOT_APPLICABLE`.
 Source-only profile-aware lifecycle helpers preserve existing Entity
-defaults; the current Reference Package/Control transport has no
+defaults; a non-Entity Finalization may not interpret Entity-only
+`.bbmodel` SHA evidence as a completed or failed PNG/Particle/block
+output. Its own native artifact readback remains unimplemented. The
+current Reference Package/Control transport has no
 authoritative new `asset_profile_id` selection and must not infer one from
 the modelling `selected_profile`. Wire selection only as an atomic
 generator/consumer/schema change with a verified Runtime output path.
