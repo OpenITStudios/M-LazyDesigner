@@ -82,4 +82,44 @@ describe("source-backed documentation architecture", () => {
     const edges = indexExplicitDocumentationEdges("docs/README.md", input);
     expect(edges.map(edge => edge.to)).toEqual(["docs/real.md", "docs/other.md"]);
   });
+
+  test("multiline HTML comment markers cannot open a false Markdown fence", () => {
+    const fence = String.fromCharCode(96).repeat(3);
+    const source = [
+      "<!--", fence + "md", "-->",
+      "[Real](valid.md)",
+      fence + "md", "[Fenced](hidden.md)", fence,
+      "[Also real](more.md)",
+    ].join("\n");
+    expect(indexExplicitDocumentationEdges("docs/README.md", source)
+      .map(edge => edge.to)).toEqual(["docs/valid.md", "docs/more.md"]);
+  });
+
+  test("multiline inline-code spans do not suppress later documentation routes", () => {
+    const tick = String.fromCharCode(96);
+    const source = [
+      tick + "[Hidden](fake.md)",
+      tick.repeat(3), "the span ends" + tick,
+      "[Actual](real.md)",
+    ].join("\n");
+    expect(indexExplicitDocumentationEdges("docs/README.md", source)
+      .map(edge => edge.to)).toEqual(["docs/real.md"]);
+  });
+
+  test("document graph keeps source content hash for each exact link witness", () => {
+    const original = explainDocumentationPath(buildDocumentationGraph(docs),
+      "docs/README.md", "docs/04-system/knowledge-architecture.md");
+    expect(original.steps[0]?.witness.source_sha256).toMatch(/^[a-f0-9]{64}$/);
+    const edited = docs.map(item => item.path === "docs/README.md"
+      ? { ...item, markdown: item.markdown + "\nAdditional explicit routing rationale." }
+      : item);
+    const changed = explainDocumentationPath(buildDocumentationGraph(edited),
+      "docs/README.md", "docs/04-system/knowledge-architecture.md");
+    expect(changed.steps[0]?.witness.source_sha256)
+      .not.toBe(original.steps[0]?.witness.source_sha256);
+    expect(changed.steps[1]?.witness.source_sha256)
+      .toBe(original.steps[1]?.witness.source_sha256);
+    expect(documentationTraceMarkdown(changed)).toContain("SHA-256");
+  });
+
 });

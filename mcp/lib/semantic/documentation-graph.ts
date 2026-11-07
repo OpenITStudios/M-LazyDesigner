@@ -1,16 +1,21 @@
-import { indexExplicitDocumentationEdges, type ExplicitDocumentationEdge } from "./knowledge";
+import {
+  describeKnowledgeSource,
+  indexExplicitDocumentationEdges,
+  type ExplicitDocumentationEdge,
+} from "./knowledge";
 
 /** Derived, read-only document navigation; never a Runtime/source dependency graph. */
 export type DocumentationGraph = {
   schema: 1;
   proof_scope: "AUTHORED_NAVIGATION_ONLY";
-  resources: { id: string; path: string; role: "ROUTER" | "DOCUMENT" }[];
+  resources: { id: string; path: string; role: "ROUTER" | "DOCUMENT";
+    content_sha256: string }[];
   edges: ExplicitDocumentationEdge[];
   unresolved: ExplicitDocumentationEdge[];
 };
 export type DocumentationStep = {
   from: string; to: string; direction: "FORWARD" | "REVERSE";
-  witness: ExplicitDocumentationEdge;
+  witness: ExplicitDocumentationEdge & { source_sha256: string };
 };
 export type DocumentationTrace = {
   schema: 1; proof_scope: DocumentationGraph["proof_scope"];
@@ -35,9 +40,11 @@ export function buildDocumentationGraph(
     if (seen.has(entry.path)) throw new Error("Duplicate document resource: " + entry.path);
     seen.add(entry.path);
   }
+  const markdownByPath = new Map(inputs.map(entry => [entry.path, entry.markdown]));
   const resources = [...seen].sort().map(path => ({
     id: documentResourceId(path), path,
     role: (path.endsWith("/README.md") ? "ROUTER" : "DOCUMENT") as "ROUTER" | "DOCUMENT",
+    content_sha256: describeKnowledgeSource(path, markdownByPath.get(path)!).content_sha256,
   }));
   const authored = inputs.flatMap(entry =>
     indexExplicitDocumentationEdges(entry.path, entry.markdown)
@@ -66,6 +73,9 @@ export function explainDocumentationPath(
       !graph.resources.some(x => x.path === target)) return base;
   if (start === target) return { ...base, status: "FOUND", from: start, to: target, nodes: [start] };
 
+  const sourceHashes = new Map<string, string>(graph.resources.map(resource => [
+    resource.path, resource.content_sha256,
+  ] as const));
   const visited = new Set([start]);
   const queue: { path: string; nodes: string[]; steps: DocumentationStep[] }[] =
     [{ path: start, nodes: [start], steps: [] }];
@@ -75,9 +85,11 @@ export function explainDocumentationPath(
     const neighbors = graph.edges.flatMap(edge => {
       const hits: DocumentationStep[] = [];
       if (edge.from === current.path) hits.push({
-        from: current.path, to: edge.to, direction: "FORWARD", witness: edge });
+        from: current.path, to: edge.to, direction: "FORWARD",
+        witness: { ...edge, source_sha256: sourceHashes.get(edge.from)! } });
       if (bothDirections && edge.to === current.path) hits.push({
-        from: current.path, to: edge.from, direction: "REVERSE", witness: edge });
+        from: current.path, to: edge.from, direction: "REVERSE",
+        witness: { ...edge, source_sha256: sourceHashes.get(edge.from)! } });
       return hits;
     }).sort((a, b) => a.to.localeCompare(b.to) ||
       a.witness.from.localeCompare(b.witness.from) || a.witness.line - b.witness.line);
@@ -140,7 +152,8 @@ export function documentationTraceMarkdown(trace: DocumentationTrace): string {
     for (const step of trace.steps) out.push(
       "- " + step.from + (step.direction === "FORWARD" ? " → " : " ← reverse ") +
       step.to + " at " + step.witness.from + ":" + step.witness.line +
-      " (" + step.witness.relation + ", " + step.witness.label + ")"
+      " (SHA-256 " + step.witness.source_sha256.slice(0, 12) + ", " +
+      step.witness.relation + ", " + step.witness.label + ")"
     );
   } else out.push("No source-backed route within the selected limits.");
   out.push("", "## Mermaid / Pele-compatible source", "", fence + "mermaid",

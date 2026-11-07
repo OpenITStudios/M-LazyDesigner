@@ -11,6 +11,34 @@ import {
 import { DEFAULT_SOURCES, parsePreviousKnowledgeIndex } from "../scripts/development/build-knowledge-index";
 
 describe("knowledge section compiler", () => {
+
+  test("hidden Markdown headings in multiline comments never become knowledge sections", () => {
+    const fence = String.fromCharCode(96).repeat(3);
+    const sections = indexMarkdownKnowledge("docs/README.md", [
+      "# Real",
+      "<!--",
+      fence + "md",
+      "## Phantom",
+      "-->",
+      "## Visible",
+      "A real source-owned description.",
+      fence + "md",
+      "### Hidden in actual fence",
+      fence,
+    ].join("\n"));
+    expect(sections.map(section => section.heading)).toEqual(["Real", "Visible"]);
+  });
+
+  test("inline-code heading text remains a legitimate addressable section", () => {
+    const tick = String.fromCharCode(96);
+    const sections = indexMarkdownKnowledge("docs/README.md", [
+      "# Reference", "## " + tick + "Fidelity" + tick + " Standard", "Current rule",
+    ].join("\n"));
+    expect(sections.map(section => section.heading)).toEqual([
+      "Reference", tick + "Fidelity" + tick + " Standard",
+    ]);
+  });
+
   test("creates stable hierarchical ids and ignores fenced headings", () => {
     const text = [
       "# Workflow",

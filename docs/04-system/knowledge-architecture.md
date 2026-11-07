@@ -60,6 +60,13 @@ Examples, to run only after executable verification is reauthorized, from `mcp/`
 
 An absent literal reference does not establish that a section was never dynamically loaded. A source code import or call is a navigation witness and not evidence of a tested feature, an accepted 3D model, an active Blockbench capability or an applied specific knowledge fact.
 
+## Audited blind spots and proof limits
+
+The source-level corrections narrow previous optimistic conclusions: no verified importer is `NO_PATH`, not `FOUND`; unresolved computed/unverified imports may yield `INCOMPLETE_EVIDENCE` where they can hide an affected module. Exact result limits do not imply truncation, and both total unresolved sites and displayed sample counts are retained. Scope is **MCP TypeScript-config and standalone `scripts/` JS**, not the entire Desktop/distribution repository. AST source imports never establish actual execution. Each newly inspected source witness carries the SHA-256 of its exact code text; the same file path/line at a different hash is not identical evidence. A self-source trace is explicitly `SAME_SOURCE_NO_IMPORT_EDGE`, not synthetic `FOUND`.
+
+The source-only knowledge-candidate scanner now observes existing **Recipe** calls (`suggestRecipeKnowledge`, `resolveRecipeKnowledgeLinks`, `reviewRecipeKnowledge`, `prepareKnowledgeAwareRecipe`, `collectRecipeKnowledge`, `indexRecipeKnowledge`) only when value-imported from their canonical modules. These are still generic candidates and cannot prove that a specific Knowledge record was applied. Type-only imports do not become runtime knowledge candidates.
+
+Documentation graph witnesses include a SHA-256 of the authored source bytes alongside `file:line`. This binds a link to document content, not to a Git commit, approved revision or tested execution. Fence markers hidden in HTML comments or multiline inline code cannot suppress real links or become synthetic sections. Cross-product graph coverage, exact-HEAD executable tests, Pele/Obsidian rendering, real-world knowledge consumption and native Blockbench acceptance remain unverified.
 ## Adoption and lifecycle
 
 Add new canonical documentation under its present 01–05 domain, create one explicit Markdown router link, inspect the audited link witness and affected producer/consumer, and preserve Git history through moves. If a link is missing, repair the owning router rather than making a synthetic inferred edge. No external tool install, new Agent Skill, Control stage, Gateway tool, external graph service, persistent graph store, auto-merge or release.

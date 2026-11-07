@@ -353,4 +353,129 @@ describe("source reachability is a review-only dependency audit", () => {
     expect(sourceInspectionMarkdown(report)).toContain("not function-call");
   });
 
+
+  test("no importer never becomes a fabricated FOUND impact", () => {
+    const graph = { files: ["lib/changed.ts", "lib/unrelated.ts"], edges: [],
+      obligations: [] };
+    const result = explainSourceDependency(graph, {
+      mode: "IMPACT", source: "lib/changed.ts",
+    });
+    expect(result.status).toBe("NO_PATH");
+    expect(result.routes).toEqual([]);
+    expect(result.source_scope).toBe("MCP_TSCONFIG_AND_STANDALONE_SCRIPT_JS");
+    expect(result.inspected_file_count).toBe(2);
+    expect(result.possible_dependency_gap_count).toBe(0);
+  });
+
+  test("computed imports remain a gap instead of falsely clearing impact", () => {
+    const graph = {
+      files: ["lib/changed.ts", "lib/unknown.ts"], edges: [],
+      obligations: [{
+        path: "lib/unknown.ts", line: 7, column: 3, specifier: null,
+        kind: "DYNAMIC_IMPORT" as const, runtime_capable: true,
+        reason: "NONLITERAL_IMPORT" as const,
+      }],
+    };
+    const impact = explainSourceDependency(graph, {
+      mode: "IMPACT", source: "lib/changed.ts",
+    });
+    expect(impact.status).toBe("INCOMPLETE_EVIDENCE");
+    expect(impact.possible_dependency_gap_count).toBe(1);
+    expect(impact.relevant_obligation_count).toBe(1);
+    expect(impact.global_obligation_count).toBe(1);
+    expect(explainSourceDependency(graph, {
+      mode: "TRACE", source: "lib/unknown.ts", target: "lib/changed.ts",
+    }).status).toBe("INCOMPLETE_EVIDENCE");
+    const excluded = {
+      ...graph, obligations: [
+        { ...graph.obligations[0]!, reason: "EXCLUDED_NON_CODE" as const },
+      ],
+    };
+    expect(explainSourceDependency(excluded, {
+      mode: "IMPACT", source: "lib/changed.ts",
+    }).status).toBe("NO_PATH");
+    expect(explainSourceDependency(excluded, {
+      mode: "IMPACT", source: "lib/changed.ts",
+    }).global_obligation_count).toBe(1);
+  });
+
+  test("a result count equal to the requested limit is not truncation", () => {
+    const graph = {
+      files: ["changed.ts", "user.ts"], obligations: [],
+      edges: [{
+        path: "user.ts", dependency: "changed.ts", line: 1, column: 1,
+        specifier: "./changed", kind: "IMPORT" as const, runtime_capable: true,
+      }],
+    };
+    const result = explainSourceDependency(graph, {
+      mode: "IMPACT", source: "changed.ts", resultLimit: 1,
+    });
+    expect(result.status).toBe("FOUND");
+    expect(result.truncated).toBe(false);
+    expect(result.route_count).toBe(1);
+  });
+
+  test("Recipe knowledge API candidates are admitted only from exact value imports", () => {
+    const id = "knowledge:docs/03-authoring/modelling/standard#geometry";
+    const recipe = readSourceAstEvidence([
+      'import { suggestRecipeKnowledge as choose } from "@/lib/authoringRecipe/knowledgeSelection";',
+      'import { resolveRecipeKnowledgeLinks } from "@/lib/authoringRecipe/knowledge";',
+      'choose(recipe, index);',
+      'resolveRecipeKnowledgeLinks(recipe, index);',
+    ].join("\n"), "lib/authoringRecipe/knowledgePlanning.ts", id);
+    expect(recipe.knowledge_api_candidates.map(site => site.api)).toEqual([
+      "suggestRecipeKnowledge", "resolveRecipeKnowledgeLinks",
+    ]);
+    expect(inspectKnowledgeSourceSites(id, [recipe]).evidence_class)
+      .toBe("GENERIC_KNOWLEDGE_API_CANDIDATE");
+    const onlyType = readSourceAstEvidence([
+      'import type { suggestRecipeKnowledge } from "@/lib/authoringRecipe/knowledgeSelection";',
+      'import { type resolveRecipeKnowledgeLinks } from "@/lib/authoringRecipe/knowledge";',
+      'const choose = 3;',
+    ].join("\n"), "lib/authoringRecipe/typeOnly.ts", id);
+    expect(onlyType.knowledge_api_candidates).toEqual([]);
+    expect(inspectKnowledgeSourceSites(id, [onlyType]).evidence_class)
+      .toBe("NO_SOURCE_WITNESS");
+  });
+
+  test("relevant unresolved witness counts report samples without hiding debt", () => {
+    const graph = {
+      files: ["changed.ts", "unknown.ts"], edges: [],
+      obligations: Array.from({ length: 45 }, (_, i) => ({
+        path: "unknown.ts", line: i + 1, column: 1,
+        specifier: null, kind: "DYNAMIC_IMPORT" as const,
+        runtime_capable: true, reason: "NONLITERAL_IMPORT" as const,
+      })),
+    };
+    const report = explainSourceDependency(graph, {
+      mode: "IMPACT", source: "changed.ts",
+    });
+    expect(report.status).toBe("INCOMPLETE_EVIDENCE");
+    expect(report.relevant_obligation_count).toBe(45);
+    expect(report.relevant_obligations).toHaveLength(40);
+    expect(report.relevant_obligations_truncated).toBe(true);
+    expect(sourceInspectionMarkdown(report)).toContain("possible dependency gaps: 45");
+  });
+
+
+  test("source witnesses preserve content identity across source changes", () => {
+    const before = readSourceAstEvidence('import "./example";', "lib/example.ts");
+    const after = readSourceAstEvidence('import "./example";\n// edited',
+      "lib/example.ts");
+    expect(before.imports[0]?.source_sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(before.imports[0]?.source_sha256).not.toBe(after.imports[0]?.source_sha256);
+    expect(before.imports[0]?.line).toBe(after.imports[0]?.line);
+  });
+
+  test("self trace is identity rather than proof of an import edge", () => {
+    const self = explainSourceDependency({ files: ["lib/a.ts"], edges: [],
+      obligations: [] }, {
+      mode: "TRACE", source: "lib/a.ts", target: "lib/a.ts",
+    });
+    expect(self.status).toBe("SAME_SOURCE_NO_IMPORT_EDGE");
+    expect(self.route_count).toBe(0);
+    expect(self.routes).toEqual([]);
+    expect(self.interpretation).toContain("no import edge");
+  });
+
 });

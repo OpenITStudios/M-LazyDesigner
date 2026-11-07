@@ -189,6 +189,7 @@ export function indexMarkdownKnowledge(
   const sections: KnowledgeSection[] = [];
   const headingStack: Array<{ level: number; heading: string }> = [];
   let fence: MarkdownFence | null = null;
+  const proseState: DocumentationProse = { comment: false, inlineTicks: 0 };
   let active:
     | {
         id: string;
@@ -223,12 +224,20 @@ export function indexMarkdownKnowledge(
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
-    const transition = advanceMarkdownFence(line, fence);
-    fence = transition.fence;
-    if (transition.boundary || fence !== null) continue;
-
+    const insideNonProse = proseState.comment || proseState.inlineTicks > 0;
+    if (!insideNonProse) {
+      const transition = advanceMarkdownFence(line, fence);
+      fence = transition.fence;
+      if (transition.boundary || fence !== null) continue;
+    } else if (fence !== null) {
+      continue;
+    }
+    // Read the original heading text (including legitimate inline code),
+    // but require the heading marker to be visible outside HTML comments
+    // and multiline code spans. This reuses the navigation prose masker.
+    const visible = documentationProse(line, proseState);
     const headingMatch = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
-    if (!headingMatch) continue;
+    if (!headingMatch || !visible.startsWith(headingMatch[1]!)) continue;
 
     finish(index + 1);
 
@@ -493,9 +502,15 @@ export function indexExplicitDocumentationEdges(
       to_id: "document:" + to.slice(0, -3) });
   };
   for (const [index, line] of markdown.split(/\r?\n/).entries()) {
-    const transition = advanceMarkdownFence(line, fence);
-    fence = transition.fence;
-    if (transition.boundary || fence !== null || /^( {4}|\t)/.test(line)) continue;
+    // A marker inside an HTML comment or multiline inline code is not a fence.
+    const insideNonProse = state.comment || state.inlineTicks > 0;
+    if (!insideNonProse) {
+      const transition = advanceMarkdownFence(line, fence);
+      fence = transition.fence;
+      if (transition.boundary || fence !== null || /^( {4}|\t)/.test(line)) continue;
+    } else if (fence !== null) {
+      continue;
+    }
     const prose = documentationProse(line, state);
     for (const match of prose.matchAll(/\[([^\]\n]+)\]\(([^)\s]+)\)/g)) {
       if (match.index === undefined || escapedDocumentLink(prose, match.index) ||
