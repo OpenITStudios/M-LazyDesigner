@@ -134,7 +134,8 @@ function currentVariantMappedUvIdentity() {
   };
 }
 
-async function createTextureVariant(request: z.infer<typeof createTextureVariantParameters>) {
+/** Existing internal executor, exported only for disposable fake-native regression. */
+export async function createTextureVariant(request: z.infer<typeof createTextureVariantParameters>) {
   const source = resolveCoreTexture(
     request.source_texture_id,
     "Use list_textures to identify the single established base-color atlas."

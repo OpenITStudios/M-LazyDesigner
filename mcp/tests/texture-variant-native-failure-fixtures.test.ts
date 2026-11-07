@@ -1,0 +1,313 @@
+import { describe, expect, test } from "bun:test";
+import { createTextureVariant } from "@/server/runtime/contracts/texture";
+
+/**
+ * Disposable *fake* Blockbench globals, not a native Runtime test. The
+ * current registered executor is invoked directly with fault injection.
+ * Never claim this fixture proves the real Blockbench UndoSystem or renderer.
+ */
+type Fault =
+  | "none" | "decode_reject" | "partial_from_data_url"
+  | "add_throws" | "remove_throws" | "cancel_throws"
+  | "foreign_texture" | "shadow_uuid" | "history_drift"
+  | "project_swap" | "undo_swap" | "finish_throws_after_commit"
+  | "postcommit_pixel_changed" | "postcommit_redraw_throws"
+  | "cancel_alters_history" | "remove_replaces_uuid" | "init_throws";
+
+type FakeCase = {
+  call: () => ReturnType<typeof createTextureVariant>;
+  calls: { init: number; finish: number; cancel: number; remove: number; redraw: number };
+  textures: Array<{ uuid: string; name: string }>;
+  undo: {
+    current_save: object | undefined;
+    history: object[];
+    index: number;
+  };
+  source: { uuid: string; pixels: Uint8ClampedArray };
+};
+
+async function withFakeBlockbench(
+  fault: Fault,
+  inspect: (ctx: FakeCase) => Promise<void>
+): Promise<void> {
+  const names = ["Project", "Texture", "TextureGroup", "Cube", "Undo", "Canvas"];
+  const saved = names.map(name =>
+    [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const
+  );
+  const assign = (key: string, value: unknown) =>
+    Object.defineProperty(globalThis, key, {
+      configurable: true, writable: true, value,
+    });
+  const calls = {init: 0, finish: 0, cancel: 0, remove: 0, redraw: 0};
+  let counter = 0;
+  let source!: FakeTexture;
+  const project = {uuid:"project-a",texture_width:16,texture_height:16};
+  const undo: FakeCase["undo"] & {
+    initEdit: (aspects: unknown) => object;
+    finishEdit: (name: string, aspects: unknown) => object;
+    cancelEdit: () => void;
+  } = {
+    current_save: undefined,
+    history: [], index: 0,
+    initEdit(_aspects: unknown) {
+      calls.init++;
+      if (fault === "init_throws") throw new Error("INIT_FAILED");
+      undo.current_save = {owner:"variant"};
+      return undo.current_save;
+    },
+    finishEdit(_name: string,_aspects: unknown) {
+      calls.finish++;
+      undo.history.push({kind:"committed"});
+      undo.index++;
+      undo.current_save = undefined;
+      if (fault === "postcommit_pixel_changed") source.pixels[0] = 201;
+      if (fault === "finish_throws_after_commit") {
+        throw new Error("FINISH_FAILED_AFTER_COMMIT");
+      }
+      return undo.history[undo.history.length - 1]!;
+    },
+    cancelEdit() {
+      calls.cancel++;
+      if (fault === "cancel_throws") throw new Error("CANCEL_FAILED");
+      undo.current_save = undefined;
+      if (fault === "cancel_alters_history") {
+        undo.history.push({kind:"foreign"});
+        undo.index++;
+      }
+    },
+  };
+  const group = {uuid:"group",name:"Variants",is_material:false};
+
+  class FakeTexture {
+    static all: FakeTexture[] = [];
+    uuid: string;
+    id: string;
+    name: string;
+    width: number;
+    height: number;
+    display_height: number;
+    uv_width: number;
+    uv_height: number;
+    group: string | null;
+    pbr_channel: string;
+    pixels: Uint8ClampedArray;
+    render_mode = "default";
+    render_sides = "front";
+    wrap_mode = "clamp";
+    frame_time = 1;
+    frame_order_type = "loop";
+    frame_order = "";
+    frame_interpolate = false;
+    internal = true;
+    img: {decode: () => Promise<void>};
+
+    constructor(opts: {
+      name: string; width: number; height: number;
+      group?: string; pbr_channel?: string;
+    }) {
+      this.name=opts.name;
+      this.uuid=opts.name==="base.png" ? "base" : "variant-"+String(++counter);
+      this.id=this.uuid;
+      this.width=opts.width;
+      this.height=opts.height;
+      this.display_height=opts.height;
+      this.uv_width=opts.width;
+      this.uv_height=opts.height;
+      this.group=opts.group ?? null;
+      this.pbr_channel=opts.pbr_channel ?? "color";
+      this.pixels=new Uint8ClampedArray(opts.width*opts.height*4);
+      this.img={decode:async()=>{
+        if (["decode_reject","remove_throws","cancel_throws",
+             "cancel_alters_history","remove_replaces_uuid"].includes(fault)) {
+          throw new Error("DECODE_FAILED");
+        }
+        if (fault==="foreign_texture") {
+          FakeTexture.all.push(new FakeTexture({
+            name:"foreign.png",width:16,height:16,
+          }));
+        }
+        if (fault==="shadow_uuid") {
+          const shadow=new FakeTexture({name:"shadow.png",width:16,height:16});
+          shadow.uuid=this.uuid;
+          FakeTexture.all.push(shadow);
+        }
+        if (fault==="history_drift") {
+          undo.history.push({kind:"other"});
+          undo.index++;
+        }
+        if (fault==="project_swap") {
+          assign("Project",{...project,uuid:"project-b"});
+        }
+        if (fault==="undo_swap") {
+          undo.current_save={owner:"other"};
+        }
+      }};
+    }
+    get canvas() { return {width:this.width,height:this.height}; }
+    get ctx() {
+      return {getImageData:(_x:number,_y:number,_w:number,_h:number)=>({
+        data:Uint8ClampedArray.from(this.pixels),
+      })};
+    }
+    getUVWidth() {return this.uv_width;}
+    getUVHeight() {return this.uv_height;}
+    getDataURL() {return "data:image/png;base64,source";}
+
+    fromDataURL(_data:string) {
+      this.pixels=Uint8ClampedArray.from(source.pixels);
+      if (fault==="partial_from_data_url") {
+        FakeTexture.all.push(this);
+        throw new Error("FROM_DATA_URL_PARTIAL");
+      }
+      return this;
+    }
+    add(_select?:boolean,_allowUndo?:boolean) {
+      FakeTexture.all.push(this);
+      if (fault==="add_throws") throw new Error("ADD_FAILED_AFTER_REGISTER");
+      return this;
+    }
+    remove(_undo?:boolean) {
+      calls.remove++;
+      if (fault==="remove_throws") throw new Error("REMOVE_FAILED");
+      const index=FakeTexture.all.indexOf(this);
+      if (index!==-1) FakeTexture.all.splice(index,1);
+      if (fault==="remove_replaces_uuid") {
+        const replacement=new FakeTexture({
+          name:"replacement.png",width:16,height:16,
+        });
+        replacement.uuid=this.uuid;
+        FakeTexture.all.push(replacement);
+      }
+    }
+  }
+  source=new FakeTexture({name:"base.png",width:16,height:16});
+  source.pixels.set([110,20,30,255,60,45,90,0]);
+  FakeTexture.all.push(source);
+  try {
+    assign("Project",project);
+    assign("Texture",FakeTexture);
+    assign("TextureGroup",{all:[group]});
+    assign("Cube",{all:[]});
+    assign("Undo",undo);
+    assign("Canvas",{updateAll(){
+      calls.redraw++;
+      if (fault==="postcommit_redraw_throws") throw new Error("REDRAW_FAILED");
+    }});
+    await inspect({
+      call:()=>createTextureVariant({
+        type:"variant",name:"variant.png",source_texture_id:"base",group:"group",
+      }),
+      calls,textures:FakeTexture.all,undo,source,
+    });
+  } finally {
+    for (const [name,descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis,name,descriptor);
+      else Reflect.deleteProperty(globalThis,name);
+    }
+  }
+}
+
+describe("V1 partial-registration and recovery fake-native fault injection",()=>{
+  test("success path emits creation-time receipt but never user/visual approval",async()=>{
+    await withFakeBlockbench("none",async ctx=>{
+      const result=await ctx.call();
+      expect(result.structuredContent.variant_native_continuity).toMatchObject({
+        state:"RUNTIME_PRECOMMIT_VARIANT_CONTINUITY_OBSERVED",
+        visual_verified:false,minecraft_verified:false,
+      });
+      expect(ctx.textures).toHaveLength(2);
+      expect(ctx.calls).toMatchObject({init:1,finish:1,cancel:0,remove:0});
+      expect(ctx.undo.current_save).toBeUndefined();
+    });
+  });
+
+  test("decoder and partially failing add rollback only the owned candidate",async()=>{
+    for(const fault of ["decode_reject","add_throws"] as const){
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow(
+          fault==="decode_reject"?"DECODE_FAILED":"ADD_FAILED_AFTER_REGISTER"
+        );
+        expect(ctx.textures).toHaveLength(1);
+        expect(ctx.textures[0]).toBe(ctx.source);
+        expect(ctx.calls).toMatchObject({init:1,finish:0,cancel:1,remove:1});
+        expect(ctx.undo.history).toHaveLength(0);
+        expect(ctx.undo.current_save).toBeUndefined();
+      });
+    }
+  });
+
+  test("partially registered object before assignment refuses automatic cleanup",async()=>{
+    await withFakeBlockbench("partial_from_data_url",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+      expect(ctx.textures).toHaveLength(2);
+      expect(ctx.calls.cancel).toBe(0);
+      expect(ctx.calls.remove).toBe(0);
+      expect(ctx.undo.current_save).toBeDefined();
+    });
+  });
+
+  test("foreign Texture or duplicate UUID during decode forces inspection",async()=>{
+    for(const fault of ["foreign_texture","shadow_uuid"] as const){
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+        expect(ctx.textures.length).toBe(3);
+        expect(ctx.calls.remove).toBe(0);
+        expect(ctx.calls.cancel).toBe(0);
+      });
+    }
+  });
+
+  test("project, Undo ownership or history drift cannot rollback another edit",async()=>{
+    for(const fault of ["project_swap","undo_swap","history_drift"] as const){
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+        expect(ctx.calls.cancel).toBe(0);
+        expect(ctx.calls.remove).toBe(0);
+        expect(ctx.textures.length).toBe(2);
+      });
+    }
+  });
+
+  test("remove, cancel and post-cancel history corruption are ROLLBACK_UNVERIFIED",async()=>{
+    for(const fault of ["remove_throws","cancel_throws","cancel_alters_history",
+      "remove_replaces_uuid"] as const){
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_ROLLBACK_UNVERIFIED");
+        expect(ctx.calls.finish).toBe(0);
+      });
+    }
+  });
+
+  test("finishEdit can commit before throwing and is never rolled back automatically",async()=>{
+    await withFakeBlockbench("finish_throws_after_commit",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+      expect(ctx.calls).toMatchObject({init:1,finish:1,cancel:0,remove:0});
+      expect(ctx.undo.history).toHaveLength(1);
+      expect(ctx.textures).toHaveLength(2);
+    });
+  });
+
+  test("postcommit listener edits refuse success; redraw failure never retries",async()=>{
+    await withFakeBlockbench("postcommit_pixel_changed",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+      expect(ctx.calls.finish).toBe(1);
+      expect(ctx.calls.cancel).toBe(0);
+      expect(ctx.textures).toHaveLength(2);
+    });
+    await withFakeBlockbench("postcommit_redraw_throws",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_POSTCOMMIT_DISPLAY_UNVERIFIED");
+      expect(ctx.calls.finish).toBe(1);
+      expect(ctx.calls.cancel).toBe(0);
+      expect(ctx.textures).toHaveLength(2);
+    });
+  });
+
+  test("unknown initEdit outcome is not reinterpreted as safe retry",async()=>{
+    await withFakeBlockbench("init_throws",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_UNDO_INIT_OUTCOME_UNKNOWN");
+      expect(ctx.calls.finish).toBe(0);
+      expect(ctx.calls.cancel).toBe(0);
+      expect(ctx.textures).toHaveLength(1);
+    });
+  });
+});
