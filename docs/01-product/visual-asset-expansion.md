@@ -145,6 +145,18 @@ The import-safe V1 owner is mcp/lib/texture/appearanceVariantContinuity.ts. It c
 
 References: [Microsoft render controller arrays](https://learn.microsoft.com/en-us/minecraft/creator/documents/animations/animationrendercontroller?view=minecraft-bedrock-stable); [Microsoft Client Entity JSON](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/entityreference/examples/cliententitydocumentation/cliententitydocumentationintroduction?view=minecraft-bedrock-stable); [Bedrock Wiki block texture variations](https://wiki.bedrock.dev/blocks/block-texture-variation).
 
+## C1 — Block-local Collision & Selection advisory
+
+The import-safe C1 source owner is `mcp/lib/bedrock/blockInteractionBounds.ts`. It consumes the existing **B1** custom-block visual source and passes derived interaction features through **F0** for version validation (including the new, distinct 1.26.0 extended-collision-height check). It does not create Behavior Pack components, change Blockbench scene state, run gameplay physics, raycast a cursor, or verify collision/selection in Minecraft.
+
+- The visual comparison is solely against B1's declared **local Cube envelope**. It is **not** a rendered-world bounding volume, especially for Group transforms, rotation, inflation, animation, or block-permutation states. All results retain NATIVE_UNVERIFIED and MINECRAFT_UNVERIFIED.
+- Collision and selection must remain separate. Omitted components default to full 16×16×16, explicit true means full, false disables that individual interaction, and a custom object specifies origin and size in block-local model units. C1 accepts up to 16 explicit collision boxes but rejects empty arrays rather than silently interpreting them as disabled/full.
+- Selection supports one box, with x/z in [-8,8] and y in [0,16]. Collision supports the same base limits; for newer versions the collision upper Y limit is 24. Both are bounded source policy, not claims about every experimental preview format. Origin/size are compared via [min,max] local AABBs; nonfinite, reversed, negative-size or out-of-range coordinates fail before any preview/report.
+- Collision-array syntax and upper Y beyond 16 are distinct features gated by F0 at format_version **1.26.0**. Exact block version is supplied by the caller; no duplicate version table or game-format auto-promotion is created. Selection arrays are not accepted as supported declarations.
+- Reports distinguish disabled interaction, absence of usable visual bounds, within/envelope-exceeding bounds, and differences between collision and selection. A union AABB of several collision boxes is **not** proof that the occupied shape fills that envelope, physically collides, or has appropriate player targeting.
+- A C1 source fingerprint binds B1's source identity to normalized collision/selection definitions. It does not replace B1's model UV/rigger or source approval, and the planner never writes a component to the Behavior Pack or promotes source comparison into a Minecraft runtime result.
+- Microsoft references: [Collision Box](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_collision_box?view=minecraft-bedrock-stable) and [Selection Box](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_selection_box?view=minecraft-bedrock-stable). Supplemental domain examples: [Bedrock Wiki Block Components](https://wiki.bedrock.dev/blocks/block-components).
+
 ## Milestone acceptance contract
 
 | ID | Deliverable | Completion criteria before production claim |

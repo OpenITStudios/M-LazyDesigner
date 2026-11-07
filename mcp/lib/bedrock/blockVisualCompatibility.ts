@@ -13,6 +13,9 @@ const BLOCK_VISUAL_FEATURE_MIN_FORMAT = {
   culling: "1.20.60",
   uv_lock: "1.21.100",
   multi_collision_boxes: "1.26.0",
+  // Height above 16 source units is independently introduced alongside
+  // collision arrays. Keep it distinct from multi-box syntax.
+  extended_collision_height: "1.26.0",
   culling_shape: "1.26.30",
   n_way_visual_rotation: "1.26.30",
 } as const;

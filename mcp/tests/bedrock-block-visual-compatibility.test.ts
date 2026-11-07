@@ -92,6 +92,10 @@ describe("Bedrock custom-block visual format policy (source only)", () => {
     expect(featureIssue("multi_collision_boxes", "1.25.99")
       ?.minimum_format_version).toBe("1.26.0");
     expect(featureIssue("multi_collision_boxes", "1.26.0")).toBeUndefined();
+    expect(featureIssue("extended_collision_height", "1.25.99")
+      ?.minimum_format_version).toBe("1.26.0");
+    expect(featureIssue("extended_collision_height", "1.26.0"))
+      .toBeUndefined();
     expect(assessBedrockBlockVisualCompatibility(sample({
       features: ["multi_collision_boxes"],
     })).review_notes).toContain("COLLISION_PREVIEW_IS_NOT_GAMEPLAY_PROOF");
