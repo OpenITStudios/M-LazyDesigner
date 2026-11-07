@@ -217,9 +217,16 @@ export function reviewBedrockBlockInteractionBounds(
   }
   const collision = area(input.collision_box, "COLLISION");
   const selection = area(input.selection_box, "SELECTION");
-  const features = new Set<BedrockBlockVisualFeature>(
-    input.visual.compatibility?.features ?? []
-  );
+  // Never turn a malformed/missing F0 feature inventory into an empty
+  // one, nor erase duplicate declarations through Set normalization.
+  const declaredFeatures = input.visual.compatibility?.features;
+  if (!Array.isArray(declaredFeatures)) {
+    throw new Error("BLOCK_INTERACTION_FEATURE_INVENTORY_INVALID");
+  }
+  if (new Set(declaredFeatures).size !== declaredFeatures.length) {
+    throw new Error("BLOCK_INTERACTION_FEATURE_INVENTORY_AMBIGUOUS");
+  }
+  const features = new Set<BedrockBlockVisualFeature>(declaredFeatures);
   if (input.collision_box !== undefined) features.add("collision_box");
   if (input.selection_box !== undefined) features.add("selection_box");
   if (collision.array) features.add("multi_collision_boxes");

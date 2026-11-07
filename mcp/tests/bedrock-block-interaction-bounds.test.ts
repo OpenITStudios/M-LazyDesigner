@@ -232,6 +232,19 @@ describe("C1 Bedrock block-local collision and selection preview", () => {
     expect(base).toEqual(original);
   });
 
+  test("malformed and duplicate upstream F0 feature inventory cannot be normalized away", () => {
+    expect(() => review(fixture({ visual: {
+      ...fixture().visual,
+      compatibility: { ...fixture().visual.compatibility,
+        features: null as unknown as string[] },
+    } }))).toThrow("BLOCK_INTERACTION_FEATURE_INVENTORY_INVALID");
+    expect(() => review(fixture({ visual: {
+      ...fixture().visual,
+      compatibility: { ...fixture().visual.compatibility,
+        features: ["collision_box", "collision_box"] },
+    } }))).toThrow("BLOCK_INTERACTION_FEATURE_INVENTORY_AMBIGUOUS");
+  });
+
   test("malformed vectors and explicit unknown inputs fail closed", () => {
     for (const box of [
       { origin: [NaN,0,-8], size:[16,16,16] },
