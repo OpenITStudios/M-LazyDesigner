@@ -66,6 +66,19 @@ The feature gate cannot verify actual geometry content, culling-rule files, UV s
 
 No package installation, bundled copies of Mojang assets, or live integration are authorized by these references.
 
+## A1 — Attachable source binding ownership
+
+The import-safe source owner is mcp/lib/bedrock/attachableBinding.ts. It is a pure planner over explicitly caller-supplied inventories, not a Blockbench binding executor, Resource Pack builder, or proof of Minecraft compatibility.
+
+- Attachables must use an **exact** namespaced item identifier matching their own; geometry identifiers must already be canonical. No guessed rename or fallback.
+- Model bone UUID/name uniqueness, fully resolved parent chains, acyclic hierarchy, explicit selected target and top-level item-slot bone are mandatory. Holder bone inventory is only a caller assertion, not native evidence.
+- For held main_hand/off_hand, the only automatic candidate is the official query q.item_slot_to_bone_name(context.item_slot). The specific slot is a preview intent. The resulting holder bone is chosen at runtime and has not been observed.
+- Direct-holder-bone binding requires an exact bone name in the declared holder inventory, but returns a review-only result with no geometry-binding expression. This route needs combined holder rig, animation and parentage review.
+- Wearable/armor/body slot fitting, first-person vs third-person alignment, native undo, pack JSON compilation, material/texture binding and actual Minecraft rendering are **NOT VERIFIED** and must be scoped to later authoring/native milestones. Never infer wearable slots from hand-only input.
+- Source refs are untrusted caller claims. A SOURCE_SLOT_BINDING_PLANNED result is not approval or native readiness.
+
+Primary sources: [Microsoft Using Attachables](https://learn.microsoft.com/en-us/minecraft/creator/documents/attachables?view=minecraft-bedrock-stable) and [Attachable Definition](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/attachablereference/examples/attachabledefinitions/attachable?view=minecraft-bedrock-stable).
+
 ## Milestone acceptance contract
 
 | ID | Deliverable | Completion criteria before production claim |
