@@ -10,6 +10,7 @@ import {
   summarizeCaptureImageTraffic,
   assessVisualCaptureFreshness,
   fingerprintVisualCaptureDependencies,
+  readNativeVisualCaptureSnapshot,
   selectCaptureSizeForEvidence,
   selectModelViewsForEvidence,
   selectSilhouetteCaptureViews,
@@ -51,6 +52,93 @@ describe("capture native dependency freshness contract", () => {
     expect(fingerprintVisualCaptureDependencies(baseline)).toBe(digest);
     for (const changed of variants) {
       expect(fingerprintVisualCaptureDependencies(changed)).not.toBe(digest);
+    }
+  });
+
+  test("render metadata and material-group edits change dependencies without repainting", () => {
+    const withGroups = {
+      ...baseline, texture_groups: [["group-a", "Original", true]],
+    };
+    const first = fingerprintVisualCaptureDependencies(withGroups);
+    expect(fingerprintVisualCaptureDependencies({
+      ...withGroups, texture_groups: [["group-a", "Original", false]],
+    })).not.toBe(first);
+    expect(fingerprintVisualCaptureDependencies({
+      ...withGroups,
+      textures: [["atlas", 16, 16, "bitmap-sha-a", "emissive"]],
+    })).not.toBe(first);
+  });
+
+  test("native snapshot tracks render state and labels animated frame evidence partial", () => {
+    const keys = [
+      "Project", "Cube", "Group", "Mesh", "Texture", "TextureGroup",
+      "AnimationItem", "Settings", "Format", "settings",
+    ] as const;
+    const oldProps = keys.map(key =>
+      [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    );
+    const set = (key: string, value: unknown) =>
+      Object.defineProperty(globalThis, key, {
+        configurable: true, writable: true, value,
+      });
+    const pixels = new Uint8ClampedArray(4 * 4 * 4);
+    pixels.fill(255);
+    const texture = {
+      uuid: "atlas", name: "atlas.png", id: "atlas",
+      width: 4, height: 4, uv_width: 4, uv_height: 4,
+      display_height: 4, visible: true, render_mode: "default",
+      render_sides: "front", wrap_mode: "clamp",
+      group: "pbr", pbr_channel: "color", use_as_default: true,
+      frameCount: 1, currentFrame: 0, frame_time: 1,
+      frame_order_type: "loop", frame_order: "", frame_interpolate: false,
+      ctx: { canvas: {width: 4, height: 4},
+        getImageData: () => ({data: pixels}) },
+    };
+    const groups = [{uuid: "pbr", name: "Material", is_material: true}];
+    try {
+      set("Project", {uuid: "project-a", view_mode: "textured"});
+      set("Cube", {all: []});
+      set("Group", {all: []});
+      set("Mesh", {all: []});
+      set("Texture", {all: [texture]});
+      set("TextureGroup", {all: groups});
+      set("AnimationItem", {selected: null});
+      set("Settings", {get: () => 50});
+      set("Format", {id: "bedrock"});
+      set("settings", {shading: {value: true}});
+      const initial = readNativeVisualCaptureSnapshot(null);
+      expect(initial.coverage).toBe("TRACKED");
+      expect(initial.texture_pixels_hashed).toBe(16);
+
+      texture.render_mode = "emissive";
+      expect(assessVisualCaptureFreshness(initial,
+        readNativeVisualCaptureSnapshot(null)).state).toBe("STALE");
+      texture.render_mode = "default";
+      groups[0]!.is_material = false;
+      expect(assessVisualCaptureFreshness(initial,
+        readNativeVisualCaptureSnapshot(null)).state).toBe("STALE");
+      groups[0]!.is_material = true;
+
+      texture.frameCount = 4;
+      const animated = readNativeVisualCaptureSnapshot(null);
+      expect(animated.coverage).toBe("PARTIAL");
+      expect(animated.unresolved).toContain("ANIMATED_TEXTURE_FRAME_PHASE_UNTRACKED");
+      expect(assessVisualCaptureFreshness(animated, animated).state).toBe("UNVERIFIED");
+      texture.frameCount = 1;
+      set("Texture", {all: [texture, {...texture}]});
+      const duplicated = readNativeVisualCaptureSnapshot(null);
+      expect(duplicated.unresolved).toContain("TEXTURE_UUID_AMBIGUOUS");
+      expect(duplicated.coverage).toBe("PARTIAL");
+      set("Texture", {all: [texture]});
+      groups.push({uuid: "pbr", name: "Ambiguous", is_material: false});
+      const duplicateGroup = readNativeVisualCaptureSnapshot(null);
+      expect(duplicateGroup.unresolved).toContain("TEXTURE_GROUP_UUID_AMBIGUOUS");
+      expect(duplicateGroup.coverage).toBe("PARTIAL");
+    } finally {
+      for (const [key, descriptor] of oldProps) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else Reflect.deleteProperty(globalThis, key);
+      }
     }
   });
 

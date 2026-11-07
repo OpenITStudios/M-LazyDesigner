@@ -87,6 +87,8 @@ export type VisualCaptureDependencyInput = Readonly<{
   cubes: readonly unknown[];
   groups: readonly unknown[];
   textures: readonly unknown[];
+  /** Canonical native TextureGroup inventory, if observable. */
+  texture_groups?: readonly unknown[];
   pose: unknown;
   presentation: unknown;
   reference_binding: unknown;
@@ -136,7 +138,8 @@ const CAPTURE_FACE_KEYS = ["north", "south", "east", "west", "up", "down"] as co
  * not Outliner expanded/selected UI state. Missing read access never becomes
  * a fabricated clean snapshot. Bounded texture reads prevent huge atlas costs.
  */
-function readNativeVisualCaptureSnapshot(referenceBinding: unknown): VisualNativeCaptureSnapshot {
+/** Internal native capture reader, exported only for disposable fake-native regressions. */
+export function readNativeVisualCaptureSnapshot(referenceBinding: unknown): VisualNativeCaptureSnapshot {
   if (!Project?.uuid || typeof Cube === "undefined" ||
       !Array.isArray(Cube.all)) {
     throw new Error("VISUAL_CAPTURE_NATIVE_PROJECT_UNAVAILABLE");
@@ -201,11 +204,43 @@ function readNativeVisualCaptureSnapshot(referenceBinding: unknown): VisualNativ
     : 0;
   if (meshes > 0) unresolved.add("NON_CUBE_GEOMETRY_NOT_TRACKED");
   let texturePixelsHashed = 0;
+  const textureGroups: unknown[] = [];
+  const groupIds = new Set<string>();
+  if (typeof TextureGroup === "undefined" || !Array.isArray(TextureGroup.all)) {
+    unresolved.add("TEXTURE_GROUP_INVENTORY_UNAVAILABLE");
+  } else {
+    for (const group of [...TextureGroup.all].sort((a, b) =>
+      String(a.uuid).localeCompare(String(b.uuid)))) {
+      if (typeof group.uuid !== "string" || !group.uuid ||
+          groupIds.has(group.uuid)) {
+        unresolved.add("TEXTURE_GROUP_UUID_AMBIGUOUS");
+      }
+      groupIds.add(group.uuid);
+      textureGroups.push([group.uuid, group.name, group.is_material]);
+    }
+  }
   const textures: unknown[] = [];
+  const textureIds = new Set<string>();
   if (typeof Texture === "undefined" || !Array.isArray(Texture.all)) {
     unresolved.add("TEXTURE_INVENTORY_UNAVAILABLE");
   } else {
-    for (const texture of [...Texture.all].sort((a, b) => a.uuid.localeCompare(b.uuid))) {
+    for (const texture of [...Texture.all].sort((a, b) =>
+      String(a.uuid).localeCompare(String(b.uuid)))) {
+      if (typeof texture.uuid !== "string" || !texture.uuid ||
+          textureIds.has(texture.uuid)) {
+        unresolved.add("TEXTURE_UUID_AMBIGUOUS");
+      }
+      textureIds.add(texture.uuid);
+      if (texture.group && !groupIds.has(texture.group)) {
+        unresolved.add("TEXTURE_GROUP_REFERENCE_UNRESOLVED");
+      }
+      // Source-strip hashes cannot prove the actual animation frame used for
+      // each camera shot. A frame could advance and return to its initial
+      // value between the before/after native snapshots.
+      const frameCount = texture.frameCount;
+      if (typeof frameCount === "number" && frameCount > 1) {
+        unresolved.add("ANIMATED_TEXTURE_FRAME_PHASE_UNTRACKED");
+      }
       const ctx = texture.ctx;
       const width = ctx?.canvas?.width;
       const height = ctx?.canvas?.height;
@@ -234,6 +269,16 @@ function readNativeVisualCaptureSnapshot(referenceBinding: unknown): VisualNativ
         texture.uuid, texture.width, texture.height,
         texture.display_height ?? null, texture.uv_width ?? null,
         texture.uv_height ?? null, bitmapSha,
+        // Appearance can change while every underlying RGBA sample stays
+        // unchanged; bind native material and animation source properties.
+        texture.name ?? null, texture.id ?? null,
+        texture.visible ?? null, texture.render_mode ?? null,
+        texture.render_sides ?? null, texture.wrap_mode ?? null,
+        texture.group ?? null, texture.pbr_channel ?? null,
+        texture.use_as_default ?? null,
+        frameCount ?? null, texture.currentFrame ?? null,
+        texture.frame_time ?? null, texture.frame_order_type ?? null,
+        texture.frame_order ?? null, texture.frame_interpolate ?? null,
       ]);
     }
   }
@@ -255,7 +300,7 @@ function readNativeVisualCaptureSnapshot(referenceBinding: unknown): VisualNativ
   };
   const dependency_sha256 = fingerprintVisualCaptureDependencies({
     project_uuid: Project.uuid,
-    cubes, groups, textures, pose, presentation,
+    cubes, groups, textures, texture_groups: textureGroups, pose, presentation,
     reference_binding: referenceBinding,
   });
   return {
