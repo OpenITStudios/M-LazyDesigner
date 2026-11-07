@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { classifyAdvancedGeometryRevisionSurface } from
-  "../server/runtime/recipes/authoring/advancedConstruction";
+import {
+  classifyAdvancedGeometryRevisionSurface,
+  requireFiniteAdvancedGeometrySceneSurface,
+} from "../server/runtime/recipes/authoring/advancedConstruction";
 
 describe("Blockbench parametric recipe adapter ownership", () => {
   test("runtime adapter is a narrow native boundary, not another planner or MCP surface", async () => {
@@ -181,5 +183,75 @@ describe("advanced Geometry revision native surface preflight", () => {
     expect(prepare).toContain("ADVANCED_GEOMETRY_TEXTURED_REVISION_REQUIRES_UV_REMAP");
     expect(source.indexOf("function prepareNativeConstruction("))
       .toBeLessThan(source.indexOf("export async function createAdvancedGeometryNative("));
+  });
+});
+
+describe("advanced Geometry scene fingerprint finite numeric identity", () => {
+  const safe = () => ({
+    inflate: 0,
+    autouv: 1,
+    uv_offset: [0, 0],
+    faces: Object.fromEntries(FACE_KEYS.map(key => [key, {
+      uv: [0, 0, 16, 16],
+      rotation: 0,
+    }])),
+  });
+  test("finite native geometry UV values allow the existing scene digest", () => {
+    expect(() => requireFiniteAdvancedGeometrySceneSurface(safe()))
+      .not.toThrow();
+    expect(() => requireFiniteAdvancedGeometrySceneSurface({
+      ...safe(), uv_offset: null, inflate: undefined,
+    })).not.toThrow();
+    expect(() => requireFiniteAdvancedGeometrySceneSurface({
+      ...safe(), faces: undefined,
+    })).not.toThrow();
+  });
+
+  test("JSON-nonfinite Cube scalars and UV offsets fail before a plan hash", () => {
+    for (const scalar of [Number.NaN, Infinity, -Infinity]) {
+      for (const surface of [
+        { ...safe(), inflate: scalar },
+        { ...safe(), autouv: scalar },
+        { ...safe(), uv_offset: [0, scalar] },
+      ]) {
+        expect(() => requireFiniteAdvancedGeometrySceneSurface(surface))
+          .toThrow("ADVANCED_GEOMETRY_NATIVE_SCENE_INVALID");
+      }
+    }
+    for (const offset of [[], [0], [0, 1, 2], ["0", 1]]) {
+      expect(() => requireFiniteAdvancedGeometrySceneSurface({
+        ...safe(), uv_offset: offset,
+      })).toThrow("ADVANCED_GEOMETRY_NATIVE_SCENE_INVALID");
+    }
+  });
+
+  test("all six face UV coordinates and rotation remain finite", () => {
+    for (const faceKey of FACE_KEYS) {
+      for (const change of [
+        { uv: [0, Number.NaN, 16, 16], rotation: 0 },
+        { uv: [0, 0, 16, 16], rotation: Infinity },
+        { uv: [0, 0, 16], rotation: 0 },
+      ]) {
+        const surface = safe();
+        surface.faces[faceKey] = change;
+        expect(() => requireFiniteAdvancedGeometrySceneSurface(surface))
+          .toThrow("ADVANCED_GEOMETRY_NATIVE_SCENE_INVALID");
+      }
+    }
+  });
+
+  test("scene digest call guards projected Cube and project dimensions", async () => {
+    const source = await Bun.file(
+      "server/runtime/recipes/authoring/advancedConstruction.ts"
+    ).text();
+    const scene = source.slice(
+      source.indexOf("function sceneFingerprint("),
+      source.indexOf("function requireRecipeParentScope(")
+    );
+    expect(scene).toContain("requireFiniteAdvancedGeometrySceneSurface(cube)");
+    expect(scene).toContain('["Project texture_width", Project.texture_width]');
+    expect(scene).toContain('["Project texture_height", Project.texture_height]');
+    expect(scene.indexOf("requireFiniteAdvancedGeometrySceneSurface(cube)"))
+      .toBeLessThan(scene.indexOf('createHash("sha256")'));
   });
 });

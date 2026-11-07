@@ -225,6 +225,64 @@ function readFiniteVector(value: readonly number[], label: string): number[] {
   return [...value];
 }
 
+/**
+ * Scene-plan fingerprints must not accept numeric values that JSON.stringify
+ * silently coerces to null (NaN and infinities). Validate only native fields
+ * already projected into the existing scene revision; do not inspect new
+ * external state or change Recipe/UV mutation ownership.
+ *
+ * Missing optional fields retain the fingerprint's original null/default
+ * semantics. A malformed present value fails closed before plan or Undo.
+ */
+export function requireFiniteAdvancedGeometrySceneSurface(surface: {
+  inflate?: unknown;
+  autouv?: unknown;
+  uv_offset?: unknown;
+  faces?: unknown;
+}): void {
+  const reject = (field: string): never => {
+    throw new Error("ADVANCED_GEOMETRY_NATIVE_SCENE_INVALID: " + field);
+  };
+  const requireFinite = (value: unknown, field: string): void => {
+    if (typeof value !== "number" || !Number.isFinite(value)) reject(field);
+  };
+  const requireVector = (
+    value: unknown, count: number, field: string
+  ): void => {
+    if (!Array.isArray(value) || value.length !== count) reject(field);
+    for (const entry of value) requireFinite(entry, field);
+  };
+  if (surface.inflate !== undefined && surface.inflate !== null) {
+    requireFinite(surface.inflate, "Cube inflate");
+  }
+  if (surface.autouv !== undefined && surface.autouv !== null) {
+    requireFinite(surface.autouv, "Cube autouv");
+  }
+  if (surface.uv_offset !== undefined && surface.uv_offset !== null) {
+    requireVector(surface.uv_offset, 2, "Cube uv_offset");
+  }
+  if (surface.faces === undefined || surface.faces === null) return;
+  if (typeof surface.faces !== "object" || Array.isArray(surface.faces)) {
+    reject("Cube faces");
+  }
+  const faces = surface.faces as Record<string, unknown>;
+  for (const faceKey of ["north", "south", "east", "west", "up", "down"]) {
+    const face = faces[faceKey];
+    // The existing scene fingerprint records missing faces explicitly.
+    if (face === undefined || face === null) continue;
+    if (typeof face !== "object" || Array.isArray(face)) {
+      reject("Cube face " + faceKey);
+    }
+    const state = face as Record<string, unknown>;
+    if (state.uv !== undefined && state.uv !== null) {
+      requireVector(state.uv, 4, "Cube " + faceKey + " UV");
+    }
+    if (state.rotation !== undefined && state.rotation !== null) {
+      requireFinite(state.rotation, "Cube " + faceKey + " rotation");
+    }
+  }
+}
+
 type SceneFingerprintScope = {
   allowAttributedUndo?: boolean;
   excludeOwned?: { recipe_id: string; instance_ids: ReadonlySet<string> };
@@ -284,6 +342,7 @@ function sceneFingerprint(
         scope.excludeOwned.instance_ids.has(ownership.instance_id)) {
       return [];
     }
+    requireFiniteAdvancedGeometrySceneSurface(cube);
     return [{
     uuid: cube.uuid,
     // UUID and geometry alone cannot detect a Recipe ownership reassignment.
@@ -311,6 +370,15 @@ function sceneFingerprint(
     }),
     }];
   }).sort((a, b) => a.uuid.localeCompare(b.uuid));
+  for (const [label, value] of [
+    ["Project texture_width", Project.texture_width],
+    ["Project texture_height", Project.texture_height],
+  ] as const) {
+    if (value !== undefined && value !== null &&
+        (typeof value !== "number" || !Number.isFinite(value))) {
+      throw new Error("ADVANCED_GEOMETRY_NATIVE_SCENE_INVALID: " + label);
+    }
+  }
   const digest = createHash("sha256").update(JSON.stringify({
     contract: SOURCE_CONTRACT,
     project: Project.uuid,
