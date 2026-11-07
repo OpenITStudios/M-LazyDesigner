@@ -382,6 +382,145 @@ describe("Control orchestration reducer", () => {
       .not.toContain("prior Particle JSON");
   });
 
+  test("scoped Geometry visual debt keeps its domain after an Animation Particle receipt", () => {
+    const first = reduceControlExecutionState(null, delta(), {
+      taskContextId: "geo-then-particle", cohortBoundary: "CONTINUE",
+    });
+    expect(first.state.pending_verification?.verification_domain).toBe("GEOMETRY");
+    const finished = reduceControlExecutionState(first.state, delta({
+      capability: "manage_particle",
+      authoring_domain: "ANIMATION",
+      phase_before: "animation", phase_after: "animation",
+      next_intent: "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES",
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
+    }), { taskContextId: "geo-then-particle", cohortBoundary: "COMPLETE" });
+    expect(finished.continuation.next_action).toMatchObject({
+      kind: "VERIFY_VISUAL", target_domain: "GEOMETRY",
+      recommended_capability: null,
+      verification_scope: { kind: "CUBE_TARGETS", cube_uuids: ["cube-a"] },
+    });
+    expect(finished.continuation.next_action.reason).toContain("Geometry visual review");
+    expect(finished.continuation.next_action.reason).toContain("conditional-texture");
+    // A cross-domain completion is not a Geometry-capture authorization.
+    expect(finished.continuation.next_action.recommended_capability).toBeNull();
+  });
+
+  test("earlier Animation visual evidence is not retargeted to later Entity export", () => {
+    const animation = delta({
+      authoring_domain: "ANIMATION",
+      capability: "manage_keyframes",
+      phase_before: "animation", phase_after: "animation",
+      verification_scope: {
+        kind: "ANIMATION_RANGE",
+        animation_uuid: "clip-1", bone_uuid: "bone-1", channel: "rotation",
+        time_range: [1, 2],
+        review: { bone_ids: ["bone-1"], range: { start: 1, end: 2 },
+          sample_times: [1, 1.5, 2] },
+      },
+    });
+    const first = reduceControlExecutionState(null, animation, {
+      taskContextId: "animation-then-export", cohortBoundary: "CONTINUE",
+    });
+    const final = reduceControlExecutionState(first.state, delta({
+      capability: "export_model", authoring_domain: "CORE",
+      next_intent: "VERIFY_REQUESTED_OUTPUT_SET_AND_APPROVALS",
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
+    }), { taskContextId: "animation-then-export", cohortBoundary: "COMPLETE" });
+    expect(final.continuation.next_action).toMatchObject({
+      kind: "VERIFY_VISUAL", target_domain: "ANIMATION",
+      verification_scope: { kind: "ANIMATION_RANGE", animation_uuid: "clip-1" },
+    });
+    expect(final.continuation.next_action.reason).toContain("Temporal motion");
+    expect(final.continuation.next_action.reason).toContain("requested deliverables");
+  });
+
+  test("equally strong visual obligations from different domains require separate reviews", () => {
+    const first = reduceControlExecutionState(null, delta(), {
+      taskContextId: "mixed-visual-owners", cohortBoundary: "CONTINUE",
+    });
+    const texturing = delta({
+      capability: "paint_texture_transaction",
+      authoring_domain: "TEXTURING",
+      phase_before: "texturing", phase_after: "texturing",
+      verification_scope: {
+        kind: "TEXTURE_REGION",
+        texture_uuid: "texture-1", affected_rect: [0, 0, 8, 8],
+        revision: "after-1", evidence_source: "follow_up_read",
+      },
+    });
+    const middle = reduceControlExecutionState(first.state, texturing, {
+      taskContextId: "mixed-visual-owners", cohortBoundary: "CONTINUE",
+    });
+    expect(middle.state.pending_verification?.verification_domain).toBeNull();
+    expect(middle.state.pending_verification?.verification_scope).toBeNull();
+    const end = reduceControlExecutionState(middle.state, delta({
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
+    }), { taskContextId: "mixed-visual-owners", cohortBoundary: "COMPLETE" });
+    expect(end.continuation.next_action).toMatchObject({
+      kind: "VERIFY_VISUAL", target_domain: null,
+      recommended_capability: null, verification_scope: null,
+    });
+    expect(end.continuation.next_action.reason).toContain("Multiple authoring domains");
+    expect(end.state.pending_verification).toBeNull();
+  });
+
+  test("equal focused checks from different domains preserve non-retry warning", () => {
+    const first = reduceControlExecutionState(null, delta({
+      capability: "paint_texture_transaction", authoring_domain: "TEXTURING",
+      verification_class: "focused_read", verification_scope: null,
+      freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
+    }), { taskContextId: "mixed-focused-owners", cohortBoundary: "CONTINUE" });
+    const finished = reduceControlExecutionState(first.state, delta({
+      capability: "manage_particle", authoring_domain: "ANIMATION",
+      next_intent: "INSPECT_OUTPUT_WRITE_OUTCOME_BEFORE_RETRY",
+      verification_class: "focused_read", verification_scope: null,
+      freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
+    }), { taskContextId: "mixed-focused-owners", cohortBoundary: "COMPLETE" });
+    expect(finished.continuation.next_action).toMatchObject({
+      kind: "VERIFY_FOCUSED", target_domain: null,
+      recommended_capability: null, verification_scope: null,
+    });
+    expect(finished.continuation.next_action.reason)
+      .toContain("Multiple authoring domains");
+    expect(finished.continuation.next_action.reason)
+      .toContain("do not automatically retry");
+  });
+
+  test("Geometry capture hint preserves earlier Particle and output-set reviews", () => {
+    const noChange = { basis: "NO_CHANGE" as const, stale: [], fresh: [], unknown: [] };
+    const particle = reduceControlExecutionState(null, delta({
+      capability: "manage_particle", authoring_domain: "ANIMATION",
+      next_intent: "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES",
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: noChange,
+    }), { taskContextId: "capture-output-debt", cohortBoundary: "CONTINUE" });
+    const exported = reduceControlExecutionState(particle.state, delta({
+      capability: "export_model", authoring_domain: "CORE",
+      next_intent: "VERIFY_REQUESTED_OUTPUT_SET_AND_APPROVALS",
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: noChange,
+    }), { taskContextId: "capture-output-debt", cohortBoundary: "CONTINUE" });
+    const geometry = reduceControlExecutionState(exported.state, delta(), {
+      taskContextId: "capture-output-debt", cohortBoundary: "CONTINUE",
+    });
+    expect(geometry.state.pending_verification?.verification_domain).toBe("GEOMETRY");
+    const end = reduceControlExecutionState(geometry.state, delta({
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: noChange,
+    }), { taskContextId: "capture-output-debt", cohortBoundary: "COMPLETE" });
+    expect(end.continuation.next_action).toMatchObject({
+      kind: "VERIFY_VISUAL", target_domain: "GEOMETRY",
+      recommended_capability: "capture_model_views",
+    });
+    expect(end.continuation.next_action.reason).toContain("front_direction");
+    expect(end.continuation.next_action.reason).toContain("conditional-texture");
+    expect(end.continuation.next_action.reason).toContain("requested deliverables");
+    expect(end.state.pending_verification).toBeNull();
+  });
+
   test("visual debt stays primary while a later Particle receipt remains named", () => {
     const first = reduceControlExecutionState(null, delta(), {
       taskContextId: "visual-and-particle", cohortBoundary: "CONTINUE",
@@ -393,6 +532,7 @@ describe("Control orchestration reducer", () => {
       freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
     }), { taskContextId: "visual-and-particle", cohortBoundary: "COMPLETE" });
     expect(last.continuation.next_action.kind).toBe("VERIFY_VISUAL");
+    expect(last.continuation.next_action.target_domain).toBe("GEOMETRY");
     expect(last.continuation.next_action.reason)
       .toContain("conditional-texture");
     expect(last.continuation.cohort?.pending_verification_class).toBe("visual");

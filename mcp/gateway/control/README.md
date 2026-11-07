@@ -128,7 +128,12 @@ set/approvals); `COMPLETE` explains both when they arose from different
 invocations, instead of replacing an earlier Particle review with a generic
 focused-read message. A stronger visual review stays primary with the
 Particle follow-up noted. Cohort changes/project changes do not inherit
-these obligations. An uncertain native outcome still takes precedence and
+these obligations. The strongest pending verification keeps its own
+`verification_domain`: Geometry Cube views remain Geometry-owned even when
+Particle/Entity output closes the cohort. Equally strong reviews across
+different domains become an explicit multi-domain verification with no
+fabricated single target or camera scope. This is internal ephemeral state,
+not another Stage/router or public Gateway field. An uncertain native outcome still takes precedence and
 never permits an automatic retry, while incomplete exported bytes remain
 `focused_read`. No new public action type, output field, cache or native
 tool is introduced.

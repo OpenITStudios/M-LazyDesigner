@@ -34,6 +34,8 @@ type CohortOutputReview =
 
 export type ControlPendingVerification = {
   verification_class: ControlDelta["verification_class"];
+  /** Domain owning the strongest pending verification, null when mixed. */
+  verification_domain: ControlAuthoringDomain | null;
   verification_scope: ControlVerificationScope | null;
   freshness_basis: ControlDelta["freshness"]["basis"];
   stale: ControlFreshnessScope[];
@@ -353,6 +355,7 @@ function pendingVerificationFromDelta(delta: ControlDelta): ControlPendingVerifi
   return {
     verification_class: outputReview === "PARTICLE_RESOURCE_DEPENDENCIES"
       ? "focused_read" : delta.verification_class,
+    verification_domain: delta.authoring_domain,
     verification_scope: delta.verification_scope,
     freshness_basis: delta.freshness.basis,
     stale: [...delta.freshness.stale],
@@ -376,15 +379,27 @@ function mergePendingVerification(
     ...(left.output_reviews ?? []),
     ...(right.output_reviews ?? []),
   ])];
+  const classRank = VERIFICATION_RANK[left.verification_class] -
+    VERIFICATION_RANK[right.verification_class];
+  // The domain of the stronger pending evidence wins. Equally strong
+  // evidence from different domains is ambiguous, never the latest Stage.
+  const verificationDomain = classRank > 0
+    ? left.verification_domain
+    : classRank < 0
+      ? right.verification_domain
+      : left.verification_domain === right.verification_domain
+        ? left.verification_domain : null;
+  const verificationClass = strongerVerificationClass(
+    left.verification_class, right.verification_class
+  );
   return {
-    verification_class: strongerVerificationClass(
-      left.verification_class,
-      right.verification_class
-    ),
-    verification_scope: unboundedVisual ? null : mergeVerificationScope(
-      left.verification_scope,
-      right.verification_scope
-    ),
+    verification_class: verificationClass,
+    verification_domain: verificationDomain,
+    verification_scope:
+      (verificationClass === "visual" && verificationDomain === null) ||
+      unboundedVisual
+        ? null
+        : mergeVerificationScope(left.verification_scope, right.verification_scope),
     freshness_basis: strongerFreshnessBasis(
       left.freshness_basis,
       right.freshness_basis
@@ -395,12 +410,21 @@ function mergePendingVerification(
   };
 }
 
+function outputReviewReminder(review: CohortOutputReview): string {
+  return review === "PARTICLE_RESOURCE_DEPENDENCIES"
+    ? "A prior Particle JSON write in this cohort still requires resource-reference and conditional-texture review before asset acceptance; no native file-byte or visual PASS is implied."
+    : "An export in this cohort still requires review of requested deliverables, current native revision and approvals before asset acceptance.";
+}
+
 function cohortCompletionAction(
   delta: ControlDelta,
   pending: ControlPendingVerification
 ): ControlNextAction {
   const action = nextActionForControlDelta({
     ...delta,
+    // Earlier scoped Geometry/Texture/Animation work must not be retargeted
+    // to the last invocation's domain (e.g. a Particle receipt in Animation).
+    authoring_domain: pending.verification_domain ?? delta.authoring_domain,
     verification_class: pending.verification_class,
     verification_scope: pending.verification_scope,
     freshness: {
@@ -413,45 +437,59 @@ function cohortCompletionAction(
   if (action.kind === "RECOVER" || action.kind === "STATUS" ||
       action.kind === "HANDOFF") return action;
 
+  // Two equally strong verification obligations in different authoring
+  // domains cannot be represented as one trusted target or camera scope.
+  // Preserve the class and pending review debt, but require separate reads.
+  const ambiguousDomain =
+    pending.verification_domain === null &&
+    (action.kind === "VERIFY_VISUAL" || action.kind === "VERIFY_FOCUSED");
+  const resolvedAction: ControlNextAction = ambiguousDomain ? {
+    ...action,
+    target_domain: null,
+    recommended_capability: null,
+    verification_scope: null,
+    reason: action.kind === "VERIFY_VISUAL"
+      ? "Multiple authoring domains require separate visual reviews; no single current Stage or capture scope is authoritative."
+      : "Multiple authoring domains require separate focused verification; inspect each affected owner rather than assuming the last Stage is authoritative. " + action.reason,
+  } : action;
+
   const reviews = pending.output_reviews ?? [];
   const particleAlreadyExplained =
-    action.kind === "VERIFY_FOCUSED" &&
+    resolvedAction.kind === "VERIFY_FOCUSED" &&
     delta.capability === "manage_particle" &&
     delta.next_intent === "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES";
   const exportAlreadyExplained =
-    action.kind === "CONTINUE" &&
+    resolvedAction.kind === "CONTINUE" &&
     delta.capability === "export_model" &&
     delta.next_intent === "VERIFY_REQUESTED_OUTPUT_SET_AND_APPROVALS";
   const reminders: string[] = [];
   if (reviews.includes("PARTICLE_RESOURCE_DEPENDENCIES") &&
       !particleAlreadyExplained) {
-    reminders.push(
-      "A prior Particle JSON write in this cohort still requires resource-reference and conditional-texture review before asset acceptance; no native file-byte or visual PASS is implied."
-    );
+    reminders.push(outputReviewReminder("PARTICLE_RESOURCE_DEPENDENCIES"));
   }
   if (reviews.includes("OUTPUT_SET_AND_APPROVALS") &&
       !exportAlreadyExplained) {
-    reminders.push(
-      "An export in this cohort still requires review of requested deliverables, current native revision and approvals before asset acceptance."
-    );
+    reminders.push(outputReviewReminder("OUTPUT_SET_AND_APPROVALS"));
   }
-  if (reminders.length === 0) return action;
+  if (reminders.length === 0) return resolvedAction;
 
   // When the latest receipt needs no separate verification, but a prior
   // Particle write did, orient the focused follow-up back to Animation.
   // A currently focused file-readback or stronger visual review keeps its
   // own domain and scope instead of being silently overwritten.
   const focusPriorParticle =
-    action.kind === "VERIFY_FOCUSED" &&
+    !ambiguousDomain &&
+    resolvedAction.kind === "VERIFY_FOCUSED" &&
     delta.verification_class === "receipt_only" &&
     pending.verification_scope === null &&
+    pending.verification_domain === "ANIMATION" &&
     reviews.includes("PARTICLE_RESOURCE_DEPENDENCIES");
-  const reason = action.reason ===
+  const reason = resolvedAction.reason ===
       "mutation receipt is insufficient for the affected state"
     ? "A prior cohort verification remains outstanding."
-    : action.reason;
+    : resolvedAction.reason;
   return {
-    ...action,
+    ...resolvedAction,
     reason: [reason, ...reminders].join(" "),
     ...(focusPriorParticle ? { target_domain: "ANIMATION" as const } : {}),
   };
@@ -528,6 +566,7 @@ export function reduceControlExecutionState(
     sameCohort &&
     previous?.owner === "GEOMETRY" &&
     previous.pending_verification?.verification_class === "visual" &&
+    previous.pending_verification.verification_domain === "GEOMETRY" &&
     previous.pending_verification.verification_scope?.kind === "CUBE_TARGETS" &&
     previous.pending_verification.verification_scope.cube_uuids.length > 0;
   const completedGeometryCohort =
@@ -542,7 +581,11 @@ export function reduceControlExecutionState(
     ? {
         ...pendingAction,
         recommended_capability: "capture_model_views",
-        reason: "Geometry cohort finished. At the next material reference-quality gate, compare approved source pixels with one bounded capture of relevant current model views. Before invoke, supply front_direction from the approved reference and either explicitly matched views or evidence_targets; Cube UUIDs are affected scope, not camera view names. Do not capture per Cube or treat a capture as visual PASS.",
+        reason: [
+          "Geometry cohort finished. At the next material reference-quality gate, compare approved source pixels with one bounded capture of relevant current model views. Before invoke, supply front_direction from the approved reference and either explicitly matched views or evidence_targets; Cube UUIDs are affected scope, not camera view names. Do not capture per Cube or treat a capture as visual PASS.",
+          // A capture hint cannot erase earlier output-review obligations.
+          ...(mergedPending.output_reviews ?? []).map(outputReviewReminder),
+        ].join(" "),
       }
     : pendingAction;
 

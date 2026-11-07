@@ -390,8 +390,13 @@ resource/texture review and requested export-output/approval review in its
 existing bounded `pending_verification.output_reviews`, even when another
 receipt follows. Cohort completion surfaces the owed review rather than a
 generic focused read, while preserving a higher-priority visual, recovery,
-status or handoff decision. These internal facts are not a new registry,
-Gateway output field, evidence store or proof of overall asset acceptance. Size-only and compile-only outcomes describe their exact
+status or handoff decision. The same ephemeral cohort also tracks `verification_domain` for the
+strongest pending check. A later Animation/CORE receipt cannot retarget an
+earlier Geometry/Texture/Animation visual scope; equally strong cross-domain
+visual debt becomes an explicitly unscoped, untargeted multi-domain review.
+No cross-domain Cube camera capture is recommended. These internal facts
+are not a new registry, Gateway output field, evidence store or proof of
+overall asset acceptance. Size-only and compile-only outcomes describe their exact
 remaining work; unknown write outcome retains no-auto-retry safety.
 Local provider results and cached/session UUIDs cannot obtain this
 native receipt classification. Focused regressions:
