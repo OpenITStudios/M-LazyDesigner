@@ -106,6 +106,22 @@ describe("A1 Bedrock attachable source binding (no native pass)", () => {
     }))).toThrow("ATTACHABLE_SLOT_UNSUPPORTED_OR_UNVERIFIED");
   });
 
+  test("missing or nonstring UUID/name/parent never pass RegExp coercion", () => {
+    const malformed = [
+      { uuid: undefined, name: "root", parent_uuid: null },
+      { uuid: null, name: "root", parent_uuid: null },
+      { uuid: "uuid", name: undefined, parent_uuid: null },
+      { uuid: "uuid", name: "root", parent_uuid: undefined },
+      { uuid: "uuid", name: "root", parent_uuid: 7 },
+    ];
+    for (const bone of malformed) {
+      expect(() => planBedrockAttachableBinding(sample({
+        model_bones: [bone as unknown as AttachableBindingInput["model_bones"][number]],
+        target_bone_uuid: "uuid",
+      }))).toThrow("ATTACHABLE_MODEL_BONE_IDENTITY_INVALID");
+    }
+  });
+
   test("holder and source identities are unambiguous and bounded", () => {
     for (const bone_names of [[], ["head", "head"], ["head", ""]]) {
       expect(() => planBedrockAttachableBinding(sample({

@@ -73,8 +73,12 @@ function checkModelBones(input: AttachableBindingInput): AttachableModelBone {
   const byId = new Map<string, AttachableModelBone>();
   const names = new Set<string>();
   for (const bone of bones) {
-    if (!bone || !UUID.test(bone.uuid) || !BONE.test(bone.name) ||
-        (bone.parent_uuid !== null && !UUID.test(bone.parent_uuid))) {
+    if (!bone || typeof bone.uuid !== "string" ||
+        typeof bone.name !== "string" ||
+        !UUID.test(bone.uuid) || !BONE.test(bone.name) ||
+        (bone.parent_uuid !== null &&
+          (typeof bone.parent_uuid !== "string" ||
+           !UUID.test(bone.parent_uuid)))) {
       throw new Error("ATTACHABLE_MODEL_BONE_IDENTITY_INVALID");
     }
     if (byId.has(bone.uuid) || names.has(bone.name)) {
