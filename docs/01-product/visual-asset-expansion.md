@@ -91,6 +91,21 @@ The import-safe owner `mcp/lib/bedrock/attachableContextPreview.ts` is an **A2 s
 
 Official context: [Microsoft Using Attachables](https://learn.microsoft.com/en-us/minecraft/creator/documents/attachables?view=minecraft-bedrock-stable) (first-/third-person animation distinction, copy-bones limitations). Source evidence baseline: `mcp/server/tools/inspection/camera.ts`.
 
+## B1 — Custom Block Visual source planning and advisory QA
+
+The import-safe source owner is mcp/lib/bedrock/blockVisualPlanning.ts. It **consumes the existing F0** Bedrock format-compatibility assessment instead of duplicating minimum-version rules, and assesses exact caller-supplied custom-block geometry/material/culling/rotation declarations. It is NOT a native Blockbench tool, in-game visual preview, block Resource Pack compiler or automatic geometry optimizer.
+
+- Inputs require an exact project UUID, namespaced block ID, canonical authored geometry ID, declared block format_version/features, bounded Cube inventory (UUID, bone, finite bounds, Box UV mode, optional rotation/inflate/visibility/export), block material instances, optional culling-rule claims, optional n-way rotation state and placement intent.
+- B1 currently requires a real authored geometry.<name> inventory: Mojang built-in minecraft:geometry.full_block/cross use a separate geometry source model and are intentionally not misrepresented as authored Cubes.
+- Source summaries report an *axis-aligned local coordinate envelope only*. They cannot attest rendered/world bounds when bones are parented, animated, rotated, inflated or have transforms not present in the input. Those require the existing Blockbench native inspection owner.
+- Requested culling must name a rule with at least one declared bone/direction. Culling rule content is a caller assertion until the referenced Resource Pack file is read and verified. Custom culling_shape remains subject to F0 version and rule dependencies.
+- UV lock with unequal Box UV dimensions is marked for review because only square Box UV faces are supported. No silent UV remap and no claim that a warning determines actual per-face coverage.
+- Block material render methods are **not entity render profiles**. Non-opaque render methods trigger a render-distance review, not an automatic downgrade to opaque; unknown future methods require review.
+- The official 50-Cube block-model guideline is advisory, with extra warning for repeated placement, not an automatic simplifier or a verified performance score. Structural quality and intended details must remain intact.
+- Only source-declaration compatibility can be blocked here; every otherwise valid assessment remains SOURCE_REVIEW_REQUIRED_NATIVE_UNVERIFIED. Source fingerprint records deterministic declared input identity but does not attest a live Blockbench scene, UV pixels, camera capture or Minecraft runtime.
+
+Sources: [Minecraft block geometry](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_geometry?view=minecraft-bedrock-stable); [Block culling rules](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/definitions/blockculling?view=minecraft-bedrock-stable); [Custom block render distance](https://learn.microsoft.com/en-us/minecraft/creator/documents/customblockrenderdistance?view=minecraft-bedrock-stable); [Performance/resource usage](https://learn.microsoft.com/en-us/minecraft/creator/documents/practices/improvingperformanceandresourceusage?view=minecraft-bedrock-stable).
+
 ## Milestone acceptance contract
 
 | ID | Deliverable | Completion criteria before production claim |
