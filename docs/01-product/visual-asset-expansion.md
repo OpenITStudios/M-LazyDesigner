@@ -106,6 +106,18 @@ The import-safe source owner is mcp/lib/bedrock/blockVisualPlanning.ts. It **con
 
 Sources: [Minecraft block geometry](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/blockcomponents/minecraftblock_geometry?view=minecraft-bedrock-stable); [Block culling rules](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/blockreference/examples/definitions/blockculling?view=minecraft-bedrock-stable); [Custom block render distance](https://learn.microsoft.com/en-us/minecraft/creator/documents/customblockrenderdistance?view=minecraft-bedrock-stable); [Performance/resource usage](https://learn.microsoft.com/en-us/minecraft/creator/documents/practices/improvingperformanceandresourceusage?view=minecraft-bedrock-stable).
 
+## I1 — Item Icon & static Sprite source handoff
+
+The source-only I1 owner is `mcp/lib/texture/itemIconPlanning.ts`. It consumes caller-provided RGBA8 bitmap samples and **reuses the existing** `mcp/lib/texture/pixelCraft.ts` cluster diagnostics. Pixel Art Reference continues to own actual artistic judgement, grid construction, palette, approved Style Lock and source-image interpretation; Texturing owns actual bitmap/PNG, texture inventory, atomic writes and atlas changes.
+
+- Bind one exact namespaced Minecraft item ID, one `item_texture.json texture_data` key (namespaced or plain), and one canonical extensionless `textures/items/<name>` path. Reject traversals, aliasing, duplicate source inventory keys and creation collisions. There is **no** automatic pack mutation or inferred item registration.
+- The supplied image must be complete row-major 8-bit RGBA with **exactly** `width × height × 4` samples; each component is an integer 0–255. I1 does not pretend these pixels are verified PNG bytes or that the image came from a native Blockbench Texture.
+- I1 projects simple, objective pixel counts (visible/transparent/partial alpha, bounds, color count, hidden RGB) and reuses PixelCraft warnings for isolated pixels/color-cluster fragmentation. Warnings are **diagnostic**, not automatic source corrections, a quality score, native-size recognition, or approved pixel art.
+- Explicit alpha intent and new-atlas-key collisions are source blockers. Half-alpha fringes, palette complexity, border contact, non-square canvases and hidden RGB are warnings requiring actual visual context. Large icons whose exact craft scan exceeds the existing 16,384-pixel budget return the original `unavailable` evidence; no new scanning engine is created.
+- The candidate `minecraft:icon.textures.default` points to the supplied atlas key; actual item format_version compatibility, Resource Pack texture registry, file existence, PNG encoding and Minecraft runtime all remain **UNVERIFIED**. It neither writes item JSON nor becomes a UI/HUD authoring system.
+- Fingerprints distinguish bitmap byte changes, icon path/key and source/style claims; an internally consistent fingerprint alone does not attest visual appearance or an installed resource.
+- Sources: [Microsoft Minecraft icon component](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/itemreference/examples/itemcomponents/minecraft_icon?view=minecraft-bedrock-stable); [Microsoft Custom Items](https://learn.microsoft.com/en-us/minecraft/creator/documents/addcustomitems?view=minecraft-bedrock-stable); [Pixel Art QA](../02-reference/pixel-art/qa.md); [Pixel Craft source](../../mcp/lib/texture/pixelCraft.ts).
+
 ## Milestone acceptance contract
 
 | ID | Deliverable | Completion criteria before production claim |
