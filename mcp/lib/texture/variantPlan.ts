@@ -256,8 +256,9 @@ export function reconcileTextureVariantNativeContinuity(
 /**
  * A failed native variant edit is rollback-eligible ONLY before commit was
  * attempted, while its original Project/Undo/history/source/UV/candidate
- * ownership remains observable. Otherwise preserve state and request
- * inspection. This is a decision guard, not a second Undo executor.
+ * ownership remains observable, including the full original Texture
+ * inventory and at most the candidate. Otherwise preserve state for review.
+ * This is a decision guard, not a second Undo executor.
  */
 export type TextureVariantNativeRecoveryObservation = {
   commit_attempted: boolean;
@@ -266,7 +267,7 @@ export type TextureVariantNativeRecoveryObservation = {
   history_unchanged: boolean;
   source_unchanged: boolean;
   uv_unchanged: boolean;
-  created_identity_unambiguous: boolean;
+  texture_inventory_unchanged_except_candidate: boolean;
 };
 export function chooseTextureVariantNativeFailureRecovery(
   state: TextureVariantNativeRecoveryObservation
@@ -276,14 +277,51 @@ export function chooseTextureVariantNativeFailureRecovery(
       [
         state.commit_attempted, state.project_unchanged, state.undo_owned,
         state.history_unchanged, state.source_unchanged,
-        state.uv_unchanged, state.created_identity_unambiguous,
+        state.uv_unchanged, state.texture_inventory_unchanged_except_candidate,
       ].some(value => typeof value !== "boolean")) {
     throw new Error("TEXTURE_VARIANT_RECOVERY_OBSERVATION_INVALID");
   }
   return !state.commit_attempted &&
     state.project_unchanged && state.undo_owned &&
     state.history_unchanged && state.source_unchanged &&
-    state.uv_unchanged && state.created_identity_unambiguous
+    state.uv_unchanged && state.texture_inventory_unchanged_except_candidate
     ? "ROLLBACK_OWNED_PRECOMMIT"
     : "INSPECT_OUTCOME_UNKNOWN";
+}
+
+/**
+ * Ensure the native Texture collection contains exactly the original
+ * object references and at most this edit's one candidate, with unique UUIDs.
+ * Extra/unidentified objects cannot be safely removed during rollback.
+ * This is read-only source ownership evidence, not a new Texture registry.
+ */
+export function textureVariantNativeInventoryIntact<T extends {uuid: string}>(
+  before: readonly T[],
+  current: readonly T[],
+  candidate?: T
+): boolean {
+  if (!Array.isArray(before) || !Array.isArray(current)) return false;
+  const originals = new Set(before);
+  const seen = new Set(current);
+  if (originals.size !== before.length || seen.size !== current.length ||
+      (candidate !== undefined && originals.has(candidate))) return false;
+  const originalIds = new Set<string>();
+  for (const item of before) {
+    if (!item || typeof item.uuid !== "string" || !item.uuid ||
+        originalIds.has(item.uuid) || !seen.has(item)) return false;
+    originalIds.add(item.uuid);
+  }
+  const candidatePresent = candidate !== undefined && seen.has(candidate);
+  if (candidate !== undefined &&
+      (!candidate || typeof candidate.uuid !== "string" ||
+       !candidate.uuid || originalIds.has(candidate.uuid))) return false;
+  if (current.length !== before.length + (candidatePresent ? 1 : 0)) return false;
+  const currentIds = new Set<string>();
+  for (const item of current) {
+    if (!item || typeof item.uuid !== "string" || !item.uuid ||
+        currentIds.has(item.uuid) ||
+        (!originals.has(item) && item !== candidate)) return false;
+    currentIds.add(item.uuid);
+  }
+  return true;
 }

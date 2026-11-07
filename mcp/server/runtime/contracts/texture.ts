@@ -23,6 +23,7 @@ import {
   planTextureVariantFromBase,
   reconcileTextureVariantNativeContinuity,
   chooseTextureVariantNativeFailureRecovery,
+  textureVariantNativeInventoryIntact,
   type TextureVariantNativeTextureIdentity,
   type TextureVariantSource,
 } from "@/lib/texture/variantPlan";
@@ -179,8 +180,10 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
       sourceBitmap.height + ":" + createHash("sha256")
         .update(sourceBitmap.pixels).digest("hex"),
   };
-  if (!Texture.all.includes(source)) {
-    throw new Error("TEXTURE_VARIANT_NATIVE_SOURCE_NOT_REGISTERED");
+  const textureInventoryBefore = [...Texture.all];
+  if (!Texture.all.includes(source) ||
+      !textureVariantNativeInventoryIntact(textureInventoryBefore, Texture.all)) {
+    throw new Error("TEXTURE_VARIANT_NATIVE_BASE_INVENTORY_AMBIGUOUS");
   }
 
   // A history snapshot lets failure recovery reject asynchronous edits by a
@@ -256,6 +259,12 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
     const ownedGroup = TextureGroup.all.filter(
       group => group.uuid === targetGroup.uuid
     );
+    if (!Texture.all.includes(variant) ||
+        !textureVariantNativeInventoryIntact(
+          textureInventoryBefore, Texture.all, variant
+        )) {
+      throw new Error("TEXTURE_VARIANT_NATIVE_TEXTURE_INVENTORY_DRIFT");
+    }
     nativeContinuity = reconcileTextureVariantNativeContinuity(
       plan, precommit, {
         project_uuid: Project?.uuid ?? "",
@@ -295,6 +304,9 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
         Project?.uuid !== precommit.project_uuid ||
         Undo.current_save ||
         !Texture.all.includes(variant) ||
+        !textureVariantNativeInventoryIntact(
+          textureInventoryBefore, Texture.all, variant
+        ) ||
         Texture.all.filter(item => item.uuid === variant.uuid).length !== 1 ||
         !Texture.all.includes(source) ||
         Texture.all.filter(item => item.uuid === source.uuid).length !== 1 ||
@@ -339,17 +351,16 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
         uvUnchanged = false;
       }
     }
-    let createdIdentityUnambiguous = false;
+    let inventoryIntact = false;
     if (projectUnchanged) {
       try {
-        // An unregistered candidate needs no native removal. A registered
-        // candidate must uniquely identify the object created by this edit.
-        createdIdentityUnambiguous = !variant ||
-          (Texture.all.includes(variant)
-            ? Texture.all.filter(item => item.uuid === variant.uuid).length === 1
-            : Texture.all.every(item => item.uuid !== variant.uuid));
+        // A constructor/fromDataURL/add failure can register a partial
+        // object before variant is assigned. Unowned drift forbids rollback.
+        inventoryIntact = textureVariantNativeInventoryIntact(
+          textureInventoryBefore, Texture.all, variant
+        );
       } catch {
-        createdIdentityUnambiguous = false;
+        inventoryIntact = false;
       }
     }
     const decision = chooseTextureVariantNativeFailureRecovery({
@@ -359,7 +370,7 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
       history_unchanged: undoHistoryUnchanged(),
       source_unchanged: sourceUnchanged,
       uv_unchanged: uvUnchanged,
-      created_identity_unambiguous: createdIdentityUnambiguous,
+      texture_inventory_unchanged_except_candidate: inventoryIntact,
     });
     if (decision !== "ROLLBACK_OWNED_PRECOMMIT") {
       throw new Error(
@@ -386,6 +397,9 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
           Project !== projectOwner ||
           Project?.uuid !== precommit.project_uuid ||
           (variant && Texture.all.includes(variant)) ||
+          !textureVariantNativeInventoryIntact(
+            textureInventoryBefore, Texture.all
+          ) ||
           !Texture.all.includes(source) ||
           Texture.all.filter(item => item.uuid === source.uuid).length !== 1 ||
           JSON.stringify(nativeVariantTextureIdentity(source)) !==

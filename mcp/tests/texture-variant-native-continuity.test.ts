@@ -10,6 +10,7 @@ import {
   planTextureVariantFromBase,
   reconcileTextureVariantNativeContinuity,
   chooseTextureVariantNativeFailureRecovery,
+  textureVariantNativeInventoryIntact,
   type TextureVariantNativeBefore,
   type TextureVariantNativeAfter,
 } from "@/lib/texture/variantPlan";
@@ -212,7 +213,7 @@ describe("V1 variant pre-Undo native source continuity", () => {
       commit_attempted: false,
       project_unchanged: true, undo_owned: true,
       history_unchanged: true, source_unchanged: true,
-      uv_unchanged: true, created_identity_unambiguous: true,
+      uv_unchanged: true, texture_inventory_unchanged_except_candidate: true,
     };
     expect(chooseTextureVariantNativeFailureRecovery(safe))
       .toBe("ROLLBACK_OWNED_PRECOMMIT");
@@ -223,7 +224,7 @@ describe("V1 variant pre-Undo native source continuity", () => {
       { history_unchanged: false },
       { source_unchanged: false },
       { uv_unchanged: false },
-      { created_identity_unambiguous: false },
+      { texture_inventory_unchanged_except_candidate: false },
     ]) {
       expect(chooseTextureVariantNativeFailureRecovery({
         ...safe, ...fault,
@@ -252,6 +253,37 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(body).toContain("Undo.cancelEdit()");
     expect(body).toContain("TEXTURE_VARIANT_ROLLBACK_POSTCONDITION_FAILED");
     expect(body).toContain("undoHistoryUnchanged()");
+  });
+
+
+  test("native Texture inventory requires original object identities plus at most one owned candidate",()=>{
+    const base={uuid:"base"},other={uuid:"other"},candidate={uuid:"candidate"};
+    const original=[base,other];
+    expect(textureVariantNativeInventoryIntact(original,[other,base])).toBe(true);
+    expect(textureVariantNativeInventoryIntact(original,[base,other,candidate],candidate)).toBe(true);
+    expect(textureVariantNativeInventoryIntact(original,[base,other],candidate)).toBe(true);
+    expect(textureVariantNativeInventoryIntact(original,[base],candidate)).toBe(false);
+    expect(textureVariantNativeInventoryIntact(original,[base,other,{uuid:"foreign"}],candidate)).toBe(false);
+    expect(textureVariantNativeInventoryIntact(original,[base,{uuid:"other"}],candidate)).toBe(false);
+    expect(textureVariantNativeInventoryIntact(original,[base,other,candidate,{uuid:"candidate"}],candidate)).toBe(false);
+    expect(textureVariantNativeInventoryIntact(original,[base,other,candidate,candidate],candidate)).toBe(false);
+    expect(textureVariantNativeInventoryIntact([base,base],[base],candidate)).toBe(false);
+    expect(textureVariantNativeInventoryIntact(original,[base,other],{uuid:"base"})).toBe(false);
+    expect(textureVariantNativeInventoryIntact(original,[base,other,{uuid:"partial"}])).toBe(false);
+  });
+
+  test("runtime checks complete Texture inventory around decode and after cleanup",async()=>{
+    const source=await Bun.file("server/runtime/contracts/texture.ts").text();
+    const start=source.indexOf("async function createTextureVariant");
+    const end=source.indexOf("function textureEvidenceSourceIdentity",start);
+    const body=source.slice(start,end);
+    expect(body).toContain("const textureInventoryBefore = [...Texture.all]");
+    expect(body).toContain("TEXTURE_VARIANT_NATIVE_BASE_INVENTORY_AMBIGUOUS");
+    expect(body).toContain("TEXTURE_VARIANT_NATIVE_TEXTURE_INVENTORY_DRIFT");
+    expect(body.indexOf("TEXTURE_VARIANT_NATIVE_TEXTURE_INVENTORY_DRIFT"))
+      .toBeLessThan(body.indexOf('Undo.finishEdit("Agent created texture variant"'));
+    expect(body).toContain("texture_inventory_unchanged_except_candidate: inventoryIntact");
+    expect(body).toContain("textureVariantNativeInventoryIntact(");
   });
 
   test("existing variant executor performs exact precommit source/UV checks before finishEdit",async()=>{
