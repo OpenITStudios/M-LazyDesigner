@@ -221,6 +221,9 @@ describe("B1 custom-block visual planner consumes F0 source constraints", () => 
     expect(() => planBedrockBlockVisual(sample({
       geometry_identifier: "minecraft:geometry.full_block",
     }))).toThrow("BLOCK_VISUAL_GEOMETRY_IDENTIFIER_NOT_AUTHORED");
+    expect(() => planBedrockBlockVisual(sample({
+      geometry_identifier: "geometry.bad name",
+    }))).toThrow("BLOCK_VISUAL_GEOMETRY_IDENTIFIER_NOT_AUTHORED");
     for (const change of [
       { cubes: [sample().cubes[0]!, sample().cubes[0]!] },
       { cubes: [{ ...sample().cubes[0]!, to: [Infinity, 16, 16] }] },

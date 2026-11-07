@@ -153,7 +153,14 @@ export function planBedrockBlockVisual(
   const project = exact(input.expected_project_uuid, "expected_project_uuid", 128);
   const block = requireBlockId(input.block_identifier, "block_identifier");
   const geometry = exact(input.geometry_identifier, "geometry_identifier", 192);
-  if (normalizeBedrockGeometryIdentifier(geometry) !== geometry) {
+  // The shared Bedrock identifier owner can itself throw for malformed
+  // names. Normalize every unsupported authored-Geometry target to the
+  // same B1 refusal; never reinterpret Vanilla geometry as model Cubes.
+  try {
+    if (normalizeBedrockGeometryIdentifier(geometry) !== geometry) {
+      throw new Error("BLOCK_VISUAL_GEOMETRY_IDENTIFIER_NOT_AUTHORED");
+    }
+  } catch {
     throw new Error("BLOCK_VISUAL_GEOMETRY_IDENTIFIER_NOT_AUTHORED");
   }
   if (!["UNIQUE", "SPARSE", "REPEATED"].includes(input.placement_intent)) {
