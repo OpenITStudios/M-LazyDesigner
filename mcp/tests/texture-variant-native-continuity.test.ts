@@ -167,6 +167,8 @@ describe("V1 variant pre-Undo native source continuity", () => {
       .toBeLessThan(block.indexOf('Undo.finishEdit("Agent created texture variant"'));
     expect(block).toContain("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
     expect(block).toContain("variant_native_continuity: nativeContinuity");
+    expect(block).toContain("targetGroup.name === plan.target_group_name");
+    expect(block).toContain("Texture.all.filter(item => item.uuid === variant.uuid).length === 1");
     expect(native).toContain('createDefinition.parameterSchema = wiredCreateTextureParameters');
   });
 });

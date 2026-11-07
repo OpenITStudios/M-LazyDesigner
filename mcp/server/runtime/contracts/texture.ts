@@ -234,7 +234,9 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
         mapping: currentVariantMappedUvIdentity(),
         target_group_uuid: targetGroup.uuid,
         target_group_is_valid: ownedGroup.length === 1 &&
-          ownedGroup[0] === targetGroup && targetGroup.is_material === false,
+          ownedGroup[0] === targetGroup &&
+          targetGroup.name === plan.target_group_name &&
+          targetGroup.is_material === false,
         source_remains_base_color:
           textureProductionRoleForVariant(source) === "base_color_candidate",
         source_registered_once: Texture.all.includes(source) &&

@@ -71,6 +71,9 @@ describe("create_texture native identity receipt", () => {
     expect(isTextureCreationReceipt({
       ...observed, variant_creation: {invalid: true},
     }, "blank")).toBe(false);
+    expect(isTextureCreationReceipt({
+      ...observed, variant_native_continuity: {state: "forged"},
+    }, "blank")).toBe(false);
   });
 
   test("rejects a success label, absent native identity or unreadable bitmap", () => {

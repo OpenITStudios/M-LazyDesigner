@@ -20,8 +20,10 @@ export const textureInventoryCreationReceiptSchema = z.object({
       height: bitmapDimension,
     }),
   }),
-}).passthrough().refine((receipt) => !Object.hasOwn(receipt, "variant_creation"), {
-  message: "A texture variant must be validated against its source-owned plan.",
+}).passthrough().refine((receipt) =>
+  !Object.hasOwn(receipt, "variant_creation") &&
+  !Object.hasOwn(receipt, "variant_native_continuity"), {
+  message: "A texture variant and its native continuity must be validated against the source-owned plan.",
 });
 
 
