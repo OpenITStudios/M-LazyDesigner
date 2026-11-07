@@ -29,6 +29,22 @@ runtime -X-> execution
 
 Do not move transport/reconnect state, authored state, or capability metadata ownership into this folder.
 
+## Native output receipt decision
+
+For successful bound Runtime invocations, the executor passes the **Backend
+preflight-verified project UUID**, exact invocation arguments and existing
+native `structuredContent` into `buildControlDelta`. Only `export_model`
+and `manage_particle` consult the current canonical Output Receipt contract
+through the Control-owned `delta/outputReceipt.ts` consumer.
+
+This changes only the existing `verification_class` and `next_intent`
+decision: file readback reported at invocation is sufficient for receipt-only
+continuation, while compile-only, size-only or rejected receipts retain
+verification debt. It never authenticates an arbitrary client payload,
+verifies a future editor revision, writes another file, or grants visual
+approval/Finalization PASS. Local providers and cached session affinity do
+not satisfy the native-origin gate.
+
 
 `gatewayErrors.ts` owns AI-facing error/result adaptation and trace metadata extraction for Gateway tool execution. Runtime owns backend error contracts and recovery policy inputs, not MCP result shaping.
 

@@ -370,6 +370,22 @@ manage_animation_controller
 
 ## Visual Asset Expansion — Source to Runtime Closure
 
+**Invocation-scoped output receipt classification (source-wired):**
+`mcp/gateway/execution/capabilityExecutor.ts` now supplies the
+Backend-verified native project UUID and invocation arguments to the
+existing `buildControlDelta`. The focused Control consumer
+`mcp/gateway/control/delta/outputReceipt.ts` reuses canonical
+`planAssetOutputRequirements` and `reviewAssetOutputReceipts`
+for only `export_model` (project / geometry / animation) and
+`manage_particle`. It classifies reported readback as `receipt_only`
+for that invocation, and compile-only / size-only / rejected evidence as
+`focused_read` with a concrete next intent. This changes the **existing**
+Control Delta verification/continuation decision, not public fields,
+persistent receipt storage, native writers, or Finalization acceptance.
+Local provider results and cached/session UUIDs cannot obtain this
+native receipt classification. Focused regressions:
+`mcp/tests/export-lifecycle-control-delta.test.ts` (NOT_EXECUTED).
+
 **Control output-context continuity (source-only):**
 `mcp/gateway/control/outputEvidence.ts` compares a bounded captured
 Control project binding, Runtime generation, Reference/Workspace fingerprints

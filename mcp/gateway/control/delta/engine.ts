@@ -16,6 +16,7 @@ import {
   verificationScopeForResult,
 } from "./verification";
 import { authoritativeReceipt } from "./receipts";
+import { assessNativeOutputInvocation } from "./outputReceipt";
 import { downstreamRechecksForFreshness } from "./recheck";
 
 export function buildControlDelta(input: {
@@ -28,6 +29,9 @@ export function buildControlDelta(input: {
   result?: unknown;
   /** Actual MCP content items for transport-bound visual claims. */
   content?: unknown;
+  /** Invocation args and Backend-verified origin; never inferred from receipt JSON. */
+  capabilityArguments?: Readonly<Record<string, unknown>>;
+  nativeInvocationVerified?: boolean;
 }): ControlDelta {
   const changed: string[] = [];
   if (input.succeeded && input.phaseBefore !== input.phaseAfter) changed.push("authoring_phase");
@@ -74,7 +78,18 @@ export function buildControlDelta(input: {
   const revisionEvidence = input.succeeded
     ? authoritativeRevisionEvidence(input.capability, input.result)
     : {};
-  const verificationClass = verificationClassForResult(
+  // Interpret the real native result once, before Control classification.
+  // This is evidence about this output invocation, not asset Finalization.
+  const outputReceipt = assessNativeOutputInvocation({
+    capability: input.capability,
+    arguments: input.capabilityArguments,
+    succeeded: input.succeeded,
+    native_invocation_verified: input.nativeInvocationVerified === true,
+    verified_project_uuid: input.projectUuid,
+    structured_content: input.result,
+  });
+  const verificationClass = outputReceipt?.verification_class ??
+    verificationClassForResult(
     input.capability,
     input.branch,
     input.succeeded,
@@ -102,7 +117,9 @@ export function buildControlDelta(input: {
     ? "RECOVER_CURRENT_OPERATION"
     : particleTextureHandoff
       ? "AUTHOR_PARTICLE_TEXTURE_THEN_RESUME"
-      : input.capability === "switch_authoring_phase"
+      : outputReceipt
+        ? outputReceipt.next_intent
+        : input.capability === "switch_authoring_phase"
         ? "CONTINUE_NEW_AUTHORING_PHASE"
         : authoringDomain === "GEOMETRY"
           ? "VERIFY_OR_CONTINUE_GEOMETRY"

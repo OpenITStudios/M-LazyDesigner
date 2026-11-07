@@ -283,6 +283,12 @@ export class GatewayCapabilityExecutor {
         succeeded,
         result: result.structuredContent,
         content: deliveredContent,
+        capabilityArguments: args,
+        // Only the serialized native Backend preflight confirms affinity.
+        // A local capability or cached session UUID is not native proof.
+        nativeInvocationVerified: runtimeInvocation !== null &&
+          verifiedProjectUuid !== null &&
+          runtimeInvocation.verifiedProjectUuid === verifiedProjectUuid,
       });
 
       const attachControlDelta = shouldAttachGatewayControlDelta(
