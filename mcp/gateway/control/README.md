@@ -122,9 +122,16 @@ focused resource/conditional-texture review even if the write's
 `verification_class` is `receipt_only`. The existing cohort's
 `pending_verification` retains this focused debt through `CONTINUE` and
 `COMPLETE` instead of treating the later receipt as an all-clear.
-An uncertain native outcome still takes precedence and never permits an
-automatic retry, while incomplete exported bytes remain `focused_read`.
-No new public action type, output field, cache or native tool is introduced.
+The existing ephemeral `pending_verification.output_reviews` keeps only
+two bounded review intents (Particle resources and requested output
+set/approvals); `COMPLETE` explains both when they arose from different
+invocations, instead of replacing an earlier Particle review with a generic
+focused-read message. A stronger visual review stays primary with the
+Particle follow-up noted. Cohort changes/project changes do not inherit
+these obligations. An uncertain native outcome still takes precedence and
+never permits an automatic retry, while incomplete exported bytes remain
+`focused_read`. No new public action type, output field, cache or native
+tool is introduced.
 
 Control consumes canonical capability metadata from `mcp/lib/capabilities/manifest.ts` through `capabilityProjection.ts`. Branch-level AI routing metadata remains owned by `gateway/capabilities/`; Control adds context/freshness/orchestration semantics without rebuilding those tables.
 

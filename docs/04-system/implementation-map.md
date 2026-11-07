@@ -385,10 +385,13 @@ persistent receipt storage, native writers, or Finalization acceptance.
 The existing `gateway/control/orchestration.ts` now interprets output
 `next_intent` at the continuation boundary: verified write readback can
 continue with explicit requested-output/approval debt; Particle JSON write
-still requires a focused resource/texture review. An open cohort retains
-that Particle review in existing `pending_verification` even when another
-receipt follows, without converting write-level `receipt_only` to overall
-asset acceptance. Size-only and compile-only outcomes describe their exact
+still requires a focused resource/texture review. An open cohort now retains the **specific kind** of outstanding Particle
+resource/texture review and requested export-output/approval review in its
+existing bounded `pending_verification.output_reviews`, even when another
+receipt follows. Cohort completion surfaces the owed review rather than a
+generic focused read, while preserving a higher-priority visual, recovery,
+status or handoff decision. These internal facts are not a new registry,
+Gateway output field, evidence store or proof of overall asset acceptance. Size-only and compile-only outcomes describe their exact
 remaining work; unknown write outcome retains no-auto-retry safety.
 Local provider results and cached/session UUIDs cannot obtain this
 native receipt classification. Focused regressions:

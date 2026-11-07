@@ -27,12 +27,19 @@ export type ControlNextAction = {
 
 export type ControlCohortBoundary = "CONTINUE" | "COMPLETE";
 
+/** Bounded output debts of the existing in-memory execution cohort. */
+type CohortOutputReview =
+  | "PARTICLE_RESOURCE_DEPENDENCIES"
+  | "OUTPUT_SET_AND_APPROVALS";
+
 export type ControlPendingVerification = {
   verification_class: ControlDelta["verification_class"];
   verification_scope: ControlVerificationScope | null;
   freshness_basis: ControlDelta["freshness"]["basis"];
   stale: ControlFreshnessScope[];
   unknown: ControlFreshnessScope[];
+  /** Internal cohort-only follow-ups; never a verified native artifact or approval. */
+  output_reviews?: CohortOutputReview[];
 };
 
 export type ControlContinuation = {
@@ -323,21 +330,34 @@ function strongerFreshnessBasis(
   return FRESHNESS_RANK[right] > FRESHNESS_RANK[left] ? right : left;
 }
 
+function outputReviewFromDelta(delta: ControlDelta): CohortOutputReview | null {
+  // A native receipt can close a single write, not its resource dependencies
+  // or the requested output set. Capture only these two known review intents.
+  if (delta.capability === "manage_particle" &&
+      delta.next_intent === "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES" &&
+      delta.verification_class === "receipt_only") {
+    return "PARTICLE_RESOURCE_DEPENDENCIES";
+  }
+  if (delta.capability === "export_model" &&
+      delta.next_intent === "VERIFY_REQUESTED_OUTPUT_SET_AND_APPROVALS" &&
+      delta.verification_class === "receipt_only") {
+    return "OUTPUT_SET_AND_APPROVALS";
+  }
+  return null;
+}
+
 function pendingVerificationFromDelta(delta: ControlDelta): ControlPendingVerification {
-  // Do not erase an unreviewed Particle dependency during a multi-invocation
-  // cohort. This is still receipt_only for the JSON write in control_delta;
-  // only the cohort's outstanding asset-resource review is focused_read.
-  const particleResourceReviewOwed =
-    delta.capability === "manage_particle" &&
-    delta.verification_class === "receipt_only" &&
-    delta.next_intent === "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES";
+  const outputReview = outputReviewFromDelta(delta);
+  // Preserve focused debt for a Particle resource handoff even when the JSON
+  // write itself is receipt_only. No public Control Delta class changes.
   return {
-    verification_class: particleResourceReviewOwed
+    verification_class: outputReview === "PARTICLE_RESOURCE_DEPENDENCIES"
       ? "focused_read" : delta.verification_class,
     verification_scope: delta.verification_scope,
     freshness_basis: delta.freshness.basis,
     stale: [...delta.freshness.stale],
     unknown: [...delta.freshness.unknown],
+    ...(outputReview ? { output_reviews: [outputReview] } : {}),
   };
 }
 
@@ -352,6 +372,10 @@ function mergePendingVerification(
   const unboundedVisual =
     (left.verification_class === "visual" && left.verification_scope === null) ||
     (right.verification_class === "visual" && right.verification_scope === null);
+  const outputReviews = [...new Set<CohortOutputReview>([
+    ...(left.output_reviews ?? []),
+    ...(right.output_reviews ?? []),
+  ])];
   return {
     verification_class: strongerVerificationClass(
       left.verification_class,
@@ -367,6 +391,7 @@ function mergePendingVerification(
     ),
     stale: [...new Set([...left.stale, ...right.stale])],
     unknown: [...new Set([...left.unknown, ...right.unknown])],
+    ...(outputReviews.length > 0 ? { output_reviews: outputReviews } : {}),
   };
 }
 
@@ -374,7 +399,7 @@ function cohortCompletionAction(
   delta: ControlDelta,
   pending: ControlPendingVerification
 ): ControlNextAction {
-  return nextActionForControlDelta({
+  const action = nextActionForControlDelta({
     ...delta,
     verification_class: pending.verification_class,
     verification_scope: pending.verification_scope,
@@ -384,6 +409,52 @@ function cohortCompletionAction(
       unknown: pending.unknown,
     },
   });
+  // Do not obscure RECOVER/STATUS/HANDOFF with lower-priority output review.
+  if (action.kind === "RECOVER" || action.kind === "STATUS" ||
+      action.kind === "HANDOFF") return action;
+
+  const reviews = pending.output_reviews ?? [];
+  const particleAlreadyExplained =
+    action.kind === "VERIFY_FOCUSED" &&
+    delta.capability === "manage_particle" &&
+    delta.next_intent === "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES";
+  const exportAlreadyExplained =
+    action.kind === "CONTINUE" &&
+    delta.capability === "export_model" &&
+    delta.next_intent === "VERIFY_REQUESTED_OUTPUT_SET_AND_APPROVALS";
+  const reminders: string[] = [];
+  if (reviews.includes("PARTICLE_RESOURCE_DEPENDENCIES") &&
+      !particleAlreadyExplained) {
+    reminders.push(
+      "A prior Particle JSON write in this cohort still requires resource-reference and conditional-texture review before asset acceptance; no native file-byte or visual PASS is implied."
+    );
+  }
+  if (reviews.includes("OUTPUT_SET_AND_APPROVALS") &&
+      !exportAlreadyExplained) {
+    reminders.push(
+      "An export in this cohort still requires review of requested deliverables, current native revision and approvals before asset acceptance."
+    );
+  }
+  if (reminders.length === 0) return action;
+
+  // When the latest receipt needs no separate verification, but a prior
+  // Particle write did, orient the focused follow-up back to Animation.
+  // A currently focused file-readback or stronger visual review keeps its
+  // own domain and scope instead of being silently overwritten.
+  const focusPriorParticle =
+    action.kind === "VERIFY_FOCUSED" &&
+    delta.verification_class === "receipt_only" &&
+    pending.verification_scope === null &&
+    reviews.includes("PARTICLE_RESOURCE_DEPENDENCIES");
+  const reason = action.reason ===
+      "mutation receipt is insufficient for the affected state"
+    ? "A prior cohort verification remains outstanding."
+    : action.reason;
+  return {
+    ...action,
+    reason: [reason, ...reminders].join(" "),
+    ...(focusPriorParticle ? { target_domain: "ANIMATION" as const } : {}),
+  };
 }
 
 /**

@@ -295,6 +295,109 @@ describe("Control orchestration reducer", () => {
       .toBe("visual");
   });
 
+  test("cohort completion retains named Particle and export acceptance reviews", () => {
+    const noChange = {
+      basis: "NO_CHANGE" as const, stale: [], fresh: [], unknown: [],
+    };
+    const particle = delta({
+      capability: "manage_particle",
+      authoring_domain: "ANIMATION",
+      phase_before: "animation", phase_after: "animation",
+      next_intent: "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES",
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: noChange,
+    });
+    const exported = delta({
+      capability: "export_model", authoring_domain: "CORE",
+      next_intent: "VERIFY_REQUESTED_OUTPUT_SET_AND_APPROVALS",
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: noChange,
+    });
+    const first = reduceControlExecutionState(null, particle, {
+      taskContextId: "output-reviews", cohortBoundary: "CONTINUE",
+    });
+    expect(first.state.pending_verification?.output_reviews).toEqual([
+      "PARTICLE_RESOURCE_DEPENDENCIES",
+    ]);
+    const completed = reduceControlExecutionState(first.state, exported, {
+      taskContextId: "output-reviews", cohortBoundary: "COMPLETE",
+    });
+    expect(completed.continuation.next_action).toMatchObject({
+      kind: "VERIFY_FOCUSED", target_domain: "ANIMATION",
+      recommended_capability: null,
+    });
+    expect(completed.continuation.next_action.reason)
+      .toContain("prior Particle JSON write");
+    expect(completed.continuation.next_action.reason)
+      .toContain("requested deliverables");
+    expect(completed.continuation.cohort?.pending_verification_class)
+      .toBe("focused_read");
+    expect(completed.state.pending_verification).toBeNull();
+
+    const reverse = reduceControlExecutionState(null, exported, {
+      taskContextId: "output-reviews-reversed", cohortBoundary: "CONTINUE",
+    });
+    expect(reverse.state.pending_verification?.output_reviews).toEqual([
+      "OUTPUT_SET_AND_APPROVALS",
+    ]);
+    const alsoParticle = reduceControlExecutionState(reverse.state, particle, {
+      taskContextId: "output-reviews-reversed", cohortBoundary: "COMPLETE",
+    });
+    expect(alsoParticle.continuation.next_action.kind).toBe("VERIFY_FOCUSED");
+    expect(alsoParticle.continuation.next_action.reason)
+      .toContain("Particle JSON write is reported");
+    expect(alsoParticle.continuation.next_action.reason)
+      .toContain("requested deliverables");
+    expect(alsoParticle.state.pending_verification).toBeNull();
+  });
+
+  test("a prior Particle review does not leak into another task or project", () => {
+    const particle = delta({
+      capability: "manage_particle", authoring_domain: "ANIMATION",
+      next_intent: "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES",
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
+    });
+    const first = reduceControlExecutionState(null, particle, {
+      taskContextId: "prior", cohortBoundary: "CONTINUE",
+    });
+    for (const options of [
+      { taskContextId: "different", cohortBoundary: "COMPLETE" as const },
+    ]) {
+      const final = reduceControlExecutionState(first.state, delta({
+        verification_class: "receipt_only", verification_scope: null,
+        freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
+      }), options);
+      expect(final.continuation.next_action.reason)
+        .not.toContain("Particle JSON");
+    }
+    const differentProject = reduceControlExecutionState(first.state, delta({
+      project_uuid: "project-other", capability: "export_model",
+      next_intent: "VERIFY_REQUESTED_OUTPUT_SET_AND_APPROVALS",
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
+    }), { taskContextId: "prior", cohortBoundary: "COMPLETE" });
+    expect(differentProject.continuation.next_action.kind).toBe("CONTINUE");
+    expect(differentProject.continuation.next_action.reason)
+      .not.toContain("prior Particle JSON");
+  });
+
+  test("visual debt stays primary while a later Particle receipt remains named", () => {
+    const first = reduceControlExecutionState(null, delta(), {
+      taskContextId: "visual-and-particle", cohortBoundary: "CONTINUE",
+    });
+    const last = reduceControlExecutionState(first.state, delta({
+      capability: "manage_particle", authoring_domain: "ANIMATION",
+      next_intent: "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES",
+      verification_class: "receipt_only", verification_scope: null,
+      freshness: { basis: "NO_CHANGE", stale: [], fresh: [], unknown: [] },
+    }), { taskContextId: "visual-and-particle", cohortBoundary: "COMPLETE" });
+    expect(last.continuation.next_action.kind).toBe("VERIFY_VISUAL");
+    expect(last.continuation.next_action.reason)
+      .toContain("conditional-texture");
+    expect(last.continuation.cohort?.pending_verification_class).toBe("visual");
+  });
+
   test("never converts unknown mutation outcome into an automatic retry", () => {
     const action = nextActionForControlDelta(
       delta({

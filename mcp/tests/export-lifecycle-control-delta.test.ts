@@ -233,5 +233,12 @@ describe("invocation-bound Asset Output receipt verification", () => {
     expect(completed.continuation.cohort?.pending_verification_class)
       .toBe("focused_read");
     expect(completed.continuation.next_action.recommended_capability).toBeNull();
+    expect(completed.continuation.next_action.target_domain).toBe("ANIMATION");
+    expect(completed.continuation.next_action.reason)
+      .toContain("prior Particle JSON write");
+    expect(completed.continuation.next_action.reason)
+      .toContain("requested deliverables");
+    expect(completed.continuation.next_action.reason)
+      .toContain("conditional-texture");
   });
 });
