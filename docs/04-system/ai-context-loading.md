@@ -91,6 +91,8 @@ Task
 
 **Conditional system-development view:** [Repository Knowledge Architecture](knowledge-architecture.md) explains authored documentation links and bounded provenance. Use it only for unresolved document relationships; exact source owners, the current developer context planner and the normal authoring hot path remain unchanged. A document route is not a module dependency or Runtime proof. When source/knowledge provenance materially changes a development decision, the existing `audit:reachability` opt-in source AST modes preserve exact import sites and distinguish literal knowledge references from generic selection candidates. Neither is loaded on the normal asset-authoring hot path.
 
+**Optional development evidence chain:** the existing `plan-development-context.ts --evidence-chain` composes *declared* capability/source/test owners and the existing affected check planner alongside an authored documentation route. It is explicitly `PLANNED_NOT_EXECUTED`, does not infer a direct documentation→source link, and does not perform AST import scanning. Keep it outside the standard authoring hot path; consult [Repository Knowledge Architecture](knowledge-architecture.md) for source and proof boundaries.
+
 ## Authority Roles
 
 ```text

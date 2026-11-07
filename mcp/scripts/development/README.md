@@ -15,6 +15,16 @@ plan-semantic-invalidation.ts    semantic diff → invalidation/check plan
 snapshot-semantic-registry.ts    canonical semantic registry snapshot
 ```
 
+## Optional source-to-test evidence chain
+
+`plan:development-context` can include `--evidence-chain` to project the existing two-hop authored document router (with SHA-256), exact Capability source/test declarations, Semantic Impact, and canonical `plan:affected` checks into one bounded report. It **does not execute** tests, read a Git HEAD identity, invent document→source links or scan imports. Source import routes remain an explicit `audit:reachability` selection.
+
+```bash
+bun run plan:development-context -- "repair manage_cubes" --changed mcp/server/tools/geometry/cubes.ts --evidence-chain
+```
+
+Opt-in path inputs are validated and capped at 64 safe repository paths before any affected command text is planned. An accepted path is not proof it exists or belongs to the latest Git diff. Absent the flag, the existing development-context response and authoring behavior stay lean.
+
 ## Read-only documentation architecture navigation
 
 `analyze:documentation-graph` uses the existing authored Markdown link parser and emits bounded paths with original `file:line` witnesses. It is a derived documentation navigation view, not a Runtime Graph, source import graph or second owner. Missing links and unreachable notes are reported for review, never auto-deleted.

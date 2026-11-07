@@ -72,6 +72,8 @@ If the exact owner exists, do not traverse document navigation again.
 
 For a missing documentation relationship, use [Repository Knowledge Architecture](knowledge-architecture.md). It projects exact authored links with witnesses to Markdown/Mermaid; existing Source Owners, Semantic Impact, TypeScript reachability, Control and Runtime Capability Graph remain separate canonical owners.
 
+**Cross-owner proof planning:** the opt-in `mcp/scripts/development/plan-development-context.ts --evidence-chain` produces a read-only composition of the existing routing owner, explicit capability source/test declarations and affected check plan. It must not imply that authored document links prove source dependencies or that planned regressions were run. See [Repository Knowledge Architecture](knowledge-architecture.md).
+
 ## Canonical Skills
 
 ### Reference Preparation

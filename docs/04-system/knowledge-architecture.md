@@ -67,6 +67,19 @@ The source-level corrections narrow previous optimistic conclusions: no verified
 The source-only knowledge-candidate scanner now observes existing **Recipe** calls (`suggestRecipeKnowledge`, `resolveRecipeKnowledgeLinks`, `reviewRecipeKnowledge`, `prepareKnowledgeAwareRecipe`, `collectRecipeKnowledge`, `indexRecipeKnowledge`) only when value-imported from their canonical modules. These are still generic candidates and cannot prove that a specific Knowledge record was applied. Type-only imports do not become runtime knowledge candidates.
 
 Documentation graph witnesses include a SHA-256 of the authored source bytes alongside `file:line`. This binds a link to document content, not to a Git commit, approved revision or tested execution. Fence markers hidden in HTML comments or multiline inline code cannot suppress real links or become synthetic sections. Cross-product graph coverage, exact-HEAD executable tests, Pele/Obsidian rendering, real-world knowledge consumption and native Blockbench acceptance remain unverified.
+## Development evidence chain (opt-in)
+
+`plan:development-context` can now append one **derived evidence chain** only when explicitly requested. Changed paths are caller-supplied and neither Git-diff membership nor newly added-file identity is verified by this projection; the opt-in mode rejects unsafe/traversing/shell-like paths and bounds the selection to 64 repository paths; use the existing Git-aware `plan:affected` route for that separate proof. This composes its existing authored router route, exact capability source/test owners, the existing Semantic Impact and `plan:affected` verification plan. It neither creates a new graph manager, test registry, file-state store nor calls the AST import inspector automatically.
+
+From `mcp/`, when an executable environment is authorized:
+
+```bash
+bun run plan:development-context -- "repair manage_cubes" --changed mcp/server/tools/geometry/cubes.ts --evidence-chain
+```
+
+The `evidence_chain` output identifies document-router `file:line` witnesses plus the SHA-256 of those router bytes, direct owner declarations (source/anchor-test/specialist), downstream semantic candidates, proposed tests/commands, paths outside explicit **capability** ownership, and open proof obligations. A non-capability shared module is **not automatically unowned** merely because it is absent from the capability map. The evidence chain always labels its checks `CHECKS_PLANNED_NOT_EXECUTED`; it does not read Git HEAD, run Bun, invoke Codex, load Blockbench, approve assets or attest actual behavior.
+
+**Crucial boundary:** a documentation route proves that the router linked to a document, not that the document directly claims a particular source module. The output explicitly leaves `document_to_code_relation=NOT_ESTABLISHED_FROM_DOCUMENT_NAVIGATION` until separately authored source evidence is inspected. Similarly, `source_dependency=AST_IMPORT_GRAPH_NOT_SCANNED_BY_CONTEXT_PLANNER`: the existing `audit:reachability` commands are suggestions for future source-only evidence, not scans executed by context planning. Missing exact capability owners, incomplete AST inspection, missing generated artifacts and unexecuted regression acceptance must not be silently treated as PASS.
 ## Adoption and lifecycle
 
 Add new canonical documentation under its present 01–05 domain, create one explicit Markdown router link, inspect the audited link witness and affected producer/consumer, and preserve Git history through moves. If a link is missing, repair the owning router rather than making a synthetic inferred edge. No external tool install, new Agent Skill, Control stage, Gateway tool, external graph service, persistent graph store, auto-merge or release.

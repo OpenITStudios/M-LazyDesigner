@@ -3,6 +3,7 @@ import { analyzeSemanticImpact } from "../../gateway/development/impact";
 import {
   indexMarkdownKnowledge,
   indexExplicitDocumentationEdges,
+  describeKnowledgeSource,
   selectKnowledgeSections,
   type ExplicitDocumentationEdge,
   type KnowledgeSelection,
@@ -15,6 +16,7 @@ import {
   listExplicitSourceOwners,
 } from "../../gateway/development/sourceOwners";
 import { resolveDevelopmentIntent } from "../../gateway/development/intent";
+import { buildAffectedExecutionPlan } from "./plan-affected-execution";
 import {
   buildDevelopmentSymbolMap,
   DEVELOPMENT_SYMBOL_MAP_PROXY_BYTES,
@@ -40,7 +42,10 @@ export type DevelopmentContextPlan = {
     nodes: string[];
     edges: ExplicitDocumentationEdge[];
     canonical_owner: string;
+    /** Snapshot identity of the two authored routers, not Git HEAD proof. */
+    source_hashes: Array<{ path: string; content_sha256: string }>;
   } | null;
+  evidence_chain?: DevelopmentEvidenceChain;
   read_targets: {
     source: string[];
     anchor_tests: string[];
@@ -88,6 +93,12 @@ async function resolveUncertainSystemDocumentRoute(): Promise<NonNullable<Develo
     nodes: [root, system, owner],
     edges: [rootEdge, ownerEdge],
     canonical_owner: owner,
+    source_hashes: [
+      { path: root,
+        content_sha256: describeKnowledgeSource(root, rootText).content_sha256 },
+      { path: system,
+        content_sha256: describeKnowledgeSource(system, systemText).content_sha256 },
+    ],
   };
 }
 
@@ -125,12 +136,245 @@ function uniqueSorted(values: Iterable<string>): string[] {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
+
+/**
+ * An optional, read-only cross-owner PROJECTION, not a task state store or a
+ * new authority registry. It composes existing Router, Capability ownership,
+ * semantic impact and the canonical affected verification planner. All fields
+ * are static declarations/plans; no command is executed or permission granted.
+ */
+export type DevelopmentEvidenceChain = {
+  schema: 1;
+  authority: "DERIVED_DEVELOPMENT_EVIDENCE_NOT_EXECUTION";
+  proof: "PLANNED_NOT_EXECUTED";
+  source_revision: "GIT_HEAD_NOT_BOUND_BY_CONTEXT_PLANNER";
+  change_set_provenance: "CALLER_SUPPLIED_NOT_GIT_DIFF_VERIFIED";
+  changed_paths: string[];
+  decision: {
+    status: "AUTHORED_DOCUMENT_ROUTE" | "NO_DOCUMENT_ROUTE_DIRECT_OR_UNRESOLVED_SOURCE";
+    canonical_document: string | null;
+    document_to_code_relation: "NOT_ESTABLISHED_FROM_DOCUMENT_NAVIGATION";
+    witnesses: Array<{
+      from: string;
+      to: string;
+      line: number;
+      relation: ExplicitDocumentationEdge["relation"];
+      source_sha256: string | null;
+    }>;
+  };
+  direct_capability_owners: Array<{
+    capability: string;
+    owner_source: string;
+    owner_specialist: string | null;
+    anchor_test: string | null;
+    changed_evidence: Array<
+      "DIRECT_SOURCE" | "DIRECT_ANCHOR_TEST" | "DIRECT_SPECIALIST"
+    >;
+    proof: "EXPLICIT_CAPABILITY_OWNER_DECLARATION_NOT_RUNTIME_PROOF";
+  }>;
+  outside_explicit_capability_owner_paths: string[];
+  affected_capabilities: Array<{
+    capability: string;
+    reasons: string[];
+    owner_source: string | null;
+    anchor_test: string | null;
+    proof: "SEMANTIC_IMPACT_CANDIDATE";
+  }>;
+  source_dependency: {
+    status: "AST_IMPORT_GRAPH_NOT_SCANNED_BY_CONTEXT_PLANNER";
+    available_impact_queries: string[];
+    interpretation: string;
+  };
+  verification: {
+    status: "CHECKS_PLANNED_NOT_EXECUTED";
+    added_path_proof: "ADDED_PATH_IDENTITY_NOT_PROVIDED";
+    checks: string[];
+    anchor_test_declarations: string[];
+    targeted_tests: string[];
+    commands: string[];
+    fallback_full_verify: boolean;
+    unowned_new_runtime_sources: string[];
+    reasons: string[];
+  };
+  open_obligations: Array<
+    "NO_SELECTED_CHANGE_SET" | "NO_EXACT_CAPABILITY_OWNER_FOR_SOME_PATHS" |
+    "NO_DIRECT_DOCUMENT_TO_SOURCE_WITNESS" | "SOURCE_IMPORTS_UNVERIFIED" |
+    "CHECKS_NOT_EXECUTED" | "NEW_RUNTIME_SOURCE_TEST_OWNER_MISSING" |
+    "CHANGE_SET_NOT_GIT_VERIFIED" | "ADDED_PATH_IDENTITY_NOT_PROVIDED"
+  >;
+};
+
+
+/** Path-only evidence selection; never trust it as an actual Git diff. */
+export function validateEvidenceChangePaths(paths: readonly string[]): string[] {
+  if (paths.length > 64)
+    throw new Error("EVIDENCE_CHANGE_SCOPE_TOO_LARGE: select at most 64 paths.");
+  const permittedRoots = new Set([
+    "mcp", "apps", "distribution", "docs", "experiments",
+    ".agents", ".github", "workspace",
+  ]);
+  const permittedFiles = new Set([
+    "AGENTS.md", "GITHUB_RULES.md", "CONTEXT.md", "CONTRIBUTING.md",
+    "README.md", "SECURITY.md", "package.json", "LICENSE",
+  ]);
+  const sensitiveSegments = new Set([
+    ".git", ".env", ".ssh", "secrets", "credentials",
+  ]);
+  const normalized: string[] = [];
+  for (const raw of paths) {
+    if (typeof raw !== "string" || raw.length < 1 || raw.length > 4096)
+      throw new Error("EVIDENCE_CHANGE_PATH_UNSAFE");
+    const path = raw.replaceAll("\\", "/").replace(/^\.\//, "");
+    const parts = path.split("/");
+    if (!/^[A-Za-z0-9._/-]+$/.test(path) ||
+        parts.some(part => !part || part === "." || part === ".." ||
+          sensitiveSegments.has(part.toLowerCase()) ||
+          part.toLowerCase().startsWith(".env.")) ||
+        (parts.length === 1 ? !permittedFiles.has(path)
+          : !permittedRoots.has(parts[0]!))) {
+      throw new Error("EVIDENCE_CHANGE_PATH_UNSAFE: " + raw);
+    }
+    normalized.push(path);
+  }
+  return uniqueSorted(normalized);
+}
+
+export function projectDevelopmentEvidenceChain(input: {
+  changedPaths: readonly string[];
+  semanticImpact: DevelopmentContextPlan["semantic_impact"];
+  documentationRoute: DevelopmentContextPlan["documentation_route"];
+}): DevelopmentEvidenceChain {
+  // These are the actual selected changed paths, not keyword-matched candidates.
+  const changed = validateEvidenceChangePaths(input.changedPaths);
+  // Compose verification only from its canonical planner, not a caller-supplied
+  // or independently cached plan with potentially forged commands.
+  const affectedPlan = buildAffectedExecutionPlan(changed);
+  const matchesSelection = (actual: readonly string[]) =>
+    JSON.stringify(validateEvidenceChangePaths(actual)) === JSON.stringify(changed);
+  if ((input.semanticImpact !== null &&
+       !matchesSelection(input.semanticImpact.changed_paths)) ||
+      (input.semanticImpact === null && changed.length !== 0) ||
+      !matchesSelection(affectedPlan.execution.changed_paths)) {
+    throw new Error("EVIDENCE_CHANGE_SET_MISMATCH: refuse to join unrelated source and proof plans.");
+  }
+  if (input.semanticImpact !== null &&
+      JSON.stringify(input.semanticImpact) !== JSON.stringify(affectedPlan.semantic_impact)) {
+    throw new Error("EVIDENCE_SEMANTIC_OWNER_DRIFT: source impact and check plan disagree.");
+  }
+  const changedSet = new Set(changed);
+  const directReasons = new Set([
+    "DIRECT_SOURCE", "DIRECT_ANCHOR_TEST", "DIRECT_SPECIALIST",
+  ]);
+  const direct = (input.semanticImpact?.affected_capabilities ?? [])
+    .filter(entry => entry.source_owner !== null &&
+      entry.reasons.some(reason => directReasons.has(reason)))
+    .map(entry => ({
+      capability: entry.capability,
+      owner_source: entry.source_owner!.source,
+      owner_specialist: entry.source_owner!.specialist,
+      anchor_test: entry.source_owner!.anchor_test,
+      changed_evidence: entry.reasons.filter(reason =>
+        directReasons.has(reason)) as Array<
+        "DIRECT_SOURCE" | "DIRECT_ANCHOR_TEST" | "DIRECT_SPECIALIST">,
+      proof: "EXPLICIT_CAPABILITY_OWNER_DECLARATION_NOT_RUNTIME_PROOF" as const,
+    }))
+    .sort((a, b) => a.capability.localeCompare(b.capability));
+  const directlyRepresented = new Set<string>();
+  for (const item of direct) {
+    if (changedSet.has(item.owner_source)) directlyRepresented.add(item.owner_source);
+    if (item.anchor_test && changedSet.has(item.anchor_test))
+      directlyRepresented.add(item.anchor_test);
+  }
+  // Specialist paths are admitted only when declared by the same explicit
+  // capability owner; keyword-matched routing is never ownership proof.
+  for (const item of direct) {
+    if (item.owner_specialist && changedSet.has(item.owner_specialist))
+      directlyRepresented.add(item.owner_specialist);
+  }
+  const unclassified = changed.filter(path => !directlyRepresented.has(path));
+  const hashByPath = new Map((input.documentationRoute?.source_hashes ?? [])
+    .map(item => [item.path, item.content_sha256]));
+  const anchorTests = uniqueSorted(direct.flatMap(item =>
+    item.anchor_test ? [item.anchor_test] : []
+  ));
+  const selectedImpactQueries = changed.filter(path =>
+    (path === "mcp/index.ts" ||
+      /^mcp\/(?:lib|gateway|server|plugin|scripts|build|compatibility)\//.test(path)) &&
+    /\.(?:tsx?|jsx?|mts|cts|mjs|cjs)$/.test(path)
+  ).slice(0, 3).map(path =>
+    "bun run audit:reachability -- --impact=" + path + " --format=json"
+  );
+  const execution = affectedPlan.execution;
+  const obligations: DevelopmentEvidenceChain["open_obligations"] = [];
+  if (changed.length === 0) obligations.push("NO_SELECTED_CHANGE_SET");
+  if (unclassified.length > 0) obligations.push("NO_EXACT_CAPABILITY_OWNER_FOR_SOME_PATHS");
+  // A doc-to-doc router edge is not a doc-to-source witness.
+  obligations.push("NO_DIRECT_DOCUMENT_TO_SOURCE_WITNESS", "SOURCE_IMPORTS_UNVERIFIED");
+  if (execution.unowned_new_runtime_sources.length)
+    obligations.push("NEW_RUNTIME_SOURCE_TEST_OWNER_MISSING");
+  obligations.push("CHECKS_NOT_EXECUTED",
+    "CHANGE_SET_NOT_GIT_VERIFIED", "ADDED_PATH_IDENTITY_NOT_PROVIDED");
+
+  return {
+    schema: 1,
+    authority: "DERIVED_DEVELOPMENT_EVIDENCE_NOT_EXECUTION",
+    proof: "PLANNED_NOT_EXECUTED",
+    source_revision: "GIT_HEAD_NOT_BOUND_BY_CONTEXT_PLANNER",
+    change_set_provenance: "CALLER_SUPPLIED_NOT_GIT_DIFF_VERIFIED",
+    changed_paths: changed,
+    decision: {
+      status: input.documentationRoute
+        ? "AUTHORED_DOCUMENT_ROUTE" : "NO_DOCUMENT_ROUTE_DIRECT_OR_UNRESOLVED_SOURCE",
+      canonical_document: input.documentationRoute?.canonical_owner ?? null,
+      document_to_code_relation: "NOT_ESTABLISHED_FROM_DOCUMENT_NAVIGATION",
+      witnesses: (input.documentationRoute?.edges ?? []).map(edge => ({
+        from: edge.from, to: edge.to, line: edge.line,
+        relation: edge.relation,
+        source_sha256: hashByPath.get(edge.from) ?? null,
+      })),
+    },
+    direct_capability_owners: direct,
+    outside_explicit_capability_owner_paths: unclassified,
+    affected_capabilities: (input.semanticImpact?.affected_capabilities ?? [])
+      .map(entry => ({
+        capability: entry.capability,
+        reasons: entry.reasons,
+        owner_source: entry.source_owner?.source ?? null,
+        anchor_test: entry.source_owner?.anchor_test ?? null,
+        proof: "SEMANTIC_IMPACT_CANDIDATE" as const,
+      })),
+    source_dependency: {
+      status: "AST_IMPORT_GRAPH_NOT_SCANNED_BY_CONTEXT_PLANNER",
+      available_impact_queries: selectedImpactQueries,
+      interpretation: "No AST import, function call or knowledge consumption was " +
+        "established by this context plan. Use the existing opt-in source auditor.",
+    },
+    verification: {
+      status: "CHECKS_PLANNED_NOT_EXECUTED",
+      added_path_proof: "ADDED_PATH_IDENTITY_NOT_PROVIDED",
+      checks: execution.checks,
+      anchor_test_declarations: anchorTests,
+      targeted_tests: execution.targeted_tests,
+      commands: execution.commands,
+      fallback_full_verify: execution.fallback_full_verify,
+      unowned_new_runtime_sources: execution.unowned_new_runtime_sources,
+      reasons: execution.reasons,
+    },
+    open_obligations: obligations,
+  };
+}
+
 export async function buildDevelopmentContextPlan(input: {
   intent: string;
   changedPaths?: readonly string[];
   symbolMapMaxBytes?: number;
   knowledgeTokenBudget?: number;
+  /** Opt-in evidence/proof planning, never a default authoring/context read. */
+  includeEvidenceChain?: boolean;
 }): Promise<DevelopmentContextPlan> {
+  const evidencePaths = input.includeEvidenceChain === true
+    ? validateEvidenceChangePaths(input.changedPaths ?? [])
+    : input.changedPaths;
   const routing = resolveDevelopmentIntent(input.intent);
   const sourceOwners = listExplicitSourceOwners();
   const symbolMap = await buildDevelopmentSymbolMap(
@@ -138,9 +382,9 @@ export async function buildDevelopmentContextPlan(input: {
     input.symbolMapMaxBytes ?? DEVELOPMENT_SYMBOL_MAP_PROXY_BYTES
   );
   const semanticImpact =
-    input.changedPaths && input.changedPaths.length > 0
+    evidencePaths && evidencePaths.length > 0
       ? analyzeSemanticImpact({
-          changedPaths: input.changedPaths,
+          changedPaths: evidencePaths,
           sourceOwners,
           manifest: CAPABILITY_BRANCH_MANIFEST,
         })
@@ -242,6 +486,13 @@ export async function buildDevelopmentContextPlan(input: {
       CAPABILITY_SEMANTIC_CATALOG_REVISIONS,
     knowledge_sections: selectedKnowledge,
     documentation_route: documentationRoute,
+    ...(input.includeEvidenceChain === true ? {
+      evidence_chain: projectDevelopmentEvidenceChain({
+        changedPaths: evidencePaths ?? [],
+        semanticImpact,
+        documentationRoute,
+      }),
+    } : {}),
     read_targets: {
       source: uniqueSorted([
         ...routingSources,
@@ -266,7 +517,13 @@ export async function buildDevelopmentContextPlan(input: {
 }
 
 async function main() {
-  const args = process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
+  const evidenceFlags = rawArgs.filter(arg => arg === "--evidence-chain");
+  if (evidenceFlags.length > 1) {
+    throw new Error("Duplicate --evidence-chain option.");
+  }
+  const includeEvidenceChain = evidenceFlags.length === 1;
+  const args = rawArgs.filter(arg => arg !== "--evidence-chain");
   const separator = args.indexOf("--changed");
   const intentParts = separator >= 0 ? args.slice(0, separator) : args;
   const changedPaths = separator >= 0 ? args.slice(separator + 1) : [];
@@ -274,7 +531,7 @@ async function main() {
 
   if (!intent) {
     throw new Error(
-      'Usage: bun run plan:development-context -- "<intent>" [--changed <path> ...]'
+      'Usage: bun run plan:development-context -- "<intent>" [--changed <path> ...] [--evidence-chain]'
     );
   }
 
@@ -283,6 +540,7 @@ async function main() {
       await buildDevelopmentContextPlan({
         intent,
         changedPaths,
+        includeEvidenceChain,
       }),
       null,
       2
