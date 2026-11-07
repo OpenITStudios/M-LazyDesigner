@@ -41,6 +41,25 @@ From mcp/:
 
 For source change impact use existing plan:affected; for TypeScript static imports use existing audit:reachability. Neither can prove actual Blockbench invocation. Tests and native verification remain NOT_EXECUTED while the user hold applies.
 
+
+## AST Source Dependency and Knowledge Witnesses
+
+The existing `audit:reachability` owner now has optional source-only projections:
+
+- `--impact=mcp/lib/semantic/knowledge.ts` follows **reverse exact AST import** paths to potentially affected modules. Each edge retains importer, resolved dependency, import syntax, type-only/runtime-capable classification and `file:line:column`.
+- `--trace=mcp/scripts/development/plan-development-context.ts,mcp/lib/semantic/knowledge.ts` explains a directed dependency route. Depth is bounded 1–6 and selection requires real inventoried files; missing paths remain `UNKNOWN_SOURCE`, not inferred owners.
+- `--knowledge-id=knowledge:...` searches exact AST string-literal references and imported `selectKnowledgeSections` / `indexMarkdownKnowledge` call sites. Exact source references, generic API candidates and declaration-only evidence are **not** Runtime knowledge consumption. Test-only literals remain a separate evidence class. Catalog registration is not checked by this source-reference mode, and absence of a source witness is reported as `NO_SOURCE_WITNESS`, not an invented declaration.
+- Resolved, uniquely registered **relative** AST imports are the only selected projection edges. Computed imports, unverified `require` calls, member `require`, non-relative packages, non-code assets and unregistered targets remain explicit exclusions/obligations, not `DEPENDS_ON` assertions. The pre-existing reachability summary's historic grouping remains intact and must not be mistaken for this stricter proof.
+- The source graph is opt-in and separate from documentation relationships, Semantic Impact and the Runtime Capability Graph. Mermaid/Pele and Markdown output are derived source only and do not render SVG, install Obsidian or prove execution.
+
+Examples, to run only after executable verification is reauthorized, from `mcp/`:
+
+    bun run audit:reachability -- --impact=mcp/lib/semantic/knowledge.ts --max-hops=3 --format=markdown
+    bun run audit:reachability -- --trace=mcp/scripts/development/plan-development-context.ts,mcp/lib/semantic/knowledge.ts
+    bun run audit:reachability -- --knowledge-id=knowledge:docs/03-authoring/modelling/standard#geometry
+
+An absent literal reference does not establish that a section was never dynamically loaded. A source code import or call is a navigation witness and not evidence of a tested feature, an accepted 3D model, an active Blockbench capability or an applied specific knowledge fact.
+
 ## Adoption and lifecycle
 
 Add new canonical documentation under its present 01–05 domain, create one explicit Markdown router link, inspect the audited link witness and affected producer/consumer, and preserve Git history through moves. If a link is missing, repair the owning router rather than making a synthetic inferred edge. No external tool install, new Agent Skill, Control stage, Gateway tool, external graph service, persistent graph store, auto-merge or release.

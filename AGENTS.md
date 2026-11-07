@@ -91,7 +91,7 @@ Material commits use `Work`, `State`, `Proof`, plus conditional `Decision`, `Unr
 
 ## Repository knowledge navigation
 
-When the exact implementation owner is unknown, follow [Repository Knowledge Architecture](docs/04-system/knowledge-architecture.md) through `docs/README.md` and its domain router. Use registered document IDs and exact authored `file:line` links; missing paths remain UNKNOWN_RESOURCE/NO_PATH. Graphify is the derived explanation method; Obsidian and Mermaid/Pele are optional presentations, not installed applications or new authority. For source imports and changes use the existing `audit:reachability` and `plan:affected`; never infer code dependencies or Runtime success from document links. No new Skill, Control stage or Gateway tool.
+When the exact implementation owner is unknown, follow [Repository Knowledge Architecture](docs/04-system/knowledge-architecture.md) through `docs/README.md` and its domain router. Use registered document IDs and exact authored `file:line` links; missing paths remain UNKNOWN_RESOURCE/NO_PATH. Graphify is the derived explanation method; Obsidian and Mermaid/Pele are optional presentations, not installed applications or new authority. For source imports use `audit:reachability -- --impact=<exact-mcp-source>` / `--trace=<from>,<to>`; for knowledge reference witnesses use `--knowledge-id=<exact-id>`, and for capability changes use `plan:affected`; never infer code dependencies or Runtime success from document links. No new Skill, Control stage or Gateway tool.
 
 ## Source Precedence
 

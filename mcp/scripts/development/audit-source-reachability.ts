@@ -233,6 +233,321 @@ export function readSourceImports(source: string, path = "fixture.ts"): ParsedSo
   };
 }
 
+
+/** Selected source-only AST witnesses. No runtime execution or call graph implied. */
+export type SourceImportWitness = {
+  path: string; line: number; column: number;
+  specifier: string | null;
+  kind: "IMPORT" | "EXPORT" | "IMPORT_EQUALS" | "IMPORT_TYPE" |
+        "DYNAMIC_IMPORT" | "REQUIRE" | "MEMBER_REQUIRE";
+  runtime_capable: boolean;
+};
+export type SourceKnowledgeWitness = {
+  path: string; line: number; column: number;
+  api?: "selectKnowledgeSections" | "indexMarkdownKnowledge";
+};
+export type SourceAstEvidence = {
+  imports: SourceImportWitness[];
+  knowledge_literals: SourceKnowledgeWitness[];
+  knowledge_api_candidates: SourceKnowledgeWitness[];
+};
+
+/** Preserve exact AST locations; unlike keyword search, comments are excluded. */
+export function readSourceAstEvidence(
+  source: string, path = "fixture.ts", knowledgeId?: string
+): SourceAstEvidence {
+  const file = ts.createSourceFile(
+    path, source, ts.ScriptTarget.Latest, true,
+    path.endsWith(".tsx") ? ts.ScriptKind.TSX :
+      /\.(?:mjs|cjs|js)$/.test(path) ? ts.ScriptKind.JS : ts.ScriptKind.TS
+  );
+  const imports: SourceImportWitness[] = [];
+  const knowledge_literals: SourceKnowledgeWitness[] = [];
+  const knowledge_api_candidates: SourceKnowledgeWitness[] = [];
+  const importedKnowledgeAPIs = new Map<string,
+    "selectKnowledgeSections" | "indexMarkdownKnowledge">();
+  if (knowledgeId !== undefined) {
+    if (!/^knowledge:[a-zA-Z0-9_./#-]{1,500}$/.test(knowledgeId))
+      throw new Error("Knowledge inspection requires one exact stable knowledge: ID.");
+    for (const statement of file.statements) {
+      if (!ts.isImportDeclaration(statement) ||
+          !ts.isStringLiteral(statement.moduleSpecifier) ||
+          !/(?:^|\/)semantic\/knowledge(?:\.[cm]?[jt]s)?$/.test(
+            statement.moduleSpecifier.text)) continue;
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) continue;
+      for (const item of bindings.elements) {
+        const name = item.propertyName?.text ?? item.name.text;
+        if (name === "selectKnowledgeSections" || name === "indexMarkdownKnowledge")
+          importedKnowledgeAPIs.set(item.name.text, name);
+      }
+    }
+  }
+  const site = (node: ts.Node) => {
+    const pos = file.getLineAndCharacterOfPosition(node.getStart(file));
+    return { path, line: pos.line + 1, column: pos.character + 1 };
+  };
+  const add = (
+    node: ts.Node, expression: ts.Node | undefined,
+    kind: SourceImportWitness["kind"], runtime_capable: boolean
+  ) => {
+    imports.push({
+      ...site(expression ?? node),
+      specifier: expression && ts.isStringLiteral(expression) ? expression.text : null,
+      kind, runtime_capable,
+    });
+  };
+  const isOnlyTypeImport = (clause: ts.ImportClause | undefined) =>
+    clause?.isTypeOnly === true || !!(clause && !clause.name &&
+      clause.namedBindings && ts.isNamedImports(clause.namedBindings) &&
+      clause.namedBindings.elements.length > 0 &&
+      clause.namedBindings.elements.every(element => element.isTypeOnly));
+  const isOnlyTypeExport = (node: ts.ExportDeclaration) =>
+    node.isTypeOnly || !!(node.exportClause && ts.isNamedExports(node.exportClause) &&
+      node.exportClause.elements.length > 0 &&
+      node.exportClause.elements.every(element => element.isTypeOnly));
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node)) {
+      add(node, node.moduleSpecifier, "IMPORT", !isOnlyTypeImport(node.importClause));
+    } else if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
+      add(node, node.moduleSpecifier, "EXPORT", !isOnlyTypeExport(node));
+    } else if (ts.isImportEqualsDeclaration(node) &&
+               ts.isExternalModuleReference(node.moduleReference)) {
+      add(node, node.moduleReference.expression, "IMPORT_EQUALS", !node.isTypeOnly);
+    } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
+      add(node, node.argument.literal, "IMPORT_TYPE", false);
+    } else if (ts.isCallExpression(node) &&
+               node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+      add(node, node.arguments[0], "DYNAMIC_IMPORT", true);
+    } else if (ts.isCallExpression(node) &&
+               ts.isIdentifier(node.expression) && node.expression.text === "require") {
+      // No source-level proof that require has not been shadowed.
+      add(node, node.arguments[0], "REQUIRE", true);
+    } else if (ts.isCallExpression(node) &&
+               ts.isPropertyAccessExpression(node.expression) &&
+               node.expression.name.text === "require") {
+      add(node, node.arguments[0], "MEMBER_REQUIRE", true);
+    }
+    if (knowledgeId !== undefined) {
+      if (ts.isStringLiteral(node) && node.text === knowledgeId) {
+        knowledge_literals.push(site(node));
+      }
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        const api = importedKnowledgeAPIs.get(node.expression.text);
+        if (api) knowledge_api_candidates.push({ ...site(node.expression), api });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  const order = (a: {path:string;line:number;column:number},
+                 b: {path:string;line:number;column:number}) =>
+    a.path.localeCompare(b.path) || a.line - b.line || a.column - b.column;
+  return {
+    imports: imports.sort(order),
+    knowledge_literals: knowledge_literals.sort(order),
+    knowledge_api_candidates: knowledge_api_candidates.sort(order),
+  };
+}
+
+export type ResolvedSourceImport = SourceImportWitness & {
+  dependency: string;
+};
+export type SourceImportObligation = SourceImportWitness & {
+  reason: "NONLITERAL_IMPORT" | "UNVERIFIED_REQUIRE" | "EXCLUDED_NON_RELATIVE" |
+          "UNRESOLVED_RELATIVE" | "UNREGISTERED_TARGET" | "EXCLUDED_NON_CODE";
+};
+export type SourceDependencyGraph = {
+  files: readonly string[];
+  edges: readonly ResolvedSourceImport[];
+  obligations: readonly SourceImportObligation[];
+};
+export type SourceDependencyStep = {
+  importer: string; dependency: string;
+  witness: ResolvedSourceImport;
+};
+export type SourceDependencyRoute = {
+  path: string; steps: SourceDependencyStep[];
+};
+export type SourceDependencyInspection = {
+  schema: 1; proof_scope: "STATIC_AST_IMPORT_WITNESSES_ONLY";
+  mode: "IMPACT" | "TRACE"; status: "FOUND" | "UNKNOWN_SOURCE" | "NO_PATH" | "DEPTH_LIMIT";
+  source: string; target?: string; max_hops: number;
+  routes: SourceDependencyRoute[];
+  route_count: number; truncated: boolean;
+  relevant_obligations: SourceImportObligation[];
+  global_obligation_count: number;
+  interpretation: string;
+};
+export type KnowledgeInspection = {
+  schema: 1; proof_scope: "AST_REFERENCE_NOT_KNOWLEDGE_CONSUMPTION";
+  mode: "KNOWLEDGE"; knowledge_id: string;
+  catalog_registration: "NOT_CHECKED";
+  evidence_class: "EXACT_AST_LITERAL_REFERENCE_NOT_CONSUMPTION_PROOF" |
+    "GENERIC_KNOWLEDGE_API_CANDIDATE" | "DECLARATION_ONLY" | "NO_SOURCE_WITNESS";
+  literal_source_count: number; literal_test_count: number; generic_candidate_count: number;
+  literal_source_sites: SourceKnowledgeWitness[];
+  literal_test_sites: SourceKnowledgeWitness[];
+  generic_candidates: SourceKnowledgeWitness[];
+  truncated: boolean;
+  interpretation: string;
+};
+export type SourceInspectionRequest =
+  | { mode: "IMPACT"; source: string; maxHops?: number; resultLimit?: number }
+  | { mode: "TRACE"; source: string; target: string; maxHops?: number; resultLimit?: number }
+  | { mode: "KNOWLEDGE"; id: string; resultLimit?: number };
+export type SourceInspectionResult = SourceDependencyInspection | KnowledgeInspection;
+const SOURCE_PROOF = "STATIC_AST_IMPORT_WITNESSES_ONLY" as const;
+const SOURCE_LIMIT = "This trace is potential module dependency, not function-call execution, " +
+  "native Blockbench behavior or proof an imported symbol is consumed. " +
+  "Unverified require, computed import and external references stay unresolved.";
+
+function boundedSourceOptions(options: { maxHops?: number; resultLimit?: number }) {
+  const maxHops = options.maxHops ?? 6;
+  const resultLimit = options.resultLimit ?? 30;
+  if (!Number.isInteger(maxHops) || maxHops < 1 || maxHops > 6)
+    throw new Error("Source trace maxHops must be 1..6.");
+  if (!Number.isInteger(resultLimit) || resultLimit < 1 || resultLimit > 100)
+    throw new Error("Source trace resultLimit must be 1..100.");
+  return { maxHops, resultLimit };
+}
+
+/** All paths must be exact files in the already inventoried source graph. */
+export function explainSourceDependency(
+  graph: SourceDependencyGraph,
+  request: Extract<SourceInspectionRequest, { mode: "IMPACT" | "TRACE" }>
+): SourceDependencyInspection {
+  const { maxHops, resultLimit } = boundedSourceOptions(request);
+  const files = new Set(graph.files);
+  const { source } = request;
+  const target = request.mode === "TRACE" ? request.target : undefined;
+  const base = {
+    schema: 1 as const, proof_scope: SOURCE_PROOF,
+    mode: request.mode, source, ...(target ? { target } : {}),
+    max_hops: maxHops, routes: [] as SourceDependencyRoute[],
+    route_count: 0, truncated: false,
+    relevant_obligations: [] as SourceImportObligation[],
+    global_obligation_count: graph.obligations.length,
+    interpretation: SOURCE_LIMIT,
+  };
+  if (!files.has(source) || (target !== undefined && !files.has(target)))
+    return { ...base, status: "UNKNOWN_SOURCE" };
+  if (target !== undefined && source === target) return {
+    ...base, status: "FOUND", routes: [{ path: source, steps: [] }], route_count: 1,
+  };
+  const reversed = request.mode === "IMPACT";
+  const visited = new Set<string>([source]);
+  const queue: SourceDependencyRoute[] = [{ path: source, steps: [] }];
+  const routes: SourceDependencyRoute[] = [];
+  let hitLimit = false;
+  for (let i = 0; i < queue.length; i++) {
+    const current = queue[i]!;
+    const neighbors = graph.edges.filter(edge => reversed
+      ? edge.dependency === current.path : edge.path === current.path
+    ).sort((a, b) => (reversed ? a.path : a.dependency)
+      .localeCompare(reversed ? b.path : b.dependency) ||
+      a.line - b.line || a.column - b.column);
+    for (const edge of neighbors) {
+      const next = reversed ? edge.path : edge.dependency;
+      if (visited.has(next)) continue;
+      if (current.steps.length >= maxHops) { hitLimit = true; continue; }
+      const step = { importer: edge.path, dependency: edge.dependency, witness: edge };
+      const route = { path: next, steps: [...current.steps, step] };
+      visited.add(next);
+      if (reversed) routes.push(route);
+      else if (next === target) routes.push(route);
+      queue.push(route);
+      if (routes.length >= resultLimit && reversed) { hitLimit = true; break; }
+      if (!reversed && next === target) break;
+    }
+    if (hitLimit && reversed && routes.length >= resultLimit) break;
+    if (!reversed && routes.length) break;
+  }
+  const relevant = new Set([source, ...queue.map(item => item.path)]);
+  const relevant_obligations = graph.obligations
+    .filter(obligation => relevant.has(obligation.path)).slice(0, 40);
+  const status: SourceDependencyInspection["status"] = reversed || routes.length
+    ? "FOUND" : hitLimit ? "DEPTH_LIMIT" : "NO_PATH";
+  return { ...base, status, routes, route_count: routes.length,
+    truncated: hitLimit, relevant_obligations };
+}
+
+export function inspectKnowledgeSourceSites(
+  id: string, witnesses: readonly SourceAstEvidence[],
+  resultLimit = 50
+): KnowledgeInspection {
+  boundedSourceOptions({ resultLimit });
+  const literals = witnesses.flatMap(item => item.knowledge_literals);
+  const generic = witnesses.flatMap(item => item.knowledge_api_candidates);
+  const bySite = (a: SourceKnowledgeWitness, b: SourceKnowledgeWitness) =>
+    a.path.localeCompare(b.path) || a.line - b.line || a.column - b.column;
+  const sources = literals.filter(site => !isTestSource(site.path)).sort(bySite);
+  const tests = literals.filter(site => isTestSource(site.path)).sort(bySite);
+  const genericCandidates = generic.filter(site => !isTestSource(site.path)).sort(bySite);
+  return {
+    schema: 1, mode: "KNOWLEDGE",
+    proof_scope: "AST_REFERENCE_NOT_KNOWLEDGE_CONSUMPTION",
+    knowledge_id: id,
+    catalog_registration: "NOT_CHECKED",
+    evidence_class: sources.length
+      ? "EXACT_AST_LITERAL_REFERENCE_NOT_CONSUMPTION_PROOF"
+      : genericCandidates.length ? "GENERIC_KNOWLEDGE_API_CANDIDATE"
+      : tests.length ? "DECLARATION_ONLY" : "NO_SOURCE_WITNESS",
+    literal_source_count: sources.length,
+    literal_test_count: tests.length, generic_candidate_count: genericCandidates.length,
+    literal_source_sites: sources.slice(0, resultLimit),
+    literal_test_sites: tests.slice(0, resultLimit),
+    generic_candidates: genericCandidates.slice(0, resultLimit),
+    truncated: sources.length > resultLimit || tests.length > resultLimit ||
+      genericCandidates.length > resultLimit,
+    interpretation: "Exact AST literal references do not prove a knowledge item was loaded or applied. " +
+      "Imported section-index/selection calls are generic candidates only; " +
+      "no exact-ID consumption, Runtime execution or quality claim follows from their presence.",
+  };
+}
+
+export function sourceInspectionMermaid(report: SourceDependencyInspection): string {
+  if (report.status !== "FOUND") return 'flowchart LR\n  unresolved["NO VERIFIED SOURCE PATH"]';
+  const nodes = [report.source, ...report.routes.flatMap(route => [
+    route.path, ...route.steps.flatMap(step => [step.importer, step.dependency]),
+  ])];
+  const paths = [...new Set(nodes)];
+  const ids = new Map(paths.map((path, index) => [path, "n" + index]));
+  const lines = ["flowchart LR"];
+  for (const [path, id] of ids) lines.push("  " + id + "[" + JSON.stringify(path) + "]");
+  const seen = new Set<string>();
+  for (const route of report.routes) for (const step of route.steps) {
+    // Import direction is always importer --> dependency, also for reverse impact exploration.
+    const left = ids.get(step.importer), right = ids.get(step.dependency);
+    if (left && right && !seen.has(left + ":" + right)) {
+      lines.push("  " + left + " -->|imports| " + right);
+      seen.add(left + ":" + right);
+    }
+  }
+  return lines.join("\n");
+}
+export function sourceInspectionMarkdown(report: SourceDependencyInspection): string {
+  const mark = String.fromCharCode(96), fence = mark.repeat(3);
+  const out = ["# Source dependency inspection", "", "Status: " + report.status,
+    "Scope: " + report.mode + " / " + report.proof_scope, "",
+    "The following are AST import sites, not function-call or Runtime proof.", ""];
+  for (const route of report.routes) {
+    out.push("- " + mark + route.path + mark);
+    for (const step of route.steps) out.push(
+      "  - " + step.importer + " imports " + step.dependency + " at " +
+      step.witness.path + ":" + step.witness.line + ":" + step.witness.column +
+      " [" + step.witness.kind + (step.witness.runtime_capable ? ", runtime-capable" : ", type-only") + "]"
+    );
+  }
+  out.push("", "Unresolved/excluded import sites (global): " +
+    report.global_obligation_count + "; relevant sample: " + report.relevant_obligations.length + ".",
+    "Truncated: " + report.truncated + ".", "",
+    "## Mermaid / Pele-compatible source", "", fence + "mermaid",
+    sourceInspectionMermaid(report), fence, "", report.interpretation);
+  return out.join("\n");
+}
+
 function configuredProject(path: string) {
   const config = ts.readConfigFile(path, ts.sys.readFile);
   if (config.error) throw new Error("SOURCE_AUDIT_CONFIG_UNREADABLE: " + path);
@@ -302,10 +617,16 @@ async function standaloneScriptSources(dir: string, root: string): Promise<strin
 }
 
 export async function auditRepositorySourceReachability(
-  root: string,
-  sampleLimit = 20,
-  reviewOffset = 0
-): Promise<SourceReachabilitySummary> {
+  root: string, sampleLimit?: number, reviewOffset?: number
+): Promise<SourceReachabilitySummary>;
+export async function auditRepositorySourceReachability(
+  root: string, sampleLimit: number, reviewOffset: number,
+  request: SourceInspectionRequest
+): Promise<SourceInspectionResult>;
+export async function auditRepositorySourceReachability(
+  root: string, sampleLimit = 20, reviewOffset = 0,
+  request?: SourceInspectionRequest
+): Promise<SourceReachabilitySummary | SourceInspectionResult> {
   const absoluteRoot = resolve(root);
   const runtime = configuredProject(resolve(absoluteRoot, "tsconfig.json"));
   const gateway = configuredProject(resolve(absoluteRoot, "gateway/tsconfig.json"));
@@ -327,6 +648,9 @@ export async function auditRepositorySourceReachability(
   const unresolved: string[] = [];
   const dynamic: string[] = [];
   const facades: string[] = [];
+  const sourceEdges: ResolvedSourceImport[] = [];
+  const importObligations: SourceImportObligation[] = [];
+  const knowledgeEvidence: SourceAstEvidence[] = [];
   for (const path of files) {
     const text = await readFile(resolve(absoluteRoot, path), "utf8");
     raw.set(path, text);
@@ -357,8 +681,45 @@ export async function auditRepositorySourceReachability(
         unresolved.push(path + " -> " + specifier);
       }
     }
+    if (request) {
+      const evidence = readSourceAstEvidence(contents, path,
+        request.mode === "KNOWLEDGE" ? request.id : undefined);
+      if (request.mode === "KNOWLEDGE") knowledgeEvidence.push(evidence);
+      else {
+        for (const site of evidence.imports) {
+          const unverifiedRequire = site.kind === "REQUIRE" || site.kind === "MEMBER_REQUIRE";
+          const literal = site.specifier;
+          const reason: SourceImportObligation["reason"] | null =
+            unverifiedRequire ? "UNVERIFIED_REQUIRE" :
+            literal === null ? "NONLITERAL_IMPORT" :
+            !literal.startsWith(".") ? "EXCLUDED_NON_RELATIVE" :
+            /\.(?:svg|md|css|html|json|png|webp)$/.test(literal) ? "EXCLUDED_NON_CODE" : null;
+          if (reason !== null) {
+            importObligations.push({ ...site, reason });
+            continue;
+          }
+          const resolved = ts.resolveModuleName(
+            literal!, resolve(absoluteRoot, path), options, ts.sys
+          ).resolvedModule;
+          const dependency = resolved && localModulePath(absoluteRoot, resolved.resolvedFileName);
+          if (dependency && Object.hasOwn(sourceGraph, dependency)) {
+            sourceEdges.push({ ...site, dependency });
+          } else {
+            importObligations.push({ ...site,
+              reason: dependency ? "UNREGISTERED_TARGET" : "UNRESOLVED_RELATIVE" });
+          }
+        }
+      }
+    }
     graph[path] = uniqueSorted(graph[path]!);
     sourceGraph[path] = uniqueSorted(sourceGraph[path]!);
+  }
+  if (request?.mode === "KNOWLEDGE") {
+    return inspectKnowledgeSourceSites(request.id, knowledgeEvidence, request.resultLimit);
+  }
+  if (request) {
+    const graph: SourceDependencyGraph = { files, edges: sourceEdges, obligations: importObligations };
+    return explainSourceDependency(graph, request);
   }
   const manifest = JSON.parse(
     await readFile(resolve(absoluteRoot, "package.json"), "utf8")
@@ -381,19 +742,66 @@ export async function auditRepositorySourceReachability(
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  if (args.some((arg) =>
-    !/^--(?:sample-limit|review-offset)=\d+$/.test(arg)
-  ) || args.filter((arg) => arg.startsWith("--sample-limit=")).length > 1 ||
-       args.filter((arg) => arg.startsWith("--review-offset=")).length > 1) {
-    throw new Error("Only one --sample-limit=0..100 and --review-offset=N are supported.");
+  const seen = new Set<string>();
+  const options = new Map<string, string>();
+  for (const arg of args) {
+    const i = arg.indexOf("=");
+    const key = i < 0 ? arg : arg.slice(0, i);
+    const value = i < 0 ? "" : arg.slice(i + 1);
+    if (seen.has(key) || !new Set(["--sample-limit", "--review-offset",
+      "--impact", "--trace", "--knowledge-id", "--max-hops", "--result-limit",
+      "--format"]).has(key) || i < 0 || !value)
+      throw new Error("Unknown, repeated or missing source audit option: " + key);
+    seen.add(key); options.set(key, value);
   }
-  const sample = args.find((item) => item.startsWith("--sample-limit="));
-  const offset = args.find((item) => item.startsWith("--review-offset="));
-  const limit = sample ? Number(sample.split("=")[1]) : 20;
-  const reviewOffset = offset ? Number(offset.split("=")[1]) : 0;
+  const sample = options.get("--sample-limit");
+  const offset = options.get("--review-offset");
+  const limit = sample === undefined ? 20 : Number(sample);
+  const reviewOffset = offset === undefined ? 0 : Number(offset);
+  if (!Number.isInteger(limit) || limit < 0 || limit > 100 ||
+      !Number.isSafeInteger(reviewOffset) || reviewOffset < 0)
+    throw new Error("Invalid legacy reachability sample-limit/review-offset.");
+  const selectors = ["--impact", "--trace", "--knowledge-id"].filter(key => options.has(key));
+  if (selectors.length > 1) throw new Error("Only one source evidence selection is allowed.");
+  if (!selectors.length && ["--max-hops", "--result-limit", "--format"].some(key => options.has(key)))
+    throw new Error("Source evidence limits and format require a selected inspection.");
+  const maxHops = options.get("--max-hops") === undefined ? 6 : Number(options.get("--max-hops"));
+  const resultLimit = options.get("--result-limit") === undefined ? 30 :
+    Number(options.get("--result-limit"));
+  boundedSourceOptions({ maxHops, resultLimit });
+  const format = options.get("--format") ?? "json";
+  if (!["json", "markdown", "mermaid"].includes(format))
+    throw new Error("Expected --format=json|markdown|mermaid.");
+  if (options.has("--knowledge-id") && format !== "json")
+    throw new Error("Knowledge source evidence is JSON only, never a rendered consumption graph.");
+  const normalize = (input: string) => {
+    const path = input.startsWith("mcp/") ? input.slice(4) : input;
+    if (!/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.[cm]?[jt]sx?$/.test(path) ||
+        path.split("/").some(part => part === "." || part === ".."))
+      throw new Error("Source selection requires an exact safe .ts/.tsx/.js/.mjs/.cjs file.");
+    return path;
+  };
+  let request: SourceInspectionRequest | undefined;
+  if (options.has("--impact")) request = {
+    mode: "IMPACT", source: normalize(options.get("--impact")!), maxHops, resultLimit,
+  };
+  if (options.has("--trace")) {
+    const items = options.get("--trace")!.split(",");
+    if (items.length !== 2) throw new Error("--trace requires source,target.");
+    request = { mode: "TRACE", source: normalize(items[0]!),
+      target: normalize(items[1]!), maxHops, resultLimit };
+  }
+  if (options.has("--knowledge-id")) request = {
+    mode: "KNOWLEDGE", id: options.get("--knowledge-id")!, resultLimit,
+  };
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-  const report = await auditRepositorySourceReachability(root, limit, reviewOffset);
-  console.log(JSON.stringify(report, null, 2));
+  const report = request
+    ? await auditRepositorySourceReachability(root, limit, reviewOffset, request)
+    : await auditRepositorySourceReachability(root, limit, reviewOffset);
+  if (report && "mode" in report && report.mode !== "KNOWLEDGE" && format !== "json") {
+    console.log(format === "markdown"
+      ? sourceInspectionMarkdown(report) : sourceInspectionMermaid(report));
+  } else console.log(JSON.stringify(report, null, 2));
 }
 
 if (import.meta.main) {

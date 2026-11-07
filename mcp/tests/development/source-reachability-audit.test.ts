@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   readSourceImports,
+  readSourceAstEvidence,
+  explainSourceDependency,
+  inspectKnowledgeSourceSites,
+  sourceInspectionMermaid,
+  sourceInspectionMarkdown,
   summarizeSourceReachability,
 } from "../../scripts/development/audit-source-reachability";
 
@@ -231,4 +236,121 @@ describe("source reachability is a review-only dependency audit", () => {
     expect(out.review_examples).toEqual([]);
     expect(out.review_examples_truncated).toBe(true);
   });
+
+  test("AST source witnesses preserve source line/column, type-only and literal dynamic imports", () => {
+    const evidence = readSourceAstEvidence([
+      'import type { A } from "./types";',
+      'import { live } from "./live";',
+      'export type { D } from "./other";',
+      'const lazy = import("./lazy");',
+      'const unknown = import("./variant/" + suffix);',
+      'const maybe = require("./shadowed");',
+      'const member = some.require("./member");',
+      '// import { Fake } from "./comment";',
+    ].join("\n"), "lib/inspect.ts");
+    const exact = evidence.imports.filter(site => site.specifier !== null);
+    expect(exact.map(site => site.kind)).toEqual([
+      "IMPORT", "IMPORT", "EXPORT", "DYNAMIC_IMPORT", "REQUIRE", "MEMBER_REQUIRE",
+    ]);
+    expect(exact.map(site => site.line)).toEqual([1, 2, 3, 4, 6, 7]);
+    expect(exact[0]?.column).toBe(24);
+    expect(exact[0]?.runtime_capable).toBe(false);
+    expect(exact[1]?.runtime_capable).toBe(true);
+    expect(evidence.imports.filter(site => site.specifier === null))
+      .toMatchObject([{ kind: "DYNAMIC_IMPORT", line: 5 }]);
+  });
+
+  test("source graph impact is conservative with exact witnesses and bounded cycles", () => {
+    const files = ["lib/changed.ts", "lib/user.ts", "lib/top.ts", "lib/unrelated.ts"];
+    const edge = (path: string, dependency: string, line: number) => ({
+      path, dependency, line, column: 8, specifier: "./" + dependency.split("/").at(-1),
+      kind: "IMPORT" as const, runtime_capable: true,
+    });
+    const graph = {
+      files, edges: [
+        edge("lib/user.ts", "lib/changed.ts", 4),
+        edge("lib/top.ts", "lib/user.ts", 7),
+        edge("lib/user.ts", "lib/top.ts", 12),
+      ],
+      obligations: [
+        { path: "lib/top.ts", line: 15, column: 12, specifier: null,
+          kind: "DYNAMIC_IMPORT" as const, runtime_capable: true,
+          reason: "NONLITERAL_IMPORT" as const },
+      ],
+    };
+    const result = explainSourceDependency(graph,
+      { mode: "IMPACT", source: "lib/changed.ts" });
+    expect(result.status).toBe("FOUND");
+    expect(result.routes.map(route => route.path)).toEqual(["lib/user.ts", "lib/top.ts"]);
+    expect(result.routes[1]?.steps.map(step => step.witness.line)).toEqual([4, 7]);
+    expect(result.relevant_obligations).toHaveLength(1);
+    expect(result.global_obligation_count).toBe(1);
+    expect(explainSourceDependency(graph, {
+      mode: "TRACE", source: "lib/top.ts", target: "lib/changed.ts",
+    }).routes[0]?.steps.map(step => step.witness.line)).toEqual([7, 4]);
+    expect(explainSourceDependency(graph, {
+      mode: "TRACE", source: "lib/changed.ts", target: "lib/unrelated.ts",
+    }).status).toBe("NO_PATH");
+    expect(explainSourceDependency(graph, {
+      mode: "IMPACT", source: "lib/phantom.ts",
+    }).status).toBe("UNKNOWN_SOURCE");
+    expect(explainSourceDependency(graph, {
+      mode: "TRACE", source: "lib/top.ts", target: "lib/changed.ts", maxHops: 1,
+    }).status).toBe("DEPTH_LIMIT");
+    expect(explainSourceDependency(graph, {
+      mode: "IMPACT", source: "lib/changed.ts", resultLimit: 1,
+    }).truncated).toBe(true);
+  });
+
+  test("generic knowledge API sites and exact literal references are distinct from consumption", () => {
+    const key = "knowledge:docs/modelling/standard#uv";
+    const production = readSourceAstEvidence([
+      'import { selectKnowledgeSections as choose } from "../../lib/semantic/knowledge";',
+      'const selected = choose({ query: "UV" });',
+      'const declared = "' + key + '";',
+      '// "' + key + '"',
+      'const unrelated = selectKnowledgeSections();',
+    ].join("\n"), "scripts/development/plan.ts", key);
+    const proofOnly = readSourceAstEvidence(
+      'const known = "' + key + '";', "tests/knowledge.test.ts", key
+    );
+    expect(production.knowledge_literals).toMatchObject([
+      { path: "scripts/development/plan.ts", line: 3 },
+    ]);
+    expect(production.knowledge_api_candidates).toMatchObject([
+      { line: 2, api: "selectKnowledgeSections" },
+    ]);
+    const report = inspectKnowledgeSourceSites(key, [production, proofOnly]);
+    expect(report.evidence_class).toBe("EXACT_AST_LITERAL_REFERENCE_NOT_CONSUMPTION_PROOF");
+    expect(report.literal_source_count).toBe(1);
+    expect(report.literal_test_count).toBe(1);
+    expect(report.generic_candidate_count).toBe(1);
+    expect(report.interpretation).toContain("not prove");
+    expect(inspectKnowledgeSourceSites(key, [readSourceAstEvidence(
+      'import { indexMarkdownKnowledge } from "../../lib/semantic/knowledge";\n' +
+      'indexMarkdownKnowledge("x", "# a");', "scripts/other.ts", key
+    )]).evidence_class).toBe("GENERIC_KNOWLEDGE_API_CANDIDATE");
+    expect(inspectKnowledgeSourceSites(key, [
+      readSourceAstEvidence('const unrelated = "other";', "scripts/other.ts", key),
+    ]).evidence_class).toBe("NO_SOURCE_WITNESS");
+    expect(inspectKnowledgeSourceSites(key, [proofOnly]).evidence_class)
+      .toBe("DECLARATION_ONLY");
+    expect(report.catalog_registration).toBe("NOT_CHECKED");
+    expect(() => readSourceAstEvidence("", "a.ts", "not-a-knowledge-id")).toThrow();
+  });
+
+  test("source import Mermaid and Markdown are witness-backed projections only", () => {
+    const report = explainSourceDependency({
+      files: ["a.ts", "b.ts"],
+      edges: [{
+        path: "b.ts", dependency: "a.ts", line: 3, column: 9,
+        specifier: "./a", kind: "IMPORT", runtime_capable: true,
+      }],
+      obligations: [],
+    }, { mode: "IMPACT", source: "a.ts" });
+    expect(sourceInspectionMermaid(report)).toContain("flowchart LR");
+    expect(sourceInspectionMarkdown(report)).toContain("b.ts:3:9");
+    expect(sourceInspectionMarkdown(report)).toContain("not function-call");
+  });
+
 });

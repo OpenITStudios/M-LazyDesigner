@@ -78,6 +78,12 @@ Unresolved local imports, missing declared roots and nonliteral dynamic
 imports are reported rather than silently ignored. A syntactic value import
 still does not prove emitted JavaScript, installed Runtime registration or
 actual execution.
+Source provenance can be queried without inventing a second source graph:
+`bun run audit:reachability -- --impact=mcp/lib/semantic/knowledge.ts --format=markdown`
+or
+`bun run audit:reachability -- --trace=mcp/scripts/development/plan-development-context.ts,mcp/lib/semantic/knowledge.ts`.
+These views use exact relative AST import witnesses and report unverified/computed imports as obligations. The separate `--knowledge-id=knowledge:...` report distinguishes AST literals, imported generic knowledge-selection API calls and declaration-only states; none proves that a specific fact was applied. Source Mermaid is derived presentation, not Runtime or Pele execution. See [Repository Knowledge Architecture](../../../docs/04-system/knowledge-architecture.md).
+
 This audit also cannot prove external consumers, model quality or safe deletion. Pair its findings with
 existing `audit:unused`, exact owner tests, manifest/Runtime inventory
 and focused production caller review. No new Runtime module, cleanup
