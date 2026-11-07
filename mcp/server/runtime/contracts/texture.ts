@@ -186,6 +186,21 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
       !textureVariantNativeInventoryIntact(textureInventoryBefore, Texture.all)) {
     throw new Error("TEXTURE_VARIANT_NATIVE_BASE_INVENTORY_AMBIGUOUS");
   }
+  // TextureGroup is independently mutable. Listener changes to its membership
+  // or metadata during async decode must not be undone as though owned here.
+  const groupInventoryBefore = TextureGroup.all.map(group => ({
+    owner: group, uuid: group.uuid, name: group.name,
+    is_material: group.is_material,
+  }));
+  const textureGroupsUnchanged = () =>
+    TextureGroup.all.length === groupInventoryBefore.length &&
+    TextureGroup.all.every((group, index) => {
+      const original = groupInventoryBefore[index];
+      return group === original?.owner &&
+        group.uuid === original.uuid &&
+        group.name === original.name &&
+        group.is_material === original.is_material;
+    });
 
   // A history snapshot lets failure recovery reject asynchronous edits by a
   // different owner, even if they happened on the same Project instance.
@@ -251,6 +266,9 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
       // A concurrent edit may have committed while the async decoder yielded.
       // The original Undo transaction is no longer safe to finish or cancel.
       throw new Error("TEXTURE_VARIANT_UNDO_HISTORY_CHANGED_DURING_DECODE");
+    }
+    if (!textureGroupsUnchanged()) {
+      throw new Error("TEXTURE_VARIANT_NATIVE_TEXTURE_GROUP_INVENTORY_DRIFT");
     }
     const sourceNow = fullTextureRgba(source);
     requireUnchangedTextureBitmap(
@@ -340,6 +358,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
         !textureVariantNativeInventoryIntact(
           textureInventoryBefore, Texture.all, variant
         ) ||
+        !textureGroupsUnchanged() ||
         Texture.all.filter(item => item.uuid === variant.uuid).length !== 1 ||
         !Texture.all.includes(source) ||
         Texture.all.filter(item => item.uuid === source.uuid).length !== 1 ||
@@ -394,6 +413,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
       }
     }
     let inventoryIntact = false;
+    let groupsIntact = false;
     if (projectUnchanged) {
       try {
         // A constructor/fromDataURL/add failure can register a partial
@@ -401,8 +421,10 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
         inventoryIntact = textureVariantNativeInventoryIntact(
           textureInventoryBefore, Texture.all, variant
         );
+        groupsIntact = textureGroupsUnchanged();
       } catch {
         inventoryIntact = false;
+        groupsIntact = false;
       }
     }
     const decision = chooseTextureVariantNativeFailureRecovery({
@@ -413,6 +435,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
       source_unchanged: sourceUnchanged,
       uv_unchanged: uvUnchanged,
       texture_inventory_unchanged_except_candidate: inventoryIntact,
+      texture_group_inventory_unchanged: groupsIntact,
     });
     if (decision !== "ROLLBACK_OWNED_PRECOMMIT") {
       throw new Error(
@@ -430,7 +453,8 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
       // owner before touching Undo or another Project's transaction.
       if (Project !== projectOwner ||
           Project?.uuid !== precommit.project_uuid ||
-          Undo.current_save !== undoOwner) {
+          Undo.current_save !== undoOwner ||
+          !textureGroupsUnchanged()) {
         throw new Error("TEXTURE_VARIANT_ROLLBACK_OWNERSHIP_LOST");
       }
       Undo.cancelEdit();
@@ -442,6 +466,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
           !textureVariantNativeInventoryIntact(
             textureInventoryBefore, Texture.all
           ) ||
+          !textureGroupsUnchanged() ||
           !Texture.all.includes(source) ||
           Texture.all.filter(item => item.uuid === source.uuid).length !== 1 ||
           JSON.stringify(nativeVariantTextureIdentity(source)) !==

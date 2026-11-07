@@ -214,6 +214,7 @@ describe("V1 variant pre-Undo native source continuity", () => {
       project_unchanged: true, undo_owned: true,
       history_unchanged: true, source_unchanged: true,
       uv_unchanged: true, texture_inventory_unchanged_except_candidate: true,
+      texture_group_inventory_unchanged: true,
     };
     expect(chooseTextureVariantNativeFailureRecovery(safe))
       .toBe("ROLLBACK_OWNED_PRECOMMIT");
@@ -225,6 +226,7 @@ describe("V1 variant pre-Undo native source continuity", () => {
       { source_unchanged: false },
       { uv_unchanged: false },
       { texture_inventory_unchanged_except_candidate: false },
+      { texture_group_inventory_unchanged: false },
     ]) {
       expect(chooseTextureVariantNativeFailureRecovery({
         ...safe, ...fault,
@@ -232,6 +234,9 @@ describe("V1 variant pre-Undo native source continuity", () => {
     }
     expect(() => chooseTextureVariantNativeFailureRecovery({
       ...safe, undo_owned: undefined as unknown as boolean,
+    })).toThrow("TEXTURE_VARIANT_RECOVERY_OBSERVATION_INVALID");
+    expect(() => chooseTextureVariantNativeFailureRecovery({
+      ...safe, texture_group_inventory_unchanged: undefined as unknown as boolean,
     })).toThrow("TEXTURE_VARIANT_RECOVERY_OBSERVATION_INVALID");
   });
 
@@ -254,6 +259,9 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(body).toContain("TEXTURE_VARIANT_ROLLBACK_POSTCONDITION_FAILED");
     expect(body).toContain("undoHistoryUnchanged()");
     expect(body).toContain("TEXTURE_VARIANT_UNDO_HISTORY_CHANGED_DURING_DECODE");
+    expect(body).toContain("TEXTURE_VARIANT_NATIVE_TEXTURE_GROUP_INVENTORY_DRIFT");
+    expect(body).toContain("texture_group_inventory_unchanged: groupsIntact");
+    expect(body).toContain("!textureGroupsUnchanged()");
     expect(body).toContain("TEXTURE_VARIANT_UNDO_COMMIT_ENTRY_UNVERIFIED");
     expect(body).toContain("commitSnapshot?.before !== undoOwner");
     expect(body).toContain("Object.hasOwn(postTextures, variantBeforeFinish.uuid)");

@@ -17,6 +17,9 @@ type Fault =
   | "finished_event_variant_id_changed" | "finished_event_variant_channel_changed"
   | "finished_event_group_renamed" | "finished_event_group_material_changed"
   | "finished_event_group_removed" | "finished_event_undo_snapshot_erased"
+  | "group_foreign_during_decode" | "group_renamed_during_decode"
+  | "group_removed_during_decode" | "group_drift_on_remove"
+  | "group_drift_on_cancel" | "group_foreign_after_commit"
   | "finish_entry_mismatch" | "cancel_alters_history" | "remove_replaces_uuid" | "init_throws";
 
 type FakeCase = {
@@ -97,6 +100,9 @@ async function withFakeBlockbench(
       if (fault === "finished_event_group_renamed") group.name = "Other";
       if (fault === "finished_event_group_material_changed") group.is_material = true;
       if (fault === "finished_event_group_removed") textureGroups.length = 0;
+      if (fault === "group_foreign_after_commit") {
+        textureGroups.push({uuid:"foreign",name:"Other",is_material:false});
+      }
       if (fault === "finished_event_undo_snapshot_erased") entry.post.textures = {};
       if (fault === "finish_throws_after_commit") {
         throw new Error("FINISH_FAILED_AFTER_COMMIT");
@@ -108,6 +114,7 @@ async function withFakeBlockbench(
       calls.cancel++;
       if (fault === "cancel_throws") throw new Error("CANCEL_FAILED");
       undo.current_save = undefined;
+      if (fault === "group_drift_on_cancel") group.name = "changed_on_cancel";
       if (fault === "cancel_alters_history") {
         undo.history.push({kind:"foreign"});
         undo.index++;
@@ -155,7 +162,8 @@ async function withFakeBlockbench(
       this.pixels=new Uint8ClampedArray(opts.width*opts.height*4);
       this.img={decode:async()=>{
         if (["decode_reject","remove_throws","cancel_throws",
-             "cancel_alters_history","remove_replaces_uuid"].includes(fault)) {
+             "cancel_alters_history","remove_replaces_uuid",
+             "group_drift_on_remove","group_drift_on_cancel"].includes(fault)) {
           throw new Error("DECODE_FAILED");
         }
         if (fault==="foreign_texture") {
@@ -163,6 +171,11 @@ async function withFakeBlockbench(
             name:"foreign.png",width:16,height:16,
           }));
         }
+        if (fault === "group_foreign_during_decode") {
+          textureGroups.push({uuid:"foreign",name:"Other",is_material:false});
+        }
+        if (fault === "group_renamed_during_decode") group.name = "renamed";
+        if (fault === "group_removed_during_decode") textureGroups.length = 0;
         if (fault==="shadow_uuid") {
           const shadow=new FakeTexture({name:"shadow.png",width:16,height:16});
           shadow.uuid=this.uuid;
@@ -208,6 +221,7 @@ async function withFakeBlockbench(
       if (fault==="remove_throws") throw new Error("REMOVE_FAILED");
       const index=FakeTexture.all.indexOf(this);
       if (index!==-1) FakeTexture.all.splice(index,1);
+      if (fault === "group_drift_on_remove") group.name = "changed_on_remove";
       if (fault==="remove_replaces_uuid") {
         const replacement=new FakeTexture({
           name:"replacement.png",width:16,height:16,
@@ -308,6 +322,40 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
         expect(ctx.textures.length).toBe(2);
       });
     }
+  });
+
+  test("foreign TextureGroup edits during decode forbid finish or rollback",async()=>{
+    for (const fault of [
+      "group_foreign_during_decode", "group_renamed_during_decode",
+      "group_removed_during_decode",
+    ] as const) {
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+        expect(ctx.calls).toMatchObject({init:1,finish:0,cancel:0,remove:0});
+        expect(ctx.textures).toHaveLength(2);
+      });
+    }
+  });
+
+  test("TextureGroup changes during cleanup invalidate rollback ownership",async()=>{
+    await withFakeBlockbench("group_drift_on_remove",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_ROLLBACK_UNVERIFIED");
+      expect(ctx.calls).toMatchObject({init:1,finish:0,remove:1,cancel:0});
+      expect(ctx.textures).toHaveLength(1);
+    });
+    await withFakeBlockbench("group_drift_on_cancel",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_ROLLBACK_UNVERIFIED");
+      expect(ctx.calls).toMatchObject({init:1,finish:0,remove:1,cancel:1});
+      expect(ctx.textures).toHaveLength(1);
+    });
+  });
+
+  test("foreign TextureGroup addition after native commit is not receipt success",async()=>{
+    await withFakeBlockbench("group_foreign_after_commit",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+      expect(ctx.calls).toMatchObject({init:1,finish:1,cancel:0,remove:0});
+      expect(ctx.textures).toHaveLength(2);
+    });
   });
 
   test("remove, cancel and post-cancel history corruption are ROLLBACK_UNVERIFIED",async()=>{

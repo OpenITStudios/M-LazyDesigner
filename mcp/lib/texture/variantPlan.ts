@@ -256,8 +256,8 @@ export function reconcileTextureVariantNativeContinuity(
 /**
  * A failed native variant edit is rollback-eligible ONLY before commit was
  * attempted, while its original Project/Undo/history/source/UV/candidate
- * ownership remains observable, including the full original Texture
- * inventory and at most the candidate. Otherwise preserve state for review.
+ * ownership remains observable, including the original TextureGroup inventory,
+ * full original Texture inventory and at most the candidate. Otherwise preserve state.
  * This is a decision guard, not a second Undo executor.
  */
 export type TextureVariantNativeRecoveryObservation = {
@@ -268,23 +268,26 @@ export type TextureVariantNativeRecoveryObservation = {
   source_unchanged: boolean;
   uv_unchanged: boolean;
   texture_inventory_unchanged_except_candidate: boolean;
+  texture_group_inventory_unchanged: boolean;
 };
 export function chooseTextureVariantNativeFailureRecovery(
   state: TextureVariantNativeRecoveryObservation
 ): "ROLLBACK_OWNED_PRECOMMIT" | "INSPECT_OUTCOME_UNKNOWN" {
   if (!state || typeof state !== "object" ||
-      Object.keys(state).length !== 7 ||
+      Object.keys(state).length !== 8 ||
       [
         state.commit_attempted, state.project_unchanged, state.undo_owned,
         state.history_unchanged, state.source_unchanged,
         state.uv_unchanged, state.texture_inventory_unchanged_except_candidate,
+        state.texture_group_inventory_unchanged,
       ].some(value => typeof value !== "boolean")) {
     throw new Error("TEXTURE_VARIANT_RECOVERY_OBSERVATION_INVALID");
   }
   return !state.commit_attempted &&
     state.project_unchanged && state.undo_owned &&
     state.history_unchanged && state.source_unchanged &&
-    state.uv_unchanged && state.texture_inventory_unchanged_except_candidate
+    state.uv_unchanged && state.texture_inventory_unchanged_except_candidate &&
+    state.texture_group_inventory_unchanged
     ? "ROLLBACK_OWNED_PRECOMMIT"
     : "INSPECT_OUTCOME_UNKNOWN";
 }
