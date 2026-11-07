@@ -2,6 +2,14 @@
 
 Load this file only at `Current Stage: FINALIZATION`. It owns generic completion integrity, not Geometry/Texturing/Animation quality and not repair of historical assets.
 
+**Scope of existing gates:** The Geometry/UV/Texturing approvals and saved
+`.bbmodel` SHA procedure below are established for the Bedrock Entity model
+workflow. Other Asset Profiles have distinct source-only deliverable
+requirements in `mcp/lib/product/assetOutputContracts.ts`; those plans are
+not native proof or a substitute for profile-specific output readback,
+contextual validation and approval. Never treat an Entity `.bbmodel`
+checkpoint as the Finalization artifact for PNG, Block or Particle outputs.
+
 ## Entry Prerequisites
 
 ```text

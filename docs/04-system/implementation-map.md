@@ -370,6 +370,17 @@ manage_animation_controller
 
 ## Visual Asset Expansion — Source to Runtime Closure
 
+**Source-only output requirements:** `mcp/lib/product/assetOutputContracts.ts`
+owns the per-profile FILE/HANDOFF/REVIEW deliverable plans, projected from
+the existing `assetProfiles.ts` `output_contract` identity (not a second
+Asset Profile registry). `planAssetOutputRequirements` resolves required,
+explicitly requested and referenced outputs; a missing referenced inventory
+retains an unresolved conditional rather than dropping a Particle texture.
+It never checks file bytes, invokes a native tool, writes Resource Packs or
+authorizes Finalization. `mcp/tests/asset-output-contracts.test.ts` owns the
+positive/negative source contract. The existing native export, Texture and
+Particle owners remain the only execution paths.
+
 **Asset Profile source owner:** `mcp/lib/product/assetProfiles.ts` declares
 seven output-intent profiles, category, authoring-domain eligibility, output
 quality gate applicability and output contract identity. Its source-only

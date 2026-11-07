@@ -63,6 +63,43 @@ LazyDesigner extends its existing Geometry/UV, Texture/Painter/PBR, Animation/Ri
 
 **Cross-profile modifiers, not extra Stages:** appearance/texture/geometry variants; placement context; collision/selection bounds preview; export QA. None may silently promote source evidence to in-game proof.
 
+## Source-only per-profile output contract
+
+The canonical output requirement owner is
+`mcp/lib/product/assetOutputContracts.ts`. It uses the existing
+`output_contract` value from `mcp/lib/product/assetProfiles.ts`; this is
+**not** another Asset Profile registry, capability catalog, Runtime exporter,
+or completed Resource/Behavior Pack assembly. Output requirements are
+`FILE`, `HANDOFF`, or `REVIEW`, with `REQUIRED`, `WHEN_REQUESTED`,
+or `WHEN_REFERENCED` activation. The named evidence class describes
+**future evidence needed**, not proof already obtained.
+
+| Asset Profile | Minimum required output or review | Conditional output |
+| --- | --- | --- |
+| Entity | Editable `.bbmodel` | Native geometry JSON, animation JSON persisted after native compilation, texture PNG when requested |
+| Attachable | Editable model, binding review, actual holder fit review | Texture PNG or separately authorized attachable resource handoff |
+| Custom Block Visual | Block geometry JSON, texture PNG, format-compatibility review | Editable source project when requested and supported |
+| Item Icon / Sprite | PNG and item-atlas mapping handoff | No unrequested pack assembly |
+| Animated Block Texture | PNG frame strip, flipbook definition handoff, terrain atlas binding handoff | No Animation Timeline or Particle substitution |
+| Classic Player Skin | Skin PNG and skin metadata handoff | No implicit skin-pack compiler |
+| Particle | Particle JSON and dependency/resource review | Texture PNG when referenced, or explicitly requested |
+
+`planAssetOutputRequirements` enforces exact allowed deliverable IDs,
+rejects duplicate/unknown requests and incompatible reference claims, and
+keeps `WHEN_REFERENCED` outcomes unresolved until a complete referenced
+resource inventory is supplied by the caller. This pure planner cannot
+authenticate that inventory. An absent inventory must **not** prove an
+optional texture is unnecessary. A plan always reports `native_verified=false`,
+`files_written=false`, and `minecraft_verified=false`, even when its required
+output identities are fully determined. It neither accepts Runtime evidence
+nor changes Control's Finalization verdict.
+
+The existing Entity native export, Texture/Painter output, Bedrock format
+planners, Particle resource owner, and specialist QA remain authoritative for
+actual execution. In particular, candidate atlas/flipbook/skin metadata is a
+handoff, not a generated pack file; a model-only camera image cannot satisfy
+attachable holder-fit proof.
+
 ## Implementation contract
 
 1. **Authority:** original user intent and approved reference. When modelling, numeric requirements/real Minecraft unit dimensions and the target *Minecraft Bedrock resource format version* are explicit; Blockbench version is a separate compatibility dimension.
