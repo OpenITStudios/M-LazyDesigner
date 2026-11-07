@@ -52,6 +52,10 @@ describe("create_texture native identity receipt", () => {
     };
     expect(isTextureCreationReceipt(variant, "variant")).toBe(true);
     expect(textureVariantCreationReceiptSchema.safeParse(variant).success).toBe(true);
+    // Backward compatible for previous runtime receipts lacking the optional
+    // native precommit reconciliation; never force a fabricated PASS field.
+    expect(textureVariantCreationReceiptSchema.parse(variant)
+      .variant_native_continuity).toBeUndefined();
     expect(isTextureCreationReceipt(variant, "template")).toBe(false);
     expect(isTextureCreationReceipt(observed, "variant")).toBe(false);
     for (const changed of [

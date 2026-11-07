@@ -1,6 +1,7 @@
 /// <reference types="blockbench-types" />
 
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import {
   getAllToolDefinitions,
   invalidateToolRegistrationRuntimeCaches,
@@ -20,6 +21,8 @@ import {
 import {
   createTextureVariantParameters,
   planTextureVariantFromBase,
+  reconcileTextureVariantNativeContinuity,
+  type TextureVariantNativeTextureIdentity,
   type TextureVariantSource,
 } from "@/lib/texture/variantPlan";
 import { textureIdSchema } from "@/lib/schemas/ids";
@@ -29,6 +32,7 @@ import {
   rgbaToPngDataUrl,
 } from "@/lib/texture/bitmapRuntime";
 import { createTextureParameters } from "../../tools/texture/createSchema";
+import { collectUvAtlasUsages } from "../../tools/texture/atlas";
 
 export const wiredCreateTextureParameters = z.union([
   createTextureParameters,
@@ -95,6 +99,39 @@ function variantSource(texture: Texture): TextureVariantSource {
   };
 }
 
+
+function nativeVariantTextureIdentity(texture: Texture): TextureVariantNativeTextureIdentity {
+  return {
+    uuid: texture.uuid,
+    name: texture.name,
+    width: texture.width,
+    height: texture.height,
+    display_height: texture.display_height ?? texture.height,
+    uv_width: texture.getUVWidth(),
+    uv_height: texture.getUVHeight(),
+    group_uuid: texture.group || null,
+    pbr_channel: texture.pbr_channel ?? "color",
+  };
+}
+
+/** Existing atlas usage collector owns native Cube face/UV references. */
+function currentVariantMappedUvIdentity() {
+  const faces = collectUvAtlasUsages()
+    .slice()
+    .sort((a, b) =>
+      a.cube_uuid.localeCompare(b.cube_uuid) || a.face.localeCompare(b.face)
+    );
+  return {
+    mapped_face_count: faces.length,
+    mapped_face_sha256: "sha256:" + createHash("sha256")
+      .update(JSON.stringify(faces)).digest("hex"),
+    project_logical_uv: [
+      Project?.texture_width ?? 0,
+      Project?.texture_height ?? 0,
+    ] as [number, number],
+  };
+}
+
 async function createTextureVariant(request: z.infer<typeof createTextureVariantParameters>) {
   const source = resolveCoreTexture(
     request.source_texture_id,
@@ -116,7 +153,35 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
     existing_texture_names: Texture.all.map((texture) => texture.name),
   });
 
+  if (Undo.current_save) {
+    throw new Error("TEXTURE_VARIANT_UNDO_ALREADY_ACTIVE");
+  }
+  if (!Project?.uuid) {
+    throw new Error("TEXTURE_VARIANT_NATIVE_PROJECT_UNAVAILABLE");
+  }
+  // Read actual native data before edit. This is not a caller-supplied
+  // appearance hash; it is bound to this Project and Texture instance.
+  const sourceBitmap = fullTextureRgba(source);
+  const sourceBefore = nativeVariantTextureIdentity(source);
+  if (sourceBitmap.width !== plan.bitmap.width ||
+      sourceBitmap.height !== plan.bitmap.height) {
+    throw new Error("TEXTURE_VARIANT_NATIVE_SOURCE_BITMAP_MISMATCH");
+  }
+  const precommit = {
+    project_uuid: Project.uuid,
+    source: sourceBefore,
+    mapping: currentVariantMappedUvIdentity(),
+    source_rgba_revision: "sha256:" + sourceBitmap.width + "x" +
+      sourceBitmap.height + ":" + createHash("sha256")
+        .update(sourceBitmap.pixels).digest("hex"),
+  };
+  if (!Texture.all.includes(source)) {
+    throw new Error("TEXTURE_VARIANT_NATIVE_SOURCE_NOT_REGISTERED");
+  }
+
   Undo.initEdit({ textures: [], collections: [] });
+  const undoOwner = Undo.current_save;
+  let nativeContinuity!: ReturnType<typeof reconcileTextureVariantNativeContinuity>;
   let variant: Texture | undefined;
   try {
     variant = new Texture({
@@ -142,12 +207,63 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
     variant.uv_height = source.uv_height;
     variant.add(false, false);
     await variant.img.decode();
+    // Keep the precommit check synchronous: no more yield is allowed while
+    // the mutation is open. Reject a changed source, project or UV map rather
+    // than presenting a stale variant_creation success receipt.
+    if (Undo.current_save !== undoOwner) {
+      throw new Error("TEXTURE_VARIANT_UNDO_OWNERSHIP_LOST");
+    }
+    const sourceNow = fullTextureRgba(source);
+    requireUnchangedTextureBitmap(
+      sourceBitmap, sourceNow,
+      "TEXTURE_VARIANT_NATIVE_SOURCE_RGBA_CHANGED"
+    );
+    const variantNow = fullTextureRgba(variant);
+    requireUnchangedTextureBitmap(
+      sourceBitmap, variantNow,
+      "TEXTURE_VARIANT_NATIVE_VARIANT_RGBA_MISMATCH"
+    );
+    const ownedGroup = TextureGroup.all.filter(
+      group => group.uuid === targetGroup.uuid
+    );
+    nativeContinuity = reconcileTextureVariantNativeContinuity(
+      plan, precommit, {
+        project_uuid: Project?.uuid ?? "",
+        source: nativeVariantTextureIdentity(source),
+        variant: nativeVariantTextureIdentity(variant),
+        mapping: currentVariantMappedUvIdentity(),
+        target_group_uuid: targetGroup.uuid,
+        target_group_is_material: ownedGroup.length !== 1 ||
+          ownedGroup[0] !== targetGroup || targetGroup.is_material === true,
+        source_remains_base_color:
+          textureProductionRoleForVariant(source) === "base_color_candidate",
+        source_registered_once: Texture.all.filter(
+          item => item.uuid === source.uuid && item === source
+        ).length === 1,
+        variant_registered_once: Texture.all.filter(
+          item => item.uuid === variant.uuid && item === variant
+        ).length === 1,
+        variant_name_count: Texture.all.filter(
+          item => item.name === variant.name
+        ).length,
+        source_rgba_unchanged: true,
+        variant_rgba_matches_source: true,
+      }
+    );
 
     Undo.finishEdit("Agent created texture variant", {
       textures: [variant],
       collections: [],
     });
   } catch (error) {
+    if (Undo.current_save !== undoOwner) {
+      // A foreign Undo transaction may now be active. Never cancel or
+      // remove another operation's state; the outcome needs inspection.
+      throw new Error(
+        "TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN: native Undo ownership changed " +
+        "during asynchronous texture decode; inspect project before retrying."
+      );
+    }
     variant?.remove(true);
     Undo.cancelEdit();
     Canvas.updateAll();
@@ -173,6 +289,7 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
         pbr_channel: variant.pbr_channel,
       },
       variant_creation: plan,
+      variant_native_continuity: nativeContinuity,
     },
   };
 }

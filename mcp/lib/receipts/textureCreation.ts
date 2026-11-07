@@ -24,6 +24,24 @@ export const textureInventoryCreationReceiptSchema = z.object({
   message: "A texture variant must be validated against its source-owned plan.",
 });
 
+
+export const textureVariantNativeContinuityReceiptSchema = z.object({
+  state: z.literal("RUNTIME_PRECOMMIT_VARIANT_CONTINUITY_OBSERVED"),
+  project_uuid: z.string().min(1),
+  source_texture_uuid: z.string().min(1),
+  variant_texture_uuid: z.string().min(1),
+  target_group_uuid: z.string().min(1),
+  source_rgba_revision: z.string().regex(
+    /^sha256:[1-9]\d*x[1-9]\d*:[0-9a-f]{64}$/
+  ),
+  uv_mapped_faces_sha256: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+  uv_mapped_face_count: z.number().int().nonnegative(),
+  source_and_variant_rgba_equal_at_creation: z.literal(true),
+  uv_mapping_unchanged_during_creation: z.literal(true),
+  visual_verified: z.literal(false),
+  minecraft_verified: z.literal(false),
+});
+
 export const textureVariantCreationReceiptSchema = z.object({
   texture: z.object({
     uuid: z.string().min(1),
@@ -34,6 +52,7 @@ export const textureVariantCreationReceiptSchema = z.object({
     pbr_channel: z.literal("color"),
   }),
   variant_creation: textureVariantPlanReceiptSchema,
+  variant_native_continuity: textureVariantNativeContinuityReceiptSchema.optional(),
 }).superRefine((value, ctx) => {
   const texture = value.texture;
   const plan = value.variant_creation;
@@ -61,7 +80,20 @@ export const textureVariantCreationReceiptSchema = z.object({
       message: "Created variant must retain its source atlas bitmap dimensions.",
     });
   }
+
+  const continuity = value.variant_native_continuity;
+  if (continuity && (
+    continuity.source_texture_uuid !== plan.source_texture_uuid ||
+    continuity.variant_texture_uuid !== texture.uuid ||
+    continuity.target_group_uuid !== plan.target_group_uuid
+  )) {
+    ctx.addIssue({
+      code: "custom", path: ["variant_native_continuity"],
+      message: "Runtime native variant continuity must bind exact source, variant and group.",
+    });
+  }
 });
+
 
 export const textureCreationReceiptSchema = z.union([
   textureInventoryCreationReceiptSchema,
