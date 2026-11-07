@@ -370,6 +370,18 @@ manage_animation_controller
 
 ## Visual Asset Expansion — Source to Runtime Closure
 
+**Native receipt bridge (source-only):**
+`mcp/lib/receipts/assetOutput.ts` reviews exact `export_model`
+structuredContent (Entity project/geometry/animation) and existing
+`isVerifiedParticleWriteReceipt` (Particle JSON) against planned
+deliverables. It distinguishes compile-only, size-only, native-reported
+readback and Particle write receipt without claiming current revision,
+authenticity, visual acceptance or completion. Missing native owners stay
+explicitly `NATIVE_ROUTE_UNAVAILABLE`; this is **not** a second
+exporter, receipt store, validation engine or Gateway route. Focused
+`mcp/tests/contracts/asset-output-receipt-contract.test.ts`
+covers valid/invalid producer shapes and fail-closed ownership.
+
 **Source-only output requirements:** `mcp/lib/product/assetOutputContracts.ts`
 owns the per-profile FILE/HANDOFF/REVIEW deliverable plans, projected from
 the existing `assetProfiles.ts` `output_contract` identity (not a second

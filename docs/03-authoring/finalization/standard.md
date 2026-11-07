@@ -105,6 +105,20 @@ sufficient; verify current asset state again if edited after compilation.
 
 For a separately requested animation controller, use its actual native Blockbench export/save route; for a PNG use the native texture save/export route. Do not invent additional codec IDs, substitute `.bbmodel`, or bypass through generic UI/eval. If the required native step is unavailable, report that output as pending and keep its finalization blocked. Existing Bedrock geometry files require native overwrite/merge or a new path; `.bbmodel` replacement requires explicit overwrite consent. Animation content compilation does not constitute a native file save or Minecraft playback proof.
 
+### Output receipt evidence boundary
+
+`mcp/lib/receipts/assetOutput.ts` can summarize existing
+`export_model` and `manage_particle` structuredContent into scoped
+evidence levels. It is a pure reviewer, not a live file probe.
+`FILE_READBACK_REPORTED` means a native receipt reports matching hashes
+at its execution point, not that the currently saved source revision still
+matches; `PARTICLE_WRITE_REPORTED` has no file-byte readback.
+`COMPILE_ONLY_REPORTED` and `WRITE_SIZE_ONLY_REPORTED` cannot substitute
+for actual delivered files. No result from this bridge can independently
+turn a new Asset Profile into `FINALIZATION PASS` or `COMPLETE`.
+Continue to use actual native files, approvals and the profile's required
+deliverables before advancing.
+
 ## Identifier / Reference Integrity
 
 The native project is metadata authority. Set or repair identifiers through the native/project owner; do not patch compiled JSON merely to pretend native state changed.

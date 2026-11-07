@@ -100,6 +100,33 @@ actual execution. In particular, candidate atlas/flipbook/skin metadata is a
 handoff, not a generated pack file; a model-only camera image cannot satisfy
 attachable holder-fit proof.
 
+## Source-only native receipt evidence bridge
+
+`mcp/lib/receipts/assetOutput.ts` now interprets **existing**
+`export_model` structuredContent and `manage_particle` mutation receipts
+against the canonical output plan, without changing either producer.
+Current bridges cover Entity `.bbmodel`, Bedrock geometry JSON, content-only
+Bedrock animation JSON compilation, and Particle JSON writes. There is no
+current registered native bridge for attachable holder fitting, block JSON,
+2D PNGs, atlas handoffs, skins, flipbook, or visual review outputs; those
+remain `NATIVE_ROUTE_UNAVAILABLE`.
+
+Evidence levels are deliberately different: `COMPILE_ONLY_REPORTED` does
+not mean an exported file exists; `WRITE_SIZE_ONLY_REPORTED` does not attest
+file contents; `FILE_READBACK_REPORTED` means an existing native export
+receipt reports matching compiled/writeback hashes and project/codec/path,
+not an independently authenticated current asset revision; and
+`PARTICLE_WRITE_REPORTED` means the canonical particle receipt records an
+exact write, not a verified file-byte readback. The bridge rejects mismatched
+codec, project UUID, path, geometry/animation identity, hash, duplicate or
+unplanned observations; all observations remain caller-provided.
+
+**None** of these result classes confers user approval, visual PASS, current
+asset-revision proof, Minecraft verification or Finalization readiness.
+The output bridge reads existing receipts in memory, performs no filesystem
+or Runtime operations, and publishes no new Gateway tool/transport schema.
+Tests: `mcp/tests/contracts/asset-output-receipt-contract.test.ts`.
+
 ## Implementation contract
 
 1. **Authority:** original user intent and approved reference. When modelling, numeric requirements/real Minecraft unit dimensions and the target *Minecraft Bedrock resource format version* are explicit; Blockbench version is a separate compatibility dimension.
