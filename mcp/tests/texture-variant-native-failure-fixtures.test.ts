@@ -26,11 +26,13 @@ type Fault =
   | "group_drift_on_cancel" | "group_foreign_after_commit"
   | "init_listener_throws" | "init_listener_replaces_save"
   | "init_listener_changes_source" | "init_listener_changes_groups"
-  | "init_listener_adds_texture" | "init_listener_changes_history"
+  | "init_listener_changes_render" | "init_listener_adds_texture" | "init_listener_changes_history"
   | "init_listener_swaps_undo" | "add_listener_throws"
-  | "add_listener_changes_source" | "add_listener_adds_foreign_texture"
+  | "add_listener_changes_source" | "add_listener_changes_wrap"
+  | "add_listener_adds_foreign_texture"
   | "add_listener_swaps_undo" | "add_listener_renames_variant"
-  | "finish_entry_mismatch" | "cancel_alters_history" | "remove_replaces_uuid" | "init_throws";
+  | "decode_variant_frame_drift" | "finished_event_variant_render_drift"
+  | "redraw_variant_sides_drift" | "finish_entry_mismatch" | "cancel_alters_history" | "remove_replaces_uuid" | "init_throws";
 
 type FakeCase = {
   call: () => ReturnType<typeof createTextureVariant>;
@@ -87,6 +89,7 @@ async function withFakeBlockbench(
       }
       if (fault === "init_listener_changes_source") source.pixels[0] = 255;
       if (fault === "init_listener_changes_groups") group.name = "Other";
+      if (fault === "init_listener_changes_render") source.render_mode = "emissive";
       if (fault === "init_listener_adds_texture") {
         FakeTexture.all.push(new FakeTexture({name:"foreign.png",width:16,height:16}));
       }
@@ -128,6 +131,7 @@ async function withFakeBlockbench(
       if (fault === "finished_event_variant_renamed") candidate.name = "after.png";
       if (fault === "finished_event_variant_id_changed") candidate.id = "renamed-id";
       if (fault === "finished_event_variant_channel_changed") candidate.pbr_channel = "mer";
+      if (fault === "finished_event_variant_render_drift") candidate.render_mode = "emissive";
       if (fault === "finished_event_group_renamed") group.name = "Other";
       if (fault === "finished_event_group_material_changed") group.is_material = true;
       if (fault === "finished_event_group_removed") textureGroups.length = 0;
@@ -207,6 +211,7 @@ async function withFakeBlockbench(
         }
         if (fault === "group_renamed_during_decode") group.name = "renamed";
         if (fault === "group_removed_during_decode") textureGroups.length = 0;
+        if (fault === "decode_variant_frame_drift") this.frame_time = 3;
         if (fault==="shadow_uuid") {
           const shadow=new FakeTexture({name:"shadow.png",width:16,height:16});
           shadow.uuid=this.uuid;
@@ -249,6 +254,7 @@ async function withFakeBlockbench(
       if (fault==="add_throws") throw new Error("ADD_FAILED_AFTER_REGISTER");
       if (fault === "add_listener_throws") throw new Error("ADD_TEXTURE_LISTENER_THROW");
       if (fault === "add_listener_changes_source") source.pixels[0] = 255;
+      if (fault === "add_listener_changes_wrap") source.wrap_mode = "repeat";
       if (fault === "add_listener_adds_foreign_texture") {
         FakeTexture.all.push(new FakeTexture({name:"foreign.png",width:16,height:16}));
       }
@@ -304,6 +310,10 @@ async function withFakeBlockbench(
       }
       if (fault === "redraw_undo_swap") assign("Undo",{...undo});
       if (fault === "redraw_uv_drift") project.texture_width = 32;
+      if (fault === "redraw_variant_sides_drift") {
+        const candidate = FakeTexture.all.find(texture => texture !== source);
+        if (candidate) candidate.render_sides = "double";
+      }
     }});
     await inspect({
       call:()=>createTextureVariant({
@@ -344,7 +354,8 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
     for (const fault of [
       "init_listener_throws", "init_listener_replaces_save",
       "init_listener_changes_source", "init_listener_changes_groups",
-      "init_listener_adds_texture", "init_listener_changes_history",
+      "init_listener_adds_texture", "init_listener_changes_render",
+      "init_listener_changes_history",
       "init_listener_swaps_undo",
     ] as const) {
       await withFakeBlockbench(fault,async ctx=>{
@@ -372,8 +383,8 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
 
   test("foreign add_texture listener mutations cannot roll back another owner",async()=>{
     for (const fault of [
-      "add_listener_changes_source","add_listener_adds_foreign_texture",
-      "add_listener_swaps_undo",
+      "add_listener_changes_source","add_listener_changes_wrap",
+      "add_listener_adds_foreign_texture", "add_listener_swaps_undo",
     ] as const) {
       await withFakeBlockbench(fault,async ctx=>{
         await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
@@ -381,6 +392,15 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
         expect(ctx.calls.events).toEqual(["init_edit","add_texture"]);
       });
     }
+  });
+
+  test("decoder visual-setting drift rolls back only the owned candidate",async()=>{
+    await withFakeBlockbench("decode_variant_frame_drift", async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_NATIVE_APPEARANCE_DRIFT");
+      expect(ctx.calls).toMatchObject({init:1,finish:0,remove:1,cancel:1});
+      expect(ctx.textures).toHaveLength(1);
+      expect(ctx.textures[0]).toBe(ctx.source);
+    });
   });
 
   test("decoder and partially failing add rollback only the owned candidate",async()=>{
@@ -512,7 +532,8 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
   test("finished_edit cannot silently change exact variant or group",async()=>{
     for(const fault of [
       "finished_event_variant_renamed", "finished_event_variant_id_changed",
-      "finished_event_variant_channel_changed", "finished_event_group_renamed",
+      "finished_event_variant_channel_changed", "finished_event_variant_render_drift",
+      "finished_event_group_renamed",
       "finished_event_group_material_changed", "finished_event_group_removed",
     ] as const){
       await withFakeBlockbench(fault,async ctx=>{
@@ -565,7 +586,7 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
       "redraw_source_pixel_drift", "redraw_variant_pixel_drift",
       "redraw_group_drift", "redraw_foreign_texture",
       "redraw_history_drift", "redraw_project_swap",
-      "redraw_undo_swap", "redraw_uv_drift",
+      "redraw_undo_swap", "redraw_uv_drift", "redraw_variant_sides_drift",
     ] as const) {
       await withFakeBlockbench(fault,async ctx=>{
         await expect(ctx.call()).rejects.toThrow(

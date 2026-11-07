@@ -166,6 +166,11 @@ describe("capture native dependency freshness contract", () => {
     expect(source).toContain("const dependencyAfter = readNativeVisualCaptureSnapshot(referenceBinding)");
     expect(source).toContain('dependencyFreshness.state === "STALE"');
     expect(source).toContain("MODEL_CAPTURE_STALE:");
+    expect(source).toContain('dependencyFreshness.state !== "MATCHED"');
+    expect(source).toContain('dependencyFreshness.state === "MATCHED"');
+    expect(source).toContain("PART_CORRESPONDENCE_UNVERIFIED");
+    expect(source.indexOf('dependencyFreshness.state === "MATCHED"'))
+      .toBeLessThan(source.indexOf("const assessment = assessVisualPartCorrespondence({"));
     expect(source).toContain('reference_authority: "CALLER_DECLARED_NOT_RUNTIME_VERIFIED"');
     expect(source).toContain("cross_invocation_reuse_allowed: false");
     expect(source).toContain("CAPTURE_TEXTURE_PIXEL_BUDGET");

@@ -256,6 +256,9 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(body).toContain("TEXTURE_VARIANT_UNDO_INIT_OUTCOME_UNKNOWN");
     expect(body).toContain("TEXTURE_VARIANT_UNDO_INIT_STATE_UNVERIFIED");
     expect(body).toContain("TEXTURE_VARIANT_ADD_TEXTURE_STATE_DRIFT");
+    expect(body).toContain("TEXTURE_VARIANT_NATIVE_APPEARANCE_DRIFT");
+    expect(body).toContain("nativeVariantAppearanceIdentity(source)");
+    expect(body).toContain("nativeVariantAppearanceIdentity(variant)");
     expect(body).toContain("save.aspects !== initAspects");
     expect(body).toContain("Undo !== undoSystemOwner");
     expect(body).toContain("addResult !== variant");

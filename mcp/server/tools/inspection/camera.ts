@@ -1523,7 +1523,20 @@ export function registerCameraTools() {
       }
 
       let partCorrespondenceEvidence = null;
-      if (reference_correspondence && correspondenceBefore) {
+      if (reference_correspondence && correspondenceBefore &&
+          dependencyFreshness.state !== "MATCHED") {
+        // Recipe geometry can be unchanged while pixels, material or
+        // animated frame phase remain untracked. Do not attest that all
+        // model capture dependencies were stable in that case.
+        content.push({
+          type: "text",
+          text: "PART_CORRESPONDENCE_UNVERIFIED: native model capture " +
+            "dependencies are incomplete; no stable part-comparison " +
+            "receipt is issued for these images.",
+        });
+      }
+      if (reference_correspondence && correspondenceBefore &&
+          dependencyFreshness.state === "MATCHED") {
         const after = readRecipePartCaptureScope(
           reference_correspondence.recipe_id, requestedCorrespondenceUuids
         );

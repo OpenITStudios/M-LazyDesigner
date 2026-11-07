@@ -2,6 +2,10 @@
 
 This file owns current proof interpretation only. Continuation: [next-action.md](next-action.md); native procedure: [local-acceptance-runbook.md](local-acceptance-runbook.md). Git owns historical implementation and acceptance details.
 
+## 2026-11-07 — Visual-asset source focus-switch closure (not executed)
+
+V1 Texture Variant is source-wired with transaction-local render/wrap/visibility/frame setting continuity across the existing Undo lifecycle; Camera `capture_model_views` is source-wired to withhold part-correspondence evidence when capture freshness is not `MATCHED`. Owning regressions and architecture source closure are **SOURCE_REVIEWED / REGRESSION_AUTHORED_NOT_RUN**. Bun, TypeScript, canonical generators, installed Blockbench and Minecraft remain **NOT_EXECUTED / NATIVE_UNVERIFIED / QUALITY_UNVERIFIED** at this source revision. Internal Capability Graph `READY` versus Gateway/Control `UNKNOWN` and non-wired asset planners are open, not silently marked complete. No public capability, generated artifact, CI or release changed.
+
 ## 2026-11-05 — Initial PROFILE_SWEEP frame roll stability (source-only)
 
 The existing v13+ `PROFILE_SWEEP` derives its initial normal by

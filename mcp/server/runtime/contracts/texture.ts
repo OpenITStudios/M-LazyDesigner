@@ -116,6 +116,17 @@ function nativeVariantTextureIdentity(texture: Texture): TextureVariantNativeTex
   };
 }
 
+/** Transaction-local native appearance evidence, not a public receipt. */
+function nativeVariantAppearanceIdentity(texture: Texture) {
+  return JSON.stringify([
+    texture.render_mode ?? null, texture.render_sides ?? null,
+    texture.wrap_mode ?? null, texture.visible ?? null,
+    texture.use_as_default ?? null, texture.frame_time ?? null,
+    texture.frame_order_type ?? null, texture.frame_order ?? null,
+    texture.frame_interpolate ?? null,
+  ]);
+}
+
 /** Existing atlas usage collector owns native Cube face/UV references. */
 function currentVariantMappedUvIdentity() {
   const faces = collectUvAtlasUsages()
@@ -169,6 +180,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
   // appearance hash; it is bound to this Project and Texture instance.
   const sourceBitmap = fullTextureRgba(source);
   const sourceBefore = nativeVariantTextureIdentity(source);
+  const sourceAppearanceBefore = nativeVariantAppearanceIdentity(source);
   if (sourceBitmap.width !== plan.bitmap.width ||
       sourceBitmap.height !== plan.bitmap.height) {
     throw new Error("TEXTURE_VARIANT_NATIVE_SOURCE_BITMAP_MISMATCH");
@@ -236,6 +248,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
         !textureGroupsUnchanged() ||
         JSON.stringify(nativeVariantTextureIdentity(source)) !==
           JSON.stringify(precommit.source) ||
+        nativeVariantAppearanceIdentity(source) !== sourceAppearanceBefore ||
         JSON.stringify(currentVariantMappedUvIdentity()) !==
           JSON.stringify(precommit.mapping)) {
       throw new Error("TEXTURE_VARIANT_UNDO_INIT_STATE_UNVERIFIED");
@@ -255,6 +268,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
   let commitAttempted = false;
   let nativeContinuity!: ReturnType<typeof reconcileTextureVariantNativeContinuity>;
   let variant: Texture | undefined;
+  let variantAppearanceAfterAdd = "";
   try {
     variant = new Texture({
       name: plan.requested_name,
@@ -297,10 +311,14 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
         variant.pbr_channel !== "color" ||
         JSON.stringify(nativeVariantTextureIdentity(source)) !==
           JSON.stringify(precommit.source) ||
+        nativeVariantAppearanceIdentity(source) !== sourceAppearanceBefore ||
         JSON.stringify(currentVariantMappedUvIdentity()) !==
           JSON.stringify(precommit.mapping)) {
       throw new Error("TEXTURE_VARIANT_ADD_TEXTURE_STATE_DRIFT");
     }
+    // Texture.add() may legitimately adjust the new Texture's material mode.
+    // Bind the native result after add_texture, then guard later listener drift.
+    variantAppearanceAfterAdd = nativeVariantAppearanceIdentity(variant);
     requireUnchangedTextureBitmap(
       sourceBitmap, fullTextureRgba(source),
       "TEXTURE_VARIANT_ADD_TEXTURE_SOURCE_CHANGED"
@@ -323,6 +341,10 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
     }
     if (!textureGroupsUnchanged()) {
       throw new Error("TEXTURE_VARIANT_NATIVE_TEXTURE_GROUP_INVENTORY_DRIFT");
+    }
+    if (nativeVariantAppearanceIdentity(source) !== sourceAppearanceBefore ||
+        nativeVariantAppearanceIdentity(variant) !== variantAppearanceAfterAdd) {
+      throw new Error("TEXTURE_VARIANT_NATIVE_APPEARANCE_DRIFT");
     }
     const sourceNow = fullTextureRgba(source);
     requireUnchangedTextureBitmap(
@@ -422,6 +444,8 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
         targetGroup.name !== plan.target_group_name ||
         targetGroup.is_material !== false ||
         textureProductionRoleForVariant(source) !== "base_color_candidate" ||
+        nativeVariantAppearanceIdentity(source) !== sourceAppearanceBefore ||
+        nativeVariantAppearanceIdentity(variant) !== variantAppearanceAfterAdd ||
         variant.id !== variantIdBeforeFinish ||
         JSON.stringify(nativeVariantTextureIdentity(variant)) !==
           JSON.stringify(variantBeforeFinish) ||
@@ -454,7 +478,8 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
           Texture.all.includes(source) &&
           Texture.all.filter(item => item.uuid === source.uuid).length === 1 &&
           JSON.stringify(nativeVariantTextureIdentity(source)) ===
-            JSON.stringify(precommit.source);
+            JSON.stringify(precommit.source) &&
+          nativeVariantAppearanceIdentity(source) === sourceAppearanceBefore;
         if (sourceUnchanged) {
           requireUnchangedTextureBitmap(
             sourceBitmap, fullTextureRgba(source),
@@ -529,6 +554,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
           Texture.all.filter(item => item.uuid === source.uuid).length !== 1 ||
           JSON.stringify(nativeVariantTextureIdentity(source)) !==
             JSON.stringify(precommit.source) ||
+          nativeVariantAppearanceIdentity(source) !== sourceAppearanceBefore ||
           JSON.stringify(currentVariantMappedUvIdentity()) !==
             JSON.stringify(precommit.mapping)) {
         throw new Error("TEXTURE_VARIANT_ROLLBACK_POSTCONDITION_FAILED");
@@ -576,6 +602,8 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
           JSON.stringify(variantBeforeRedraw) ||
         JSON.stringify(nativeVariantTextureIdentity(source)) !==
           JSON.stringify(sourceBeforeRedraw) ||
+        nativeVariantAppearanceIdentity(source) !== sourceAppearanceBefore ||
+        nativeVariantAppearanceIdentity(variant) !== variantAppearanceAfterAdd ||
         JSON.stringify(currentVariantMappedUvIdentity()) !==
           JSON.stringify(precommit.mapping)) {
       throw new Error("TEXTURE_VARIANT_POSTREDRAW_STATE_DRIFT");

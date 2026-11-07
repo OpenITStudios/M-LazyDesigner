@@ -393,6 +393,10 @@ manage_animation_controller
 3. **Then I1/T1 source-to-texture output.** Build only explicitly authorized, format-correct output adapters from actual Texture/PNG/atlas evidence; do not silently assemble entire Resource/Behavior Packs or route Pixel Art through Animation/Particle.
 4. **B1/C1 and S1 require separate native format/output decisions.** Current `export_model` supports Bedrock Entity geometry, `.bbmodel` project and content-only Bedrock animation. Do not pass off existing Entity codecs as a custom block, collision, or skin pack exporter.
 
+**Source closure for focus switch (2026-11-07):** the V1 Texture-only executor and `capture_model_views` Camera observation are **SOURCE_WIRED / REGRESSION_AUTHORED_NOT_RUN**, not native acceptance. V1's transaction-local appearance identity guards render/animation settings during Undo and redraw; Camera withholds a stable part-correspondence receipt when before/after capture dependency coverage is `UNVERIFIED`. A1/A2, B1/C1, I1, T1 and S1 remain independent native/codec/output milestones. A model-only capture does not close A2 holder-composite evidence. The public Gateway remains exactly four tools.
+
+**P0 Capability Graph boundary:** `gateway/capabilities/graph.ts` still returns `READY` when no Graph prerequisites exist, while search/Control mitigations return `UNKNOWN` for unselected or graphless mutations. This is **not resolved** by the V1/Camera source closure. The first complete P0 semantic change must include exact-branch behavior, affected consumers, owning regressions, semantic revision and canonical generated API/HTML on the same SHA. No manual edits of generator outputs or partial Graph owner changes.
+
 Before authoring any new Runtime schema or capability, inspect the actual registered catalog and dependent generators. Semantic schema changes must move with their generator-owned API outputs; while generators are unavailable, complete independent source/regression work only. Current proof is **SOURCE_REVIEWED**; executable Bun/Blockbench/Minecraft checks are not performed.
 
 ## Shared Runtime Libraries
