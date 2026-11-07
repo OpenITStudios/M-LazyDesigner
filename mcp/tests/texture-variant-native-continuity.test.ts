@@ -9,6 +9,7 @@ import { authoritativeReceipt } from "@/gateway/control/delta/receipts";
 import {
   planTextureVariantFromBase,
   reconcileTextureVariantNativeContinuity,
+  chooseTextureVariantNativeFailureRecovery,
   type TextureVariantNativeBefore,
   type TextureVariantNativeAfter,
 } from "@/lib/texture/variantPlan";
@@ -204,6 +205,53 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(compactGatewayCapabilityStructuredContent(
       "create_texture", payload, "receipt_only", false
     )).toEqual(payload);
+  });
+
+  test("failure recovery permits only fully owned precommit rollback", () => {
+    const safe = {
+      commit_attempted: false,
+      project_unchanged: true, undo_owned: true,
+      history_unchanged: true, source_unchanged: true,
+      uv_unchanged: true, created_identity_unambiguous: true,
+    };
+    expect(chooseTextureVariantNativeFailureRecovery(safe))
+      .toBe("ROLLBACK_OWNED_PRECOMMIT");
+    for (const fault of [
+      { commit_attempted: true },
+      { project_unchanged: false },
+      { undo_owned: false },
+      { history_unchanged: false },
+      { source_unchanged: false },
+      { uv_unchanged: false },
+      { created_identity_unambiguous: false },
+    ]) {
+      expect(chooseTextureVariantNativeFailureRecovery({
+        ...safe, ...fault,
+      })).toBe("INSPECT_OUTCOME_UNKNOWN");
+    }
+    expect(() => chooseTextureVariantNativeFailureRecovery({
+      ...safe, undo_owned: undefined as unknown as boolean,
+    })).toThrow("TEXTURE_VARIANT_RECOVERY_OBSERVATION_INVALID");
+  });
+
+  test("native commit attempt never triggers automatic rollback and unknown recovery stays explicit", async () => {
+    const src = await Bun.file("server/runtime/contracts/texture.ts").text();
+    const start = src.indexOf("async function createTextureVariant");
+    const end = src.indexOf("function textureEvidenceSourceIdentity", start);
+    const body = src.slice(start, end);
+    expect(body).toContain("commitAttempted = true;");
+    expect(body.indexOf("commitAttempted = true;"))
+      .toBeLessThan(body.indexOf('Undo.finishEdit("Agent created texture variant"'));
+    expect(body).toContain('if (decision !== "ROLLBACK_OWNED_PRECOMMIT")');
+    expect(body.indexOf('if (decision !== "ROLLBACK_OWNED_PRECOMMIT")'))
+      .toBeLessThan(body.indexOf("variant.remove(true)"));
+    expect(body).toContain("TEXTURE_VARIANT_ROLLBACK_UNVERIFIED");
+    expect(body).toContain("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+    expect(body).toContain("TEXTURE_VARIANT_UNDO_INIT_OUTCOME_UNKNOWN");
+    expect(body).toContain("TEXTURE_VARIANT_POSTCOMMIT_DISPLAY_UNVERIFIED");
+    expect(body).toContain("Undo.cancelEdit()");
+    expect(body).toContain("TEXTURE_VARIANT_ROLLBACK_POSTCONDITION_FAILED");
+    expect(body).toContain("undoHistoryUnchanged()");
   });
 
   test("existing variant executor performs exact precommit source/UV checks before finishEdit",async()=>{

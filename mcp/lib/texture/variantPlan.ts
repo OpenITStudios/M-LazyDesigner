@@ -252,3 +252,38 @@ export function reconcileTextureVariantNativeContinuity(
     minecraft_verified: false as const,
   };
 }
+
+/**
+ * A failed native variant edit is rollback-eligible ONLY before commit was
+ * attempted, while its original Project/Undo/history/source/UV/candidate
+ * ownership remains observable. Otherwise preserve state and request
+ * inspection. This is a decision guard, not a second Undo executor.
+ */
+export type TextureVariantNativeRecoveryObservation = {
+  commit_attempted: boolean;
+  project_unchanged: boolean;
+  undo_owned: boolean;
+  history_unchanged: boolean;
+  source_unchanged: boolean;
+  uv_unchanged: boolean;
+  created_identity_unambiguous: boolean;
+};
+export function chooseTextureVariantNativeFailureRecovery(
+  state: TextureVariantNativeRecoveryObservation
+): "ROLLBACK_OWNED_PRECOMMIT" | "INSPECT_OUTCOME_UNKNOWN" {
+  if (!state || typeof state !== "object" ||
+      Object.keys(state).length !== 7 ||
+      [
+        state.commit_attempted, state.project_unchanged, state.undo_owned,
+        state.history_unchanged, state.source_unchanged,
+        state.uv_unchanged, state.created_identity_unambiguous,
+      ].some(value => typeof value !== "boolean")) {
+    throw new Error("TEXTURE_VARIANT_RECOVERY_OBSERVATION_INVALID");
+  }
+  return !state.commit_attempted &&
+    state.project_unchanged && state.undo_owned &&
+    state.history_unchanged && state.source_unchanged &&
+    state.uv_unchanged && state.created_identity_unambiguous
+    ? "ROLLBACK_OWNED_PRECOMMIT"
+    : "INSPECT_OUTCOME_UNKNOWN";
+}

@@ -22,6 +22,7 @@ import {
   createTextureVariantParameters,
   planTextureVariantFromBase,
   reconcileTextureVariantNativeContinuity,
+  chooseTextureVariantNativeFailureRecovery,
   type TextureVariantNativeTextureIdentity,
   type TextureVariantSource,
 } from "@/lib/texture/variantPlan";
@@ -182,8 +183,30 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
     throw new Error("TEXTURE_VARIANT_NATIVE_SOURCE_NOT_REGISTERED");
   }
 
-  Undo.initEdit({ textures: [], collections: [] });
-  const undoOwner = Undo.current_save;
+  // A history snapshot lets failure recovery reject asynchronous edits by a
+  // different owner, even if they happened on the same Project instance.
+  const historyBefore = [...Undo.history];
+  const undoIndexBefore = Undo.index;
+  const undoHistoryUnchanged = () =>
+    Undo.index === undoIndexBefore &&
+    Undo.history.length === historyBefore.length &&
+    Undo.history.every((entry, i) => entry === historyBefore[i]);
+  let undoOwner: typeof Undo.current_save;
+  try {
+    Undo.initEdit({ textures: [], collections: [] });
+    undoOwner = Undo.current_save;
+    if (!undoOwner) {
+      throw new Error("TEXTURE_VARIANT_UNDO_SNAPSHOT_UNAVAILABLE");
+    }
+  } catch (error) {
+    // initEdit may have partially opened an edit. Without its exact owner,
+    // an automatic cancel would risk mutating a foreign/unknown transaction.
+    throw new Error(
+      "TEXTURE_VARIANT_UNDO_INIT_OUTCOME_UNKNOWN: inspect editor before retrying.",
+      { cause: error }
+    );
+  }
+  let commitAttempted = false;
   let nativeContinuity!: ReturnType<typeof reconcileTextureVariantNativeContinuity>;
   let variant: Texture | undefined;
   try {
@@ -258,29 +281,146 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
       }
     );
 
+    // finishEdit can change Undo history or clear current_save *before* an
+    // extension listener throws. After this point, never auto-rollback.
+    commitAttempted = true;
     Undo.finishEdit("Agent created texture variant", {
       textures: [variant],
       collections: [],
     });
+    // Native finish listeners can mutate the scene after precommit checks.
+    // Do not publish a continuity receipt if any source identity/readback
+    // has already diverged or the owned transaction remains open.
+    if (Project !== projectOwner ||
+        Project?.uuid !== precommit.project_uuid ||
+        Undo.current_save ||
+        !Texture.all.includes(variant) ||
+        Texture.all.filter(item => item.uuid === variant.uuid).length !== 1 ||
+        !Texture.all.includes(source) ||
+        Texture.all.filter(item => item.uuid === source.uuid).length !== 1 ||
+        JSON.stringify(nativeVariantTextureIdentity(source)) !==
+          JSON.stringify(precommit.source) ||
+        JSON.stringify(currentVariantMappedUvIdentity()) !==
+          JSON.stringify(precommit.mapping)) {
+      throw new Error("TEXTURE_VARIANT_POSTCOMMIT_STATE_UNVERIFIED");
+    }
+    requireUnchangedTextureBitmap(
+      sourceBitmap, fullTextureRgba(source),
+      "TEXTURE_VARIANT_POSTCOMMIT_SOURCE_BITMAP_CHANGED"
+    );
+    requireUnchangedTextureBitmap(
+      sourceBitmap, fullTextureRgba(variant),
+      "TEXTURE_VARIANT_POSTCOMMIT_VARIANT_BITMAP_CHANGED"
+    );
   } catch (error) {
-    if (Undo.current_save !== undoOwner ||
-        Project !== projectOwner ||
-        Project?.uuid !== precommit.project_uuid) {
-      // A different project or Undo transaction may now own the editor.
-      // Never remove a texture or cancel an edit belonging to that owner.
+    const projectUnchanged = Project === projectOwner &&
+      Project?.uuid === precommit.project_uuid;
+    const undoOwned = Undo.current_save === undoOwner;
+    let sourceUnchanged = false;
+    let uvUnchanged = false;
+    // Reads are best-effort only; failure to observe means NO rollback.
+    if (!commitAttempted && projectUnchanged && undoOwned) {
+      try {
+        sourceUnchanged =
+          Texture.all.includes(source) &&
+          Texture.all.filter(item => item.uuid === source.uuid).length === 1 &&
+          JSON.stringify(nativeVariantTextureIdentity(source)) ===
+            JSON.stringify(precommit.source);
+        if (sourceUnchanged) {
+          requireUnchangedTextureBitmap(
+            sourceBitmap, fullTextureRgba(source),
+            "TEXTURE_VARIANT_ROLLBACK_SOURCE_CHANGED"
+          );
+        }
+        uvUnchanged = JSON.stringify(currentVariantMappedUvIdentity()) ===
+          JSON.stringify(precommit.mapping);
+      } catch {
+        sourceUnchanged = false;
+        uvUnchanged = false;
+      }
+    }
+    let createdIdentityUnambiguous = false;
+    if (projectUnchanged) {
+      try {
+        // An unregistered candidate needs no native removal. A registered
+        // candidate must uniquely identify the object created by this edit.
+        createdIdentityUnambiguous = !variant ||
+          (Texture.all.includes(variant)
+            ? Texture.all.filter(item => item.uuid === variant.uuid).length === 1
+            : Texture.all.every(item => item.uuid !== variant.uuid));
+      } catch {
+        createdIdentityUnambiguous = false;
+      }
+    }
+    const decision = chooseTextureVariantNativeFailureRecovery({
+      commit_attempted: commitAttempted,
+      project_unchanged: projectUnchanged,
+      undo_owned: undoOwned,
+      history_unchanged: undoHistoryUnchanged(),
+      source_unchanged: sourceUnchanged,
+      uv_unchanged: uvUnchanged,
+      created_identity_unambiguous: createdIdentityUnambiguous,
+    });
+    if (decision !== "ROLLBACK_OWNED_PRECOMMIT") {
       throw new Error(
-        "TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN: native project/Undo " +
-        "ownership changed during asynchronous texture decode; " +
-        "inspect the current project before retrying."
+        "TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN: native ownership, " +
+        "source/UV integrity, or commit outcome cannot be established. " +
+        "Inspect project, textures and Undo before any retry.",
+        { cause: error }
       );
     }
-    variant?.remove(true);
-    Undo.cancelEdit();
-    Canvas.updateAll();
+    try {
+      if (variant && Texture.all.includes(variant)) {
+        variant.remove(true);
+      }
+      // remove() can itself invoke Blockbench listeners; re-check the
+      // owner before touching Undo or another Project's transaction.
+      if (Project !== projectOwner ||
+          Project?.uuid !== precommit.project_uuid ||
+          Undo.current_save !== undoOwner) {
+        throw new Error("TEXTURE_VARIANT_ROLLBACK_OWNERSHIP_LOST");
+      }
+      Undo.cancelEdit();
+      if (Undo.current_save ||
+          !undoHistoryUnchanged() ||
+          Project !== projectOwner ||
+          Project?.uuid !== precommit.project_uuid ||
+          (variant && Texture.all.includes(variant)) ||
+          !Texture.all.includes(source) ||
+          Texture.all.filter(item => item.uuid === source.uuid).length !== 1 ||
+          JSON.stringify(nativeVariantTextureIdentity(source)) !==
+            JSON.stringify(precommit.source) ||
+          JSON.stringify(currentVariantMappedUvIdentity()) !==
+            JSON.stringify(precommit.mapping)) {
+        throw new Error("TEXTURE_VARIANT_ROLLBACK_POSTCONDITION_FAILED");
+      }
+      requireUnchangedTextureBitmap(
+        sourceBitmap, fullTextureRgba(source),
+        "TEXTURE_VARIANT_ROLLBACK_SOURCE_PIXELS_NOT_RESTORED"
+      );
+      Canvas.updateAll();
+    } catch (rollbackError) {
+      throw new Error(
+        "TEXTURE_VARIANT_ROLLBACK_UNVERIFIED: inspect the current " +
+        "project, texture inventory and Undo history before retrying.",
+        { cause: new AggregateError([error, rollbackError],
+          "Variant creation and rollback errors") }
+      );
+    }
     throw error;
   }
 
-  Canvas.updateAll();
+  // The native transaction has finished; failure to redraw is not a
+  // request to repeat a destructive texture creation.
+  try {
+    Canvas.updateAll();
+  } catch (error) {
+    throw new Error(
+      "TEXTURE_VARIANT_POSTCOMMIT_DISPLAY_UNVERIFIED: the variant may " +
+      "already be committed; inspect native editor state before retrying.",
+      { cause: error }
+    );
+  }
   return {
     content: [
       {
