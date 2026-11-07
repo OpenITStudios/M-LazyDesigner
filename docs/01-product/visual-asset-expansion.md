@@ -4,6 +4,28 @@
 
 This is the durable product-contract owner for new visual asset families. Current progress/next action lives only in [next-action.md](../05-operations/next-action.md); commits own history. Do not create a second operations tracker, workflow engine, context router, or capability registry.
 
+## Asset Profile architecture — source foundation
+
+The canonical seven-identity Asset Profile contract lives in
+`mcp/lib/product/assetProfiles.ts`, organized into `models_3d`,
+`textures_2d`, and `visual_effects`. Its IDs are `entity`, `attachable`,
+`custom_block`, `item_icon`, `animated_texture`, `player_skin`, and
+`particle`. This is an **Asset Profile**, distinct from a modelling subtype
+(`HUMANOID`, etc.), Runtime Registration Profile (`bedrock_entity` /
+`extended`), Authoring Stage, Runtime Surface and Capability.
+
+The source contract declares each profile's existing Entity-stage
+applicability and intended output family. It does **not** establish native
+registrations, a new Stage, a Blockbench project format, profile-specific
+output acceptance, or production readiness. In particular, Skin UV, flipbook
+timing, holder fit, custom-block compatibility and Particle authoring need
+their own evidence even when a model-stage gate is `NOT_APPLICABLE`.
+Source-only profile-aware lifecycle helpers preserve existing Entity
+defaults; the current Reference Package/Control transport has no
+authoritative new `asset_profile_id` selection and must not infer one from
+the modelling `selected_profile`. Wire selection only as an atomic
+generator/consumer/schema change with a verified Runtime output path.
+
 ## Product boundary
 
 LazyDesigner extends its existing Geometry/UV, Texture/Painter/PBR, Animation/Rig and Particle authoring for *Minecraft Bedrock visual assets*. The original editable `.bbmodel` remains a valid output for model-based types, while 2D texture outputs retain their own Texture/Painter delivery boundaries.

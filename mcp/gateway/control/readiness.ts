@@ -1,4 +1,8 @@
 import type { ControlReferenceProjection } from "./referenceTypes";
+import {
+  getAssetProfileContract,
+  type AssetProfileId,
+} from "../../lib/product/assetProfiles";
 import type { ControlWorkspaceProjection } from "./workspace";
 import type {
   ControlAuthoringDomain,
@@ -32,12 +36,23 @@ function normalizedGate(value: string | null): string | null {
 
 export function lifecycleForDomain(
   domain: ControlAuthoringDomain | null,
-  workspace: ControlWorkspaceProjection
+  workspace: ControlWorkspaceProjection,
+  /** Internal-only profile application; existing Control calls keep Entity behavior. */
+  assetProfileId: AssetProfileId = "entity"
 ): LifecycleProjection {
   if (!domain || domain === "CORE") {
     return { ready: false, blocked: false, orientation_required: true, reasons: ["AUTHORING_DOMAIN_UNRESOLVED"] };
   }
 
+  const requirements = getAssetProfileContract(assetProfileId).stages;
+  const selectedGate = domain === "GEOMETRY" ? "geometry"
+    : domain === "TEXTURING" ? "texturing" : "animation";
+  if (requirements[selectedGate] === "NOT_APPLICABLE") {
+    return {
+      ready: false, blocked: true, orientation_required: false,
+      reasons: ["ASSET_PROFILE_STAGE_NOT_APPLICABLE"],
+    };
+  }
   if (domain === "GEOMETRY") {
     return { ready: true, blocked: false, orientation_required: false, reasons: [] };
   }
@@ -56,9 +71,17 @@ export function lifecycleForDomain(
   const texturing = normalizedGate(workspace.gates.texturing);
   const reasons: string[] = [];
 
-  if (geometry !== "APPROVED") reasons.push("GEOMETRY_APPROVAL_REQUIRED");
-  if (uv !== "PASS") reasons.push("UV_LAYOUT_PASS_REQUIRED");
-  if (domain === "ANIMATION" && texturing !== "APPROVED") {
+  if (requirements.geometry !== "NOT_APPLICABLE" && geometry !== "APPROVED") {
+    reasons.push("GEOMETRY_APPROVAL_REQUIRED");
+  }
+  if (requirements.uv_layout !== "NOT_APPLICABLE" && uv !== "PASS") {
+    reasons.push("UV_LAYOUT_PASS_REQUIRED");
+  }
+  // CONDITIONAL texturing still needs affirmative source evidence before
+  // the dependent stage may skip it; absence is never proof of exemption.
+  if (domain === "ANIMATION" &&
+      requirements.texturing !== "NOT_APPLICABLE" &&
+      texturing !== "APPROVED") {
     reasons.push("TEXTURE_APPROVAL_REQUIRED");
   }
 

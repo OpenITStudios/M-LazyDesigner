@@ -1,3 +1,8 @@
+import {
+  getAssetProfileContract,
+  type AssetProfileId,
+} from "../product/assetProfiles";
+
 export type AssetHealthDomain =
   | "GEOMETRY"
   | "TEXTURING"
@@ -119,7 +124,11 @@ export function buildAssetHealthSummary(input: {
   domain: AssetHealthDomain | null;
   reference: AssetHealthReferenceLike;
   workspace: AssetHealthWorkspaceLike;
+  /** Internal applicability only; current Gateway/Reference does not yet select non-Entity profiles. */
+  asset_profile_id?: AssetProfileId;
 }): AssetHealthSummary {
+  const profileId = input.asset_profile_id ?? "entity";
+  const applicable = getAssetProfileContract(profileId).stages;
   // Unknown is not false: an unspecified animation requirement must not
   // silently become NOT_REQUIRED. Already APPROVED animation is sufficient
   // even when its original requirement was not projected.
@@ -130,8 +139,13 @@ export function buildAssetHealthSummary(input: {
   const malformedRequirement = (input.workspace.workspace_issues ?? [])
     .some((reason) => reason.startsWith("WORKSPACE_ANIMATION_REQUIREMENT_"));
   // Only an explicit, uncontested Reference false permits NOT_REQUIRED.
-  const animationExcluded = animationRequirement === false &&
-    !requirementConflict && !malformedRequirement;
+  const profileAnimationConflict =
+    applicable.animation === "NOT_APPLICABLE" && animationRequirement === true;
+  const animationExcluded =
+    (applicable.animation === "NOT_APPLICABLE" && !profileAnimationConflict) ||
+    (applicable.animation === "CONDITIONAL" &&
+      animationRequirement === false &&
+      !requirementConflict && !malformedRequirement);
   // Stage reference and whole-package reference serve different decisions.
   // An active Geometry READY must not hide unresolved later-stage package
   // constraints in an all-asset readiness summary.
@@ -139,17 +153,25 @@ export function buildAssetHealthSummary(input: {
   const stages: AssetHealthSummary["stages"] = {
     reference: referenceState(input.domain, input.reference),
     // A technical PASS must never substitute for a persisted user approval.
-    geometry: input.workspace.available
-      ? workspaceGateState(input.workspace.gates.geometry, ["APPROVED"])
-      : "UNVERIFIED",
-    // UV Layout is the technical Geometry-owned gate: only PASS is valid.
-    uv_layout: input.workspace.available
-      ? workspaceGateState(input.workspace.gates.uv_layout, ["PASS"])
-      : "UNVERIFIED",
-    texturing: input.workspace.available
-      ? workspaceGateState(input.workspace.gates.texturing, ["APPROVED"])
-      : "UNVERIFIED",
-    animation: animationExcluded
+    geometry: applicable.geometry === "NOT_APPLICABLE"
+      ? "NOT_REQUIRED"
+      : input.workspace.available
+        ? workspaceGateState(input.workspace.gates.geometry, ["APPROVED"])
+        : "UNVERIFIED",
+    // Native model UV Layout is separate from skin UV or pixel-grid validation.
+    uv_layout: applicable.uv_layout === "NOT_APPLICABLE"
+      ? "NOT_REQUIRED"
+      : input.workspace.available
+        ? workspaceGateState(input.workspace.gates.uv_layout, ["PASS"])
+        : "UNVERIFIED",
+    texturing: applicable.texturing === "NOT_APPLICABLE"
+      ? "NOT_REQUIRED"
+      : input.workspace.available
+        ? workspaceGateState(input.workspace.gates.texturing, ["APPROVED"])
+        : "UNVERIFIED",
+    animation: profileAnimationConflict
+      ? "UNVERIFIED"
+      : animationExcluded
       ? "NOT_REQUIRED"
       : input.workspace.available
         ? workspaceGateState(input.workspace.gates.animation, ["APPROVED"])
@@ -180,9 +202,9 @@ export function buildAssetHealthSummary(input: {
   const requiredStates = [
     stages.reference,
     packageReferenceState,
-    stages.geometry,
-    stages.uv_layout,
-    stages.texturing,
+    ...(applicable.geometry === "NOT_APPLICABLE" ? [] : [stages.geometry]),
+    ...(applicable.uv_layout === "NOT_APPLICABLE" ? [] : [stages.uv_layout]),
+    ...(applicable.texturing === "NOT_APPLICABLE" ? [] : [stages.texturing]),
     ...(!animationExcluded ? [stages.animation] : []),
   ];
 
@@ -190,6 +212,7 @@ export function buildAssetHealthSummary(input: {
   // gate alongside a conflicting later declaration. A gate summary must not
   // independently claim READY while Control correctly requests orientation.
   const sourceNeedsOrientation =
+    profileAnimationConflict ||
     requirementConflict ||
     (finalizing && nativeFinalization?.state !== "MATCHED") ||
     (input.workspace.workspace_issues?.length ?? 0) > 0 ||
@@ -200,7 +223,9 @@ export function buildAssetHealthSummary(input: {
       : sourceNeedsOrientation
         ? "REVIEW"
         : requiredStates.every((state) => state === "PASS")
-          ? "READY"
+          // Non-Entity outputs still lack registered/native output acceptance.
+          // No profile metadata can promote a planned adapter to READY.
+          ? (profileId === "entity" ? "READY" : "INCOMPLETE")
           : requiredStates.some((state) => state === "REVIEW")
             ? "REVIEW"
             : "INCOMPLETE";
@@ -210,7 +235,8 @@ export function buildAssetHealthSummary(input: {
     active_domain: input.domain,
     stages,
     blockers,
-    note:
-      "Declared gate summary, not independent user/visual/export approval. Finalization/Complete also requires the current saved native .bbmodel SHA-256 to match the explicitly accepted checkpoint; no automatic approval or Minecraft runtime proof is inferred.",
+    note: profileId === "entity"
+      ? "Declared gate summary, not independent user/visual/export approval. Finalization/Complete also requires the current saved native .bbmodel SHA-256 to match the explicitly accepted checkpoint; no automatic approval or Minecraft runtime proof is inferred."
+      : "Profile stage applicability is source-only. Profile-specific native output, artifact validation and acceptance are not integrated; this summary cannot establish whole-asset READY.",
   };
 }

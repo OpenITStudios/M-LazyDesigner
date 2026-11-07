@@ -370,6 +370,17 @@ manage_animation_controller
 
 ## Visual Asset Expansion — Source to Runtime Closure
 
+**Asset Profile source owner:** `mcp/lib/product/assetProfiles.ts` declares
+seven output-intent profiles, category, current Stage applicability and output
+contract identity. `mcp/lib/authoring/assetHealth.ts` and
+`mcp/gateway/control/readiness.ts` accept an **explicit internal** profile
+for applicability; legacy calls remain Entity-default. The existing public
+Reference `selected_profile` is a modelling subtype, not an Asset Profile,
+and no new public `asset_profile_id` is yet generated or selected by Control.
+No non-Entity planner becomes registered by this contract. A real multi-asset
+handoff must update the canonical Reference generator, consumers, semantic
+revision and generated API together, with native outputs independently proved.
+
 **Repository source assessment (2026-11-07):** the approved product scope is in [Visual Asset Expansion](../01-product/visual-asset-expansion.md). This map describes *existing source ownership and true call paths*, not a second feature registry, executable product claim, or a new Control router. All new F0–S1 source regressions remain `NOT_EXECUTED`, and native/Gateway availability requires live Runtime evidence.
 
 | Milestone | Pure contract / nearest source owner | Existing actual Runtime/export relationship | Closure boundary |

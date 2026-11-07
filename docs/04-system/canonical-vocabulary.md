@@ -18,6 +18,8 @@ Do not create synonyms for style. Prefer the canonical term even when another wo
 | Concept | Canonical term | Meaning |
 | --- | --- | --- |
 | top-level kind of work | **Task Class** | `ASSET_AUTHORING` or `SYSTEM_DEVELOPMENT` |
+| grouping of visual asset output intent | **Asset Category** | `models_3d`, `textures_2d`, or `visual_effects`; not a Runtime Surface |
+| one target visual asset/output contract | **Asset Profile** | `entity`, `attachable`, `custom_block`, `item_icon`, `animated_texture`, `player_skin`, or `particle`; not the modelling profile or Registration Profile |
 | current semantic authoring position | **Stage** | `GEOMETRY`, `TEXTURING`, `ANIMATION`, `FINALIZATION` |
 | currently exposed Runtime capability family | **Runtime Surface** | `AUTHORING` or `ANIMATION` |
 | semantic specialist ownership | **Domain** | Geometry, Texturing, Animation, or Core ownership; not lifecycle position |
@@ -91,6 +93,13 @@ Use **Capability** when discussing what the AI can request or discover.
 Use **Tool** when discussing MCP registration, schema validation, execution objects, or Tool-specific implementation mechanics.
 
 ## Profile vs Family
+
+**Asset Profile** is a distinct product concept: it defines the visual asset
+output intent and which existing Entity lifecycle gates apply. The canonical
+contract is `mcp/lib/product/assetProfiles.ts`. The existing
+`selected_profile` field still means a **modelling subtype** such as
+`HUMANOID`, not an Asset Profile. Source declaration never proves native
+executor availability or output acceptance.
 
 ~~~text
 Registration Profile
