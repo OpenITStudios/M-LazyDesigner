@@ -131,6 +131,20 @@ The import-safe source owner is mcp/lib/texture/blockFlipbookPlanning.ts. It con
 
 References: [Microsoft Create an Animated Block Texture](https://learn.microsoft.com/en-us/minecraft/creator/documents/createanimatedblocktexture?view=minecraft-bedrock-stable); [Mojang Vanilla flipbook sample](https://github.com/Mojang/bedrock-samples/blob/main/resource_pack/textures/flipbook_textures.json); [Pixel Art Animation](../02-reference/pixel-art/animation.md); [Bedrock Wiki flipbook details](https://wiki.bedrock.dev/blocks/flipbook-textures.html).
 
+## V1 — Entity Appearance Variant continuity (source-only)
+
+The import-safe V1 owner is mcp/lib/texture/appearanceVariantContinuity.ts. It calls the canonical mcp/lib/texture/variantPlan.ts planner for create_texture(type=variant) instead of copying bitmap/TextureGroup logic. For render semantics it consults the existing entity material inspection owner in mcp/lib/texture/renderProfile.ts. There is NO second variant creation engine, Render Controller writer, new Gateway tool or production import path.
+
+- This phase covers **Entity appearance variants**. Block terrain texture variations use terrain_texture.json variations/weights and are NOT the same mechanism; no block-variant / PBR compatibility claim is made from entity previews.
+- One TEXTURE_ONLY variant must preserve the same exact geometry identifier, UV mapping fingerprint, bone UUID/name/parent/pivot inventory and Minecraft material code. The proposed bitmap dimensions must match the base-color source plan. Any drift is an explicit source blocker, not silently recategorized or auto-remapped.
+- MATERIAL_CHANGE retains Geometry, UV and rig continuity but may change the Minecraft entity material code only through a distinct declared render-material slot; existing inspectEntityRenderMaterialCode reports unknown custom materials as unverified. It does not create material configs or claim real alpha/PBR rendering.
+- GEOMETRY_OVERRIDE must have a **new distinct** Geometry identifier and render Geometry slot. Changed UV/rig are accepted for **review only**, not claimed compatible with clips/locators/attachments, nor substituted for the original base geometry. Material changes also need a dedicated material slot.
+- Caller-supplied SHA-256 UV identity, bone inventories, source refs and render slot names are declaration evidence only. V1 validates exact identity and acyclic bone ancestry, including pivots, but cannot prove actual native Blockbench scene/atlas pixels, render controller selector/index or cross-animation compatibility.
+- Output includes a bounded source fingerprint and candidate Texture./Material./Geometry. symbolic references, NOT an executable Render Controller or Molang selector. Real entity variant selection needs a separately reviewed client_entity/render_controller resource binding through existing owners. Behavior Pack properties, triggers and gameplay remain excluded.
+- Regardless of source consistency, verdict remains SOURCE_REVIEW_REQUIRED_NATIVE_UNVERIFIED. Bun/Blockbench/native image review/Resource Pack/in-game rendering must not be inferred as PASS.
+
+References: [Microsoft render controller arrays](https://learn.microsoft.com/en-us/minecraft/creator/documents/animations/animationrendercontroller?view=minecraft-bedrock-stable); [Microsoft Client Entity JSON](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/entityreference/examples/cliententitydocumentation/cliententitydocumentationintroduction?view=minecraft-bedrock-stable); [Bedrock Wiki block texture variations](https://wiki.bedrock.dev/blocks/block-texture-variation).
+
 ## Milestone acceptance contract
 
 | ID | Deliverable | Completion criteria before production claim |
