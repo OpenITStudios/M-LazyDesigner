@@ -171,6 +171,18 @@ The import-safe source owner is `mcp/lib/texture/classicSkinPlanning.ts`. This i
 
 References: [Microsoft Skin Pack JSON Reference](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/skinpacksreference/skinpackjsonreference?view=minecraft-bedrock-stable), [Microsoft Packaging a Skin Pack](https://learn.microsoft.com/en-us/minecraft/creator/documents/packagingaskinpack?view=minecraft-bedrock-stable), [Mojang humanoid.custom wide and slim UV data](https://github.com/Mojang/bedrock-samples/blob/main/resource_pack/models/mobs.json), [Pixel Art QA](../02-reference/pixel-art/qa.md).
 
+## E1 — Environment Fog and Client Biome visual planning
+
+The source-only owner is `mcp/lib/bedrock/environmentVisualPlanning.ts`. It prepares candidate Resource Pack fog and client-biome JSON objects from explicitly declared visual facts; it does **not** write pack files, mutate Blockbench, create shaders, or author world-generation/gameplay biomes.
+
+- One namespaced fog ID and the client-biome `minecraft:fog_appearance.fog_identifier` must match exactly. Resource file hints are bounded relative `fogs/<name>.json` and `biomes_client/<name>.biome_client.json` paths. Existing file/identifier registry conflicts block source admission; no automatic replace or pack assembly.
+- Client-biome JSON is the preferred modern format as of 1.21.40. E1 requires `format_version` 1.21.40 or later for its modern `minecraft:client_biome` candidate. Old `biomes_client.json` and biome Behavior Pack authoring are not inferred to be equivalent or handled automatically.
+- Supported fog distance media: air, water, weather, lava, lava_resistance and powder_snow. Each source scope requires an explicit RGB fog color, ordered finite nonnegative fog_start/fog_end, and `render_distance_type` fixed or render. `render` depends on the player's render distance. Omitted media inherit lower fog-stack settings; this contract does not manufacture those defaults.
+- Optional client biome visuals include `minecraft:sky_color.sky_color` and `minecraft:water_appearance` surface color/opacity. Ambient sounds, music, shaders, lighting, volumetric fog, and Vibrant Visuals remain outside E1.
+- Higher priority player `/fog` commands, neighboring biome blends, actual biome existence, other Resource Packs, visual output and native rendering remain unverified. Source-only diagnostics never imply worldgen, pack readiness, fog smoothness, performance, or game PASS.
+- SHA-256 source identity includes the declared version, normalized fog/biome colors, path/identity inventory and source references. Existing project Control, Gateway, Runtime, Texture and Pixel Art owners are unchanged; this is not a second environment renderer.
+
+References: [Microsoft Fogs](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/fogsreference/fogs?view=minecraft-bedrock-stable), [Microsoft Client Biomes](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/clientbiomesreference/examples/clientbiomesoverview?view=minecraft-bedrock-stable), [Mojang fog stack](https://github.com/Mojang/bedrock-samples/blob/main/documentation/Fogs.html).
 ## Milestone acceptance contract
 
 | ID | Deliverable | Completion criteria before production claim |
