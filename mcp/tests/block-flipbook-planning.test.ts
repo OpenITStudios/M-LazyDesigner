@@ -241,6 +241,15 @@ describe("T1 Bedrock animated block texture strip/flipbook handoff", () => {
       source_refs: [...input.source_refs].reverse(),
     });
     expect(sorted.source_fingerprint).toBe(a.source_fingerprint);
+    const renamedIncumbent = planBedrockBlockFlipbook({
+      ...input,
+      existing_flipbooks: [
+        { atlas_tile: "other", flipbook_texture: "textures/blocks/renamed_other" },
+        input.existing_flipbooks[1]!,
+      ],
+    });
+    expect(renamedIncumbent.source_fingerprint)
+      .not.toBe(a.source_fingerprint);
     expect(planBedrockBlockFlipbook({
       ...input, ticks_per_frame: 6,
     }).source_fingerprint).not.toBe(a.source_fingerprint);

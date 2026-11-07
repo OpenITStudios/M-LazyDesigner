@@ -252,17 +252,17 @@ export function planBedrockBlockFlipbook(
     }
     terrain.set(key, item.texture_paths.map(texturePath));
   }
-  const existing = new Set<string>();
+  const existing = new Map<string, string>();
   for (const item of input.existing_flipbooks) {
     if (!item || typeof item !== "object") {
       throw new Error("BLOCK_FLIPBOOK_EXISTING_ENTRY_INVALID");
     }
-    texturePath(item.flipbook_texture);
+    const existingPath = texturePath(item.flipbook_texture);
     const key = targetIdentity(target(item));
     if (existing.has(key)) {
       throw new Error("BLOCK_FLIPBOOK_EXISTING_TARGET_AMBIGUOUS");
     }
-    existing.add(key);
+    existing.set(key, existingPath);
   }
 
   const expectedBytes = width * height * 4;
@@ -357,7 +357,10 @@ export function planBedrockBlockFlipbook(
     replicate: replicate ?? null, style_lock_id: style,
     sources: [...input.source_refs].sort(),
     terrain: [...terrain.entries()].sort(([a], [b]) => a.localeCompare(b)),
-    existing_targets: [...existing].sort(),
+    // An occupied target's source path is part of source identity; a
+    // changed incumbent file must retire earlier review fingerprints.
+    existing_targets: [...existing.entries()].sort(([a], [b]) =>
+      a.localeCompare(b)),
   };
   const source_fingerprint = "sha256:" + createHash("sha256")
     .update(JSON.stringify(normalized)).digest("hex");
