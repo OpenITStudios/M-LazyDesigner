@@ -1,4 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
+import { computeTextureRevision } from "@/lib/texture/revision";
+import {
+  compactGatewayCapabilityStructuredContent,
+  composeGatewayStructuredContent,
+} from "@/gateway/presentation/resultCompaction";
+import { authoritativeReceipt } from "@/gateway/control/delta/receipts";
 import {
   planTextureVariantFromBase,
   reconcileTextureVariantNativeContinuity,
@@ -7,6 +14,7 @@ import {
 } from "@/lib/texture/variantPlan";
 import {
   textureVariantCreationReceiptSchema,
+  isTextureCreationReceipt,
 } from "@/lib/receipts/textureCreation";
 
 const sha = "sha256:" + "a".repeat(64);
@@ -153,6 +161,51 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(textureVariantCreationReceiptSchema.safeParse(legacy).success).toBe(true);
   });
 
+  test("full RGBA source revision uses the same SHA-256 identity as get_texture", async () => {
+    const pixels = new Uint8ClampedArray(64 * 64 * 4);
+    pixels.set([10, 20, 30, 255, 40, 50, 60, 0]);
+    pixels[pixels.length - 1] = 127;
+    const expected = await computeTextureRevision(pixels, 64, 64);
+    const runtimeRevision = "sha256:64x64:" +
+      createHash("sha256").update(pixels).digest("hex");
+    expect(runtimeRevision).toBe(expected);
+    const { plan, before, after } = fixture();
+    expect(reconcileTextureVariantNativeContinuity(plan, {
+      ...before, source_rgba_revision: runtimeRevision,
+    }, after).source_rgba_revision).toBe(expected);
+  });
+
+  test("MCP/Gateway structured transport preserves bounded native continuity", () => {
+    const { plan, before, after } = fixture();
+    const evidence = reconcileTextureVariantNativeContinuity(plan, before, after);
+    const payload = {
+      texture: {
+        uuid: "variant", name: "variant.png", width: 64, height: 64,
+        group: "group", pbr_channel: "color" as const,
+      },
+      variant_creation: plan,
+      variant_native_continuity: evidence,
+    };
+    const compacted = compactGatewayCapabilityStructuredContent(
+      "create_texture", payload, "receipt_only", true
+    );
+    expect(compacted).toEqual(payload);
+    const controlDelta = { kind: "texture", changed: true };
+    const composed = composeGatewayStructuredContent(compacted, controlDelta);
+    expect(composed.variant_native_continuity).toEqual(evidence);
+    expect(composed.variant_creation).toEqual(plan);
+    expect(isTextureCreationReceipt(composed, "variant")).toBe(true);
+    const selected = authoritativeReceipt({
+      content: [{ type: "text", text: "Variant created" }],
+      structuredContent: composed,
+    });
+    expect(selected?.variant_native_continuity).toEqual(evidence);
+    expect(textureVariantCreationReceiptSchema.safeParse(selected).success).toBe(true);
+    expect(compactGatewayCapabilityStructuredContent(
+      "create_texture", payload, "receipt_only", false
+    )).toEqual(payload);
+  });
+
   test("existing variant executor performs exact precommit source/UV checks before finishEdit",async()=>{
     const native=await Bun.file("server/runtime/contracts/texture.ts").text();
     const variantStart=native.indexOf("async function createTextureVariant");
@@ -166,6 +219,9 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(block.indexOf("reconcileTextureVariantNativeContinuity("))
       .toBeLessThan(block.indexOf('Undo.finishEdit("Agent created texture variant"'));
     expect(block).toContain("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+    expect(block).toContain("const projectOwner = Project");
+    expect(block).toContain("Project !== projectOwner");
+    expect(block).toContain("TEXTURE_VARIANT_PROJECT_OWNERSHIP_LOST");
     expect(block).toContain("variant_native_continuity: nativeContinuity");
     expect(block).toContain("targetGroup.name === plan.target_group_name");
     expect(block).toContain("Texture.all.filter(item => item.uuid === variant.uuid).length === 1");

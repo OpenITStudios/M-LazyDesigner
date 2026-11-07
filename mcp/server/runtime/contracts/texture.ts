@@ -159,6 +159,9 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
   if (!Project?.uuid) {
     throw new Error("TEXTURE_VARIANT_NATIVE_PROJECT_UNAVAILABLE");
   }
+  // Project UUID alone is insufficient across reload/open transitions: the
+  // native Project object must also remain the transaction's original owner.
+  const projectOwner = Project;
   // Read actual native data before edit. This is not a caller-supplied
   // appearance hash; it is bound to this Project and Texture instance.
   const sourceBitmap = fullTextureRgba(source);
@@ -213,6 +216,10 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
     if (Undo.current_save !== undoOwner) {
       throw new Error("TEXTURE_VARIANT_UNDO_OWNERSHIP_LOST");
     }
+    if (Project !== projectOwner ||
+        Project?.uuid !== precommit.project_uuid) {
+      throw new Error("TEXTURE_VARIANT_PROJECT_OWNERSHIP_LOST");
+    }
     const sourceNow = fullTextureRgba(source);
     requireUnchangedTextureBitmap(
       sourceBitmap, sourceNow,
@@ -256,12 +263,15 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
       collections: [],
     });
   } catch (error) {
-    if (Undo.current_save !== undoOwner) {
-      // A foreign Undo transaction may now be active. Never cancel or
-      // remove another operation's state; the outcome needs inspection.
+    if (Undo.current_save !== undoOwner ||
+        Project !== projectOwner ||
+        Project?.uuid !== precommit.project_uuid) {
+      // A different project or Undo transaction may now own the editor.
+      // Never remove a texture or cancel an edit belonging to that owner.
       throw new Error(
-        "TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN: native Undo ownership changed " +
-        "during asynchronous texture decode; inspect project before retrying."
+        "TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN: native project/Undo " +
+        "ownership changed during asynchronous texture decode; " +
+        "inspect the current project before retrying."
       );
     }
     variant?.remove(true);
