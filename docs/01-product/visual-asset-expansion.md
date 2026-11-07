@@ -79,6 +79,18 @@ The import-safe source owner is mcp/lib/bedrock/attachableBinding.ts. It is a pu
 
 Primary sources: [Microsoft Using Attachables](https://learn.microsoft.com/en-us/minecraft/creator/documents/attachables?view=minecraft-bedrock-stable) and [Attachable Definition](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/attachablereference/examples/attachabledefinitions/attachable?view=minecraft-bedrock-stable).
 
+## A2 — Contextual equipment preview evidence
+
+The import-safe owner `mcp/lib/bedrock/attachableContextPreview.ts` is an **A2 source-only preview and claim-freshness planner**. It calls A1 on the underlying source inventory; an unverified client-supplied A1 summary is never sufficient. It binds an exact requested asset, holder, model bone, item slot, reference image digest, pose digest, holder/asset scene fingerprints, and expected installed Runtime build fingerprint into one immutable *planning handle*. Those inputs remain caller assertions until actual native observation.
+
+- Every held-item context requires distinct **FIRST_PERSON**, **THIRD_PERSON_FRONT** and **THIRD_PERSON_SIDE** observations. Any omitted perspective is an incomplete claim; no camera angle, right/left item bone, pose transform or player-scale multiplier is guessed.
+- The existing `capture_model_views` tool observes isolated model viewpoints. It is **not** a holder+equipment compositor or first-person item fitting tool. A2's planned `NATIVE_HOLDER_COMPOSITE_REQUIRED` path is not currently registered or executed. Do not reuse standalone Cube shots as if they proved a weapon's grip, silhouette or clipping on a player.
+- A future holder-context native capture must match the exact plan, asset/holder/pose/Runtime-build/ref fingerprints, and all requested viewpoint images. Reported image hashes, handles and caller labels are **claims**, not an authenticated capture receipt or pixel review; even all-matched claims return **HUMAN_VISUAL_REVIEW_REQUIRED**, never a visual or Minecraft PASS.
+- Direct holder-bone usage remains blocked on a combined-rig/parentage review, even when three image claims exist. Non-hand wearables and armor are intentionally not inferred from A1 hand-slot inputs and need their own source-backed target/preview contract.
+- A2 does not mutate Blockbench, export an attachable, introduce a second renderer, add a new Gateway tool, or change any existing Camera/Geometry/Animation capability. Any real native integration must live with the current Camera/Runtime owner and retain its existing project/Undo semantics.
+
+Official context: [Microsoft Using Attachables](https://learn.microsoft.com/en-us/minecraft/creator/documents/attachables?view=minecraft-bedrock-stable) (first-/third-person animation distinction, copy-bones limitations). Source evidence baseline: `mcp/server/tools/inspection/camera.ts`.
+
 ## Milestone acceptance contract
 
 | ID | Deliverable | Completion criteria before production claim |
