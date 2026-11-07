@@ -118,6 +118,19 @@ The source-only I1 owner is `mcp/lib/texture/itemIconPlanning.ts`. It consumes c
 - Fingerprints distinguish bitmap byte changes, icon path/key and source/style claims; an internally consistent fingerprint alone does not attest visual appearance or an installed resource.
 - Sources: [Microsoft Minecraft icon component](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/itemreference/examples/itemcomponents/minecraft_icon?view=minecraft-bedrock-stable); [Microsoft Custom Items](https://learn.microsoft.com/en-us/minecraft/creator/documents/addcustomitems?view=minecraft-bedrock-stable); [Pixel Art QA](../02-reference/pixel-art/qa.md); [Pixel Craft source](../../mcp/lib/texture/pixelCraft.ts).
 
+## T1 — Animated Block Flipbook source and atlas integrity
+
+The import-safe source owner is mcp/lib/texture/blockFlipbookPlanning.ts. It consumes explicitly supplied 8-bit RGBA pixels from one **vertical strip of square frames** and returns a non-writing candidate entry for textures/flipbook_textures.json. This is a Texture / Pixel Art handoff, not bone Animation, Particle animation, a Resource Pack compiler, a native Blockbench edit or an in-game animation.
+
+- The strip is exactly frame_size pixels wide and frame_size × physical_frame_count pixels tall. Require two or more complete physical frames, strict row-major RGBA8 byte length, finite integer values 0–255, and bounded source work budgets. The 128-pixel frame, 128-frame, 262,144-pixel and 256-entry playback limits are **LazyDesigner source budgets**, not alleged limits of Minecraft Bedrock.
+- The caller provides target Bedrock version, explicit frames (including valid repeated/reversed indices), ticks_per_frame (20 game ticks per second), blend_frames and optional replicate. Indices must refer to physical strip frames. Do not assume that animation uses every physical frame or that repetitions are errors; holds and cycles are supported in Vanilla.
+- Atlas tile identity comes from the caller's declared terrain_texture mapping, not from a filename guess. If the tile uses several texture paths, atlas_index must be explicit. Same atlas tile/index/variant target cannot be silently overwritten by an existing flipbook. The atlas_tile_variant field is retained only with a warning because a flattened terrain texture path array does not verify a variation mapping.
+- Capture a SHA-256 digest of the strip and each physical frame; the source fingerprint also includes timing, sequence, selected tile, relevant declared inventories and source/style claims. Raw end-to-start **visible pixel difference** is diagnostic, not proof of smooth looping, material consistency or actual animation quality. Hidden RGB under fully transparent alpha is not mistaken for visible seam change.
+- No automatic PNG encoding, atlas writes, source conversion, texture resizing, interpolated animation rendering, Minecraft file IO or frame smoothing. Actual Texture/PNG source truth and revisions remain with the existing Texturing Runtime owner; Pixel Art reference/cluster/style QA remains with the Pixel Art Skill.
+- All otherwise valid source results remain SOURCE_REVIEW_REQUIRED_NATIVE_UNVERIFIED. Missing texture file, source pixel provenance, exact atlas JSON bytes, frame-size compatibility on a particular Bedrock target, blending behavior, runtime quality and visual loop acceptance remain unverified.
+
+References: [Microsoft Create an Animated Block Texture](https://learn.microsoft.com/en-us/minecraft/creator/documents/createanimatedblocktexture?view=minecraft-bedrock-stable); [Mojang Vanilla flipbook sample](https://github.com/Mojang/bedrock-samples/blob/main/resource_pack/textures/flipbook_textures.json); [Pixel Art Animation](../02-reference/pixel-art/animation.md); [Bedrock Wiki flipbook details](https://wiki.bedrock.dev/blocks/flipbook-textures.html).
+
 ## Milestone acceptance contract
 
 | ID | Deliverable | Completion criteria before production claim |
