@@ -257,6 +257,44 @@ describe("Control orchestration reducer", () => {
     expect(projectChanged.continuation.next_action.recommended_capability).toBeNull();
   });
 
+  test("output receipt dependency never overrides stronger recovery, status, or visual debt", () => {
+    const particle = delta({
+      capability: "manage_particle",
+      authoring_domain: "ANIMATION",
+      phase_before: "animation",
+      phase_after: "animation",
+      next_intent: "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES",
+      verification_class: "receipt_only",
+      verification_scope: null,
+      freshness: {
+        basis: "NO_CHANGE", stale: [], fresh: [], unknown: [],
+      },
+    });
+    expect(nextActionForControlDelta(particle).kind).toBe("VERIFY_FOCUSED");
+    expect(nextActionForControlDelta({
+      ...particle, freshness: {
+        basis: "UNKNOWN_OUTCOME", stale: [], fresh: [],
+        unknown: ["PARTICLE_SYSTEM"],
+      },
+    }).kind).toBe("RECOVER");
+    expect(nextActionForControlDelta({
+      ...particle, requires_status_refresh: true,
+    }).kind).toBe("STATUS");
+    expect(nextActionForControlDelta({
+      ...particle, next_intent: "AUTHOR_PARTICLE_TEXTURE_THEN_RESUME",
+    }).kind).toBe("HANDOFF");
+
+    const visualBefore = reduceControlExecutionState(null, delta(), {
+      taskContextId: "visual-plus-particle", cohortBoundary: "CONTINUE",
+    });
+    const completed = reduceControlExecutionState(visualBefore.state, particle, {
+      taskContextId: "visual-plus-particle", cohortBoundary: "COMPLETE",
+    });
+    expect(completed.continuation.next_action.kind).toBe("VERIFY_VISUAL");
+    expect(completed.continuation.cohort?.pending_verification_class)
+      .toBe("visual");
+  });
+
   test("never converts unknown mutation outcome into an automatic retry", () => {
     const action = nextActionForControlDelta(
       delta({

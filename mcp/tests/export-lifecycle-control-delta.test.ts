@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { buildControlDelta } from "../gateway/control/delta/engine";
 import { projectControlDeltaForGateway } from "../gateway/control/delta/projection";
 import { assessNativeOutputInvocation } from "../gateway/control/delta/outputReceipt";
+import { reduceControlExecutionState } from "../gateway/control/orchestration";
 
 function exportDelta(result: unknown, succeeded = true) {
   return buildControlDelta({
@@ -110,6 +111,12 @@ describe("invocation-bound Asset Output receipt verification", () => {
       expect(projected.next_intent).toBe(report.next_intent);
       expect(projected).not.toHaveProperty("output_receipt");
       expect(projected).not.toHaveProperty("finalization_ready");
+      const completed = reduceControlExecutionState(null, report);
+      expect(completed.continuation.next_action.kind).toBe("CONTINUE");
+      expect(completed.continuation.next_action.reason)
+        .toContain("requested deliverables");
+      expect(completed.continuation.next_action.reason)
+        .toContain("this write only");
     }
   });
 
@@ -119,9 +126,18 @@ describe("invocation-bound Asset Output receipt verification", () => {
     }));
     expect(size.verification_class).toBe("focused_read");
     expect(size.next_intent).toBe("VERIFY_EXPORTED_FILE_READBACK");
+    expect(reduceControlExecutionState(null, size).continuation.next_action)
+      .toMatchObject({
+        kind: "VERIFY_FOCUSED",
+        recommended_capability: null,
+      });
+    expect(reduceControlExecutionState(null, size).continuation.next_action.reason)
+      .toContain("file-byte readback");
     const animation = deltaForNative("bedrock_animation", nativeExport("bedrock_animation"));
     expect(animation.verification_class).toBe("focused_read");
     expect(animation.next_intent).toBe("REVIEW_COMPILED_ANIMATION_OR_PERSIST_IF_REQUESTED");
+    expect(reduceControlExecutionState(null, animation).continuation.next_action.reason)
+      .toContain("content only");
     const preview = deltaForNative("bedrock", nativeExport("bedrock", {
       save_behavior: "COMPILE_ONLY", wrote_to_path: null,
       file_integrity_state: "NOT_WRITTEN", written_file_sha256: null,
@@ -142,6 +158,10 @@ describe("invocation-bound Asset Output receipt verification", () => {
       const d = deltaForNative("project", invalid);
       expect(d.verification_class).toBe("focused_read");
       expect(d.next_intent).toBe("INSPECT_OUTPUT_WRITE_OUTCOME_BEFORE_RETRY");
+      expect(reduceControlExecutionState(null, d).continuation.next_action)
+        .toMatchObject({ kind: "VERIFY_FOCUSED", recommended_capability: null });
+      expect(reduceControlExecutionState(null, d).continuation.next_action.reason)
+        .toContain("do not automatically retry");
     }
   });
 
@@ -182,6 +202,14 @@ describe("invocation-bound Asset Output receipt verification", () => {
     });
     expect(packet.verification_class).toBe("receipt_only");
     expect(packet.next_intent).toBe("REVIEW_PARTICLE_RESOURCE_DEPENDENCIES");
+    expect(reduceControlExecutionState(null, packet).continuation.next_action)
+      .toMatchObject({
+        kind: "VERIFY_FOCUSED",
+        target_domain: "ANIMATION",
+        recommended_capability: null,
+      });
+    expect(reduceControlExecutionState(null, packet).continuation.next_action.reason)
+      .toContain("resource references");
     const missing = buildControlDelta({
       capability: "manage_particle", phaseBefore: "animation",
       phaseAfter: "animation", projectUuid: UUID,
@@ -190,5 +218,20 @@ describe("invocation-bound Asset Output receipt verification", () => {
     });
     expect(missing.verification_class).toBe("focused_read");
     expect(missing.next_intent).toBe("INSPECT_OUTPUT_WRITE_OUTCOME_BEFORE_RETRY");
+
+    const first = reduceControlExecutionState(null, packet, {
+      taskContextId: "particle-and-model", cohortBoundary: "CONTINUE",
+    });
+    expect(first.continuation.next_action.kind).toBe("CONTINUE");
+    expect(first.state.pending_verification?.verification_class).toBe("focused_read");
+    const completed = reduceControlExecutionState(
+      first.state,
+      deltaForNative("project", nativeExport("project")),
+      { taskContextId: "particle-and-model", cohortBoundary: "COMPLETE" }
+    );
+    expect(completed.continuation.next_action.kind).toBe("VERIFY_FOCUSED");
+    expect(completed.continuation.cohort?.pending_verification_class)
+      .toBe("focused_read");
+    expect(completed.continuation.next_action.recommended_capability).toBeNull();
   });
 });

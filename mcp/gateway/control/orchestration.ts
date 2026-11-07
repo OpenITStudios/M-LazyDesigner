@@ -114,10 +114,38 @@ export function nextActionForControlDelta(delta: ControlDelta): ControlNextActio
     };
   }
 
-  if (delta.verification_class === "focused_read") {
+  // A Particle write receipt verifies only a write operation. Its mandatory
+  // resource/conditional-texture review remains separate from native receipt
+  // validity. This must never silently become "receipt complete".
+  if (delta.capability === "manage_particle" &&
+      delta.next_intent === "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES" &&
+      (delta.verification_class === "receipt_only" ||
+       delta.verification_class === "focused_read")) {
     return {
       kind: "VERIFY_FOCUSED",
-      reason: "mutation receipt is insufficient for the affected state",
+      reason: "Particle JSON write is reported; review resource references and conditional texture dependencies before completion. File-byte readback, visual approval and Minecraft behavior remain unverified.",
+      recommended_capability: null,
+      target_domain: delta.authoring_domain,
+      verification_scope: null,
+    };
+  }
+
+  if (delta.verification_class === "focused_read") {
+    const outputFollowUp = delta.capability === "export_model" ||
+      delta.capability === "manage_particle"
+      ? delta.next_intent : null;
+    const reason = outputFollowUp === "VERIFY_EXPORTED_FILE_READBACK"
+      ? "Export was size-verified only; check exact output file-byte readback before accepting integrity."
+      : outputFollowUp === "REVIEW_COMPILED_ANIMATION_OR_PERSIST_IF_REQUESTED"
+        ? "Bedrock AnimationCodec returned content only. Review the complete compiled output and persist a separate file only when requested."
+        : outputFollowUp === "REVIEW_COMPILED_OUTPUT_OR_PERSIST_IF_REQUESTED"
+          ? "Native codec returned compiled content only. Review it or persist a separate file only when requested."
+          : outputFollowUp === "INSPECT_OUTPUT_WRITE_OUTCOME_BEFORE_RETRY"
+            ? "Output receipt cannot establish the write outcome. Inspect the destination and native lifecycle; do not automatically retry or overwrite."
+            : "mutation receipt is insufficient for the affected state";
+    return {
+      kind: "VERIFY_FOCUSED",
+      reason,
       recommended_capability: null,
       target_domain: delta.authoring_domain,
       verification_scope: delta.verification_scope,
@@ -158,9 +186,13 @@ export function nextActionForControlDelta(delta: ControlDelta): ControlNextActio
   return {
     kind: "CONTINUE",
     reason:
+      delta.capability === "export_model" &&
+      delta.next_intent === "VERIFY_REQUESTED_OUTPUT_SET_AND_APPROVALS" &&
       delta.verification_class === "receipt_only"
-        ? "authoritative receipt is sufficient"
-        : "no additional verification is required",
+        ? "The export's native readback receipt is sufficient for this write only; requested deliverables, current source revision, visual review and approvals still need separate checks."
+        : delta.verification_class === "receipt_only"
+          ? "authoritative receipt is sufficient for this operation only"
+          : "no additional verification is required",
     recommended_capability: null,
     target_domain: delta.authoring_domain,
     verification_scope: null,
@@ -292,8 +324,16 @@ function strongerFreshnessBasis(
 }
 
 function pendingVerificationFromDelta(delta: ControlDelta): ControlPendingVerification {
+  // Do not erase an unreviewed Particle dependency during a multi-invocation
+  // cohort. This is still receipt_only for the JSON write in control_delta;
+  // only the cohort's outstanding asset-resource review is focused_read.
+  const particleResourceReviewOwed =
+    delta.capability === "manage_particle" &&
+    delta.verification_class === "receipt_only" &&
+    delta.next_intent === "REVIEW_PARTICLE_RESOURCE_DEPENDENCIES";
   return {
-    verification_class: delta.verification_class,
+    verification_class: particleResourceReviewOwed
+      ? "focused_read" : delta.verification_class,
     verification_scope: delta.verification_scope,
     freshness_basis: delta.freshness.basis,
     stale: [...delta.freshness.stale],

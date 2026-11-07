@@ -74,6 +74,11 @@ describe("real Gateway executor invocation -> Control output receipt continuatio
     expect(delta.project_uuid).toBe(UUID);
     expect(delta.verification_class).toBe("receipt_only");
     expect(delta.next_intent).toBe("VERIFY_REQUESTED_OUTPUT_SET_AND_APPROVALS");
+    const continuation = delta.continuation as {
+      next_action?: { kind?: string; reason?: string };
+    } | undefined;
+    expect(continuation?.next_action?.kind).toBe("CONTINUE");
+    expect(continuation?.next_action?.reason).toContain("requested deliverables");
     expect(delta).not.toHaveProperty("output_evidence");
     expect(delta).not.toHaveProperty("finalization_ready");
     const data = (response as {
@@ -100,5 +105,10 @@ describe("real Gateway executor invocation -> Control output receipt continuatio
     );
     expect(delta.verification_class).toBe("focused_read");
     expect(delta.next_intent).toBe("INSPECT_OUTPUT_WRITE_OUTCOME_BEFORE_RETRY");
+    const continuation = delta.continuation as {
+      next_action?: { kind?: string; reason?: string };
+    } | undefined;
+    expect(continuation?.next_action?.kind).toBe("VERIFY_FOCUSED");
+    expect(continuation?.next_action?.reason).toContain("do not automatically retry");
   });
 });

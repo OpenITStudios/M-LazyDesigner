@@ -382,6 +382,14 @@ for that invocation, and compile-only / size-only / rejected evidence as
 `focused_read` with a concrete next intent. This changes the **existing**
 Control Delta verification/continuation decision, not public fields,
 persistent receipt storage, native writers, or Finalization acceptance.
+The existing `gateway/control/orchestration.ts` now interprets output
+`next_intent` at the continuation boundary: verified write readback can
+continue with explicit requested-output/approval debt; Particle JSON write
+still requires a focused resource/texture review. An open cohort retains
+that Particle review in existing `pending_verification` even when another
+receipt follows, without converting write-level `receipt_only` to overall
+asset acceptance. Size-only and compile-only outcomes describe their exact
+remaining work; unknown write outcome retains no-auto-retry safety.
 Local provider results and cached/session UUIDs cannot obtain this
 native receipt classification. Focused regressions:
 `mcp/tests/export-lifecycle-control-delta.test.ts` (NOT_EXECUTED).
