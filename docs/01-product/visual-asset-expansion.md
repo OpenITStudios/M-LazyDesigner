@@ -6,10 +6,10 @@ This is the durable product-contract owner for new visual asset families. Curren
 
 ## Product boundary
 
-LazyDesigner extends its existing Geometry/UV, Texture/Painter/PBR, Animation/Rig and Particle authoring for *Minecraft Bedrock visual assets*. The original editable `.bbmodel` remains a valid output for model-based types, but not every 2D texture or fog profile must be forced into a Blockbench Entity project.
+LazyDesigner extends its existing Geometry/UV, Texture/Painter/PBR, Animation/Rig and Particle authoring for *Minecraft Bedrock visual assets*. The original editable `.bbmodel` remains a valid output for model-based types, while 2D texture outputs retain their own Texture/Painter delivery boundaries.
 
-- **Included:** equipment/attachables, custom block **visuals**, item icons/sprites, animated block textures, appearance variants, non-authoritative collision/selection previews, classic skins/wearable cosmetics, and later limited environment visuals.
-- **Excluded by user:** Sound/Audio and UI/HUD asset authoring.
+- **Included:** equipment/attachables, custom block **visuals**, item icons/sprites, animated block textures, appearance variants, non-authoritative collision/selection previews, classic skins/wearable cosmetics, without any environment/biome visuals.
+- **Excluded by user:** Sound/Audio, UI/HUD, and Fog/biome environment visual authoring. Fog/E1 was explicitly withdrawn because it is not part of the Blockbench asset-authoring workflow.
 - **Excluded by architecture:** Behavior Pack mechanics, item effects/damage, crafting, mob AI, spawning, Script API, full Add-On/pack assembly, external arbitrary render/shader engines, and automatic gameplay state integration.
 - **No implicit capability:** source planning does not mean a registered Runtime route or Minecraft compatibility proof. Never label unregistered `construct_geometry` or `manage_uv_layout` as production-ready.
 - **Reuse native owners:** no second Geometry Engine, Texture Engine, Animation Engine, Particle Engine, Stage, Control router, Gateway service, or auto-generated Resource Pack system. The normal Gateway remains exactly four tools.
@@ -24,7 +24,6 @@ LazyDesigner extends its existing Geometry/UV, Texture/Painter/PBR, Animation/Ri
 | **Item Icon / Sprite** (P0) | Pixel Art Reference, Texture | Pixel-perfect PNG, atlas key and handoff reference | deliberate pixel grid, alpha, silhouette/readability at target size, stable identifier |
 | **Animated Block Texture** (P1) | Texture and Pixel Art | Ordered frames + flipbook definition handoff | frame/tick order, source dimensions, seam, atlas target, version |
 | **Classic Player Skin** (P2) | Pixel Art, Texture | Skin PNG and supported skin-metadata handoff | 64×64 layout where applicable, classic/slim arms, outer layers, UV identity |
-| **Environment Visual** (P2/P3) | Texture and Bedrock visual compatibility | Fog/biome visual intent and reviewed resource handoff | scope support, resource identity, fog priority and platform compatibility |
 
 **Cross-profile modifiers, not extra Stages:** appearance/texture/geometry variants; placement context; collision/selection bounds preview; export QA. None may silently promote source evidence to in-game proof.
 
@@ -34,7 +33,7 @@ LazyDesigner extends its existing Geometry/UV, Texture/Painter/PBR, Animation/Ri
 2. **Routing:** existing Control chooses the active GEOMETRY, TEXTURING, or ANIMATION specialist; profiles only supply task-specific rules and validation. No preload of all profiles. No new `REFERENCE.json` fields until the owning generator, consumers, semantic revision, and generated docs can move atomically.
 3. **Native identity:** exact project/geometry, Group, Cube, Locator and texture IDs; ambiguous names, missing expected versions, unsupported format features, interrupted edits, and stale revisions fail closed before mutation. Reuse existing transaction/Undo/atomic-write owners.
 4. **Version policy:** use one verified source owner per format rule, cite Mojang/Microsoft reference, distinguish retail vs experimental. Unknown target version or unverified feature must never imply READY.
-5. **Non-3D outputs:** PNG/texture and fog files are separate output types; exporting an Entity `.bbmodel` does not prove they are usable. Do not invent pack manifests, attachable JSON or gameplay definitions from incomplete evidence.
+5. **Non-3D outputs:** PNG/texture files are separate output types; exporting an Entity `.bbmodel` does not prove they are usable. Do not invent pack manifests, attachable JSON or gameplay definitions from incomplete evidence.
 6. **Proof hierarchy:** SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN / NATIVE_UNVERIFIED / MINECRAFT_UNVERIFIED. Actual game acceptance requires matching evidence and tested build, never an assumed PASS.
 7. **Efficiency:** reuse inspected source identities and derived scene/UV evidence; validate only affected asset parts; optimize cost to accepted result, not model Cube count alone.
 
@@ -171,18 +170,6 @@ The import-safe source owner is `mcp/lib/texture/classicSkinPlanning.ts`. This i
 
 References: [Microsoft Skin Pack JSON Reference](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/skinpacksreference/skinpackjsonreference?view=minecraft-bedrock-stable), [Microsoft Packaging a Skin Pack](https://learn.microsoft.com/en-us/minecraft/creator/documents/packagingaskinpack?view=minecraft-bedrock-stable), [Mojang humanoid.custom wide and slim UV data](https://github.com/Mojang/bedrock-samples/blob/main/resource_pack/models/mobs.json), [Pixel Art QA](../02-reference/pixel-art/qa.md).
 
-## E1 — Environment Fog and Client Biome visual planning
-
-The source-only owner is `mcp/lib/bedrock/environmentVisualPlanning.ts`. It prepares candidate Resource Pack fog and client-biome JSON objects from explicitly declared visual facts; it does **not** write pack files, mutate Blockbench, create shaders, or author world-generation/gameplay biomes.
-
-- One namespaced fog ID and the client-biome `minecraft:fog_appearance.fog_identifier` must match exactly. Resource file hints are bounded relative `fogs/<name>.json` and `biomes_client/<name>.biome_client.json` paths. Existing file/identifier registry conflicts block source admission; no automatic replace or pack assembly.
-- Client-biome JSON is the preferred modern format as of 1.21.40. E1 requires `format_version` 1.21.40 or later for its modern `minecraft:client_biome` candidate. Old `biomes_client.json` and biome Behavior Pack authoring are not inferred to be equivalent or handled automatically.
-- Supported fog distance media: air, water, weather, lava, lava_resistance and powder_snow. Each source scope requires an explicit RGB fog color, ordered finite nonnegative fog_start/fog_end, and `render_distance_type` fixed or render. `render` depends on the player's render distance. Omitted media inherit lower fog-stack settings; this contract does not manufacture those defaults.
-- Optional client biome visuals include `minecraft:sky_color.sky_color` and `minecraft:water_appearance` surface color/opacity. Ambient sounds, music, shaders, lighting, volumetric fog, and Vibrant Visuals remain outside E1.
-- Higher priority player `/fog` commands, neighboring biome blends, actual biome existence, other Resource Packs, visual output and native rendering remain unverified. Source-only diagnostics never imply worldgen, pack readiness, fog smoothness, performance, or game PASS.
-- SHA-256 source identity includes the declared version, normalized fog/biome colors, path/identity inventory and source references. Existing project Control, Gateway, Runtime, Texture and Pixel Art owners are unchanged; this is not a second environment renderer.
-
-References: [Microsoft Fogs](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/fogsreference/fogs?view=minecraft-bedrock-stable), [Microsoft Client Biomes](https://learn.microsoft.com/en-us/minecraft/creator/reference/content/clientbiomesreference/examples/clientbiomesoverview?view=minecraft-bedrock-stable), [Mojang fog stack](https://github.com/Mojang/bedrock-samples/blob/main/documentation/Fogs.html).
 ## Milestone acceptance contract
 
 | ID | Deliverable | Completion criteria before production claim |
@@ -196,6 +183,5 @@ References: [Microsoft Fogs](https://learn.microsoft.com/en-us/minecraft/creator
 | **V1** | Appearance variants | Strict texture/geometry/bone mapping continuity and deliberate variant bindings |
 | **C1** | Collision/selection preview | Honest geometric comparison with no gameplay collision claim; version aware |
 | **S1** | Classic skin and cosmetics | Classic/slim and outer-layer UV proof, separate from wearables |
-| **E1** | Limited environment visuals | Fog/biome visual constraints; only formats officially supported at implementation time |
 
 For each milestone: define its nearest source owner and narrow tests, pin an exact `Local` SHA, preserve existing capability semantics, record actual verification class, and update the **single** current continuation owner. Finish complete independently coherent source units while executable testing remains unavailable. Generator-coupled feature registration is deferred rather than partially written.
