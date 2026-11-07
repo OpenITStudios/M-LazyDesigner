@@ -79,6 +79,28 @@ describe("A1 Bedrock attachable source binding (no native pass)", () => {
     }))).toThrow("ATTACHABLE_GEOMETRY_IDENTIFIER_NOT_CANONICAL");
   });
 
+  test("explicit item mapping needs opt-in and never claims Resource Pack installation", () => {
+    const review = planBedrockAttachableBinding(sample({
+      item_identifier: "demo:alternative_sword",
+      explicit_item_mapping: true,
+    }));
+    expect(review.explicit_item_mapping_required).toBe(true);
+    expect(review.item_identifier).toBe("demo:alternative_sword");
+    expect(review.review_gates).toContain("EXPLICIT_ITEM_MAPPING_NOT_COMPILED");
+    expect(review.candidate_geometry_binding)
+      .toBe("q.item_slot_to_bone_name(context.item_slot)");
+    expect(review.minecraft_verified).toBe(false);
+    expect(() => planBedrockAttachableBinding(sample({
+      item_identifier: "demo:alternative_sword",
+      explicit_item_mapping: false,
+    }))).toThrow("ATTACHABLE_ITEM_IDENTIFIER_MISMATCH");
+    expect(() => planBedrockAttachableBinding(sample({
+      explicit_item_mapping: "true" as unknown as boolean,
+    }))).toThrow("ATTACHABLE_EXPLICIT_ITEM_MAPPING_INVALID");
+    expect(planBedrockAttachableBinding(sample())
+      .explicit_item_mapping_required).toBe(false);
+  });
+
   test("ambiguous, orphaned, cyclic and wrong model bone identities refuse", () => {
     const root = { uuid: "root", name: "root", parent_uuid: null };
     for (const model_bones of [

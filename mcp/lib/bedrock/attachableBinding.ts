@@ -10,6 +10,8 @@ export type AttachableBindingInput = {
   expected_project_uuid: string;
   attachable_identifier: string;
   item_identifier: string;
+  /** Explicit item mapping opt-in, rather than an implicit renamed item. */
+  explicit_item_mapping?: boolean;
   geometry_identifier: string;
   target_bone_uuid: string;
   model_bones: readonly AttachableModelBone[];
@@ -28,6 +30,7 @@ export type AttachableBindingReview = {
   project_uuid: string;
   attachable_identifier: string;
   item_identifier: string;
+  explicit_item_mapping_required: boolean;
   geometry_identifier: string;
   selected_model_bone: { uuid: string; name: string };
   holder_entity_identifier: string;
@@ -40,6 +43,7 @@ export type AttachableBindingReview = {
     | "DIRECT_BONE_COMBINED_RIG_REQUIRED"
     | "HOLDER_ANIMATION_AND_BONE_PARENTAGE_UNVERIFIED"
     | "RESOURCE_REFERENCES_NOT_COMPILED"
+    | "EXPLICIT_ITEM_MAPPING_NOT_COMPILED"
   )[];
   native_verified: false;
   minecraft_verified: false;
@@ -129,7 +133,14 @@ export function planBedrockAttachableBinding(
   const project = exact(input.expected_project_uuid, "expected_project_uuid", 128);
   const attachable = id(input.attachable_identifier, "attachable_identifier");
   const item = id(input.item_identifier, "item_identifier");
-  if (attachable !== item) throw new Error("ATTACHABLE_ITEM_IDENTIFIER_MISMATCH");
+  if (input.explicit_item_mapping !== undefined &&
+      typeof input.explicit_item_mapping !== "boolean") {
+    throw new Error("ATTACHABLE_EXPLICIT_ITEM_MAPPING_INVALID");
+  }
+  const distinctItemId = attachable !== item;
+  if (distinctItemId && input.explicit_item_mapping !== true) {
+    throw new Error("ATTACHABLE_ITEM_IDENTIFIER_MISMATCH");
+  }
   const geometry = exact(input.geometry_identifier, "geometry_identifier", 192);
   if (normalizeBedrockGeometryIdentifier(geometry) !== geometry) {
     throw new Error("ATTACHABLE_GEOMETRY_IDENTIFIER_NOT_CANONICAL");
@@ -151,6 +162,7 @@ export function planBedrockAttachableBinding(
     project_uuid: project,
     attachable_identifier: attachable,
     item_identifier: item,
+    explicit_item_mapping_required: distinctItemId,
     geometry_identifier: geometry,
     selected_model_bone: { uuid: bone.uuid, name: bone.name },
     holder_entity_identifier: holder,
@@ -175,6 +187,7 @@ export function planBedrockAttachableBinding(
         "HOLDER_SLOT_RESOLUTION_UNVERIFIED",
         "FIRST_AND_THIRD_PERSON_FIT_UNVERIFIED",
         "RESOURCE_REFERENCES_NOT_COMPILED",
+        ...(distinctItemId ? ["EXPLICIT_ITEM_MAPPING_NOT_COMPILED" as const] : []),
       ],
     };
   }
@@ -195,6 +208,7 @@ export function planBedrockAttachableBinding(
         "HOLDER_ANIMATION_AND_BONE_PARENTAGE_UNVERIFIED",
         "FIRST_AND_THIRD_PERSON_FIT_UNVERIFIED",
         "RESOURCE_REFERENCES_NOT_COMPILED",
+        ...(distinctItemId ? ["EXPLICIT_ITEM_MAPPING_NOT_COMPILED" as const] : []),
       ],
     };
   }

@@ -70,7 +70,7 @@ No package installation, bundled copies of Mojang assets, or live integration ar
 
 The import-safe source owner is mcp/lib/bedrock/attachableBinding.ts. It is a pure planner over explicitly caller-supplied inventories, not a Blockbench binding executor, Resource Pack builder, or proof of Minecraft compatibility.
 
-- Attachables must use an **exact** namespaced item identifier matching their own; geometry identifiers must already be canonical. No guessed rename or fallback.
+- Attachables default to an exact namespaced item identifier matching their own. A deliberately different item identifier requires `explicit_item_mapping: true` and returns `EXPLICIT_ITEM_MAPPING_NOT_COMPILED` for Resource Pack review; it is not a generated or verified item binding. Geometry identifiers must already be canonical. No guessed rename or fallback.
 - Model bone UUID/name uniqueness, fully resolved parent chains, acyclic hierarchy, explicit selected target and top-level item-slot bone are mandatory. Holder bone inventory is only a caller assertion, not native evidence.
 - For held main_hand/off_hand, the only automatic candidate is the official query q.item_slot_to_bone_name(context.item_slot). The specific slot is a preview intent. The resulting holder bone is chosen at runtime and has not been observed.
 - Direct-holder-bone binding requires an exact bone name in the declared holder inventory, but returns a review-only result with no geometry-binding expression. This route needs combined holder rig, animation and parentage review.
