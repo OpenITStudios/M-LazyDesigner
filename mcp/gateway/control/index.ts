@@ -68,5 +68,18 @@ export type {
   ControlSourceOwner,
 } from "./types";
 
+export {
+  captureOutputControlContext,
+  reviewAssetOutputAgainstCurrentControl,
+} from "./outputEvidence";
+export type {
+  OutputControlSnapshot,
+  OutputControlContext,
+  OutputControlEvidenceReview,
+  OutputControlEvidenceRow,
+  OutputContextMatch,
+  OutputRevisionRelation,
+} from "./outputEvidence";
+
 export { buildControlContinuationCheckpoint } from "./continuationCheckpoint";
 export type { ControlContinuationCheckpoint } from "./continuationCheckpoint";

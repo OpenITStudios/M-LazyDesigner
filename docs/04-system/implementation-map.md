@@ -370,6 +370,24 @@ manage_animation_controller
 
 ## Visual Asset Expansion — Source to Runtime Closure
 
+**Control output-context continuity (source-only):**
+`mcp/gateway/control/outputEvidence.ts` compares a bounded captured
+Control project binding, Runtime generation, Reference/Workspace fingerprints
+and task-context identity with a later Control Packet, then composes the
+existing `lib/receipts/assetOutput.ts` reviewer. Project, Runtime-generation or Reference identity differences and
+unavailable bound context withhold positive revision claims. Workspace
+and task IDs may rotate after an authorized save: only the exact
+Finalization-native current file digest (not those IDs) can still match
+the specific saved Entity file. The existing
+Finalization-only Entity `.bbmodel` digest can yield only
+`CONTROL_CHECKPOINT_MATCH_REPORTED` when its accepted/current hash also
+matches that specific native-reported file readback receipt. Matching
+contexts alone cannot prove a native revision: manual editor edits may not
+rotate Control identifiers. Particle and other output types remain
+`UNVERIFIED` until native format-specific readback exists. No new state,
+public Gateway tool, Runtime writer, or generated schema.
+Focused owner: `mcp/gateway/control/outputEvidence.test.ts`.
+
 **Native receipt bridge (source-only):**
 `mcp/lib/receipts/assetOutput.ts` reviews exact `export_model`
 structuredContent (Entity project/geometry/animation) and existing

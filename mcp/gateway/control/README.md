@@ -56,6 +56,7 @@ readiness.ts          lifecycle/readiness policy
 packetData.ts         empty workspace + packet summaries
 packet.ts             task packet orchestration
 receipt.ts            phase/project receipt derivation
+outputEvidence.ts     source-only existing-receipt/Control snapshot comparison; no state store
 capabilities.ts       capability decoration
 routingPolicy.ts      direct-first route policy
 developmentIntent.ts  bounded SYSTEM_DEVELOPMENT routing
@@ -114,6 +115,23 @@ handoff, and unknown outcomes into deterministic flow policy without another
 LLM/planner call. Unknown mutation outcomes never become automatic retries.
 
 Control consumes canonical capability metadata from `mcp/lib/capabilities/manifest.ts` through `capabilityProjection.ts`. Branch-level AI routing metadata remains owned by `gateway/capabilities/`; Control adds context/freshness/orchestration semantics without rebuilding those tables.
+
+## Output receipt continuity (source-only)
+
+`captureOutputControlContext` takes a bounded snapshot of the existing
+Control project binding, Runtime generation (requires a concrete
+instance/startup identity), Reference/Workspace fingerprints and task ID. `reviewAssetOutputAgainstCurrentControl` compares a
+caller-supplied receipt's captured snapshot with a later Control Packet and
+reuses the canonical `lib/receipts/assetOutput.ts` reviewer.
+
+Context identity equality **does not prove native freshness**: manual
+Blockbench edits can bypass those fingerprints. Only the existing
+Finalization-only Entity `.bbmodel` accepted/current readback may report a
+bounded file-byte match with a specific `export_model` receipt; a Particle
+write or a geometry/animation compile cannot borrow that claim. The review
+never authenticates a caller-supplied receipt, writes native files, adds
+Gateway tools, or awards visual/user/Minecraft/Finalization PASS. No
+independent cache, ledger or persisted receipt state is introduced.
 
 ## Gateway boundary
 
