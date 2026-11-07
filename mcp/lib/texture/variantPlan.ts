@@ -151,7 +151,7 @@ export type TextureVariantNativeAfter = {
   variant: TextureVariantNativeTextureIdentity;
   mapping: TextureVariantMappedUvIdentity;
   target_group_uuid: string;
-  target_group_is_material: boolean;
+  target_group_is_valid: boolean;
   source_remains_base_color: boolean;
   source_registered_once: boolean;
   variant_registered_once: boolean;
@@ -221,7 +221,7 @@ export function reconcileTextureVariantNativeContinuity(
     throw new Error("TEXTURE_VARIANT_NATIVE_SOURCE_CHANGED");
   }
   if (after.target_group_uuid !== plan.target_group_uuid ||
-      after.target_group_is_material !== false ||
+      after.target_group_is_valid !== true ||
       after.variant.uuid === before.source.uuid ||
       after.variant.name !== plan.requested_name ||
       after.variant.group_uuid !== plan.target_group_uuid ||
@@ -245,6 +245,7 @@ export function reconcileTextureVariantNativeContinuity(
     source_rgba_revision: before.source_rgba_revision,
     uv_mapped_faces_sha256: before.mapping.mapped_face_sha256,
     uv_mapped_face_count: before.mapping.mapped_face_count,
+    project_logical_uv: [...before.mapping.project_logical_uv] as [number, number],
     source_and_variant_rgba_equal_at_creation: true as const,
     uv_mapping_unchanged_during_creation: true as const,
     visual_verified: false as const,

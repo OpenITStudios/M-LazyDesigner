@@ -36,6 +36,7 @@ export const textureVariantNativeContinuityReceiptSchema = z.object({
   ),
   uv_mapped_faces_sha256: z.string().regex(/^sha256:[0-9a-f]{64}$/),
   uv_mapped_face_count: z.number().int().nonnegative(),
+  project_logical_uv: z.tuple([z.number().int().positive(), z.number().int().positive()]),
   source_and_variant_rgba_equal_at_creation: z.literal(true),
   uv_mapping_unchanged_during_creation: z.literal(true),
   visual_verified: z.literal(false),

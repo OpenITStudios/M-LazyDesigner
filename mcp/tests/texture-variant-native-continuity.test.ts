@@ -33,7 +33,7 @@ function fixture() {
     project_uuid:"project-a",source:{...source},
     variant:{...source,uuid:"variant",name:"variant.png",group_uuid:"group"},
     mapping:{...before.mapping},
-    target_group_uuid:"group",target_group_is_material:false,
+    target_group_uuid:"group",target_group_is_valid:true,
     source_remains_base_color:true,source_registered_once:true,
     variant_registered_once:true,variant_name_count:1,
     source_rgba_unchanged:true,variant_rgba_matches_source:true,
@@ -50,6 +50,7 @@ describe("V1 variant pre-Undo native source continuity", () => {
       project_uuid:"project-a",source_texture_uuid:"base",
       variant_texture_uuid:"variant",target_group_uuid:"group",
       uv_mapped_faces_sha256:sha,uv_mapped_face_count:12,
+      project_logical_uv:[64,64],
       source_and_variant_rgba_equal_at_creation:true,
       uv_mapping_unchanged_during_creation:true,
       visual_verified:false,minecraft_verified:false,
@@ -118,7 +119,7 @@ describe("V1 variant pre-Undo native source continuity", () => {
       {variant:{...fixture().after.variant,uv_width:32}},
       {variant:{...fixture().after.variant,pbr_channel:"normal"}},
       {target_group_uuid:"wrong"},
-      {target_group_is_material:true},
+      {target_group_is_valid:false},
       {variant_registered_once:false},
       {variant_name_count:2},
       {variant_rgba_matches_source:false},
@@ -144,6 +145,9 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(textureVariantCreationReceiptSchema.safeParse({
       ...output,variant_native_continuity:{...evidence,visual_verified:true},
     }).success).toBe(false);
+    expect(textureVariantCreationReceiptSchema.safeParse({
+      ...output,variant_native_continuity:{...evidence,project_logical_uv:[0,64]},
+    }).success).toBe(false);
     const legacy={...output};
     delete (legacy as {variant_native_continuity?:unknown}).variant_native_continuity;
     expect(textureVariantCreationReceiptSchema.safeParse(legacy).success).toBe(true);
@@ -155,7 +159,8 @@ describe("V1 variant pre-Undo native source continuity", () => {
     const variantEnd=native.indexOf("function textureEvidenceSourceIdentity",variantStart);
     const block=native.slice(variantStart,variantEnd);
     expect(block).toContain("fullTextureRgba(source)");
-    expect(block).toContain("collectUvAtlasUsages()");
+    expect(native).toContain("const faces = collectUvAtlasUsages()");
+    expect(block).toContain("currentVariantMappedUvIdentity()");
     expect(block).toContain("requireUnchangedTextureBitmap(");
     expect(block).toContain("reconcileTextureVariantNativeContinuity(");
     expect(block.indexOf("reconcileTextureVariantNativeContinuity("))

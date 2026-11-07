@@ -233,16 +233,14 @@ async function createTextureVariant(request: z.infer<typeof createTextureVariant
         variant: nativeVariantTextureIdentity(variant),
         mapping: currentVariantMappedUvIdentity(),
         target_group_uuid: targetGroup.uuid,
-        target_group_is_material: ownedGroup.length !== 1 ||
-          ownedGroup[0] !== targetGroup || targetGroup.is_material === true,
+        target_group_is_valid: ownedGroup.length === 1 &&
+          ownedGroup[0] === targetGroup && targetGroup.is_material === false,
         source_remains_base_color:
           textureProductionRoleForVariant(source) === "base_color_candidate",
-        source_registered_once: Texture.all.filter(
-          item => item.uuid === source.uuid && item === source
-        ).length === 1,
-        variant_registered_once: Texture.all.filter(
-          item => item.uuid === variant.uuid && item === variant
-        ).length === 1,
+        source_registered_once: Texture.all.includes(source) &&
+          Texture.all.filter(item => item.uuid === source.uuid).length === 1,
+        variant_registered_once: Texture.all.includes(variant) &&
+          Texture.all.filter(item => item.uuid === variant.uuid).length === 1,
         variant_name_count: Texture.all.filter(
           item => item.name === variant.name
         ).length,
