@@ -254,6 +254,11 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(body).toContain("TEXTURE_VARIANT_ROLLBACK_UNVERIFIED");
     expect(body).toContain("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
     expect(body).toContain("TEXTURE_VARIANT_UNDO_INIT_OUTCOME_UNKNOWN");
+    expect(body).toContain("TEXTURE_VARIANT_UNDO_INIT_STATE_UNVERIFIED");
+    expect(body).toContain("TEXTURE_VARIANT_ADD_TEXTURE_STATE_DRIFT");
+    expect(body).toContain("save.aspects !== initAspects");
+    expect(body).toContain("Undo !== undoSystemOwner");
+    expect(body).toContain("addResult !== variant");
     expect(body).toContain("TEXTURE_VARIANT_POSTCOMMIT_DISPLAY_UNVERIFIED");
     expect(body).toContain("Undo.cancelEdit()");
     expect(body).toContain("TEXTURE_VARIANT_ROLLBACK_POSTCONDITION_FAILED");

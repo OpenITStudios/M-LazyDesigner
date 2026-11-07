@@ -20,6 +20,12 @@ type Fault =
   | "group_foreign_during_decode" | "group_renamed_during_decode"
   | "group_removed_during_decode" | "group_drift_on_remove"
   | "group_drift_on_cancel" | "group_foreign_after_commit"
+  | "init_listener_throws" | "init_listener_replaces_save"
+  | "init_listener_changes_source" | "init_listener_changes_groups"
+  | "init_listener_adds_texture" | "init_listener_changes_history"
+  | "init_listener_swaps_undo" | "add_listener_throws"
+  | "add_listener_changes_source" | "add_listener_adds_foreign_texture"
+  | "add_listener_swaps_undo" | "add_listener_renames_variant"
   | "finish_entry_mismatch" | "cancel_alters_history" | "remove_replaces_uuid" | "init_throws";
 
 type FakeCase = {
@@ -62,7 +68,28 @@ async function withFakeBlockbench(
     initEdit(_aspects: unknown) {
       calls.init++;
       if (fault === "init_throws") throw new Error("INIT_FAILED");
-      undo.current_save = {owner:"variant", textures:{}, collections:{}};
+      const aspects = _aspects as {textures: FakeTexture[]; collections: unknown[]};
+      undo.current_save = {owner:"variant", aspects, textures:{}, collections:{}};
+      // Native create_undo_save/init_edit listeners run while opening Undo.
+      calls.events.push("init_edit");
+      if (fault === "init_listener_throws") {
+        throw new Error("INIT_LISTENER_THROW_AFTER_OPEN");
+      }
+      if (fault === "init_listener_replaces_save") {
+        undo.current_save = {
+          owner:"foreign", aspects:{textures:[],collections:[]},
+          textures:{}, collections:{},
+        };
+      }
+      if (fault === "init_listener_changes_source") source.pixels[0] = 255;
+      if (fault === "init_listener_changes_groups") group.name = "Other";
+      if (fault === "init_listener_adds_texture") {
+        FakeTexture.all.push(new FakeTexture({name:"foreign.png",width:16,height:16}));
+      }
+      if (fault === "init_listener_changes_history") {
+        undo.history.push({kind:"external"}); undo.index++;
+      }
+      if (fault === "init_listener_swaps_undo") assign("Undo",{...undo});
       return undo.current_save;
     },
     finishEdit(_name: string,_aspects: unknown) {
@@ -213,7 +240,16 @@ async function withFakeBlockbench(
     }
     add(_select?:boolean,_allowUndo?:boolean) {
       FakeTexture.all.push(this);
+      // Official Texture.add dispatches add_texture after registration.
+      calls.events.push("add_texture");
       if (fault==="add_throws") throw new Error("ADD_FAILED_AFTER_REGISTER");
+      if (fault === "add_listener_throws") throw new Error("ADD_TEXTURE_LISTENER_THROW");
+      if (fault === "add_listener_changes_source") source.pixels[0] = 255;
+      if (fault === "add_listener_adds_foreign_texture") {
+        FakeTexture.all.push(new FakeTexture({name:"foreign.png",width:16,height:16}));
+      }
+      if (fault === "add_listener_swaps_undo") assign("Undo",{...undo});
+      if (fault === "add_listener_renames_variant") this.name = "renamed.png";
       return this;
     }
     remove(_undo?:boolean) {
@@ -269,12 +305,57 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
       expect(ctx.textures).toHaveLength(2);
       expect(ctx.calls).toMatchObject({init:1,finish:1,cancel:0,remove:0});
       expect(ctx.undo.current_save).toBeUndefined();
-      expect(ctx.calls.events).toEqual(["finish_edit","finished_edit"]);
+      expect(ctx.calls.events).toEqual([
+          "init_edit","add_texture","finish_edit","finished_edit",
+        ]);
       expect(ctx.undo.history[0]).toMatchObject({
         before:{textures:{}},
         post:{textures:{"variant-1":{uuid:"variant-1",name:"variant.png"}}},
       });
     });
+  });
+
+  test("init_edit listener drift never starts candidate creation or cancels an unknown edit",async()=>{
+    for (const fault of [
+      "init_listener_throws", "init_listener_replaces_save",
+      "init_listener_changes_source", "init_listener_changes_groups",
+      "init_listener_adds_texture", "init_listener_changes_history",
+      "init_listener_swaps_undo",
+    ] as const) {
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_UNDO_INIT_OUTCOME_UNKNOWN");
+        expect(ctx.calls).toMatchObject({init:1,finish:0,cancel:0,remove:0});
+        expect(ctx.calls.events).toEqual(["init_edit"]);
+        expect(ctx.undo.current_save).toBeDefined();
+      });
+    }
+  });
+
+  test("add_texture listener may fail after registration but only owned edits rollback",async()=>{
+    for (const fault of ["add_listener_throws","add_listener_renames_variant"] as const) {
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow(
+          fault === "add_listener_throws"
+            ? "ADD_TEXTURE_LISTENER_THROW" : "TEXTURE_VARIANT_ADD_TEXTURE_STATE_DRIFT"
+        );
+        expect(ctx.calls).toMatchObject({init:1,finish:0,cancel:1,remove:1});
+        expect(ctx.calls.events).toEqual(["init_edit","add_texture"]);
+        expect(ctx.textures).toHaveLength(1);
+      });
+    }
+  });
+
+  test("foreign add_texture listener mutations cannot roll back another owner",async()=>{
+    for (const fault of [
+      "add_listener_changes_source","add_listener_adds_foreign_texture",
+      "add_listener_swaps_undo",
+    ] as const) {
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+        expect(ctx.calls).toMatchObject({init:1,finish:0,cancel:0,remove:0});
+        expect(ctx.calls.events).toEqual(["init_edit","add_texture"]);
+      });
+    }
   });
 
   test("decoder and partially failing add rollback only the owned candidate",async()=>{
@@ -382,7 +463,9 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
       "finish_before_commit_variant_renamed"] as const){
       await withFakeBlockbench(fault,async ctx=>{
         await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
-        expect(ctx.calls.events).toEqual(["finish_edit","finished_edit"]);
+        expect(ctx.calls.events).toEqual([
+          "init_edit","add_texture","finish_edit","finished_edit",
+        ]);
         expect(ctx.undo.history).toHaveLength(1);
         expect(ctx.calls.cancel).toBe(0);
         expect(ctx.calls.remove).toBe(0);
@@ -393,7 +476,7 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
   test("a throwing finish_edit listener before commit still has unknown outcome",async()=>{
     await withFakeBlockbench("finish_before_commit_throws",async ctx=>{
       await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
-      expect(ctx.calls.events).toEqual(["finish_edit"]);
+      expect(ctx.calls.events).toEqual(["init_edit","add_texture","finish_edit"]);
       expect(ctx.undo.history).toHaveLength(0);
       expect(ctx.undo.current_save).toBeDefined();
       expect(ctx.calls.cancel).toBe(0);
@@ -409,7 +492,9 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
     ] as const){
       await withFakeBlockbench(fault,async ctx=>{
         await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
-        expect(ctx.calls.events).toEqual(["finish_edit","finished_edit"]);
+        expect(ctx.calls.events).toEqual([
+          "init_edit","add_texture","finish_edit","finished_edit",
+        ]);
         expect(ctx.undo.history).toHaveLength(1);
         expect(ctx.calls).toMatchObject({finish:1,cancel:0,remove:0});
         expect(ctx.textures).toHaveLength(2);

@@ -204,6 +204,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
 
   // A history snapshot lets failure recovery reject asynchronous edits by a
   // different owner, even if they happened on the same Project instance.
+  const undoSystemOwner = Undo;
   const historyBefore = [...Undo.history];
   const undoIndexBefore = Undo.index;
   const undoHistoryUnchanged = () =>
@@ -211,15 +212,41 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
     Undo.history.length === historyBefore.length &&
     Undo.history.every((entry, i) => entry === historyBefore[i]);
   let undoOwner: typeof Undo.current_save;
+  const initAspects = { textures: [], collections: [] };
   try {
-    Undo.initEdit({ textures: [], collections: [] });
+    Undo.initEdit(initAspects);
     undoOwner = Undo.current_save;
-    if (!undoOwner) {
-      throw new Error("TEXTURE_VARIANT_UNDO_SNAPSHOT_UNAVAILABLE");
+    // UndoSystem.save retains the exact init aspects with empty texture and
+    // collection snapshots. init_edit listeners run before initEdit returns,
+    // so foreign edits must be refused before constructing a candidate.
+    const save = undoOwner as unknown as {
+      aspects?: unknown; textures?: Record<string, unknown>;
+      collections?: Record<string, unknown>;
+    } | undefined;
+    if (!save || save.aspects !== initAspects ||
+        initAspects.textures.length !== 0 ||
+        initAspects.collections.length !== 0 ||
+        !save.textures || Object.keys(save.textures).length !== 0 ||
+        !save.collections || Object.keys(save.collections).length !== 0 ||
+        Undo !== undoSystemOwner ||
+        Project !== projectOwner ||
+        Project?.uuid !== precommit.project_uuid ||
+        !undoHistoryUnchanged() ||
+        !textureVariantNativeInventoryIntact(textureInventoryBefore, Texture.all) ||
+        !textureGroupsUnchanged() ||
+        JSON.stringify(nativeVariantTextureIdentity(source)) !==
+          JSON.stringify(precommit.source) ||
+        JSON.stringify(currentVariantMappedUvIdentity()) !==
+          JSON.stringify(precommit.mapping)) {
+      throw new Error("TEXTURE_VARIANT_UNDO_INIT_STATE_UNVERIFIED");
     }
+    requireUnchangedTextureBitmap(
+      sourceBitmap, fullTextureRgba(source),
+      "TEXTURE_VARIANT_UNDO_INIT_SOURCE_CHANGED"
+    );
   } catch (error) {
-    // initEdit may have partially opened an edit. Without its exact owner,
-    // an automatic cancel would risk mutating a foreign/unknown transaction.
+    // initEdit/create_undo_save/init_edit may have opened a foreign or
+    // incomplete transaction; no candidate has been created yet.
     throw new Error(
       "TEXTURE_VARIANT_UNDO_INIT_OUTCOME_UNKNOWN: inspect editor before retrying.",
       { cause: error }
@@ -250,12 +277,39 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
     variant.pbr_channel = "color";
     variant.uv_width = source.uv_width;
     variant.uv_height = source.uv_height;
-    variant.add(false, false);
+    const addResult: unknown = variant.add(false, false);
+    // Native Texture.add registers the object before dispatching add_texture.
+    // Refuse listener changes before yielding to the image decoder.
+    if (addResult !== variant ||
+        Undo !== undoSystemOwner ||
+        Undo.current_save !== undoOwner ||
+        Project !== projectOwner ||
+        Project?.uuid !== precommit.project_uuid ||
+        !undoHistoryUnchanged() ||
+        !textureGroupsUnchanged() ||
+        !textureVariantNativeInventoryIntact(
+          textureInventoryBefore, Texture.all, variant
+        ) ||
+        !Texture.all.includes(variant) ||
+        variant.uuid === source.uuid ||
+        variant.name !== plan.requested_name ||
+        variant.group !== plan.target_group_uuid ||
+        variant.pbr_channel !== "color" ||
+        JSON.stringify(nativeVariantTextureIdentity(source)) !==
+          JSON.stringify(precommit.source) ||
+        JSON.stringify(currentVariantMappedUvIdentity()) !==
+          JSON.stringify(precommit.mapping)) {
+      throw new Error("TEXTURE_VARIANT_ADD_TEXTURE_STATE_DRIFT");
+    }
+    requireUnchangedTextureBitmap(
+      sourceBitmap, fullTextureRgba(source),
+      "TEXTURE_VARIANT_ADD_TEXTURE_SOURCE_CHANGED"
+    );
     await variant.img.decode();
     // Keep the precommit check synchronous: no more yield is allowed while
     // the mutation is open. Reject a changed source, project or UV map rather
     // than presenting a stale variant_creation success receipt.
-    if (Undo.current_save !== undoOwner) {
+    if (Undo !== undoSystemOwner || Undo.current_save !== undoOwner) {
       throw new Error("TEXTURE_VARIANT_UNDO_OWNERSHIP_LOST");
     }
     if (Project !== projectOwner ||
@@ -353,6 +407,7 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
     // material group, even if source/variant pixel bytes still match.
     if (Project !== projectOwner ||
         Project?.uuid !== precommit.project_uuid ||
+        Undo !== undoSystemOwner ||
         Undo.current_save ||
         !Texture.all.includes(variant) ||
         !textureVariantNativeInventoryIntact(
@@ -388,7 +443,8 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
   } catch (error) {
     const projectUnchanged = Project === projectOwner &&
       Project?.uuid === precommit.project_uuid;
-    const undoOwned = Undo.current_save === undoOwner;
+    const undoOwned = Undo === undoSystemOwner &&
+      Undo.current_save === undoOwner;
     let sourceUnchanged = false;
     let uvUnchanged = false;
     // Reads are best-effort only; failure to observe means NO rollback.
@@ -453,12 +509,14 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
       // owner before touching Undo or another Project's transaction.
       if (Project !== projectOwner ||
           Project?.uuid !== precommit.project_uuid ||
+          Undo !== undoSystemOwner ||
           Undo.current_save !== undoOwner ||
           !textureGroupsUnchanged()) {
         throw new Error("TEXTURE_VARIANT_ROLLBACK_OWNERSHIP_LOST");
       }
       Undo.cancelEdit();
-      if (Undo.current_save ||
+      if (Undo !== undoSystemOwner ||
+          Undo.current_save ||
           !undoHistoryUnchanged() ||
           Project !== projectOwner ||
           Project?.uuid !== precommit.project_uuid ||
