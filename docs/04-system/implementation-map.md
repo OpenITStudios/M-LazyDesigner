@@ -396,8 +396,12 @@ and task IDs may rotate after an authorized save: only the exact
 Finalization-native current file digest (not those IDs) can still match
 the specific saved Entity file. The existing
 Finalization-only Entity `.bbmodel` digest can yield only
-`CONTROL_CHECKPOINT_MATCH_REPORTED` when its accepted/current hash also
-matches that specific native-reported file readback receipt. Matching
+`CONTROL_CHECKPOINT_MATCH_REPORTED` when its accepted/current hash
+matches a file readback receipt **and** the same-status bound Runtime
+requested project's absolute native `save_path` exactly matches the
+receipt's `wrote_to_path`. Save As to a different file with identical
+bytes is not same-deliverable proof; absent Runtime status/native path
+withholds a positive comparison. Matching
 contexts alone cannot prove a native revision: manual editor edits may not
 rotate Control identifiers. Particle and other output types remain
 `UNVERIFIED` until native format-specific readback exists. No new state,

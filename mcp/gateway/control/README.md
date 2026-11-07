@@ -127,7 +127,11 @@ reuses the canonical `lib/receipts/assetOutput.ts` reviewer.
 Context identity equality **does not prove native freshness**: manual
 Blockbench edits can bypass those fingerprints. Only the existing
 Finalization-only Entity `.bbmodel` accepted/current readback may report a
-bounded file-byte match with a specific `export_model` receipt; a Particle
+bounded **same-file** match with a specific `export_model` receipt only
+when a same-status bound Runtime native save_path exactly equals that
+receipt's wrote_to_path. Without current native status, without a saved
+bound project, or after Save As to a different file, a matching SHA alone
+must not claim current output identity; a Particle
 write or a geometry/animation compile cannot borrow that claim. The review
 never authenticates a caller-supplied receipt, writes native files, adds
 Gateway tools, or awards visual/user/Minecraft/Finalization PASS. No

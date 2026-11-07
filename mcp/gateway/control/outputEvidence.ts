@@ -1,4 +1,7 @@
 import type { ControlPacket } from "./packet";
+import type { GatewayRuntimeStatus } from "../runtime/backend";
+import { readRuntimeProjectHealth } from "../../lib/runtime/affinity";
+import { isAbsoluteFilesystemPath } from "../../lib/core/path";
 import {
   resolveAssetProfileSelection,
 } from "../../lib/product/assetProfiles";
@@ -46,6 +49,7 @@ export type OutputContextMatch =
 export type OutputRevisionRelation =
   | "UNVERIFIED"
   | "CONTROL_CHECKPOINT_STALE_REPORTED"
+  | "CONTROL_NATIVE_FILE_PATH_MISMATCH"
   | "CONTROL_CHECKPOINT_DIFFERS_FROM_RECEIPT"
   | "CONTROL_CHECKPOINT_MATCH_REPORTED";
 
@@ -136,8 +140,42 @@ function contextDifferences(
   return fields.filter((field) => captured[field] !== current[field]);
 }
 
+/**
+ * Reuse the already-verified Runtime health project owner. A file hash cannot
+ * identify *which* .bbmodel was saved. Require the bound current native
+ * save_path and the export receipt's exact wrote_to_path to agree.
+ *
+ * The caller must supply the same Runtime status that produced the current
+ * Control Packet. This source-only comparison does not authenticate calls,
+ * read files, or upgrade the independent Finalization checkpoint proof.
+ */
+function currentBoundEntitySavePath(
+  current: OutputControlSnapshot,
+  status: GatewayRuntimeStatus | null | undefined
+): string | null {
+  if (!status || current.project.binding !== "BOUND" ||
+      !nonempty(current.project.affinity_uuid) ||
+      !status.runtime.online || !status.runtime.mcp_client_ready ||
+      status.runtime.catalog_stale ||
+      status.runtime.runtime_signature !== current.runtime.runtime_signature ||
+      status.affinity.project_uuid !== current.project.affinity_uuid) return null;
+
+  const project = readRuntimeProjectHealth(status.runtime.health);
+  const native = project?.requested_project;
+  const nativePath = native?.save_path;
+  if (project?.requested_project_available !== true ||
+      project.requested_project_uuid !== current.project.affinity_uuid ||
+      native?.uuid !== current.project.affinity_uuid ||
+      native?.saved !== true ||
+      typeof nativePath !== "string" ||
+      !isAbsoluteFilesystemPath(nativePath) ||
+      !/\.bbmodel$/i.test(nativePath)) return null;
+  return nativePath;
+}
+
 function revisionForEntityProject(input: {
   current: OutputControlSnapshot;
+  current_native_status?: GatewayRuntimeStatus | null;
   rows: AssetOutputReceiptReview["rows"];
   observations: readonly AssetOutputReceiptObservation[];
   context_match: OutputContextMatch;
@@ -180,9 +218,24 @@ function revisionForEntityProject(input: {
   }
   if (checkpoint.state !== "MATCHED") return findings;
 
+  // A matching SHA across two files is not same-deliverable proof. The
+  // status/project binding must identify the exact file in the receipt.
+  const currentNativePath = currentBoundEntitySavePath(
+    input.current, input.current_native_status
+  );
+  if (!currentNativePath) return findings;
   const receipt = record(input.observations.find(
     (entry) => entry.deliverable_id === "editable_bbmodel"
   )?.structured_content);
+  const writtenPath = receipt?.wrote_to_path;
+  if (typeof writtenPath !== "string" || writtenPath.length === 0) return findings;
+  if (writtenPath !== currentNativePath) {
+    findings.set("editable_bbmodel", {
+      relation: "CONTROL_NATIVE_FILE_PATH_MISMATCH",
+      reason: "CURRENT_BOUND_NATIVE_PATH_DIFFERS_FROM_EXPORT_RECEIPT",
+    });
+    return findings;
+  }
   const writtenSha = receipt?.written_file_sha256;
   if (!nonempty(writtenSha) || !SHA256.test(writtenSha) ||
       !nonempty(checkpoint.accepted_sha256) ||
@@ -211,12 +264,16 @@ function revisionForEntityProject(input: {
  * revision ledger or recomputing filesystem hashes.
  *
  * Identical Context IDs do not prove native model freshness: manual edits
- * may not rotate them. Only the existing Entity Finalization readback can
- * report a bounded same-file match, never user/visual/Minecraft approval.
+ * may not rotate them. The existing Finalization Entity SHA alone cannot
+ * identify a saved file; require the same-bound Runtime status's native
+ * save_path to match the export receipt before reporting a point-in-time
+ * same-file match. Never imply user/visual/Minecraft approval.
  */
 export function reviewAssetOutputAgainstCurrentControl(input: {
   plan: AssetOutputPlan;
   current: OutputControlSnapshot;
+  /** Same-status Runtime health as the current Control Packet; no new read. */
+  current_native_status?: GatewayRuntimeStatus | null;
   captured_at_receipt: OutputControlContext | null;
   observations: readonly AssetOutputReceiptObservation[];
 }): OutputControlEvidenceReview {
@@ -254,6 +311,7 @@ export function reviewAssetOutputAgainstCurrentControl(input: {
   const fileRevisions = input.plan.asset_profile_id === "entity"
     ? revisionForEntityProject({
         current: input.current,
+        current_native_status: input.current_native_status,
         rows: reviewed.rows,
         observations: input.observations,
         context_match: contextMatch,

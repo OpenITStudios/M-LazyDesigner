@@ -38,6 +38,12 @@ asset README. Obtain it from the **matching saved-file readback**
 or from the current bound native file digest surfaced by Control status.
 The digest is a checkpoint identity, **not user approval**: the required
 Stage approvals and relevant visual evidence must already exist.
+When reconciling a prior `export_model` receipt with a later Control
+checkpoint, require the **same native file path**, not just matching
+SHA-256 values. The internal Output Evidence comparison checks the
+bound Runtime project's current `save_path` against the receipt's
+`wrote_to_path`; if either native status/path is missing or a Save As
+changed the output path, a hash match alone is insufficient.
 
 At `Current Stage: FINALIZATION` or `COMPLETE`, the existing Control
 status compares this accepted digest to the **currently saved, uniquely

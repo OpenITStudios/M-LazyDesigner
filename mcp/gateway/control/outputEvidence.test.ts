@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { GatewayRuntimeStatus } from "../runtime/backend";
 import { planAssetOutputRequirements } from "@/lib/product/assetOutputContracts";
 import {
   captureOutputControlContext,
@@ -39,6 +40,26 @@ function current(kind: "MODEL" | "PARTICLE" | null = "MODEL"): OutputControlSnap
   };
 }
 
+/** Minimal snapshot of existing bound native health; no real Runtime runs. */
+function nativeStatus(savePath = PATH): GatewayRuntimeStatus {
+  return {
+    affinity: { project_uuid: "project-1", authoring_phase: "geometry" },
+    runtime: {
+      online: true, mcp_client_ready: true, catalog_stale: false,
+      runtime_signature: SIGNATURE,
+      health: { project_context: {
+        active_project_uuid: "project-1",
+        requested_project_uuid: "project-1",
+        requested_project_available: true,
+        open_project_count: 1,
+        requested_project: {
+          uuid: "project-1", save_path: savePath, saved: true,
+        },
+      } },
+    },
+  } as unknown as GatewayRuntimeStatus;
+}
+
 function exported(receiptHash = SHA) {
   return {
     project_format: "bedrock",
@@ -60,6 +81,7 @@ function entityInputs(packet = current(), receipt = exported()) {
   return {
     plan: planAssetOutputRequirements({ asset_profile_id: "entity" }),
     current: packet,
+    current_native_status: nativeStatus(),
     captured_at_receipt: captureOutputControlContext(current()),
     observations: [{
       deliverable_id: "editable_bbmodel",
@@ -139,6 +161,47 @@ describe("Control-bound Asset Output receipt continuity", () => {
     expect(reviewAssetOutputAgainstCurrentControl({
       ...entityInputs(), captured_at_receipt: null,
     }).context_match).toBe("NO_CAPTURED_CONTEXT");
+  });
+
+  test("same hash across a different native output path is not same-file proof", () => {
+    const moved = reviewAssetOutputAgainstCurrentControl({
+      ...entityInputs(), current_native_status: nativeStatus("/assets/copy.bbmodel"),
+    });
+    expect(moved.rows[0].state).toBe("FILE_READBACK_REPORTED");
+    expect(moved.rows[0].revision_relation)
+      .toBe("CONTROL_NATIVE_FILE_PATH_MISMATCH");
+    expect(moved.rows[0].revision_reason)
+      .toBe("CURRENT_BOUND_NATIVE_PATH_DIFFERS_FROM_EXPORT_RECEIPT");
+    expect(moved.current_asset_revision_verified).toBe(false);
+    expect(moved.finalization_ready).toBe(false);
+  });
+
+  test("missing or untrusted current native binding withholds positive file match", () => {
+    const original = nativeStatus();
+    const cases: Array<GatewayRuntimeStatus | null> = [
+      null,
+      { ...original, affinity: { ...original.affinity, project_uuid: "other" } },
+      { ...original, runtime: { ...original.runtime,
+        runtime_signature: SIGNATURE.replace("runtime-instance-1", "other-instance") } },
+      { ...original, runtime: { ...original.runtime,
+        health: { project_context: { active_project_uuid: "project-1",
+          requested_project_uuid: "project-1", requested_project_available: false,
+          open_project_count: 1 } } } },
+      { ...original, runtime: { ...original.runtime,
+        health: { project_context: { active_project_uuid: "project-1",
+          requested_project_uuid: "project-1", requested_project_available: true,
+          open_project_count: 1, requested_project: {
+            uuid: "project-1", save_path: PATH, saved: false,
+          } } } } },
+      nativeStatus("relative/model.bbmodel"),
+    ];
+    for (const status of cases) {
+      const review = reviewAssetOutputAgainstCurrentControl({
+        ...entityInputs(), current_native_status: status,
+      });
+      expect(review.rows[0].revision_relation).toBe("UNVERIFIED");
+      expect(review.finalization_ready).toBe(false);
+    }
   });
 
   test("a stale or differing current Entity checkpoint defeats receipt readback", () => {
