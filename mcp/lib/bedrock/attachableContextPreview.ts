@@ -143,10 +143,32 @@ export function planBedrockAttachableContextPreview(
   const binding = planBedrockAttachableBinding(input.binding);
   const expected = validateDependencies(input.expected);
   const itemSlot = binding.preview_slot;
+  // A1 has already validated identifiers, uniqueness, bone ancestry and the
+  // holder inventory. Preserve every material source identity while making
+  // order-insensitive inventories and object key order hash identically.
+  const canonicalSource = {
+    project_uuid: binding.project_uuid,
+    attachable_identifier: binding.attachable_identifier,
+    item_identifier: binding.item_identifier,
+    explicit_item_mapping_required: binding.explicit_item_mapping_required,
+    geometry_identifier: binding.geometry_identifier,
+    target_model_bone_uuid: binding.selected_model_bone.uuid,
+    model_bones: input.binding.model_bones
+      .map(bone => [bone.uuid, bone.name, bone.parent_uuid] as const)
+      .sort((a, b) => a[0].localeCompare(b[0])),
+    holder_entity_identifier: binding.holder_entity_identifier,
+    holder_bone_names: [...input.binding.holder.bone_names].sort(),
+    binding_strategy: binding.binding_strategy,
+    target_holder_bone: input.binding.binding.strategy === "DIRECT_BONE"
+      ? input.binding.binding.holder_bone_name : null,
+    item_slot: itemSlot,
+    source_refs: [...input.binding.source_refs].sort(),
+  };
+  // Version bump deliberately invalidates pre-canonicalization source claims.
   const plan_id = "attachable-context:" + createHash("sha256")
     .update(JSON.stringify([
-      "attachable-context-a2-v1",
-      input.binding,
+      "attachable-context-a2-v2",
+      canonicalSource,
       binding,
       expected,
       ATTACHABLE_CONTEXT_VIEWS,

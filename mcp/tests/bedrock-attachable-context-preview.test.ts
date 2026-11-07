@@ -75,6 +75,50 @@ describe("A2 attachable holder-composite preview evidence (source-only)", () => 
     expect(planBedrockAttachableContextPreview(input).plan_id).toBe(p.plan_id);
   });
 
+  test("equivalent A1 inventories and object key ordering retain the same A2 capture plan", () => {
+    const initial = base();
+    initial.binding = {
+      ...initial.binding,
+      model_bones: [
+        { uuid: "bone-staff", name: "staff", parent_uuid: null },
+        { uuid: "bone-detail", name: "detail", parent_uuid: "bone-staff" },
+      ],
+      source_refs: ["approved:front", "approved:side"],
+    };
+    const before = structuredClone(initial);
+    const reordered: AttachableContextPreviewInput = {
+      expected: {
+        holder_pose_label: initial.expected.holder_pose_label,
+        reference_image_fingerprint: initial.expected.reference_image_fingerprint,
+        runtime_build_fingerprint: initial.expected.runtime_build_fingerprint,
+        holder_pose_fingerprint: initial.expected.holder_pose_fingerprint,
+        holder_fingerprint: initial.expected.holder_fingerprint,
+        asset_fingerprint: initial.expected.asset_fingerprint,
+      },
+      binding: {
+        source_refs: [...initial.binding.source_refs].reverse(),
+        binding: { preview_slot: "main_hand", strategy: "ITEM_SLOT" },
+        holder: {
+          bone_names: [...initial.binding.holder.bone_names].reverse(),
+          entity_identifier: initial.binding.holder.entity_identifier,
+        },
+        model_bones: [...initial.binding.model_bones].reverse().map(bone => ({
+          parent_uuid: bone.parent_uuid, name: bone.name, uuid: bone.uuid,
+        })),
+        target_bone_uuid: initial.binding.target_bone_uuid,
+        geometry_identifier: initial.binding.geometry_identifier,
+        item_identifier: initial.binding.item_identifier,
+        attachable_identifier: initial.binding.attachable_identifier,
+        expected_project_uuid: initial.binding.expected_project_uuid,
+      },
+    };
+    const planned = planBedrockAttachableContextPreview(initial);
+    expect(planBedrockAttachableContextPreview(reordered).plan_id).toBe(planned.plan_id);
+    expect(reviewBedrockAttachableContextCapture(reordered, claim(initial)).state)
+      .toBe("CLAIMS_READY_FOR_HUMAN_VISUAL_REVIEW");
+    expect(initial).toEqual(before);
+  });
+
   test("no capture remains incomplete and no issued claim can create a PASS", () => {
     const r = reviewBedrockAttachableContextCapture(base(), null);
     expect(r.state).toBe("CAPTURE_NOT_PROVIDED");
@@ -111,6 +155,35 @@ describe("A2 attachable holder-composite preview evidence (source-only)", () => 
     edited.binding = { ...edited.binding, target_bone_uuid: "not-a-bone" };
     expect(() => planBedrockAttachableContextPreview(edited))
       .toThrow("ATTACHABLE_MODEL_TARGET_BONE_NOT_FOUND");
+  });
+
+  test("material bone, holder and source edits still expire previous A2 claims", () => {
+    const initial = base();
+    const old = claim(initial);
+    const changed = [
+      { ...initial.binding,
+        model_bones: [{ uuid: "bone-staff", name: "staff_v2", parent_uuid: null }] },
+      { ...initial.binding,
+        holder: { ...initial.binding.holder,
+          bone_names: [...initial.binding.holder.bone_names, "newBone"] } },
+      { ...initial.binding,
+        source_refs: [...initial.binding.source_refs, "approved:side"] },
+    ];
+    for (const binding of changed) {
+      const revised = { ...initial, binding };
+      expect(planBedrockAttachableContextPreview(revised).plan_id)
+        .not.toBe(old.plan_id);
+      expect(reviewBedrockAttachableContextCapture(revised, old).state)
+        .toBe("STALE_CAPTURE_SOURCE");
+    }
+    const direct = base();
+    direct.binding = { ...direct.binding,
+      binding: { strategy: "DIRECT_BONE", holder_bone_name: "rightItem" } };
+    const first = planBedrockAttachableContextPreview(direct);
+    const second = planBedrockAttachableContextPreview({ ...direct, binding: {
+      ...direct.binding, binding: { strategy: "DIRECT_BONE", holder_bone_name: "body" },
+    } });
+    expect(first.plan_id).not.toBe(second.plan_id);
   });
 
   test("swapped identity, slot or plan handle fails closed as stale", () => {

@@ -36,6 +36,7 @@ export type ItemIconPlanningInput = {
 export type ItemIconPlanningIssue =
   | "ITEM_ICON_EMPTY_BITMAP"
   | "ATLAS_KEY_ALREADY_OWNED"
+  | "TEXTURE_PATH_ALREADY_OWNED"
   | "ALPHA_INTENT_CONFLICT";
 
 export type ItemIconPlanningWarning =
@@ -240,6 +241,13 @@ export function planBedrockItemIcon(input: ItemIconPlanningInput): ItemIconPlann
   const issues: ItemIconPlanningIssue[] = [];
   if (visible === 0) issues.push("ITEM_ICON_EMPTY_BITMAP");
   if (atlasInventory.has(atlas)) issues.push("ATLAS_KEY_ALREADY_OWNED");
+  // Existing atlas keys may legitimately alias one texture. Creation of a
+  // NEW PNG must not claim any incumbent path, including its .png spelling.
+  if ([...atlasInventory.values()].some(existingPath =>
+    (existingPath.endsWith(".png")
+      ? existingPath.slice(0, -4) : existingPath) === path)) {
+    issues.push("TEXTURE_PATH_ALREADY_OWNED");
+  }
   if ((input.alpha_intent === "TRANSPARENT" && transparent === 0) ||
       (input.alpha_intent === "OPAQUE" && transparent + partialAlpha > 0)) {
     issues.push("ALPHA_INTENT_CONFLICT");

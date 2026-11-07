@@ -80,6 +80,30 @@ describe("I1 Item Icon / Sprite source-only handoff", () => {
     }))).toThrow("ITEM_ICON_ATLAS_INVENTORY_AMBIGUOUS");
   });
 
+  test("new PNG path cannot overwrite an incumbent atlas path under another key", () => {
+    for (const occupied of [
+      "textures/items/runic_gem", "textures/items/runic_gem.png",
+    ]) {
+      const input = sample({ existing_atlas_entries: [
+        { key: "other:shared_key", texture_path: occupied },
+      ] });
+      const original = structuredClone({ ...input, rgba: Array.from(input.rgba) });
+      const planned = planBedrockItemIcon(input);
+      expect(planned.state).toBe("BLOCKED_BY_DECLARED_SOURCE");
+      expect(planned.issues).toContain("TEXTURE_PATH_ALREADY_OWNED");
+      expect(planned.issues).not.toContain("ATLAS_KEY_ALREADY_OWNED");
+      expect(planned.atlas_writes_performed).toBe(false);
+      expect({ ...input, rgba: Array.from(input.rgba) }).toEqual(original);
+    }
+    // Preexisting aliases are legitimate; do not reject an unrelated new path.
+    const unrelated = planBedrockItemIcon(sample({ existing_atlas_entries: [
+      { key: "other:icon_a", texture_path: "textures/items/shared" },
+      { key: "other:icon_b", texture_path: "textures/items/shared" },
+    ] }));
+    expect(unrelated.issues).toEqual([]);
+    expect(unrelated.state).toBe("SOURCE_REVIEW_REQUIRED_NATIVE_UNVERIFIED");
+  });
+
   test("relative texture path must remain under items, with no traversal or extension", () => {
     for (const texture_path of [
       "/textures/items/a",
