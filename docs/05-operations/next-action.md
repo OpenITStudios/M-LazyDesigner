@@ -37,6 +37,16 @@ Codex is **not accessible to the user yet**. Do not ask for local/Codex testing,
 
 Codex remains the eventual second surface for executable validation and daily MCP use when the user reauthorizes testing. This is a temporary suspension of testing requests, not a permanent architectural removal of Codex.
 
+## Approved visual asset expansion — current source track (2026-11-07)
+
+**User scope:** Attachable/Equipment, Custom Block Visual, Item Icon/Sprite, animated block texture, appearance variants, collision/selection preview, classic skins/cosmetics, and limited environment visuals. **Sound/Audio and UI/HUD excluded.** Canonical durable target and milestone acceptance: [visual-asset-expansion.md](../01-product/visual-asset-expansion.md). This is not an Add-On, Behavior Pack, or second Control/Stage.
+
+- **F0 — SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN:** pure retail-format block compatibility at `mcp/lib/bedrock/blockVisualCompatibility.ts` with owning regression `mcp/tests/bedrock-block-visual-compatibility.test.ts`. Source gates: format version, geometry/material pair, culling rule for shape, UV lock, visual-only rotation, collision/selection floors. No native, game, pack, or export acceptance claimed.
+- **A1/A2 — NOT_STARTED:** source-grounded attachable slot/bone binding and native first-/third-person/wearable preview; reuse existing Geometry/Locator/Animation. **Next independent source unit: A1**. Do not fabricate player fit or compile attachable resources from missing evidence.
+- **B1/I1 — NOT_STARTED:** custom block authoring consumer of F0 and pixel-art/Texture item icon pipeline; preserve resource/geometry ownership.
+- **T1/V1/C1/S1/E1 — NOT_STARTED:** flipbook, variants, collision preview, classic skins and limited environment visuals. Start only at their owning implementation stage.
+- **Execution ceiling:** current GitHub-only source commits can include bounded regression intent, not executed Bun/generator/native/Bedrock evidence. Do not request local testing, change CI, publish, or hand-edit generated API. Existing Capability Graph and `construct_geometry` / `manage_uv_layout` registration residue remains separately tracked below.
+
 ## Primary next — Capability source stabilization (2026-11-04)
 
 **Goal:** preserve existing useful Geometry, Texture and Animation capabilities while resolving inaccurate readiness/ownership. No feature expansion, new framework, CI activation or mass cleanup.
