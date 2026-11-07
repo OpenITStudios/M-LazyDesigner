@@ -197,6 +197,19 @@ describe("C1 Bedrock block-local collision and selection preview", () => {
       .toContain("ROTATED_VISUAL_DOES_NOT_ROTATE_INTERACTION");
     expect(rotated.comparison.visual_scope)
       .toBe("B1_DECLARED_CUBE_LOCAL_ENVELOPE");
+    expect(rotated.comparison.collision_extent)
+      .toBe("NOT_COMPARABLE_UNTIL_TRANSFORM_RESOLVED");
+    expect(rotated.comparison.selection_extent)
+      .toBe("NOT_COMPARABLE_UNTIL_TRANSFORM_RESOLVED");
+    expect(rotated.warnings)
+      .toContain("INTERACTION_VISUAL_COMPARISON_REQUIRES_RESOLVED_TRANSFORM");
+    expect(rotated.warnings).not.toContain("COLLISION_EXTENDS_BEYOND_VISUAL_ENVELOPE");
+    const inflated = review(fixture({ visual: {
+      ...fixture().visual,
+      cubes: [{...fixture().visual.cubes[0]!, inflate: 0.2}],
+    } }));
+    expect(inflated.comparison.collision_extent)
+      .toBe("NOT_COMPARABLE_UNTIL_TRANSFORM_RESOLVED");
     const noVisible = review(fixture({ visual: {
       ...fixture().visual,
       cubes: [{ ...fixture().visual.cubes[0]!, visible: false }],

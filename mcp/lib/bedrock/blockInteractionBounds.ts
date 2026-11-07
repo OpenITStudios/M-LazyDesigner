@@ -43,11 +43,13 @@ export type BlockInteractionArea = {
 export type BlockInteractionExtent =
   | "NO_INTERACTION_AREA"
   | "VISUAL_ENVELOPE_UNAVAILABLE"
+  | "NOT_COMPARABLE_UNTIL_TRANSFORM_RESOLVED"
   | "WITHIN_VISUAL_ENVELOPE"
   | "EXTENDS_BEYOND_VISUAL_ENVELOPE";
 export type BlockInteractionReviewWarning =
   | "BLOCK_GEOMETRY_LOCAL_NOT_WORLD_ATTESTED"
   | "ROTATED_OR_INFLATED_GEOMETRY_NEEDS_NATIVE_BOUNDS"
+  | "INTERACTION_VISUAL_COMPARISON_REQUIRES_RESOLVED_TRANSFORM"
   | "VISUAL_GEOMETRY_ENVELOPE_UNAVAILABLE"
   | "INTERACTION_ENVELOPES_DIFFER"
   | "COLLISION_EXTENDS_BEYOND_VISUAL_ENVELOPE"
@@ -191,10 +193,12 @@ function area(
 }
 
 function extent(
-  area: BlockInteractionArea, visual: WorldAabb | null
+  area: BlockInteractionArea, visual: WorldAabb | null,
+  unresolvedTransform: boolean
 ): BlockInteractionExtent {
   if (!area.boxes.length) return "NO_INTERACTION_AREA";
   if (!visual) return "VISUAL_ENVELOPE_UNAVAILABLE";
+  if (unresolvedTransform) return "NOT_COMPARABLE_UNTIL_TRANSFORM_RESOLVED";
   const outside = area.boxes.some(box =>
     box.min.some((v, axis) => v < visual.min[axis]!) ||
     box.max.some((v, axis) => v > visual.max[axis]!)
@@ -245,8 +249,11 @@ export function reviewBedrockBlockInteractionBounds(
   const local = geometryBounds
     ? { min: [...geometryBounds.min] as [number,number,number],
         max: [...geometryBounds.max] as [number,number,number] } : null;
-  const collisionExtent = extent(collision.report, local);
-  const selectionExtent = extent(selection.report, local);
+  const unresolvedTransform = visual.warnings.includes(
+    "ROTATED_OR_INFLATED_BOUNDS_NOT_WORLD_ATTESTED"
+  );
+  const collisionExtent = extent(collision.report, local, unresolvedTransform);
+  const selectionExtent = extent(selection.report, local, unresolvedTransform);
   const different = JSON.stringify(collision.report.envelope) !==
     JSON.stringify(selection.report.envelope);
   const warnings = new Set<BlockInteractionReviewWarning>([
@@ -256,8 +263,9 @@ export function reviewBedrockBlockInteractionBounds(
   if (input.collision_box === undefined || input.selection_box === undefined) {
     warnings.add("DEFAULT_COMPONENTS_ARE_NOT_AUTHORED_COMPONENTS");
   }
-  if (visual.warnings.includes("ROTATED_OR_INFLATED_BOUNDS_NOT_WORLD_ATTESTED")) {
+  if (unresolvedTransform) {
     warnings.add("ROTATED_OR_INFLATED_GEOMETRY_NEEDS_NATIVE_BOUNDS");
+    warnings.add("INTERACTION_VISUAL_COMPARISON_REQUIRES_RESOLVED_TRANSFORM");
   }
   if (local === null) warnings.add("VISUAL_GEOMETRY_ENVELOPE_UNAVAILABLE");
   if (different) warnings.add("INTERACTION_ENVELOPES_DIFFER");

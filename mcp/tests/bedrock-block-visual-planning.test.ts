@@ -185,6 +185,52 @@ describe("B1 custom-block visual planner consumes F0 source constraints", () => 
     expect(unique.warnings).not.toContain("REPEATED_BLOCK_PERFORMANCE_REVIEW");
   });
 
+  test("only editable non-exported Cubes cannot satisfy custom block geometry", () => {
+    const absent = planBedrockBlockVisual(sample({ cubes: [] }));
+    expect(absent.issues.map(issue => issue.code)).toContain("CUSTOM_GEOMETRY_SOURCE_MISSING");
+    const skipped = planBedrockBlockVisual(sample({
+      cubes: [{ ...sample().cubes[0]!, export: false }],
+    }));
+    expect(skipped.state).toBe("BLOCKED_BY_DECLARED_COMPATIBILITY");
+    expect(skipped.issues.map(issue => issue.code))
+      .toContain("EXPORTABLE_GEOMETRY_SOURCE_MISSING");
+    expect(skipped.geometry_summary.exported_cube_count).toBe(0);
+    const mixed = planBedrockBlockVisual(sample({
+      cubes: [
+        { ...sample().cubes[0]!, uuid: "hidden", export: false },
+        { ...sample().cubes[0]!, uuid: "real", export: true },
+      ],
+    }));
+    expect(mixed.issues).toEqual([]);
+    expect(mixed.geometry_summary.exported_cube_count).toBe(1);
+  });
+
+  test("retail oversized limits trigger local-source reviews without native PASS", () => {
+    const tooWide = planBedrockBlockVisual(sample({
+      cubes: [{ ...sample().cubes[0]!, from: [-16, 0, -8], to: [16, 16, 8] }],
+    }));
+    expect(tooWide.warnings).toContain("SOURCE_BLOCK_SPAN_OVER_30_REVIEW");
+    const displaced = planBedrockBlockVisual(sample({
+      cubes: [{ ...sample().cubes[0]!, from: [30, 0, 0], to: [32, 10, 10] }],
+    }));
+    expect(displaced.warnings).toContain("SOURCE_BLOCK_POSITION_OUTSIDE_30_REVIEW");
+    expect(displaced.warnings).toContain("SOURCE_BLOCK_BASE_OVERLAP_REVIEW");
+    const boundary = planBedrockBlockVisual(sample({
+      cubes: [{ ...sample().cubes[0]!, from: [-15, 0, -15], to: [15, 16, 15] }],
+    }));
+    expect(boundary.warnings).not.toContain("SOURCE_BLOCK_SPAN_OVER_30_REVIEW");
+    expect(boundary.warnings).not.toContain("SOURCE_BLOCK_POSITION_OUTSIDE_30_REVIEW");
+    expect(boundary.warnings).not.toContain("SOURCE_BLOCK_BASE_OVERLAP_REVIEW");
+    expect(boundary.native_verified).toBe(false);
+  });
+
+  test("unrepresentable finite-source spans fail before generating a fingerprint", () => {
+    expect(() => planBedrockBlockVisual(sample({
+      cubes: [{ ...sample().cubes[0]!, from: [-1e308, 0, 0],
+        to: [1e308, 1, 1] }],
+    }))).toThrow("BLOCK_VISUAL_GEOMETRY_SPAN_UNREPRESENTABLE");
+  });
+
   test("block material methods are distinct from entity materials", () => {
     const input = sample({
       materials: [{ key: "*", texture_key: "glass", render_method: "blend" }],
@@ -192,6 +238,16 @@ describe("B1 custom-block visual planner consumes F0 source constraints", () => 
     const result = planBedrockBlockVisual(input);
     expect(result.material_summary.non_opaque_methods).toEqual(["blend"]);
     expect(result.warnings).toContain("NON_OPAQUE_RENDER_DISTANCE_REVIEW");
+    for (const render_method of [
+      "blend_to_opaque", "alpha_test_to_opaque",
+      "alpha_test_single_sided_to_opaque",
+    ]) {
+      const known = planBedrockBlockVisual(sample({
+        materials: [{ key: "*", texture_key: "leaves", render_method }],
+      }));
+      expect(known.warnings).not.toContain("RENDER_METHOD_UNKNOWN_REVIEW");
+      expect(known.warnings).toContain("NON_OPAQUE_RENDER_DISTANCE_REVIEW");
+    }
     const unknown = planBedrockBlockVisual(sample({
       materials: [{ key: "*", texture_key: "atlas",
         render_method: "custom_future_method" }],

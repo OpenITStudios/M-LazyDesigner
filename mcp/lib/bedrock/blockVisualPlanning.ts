@@ -56,6 +56,7 @@ export type BlockVisualPlanningInput = {
 export type BlockVisualPlanningIssue = {
   code:
     | "CUSTOM_GEOMETRY_SOURCE_MISSING"
+    | "EXPORTABLE_GEOMETRY_SOURCE_MISSING"
     | "MATERIAL_DECLARATION_MISSING"
     | "MATERIAL_DECLARATION_UNEXPECTED"
     | "CULLING_RULE_REFERENCE_MISSING"
@@ -73,6 +74,9 @@ export type BlockVisualPlanningWarning =
   | "UV_LOCK_BOX_UV_NON_SQUARE_FACE_REVIEW"
   | "ZERO_THICKNESS_CUBE_REVIEW"
   | "LARGE_LOCAL_ENVELOPE_REVIEW"
+  | "SOURCE_BLOCK_SPAN_OVER_30_REVIEW"
+  | "SOURCE_BLOCK_POSITION_OUTSIDE_30_REVIEW"
+  | "SOURCE_BLOCK_BASE_OVERLAP_REVIEW"
   | "ROTATED_OR_INFLATED_BOUNDS_NOT_WORLD_ATTESTED"
   | "CULLING_RESOURCE_NOT_VERIFIED"
   | "MATERIAL_TEXTURE_RESOURCE_NOT_VERIFIED"
@@ -112,10 +116,18 @@ const FACE_DIRECTIONS = new Set(["north", "south", "east", "west", "up", "down"]
 const KNOWN_RENDER_METHODS = new Set([
   "opaque", "double_sided", "blend", "alpha_test",
   "alpha_test_single_sided",
+  "blend_to_opaque", "alpha_test_to_opaque",
+  "alpha_test_single_sided_to_opaque",
 ]);
 const MAX_CUBES = 4096;
 const MAX_MATERIALS = 64;
 const MAX_CULLING_RULES = 256;
+// Mojang custom block source guidance: 30 px extent/placement and 1 px base overlap.
+// These are only local-source review thresholds until bone transforms are resolved.
+const CUSTOM_BLOCK_MAX_LOCAL_SPAN = 30;
+const CUSTOM_BLOCK_MAX_LOCAL_POSITION = 30;
+const BASE_BLOCK_MIN = [-8, 0, -8] as const;
+const BASE_BLOCK_MAX = [8, 16, 8] as const;
 
 function exact(value: unknown, label: string, max = 160): string {
   if (typeof value !== "string" || value.length === 0 ||
@@ -250,6 +262,8 @@ export function planBedrockBlockVisual(
     rotationState = exact(input.n_way_rotation_state, "n_way_rotation_state", 192);
   }
 
+  const exportCubes = canonicalCubes.filter(cube => cube.export);
+  const visibleCubes = exportCubes.filter(cube => cube.visible);
   const issues: BlockVisualPlanningIssue[] = [];
   const warnings = new Set<BlockVisualPlanningWarning>();
   const addIssue = (code: BlockVisualPlanningIssue["code"], detail?: string) => {
@@ -257,6 +271,8 @@ export function planBedrockBlockVisual(
   };
   if (!canonicalCubes.length) {
     addIssue("CUSTOM_GEOMETRY_SOURCE_MISSING");
+  } else if (!exportCubes.length) {
+    addIssue("EXPORTABLE_GEOMETRY_SOURCE_MISSING");
   }
   if (input.compatibility.has_material_instances_component &&
       !canonicalMaterials.length) {
@@ -286,8 +302,6 @@ export function planBedrockBlockVisual(
     warnings.add("N_WAY_ROTATION_NOT_PHYSICAL_INTERACTION");
   }
 
-  const exportCubes = canonicalCubes.filter(cube => cube.export);
-  const visibleCubes = exportCubes.filter(cube => cube.visible);
   const min = [Infinity, Infinity, Infinity] as [number, number, number];
   const max = [-Infinity, -Infinity, -Infinity] as [number, number, number];
   for (const cube of visibleCubes) {
@@ -297,6 +311,9 @@ export function planBedrockBlockVisual(
     }
     const size = cube.to.map((coordinate, axis) =>
       coordinate - cube.from[axis]!) as [number, number, number];
+    if (size.some(span => !Number.isFinite(span))) {
+      throw new Error("BLOCK_VISUAL_GEOMETRY_SPAN_UNREPRESENTABLE");
+    }
     if (size.some(span => span === 0)) {
       warnings.add("ZERO_THICKNESS_CUBE_REVIEW");
     }
@@ -315,8 +332,44 @@ export function planBedrockBlockVisual(
     ? [max[0] - min[0], max[1] - min[1], max[2] - min[2]]
       as [number, number, number]
     : null;
+  if (local_span?.some(span => !Number.isFinite(span))) {
+    throw new Error("BLOCK_VISUAL_GEOMETRY_SPAN_UNREPRESENTABLE");
+  }
   if (local_span?.some(span => span > 16)) {
     warnings.add("LARGE_LOCAL_ENVELOPE_REVIEW");
+  }
+  // The editor may contain hidden-but-exported Cubes. Review all exported
+  // source geometry; never present local coordinates as transformed world AABB.
+  if (exportCubes.length) {
+    const exportedMin = [Infinity, Infinity, Infinity];
+    const exportedMax = [-Infinity, -Infinity, -Infinity];
+    const touchesBaseAxis = [false, false, false];
+    for (const cube of exportCubes) {
+      for (let axis = 0; axis < 3; axis++) {
+        exportedMin[axis] = Math.min(exportedMin[axis]!, cube.from[axis]!);
+        exportedMax[axis] = Math.max(exportedMax[axis]!, cube.to[axis]!);
+        if (Math.min(cube.to[axis]!, BASE_BLOCK_MAX[axis]!) -
+            Math.max(cube.from[axis]!, BASE_BLOCK_MIN[axis]!) >= 1) {
+          touchesBaseAxis[axis] = true;
+        }
+      }
+    }
+    if (exportedMin.some((v, axis) =>
+      !Number.isFinite(exportedMax[axis]! - v))) {
+      throw new Error("BLOCK_VISUAL_GEOMETRY_SPAN_UNREPRESENTABLE");
+    }
+    if (exportedMin.some((v, axis) =>
+      exportedMax[axis]! - v > CUSTOM_BLOCK_MAX_LOCAL_SPAN)) {
+      warnings.add("SOURCE_BLOCK_SPAN_OVER_30_REVIEW");
+    }
+    if (exportedMin.some((v, axis) =>
+      v < -CUSTOM_BLOCK_MAX_LOCAL_POSITION ||
+      exportedMax[axis]! > CUSTOM_BLOCK_MAX_LOCAL_POSITION)) {
+      warnings.add("SOURCE_BLOCK_POSITION_OUTSIDE_30_REVIEW");
+    }
+    if (touchesBaseAxis.some(touches => !touches)) {
+      warnings.add("SOURCE_BLOCK_BASE_OVERLAP_REVIEW");
+    }
   }
   if (exportCubes.length > 50) {
     warnings.add("COMPLEX_BLOCK_GEOMETRY_REVIEW");
