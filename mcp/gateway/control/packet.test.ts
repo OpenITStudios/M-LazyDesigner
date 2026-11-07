@@ -62,6 +62,85 @@ describe("Control packet missing context boundary", () => {
     expect(projected.context.invalidated_ids).toEqual([contextId, profileId]);
   });
 
+  test("legacy PARTICLE kind selects existing particle lifecycle without Entity QA", async () => {
+    const animationStatus = {
+      ...status,
+      affinity: { ...status.affinity, authoring_phase: "animation" },
+    } as GatewayRuntimeStatus;
+    const reference = {
+      ...emptyReference("REFERENCE_PATH_UNAVAILABLE"),
+      available: true,
+      asset_kind: "PARTICLE" as const,
+      asset_name: "Smoke",
+      requirements: {
+        ...emptyReference("REFERENCE_PATH_UNAVAILABLE").requirements,
+        animation_required: false,
+      },
+      readiness: {
+        overall: "READY", geometry: "NOT_REQUIRED",
+        texture: "READY", animation: "READY",
+      },
+    };
+    const workspace = {
+      ...emptyWorkspace(), available: true,
+      current_stage: "FINALIZATION",
+      gates: {
+        geometry: "NOT_STARTED", uv_layout: "NOT_STARTED",
+        texturing: "APPROVED", animation: "NOT_STARTED",
+      },
+      finalization_native_revision: {
+        state: "STALE" as const,
+        reason: "FINALIZATION_NATIVE_CHECKPOINT_MISMATCH",
+        accepted_sha256: null, observed_sha256: null,
+      },
+    };
+    const packet = await buildControlPacket(animationStatus, {
+      referenceReader: async () => reference,
+      workspaceReader: async () => workspace,
+      contextResolver: async () => ({
+        required: [handle("animation")], optional: [], unavailable: [],
+      }),
+    });
+    expect(packet.reference.asset_kind).toBe("PARTICLE");
+    expect(packet.stage_context?.asset_health.stages).toMatchObject({
+      geometry: "NOT_REQUIRED", uv_layout: "NOT_REQUIRED",
+      texturing: "PASS", animation: "NOT_REQUIRED",
+    });
+    expect(packet.stage_context?.asset_health.overall).toBe("INCOMPLETE");
+    expect(packet.readiness.reasons).toContain("ASSET_PROFILE_OUTPUT_ACCEPTANCE_UNVERIFIED");
+    expect(packet.readiness.reasons).not.toContain("FINALIZATION_NATIVE_CHECKPOINT_STALE");
+    expect(packet.readiness.reasons).not.toContain("ANIMATION_REQUIREMENT_CONFLICT");
+    expect(packet.readiness.reasons).not.toContain("GEOMETRY_APPROVAL_REQUIRED");
+    expect(packet.blockers).not.toContain("FINALIZATION_NATIVE_CHECKPOINT_STALE");
+    expect(packet.workspace.finalization_native_revision).toBeUndefined();
+    expect(packet.readiness.modelling_start).not.toBe("READY");
+    expect(Object.hasOwn(packet.reference, "asset_profile_id")).toBe(false);
+  });
+
+  test("legacy MODEL and missing kind preserve Entity lifecycle and public shape", async () => {
+    const ws = {
+      ...emptyWorkspace(), available: true,
+      current_stage: "TEXTURING",
+      gates: {
+        geometry: "NOT_STARTED", uv_layout: "NOT_STARTED",
+        texturing: "APPROVED", animation: "NOT_STARTED",
+      },
+    };
+    const ref = emptyReference("REFERENCE_PATH_UNAVAILABLE");
+    for (const asset_kind of ["MODEL", null] as const) {
+      const packet = await buildControlPacket(status, {
+        referenceReader: async () => ({ ...ref, available: true, asset_kind }),
+        workspaceReader: async () => ws,
+        contextResolver: async () => ({
+          required: [handle("modelling")], optional: [], unavailable: [],
+        }),
+      });
+      expect(packet.stage_context?.asset_health.stages.geometry).toBe("UNVERIFIED");
+      expect(packet.stage_context?.asset_health.stages.uv_layout).toBe("UNVERIFIED");
+      expect(Object.hasOwn(packet.reference, "asset_profile_id")).toBe(false);
+    }
+  });
+
   test("healthy resolver preserves normal cached context behavior", async () => {
     const packet = await buildControlPacket(status, {
       knownContextIds: [handle("modelling").id],

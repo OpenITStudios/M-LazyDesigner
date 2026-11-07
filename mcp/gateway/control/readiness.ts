@@ -109,7 +109,9 @@ export function buildReadiness(
   reference: ControlReferenceProjection,
   mode: ControlTaskMode,
   lifecycle: LifecycleProjection,
-  activeReferenceReadiness: string | null
+  activeReferenceReadiness: string | null,
+  /** Internal v1 asset.kind binding only; public schema remains unchanged. */
+  assetProfileId: AssetProfileId = "entity"
 ): ControlReadiness {
   // Readiness describes the Runtime transport consistently across task modes.
   // System development may proceed independently of Runtime, but must never
@@ -165,6 +167,7 @@ export function buildReadiness(
   const activeReferencePending = referenceStatus !== null &&
     referenceStatus !== "READY" && !activeReferenceBlocked;
   const animationRequirementMismatch =
+    getAssetProfileContract(assetProfileId).stages.animation !== "NOT_APPLICABLE" &&
     snapshot.authoring.domain === "ANIMATION" &&
     workspace.available &&
     animationRequirementConflict(reference, workspace);
@@ -175,13 +178,16 @@ export function buildReadiness(
   const finalizationRequired = ["FINALIZATION", "COMPLETE"].includes(
     workspace.current_stage?.trim().toUpperCase() ?? ""
   );
-  const finalizationRevision = finalizationRequired
+  // Workspace native digest currently proves Entity .bbmodel bytes only.
+  // Do not reuse its STALE/MATCHED verdict for Particle or future 2D outputs.
+  const finalizationRevision = finalizationRequired && assetProfileId === "entity"
     ? workspace.finalization_native_revision : null;
   // Reuse the canonical whole-asset health projection: matching source
   // bytes cannot turn an unapproved Texture, UV or Animation into READY.
   const finalizationHealth = finalizationRequired
     ? buildAssetHealthSummary({
         domain: snapshot.authoring.domain, reference, workspace,
+        asset_profile_id: assetProfileId,
       }) : null;
   const finalizationGatesBlocked = finalizationHealth?.overall === "BLOCKED";
   const finalizationGatesPending = finalizationRequired &&
@@ -189,7 +195,8 @@ export function buildReadiness(
   const finalizationStale = finalizationRequired &&
     finalizationRevision?.state === "STALE";
   const finalizationUnverified = finalizationRequired &&
-    finalizationRevision?.state !== "MATCHED" && !finalizationStale;
+    (assetProfileId !== "entity" ||
+      (finalizationRevision?.state !== "MATCHED" && !finalizationStale));
   const workspaceBlockersUnresolved = workspace.available && workspace.blockers.length > 0;
   const reasons: string[] = [];
 
@@ -208,8 +215,12 @@ export function buildReadiness(
   if (workspaceIncomplete) reasons.push("WORKSPACE_PROJECTION_INCOMPLETE");
   if (finalizationStale) reasons.push("FINALIZATION_NATIVE_CHECKPOINT_STALE");
   if (finalizationGatesBlocked) reasons.push("FINALIZATION_UPSTREAM_GATES_BLOCKED");
-  if (finalizationGatesPending) reasons.push("FINALIZATION_UPSTREAM_GATES_REQUIRE_REVIEW");
-  if (finalizationUnverified) reasons.push(
+  if (finalizationGatesPending) reasons.push(
+    assetProfileId === "entity"
+      ? "FINALIZATION_UPSTREAM_GATES_REQUIRE_REVIEW"
+      : "ASSET_PROFILE_OUTPUT_ACCEPTANCE_UNVERIFIED"
+  );
+  if (finalizationUnverified && assetProfileId === "entity") reasons.push(
     finalizationRevision?.reason ?? "FINALIZATION_NATIVE_CHECKPOINT_UNVERIFIED"
   );
   if (workspaceBlockersUnresolved) reasons.push("WORKSPACE_BLOCKERS_REQUIRE_REVIEW");

@@ -1,4 +1,5 @@
 import type { GatewayRuntimeStatus } from "../runtime/backend";
+import { resolveAssetProfileSelection } from "../../lib/product/assetProfiles";
 import {
   resolveDevelopmentIntent,
   type DevelopmentResolution,
@@ -102,6 +103,14 @@ export async function buildControlPacket(
   const [workspace, reference, resolvedContext] = await Promise.all([
     workspacePromise, referencePromise, contextPromise,
   ]);
+  // Reuse existing v1 Reference asset.kind without adding a public selector.
+  // Missing/old model references keep the historical Entity default; the
+  // explicit seven-profile Reference schema remains a separate generator unit.
+  const profileSelection = mode === "ASSET_AUTHORING" && reference.available
+    ? resolveAssetProfileSelection({ referenceAssetKind: reference.asset_kind })
+    : null;
+  const assetProfileId = profileSelection?.state === "RESOLVED"
+    ? profileSelection.asset_profile_id : "entity";
   const contextUnavailable = resolvedContext.unavailable.length > 0;
 
   const snapshot: ControlSnapshot = {
@@ -122,12 +131,13 @@ export async function buildControlPacket(
           reference,
           workspace,
           currentUserDelta: options.currentUserDelta,
+          assetProfileId,
         })
       : null;
 
   const lifecycle =
     mode === "ASSET_AUTHORING"
-      ? lifecycleForDomain(snapshot.authoring.domain, workspace)
+      ? lifecycleForDomain(snapshot.authoring.domain, workspace, assetProfileId)
       : NOT_REQUIRED_LIFECYCLE;
 
   const workspaceBlockers =
@@ -148,7 +158,8 @@ export async function buildControlPacket(
   const finalizationBlockers =
     mode !== "ASSET_AUTHORING" ? []
       : [
-          ...(workspace.finalization_native_revision?.state === "STALE"
+          ...(assetProfileId === "entity" &&
+            workspace.finalization_native_revision?.state === "STALE"
             ? ["FINALIZATION_NATIVE_CHECKPOINT_STALE"] : []),
           ...(["FINALIZATION", "COMPLETE"].includes(
             workspace.current_stage?.trim().toUpperCase() ?? ""
@@ -201,9 +212,10 @@ export async function buildControlPacket(
       reference,
       mode,
       lifecycle,
-      stageContext?.stage_readiness ?? null
+      stageContext?.stage_readiness ?? null,
+      assetProfileId
     ),
-    workspace: workspaceSummary(workspace),
+    workspace: workspaceSummary(workspace, assetProfileId),
     reference: referenceSummary(reference),
     stage_context: stageContext,
     development,

@@ -34,8 +34,9 @@ Source-only profile-aware lifecycle helpers preserve existing Entity
 defaults; a non-Entity Finalization may not interpret Entity-only
 `.bbmodel` SHA evidence as a completed or failed PNG/Particle/block
 output. Its own native artifact readback remains unimplemented. The
-current Reference Package/Control transport has no
-authoritative new `asset_profile_id` selection and must not infer one from
+current Reference Package/Control transport maps only existing v1
+`asset.kind=MODEL|PARTICLE` to the internal Entity/Particle lifecycle;
+it has no authoritative new `asset_profile_id` selection and must not infer one from
 the modelling `selected_profile`. Wire selection only as an atomic
 generator/consumer/schema change with a verified Runtime output path.
 

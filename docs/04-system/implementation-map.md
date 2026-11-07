@@ -378,10 +378,14 @@ legacy Reference identities; modelling `selected_profile` never selects an
 Asset Profile. Particle may author on the ANIMATION Runtime Surface without
 a model Animation clip requirement. `mcp/lib/authoring/assetHealth.ts` and
 `mcp/gateway/control/readiness.ts` accept an **explicit internal** profile
-for applicability; legacy calls remain Entity-default. Non-Entity
+for applicability; unqualified helper calls remain Entity-default. Non-Entity
 Finalization does not accept Entity-only `.bbmodel` checkpoint checks.
 The existing public Reference `selected_profile` is a modelling subtype, not an Asset Profile,
 and no new public `asset_profile_id` is yet generated or selected by Control.
+The existing v1 `asset.kind` now selects only internal Entity/Particle
+applicability at Control packet assembly. Finalization and Gateway-facing
+Workspace summary exclude Entity-native `.bbmodel` stale evidence for
+Particle, while its own output remains unverified.
 No non-Entity planner becomes registered by this contract. A real multi-asset
 handoff must update the canonical Reference generator, consumers, semantic
 revision and generated API together, with native outputs independently proved.

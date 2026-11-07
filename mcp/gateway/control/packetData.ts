@@ -1,4 +1,5 @@
 import type { ControlReferenceProjection } from "./referenceTypes";
+import type { AssetProfileId } from "../../lib/product/assetProfiles";
 import type { ControlWorkspaceProjection } from "./workspace";
 
 export type ControlWorkspaceSummary = Pick<
@@ -42,7 +43,8 @@ export function emptyWorkspace(): ControlWorkspaceProjection {
 }
 
 export function workspaceSummary(
-  workspace: ControlWorkspaceProjection
+  workspace: ControlWorkspaceProjection,
+  assetProfileId: AssetProfileId = "entity"
 ): ControlWorkspaceSummary {
   // Only return a path when the agent needs the unresolved source facts.
   // Avoid copying free-form blocker text into every status response.
@@ -55,7 +57,7 @@ export function workspaceSummary(
     available: workspace.available,
     fingerprint: workspace.fingerprint,
     asset: workspace.asset,
-    ...(workspace.finalization_native_revision
+    ...(assetProfileId === "entity" && workspace.finalization_native_revision
       ? { finalization_native_revision: workspace.finalization_native_revision }
       : {}),
     ...(needsSourceReview

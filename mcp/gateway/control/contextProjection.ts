@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { AssetProfileId } from "../../lib/product/assetProfiles";
 import { canonicalJson } from "../../lib/semantic/canonical";
 import {
   buildAssetHealthSummary,
@@ -539,6 +540,8 @@ export function buildControlStageContext(input: {
   reference: ControlReferenceProjection;
   workspace: ControlWorkspaceProjection;
   currentUserDelta?: string | null;
+  /** Internal profile inferred from existing v1 asset.kind; never modelling selected_profile. */
+  assetProfileId?: AssetProfileId;
 }): ControlStageContext {
   const stage = referenceStage(input.domain);
   const type = contextType(input.domain);
@@ -570,6 +573,7 @@ export function buildControlStageContext(input: {
     domain: input.domain,
     reference: input.reference,
     workspace: input.workspace,
+    asset_profile_id: input.assetProfileId,
   });
 
   const hashPayload = canonicalJson({
