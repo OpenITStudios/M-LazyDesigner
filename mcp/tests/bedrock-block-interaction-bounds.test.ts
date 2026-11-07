@@ -132,7 +132,7 @@ describe("C1 Bedrock block-local collision and selection preview", () => {
       { origin: [-8, 0, -8], size: [17, 16, 16] },
       { origin: [-8, 17, -8], size: [16, 1, 16] },
       { origin: [-8, 0, -8], size: [16, 25, 16] },
-    ]) {
+    ] as const) {
       expect(() => review(fixture({ collision_box: box })))
         .toThrow("BLOCK_INTERACTION_BOX_OUTSIDE_BLOCK_RANGE");
     }
@@ -236,7 +236,7 @@ describe("C1 Bedrock block-local collision and selection preview", () => {
     expect(() => review(fixture({ visual: {
       ...fixture().visual,
       compatibility: { ...fixture().visual.compatibility,
-        features: null as unknown as string[] },
+        features: null as unknown as never },
     } }))).toThrow("BLOCK_INTERACTION_FEATURE_INVENTORY_INVALID");
     expect(() => review(fixture({ visual: {
       ...fixture().visual,
@@ -252,7 +252,7 @@ describe("C1 Bedrock block-local collision and selection preview", () => {
       { origin: [-8,0], size:[16,16,16] },
       { origin: [-8,0,-8], size:[16,16] },
     ]) {
-      expect(() => review(fixture({collision_box:box as BlockInteractionPlanningInput["collision_box"]})))
+      expect(() => review(fixture({collision_box:box as unknown as BlockInteractionPlanningInput["collision_box"]})))
         .toThrow("BLOCK_INTERACTION_VECTOR_INVALID");
     }
     expect(() => review(fixture({
