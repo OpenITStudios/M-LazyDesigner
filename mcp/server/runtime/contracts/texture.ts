@@ -247,6 +247,11 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
         Project?.uuid !== precommit.project_uuid) {
       throw new Error("TEXTURE_VARIANT_PROJECT_OWNERSHIP_LOST");
     }
+    if (!undoHistoryUnchanged()) {
+      // A concurrent edit may have committed while the async decoder yielded.
+      // The original Undo transaction is no longer safe to finish or cancel.
+      throw new Error("TEXTURE_VARIANT_UNDO_HISTORY_CHANGED_DURING_DECODE");
+    }
     const sourceNow = fullTextureRgba(source);
     requireUnchangedTextureBitmap(
       sourceBitmap, sourceNow,
@@ -294,10 +299,14 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
     // finishEdit can change Undo history or clear current_save *before* an
     // extension listener throws. After this point, never auto-rollback.
     commitAttempted = true;
-    Undo.finishEdit("Agent created texture variant", {
+    const committedEntry = Undo.finishEdit("Agent created texture variant", {
       textures: [variant],
       collections: [],
     });
+    if (!committedEntry || Undo.index < 1 ||
+        Undo.history[Undo.index - 1] !== committedEntry) {
+      throw new Error("TEXTURE_VARIANT_UNDO_COMMIT_ENTRY_UNVERIFIED");
+    }
     // Native finish listeners can mutate the scene after precommit checks.
     // Do not publish a continuity receipt if any source identity/readback
     // has already diverged or the owned transaction remains open.

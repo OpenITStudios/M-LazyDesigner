@@ -253,6 +253,10 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(body).toContain("Undo.cancelEdit()");
     expect(body).toContain("TEXTURE_VARIANT_ROLLBACK_POSTCONDITION_FAILED");
     expect(body).toContain("undoHistoryUnchanged()");
+    expect(body).toContain("TEXTURE_VARIANT_UNDO_HISTORY_CHANGED_DURING_DECODE");
+    expect(body).toContain("TEXTURE_VARIANT_UNDO_COMMIT_ENTRY_UNVERIFIED");
+    expect(body.indexOf("TEXTURE_VARIANT_UNDO_HISTORY_CHANGED_DURING_DECODE"))
+      .toBeLessThan(body.indexOf("commitAttempted = true;"));
   });
 
 

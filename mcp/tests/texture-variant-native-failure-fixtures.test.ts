@@ -12,7 +12,7 @@ type Fault =
   | "foreign_texture" | "shadow_uuid" | "history_drift"
   | "project_swap" | "undo_swap" | "finish_throws_after_commit"
   | "postcommit_pixel_changed" | "postcommit_redraw_throws"
-  | "cancel_alters_history" | "remove_replaces_uuid" | "init_throws";
+  | "finish_entry_mismatch" | "cancel_alters_history" | "remove_replaces_uuid" | "init_throws";
 
 type FakeCase = {
   call: () => ReturnType<typeof createTextureVariant>;
@@ -64,6 +64,7 @@ async function withFakeBlockbench(
       if (fault === "finish_throws_after_commit") {
         throw new Error("FINISH_FAILED_AFTER_COMMIT");
       }
+      if (fault === "finish_entry_mismatch") return {kind:"wrong-entry"};
       return undo.history[undo.history.length - 1]!;
     },
     cancelEdit() {
@@ -283,6 +284,16 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
       await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
       expect(ctx.calls).toMatchObject({init:1,finish:1,cancel:0,remove:0});
       expect(ctx.undo.history).toHaveLength(1);
+      expect(ctx.textures).toHaveLength(2);
+    });
+  });
+
+  test("finishEdit result must match the active native Undo history entry",async()=>{
+    await withFakeBlockbench("finish_entry_mismatch",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+      expect(ctx.calls.finish).toBe(1);
+      expect(ctx.calls.cancel).toBe(0);
+      expect(ctx.calls.remove).toBe(0);
       expect(ctx.textures).toHaveLength(2);
     });
   });
