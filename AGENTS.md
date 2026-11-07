@@ -89,6 +89,10 @@ Classify `INSPECT | PLAN | DIAGNOSE | DEVELOP | REPAIR | VALIDATE | RELEASE`. IN
 
 Material commits use `Work`, `State`, `Proof`, plus conditional `Decision`, `Unresolved`, `Next`. Git owns history; `docs/05-operations/next-action.md` owns current continuation. Reconcile historical `Next` with current source.
 
+## Repository knowledge navigation
+
+When the exact implementation owner is unknown, follow [Repository Knowledge Architecture](docs/04-system/knowledge-architecture.md) through `docs/README.md` and its domain router. Use registered document IDs and exact authored `file:line` links; missing paths remain UNKNOWN_RESOURCE/NO_PATH. Graphify is the derived explanation method; Obsidian and Mermaid/Pele are optional presentations, not installed applications or new authority. For source imports and changes use the existing `audit:reachability` and `plan:affected`; never infer code dependencies or Runtime success from document links. No new Skill, Control stage or Gateway tool.
+
 ## Source Precedence
 
 current user → current source/proof → nearest `AGENTS.md` → Control-projected active specialist/context → selected canonical doc owner under `docs/` → operational continuity only when material → history.

@@ -444,53 +444,80 @@ export type ExplicitDocumentationEdge = {
   from_id: string;
   to_id: string;
   line: number;
-  relation: "EXPLICIT_MARKDOWN_LINK";
+  relation: "EXPLICIT_MARKDOWN_LINK" | "EXPLICIT_OBSIDIAN_WIKILINK";
 };
 
+type DocumentationProse = { comment: boolean; inlineTicks: number };
+
+/* Mask HTML comments and inline code while keeping original column offsets. */
+function documentationProse(line: string, state: DocumentationProse): string {
+  const tick = String.fromCharCode(96);
+  let result = "";
+  for (let i = 0; i < line.length;) {
+    if (state.comment) {
+      if (line.startsWith("-->", i)) { state.comment = false; result += "   "; i += 3; }
+      else { result += " "; i++; }
+    } else if (state.inlineTicks || line[i] === tick) {
+      let run = 0;
+      while (line[i + run] === tick) run++;
+      if (run && !state.inlineTicks) state.inlineTicks = run;
+      else if (run && state.inlineTicks === run) state.inlineTicks = 0;
+      result += " ".repeat(run || 1); i += run || 1;
+    } else if (line.startsWith("<!--", i)) {
+      state.comment = true; result += "    "; i += 4;
+    } else { result += line[i]; i++; }
+  }
+  return result;
+}
+function escapedDocumentLink(value: string, index: number): boolean {
+  let count = 0;
+  for (let i = index - 1; i >= 0 && value[i] === "\\"; i--) count++;
+  return count % 2 === 1;
+}
+
+/** Exact authored navigation, never inferred ownership or import dependency. */
 export function indexExplicitDocumentationEdges(
-  source: string,
-  markdown: string
+  source: string, markdown: string
 ): ExplicitDocumentationEdge[] {
-  if (!source.startsWith("docs/") || !source.endsWith(".md") ||
-      source.includes("\\") || source.split("/").includes("..")) {
+  if (!/^docs\/[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*\.md$/.test(source) ||
+      source.split("/").some(part => part === "." || part === "..")) {
     throw new Error("Documentation router source must be a canonical docs/*.md path.");
   }
-
   const edges: ExplicitDocumentationEdge[] = [];
   let fence: MarkdownFence | null = null;
+  const state: DocumentationProse = { comment: false, inlineTicks: 0 };
+  const add = (to: string, label: string, line: number,
+    relation: ExplicitDocumentationEdge["relation"]) => {
+    edges.push({ from: source, to, label, line, relation,
+      from_id: "document:" + source.slice(0, -3),
+      to_id: "document:" + to.slice(0, -3) });
+  };
   for (const [index, line] of markdown.split(/\r?\n/).entries()) {
     const transition = advanceMarkdownFence(line, fence);
     fence = transition.fence;
-    if (transition.boundary || fence !== null) continue;
-
-    const links = /\[([^\]\n]+)\]\(([^)\s]+)\)/g;
-    for (const match of line.matchAll(links)) {
-      if (match.index != null && match.index > 0 && line[match.index - 1] === "!") {
-        continue; // image reference, not documentation navigation
-      }
-      const label = match[1]!.trim();
+    if (transition.boundary || fence !== null || /^( {4}|\t)/.test(line)) continue;
+    const prose = documentationProse(line, state);
+    for (const match of prose.matchAll(/\[([^\]\n]+)\]\(([^)\s]+)\)/g)) {
+      if (match.index === undefined || escapedDocumentLink(prose, match.index) ||
+          (match.index > 0 && prose[match.index - 1] === "!")) continue;
       const href = match[2]!;
-      if (href.startsWith("/") || href.startsWith("#") ||
-          /^[a-z][a-z\d+.-]*:/i.test(href) || href.startsWith("//")) {
-        continue;
-      }
+      if (href.startsWith("/") || href.startsWith("#") || href.startsWith("//") ||
+          /^[a-z][a-z\d+.-]*:/i.test(href)) continue;
       const relative = href.split("#", 1)[0]!;
       if (!relative.endsWith(".md") || /[\\?%:]/.test(relative)) continue;
       const target = posix.normalize(posix.join(posix.dirname(source), relative));
-      if (!target.startsWith("docs/") || target.split("/").includes("..")) {
-        continue; // cannot infer or grant authority outside canonical docs
-      }
-      // Preserve every authored edge: a duplicate role must remain visible
-      // to the fail-closed canonical-router uniqueness check.
-      edges.push({
-        from: source,
-        to: target,
-        label,
-        from_id: `document:${source.slice(0, -3)}`,
-        to_id: `document:${target.slice(0, -3)}`,
-        line: index + 1,
-        relation: "EXPLICIT_MARKDOWN_LINK",
-      });
+      if (!/^docs\//.test(target) || target.split("/").some(part => part === "..")) continue;
+      add(target, match[1]!.trim(), index + 1, "EXPLICIT_MARKDOWN_LINK");
+    }
+    for (const match of prose.matchAll(/(!?)\[\[([^\]\n]+)\]\]/g)) {
+      if (match.index === undefined || match[1] === "!" ||
+          escapedDocumentLink(prose, match.index)) continue;
+      const [path, alias] = match[2]!.split("|", 2);
+      const target = path!.split("#", 1)[0]!.trim();
+      // Only repo-root exact paths: fuzzy Obsidian basename matching is not authority.
+      if (!/^docs\/[a-zA-Z0-9_.-]+(?:\/[a-zA-Z0-9_.-]+)*\.md$/.test(target) ||
+          target.split("/").some(part => part === "." || part === "..")) continue;
+      add(target, alias?.trim() || target, index + 1, "EXPLICIT_OBSIDIAN_WIKILINK");
     }
   }
   return edges;

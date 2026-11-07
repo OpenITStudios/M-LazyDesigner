@@ -68,6 +68,10 @@ requires generator-aligned semantic/API evidence.  Never infer
 source ownership from a capability's semantic similarity or a diagram arrow.
 If the exact owner exists, do not traverse document navigation again.
 
+## Documentation architecture route
+
+For a missing documentation relationship, use [Repository Knowledge Architecture](knowledge-architecture.md). It projects exact authored links with witnesses to Markdown/Mermaid; existing Source Owners, Semantic Impact, TypeScript reachability, Control and Runtime Capability Graph remain separate canonical owners.
+
 ## Canonical Skills
 
 ### Reference Preparation

@@ -57,6 +57,9 @@ Which Blockbench versions are validated, merely allowed, or review-gated?
 What does Control project to Codex?
 → control/context-projection.md
 
+How do we trace source-backed documentation routes and generate Obsidian/Pele-compatible architectural diagrams?
+→ [Repository Knowledge Architecture](knowledge-architecture.md)
+
 Which source/module owns this behavior?
 → implementation-map.md
 

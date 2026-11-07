@@ -15,6 +15,17 @@ plan-semantic-invalidation.ts    semantic diff → invalidation/check plan
 snapshot-semantic-registry.ts    canonical semantic registry snapshot
 ```
 
+## Read-only documentation architecture navigation
+
+`analyze:documentation-graph` uses the existing authored Markdown link parser and emits bounded paths with original `file:line` witnesses. It is a derived documentation navigation view, not a Runtime Graph, source import graph or second owner. Missing links and unreachable notes are reported for review, never auto-deleted.
+
+```bash
+bun run analyze:documentation-graph -- --audit
+bun run analyze:documentation-graph -- --trace docs/README.md docs/04-system/knowledge-architecture.md --format=markdown
+```
+
+Markdown output includes repo-root Obsidian links and Mermaid/Pele-compatible source; it neither writes a vault nor executes Pele. For source changes continue to use `plan:affected` and `audit:reachability`. See [Repository Knowledge Architecture](../../../docs/04-system/knowledge-architecture.md).
+
 ## Read-only branch readiness impact
 
 `plan:affected` reuses the canonical capability manifest to show qualified

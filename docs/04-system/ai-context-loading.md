@@ -89,6 +89,8 @@ Task
 
 `mcp/lib/semantic/knowledge.ts` already supplies path/heading-scoped section IDs, content hashes and ranked section selection. `mcp/scripts/development/plan-development-context.ts` composes the existing developer context plan; `mcp/gateway/development/sourceOwners.ts` and `semanticDependencyMatrix.ts` own distinct source and semantic dependency roles. This is *not* a universal documentation graph. For ambiguous or unresolved SYSTEM_DEVELOPMENT intent, the existing context planner now follows the two explicit Markdown edges `docs/README.md → docs/04-system/README.md → docs/04-system/implementation-map.md`; confirmed source-owner routes skip that graph traversal. Missing required documents or edges fail closed instead of silently producing an empty knowledge result. Section ranking remains a navigation aid, never source or runtime authority. Do not add a parallel registry or inferred graph.
 
+**Conditional system-development view:** [Repository Knowledge Architecture](knowledge-architecture.md) explains authored documentation links and bounded provenance. Use it only for unresolved document relationships; exact source owners, the current developer context planner and the normal authoring hot path remain unchanged. A document route is not a module dependency or Runtime proof.
+
 ## Authority Roles
 
 ```text
