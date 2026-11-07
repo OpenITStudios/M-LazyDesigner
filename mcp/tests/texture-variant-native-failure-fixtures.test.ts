@@ -12,11 +12,16 @@ type Fault =
   | "foreign_texture" | "shadow_uuid" | "history_drift"
   | "project_swap" | "undo_swap" | "finish_throws_after_commit"
   | "postcommit_pixel_changed" | "postcommit_redraw_throws"
+  | "finish_before_commit_throws" | "finish_before_commit_aspects_dropped"
+  | "finish_before_commit_variant_renamed" | "finished_event_variant_renamed"
+  | "finished_event_variant_id_changed" | "finished_event_variant_channel_changed"
+  | "finished_event_group_renamed" | "finished_event_group_material_changed"
+  | "finished_event_group_removed" | "finished_event_undo_snapshot_erased"
   | "finish_entry_mismatch" | "cancel_alters_history" | "remove_replaces_uuid" | "init_throws";
 
 type FakeCase = {
   call: () => ReturnType<typeof createTextureVariant>;
-  calls: { init: number; finish: number; cancel: number; remove: number; redraw: number };
+  calls: { init: number; finish: number; cancel: number; remove: number; redraw: number; events: string[] };
   textures: Array<{ uuid: string; name: string }>;
   undo: {
     current_save: object | undefined;
@@ -38,13 +43,15 @@ async function withFakeBlockbench(
     Object.defineProperty(globalThis, key, {
       configurable: true, writable: true, value,
     });
-  const calls = {init: 0, finish: 0, cancel: 0, remove: 0, redraw: 0};
+  const calls = {init: 0, finish: 0, cancel: 0, remove: 0, redraw: 0, events: [] as string[]};
   let counter = 0;
   let source!: FakeTexture;
   const project = {uuid:"project-a",texture_width:16,texture_height:16};
+  const group = {uuid:"group",name:"Variants",is_material:false};
+  const textureGroups = [group];
   const undo: FakeCase["undo"] & {
     initEdit: (aspects: unknown) => object;
-    finishEdit: (name: string, aspects: unknown) => object;
+    finishEdit: (name: string, aspects: unknown) => object | undefined;
     cancelEdit: () => void;
   } = {
     current_save: undefined,
@@ -52,20 +59,50 @@ async function withFakeBlockbench(
     initEdit(_aspects: unknown) {
       calls.init++;
       if (fault === "init_throws") throw new Error("INIT_FAILED");
-      undo.current_save = {owner:"variant"};
+      undo.current_save = {owner:"variant", textures:{}, collections:{}};
       return undo.current_save;
     },
     finishEdit(_name: string,_aspects: unknown) {
       calls.finish++;
-      undo.history.push({kind:"committed"});
-      undo.index++;
+      if (!undo.current_save) return undefined;
+      // Match the two official UndoSystem event windows, not the native
+      // Blockbench renderer or a complete Blockbench save implementation.
+      calls.events.push("finish_edit");
+      const candidate = FakeTexture.all.find(texture => texture !== source)!;
+      if (fault === "finish_before_commit_throws") {
+        throw new Error("FINISH_LISTENER_THROW_BEFORE_COMMIT");
+      }
+      if (fault === "finish_before_commit_aspects_dropped") {
+        (_aspects as {textures:FakeTexture[]}).textures = [];
+      }
+      if (fault === "finish_before_commit_variant_renamed") {
+        candidate.name = "unexpected_before_commit.png";
+      }
+      const aspects = _aspects as {textures: FakeTexture[]};
+      const entry = {
+        kind:"committed", before:undo.current_save,
+        post:{textures:Object.fromEntries(aspects.textures.map(texture => [
+          texture.uuid, {uuid:texture.uuid,name:texture.name},
+        ]))},
+      };
+      if (undo.history.length > undo.index) undo.history.length = undo.index;
       undo.current_save = undefined;
+      undo.history.push(entry);
+      undo.index = undo.history.length;
+      calls.events.push("finished_edit");
       if (fault === "postcommit_pixel_changed") source.pixels[0] = 201;
+      if (fault === "finished_event_variant_renamed") candidate.name = "after.png";
+      if (fault === "finished_event_variant_id_changed") candidate.id = "renamed-id";
+      if (fault === "finished_event_variant_channel_changed") candidate.pbr_channel = "mer";
+      if (fault === "finished_event_group_renamed") group.name = "Other";
+      if (fault === "finished_event_group_material_changed") group.is_material = true;
+      if (fault === "finished_event_group_removed") textureGroups.length = 0;
+      if (fault === "finished_event_undo_snapshot_erased") entry.post.textures = {};
       if (fault === "finish_throws_after_commit") {
         throw new Error("FINISH_FAILED_AFTER_COMMIT");
       }
       if (fault === "finish_entry_mismatch") return {kind:"wrong-entry"};
-      return undo.history[undo.history.length - 1]!;
+      return entry;
     },
     cancelEdit() {
       calls.cancel++;
@@ -77,7 +114,6 @@ async function withFakeBlockbench(
       }
     },
   };
-  const group = {uuid:"group",name:"Variants",is_material:false};
 
   class FakeTexture {
     static all: FakeTexture[] = [];
@@ -187,7 +223,7 @@ async function withFakeBlockbench(
   try {
     assign("Project",project);
     assign("Texture",FakeTexture);
-    assign("TextureGroup",{all:[group]});
+    assign("TextureGroup",{all:textureGroups});
     assign("Cube",{all:[]});
     assign("Undo",undo);
     assign("Canvas",{updateAll(){
@@ -219,6 +255,11 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
       expect(ctx.textures).toHaveLength(2);
       expect(ctx.calls).toMatchObject({init:1,finish:1,cancel:0,remove:0});
       expect(ctx.undo.current_save).toBeUndefined();
+      expect(ctx.calls.events).toEqual(["finish_edit","finished_edit"]);
+      expect(ctx.undo.history[0]).toMatchObject({
+        before:{textures:{}},
+        post:{textures:{"variant-1":{uuid:"variant-1",name:"variant.png"}}},
+      });
     });
   });
 
@@ -285,6 +326,54 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
       expect(ctx.calls).toMatchObject({init:1,finish:1,cancel:0,remove:0});
       expect(ctx.undo.history).toHaveLength(1);
       expect(ctx.textures).toHaveLength(2);
+    });
+  });
+
+  test("finish_edit listeners run before post snapshot and cannot claim success",async()=>{
+    for(const fault of ["finish_before_commit_aspects_dropped",
+      "finish_before_commit_variant_renamed"] as const){
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+        expect(ctx.calls.events).toEqual(["finish_edit","finished_edit"]);
+        expect(ctx.undo.history).toHaveLength(1);
+        expect(ctx.calls.cancel).toBe(0);
+        expect(ctx.calls.remove).toBe(0);
+      });
+    }
+  });
+
+  test("a throwing finish_edit listener before commit still has unknown outcome",async()=>{
+    await withFakeBlockbench("finish_before_commit_throws",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+      expect(ctx.calls.events).toEqual(["finish_edit"]);
+      expect(ctx.undo.history).toHaveLength(0);
+      expect(ctx.undo.current_save).toBeDefined();
+      expect(ctx.calls.cancel).toBe(0);
+      expect(ctx.calls.remove).toBe(0);
+    });
+  });
+
+  test("finished_edit cannot silently change exact variant or group",async()=>{
+    for(const fault of [
+      "finished_event_variant_renamed", "finished_event_variant_id_changed",
+      "finished_event_variant_channel_changed", "finished_event_group_renamed",
+      "finished_event_group_material_changed", "finished_event_group_removed",
+    ] as const){
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+        expect(ctx.calls.events).toEqual(["finish_edit","finished_edit"]);
+        expect(ctx.undo.history).toHaveLength(1);
+        expect(ctx.calls).toMatchObject({finish:1,cancel:0,remove:0});
+        expect(ctx.textures).toHaveLength(2);
+      });
+    }
+  });
+
+  test("finished_edit cannot erase the committed native Undo texture snapshot",async()=>{
+    await withFakeBlockbench("finished_event_undo_snapshot_erased",async ctx=>{
+      await expect(ctx.call()).rejects.toThrow("TEXTURE_VARIANT_WRITE_OUTCOME_UNKNOWN");
+      expect(ctx.undo.history).toHaveLength(1);
+      expect(ctx.calls).toMatchObject({finish:1,cancel:0,remove:0});
     });
   });
 

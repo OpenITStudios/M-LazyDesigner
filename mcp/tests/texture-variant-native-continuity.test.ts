@@ -255,6 +255,11 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(body).toContain("undoHistoryUnchanged()");
     expect(body).toContain("TEXTURE_VARIANT_UNDO_HISTORY_CHANGED_DURING_DECODE");
     expect(body).toContain("TEXTURE_VARIANT_UNDO_COMMIT_ENTRY_UNVERIFIED");
+    expect(body).toContain("commitSnapshot?.before !== undoOwner");
+    expect(body).toContain("Object.hasOwn(postTextures, variantBeforeFinish.uuid)");
+    expect(body).toContain("groupAfterFinish.length !== 1");
+    expect(body).toContain("JSON.stringify(nativeVariantTextureIdentity(variant))");
+    expect(body).toContain("variant.id !== variantIdBeforeFinish");
     expect(body.indexOf("TEXTURE_VARIANT_UNDO_HISTORY_CHANGED_DURING_DECODE"))
       .toBeLessThan(body.indexOf("commitAttempted = true;"));
   });

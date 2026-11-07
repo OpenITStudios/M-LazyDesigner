@@ -296,20 +296,43 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
       }
     );
 
-    // finishEdit can change Undo history or clear current_save *before* an
-    // extension listener throws. After this point, never auto-rollback.
+    // Blockbench dispatches finish_edit BEFORE the Undo post-save and
+    // finished_edit AFTER committing the history entry. Both may invoke
+    // extension listeners that mutate Texture or TextureGroup state.
+    const variantBeforeFinish = nativeVariantTextureIdentity(variant);
+    const variantIdBeforeFinish = variant.id;
+    // After attempting finishEdit, outcome is uncertain even if its listener
+    // fails before the history entry is recorded. Never auto-rollback.
     commitAttempted = true;
     const committedEntry = Undo.finishEdit("Agent created texture variant", {
       textures: [variant],
       collections: [],
     });
+    const commitSnapshot = committedEntry as unknown as {
+      before?: { textures?: Record<string, unknown> };
+      post?: { textures?: Record<string, { uuid?: unknown; name?: unknown }> };
+    } | undefined;
+    const beforeTextures = commitSnapshot?.before?.textures;
+    const postTextures = commitSnapshot?.post?.textures;
+    const recordedVariant = postTextures?.[variantBeforeFinish.uuid];
+    // The real UndoSystem.save snapshots a map keyed by the Texture UUID.
+    // A matching history object alone does not guarantee undo/redo captured
+    // the intended new Texture instead of a listener-modified aspect list.
     if (!committedEntry || Undo.index < 1 ||
-        Undo.history[Undo.index - 1] !== committedEntry) {
+        Undo.history[Undo.index - 1] !== committedEntry ||
+        commitSnapshot?.before !== undoOwner ||
+        !beforeTextures || Object.keys(beforeTextures).length !== 0 ||
+        !postTextures || Object.keys(postTextures).length !== 1 ||
+        !Object.hasOwn(postTextures, variantBeforeFinish.uuid) ||
+        recordedVariant?.uuid !== variantBeforeFinish.uuid ||
+        recordedVariant?.name !== variantBeforeFinish.name) {
       throw new Error("TEXTURE_VARIANT_UNDO_COMMIT_ENTRY_UNVERIFIED");
     }
-    // Native finish listeners can mutate the scene after precommit checks.
-    // Do not publish a continuity receipt if any source identity/readback
-    // has already diverged or the owned transaction remains open.
+    const groupAfterFinish = TextureGroup.all.filter(
+      group => group.uuid === targetGroup.uuid
+    );
+    // Never publish a receipt for a renamed/regrouped variant or mutated
+    // material group, even if source/variant pixel bytes still match.
     if (Project !== projectOwner ||
         Project?.uuid !== precommit.project_uuid ||
         Undo.current_save ||
@@ -320,6 +343,15 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
         Texture.all.filter(item => item.uuid === variant.uuid).length !== 1 ||
         !Texture.all.includes(source) ||
         Texture.all.filter(item => item.uuid === source.uuid).length !== 1 ||
+        groupAfterFinish.length !== 1 ||
+        groupAfterFinish[0] !== targetGroup ||
+        targetGroup.name !== plan.target_group_name ||
+        targetGroup.is_material !== false ||
+        textureProductionRoleForVariant(source) !== "base_color_candidate" ||
+        variant.id !== variantIdBeforeFinish ||
+        JSON.stringify(nativeVariantTextureIdentity(variant)) !==
+          JSON.stringify(variantBeforeFinish) ||
+        Texture.all.filter(item => item.name === variantBeforeFinish.name).length !== 1 ||
         JSON.stringify(nativeVariantTextureIdentity(source)) !==
           JSON.stringify(precommit.source) ||
         JSON.stringify(currentVariantMappedUvIdentity()) !==
