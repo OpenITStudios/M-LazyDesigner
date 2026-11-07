@@ -549,10 +549,45 @@ export async function createTextureVariant(request: z.infer<typeof createTexture
     throw error;
   }
 
-  // The native transaction has finished; failure to redraw is not a
-  // request to repeat a destructive texture creation.
+  // The native transaction has finished. Keep a bounded exact snapshot
+  // around final redraw: Canvas.updateAll can dispatch further listeners.
+  // A redraw that returns normally must not turn altered native state into
+  // a stale successful creation receipt. Never retry an already committed edit.
+  const sourceBeforeRedraw = nativeVariantTextureIdentity(source);
+  const variantBeforeRedraw = nativeVariantTextureIdentity(variant);
+  const variantIdBeforeRedraw = variant.id;
+  const historyBeforeRedraw = [...Undo.history];
+  const undoIndexBeforeRedraw = Undo.index;
   try {
     Canvas.updateAll();
+    if (Undo !== undoSystemOwner ||
+        Undo.current_save ||
+        Undo.index !== undoIndexBeforeRedraw ||
+        Undo.history.length !== historyBeforeRedraw.length ||
+        Undo.history.some((entry, index) => entry !== historyBeforeRedraw[index]) ||
+        Project !== projectOwner ||
+        Project?.uuid !== precommit.project_uuid ||
+        !textureVariantNativeInventoryIntact(
+          textureInventoryBefore, Texture.all, variant
+        ) ||
+        !textureGroupsUnchanged() ||
+        variant.id !== variantIdBeforeRedraw ||
+        JSON.stringify(nativeVariantTextureIdentity(variant)) !==
+          JSON.stringify(variantBeforeRedraw) ||
+        JSON.stringify(nativeVariantTextureIdentity(source)) !==
+          JSON.stringify(sourceBeforeRedraw) ||
+        JSON.stringify(currentVariantMappedUvIdentity()) !==
+          JSON.stringify(precommit.mapping)) {
+      throw new Error("TEXTURE_VARIANT_POSTREDRAW_STATE_DRIFT");
+    }
+    requireUnchangedTextureBitmap(
+      sourceBitmap, fullTextureRgba(source),
+      "TEXTURE_VARIANT_POSTREDRAW_SOURCE_RGBA_CHANGED"
+    );
+    requireUnchangedTextureBitmap(
+      sourceBitmap, fullTextureRgba(variant),
+      "TEXTURE_VARIANT_POSTREDRAW_VARIANT_RGBA_CHANGED"
+    );
   } catch (error) {
     throw new Error(
       "TEXTURE_VARIANT_POSTCOMMIT_DISPLAY_UNVERIFIED: the variant may " +

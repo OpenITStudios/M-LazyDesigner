@@ -12,6 +12,10 @@ type Fault =
   | "foreign_texture" | "shadow_uuid" | "history_drift"
   | "project_swap" | "undo_swap" | "finish_throws_after_commit"
   | "postcommit_pixel_changed" | "postcommit_redraw_throws"
+  | "redraw_source_pixel_drift" | "redraw_variant_pixel_drift"
+  | "redraw_group_drift" | "redraw_foreign_texture"
+  | "redraw_history_drift" | "redraw_project_swap"
+  | "redraw_undo_swap" | "redraw_uv_drift"
   | "finish_before_commit_throws" | "finish_before_commit_aspects_dropped"
   | "finish_before_commit_variant_renamed" | "finished_event_variant_renamed"
   | "finished_event_variant_id_changed" | "finished_event_variant_channel_changed"
@@ -279,6 +283,27 @@ async function withFakeBlockbench(
     assign("Canvas",{updateAll(){
       calls.redraw++;
       if (fault==="postcommit_redraw_throws") throw new Error("REDRAW_FAILED");
+      // The fake render handler stands in for a synchronous native listener.
+      if (fault === "redraw_source_pixel_drift") source.pixels[0] = 251;
+      if (fault === "redraw_variant_pixel_drift") {
+        const candidate = FakeTexture.all.find(texture => texture !== source);
+        if (candidate) candidate.pixels[0] = 251;
+      }
+      if (fault === "redraw_group_drift") group.name = "ChangedOnRender";
+      if (fault === "redraw_foreign_texture") {
+        FakeTexture.all.push(new FakeTexture({
+          name:"foreign.png",width:16,height:16,
+        }));
+      }
+      if (fault === "redraw_history_drift") {
+        undo.history.push({kind:"foreign-render-edit"});
+        undo.index = undo.history.length;
+      }
+      if (fault === "redraw_project_swap") {
+        assign("Project",{...project});
+      }
+      if (fault === "redraw_undo_swap") assign("Undo",{...undo});
+      if (fault === "redraw_uv_drift") project.texture_width = 32;
     }});
     await inspect({
       call:()=>createTextureVariant({
@@ -533,6 +558,29 @@ describe("V1 partial-registration and recovery fake-native fault injection",()=>
       expect(ctx.calls.cancel).toBe(0);
       expect(ctx.textures).toHaveLength(2);
     });
+  });
+
+  test("redraw listeners cannot invalidate a committed receipt or start rollback",async()=>{
+    for (const fault of [
+      "redraw_source_pixel_drift", "redraw_variant_pixel_drift",
+      "redraw_group_drift", "redraw_foreign_texture",
+      "redraw_history_drift", "redraw_project_swap",
+      "redraw_undo_swap", "redraw_uv_drift",
+    ] as const) {
+      await withFakeBlockbench(fault,async ctx=>{
+        await expect(ctx.call()).rejects.toThrow(
+          "TEXTURE_VARIANT_POSTCOMMIT_DISPLAY_UNVERIFIED"
+        );
+        expect(ctx.calls).toMatchObject({
+          init:1, finish:1, cancel:0, remove:0, redraw:1,
+        });
+        expect(ctx.calls.events).toEqual([
+          "init_edit", "add_texture", "finish_edit", "finished_edit",
+        ]);
+        expect(ctx.textures.length).toBeGreaterThanOrEqual(2);
+        expect(ctx.undo.history.length).toBeGreaterThanOrEqual(1);
+      });
+    }
   });
 
   test("unknown initEdit outcome is not reinterpreted as safe retry",async()=>{

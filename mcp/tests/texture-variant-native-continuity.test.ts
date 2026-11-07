@@ -260,6 +260,11 @@ describe("V1 variant pre-Undo native source continuity", () => {
     expect(body).toContain("Undo !== undoSystemOwner");
     expect(body).toContain("addResult !== variant");
     expect(body).toContain("TEXTURE_VARIANT_POSTCOMMIT_DISPLAY_UNVERIFIED");
+    expect(body).toContain("TEXTURE_VARIANT_POSTREDRAW_STATE_DRIFT");
+    expect(body).toContain("TEXTURE_VARIANT_POSTREDRAW_SOURCE_RGBA_CHANGED");
+    expect(body).toContain("TEXTURE_VARIANT_POSTREDRAW_VARIANT_RGBA_CHANGED");
+    expect(body.indexOf("Canvas.updateAll();"))
+      .toBeLessThan(body.indexOf("TEXTURE_VARIANT_POSTREDRAW_STATE_DRIFT"));
     expect(body).toContain("Undo.cancelEdit()");
     expect(body).toContain("TEXTURE_VARIANT_ROLLBACK_POSTCONDITION_FAILED");
     expect(body).toContain("undoHistoryUnchanged()");
