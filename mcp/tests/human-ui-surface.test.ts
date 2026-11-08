@@ -419,9 +419,11 @@ describe("human-facing Blockbench UI", () => {
     expect(disclosure).toBeGreaterThan(particle);
     expect(panel.indexOf('<summary class="ld-studio-toggle">', disclosure)).toBeGreaterThan(disclosure);
     expect(panel).not.toContain('<details class="ld-studio-disclosure" open');
-    expect(panel).toContain("Draft in progress");
-    expect(panel).toContain("Editing saved effect");
-    expect(panel).toContain("Animation stage required");
+    expect(ui).toContain("Draft not saved");
+    expect(ui).toContain("Changes not saved");
+    expect(ui).toContain("Saved effect ready");
+    expect(ui).toContain("Animation stage required");
+    expect(panel).toContain("{{studioSummaryLabel()}}");
     expect(panel).toContain("Open a Bedrock Model");
     expect(panel).toContain('v-else-if="!studioStageReady()"');
     for (const method of ["studioRefresh", "studioReset", "studioOpen", "studioCreate",
@@ -429,11 +431,81 @@ describe("human-facing Blockbench UI", () => {
       expect(panel.indexOf(`@click="${method}"`, disclosure)).toBeGreaterThan(disclosure);
     }
     expect(panel).toContain(':disabled="studioBusy || !project.hasFolder || !studioHasChanges()"');
-    expect(panel).toContain(':disabled="studioBusy || !studioLoaded.path"');
+    expect(panel).toContain(':disabled="studioBusy || !studioLoaded.path || studioHasChanges()"');
     expect(css).toContain('.ld-studio-disclosure > summary:focus-visible');
     expect(css).toContain('.ld-studio-disclosure[open] > summary::before');
     expect(ui).toContain("stopStudioPreview");
     expect(ui).toContain("studioStageReady(this: HumanPanelContext): boolean {");
+  });
+
+  test("collapsed Particle Studio exposes errors and unsaved work without changing native lifecycle", async () => {
+    const [panel, css, ui] = await Promise.all([
+      source("ui/panel.html"), source("ui/panel.css"), source("ui/index.ts"),
+    ]);
+    const particle = panel.slice(panel.indexOf('aria-label="Particle Studio"'));
+    expect(particle).toContain('<details class="ld-studio-disclosure">');
+    expect(particle).not.toContain('<details class="ld-studio-disclosure" open');
+    expect(particle).toContain("{{studioSummaryLabel()}}");
+    expect(particle).toContain("ld-studio-has-error");
+    expect(particle).toContain("ld-studio-has-changes");
+    expect(particle).toContain('v-if="studioError" class="ld-studio-error-closed" role="alert"');
+    expect(particle).toContain("Open it to read the error.");
+    const closedError = particle.indexOf('class="ld-studio-error-closed"');
+    const detailsEnd = particle.lastIndexOf("</details>", closedError);
+    expect(detailsEnd).toBeGreaterThan(0);
+    expect(closedError).toBeGreaterThan(detailsEnd);
+    expect(particle.match(/{{studioError}}/g)).toHaveLength(1);
+    expect(particle).toContain('<p v-if="studioError" class="ld-error" role="alert">{{studioError}}</p>');
+    expect(particle).toContain('<p v-if="studioNote" class="ld-studio-note" role="status" aria-live="polite">{{studioNote}}</p>');
+    expect(css).toContain(".ld-studio-disclosure[open] + .ld-studio-error-closed { display: none; }");
+    expect(css).toContain(".ld-studio-toggle-hint.ld-studio-has-error");
+    expect(css).toContain(".ld-studio-disclosure > summary:focus-visible");
+
+    expect(ui).toContain("studioSummaryLabel(this: HumanPanelContext): string {");
+    const summary = ui.slice(ui.indexOf("studioSummaryLabel(this: HumanPanelContext): string {"),
+      ui.indexOf("studioHasChanges(this: HumanPanelContext): boolean {"));
+    expect(summary).toContain('if (this.studioError) return "Needs attention · Open for details";');
+    expect(summary).toContain('if (this.studioBusy) return "Working on particle…";');
+    expect(summary).toContain('if (!this.project.isBedrock) return "Open a Bedrock Model";');
+    expect(summary).toContain('"Animation stage required · Draft not saved"');
+    expect(summary).toContain('"Animation stage required · Changes not saved"');
+    expect(summary).toContain('"Preview playing · Draft not saved"');
+    expect(summary).toContain('"Preview playing · Changes not saved"');
+    expect(summary).toContain('"Saved effect ready"');
+    expect(summary).not.toContain("await ");
+    expect(summary).not.toContain("writeFile");
+    expect(ui).toContain('vm.studioNote = "Preview stopped when Blockbench mode changed.');
+    expect(ui).toContain("stopStudioPreview()");
+    expect(ui).toContain('this.studioError = "Preview unavailable: " +');
+    expect(ui).toContain('this.studioError = "Particle file saved, but preview unavailable: " +');
+    expect(ui).toContain('this.studioNote = "Particle file saved." + animationWarning;');
+    expect(ui).not.toContain('this.studioNote += " Standalone preview: "');
+  });
+
+  test("Particle Studio orders Preview, Save and Attach and blocks unsafe attachment early", async () => {
+    const [panel, ui, css] = await Promise.all([
+      source("ui/panel.html"), source("ui/index.ts"), source("ui/panel.css"),
+    ]);
+    const preview = panel.indexOf('class="ld-studio-subheading">Preview');
+    const save = panel.indexOf('class="ld-studio-subheading">Save');
+    const attach = panel.indexOf('class="ld-studio-subheading">Attach to animation');
+    expect(preview).toBeGreaterThan(panel.indexOf('v-if="studioLoaded" class="ld-studio-edit"'));
+    expect(save).toBeGreaterThan(preview);
+    expect(attach).toBeGreaterThan(save);
+    expect(panel).toContain("Location in model");
+    expect(panel).toContain("Preview uses this location without saving a particle file.");
+    expect(panel).toContain("Some controls are read-only because the particle uses authored expressions.");
+    expect(panel).toContain("Those values are preserved.");
+    expect(panel).toContain('v-else-if="!studioHasChanges()" class="section-hint">No unsaved changes to save.');
+    expect(panel).toContain('v-if="!studioLoaded.path" class="section-hint">Save this particle file before attaching it.');
+    expect(panel).toContain('v-else-if="studioHasChanges()" class="section-hint">Save your latest changes before attaching.');
+    expect(panel).toContain(':disabled="studioBusy || !studioLoaded.path || studioHasChanges()"');
+    expect(panel).toContain(':disabled="studioBusy || !project.hasFolder || !studioHasChanges()"');
+    expect(panel).toContain('@click="studioAttach"');
+    expect(ui).toContain('if (!this.studioLoaded.path) {');
+    expect(ui).toContain('if (studioChangeOperations(this.studioLoaded, this.studioSettings).length) {');
+    expect(ui).toContain("attachStudioParticle(project, this.studioLoaded, this.studioLocator)");
+    expect(css).toContain(".ld-studio-subheading");
   });
 
   test("native authoring panel prioritizes the actionable Geometry section", async () => {
@@ -715,11 +787,11 @@ describe("human-facing Blockbench UI", () => {
     expect(panel).toContain("You can still edit in Blockbench");
     expect(panel).toContain("Switch to the Animation stage to use particle tools.");
     expect(panel).toContain("Save the .bbmodel to enable Find Particles and Save Particle.");
-    expect(panel).toContain("Preview playing");
+    expect(ui).toContain("Preview playing");
     expect(panel).toContain("{{studioLoaded.path ? 'Save Changes' : 'Save Particle'}}");
     expect(panel).toContain("{{studioLoaded.path ? 'Revert Changes' : 'Reset Draft'}}");
     expect(panel).toContain(':disabled="studioBusy || !project.hasFolder || !studioHasChanges()"');
-    expect(panel).toContain(':disabled="studioBusy || !studioLoaded.path"');
+    expect(panel).toContain(':disabled="studioBusy || !studioLoaded.path || studioHasChanges()"');
     expect(panel).toContain('v-else-if="!studioStageReady()"');
     expect(ui).toContain("this.studioLoaded.path");
     expect(ui).toContain("Draft settings reset to the starting preview. No file was changed.");

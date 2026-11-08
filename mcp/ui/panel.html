@@ -98,12 +98,7 @@
     <details class="ld-studio-disclosure">
       <summary class="ld-studio-toggle">
         <span class="ld-section-title">Particle Studio</span>
-        <span class="ld-studio-toggle-hint" v-if="!project.isBedrock">Open a Bedrock Model</span>
-        <span class="ld-studio-toggle-hint" v-else-if="!studioStageReady()">Animation stage required</span>
-        <span class="ld-studio-toggle-hint" v-else-if="studioError">Needs attention</span>
-        <span class="ld-studio-toggle-hint" v-else-if="studioPlaying">Preview playing</span>
-        <span class="ld-studio-toggle-hint" v-else-if="studioLoaded">{{studioLoaded.path ? 'Editing saved effect' : 'Draft in progress'}}</span>
-        <span class="ld-studio-toggle-hint" v-else>Create or edit effects</span>
+        <span class="ld-studio-toggle-hint" :class="{ 'ld-studio-has-error': !!studioError, 'ld-studio-has-changes': !!studioLoaded && studioHasChanges() }">{{studioSummaryLabel()}}</span>
       </summary>
     <p class="ld-description">Create, preview and adjust Bedrock particles here. AI particle generation remains available through your connected client.</p>
     <p v-if="!project.isBedrock" class="ld-empty-state">Open a Bedrock Model project.</p>
@@ -165,6 +160,8 @@
           <input id="ld-studio-color" type="color" v-model="studioSettings.color" @input="studioLiveChanged"
             :disabled="studioBusy || !studioLoaded.editable.color"/>
         </div>
+        <p v-if="!studioLoaded.editable.emission || !studioLoaded.editable.size || !studioLoaded.editable.speed || !studioLoaded.editable.lifetime || !studioLoaded.editable.color"
+          class="section-hint">Some controls are read-only because the particle uses authored expressions. Those values are preserved.</p>
         <details class="ld-utilities" aria-label="Advanced particle visual and motion controls">
           <summary>Advanced visual / motion (numeric-only)</summary>
           <div class="ld-studio-edit">
@@ -189,12 +186,9 @@
             <p class="section-hint">Unsupported shape, gradient or MoLang fields remain unchanged. No additional emitters are created.</p>
           </div>
         </details>
+        <div class="ld-studio-subheading">Preview</div>
         <div class="ld-studio-row">
-          <button class="user-action primary" type="button" :disabled="studioBusy || !project.hasFolder || !studioHasChanges()" @click="studioSave">{{studioLoaded.path ? 'Save Changes' : 'Save Particle'}}</button>
-          <button class="user-action" type="button" :disabled="studioBusy || !studioHasChanges()" @click="studioRevert">{{studioLoaded.path ? 'Revert Changes' : 'Reset Draft'}}</button>
-        </div>
-        <div class="ld-studio-row">
-          <label for="ld-studio-locator">Attach to</label>
+          <label for="ld-studio-locator">Location in model</label>
           <select id="ld-studio-locator" v-model="studioLocator" @change="studioLiveChanged" :disabled="studioBusy">
             <option value="">Model origin</option>
             <option v-for="name in studioLocators" :key="name" :value="name">{{name}}</option>
@@ -205,13 +199,25 @@
           <button type="button" class="user-action" :disabled="!studioPlaying" @click="studioStop">Stop</button>
           <button type="button" class="user-action" :disabled="studioBusy" @click="studioCheck">Check Preview</button>
         </div>
-        <button type="button" class="user-action" :disabled="studioBusy || !studioLoaded.path" @click="studioAttach">Attach at Animation Playhead</button>
-        <p class="section-hint">Preview never writes JSON. Save the particle before attaching; select an Animation in Blockbench. Viewport appearance still requires visual review.</p>
+        <p class="section-hint">Preview uses this location without saving a particle file. The viewport still needs visual review.</p>
+        <div class="ld-studio-subheading">Save</div>
+        <div class="ld-studio-row">
+          <button class="user-action primary" type="button" :disabled="studioBusy || !project.hasFolder || !studioHasChanges()" @click="studioSave">{{studioLoaded.path ? 'Save Changes' : 'Save Particle'}}</button>
+          <button class="user-action" type="button" :disabled="studioBusy || !studioHasChanges()" @click="studioRevert">{{studioLoaded.path ? 'Revert Changes' : 'Reset Draft'}}</button>
+        </div>
+        <p v-if="!project.hasFolder" class="section-hint">Save the .bbmodel first to enable particle file Save.</p>
+        <p v-else-if="!studioHasChanges()" class="section-hint">No unsaved changes to save.</p>
+        <div class="ld-studio-subheading">Attach to animation</div>
+        <button type="button" class="user-action" :disabled="studioBusy || !studioLoaded.path || studioHasChanges()" @click="studioAttach">Attach at Animation Playhead</button>
+        <p v-if="!studioLoaded.path" class="section-hint">Save this particle file before attaching it. Preview alone does not create a file.</p>
+        <p v-else-if="studioHasChanges()" class="section-hint">Save your latest changes before attaching. Select an Animation in Blockbench.</p>
+        <p v-else class="section-hint">Select an Animation in Blockbench and choose the playhead position to attach the saved particle.</p>
       </div>
-      <p v-if="studioNote" class="ld-studio-note" role="status" aria-live="polite">{{studioNote}}</p>
-      <p v-if="studioError" class="ld-error" role="alert">{{studioError}}</p>
     </div>
+    <p v-if="studioNote" class="ld-studio-note" role="status" aria-live="polite">{{studioNote}}</p>
+    <p v-if="studioError" class="ld-error" role="alert">{{studioError}}</p>
     </details>
+    <p v-if="studioError" class="ld-studio-error-closed" role="alert">Particle Studio needs attention. Open it to read the error.</p>
   </section>
 
   <p class="panel-note">Geometry and particle controls use the current Blockbench project. Texture painting and Animation timeline editing remain native.</p>

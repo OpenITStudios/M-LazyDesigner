@@ -228,6 +228,25 @@
   line-height: 1.35;
   text-align: end;
 }
+.mcp-panel .ld-studio-toggle-hint.ld-studio-has-error {
+  color: var(--color-error);
+  font-weight: 600;
+}
+.mcp-panel .ld-studio-toggle-hint.ld-studio-has-changes:not(.ld-studio-has-error) {
+  color: var(--color-text);
+  font-weight: 600;
+}
+.mcp-panel .ld-studio-error-closed {
+  margin: 8px 0 0;
+  padding: 7px 8px;
+  border-left: 2px solid var(--color-error);
+  color: var(--color-text);
+  font-size: .9em;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+/* Exactly one visible alert: the concise collapsed warning or expanded detail. */
+.mcp-panel .ld-studio-disclosure[open] + .ld-studio-error-closed { display: none; }
 .mcp-panel .ld-studio-disclosure[open] > .ld-description { margin-top: 10px; }
 .mcp-panel .ld-studio-body { display: grid; gap: 10px; margin-top: 10px; }
 .mcp-panel .ld-studio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
@@ -243,6 +262,16 @@
   padding: 6px; font: inherit;
 }
 .mcp-panel .ld-studio-edit { display: grid; gap: 9px; border-top: 1px solid var(--color-border); padding-top: 10px; }
+.mcp-panel .ld-studio-subheading {
+  border-top: 1px solid var(--color-border);
+  padding-top: 9px;
+  margin-top: 3px;
+  font-size: .9em;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.mcp-panel .ld-studio-disclosure > .ld-studio-note,
+.mcp-panel .ld-studio-disclosure > .ld-error { margin-top: 10px; }
 .mcp-panel .ld-studio-control { display: grid; gap: 4px; font-size: .88em; }
 .mcp-panel .ld-studio-control input { inline-size: 100%; accent-color: var(--color-accent); }
 .mcp-panel .ld-studio-row input[type="color"] { inline-size: 54px; block-size: 32px; padding: 2px; }

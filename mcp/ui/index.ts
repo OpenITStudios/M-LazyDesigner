@@ -331,6 +331,9 @@ export function uiSetup(input: UiSetupInput) {
           if (event === "select_mode") {
             cancelStudioLivePreview();
             stopStudioPreview();
+            if (vm.studioPlaying) {
+              vm.studioNote = "Preview stopped when Blockbench mode changed. Return to Animation to replay.";
+            }
             vm.studioPlaying = false;
           }
           if (["select_project", "new_project", "setup_project", "load_project", "close_project"].includes(event ?? "")) {
@@ -416,6 +419,29 @@ export function uiSetup(input: UiSetupInput) {
         studioStageReady(this: HumanPanelContext): boolean {
           return this.project.isBedrock && getActiveMcpAuthoringStage() === "animation";
         },
+        studioSummaryLabel(this: HumanPanelContext): string {
+          // The native disclosure remains readable even when its editor body
+          // is hidden by the authoring Stage. No file/preview operation runs
+          // from this presentation-only projection.
+          if (this.studioError) return "Needs attention · Open for details";
+          if (this.studioBusy) return "Working on particle…";
+          if (!this.project.isBedrock) return "Open a Bedrock Model";
+          const loaded = this.studioLoaded;
+          const changed = this.studioHasChanges();
+          if (!this.studioStageReady()) {
+            if (loaded && !loaded.path) return "Animation stage required · Draft not saved";
+            if (loaded && changed) return "Animation stage required · Changes not saved";
+            return "Animation stage required";
+          }
+          if (loaded && !loaded.path) {
+            return this.studioPlaying ? "Preview playing · Draft not saved" : "Draft not saved";
+          }
+          if (loaded && changed) {
+            return this.studioPlaying ? "Preview playing · Changes not saved" : "Changes not saved";
+          }
+          if (this.studioPlaying) return "Preview playing · Saved effect";
+          return loaded ? "Saved effect ready" : "Create or edit effects";
+        },
         studioHasChanges(this: HumanPanelContext): boolean {
           const loaded = this.studioLoaded;
           if (!loaded) return false;
@@ -473,7 +499,10 @@ export function uiSetup(input: UiSetupInput) {
               this.studioNote = await startPanelParticlePreview(project, loaded, this.studioLocator);
               this.studioPlaying = true;
             } catch (error) {
-              this.studioNote += " Preview: " + (error instanceof Error ? error.message : String(error));
+              // A prepared draft or loaded file remains available even when
+              // standalone viewport preview fails. Surface the preview error
+              // in the closed Studio summary without reporting Save failure.
+              this.studioError = "Preview unavailable: " + (error instanceof Error ? error.message : String(error));
               this.studioPlaying = false;
             }
           } catch (error) {
@@ -501,7 +530,10 @@ export function uiSetup(input: UiSetupInput) {
               this.studioNote = await startPanelParticlePreview(project, loaded, this.studioLocator);
               this.studioPlaying = true;
             } catch (error) {
-              this.studioNote += " Preview: " + (error instanceof Error ? error.message : String(error));
+              // A prepared draft or loaded file remains available even when
+              // standalone viewport preview fails. Surface the preview error
+              // in the closed Studio summary without reporting Save failure.
+              this.studioError = "Preview unavailable: " + (error instanceof Error ? error.message : String(error));
               this.studioPlaying = false;
             }
           } catch (error) {
@@ -547,7 +579,10 @@ export function uiSetup(input: UiSetupInput) {
               this.studioNote = previewNote + animationWarning;
               this.studioPlaying = true;
             } catch (error) {
-              this.studioNote += " Standalone preview: " + (error instanceof Error ? error.message : String(error));
+              // Canonical Save has already committed. Never roll back or
+              // misreport the file as uncommitted when only preview fails.
+              this.studioError = "Particle file saved, but preview unavailable: " +
+                (error instanceof Error ? error.message : String(error));
             }
           } catch (error) {
             if (epoch === uiEpoch && Project === project) {
