@@ -21,7 +21,7 @@ Do not infer F2 from the mere presence of a renderer script. Do not infer F3 fro
 
 ## Routes and defaults
 
-- "Preview current UI" → latest pinned `Local`, Unified Editor ready, 1600×940, one screenshot.
+- "Preview current UI" → latest pinned `Local`, Unified Editor ready, **1920×1080** (both side docks visible), one screenshot.
 - Named Workspace/Support/Analytics or another fixture → same production `App.svelte` page with the minimal typed scenario.
 - "Responsive" → 1280×760, 1600×940 and 1920×1080 with no rewritten page markup.
 - "Before / after" → two named SHAs, identical fixture, browser, settings and viewport; do not invent prior pictures.
