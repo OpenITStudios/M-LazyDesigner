@@ -7,6 +7,8 @@
   export let status: SystemStatus;
   export let loading: boolean;
   export let busyAction: DesktopBusyAction | null;
+  export let openingModelId: string | null;
+  export let statusPresentationNowMs: number;
   export let progressStage: string;
   export let statusProbeFailures: number;
   export let pluginApprovalNeeded: boolean;
@@ -36,7 +38,7 @@
   export let refresh: () => Promise<void>;
   export let navigate: (page: 'Support') => void;
 
-  $: aiStatus = aiStatusPresentation(status, statusProbeFailures);
+  $: aiStatus = aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs);
 </script>
 
 {#snippet projectNavigator(current: SystemStatus)}
@@ -46,6 +48,7 @@
     bind:showAllProjects
     bind:projectSearch
     busy={busyAction !== null}
+    {openingModelId}
     canBrowseModel={busyAction === null}
     canOpenModel={true}
     canFocusCurrentEditor={statusProbeFailures < 2}
@@ -139,12 +142,12 @@
   {:else}
     {#if (productMode(status) === 'ready' || productMode(status) === 'client-wait') && (status.project_navigation.active || status.project_navigation.projects.length > 0)}
       <section class="workspace-connection" aria-label="Connection status">
-        <span class="connection-dot" class:waiting={productMode(status) === 'client-wait'} class:unknown={statusProbeFailures >= 2} aria-hidden="true"></span>
+        <span class="connection-dot" class:waiting={productMode(status) === 'client-wait'} class:unknown={aiStatus.needsRefresh} aria-hidden="true"></span>
         <div class="connection-copy">
           <strong>{aiStatus.headline}</strong>
           <span>{aiStatus.detail}</span>
         </div>
-        {#if statusProbeFailures >= 2}
+        {#if aiStatus.needsRefresh}
           <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
         {:else}
           <div class="connection-actions">

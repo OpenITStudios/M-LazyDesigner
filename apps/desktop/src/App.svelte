@@ -11,7 +11,7 @@
   import { createEditorOperations } from './editorOperations';
   import { createMaintenanceOperations, planManagedAction } from './maintenanceOperations';
   import { subscribeManagedProgress } from './managedProgress';
-  import { createDevFixtureStatus, createDevAnalyticsFixture, devFixtureFromLocation, type DevFixture } from './desktopFixtures';
+  import { createDevFixtureStatus, createDevAnalyticsFixture, devFixtureFromLocation, FIXTURE_NOW_MS, type DevFixture } from './desktopFixtures';
   import { observeStatus } from './statusObservation';
   import { isSafeFileNavigationAction, type ProjectAction, type ProjectDeletePreview, type ProjectDeleteResult } from './projectNavigationTypes';
   import type {
@@ -29,6 +29,10 @@
   let errorTitle = 'Action could not be completed';
   let errorDetail: string | null = null;
   let busyAction: DesktopBusyAction | null = null;
+  let openingModelId: string | null = null;
+  // UI-only clock. Updated by the existing watcher and foreground events;
+  // it never authorizes native actions or starts a second status monitor.
+  let statusPresentationNowMs = Date.now();
   let pluginApprovalNeeded = false;
   let migrationConflict = false;
   let migrationConflictKind: 'plugin' | 'client' = 'plugin';
@@ -45,7 +49,10 @@
     current: () => ({ status, busy: busyAction !== null, fixture: devFixture !== null }),
     observe: () => observeStatus(invoke<ConnectionStatus>('connection_status'), 10_000),
     refresh: () => refresh(),
-    onFailures: failures => { statusProbeFailures = failures; },
+    onFailures: failures => {
+      statusProbeFailures = failures;
+      if (!devFixture) statusPresentationNowMs = Date.now();
+    },
   });
   let updateCheck: ManagedUpdateCheck | null = null;
   const editorOperations = createEditorOperations(invoke);
@@ -162,11 +169,13 @@
     // Development-only visual fixtures render without Tauri, Runtime, or filesystem access.
     if (devFixture) {
       status = createDevFixtureStatus(devFixture);
+      statusPresentationNowMs = FIXTURE_NOW_MS;
       loading = false;
       return;
     }
     try {
       status = await observeStatus(invoke<SystemStatus>('system_status'), 30_000);
+      statusPresentationNowMs = Date.now();
       setupStaged = !status?.manager_available && status?.bootstrap_pending === true;
       connectionMonitor.fullStatusSucceeded();
     } catch (cause) {
@@ -267,6 +276,7 @@
   async function openModel(id?: string) {
     if (devFixture || busyAction) return;
     busyAction = id === undefined ? 'browse-model' : 'project-action';
+    openingModelId = id ?? null;
     clearActionFeedback();
     try {
       const feedback = await editorOperations.openModel(id);
@@ -280,14 +290,26 @@
     } catch (cause) {
       reportError(cause);
     } finally {
+      openingModelId = null;
       busyAction = null;
     }
   }
 
   async function focusCurrentEditor() {
     if (devFixture || busyAction || statusProbeFailures >= 2) return;
-    const focused = await editorOperations.focus();
-    if (!focused) showActionToast('Select your Blockbench window from the taskbar.', 'pending');
+    busyAction = 'open-editor';
+    clearActionFeedback();
+    try {
+      const focused = await editorOperations.focus();
+      showActionToast(focused
+        ? 'Blockbench window focus confirmed.'
+        : 'Windows could not confirm Blockbench focus. Select Blockbench from the taskbar.',
+        focused ? 'success' : 'pending');
+    } catch (cause) {
+      reportError(cause);
+    } finally {
+      busyAction = null;
+    }
   }
 
   async function chooseBlockbenchExecutable() {
@@ -570,10 +592,17 @@
     };
     const onVisibilityChange = () => {
       if (document.hidden) connectionMonitor.stop();
-      else connectionMonitor.request();
+      else {
+        if (!devFixture) statusPresentationNowMs = Date.now();
+        connectionMonitor.request();
+      }
     };
-    const onFocus = () => { connectionMonitor.request(); };
+    const onFocus = () => {
+      if (!devFixture) statusPresentationNowMs = Date.now();
+      connectionMonitor.request();
+    };
     devFixture = devFixtureFromLocation(import.meta.env.DEV, window.location.search);
+    if (devFixture) statusPresentationNowMs = FIXTURE_NOW_MS;
     if (devFixture) {
       // A direct, development-only view selector for deterministic screenshots.
       const view = new URLSearchParams(window.location.search).get('view');
@@ -596,6 +625,11 @@
     if (devFixture) {
       void refresh().then(() => {
         if (devFixture === 'status-unverified') statusProbeFailures = 2;
+        // Browser-only opening-row specimen: never invokes Tauri or a file.
+        if (devFixture === 'ready' && new URLSearchParams(window.location.search).get('activity') === 'opening-model') {
+          busyAction = 'project-action';
+          openingModelId = 'model-fixture-2';
+        }
         // Fixed development-only feedback specimens for layout/copy review.
         // Do not invoke native commands or accept arbitrary query text.
         const preview = new URLSearchParams(window.location.search).get('feedback');
@@ -718,7 +752,7 @@
 
       {:else if page === 'Overview'}
         <WorkspacePage
-          {status} {loading} {busyAction} {progressStage} {statusProbeFailures}
+          {status} {loading} {busyAction} {openingModelId} {statusPresentationNowMs} {progressStage} {statusProbeFailures}
           {pluginApprovalNeeded} {migrationConflict} {migrationConflictKind} {setupStaged}
           {readinessReason} {updateCheck}
           bind:expandedProjectId bind:showAllProjects bind:projectSearch bind:workspaceMain
@@ -731,7 +765,7 @@
 
       {:else}
         <SupportPage
-          {status} {loading} {busyAction} {statusProbeFailures}
+          {status} {loading} {busyAction} {statusPresentationNowMs} {statusProbeFailures}
           {migrationConflict} {migrationConflictKind} {error} {errorTitle} {errorDetail} {operations}
           {refresh} {showRetiredPluginFile} {chooseBlockbenchExecutable}
           {showPluginFile} {exportDiagnostics} {runManagedAction}

@@ -40,22 +40,61 @@ export function productMessage(value: SystemStatus) {
 }
 
 /**
- * Shared human-facing AI labels. Uses the canonical Desktop product state and
- * observation freshness; does not infer a new Runtime or Gateway status.
+ * Status freshness is the age of a FULL Desktop observation, not the time of
+ * the last successful MCP request. This is a presentation-only conservative
+ * reminder; Rust still owns session proof, readiness and action admission.
  */
-export function aiStatusPresentation(value: SystemStatus, probeFailures: number) {
+export const FULL_STATUS_RECENT_MS = 30_000;
+
+export function fullStatusObservationAgeMs(observedAtMs: number, nowMs: number): number | null {
+  if (!Number.isSafeInteger(observedAtMs) || observedAtMs <= 0 ||
+      !Number.isSafeInteger(nowMs) || nowMs < observedAtMs) return null;
+  return nowMs - observedAtMs;
+}
+
+function observationAgeText(ageMs: number): string {
+  if (ageMs < 60_000) return `${Math.floor(ageMs / 1000)} seconds ago`;
+  if (ageMs < 3_600_000) {
+    const minutes = Math.floor(ageMs / 60_000);
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  }
+  const hours = Math.floor(ageMs / 3_600_000);
+  return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+}
+
+/** Pure product-state wording over an explicit presentation clock. */
+export function aiStatusPresentation(value: SystemStatus, probeFailures: number, nowMs: number = Date.now()) {
   if (probeFailures >= 2) return {
     label: 'Verification required',
     headline: 'AI status needs verification',
     detail: 'These are the last known connection details. Models and folders remain accessible; Refresh before changing project shortcuts or installed components.',
     recentlyVerified: false,
+    needsRefresh: true,
   };
   const mode = productMode(value);
+  const age = fullStatusObservationAgeMs(value.observed_at_unix_ms, nowMs);
+  if (mode === 'ready' || mode === 'client-wait') {
+    if (age === null) return {
+      label: 'Check time unavailable',
+      headline: 'Check AI status again',
+      detail: 'The last full status check has no trustworthy timestamp. Refresh to check the AI session; model editing remains available.',
+      recentlyVerified: false,
+      needsRefresh: true,
+    };
+    if (age > FULL_STATUS_RECENT_MS) return {
+      label: 'AI check out of date',
+      headline: 'Check AI status again',
+      detail: `The last full status check was ${observationAgeText(age)}. This does not mean AI is disconnected. Refresh for current information; model editing remains available.`,
+      recentlyVerified: false,
+      needsRefresh: true,
+    };
+  }
   if (mode === 'ready') return {
-    label: 'Recently verified',
-    headline: 'AI connection recently verified',
-    detail: 'A recent AI request verified matching tools. You can keep editing; an idle connection may need a new check.',
+    label: 'Verified at last check',
+    headline: 'AI verified at last check',
+    detail: `An AI request was verified at the full status check ${observationAgeText(age!)}. This does not guarantee the session remains connected.`,
     recentlyVerified: true,
+    needsRefresh: false,
   };
   if (mode === 'client-wait') {
     if (value.gateway.state === 'gateway-detected') return {
@@ -63,12 +102,14 @@ export function aiStatusPresentation(value: SystemStatus, probeFailures: number)
       headline: 'Confirm AI connection',
       detail: 'The AI service was detected, but the session is not verified. Confirm it in your AI client; model editing remains available.',
       recentlyVerified: false,
+      needsRefresh: false,
     };
     return {
       label: 'AI client not connected',
       headline: 'Blockbench ready',
       detail: 'You can edit models now. Connect an AI client only when you need AI-assisted work.',
       recentlyVerified: false,
+      needsRefresh: false,
     };
   }
   const labels: Record<Exclude<ProductMode, 'ready' | 'client-wait'>, string> = {
@@ -84,6 +125,7 @@ export function aiStatusPresentation(value: SystemStatus, probeFailures: number)
     headline: productHeadline(value),
     detail: productMessage(value),
     recentlyVerified: false,
+    needsRefresh: false,
   };
 }
 

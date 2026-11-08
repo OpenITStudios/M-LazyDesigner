@@ -301,7 +301,7 @@ describe("Desktop control-plane ownership", () => {
     expect(navigator).toContain("Search projects or models");
     expect(navigator).not.toContain("Search models");
     expect(navigator).toContain("onAddProjectFolder");
-    expect(navigator).toContain('disabled={!model.exists || busy || !canOpenModel}>Open</button>');
+    expect(navigator).toContain("disabled={!model.exists || busy || !canOpenModel}>{openingModelId === model.id ? 'Opening…' : 'Open'}</button>");
     expect(navigator).not.toContain("model.open ? 'Switch' : 'Open'");
     expect(navigator).toContain("Modified");
     expect(navigator).toContain("active.dirty");
@@ -785,7 +785,7 @@ describe("Desktop calm connection summary", () => {
     const workspace = await workspaceSource;
     expect(ui).toContain("<WorkspacePage");
     expect(workspace).toContain('class="workspace-connection"');
-    expect(workspace).toContain("aiStatusPresentation(status, statusProbeFailures)");
+    expect(workspace).toContain("aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs)");
     expect(workspace).toContain("{aiStatus.headline}");
     expect(workspace).toContain("status.project_navigation.projects.length > 0");
     expect(workspace).toContain("productMode(status) === 'ready' || productMode(status) === 'client-wait'");
@@ -1080,7 +1080,7 @@ describe("Desktop Workspace and Support feedback integrity", () => {
     const support = await source("../apps/desktop/src/SupportPage.svelte");
     expect(ui).toContain("<SupportPage");
     expect(support).toContain('<main class="page-content settings-content">');
-    expect(support).toContain("{#if statusProbeFailures >= 2}");
+    expect(support).toContain("{#if aiStatus.needsRefresh}");
     expect(support).toContain('id="support-stale-status-description">{aiStatus.detail}');
     const presentation = await source("../apps/desktop/src/desktopPresentation.ts");
     expect(presentation).toContain("These are the last known connection details.");

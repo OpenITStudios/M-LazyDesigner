@@ -1,10 +1,13 @@
 import type { SystemStatus, AnalyticsOverview } from './desktopTypes';
 
-export type DevFixture = 'ready' | 'ready-no-active' | 'many-projects' | 'status-unverified' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
+/** Fixed browser-only comparison clock; never represents the real machine clock. */
+export const FIXTURE_NOW_MS = 1_730_000_000_000;
+
+export type DevFixture = 'ready' | 'ready-no-active' | 'ready-aged' | 'many-projects' | 'status-unverified' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
 
 export function applyDevFixture(base: SystemStatus, fixture: DevFixture): SystemStatus {
   const next = structuredClone(base);
-  const ready = ['ready', 'ready-no-active', 'many-projects', 'status-unverified'].includes(fixture);
+  const ready = ['ready', 'ready-no-active', 'ready-aged', 'many-projects', 'status-unverified'].includes(fixture);
   const runtimeOnline = ready || ['client-wait', 'repair-blocked'].includes(fixture);
   const gatewayActive = ready || fixture === 'repair-blocked';
 
@@ -134,6 +137,11 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
     }));
   }
 
+  if (fixture === 'ready-aged') {
+    // Healthy at the last FULL observation; that observation is now old.
+    next.observed_at_unix_ms = FIXTURE_NOW_MS - 90_000;
+  }
+
   next.maintenance = {
     ...next.maintenance,
     update: fixture !== 'fresh-install',
@@ -151,7 +159,7 @@ export function createDevFixtureStatus(fixture: DevFixture): SystemStatus {
     schema: 1,
     product_state: 'welcome',
     plugin_integrity: 'unknown',
-    observed_at_unix_ms: 0,
+    observed_at_unix_ms: FIXTURE_NOW_MS,
     readiness: { state: 'setup-required', summary: 'Development fixture only.', ready: false },
     blockbench: { running: false, version: null, compatibility: null, diagnostic: null },
     gateway: { ownership: 'client-owned', state: 'idle', action: null },
@@ -229,7 +237,7 @@ export function createDevAnalyticsFixture(): AnalyticsOverview {
 export function devFixtureFromLocation(development: boolean, search: string): DevFixture | null {
   if (!development) return null;
   const value = new URLSearchParams(search).get('fixture');
-  const allowed: DevFixture[] = ['ready','ready-no-active','many-projects','status-unverified','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
+  const allowed: DevFixture[] = ['ready','ready-no-active','ready-aged','many-projects','status-unverified','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
   return allowed.includes(value as DevFixture) ? value as DevFixture : null;
 }
 

@@ -4,6 +4,7 @@
 
   export let navigation: ProjectNavigation;
   export let busy = false;
+  export let openingModelId: string | null = null;
   export let canOpenModel = true;
   export let canFocusCurrentEditor = true;
   // Native .bbmodel browsing remains available when AI status is unverified.
@@ -26,6 +27,9 @@
   $: recentTargets = recentModelTargets(navigation);
   $: targetToContinue = continueTarget(navigation);
   $: uniqueSearchModel = uniqueModelSearchTarget(navigation, projectSearch);
+  $: openingModelName = openingModelId
+    ? navigation.projects.flatMap(project => project.models).find(model => model.id === openingModelId)?.name ?? 'model'
+    : null;
 
   // Null defaults to the active project; an empty ID records a user collapse
   // and persists across Workspace/Support navigation via the parent binding.
@@ -57,6 +61,9 @@
   }
 </script>
 
+{#if openingModelId !== null}
+  <p class="model-opening-notice" role="status" aria-live="polite">Opening {openingModelName} in Blockbench…</p>
+{/if}
 {#if statusUnverified}
   <p id="ld-project-action-note" class="project-state-note" role="status"><strong>Refresh required for project changes.</strong> You can still open models and folders. Select Refresh above when available, or choose Refresh from Workspace's More actions, before changing shortcuts, deleting projects or focusing the current editor.</p>
 {/if}
@@ -106,7 +113,7 @@
             <div class="project-meta">{target.project.name}</div>
           </div>
           <div class="project-actions">
-            <button class="primary-button small-button" aria-label={`Continue model ${target.model.name}`} onclick={() => onOpenModel(target.model.id)} disabled={busy || !canOpenModel}>Continue</button>
+            <button class="primary-button small-button" aria-label={openingModelId === target.model.id ? `Opening model ${target.model.name}` : `Continue model ${target.model.name}`} aria-busy={openingModelId === target.model.id} onclick={() => onOpenModel(target.model.id)} disabled={busy || !canOpenModel}>{openingModelId === target.model.id ? 'Opening…' : 'Continue'}</button>
           </div>
         </div>
       </div>
@@ -182,7 +189,7 @@
                   {#if model.active}
                     <span class="current-model-tag">Current model</span>
                   {:else}
-                    <button class="secondary-button small-button" aria-label={`Open model ${model.name}`} onclick={() => onOpenModel(model.id)} disabled={!model.exists || busy || !canOpenModel}>Open</button>
+                    <button class="secondary-button small-button" aria-label={openingModelId === model.id ? `Opening model ${model.name}` : `Open model ${model.name}`} aria-busy={openingModelId === model.id} onclick={() => onOpenModel(model.id)} disabled={!model.exists || busy || !canOpenModel}>{openingModelId === model.id ? 'Opening…' : 'Open'}</button>
                   {/if}
                   <details class="more-menu">
                     <summary aria-label={`Actions for model ${model.name}`}>•••</summary>
@@ -231,7 +238,7 @@
             <div class="project-meta">{target.project.name}</div>
           </div>
           <div class="project-actions">
-            <button class="secondary-button small-button" aria-label={`Open recent model ${target.model.name} from ${target.project.name}`} onclick={() => onOpenModel(target.model.id)} disabled={busy || !canOpenModel}>Open</button>
+            <button class="secondary-button small-button" aria-label={openingModelId === target.model.id ? `Opening model ${target.model.name}` : `Open recent model ${target.model.name} from ${target.project.name}`} aria-busy={openingModelId === target.model.id} onclick={() => onOpenModel(target.model.id)} disabled={busy || !canOpenModel}>{openingModelId === target.model.id ? 'Opening…' : 'Open'}</button>
           </div>
         </div>
       {/each}
@@ -283,6 +290,7 @@
   .menu-popover button:hover:not(:disabled){background:var(--surface-3)}
   .menu-popover .menu-danger{color:#e28b8b;font-weight:700}
   .menu-popover .menu-danger:hover:not(:disabled){background:rgba(192,70,70,.12)}
+  .model-opening-notice{margin:0 0 12px;padding:7px 10px;border-left:2px solid var(--info);background:var(--bg-elevated);color:var(--text-soft);font-size:var(--font-sm);line-height:1.5;overflow-wrap:anywhere}
   .project-state-note{margin:0 0 14px;padding:7px 10px;border-left:2px solid var(--warning);color:var(--text-soft);font-size:var(--font-sm);line-height:1.5}
   .project-state-note strong{font-weight:700}
   @media(max-width:680px){

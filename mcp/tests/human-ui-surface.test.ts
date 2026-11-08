@@ -19,7 +19,7 @@ describe("human-facing Blockbench UI", () => {
     expect(navigator).toContain("aria-describedby={statusUnverified ? 'ld-project-action-note' : undefined}");
     expect(navigator).toContain("disabled={busy || !canEditProjectPrefs}>Add Project Folder</button>");
     expect(navigator).toContain("disabled={!project.available || busy}>Open Folder</button>");
-    expect(navigator).toContain("disabled={!model.exists || busy || !canOpenModel}>Open</button>");
+    expect(navigator).toContain("disabled={!model.exists || busy || !canOpenModel}>{openingModelId === model.id ? 'Opening…' : 'Open'}</button>");
     expect(app).toContain("statusProbeFailures >= 2 && !isSafeFileNavigationAction(action)");
     expect(workspace).toContain("updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED'");
     expect(workspace).toContain("Staged package unverified");
@@ -95,36 +95,96 @@ describe("human-facing Blockbench UI", () => {
     expect(fixture).not.toContain("repair.click()");
   });
 
-  test("AI labels reflect recent verification, missing handshake and stale observations", async () => {
-    const { aiStatusPresentation } = await import("../../apps/desktop/src/desktopPresentation");
-    const { createDevFixtureStatus } = await import("../../apps/desktop/src/desktopFixtures");
-    const ready = aiStatusPresentation(createDevFixtureStatus("ready"), 0);
-    expect(ready.label).toBe("Recently verified");
-    expect(ready.headline).toBe("AI connection recently verified");
-    expect(ready.recentlyVerified).toBe(true);
-    expect(ready.detail).not.toContain("permanently");
+  test("AI status labels distinguish full-check age from a live MCP session", async () => {
+    const { aiStatusPresentation, fullStatusObservationAgeMs, FULL_STATUS_RECENT_MS } =
+      await import("../../apps/desktop/src/desktopPresentation");
+    const { createDevFixtureStatus, FIXTURE_NOW_MS } =
+      await import("../../apps/desktop/src/desktopFixtures");
+    const readyStatus = createDevFixtureStatus("ready");
+    const fresh = aiStatusPresentation(readyStatus, 0, FIXTURE_NOW_MS);
+    expect(fresh.label).toBe("Verified at last check");
+    expect(fresh.headline).toBe("AI verified at last check");
+    expect(fresh.detail).toContain("full status check");
+    expect(fresh.detail).toContain("does not guarantee");
+    expect(fresh.recentlyVerified).toBe(true);
+    expect(fresh.needsRefresh).toBe(false);
 
-    const stale = aiStatusPresentation(createDevFixtureStatus("ready"), 2);
-    expect(stale.label).toBe("Verification required");
-    expect(stale.recentlyVerified).toBe(false);
-    expect(stale.detail).toContain("Models and folders remain accessible");
+    expect(fullStatusObservationAgeMs(FIXTURE_NOW_MS, FIXTURE_NOW_MS)).toBe(0);
+    expect(fullStatusObservationAgeMs(0, FIXTURE_NOW_MS)).toBeNull();
+    expect(fullStatusObservationAgeMs(FIXTURE_NOW_MS + 1, FIXTURE_NOW_MS)).toBeNull();
+    expect(FULL_STATUS_RECENT_MS).toBe(30_000);
+    const atBoundary = aiStatusPresentation(readyStatus, 0, FIXTURE_NOW_MS + FULL_STATUS_RECENT_MS);
+    expect(atBoundary.needsRefresh).toBe(false);
+    const old = aiStatusPresentation(readyStatus, 0, FIXTURE_NOW_MS + FULL_STATUS_RECENT_MS + 1);
+    expect(old.label).toBe("AI check out of date");
+    expect(old.recentlyVerified).toBe(false);
+    expect(old.needsRefresh).toBe(true);
+    expect(old.detail).toContain("This does not mean AI is disconnected");
+
+    const aged = aiStatusPresentation(createDevFixtureStatus("ready-aged"), 0, FIXTURE_NOW_MS);
+    expect(aged.label).toBe("AI check out of date");
+    expect(aged.detail).toContain("1 minute ago");
+    const unknown = createDevFixtureStatus("ready");
+    unknown.observed_at_unix_ms = 0;
+    expect(aiStatusPresentation(unknown, 0, FIXTURE_NOW_MS).label).toBe("Check time unavailable");
+    const future = createDevFixtureStatus("ready");
+    future.observed_at_unix_ms = FIXTURE_NOW_MS + 1;
+    expect(aiStatusPresentation(future, 0, FIXTURE_NOW_MS).needsRefresh).toBe(true);
+
+    const staleProbe = aiStatusPresentation(readyStatus, 2, FIXTURE_NOW_MS);
+    expect(staleProbe.label).toBe("Verification required");
+    expect(staleProbe.recentlyVerified).toBe(false);
+    expect(staleProbe.needsRefresh).toBe(true);
+    expect(staleProbe.detail).toContain("Models and folders remain accessible");
+
     const waiting = createDevFixtureStatus("client-wait");
-    expect(aiStatusPresentation(waiting, 0).label).toBe("AI client not connected");
+    expect(aiStatusPresentation(waiting, 0, FIXTURE_NOW_MS).label).toBe("AI client not connected");
     waiting.gateway.state = "gateway-detected";
-    const handshake = aiStatusPresentation(waiting, 0);
+    const handshake = aiStatusPresentation(waiting, 0, FIXTURE_NOW_MS);
     expect(handshake.label).toBe("AI handshake unverified");
     expect(handshake.detail).toContain("not verified");
-    expect(aiStatusPresentation(createDevFixtureStatus("fresh-install"), 0).label).toBe("Setup needed");
+    expect(aiStatusPresentation(createDevFixtureStatus("fresh-install"), 0, FIXTURE_NOW_MS).label).toBe("Setup needed");
 
-    const [workspace, support] = await Promise.all([
-      source("../apps/desktop/src/WorkspacePage.svelte"), source("../apps/desktop/src/SupportPage.svelte"),
+    const [workspace, support, app] = await Promise.all([
+      source("../apps/desktop/src/WorkspacePage.svelte"),
+      source("../apps/desktop/src/SupportPage.svelte"),
+      source("../apps/desktop/src/App.svelte"),
     ]);
-    expect(workspace).toContain("aiStatusPresentation(status, statusProbeFailures)");
+    expect(workspace).toContain("aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs)");
     expect(workspace).toContain("{aiStatus.headline}");
     expect(workspace).toContain("{aiStatus.label}");
+    expect(workspace).toContain("{#if aiStatus.needsRefresh}");
     expect(workspace).not.toContain("productMode(status) === 'ready' ? 'Connected'");
-    expect(support).toContain("aiStatusPresentation(status, statusProbeFailures)");
+    expect(support).toContain("aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs)");
     expect(support).toContain("{aiStatus.label}");
+    expect(support).toContain("{#if aiStatus.needsRefresh}");
+    expect(app).toContain("statusPresentationNowMs = Date.now();");
+    expect(app).toContain("if (!devFixture) statusPresentationNowMs = Date.now();");
+    expect(app).toContain("statusPresentationNowMs = FIXTURE_NOW_MS");
+  });
+
+  test("model opening and editor focus expose a bounded visible progress path", async () => {
+    const [navigator, workspace, app, fixture] = await Promise.all([
+      source("../apps/desktop/src/ProjectNavigator.svelte"),
+      source("../apps/desktop/src/WorkspacePage.svelte"),
+      source("../apps/desktop/src/App.svelte"),
+      source("../apps/desktop/src/desktopFixtures.ts"),
+    ]);
+    expect(navigator).toContain("export let openingModelId: string | null = null");
+    expect(navigator).toContain('class="model-opening-notice" role="status" aria-live="polite"');
+    expect(navigator).toContain("Opening {openingModelName} in Blockbench…");
+    expect(navigator.match(/aria-busy={openingModelId === /g)).toHaveLength(3);
+    expect(navigator).toContain("openingModelId === model.id ? 'Opening…' : 'Open'");
+    expect(navigator).toContain("disabled={!model.exists || busy || !canOpenModel}");
+    expect(workspace).toContain("{openingModelId}");
+    expect(app).toContain("openingModelId = id ?? null;");
+    expect(app).toContain("openingModelId = null;\n      busyAction = null;");
+    expect(app).toContain("editorOperations.openModel(id)");
+    expect(app).toContain("feedback.verification === 'confirmed-active' ? 'success' : 'pending'");
+    expect(app).toContain("busyAction = 'open-editor';\n    clearActionFeedback();");
+    expect(app).toContain("Windows could not confirm Blockbench focus.");
+    expect(app).toContain("if (devFixture === 'ready' && new URLSearchParams(window.location.search).get('activity') === 'opening-model')");
+    expect(fixture).toContain("'ready-aged'");
   });
 
   test("next-step notifications persist; optional launch focus is not a success claim", async () => {

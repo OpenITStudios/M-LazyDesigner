@@ -16,6 +16,8 @@ from urllib.parse import urlencode, urlsplit
 SCENARIOS = (
     ("fresh-install", "workspace"),
     ("ready", "workspace"),
+    ("ready-aged", "workspace"),
+    ("ready-aged", "support"),
     ("many-projects", "workspace"),
     ("ready-no-active", "workspace"),
     ("status-unverified", "workspace"),
@@ -34,6 +36,8 @@ FEEDBACK_SCENARIOS = (
     ("ready", "workspace", "error"),
     ("ready", "support", "error"),
 )
+# One fixed busy-row specimen. Opening a model is never invoked by this script.
+OPENING_SCENARIOS = (("ready", "workspace", "opening-model"),)
 # The narrow layout is a source-level proxy for high-zoom/small effective width, not native proof.
 VIEWPORTS = ((390, 640), (780, 560), (980, 680))
 
@@ -85,6 +89,13 @@ def inspect_action_states(page, fixture, view):
         ("many-projects", "workspace"): {
             "Open Model…": True,
             "Show all projects": True,
+        },
+        ("ready-aged", "workspace"): {
+            "Open Model…": True,
+            "Refresh": True,
+        },
+        ("ready-aged", "support"): {
+            "Refresh": True,
         },
         ("ready", "workspace"): {
             "Open Model…": True,
@@ -422,6 +433,40 @@ def inspect_feedback_presentation(page, feedback, view):
     return issues
 
 
+def inspect_old_ai_observation(page, fixture, view):
+    """An aged full status check is neither a live AI success nor a disconnect."""
+    if fixture != "ready-aged" or view not in {"workspace", "support"}:
+        return []
+    issues = []
+    if page.get_by_text("Check AI status again", exact=True).count() != 1:
+        issues.append("outdated verification should ask for a new AI status check")
+    if page.get_by_text("AI check out of date", exact=True).count() > 1:
+        issues.append("outdated status should not be repeated")
+    if page.get_by_role("button", name="Refresh", exact=True).count() != 1:
+        issues.append("one Refresh action must be available for an old full status check")
+    if page.get_by_text("AI verified at last check", exact=True).count():
+        issues.append("old status should not retain the fresh verification headline")
+    return issues
+
+
+def inspect_opening_model_row(page, activity, view):
+    """Observe the one model-specific busy row; never invoke Blockbench."""
+    if activity != "opening-model" or view != "workspace":
+        return []
+    issues = []
+    announcement = page.locator(".model-opening-notice")
+    if announcement.count() != 1 or "Opening Sofa in Blockbench" not in announcement.inner_text():
+        issues.append("model identity must be visible in one announced progress notice")
+    button = page.get_by_role("button", name="Opening model Sofa", exact=True)
+    if button.count() != 1:
+        issues.append("the requested model must show its own Opening state")
+    elif button.is_enabled() or button.get_attribute("aria-busy") != "true":
+        issues.append("the pending model action must be disabled and marked busy")
+    if page.get_by_role("button", name="Open model Sofa", exact=True).count():
+        issues.append("a pending model must not simultaneously offer an Open control")
+    return issues
+
+
 def main():
     args = parse_args()
     target = urlsplit(args.base_url)
@@ -444,10 +489,12 @@ def main():
             opts["executable_path"] = args.browser
         browser = playwright.chromium.launch(**opts)
         try:
-            scenarios = [(fixture, view, None) for fixture, view in SCENARIOS] + list(FEEDBACK_SCENARIOS)
+            scenarios = ([(fixture, view, None, None) for fixture, view in SCENARIOS]
+                         + [(fixture, view, feedback, None) for fixture, view, feedback in FEEDBACK_SCENARIOS]
+                         + [(fixture, view, None, activity) for fixture, view, activity in OPENING_SCENARIOS])
             for width, height in VIEWPORTS:
-                for fixture, view, feedback in scenarios:
-                    suffix = f"-feedback-{feedback}" if feedback else ""
+                for fixture, view, feedback, activity in scenarios:
+                    suffix = f"-feedback-{feedback}" if feedback else f"-activity-{activity}" if activity else ""
                     name = f"{fixture}-{view}{suffix}-{width}x{height}"
                     page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1, reduced_motion="reduce")
                     page_errors = []
@@ -455,8 +502,10 @@ def main():
                     query = {"fixture": fixture, "view": view}
                     if feedback:
                         query["feedback"] = feedback
+                    if activity:
+                        query["activity"] = activity
                     url = args.base_url.rstrip("/") + "/?" + urlencode(query)
-                    entry = {"fixture": fixture, "view": view, "feedback": feedback, "requestedViewport": [width, height], "url": url}
+                    entry = {"fixture": fixture, "view": view, "feedback": feedback, "activity": activity, "requestedViewport": [width, height], "url": url}
                     try:
                         page.goto(url, wait_until="domcontentloaded", timeout=20000)
                         page.locator(f'[data-qa-fixture="{fixture}"]').wait_for(timeout=15000)
@@ -471,8 +520,10 @@ def main():
                         if feedback:
                             target = 'section[aria-label="Last unsuccessful action"]' if feedback == "error" and view == "support" else ".operation-attention"
                             page.locator(target).wait_for(timeout=10000)
+                        if activity:
+                            page.locator(".model-opening-notice").wait_for(timeout=10000)
                         snapshot = inspect(page)
-                        action_checks = inspect_action_states(page, fixture, view)
+                        action_checks = inspect_action_states(page, fixture, view) if activity is None else {"checked": 0, "issues": []}
                         entry["actionChecks"] = action_checks
                         for issue in action_checks["issues"]:
                             failures.append(name + ": " + issue)
@@ -488,6 +539,16 @@ def main():
                             failures.append(name + ": viewport size mismatch")
                         if snapshot["horizontalOverflow"] or snapshot["offscreenControls"]:
                             failures.append(name + ": horizontal overflow or clipped controls")
+                        aged_issues = inspect_old_ai_observation(page, fixture, view)
+                        if fixture == "ready-aged":
+                            entry["observationAgeChecks"] = {"issues": aged_issues}
+                        for issue in aged_issues:
+                            failures.append(name + ": " + issue)
+                        opening_issues = inspect_opening_model_row(page, activity, view)
+                        if activity:
+                            entry["openingModelChecks"] = {"issues": opening_issues}
+                        for issue in opening_issues:
+                            failures.append(name + ": " + issue)
                         feedback_issues = inspect_feedback_presentation(page, feedback, view)
                         if feedback:
                             entry["feedbackChecks"] = {"issues": feedback_issues}
@@ -498,8 +559,8 @@ def main():
                             entry["supportNavigationChecks"] = {"issues": support_issues}
                         for issue in support_issues:
                             failures.append(name + ": " + issue)
-                        navigation_issues = inspect_project_expansion(page, fixture, view) if feedback is None else []
-                        if fixture == "ready" and view == "workspace":
+                        navigation_issues = inspect_project_expansion(page, fixture, view) if feedback is None and activity is None else []
+                        if fixture == "ready" and view == "workspace" and feedback is None and activity is None:
                             entry["navigationChecks"] = {"checked": 3, "issues": navigation_issues}
                         for issue in navigation_issues:
                             failures.append(name + ": " + issue)
@@ -513,7 +574,7 @@ def main():
                             entry["firstRunChecks"] = {"checked": 5, "issues": first_run_issues}
                         for issue in first_run_issues:
                             failures.append(name + ": " + issue)
-                        journey = inspect_task_journey(page, fixture, view) if feedback is None else None
+                        journey = inspect_task_journey(page, fixture, view) if feedback is None and activity is None else None
                         if journey is not None:
                             entry["taskJourney"] = journey
                             for issue in journey["issues"]:
@@ -535,6 +596,7 @@ def main():
         "nativeOrVisualApproval": "NOT_VERIFIED",
         "taskEvidence": "OFFLINE_BROWSER_FIXTURE_ONLY",
         "feedbackEvidence": "SOURCE_FIXED_DEV_FIXTURES_ONLY",
+        "ageAndModelProgressEvidence": "DETERMINISTIC_UI_FIXTURE_ONLY",
         "humanTaskSuccess": "NOT_MEASURED",
         "timingInterpretation": "Playwright automation elapsed time, not user completion time",
         "scenarios": records,

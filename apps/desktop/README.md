@@ -423,6 +423,7 @@ Frontend development builds support deterministic UI state fixtures through:
 
 ```text
 ?fixture=ready
+?fixture=ready-aged
 ?fixture=ready-no-active
 ?fixture=many-projects
 ?fixture=status-unverified
@@ -449,6 +450,12 @@ python scripts/capture-ui.py
 ```
 
 Fixed, development-only `?fixture=ready&feedback=pending|success|error` specimens show truthful feedback copy without native actions. Support's error specimen uses `?view=support&feedback=error` to verify the classified in-page error instead of a duplicate notification. These query options do not work in production and never receive arbitrary message text.
+
+The additional `?fixture=ready-aged` specimen contains a synthetic full status
+observation older than 30 seconds; both Desktop pages should ask for Refresh
+without saying that AI is disconnected. `?fixture=ready&activity=opening-model`
+marks the synthetic Sofa row as Opening… for keyboard and visual QA. Neither
+fixture requests an actual model launch, update, repair or status operation.
 
 The script captures Workspace, Support and Analytics at **390×640** (narrow-layout proxy), **780×560** (minimum window baseline), and **980×680** (default comparison), plus relevant failure/setup states. It records horizontal overflow, offscreen controls, browser JS errors, and top/bottom screenshots when scrolling is needed. The `many-projects` synthetic fixture contains eight uniquely identified projects, with the `Needle asset` in the final project to check discovery beyond the initial six rows.
 
@@ -786,14 +793,35 @@ Desktop presents action feedback **in the layout, directly below the main toolba
 
 The initial **Open Model…** CTA retains the primary visual treatment. Optional **Set up AI tools** uses the secondary treatment and its descriptive steps remain behind a native disclosure. Project list spacing/radii and more-actions hit targets reuse existing Desktop tokens; no new design system or palette was added.
 
-The shared `aiStatusPresentation()` maps only the canonical Desktop product
-state and observation freshness into Workspace/Support copy. `Recently verified`
-means there was a matching AI request, not a permanent connection. Blockbench
-running state is labelled separately from AI readiness. `Next step` notices
+The shared `aiStatusPresentation()` maps only canonical Desktop product
+state, failed probe count and the age of the last **full** `system_status`
+observation into Workspace/Support copy. Rust's existing MCP proof freshness
+window is bounded to 30 seconds; the UI uses a conservative 30-second
+**observation-age presentation** threshold without claiming the full observation
+timestamp is the time of the actual MCP request. It shows **Verified at last
+check** while the full observation is recent, **AI check out of date** when
+older, and **Check time unavailable** for missing, future or invalid timestamps.
+It does **not** claim an AI session is live just because a previous check
+passed. Both pages expose Refresh for an old check, but stale age alone does not
+block independently verified file or manager actions; existing native
+readiness, active session checks and probe-failure guards retain authority.
+The display clock advances using the existing connection watcher and
+foreground/focus events; no additional timer, background monitor or Gateway
+status owner was introduced. Synthetic fixtures use a fixed comparison clock
+rather than depending on the developer workstation time.
+Blockbench running state is labelled separately from AI readiness. `Next step` notices
 for staged updates, unverified launches, trust approval or handshake checks
 remain visible until dismissed or replaced by a later action; short success
 and no-change notices still expire automatically. A native launch without
 confirmed window focus is not reported as a completed foreground handoff.
+During an explicit known-model open, Desktop retains the requested model's
+opaque ID only in session-local presentation state and marks the appropriate
+Project/Continue/Recent row **Opening…**, with a single announced status.
+It clears the marker on success or failure and uses the existing
+`CONFIRMED_ACTIVE` versus `LAUNCHED_UNVERIFIED` native acknowledgement
+rather than guessing from window focus. A failed explicit Go to Blockbench
+focus attempt now reports a classified error instead of an unhandled promise;
+a denied foreground request remains a persistent next step.
 Support displays the specific already-classified error title for failed
 actions, with technical details behind its existing disclosure. Direct setup
 and connection readiness failures receive matching plain-language titles;

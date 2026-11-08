@@ -6,6 +6,7 @@
   export let status: SystemStatus;
   export let loading: boolean;
   export let busyAction: DesktopBusyAction | null;
+  export let statusPresentationNowMs: number;
   export let statusProbeFailures: number;
   export let migrationConflict: boolean;
   export let migrationConflictKind: 'plugin' | 'client';
@@ -22,11 +23,11 @@
   export let migrateLegacySetup: () => Promise<void>;
   export let openAnalytics: () => void;
 
-  $: aiStatus = aiStatusPresentation(status, statusProbeFailures);
+  $: aiStatus = aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs);
 </script>
 
 <main class="page-content settings-content">
-  {#if statusProbeFailures >= 2}
+  {#if aiStatus.needsRefresh}
     <section class="support-banner" role="status">
       <span class="support-banner-dot" aria-hidden="true"></span>
       <div><strong>{aiStatus.headline}</strong><span id="support-stale-status-description">{aiStatus.detail}</span></div>
@@ -103,7 +104,7 @@
   <section class="settings-section">
     <div class="settings-heading">
       <h2>About</h2>
-      {#if statusProbeFailures < 2}
+      {#if !aiStatus.needsRefresh}
         <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
       {/if}
     </div>
