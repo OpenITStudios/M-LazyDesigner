@@ -3,6 +3,7 @@
   import { listen } from '@tauri-apps/api/event';
   import { onMount, tick } from 'svelte';
   import WorkspacePage from './WorkspacePage.svelte';
+  import NativeEditorStage from './NativeEditorStage.svelte';
   import ProjectDeleteDialog from './ProjectDeleteDialog.svelte';
   import SupportPage from './SupportPage.svelte';
   import AnalyticsPage from './AnalyticsPage.svelte';
@@ -62,8 +63,9 @@
   const editorOperations = createEditorOperations(invoke);
   const setupOperations = createSetupOperations(invoke);
   const maintenanceOperations = createMaintenanceOperations(invoke);
-  type Page = 'Overview' | 'Analytics' | 'Support';
+  type Page = 'Overview' | 'Editor' | 'Analytics' | 'Support';
   let page: Page = 'Overview';
+  let nativeEditorStage: { detach: () => Promise<boolean> } | undefined;
   let analytics: AnalyticsOverview | null = null;
   let analyticsLoading = false;
   let analyticsError = '';
@@ -89,7 +91,19 @@
     ].slice(0, 8);
   }
 
+  // A composed native editor must be restored BEFORE showing another
+  // application page, not merely after Svelte has removed its aperture.
   function navigate(next: Page) {
+    if (page === 'Editor' && next !== 'Editor' && nativeEditorStage) {
+      void nativeEditorStage.detach().then(restored => {
+        if (restored) finishNavigate(next);
+      }).catch(reportError);
+      return;
+    }
+    finishNavigate(next);
+  }
+
+  function finishNavigate(next: Page) {
     utilityMenuOpen = false;
     if (next === page) return;
     if (page === 'Overview' && workspaceMain) workspaceScrollTop = workspaceMain.scrollTop;
@@ -773,6 +787,11 @@
       </div>
 
       <nav class="global-nav">
+        {#if import.meta.env.DEV && !devFixture}
+          <button class:active={page === 'Editor'} aria-current={page === 'Editor' ? 'page' : undefined} onclick={() => navigate('Editor')}>
+            <span class="nav-icon">{@render navIcon('Overview')}</span><span>Editor preview</span>
+          </button>
+        {/if}
         <button class:active={page === 'Overview'} aria-current={page === 'Overview' ? 'page' : undefined} onclick={() => navigate('Overview')}>
           <span class="nav-icon">{@render navIcon('Overview')}</span><span>Workspace</span>
         </button>
@@ -836,6 +855,9 @@
             <button class="secondary-button" onclick={() => openModel()} disabled={busyAction !== null}>Open Model…</button>
           </section>
         </main>
+
+      {:else if page === 'Editor' && import.meta.env.DEV}
+        <NativeEditorStage bind:this={nativeEditorStage} fixture={devFixture !== null} />
 
       {:else if page === 'Overview'}
         <WorkspacePage

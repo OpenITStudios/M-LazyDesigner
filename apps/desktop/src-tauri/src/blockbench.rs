@@ -595,6 +595,27 @@ mod window_focus {
     }
 }
 
+/// Candidate PIDs for the *existing* verified editor installation only.
+/// Native composition must refuse another installation or an ambiguous
+/// Windows top-level editor window instead of selecting by title/process order.
+pub(crate) fn native_surface_processes() -> Result<std::collections::HashSet<u32>, String> {
+    let system = crate::process::process_snapshot();
+    let selected = discover_executable(&system)?
+        .ok_or_else(|| "No verified Blockbench installation is running.".to_string())?;
+    let key = selected.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
+    Ok(system.processes().iter()
+        .filter(|(_, process)| {
+            let name = process.name().to_string_lossy().to_ascii_lowercase();
+            (name == "blockbench.exe" || name == "blockbench")
+                && process.exe().is_some_and(|path|
+                    is_executable_name(path)
+                        && path.to_string_lossy().replace('/', "\\").to_ascii_lowercase() == key
+                )
+        })
+        .map(|(pid, _)| pid.as_u32())
+        .collect())
+}
+
 /// Best-effort, explicit window focus; does not start a new Blockbench process.
 /// The caller must handle non-FOCUSED outcomes without claiming a foreground switch.
 pub(crate) fn focus_window() -> BlockbenchFocusResult {

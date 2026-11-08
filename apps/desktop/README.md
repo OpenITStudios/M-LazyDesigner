@@ -899,3 +899,25 @@ wrap long copy. The optional offline screenshot fixture includes a 390×640
 small-effective-width proxy alongside 780×560 and 980×680; it is not evidence
 that native 200% Windows zoom or screen-reader use was executed.
 This is source-authored UI behavior, not executed Svelte/Windows acceptance.
+
+
+## Native Blockbench workspace P0 (debug-only)
+
+The development-only **Editor preview** routes through
+`src/NativeEditorStage.svelte` to the single Rust
+`src-tauri/src/blockbench_surface.rs` presentation owner.
+This adopts LazyTester-style independent native composition without importing
+Minecraft lifecycle, adding a WebView editor or changing Gateway/Runtime.
+An explicit Present action positions a single uniquely verified existing
+Blockbench top-level window within the Editor viewport. Update is
+ResizeObserver/foreground-driven only while a lease is present. Detach
+restores original window bounds before navigating away; normal app
+exit also attempts restoration. It does not create/delete model files,
+change native window styles, reparent, inject input, or assert that
+the editor is interactive under all focus conditions.
+
+Gate: `cfg(all(windows, debug_assertions))` on Rust actions and
+`import.meta.env.DEV` in Svelte navigation. All other builds
+return UNAVAILABLE, and production navigation stays unchanged.
+See the `docs/01-product/interface-ux.md` experimental native
+composition contract for negative cases and proof limits.

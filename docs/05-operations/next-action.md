@@ -2,6 +2,12 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Native Blockbench composition P0 — 2026-11-08
+
+- **New user-selected UX direction:** Independent native window composition adapted from LazyTester, not WebView/iframe, SetParent or editor duplication. New Windows-debug-only `blockbench_surface.rs` owns one explicit placement/restore lease and uses existing Blockbench executable discovery. `NativeEditorStage.svelte` is an opt-in developer Editor surface; release Workspace/Support navigation remains unchanged.
+- **Source boundary:** SOURCE_AUTHORED, Rust viewport negative regressions AUTHORED_NOT_EXECUTED. Native z-order, DPI, focus, dialogs, minimize, crash restoration and Blockbench usability remain UNVERIFIED; no local/Codex/Windows tests requested while the hold remains. No CI, release, installer or MCP/Runtime change.
+- **Next:** Source guard/security review and native-editor visual/user acceptance only when execution is separately reauthorized; do not claim a completed embedded editor or start new window-management frameworks.
+
 ## Particle source continuation — 2026-11-07
 
 - **Current scope (SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN):** The canonical Particle Studio and MCP `inspect_particle/manage_particle` retain lossless Bedrock JSON edits, native Wintersky preview with bounded admission, preset-consistent quick controls, child-event ownership/cost review, and static temporal/appearance warnings. The latest source-only hardening corrects test imports, isolated color-edit regression inputs, preset-derived initial slider settings, and nonfinite looping-burst arithmetic. These claims are verified as source presence and intent, **not** executed functionality.

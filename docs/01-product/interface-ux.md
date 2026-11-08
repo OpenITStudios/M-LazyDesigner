@@ -75,3 +75,41 @@ Compare identical user tasks and constraints before/after only when an executabl
 **Do not add** a new Control Stage, Skill, MCP tool, process monitor, telemetric service, duplicate native editor, persistent UX state, or release workflow as a shortcut to better UX. UI UX Pro Max guides the interface review within the eight local Agent Rules methods, and the existing development/test owners remain unchanged.
 
 GitHub source review and authored regressions establish intent and structural changes only. No claim of native accessibility, screen-reader behavior, runtime feature quality, executable PASS or production acceptance is made without matching actual execution evidence.
+
+
+## Experimental native composition — source-only P0 (2026-11-08)
+
+The user selected the LazyTester native-window-composition principle: an independent
+installed Blockbench.exe remains the only editor and model-state owner, while
+LazyDesigner may visually position its existing Windows top-level window inside
+a bounded Desktop Editor area. This is **not** a WebView port, a DWM thumbnail,
+cross-process SetParent child hosting, or a second Geometry/UV/Animation editor.
+
+The initial owner is `apps/desktop/src-tauri/src/blockbench_surface.rs`, with
+the existing `blockbench.rs` process selection and a development-only
+`NativeEditorStage.svelte` caller. P0 exposes the route only in Windows debug
+builds and a dev-only Editor preview page. Normal Workspace/Support and
+production packages stay unchanged. User explicitly selects Show/Detach;
+no app startup, background probe, model-open receipt or AI operation can
+implicitly reposition Blockbench. No process is closed or relaunched by
+native presentation. Only rectangle/z-order placement is attempted; native
+window frame, owner/parent, taskbar style, executable, userData profile,
+model files, plugin and all rendering/input remain unchanged.
+
+Admit exactly one verified running Blockbench executable and one visible
+unowned editor HWND, plus the verified LazyDesigner window. Pin PID,
+process birth, native thread and class for each accepted lease; refuse
+ambiguity, minimized/maximized editor, Always on Top and stale identity.
+Check finite CSS viewport, client bounds and DPI before placement; re-read
+the physical window geometry. On uncertainty, never repeat a native
+mutation automatically. Detach restores original geometry before changing
+pages, and Rust attempts the same on normal app exit. Since no window
+style/parent is changed, even an unexpected app crash leaves Blockbench
+as a normal independent, movable Windows application; position after
+crash is not guaranteed.
+
+**Proof boundary:** SOURCE_AUTHORED and viewport regression AUTHORED_NOT_EXECUTED.
+Windows HWND/z-order, Electron dialogs, multi-monitor DPI, focus,
+minimize/maximize, editor saving/Undo, crash behavior and one-shell usability
+are NOT_EXECUTED/UNVERIFIED. Do not call it a native embedded editor or
+mark production READY before matching Windows acceptance.

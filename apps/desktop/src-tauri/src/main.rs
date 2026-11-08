@@ -8,6 +8,7 @@ mod native_acceptance;
 
 mod analytics;
 mod blockbench;
+mod blockbench_surface;
 mod desktop_error;
 mod desktop_instance;
 mod diagnostics;
@@ -87,6 +88,16 @@ async fn focus_blockbench_window() -> blockbench::BlockbenchFocusResult {
         }
     }
     blockbench::focus_window()
+}
+
+#[tauri::command]
+fn native_editor_surface(
+    action: String,
+    viewport: Option<blockbench_surface::EditorViewport>,
+) -> Result<blockbench_surface::EditorSurfaceReceipt, DesktopError> {
+    // Direct-user/debug-only composition, never a status/probe side effect.
+    blockbench_surface::command(&action, viewport)
+        .map_err(|message| DesktopError::recoverable("NATIVE_EDITOR_SURFACE_UNVERIFIED", message))
 }
 
 #[tauri::command]
@@ -277,6 +288,7 @@ fn main() {
             connection_status,
             ensure_ready,
             focus_blockbench_window,
+            native_editor_surface,
             open_blockbench_editor,
             choose_blockbench_executable,
             browse_model,
@@ -300,10 +312,19 @@ fn main() {
         .run(move |_, event| {
             let name = match event {
                 tauri::RunEvent::Ready => "desktop:ready",
-                tauri::RunEvent::ExitRequested { .. } => "desktop:exit-requested",
-                tauri::RunEvent::Exit => "desktop:exit",
+                tauri::RunEvent::ExitRequested { .. } => {
+                    blockbench_surface::restore_on_exit();
+                    "desktop:exit-requested"
+                },
+                tauri::RunEvent::Exit => {
+                    blockbench_surface::restore_on_exit();
+                    "desktop:exit"
+                },
                 tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::CloseRequested { .. }, .. }
-                    if label == "main" => "desktop:close-requested",
+                    if label == "main" => {
+                        blockbench_surface::restore_on_exit();
+                        "desktop:close-requested"
+                    },
                 tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. }
                     if label == "main" => "desktop:destroyed",
                 _ => return,
