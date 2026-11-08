@@ -45,7 +45,7 @@ npm run preview:typecheck
 npm run preview:quick
 npm run preview:quick -- --scenario editor-many-projects --viewport compact
 npm run preview:render -- --expected-sha <exact-40-character-Local-SHA>
-npm run preview:render -- --execute --expected-sha <exact-40-character-Local-SHA> --scenario editor-ready --viewport desktop
+npm run preview:render -- --execute --expected-sha <exact-40-character-Local-SHA> --scenario editor-ready --viewport large
 ```
 
 `preview:plan` is a non-rendering preflight; `preview:quick` is the explicit real render fast path. `--current-local` and `--expected-sha` cannot be combined, neither command checks out/fetches/updates Git. Render requires a clean exact-source `Local` checkout and already-installed Vite, Playwright and Chromium. The renderer launches no updater, app installer, CI or native Tauri. It never installs dependencies or downloads a browser; unavailable tools remain NOT_EXECUTED. Existing temporary browser evidence is not automatically accessible in ChatGPT.
@@ -54,7 +54,7 @@ npm run preview:render -- --execute --expected-sha <exact-40-character-Local-SHA
 
 1. Confirm `Local` HEAD is the requested full SHA; verify preview dependency files clean before and after capture.
 2. Serve existing Vite on **127.0.0.1** and render the real `App.svelte` in an iframe. Deny remote HTTP/WebSocket, service workers and downloads. Use `en-GB`, `Asia/Jakarta`, fixed fixture clock, dark scheme, reduced motion and `deviceScaleFactor=1`.
-3. Inspect actual `.desktop-shell[data-qa-fixture]`, page-specific production landmarks, computed styling and horizontal overflow. Check frame `innerWidth/innerHeight` equals canvas dimensions; check visible important controls remain in viewport (not merely parent bounds). Unified Editor validates the real topbar and the Project Explorer / Model Tools conditional layout, and confirms the **native center is blank with no host controls, markup or images**. Support and Workspace validate their real page headings and body.
+3. Inspect actual `.desktop-shell[data-qa-fixture]`, page-specific production landmarks, computed styling and horizontal overflow. Check frame `innerWidth/innerHeight` equals canvas dimensions; check visible important controls remain in viewport (not merely parent bounds). Unified Editor validates the real topbar, Project Explorer and LazyDesigner Assistant & Review as two permanently mounted side docks (full-width or shortcut rail), checks the pinned Blockbench Default Dark token fallback, and confirms the **native center is blank with no host controls, markup or images**. Support and Workspace validate their real page headings and body.
 4. Verify native host unavailable and synthetic-only badge present. No browser errors, outside network requests or source changes after screenshot.
 5. Screenshot only `[data-preview-canvas]` (real iframe render), compute SHA-256, write one ephemeral `receipt.json` outside repository. Any failed QA yields nonzero exit and a FAIL receipt, not a PASS picture.
 
@@ -68,7 +68,7 @@ ref: Local
 sha: <exact source SHA>
 page: editor
 scenario: editor-ready
-viewport: 1600x940
+viewport: 1920x1080
 fidelity: F0_SOURCE | F2_BROWSER_COMPONENT | F3_TARGET_WINDOWS
 rendered: NOT_EXECUTED | VERIFIED
 synthetic: true
