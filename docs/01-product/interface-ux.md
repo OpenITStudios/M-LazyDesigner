@@ -49,20 +49,22 @@ The primary user outcome is **continue asset work**. Connection and installation
 
 ## Measurement and acceptance: do not substitute source review for UX proof
 
-The baseline is source-observed, not a measured usability score. Compare the same representative task before/after on the same build, fixture, viewport and keyboard path. Record user success, actions/clicks, time-to-completion, error/recovery and any wrong target separately.
+The baseline is source-observed, not a measured usability score. The existing offline Desktop fixture now defines **five browser-only task paths**, including a hidden-eighth-project search and a non-mutating path to Support recovery. Its `taskJourney` records availability, browser interaction count, issues and automation elapsed time; these are **synthetic navigation diagnostics**, not real human completion, native action, task success, or a measured efficiency gain.
+
+Compare identical user tasks and constraints before/after only when an executable/native context is authorized. A later genuine usability session must separately record human success, actions/clicks, time-to-completion, misunderstanding, wrong-target attempts, recoveries and perceived clarity. Do not combine synthetic elapsed time with user timing or infer a quality score from fewer clicks alone.
 
 | Scenario | Source-level acceptance | Later executable/native evidence (currently NOT_EXECUTED) |
 | --- | --- | --- |
 | Fresh install and no project | Model-open remains available without AI or setup | Fixture keyboard + 780×560/980×680 screenshots; real model-open flow |
-| Ready with 7+ projects | Search sees beyond the initial six, counts matching projects, Clear returns focus to search | Keyboard tab/screen-reader check and reset behavior |
+| Ready with 7+ projects | Eight-project offline fixture includes a uniquely identified Needle asset in the eighth project; normal search still finds it, count is correct, Clear restores focus without silently expanding collapsed projects | Keyboard tab/screen-reader check, reset behavior and real discovery time |
 | Connection uncertainty | Last-known AI state is visibly qualified on both pages; Rust-revalidated file navigation stays available but stale managed actions are blocked | Forced disconnected/failed probe, retry and recovery |
 | Pending action (staged update, plugin approval, unverified model/editor launch) | The next step is distinct from success and remains visible until dismissed or replaced | Keyboard notice dismissal, real focus/handshake verification and no false completed claim |
 | First geometry issue in native panel | Geometry actions precede the optional collapsed Particle Studio; unsupported Bedrock format has an explanation | At least 100 Cubes, correct UUID locate, no edit/Undo mutation, measured task time |
 | Particle Studio collapsed and expanded | Summary exposes eligibility or current draft; native controls and existing protection remain accessible after expansion | Keyboard disclosure, same draft state across collapse/reopen, Save/Attach/preview restrictions and native playback |
 | Particle Studio from a draft | Preview and persistence are distinct; stage/path/advanced-field guards are retained | Animation-stage draft, Save, Attach, reload, native visual playback |
 | Recovery and deletion | Specific classified error heading and safe recovery entry; no conflation of remove vs delete | Cancel/confirm, focus restoration, filesystem/Recycle Bin proof |
-| Stale project decisions | Disabled preference/deletion/focus actions reference one nearby recovery instruction, but read-only/native file navigation stays enabled | Keyboard reading order, accessible description, full Refresh and safe navigation |
-| Narrow effective viewport | Rows, toolbar and Support diagnostic text wrap without losing actions; 390px fixture is an approximate 200% zoom proxy only | 390×640/780×560/980×680 fixture review plus separate native 200% zoom and screen-reader acceptance |
+| Stale project decisions | Disabled preference/deletion/focus actions reference one nearby recovery instruction that points to visible Refresh when available; read-only/native file navigation stays enabled | Keyboard reading order, accessible description, full Refresh and safe navigation |
+| Narrow effective viewport | Rows, toolbar and Support diagnostic text wrap without losing actions; the 390px fixture is a narrow-layout proxy only | 390×640/780×560/980×680 fixture review plus separate native 200% zoom and screen-reader acceptance |
 
 ## Scope and proof boundary
 

@@ -423,6 +423,9 @@ Frontend development builds support deterministic UI state fixtures through:
 
 ```text
 ?fixture=ready
+?fixture=ready-no-active
+?fixture=many-projects
+?fixture=status-unverified
 ?fixture=fresh-install
 ?fixture=approval-required
 ?fixture=plugin-missing
@@ -445,7 +448,11 @@ python scripts/capture-ui.py
 # Optional: --browser <path-to-Chrome-or-Chromium> --out <temporary-qa-directory>
 ```
 
-The script captures Workspace, Support and Analytics at **780×560** (minimum) and **980×680** (default), plus the most relevant failure/setup states. It records horizontal overflow, offscreen controls, browser JS errors, and top/bottom screenshots when scrolling is needed. Output is temporary and never written back to the repository automatically. It is intentionally manual-triggered (not CI or telemetry), and restricts the origin to local HTTP. The script needs an already-installed Playwright Python package and Chromium browser in the execution environment.
+The script captures Workspace, Support and Analytics at **390×640** (narrow-layout proxy), **780×560** (minimum window baseline), and **980×680** (default comparison), plus relevant failure/setup states. It records horizontal overflow, offscreen controls, browser JS errors, and top/bottom screenshots when scrolling is needed. The `many-projects` synthetic fixture contains eight uniquely identified projects, with the `Needle asset` in the final project to check discovery beyond the initial six rows.
+
+The same existing screenshot helper now records bounded `taskJourney` evidence for five synthetic UI paths: finding the native model-open action without AI setup, searching and clearing normal model results, finding an item in the hidden eighth project, discovering Refresh when status is stale, and navigating to the existing Repair control without activating it. Records include UI availability, browser interaction count, automation elapsed milliseconds, and explicit `native_action: NOT_ATTEMPTED` / `human_task_success: NOT_MEASURED`. The scripted timing is **not** a human completion-time or product-speed benchmark. The path checker does not click model-open, Refresh, Install, Delete, or Repair actions.
+
+Output is temporary and never written back to the repository automatically. The tool remains manually triggered (not CI or telemetry) and restricts the origin to local HTTP. It needs an already-installed Playwright Python package and Chromium browser in an eligible execution environment.
 
 Screenshot capture alone **does not** certify UX. Review the images for readability, disabled actions, controls, dialogs and keyboard focus. Native Windows focus/Recycle Bin operations, live Blockbench editor-panel behavior, MCP lifecycle, and actual user comprehension require separate matching-build acceptance.
 

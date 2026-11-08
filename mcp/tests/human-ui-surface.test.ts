@@ -238,6 +238,54 @@ describe("human-facing Blockbench UI", () => {
     } })).toBeNull();
   });
 
+  test("large project fixture exposes a model beyond the six initially visible rows", async () => {
+    const { createDevFixtureStatus, devFixtureFromLocation } =
+      await import("../../apps/desktop/src/desktopFixtures");
+    const { visibleProjects, visibleProjectModels } =
+      await import("../../apps/desktop/src/desktopPresentation");
+    const fixture = createDevFixtureStatus("many-projects");
+    const state = fixture.project_navigation;
+    expect(fixture.product_state).toBe("ready");
+    expect(state.active).toBeNull();
+    expect(state.projects).toHaveLength(8);
+    expect(new Set(state.projects.map(p => p.id)).size).toBe(8);
+    expect(new Set(state.projects.flatMap(p => p.models.map(m => m.id))).size).toBe(8);
+    expect(visibleProjects(state, "", false)).toHaveLength(6);
+    expect(visibleProjects(state, "Needle asset", false).map(p => p.id))
+      .toEqual(["fixture-project-8"]);
+    expect(visibleProjectModels(state.projects[7], "Needle asset").map(m => m.name))
+      .toEqual(["Needle asset"]);
+    expect(visibleProjects(state, "", true)).toHaveLength(8);
+    expect(devFixtureFromLocation(false, "?fixture=many-projects")).toBeNull();
+    expect(devFixtureFromLocation(true, "?fixture=many-projects")).toBe("many-projects");
+  });
+
+  test("offline UX task probes record presentation paths without claiming real user completion", async () => {
+    const script = await source("../apps/desktop/scripts/capture-ui.py");
+    for (const task of [
+      "discover_model_without_ai",
+      "find_model_and_recover_empty_search",
+      "find_model_beyond_first_six_projects",
+      "locate_stale_status_recovery",
+      "navigate_to_safe_repair",
+    ]) expect(script).toContain(task);
+    expect(script).toContain('("many-projects", "workspace")');
+    expect(script).toContain("def inspect_task_journey(page, fixture, view):");
+    expect(script).toContain('"taskJourney"');
+    expect(script).toContain('"humanTaskSuccess": "NOT_MEASURED"');
+    expect(script).toContain('"native_action": "NOT_ATTEMPTED"');
+    expect(script).toContain('"automation_elapsed_ms"');
+    const start = script.indexOf("def inspect_task_journey(");
+    const end = script.indexOf("\ndef main():", start);
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const probe = script.slice(start, end);
+    for (const forbidden of ["model.click()", "repair.click()", "refresh.click()", "invoke(",
+      "launch_model", "confirm_delete_project", "runManagedAction("]) {
+      expect(probe).not.toContain(forbidden);
+    }
+  });
+
   test("managed update notice distinguishes staged, applied, missing, and invalid receipts", async () => {
     const { managedActionPresentation } = await import("../../apps/desktop/src/desktopPresentation");
     const staged = managedActionPresentation("update", { status: "STAGED" });

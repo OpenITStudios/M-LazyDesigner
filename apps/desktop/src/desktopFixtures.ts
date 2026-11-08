@@ -1,10 +1,10 @@
 import type { SystemStatus, AnalyticsOverview } from './desktopTypes';
 
-export type DevFixture = 'ready' | 'ready-no-active' | 'status-unverified' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
+export type DevFixture = 'ready' | 'ready-no-active' | 'many-projects' | 'status-unverified' | 'fresh-install' | 'approval-required' | 'plugin-missing' | 'plugin-modified' | 'runtime-offline' | 'client-wait' | 'unsupported' | 'repair-blocked';
 
 export function applyDevFixture(base: SystemStatus, fixture: DevFixture): SystemStatus {
   const next = structuredClone(base);
-  const ready = ['ready', 'ready-no-active', 'status-unverified'].includes(fixture);
+  const ready = ['ready', 'ready-no-active', 'many-projects', 'status-unverified'].includes(fixture);
   const runtimeOnline = ready || ['client-wait', 'repair-blocked'].includes(fixture);
   const gatewayActive = ready || fixture === 'repair-blocked';
 
@@ -108,6 +108,32 @@ export function applyDevFixture(base: SystemStatus, fixture: DevFixture): System
     }
   }
 
+  if (fixture === 'many-projects') {
+    // Synthetic UI-only inventory: the Needle asset is beyond the first six
+    // project rows, and is discoverable without expanding all projects.
+    next.project_navigation.active = null;
+    next.project_navigation.continue_model_id = null;
+    next.project_navigation.recent_model_ids = [];
+    next.project_navigation.projects = Array.from({ length: 8 }, (_, index) => ({
+      id: `fixture-project-${index + 1}`,
+      name: index === 7 ? 'Archive Models' : `Project ${index + 1}`,
+      active: false,
+      pinned: false,
+      registered: true,
+      available: true,
+      model_count: 1,
+      models: [{
+        id: `fixture-model-${index + 1}`,
+        name: index === 7 ? 'Needle asset' : `Prop ${index + 1}`,
+        active: false,
+        open: false,
+        dirty: false,
+        exists: true,
+      }],
+      folders: [],
+    }));
+  }
+
   next.maintenance = {
     ...next.maintenance,
     update: fixture !== 'fresh-install',
@@ -203,7 +229,7 @@ export function createDevAnalyticsFixture(): AnalyticsOverview {
 export function devFixtureFromLocation(development: boolean, search: string): DevFixture | null {
   if (!development) return null;
   const value = new URLSearchParams(search).get('fixture');
-  const allowed: DevFixture[] = ['ready','ready-no-active','status-unverified','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
+  const allowed: DevFixture[] = ['ready','ready-no-active','many-projects','status-unverified','fresh-install','approval-required','plugin-missing','plugin-modified','runtime-offline','client-wait','unsupported','repair-blocked'];
   return allowed.includes(value as DevFixture) ? value as DevFixture : null;
 }
 

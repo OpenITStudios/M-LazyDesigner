@@ -10,11 +10,13 @@ import json
 import sys
 from pathlib import Path
 from tempfile import gettempdir
+from time import perf_counter
 from urllib.parse import urlencode, urlsplit
 
 SCENARIOS = (
     ("fresh-install", "workspace"),
     ("ready", "workspace"),
+    ("many-projects", "workspace"),
     ("ready-no-active", "workspace"),
     ("status-unverified", "workspace"),
     ("status-unverified", "support"),
@@ -72,6 +74,10 @@ def inspect_action_states(page, fixture, view):
             "Open Model…": True,
             "Set up AI tools": True,
             "Add Project Folder": True,
+        },
+        ("many-projects", "workspace"): {
+            "Open Model…": True,
+            "Show all projects": True,
         },
         ("ready", "workspace"): {
             "Open Model…": True,
@@ -178,6 +184,160 @@ def inspect_first_run(page, fixture, view):
     return issues
 
 
+def inspect_task_journey(page, fixture, view):
+    """Exercise only browser navigation; never invoke model, repair or install actions.
+
+    Interaction counts and elapsed time describe an automated fixture,
+    not human task completion or an installed/native LazyDesigner session.
+    """
+    if view != "workspace" or fixture not in {"fresh-install", "ready", "many-projects", "status-unverified", "plugin-modified"}:
+        return None
+
+    started = perf_counter()
+    issues = []
+    interactions = 0
+    task = {
+        "fresh-install": "discover_model_without_ai",
+        "ready": "find_model_and_recover_empty_search",
+        "many-projects": "find_model_beyond_first_six_projects",
+        "status-unverified": "locate_stale_status_recovery",
+        "plugin-modified": "navigate_to_safe_repair",
+    }[fixture]
+
+    if fixture == "fresh-install":
+        model = page.get_by_role("button", name="Open Model…", exact=True)
+        if model.count() != 1 or not model.is_enabled():
+            issues.append("the native model picker must be discoverable without AI setup")
+        disclosure = page.locator("details.setup-steps")
+        if disclosure.count() != 1:
+            issues.append("the optional setup explanation must exist")
+        else:
+            summary = disclosure.locator("summary")
+            summary.focus()
+            # The earlier first-run check left the disclosure open.
+            summary.press("Enter")
+            interactions += 1
+            if disclosure.evaluate("(node) => node.open"):
+                issues.append("Enter did not collapse the optional setup instructions")
+            summary.press("Enter")
+            interactions += 1
+            if not disclosure.evaluate("(node) => node.open"):
+                issues.append("Enter did not reopen the optional setup instructions")
+
+    elif fixture == "ready":
+        search = page.locator("#ld-project-search")
+        if search.count() != 1:
+            issues.append("project/model search is not discoverable")
+        else:
+            search.fill("Sofa")
+            interactions += 1
+            result = page.locator("#ld-project-search-results")
+            if result.count() != 1 or "1 project matches" not in result.inner_text():
+                issues.append("matching project count was not shown for a model name")
+            model = page.get_by_role("button", name="Open model Sofa", exact=True)
+            if model.count() != 1 or not model.is_enabled():
+                issues.append("matching model does not expose a usable Open action")
+            clear = page.get_by_role("button", name="Clear search", exact=True)
+            if clear.count() != 1:
+                issues.append("search has no explicit reset action")
+            else:
+                clear.click()
+                interactions += 1
+                if search.input_value():
+                    issues.append("clearing search did not empty the query")
+                if not search.evaluate("(node) => document.activeElement === node"):
+                    issues.append("Clear search did not restore keyboard focus")
+            search.fill("zzz_no_such_model_zzz")
+            interactions += 1
+            if page.get_by_text("No matching projects or models.", exact=True).count() != 1:
+                issues.append("empty search needs an explicit empty result")
+            clear = page.get_by_role("button", name="Clear search", exact=True)
+            if clear.count() == 1:
+                clear.click()
+                interactions += 1
+                # Existing user collapse state remains authoritative: browsing is
+                # restored even when the model rows intentionally stay collapsed.
+                expand = page.get_by_role("button", name="Show models for project Furniture", exact=True)
+                open_model = page.get_by_role("button", name="Open model Sofa", exact=True)
+                if expand.count() != 1 and open_model.count() != 1:
+                    issues.append("clearing the empty result did not restore project browsing")
+            else:
+                issues.append("empty search cannot be cleared")
+
+    elif fixture == "many-projects":
+        show_all = page.get_by_role("button", name="Show all projects", exact=True)
+        if show_all.count() != 1:
+            issues.append("more than six projects need a discoverable Show all action")
+        search = page.locator("#ld-project-search")
+        if search.count() != 1:
+            issues.append("project search is missing for a large inventory")
+        else:
+            search.fill("Needle asset")
+            interactions += 1
+            result = page.locator("#ld-project-search-results")
+            if result.count() != 1 or "1 project matches" not in result.inner_text():
+                issues.append("a hidden model match must be included in the project count")
+            model = page.get_by_role("button", name="Open model Needle asset", exact=True)
+            if model.count() != 1 or not model.is_enabled():
+                issues.append("search did not expose the model beyond the first six projects")
+            clear = page.get_by_role("button", name="Clear search", exact=True)
+            if clear.count() != 1:
+                issues.append("search cannot be reset after finding a hidden model")
+            else:
+                clear.click()
+                interactions += 1
+                if search.input_value() or not search.evaluate("(node) => document.activeElement === node"):
+                    issues.append("reset must clear the query and return keyboard focus")
+                if page.get_by_role("button", name="Show all projects", exact=True).count() != 1:
+                    issues.append("clearing search must restore the six-project list boundary")
+
+    elif fixture == "status-unverified":
+        note = page.locator("#ld-project-action-note")
+        if note.count() != 1 or "Select Refresh above when available" not in note.inner_text():
+            issues.append("the stale-action guidance does not identify the visible Refresh path")
+        refresh = page.get_by_role("button", name="Refresh", exact=True)
+        if refresh.count() != 1 or not refresh.is_enabled():
+            issues.append("Refresh must be visible and enabled for stale status")
+        change = page.get_by_role("button", name="Add Project Folder", exact=True)
+        if change.count() != 1 or change.is_enabled():
+            issues.append("stale project preference edits must remain blocked")
+        model = page.get_by_role("button", name="Open model Sofa", exact=True)
+        if model.count() != 1 or not model.is_enabled():
+            issues.append("independently validated model navigation must remain available")
+        # Do not select Refresh: fixtures cannot verify an actual machine-state recovery.
+
+    elif fixture == "plugin-modified":
+        support = page.get_by_role("button", name="Open Support", exact=True)
+        if support.count() != 1 or not support.is_enabled():
+            issues.append("the incompatible plugin state needs a direct Support entry")
+        else:
+            support.click()
+            interactions += 1
+            if page.get_by_role("heading", name="Troubleshooting", exact=True).count() != 1:
+                issues.append("Support did not expose its troubleshooting section")
+            recovery = page.locator("details.advanced-recovery").filter(has_text="Advanced recovery")
+            if recovery.count() != 1:
+                issues.append("advanced recovery is not discoverable")
+            else:
+                recovery.locator("summary").click()
+                interactions += 1
+                repair = page.get_by_role("button", name="Repair", exact=True)
+                if repair.count() != 1:
+                    issues.append("Support does not expose the existing Repair action")
+            # Never click Repair: this browser fixture cannot authorize or test a native repair.
+
+    return {
+        "task": task,
+        "scope": "OFFLINE_BROWSER_FIXTURE_ONLY",
+        "interactions": interactions,
+        "automation_elapsed_ms": round((perf_counter() - started) * 1000),
+        "ui_path_available": len(issues) == 0,
+        "native_action": "NOT_ATTEMPTED",
+        "human_task_success": "NOT_MEASURED",
+        "issues": issues,
+    }
+
+
 def main():
     args = parse_args()
     target = urlsplit(args.base_url)
@@ -251,6 +411,11 @@ def main():
                             entry["firstRunChecks"] = {"checked": 5, "issues": first_run_issues}
                         for issue in first_run_issues:
                             failures.append(name + ": " + issue)
+                        journey = inspect_task_journey(page, fixture, view)
+                        if journey is not None:
+                            entry["taskJourney"] = journey
+                            for issue in journey["issues"]:
+                                failures.append(name + ": " + journey["task"] + ": " + issue)
                         if page_errors:
                             failures.append(name + ": JS errors: " + "; ".join(page_errors[:3]))
                             entry["pageErrors"] = page_errors
@@ -266,6 +431,9 @@ def main():
     manifest = {
         "purpose": "development fixture layout inspection",
         "nativeOrVisualApproval": "NOT_VERIFIED",
+        "taskEvidence": "OFFLINE_BROWSER_FIXTURE_ONLY",
+        "humanTaskSuccess": "NOT_MEASURED",
+        "timingInterpretation": "Playwright automation elapsed time, not user completion time",
         "scenarios": records,
         "issues": failures,
     }

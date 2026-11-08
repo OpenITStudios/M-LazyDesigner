@@ -44,7 +44,7 @@
 </script>
 
 {#if statusUnverified}
-  <p id="ld-project-action-note" class="project-state-note" role="status"><strong>Refresh required for project changes.</strong> You can still open models and folders. Choose Refresh from Workspace's More actions before changing shortcuts, deleting projects or returning to the current editor.</p>
+  <p id="ld-project-action-note" class="project-state-note" role="status"><strong>Refresh required for project changes.</strong> You can still open models and folders. Select Refresh above when available, or choose Refresh from Workspace's More actions, before changing shortcuts, deleting projects or focusing the current editor.</p>
 {/if}
 
 {#if navigation.preferences_issue}
