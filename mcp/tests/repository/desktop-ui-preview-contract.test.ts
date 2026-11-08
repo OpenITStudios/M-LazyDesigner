@@ -84,6 +84,7 @@ describe("Desktop UI Preview: real application only", () => {
     expect(script).toContain("native_reservation_has_real_area");
     expect(script).toContain("side_docks_have_accessible_names");
     expect(script).toContain("both_side_docks_present");
+    expect(script).toContain("active_model_name_readable_default");
     expect(script).toContain("dock_responsive_rails");
     expect(script).toContain("assistant_review_activity_truthful");
     expect(script).toContain("default_dark_matches_blockbench_source");

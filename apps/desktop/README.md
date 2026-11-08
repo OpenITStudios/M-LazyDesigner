@@ -945,7 +945,7 @@ Both companion docks remain present by default, including in narrow viewports:
 
 | Window width | Project Explorer | Native center | LazyDesigner |
 | --- | --- | --- | --- |
-| >= 1320px | Full, default 200px | Remaining space | Full, default 240px |
+| >= 1320px | Full, default 220px | Remaining space | Full, default 240px |
 | 920–1319px | 48px shortcut rail | Remaining space | 48px shortcut rail |
 | Under 920px | 44px shortcut rail | Remaining space | 44px shortcut rail |
 

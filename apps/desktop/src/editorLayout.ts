@@ -18,7 +18,7 @@ export const INITIAL_EDITOR_LAYOUT: EditorLayoutState = {
   projectsExpanded: true,
   assistantExpanded: true,
   focusMode: false,
-  projectsWidth: 200,
+  projectsWidth: 220,
   toolsWidth: 240,
 };
 

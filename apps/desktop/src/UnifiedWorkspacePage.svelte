@@ -437,7 +437,8 @@
                         <span class="model-state" role="status">Opening…</span>
                       {:else}
                         {#if model.active}
-                          <span class="model-state" title="Current at last observation">Current</span>
+                          <span class="model-current-indicator" title="Current model at last observation"
+                            aria-hidden="true">●</span>
                         {/if}
                         {#if !model.exists}
                           <span class="model-state warning" title="File unavailable">Missing</span>
@@ -692,17 +693,17 @@
     display:grid;grid-template-columns:minmax(0,1fr);flex:1;min-width:0;min-height:0;overflow:hidden;
   }
   /* Both docks participate in the grid: no host overlay hides native controls. */
-  .unified-body.with-projects {grid-template-columns:var(--explorer-width,200px) 6px minmax(0,1fr)}
+  .unified-body.with-projects {grid-template-columns:var(--explorer-width,220px) 6px minmax(0,1fr)}
   .unified-body.with-inspector {grid-template-columns:minmax(0,1fr) 6px var(--tools-width,240px)}
   .unified-body.with-projects.with-inspector {
-    grid-template-columns:var(--explorer-width,200px) 6px minmax(0,1fr) 6px var(--tools-width,240px);
+    grid-template-columns:var(--explorer-width,220px) 6px minmax(0,1fr) 6px var(--tools-width,240px);
   }
   /* All combinations keep left and right as real in-flow dock surfaces. */
   .unified-body.rail.with-projects.with-inspector {
     grid-template-columns:48px minmax(0,1fr) 6px var(--tools-width,240px);
   }
   .unified-body.tools-rail.with-projects.with-inspector {
-    grid-template-columns:var(--explorer-width,200px) 6px minmax(0,1fr) 48px;
+    grid-template-columns:var(--explorer-width,220px) 6px minmax(0,1fr) 48px;
   }
   .unified-body.rail.tools-rail.with-projects.with-inspector {
     grid-template-columns:48px minmax(0,1fr) 48px;
@@ -773,7 +774,7 @@
   }
   .project-name,.model-name {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .folder-action,.reveal-model,.pin-project {
-    flex:none;width:26px;height:28px;border:0;border-radius:4px;
+    flex:none;width:23px;height:28px;border:0;border-radius:4px;
     background:transparent;color:var(--ed-muted-soft);cursor:pointer;
   }
   .folder-action:hover,.reveal-model:hover,.pin-project:hover{
@@ -792,6 +793,10 @@
   }
   .model-line.current .model-open{color:var(--ed-text)}
   .model-symbol{color:var(--ed-muted-soft);font-size:14px;flex:none}
+  .model-current-indicator{
+    width:9px;flex:none;color:var(--ed-accent);font-size:9px;line-height:1;
+    text-align:center;
+  }
   .model-state{color:var(--ed-muted-soft);font-size:10px;white-space:nowrap}
   .model-state.warning{color:#e1b65f}
   .row-hint,.empty-state{color:var(--ed-muted);font-size:12px;line-height:1.5;margin:7px 5px}
@@ -811,6 +816,9 @@
   .project-resources summary::before{content:'▸';font-size:12px}
   .project-resources[open] summary::before{content:'▾'}
   .project-resources summary:hover,.resource-link:hover{background:var(--ed-raised);color:var(--ed-text)}
+  .project-resources summary:focus-visible{
+    outline:2px solid var(--ed-accent);outline-offset:-2px;
+  }
   .resource-count{margin-left:auto;color:var(--ed-muted-soft);font-size:10px}
   .resource-links{display:grid;gap:1px;padding-left:9px}
   .resource-link{
@@ -902,7 +910,7 @@
       grid-template-columns:44px minmax(0,1fr) 6px var(--tools-width,240px);
     }
     .unified-body.tools-rail.with-projects.with-inspector{
-      grid-template-columns:var(--explorer-width,200px) 6px minmax(0,1fr) 44px;
+      grid-template-columns:var(--explorer-width,220px) 6px minmax(0,1fr) 44px;
     }
     .unified-body.rail.tools-rail.with-projects.with-inspector{
       grid-template-columns:44px minmax(0,1fr) 44px;

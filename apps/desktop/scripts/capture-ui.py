@@ -558,6 +558,14 @@ def inspect_unified_editor(page, fixture, view):
             expand.click()
         else:
             issues.append("Project Explorer shortcut rail has no expand action")
+    if width >= 1320 and fixture == "ready":
+        active_name = explorer.locator(".model-line.current .model-name")
+        if active_name.count() == 1:
+            readable = active_name.evaluate(
+                "(node) => node.scrollWidth <= node.clientWidth + 1"
+            )
+            if not readable:
+                issues.append("The active model's name is clipped in the default Project Explorer")
     if fixture in {"ready", "many-projects"}:
         search = page.locator("#ld-unified-model-search")
         if search.count() != 1:

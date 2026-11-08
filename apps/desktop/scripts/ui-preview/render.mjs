@@ -248,6 +248,12 @@ async function main() {
         && sidePanels.nativeSize.width > 600 && sidePanels.nativeSize.height > 300);
       checks.native_editor_dominates_layout = sidePanels.nativeFraction >=
         (dims.width >= 1320 ? 0.70 : 0.80);
+      checks.active_model_name_readable_default = dims.width < 1320 || await frame
+        .locator('#ld-unified-explorer')
+        .evaluate(explorer => {
+          const label = explorer.querySelector('.model-line.current .model-name');
+          return !label || label.scrollWidth <= label.clientWidth + 1;
+        });
       checks.both_side_docks_present = (await frame.locator('#ld-unified-explorer').count()) === 1
         && (await frame.locator('#ld-unified-inspector').count()) === 1;
       checks.side_docks_have_accessible_names = sidePanels.explorerLabel === 'Project Explorer'

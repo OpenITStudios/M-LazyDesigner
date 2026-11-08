@@ -35,8 +35,8 @@ These tokens are a **default-theme fallback**, **not proof of an automatic read 
 
 | Editor width | Left companion | Center, native Blockbench | Right companion |
 | --- | --- | --- | --- |
-| 1810px or wider | Project Explorer full, default 200px | Remaining space (about 1468px at 1920px) | LazyDesigner full, default 240px |
-| 1320–1809px | Project Explorer full | Remaining space (about 1148px at 1600px) | LazyDesigner full |
+| 1810px or wider | Project Explorer full, default 220px | Remaining space (about 1448px at 1920px) | LazyDesigner full, default 240px |
+| 1320–1809px | Project Explorer full | Remaining space (about 1128px at 1600px) | LazyDesigner full |
 | 920–1319px | Project Explorer shortcut rail (48px) | Dominant remaining space | LazyDesigner shortcut rail (48px) |
 | Under 920px | Left rail (~44px) | Dominant remaining space | Right rail (~44px) |
 

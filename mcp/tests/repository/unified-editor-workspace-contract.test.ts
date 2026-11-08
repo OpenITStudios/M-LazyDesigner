@@ -114,7 +114,10 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("Resize Project Explorer");
     expect(unified).toContain("Resize LazyDesigner companion");
     expect(unified).toContain("aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}");
-    expect(unified).toContain("grid-template-columns:var(--explorer-width,200px)");
+    expect(unified).toContain("grid-template-columns:var(--explorer-width,220px)");
+    expect(unified).toContain('class="model-current-indicator"');
+    expect(unified).toContain('title="Current model at last observation"');
+    expect(unified).not.toContain('title="Current at last observation">Current</span>');
     expect(unified).toContain("grid-template-columns:48px minmax(0,1fr) 48px");
     expect(unified).not.toContain("grid-template-rows:140px minmax(220px,1fr)");
     expect(unified).toContain("overflow:hidden");
@@ -146,6 +149,7 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(defaultEditorPanels("standard")).toEqual({ projectsExpanded: true, assistantExpanded: true });
     expect(defaultEditorPanels("rail")).toEqual({ projectsExpanded: false, assistantExpanded: false });
     expect(defaultEditorPanels("compact")).toEqual({ projectsExpanded: false, assistantExpanded: false });
+    expect(INITIAL_EDITOR_LAYOUT.projectsWidth).toBe(220);
     expect(editorDockWidth("projects", 20)).toBe(160);
     expect(editorDockWidth("projects", 800)).toBe(260);
     expect(editorDockWidth("tools", 100)).toBe(220);
