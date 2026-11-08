@@ -17,9 +17,9 @@
     </div>
     <div v-if="runtime.state === 'failed'" class="runtime-help">
       <div class="runtime-help-title">Connection needs attention</div>
-      <div class="runtime-help-text">Local editor tools and AI connection have separate readiness.</div>
+      <div class="runtime-help-text">LazyDesigner tools need attention. You can still edit in Blockbench; reload the plugin or copy details for troubleshooting.</div>
       <div class="action-row">
-        <button v-if="canReload" type="button" class="user-action" @click="reloadLazyDesigner">Reload</button>
+        <button v-if="canReload" type="button" class="user-action" @click="reloadLazyDesigner">Reload LazyDesigner</button>
         <button type="button" class="user-action" @click="copyErrorDetails">Copy Error Details</button>
       </div>
     </div>
@@ -27,20 +27,19 @@
 
   <section class="ld-workspace" aria-label="Geometry tools">
     <div class="ld-section-title">Geometry checks</div>
-    <p class="ld-description">Review recent Cube changes or find issues without editing the model. Cleanup requires a separate preview and confirmation.</p>
-    <p v-if="!project.isBedrock" class="ld-empty-state">Open a Bedrock Model project to use these checks.</p>
+    <p class="ld-description">Review Cube changes and find possible geometry issues without changing the model. Cleanup asks for a separate preview and confirmation.</p>
+    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project to use these checks.</p>
+    <p v-else-if="!project.isBedrock" class="ld-empty-state">Switch to a Bedrock Model project to use Geometry checks.</p>
     <div class="ld-tool-actions">
       <button type="button" class="user-action primary" :disabled="!project.isBedrock || busy" @click="inspectLatestEdit">{{busy ? 'Checking…' : 'Review Latest Edit'}}</button>
       <button type="button" class="user-action" :disabled="!project.isBedrock || busy" @click="inspectActive">Find Geometry Issues</button>
     </div>
     <details class="ld-utilities">
-      <summary>Geometry utility</summary>
-      <p class="section-hint">Round selected Cube bounds or rotation only after reviewing the native dry-run and UV risk.</p>
+      <summary>Advanced: Cube cleanup</summary>
+      <p class="section-hint">Preview proposed Cube rounding and UV risks before confirming any change.</p>
       <button type="button" class="user-action" :disabled="!canCleanup || busy" @click="openCleanup">Safe Cube Cleanup</button>
       <p class="section-hint" v-if="!canCleanup && project.isBedrock">Requires 1–32 selected Cubes and the active Geometry stage.</p>
     </details>
-    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project to use Geometry checks.</p>
-    <p v-else-if="!project.isBedrock" class="ld-empty-state">Geometry checks require a Bedrock Model project.</p>
     <div v-if="error" class="ld-error" role="alert">{{error}}</div>
 
     <section v-if="editReview" class="ld-review" aria-live="polite" aria-label="Native geometry change review">
@@ -102,14 +101,15 @@
         <span class="ld-studio-toggle-hint" v-if="!project.isBedrock">Open a Bedrock Model</span>
         <span class="ld-studio-toggle-hint" v-else-if="!studioStageReady()">Animation stage required</span>
         <span class="ld-studio-toggle-hint" v-else-if="studioError">Needs attention</span>
+        <span class="ld-studio-toggle-hint" v-else-if="studioPlaying">Preview playing</span>
         <span class="ld-studio-toggle-hint" v-else-if="studioLoaded">{{studioLoaded.path ? 'Editing saved effect' : 'Draft in progress'}}</span>
         <span class="ld-studio-toggle-hint" v-else>Create or edit effects</span>
       </summary>
     <p class="ld-description">Create, preview and adjust Bedrock particles here. AI particle generation remains available through your connected client.</p>
     <p v-if="!project.isBedrock" class="ld-empty-state">Open a Bedrock Model project.</p>
-    <p v-else-if="!studioStageReady()" class="ld-empty-state">Particle tools are available in the Animation stage after the normal authoring handoff.</p>
+    <p v-else-if="!studioStageReady()" class="ld-empty-state">Switch to the Animation stage to use particle tools. If that stage is not available, finish the current authoring step first.</p>
     <div v-else class="ld-studio-body">
-      <p v-if="!project.hasFolder" class="section-hint">You can preview a new particle before saving the model. Save the .bbmodel before saving the particle file.</p>
+      <p v-if="!project.hasFolder" class="section-hint">Save the .bbmodel to enable Find Particles and Save Particle. You can still preview a new unsaved effect.</p>
       <div class="ld-studio-row">
         <button class="user-action" type="button" :disabled="studioBusy || !project.hasFolder" @click="studioRefresh">Find Particles</button>
         <button class="user-action" type="button" :disabled="studioBusy" @click="studioReset">New Effect</button>
@@ -190,8 +190,8 @@
           </div>
         </details>
         <div class="ld-studio-row">
-          <button class="user-action primary" type="button" :disabled="studioBusy || !project.hasFolder || !studioHasChanges()" @click="studioSave">{{studioLoaded.path ? 'Apply Changes' : 'Save Particle'}}</button>
-          <button class="user-action" type="button" :disabled="studioBusy || !studioHasChanges()" @click="studioRevert">Discard Draft</button>
+          <button class="user-action primary" type="button" :disabled="studioBusy || !project.hasFolder || !studioHasChanges()" @click="studioSave">{{studioLoaded.path ? 'Save Changes' : 'Save Particle'}}</button>
+          <button class="user-action" type="button" :disabled="studioBusy || !studioHasChanges()" @click="studioRevert">{{studioLoaded.path ? 'Revert Changes' : 'Reset Draft'}}</button>
         </div>
         <div class="ld-studio-row">
           <label for="ld-studio-locator">Attach to</label>

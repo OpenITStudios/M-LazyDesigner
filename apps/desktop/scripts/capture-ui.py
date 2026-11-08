@@ -97,6 +97,9 @@ def inspect_action_states(page, fixture, view):
         },
         ("ready", "support"): {
             "Refresh": True,
+            "Choose Blockbench…": True,
+            "Show plugin file": True,
+            "Export diagnostics": True,
         },
         ("status-unverified", "workspace"): {
             "Open Model…": True,
@@ -107,9 +110,9 @@ def inspect_action_states(page, fixture, view):
             "Refresh": True,
         },
         ("status-unverified", "support"): {
-            "Choose…": False,
+            "Choose Blockbench…": False,
             "Refresh": True,
-            "Export": True,
+            "Export diagnostics": True,
         },
     }.get((fixture, view), {})
     issues = []
@@ -165,6 +168,34 @@ def inspect_stale_file_navigation(page, fixture, view):
     page.locator('summary[aria-label="Actions for model Sofa"]').click()
     check_control("Show model Sofa in Explorer", True)
     check_control("Copy path for model Sofa", True)
+    return issues
+
+
+def inspect_support_disclosures(page, fixture, view):
+    """Check Support's task-first layout and native, non-mutating disclosures."""
+    if view != "support" or fixture not in {"ready", "status-unverified"}:
+        return []
+    issues = []
+    headings = page.locator(".settings-content h2").all_text_contents()
+    if "Troubleshooting" not in headings or "About" not in headings:
+        issues.append("Support must expose Troubleshooting and About sections")
+    elif headings.index("Troubleshooting") >= headings.index("About"):
+        issues.append("Troubleshooting should precede read-only version details")
+
+    advanced = page.locator("details.advanced-recovery").filter(has_text="Advanced recovery")
+    if advanced.count() != 1:
+        issues.append("Advanced recovery must remain available as one disclosure")
+    else:
+        if advanced.evaluate("(node) => node.open"):
+            issues.append("Advanced recovery should start collapsed")
+        if advanced.locator(".disclosure-state .when-closed").count() != 1:
+            issues.append("Advanced recovery must show a closed-state label")
+        advanced.locator("summary").click()
+        if not advanced.evaluate("(node) => node.open"):
+            issues.append("Advanced recovery cannot be expanded using native summary")
+        if advanced.locator(".disclosure-state .when-open").count() != 1 or not advanced.locator(".disclosure-state .when-open").is_visible():
+            issues.append("Expanded recovery should say Hide, not Show")
+        # No click on Restore, Repair or Recover; this is a visual-only fixture.
     return issues
 
 
@@ -461,6 +492,11 @@ def main():
                         if feedback:
                             entry["feedbackChecks"] = {"issues": feedback_issues}
                         for issue in feedback_issues:
+                            failures.append(name + ": " + issue)
+                        support_issues = inspect_support_disclosures(page, fixture, view) if feedback is None else []
+                        if view == "support" and fixture in {"ready", "status-unverified"} and feedback is None:
+                            entry["supportNavigationChecks"] = {"issues": support_issues}
+                        for issue in support_issues:
                             failures.append(name + ": " + issue)
                         navigation_issues = inspect_project_expansion(page, fixture, view) if feedback is None else []
                         if fixture == "ready" and view == "workspace":

@@ -451,7 +451,7 @@ describe("human-facing Blockbench UI", () => {
     expect(capture).toContain("def inspect_action_states(page, fixture, view):");
     expect(capture).toContain('"Go to Blockbench for Modern Chair": False');
     expect(capture).toContain('"Open Model…": True');
-    expect(capture).toContain('"Choose…": False');
+    expect(capture).toContain('"Choose Blockbench…": False');
     expect(capture).toContain('VIEWPORTS = ((390, 640), (780, 560), (980, 680))');
   });
 
@@ -532,6 +532,63 @@ describe("human-facing Blockbench UI", () => {
     expect(ui).toContain("runRuntimeOperationExclusive(generation");
     expect(ui).not.toContain("activeCategory");
     expect(ui).not.toContain("setActiveMcpAuthoringStage(");
+  });
+
+  test("Blockbench guidance distinguishes no project, wrong format and unsaved particle drafts", async () => {
+    const [panel, css, ui] = await Promise.all([
+      source("ui/panel.html"), source("ui/panel.css"), source("ui/index.ts"),
+    ]);
+    expect(panel).toContain('v-if="!project.open" class="ld-empty-state"');
+    expect(panel).toContain('v-else-if="!project.isBedrock" class="ld-empty-state"');
+    expect(panel.match(/Open a Bedrock Model project to use these checks\./g)).toHaveLength(1);
+    expect(panel).toContain("Switch to a Bedrock Model project to use Geometry checks.");
+    expect(panel).toContain("<summary>Advanced: Cube cleanup</summary>");
+    expect(panel).toContain("Preview proposed Cube rounding and UV risks before confirming any change.");
+    expect(panel).toContain("Reload LazyDesigner</button>");
+    expect(panel).toContain("You can still edit in Blockbench");
+    expect(panel).toContain("Switch to the Animation stage to use particle tools.");
+    expect(panel).toContain("Save the .bbmodel to enable Find Particles and Save Particle.");
+    expect(panel).toContain("Preview playing");
+    expect(panel).toContain("{{studioLoaded.path ? 'Save Changes' : 'Save Particle'}}");
+    expect(panel).toContain("{{studioLoaded.path ? 'Revert Changes' : 'Reset Draft'}}");
+    expect(panel).toContain(':disabled="studioBusy || !project.hasFolder || !studioHasChanges()"');
+    expect(panel).toContain(':disabled="studioBusy || !studioLoaded.path"');
+    expect(panel).toContain('v-else-if="!studioStageReady()"');
+    expect(ui).toContain("this.studioLoaded.path");
+    expect(ui).toContain("Draft settings reset to the starting preview. No file was changed.");
+    expect(ui).toContain("scheduleStudioLivePreview(this)");
+    expect(css).toContain(".mcp-panel summary:focus-visible");
+    expect(css).toContain(".mcp-panel .ld-review-rows dd");
+    expect(css).toContain("overflow-wrap: anywhere;");
+    expect(css).not.toContain("text-overflow: ellipsis;\n}");
+    for (const method of ["studioSave", "studioRevert", "studioPlay", "studioAttach", "studioCheck", "studioRefresh"]) {
+      expect(panel).toContain(`@click="${method}"`);
+    }
+  });
+
+  test("Support puts troubleshooting first and native disclosures tell Show from Hide", async () => {
+    const [support, fixture] = await Promise.all([
+      source("../apps/desktop/src/SupportPage.svelte"),
+      source("../apps/desktop/scripts/capture-ui.py"),
+    ]);
+    expect(support.indexOf('<h2>Troubleshooting</h2>')).toBeGreaterThan(0);
+    expect(support.indexOf('<h2>Troubleshooting</h2>')).toBeLessThan(support.indexOf('<h2>About</h2>'));
+    expect(support).toContain("'Choose Blockbench…'");
+    expect(support).toContain(">Show plugin file</button>");
+    expect(support).toContain("'Export diagnostics'");
+    expect(support).toContain("status.plugin_integrity === 'missing' ? 'Missing'");
+    expect(support).not.toContain("Repairing / missing");
+    expect(support.match(/class="disclosure-state"/g)).toHaveLength(5);
+    expect(support).toContain(".advanced-recovery[open] .disclosure-state .when-open");
+    expect(support).toContain(".recent-activity[open] .disclosure-state .when-closed");
+    expect(support).toContain('onclick={() => runManagedAction(\'repair\')}');
+    expect(support).toContain("disabled={!status.maintenance.repair || busyAction !== null || statusProbeFailures >= 2}");
+    expect(fixture).toContain("def inspect_support_disclosures(page, fixture, view):");
+    expect(fixture).toContain('entry["supportNavigationChecks"]');
+    expect(fixture).toContain('"Choose Blockbench…": False');
+    expect(fixture).toContain('"Export diagnostics": True');
+    expect(fixture).not.toContain('"Choose…": False');
+    expect(fixture).not.toContain("repair.click()");
   });
 
   test("status wording stays simple and actionable", async () => {

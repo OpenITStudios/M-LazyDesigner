@@ -408,7 +408,9 @@ export function uiSetup(input: UiSetupInput) {
           cancelStudioLivePreview();
           this.studioSettings = { ...this.studioLoaded.settings };
           this.studioError = "";
-          this.studioNote = "Unsaved changes discarded; restoring the saved preview.";
+          this.studioNote = this.studioLoaded.path
+            ? "Unsaved changes discarded; restoring the saved preview."
+            : "Draft settings reset to the starting preview. No file was changed.";
           scheduleStudioLivePreview(this);
         },
         studioStageReady(this: HumanPanelContext): boolean {

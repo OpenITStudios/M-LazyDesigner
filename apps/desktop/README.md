@@ -732,6 +732,22 @@ editor, two Blockbench windows, no matching top-level window, and Windows
 foreground restrictions. Never relax candidate matching just to make a test
 pass, and never kill/restart Blockbench to obtain focus.
 
+### Support task-first recovery and disclosures
+
+Support orders **Troubleshooting** above read-only About and managed-package
+alignment details, keeping the most likely recovery action near the top of
+the page. Its controls say **Choose Blockbench…**, **Show plugin file** and
+**Export diagnostics** rather than relying on ambiguous short button names.
+The five native disclosure surfaces use a visible Show/Hide state that follows
+their real `open` property; keyboard operation remains the browser/host native
+`<details><summary>` behavior. No recovery, installer or plugin file
+operation runs when an informational disclosure opens. A missing plugin is
+labelled **Missing**, never “Repairing” without evidence of a repair.
+The existing maintenance availability flags, explicit click handlers,
+permissions and receipts are not bypassed. The offline screenshot fixture
+checks Support section order, visible labels and non-mutating disclosure
+navigation without calling any maintenance action.
+
 ### Desktop action disclosures and keyboard
 
 More-actions popovers use native `<details><summary>` disclosure semantics

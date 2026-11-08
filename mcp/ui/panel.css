@@ -68,7 +68,9 @@
 .mcp-panel .runtime-help-title { font-size: .9em; font-weight: 600; }
 .mcp-panel .runtime-help-text { font-size: .88em; color: var(--color-subtle_text); margin-top: 3px; }
 .mcp-panel button:focus-visible,
-.mcp-panel input:focus-visible {
+.mcp-panel input:focus-visible,
+.mcp-panel select:focus-visible,
+.mcp-panel summary:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
@@ -189,10 +191,9 @@
 .mcp-panel .ld-review-rows dd {
   margin: 0;
   text-align: right;
-  max-inline-size: 55%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  max-inline-size: 60%;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 .mcp-panel .ld-review-note { margin-top: 10px; }
 .mcp-panel .panel-note { margin: 10px 2px 0; }
@@ -230,6 +231,9 @@
 .mcp-panel .ld-studio-disclosure[open] > .ld-description { margin-top: 10px; }
 .mcp-panel .ld-studio-body { display: grid; gap: 10px; margin-top: 10px; }
 .mcp-panel .ld-studio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.mcp-panel .ld-tool-actions .user-action { flex: 1 1 150px; }
+.mcp-panel .ld-studio-row .user-action { white-space: normal; }
+.mcp-panel .ld-studio-toggle-hint { overflow-wrap: anywhere; }
 .mcp-panel .ld-studio-row > label { font-size: .87em; min-inline-size: 100px; color: var(--color-subtle_text); }
 .mcp-panel .ld-studio-row > input[type="text"],
 .mcp-panel .ld-studio-row > select {
@@ -242,5 +246,4 @@
 .mcp-panel .ld-studio-control { display: grid; gap: 4px; font-size: .88em; }
 .mcp-panel .ld-studio-control input { inline-size: 100%; accent-color: var(--color-accent); }
 .mcp-panel .ld-studio-row input[type="color"] { inline-size: 54px; block-size: 32px; padding: 2px; }
-.mcp-panel select:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .mcp-panel .ld-studio-note { margin: 0; font-size: .88em; color: var(--color-subtle_text); overflow-wrap: anywhere; }
