@@ -18,7 +18,7 @@ Activate for LazyDesigner Desktop visual structure, hierarchy, typography, color
 
 ## Current UI authority
 
-The actual stack is Svelte 5 + Vite 8 + CSS semantic tokens (with Tailwind CSS 4 available) in `apps/desktop/`, plus a separate Tauri 2 host. The production `src/App.svelte`, its imported pages and `src/styles.css`/`src/tokens.css` are implementation authority. `docs/01-product/interface-ux.md` owns intended product UX. The experimental Unified Editor contains a *native Windows Blockbench placement*; a browser preview can show only its actual Svelte host and the application's existing native-stage placeholder, **never pretend it rendered the Blockbench application**.
+The actual stack is Svelte 5 + Vite 8 + CSS semantic tokens (with Tailwind CSS 4 available) in `apps/desktop/`, plus a separate Tauri 2 host. The production `src/App.svelte`, its imported pages and `src/styles.css`/`src/tokens.css` are implementation authority. `docs/01-product/interface-ux.md` owns intended product UX. The experimental Unified Editor reserves an **empty** middle region for native Windows Blockbench composition. A browser preview may render only the genuine Svelte host controls (Project Explorer, Model Tools and the host toolbar) surrounding that blank reservation: **never draw a Blockbench placeholder, faux editor, screenshot or canvas in the center and never claim it rendered native Blockbench**.
 
 ## Absolute image prohibition and phase gate
 
