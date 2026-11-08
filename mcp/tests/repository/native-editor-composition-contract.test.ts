@@ -20,6 +20,10 @@ describe("Native Blockbench composition P0 owner and recovery contract", () => {
     expect(app).toContain("import.meta.env.DEV && !devFixture");
     expect(app).toContain("if (restored) finishNavigate(next)");
     expect(stage).toContain("onclick={present}");
+    expect(stage).toContain("export async function present(): Promise<void>");
+    expect(stage).toContain('data-native-editor-reservation="true"');
+    expect(stage).toContain("{#if !compact}");
+    expect(stage).not.toContain('class="native-placeholder"');
     expect(stage).toContain("export async function detach()");
   });
 

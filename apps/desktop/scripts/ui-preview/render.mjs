@@ -208,8 +208,15 @@ async function main() {
     };
     if (editor) {
       checks.unified_editor_header = await frame.locator("header.editor-header").isVisible();
-      checks.real_blockbench_placeholder = await frame.locator(".native-editor-aperture .native-placeholder").count() === 1;
-      checks.actual_blockbench_not_claimed = await frame.locator(".native-editor-page").count() === 1;
+      checks.empty_native_window_reservation = await frame
+        .locator('.native-editor-aperture[data-native-editor-reservation="true"]')
+        .evaluate((element) => element.childElementCount === 0
+          && (element.textContent ?? "").trim() === ""
+          && getComputedStyle(element).backgroundImage === "none");
+      checks.no_native_ui_in_center = await frame.locator(
+        ".native-stage button, .native-stage canvas, .native-stage img, .native-stage .native-placeholder, .native-stage .native-editor-heading, .native-stage .native-editor-note"
+      ).count() === 0;
+      checks.native_composition_not_claimed = await frame.locator(".native-editor-page").count() === 1;
       const showPanels = dims.width >= 1810;
       checks.explorer_visible = (await frame.locator('#ld-unified-explorer').count() === 1) === (dims.width >= 920);
       checks.inspector_responsive = (await frame.locator('#ld-unified-inspector').count() === 1) === showPanels;

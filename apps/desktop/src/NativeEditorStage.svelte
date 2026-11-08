@@ -9,6 +9,7 @@
   };
   export let fixture = false;
   export let compact = false;
+  export let onPlacementChange: (state: SurfaceReceipt['status'] | 'UNCERTAIN', detail: string) => void = () => {};
 
   let aperture: HTMLDivElement;
   let presented = false;
@@ -29,7 +30,8 @@
     };
   }
 
-  async function present() {
+  // Used by the host toolbar; the native region itself must remain entirely empty.
+  export async function present(): Promise<void> {
     if (fixture || busy || uncertain) return;
     busy = true;
     problem = '';
@@ -43,11 +45,13 @@
       } else {
         note = receipt.note;
       }
+      onPlacementChange(receipt.status, receipt.note);
     } catch (error) {
       // A partial native placement can require explicit recovery even when
       // the initial action had no success receipt.
       uncertain = true;
       problem = String(error);
+      onPlacementChange('UNCERTAIN', problem);
     } finally {
       busy = false;
     }
@@ -65,15 +69,18 @@
         uncertain = false;
         problem = '';
         note = receipt.note;
+        onPlacementChange('DETACHED', receipt.note);
       } else if (receipt.status === 'DEFERRED') {
         note = receipt.note;
       } else if (receipt.status !== 'PRESENTED') {
         uncertain = true;
         problem = receipt.note;
+        onPlacementChange('UNCERTAIN', problem);
       }
     } catch (error) {
       uncertain = true;
       problem = String(error);
+      onPlacementChange('UNCERTAIN', problem);
     } finally {
       busy = false;
       if (layoutDirty && presented && !uncertain) scheduleUpdate();
@@ -107,16 +114,20 @@
       });
       if (receipt.status !== 'DETACHED') {
         problem = receipt.note;
+        uncertain = true;
+        onPlacementChange('UNCERTAIN', problem);
         return false;
       }
       note = receipt.note;
       problem = '';
       uncertain = false;
       presented = false;
+      onPlacementChange('DETACHED', receipt.note);
       return true;
     } catch (error) {
       problem = String(error);
       uncertain = true;
+      onPlacementChange('UNCERTAIN', problem);
       return false;
     } finally {
       busy = false;
@@ -154,14 +165,11 @@
 </script>
 
 <section class="native-editor-page" class:compact aria-label="Native Blockbench window composition">
+  {#if !compact}
   <header class="native-editor-heading">
     <div>
-      {#if compact}
-        <div class="compact-title"><span class="native-surface-dot" aria-hidden="true"></span>Native window <span class="experimental">Development</span></div>
-      {:else}
-        <h2>Native Blockbench workspace <span class="experimental">Development preview</span></h2>
-        <p>Original Blockbench · native Windows cutout · editing behavior not yet verified</p>
-      {/if}
+      <h2>Native Blockbench workspace <span class="experimental">Development preview</span></h2>
+      <p>Original Blockbench · native Windows cutout · editing behavior not yet verified</p>
     </div>
     <div class="native-editor-actions">
       {#if presented || uncertain}
@@ -178,17 +186,17 @@
       <span>Do not repeat placement if restoration is unverified. Use Detach to recover the original window.</span>
     </div>
   {/if}
-  <div class="native-editor-aperture" bind:this={aperture} aria-label="Native Blockbench window placement area">
-    <div class="native-placeholder">
-      <span class="placeholder-icon">◇</span>
-      <strong>{presented ? 'Window placement requested' : 'Blockbench editor area'}</strong>
-      <p>{presented ? 'The original Blockbench window is independently controlled by Windows. Input is not yet verified.' : 'Open Blockbench, then place its native window in this workspace.'}</p>
-    </div>
-  </div>
+  {/if}
+  <!-- No simulated editor, overlay, caption, placeholder or image in the native slot. -->
+  <div class="native-editor-aperture" bind:this={aperture}
+    data-native-editor-reservation="true"
+    aria-label="Reserved space for the original Blockbench window"></div>
+  {#if !compact}
   <footer class="native-editor-note" aria-live="polite">
     <span>{note}</span>
     <span>Native behavior unverified</span>
   </footer>
+  {/if}
 </section>
 
 <style>
@@ -199,24 +207,14 @@
   .experimental{display:inline-block;font-size:11px;color:var(--warning);font-weight:650;border:1px solid var(--border);border-radius:4px;padding:2px 5px}
   .native-editor-actions{display:flex;gap:6px}
   .native-editor-aperture{position:relative;flex:1;min-height:220px;border:1px solid var(--border-strong);border-radius:8px;background:#101216;display:grid;place-items:center}
-  .native-placeholder{text-align:center;max-width:320px;padding:16px;color:var(--muted);pointer-events:none}
-  .native-placeholder strong{display:block;color:var(--text-soft);font-weight:650}
-  .native-placeholder p{margin-top:5px;font-size:var(--font-sm)}
-  .placeholder-icon{display:block;font-size:28px;margin-bottom:6px;color:var(--surface-4)}
   .native-editor-note{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;color:var(--muted-2);font-size:var(--font-xs)}
+  /* The production editor occupies this entire slot, with no host chrome. */
   .native-editor-page.compact{
-    padding:2px;gap:3px;background:var(--ed-bg,var(--bg));color:var(--ed-text,var(--text));
-  }
-  .native-editor-page.compact .native-editor-heading{
-    min-height:27px;gap:7px;flex-wrap:wrap;padding:0 5px;
+    padding:0;gap:0;background:var(--ed-bg,var(--bg));color:var(--ed-text,var(--text));
   }
   .native-editor-page.compact .native-editor-aperture{
-    border:1px solid var(--ed-border,var(--border));border-radius:4px;
-    background:#151922;min-height:220px;
+    min-height:0; border:0; border-radius:0; background:var(--ed-bg,var(--bg));
   }
-  .native-editor-page.compact .native-placeholder{max-width:290px}
-  .native-editor-page.compact .native-placeholder strong{color:var(--ed-text,var(--text))}
-  .native-editor-page.compact .native-placeholder p{color:var(--ed-muted,var(--muted))}
   .native-editor-page.compact .native-editor-actions button{
     min-height:28px;padding:4px 9px;border-radius:5px;
     background:var(--ed-raised,var(--surface-2));color:var(--ed-text,var(--text-soft));
@@ -233,8 +231,6 @@
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
   }
   .native-editor-page.compact .experimental{font-size:10px;padding:1px 5px;color:#e1b65f;border-color:var(--ed-border,var(--border))}
-  .compact-title{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700}
-  .native-surface-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ed-muted-soft,var(--muted-2));flex:none}
   .native-editor-error{display:flex;flex-wrap:wrap;gap:7px;padding:8px 10px;border:1px solid var(--warning);border-radius:7px;background:var(--warning-bg);font-size:var(--font-sm)}
   .native-editor-error strong{color:var(--warning)}
   @media(max-width:760px){.native-editor-page{padding:10px 12px}.native-editor-aperture{min-height:220px}}

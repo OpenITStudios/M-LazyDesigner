@@ -24,7 +24,7 @@ The primary user outcome is **continue asset work**. Connection and installation
 
 ## Unified Editor — Blockbench-first companion layout
 
-The debug-only integrated Editor remains **one native Blockbench window** plus two non-overlay LazyDesigner docks. It is not a recreated 3D editor, an alternate Blockbench UI, or evidence of a successful Windows capture. A single 44px-class host header gives way to the native editor, whose own menu, viewport, Outliner, UV, Painter, Animation, Undo and Save stay authoritative. Native placement, resize and Detach/Restore retain their existing Windows guard and truthful failure path.
+The debug-only integrated Editor is **a LazyDesigner left dock + empty central native-window reservation + LazyDesigner right dock**. The middle is **not a LazyDesigner-designed editor panel**: no placeholder, fake 3D viewport, editor toolbar, mock Blockbench UI, screenshot, image or caption belongs inside it. The real, separately running Blockbench window alone supplies its menu, viewport, Outliner, UV, Painter, Animation, Undo and Save when the existing guarded Windows composition places that original window in the reserved area. LazyDesigner designs only its Project Explorer, Model Tools and a thin host utility header. The manual **Place Blockbench** and **Detach Blockbench** controls belong to that header, never inside the central reservation. The center must appear intentionally blank in a browser-only preview; that blank area is **not** a native Blockbench failure or proof of native integration. The Windows cutout, resize and Detach/Restore retain their existing safety/rollback requirements, and real end-to-end native presentation remains unverified until observed.
 
 | Editor viewport width | Default left dock | Default right dock | Native editor |
 | --- | --- | --- | --- |
@@ -39,7 +39,7 @@ Docks resize only through explicit pointer/keyboard separator actions (Project E
 
 **Model Tools** replaces the ambiguous name **AI & QA**. In order: **Model Overview** (observed model and saved/modified state), **Checks in Blockbench** (plain reference rows for native Geometry/Texturing/Animation/Particle Studio; not fake clickable controls or invented QA PASS) and **AI Connection** (observed status, Check/Refresh and Support route). AI connection state never blocks independent normal Blockbench modelling. The right dock is not an AI chat, duplicated QA engine or model editor until a separately implemented feature actually exists.
 
-Source review of layout or static tests is not native/window integration proof. Any requested visual preview must use the actual application render (F2) or an authorized target Windows capture (F3), never generative images, hand-recreated HTML or invented Blockbench viewport content.
+Source review of layout or static tests is not native/window integration proof. A browser-only F2 screenshot of the actual app must show the *real LazyDesigner side panels* around a genuinely **empty central native reservation**; it cannot prove the Blockbench window is present. Only an authorized real installed Windows capture (F3) can show Blockbench actually occupying the middle. Any requested visual preview must use the real application render, never generative images, hand-recreated HTML, invented placeholders or simulated Blockbench viewport content.
 
 ## Task journeys and truthful UI states
 

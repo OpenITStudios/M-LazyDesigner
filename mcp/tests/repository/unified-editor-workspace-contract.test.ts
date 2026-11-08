@@ -169,7 +169,13 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("--ed-bg: #1b1f27");
     expect(unified).toContain("--ed-panel: #232833");
     expect(unified).toContain("--ed-accent: #85a9df");
-    expect(stage).toContain('<div class="compact-title">');
+    expect(stage).toContain('data-native-editor-reservation="true"');
+    expect(stage).toContain("{#if !compact}");
+    expect(stage).toContain("export async function present(): Promise<void>");
+    expect(stage).not.toContain('class="native-placeholder"');
+    expect(unified).toContain("onPlacementChange={onNativePlacementChange}");
+    expect(unified).toContain('aria-label="Place original Blockbench window in workspace"');
+    expect(unified).toContain('aria-label="Detach and restore original Blockbench window"');
     expect(stage).toContain("Native behavior unverified");
     expect(app).toContain("{#if page !== 'Editor' || !import.meta.env.DEV}");
     expect(app).toContain(".desktop-shell.editor-shell");

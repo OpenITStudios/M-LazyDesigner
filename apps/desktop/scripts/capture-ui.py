@@ -524,8 +524,12 @@ def inspect_unified_editor(page, fixture, view):
     native_area = page.get_by_role("region", name="Blockbench native editor area")
     if native_area.count() != 1:
         issues.append("native editor area missing")
-    native_action = page.get_by_role("button", name="Show Blockbench here", exact=True)
-    if native_action.count() != 1 or native_action.is_enabled():
+    native_slot = workspace.locator('.native-editor-aperture[data-native-editor-reservation="true"]')
+    if native_slot.count() != 1:
+        issues.append("the original Blockbench needs one blank native reservation")
+    elif native_slot.evaluate("(node) => node.childElementCount === 0 && (node.textContent || '').trim() === ''") is not True:
+        issues.append("the native reservation must remain empty; no simulated Blockbench UI")
+    if workspace.locator(".native-stage button, .native-stage canvas, .native-stage img, .native-stage .native-editor-heading, .native-stage .native-editor-note").count():
         issues.append("fixture must never be able to place a native Blockbench window")
 
     project_toggle = page.get_by_role("button", name="Toggle Project Explorer", exact=True)

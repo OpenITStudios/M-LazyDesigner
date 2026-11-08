@@ -30,7 +30,10 @@
   export let navigateSupport: () => void;
   export let navigateWorkspace: () => void;
 
-  let nativeStage: { detach: () => Promise<boolean> } | undefined;
+  type NativePlacementState = 'PRESENTED' | 'DETACHED' | 'DEFERRED' | 'UNAVAILABLE' | 'UNCERTAIN';
+  let nativeStage: { detach: () => Promise<boolean>; present: () => Promise<void> } | undefined;
+  let nativePlacement: 'DETACHED' | 'PRESENTED' | 'UNCERTAIN' = 'DETACHED';
+  let nativePlacementDetail = '';
   let editorRoot: HTMLElement;
   let drag: { dock: EditorDock; pointerId: number; x: number; width: number } | null = null;
   let search = '';
@@ -145,6 +148,30 @@
     };
   });
 
+  function onNativePlacementChange(state: NativePlacementState, detail: string) {
+    nativePlacementDetail = detail;
+    if (state === 'PRESENTED') nativePlacement = 'PRESENTED';
+    else if (state === 'DETACHED') nativePlacement = 'DETACHED';
+    else if (state === 'UNCERTAIN') nativePlacement = 'UNCERTAIN';
+    // DEFERRED is a window-focus observation, not permission to place again.
+    if (state === 'UNCERTAIN') {
+      localNotice = 'Blockbench window restoration is unverified. Use Detach Blockbench before other actions. ' + detail;
+    } else if (state === 'UNAVAILABLE') {
+      localNotice = 'Native Blockbench placement is unavailable in this build. ' + detail;
+    } else if (state === 'DETACHED' || state === 'PRESENTED') {
+      if (localNotice.startsWith('Blockbench window restoration is unverified.')
+        || localNotice.startsWith('Native Blockbench placement is unavailable.')) localNotice = '';
+    }
+  }
+  function requestNativePlacement() {
+    if (fixture || !nativeStage || actionBusy || nativePlacement !== 'DETACHED') return;
+    localNotice = '';
+    void nativeStage.present();
+  }
+  function restoreNativeWindow() {
+    if (fixture || !nativeStage || actionBusy || nativePlacement === 'DETACHED') return;
+    void nativeStage.detach();
+  }
   export async function detach(): Promise<boolean> {
     return nativeStage ? nativeStage.detach() : true;
   }
@@ -259,6 +286,23 @@
       {/if}
       <button type="button" class="open-model" disabled={actionBusy || fixture}
         onclick={() => void openModelSafely()}>Open Model…</button>
+      {#if !fixture}
+        {#if nativePlacement === 'DETACHED'}
+          <button type="button" class="native-window-action"
+            aria-label="Place original Blockbench window in workspace"
+            title="Position the existing Blockbench window in the reserved center area"
+            disabled={actionBusy || !status?.blockbench.running}
+            onclick={requestNativePlacement}>Place Blockbench</button>
+        {:else}
+          <button type="button" class="native-window-action"
+            aria-label="Detach and restore original Blockbench window"
+            title={nativePlacement === 'UNCERTAIN'
+              ? 'Native placement is unverified; restore the original Blockbench window'
+              : 'Detach Blockbench and restore its original window bounds'}
+            disabled={actionBusy}
+            onclick={restoreNativeWindow}>Detach Blockbench</button>
+        {/if}
+      {/if}
       <button type="button" class="support-button" title="Support and settings"
         aria-label="Open Support" onclick={navigateSupport}><span aria-hidden="true">⚙</span></button>
     </div>
@@ -425,8 +469,10 @@
       {/if}
     {/if}
 
+    <!-- Empty native window reservation, never a recreated editor or a visual placeholder. -->
     <section class="native-stage" aria-label="Blockbench native editor area">
-      <NativeEditorStage bind:this={nativeStage} {fixture} compact={true}/>
+      <NativeEditorStage bind:this={nativeStage} {fixture} compact={true}
+        onPlacementChange={onNativePlacementChange}/>
     </section>
 
     {#if showTools}
@@ -440,6 +486,12 @@
       {/if}
       <aside id="ld-unified-inspector" class="inspector dock-panel" aria-label="Model Tools">
         <div class="pane-heading"><h3>Model Tools</h3><span class="read-only-label">COMPANION</span></div>
+        {#if !fixture && nativePlacementDetail}
+          <section class="inspector-section" aria-label="Native Blockbench window status">
+            <h4>Blockbench Window</h4>
+            <p>{nativePlacementDetail}</p>
+          </section>
+        {/if}
         <section class="inspector-section" aria-labelledby="ld-inspector-model">
           <h4 id="ld-inspector-model">Model Overview</h4>
           {#if active}
@@ -538,6 +590,9 @@
   }
   .editor-controls .open-model:hover:not(:disabled){background:#a2bde8;color:#0e1826}
   .editor-controls .launch-editor {border-color:var(--ed-border);background:#303947;color:var(--ed-text)}
+  .editor-controls .native-window-action {
+    border-color:var(--ed-border);background:var(--ed-raised);color:var(--ed-text);
+  }
   .editor-controls .support-button {width:33px;padding:5px;font-size:17px}
   .ai-indicator {
     display:flex;align-items:center;gap:6px;min-width:0;max-width:165px;
@@ -657,7 +712,7 @@
   }
   .recent-model span,.recent-model small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .recent-model small{font-size:10px;color:var(--ed-muted-soft)}
-  .native-stage{display:flex;min-width:0;min-height:0;overflow:hidden;background:#171b24}
+  .native-stage{display:flex;min-width:0;min-height:0;overflow:hidden;background:var(--ed-bg)}
   .native-stage :global(.native-editor-page){min-width:0;width:100%}
   .read-only-label {font-size:10px;color:var(--ed-muted-soft);letter-spacing:.04em}
   .inspector-section{padding:5px 1px 14px;margin-bottom:12px;border-bottom:1px solid var(--ed-border-soft)}

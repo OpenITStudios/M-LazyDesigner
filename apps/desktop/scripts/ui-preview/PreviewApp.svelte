@@ -48,8 +48,8 @@
     </div>
   </div>
   <p class="preview-disclaimer">
-    Browser render of the actual application. The native Blockbench window is NOT inside this screenshot;
-    its application placeholder is shown. No native operation or real AI readiness has been verified.
+    Browser render of the real LazyDesigner side panels. The native Blockbench window is NOT inside this screenshot;
+    the center is intentionally empty and reserved for its original Windows window. No native operation or AI readiness is verified.
   </p>
 </div>
 

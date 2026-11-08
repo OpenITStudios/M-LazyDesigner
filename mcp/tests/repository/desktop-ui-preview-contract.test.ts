@@ -75,7 +75,10 @@ describe("Desktop UI Preview: real application only", () => {
     expect(fixtures).toContain("export const FIXTURE_NOW_MS");
     expect(preview).toContain("native Blockbench window is NOT inside this screenshot");
     expect(script).toContain("native_tauri_host_absent");
-    expect(script).toContain("real_blockbench_placeholder");
+    expect(script).toContain("empty_native_window_reservation");
+    expect(script).toContain("no_native_ui_in_center");
+    expect(nativeStage).toContain('data-native-editor-reservation="true"');
+    expect(nativeStage).not.toContain('class="native-placeholder"');
     expect(script).not.toMatch(/image_gen|(?:npm|pnpm|yarn)\s+(?:install|add|ci)|npx\s/);
   });
 
