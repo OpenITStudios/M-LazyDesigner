@@ -69,7 +69,8 @@ describe("human-facing Blockbench UI", () => {
     expect(dialog).toContain("else document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();");
     const confirm = app.slice(app.indexOf("async function confirmDeleteProject()"), app.indexOf("async function openModel("));
     expect(confirm).toContain("invoke<ProjectDeleteResult>('confirm_delete_project'");
-    expect(confirm).toContain("await refresh();");
+    expect(confirm).toContain("const verifiedStatus = await refreshAfterAcknowledgment('Recycle Bin operation');");
+    expect(confirm).toContain("if (!verifiedStatus) return;");
     expect(confirm).toContain("await tick();");
     expect(confirm).toContain("document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();");
     expect(confirm).toContain("result.status === 'RECYCLED' ? 'success' : 'pending'");
@@ -163,6 +164,69 @@ describe("human-facing Blockbench UI", () => {
     expect(fixture).toContain('dismiss.press("Enter")');
     expect(fixture).toContain('"feedbackEvidence": "SOURCE_FIXED_DEV_FIXTURES_ONLY"');
     expect(fixture).not.toContain("repair.click()");
+  });
+
+  test("native receipts do not become false successes when the following full status check fails", async () => {
+    const app = await source("../apps/desktop/src/App.svelte");
+    expect(app).toContain("let lastFullStatusRefreshSucceeded = false;");
+    const refresh = app.slice(app.indexOf("async function refresh()"), app.indexOf("async function runProjectAction("));
+    expect(refresh).toContain("lastFullStatusRefreshSucceeded = false;");
+    expect(refresh).toContain("lastFullStatusRefreshSucceeded = true;");
+    expect(refresh).toContain("connectionMonitor.fullStatusFailed();");
+    expect(refresh).toContain("async function refreshAfterAcknowledgment(action: string): Promise<boolean>");
+    expect(refresh).toContain("if (lastFullStatusRefreshSucceeded) return true;");
+    expect(refresh).toContain("reportStatusAfterAcknowledgment(action);");
+    expect(refresh).toContain("action: 'refresh-status'");
+    expect(refresh).toContain("Do not repeat the action just because verification failed.");
+    expect(refresh).toContain("confirmationNeeded: 'Current Desktop/Blockbench state after the native acknowledgement.'");
+
+    const pref = app.slice(app.indexOf("async function runProjectAction("), app.indexOf("async function addProjectFolder("));
+    const folder = app.slice(app.indexOf("async function addProjectFolder("), app.indexOf("async function beginDeleteProject("));
+    const deletion = app.slice(app.indexOf("async function confirmDeleteProject("), app.indexOf("async function openModel("));
+    const model = app.slice(app.indexOf("async function openModel("), app.indexOf("async function focusCurrentEditor("));
+    const select = app.slice(app.indexOf("async function chooseBlockbenchExecutable("), app.indexOf("async function openBlockbenchEditor("));
+    const editor = app.slice(app.indexOf("async function openBlockbenchEditor("), app.indexOf("async function copyNavigationPath("));
+    for (const section of [pref, folder, deletion, model, select, editor]) {
+      expect(section).toContain("await refreshAfterAcknowledgment(");
+    }
+    expect(deletion.indexOf("recordOperation('Move Project to Recycle Bin'"))
+      .toBeLessThan(deletion.indexOf("const verifiedStatus = await refreshAfterAcknowledgment("));
+    expect(deletion).toContain("result.status === 'RECYCLED' ? 'success' : 'pending'");
+    expect(deletion).toContain("if (!verifiedStatus) return;");
+    expect(deletion).not.toContain("if (!verifiedStatus) throw");
+    expect(deletion).toContain("await tick();");
+
+    const connect = app.slice(app.indexOf("async function connectBlockbench("), app.indexOf("async function showRetiredPluginFile("));
+    const install = app.slice(app.indexOf("async function performInstall("), app.indexOf("async function showPluginFile("));
+    expect(connect).toContain("if (!lastFullStatusRefreshSucceeded)");
+    expect(connect).toContain("reportStatusAfterAcknowledgment('Blockbench connection')");
+    expect(connect).toContain("status?.product_state !== 'ready' || status.readiness.ready !== true");
+    expect(connect).toContain("result.status === 'RUNTIME_READY' && status?.runtime_ready !== true");
+    expect(connect).toContain("Connection returned a ready result, but the latest Desktop status did not confirm");
+    expect(connect.indexOf("reportStatusAfterAcknowledgment('Blockbench connection')"))
+      .toBeLessThan(connect.indexOf("showActionToast(focused"));
+    expect(connect.indexOf("status?.product_state !== 'ready' || status.readiness.ready !== true"))
+      .toBeLessThan(connect.indexOf("showActionToast(focused"));
+    expect(install).toContain("reportStatusAfterAcknowledgment('LazyDesigner setup')");
+    expect(install).toContain("ready.status === 'READY' && (status?.product_state !== 'ready' || status.readiness.ready !== true)");
+    expect(install).toContain("ready.status === 'RUNTIME_READY' && status?.runtime_ready !== true");
+    expect(install).toContain("Setup returned a ready result, but Desktop has not confirmed");
+    expect(install.indexOf("reportStatusAfterAcknowledgment('LazyDesigner setup')"))
+      .toBeLessThan(install.indexOf("if (ready.status === 'READY' &&"));
+    expect(install.indexOf("if (ready.status === 'READY' &&"))
+      .toBeLessThan(install.indexOf("else if (ready.status === 'READY') showActionToast("));
+
+    const managed = app.slice(app.indexOf("async function runManagedAction("), app.indexOf("onMount(() => {"));
+    expect(managed).toContain("recordOperation(actionLabel, feedback.kind, feedback.status)");
+    expect(managed).toContain("if (action === 'update') updateCheck = null;");
+    expect(managed).toContain("if (!(await refreshAfterAcknowledgment(actionLabel))) return;");
+    expect(managed.indexOf("if (!(await refreshAfterAcknowledgment(actionLabel))) return;"))
+      .toBeLessThan(managed.indexOf("showActionToast(feedback.message, feedback.kind)"));
+    // Full status is still read-only; neither this helper nor errors retry the
+    // acknowledged model launch, deletion, installation or managed action.
+    expect(refresh).not.toContain("confirm_delete_project");
+    expect(refresh).not.toContain("managed_action");
+    expect(refresh).not.toContain("ensure_ready");
   });
 
   test("recovery notices separate action, next step and unverified result without unsafe retries", async () => {

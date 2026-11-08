@@ -25,6 +25,9 @@
 
   let status: SystemStatus | null = null;
   let loading = true;
+  // A successful native receipt and a successful FULL status observation are
+  // separate facts. Never promote the former into a fresh-UI claim.
+  let lastFullStatusRefreshSucceeded = false;
   let error = '';
   let errorTitle = 'Action could not be completed';
   let errorDetail: string | null = null;
@@ -177,6 +180,7 @@
   async function refresh() {
     closeUtilityMenu();
     loading = true;
+    lastFullStatusRefreshSucceeded = false;
     error = '';
     errorDetail = null;
     errorRecovery = null;
@@ -184,6 +188,7 @@
     if (devFixture) {
       status = createDevFixtureStatus(devFixture);
       statusPresentationNowMs = FIXTURE_NOW_MS;
+      lastFullStatusRefreshSucceeded = true;
       loading = false;
       return;
     }
@@ -191,6 +196,7 @@
       status = await observeStatus(invoke<SystemStatus>('system_status'), 30_000);
       statusPresentationNowMs = Date.now();
       setupStaged = !status?.manager_available && status?.bootstrap_pending === true;
+      lastFullStatusRefreshSucceeded = true;
       connectionMonitor.fullStatusSucceeded();
     } catch (cause) {
       // A failed full observation must never leave actions enabled using
@@ -200,6 +206,31 @@
     } finally {
       loading = false;
     }
+  }
+
+  /**
+   * A native operation may be acknowledged while the subsequent full
+   * system_status observation fails. Keep its receipt distinct from machine
+   * readiness; do not show a completed/ready toast or repeat the operation.
+   * refresh() retains the original status error as Support technical detail.
+   */
+  function reportStatusAfterAcknowledgment(action: string): void {
+    // Preserve the full-status failure detail in Support, but distinguish
+    // it from a failed native operation/receipt.
+    errorTitle = 'Action acknowledged; current status not verified';
+    error = `${action} returned a native result, but Desktop could not refresh its current state. Do not repeat the action just because verification failed.`;
+    errorRecovery = {
+      nextStep: 'Refresh status to check current state. Do not repeat the original action solely because the status check failed.',
+      confirmationNeeded: 'Current Desktop/Blockbench state after the native acknowledgement.',
+      action: 'refresh-status',
+    };
+  }
+
+  async function refreshAfterAcknowledgment(action: string): Promise<boolean> {
+    await refresh();
+    if (lastFullStatusRefreshSucceeded) return true;
+    reportStatusAfterAcknowledgment(action);
+    return false;
   }
 
   async function runProjectAction(action: ProjectAction, id: string) {
@@ -214,7 +245,9 @@
     try {
       const result = await invoke<ProjectNavigationActionResult>('project_navigation_action', { action, id });
       if (action === 'pin-project' || action === 'unpin-project' ||
-          action === 'remove-project-folder' || action === 'restore-project-preferences') await refresh();
+          action === 'remove-project-folder' || action === 'restore-project-preferences') {
+        if (!(await refreshAfterAcknowledgment('Project shortcut change'))) return;
+      }
       if (result.status === 'REMOVED_FROM_LIST') showActionToast('Removed from Workspace. Your files were not deleted.');
       else if (result.status === 'PINNED') showActionToast('Project pinned.');
       else if (result.status === 'UNPINNED') showActionToast('Project unpinned.');
@@ -234,7 +267,7 @@
     try {
       const result = await invoke<ProjectNavigationActionResult>('add_project_folder');
       if (result.status === 'ADDED' || result.status === 'ALREADY_ADDED') {
-        await refresh();
+        if (!(await refreshAfterAcknowledgment('Project folder selection'))) return;
         showActionToast(result.status === 'ADDED'
           ? 'Project folder added. Your files were not changed.'
           : 'This folder is already in your projects.');
@@ -275,12 +308,14 @@
       const result = await invoke<ProjectDeleteResult>('confirm_delete_project', { token: review.token });
       deleteReview = null;
       expandedProjectId = null;
-      await refresh();
-      // A recycled project's action trigger may no longer exist after refresh.
-      // Move focus to the persistent page heading, not the removed row/menu.
+      // The Windows receipt may be RECYCLED or RECYCLED_SHORTCUT_RETAINED;
+      // neither proves this Desktop's next full status is available.
+      recordOperation('Move Project to Recycle Bin', result.status === 'RECYCLED' ? 'success' : 'pending', result.status);
+      const verifiedStatus = await refreshAfterAcknowledgment('Recycle Bin operation');
+      // The recycled project's action trigger may no longer exist after refresh.
       await tick();
       document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();
-      recordOperation('Move Project to Recycle Bin', 'success', result.status);
+      if (!verifiedStatus) return;
       showActionToast(result.message, result.status === 'RECYCLED' ? 'success' : 'pending');
     } catch (cause) {
       deleteReview = null;
@@ -299,7 +334,7 @@
     try {
       const feedback = await editorOperations.openModel(id);
       if (feedback !== null) {
-        await refresh();
+        if (!(await refreshAfterAcknowledgment('Model launch'))) return;
         showActionToast(
           feedback.message,
           feedback.verification === 'confirmed-active' ? 'success' : 'pending',
@@ -337,7 +372,7 @@
     try {
       const result = await invoke<BlockbenchSelectionResult>('choose_blockbench_executable');
       if (result.status === 'SELECTED') {
-        await refresh();
+        if (!(await refreshAfterAcknowledgment('Blockbench executable selection'))) return;
         showActionToast('Blockbench installation selected. No model files or managed plugins were changed.');
       }
     } catch (cause) {
@@ -353,7 +388,7 @@
     clearActionFeedback();
     try {
       const feedback = await editorOperations.openEditor();
-      await refresh();
+      if (!(await refreshAfterAcknowledgment('Blockbench editor launch'))) return;
       showActionToast(feedback.message, feedback.verification === 'focused' ? 'success' : 'pending');
     } catch (cause) {
       reportError(cause);
@@ -387,6 +422,19 @@
     clearActionFeedback();
     try {
       const result = await setupOperations.connect({ refresh, onReadiness: applyReadiness });
+      if (!lastFullStatusRefreshSucceeded) {
+        // ensure_ready returned, but its full machine snapshot did not.
+        reportStatusAfterAcknowledgment('Blockbench connection');
+        return;
+      }
+      if (result.status === 'READY' && (status?.product_state !== 'ready' || status.readiness.ready !== true)) {
+        showActionToast('Connection returned a ready result, but the latest Desktop status did not confirm a current AI session. Verify the AI client or Refresh status.', 'pending');
+        return;
+      }
+      if (result.status === 'RUNTIME_READY' && status?.runtime_ready !== true) {
+        showActionToast('Connection returned a Runtime-ready result, but the latest Desktop check did not confirm the Runtime. Refresh status before reconnecting.', 'pending');
+        return;
+      }
       if (result.status === 'READY' || result.status === 'RUNTIME_READY') {
         const focused = await editorOperations.focus();
         const connection = result.reason === 'MCP_SESSION_UNVERIFIED'
@@ -437,12 +485,21 @@
           setupStaged = !feedback.verifyRuntime;
         },
       }, migrateLegacy);
+      if (!lastFullStatusRefreshSucceeded) {
+        // A verified bootstrap receipt is not a verified post-install snapshot.
+        reportStatusAfterAcknowledgment('LazyDesigner setup');
+        return;
+      }
       const ready = outcome.readiness;
       if (!ready) {
         showActionToast(outcome.feedback.message, outcome.feedback.kind);
         return;
       }
-      if (ready.status === 'READY') showActionToast('Setup complete. LazyDesigner is ready.');
+      if (ready.status === 'READY' && (status?.product_state !== 'ready' || status.readiness.ready !== true)) {
+        showActionToast('Setup returned a ready result, but Desktop has not confirmed the current AI session. Check the AI client before treating setup as fully ready.', 'pending');
+      } else if (ready.status === 'RUNTIME_READY' && status?.runtime_ready !== true) {
+        showActionToast('Setup returned a Runtime-ready result, but Desktop has not confirmed the current Blockbench Runtime. Refresh status before relying on the connection.', 'pending');
+      } else if (ready.status === 'READY') showActionToast('Setup complete. LazyDesigner is ready.');
       else if (ready.status === 'RUNTIME_READY') showActionToast('Setup complete. Blockbench is ready.');
       else if (ready.status === 'NEEDS_ATTENTION') {
         reportReadinessFailure(ready, 'install');
@@ -568,9 +625,10 @@
     clearActionFeedback();
     try {
       const feedback = await maintenanceOperations.execute(request);
-      showActionToast(feedback.message, feedback.kind);
       recordOperation(actionLabel, feedback.kind, feedback.status);
-      await refresh();
+      if (action === 'update') updateCheck = null;
+      if (!(await refreshAfterAcknowledgment(actionLabel))) return;
+      showActionToast(feedback.message, feedback.kind);
       if (action === 'update') {
         // Staging is not installation. Re-validate the local staged package
         // after this explicit update action so the user can finish without

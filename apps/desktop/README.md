@@ -804,6 +804,39 @@ recovery retry queue, second status/router, new stored state, implicit
 repair, or change to Rust/Gateway authority was introduced. Bun/source and
 Playwright recovery specimens are authored but still `NOT_EXECUTED`.
 
+### Native receipt versus refreshed Desktop status
+
+A user-initiated native operation can return a valid result while the
+following full `system_status` observation fails or times out. The Desktop
+must not turn that acknowledgement into a "current state verified" claim.
+`refresh()` is still the single read-only full status owner; it records
+whether that *specific* observation succeeded. After user-triggered
+project changes, model/editor launch, executable selection, Recycle Bin
+operation or managed action, `refreshAfterAcknowledgment()` reports a
+separate, user-visible **Action acknowledged; current status not verified**
+state if status refresh failed. The next action is **Refresh status**, not
+repeating the original operation.
+
+For Recycle Bin actions, record the native `RECYCLED` or
+`RECYCLED_SHORTCUT_RETAINED` acknowledgement **before** refreshing status;
+a later read failure does not create a false "Delete failed" operation record
+or trigger another filesystem action. Setup/connection flows retain their
+existing `setupOperations` owner and only show readiness claims when their
+subsequent full status observation succeeded. In addition, a native
+`READY` result must agree with the refreshed `product_state: ready` and
+`readiness.ready: true` before showing a confirmed AI-ready message;
+`RUNTIME_READY` must agree with `runtime_ready: true`. A contradictory
+snapshot is shown as a persistent *Next step*, not silently promoted to
+readiness. For managed update actions, invalidate the previously shown update
+check before refreshing so a stale package decision is never carried into
+the unverified state.
+
+This is presentation and status-observation ordering only: no new process
+monitor, IPC, mutation retry, filesystem inspection, installer, Gateway
+controller or native verification is introduced. The source regressions
+are `AUTHORED_NOT_EXECUTED`; Windows/Tauri behavior remains
+`NATIVE_UNVERIFIED`.
+
 ### Accurate status and action feedback
 
 When a full status observation becomes unverified, Support explicitly marks
