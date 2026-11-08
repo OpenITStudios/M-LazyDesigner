@@ -69,7 +69,7 @@ Which data is canonical, derived or user-owned, and how is Desktop metadata prot
 What development discipline, permission and STOP checks apply?
 → development-operating-standard.md
 
-Where are LazyDesigner's optional seven-source Agent Rules reference details?
+Where are LazyDesigner's optional eight-source Agent Rules methods, including the Matt Pocock adaptation?
 → agent-rules.md
 
 How are Bun tests inventoried, selected, modernized and retired without losing coverage?

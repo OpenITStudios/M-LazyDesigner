@@ -116,4 +116,45 @@ describe("Skill lane and activation contract", () => {
     expect(skillDevelopment).toContain("A visual/reference/asset failure does not become DEVELOPMENT");
     expect(skillDevelopment).toContain("Static string tests prove repository consistency, not actual model behavior.");
   });
+  test("Matt Pocock methods stay conditional inside canonical LazyDesigner lanes", async () => {
+    const [root, policy, standard, skillOwner, complexOwner, fixture] = await Promise.all([
+      source("../AGENTS.md"),
+      source("../docs/04-system/agent-rules.md"),
+      source("../docs/04-system/development-operating-standard.md"),
+      source("../.agents/skills/lazydesigner-skill-development/SKILL.md"),
+      source("../.agents/skills/lazydesigner-development-brief/SKILL.md"),
+      source("tests/fixtures/skill-routing-cases.json"),
+    ]);
+
+    expect(root).toContain("independent eight-method root");
+    expect(root).toContain("Matt Pocock Skills");
+    expect(policy).toContain("Matt Pocock engineering methods (adapted)");
+    expect(policy).toContain("4ae2317ddb22b046e26455e4f9c9b3aaaf62212d");
+    expect(policy).toContain("AGENT_EFFECTIVENESS_NOT_MEASURED");
+    expect(standard).toContain("eight-source adaptive development");
+    expect(standard).toContain("Standards");
+    expect(standard).toContain("Spec");
+    expect(skillOwner).toContain("Conditional Matt Pocock instruction-writing reference");
+    expect(complexOwner).toContain("Conditional deep-module and review method");
+
+    const cases = JSON.parse(fixture).cases as Array<{
+      id: string; lane: string; expected_skill: string; forbidden_skills: string[];
+    }>;
+    const expected = {
+      "matt-pocock-agent-rules-adoption": ["SKILL_SYSTEM", "lazydesigner-skill-development"],
+      "matt-pocock-architecture-ambiguity": ["DEVELOPMENT", "lazydesigner-development-brief"],
+      "matt-pocock-bug-diagnosis-not-meta": ["DEVELOPMENT", "lazydesigner-blockbench-development"],
+      "matt-pocock-visual-authoring-stays-in-use": ["IN_USE", "lazydesigner-modelling"],
+      "matt-pocock-explain-only-no-skill": ["DEVELOPMENT", "NONE"],
+    };
+    for (const [id, [lane, skill]] of Object.entries(expected)) {
+      const item = cases.find((entry) => entry.id === id);
+      expect(item, id).toBeDefined();
+      expect(item?.lane).toBe(lane);
+      expect(item?.expected_skill).toBe(skill);
+      expect(item?.forbidden_skills.length).toBeGreaterThan(0);
+    }
+    // Static policy integrity only. Real agent routing and Blockbench behavior are not executed here.
+  });
+
 });

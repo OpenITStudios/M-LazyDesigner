@@ -81,6 +81,18 @@ When a development task claims to improve generated model quality, reference fid
 
 The benchmark is development/evaluation context only; normal asset authoring does not load it. Quality uses per-dimension `PASS | FAIL | UNVERIFIED`; efficiency is recorded separately as cost to accepted result. No aggregate score, cube-count target, keyframe-count target, or minimum-tool-call metric may override a critical visual/structural failure.
 
+## Conditional deep-module and review method
+
+When a genuine cross-owner ambiguity or architectural interface decision
+triggered this META Skill, use the [local Matt Pocock engineering
+adaptation](../../../docs/04-system/agent-rules.md#matt-pocock-engineering-methods-adapted)
+for a caller/interface/implementation trace and the deletion test.
+During completion, separate **Standards** review from **Spec** review
+against the exact change and its affected consumers. This refines the
+existing development chain; it does **not** make bounded bugs Complex,
+introduce another specialist, start tests while Codex is on hold, or
+permit changes to Control/Gateway/Runtime ownership without evidence.
+
 ## Evidence before optimization
 
 `current behavior/artifact → representative evidence → classify failure → first wrong owner → smallest complete change → matching proof`

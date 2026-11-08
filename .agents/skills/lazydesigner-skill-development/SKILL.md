@@ -95,6 +95,19 @@ task outcomes before removing knowledge. Distinguish required-on-trigger from
 supporting references, test both must-load and must-not-load cases, and never
 claim model compliance or artistic improvement from static file assertions.
 
+## Conditional Matt Pocock instruction-writing reference
+
+When the requested work edits root Agent Rules, Skill activation text or
+agent-facing procedure, use the [local Matt Pocock writing/engineering
+adaptation](../../../docs/04-system/agent-rules.md#matt-pocock-engineering-methods-adapted)
+**inside this Skill's existing Eval-Driven Procedure**. Keep always-loaded
+root guidance as conditional context pointers and detailed procedures
+with their existing owner. Test positive, collision, pressure and no-skill
+prompts through the current evaluation corpus; do not create a new
+`mattpocock` Skill, router, test framework, glossary or packaged upstream
+plugin. A source-level string test is not a behavioral model trace or
+a measured quality improvement.
+
 ## Activation Classes
 
 ```text

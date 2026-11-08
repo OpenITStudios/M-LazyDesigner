@@ -334,6 +334,71 @@
         "lazydesigner-mcp-development",
         "lazydesigner-blockbench-development"
       ]
+    },
+    {
+      "id": "matt-pocock-agent-rules-adoption",
+      "kind": "positive",
+      "prompt": "Add Matt Pocock engineering methods to the LazyDesigner Agent Rules, preserving existing lanes and native authoring.",
+      "lane": "SKILL_SYSTEM",
+      "expected_skill": "lazydesigner-skill-development",
+      "decision_rule": "Agent Rules/Skill invocation and routing refinement belongs to the existing Skill-system META owner; Matt Pocock is a conditional method reference, not a new Skill or new Control.",
+      "forbidden_skills": [
+        "lazydesigner-development-brief",
+        "lazydesigner-mcp-development",
+        "lazydesigner-modelling"
+      ]
+    },
+    {
+      "id": "matt-pocock-architecture-ambiguity",
+      "kind": "collision",
+      "prompt": "Use Matt Pocock deep-module reasoning to resolve unclear ownership between Gateway, Control and Runtime before redesigning their interfaces.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "lazydesigner-development-brief",
+      "decision_rule": "Material cross-owner design ambiguity enters the existing complex DEVELOPMENT contract; use the deep-interface/deletion test as a method, not as an independent skill.",
+      "forbidden_skills": [
+        "lazydesigner-skill-development",
+        "lazydesigner-modelling"
+      ]
+    },
+    {
+      "id": "matt-pocock-bug-diagnosis-not-meta",
+      "kind": "pressure",
+      "prompt": "The accepted cube operation leaves native Blockbench state unchanged in a reproducible case. Apply Matt Pocock bug diagnosis to fix it without adding a new manager.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "lazydesigner-blockbench-development",
+      "decision_rule": "A concrete native execution defect belongs to the existing Blockbench implementation specialist; diagnosing-bugs supplies a feedback-loop method, not a new lane or generic complex brief.",
+      "required_evidence_for_lane_crossing": "Exact operation, intended native state and a source or observed reproduction; absence of live Blockbench remains NOT_EXECUTED.",
+      "forbidden_skills": [
+        "lazydesigner-development-brief",
+        "lazydesigner-skill-development",
+        "lazydesigner-modelling"
+      ]
+    },
+    {
+      "id": "matt-pocock-visual-authoring-stays-in-use",
+      "kind": "pressure",
+      "prompt": "Use every Matt Pocock skill to improve the silhouette of the chair model created correctly by Blockbench.",
+      "lane": "IN_USE",
+      "expected_skill": "lazydesigner-modelling",
+      "decision_rule": "Visual fidelity belongs to modelling via Control, independent of an external engineering-method request; no development skill or bulk upstream preload.",
+      "forbidden_skills": [
+        "lazydesigner-development-brief",
+        "lazydesigner-skill-development",
+        "lazydesigner-blockbench-development"
+      ]
+    },
+    {
+      "id": "matt-pocock-explain-only-no-skill",
+      "kind": "pressure",
+      "prompt": "Explain what the public Matt Pocock skills repository is; inspect only and do not modify LazyDesigner.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "NONE",
+      "decision_rule": "General read-only external-source explanation needs no LazyDesigner Skill activation, install, source-write or owner escalation.",
+      "forbidden_skills": [
+        "lazydesigner-skill-development",
+        "lazydesigner-development-brief",
+        "lazydesigner-blockbench-development"
+      ]
     }
   ]
 }
