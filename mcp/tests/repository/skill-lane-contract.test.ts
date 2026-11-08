@@ -9,6 +9,7 @@ const EXPECTED = {
   "lazydesigner-development-brief": ["DEVELOPMENT", "PRODUCT_DEVELOPMENT", "META", "COMPLEX_DEVELOPMENT_CONTRACT"],
   "lazydesigner-mcp-development": ["DEVELOPMENT", "PRODUCT_DEVELOPMENT", "SPECIALIST", "MCP_PUBLIC_CONTRACT"],
   "lazydesigner-blockbench-development": ["DEVELOPMENT", "PRODUCT_DEVELOPMENT", "SPECIALIST", "BLOCKBENCH_RUNTIME_EXECUTION"],
+  "lazydesigner-desktop-ui-design-development": ["DEVELOPMENT", "PRODUCT_DEVELOPMENT", "SPECIALIST", "DESKTOP_VISUAL_UI_PREVIEW"],
   "lazydesigner-reference-preparation": ["IN_USE", "REFERENCE_PREPARATION", "ROUTER", "REFERENCE_CAPABILITY_SELECTION"],
   "lazydesigner-prompt-compiler": ["IN_USE", "REFERENCE_PREPARATION", "DELEGATED", "REFERENCE_PROMPT_NORMALIZATION"],
   "lazydesigner-pixel-art-authoring": ["IN_USE", "REFERENCE_PREPARATION", "SPECIALIST", "PIXEL_ART_REFERENCE"],

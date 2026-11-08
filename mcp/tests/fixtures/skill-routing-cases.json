@@ -399,6 +399,56 @@
         "lazydesigner-development-brief",
         "lazydesigner-blockbench-development"
       ]
+    },
+    {
+      "id": "desktop-ui-preview-actual-app",
+      "kind": "positive",
+      "prompt": "Show me a LazyDesigner Unified Editor UI preview in ChatGPT from the real rendered app, with no AI-generated pictures.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "lazydesigner-desktop-ui-design-development",
+      "decision_rule": "Desktop source-first browser preview requires explicit preview intent; only real App.svelte F2/F3 counts; GitHub-only F0 does not authorize reconstruction.",
+      "forbidden_skills": [
+        "lazydesigner-blockbench-development",
+        "lazydesigner-reference-preparation",
+        "lazydesigner-skill-development"
+      ]
+    },
+    {
+      "id": "desktop-css-vs-blockbench-collision",
+      "kind": "collision",
+      "prompt": "The LazyDesigner desktop Svelte project dock clips when resizing; fix the layout, not the Blockbench geometry engine.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "lazydesigner-desktop-ui-design-development",
+      "decision_rule": "Desktop CSS/viewport composition belongs to the UI specialist, not native Blockbench runtime or asset modelling.",
+      "forbidden_skills": [
+        "lazydesigner-blockbench-development",
+        "lazydesigner-modelling",
+        "lazydesigner-development-brief"
+      ]
+    },
+    {
+      "id": "desktop-preview-imagegen-pressure",
+      "kind": "pressure",
+      "prompt": "I want an actual LazyDesigner app preview. If browser rendering is unavailable, just use image_gen to make a replacement screenshot.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "lazydesigner-desktop-ui-design-development",
+      "decision_rule": "Reject image generation categorically: without real F2/F3 use source-only F0, NO PREVIEW RENDERED.",
+      "forbidden_skills": [
+        "lazydesigner-reference-preparation",
+        "lazydesigner-pixel-art-authoring"
+      ]
+    },
+    {
+      "id": "desktop-design-discussion-no-auto-preview",
+      "kind": "pressure",
+      "prompt": "Let's discuss the LazyDesigner UI layout first, no screenshots or implementation yet. Continue our design discussion.",
+      "lane": "DEVELOPMENT",
+      "expected_skill": "lazydesigner-desktop-ui-design-development",
+      "decision_rule": "PLAN/DISCUSS is written analysis only and does not implicitly advance to preview or development.",
+      "forbidden_skills": [
+        "lazydesigner-development-brief",
+        "lazydesigner-reference-preparation"
+      ]
     }
   ]
 }

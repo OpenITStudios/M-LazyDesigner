@@ -162,6 +162,7 @@ Execution owner: Codex development workflow.
 | --- | --- | --- |
 | `.agents/skills/lazydesigner-mcp-development/SKILL.md` | `lazydesigner-mcp-development` | client-visible MCP contracts, schemas, registration and protocol/session behavior |
 | `.agents/skills/lazydesigner-blockbench-development/SKILL.md` | `lazydesigner-blockbench-development` | Blockbench plugin/runtime APIs, lifecycle, UI, Undo and runtime mutation mechanics |
+| `.agents/skills/lazydesigner-desktop-ui-design-development/SKILL.md` | `lazydesigner-desktop-ui-design-development` | Desktop Svelte visual design, explicit real-app UI Preview and browser-rendered source-first QA; never generated-image previews or native Blockbench claims |
 | `.agents/skills/lazydesigner-development-brief/SKILL.md` | `lazydesigner-development-brief` | complex/ambiguous cross-owner development design only |
 
 Build/package/compiler mechanics remain owned by the exact source/build owner under `mcp/AGENTS.md` unless repeated work justifies a distinct reusable Skill.
@@ -174,6 +175,9 @@ MCP public/protocol contract
 
 Blockbench plugin/runtime/lifecycle/API behavior
 → lazydesigner-blockbench-development
+
+Desktop Svelte visual hierarchy/responsive UI/explicit real-app preview
+→ lazydesigner-desktop-ui-design-development
 
 complex architecture / materially ambiguous ownership
 → lazydesigner-development-brief
@@ -255,6 +259,7 @@ lazydesigner-texturing
 lazydesigner-animation
 lazydesigner-mcp-development
 lazydesigner-blockbench-development
+lazydesigner-desktop-ui-design-development
 lazydesigner-development-brief
 lazydesigner-skill-development
 ```

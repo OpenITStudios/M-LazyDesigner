@@ -9,6 +9,10 @@
   },
   "scripts": {
     "dev:frontend": "vite --host 127.0.0.1 --port 1421 --strictPort",
+    "preview:plan": "node scripts/ui-preview/render.mjs --current-local",
+    "preview:quick": "node scripts/ui-preview/render.mjs --execute --current-local",
+    "preview:render": "node scripts/ui-preview/render.mjs",
+    "preview:typecheck": "node scripts/ui-preview/typecheck.mjs",
     "prepare:icons": "tauri icon src-tauri/app-icon.svg",
     "prepare:managed-resource": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/prepare-managed-resource.ps1",
     "dev:app": "npm run prepare:icons && tauri dev",
