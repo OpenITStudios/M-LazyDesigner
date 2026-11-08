@@ -46,7 +46,9 @@ FEEDBACK_SCENARIOS = (
 # One fixed busy-row specimen. Opening a model is never invoked by this script.
 OPENING_SCENARIOS = (("ready", "workspace", "opening-model"),)
 # The narrow layout is a source-level proxy for high-zoom/small effective width, not native proof.
-VIEWPORTS = ((390, 640), (780, 560), (980, 680))
+VIEWPORTS = ((390, 640), (780, 560), (980, 680), (1920, 1080))
+# At 1920px capture only the Editor: this specifically exercises both side docks
+# without multiplying all unrelated Support/Workspace fixture screenshots.
 
 
 def parse_args():
@@ -541,14 +543,15 @@ def inspect_unified_editor(page, fixture, view):
     explorer = page.get_by_role("complementary", name="Project Explorer")
     inspector = page.get_by_role("complementary", name="Model Tools")
     compact = width < 920
+    wide = width >= 1810
     if compact and explorer.count():
         issues.append("compact Editor must start with Project Explorer collapsed")
     if compact and inspector.count():
         issues.append("compact Editor must start with Model Tools collapsed")
     if not compact and explorer.count() != 1:
         issues.append("standard Editor must start with Project Explorer")
-    if inspector.count() != 0:
-        issues.append("standard-width Editor should leave Model Tools closed for native viewport space")
+    if inspector.count() != (1 if wide else 0):
+        issues.append("Model Tools default visibility does not respect native editor width")
 
     # Toggle only Svelte-local presentation controls. Native actions stay disabled.
     opened_for_check = compact
@@ -558,12 +561,14 @@ def inspect_unified_editor(page, fixture, view):
             issues.append("Project Explorer cannot be opened from the compact toolbar")
     # The narrow editor uses a real 48px explorer rail. Expand it only for
     # the search interaction test; this changes Svelte UI state, not Blockbench.
+    expanded_rail_for_check = False
     if explorer.count() == 1 and explorer.locator(".rail-actions").count() == 1:
         expand = page.get_by_role("button", name="Expand Project Explorer", exact=True)
         if expand.count() != 1:
             issues.append("Project Explorer rail has no accessible expand action")
         else:
             expand.click()
+            expanded_rail_for_check = True
     if fixture in {"ready", "many-projects"}:
         search = page.locator("#ld-unified-model-search")
         if search.count() != 1:
@@ -581,7 +586,14 @@ def inspect_unified_editor(page, fixture, view):
         project_toggle.click()
         if explorer.count() != 0:
             issues.append("Project Explorer did not collapse cleanly")
-    # Model Tools is a companion, not a second editor or a simulated QA pass.
+    elif expanded_rail_for_check:
+        collapse = page.get_by_role("button", name="Collapse Project Explorer to icons", exact=True)
+        if collapse.count() != 1:
+            issues.append("Expanded Project Explorer cannot return to the narrow icon rail")
+        else:
+            collapse.click()
+
+    # Exercise only Svelte-local navigation; no simulated native editing.
     if inspector.count() == 0:
         tools_toggle.click()
         if inspector.count() != 1:
@@ -589,6 +601,30 @@ def inspect_unified_editor(page, fixture, view):
         elif inspector.get_by_text("Checks in Blockbench").count() != 1:
             issues.append("Model Tools lacks the native checks section")
         tools_toggle.click()
+    else:
+        if inspector.get_by_text("Model Overview", exact=True).count() != 1:
+            issues.append("Model Tools overview is missing at wide viewport")
+        tools_toggle.click()
+        if inspector.count() != 0:
+            issues.append("Model Tools cannot collapse at wide viewport")
+        tools_toggle.click()
+
+    focus = page.get_by_role("button", name="Focus Editor", exact=True)
+    if focus.count() != 1:
+        issues.append("Focus Editor action is unavailable")
+    else:
+        focus.click()
+        if explorer.count() or inspector.count():
+            issues.append("Focus Editor must clear both side docks")
+        if native_area.count() != 1:
+            issues.append("Focus Editor must preserve the real native reservation")
+        exit_focus = page.get_by_role("button", name="Exit Focus Editor", exact=True)
+        if exit_focus.count() == 1:
+            exit_focus.click()
+        else:
+            issues.append("Focus Editor has no restoration action")
+    if inspector.count() != (1 if wide else 0):
+        issues.append("Focus Mode did not restore Model Tools visibility")
     return issues
 
 def main():
@@ -618,6 +654,8 @@ def main():
                          + [(fixture, view, None, activity) for fixture, view, activity in OPENING_SCENARIOS])
             for width, height in VIEWPORTS:
                 for fixture, view, feedback, activity in scenarios:
+                    if width >= 1810 and view != "editor":
+                        continue
                     suffix = f"-feedback-{feedback}" if feedback else f"-activity-{activity}" if activity else ""
                     name = f"{fixture}-{view}{suffix}-{width}x{height}"
                     page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1, reduced_motion="reduce")

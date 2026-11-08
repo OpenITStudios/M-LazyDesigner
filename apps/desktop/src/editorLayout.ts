@@ -8,6 +8,8 @@ export type EditorLayoutState = {
   toolsVisible: boolean;
   focusMode: boolean;
   railExpanded: boolean;
+  restoreProjectsAfterTools: boolean;
+  restoreRailAfterTools: boolean;
   projectsWidth: number;
   toolsWidth: number;
 };
@@ -18,6 +20,8 @@ export const INITIAL_EDITOR_LAYOUT: EditorLayoutState = {
   toolsVisible: false,
   focusMode: false,
   railExpanded: false,
+  restoreProjectsAfterTools: false,
+  restoreRailAfterTools: false,
   projectsWidth: 200,
   toolsWidth: 240,
 };
@@ -34,6 +38,8 @@ export function defaultEditorPanels(band: EditorLayoutBand) {
     projectsVisible: band !== 'compact',
     toolsVisible: band === 'wide',
     railExpanded: false,
+    restoreProjectsAfterTools: false,
+    restoreRailAfterTools: false,
   };
 }
 

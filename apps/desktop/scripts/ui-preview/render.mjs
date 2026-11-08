@@ -21,7 +21,7 @@ const tracked = [
 ];
 
 function options(argv) {
-  const input = { execute: false, currentLocal: false, expectedSha: "", scenario: "editor-ready", viewport: "desktop" };
+  const input = { execute: false, currentLocal: false, expectedSha: "", scenario: "editor-ready", viewport: "large" };
   for (let i = 0; i < argv.length; i++) {
     const value = argv[i];
     if (value === "--execute") input.execute = true;
@@ -217,6 +217,31 @@ async function main() {
         ".native-stage button, .native-stage canvas, .native-stage img, .native-stage .native-placeholder, .native-stage .native-editor-heading, .native-stage .native-editor-note"
       ).count() === 0;
       checks.native_composition_not_claimed = await frame.locator(".native-editor-page").count() === 1;
+      const sidePanels = await frame.locator('.unified-body').evaluate(element => {
+        const native = element.querySelector('.native-stage');
+        const center = element.querySelector('[data-native-editor-reservation="true"]');
+        const explorer = element.querySelector('#ld-unified-explorer');
+        const tools = element.querySelector('#ld-unified-inspector');
+        const width = element.getBoundingClientRect().width;
+        const nativeWidth = native?.getBoundingClientRect().width ?? 0;
+        const centerRect = center?.getBoundingClientRect();
+        return {
+          nativeFraction: width > 0 ? nativeWidth / width : 0,
+          nativeSize: centerRect ? { width: centerRect.width, height: centerRect.height } : null,
+          explorerLabel: explorer?.getAttribute('aria-label') ?? null,
+          toolsLabel: tools?.getAttribute('aria-label') ?? null,
+          modelOverview: Boolean(tools?.querySelector('#ld-inspector-model')),
+          checksInBlockbench: Boolean(tools?.querySelector('#ld-inspector-checks')),
+        };
+      });
+      checks.native_reservation_has_real_area = Boolean(sidePanels.nativeSize
+        && sidePanels.nativeSize.width > 600 && sidePanels.nativeSize.height > 300);
+      checks.native_editor_dominates_layout = sidePanels.nativeFraction >=
+        (dims.width >= 1810 ? 0.70 : dims.width >= 1320 ? 0.80 : 0.90);
+      checks.side_docks_have_accessible_names = sidePanels.explorerLabel === 'Project Explorer'
+        && (dims.width < 1810 || sidePanels.toolsLabel === 'Model Tools');
+      checks.model_tools_sections_truthful = dims.width < 1810
+        || (sidePanels.modelOverview && sidePanels.checksInBlockbench);
       const showPanels = dims.width >= 1810;
       checks.explorer_visible = (await frame.locator('#ld-unified-explorer').count() === 1) === (dims.width >= 920);
       checks.inspector_responsive = (await frame.locator('#ld-unified-inspector').count() === 1) === showPanels;

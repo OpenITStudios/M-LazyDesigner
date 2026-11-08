@@ -935,40 +935,31 @@ Unknown native receipts block automatic placement. The release app remains
 unmodified, and none of this proves functioning native visuals or input.
 
 
-## Unified Workspace P1 — development-only
+## Unified Editor — Blockbench-first native companion (development-only)
 
-The experimental Editor navigation now mounts
-`src/UnifiedWorkspacePage.svelte` (Project Explorer | native Blockbench
-stage | AI & QA status) instead of the isolated stage alone. Desktop's
-existing project navigation, file picker, connection status and plugin
-owners are reused. The center remains `NativeEditorStage` and the original
-Blockbench.exe; panels are layout-only surfaces that never copy the 3D
-scene or intercept authoring. Model/file navigation awaits the native
-window's Detach/restore acknowledgement, and does not retry a mutation on
-an uncertain native lease.
+The editor is intentionally a three-column **window composition**, not three authored editing panes:
 
-Browser-only screenshots of the exact Svelte UI can be captured with
-`?fixture=ready&view=editor` using the existing `capture-ui.py`
-script. Fixture actions are disabled and there is no native 3D view.
-Only a real Windows debug Tauri build and actual Blockbench window can
-verify the interactive composition. The release layout is unchanged.
+- **Left — Project Explorer:** searchable project/model tree with clear results, last-observed active/Modified/Missing state, pin/unpin, folder shortcuts (Models/References/Textures/Exports), recent models and in-flow empty states.
+- **Center — an entirely blank native window reservation:** `NativeEditorStage.svelte` supplies only an empty DOM rectangle for the original Blockbench top-level Windows window. There is no placeholder, faux viewport, editor header/footer, simulated toolbar, screenshot or new renderer inside the center. Actual Blockbench remains the sole editor and owner of 3D, Undo, UV, Outliner, Paint, Animation and Save.
+- **Right — Model Tools:** last-observed model overview, references to checks in the Blockbench plugin/native editor, and a qualified AI connection state. These are not fake QA PASS or a duplicate interactive model/AI editor.
 
+A single compact LazyDesigner host header owns Project Explorer / Model Tools / Focus Editor toggles, Open Model, the native **Place Blockbench** / **Detach Blockbench** actions (only when not in an offline fixture), navigation and Support. Native placement/detachment retains the existing guarded Win32 cutout, exact-window ownership, delayed update, fail-closed recovery and Rust-authorized model/file operations. The center intentionally stays blank when the original Blockbench window is not actively composed.
 
-## Blockbench-aligned Editor chrome — P1 visual refinement (source only)
+### Editor layout defaults
 
-Development Editor uses one host topbar rather than repeating global
-navigation and the generic page toolbar. The header includes brand,
-Workspace return, last-observed model context, AI observation,
-Project Explorer / AI & QA toggles, Open Model and Support.
-The existing native stage retains only a slim window-placement and
-Detach strip. Actual Blockbench menus/modes, UV, Outliner, Timeline,
-painting, editing and Save are never duplicated or intercepted.
+| Application width | Left dock | Right dock | Native center |
+| --- | --- | --- | --- |
+| ≥1810px | Project Explorer (200px) | Model Tools (240px) | Remainder |
+| 1320–1809px | Project Explorer | Closed; open on demand | Dominant |
+| 920–1319px | 48px Explorer rail, expand on demand | Closed | Dominant |
+| <920px | Closed | Closed | Full width; open one in-flow compact shelf |
 
-The editor-specific dark graphite / blue-gray colors are scoped to the
-UnifiedWorkspacePage, leaving default Desktop tokens and installed
-Blockbench themes unchanged. Native edit area remains central. Dock
-defaults: both on at >=1320 px, Projects only at 920–1319 px, both
-closed below 920 px; manual dock opening below that threshold uses
-normal grid rows rather than an overlay. Browser fixtures include
-single-header, compact dock and disabled-native-action assertions.
-Tests and capture remain NOT_EXECUTED; this is source design only.
+Side docks resize within safe widths with a keyboard-operable separator. Opening Model Tools on a non-wide display temporarily closes Project Explorer; closing it restores the previously shown Explorer and its rail/expanded state. Focus Editor hides both without discarding the prior layout. View-only layout preferences persist across Workspace/Support navigation inside the current session; they are not saved to models.
+
+### Preview and evidence boundary
+
+A true Svelte preview is **F2_BROWSER_COMPONENT**: the existing `apps/desktop/scripts/ui-preview/` harness loads production `src/main.ts` → `App.svelte` with deterministic development fixtures, uses a genuine iframe viewport, and captures a real browser screenshot. The default is **Editor ready, 1920×1080** so that both side docks are visible. The screenshot must show the **empty center**, not a synthetic Blockbench screenshot. The optional `scripts/capture-ui.py` suite has additional wide Editor fixture assertions for dock behavior, Focus Mode and blank native reservation.
+
+**F2 does not prove native composition.** Only a matching installed Windows debug Tauri + Blockbench session can establish F3 native placement, focus, DPI, input and restoration. In browser fixture mode native controls/operations are disabled. A new Windows non-debug release is not enabled by this UI-only work; native cutout is still debug-gated in Rust. Do not use generated images or HTML reconstructions as UI preview evidence.
+
+Desktop UI source updates and authored assertions are not executed test or browser evidence. Record each proof tier only after it actually runs.

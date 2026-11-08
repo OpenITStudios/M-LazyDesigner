@@ -74,9 +74,16 @@ describe("Desktop UI Preview: real application only", () => {
     expect(monitor).toContain("if (disposed || fixture");
     expect(fixtures).toContain("export const FIXTURE_NOW_MS");
     expect(preview).toContain("native Blockbench window is NOT inside this screenshot");
+    expect(preview).toContain("let viewport = $state<PreviewViewport>('large')");
+    expect(preview).toContain("center is intentionally empty");
     expect(script).toContain("native_tauri_host_absent");
     expect(script).toContain("empty_native_window_reservation");
     expect(script).toContain("no_native_ui_in_center");
+    expect(script).toContain('viewport: "large"');
+    expect(script).toContain("native_editor_dominates_layout");
+    expect(script).toContain("native_reservation_has_real_area");
+    expect(script).toContain("side_docks_have_accessible_names");
+    expect(script).toContain("model_tools_sections_truthful");
     expect(nativeStage).toContain('data-native-editor-reservation="true"');
     expect(nativeStage).not.toContain('class="native-placeholder"');
     expect(script).not.toMatch(/image_gen|(?:npm|pnpm|yarn)\s+(?:install|add|ci)|npx\s/);

@@ -57,6 +57,14 @@ describe("Unified Editor P1 source-owned workspace", () => {
       "aria-label=\"Clear project search\"",
       "runProjectAction(project.pinned ? 'unpin-project' : 'pin-project', project.id)",
       "recentExpanded = !recentExpanded",
+      "runProjectAction('open-folder', id)",
+      "project.folders.length > 0",
+      "project.folders as folder (folder.id)",
+      "'Open ' + folder.label + ' folder for project ' + project.name",
+      "No project folders added yet.",
+      'aria-label="Modified at last observation"',
+      "restoreProjectsAfterTools: layout.projectsVisible",
+      "projectsVisible: layout.restoreProjectsAfterTools",
     ]) expect(unified).toContain(term);
     expect(unified).not.toContain("window.confirm");
     expect(unified).not.toContain("Delete Project");
@@ -127,7 +135,10 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(editorLayoutBand(1600)).toBe("standard");
     expect(editorLayoutBand(1280)).toBe("rail");
     expect(editorLayoutBand(780)).toBe("compact");
-    expect(defaultEditorPanels("wide")).toEqual({ projectsVisible: true, toolsVisible: true, railExpanded: false });
+    expect(defaultEditorPanels("wide")).toEqual({
+      projectsVisible: true, toolsVisible: true, railExpanded: false,
+      restoreProjectsAfterTools: false, restoreRailAfterTools: false,
+    });
     expect(defaultEditorPanels("standard").toolsVisible).toBe(false);
     expect(defaultEditorPanels("compact").projectsVisible).toBe(false);
     expect(editorDockWidth("projects", 20)).toBe(160);
@@ -153,6 +164,9 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain("Editor duplicates the global navigation/toolbar");
     expect(script).toContain("compact Editor must start with Project Explorer collapsed");
     expect(script).toContain("fixture must never be able to place a native Blockbench window");
+    expect(script).toContain("(1920, 1080)");
+    expect(script).toContain("Focus Mode did not restore Model Tools visibility");
+    expect(script).toContain("Expanded Project Explorer cannot return to the narrow icon rail");
     expect(stage).toContain("disabled={busy || fixture}");
   });
   test("scoped Blockbench-compatible theme retains native and legacy product ownership", async () => {

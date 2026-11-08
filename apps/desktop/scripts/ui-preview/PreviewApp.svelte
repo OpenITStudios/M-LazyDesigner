@@ -3,7 +3,7 @@
 
   // Controls only; the iframe navigates to the ACTUAL production app HTML entry.
   let scenario = $state<PreviewScenario>('editor-ready');
-  let viewport = $state<PreviewViewport>('desktop');
+  let viewport = $state<PreviewViewport>('large');
   const selected = $derived(PREVIEW_SCENARIOS.find(item => item.id === scenario) ?? PREVIEW_SCENARIOS[0]);
   const size = $derived(PREVIEW_VIEWPORTS[viewport]);
   const frameUrl = $derived('/?fixture=' + encodeURIComponent(selected.fixture) + '&view=' + encodeURIComponent(selected.view));

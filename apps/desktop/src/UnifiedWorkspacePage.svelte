@@ -72,22 +72,37 @@
       focusMode: false,
       projectsVisible: opening,
       railExpanded: opening ? false : layout.railExpanded,
-      ...(opening && layout.band !== 'wide' ? { toolsVisible: false } : {}),
+      ...(opening && layout.band !== 'wide'
+        ? { toolsVisible: false, restoreProjectsAfterTools: false, restoreRailAfterTools: false }
+        : {}),
     });
   }
   function expandExplorer() {
     // Rail mode is intentionally compact until the user asks for full browsing.
-    changeLayout({ projectsVisible: true, railExpanded: true, toolsVisible: false });
+    changeLayout({
+      projectsVisible: true, railExpanded: true, toolsVisible: false,
+      restoreProjectsAfterTools: false, restoreRailAfterTools: false,
+    });
   }
   function toggleToolsPanel() {
     const opening = layout.focusMode || !layout.toolsVisible;
-    changeLayout({
-      focusMode: false,
-      toolsVisible: opening,
-      ...(opening && layout.band !== 'wide'
-        ? { projectsVisible: false, railExpanded: false }
-        : {}),
-    });
+    if (layout.band !== 'wide' && opening) {
+      changeLayout({
+        focusMode: false, toolsVisible: true,
+        restoreProjectsAfterTools: layout.projectsVisible,
+        restoreRailAfterTools: layout.railExpanded,
+        projectsVisible: false, railExpanded: false,
+      });
+    } else if (layout.band !== 'wide' && !opening) {
+      changeLayout({
+        focusMode: false, toolsVisible: false,
+        projectsVisible: layout.restoreProjectsAfterTools,
+        railExpanded: layout.restoreRailAfterTools,
+        restoreProjectsAfterTools: false, restoreRailAfterTools: false,
+      });
+    } else {
+      changeLayout({ focusMode: false, toolsVisible: opening });
+    }
   }
   function toggleFocusMode() {
     changeLayout({ focusMode: !layout.focusMode });
@@ -202,6 +217,9 @@
   }
   function showModelFile(id: string) {
     return afterDetach(() => runProjectAction('reveal-model', id));
+  }
+  function openProjectSubfolder(id: string) {
+    return afterDetach(() => runProjectAction('open-folder', id));
   }
   function registerFolder() {
     if (statusProbeFailures >= 2 || !status) return Promise.resolve();
@@ -412,12 +430,16 @@
                       </button>
                       {#if openingModelId === model.id}
                         <span class="model-state" role="status">Opening…</span>
-                      {:else if model.active}
-                        <span class="model-state" title="Current at last observation">Current</span>
-                      {:else if model.dirty}
-                        <span class="model-state warning" title="Modified at last observation">Modified</span>
-                      {:else if !model.exists}
-                        <span class="model-state warning">Missing</span>{/if}
+                      {:else}
+                        {#if model.active}
+                          <span class="model-state" title="Current at last observation">Current</span>
+                        {/if}
+                        {#if !model.exists}
+                          <span class="model-state warning" title="File unavailable">Missing</span>
+                        {:else if model.dirty}
+                          <span class="model-state warning" title="Modified at last observation" aria-label="Modified at last observation">●</span>
+                        {/if}
+                      {/if}
                       {#if model.exists}
                         <button type="button" class="reveal-model" disabled={actionBusy || fixture}
                           title={'Show ' + model.name + ' in Explorer'}
@@ -426,6 +448,22 @@
                       {/if}
                     </div>
                   {/each}
+                  {#if !search.trim() && project.folders.length > 0}
+                    <details class="project-resources">
+                      <summary>Project folders <span class="resource-count">{project.folders.length}</span></summary>
+                      <div class="resource-links">
+                        {#each project.folders as folder (folder.id)}
+                          <button type="button" class="resource-link"
+                            aria-label={'Open ' + folder.label + ' folder for project ' + project.name}
+                            title={'Open ' + folder.label + ' in File Explorer'}
+                            disabled={actionBusy || fixture}
+                            onclick={() => void openProjectSubfolder(folder.id)}>
+                            <span aria-hidden="true">▤</span><span>{folder.label}</span>
+                          </button>
+                        {/each}
+                      </div>
+                    </details>
+                  {/if}
                 {/if}
               </div>
             {/each}
@@ -435,7 +473,13 @@
             <button class="more-projects" type="button" onclick={() => showAll = !showAll}>{showAll ? 'Show fewer projects' : 'Show all projects'}</button>
           {/if}
         {:else}
-          <p class="empty-state">{loading ? 'Checking projects…' : status ? 'No registered projects. Add a project folder or open a .bbmodel directly.' : 'Project list unavailable. Open a model directly or refresh status.'}</p>
+          <div class="explorer-empty">
+            <p class="empty-state">{loading ? 'Checking projects…' : status ? 'No project folders added yet. Register an existing folder to browse its models.' : 'Project list unavailable. You can still use Open Model in the toolbar.'}</p>
+            {#if status && !loading}
+              <button type="button" class="empty-add-folder" disabled={actionBusy || fixture || statusProbeFailures >= 2}
+                onclick={() => void registerFolder()}>+ Add Project Folder</button>
+            {/if}
+          </div>
         {/if}
 
         {#if !search.trim() && recentTargets.length > 0}
@@ -485,7 +529,7 @@
           onkeydown={(event) => resizeDockWithKeyboard(event, 'tools')}></div>
       {/if}
       <aside id="ld-unified-inspector" class="inspector dock-panel" aria-label="Model Tools">
-        <div class="pane-heading"><h3>Model Tools</h3><span class="read-only-label">COMPANION</span></div>
+        <div class="pane-heading"><h3>Model Tools</h3><span class="read-only-label">BLOCKBENCH</span></div>
         {#if !fixture && nativePlacementDetail}
           <section class="inspector-section" aria-label="Native Blockbench window status">
             <h4>Blockbench Window</h4>
@@ -694,6 +738,31 @@
   .model-state{color:var(--ed-muted-soft);font-size:10px;white-space:nowrap}
   .model-state.warning{color:#e1b65f}
   .row-hint,.empty-state{color:var(--ed-muted);font-size:12px;line-height:1.5;margin:7px 5px}
+  .explorer-empty{display:grid;gap:9px;padding:5px 3px}
+  .empty-add-folder{
+    justify-self:start;min-height:32px;padding:6px 10px;border:1px solid var(--ed-border);
+    background:var(--ed-raised);color:var(--ed-text);border-radius:5px;font-size:11px;cursor:pointer;
+  }
+  .empty-add-folder:hover:not(:disabled){border-color:var(--ed-accent)}
+  .project-resources{border-top:1px solid var(--ed-border-soft);margin:4px 2px 3px 14px}
+  .project-resources summary{
+    display:flex;align-items:center;gap:6px;min-height:31px;padding:6px 4px;
+    border-radius:4px;color:var(--ed-muted);font-size:11px;font-weight:650;cursor:pointer;
+    list-style:none;
+  }
+  .project-resources summary::-webkit-details-marker{display:none}
+  .project-resources summary::before{content:'▸';font-size:12px}
+  .project-resources[open] summary::before{content:'▾'}
+  .project-resources summary:hover,.resource-link:hover{background:var(--ed-raised);color:var(--ed-text)}
+  .resource-count{margin-left:auto;color:var(--ed-muted-soft);font-size:10px}
+  .resource-links{display:grid;gap:1px;padding-left:9px}
+  .resource-link{
+    display:flex;gap:7px;align-items:center;min-width:0;min-height:30px;padding:5px;
+    border:0;border-radius:4px;background:transparent;color:var(--ed-muted);
+    text-align:left;font-size:11px;cursor:pointer;
+  }
+  .resource-link span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
   .more-projects {
     width:100%;border:0;border-top:1px solid var(--ed-border-soft);background:transparent;
     color:var(--ed-muted);font-size:12px;text-align:left;padding:9px 5px;cursor:pointer;
