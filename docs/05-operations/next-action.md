@@ -2,6 +2,12 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Blockbench-aligned Editor UI — 2026-11-08
+
+- **SOURCE_AUTHORED:** Editor-only one-row app header replaces the stacked Desktop global nav and page toolbar. The editor-scoped graphite/blue-gray palette, compact native placement strip, responsive non-overlay Project Explorer and AI/QA dock use the original model/project/status owners. Native Blockbench still renders and owns menus, mode tabs, UV, Outliner, Timeline, input and Undo/Save. Workspace/Support production pages, global tokens, Rust P0 composition and distribution are unchanged.
+- **Proof:** Exact source review, focused repository visual contract and browser fixture assertions AUTHORED_NOT_EXECUTED. Fixture widths 390/780/980 require one app header, native actions disabled and docks collapsed when narrow. Svelte typecheck/build, actual screenshots and Windows Blockbench input/focus/crop/resize UX remain UNVERIFIED under the temporary testing hold.
+- **STOP:** Do not auto-apply Blockbench themes, change native window ownership/styles, add duplicate editor/AI/QA tools, or promote the experiment to release.
+
 ## Unified Editor P1 — 2026-11-08
 
 - **SOURCE_AUTHORED:** New `UnifiedWorkspacePage.svelte` dev-only editor shell with project/model navigation, central original Blockbench native stage, and collapsible AI/QA status. Uses the existing typed Rust project/model/connection owners, preserves `openModel` and read-only file operations, and awaits native Detach before opening model pickers or Explorer. AI/QA remains truthful status and native plugin signposting, not a chat client or separate QA processor.

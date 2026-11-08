@@ -952,3 +952,23 @@ Browser-only screenshots of the exact Svelte UI can be captured with
 script. Fixture actions are disabled and there is no native 3D view.
 Only a real Windows debug Tauri build and actual Blockbench window can
 verify the interactive composition. The release layout is unchanged.
+
+
+## Blockbench-aligned Editor chrome — P1 visual refinement (source only)
+
+Development Editor uses one host topbar rather than repeating global
+navigation and the generic page toolbar. The header includes brand,
+Workspace return, last-observed model context, AI observation,
+Project Explorer / AI & QA toggles, Open Model and Support.
+The existing native stage retains only a slim window-placement and
+Detach strip. Actual Blockbench menus/modes, UV, Outliner, Timeline,
+painting, editing and Save are never duplicated or intercepted.
+
+The editor-specific dark graphite / blue-gray colors are scoped to the
+UnifiedWorkspacePage, leaving default Desktop tokens and installed
+Blockbench themes unchanged. Native edit area remains central. Dock
+defaults: both on at >=1320 px, Projects only at 920–1319 px, both
+closed below 920 px; manual dock opening below that threshold uses
+normal grid rows rather than an overlay. Browser fixtures include
+single-header, compact dock and disabled-native-action assertions.
+Tests and capture remain NOT_EXECUTED; this is source design only.

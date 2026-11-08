@@ -157,7 +157,7 @@
   <header class="native-editor-heading">
     <div>
       {#if compact}
-        <div class="compact-title">Blockbench Native <span class="experimental">P0 preview</span></div>
+        <div class="compact-title"><span class="native-surface-dot" aria-hidden="true"></span>Native window <span class="experimental">Development</span></div>
       {:else}
         <h2>Native Blockbench workspace <span class="experimental">Development preview</span></h2>
         <p>Original Blockbench · native Windows cutout · editing behavior not yet verified</p>
@@ -181,13 +181,13 @@
   <div class="native-editor-aperture" bind:this={aperture} aria-label="Native Blockbench window placement area">
     <div class="native-placeholder">
       <span class="placeholder-icon">◇</span>
-      <strong>{presented ? 'Blockbench window positioned' : 'Blockbench editor area'}</strong>
-      <p>{presented ? 'This surface is controlled by Windows, not rendered by Svelte.' : 'Open Blockbench normally, then choose Show Blockbench here.'}</p>
+      <strong>{presented ? 'Window placement requested' : 'Blockbench editor area'}</strong>
+      <p>{presented ? 'The original Blockbench window is independently controlled by Windows. Input is not yet verified.' : 'Open Blockbench, then place its native window in this workspace.'}</p>
     </div>
   </div>
   <footer class="native-editor-note" aria-live="polite">
     <span>{note}</span>
-    <span>Source preview only · Windows interaction unverified</span>
+    <span>Native behavior unverified</span>
   </footer>
 </section>
 
@@ -204,10 +204,37 @@
   .native-placeholder p{margin-top:5px;font-size:var(--font-sm)}
   .placeholder-icon{display:block;font-size:28px;margin-bottom:6px;color:var(--surface-4)}
   .native-editor-note{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;color:var(--muted-2);font-size:var(--font-xs)}
-  .native-editor-page.compact{padding:8px;gap:7px}
-  .compact-title{display:flex;align-items:center;gap:8px;font-size:var(--font-sm);font-weight:700}
-  .native-editor-page.compact .native-editor-heading{min-height:32px}
-  .native-editor-page.compact .native-editor-aperture{border-radius:5px}
+  .native-editor-page.compact{
+    padding:5px;gap:5px;background:var(--ed-bg,var(--bg));color:var(--ed-text,var(--text));
+  }
+  .native-editor-page.compact .native-editor-heading{
+    min-height:30px;gap:8px;flex-wrap:wrap;padding:0 5px;
+  }
+  .native-editor-page.compact .native-editor-aperture{
+    border:1px solid var(--ed-border,var(--border));border-radius:4px;
+    background:#151922;min-height:220px;
+  }
+  .native-editor-page.compact .native-placeholder{max-width:290px}
+  .native-editor-page.compact .native-placeholder strong{color:var(--ed-text,var(--text))}
+  .native-editor-page.compact .native-placeholder p{color:var(--ed-muted,var(--muted))}
+  .native-editor-page.compact .native-editor-actions button{
+    min-height:28px;padding:4px 9px;border-radius:5px;
+    background:var(--ed-raised,var(--surface-2));color:var(--ed-text,var(--text-soft));
+    border:1px solid var(--ed-border,var(--border));font-size:11px;font-weight:650;
+  }
+  .native-editor-page.compact .native-editor-actions button:focus-visible{
+    outline:2px solid var(--ed-accent,var(--info));outline-offset:1px;
+  }
+  .native-editor-page.compact .native-editor-note{
+    gap:8px;min-height:21px;white-space:normal;color:var(--ed-muted-soft,var(--muted-2));
+    font-size:10px;line-height:1.35;
+  }
+  .native-editor-page.compact .native-editor-note span:first-child{
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;
+  }
+  .native-editor-page.compact .experimental{font-size:10px;padding:1px 5px;color:#e1b65f;border-color:var(--ed-border,var(--border))}
+  .compact-title{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700}
+  .native-surface-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ed-muted-soft,var(--muted-2));flex:none}
   .native-editor-error{display:flex;flex-wrap:wrap;gap:7px;padding:8px 10px;border:1px solid var(--warning);border-radius:7px;background:var(--warning-bg);font-size:var(--font-sm)}
   .native-editor-error strong{color:var(--warning)}
   @media(max-width:760px){.native-editor-page{padding:10px 12px}.native-editor-aperture{min-height:220px}}

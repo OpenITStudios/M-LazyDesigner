@@ -504,23 +504,54 @@ def inspect_opening_model_row(page, activity, view):
 
 
 def inspect_unified_editor(page, fixture, view):
-    """Browser-only P1 layout contract: never invoke a native editor action."""
+    """Offline browser-only P1 visual checks; never invoke native commands."""
     if view != "editor":
         return []
+
     issues = []
     workspace = page.locator('main[aria-label="LazyDesigner unified editor workspace"]')
     if workspace.count() != 1:
         return ["unified editor view was not rendered"]
-    if page.get_by_role("region", name="Blockbench native editor area").count() != 1:
-        issues.append("native editor area missing from unified workspace")
-    if page.get_by_role("complementary", name="Project Explorer").count() != 1:
-        issues.append("Project Explorer unavailable")
-    if page.get_by_role("button", name="AI & QA", exact=True).count() != 1:
-        issues.append("collapsible AI/QA panel control unavailable")
+
+    # The source UI has one app header, not the old global nav + page toolbar.
+    if page.locator(".navigation:visible").count() or page.locator(".page-toolbar:visible").count():
+        issues.append("Editor duplicates the global navigation/toolbar")
+    if page.locator(".editor-header:visible").count() != 1:
+        issues.append("the unified Editor must have exactly one app header")
+    if workspace.locator(".editor-header h1").count() != 1:
+        issues.append("the editor heading must identify the last-observed model")
+
+    native_area = page.get_by_role("region", name="Blockbench native editor area")
+    if native_area.count() != 1:
+        issues.append("native editor area missing")
     native_action = page.get_by_role("button", name="Show Blockbench here", exact=True)
     if native_action.count() != 1 or native_action.is_enabled():
-        issues.append("fixture must show a disabled native Blockbench placement action")
+        issues.append("fixture must never be able to place a native Blockbench window")
 
+    project_toggle = page.get_by_role("button", name="Toggle Project Explorer", exact=True)
+    qa_toggle = page.get_by_role("button", name="Toggle AI and QA", exact=True)
+    if project_toggle.count() != 1 or qa_toggle.count() != 1:
+        return issues + ["Project Explorer and AI/QA toggles must both be available"]
+
+    width = page.viewport_size["width"]
+    explorer = page.get_by_role("complementary", name="Project Explorer")
+    inspector = page.get_by_role("complementary", name="AI and QA")
+    compact = width < 920
+    if compact and explorer.count():
+        issues.append("compact Editor must start with Project Explorer collapsed")
+    if compact and inspector.count():
+        issues.append("compact Editor must start with AI/QA collapsed")
+    if not compact and explorer.count() != 1:
+        issues.append("standard Editor must start with Project Explorer")
+    if inspector.count() != 0:
+        issues.append("standard-width Editor should leave AI/QA closed for native viewport space")
+
+    # Toggle only Svelte-local presentation controls. Native actions stay disabled.
+    opened_for_check = compact
+    if opened_for_check:
+        project_toggle.click()
+        if explorer.count() != 1:
+            issues.append("Project Explorer cannot be opened from the compact toolbar")
     if fixture in {"ready", "many-projects"}:
         search = page.locator("#ld-unified-model-search")
         if search.count() != 1:
@@ -530,12 +561,15 @@ def inspect_unified_editor(page, fixture, view):
             search.fill(target)
             model = page.get_by_role("button", name="Open model " + target, exact=True)
             if model.count() != 1 or model.is_enabled():
-                issues.append("fixture search must find target but never open a native model")
+                issues.append("fixture must locate target but never open a native model")
             search.press("Escape")
             if search.input_value() != "":
-                issues.append("Escape did not clear unified Editor search")
+                issues.append("Escape did not clear Editor project search")
+    if opened_for_check:
+        project_toggle.click()
+        if explorer.count() != 0:
+            issues.append("Project Explorer did not collapse cleanly")
     return issues
-
 
 def main():
     args = parse_args()

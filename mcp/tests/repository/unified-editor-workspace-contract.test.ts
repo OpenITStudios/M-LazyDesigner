@@ -16,6 +16,14 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(app).toContain("<WorkspacePage");
     expect(app).toContain("<SupportPage");
     expect(app).toContain("if (restored) finishNavigate(next)");
+    expect(app).toContain("class:editor-shell={page === 'Editor' && import.meta.env.DEV}");
+    expect(app).toContain("{#if page !== 'Editor' || !import.meta.env.DEV}");
+    expect(app).toContain("navigateWorkspace={() => navigate('Overview')}");
+    expect(app).toContain("navigateSupport={() => navigate('Support')}");
+    expect(app).toContain("document.querySelector<HTMLElement>('.editor-header h1')?.focus()");
+    expect(unified).toContain('aria-label="LazyDesigner editor controls"');
+    expect(unified).toContain('aria-label="Return to Workspace"');
+    expect(unified).toContain('aria-label="Open Support"');
     expect(app).toContain("{focusCurrentEditor} {openBlockbenchEditor} {refresh}");
     expect(unified).toContain("<NativeEditorStage bind:this={nativeStage} {fixture} compact={true}");
     expect(unified).toContain("export async function detach(): Promise<boolean>");
@@ -68,16 +76,21 @@ describe("Unified Editor P1 source-owned workspace", () => {
     const unified = await source("../apps/desktop/src/UnifiedWorkspacePage.svelte");
     expect(unified).toContain("class:with-projects={projectsVisible}");
     expect(unified).toContain("class:with-inspector={inspectorVisible}");
-    expect(unified).toContain("projectsVisible && inspectorVisible");
-    expect(unified).toContain("if (projectsVisible && window.innerWidth <= 650)");
-    expect(unified).toContain("if (inspectorVisible && window.innerWidth <= 650)");
+    expect(unified).toContain("projectsVisible = next >= 1");
+    expect(unified).toContain("inspectorVisible = next === 2");
+    expect(unified).toContain("if (projectsVisible && window.innerWidth < 1320)");
+    expect(unified).toContain("if (inspectorVisible && window.innerWidth < 1320)");
     expect(unified).toContain("overflow:hidden");
-    expect(unified).toContain("grid-template-rows:88px minmax(220px,1fr)");
+    expect(unified).toContain("grid-template-rows:126px minmax(220px,1fr)");
+    expect(unified).toContain("--ed-bg: #1b1f27");
+    expect(unified).toContain("--ed-accent: #85a9df");
     expect(unified).toContain('aria-label="Project Explorer"');
     expect(unified).toContain('aria-label="AI and QA"');
     expect(unified).toContain('aria-label="Blockbench native editor area"');
     expect(unified).toContain('aria-expanded={projectsVisible}');
     expect(unified).toContain('aria-expanded={inspectorVisible}');
+    expect(unified).toContain('aria-label="Toggle Project Explorer"');
+    expect(unified).toContain('aria-label="Toggle AI and QA"');
   });
 
   test("browser fixture captures real Svelte layout only, never native Blockbench", async () => {
@@ -92,6 +105,32 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain('("many-projects", "editor")');
     expect(script).toContain('("fresh-install", "editor")');
     expect(script).toContain("OFFLINE_BROWSER_FIXTURE_ONLY");
+    expect(script).toContain("Editor duplicates the global navigation/toolbar");
+    expect(script).toContain("compact Editor must start with Project Explorer collapsed");
+    expect(script).toContain("fixture must never be able to place a native Blockbench window");
     expect(stage).toContain("disabled={busy || fixture}");
   });
+  test("scoped Blockbench-compatible theme retains native and legacy product ownership", async () => {
+    const [app, unified, stage, tokens] = await Promise.all([
+      source("../apps/desktop/src/App.svelte"),
+      source("../apps/desktop/src/UnifiedWorkspacePage.svelte"),
+      source("../apps/desktop/src/NativeEditorStage.svelte"),
+      source("../apps/desktop/src/tokens.css"),
+    ]);
+    expect(unified).toContain('<header class="editor-header"');
+    expect(unified).toContain('<h1 tabindex="-1"');
+    expect(unified).toContain('navigateWorkspace');
+    expect(unified).toContain('navigateSupport');
+    expect(unified).toContain("--ed-bg: #1b1f27");
+    expect(unified).toContain("--ed-panel: #232833");
+    expect(unified).toContain("--ed-accent: #85a9df");
+    expect(stage).toContain('<div class="compact-title">');
+    expect(stage).toContain("Native behavior unverified");
+    expect(app).toContain("{#if page !== 'Editor' || !import.meta.env.DEV}");
+    expect(app).toContain(".desktop-shell.editor-shell");
+    expect(tokens).toContain("--accent: #1bd96a");
+    expect(unified).not.toContain("SetParent(");
+    expect(unified).not.toContain("WebGLRenderer(");
+  });
+
 });

@@ -112,8 +112,9 @@
     void tick().then(() => {
       if (page !== next) return;
       if (next === 'Overview' && workspaceMain) workspaceMain.scrollTop = workspaceScrollTop;
-      // The previous page's trigger may no longer exist. Announce the new view.
-      document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();
+      // Announce the new view even when the standard toolbar is intentionally absent.
+      if (next === 'Editor') document.querySelector<HTMLElement>('.editor-header h1')?.focus();
+      else document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();
     });
   }
 
@@ -780,7 +781,8 @@
 {:else}
   <a class="skip-link" href="#main-content">Skip to content</a>
 
-  <div class="desktop-shell" data-qa-fixture={devFixture ?? undefined}>
+  <div class="desktop-shell" class:editor-shell={page === 'Editor' && import.meta.env.DEV} data-qa-fixture={devFixture ?? undefined}>
+    {#if page !== 'Editor' || !import.meta.env.DEV}
     <aside class="navigation" aria-label="LazyDesigner navigation">
       <div class="navigation-brand">
         <span class="brand-mark" aria-hidden="true"></span>
@@ -801,8 +803,10 @@
         </button>
       </nav>
     </aside>
+    {/if}
 
     <section id="main-content" class="main-view" tabindex="-1">
+      {#if page !== 'Editor' || !import.meta.env.DEV}
       <header class="page-toolbar">
         <h1 tabindex="-1">{page === 'Overview' ? 'Workspace' : page}</h1>
         <div class="toolbar-actions">
@@ -819,6 +823,7 @@
           {/if}
         </div>
       </header>
+      {/if}
 
       {#if attentionError || actionMessage || (busyAction && progressStage && page !== 'Overview')}
         <aside class:error={Boolean(attentionError)} class:success={Boolean(actionMessage) && !attentionError && actionMessageKind === 'success'} class:notice={Boolean(actionMessage) && !attentionError && actionMessageKind !== 'success'} class="operation-attention" role={attentionError ? 'alert' : 'status'} aria-live={attentionError ? 'assertive' : 'polite'}>
@@ -849,6 +854,7 @@
           {status} {loading} {busyAction} {openingModelId} {statusProbeFailures} {statusPresentationNowMs}
           fixture={devFixture !== null}
           {openModel} {addProjectFolder} {runProjectAction} {focusCurrentEditor} {openBlockbenchEditor} {refresh}
+          navigateWorkspace={() => navigate('Overview')}
           navigateSupport={() => navigate('Support')}
         />
 
@@ -922,6 +928,13 @@
   .attention-actions button:hover{background:var(--surface-3);color:var(--text)}
   .attention-actions .dismiss{width:32px;padding:0;border:0;background:transparent;font-size:19px}
   @media(max-width:760px){.operation-attention{padding:10px 16px;align-items:start}.attention-copy{display:grid;gap:3px}}
+
+  /* The experimental editor owns exactly one host topbar. Native Blockbench
+     owns its menu, modes, Outliner, UV panels and status independently. */
+  .desktop-shell.editor-shell{background:#1b1f27}
+  .desktop-shell.editor-shell .main-view{background:#1b1f27}
+  .desktop-shell.editor-shell .operation-attention{padding:7px 14px;min-height:40px;background:#242a35;border-color:#394451}
+  .desktop-shell.editor-shell .operation-attention.error{background:#312729}
 
   /* Workspace First: preserve content width with two top-level destinations. */
   .desktop-shell{display:flex;flex-direction:column}

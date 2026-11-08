@@ -168,3 +168,50 @@ Deterministic browser fixtures may now render `?fixture=ready&view=editor`,
 Any Playwright screenshot of those fixtures is authentic frontend render
 evidence only, not an interactive native Blockbench screenshot or a usability
 score. No renderer replacement, SetParent or release promotion.
+
+
+## Blockbench-aligned native workspace visual contract — 2026-11-08
+
+User approval: the existing Windows-native Blockbench composition is the
+centerpiece. The editor must feel like one cohesive work environment,
+without recreating the native Blockbench menus, Outliner, UV, painting,
+animation or status bar in LazyDesigner.
+
+- **One host toolbar:** In development Editor only, omit the ordinary
+  LazyDesigner global navigation and page toolbar. The Editor page owns
+  a compact approximately 52 px header with brand, Workspace return,
+  last-observed model/project, an explicitly qualified AI status,
+  Project Explorer and AI/QA toggles, Open Model and Support. The native
+  Blockbench menu/title chrome remains unmodified. The small native
+  placement/Detach rail is operational chrome, not a second navigation
+  bar. Navigating away awaits P0 Detach; uncertain restore stays visible.
+- **Scoped palette:** Graphite/blue-gray surfaces #1b1f27, #252b35,
+  #232833 and muted blue selection/focus #85a9df are confined to
+  UnifiedWorkspacePage / its native-stage presentation. Never rewrite
+  Blockbench theme/preferences or the global LazyDesigner green
+  product tokens. Contrast/keyboard focus remain independently testable.
+- **Viewport priority:** At 1320 px and wider, Project Explorer (216 px)
+  and AI/QA (264 px) may both be open. From 920 to 1319 px, only the
+  Project Explorer opens by default; choosing AI closes Projects. Below
+  920 px, both docks start collapsed. A manually opened compact dock
+  occupies a bounded row in the grid, never a native-window overlay.
+  Resizing across a width band selects a safe default, whereas
+  within-band manual choices remain temporary view state.
+- **Single authority:** Project Explorer resolves opaque model/folder
+  identifiers through the pre-existing native bridge; keyboard search
+  cannot infer an ambiguous file. AI/QA continues displaying honest
+  age-qualified connection status and Blockbench/plugin ownership,
+  not copied editors, generated QA claims or new MCP actions. File
+  pickers, model-open and Explorer actions await native Detach first.
+- **Truthful visual proof:** Browser fixture URLs
+  \`?fixture=ready&view=editor\`,
+  \`?fixture=many-projects&view=editor\` and
+  \`?fixture=fresh-install&view=editor\` can capture the actual Svelte
+  shell at 390×640, 780×560, 980×680 with Blockbench actions disabled.
+  The capture harness checks missing duplicate app chrome, responsive
+  dock defaults, keyboard search and disabled native placement.
+  These screenshots are **not** Blockbench native proof.
+
+Only source/fixture contract tests are authored. Typecheck, screenshots,
+keyboard/screen-reader usability, high-DPI native cropping, focus and
+installed Blockbench behavior are NOT_EXECUTED / UNVERIFIED.
