@@ -843,6 +843,9 @@
           error={analyticsError} exporting={analyticsExporting}
           refresh={refreshAnalytics} copyJson={copyAnalyticsJson} exportJson={exportAnalyticsJson}
           backToSupport={() => navigate('Support')}/>
+      {:else if page === 'Editor' && import.meta.env.DEV}
+        <NativeEditorStage bind:this={nativeEditorStage} fixture={devFixture !== null} />
+
       {:else if !status}
         <main class="page-content">
           <section class="message-state">
@@ -855,9 +858,6 @@
             <button class="secondary-button" onclick={() => openModel()} disabled={busyAction !== null}>Open Model…</button>
           </section>
         </main>
-
-      {:else if page === 'Editor' && import.meta.env.DEV}
-        <NativeEditorStage bind:this={nativeEditorStage} fixture={devFixture !== null} />
 
       {:else if page === 'Overview'}
         <WorkspacePage

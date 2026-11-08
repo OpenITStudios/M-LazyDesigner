@@ -49,6 +49,8 @@ mod platform {
     const SWP_NOZORDER: u32 = 0x0004;
     const SWP_SHOWWINDOW: u32 = 0x0040;
     const HWND_TOP: Hwnd = ptr::null_mut();
+    const RGN_DIFF: i32 = 4;
+    const RGN_ERROR: i32 = 0;
 
     #[repr(C)]
     #[derive(Clone, Copy, Default)]
@@ -80,6 +82,8 @@ mod platform {
         fn ClientToScreen(hwnd: Hwnd, point: *mut Point) -> i32;
         fn GetDpiForWindow(hwnd: Hwnd) -> u32;
         fn GetWindowLongPtrW(hwnd: Hwnd, index: i32) -> isize;
+        fn GetWindowRgn(hwnd: Hwnd, region: Handle) -> i32;
+        fn SetWindowRgn(hwnd: Hwnd, region: Handle, redraw: i32) -> i32;
         fn SetWindowPos(hwnd: Hwnd, insert_after: Hwnd, x: i32, y: i32, width: i32, height: i32, flags: u32) -> i32;
     }
     #[link(name = "kernel32")]
@@ -87,6 +91,115 @@ mod platform {
         fn OpenProcess(access: u32, inherit: i32, pid: u32) -> Handle;
         fn GetProcessTimes(process: Handle, created: *mut FileTime, exited: *mut FileTime, kernel: *mut FileTime, user: *mut FileTime) -> i32;
         fn CloseHandle(process: Handle) -> i32;
+    }
+
+    #[link(name = "gdi32")]
+    unsafe extern "system" {
+        fn CreateRectRgn(left: i32, top: i32, right: i32, bottom: i32) -> Handle;
+        fn CombineRgn(dest: Handle, first: Handle, second: Handle, mode: i32) -> i32;
+        fn EqualRgn(first: Handle, second: Handle) -> i32;
+        fn DeleteObject(object: Handle) -> i32;
+    }
+
+    // Window regions are GDI-owned until SetWindowRgn accepts them. On
+    // success Windows takes ownership and must release the handle itself.
+    struct Region(Handle);
+    impl Region {
+        fn rect(left: i32, top: i32, right: i32, bottom: i32) -> Result<Self, String> {
+            let raw = unsafe { CreateRectRgn(left, top, right, bottom) };
+            if raw.is_null() { Err(win_error("Unable to create native window region")) }
+            else { Ok(Self(raw)) }
+        }
+        fn transfer(&mut self) { self.0 = ptr::null_mut(); }
+    }
+    impl Drop for Region {
+        fn drop(&mut self) {
+            if !self.0.is_null() { unsafe { let _ = DeleteObject(self.0); } }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct Aperture {
+        width: i32,
+        height: i32,
+        left: i32,
+        top: i32,
+        right: i32,
+        bottom: i32,
+    }
+
+    // SetWindowRgn's coordinates are relative to the outer HWND, not the
+    // client origin. The frontend passes CSS client bounds, so Rust first
+    // translates them into physical screen positions.
+    fn aperture_rect(window: Rect, target: Placement) -> Result<Aperture, String> {
+        let width = window.right.checked_sub(window.left).ok_or("Window width overflow")?;
+        let height = window.bottom.checked_sub(window.top).ok_or("Window height overflow")?;
+        let left = target.x.checked_sub(window.left).ok_or("Aperture X overflow")?;
+        let top = target.y.checked_sub(window.top).ok_or("Aperture Y overflow")?;
+        let right = left.checked_add(target.width).ok_or("Aperture right overflow")?;
+        let bottom = top.checked_add(target.height).ok_or("Aperture bottom overflow")?;
+        if width <= 0 || height <= 0 || left < 0 || top < 0
+            || right > width || bottom > height || right <= left || bottom <= top {
+            return Err("Editor viewport does not fit within LazyDesigner's native window.".into());
+        }
+        Ok(Aperture { width, height, left, top, right, bottom })
+    }
+
+    fn region_for(ap: Aperture) -> Result<Region, String> {
+        let outer = Region::rect(0, 0, ap.width, ap.height)?;
+        let cutout = Region::rect(ap.left, ap.top, ap.right, ap.bottom)?;
+        if unsafe { CombineRgn(outer.0, outer.0, cutout.0, RGN_DIFF) } == RGN_ERROR {
+            return Err("Unable to calculate native editor cutout.".into());
+        }
+        Ok(outer)
+    }
+
+    // Do not overwrite a pre-existing custom manager region or a region
+    // changed since our last admitted aperture. An unknown clip owner is a
+    // recovery failure, never permission to silently reinitialize the GUI.
+    fn assert_owned_region(hwnd: Hwnd, owned: Option<Aperture>) -> Result<(), String> {
+        let current = Region::rect(0, 0, 0, 0)?;
+        let kind = unsafe { GetWindowRgn(hwnd, current.0) };
+        match owned {
+            None if kind == RGN_ERROR => Ok(()),
+            None => Err("LazyDesigner already has custom native clipping; editor composition refused.".into()),
+            Some(_) if kind == RGN_ERROR => Err("Native editor aperture disappeared; do not overwrite an unverified window region.".into()),
+            Some(expected) => {
+                let comparison = region_for(expected)?;
+                if unsafe { EqualRgn(current.0, comparison.0) } != 0 { Ok(()) }
+                else { Err("LazyDesigner native clipping changed externally; it was not overwritten.".into()) }
+            }
+        }
+    }
+
+    fn apply_aperture(lease: &mut Lease, target: Placement) -> Result<(), String> {
+        let manager = lease.manager as Hwnd;
+        if unsafe { IsWindow(manager) } == 0 || pid_and_thread(manager).0 != std::process::id() {
+            return Err("LazyDesigner native window identity changed.".into());
+        }
+        assert_owned_region(manager, lease.aperture)?;
+        let updated = aperture_rect(window_rect(manager)?, target)?;
+        let mut region = region_for(updated)?;
+        if unsafe { SetWindowRgn(manager, region.0, 1) } == 0 {
+            return Err(win_error("Unable to apply native editor aperture"));
+        }
+        region.transfer(); // Windows now owns this GDI region.
+        lease.aperture = Some(updated);
+        Ok(())
+    }
+
+    fn clear_aperture(lease: &mut Lease) -> Result<(), String> {
+        if lease.aperture.is_none() { return Ok(()); }
+        let manager = lease.manager as Hwnd;
+        if unsafe { IsWindow(manager) } == 0 || pid_and_thread(manager).0 != std::process::id() {
+            return Err("LazyDesigner native window is unavailable for aperture restoration.".into());
+        }
+        assert_owned_region(manager, lease.aperture)?;
+        if unsafe { SetWindowRgn(manager, ptr::null_mut(), 1) } == 0 {
+            return Err(win_error("Unable to clear the editor aperture"));
+        }
+        lease.aperture = None;
+        Ok(())
     }
 
     fn win_error(action: &str) -> String {
@@ -215,6 +328,7 @@ mod platform {
         thread: u32,
         class: String,
         original: Rect,
+        aperture: Option<Aperture>,
     }
     impl Lease {
         fn verify(&self) -> Result<(), String> {
@@ -249,7 +363,7 @@ mod platform {
         lease.verify()?;
         verify_rect(hwnd, target)
     }
-    fn restore(lease: &Lease) -> Result<(), String> {
+    fn restore_window(lease: &Lease) -> Result<(), String> {
         lease.verify()?;
         let r = lease.original;
         if unsafe {
@@ -264,11 +378,28 @@ mod platform {
         })
     }
 
+    fn restore(lease: &mut Lease) -> Result<(), String> {
+        // Both resources have independent ownership. Attempt recovery of
+        // both even when the first fails, then preserve the lease if either
+        // remains unverified; never repeat native placement automatically.
+        let region_error = clear_aperture(lease).err();
+        let window_error = restore_window(lease).err();
+        match (region_error, window_error) {
+            (None, None) => Ok(()),
+            (Some(region), None) =>
+                Err(format!("Blockbench window restored but app aperture is unverified: {region}")),
+            (None, Some(window)) =>
+                Err(format!("App aperture restored but Blockbench window is unverified: {window}")),
+            (Some(region), Some(window)) =>
+                Err(format!("Aperture recovery: {region}; Blockbench recovery: {window}")),
+        }
+    }
+
     pub(super) fn run(action: &str, view: Option<EditorViewport>) -> Result<EditorSurfaceReceipt, String> {
         let mut state = lease().lock().map_err(|_| "Native editor presentation lock is unavailable.")?;
         match action {
             "detach" => {
-                let Some(existing) = state.as_ref() else { return Ok(receipt("DETACHED", "No native editor lease was active.")); };
+                let Some(existing) = state.as_mut() else { return Ok(receipt("DETACHED", "No native editor lease was active.")); };
                 // A changed PID/HWND is *not* permission to reposition a new window.
                 restore(existing)?;
                 *state = None;
@@ -276,15 +407,30 @@ mod platform {
             }
             "present" | "update" => {
                 let viewport = view.ok_or("Native editor viewport is required.")?;
-                if let Some(existing) = state.as_ref() {
+                if let Some(existing) = state.as_mut() {
                     let manager = discover()?.0;
-                    if existing.manager != manager { return Err("LazyDesigner window changed; detach before presenting again.".into()); }
-                    let geometry = placement(manager, viewport)?;
+                    if existing.manager != manager {
+                        return Err("LazyDesigner window changed; detach before presenting again.".into());
+                    }
                     let foreground = unsafe { GetForegroundWindow() };
-                    // No foreground escalation for an unrelated application.
-                    let raise = foreground == manager as Hwnd || foreground == existing.editor as Hwnd;
-                    place(existing, geometry, raise)?;
-                    return Ok(receipt("PRESENTED", "Original Blockbench process remains independent."));
+                    if foreground != manager as Hwnd && foreground != existing.editor as Hwnd {
+                        return Ok(receipt("DEFERRED", "Another application is active; no native placement was changed."));
+                    }
+                    let geometry = placement(manager, viewport)?;
+                    existing.verify()?;
+                    assert_owned_region(manager as Hwnd, existing.aperture)?;
+                    let expected_aperture = aperture_rect(window_rect(manager as Hwnd)?, geometry)?;
+                    // A reported layout change does not justify another
+                    // Win32 mutation when the window and cutout still match.
+                    if existing.aperture == Some(expected_aperture)
+                        && verify_rect(existing.editor as Hwnd, geometry).is_ok() {
+                        return Ok(receipt("PRESENTED", "Native editor geometry already matches the workspace."));
+                    }
+                    // A failed update retains the original admission checkpoint;
+                    // the Svelte caller must stop automatic retry on uncertainty.
+                    place(existing, geometry, foreground == manager as Hwnd)?;
+                    apply_aperture(existing, geometry)?;
+                    return Ok(receipt("PRESENTED", "Native Blockbench placement and aperture were updated."));
                 }
                 if action == "update" { return Ok(receipt("DETACHED", "No native editor lease was active.")); }
                 let (manager, editor, pid) = discover()?;
@@ -304,22 +450,27 @@ mod platform {
                     thread: pid_and_thread(editor as Hwnd).1,
                     class: window_class(editor as Hwnd),
                     original,
+                    aperture: None,
                 };
                 if candidate.thread == 0 || candidate.class.is_empty() {
                     return Err("Blockbench window identity was incomplete.".into());
                 }
-                if let Err(failure) = place(&candidate, target, true) {
-                    // Avoid a misleading success after partial positioning.
-                    return match restore(&candidate) {
+                let mut candidate = candidate;
+                let placement_result = place(&candidate, target, true)
+                    .and_then(|_| apply_aperture(&mut candidate, target));
+                if let Err(failure) = placement_result {
+                    // The window and region can change independently. Attempt
+                    // both restorations and retain any uncertain checkpoint.
+                    return match restore(&mut candidate) {
                         Ok(()) => Err(failure),
-                        Err(restore_failure) => {
+                        Err(recovery) => {
                             *state = Some(candidate);
-                            Err(format!("Placement unverified ({failure}); restoration also unverified ({restore_failure}). Use Detach; do not repeat Present."))
+                            Err(format!("Presentation unverified ({failure}); restoration unverified ({recovery}). Use Detach, not Present."))
                         }
                     };
                 }
                 *state = Some(candidate);
-                Ok(receipt("PRESENTED", "Native Blockbench window positioned; interactive rendering is not yet verified."))
+                Ok(receipt("PRESENTED", "Blockbench positioned in the native window aperture; interaction is not yet verified."))
             }
             _ => Err("Unsupported native editor surface action.".into()),
         }
@@ -333,9 +484,42 @@ mod platform {
             assert!(super::unique(&[15, 16], "Blockbench").is_err());
         }
     }
+    #[cfg(test)]
+    mod aperture_tests {
+        use super::*;
+        #[test]
+        fn window_cutout_uses_outer_window_coordinates() {
+            let window = Rect { left: 100, top: 70, right: 1500, bottom: 960 };
+            let viewport = Placement { x: 220, y: 150, width: 800, height: 400 };
+            assert_eq!(aperture_rect(window, viewport).unwrap(),
+                Aperture { width: 1400, height: 890, left: 120, top: 80, right: 920, bottom: 480 });
+        }
+        #[test]
+        fn cutout_rejects_outside_or_overflowing_rectangles() {
+            let window = Rect { left: -400, top: 100, right: 1000, bottom: 900 };
+            assert!(aperture_rect(window, Placement {
+                x: 500, y: 700, width: 900, height: 400
+            }).is_err());
+            assert!(aperture_rect(window, Placement {
+                x: i32::MAX, y: 150, width: 500, height: 300
+            }).is_err());
+        }
+    }
+
+    pub(super) fn release_if_manager_minimized() {
+        if let Ok(mut state) = lease().lock() {
+            if let Some(existing) = state.as_mut() {
+                let manager = existing.manager as Hwnd;
+                if unsafe { IsWindow(manager) } != 0 && unsafe { IsIconic(manager) } != 0 {
+                    if restore(existing).is_ok() { *state = None; }
+                }
+            }
+        }
+    }
+
     pub(super) fn restore_on_exit() {
         if let Ok(mut state) = lease().lock() {
-            if let Some(existing) = state.as_ref() {
+            if let Some(existing) = state.as_mut() {
                 if restore(existing).is_ok() { *state = None; }
             }
         }
@@ -348,6 +532,7 @@ mod platform {
     pub(super) fn run(_action: &str, _view: Option<EditorViewport>) -> Result<EditorSurfaceReceipt, String> {
         Ok(receipt("UNAVAILABLE", "Native window composition is disabled outside Windows development builds."))
     }
+    pub(super) fn release_if_manager_minimized() {}
     pub(super) fn restore_on_exit() {}
 }
 
@@ -356,6 +541,7 @@ pub fn command(action: &str, viewport: Option<EditorViewport>) -> Result<EditorS
     platform::run(action, viewport)
 }
 pub fn restore_on_exit() { platform::restore_on_exit(); }
+pub fn release_if_manager_minimized() { platform::release_if_manager_minimized(); }
 
 #[cfg(test)]
 mod tests {

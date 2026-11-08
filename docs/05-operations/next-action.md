@@ -4,6 +4,10 @@ This is the **single current continuation** owner. Proof: [current-validation.md
 
 ## Native Blockbench composition P0 — 2026-11-08
 
+- **Next source increment:** Added owned native GDI aperture and exact cutout checks, independent two-part restoration, minimize-to-restore, and bounded UI layout updates that distinguish DEFERRED from failure. Source-only, not Windows/Tauri/Blockbench acceptance. Preserve original process and model owner, debug-only feature gate, and no SetParent or taskbar suppression.
+- **Proof:** New static contract and Rust aperture geometry negative tests authored, NOT_EXECUTED. Windows clipping/stacking, input, focus, dialogs, DPI, save/reopen, crash restoration, full UX: UNVERIFIED.
+
+
 - **New user-selected UX direction:** Independent native window composition adapted from LazyTester, not WebView/iframe, SetParent or editor duplication. New Windows-debug-only `blockbench_surface.rs` owns one explicit placement/restore lease and uses existing Blockbench executable discovery. `NativeEditorStage.svelte` is an opt-in developer Editor surface; release Workspace/Support navigation remains unchanged.
 - **Source boundary:** SOURCE_AUTHORED, Rust viewport negative regressions AUTHORED_NOT_EXECUTED. Native z-order, DPI, focus, dialogs, minimize, crash restoration and Blockbench usability remain UNVERIFIED; no local/Codex/Windows tests requested while the hold remains. No CI, release, installer or MCP/Runtime change.
 - **Next:** Source guard/security review and native-editor visual/user acceptance only when execution is separately reauthorized; do not claim a completed embedded editor or start new window-management frameworks.

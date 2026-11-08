@@ -23,6 +23,7 @@ mod readiness;
 mod system_status;
 
 use desktop_error::DesktopError;
+use tauri::Emitter;
 use diagnostics::DiagnosticExportResult;
 use blockbench::{BlockbenchActionResult, ModelBrowseResult};
 use system_status::{BootstrapActionResult, ConnectionStatus, EnsureReadyResult, ManagedActionResult, ManagedUpdateCheck, PluginFileActionResult, ProjectNavigationActionResult, ProjectPathResult, SystemStatus};
@@ -309,8 +310,21 @@ fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building LazyDesigner Desktop")
-        .run(move |_, event| {
+        .run(move |app, event| {
             let name = match event {
+                tauri::RunEvent::WindowEvent {
+                    label,
+                    event: tauri::WindowEvent::Moved(_)
+                        | tauri::WindowEvent::Resized(_)
+                        | tauri::WindowEvent::ScaleFactorChanged { .. }
+                        | tauri::WindowEvent::Focused(_),
+                    ..
+                } if label == "main" => {
+                    // Minimize never leaves Blockbench visually floating in place.
+                    blockbench_surface::release_if_manager_minimized();
+                    let _ = app.emit("native-editor-layout", ());
+                    return;
+                }
                 tauri::RunEvent::Ready => "desktop:ready",
                 tauri::RunEvent::ExitRequested { .. } => {
                     blockbench_surface::restore_on_exit();

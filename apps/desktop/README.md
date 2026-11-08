@@ -921,3 +921,15 @@ Gate: `cfg(all(windows, debug_assertions))` on Rust actions and
 return UNAVAILABLE, and production navigation stays unchanged.
 See the `docs/01-product/interface-ux.md` experimental native
 composition contract for negative cases and proof limits.
+
+
+### Native region cutout / layout lifecycle — P0 source continuation
+
+The manually invoked debug editor surface also has a manager-window GDI
+aperture intended to keep Blockbench visible as an independent native window.
+The current lease owns only its exact window region and original editor
+rectangle. Source guards include non-overwriting region readback and recovery
+of both components. Tauri move/resize/focus events request layout observation
+through the same Svelte presenter; a minimized manager attempts native detach.
+Unknown native receipts block automatic placement. The release app remains
+unmodified, and none of this proves functioning native visuals or input.

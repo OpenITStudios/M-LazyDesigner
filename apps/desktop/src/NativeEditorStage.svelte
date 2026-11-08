@@ -1,9 +1,10 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
+  import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
   type SurfaceReceipt = {
-    status: 'PRESENTED' | 'DETACHED' | 'UNAVAILABLE';
+    status: 'PRESENTED' | 'DETACHED' | 'DEFERRED' | 'UNAVAILABLE';
     note: string;
   };
   export let fixture = false;
@@ -16,6 +17,8 @@
   let problem = '';
   let queued = false;
   let mounted = false;
+  let layoutDirty = false;
+  let unlistenLayout: UnlistenFn | undefined;
 
   function bounds() {
     const rect = aperture.getBoundingClientRect();
@@ -50,13 +53,20 @@
   }
 
   async function update() {
-    if (!mounted || !presented || busy || fixture) return;
+    if (!mounted || !presented || busy || uncertain || fixture) return;
     busy = true;
     try {
       const receipt = await invoke<SurfaceReceipt>('native_editor_surface', {
         action: 'update', viewport: bounds(),
       });
-      if (receipt.status !== 'PRESENTED') {
+      if (receipt.status === 'DETACHED') {
+        presented = false;
+        uncertain = false;
+        problem = '';
+        note = receipt.note;
+      } else if (receipt.status === 'DEFERRED') {
+        note = receipt.note;
+      } else if (receipt.status !== 'PRESENTED') {
         uncertain = true;
         problem = receipt.note;
       }
@@ -65,14 +75,19 @@
       problem = String(error);
     } finally {
       busy = false;
+      if (layoutDirty && presented && !uncertain) scheduleUpdate();
     }
   }
 
   function scheduleUpdate() {
-    if (!presented || busy || queued) return;
+    if (!mounted || !presented || uncertain || fixture) return;
+    layoutDirty = true;
+    if (busy || queued) return;
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
+      if (!mounted || !presented || uncertain || busy) return;
+      layoutDirty = false;
       void update();
     });
   }
@@ -80,7 +95,10 @@
   // Parent navigation awaits restoration before hiding the Editor page.
   export async function detach(): Promise<boolean> {
     if (fixture || (!presented && !uncertain)) return true;
-    if (busy) return false;
+    if (busy) {
+      problem = 'A native operation is still finishing. Use Detach again when it completes.';
+      return false;
+    }
     busy = true;
     try {
       const receipt = await invoke<SurfaceReceipt>('native_editor_surface', {
@@ -110,11 +128,21 @@
     observer.observe(aperture);
     window.addEventListener('resize', scheduleUpdate);
     window.addEventListener('focus', scheduleUpdate);
+    document.addEventListener('visibilitychange', scheduleUpdate);
+    if (!fixture) {
+      void listen('native-editor-layout', scheduleUpdate).then(unlisten => {
+        if (mounted) unlistenLayout = unlisten;
+        else unlisten();
+      }).catch(() => { /* Native events are advisory, never a new admission route. */ });
+    }
     return () => {
       mounted = false;
       observer.disconnect();
       window.removeEventListener('resize', scheduleUpdate);
       window.removeEventListener('focus', scheduleUpdate);
+      document.removeEventListener('visibilitychange', scheduleUpdate);
+      unlistenLayout?.();
+      unlistenLayout = undefined;
       // Normal app exit also restores synchronously in Rust. Unmount cleanup
       // must not issue a second placement or silently terminate Blockbench.
       if (!fixture && (presented || uncertain)) {
@@ -128,7 +156,7 @@
   <header class="native-editor-heading">
     <div>
       <h2>Native Blockbench workspace <span class="experimental">Development preview</span></h2>
-      <p>Original Blockbench window · independently running · no embedding or simulated image</p>
+      <p>Original Blockbench · native Windows cutout · editing behavior not yet verified</p>
     </div>
     <div class="native-editor-actions">
       {#if presented || uncertain}

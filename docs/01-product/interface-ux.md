@@ -113,3 +113,19 @@ Windows HWND/z-order, Electron dialogs, multi-monitor DPI, focus,
 minimize/maximize, editor saving/Undo, crash behavior and one-shell usability
 are NOT_EXECUTED/UNVERIFIED. Do not call it a native embedded editor or
 mark production READY before matching Windows acceptance.
+
+
+### Native aperture follow-up — source change, not live acceptance
+
+The P0 Windows-debug composition now proposes a region cutout on the *manager*
+HWND using GDI `CombineRgn(RGN_DIFF)`, physical viewport positions, and
+window-relative (not client-relative) region coordinates. All GDI region
+handles follow OS transfer ownership after successful `SetWindowRgn`.
+It refuses to replace unknown/external clipping or an unverified original
+Blockbench HWND. Detach attempts both restoration of original Blockbench
+geometry and removal of the manager cutout even if one step fails, retaining
+uncertain state rather than automatically retrying. Minimize requests a
+bounded restore; moving/resizing/focusing the manager may request a coalesced
+layout refresh. Foreign foreground produces DEFERRED without a window change.
+These are source-authored behaviors; Tauri/WebView2 native clipping, native
+Blockbench input/dialogs, focus, DPI and reliable restoration remain untested.
