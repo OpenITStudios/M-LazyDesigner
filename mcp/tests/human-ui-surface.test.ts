@@ -117,6 +117,53 @@ describe("human-facing Blockbench UI", () => {
     expect(workspace).toContain("You can edit models even when AI is not connected.");
   });
 
+  test("keyboard quick-open resolves only one available nonactive model by name", async () => {
+    const { uniqueModelSearchTarget } = await import("../../apps/desktop/src/desktopPresentation");
+    const { createDevFixtureStatus } = await import("../../apps/desktop/src/desktopFixtures");
+    const ready = createDevFixtureStatus("ready").project_navigation;
+    expect(uniqueModelSearchTarget(ready, " SOFA ")?.model.id).toBe("model-fixture-2");
+    expect(uniqueModelSearchTarget(ready, "")).toBeNull();
+    expect(uniqueModelSearchTarget(ready, "no_such_model")).toBeNull();
+    expect(uniqueModelSearchTarget(ready, "Modern Chair")).toBeNull(); // Active model is not opened again.
+    expect(uniqueModelSearchTarget(ready, "Furniture")).toBeNull(); // Project-name match is not a model shortcut.
+
+    const large = createDevFixtureStatus("many-projects").project_navigation;
+    expect(uniqueModelSearchTarget(large, "needle")?.model.id).toBe("fixture-model-8");
+    large.projects[0].models[0].name = "Needle duplicate";
+    expect(uniqueModelSearchTarget(large, "needle")).toBeNull(); // Ambiguous; explicit selection required.
+    large.projects[0].available = false;
+    expect(uniqueModelSearchTarget(large, "needle")?.model.id).toBe("fixture-model-8");
+
+    const missing = createDevFixtureStatus("ready").project_navigation;
+    missing.projects[0].models[1].exists = false;
+    expect(uniqueModelSearchTarget(missing, "sofa")).toBeNull();
+    const unavailable = createDevFixtureStatus("ready").project_navigation;
+    unavailable.projects[0].available = false;
+    expect(uniqueModelSearchTarget(unavailable, "sofa")).toBeNull();
+  });
+
+  test("search keyboard affordances are explained, bounded and do not open ambiguous results", async () => {
+    const [navigator, presentation, fixture] = await Promise.all([
+      source("../apps/desktop/src/ProjectNavigator.svelte"),
+      source("../apps/desktop/src/desktopPresentation.ts"),
+      source("../apps/desktop/scripts/capture-ui.py"),
+    ]);
+    expect(navigator).toContain('onkeydown={handleProjectSearchKeydown}');
+    expect(navigator).toContain('id="ld-project-search-help"');
+    expect(navigator).toContain('aria-describedby="ld-project-search-results ld-project-search-help"');
+    expect(navigator).toContain("if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;");
+    expect(navigator).toContain("event.key === 'Escape' && projectSearch");
+    expect(navigator).toContain("event.stopPropagation()");
+    expect(navigator).toContain("event.key === 'Enter' && uniqueSearchModel && canOpenModel && !busy");
+    expect(navigator).toContain("void onOpenModel(uniqueSearchModel.model.id)");
+    expect(navigator).toContain('Press Enter to open');
+    expect(navigator).toContain('Escape clears search.');
+    expect(presentation).toContain("if (target !== null) return null;");
+    expect(fixture).toContain('search.press("Escape")');
+    expect(fixture).not.toContain('model.click()');
+    expect(fixture).not.toContain('search.press("Enter")'); // Preserve native safety in browser QA.
+  });
+
   test("first-run Workspace makes model opening primary and AI setup an explicit optional action", async () => {
     const [workspace, navigator] = await Promise.all([
       source("../apps/desktop/src/WorkspacePage.svelte"),

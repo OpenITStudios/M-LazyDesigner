@@ -507,6 +507,9 @@ Open Model…
 
 Projects & Models
 → one search for project folders and model names
+→ keyboard Escape clears the query and retains input focus
+→ keyboard Enter opens only one uniquely matching, existing, non-active model by its resolved opaque ID
+→ ambiguous names, project-only matches, missing models or unavailable folders require an explicit row action
 → Add Project Folder opens an explicit native folder chooser
 → expand a Project to access its .bbmodel files and familiar asset folders
 → Pin/Unpin/Remove shortcut affects only the Desktop preference list
@@ -516,6 +519,20 @@ Recent Models
 ```
 
 Projects registered through Add Project Folder are **actual user folders**, even when empty or without a Blockbench snapshot. The chooser records only their absolute folder paths in the existing `%LOCALAPPDATA%\LazyDesigner\project-preferences.json` file; no new database, authoring format or project folder is created. For each registered folder, a bounded, nonrecursive read checks the folder itself and its immediate `Models`/`Model` child (maximum 128 directory entries per directory, 64 shown models per project, 16 added folders). A displayed count says *models shown* for registered folders or *known models* for history-only projects—never an invented total count. Added folders remain visible when empty/unavailable and can be removed from the shortcut list without deleting or moving any file.
+
+The search input displays the model-specific Enter shortcut only when
+there is exactly one eligible matching model; otherwise the user chooses a
+visible row action. It does not infer that a matching project title means
+the user intends to open one of its models. Shortcut handling ignores IME
+composition and modified keyboard commands, so it does not override native
+text-entry semantics. Search still displays the project result count, offers
+Clear search, and restores the keyboard input focus when cleared. The
+resulting Open action reuses the existing native Rust path/ID verification;
+the Desktop does not declare activation complete from the keyboard event.
+
+The offline browser QA uses Escape to test reset/focus, but **never presses
+Enter to launch a model**. Bun tests for unique, ambiguous, missing, active
+and unavailable targets are authored source checks, not native acceptance.
 
 Project grouping is deterministic and intentionally shallow:
 

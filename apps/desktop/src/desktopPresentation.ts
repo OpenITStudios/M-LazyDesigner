@@ -299,6 +299,27 @@ export function visibleProjects(state: ProjectNavigation, search: string, showAl
   return query || showAll ? matches : matches.slice(0, 6);
 }
 
+/**
+ * Keyboard search may open only one available, non-active model whose NAME
+ * matches the query. Project-name matches, duplicate names and missing files
+ * must never be inferred as a safe Enter target. Native Rust still validates
+ * the opaque model ID and actual path when a user explicitly requests Open.
+ */
+export function uniqueModelSearchTarget(state: ProjectNavigation, search: string): ProjectModelTarget | null {
+  const query = search.trim().toLowerCase();
+  if (!query) return null;
+  let target: ProjectModelTarget | null = null;
+  for (const project of state.projects) {
+    if (!project.available) continue;
+    for (const model of project.models) {
+      if (!model.exists || model.active || !model.name.toLowerCase().includes(query)) continue;
+      if (target !== null) return null;
+      target = { project, model };
+    }
+  }
+  return target;
+}
+
 export function visibleProjectModels(project: ProjectNavigationProject, search: string): ProjectNavigationModel[] {
   const query = search.trim().toLowerCase();
   if (!query || project.name.toLowerCase().includes(query)) return project.models;

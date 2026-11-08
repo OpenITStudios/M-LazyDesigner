@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ProjectAction, ProjectNavigation } from './projectNavigationTypes';
-  import { visibleProjects, visibleProjectModels, recentModelTargets, continueTarget } from './desktopPresentation';
+  import { visibleProjects, visibleProjectModels, recentModelTargets, continueTarget, uniqueModelSearchTarget } from './desktopPresentation';
 
   export let navigation: ProjectNavigation;
   export let busy = false;
@@ -25,6 +25,7 @@
   $: matchingProjects = visibleProjects(navigation, projectSearch, showAllProjects);
   $: recentTargets = recentModelTargets(navigation);
   $: targetToContinue = continueTarget(navigation);
+  $: uniqueSearchModel = uniqueModelSearchTarget(navigation, projectSearch);
 
   // Null defaults to the active project; an empty ID records a user collapse
   // and persists across Workspace/Support navigation via the parent binding.
@@ -40,6 +41,19 @@
   function clearProjectSearch() {
     projectSearch = '';
     searchInput?.focus();
+  }
+
+  function handleProjectSearchKeydown(event: KeyboardEvent) {
+    // Do not reinterpret IME composition or modified shortcuts as Open.
+    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.key === 'Escape' && projectSearch) {
+      event.preventDefault();
+      event.stopPropagation();
+      clearProjectSearch();
+    } else if (event.key === 'Enter' && uniqueSearchModel && canOpenModel && !busy) {
+      event.preventDefault();
+      void onOpenModel(uniqueSearchModel.model.id);
+    }
   }
 </script>
 
@@ -109,12 +123,21 @@
   <div class="project-search-bar">
     <label for="ld-project-search">Find a project or model</label>
     <div class="project-search-controls">
-      <input id="ld-project-search" bind:this={searchInput} class="compact-search project-search" type="search" placeholder="Search projects or models…" aria-describedby="ld-project-search-results" bind:value={projectSearch} />
+      <input id="ld-project-search" bind:this={searchInput} class="compact-search project-search" type="search" placeholder="Search projects or models…" aria-describedby="ld-project-search-results ld-project-search-help" bind:value={projectSearch} onkeydown={handleProjectSearchKeydown} />
       {#if projectSearch.trim()}
         <button type="button" class="quiet-button clear-search" onclick={clearProjectSearch}>Clear search</button>
       {/if}
     </div>
     <span id="ld-project-search-results" class="project-search-feedback" role="status" aria-live="polite">{projectSearch.trim() ? `${matchingProjects.length} ${matchingProjects.length === 1 ? 'project matches' : 'projects match'} your search.` : ''}</span>
+    <span id="ld-project-search-help" class="project-search-hint">
+      {projectSearch.trim()
+        ? uniqueSearchModel && canOpenModel && !busy
+          ? `Press Enter to open ${uniqueSearchModel.model.name} in Blockbench. Escape clears search.`
+          : matchingProjects.length === 0
+            ? 'No results. Escape clears search.'
+            : 'Use a visible project or model action below. Escape clears search.'
+        : 'Search by project or model name.'}
+    </span>
   </div>
   {/if}
   <div class="project-list">
@@ -245,6 +268,7 @@
   .compact-search{width:150px;height:34px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-soft);font:inherit;font-size:var(--font-sm)}
   .compact-search:focus{border-color:var(--info)}.compact-search::placeholder{color:var(--muted-2)}
   .project-search-bar{display:grid;gap:5px;margin:0 0 10px}.project-search-bar label{color:var(--text-soft);font-size:var(--font-sm);font-weight:650}.project-search-controls{display:flex;align-items:center;gap:8px}.project-search{flex:1 1 auto;min-width:0;width:100%;max-width:460px}.project-search-feedback{color:var(--muted-2);font-size:var(--font-xs)}.project-search-feedback:empty{display:none}.clear-search{flex:0 0 auto;min-height:32px;padding:4px 8px}
+  .project-search-hint{color:var(--muted-2);font-size:var(--font-xs);line-height:1.5;overflow-wrap:anywhere}
   .project-empty{padding:10px 0;color:var(--muted-2);font-size:var(--font-sm)}.project-empty-list{padding:13px 12px}
   .folder-heading{margin-top:6px;padding-top:9px;border-top:1px solid var(--border-soft)}
   .folder-shortcuts{display:flex;flex-wrap:wrap;gap:6px;padding:3px 0 6px}

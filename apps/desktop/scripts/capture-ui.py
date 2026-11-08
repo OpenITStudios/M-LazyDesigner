@@ -237,6 +237,9 @@ def inspect_task_journey(page, fixture, view):
             model = page.get_by_role("button", name="Open model Sofa", exact=True)
             if model.count() != 1 or not model.is_enabled():
                 issues.append("matching model does not expose a usable Open action")
+            hint = page.locator("#ld-project-search-help")
+            if hint.count() != 1 or "Press Enter to open Sofa" not in hint.inner_text():
+                issues.append("unique model shortcut is not explained")
             clear = page.get_by_role("button", name="Clear search", exact=True)
             if clear.count() != 1:
                 issues.append("search has no explicit reset action")
@@ -253,8 +256,10 @@ def inspect_task_journey(page, fixture, view):
                 issues.append("empty search needs an explicit empty result")
             clear = page.get_by_role("button", name="Clear search", exact=True)
             if clear.count() == 1:
-                clear.click()
+                search.press("Escape")
                 interactions += 1
+                if search.input_value() or not search.evaluate("(node) => document.activeElement === node"):
+                    issues.append("Escape must clear search and retain keyboard focus")
                 # Existing user collapse state remains authoritative: browsing is
                 # restored even when the model rows intentionally stay collapsed.
                 expand = page.get_by_role("button", name="Show models for project Furniture", exact=True)
@@ -280,14 +285,17 @@ def inspect_task_journey(page, fixture, view):
             model = page.get_by_role("button", name="Open model Needle asset", exact=True)
             if model.count() != 1 or not model.is_enabled():
                 issues.append("search did not expose the model beyond the first six projects")
+            hint = page.locator("#ld-project-search-help")
+            if hint.count() != 1 or "Press Enter to open Needle asset" not in hint.inner_text():
+                issues.append("unique model shortcut is unavailable beyond the first six projects")
             clear = page.get_by_role("button", name="Clear search", exact=True)
             if clear.count() != 1:
                 issues.append("search cannot be reset after finding a hidden model")
             else:
-                clear.click()
+                search.press("Escape")
                 interactions += 1
                 if search.input_value() or not search.evaluate("(node) => document.activeElement === node"):
-                    issues.append("reset must clear the query and return keyboard focus")
+                    issues.append("Escape must clear the query and retain keyboard focus")
                 if page.get_by_role("button", name="Show all projects", exact=True).count() != 1:
                     issues.append("clearing search must restore the six-project list boundary")
 
