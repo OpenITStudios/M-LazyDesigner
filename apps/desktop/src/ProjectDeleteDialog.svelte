@@ -13,10 +13,16 @@
   onMount(() => {
     const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     cancelButton?.focus();
-    return () => { if (returnFocus?.isConnected) returnFocus.focus(); };
+    return () => {
+      // The original project action may vanish after the folder is recycled.
+      // Always restore focus to a surviving Workspace control.
+      if (returnFocus?.isConnected && returnFocus !== document.body) returnFocus.focus();
+      else document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();
+    };
   });
 
   function handleKeyDown(event: KeyboardEvent) {
+    if (event.defaultPrevented || event.isComposing) return;
     if (event.key === 'Escape' && !busy) {
       event.preventDefault();
       onCancel();
@@ -45,7 +51,10 @@
 
 <div class="project-delete-overlay">
   <div class="project-delete-dialog" role="alertdialog" aria-modal="true" aria-busy={busy}
-    aria-labelledby="project-delete-title" aria-describedby="project-delete-explanation"
+    aria-labelledby="project-delete-title"
+    aria-describedby={confirmBlocked
+      ? 'project-delete-explanation project-delete-location project-delete-blocked'
+      : 'project-delete-explanation project-delete-location'}
     tabindex="-1" bind:this={dialog}>
     <h2 id="project-delete-title">Move project to Recycle Bin?</h2>
     <p id="project-delete-explanation">
@@ -54,16 +63,17 @@
     </p>
     <div class="project-delete-location">
       <strong>Folder to be moved</strong>
-      <code>{review.folder_path}</code>
+      <code id="project-delete-location">{review.folder_path}</code>
     </div>
     <p>Save your work and close every Blockbench window first. This operation does not permanently delete files,
       but recovery depends on Windows Recycle Bin settings.</p>
     {#if confirmBlocked}
-      <p role="status">Desktop status needs verification. Cancel, refresh Workspace, and review the project again before deleting it.</p>
+      <p id="project-delete-blocked" role="status">Desktop status needs verification. Cancel, refresh Workspace, and review the project again before deleting it.</p>
     {/if}
     <div class="project-delete-actions">
       <button class="secondary-button" bind:this={cancelButton} onclick={onCancel} disabled={busy}>Cancel</button>
-      <button class="project-delete-confirm" onclick={onConfirm} disabled={busy || confirmBlocked}>
+      <button class="project-delete-confirm" onclick={onConfirm} disabled={busy || confirmBlocked}
+        aria-label={`Move project ${review.project_name} to Recycle Bin`} aria-describedby="project-delete-location">
         {busy ? 'Moving…' : 'Move to Recycle Bin'}
       </button>
     </div>

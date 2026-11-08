@@ -354,8 +354,15 @@ def inspect_task_journey(page, fixture, view):
 
     elif fixture == "status-unverified":
         note = page.locator("#ld-project-action-note")
-        if note.count() != 1 or "Select Refresh above when available" not in note.inner_text():
-            issues.append("the stale-action guidance does not identify the visible Refresh path")
+        if note.count() != 1 or "Refresh required for project changes" not in note.inner_text():
+            issues.append("the stale-action guidance must explain blocked project actions")
+        direct_refresh = note.get_by_role("button", name="Refresh status", exact=True)
+        if direct_refresh.count() != 1 or not direct_refresh.is_enabled():
+            issues.append("stale actions need a nearby keyboard-reachable status Refresh")
+        else:
+            direct_refresh.focus()
+            if not direct_refresh.evaluate("(node) => document.activeElement === node"):
+                issues.append("the nearby Refresh action must accept keyboard focus")
         refresh = page.get_by_role("button", name="Refresh", exact=True)
         if refresh.count() != 1 or not refresh.is_enabled():
             issues.append("Refresh must be visible and enabled for stale status")

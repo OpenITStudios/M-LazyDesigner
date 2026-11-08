@@ -60,6 +60,7 @@
     onFocusEditor={focusCurrentEditor}
     onProjectAction={runProjectAction}
     onCopyPath={copyNavigationPath}
+    onRefreshStatus={refresh}
   />
 {/snippet}
 

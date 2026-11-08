@@ -276,6 +276,10 @@
       deleteReview = null;
       expandedProjectId = null;
       await refresh();
+      // A recycled project's action trigger may no longer exist after refresh.
+      // Move focus to the persistent page heading, not the removed row/menu.
+      await tick();
+      document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();
       recordOperation('Move Project to Recycle Bin', 'success', result.status);
       showActionToast(result.message, result.status === 'RECYCLED' ? 'success' : 'pending');
     } catch (cause) {

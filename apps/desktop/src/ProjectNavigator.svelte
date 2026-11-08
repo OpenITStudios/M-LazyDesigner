@@ -17,6 +17,7 @@
   export let onFocusEditor: () => void | Promise<void>;
   export let onProjectAction: (action: ProjectAction, id: string) => void | Promise<void>;
   export let onCopyPath: (id: string) => void | Promise<void>;
+  export let onRefreshStatus: () => void | Promise<void>;
 
   // Ephemeral presentation only, retained across Support navigation.
   export let expandedProjectId: string | null = null;
@@ -65,7 +66,10 @@
   <p class="model-opening-notice" role="status" aria-live="polite">Opening {openingModelName} in Blockbench…</p>
 {/if}
 {#if statusUnverified}
-  <p id="ld-project-action-note" class="project-state-note" role="status"><strong>Refresh required for project changes.</strong> You can still open models and folders. Select Refresh above when available, or choose Refresh from Workspace's More actions, before changing shortcuts, deleting projects or focusing the current editor.</p>
+  <div id="ld-project-action-note" class="project-state-note" role="group" aria-label="Project actions need updated status">
+    <span><strong>Refresh required for project changes.</strong> You can still open models and folders. Refresh status before changing shortcuts, deleting projects or focusing the current editor.</span>
+    <button type="button" class="secondary-button small-button" onclick={onRefreshStatus} disabled={busy}>Refresh status</button>
+  </div>
 {/if}
 
 {#if navigation.preferences_issue}
@@ -291,7 +295,9 @@
   .menu-popover .menu-danger{color:#e28b8b;font-weight:700}
   .menu-popover .menu-danger:hover:not(:disabled){background:rgba(192,70,70,.12)}
   .model-opening-notice{margin:0 0 12px;padding:7px 10px;border-left:2px solid var(--info);background:var(--bg-elevated);color:var(--text-soft);font-size:var(--font-sm);line-height:1.5;overflow-wrap:anywhere}
-  .project-state-note{margin:0 0 14px;padding:7px 10px;border-left:2px solid var(--warning);color:var(--text-soft);font-size:var(--font-sm);line-height:1.5}
+  .project-state-note{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 14px;padding:8px 10px;border-left:2px solid var(--warning);color:var(--text-soft);font-size:var(--font-sm);line-height:1.5}
+  .project-state-note span{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}
+  .project-state-note button{flex:0 0 auto}
   .project-state-note strong{font-weight:700}
   @media(max-width:680px){
     .section-heading{align-items:flex-start;flex-wrap:wrap;gap:9px}

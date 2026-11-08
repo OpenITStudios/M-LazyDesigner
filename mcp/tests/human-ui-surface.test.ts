@@ -28,7 +28,77 @@ describe("human-facing Blockbench UI", () => {
     expect(app).toContain("{errorTitle} {errorDetail} {errorRecovery} {operations}");
     expect(app).toContain("reportReadinessFailure(result, 'connect')");
     expect(app).toContain("reportReadinessFailure(ready, 'install')");
-    expect(app).toContain("{#if error && status}<button");
+    expect(app).toContain("attentionError && status && errorRecovery?.action === 'open-support'");
+  });
+
+  test("stale project actions expose a nearby keyboard-reachable read-only recovery", async () => {
+    const [workspace, navigator, fixture] = await Promise.all([
+      source("../apps/desktop/src/WorkspacePage.svelte"),
+      source("../apps/desktop/src/ProjectNavigator.svelte"),
+      source("../apps/desktop/scripts/capture-ui.py"),
+    ]);
+    expect(navigator).toContain("export let onRefreshStatus: () => void | Promise<void>;");
+    expect(workspace).toContain("onRefreshStatus={refresh}");
+    expect(navigator).toContain('id="ld-project-action-note" class="project-state-note" role="group"');
+    expect(navigator).toContain('aria-label="Project actions need updated status"');
+    expect(navigator).toContain('onclick={onRefreshStatus} disabled={busy}>Refresh status</button>');
+    expect(navigator).toContain("You can still open models and folders.");
+    expect(navigator).toContain("aria-describedby={statusUnverified ? 'ld-project-action-note' : undefined}");
+    expect(navigator).toContain("disabled={busy || !canEditProjectPrefs}");
+    expect(navigator).toContain(".project-state-note button{flex:0 0 auto}");
+    expect(fixture).toContain('direct_refresh = note.get_by_role("button", name="Refresh status", exact=True)');
+    expect(fixture).toContain("direct_refresh.focus()");
+    expect(fixture).not.toContain("direct_refresh.click()");
+  });
+
+  test("Delete Project dialog announces the exact folder and restores focus after the source row disappears", async () => {
+    const [dialog, app] = await Promise.all([
+      source("../apps/desktop/src/ProjectDeleteDialog.svelte"),
+      source("../apps/desktop/src/App.svelte"),
+    ]);
+    expect(dialog).toContain('role="alertdialog" aria-modal="true"');
+    expect(dialog).toContain("project-delete-explanation project-delete-location project-delete-blocked");
+    expect(dialog).toContain('id="project-delete-location">{review.folder_path}</code>');
+    expect(dialog).toContain('id="project-delete-blocked" role="status"');
+    expect(dialog).toContain('aria-label={`Move project ${review.project_name} to Recycle Bin`}');
+    expect(dialog).toContain('aria-describedby="project-delete-location"');
+    expect(dialog).toContain("onclick={onConfirm} disabled={busy || confirmBlocked}");
+    expect(dialog).toContain("onclick={onCancel} disabled={busy}");
+    expect(dialog).toContain("if (event.defaultPrevented || event.isComposing) return;");
+    expect(dialog).toContain("if (returnFocus?.isConnected && returnFocus !== document.body) returnFocus.focus();");
+    expect(dialog).toContain("else document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();");
+    const confirm = app.slice(app.indexOf("async function confirmDeleteProject()"), app.indexOf("async function openModel("));
+    expect(confirm).toContain("invoke<ProjectDeleteResult>('confirm_delete_project'");
+    expect(confirm).toContain("await refresh();");
+    expect(confirm).toContain("await tick();");
+    expect(confirm).toContain("document.querySelector<HTMLElement>('.page-toolbar h1')?.focus();");
+    expect(confirm).toContain("result.status === 'RECYCLED' ? 'success' : 'pending'");
+    expect(dialog).not.toContain("invoke<");
+  });
+
+  test("disabled Particle Studio controls reference task-specific visible explanations", async () => {
+    const panel = await source("ui/panel.html");
+    expect(panel).toContain('id="ld-studio-save-model-hint"');
+    expect(panel).toContain("!project.hasFolder ? 'ld-studio-save-model-hint' : null");
+    expect(panel).toContain("project.hasFolder && !studioHasChanges()");
+    expect(panel).toContain('id="ld-studio-no-changes"');
+    expect(panel).not.toContain("Save the .bbmodel first to enable particle file Save.");
+    const locked = ["emission", "size", "speed", "lifetime", "color",
+      "opacity", "radius", "vertical_acceleration"];
+    for (const field of locked) {
+      expect(panel).toContain(`!studioLoaded.editable.${field} ? 'ld-studio-locked-values' : null`);
+    }
+    expect(panel).toContain('id="ld-studio-locked-values"');
+    expect(panel.match(/id="ld-studio-locked-values"/g)).toHaveLength(1);
+    expect(panel).toContain("Those values are preserved.");
+    for (const id of ["ld-studio-attach-save-first", "ld-studio-attach-save-changes", "ld-studio-attach-ready"]) {
+      expect(panel).toContain(`id="${id}"`);
+      expect(panel).toContain(`'${id}'`);
+    }
+    expect(panel).toContain(':disabled="studioBusy || !studioLoaded.path || studioHasChanges()"');
+    expect(panel).toContain(':disabled="studioBusy || !project.hasFolder || !studioHasChanges()"');
+    expect(panel).toContain('@click="studioAttach"');
+    expect(panel).toContain('@click="studioSave"');
   });
 
   test("small-window layouts wrap controls while retaining semantic focus and recovery", async () => {
@@ -541,9 +611,9 @@ describe("human-facing Blockbench UI", () => {
     expect(panel).toContain("Preview uses this location without saving a particle file.");
     expect(panel).toContain("Some controls are read-only because the particle uses authored expressions.");
     expect(panel).toContain("Those values are preserved.");
-    expect(panel).toContain('v-else-if="!studioHasChanges()" class="section-hint">No unsaved changes to save.');
-    expect(panel).toContain('v-if="!studioLoaded.path" class="section-hint">Save this particle file before attaching it.');
-    expect(panel).toContain('v-else-if="studioHasChanges()" class="section-hint">Save your latest changes before attaching.');
+    expect(panel).toContain('v-if="project.hasFolder && !studioHasChanges()" id="ld-studio-no-changes" class="section-hint">No unsaved changes to save.');
+    expect(panel).toContain('v-if="!studioLoaded.path" id="ld-studio-attach-save-first" class="section-hint">Save this particle file before attaching it.');
+    expect(panel).toContain('v-else-if="studioHasChanges()" id="ld-studio-attach-save-changes" class="section-hint">Save your latest changes before attaching.');
     expect(panel).toContain(':disabled="studioBusy || !studioLoaded.path || studioHasChanges()"');
     expect(panel).toContain(':disabled="studioBusy || !project.hasFolder || !studioHasChanges()"');
     expect(panel).toContain('@click="studioAttach"');

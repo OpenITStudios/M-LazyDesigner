@@ -26,7 +26,7 @@ describe("Desktop page and deletion-dialog ownership", () => {
     expect(dialog).toContain("event.key === 'Escape' && !busy");
     expect(dialog).toContain("event.key === 'Tab' && dialog");
     expect(dialog).toContain("button:not([disabled])");
-    expect(dialog).toContain("onclick={onConfirm} disabled={busy}");
+    expect(dialog).toContain("onclick={onConfirm} disabled={busy || confirmBlocked}");
   });
 });
 
