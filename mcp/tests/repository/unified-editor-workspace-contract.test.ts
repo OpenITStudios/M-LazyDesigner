@@ -89,9 +89,24 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs)");
     expect(unified).toContain('aria-label="LazyDesigner companion"');
     expect(unified).toContain('aria-label="Toggle LazyDesigner companion"');
-    expect(unified).toContain('id="ld-inspector-assistant">Assistant</h4>');
-    expect(unified).toContain('id="ld-inspector-checks">Model Review</h4>');
-    expect(unified).toContain('id="ld-inspector-activity">Activity</h4>');
+    expect(unified).toContain('role="tablist" aria-label="LazyDesigner sections"');
+    for (const id of ["assistant", "review", "activity"]) {
+      expect(unified).toContain('data-companion-tab="' + id + '"');
+      expect(unified).toContain('aria-selected={companionTab === \''
+        + id + '\'}');
+    }
+    expect(unified).toContain('role="tabpanel" tabindex="0" class="inspector-section assistant-section"');
+    expect(unified).toContain('role="tabpanel" tabindex="0" class="inspector-section review-section"');
+    expect(unified).toContain('role="tabpanel" tabindex="0" class="inspector-section activity-section"');
+    expect(unified).toContain('aria-labelledby="ld-tab-assistant"');
+    expect(unified).toContain('aria-labelledby="ld-tab-review"');
+    expect(unified).toContain('aria-labelledby="ld-tab-activity"');
+    expect(unified).toContain("hidden={companionTab !== 'assistant'}");
+    expect(unified).toContain("hidden={companionTab !== 'review'}");
+    expect(unified).toContain("hidden={companionTab !== 'activity'}");
+    for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
+      expect(unified).toContain("event.key === '" + key + "'");
+    }
     expect(unified).toContain("Review findings are not synchronized to this panel");
     expect(unified).toContain("Model-edit history is not available here");
     expect(unified).toContain("Model requests run through your connected AI client");
@@ -142,6 +157,9 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain('title="Current model at last observation"');
     expect(unified).not.toContain('title="Current at last observation">Current</span>');
     expect(unified).toContain("grid-template-columns:48px minmax(0,1fr) 48px");
+    expect(unified).toContain("min-height:32px; padding:2px 8px");
+    expect(unified).toContain("height:28px;padding:2px 5px;line-height:1.2");
+    expect(unified).toContain("height:28px;padding:2px 4px;line-height:1.2");
     expect(unified).not.toContain("grid-template-rows:140px minmax(220px,1fr)");
     expect(unified).toContain("overflow:hidden");
     expect(unified).toContain("--color-ui: #1e2127");
@@ -212,6 +230,8 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain("Project actions overlap the reserved native editor");
     expect(script).toContain("Narrow Project Explorer must offer safe Workspace navigation");
     expect(script).toContain("Narrow LazyDesigner rail must provide Support fallback");
+    expect(script).toContain("Companion tabs lack arrow-key navigation");
+    expect(script).toContain("Companion tab strip does not match Blockbench's 40px panel bar");
     expect(stage).toContain("disabled={busy || fixture}");
   });
   test("Svelte host icon controls are real components, not generated screenshots", async () => {
@@ -250,6 +270,8 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(stage).toContain("export async function present(): Promise<void>");
     expect(stage).not.toContain('class="native-placeholder"');
     expect(unified).toContain("onPlacementChange={onNativePlacementChange}");
+    expect(unified).toContain("--ed-native-bg:var(--color-dark)");
+    expect(stage).toContain("background:var(--ed-native-bg,var(--ed-bg,var(--bg)))");
     expect(unified).toContain('aria-label="Place original Blockbench window in workspace"');
     expect(unified).toContain('aria-label="Detach and restore original Blockbench window"');
     expect(stage).toContain("Native behavior unverified");

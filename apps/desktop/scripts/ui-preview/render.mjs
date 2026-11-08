@@ -232,8 +232,29 @@ async function main() {
           toolsLabel: tools?.getAttribute('aria-label') ?? null,
           explorerRail: explorer?.classList.contains('rail') ?? false,
           assistantRail: tools?.classList.contains('rail') ?? false,
-          assistantSections: ['ld-inspector-assistant', 'ld-inspector-checks', 'ld-inspector-activity']
-            .every(id => Boolean(tools?.querySelector('#' + id))),
+          assistantTabs: Array.from(tools?.querySelectorAll(
+            '[role="tablist"][aria-label="LazyDesigner sections"] [role="tab"]'
+          ) ?? []).map(node => ({
+            name: node.textContent?.trim().toLowerCase() ?? "",
+            selected: node.getAttribute("aria-selected") === "true",
+          })),
+          assistantSelectedPanel: tools?.querySelector('[role="tabpanel"]:not([hidden])')?.id ?? null,
+          assistantPanelCount: tools?.querySelectorAll('[role="tabpanel"]').length ?? 0,
+          assistantTabBarHeight: tools?.querySelector('.companion-tabs')
+            ?.getBoundingClientRect().height ?? 0,
+          selectedTabBackground: (() => {
+            const chosen = tools?.querySelector('.companion-tabs [role="tab"][aria-selected="true"]');
+            return chosen ? getComputedStyle(chosen).backgroundColor : null;
+          })(),
+          tabStripBackground: (() => {
+            const strip = tools?.querySelector('.companion-tabs');
+            return strip ? getComputedStyle(strip).backgroundColor : null;
+          })(),
+          projectRowHeight: explorer?.querySelector('.project-line')
+            ?.getBoundingClientRect().height ?? 0,
+          modelRowHeight: explorer?.querySelector('.model-line')
+            ?.getBoundingClientRect().height ?? 0,
+          nativeBackground: center ? getComputedStyle(center).backgroundColor : null,
           theme: {
             ui: getComputedStyle(element.closest('.desktop-shell')?.querySelector('.unified-workspace') ?? element)
               .getPropertyValue('--color-ui').trim(),
@@ -261,7 +282,20 @@ async function main() {
       const shouldRail = dims.width < 1320;
       checks.dock_responsive_rails = sidePanels.explorerRail === shouldRail
         && sidePanels.assistantRail === shouldRail;
-      checks.assistant_review_activity_truthful = shouldRail || sidePanels.assistantSections;
+      checks.assistant_review_activity_truthful = shouldRail
+        || (sidePanels.assistantTabs.map(tab => tab.name).join(",") === "assistant,review,activity"
+          && sidePanels.assistantTabs.filter(tab => tab.selected).length === 1
+          && sidePanels.assistantTabs[0].selected
+          && sidePanels.assistantPanelCount === 3
+          && sidePanels.assistantSelectedPanel === "ld-inspector-assistant");
+      checks.blockbench_tab_strip_geometry = shouldRail || Math.abs(sidePanels.assistantTabBarHeight - 40) < 1;
+      checks.blockbench_selected_tab_colors = shouldRail
+        || (sidePanels.selectedTabBackground === "rgb(30, 33, 39)"
+          && sidePanels.tabStripBackground === "rgb(24, 27, 31)");
+      checks.blockbench_outliner_row_density = shouldRail
+        || (Math.abs(sidePanels.projectRowHeight - 28) < 1
+          && (sidePanels.modelRowHeight === 0 || Math.abs(sidePanels.modelRowHeight - 28) < 1));
+      checks.blank_native_area_uses_real_dark_token = sidePanels.nativeBackground === "rgb(16, 19, 22)";
       checks.default_dark_matches_blockbench_source = sidePanels.theme.ui === '#1e2127'
         && sidePanels.theme.back === '#181b1f'
         && sidePanels.theme.accent === '#3e90ff';

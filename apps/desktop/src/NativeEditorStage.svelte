@@ -213,7 +213,8 @@
     padding:0;gap:0;background:var(--ed-bg,var(--bg));color:var(--ed-text,var(--text));
   }
   .native-editor-page.compact .native-editor-aperture{
-    min-height:0; border:0; border-radius:0; background:var(--ed-bg,var(--bg));
+    min-height:0; border:0; border-radius:0;
+    background:var(--ed-native-bg,var(--ed-bg,var(--bg)));
   }
   .native-editor-page.compact .native-editor-actions button{
     min-height:28px;padding:4px 9px;border-radius:5px;

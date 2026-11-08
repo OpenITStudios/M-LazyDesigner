@@ -40,6 +40,7 @@
   let editorWidth = 0;
   let drag: { dock: EditorDock; pointerId: number; x: number; width: number } | null = null;
   let search = '';
+  let companionTab: 'assistant' | 'review' | 'activity' = 'assistant';
   let showAll = false;
   let expandedProjectId: string | null = null;
   let projectActionsId: string | null = null;
@@ -96,6 +97,25 @@
   }
   function toggleProjectActions(id: string) {
     projectActionsId = projectActionsId === id ? null : id;
+  }
+  function onCompanionTabKeydown(
+    event: KeyboardEvent,
+    current: 'assistant' | 'review' | 'activity',
+  ) {
+    const tabs = ['assistant', 'review', 'activity'] as const;
+    const index = tabs.indexOf(current);
+    const next = event.key === 'ArrowRight' ? tabs[(index + 1) % tabs.length]
+      : event.key === 'ArrowLeft' ? tabs[(index + tabs.length - 1) % tabs.length]
+      : event.key === 'Home' ? tabs[0]
+      : event.key === 'End' ? tabs[tabs.length - 1] : null;
+    if (!next) return;
+    event.preventDefault();
+    companionTab = next;
+    void tick().then(() => {
+      editorRoot.querySelector<HTMLButtonElement>(
+        '[data-companion-tab="' + next + '"]',
+      )?.focus();
+    });
   }
   function toggleProjectsPanel() {
     const opening = layout.focusMode || !layout.projectsExpanded;
@@ -652,8 +672,36 @@
                 onclick={collapseAssistant}><EditorChromeIcon name="chevron-right"/></button>
             </div>
           </div>
-          <section class="inspector-section assistant-section" aria-labelledby="ld-inspector-assistant">
-            <h4 id="ld-inspector-assistant">Assistant</h4>
+          <div class="companion-tabs" role="tablist" aria-label="LazyDesigner sections">
+            <button type="button" role="tab" id="ld-tab-assistant"
+              data-companion-tab="assistant"
+              class:selected={companionTab === 'assistant'}
+              aria-selected={companionTab === 'assistant'}
+              aria-controls="ld-inspector-assistant"
+              tabindex={companionTab === 'assistant' ? 0 : -1}
+              onclick={() => companionTab = 'assistant'}
+              onkeydown={(event) => onCompanionTabKeydown(event, 'assistant')}>Assistant</button>
+            <button type="button" role="tab" id="ld-tab-review"
+              data-companion-tab="review"
+              class:selected={companionTab === 'review'}
+              aria-selected={companionTab === 'review'}
+              aria-controls="ld-inspector-checks"
+              tabindex={companionTab === 'review' ? 0 : -1}
+              onclick={() => companionTab = 'review'}
+              onkeydown={(event) => onCompanionTabKeydown(event, 'review')}>Review</button>
+            <button type="button" role="tab" id="ld-tab-activity"
+              data-companion-tab="activity"
+              class:selected={companionTab === 'activity'}
+              aria-selected={companionTab === 'activity'}
+              aria-controls="ld-inspector-activity"
+              tabindex={companionTab === 'activity' ? 0 : -1}
+              onclick={() => companionTab = 'activity'}
+              onkeydown={(event) => onCompanionTabKeydown(event, 'activity')}>Activity</button>
+          </div>
+          <section role="tabpanel" tabindex="0" class="inspector-section assistant-section"
+            id="ld-inspector-assistant" aria-labelledby="ld-tab-assistant"
+            hidden={companionTab !== 'assistant'}>
+            <h4>AI Connection</h4>
             <div class="connection-status" role="status">
               <i class:verified={Boolean(aiStatus?.recentlyVerified)}
                 class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
@@ -668,8 +716,10 @@
               onclick={() => void refresh()}>{aiStatus?.needsRefresh ? 'Refresh AI status' : 'Check AI status'}</button>
             <button type="button" class="text-action" onclick={navigateSupport}>Connection &amp; setup</button>
           </section>
-          <section class="inspector-section review-section" aria-labelledby="ld-inspector-checks">
-            <h4 id="ld-inspector-checks">Model Review</h4>
+          <section role="tabpanel" tabindex="0" class="inspector-section review-section"
+            id="ld-inspector-checks" aria-labelledby="ld-tab-review"
+            hidden={companionTab !== 'review'}>
+            <h4>Model Review</h4>
             {#if active}
               <div class="model-detail"><strong>{active.model_name}</strong>
                 <span>{active.project_name ?? 'Unregistered project'} · {active.dirty ? 'Modified at last observation' : active.saved ? 'Saved at last observation' : 'Not saved'}</span>
@@ -686,8 +736,10 @@
               <p class="subtle-note">Open Blockbench to use Geometry checks or Particle Studio.</p>
             {/if}
           </section>
-          <section class="inspector-section activity-section" aria-labelledby="ld-inspector-activity">
-            <h4 id="ld-inspector-activity">Activity</h4>
+          <section role="tabpanel" tabindex="0" class="inspector-section activity-section"
+            id="ld-inspector-activity" aria-labelledby="ld-tab-activity"
+            hidden={companionTab !== 'activity'}>
+            <h4>Technical Activity</h4>
             <p>View read-only Gateway metrics. Model-edit history is not available here.</p>
             <button type="button" class="text-action" onclick={navigateActivity}>View technical activity</button>
           </section>
@@ -732,7 +784,7 @@
   }
   .editor-header {
     flex:none; display:flex; align-items:center; justify-content:space-between; gap:12px;
-    min-height:40px; padding:4px 8px; border-bottom:1px solid var(--ed-border);
+    min-height:32px; padding:2px 8px; border-bottom:1px solid var(--ed-border);
     background:var(--ed-header);
   }
   .editor-leading,.editor-controls {display:flex;align-items:center;gap:7px;min-width:0}
@@ -754,7 +806,7 @@
   .model-opening {font-size:10px;color:var(--ed-accent);font-weight:600}
   .workspace-return,.editor-controls button {
     display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;
-    min-height:29px;padding:4px 8px;border:1px solid transparent;border-radius:3px;
+    min-height:26px;padding:3px 7px;border:1px solid transparent;border-radius:3px;
     color:var(--ed-muted);background:transparent;font-size:12px;font-weight:650;
     cursor:pointer;white-space:nowrap;
   }
@@ -840,6 +892,30 @@
     margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
     text-transform:uppercase;letter-spacing:.03em;font-size:12px;font-weight:650;color:var(--ed-text);
   }
+  /* Blockbench v5.2.1 uses a 40px panel tab bar and a selected tab
+     that blends into --color-ui; this is the same visual construction. */
+  .companion-tabs {
+    display:flex;align-items:stretch;height:40px;
+    margin:0 -9px 9px;padding:3px 4px 0;gap:1px;
+    background:var(--color-back);border-bottom:1px solid var(--ed-border);
+  }
+  .companion-tabs button {
+    flex:1 1 0;min-width:0;height:36px;margin:0;padding:0 4px;
+    border:0;border-radius:5px 5px 0 0;
+    background:transparent;color:var(--ed-muted-soft);
+    font-size:12px;font-weight:650;letter-spacing:-.01em;
+    text-transform:uppercase;white-space:nowrap;cursor:pointer;
+  }
+  .companion-tabs button.selected {
+    background:var(--color-ui);color:var(--ed-text);
+  }
+  .companion-tabs button:hover:not(.selected){color:var(--ed-text)}
+  .companion-tabs button:focus-visible {
+    outline:2px solid var(--ed-accent);outline-offset:-2px;
+  }
+  .inspector-section[role="tabpanel"]:focus-visible {
+    outline:2px solid var(--ed-accent);outline-offset:-2px;
+  }
   .pane-heading button {
     display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--ed-border);
     border-radius:3px;background:transparent;color:var(--ed-muted);font-size:17px;cursor:pointer;
@@ -861,9 +937,10 @@
   .search-count{font-size:10px;color:var(--ed-muted-soft);padding:7px 4px 8px}
   .project-tree {display:grid;gap:2px}
   .project-group {min-width:0}
-  .project-line {display:flex;align-items:center;gap:2px;min-height:32px}
+  .project-line {display:flex;align-items:center;gap:2px;min-height:28px}
   .project-expand {
-    display:flex;align-items:center;gap:7px;flex:1;min-width:0;padding:6px 5px;
+    display:flex;align-items:center;gap:7px;flex:1;min-width:0;
+    height:28px;padding:2px 5px;line-height:1.2;
     border:0;background:transparent;color:var(--ed-text);text-align:left;
     font-size:12px;font-weight:650;border-radius:4px;cursor:pointer;
   }
@@ -891,14 +968,15 @@
   .project-inline-actions button:hover:not(:disabled){background:var(--ed-select)}
   .project-inline-actions button:disabled{cursor:default}
   .project-inline-actions .pin-project[aria-pressed="true"]{color:#dfbc7c}
-  .model-line {display:flex;align-items:center;gap:2px;min-width:0;padding-left:13px;min-height:31px}
+  .model-line {display:flex;align-items:center;gap:2px;min-width:0;padding-left:13px;min-height:28px}
   .model-line.current {
     background:var(--ed-select);border-left:2px solid var(--ed-accent);
-    border-radius:4px;padding-left:11px;
+    border-radius:2px;padding-left:11px;
   }
   .model-open {
-    display:flex;align-items:center;gap:6px;flex:1;min-width:0;border:0;border-radius:4px;
-    background:transparent;padding:5px 4px;text-align:left;color:var(--ed-muted);font-size:12px;cursor:pointer;
+    display:flex;align-items:center;gap:6px;flex:1;min-width:0;border:0;border-radius:3px;
+    height:28px;padding:2px 4px;line-height:1.2;
+    background:transparent;text-align:left;color:var(--ed-muted);font-size:12px;cursor:pointer;
   }
   .model-line.current .model-open{color:var(--ed-text)}
   .model-symbol{color:var(--ed-muted-soft);font-size:14px;flex:none}
@@ -955,7 +1033,11 @@
   }
   .recent-model span,.recent-model small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .recent-model small{font-size:10px;color:var(--ed-muted-soft)}
-  .native-stage{display:flex;min-width:0;min-height:0;overflow:hidden;background:var(--ed-bg)}
+  .native-stage{
+    display:flex;min-width:0;min-height:0;overflow:hidden;
+    --ed-native-bg:var(--color-dark);
+    background:var(--color-dark);
+  }
   .native-stage :global(.native-editor-page){min-width:0;width:100%}
   .read-only-label {font-size:10px;color:var(--ed-muted-soft);letter-spacing:.04em}
   .inspector-section{padding:9px 2px 13px;margin-bottom:5px;border-bottom:1px solid var(--ed-border)}

@@ -647,11 +647,38 @@ def inspect_unified_editor(page, fixture, view):
         if assistant_toggle.is_enabled():
             issues.append("LazyDesigner must not expand into the minimum native viewport")
     if assistant_expanded_for_check:
-        for heading in ("Assistant", "Model Review", "Activity"):
-            if assistant.get_by_role("heading", name=heading, exact=True).count() != 1:
-                issues.append("LazyDesigner lacks the " + heading + " section")
-        if assistant.get_by_role("button", name="View technical activity", exact=True).count() != 1:
-            issues.append("Activity must link to real read-only technical analytics")
+        tabs = assistant.get_by_role("tablist", name="LazyDesigner sections")
+        if tabs.count() != 1 or tabs.get_by_role("tab").count() != 3:
+            issues.append("LazyDesigner must have the three native-style companion tabs")
+        else:
+            assistant_tab = tabs.get_by_role("tab", name="Assistant", exact=True)
+            review_tab = tabs.get_by_role("tab", name="Review", exact=True)
+            activity_tab = tabs.get_by_role("tab", name="Activity", exact=True)
+            if assistant_tab.get_attribute("aria-selected") != "true":
+                issues.append("Assistant must be the default selected companion tab")
+            if assistant.get_by_role("tabpanel", name="Assistant").count() != 1:
+                issues.append("Selected Assistant content is missing")
+            review_tab.click()
+            if (review_tab.get_attribute("aria-selected") != "true"
+                    or assistant.get_by_role("heading", name="Model Review").count() != 1):
+                issues.append("Model Review tab does not display its real content")
+            activity_tab.click()
+            if (activity_tab.get_attribute("aria-selected") != "true"
+                    or assistant.get_by_role("button", name="View technical activity").count() != 1):
+                issues.append("Activity tab must link to real technical analytics")
+            activity_tab.press("Home")
+            if assistant_tab.get_attribute("aria-selected") != "true":
+                issues.append("Companion tabs lack Home keyboard navigation")
+            assistant_tab.press("ArrowRight")
+            if review_tab.get_attribute("aria-selected") != "true":
+                issues.append("Companion tabs lack arrow-key navigation")
+            review_tab.press("End")
+            if activity_tab.get_attribute("aria-selected") != "true":
+                issues.append("Companion tabs lack End keyboard navigation")
+            assistant_tab.click()
+            tab_height = tabs.bounding_box()
+            if tab_height and abs(tab_height["height"] - 40) > 1:
+                issues.append("Companion tab strip does not match Blockbench's 40px panel bar")
         if assistant.locator(".tool-row").count():
             issues.append("Do not present static tool-name rows as usable QA functions")
         if should_rail:

@@ -29,7 +29,7 @@ The Editor has one real Blockbench native-window reservation between **two perma
 ### Blockbench visual authority
 
 For an uncustomized Blockbench installation, align the desktop host with the **actual Blockbench v5.2.1 Default (Dark)** source:
-`https://github.com/JannisX11/blockbench/blob/v5.2.1/themes/dark.bbtheme`. The relevant native tokens include `--color-ui: #1e2127`, `--color-back: #181b1f`, `--color-dark: #101316`, `--color-selected: #3b3e49`, `--color-elevated: #272a31`, `--color-button: #33383f`, `--color-accent: #3e90ff`, `--color-text: #cacad4`, and `--color-subtle_text: #848891`. The Blockbench v5.2.1 panel tab bar is 40px tall (`css/panels.css`). Use compact, flush panel headers, neutral controls and restrained selection accents rather than alternate app-dashboard cards.
+`https://github.com/JannisX11/blockbench/blob/v5.2.1/themes/dark.bbtheme`. The relevant native tokens include `--color-ui: #1e2127`, `--color-back: #181b1f`, `--color-dark: #101316`, `--color-selected: #3b3e49`, `--color-elevated: #272a31`, `--color-button: #33383f`, `--color-accent: #3e90ff`, `--color-text: #cacad4`, and `--color-subtle_text: #848891`. The Blockbench v5.2.1 panel tab bar is 40px tall, and the selected Outliner row is 28px (`css/panels.css`). Use the same 40px tab strips, 28px tree rows, quiet selection background, compact typography and neutral toolbar controls rather than an alternate app-dashboard appearance. The unoccupied native reservation uses Blockbench's `--color-dark` baseline with **no** synthetic editor content.
 
 These tokens are a **default-theme fallback**, **not proof of an automatic read of the user's currently selected Blockbench theme**. A separately running native process may have a different user-custom theme or fonts. Do not claim exact runtime theme sync without a verified read-only contract. Never override the native Blockbench theme or copy/replace its own editing controls.
 
@@ -48,13 +48,13 @@ A searchable native-style project/model tree with explicit search clear and proj
 
 ### Right: LazyDesigner — Assistant & Review
 
-The right dock is **not** named `AI & QA` or `Model Tools`, because the desktop has neither an in-panel AI chat/command executor nor synchronized cross-process QA results. It contains three truthfully scoped functions:
+The right dock is **not** named `AI & QA` or `Model Tools`, because the desktop has neither an in-panel AI chat/command executor nor synchronized cross-process QA results. It uses one **Blockbench-style tab strip** (Assistant, Review, Activity): one panel is shown at a time instead of stacking three long dashboard sections. Selected state is explicit; Arrow Left/Right and Home/End navigate tabs. All tabpanel targets stay present but hidden when inactive for stable accessibility semantics. It contains three truthfully scoped functions:
 
 - **Assistant:** display verified/aged connection state from the existing Desktop status projection, refresh the observation, and open Support for connection setup. Authoring prompts and AI operations still belong to an external AI client through the existing Gateway; the panel never suggests it can execute an in-app prompt.
 - **Model Review:** display the last-observed model identity and an honest description that Geometry checks, Latest Edit review and Particle Studio are **in the existing Blockbench plugin**. With a verified running editor, offer the existing **Go to Blockbench** focus action. Do not display invented issue counts, PASS, texture/animation controls or buttons that claim to run a QA check.
 - **Activity:** the existing `Analytics` page is a **read-only Gateway technical-activity** destination reachable by `View technical activity`. That is **not** a model-edit history and must not be described as such. No synchronized AI task progress timeline is implied.
 
-The host header keeps Workspace, model context, panel rail/full toggles, Focus Editor, Open Model, guarded native Place/Detach and Support. The Blockbench native reservation never contains any LazyDesigner header, footer, label, screenshot, simulated icon or generated model.
+The host header stays a restrained ~32px utility strip, not a copy of Blockbench's own 28px menu bar or 30px toolbars. It retains Workspace, model context, panel rail/full toggles, Focus Editor, Open Model, guarded native Place/Detach and Support. The Blockbench native reservation never contains any LazyDesigner header, footer, label, screenshot, simulated icon or generated model.
 
 ### Acceptance limits
 
