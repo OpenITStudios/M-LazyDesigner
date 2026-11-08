@@ -84,13 +84,15 @@
   {/if}
 
   {#if productMode(status) === 'welcome'}
-    {#if status.project_navigation.projects.length > 0}
+    {#if status.project_navigation.projects.length > 0 || status.project_navigation.active}
+      {#if status.project_navigation.projects.length > 0}
       <div class="inline-note">
         <strong>Models and folders stay accessible.</strong>
         <span>Work on your files while AI setup is resolved. Browsing does not change model content.</span>
       </div>
+      {/if}
+      {@render projectNavigator(status)}
     {/if}
-    {@render projectNavigator(status)}
     {#if setupStaged}
       <section class="inline-guidance" role="status">
         <strong>Setup waiting for Blockbench</strong>
@@ -111,28 +113,27 @@
         </div>
       </section>
     {/if}
-    <section class="setup-panel">
+    <section class="setup-panel" aria-label="Optional AI setup">
       <div class="setup-copy">
-        <h2>Set up LazyDesigner</h2>
-        <p>Desktop will install the required components, open Blockbench, and verify the connection automatically.</p>
+        <h2>Set up AI tools</h2>
+        <p>Opening and editing models in Blockbench does not require an AI connection. Set up LazyDesigner when you want AI-assisted authoring.</p>
       </div>
-
-      <div class="setup-steps">
-        <div class="setup-step active">
-          <span class="step-number">1</span>
-          <div><strong>Prepare workstation</strong><span>Install LazyDesigner, open Blockbench, and verify the local Runtime.</span></div>
-        </div>
-        <div class="setup-step">
-          <span class="step-number">2</span>
-          <div><strong>Ready to work</strong><span>After the one-time Blockbench trust approval, future launches connect automatically.</span></div>
-        </div>
-      </div>
-
       <div class="setup-footer">
-        {#if productGuidance(status, pluginApprovalNeeded)}<span class="setup-warning">{productGuidance(status, pluginApprovalNeeded)}</span>{:else}<span></span>{/if}
-        <button class="primary-button" onclick={installLazyDesigner} disabled={!status.bootstrap_available || busyAction !== null || statusProbeFailures >= 2}>{busyAction === 'install' ? 'Setting up…' : setupStaged ? 'Finish setup' : migrationConflict ? 'Check again' : 'Set up'}</button>
+        {#if productGuidance(status, pluginApprovalNeeded)}<span class="setup-warning">{productGuidance(status, pluginApprovalNeeded)}</span>{/if}
+        <button class="primary-button" onclick={installLazyDesigner} disabled={!status.bootstrap_available || busyAction !== null || statusProbeFailures >= 2}>{busyAction === 'install' ? 'Setting up…' : setupStaged ? 'Finish setup' : migrationConflict ? 'Check again' : 'Set up AI tools'}</button>
       </div>
+      <details class="setup-steps">
+        <summary>What happens during setup?</summary>
+        <ol>
+          <li>Install the managed LazyDesigner tools and prepare Blockbench.</li>
+          <li>Approve the LazyDesigner plugin in Blockbench if prompted.</li>
+          <li>When you need AI, verify the connection in your AI client.</li>
+        </ol>
+      </details>
     </section>
+    {#if !status.project_navigation.active && status.project_navigation.projects.length === 0}
+      {@render projectNavigator(status)}
+    {/if}
 
   {:else}
     {#if (productMode(status) === 'ready' || productMode(status) === 'client-wait') && (status.project_navigation.active || status.project_navigation.projects.length > 0)}
@@ -293,7 +294,7 @@
 
   .content-section{margin-bottom:34px}.section-heading{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:10px}.section-heading h2{margin:0;font-size:var(--font-title);font-weight:700}.section-heading p{margin:2px 0 0;color:var(--muted-2);font-size:var(--font-sm)}.resource-list{border:1px solid var(--border-soft);border-radius:8px;overflow:hidden;background:var(--bg-elevated)}.resource-row{min-height:74px;display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 12px 12px 14px}.app-icon{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text-soft)}.app-icon :global(svg){width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.resource-main{min-width:0}.resource-title{font-size:var(--font-ui);font-weight:700}.resource-meta{display:flex;align-items:center;gap:5px;margin-top:3px;color:var(--muted);font-size:var(--font-sm)}.meta-separator{color:var(--muted-2)}.status-good{color:#9ee8b9!important}.resource-actions{display:flex;align-items:center;gap:5px}.inline-action{display:flex;align-items:center;gap:10px}
   .inline-guidance{margin-top:10px;padding:14px 14px 13px;border:1px solid #5b4a22;border-radius:8px;background:var(--warning-bg)}.inline-guidance>div{display:grid;gap:2px}.inline-guidance strong{font-size:var(--font-sm)}.inline-guidance span{color:var(--muted);font-size:var(--font-sm)}.inline-guidance ol{margin:11px 0 12px;padding-left:18px;color:var(--text-soft);font-size:var(--font-sm);line-height:1.75}.inline-note{display:flex;gap:8px;margin-top:10px;padding:9px 0;color:var(--muted);font-size:var(--font-sm)}.inline-note strong{color:var(--text-soft);font-size:var(--font-sm)}.inline-alert{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:10px;padding:10px 12px;border:1px solid #5b4a22;border-radius:7px;background:var(--warning-bg)}.inline-alert>div{display:grid;gap:2px}.inline-alert strong{font-size:var(--font-sm)}.inline-alert span{color:var(--muted);font-size:var(--font-sm)}.danger-alert{display:grid;gap:2px;border-color:#693437;background:var(--danger-bg)}
-  .setup-panel{max-width:760px;padding-top:10px}.setup-copy h2{margin:0;font-size:20px;letter-spacing:-.02em}.setup-copy p{margin:6px 0 0;color:var(--muted);font-size:var(--font-sm)}.setup-steps{margin-top:24px;border-top:1px solid var(--border-soft)}.setup-step{display:grid;grid-template-columns:26px minmax(0,1fr);gap:11px;padding:14px 0;border-bottom:1px solid var(--border-soft)}.step-number{width:23px;height:23px;display:grid;place-items:center;border-radius:50%;background:var(--surface-2);color:var(--muted);font-size:var(--font-sm);font-weight:700}.setup-step.active .step-number{background:rgba(99,168,255,.12);color:var(--info)}.setup-step>div{display:grid;gap:2px}.setup-step strong{font-size:var(--font-sm)}.setup-step span{color:var(--muted);font-size:var(--font-sm)}.setup-footer{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:18px}.setup-warning{max-width:520px;color:var(--warning);font-size:var(--font-sm)}
+  .setup-panel{max-width:760px;padding-top:10px}.setup-copy h2{margin:0;font-size:20px;letter-spacing:-.02em}.setup-copy p{margin:6px 0 0;color:var(--muted);font-size:var(--font-sm)}.setup-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:14px}.setup-warning{max-width:520px;color:var(--warning);font-size:var(--font-sm)}.setup-steps{margin-top:14px;border-top:1px solid var(--border-soft);padding-top:10px}.setup-steps summary{width:max-content;max-width:100%;cursor:pointer;color:var(--text-soft);font-size:var(--font-sm);font-weight:650}.setup-steps ol{margin:10px 0 0;padding-left:21px;color:var(--muted);font-size:var(--font-sm);line-height:1.65}.setup-steps li+li{margin-top:5px}
   .task-strip{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:8px 10px;border:1px solid var(--border-soft);border-radius:7px;background:var(--bg-elevated);font-size:var(--font-sm)}.task-spinner{width:9px;height:9px;border:2px solid var(--surface-4);border-top-color:var(--info);border-radius:50%;animation:desktop-spin .8s linear infinite}.task-strip small{margin-left:auto;color:var(--muted-2);font-size:var(--font-xs)}
   @media(max-width:760px){.resource-row{grid-template-columns:36px minmax(0,1fr)}.resource-actions{grid-column:1/-1;justify-content:flex-end;padding-top:2px}.setup-footer{align-items:flex-start;flex-direction:column}}
   .workspace-overview .content-section{margin-bottom:24px}

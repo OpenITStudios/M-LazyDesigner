@@ -100,6 +100,7 @@
     <div><h2>Projects &amp; Models</h2></div>
     <button class="secondary-button small-button" onclick={onAddProjectFolder} disabled={busy || !canEditProjectPrefs}>Add Project Folder</button>
   </div>
+  {#if navigation.projects.length > 0 || projectSearch.trim().length > 0}
   <div class="project-search-bar">
     <label for="ld-project-search">Find a project or model</label>
     <div class="project-search-controls">
@@ -110,6 +111,7 @@
     </div>
     <span id="ld-project-search-results" class="project-search-feedback" role="status" aria-live="polite">{projectSearch.trim() ? `${matchingProjects.length} ${matchingProjects.length === 1 ? 'project matches' : 'projects match'} your search.` : ''}</span>
   </div>
+  {/if}
   <div class="project-list">
     {#each matchingProjects as project (project.id)}
       <div class="project-row">

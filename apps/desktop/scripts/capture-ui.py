@@ -67,6 +67,11 @@ def inspect(page):
 def inspect_action_states(page, fixture, view):
     """Check only decisions introduced by the current UI refinement."""
     expected = {
+        ("fresh-install", "workspace"): {
+            "Open Model…": True,
+            "Set up AI tools": True,
+            "Add Project Folder": True,
+        },
         ("ready", "workspace"): {
             "Open Model…": True,
             "Go to Blockbench for Modern Chair": True,
@@ -142,6 +147,29 @@ def inspect_stale_file_navigation(page, fixture, view):
     return issues
 
 
+def inspect_first_run(page, fixture, view):
+    """First-run actions are discoverable without expanding technical setup."""
+    if (fixture, view) != ("fresh-install", "workspace"):
+        return []
+    issues = []
+    if page.get_by_role("heading", name="Open a model", exact=True).count() != 1:
+        issues.append("model opening must remain the first-run primary task")
+    if page.get_by_role("heading", name="Set up AI tools", exact=True).count() != 1:
+        issues.append("optional AI setup heading missing")
+    if page.locator("#ld-project-search").count() != 0:
+        issues.append("empty project inventory must not show an unused search field")
+    disclosure = page.locator("details.setup-steps")
+    if disclosure.count() != 1:
+        issues.append("setup steps must be available as one disclosure")
+    else:
+        if disclosure.evaluate("(node) => node.open"):
+            issues.append("setup steps should start collapsed")
+        disclosure.locator("summary").click()
+        if not disclosure.evaluate("(node) => node.open"):
+            issues.append("setup disclosure must expand through native interaction")
+    return issues
+
+
 def main():
     args = parse_args()
     target = urlsplit(args.base_url)
@@ -180,7 +208,7 @@ def main():
                         if fixture == "ready-no-active":
                             page.get_by_role("button", name="Open Blockbench").wait_for(timeout=10000)
                         if fixture == "status-unverified" and view == "workspace":
-                            page.get_by_text("AI connection unverified", exact=True).wait_for(timeout=10000)
+                            page.get_by_text("AI status needs verification", exact=True).wait_for(timeout=10000)
                         if fixture == "status-unverified" and view == "support":
                             page.get_by_text("AI status needs verification", exact=True).wait_for(timeout=10000)
                         snapshot = inspect(page)
@@ -209,6 +237,11 @@ def main():
                         if fixture == "status-unverified" and view == "workspace":
                             entry["staleFileNavigationChecks"] = {"checked": 6, "issues": stale_action_issues}
                         for issue in stale_action_issues:
+                            failures.append(name + ": " + issue)
+                        first_run_issues = inspect_first_run(page, fixture, view)
+                        if fixture == "fresh-install" and view == "workspace":
+                            entry["firstRunChecks"] = {"checked": 5, "issues": first_run_issues}
+                        for issue in first_run_issues:
                             failures.append(name + ": " + issue)
                         if page_errors:
                             failures.append(name + ": JS errors: " + "; ".join(page_errors[:3]))

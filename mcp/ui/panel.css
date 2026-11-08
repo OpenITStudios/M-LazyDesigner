@@ -197,10 +197,37 @@
 .mcp-panel .ld-review-note { margin-top: 10px; }
 .mcp-panel .panel-note { margin: 10px 2px 0; }
 
-/* Particle Studio: simple native form controls, never overlays the model viewport. */
+/* Particle Studio is an optional native disclosure; never overlays the viewport. */
 .mcp-panel .ld-header + .ld-workspace,
 .mcp-panel .ld-workspace + .ld-workspace { margin-top: 10px; }
 .mcp-panel .ld-particle { margin-bottom: 0; }
+.mcp-panel .ld-studio-disclosure > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-block-size: 32px;
+  cursor: pointer;
+  list-style: none;
+}
+.mcp-panel .ld-studio-disclosure > summary::-webkit-details-marker { display: none; }
+.mcp-panel .ld-studio-disclosure > summary::before {
+  content: '▸';
+  color: var(--color-subtle_text);
+}
+.mcp-panel .ld-studio-disclosure[open] > summary::before { content: '▾'; }
+.mcp-panel .ld-studio-disclosure > summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.mcp-panel .ld-studio-toggle-hint {
+  margin-inline-start: auto;
+  color: var(--color-subtle_text);
+  font-size: .85em;
+  line-height: 1.35;
+  text-align: end;
+}
+.mcp-panel .ld-studio-disclosure[open] > .ld-description { margin-top: 10px; }
 .mcp-panel .ld-studio-body { display: grid; gap: 10px; margin-top: 10px; }
 .mcp-panel .ld-studio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .mcp-panel .ld-studio-row > label { font-size: .87em; min-inline-size: 100px; color: var(--color-subtle_text); }

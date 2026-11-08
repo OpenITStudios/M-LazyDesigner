@@ -67,6 +67,71 @@ describe("human-facing Blockbench UI", () => {
     expect(workspace).toContain("You can edit models even when AI is not connected.");
   });
 
+  test("first-run Workspace makes model opening primary and AI setup an explicit optional action", async () => {
+    const [workspace, navigator] = await Promise.all([
+      source("../apps/desktop/src/WorkspacePage.svelte"),
+      source("../apps/desktop/src/ProjectNavigator.svelte"),
+    ]);
+    expect(workspace).toContain("Opening and editing models in Blockbench does not require an AI connection.");
+    expect(workspace).toContain('aria-label="Optional AI setup"');
+    expect(workspace).toContain('<h2>Set up AI tools</h2>');
+    expect(workspace).toContain("What happens during setup?");
+    expect(workspace).not.toContain("Prepare workstation");
+    expect(workspace).toContain("setupStaged ? 'Finish setup'");
+    expect(workspace).toContain("migrationConflict ? 'Check again'");
+    expect(workspace).toContain("disabled={!status.bootstrap_available || busyAction !== null || statusProbeFailures >= 2}");
+    expect(workspace).toContain("{#if status.project_navigation.projects.length > 0}");
+    expect(workspace).toContain("{#if status.project_navigation.projects.length > 0 || status.project_navigation.active}");
+    expect(workspace).toContain("{#if !status.project_navigation.active && status.project_navigation.projects.length === 0}");
+    expect(workspace).toContain("{@render projectNavigator(status)}");
+    const welcome = workspace.indexOf("{#if productMode(status) === 'welcome'}");
+    const setup = workspace.indexOf('<section class="setup-panel"', welcome);
+    const firstModel = workspace.indexOf('<h2>Open a model</h2>');
+    expect(firstModel).toBeLessThan(setup);
+    expect(setup).toBeGreaterThan(welcome);
+
+    // Empty inventory does not show a nonproductive search, but folder add
+    // remains accessible and an existing query can still be cleared.
+    expect(navigator).toContain("navigation.projects.length > 0 || projectSearch.trim().length > 0");
+    expect(navigator).toContain("onAddProjectFolder");
+    expect(navigator).toContain("Clear search</button>");
+
+    const fixture = await source("../apps/desktop/scripts/capture-ui.py");
+    expect(fixture).toContain("def inspect_first_run(page, fixture, view):");
+    expect(fixture).toContain('("fresh-install", "workspace"): {');
+    expect(fixture).toContain('page.get_by_text("AI status needs verification", exact=True)');
+    expect(fixture).toContain('entry["firstRunChecks"]');
+  });
+
+  test("Particle Studio is an optional disclosure without losing native authoring commands", async () => {
+    const [panel, css, ui] = await Promise.all([
+      source("ui/panel.html"), source("ui/panel.css"), source("ui/index.ts"),
+    ]);
+    const geometry = panel.indexOf('aria-label="Geometry tools"');
+    const particle = panel.indexOf('aria-label="Particle Studio"');
+    const disclosure = panel.indexOf('<details class="ld-studio-disclosure">', particle);
+    expect(geometry).toBeGreaterThan(0);
+    expect(geometry).toBeLessThan(particle);
+    expect(disclosure).toBeGreaterThan(particle);
+    expect(panel.indexOf('<summary class="ld-studio-toggle">', disclosure)).toBeGreaterThan(disclosure);
+    expect(panel).not.toContain('<details class="ld-studio-disclosure" open');
+    expect(panel).toContain("Draft in progress");
+    expect(panel).toContain("Editing saved effect");
+    expect(panel).toContain("Animation stage required");
+    expect(panel).toContain("Open a Bedrock Model");
+    expect(panel).toContain('v-else-if="!studioStageReady()"');
+    for (const method of ["studioRefresh", "studioReset", "studioOpen", "studioCreate",
+      "studioSave", "studioRevert", "studioPlay", "studioStop", "studioCheck", "studioAttach"]) {
+      expect(panel.indexOf(`@click="${method}"`, disclosure)).toBeGreaterThan(disclosure);
+    }
+    expect(panel).toContain(':disabled="studioBusy || !project.hasFolder || !studioHasChanges()"');
+    expect(panel).toContain(':disabled="studioBusy || !studioLoaded.path"');
+    expect(css).toContain('.ld-studio-disclosure > summary:focus-visible');
+    expect(css).toContain('.ld-studio-disclosure[open] > summary::before');
+    expect(ui).toContain("stopStudioPreview");
+    expect(ui).toContain("studioStageReady(this: HumanPanelContext): boolean {");
+  });
+
   test("native authoring panel prioritizes the actionable Geometry section", async () => {
     const [panel, css] = await Promise.all([source("ui/panel.html"), source("ui/panel.css")]);
     expect(panel.indexOf('aria-label="Geometry tools"')).toBeGreaterThan(0);

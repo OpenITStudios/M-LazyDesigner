@@ -635,6 +635,16 @@ scroll position survive navigating to Support and back within the same
 Desktop UI session. These are view preferences only, not persisted project
 state or a replacement for the Blockbench-owned project projection.
 
+On first run, the model-open action stays above optional AI setup, and the
+setup panel has one direct action with a native disclosure for its steps.
+If a model is active or registered projects exist, their navigator appears ahead of AI setup so
+existing files remain the priority. With an empty project inventory, the
+navigator follows setup, keeps **Add Project Folder** usable and hides the
+empty search field. If a retained search query exists, keep its field and
+Clear search visible so the user can recover rather than silently hiding
+filtered results. Setup readiness/approval guards and machine-state
+authority are unchanged.
+
 Model actions are labeled **Open** rather than promising to switch or focus
 a particular Blockbench window. The current native launch path does not
 yet prove foreground-window activation; native Windows acceptance is

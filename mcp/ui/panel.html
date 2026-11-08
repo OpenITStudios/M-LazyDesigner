@@ -96,7 +96,15 @@
   </section>
 
   <section class="ld-workspace ld-particle" aria-label="Particle Studio">
-    <div class="ld-section-title">Particle Studio</div>
+    <details class="ld-studio-disclosure">
+      <summary class="ld-studio-toggle">
+        <span class="ld-section-title">Particle Studio</span>
+        <span class="ld-studio-toggle-hint" v-if="!project.isBedrock">Open a Bedrock Model</span>
+        <span class="ld-studio-toggle-hint" v-else-if="!studioStageReady()">Animation stage required</span>
+        <span class="ld-studio-toggle-hint" v-else-if="studioError">Needs attention</span>
+        <span class="ld-studio-toggle-hint" v-else-if="studioLoaded">{{studioLoaded.path ? 'Editing saved effect' : 'Draft in progress'}}</span>
+        <span class="ld-studio-toggle-hint" v-else>Create or edit effects</span>
+      </summary>
     <p class="ld-description">Create, preview and adjust Bedrock particles here. AI particle generation remains available through your connected client.</p>
     <p v-if="!project.isBedrock" class="ld-empty-state">Open a Bedrock Model project.</p>
     <p v-else-if="!studioStageReady()" class="ld-empty-state">Particle tools are available in the Animation stage after the normal authoring handoff.</p>
@@ -203,6 +211,7 @@
       <p v-if="studioNote" class="ld-studio-note" role="status" aria-live="polite">{{studioNote}}</p>
       <p v-if="studioError" class="ld-error" role="alert">{{studioError}}</p>
     </div>
+    </details>
   </section>
 
   <p class="panel-note">Geometry and particle controls use the current Blockbench project. Texture painting and Animation timeline editing remain native.</p>
