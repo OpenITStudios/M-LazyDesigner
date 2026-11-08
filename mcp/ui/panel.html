@@ -109,6 +109,9 @@
         <button class="user-action" type="button" :disabled="studioBusy || !project.hasFolder" @click="studioRefresh">Find Particles</button>
         <button class="user-action" type="button" :disabled="studioBusy" @click="studioReset">New Effect</button>
       </div>
+      <p v-if="studioLoaded && studioHasChanges()" class="ld-studio-unsaved-note">
+        Unsaved changes belong to the current Blockbench project. New Effect or Open will ask before replacing them. Switching projects discards these unsaved changes, not saved particle files.
+      </p>
       <div class="ld-studio-row" v-if="studioFiles.length">
         <label for="ld-studio-available">Existing particle</label>
         <select id="ld-studio-available" v-model="studioChoice" :disabled="studioBusy">

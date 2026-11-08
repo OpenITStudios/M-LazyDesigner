@@ -482,6 +482,51 @@ describe("human-facing Blockbench UI", () => {
     expect(ui).not.toContain('this.studioNote += " Standalone preview: "');
   });
 
+  test("Particle Studio protects unsaved drafts when starting or opening another effect", async () => {
+    const [ui, panel, css] = await Promise.all([
+      source("ui/index.ts"), source("ui/panel.html"), source("ui/panel.css"),
+    ]);
+    const context = ui.slice(ui.indexOf("type HumanPanelContext = {"), ui.indexOf("function readHumanProjectState():"));
+    expect(context).toContain("studioHasChanges(): boolean;");
+    expect(context).toContain("studioStageReady(): boolean;");
+
+    const prompt = ui.slice(ui.indexOf("function confirmStudioReplacement("), ui.indexOf("function readHumanProjectState():"));
+    expect(prompt).toContain("if (!vm.studioHasChanges()) return true;");
+    expect(prompt).toContain('const draft = !vm.studioLoaded?.path;');
+    expect(prompt).toContain('action === "new"');
+    expect(prompt).toContain("will discard those changes.");
+    expect(prompt).toContain("Saved particle files will not be modified.");
+    expect(prompt).toContain("return window.confirm(");
+    for (const forbidden of ["stopStudioPreview(", "cancelStudioLivePreview(", "studioLoaded = null",
+      "studioBusy = true", "writeFile", "runRuntimeOperationExclusive("]) {
+      expect(prompt).not.toContain(forbidden);
+    }
+
+    const newEffect = ui.slice(ui.indexOf("studioReset(this: HumanPanelContext): void {"),
+      ui.indexOf("async studioCreate(this: HumanPanelContext): Promise<void> {"));
+    const openEffect = ui.slice(ui.indexOf("async studioOpen(this: HumanPanelContext): Promise<void> {"),
+      ui.indexOf("async studioSave(this: HumanPanelContext): Promise<void> {"));
+    expect(newEffect).toContain('if (this.studioBusy || !confirmStudioReplacement(this, "new")) return;');
+    expect(openEffect).toContain('!confirmStudioReplacement(this, "open")) return;');
+    expect(newEffect.indexOf('confirmStudioReplacement(this, "new")'))
+      .toBeLessThan(newEffect.indexOf("cancelStudioLivePreview();"));
+    expect(openEffect.indexOf('confirmStudioReplacement(this, "open")'))
+      .toBeLessThan(openEffect.indexOf("cancelStudioLivePreview();"));
+    expect(newEffect.indexOf('confirmStudioReplacement(this, "new")'))
+      .toBeLessThan(newEffect.indexOf("stopStudioPreview();"));
+    expect(openEffect.indexOf('confirmStudioReplacement(this, "open")'))
+      .toBeLessThan(openEffect.indexOf("this.studioBusy = true;"));
+
+    expect(panel).toContain('v-if="studioLoaded && studioHasChanges()" class="ld-studio-unsaved-note"');
+    expect(panel).toContain("New Effect or Open will ask before replacing them.");
+    expect(panel).toContain("Switching projects discards these unsaved changes, not saved particle files.");
+    expect(css).toContain(".mcp-panel .ld-studio-unsaved-note");
+    expect(css).toContain("var(--color-accent)");
+    // No change to the authoritative file and Animation permission boundaries.
+    expect(ui).toContain('await saveStudioParticle(project, loaded, changes)');
+    expect(ui).toContain('await attachStudioParticle(project, this.studioLoaded, this.studioLocator)');
+  });
+
   test("Particle Studio orders Preview, Save and Attach and blocks unsafe attachment early", async () => {
     const [panel, ui, css] = await Promise.all([
       source("ui/panel.html"), source("ui/index.ts"), source("ui/panel.css"),

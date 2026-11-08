@@ -110,7 +110,23 @@ type HumanPanelContext = {
   studioError: string;
   studioNote: string;
   studioPlaying: boolean;
+  // Methods are exposed on the actual Vue panel instance, not stored fields.
+  studioHasChanges(): boolean;
+  studioStageReady(): boolean;
 };
+
+/**
+ * Only a user-triggered New/Open replacement may discard an in-memory draft.
+ * An unchanged saved effect needs no prompt. No preview, filesystem action,
+ * model selection or authoring Stage changes if the user cancels.
+ */
+function confirmStudioReplacement(vm: HumanPanelContext, action: "new" | "open"): boolean {
+  if (!vm.studioHasChanges()) return true;
+  const draft = !vm.studioLoaded?.path;
+  const subject = draft ? "This particle draft has not been saved." : "This particle effect has unsaved changes.";
+  const next = action === "new" ? "Starting a new effect" : "Opening another effect";
+  return window.confirm(`${subject} ${next} will discard those changes. Continue? Saved particle files will not be modified.`);
+}
 
 function readHumanProjectState(): HumanProjectState {
   if (typeof Project === "undefined" || !Project) {
@@ -468,7 +484,7 @@ export function uiSetup(input: UiSetupInput) {
           }
         },
         studioReset(this: HumanPanelContext): void {
-          if (this.studioBusy) return;
+          if (this.studioBusy || !confirmStudioReplacement(this, "new")) return;
           cancelStudioLivePreview();
           stopStudioPreview();
           this.studioSettings = studioPresetSettings("steady");
@@ -514,7 +530,8 @@ export function uiSetup(input: UiSetupInput) {
           }
         },
         async studioOpen(this: HumanPanelContext): Promise<void> {
-          if (this.studioBusy || !Project || !this.studioChoice) return;
+          if (this.studioBusy || !Project || !this.studioChoice ||
+              !confirmStudioReplacement(this, "open")) return;
           cancelStudioLivePreview();
           const project = Project, epoch = uiEpoch;
           this.studioBusy = true;

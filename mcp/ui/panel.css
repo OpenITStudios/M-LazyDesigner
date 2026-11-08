@@ -249,6 +249,16 @@
 .mcp-panel .ld-studio-disclosure[open] + .ld-studio-error-closed { display: none; }
 .mcp-panel .ld-studio-disclosure[open] > .ld-description { margin-top: 10px; }
 .mcp-panel .ld-studio-body { display: grid; gap: 10px; margin-top: 10px; }
+.mcp-panel .ld-studio-unsaved-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-inline-start: 2px solid var(--color-accent);
+  color: var(--color-text);
+  background: var(--color-back);
+  font-size: .88em;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
 .mcp-panel .ld-studio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .mcp-panel .ld-tool-actions .user-action { flex: 1 1 150px; }
 .mcp-panel .ld-studio-row .user-action { white-space: normal; }
