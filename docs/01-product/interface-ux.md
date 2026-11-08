@@ -34,13 +34,13 @@ The primary user outcome is **continue asset work**. Connection and installation
 | AI client absent / handshake unverified | Continue normal Blockbench editing; explain how the external AI session connects when needed | Process detection does not equal verified MCP handshake |
 | Recently verified AI connection | Display **recently verified**, not permanently connected | Refresh/probe uncertainty can downgrade a status; never promise a live session from an old receipt |
 | Unsupported/mismatched package | Show the actual constraint and a Support path | No forced repair, version bypass, or unverified update |
-| Full-status probe becomes unverified | **Refresh** status; keep explicit native file browsing when safe | Disable stale managed actions, project preferences and opaque-ID model activation that require fresh authority |
+| Full-status probe becomes unverified | **Refresh** status; keep independently revalidated native model and Explorer navigation available | Block stale managed actions, preferences, deletion and current-session focus; do not claim requested model launch is confirmed without native acknowledgement |
 | Particle draft / unsaved model | Preview without writing JSON; save only through explicit authorized action | The Save/Attach buttons must retain current path/Stage restrictions and never imply preview is persistence |
 
 ## Interaction and content rules
 
 1. **One next action per state.** Use a visible active verb and name the effect. Give a precise reason if disabled; prefer a recoverable route to a dead-end button.
-2. **Separate observation from completion.** Use 'checking', 'recently verified', 'needs approval', 'staged', 'completed' and 'failed' only when the corresponding existing receipt supports it. An action toast must not claim success for a request merely sent to Blockbench.
+2. **Separate observation from completion.** Use 'checking', 'recently verified', 'needs approval', 'staged', 'completed' and 'failed' only when the corresponding existing receipt supports it. An action toast must not claim success for a request merely sent to Blockbench. The same AI status label must appear in Workspace and Support; a running editor is distinct from a verified AI session. An actionable 'Next step' persists until dismissed or superseded, while brief success/no-change notices may auto-expire.
 3. **Search is a task.** Project/model search needs a visible label, matching-project count, explicit Clear search, and focus restoration; project matches may include models within them. Search must never mutate project preferences or filesystem state.
 4. **No silent destruction.** 'Remove from Workspace' only removes the registered shortcut; 'Delete Project…' is a distinct destructive operation that preserves the existing explicit Recycle Bin review and cancellation gate.
 5. **Status, failure and empty states:** distinguish no projects, zero search matches, missing folders, disconnected AI and unavailable runtime. Avoid developer acronyms on the primary path; keep diagnostic detail in Support.
@@ -55,7 +55,8 @@ The baseline is source-observed, not a measured usability score. Compare the sam
 | --- | --- | --- |
 | Fresh install and no project | Model-open remains available without AI or setup | Fixture keyboard + 780×560/980×680 screenshots; real model-open flow |
 | Ready with 7+ projects | Search sees beyond the initial six, counts matching projects, Clear returns focus to search | Keyboard tab/screen-reader check and reset behavior |
-| Connection uncertainty | Last-known AI state is visibly qualified; model browsing remains usable while stale actions are blocked | Forced disconnected/failed probe, retry and recovery |
+| Connection uncertainty | Last-known AI state is visibly qualified on both pages; Rust-revalidated file navigation stays available but stale managed actions are blocked | Forced disconnected/failed probe, retry and recovery |
+| Pending action (staged update, plugin approval, unverified model/editor launch) | The next step is distinct from success and remains visible until dismissed or replaced | Keyboard notice dismissal, real focus/handshake verification and no false completed claim |
 | First geometry issue in native panel | Geometry actions precede the optional particle form; unsupported Bedrock format has an explanation | At least 100 Cubes, correct UUID locate, no edit/Undo mutation, measured task time |
 | Particle Studio from a draft | Preview and persistence are distinct; stage/path/advanced-field guards are retained | Animation-stage draft, Save, Attach, reload, native visual playback |
 | Recovery and deletion | Clear failure copy and safe recovery entry; no conflation of remove vs delete | Cancel/confirm, focus restoration, filesystem/Recycle Bin proof |

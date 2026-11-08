@@ -1,6 +1,6 @@
 <script lang="ts">
   import ProjectNavigator from './ProjectNavigator.svelte';
-  import { productMode, productHeadline, productGuidance, progressLabel, type ManagedAction } from './desktopPresentation';
+  import { productMode, productHeadline, productGuidance, aiStatusPresentation, progressLabel, type ManagedAction } from './desktopPresentation';
   import type { SystemStatus, DesktopBusyAction, ManagedUpdateCheck } from './desktopTypes';
   import type { ProjectAction } from './projectNavigationTypes';
 
@@ -35,6 +35,8 @@
   export let runManagedAction: (action: ManagedAction) => Promise<void>;
   export let refresh: () => Promise<void>;
   export let navigate: (page: 'Support') => void;
+
+  $: aiStatus = aiStatusPresentation(status, statusProbeFailures);
 </script>
 
 {#snippet projectNavigator(current: SystemStatus)}
@@ -137,8 +139,8 @@
       <section class="workspace-connection" aria-label="Connection status">
         <span class="connection-dot" class:waiting={productMode(status) === 'client-wait'} class:unknown={statusProbeFailures >= 2} aria-hidden="true"></span>
         <div class="connection-copy">
-          <strong>{statusProbeFailures >= 2 ? 'AI connection unverified' : productMode(status) === 'ready' ? 'AI connection recently verified' : status.gateway.state === 'gateway-detected' ? 'AI connection needs confirmation' : 'Blockbench ready'}</strong>
-          <span>{statusProbeFailures >= 2 ? 'AI status is out of date. Models and folders remain available; Refresh before changing project shortcuts or managed components.' : productMode(status) === 'ready' ? 'A recent AI request verified the matching tools. Idle connections may need verification again.' : status.gateway.state === 'gateway-detected' ? 'Blockbench and the AI service are detected. Confirm the connection in your AI client.' : 'Editing is available. Connect the AI client when needed.'}</span>
+          <strong>{aiStatus.headline}</strong>
+          <span>{aiStatus.detail}</span>
         </div>
         {#if statusProbeFailures >= 2}
           <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
@@ -166,8 +168,8 @@
             <div class="resource-meta">
               <span>{status.blockbench.version ?? 'Version unavailable'}</span>
               <span class="meta-separator">·</span>
-              <span class:status-good={productMode(status) === 'ready' || productMode(status) === 'client-wait'} class:status-warning={productMode(status) === 'plugin-setup' || productMode(status) === 'unsupported'}>
-                {statusProbeFailures >= 2 ? 'Status unverified' : productMode(status) === 'ready' ? 'Connected' : productMode(status) === 'client-wait' ? 'Ready' : status.blockbench.running ? 'Running' : 'Not running'}
+              <span class:status-good={statusProbeFailures < 2 && status.blockbench.running} class:status-warning={statusProbeFailures >= 2 || productMode(status) === 'unsupported'}>
+                {statusProbeFailures >= 2 ? 'Status unverified' : status.blockbench.running ? 'Running' : 'Not running'}
               </span>
             </div>
           </div>
@@ -246,8 +248,8 @@
       <div class="definition-rows">
         <div class="definition-row">
           <span>AI status</span>
-          <strong class:status-good={productMode(status) === 'ready'} class:status-warning={statusProbeFailures >= 2}>
-            {statusProbeFailures >= 2 ? 'Check required' : productMode(status) === 'ready' ? 'Connected' : productMode(status) === 'client-wait' ? (status.gateway.state === 'gateway-detected' ? 'MCP handshake unverified' : 'Not connected yet') : productHeadline(status)}
+          <strong class:status-good={aiStatus.recentlyVerified} class:status-warning={statusProbeFailures >= 2}>
+            {aiStatus.label}
           </strong>
         </div>
         {#if status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED' || updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED' || updateCheck?.status === 'DESKTOP_UPDATE_REQUIRED'}

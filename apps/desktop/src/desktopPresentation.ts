@@ -39,6 +39,54 @@ export function productMessage(value: SystemStatus) {
   return value.readiness.summary;
 }
 
+/**
+ * Shared human-facing AI labels. Uses the canonical Desktop product state and
+ * observation freshness; does not infer a new Runtime or Gateway status.
+ */
+export function aiStatusPresentation(value: SystemStatus, probeFailures: number) {
+  if (probeFailures >= 2) return {
+    label: 'Verification required',
+    headline: 'AI status needs verification',
+    detail: 'These are the last known connection details. Models and folders remain accessible; Refresh before changing project shortcuts or installed components.',
+    recentlyVerified: false,
+  };
+  const mode = productMode(value);
+  if (mode === 'ready') return {
+    label: 'Recently verified',
+    headline: 'AI connection recently verified',
+    detail: 'A recent AI request verified matching tools. You can keep editing; an idle connection may need a new check.',
+    recentlyVerified: true,
+  };
+  if (mode === 'client-wait') {
+    if (value.gateway.state === 'gateway-detected') return {
+      label: 'AI handshake unverified',
+      headline: 'Confirm AI connection',
+      detail: 'The AI service was detected, but the session is not verified. Confirm it in your AI client; model editing remains available.',
+      recentlyVerified: false,
+    };
+    return {
+      label: 'AI client not connected',
+      headline: 'Blockbench ready',
+      detail: 'You can edit models now. Connect an AI client only when you need AI-assisted work.',
+      recentlyVerified: false,
+    };
+  }
+  const labels: Record<Exclude<ProductMode, 'ready' | 'client-wait'>, string> = {
+    welcome: 'Setup needed',
+    'security-setup': 'Secure setup needed',
+    unsupported: 'Unsupported Blockbench',
+    'ready-start': 'AI not connected',
+    'plugin-setup': 'Plugin setup needed',
+    attention: 'Action required',
+  };
+  return {
+    label: labels[mode],
+    headline: productHeadline(value),
+    detail: productMessage(value),
+    recentlyVerified: false,
+  };
+}
+
 export function productGuidance(value: SystemStatus, pluginApprovalNeeded: boolean) {
   const mode = productMode(value);
   if (mode === 'attention' && value.managed?.installed && value.managed.alignment?.state !== 'aligned') return 'Open Support to verify the managed package, plugin and AI client configuration before reconnecting.';

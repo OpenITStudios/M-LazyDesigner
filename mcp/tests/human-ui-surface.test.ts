@@ -5,6 +5,52 @@ const source = (relative: string) =>
 
 describe("human-facing Blockbench UI", () => {
 
+  test("AI labels reflect recent verification, missing handshake and stale observations", async () => {
+    const { aiStatusPresentation } = await import("../../apps/desktop/src/desktopPresentation");
+    const { createDevFixtureStatus } = await import("../../apps/desktop/src/desktopFixtures");
+    const ready = aiStatusPresentation(createDevFixtureStatus("ready"), 0);
+    expect(ready.label).toBe("Recently verified");
+    expect(ready.headline).toBe("AI connection recently verified");
+    expect(ready.recentlyVerified).toBe(true);
+    expect(ready.detail).not.toContain("permanently");
+
+    const stale = aiStatusPresentation(createDevFixtureStatus("ready"), 2);
+    expect(stale.label).toBe("Verification required");
+    expect(stale.recentlyVerified).toBe(false);
+    expect(stale.detail).toContain("Models and folders remain accessible");
+    const waiting = createDevFixtureStatus("client-wait");
+    expect(aiStatusPresentation(waiting, 0).label).toBe("AI client not connected");
+    waiting.gateway.state = "gateway-detected";
+    const handshake = aiStatusPresentation(waiting, 0);
+    expect(handshake.label).toBe("AI handshake unverified");
+    expect(handshake.detail).toContain("not verified");
+    expect(aiStatusPresentation(createDevFixtureStatus("fresh-install"), 0).label).toBe("Setup needed");
+
+    const [workspace, support] = await Promise.all([
+      source("../apps/desktop/src/WorkspacePage.svelte"), source("../apps/desktop/src/SupportPage.svelte"),
+    ]);
+    expect(workspace).toContain("aiStatusPresentation(status, statusProbeFailures)");
+    expect(workspace).toContain("{aiStatus.headline}");
+    expect(workspace).toContain("{aiStatus.label}");
+    expect(workspace).not.toContain("productMode(status) === 'ready' ? 'Connected'");
+    expect(support).toContain("aiStatusPresentation(status, statusProbeFailures)");
+    expect(support).toContain("{aiStatus.label}");
+  });
+
+  test("next-step notifications persist; optional launch focus is not a success claim", async () => {
+    const [app, editor] = await Promise.all([
+      source("../apps/desktop/src/App.svelte"), source("../apps/desktop/src/editorOperations.ts"),
+    ]);
+    expect(app).toContain("if (kind === 'pending') return;");
+    expect(app).toContain("actionToastTimer = window.setTimeout");
+    expect(app).toContain("onclick={clearActionFeedback}");
+    expect(app).toContain("role={error ? 'alert' : 'status'}");
+    expect(app).toContain("feedback.verification === 'focused' ? 'success' : 'pending'");
+    expect(app).toContain("approvalPending ? 'pending' : 'success'");
+    expect(app).toContain("result.reason !== 'MCP_SESSION_UNVERIFIED' ? 'success' : 'pending'");
+    expect(editor).toContain("verification: focused ? 'focused' : 'launched-unverified'");
+  });
+
   test("Desktop model search has an explicit clear action and live result count", async () => {
     const [navigator, workspace] = await Promise.all([
       source("../apps/desktop/src/ProjectNavigator.svelte"),
@@ -169,14 +215,15 @@ describe("human-facing Blockbench UI", () => {
       Bun.file(new URL("../../docs/05-operations/blockbench-plugin-ui.md", import.meta.url)).text(),
       Bun.file(new URL("../../apps/desktop/src/SupportPage.svelte", import.meta.url)).text(),
     ]);
-    expect(workspace).toContain("canOpenModel={statusProbeFailures < 2}");
+    expect(workspace).toContain("canOpenModel={true}");
+    expect(workspace).toContain("canFocusCurrentEditor={statusProbeFailures < 2}");
     expect(workspace).toContain("canEditProjectPrefs={statusProbeFailures < 2}");
-    expect(workspace).toContain("busy={busyAction !== null || statusProbeFailures >= 2}");
+    expect(workspace).toContain("busy={busyAction !== null}");
     expect(workspace).toContain("{#if !status.project_navigation.active}");
     expect(workspace).toContain("Open Blockbench</button>");
     expect(workspace).toContain('onclick={() => openModel()} disabled={busyAction !== null}');
-    expect(app).toContain("(id !== undefined && statusProbeFailures >= 2)");
-    expect(app).toContain("async function runProjectAction(action: ProjectAction, id: string) {\n    if (devFixture || busyAction || statusProbeFailures >= 2) return;");
+    expect(app).toContain("async function openModel(id?: string) {\n    if (devFixture || busyAction) return;");
+    expect(app).toContain("statusProbeFailures >= 2 && !isSafeFileNavigationAction(action)");
     expect(app).toContain("async function confirmDeleteProject() {\n    if (devFixture || busyAction || !deleteReview || statusProbeFailures >= 2) return;");
     expect(app).toContain("confirmBlocked={statusProbeFailures >= 2}");
     expect(app).toContain("if (devFixture === 'status-unverified') statusProbeFailures = 2;");

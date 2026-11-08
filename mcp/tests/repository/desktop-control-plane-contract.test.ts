@@ -783,7 +783,8 @@ describe("Desktop calm connection summary", () => {
     const workspace = await workspaceSource;
     expect(ui).toContain("<WorkspacePage");
     expect(workspace).toContain('class="workspace-connection"');
-    expect(workspace).toContain("statusProbeFailures >= 2 ? 'AI status unverified'");
+    expect(workspace).toContain("aiStatusPresentation(status, statusProbeFailures)");
+    expect(workspace).toContain("{aiStatus.headline}");
     expect(workspace).toContain("status.project_navigation.projects.length > 0");
     expect(workspace).toContain("productMode(status) === 'ready' || productMode(status) === 'client-wait'");
     expect(workspace.indexOf("<ProjectNavigator")).toBeLessThan(workspace.indexOf("<h2>AI connection and updates</h2>"));
@@ -1078,7 +1079,9 @@ describe("Desktop Workspace and Support feedback integrity", () => {
     expect(ui).toContain("<SupportPage");
     expect(support).toContain('<main class="page-content settings-content">');
     expect(support).toContain("{#if statusProbeFailures >= 2}");
-    expect(support).toContain("These are the last known connection details.");
+    expect(support).toContain('id="support-stale-status-description">{aiStatus.detail}');
+    const presentation = await source("../apps/desktop/src/desktopPresentation.ts");
+    expect(presentation).toContain("These are the last known connection details.");
     expect(support).toContain('onclick={refresh}');
     expect(support).toContain("{:else if productMode(status) !== 'ready'}");
     const copy = ui.slice(ui.indexOf("async function copyNavigationPath("), ui.indexOf("async function connectBlockbench()"));

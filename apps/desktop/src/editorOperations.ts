@@ -6,6 +6,12 @@ export type ModelOpenFeedback = {
   message: string;
 };
 
+/** Launching Blockbench is distinct from foreground focus or opening a model. */
+export type EditorOpenFeedback = {
+  verification: 'focused' | 'launched-unverified';
+  message: string;
+};
+
 /** Native editor operations never prepare AI, install components or own view state. */
 export function createEditorOperations(invoke: DesktopInvoke) {
   async function focusBlockbenchAfterOpen(): Promise<boolean> {
@@ -42,12 +48,15 @@ export function createEditorOperations(invoke: DesktopInvoke) {
           : 'Model launch sent, but the active tab is not verified. Select Blockbench and check the model.',
       };
     },
-    async openEditor(): Promise<string> {
+    async openEditor(): Promise<EditorOpenFeedback> {
       await invoke<BlockbenchEditorResult>('open_blockbench_editor');
       const focused = await focusBlockbenchAfterOpen();
-      return focused
-        ? 'Blockbench is open.'
-        : 'Blockbench launched. Select its window from the taskbar if needed.';
+      return {
+        verification: focused ? 'focused' : 'launched-unverified',
+        message: focused
+          ? 'Blockbench is open.'
+          : 'Blockbench launched. Select its window from the taskbar if needed.',
+      };
     },
   };
 }

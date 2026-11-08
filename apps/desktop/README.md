@@ -644,10 +644,13 @@ required before stronger copy or focus behavior is introduced.
 
 After two failed lightweight connection probes **or one failed full**
 `system_status` with a previous observation, Desktop preserves that last
-observation for context but disables project-ID actions, Blockbench launch,
-folder/path mutations and managed operations that depend on fresh machine
-state. Direct `Open Model…` browsing remains available because its selected
-file is validated by Rust independently of the stale project list. An open
+observation for context but disables project preference changes, destructive
+actions, current-session Blockbench focus, editor launch and managed operations
+that depend on fresh machine state. Explicit Explorer-only folder/reveal
+actions and Copy path remain available because Rust re-resolves their opaque
+IDs. Direct `Open Model…` browsing and requested known-model launches remain
+available through their existing native file/path checks; an unverified model
+launch is never described as confirmed activation. An open
 Recycle Bin confirmation keeps Cancel usable but blocks confirmation. A subsequent successful
 lightweight probe cannot clear this gate; only the user's explicit `Refresh`
 with successful full `system_status` restores the action affordances. The
@@ -722,3 +725,13 @@ approval is universally required: approval is mentioned conditionally and
 never marked complete merely because a file was highlighted. User-facing
 managed-component update progress and activity labels deliberately distinguish
 managed distribution updates from updates to the Desktop executable.
+
+The shared `aiStatusPresentation()` maps only the canonical Desktop product
+state and observation freshness into Workspace/Support copy. `Recently verified`
+means there was a matching AI request, not a permanent connection. Blockbench
+running state is labelled separately from AI readiness. `Next step` notices
+for staged updates, unverified launches, trust approval or handshake checks
+remain visible until dismissed or replaced by a later action; short success
+and no-change notices still expire automatically. A native launch without
+confirmed window focus is not reported as a completed foreground handoff.
+This is source-authored UI behavior, not executed Svelte/Windows acceptance.

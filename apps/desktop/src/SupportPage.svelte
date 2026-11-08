@@ -1,6 +1,6 @@
 <script lang="ts">
   import { version as desktopVersion } from '../package.json';
-  import { compatibilityLabel, productMode, productHeadline, productMessage, type ManagedAction } from './desktopPresentation';
+  import { compatibilityLabel, productMode, productHeadline, productMessage, aiStatusPresentation, type ManagedAction } from './desktopPresentation';
   import type { SystemStatus, DesktopBusyAction, DesktopOperationRecord } from './desktopTypes';
 
   export let status: SystemStatus;
@@ -20,13 +20,15 @@
   export let runManagedAction: (action: ManagedAction) => Promise<void>;
   export let migrateLegacySetup: () => Promise<void>;
   export let openAnalytics: () => void;
+
+  $: aiStatus = aiStatusPresentation(status, statusProbeFailures);
 </script>
 
 <main class="page-content settings-content">
   {#if statusProbeFailures >= 2}
     <section class="support-banner" role="status">
       <span class="support-banner-dot" aria-hidden="true"></span>
-      <div><strong>AI status needs verification</strong><span id="support-stale-status-description">These are the last known connection details. You can still open model files; Refresh before changing AI or installed components.</span></div>
+      <div><strong>{aiStatus.headline}</strong><span id="support-stale-status-description">{aiStatus.detail}</span></div>
       <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
     </section>
   {:else if productMode(status) !== 'ready'}
@@ -69,7 +71,7 @@
       {/if}
     </div>
     <div class="definition-rows">
-      <div class="definition-row"><span>AI status</span><strong class:status-warning={statusProbeFailures >= 2}>{statusProbeFailures >= 2 ? 'Verification required' : productMode(status) === 'ready' ? 'Recently verified' : productHeadline(status)}</strong></div>
+      <div class="definition-row"><span>AI status</span><strong class:status-warning={statusProbeFailures >= 2}>{aiStatus.label}</strong></div>
       <div class="definition-row"><span>LazyDesigner Desktop version</span><strong>{desktopVersion}</strong></div>
       {#if status.desktop_build}<div class="definition-row"><span>Desktop build</span><code>{status.desktop_build.source_sha.slice(0,12)}</code></div>{/if}
       <div class="definition-row"><span>Blockbench version</span><strong>{status.blockbench.version ?? 'Unavailable'}</strong></div>

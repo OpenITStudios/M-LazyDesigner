@@ -51,6 +51,28 @@ describe("Desktop setup ordering", () => {
 });
 
 describe("Desktop native editor operations", () => {
+  test.each(["FOCUSED", "DENIED"])("editor launch distinguishes foreground %s from unverified focus", async focusStatus => {
+    const calls: string[] = [];
+    const invoke: DesktopInvoke = async command => {
+      calls.push(command);
+      return { status: command === "focus_blockbench_window" ? focusStatus : "OPENED" } as never;
+    };
+    const feedback = await createEditorOperations(invoke).openEditor();
+    expect(calls).toEqual(["open_blockbench_editor", "focus_blockbench_window"]);
+    expect(feedback.verification).toBe(focusStatus === "FOCUSED" ? "focused" : "launched-unverified");
+    expect(feedback.message).toContain(focusStatus === "FOCUSED" ? "Blockbench is open" : "Select its window");
+  });
+
+  test("failed editor launch never attempts focus or claims completion", async () => {
+    const calls: string[] = [];
+    const invoke: DesktopInvoke = async command => {
+      calls.push(command);
+      throw new Error("Editor launch rejected");
+    };
+    await expect(createEditorOperations(invoke).openEditor()).rejects.toThrow("Editor launch rejected");
+    expect(calls).toEqual(["open_blockbench_editor"]);
+  });
+
   test.each([undefined, "recent-model"])("model launch %s shares focus and truthful acknowledgement", async (id) => {
     const calls: string[] = [];
     const invoke: DesktopInvoke = async (command) => {

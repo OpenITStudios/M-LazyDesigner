@@ -120,8 +120,13 @@
     kind: 'success' | 'pending' | 'unchanged' = 'success'
   ) {
     if (actionToastTimer !== null) window.clearTimeout(actionToastTimer);
+    actionToastTimer = null;
+    error = '';
+    errorDetail = null;
     actionMessageKind = kind;
     actionMessage = message;
+    // A next step must stay available until dismissed or superseded.
+    if (kind === 'pending') return;
     actionToastTimer = window.setTimeout(() => {
       actionMessage = '';
       actionToastTimer = null;
@@ -302,9 +307,9 @@
     busyAction = 'open-editor';
     clearActionFeedback();
     try {
-      const message = await editorOperations.openEditor();
+      const feedback = await editorOperations.openEditor();
       await refresh();
-      showActionToast(message);
+      showActionToast(feedback.message, feedback.verification === 'focused' ? 'success' : 'pending');
     } catch (cause) {
       reportError(cause);
     } finally {
@@ -344,7 +349,8 @@
           : result.status === 'READY' ? 'AI connection is ready.' : 'AI client can connect when needed.';
         showActionToast(focused
           ? `Blockbench window focus confirmed. ${connection}`
-          : `Blockbench is ready. Select it from the taskbar if needed. ${connection}`);
+          : `Blockbench is ready. Select it from the taskbar if needed. ${connection}`,
+          result.status === 'READY' && result.reason !== 'MCP_SESSION_UNVERIFIED' ? 'success' : 'pending');
       } else if (result.status === 'NEEDS_ATTENTION' && result.reason !== 'PLUGIN_MISSING_WHILE_BLOCKBENCH_RUNNING') {
         error = connectionReadinessError(result);
       }
@@ -421,9 +427,10 @@
     errorDetail = null;
     try {
       await invoke<PluginFileActionResult>('show_plugin_file');
-      showActionToast(pluginApprovalNeeded && productMode(status) === 'plugin-setup'
+      const approvalPending = pluginApprovalNeeded && productMode(status) === 'plugin-setup';
+      showActionToast(approvalPending
         ? 'Plugin file highlighted. Approve it in Blockbench if prompted.'
-        : 'Plugin file highlighted in File Explorer.');
+        : 'Plugin file highlighted in File Explorer.', approvalPending ? 'pending' : 'success');
     } catch (cause) {
       reportError(cause);
     } finally {
@@ -708,12 +715,12 @@
 {/if}
 
 {#if error || actionMessage || (busyAction && progressStage && busyAction !== 'repair')}
-  <aside class:error={Boolean(error)} class:success={Boolean(actionMessage) && !error && actionMessageKind === 'success'} class:notice={Boolean(actionMessage) && !error && actionMessageKind !== 'success'} class="operation-attention" aria-live={error ? 'assertive' : 'polite'}>
+  <aside class:error={Boolean(error)} class:success={Boolean(actionMessage) && !error && actionMessageKind === 'success'} class:notice={Boolean(actionMessage) && !error && actionMessageKind !== 'success'} class="operation-attention" role={error ? 'alert' : 'status'} aria-live={error ? 'assertive' : 'polite'}>
     <div class="attention-icon">{error ? '!' : actionMessage ? (actionMessageKind === 'success' ? '✓' : 'i') : '•'}</div>
     <div class="attention-copy"><strong>{error ? errorTitle : actionMessage ? (actionMessageKind === 'pending' ? 'Next step' : actionMessageKind === 'unchanged' ? 'No change' : 'Done') : 'Working'}</strong><span>{error || actionMessage || progressLabel(progressStage)}</span></div>
     <div class="attention-actions">
       {#if error}<button onclick={() => navigate('Support')}>Support</button>{/if}
-      {#if error || actionMessage}<button class="dismiss" aria-label="Dismiss notification" onclick={() => { error=''; clearActionToast(); }}>×</button>{/if}
+      {#if error || actionMessage}<button class="dismiss" aria-label="Dismiss notification" onclick={clearActionFeedback}>×</button>{/if}
     </div>
   </aside>
 {/if}
