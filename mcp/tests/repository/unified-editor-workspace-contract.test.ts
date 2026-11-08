@@ -66,6 +66,14 @@ describe("Unified Editor P1 source-owned workspace", () => {
       'aria-label="Modified at last observation"',
       "projectsExpanded: true",
       "assistantExpanded: false",
+      "projectActionsId = projectActionsId === id ? null : id;",
+      "projectActionsId === project.id",
+      "'Show actions for project ' + project.name",
+      "'Actions for project ' + project.name",
+      "class=\"project-inline-actions\"",
+      "Browse projects in Workspace",
+      "Open LazyDesigner Support",
+      "aria-label=\"Clear project search\"",
     ]) expect(unified).toContain(term);
     expect(unified).not.toContain("window.confirm");
     expect(unified).not.toContain("Delete Project");
@@ -106,9 +114,24 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("class:tools-rail={assistantRail}");
     expect(unified).toContain("showProjects = !layout.focusMode");
     expect(unified).toContain("showTools = !layout.focusMode");
-    expect(unified).toContain("editorLayoutBand(editorRoot.getBoundingClientRect().width)");
+    expect(unified).toContain("editorLayoutBand(width)");
     expect(unified).toContain("defaultEditorPanels(band)");
+    expect(unified).toContain("canExpandEditorDock(editorWidth, 'projects'");
+    expect(unified).toContain("canExpandEditorDock(editorWidth, 'tools'");
+    expect(unified).toContain("if (opening && !canExpandProjects) return;");
+    expect(unified).toContain("if (opening && !canExpandAssistant) return;");
     expect(unified).toContain("editorDockWidth(drag.dock");
+    expect(unified).toContain("import { onMount, tick } from 'svelte'");
+    expect(unified).toContain("await tick();");
+    expect(unified).toContain("element?.focus();");
+    expect(unified).toContain("element instanceof HTMLButtonElement && element.disabled");
+    expect(unified).toContain("editorRoot?.querySelector<HTMLButtonElement>(fallback)?.focus();");
+    expect(unified).toContain("void focusAfterLayout(() => explorerToggle)");
+    expect(unified).toContain("void focusAfterLayout(() => companionToggle)");
+    expect(unified).toContain("bind:this={explorerToggle}");
+    expect(unified).toContain("bind:this={companionToggle}");
+    expect(unified).toContain("project-inline-actions");
+    expect(unified).not.toContain("position:fixed");
     expect(unified).toContain("toggleFocusMode");
     expect(unified).toContain("role=\"separator\" tabindex=\"0\"");
     expect(unified).toContain("Resize Project Explorer");
@@ -138,8 +161,10 @@ describe("Unified Editor P1 source-owned workspace", () => {
   });
 
   test("responsive bands favor Blockbench width and never assume native visual proof", async () => {
-    const { editorLayoutBand, defaultEditorPanels, editorDockWidth, INITIAL_EDITOR_LAYOUT } =
-      await import("../../../apps/desktop/src/editorLayout");
+    const {
+      editorLayoutBand, defaultEditorPanels, editorDockWidth,
+      canExpandEditorDock, MIN_NATIVE_EXPANSION_WIDTH, INITIAL_EDITOR_LAYOUT,
+    } = await import("../../../apps/desktop/src/editorLayout");
     expect(editorLayoutBand(1920)).toBe("wide");
     expect(editorLayoutBand(1800)).toBe("standard");
     expect(editorLayoutBand(1600)).toBe("standard");
@@ -150,6 +175,12 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(defaultEditorPanels("rail")).toEqual({ projectsExpanded: false, assistantExpanded: false });
     expect(defaultEditorPanels("compact")).toEqual({ projectsExpanded: false, assistantExpanded: false });
     expect(INITIAL_EDITOR_LAYOUT.projectsWidth).toBe(220);
+    expect(MIN_NATIVE_EXPANSION_WIDTH).toBe(320);
+    expect(canExpandEditorDock(390, "projects", 220, 44)).toBe(false);
+    expect(canExpandEditorDock(390, "tools", 240, 44)).toBe(false);
+    expect(canExpandEditorDock(780, "projects", 220, 44)).toBe(true);
+    expect(canExpandEditorDock(780, "tools", 240, 44)).toBe(true);
+    expect(canExpandEditorDock(600, "tools", 300, 44)).toBe(false);
     expect(editorDockWidth("projects", 20)).toBe(160);
     expect(editorDockWidth("projects", 800)).toBe(260);
     expect(editorDockWidth("tools", 100)).toBe(220);
@@ -176,6 +207,11 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain("(1920, 1080)");
     expect(script).toContain("Focus Mode must restore both side docks");
     expect(script).toContain("Expanded Project Explorer cannot return to icon rail");
+    expect(script).toContain("Collapsing Project Explorer loses keyboard focus");
+    expect(script).toContain("Collapsing LazyDesigner companion loses keyboard focus");
+    expect(script).toContain("Project actions overlap the reserved native editor");
+    expect(script).toContain("Narrow Project Explorer must offer safe Workspace navigation");
+    expect(script).toContain("Narrow LazyDesigner rail must provide Support fallback");
     expect(stage).toContain("disabled={busy || fixture}");
   });
   test("Svelte host icon controls are real components, not generated screenshots", async () => {

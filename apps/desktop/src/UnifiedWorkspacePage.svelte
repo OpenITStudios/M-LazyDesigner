@@ -2,10 +2,10 @@
   import NativeEditorStage from './NativeEditorStage.svelte';
   import EditorChromeIcon from './EditorChromeIcon.svelte';
   import {
-    defaultEditorPanels, editorDockWidth, editorLayoutBand,
+    canExpandEditorDock, defaultEditorPanels, editorDockWidth, editorLayoutBand,
     type EditorDock, type EditorLayoutState,
   } from './editorLayout';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import {
     aiStatusPresentation, continueTarget, recentModelTargets,
     uniqueModelSearchTarget, visibleProjectModels, visibleProjects,
@@ -37,14 +37,20 @@
   let nativePlacement: 'DETACHED' | 'PRESENTED' | 'UNCERTAIN' = 'DETACHED';
   let nativePlacementDetail = '';
   let editorRoot: HTMLElement;
+  let editorWidth = 0;
   let drag: { dock: EditorDock; pointerId: number; x: number; width: number } | null = null;
   let search = '';
   let showAll = false;
   let expandedProjectId: string | null = null;
+  let projectActionsId: string | null = null;
   let recentExpanded = false;
   let executing = false;
   let localNotice = '';
   let searchInput: HTMLInputElement | undefined;
+  let explorerToggle: HTMLButtonElement | undefined;
+  let companionToggle: HTMLButtonElement | undefined;
+  let explorerHeading: HTMLHeadingElement | undefined;
+  let companionHeading: HTMLHeadingElement | undefined;
 
   $: navigation = status?.project_navigation ?? null;
   $: active = navigation?.active ?? null;
@@ -60,6 +66,9 @@
   $: showTools = !layout.focusMode;
   $: explorerRail = showProjects && !layout.projectsExpanded;
   $: assistantRail = showTools && !layout.assistantExpanded;
+  $: otherRailWidth = layout.band === 'compact' ? 44 : 48;
+  $: canExpandProjects = canExpandEditorDock(editorWidth, 'projects', layout.projectsWidth, otherRailWidth);
+  $: canExpandAssistant = canExpandEditorDock(editorWidth, 'tools', layout.toolsWidth, otherRailWidth);
 
   function expanded(project: ProjectNavigationProject): boolean {
     return expandedProjectId === project.id
@@ -71,55 +80,114 @@
   function changeLayout(next: Partial<EditorLayoutState>) {
     layout = { ...layout, ...next };
   }
+  // When a dock is replaced by its shortcut rail, restore focus to a stable
+  // toolbar control rather than leaving keyboard users on a removed element.
+  async function focusAfterLayout(target: () => HTMLElement | undefined) {
+    await tick();
+    const element = target();
+    if (element instanceof HTMLButtonElement && element.disabled) {
+      // A narrow-window rail cannot expand without squeezing Blockbench.
+      // Send keyboard focus to the still-operable Workspace/Support route.
+      const fallback = element === explorerToggle ? '.workspace-return' : '.support-button';
+      editorRoot?.querySelector<HTMLButtonElement>(fallback)?.focus();
+      return;
+    }
+    element?.focus();
+  }
+  function toggleProjectActions(id: string) {
+    projectActionsId = projectActionsId === id ? null : id;
+  }
   function toggleProjectsPanel() {
     const opening = layout.focusMode || !layout.projectsExpanded;
+    if (opening && !canExpandProjects) return;
     changeLayout({
       focusMode: false,
       projectsExpanded: opening,
       ...(opening && (layout.band === 'rail' || layout.band === 'compact')
         ? { assistantExpanded: false } : {}),
     });
+    void focusAfterLayout(() => opening
+      ? searchInput ?? explorerHeading ?? explorerToggle
+      : explorerToggle);
   }
   function expandExplorer() {
+    if (!canExpandProjects) return;
     changeLayout({
       focusMode: false,
       projectsExpanded: true,
       ...(layout.band === 'rail' || layout.band === 'compact'
         ? { assistantExpanded: false } : {}),
     });
+    void focusAfterLayout(() => searchInput ?? explorerHeading ?? explorerToggle);
   }
   function collapseExplorer() {
     changeLayout({ projectsExpanded: false });
+    void focusAfterLayout(() => explorerToggle);
   }
   function toggleToolsPanel() {
     const opening = layout.focusMode || !layout.assistantExpanded;
+    if (opening && !canExpandAssistant) return;
     changeLayout({
       focusMode: false,
       assistantExpanded: opening,
       ...(opening && (layout.band === 'rail' || layout.band === 'compact')
         ? { projectsExpanded: false } : {}),
     });
+    void focusAfterLayout(() => opening ? companionHeading ?? companionToggle : companionToggle);
   }
   function expandAssistant() {
+    if (!canExpandAssistant) return;
     changeLayout({
       focusMode: false,
       assistantExpanded: true,
       ...(layout.band === 'rail' || layout.band === 'compact'
         ? { projectsExpanded: false } : {}),
     });
+    void focusAfterLayout(() => companionHeading ?? companionToggle);
   }
   function collapseAssistant() {
     changeLayout({ assistantExpanded: false });
+    void focusAfterLayout(() => companionToggle);
   }
   function toggleFocusMode() {
     changeLayout({ focusMode: !layout.focusMode });
   }
   function syncWidthBand() {
-    const band = editorLayoutBand(editorRoot.getBoundingClientRect().width);
-    if (band === layout.band) return;
-    // Keep both sides present; crossing a responsive band chooses whether
-    // they show full content or shortcut rails, not whether they disappear.
-    changeLayout({ band, ...defaultEditorPanels(band) });
+    const width = Math.round(editorRoot.getBoundingClientRect().width);
+    editorWidth = width;
+    const band = editorLayoutBand(width);
+    if (band !== layout.band) {
+      // Keep both sides present; crossing a responsive band chooses rail/full
+      // defaults, never removal of a companion. Moving into a rail also needs
+      // to restore focus from controls that are about to unmount.
+      const next = defaultEditorPanels(band);
+      const focused = document.activeElement;
+      const focusedExplorer = !next.projectsExpanded && focused instanceof Element
+        && Boolean(focused.closest('#ld-unified-explorer'));
+      const focusedAssistant = !next.assistantExpanded && focused instanceof Element
+        && Boolean(focused.closest('#ld-unified-inspector'));
+      changeLayout({ band, ...next });
+      if (focusedExplorer) void focusAfterLayout(() => explorerToggle);
+      else if (focusedAssistant) void focusAfterLayout(() => companionToggle);
+      return;
+    }
+    const rail = band === 'compact' ? 44 : 48;
+    const collapseProjects = layout.projectsExpanded
+      && !canExpandEditorDock(width, 'projects', layout.projectsWidth, rail);
+    const collapseAssistant = layout.assistantExpanded
+      && !canExpandEditorDock(width, 'tools', layout.toolsWidth, rail);
+    if (!collapseProjects && !collapseAssistant) return;
+    const focused = document.activeElement;
+    const focusedExplorer = collapseProjects && focused instanceof Element
+      && Boolean(focused.closest('#ld-unified-explorer'));
+    const focusedAssistant = collapseAssistant && focused instanceof Element
+      && Boolean(focused.closest('#ld-unified-inspector'));
+    changeLayout({
+      ...(collapseProjects ? { projectsExpanded: false } : {}),
+      ...(collapseAssistant ? { assistantExpanded: false } : {}),
+    });
+    if (focusedExplorer) void focusAfterLayout(() => explorerToggle);
+    else if (focusedAssistant) void focusAfterLayout(() => companionToggle);
   }
   function startDockResize(event: PointerEvent, dock: EditorDock) {
     if (event.button !== 0 || layout.focusMode || !editorRoot) return;
@@ -247,6 +315,7 @@
   }
   function clearSearch() {
     search = '';
+    projectActionsId = null;
     searchInput?.focus();
   }
   function searchKeydown(event: KeyboardEvent) {
@@ -290,13 +359,17 @@
           class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
         <span class="ai-label">{aiStatus?.label ?? 'AI unverified'}</span>
       </span>
-      <button type="button" class="dock-toggle" class:chosen={showProjects && !explorerRail}
-        aria-label="Toggle Project Explorer" title="Expand or collapse Project Explorer"
+      <button type="button" bind:this={explorerToggle} class="dock-toggle" class:chosen={showProjects && !explorerRail}
+        aria-label="Toggle Project Explorer"
+        title={canExpandProjects ? 'Expand or collapse Project Explorer' : 'Browse projects through Workspace at this width'}
+        disabled={explorerRail && !canExpandProjects}
         aria-expanded={showProjects && !explorerRail}
         aria-controls={showProjects ? 'ld-unified-explorer' : undefined}
         onclick={toggleProjectsPanel}><EditorChromeIcon name="projects"/><span class="dock-label">Projects</span></button>
-      <button type="button" class="dock-toggle" class:chosen={showTools && !assistantRail}
-        aria-label="Toggle LazyDesigner companion" title="Expand or collapse LazyDesigner companion"
+      <button type="button" bind:this={companionToggle} class="dock-toggle" class:chosen={showTools && !assistantRail}
+        aria-label="Toggle LazyDesigner companion"
+        title={canExpandAssistant ? 'Expand or collapse LazyDesigner companion' : 'Use Support to inspect the connection at this width'}
+        disabled={assistantRail && !canExpandAssistant}
         aria-expanded={showTools && !assistantRail}
         aria-controls={showTools ? 'ld-unified-inspector' : undefined}
         onclick={toggleToolsPanel}><EditorChromeIcon name="assistant"/><span class="dock-label">Assistant</span></button>
@@ -344,8 +417,14 @@
       <aside id="ld-unified-explorer" class="explorer dock-panel" class:rail={explorerRail} aria-label="Project Explorer">
         {#if explorerRail}
           <div class="rail-actions" role="group" aria-label="Project Explorer shortcuts">
-            <button type="button" aria-label="Expand Project Explorer" title="Expand Project Explorer"
-              onclick={expandExplorer}><EditorChromeIcon name="projects"/></button>
+            {#if canExpandProjects}
+              <button type="button" aria-label="Expand Project Explorer" title="Expand Project Explorer"
+                onclick={expandExplorer}><EditorChromeIcon name="projects"/></button>
+            {:else}
+              <button type="button" aria-label="Browse projects in Workspace"
+                title="Open Workspace to browse models without shrinking Blockbench"
+                onclick={navigateWorkspace}><EditorChromeIcon name="projects"/></button>
+            {/if}
             <button type="button" aria-label="Open Model from Project Explorer" title="Open Model…"
               disabled={actionBusy || fixture} onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/></button>
             <button type="button" aria-label="Add Project Folder from Project Explorer" title="Add Project Folder"
@@ -354,7 +433,7 @@
           </div>
         {:else}
         <div class="pane-heading">
-          <h3>Project Explorer</h3>
+          <h3 tabindex="-1" bind:this={explorerHeading}>Project Explorer</h3>
           <div class="pane-actions">
             <button type="button" aria-label="Collapse Project Explorer to icons"
               title="Collapse Project Explorer to icons"
@@ -407,18 +486,28 @@
                     <span aria-hidden="true">{expanded(project) || search.trim() ? '▾' : '▸'}</span>
                     <span class="project-name" title={project.name}>{project.name}</span>
                   </button>
-                  <button type="button" class="pin-project" class:pinned={project.pinned}
-                    aria-label={(project.pinned ? 'Unpin project ' : 'Pin project ') + project.name}
-                    aria-pressed={project.pinned}
-                    title={project.pinned ? 'Unpin project' : 'Pin project'}
-                    disabled={actionBusy || fixture || statusProbeFailures >= 2}
-                    onclick={() => void togglePinnedProject(project)}>{project.pinned ? '★' : '☆'}</button>
-                  <button type="button" class="folder-action"
-                    aria-label={'Open folder for project ' + project.name}
-                    title={'Open ' + project.name + ' folder'}
-                    disabled={!project.available || actionBusy || fixture}
-                    onclick={() => void openProjectFolder(project.id)}>↗</button>
+                  <button type="button" class="project-actions-toggle"
+                    aria-label={'Show actions for project ' + project.name}
+                    title={'Project actions for ' + project.name}
+                    aria-expanded={projectActionsId === project.id}
+                    onclick={() => toggleProjectActions(project.id)}>···</button>
                 </div>
+                {#if projectActionsId === project.id}
+                  <div class="project-inline-actions" role="group"
+                    aria-label={'Actions for project ' + project.name}>
+                    <button type="button" class="pin-project"
+                      aria-label={(project.pinned ? 'Unpin project ' : 'Pin project ') + project.name}
+                      aria-pressed={project.pinned}
+                      disabled={actionBusy || fixture || statusProbeFailures >= 2}
+                      onclick={() => void togglePinnedProject(project)}>
+                      {project.pinned ? '★ Unpin' : '☆ Pin'}
+                    </button>
+                    <button type="button" class="folder-action"
+                      aria-label={'Open folder for project ' + project.name}
+                      disabled={!project.available || actionBusy || fixture}
+                      onclick={() => void openProjectFolder(project.id)}>Open folder</button>
+                  </div>
+                {/if}
                 {#if !project.available}
                   <p class="row-hint">Folder unavailable; shortcut preserved.</p>
                 {:else if expanded(project) || search.trim()}
@@ -538,16 +627,25 @@
         aria-label="LazyDesigner companion">
         {#if assistantRail}
           <div class="rail-actions" role="group" aria-label="LazyDesigner companion shortcuts">
-            <button type="button" title="Expand LazyDesigner Assistant and Review"
-              aria-label="Expand LazyDesigner companion" onclick={expandAssistant}><EditorChromeIcon name="assistant"/></button>
-            <button type="button" title="Connection and Support" aria-label="Open connection Support"
-              onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
+            {#if canExpandAssistant}
+              <button type="button" title="Expand LazyDesigner Assistant and Review"
+                aria-label="Expand LazyDesigner companion"
+                onclick={expandAssistant}><EditorChromeIcon name="assistant"/></button>
+            {:else}
+              <button type="button" title="Open connection Support without shrinking Blockbench"
+                aria-label="Open LazyDesigner Support"
+                onclick={navigateSupport}><EditorChromeIcon name="assistant"/></button>
+            {/if}
+            {#if canExpandAssistant}
+              <button type="button" title="Connection and Support" aria-label="Open connection Support"
+                onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
+            {/if}
             <button type="button" title="Technical activity" aria-label="Open technical activity"
               onclick={navigateActivity}><EditorChromeIcon name="activity"/></button>
           </div>
         {:else}
           <div class="pane-heading">
-            <h3>LazyDesigner</h3>
+            <h3 tabindex="-1" bind:this={companionHeading}>LazyDesigner</h3>
             <div class="pane-actions">
               <button type="button" class="collapse-dock" title="Collapse to right rail"
                 aria-label="Collapse LazyDesigner companion to icons"
@@ -773,15 +871,26 @@
     background:var(--ed-raised);color:var(--ed-text);
   }
   .project-name,.model-name {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .folder-action,.reveal-model,.pin-project {
-    flex:none;width:23px;height:28px;border:0;border-radius:4px;
-    background:transparent;color:var(--ed-muted-soft);cursor:pointer;
+  /* One compact action affordance preserves project-name width; its commands
+     are expanded as normal layout content, never over the native cutout. */
+  .project-actions-toggle,.reveal-model {
+    flex:none;width:26px;height:28px;border:0;border-radius:3px;
+    background:transparent;color:var(--ed-muted);cursor:pointer;
   }
-  .folder-action:hover,.reveal-model:hover,.pin-project:hover{
-    background:var(--ed-raised);color:var(--ed-text);
+  .project-actions-toggle:hover,.reveal-model:hover,
+  .project-actions-toggle[aria-expanded="true"]{background:var(--ed-raised);color:var(--ed-text)}
+  .project-inline-actions{
+    display:flex;align-items:center;flex-wrap:wrap;gap:5px;
+    margin:0 2px 6px 17px;padding:4px 0 5px;border-bottom:1px solid var(--ed-border);
   }
-  .pin-project.pinned{color:#dfbc7c}
-  .pin-project:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
+  .project-inline-actions button{
+    min-height:30px;padding:4px 7px;border:1px solid var(--ed-border);
+    border-radius:3px;background:var(--ed-raised);color:var(--ed-text);
+    font-size:11px;cursor:pointer;
+  }
+  .project-inline-actions button:hover:not(:disabled){background:var(--ed-select)}
+  .project-inline-actions button:disabled{cursor:default}
+  .project-inline-actions .pin-project[aria-pressed="true"]{color:#dfbc7c}
   .model-line {display:flex;align-items:center;gap:2px;min-width:0;padding-left:13px;min-height:31px}
   .model-line.current {
     background:var(--ed-select);border-left:2px solid var(--ed-accent);

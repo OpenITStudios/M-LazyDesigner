@@ -39,3 +39,18 @@ export function editorDockWidth(dock: EditorDock, proposed: number): number {
   const max = dock === 'projects' ? 260 : 300;
   return Math.min(max, Math.max(min, Math.round(proposed)));
 }
+
+// A full dock must not crush the reserved original Blockbench region.
+// On unusually narrow windows the shortcut rails offer Workspace/Support
+// navigation instead of mounting an unusably thin native editor.
+export const MIN_NATIVE_EXPANSION_WIDTH = 320;
+export function canExpandEditorDock(
+  editorWidth: number,
+  dock: EditorDock,
+  expandedDockWidth: number,
+  otherRailWidth: number,
+): boolean {
+  if (!Number.isFinite(editorWidth) || editorWidth <= 0) return false;
+  return editorWidth - editorDockWidth(dock, expandedDockWidth)
+    - otherRailWidth - 6 >= MIN_NATIVE_EXPANSION_WIDTH;
+}

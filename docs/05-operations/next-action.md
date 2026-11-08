@@ -2,17 +2,18 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
-## Blockbench-aligned Editor UI — 2026-11-08
+## Blockbench-aligned Editor UI — 2026-11-09
 
-- **SOURCE_AUTHORED:** Editor-only one-row app header replaces the stacked Desktop global nav and page toolbar. The editor-scoped graphite/blue-gray palette, compact native placement strip, responsive non-overlay Project Explorer and AI/QA dock use the original model/project/status owners. Native Blockbench still renders and owns menus, mode tabs, UV, Outliner, Timeline, input and Undo/Save. Workspace/Support production pages, global tokens, Rust P0 composition and distribution are unchanged.
-- **Proof:** Exact source review, focused repository visual contract and browser fixture assertions AUTHORED_NOT_EXECUTED. Fixture widths 390/780/980 require one app header, native actions disabled and docks collapsed when narrow. Svelte typecheck/build, actual screenshots and Windows Blockbench input/focus/crop/resize UX remain UNVERIFIED under the temporary testing hold.
-- **STOP:** Do not auto-apply Blockbench themes, change native window ownership/styles, add duplicate editor/AI/QA tools, or promote the experiment to release.
+- **SOURCE_AUTHORED:** The development-only Svelte Unified Editor now uses exact upstream Blockbench v5.2.1 Default (Dark) fallback tokens and 40px panel headers, one host toolbar, and two companion docks present in normal editing: Project Explorer on the left and LazyDesigner Assistant/Model Review/Activity on the right. The center is intentionally an empty Win32 cutout reservation for the original Blockbench window; no simulated viewport, toolbar or generated image belongs there.
+- **Latest source increment:** More readable 220px Project Explorer, independent active/modified indicators, in-flow project actions (Pin/Unpin and Open Folder) instead of permanently occupying the project name row, and accessible keyboard-focus restoration when opening/collapsing docks. Native docking safety remains outside the Svelte presentation owner. Very narrow viewports keep both 44px rails while a 320px minimum is enforced for manually expanding a full dock; users can navigate to Workspace/Support instead of crushing the native region.
+- **Proof:** Pinned GitHub `Local` source review and authored Svelte/Bun/Playwright fixture assertions only. Real Svelte build, F2 Chrome screenshots, F3 installed Windows/Tauri/Blockbench input/focus/DPI/cutout remain **NOT_EXECUTED / UNVERIFIED** under the existing hold. Source assertions are not visual PASS; an HTML reconstruction is not the app.
+- **STOP:** Do not turn on CI or Codex/local tests, change native process ownership, create a second editor, claim custom theme synchronization, fake an AI/QA result, render a generative UI image, or promote the dev-only Editor to release without separate authority.
 
-## Unified Editor P1 — 2026-11-08
+## Unified Editor P1 — 2026-11-09
 
-- **SOURCE_AUTHORED:** New `UnifiedWorkspacePage.svelte` dev-only editor shell with project/model navigation, central original Blockbench native stage, and collapsible AI/QA status. Uses the existing typed Rust project/model/connection owners, preserves `openModel` and read-only file operations, and awaits native Detach before opening model pickers or Explorer. AI/QA remains truthful status and native plugin signposting, not a chat client or separate QA processor.
-- **Preview:** Editor browser-only fixtures added to `capture-ui.py`; all native/file actions are disabled in fixtures. New source contract cases AUTHORED_NOT_EXECUTED. No production route, Gateway/Runtime, CI, installer, release or native editor process changes.
-- **Remaining:** Svelte typecheck/build, browser render screenshots and native Windows/Blockbench input/focus/persistence/accessibility remain NOT_EXECUTED/UNVERIFIED under the user testing hold. Next development should close actual identified source defects; never use synthetic fixture screenshots as native evidence.
+- **Actual owner:** `apps/desktop/src/UnifiedWorkspacePage.svelte`, `editorLayout.ts`, and `NativeEditorStage.svelte`, with one session-local presentation state in `App.svelte`. Rust P0 remains the sole native-window owner. Model/file actions continue through the same opaque Rust navigation callbacks and Detach/Restore admission gate.
+- **Next necessary proof:** With an explicitly available authorized actual app toolchain, capture the production Svelte fixture across wide/rail/very narrow widths and inspect name clipping, in-flow action expansion, keyboard focus after collapse, native region minimum, empty center and both docks. Separately check the original Blockbench native window under Windows debug Tauri before any live/full-fidelity claim.
+- **Scope boundary:** No separate AI client/chat, no invented QA issue count or task timeline. The Desktop right companion only displays observed AI status, points to the real Blockbench plugin for Model Review and navigates to existing read-only technical Analytics.
 
 ## Native Blockbench composition P0 — 2026-11-08
 
