@@ -1,6 +1,6 @@
 # LazyDesigner Blockbench Plugin UI — product-value gate
 
-Source authority: current `Local` implementation in `mcp/ui/panel.html` and `mcp/ui/index.ts`. This specifies **source-authored UI**, not verified installed-plugin behavior.
+Source authority: current `Local` implementation in `mcp/ui/panel.html` and `mcp/ui/index.ts`. This specifies **source-authored UI**, not verified installed-plugin behavior. Cross-surface navigation and UX acceptance belong to [Human Interface Contract](../01-product/interface-ux.md). In the native panel, keep the actionable Geometry checks above the optional Particle Studio form.
 
 ## Product rule: no nonproductive UI
 

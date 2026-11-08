@@ -198,7 +198,9 @@
 .mcp-panel .panel-note { margin: 10px 2px 0; }
 
 /* Particle Studio: simple native form controls, never overlays the model viewport. */
-.mcp-panel .ld-particle { margin-bottom: 10px; }
+.mcp-panel .ld-header + .ld-workspace,
+.mcp-panel .ld-workspace + .ld-workspace { margin-top: 10px; }
+.mcp-panel .ld-particle { margin-bottom: 0; }
 .mcp-panel .ld-studio-body { display: grid; gap: 10px; margin-top: 10px; }
 .mcp-panel .ld-studio-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .mcp-panel .ld-studio-row > label { font-size: .87em; min-inline-size: 100px; color: var(--color-subtle_text); }

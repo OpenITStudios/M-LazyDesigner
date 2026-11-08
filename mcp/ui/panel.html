@@ -25,6 +25,76 @@
     </div>
   </section>
 
+  <section class="ld-workspace" aria-label="Geometry tools">
+    <div class="ld-section-title">Geometry checks</div>
+    <p class="ld-description">Review recent Cube changes or find issues without editing the model. Cleanup requires a separate preview and confirmation.</p>
+    <p v-if="!project.isBedrock" class="ld-empty-state">Open a Bedrock Model project to use these checks.</p>
+    <div class="ld-tool-actions">
+      <button type="button" class="user-action primary" :disabled="!project.isBedrock || busy" @click="inspectLatestEdit">{{busy ? 'Checking…' : 'Review Latest Edit'}}</button>
+      <button type="button" class="user-action" :disabled="!project.isBedrock || busy" @click="inspectActive">Find Geometry Issues</button>
+    </div>
+    <details class="ld-utilities">
+      <summary>Geometry utility</summary>
+      <p class="section-hint">Round selected Cube bounds or rotation only after reviewing the native dry-run and UV risk.</p>
+      <button type="button" class="user-action" :disabled="!canCleanup || busy" @click="openCleanup">Safe Cube Cleanup</button>
+      <p class="section-hint" v-if="!canCleanup && project.isBedrock">Requires 1–32 selected Cubes and the active Geometry stage.</p>
+    </details>
+    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project to use Geometry checks.</p>
+    <p v-else-if="!project.isBedrock" class="ld-empty-state">Geometry checks require a Bedrock Model project.</p>
+    <div v-if="error" class="ld-error" role="alert">{{error}}</div>
+
+    <section v-if="editReview" class="ld-review" aria-live="polite" aria-label="Native geometry change review">
+      <div class="ld-review-title">{{editReview.heading}}</div>
+      <p class="ld-review-summary">{{editReview.action}} — {{editReview.summary}}</p>
+      <div v-if="editReview.cubes.length" class="ld-findings">
+        <article v-for="change in editReview.cubes" :key="change.uuid" class="ld-finding">
+          <div class="ld-finding-title" :title="change.uuid">
+            {{change.name}} <span class="ld-finding-kind">({{change.kind}})</span>
+          </div>
+          <div class="ld-change-rows">
+            <div v-for="field in change.fields" :key="field.field" class="ld-change-row">
+              <span class="ld-change-key">{{field.field}}</span>
+              <span class="ld-change-before">{{field.before}}</span>
+              <span class="ld-change-arrow" aria-label="to">→</span>
+              <span class="ld-change-after">{{field.after}}</span>
+            </div>
+            <p v-if="!change.fields.length" class="section-hint">Object {{change.kind}} in this native edit.</p>
+          </div>
+          <button v-if="change.canLocate" type="button" class="user-action"
+            :disabled="busy || !project.open" @click="locateEditedCube(change)">Locate Cube</button>
+        </article>
+      </div>
+      <p v-if="editReview.truncated" class="section-hint">
+        Only the first 8 of {{editReview.affectedCount}} changed Cubes are shown.
+      </p>
+      <p class="ld-review-note">{{editReview.note}}</p>
+    </section>
+
+    <section v-if="review" class="ld-review" aria-live="polite" aria-label="Geometry diagnostic results">
+      <div class="ld-review-title">{{review.heading}}</div>
+      <p class="ld-review-summary">{{review.summary}}</p>
+
+      <div v-if="review.issues.length" class="ld-findings">
+        <article v-for="issue in review.issues" :key="issue.code + ':' + issue.uuid" class="ld-finding">
+          <div class="ld-finding-title" :title="issue.uuid">{{issue.name}} <span class="ld-finding-kind">({{issue.kind}})</span></div>
+          <p class="ld-finding-description">{{issue.description}}</p>
+          <button type="button" class="user-action" :disabled="busy || !project.open" @click="locateIssue(issue)">Locate in Outliner</button>
+        </article>
+      </div>
+      <p v-if="review.truncated" class="section-hint">Some additional findings are omitted. Resolve and re-run the inspection for more examples.</p>
+
+      <details class="ld-diagnostic-details">
+        <summary>Technical counts</summary>
+        <dl class="ld-review-rows">
+          <div v-for="(entry, index) in review.rows" :key="entry.label + index">
+            <dt>{{entry.label}}</dt><dd :title="entry.value">{{entry.value}}</dd>
+          </div>
+        </dl>
+      </details>
+      <p class="ld-review-note">{{review.note}}</p>
+    </section>
+  </section>
+
   <section class="ld-workspace ld-particle" aria-label="Particle Studio">
     <div class="ld-section-title">Particle Studio</div>
     <p class="ld-description">Create, preview and adjust Bedrock particles here. AI particle generation remains available through your connected client.</p>
@@ -133,75 +203,6 @@
       <p v-if="studioNote" class="ld-studio-note" role="status" aria-live="polite">{{studioNote}}</p>
       <p v-if="studioError" class="ld-error" role="alert">{{studioError}}</p>
     </div>
-  </section>
-
-  <section class="ld-workspace" aria-label="Geometry tools">
-    <div class="ld-section-title">Geometry checks</div>
-    <p class="ld-description">Review recent Cube changes or find issues without editing the model. Cleanup requires a separate preview and confirmation.</p>
-    <div class="ld-tool-actions">
-      <button type="button" class="user-action primary" :disabled="!project.isBedrock || busy" @click="inspectLatestEdit">{{busy ? 'Checking…' : 'Review Latest Edit'}}</button>
-      <button type="button" class="user-action" :disabled="!project.isBedrock || busy" @click="inspectActive">Find Geometry Issues</button>
-    </div>
-    <details class="ld-utilities">
-      <summary>Geometry utility</summary>
-      <p class="section-hint">Round selected Cube bounds or rotation only after reviewing the native dry-run and UV risk.</p>
-      <button type="button" class="user-action" :disabled="!canCleanup || busy" @click="openCleanup">Safe Cube Cleanup</button>
-      <p class="section-hint" v-if="!canCleanup && project.isBedrock">Requires 1–32 selected Cubes and the active Geometry stage.</p>
-    </details>
-    <p v-if="!project.open" class="ld-empty-state">Open a Bedrock Model project to use Geometry checks.</p>
-    <p v-else-if="!project.isBedrock" class="ld-empty-state">Geometry checks require a Bedrock Model project.</p>
-    <div v-if="error" class="ld-error" role="alert">{{error}}</div>
-
-    <section v-if="editReview" class="ld-review" aria-live="polite" aria-label="Native geometry change review">
-      <div class="ld-review-title">{{editReview.heading}}</div>
-      <p class="ld-review-summary">{{editReview.action}} — {{editReview.summary}}</p>
-      <div v-if="editReview.cubes.length" class="ld-findings">
-        <article v-for="change in editReview.cubes" :key="change.uuid" class="ld-finding">
-          <div class="ld-finding-title" :title="change.uuid">
-            {{change.name}} <span class="ld-finding-kind">({{change.kind}})</span>
-          </div>
-          <div class="ld-change-rows">
-            <div v-for="field in change.fields" :key="field.field" class="ld-change-row">
-              <span class="ld-change-key">{{field.field}}</span>
-              <span class="ld-change-before">{{field.before}}</span>
-              <span class="ld-change-arrow" aria-label="to">→</span>
-              <span class="ld-change-after">{{field.after}}</span>
-            </div>
-            <p v-if="!change.fields.length" class="section-hint">Object {{change.kind}} in this native edit.</p>
-          </div>
-          <button v-if="change.canLocate" type="button" class="user-action"
-            :disabled="busy || !project.open" @click="locateEditedCube(change)">Locate Cube</button>
-        </article>
-      </div>
-      <p v-if="editReview.truncated" class="section-hint">
-        Only the first 8 of {{editReview.affectedCount}} changed Cubes are shown.
-      </p>
-      <p class="ld-review-note">{{editReview.note}}</p>
-    </section>
-
-    <section v-if="review" class="ld-review" aria-live="polite" aria-label="Geometry diagnostic results">
-      <div class="ld-review-title">{{review.heading}}</div>
-      <p class="ld-review-summary">{{review.summary}}</p>
-
-      <div v-if="review.issues.length" class="ld-findings">
-        <article v-for="issue in review.issues" :key="issue.code + ':' + issue.uuid" class="ld-finding">
-          <div class="ld-finding-title" :title="issue.uuid">{{issue.name}} <span class="ld-finding-kind">({{issue.kind}})</span></div>
-          <p class="ld-finding-description">{{issue.description}}</p>
-          <button type="button" class="user-action" :disabled="busy || !project.open" @click="locateIssue(issue)">Locate in Outliner</button>
-        </article>
-      </div>
-      <p v-if="review.truncated" class="section-hint">Some additional findings are omitted. Resolve and re-run the inspection for more examples.</p>
-
-      <details class="ld-diagnostic-details">
-        <summary>Technical counts</summary>
-        <dl class="ld-review-rows">
-          <div v-for="(entry, index) in review.rows" :key="entry.label + index">
-            <dt>{{entry.label}}</dt><dd :title="entry.value">{{entry.value}}</dd>
-          </div>
-        </dl>
-      </details>
-      <p class="ld-review-note">{{review.note}}</p>
-    </section>
   </section>
 
   <p class="panel-note">Geometry and particle controls use the current Blockbench project. Texture painting and Animation timeline editing remain native.</p>

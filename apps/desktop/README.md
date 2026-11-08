@@ -1,6 +1,6 @@
 # LazyDesigner Desktop
 
-This directory owns the desktop **machine control plane** only.
+This directory owns the desktop **machine control plane** only. Cross-surface human navigation, labels and UX scenario acceptance are defined in the [Human Interface Contract](../../docs/01-product/interface-ux.md); this README remains the implementation-facing Desktop behavior owner.
 
 ## Responsibilities
 

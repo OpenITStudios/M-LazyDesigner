@@ -5,6 +5,32 @@ const source = (relative: string) =>
 
 describe("human-facing Blockbench UI", () => {
 
+  test("Desktop model search has an explicit clear action and live result count", async () => {
+    const [navigator, workspace] = await Promise.all([
+      source("../apps/desktop/src/ProjectNavigator.svelte"),
+      source("../apps/desktop/src/WorkspacePage.svelte"),
+    ]);
+    expect(navigator).toContain('for="ld-project-search"');
+    expect(navigator).toContain('bind:this={searchInput}');
+    expect(navigator).toContain('function clearProjectSearch()');
+    expect(navigator).toContain("searchInput?.focus()");
+    expect(navigator).toContain("Clear search</button>");
+    expect(navigator).toContain('id="ld-project-search-results"');
+    expect(navigator).toContain('role="status" aria-live="polite"');
+    expect(navigator).toContain("matchingProjects.length");
+    expect(workspace).toContain("You can edit models even when AI is not connected.");
+  });
+
+  test("native authoring panel prioritizes the actionable Geometry section", async () => {
+    const [panel, css] = await Promise.all([source("ui/panel.html"), source("ui/panel.css")]);
+    expect(panel.indexOf('aria-label="Geometry tools"')).toBeGreaterThan(0);
+    expect(panel.indexOf('aria-label="Geometry tools"')).toBeLessThan(panel.indexOf('aria-label="Particle Studio"'));
+    expect(panel).toContain('Open a Bedrock Model project to use these checks.');
+    expect(panel).toContain('studioStageReady()');
+    expect(panel).toContain('@click="studioSave"');
+    expect(css).toContain('.ld-workspace + .ld-workspace');
+  });
+
   test("project-list selectors retain search, first-match, continue and recent order semantics", async () => {
     const { visibleProjects, visibleProjectModels, recentModelTargets, continueTarget } =
       await import("../../apps/desktop/src/desktopPresentation");

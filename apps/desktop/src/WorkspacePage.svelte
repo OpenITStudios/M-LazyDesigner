@@ -73,7 +73,7 @@
   {#if !status.project_navigation.active}
   <section class="content-section">
     <div class="section-heading">
-      <div><h2>Open a model</h2><p>Choose an existing .bbmodel file. AI connection is optional.</p></div>
+      <div><h2>Open a model</h2><p>Open an existing .bbmodel file in Blockbench. You can edit models even when AI is not connected.</p></div>
       <button class="primary-button" onclick={() => openModel()} disabled={busyAction !== null}>
         {busyAction === 'browse-model' ? 'Opening…' : 'Open Model…'}
       </button>

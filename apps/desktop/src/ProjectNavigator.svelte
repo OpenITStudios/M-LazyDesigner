@@ -34,6 +34,12 @@
   function toggleProject(id: string) {
     expandedProjectId = isProjectExpanded(id) ? '' : id;
   }
+
+  let searchInput: HTMLInputElement | undefined;
+  function clearProjectSearch() {
+    projectSearch = '';
+    searchInput?.focus();
+  }
 </script>
 
 {#if navigation.preferences_issue}
@@ -95,7 +101,14 @@
     <button class="secondary-button small-button" onclick={onAddProjectFolder} disabled={busy || !canEditProjectPrefs}>Add Project Folder</button>
   </div>
   <div class="project-search-bar">
-    <input class="compact-search project-search" type="search" placeholder="Search projects or models…" aria-label="Search projects or models" bind:value={projectSearch} />
+    <label for="ld-project-search">Find a project or model</label>
+    <div class="project-search-controls">
+      <input id="ld-project-search" bind:this={searchInput} class="compact-search project-search" type="search" placeholder="Search projects or models…" aria-describedby="ld-project-search-results" bind:value={projectSearch} />
+      {#if projectSearch.trim()}
+        <button type="button" class="quiet-button clear-search" onclick={clearProjectSearch}>Clear search</button>
+      {/if}
+    </div>
+    <span id="ld-project-search-results" class="project-search-feedback" role="status" aria-live="polite">{projectSearch.trim() ? `${matchingProjects.length} ${matchingProjects.length === 1 ? 'project matches' : 'projects match'} your search.` : ''}</span>
   </div>
   <div class="project-list">
     {#each matchingProjects as project (project.id)}
@@ -224,7 +237,7 @@
   .show-more-button{margin-top:8px;padding:4px 0}
   .compact-search{width:150px;height:34px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text-soft);font:inherit;font-size:var(--font-sm)}
   .compact-search:focus{border-color:var(--info)}.compact-search::placeholder{color:var(--muted-2)}
-  .project-search-bar{margin:0 0 10px} .project-search{width:100%;max-width:460px}
+  .project-search-bar{display:grid;gap:5px;margin:0 0 10px}.project-search-bar label{color:var(--text-soft);font-size:var(--font-sm);font-weight:650}.project-search-controls{display:flex;align-items:center;gap:8px}.project-search{flex:1 1 auto;min-width:0;width:100%;max-width:460px}.project-search-feedback{color:var(--muted-2);font-size:var(--font-xs)}.project-search-feedback:empty{display:none}.clear-search{flex:0 0 auto;min-height:32px;padding:4px 8px}
   .project-empty{padding:10px 0;color:var(--muted-2);font-size:var(--font-sm)}.project-empty-list{padding:13px 12px}
   .folder-heading{margin-top:6px;padding-top:9px;border-top:1px solid var(--border-soft)}
   .folder-shortcuts{display:flex;flex-wrap:wrap;gap:6px;padding:3px 0 6px}
