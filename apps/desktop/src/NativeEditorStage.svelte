@@ -8,6 +8,7 @@
     note: string;
   };
   export let fixture = false;
+  export let compact = false;
 
   let aperture: HTMLDivElement;
   let presented = false;
@@ -152,11 +153,15 @@
   });
 </script>
 
-<main class="native-editor-page">
+<section class="native-editor-page" class:compact aria-label="Native Blockbench window composition">
   <header class="native-editor-heading">
     <div>
-      <h2>Native Blockbench workspace <span class="experimental">Development preview</span></h2>
-      <p>Original Blockbench · native Windows cutout · editing behavior not yet verified</p>
+      {#if compact}
+        <div class="compact-title">Blockbench Native <span class="experimental">P0 preview</span></div>
+      {:else}
+        <h2>Native Blockbench workspace <span class="experimental">Development preview</span></h2>
+        <p>Original Blockbench · native Windows cutout · editing behavior not yet verified</p>
+      {/if}
     </div>
     <div class="native-editor-actions">
       {#if presented || uncertain}
@@ -184,7 +189,7 @@
     <span>{note}</span>
     <span>Source preview only · Windows interaction unverified</span>
   </footer>
-</main>
+</section>
 
 <style>
   .native-editor-page{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:14px 18px 12px;gap:10px}
@@ -199,6 +204,10 @@
   .native-placeholder p{margin-top:5px;font-size:var(--font-sm)}
   .placeholder-icon{display:block;font-size:28px;margin-bottom:6px;color:var(--surface-4)}
   .native-editor-note{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;color:var(--muted-2);font-size:var(--font-xs)}
+  .native-editor-page.compact{padding:8px;gap:7px}
+  .compact-title{display:flex;align-items:center;gap:8px;font-size:var(--font-sm);font-weight:700}
+  .native-editor-page.compact .native-editor-heading{min-height:32px}
+  .native-editor-page.compact .native-editor-aperture{border-radius:5px}
   .native-editor-error{display:flex;flex-wrap:wrap;gap:7px;padding:8px 10px;border:1px solid var(--warning);border-radius:7px;background:var(--warning-bg);font-size:var(--font-sm)}
   .native-editor-error strong{color:var(--warning)}
   @media(max-width:760px){.native-editor-page{padding:10px 12px}.native-editor-aperture{min-height:220px}}

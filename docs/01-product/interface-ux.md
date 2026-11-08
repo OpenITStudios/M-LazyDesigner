@@ -129,3 +129,42 @@ bounded restore; moving/resizing/focusing the manager may request a coalesced
 layout refresh. Foreign foreground produces DEFERRED without a window change.
 These are source-authored behaviors; Tauri/WebView2 native clipping, native
 Blockbench input/dialogs, focus, DPI and reliable restoration remain untested.
+
+
+## Unified Editor P1 — source-authored development preview (2026-11-08)
+
+The user selected a unified LazyTester-style workspace around the **original**
+Blockbench native window. The development-only `Editor` route now composes
+one `UnifiedWorkspacePage.svelte` with a compact Project Explorer at left,
+existing `NativeEditorStage` at center and a collapsible AI/QA information
+panel at right. This does not modify the production Workspace/Support routes
+or become a new authoring engine. No additional navigation layers, fake
+rendered Blockbench frame, AI chat provider, QC score or new MCP/Runtime tool.
+
+The Project Explorer consumes canonical `project_navigation` opaque IDs and
+existing `desktopPresentation` search/continue/recent projections. A chosen
+model invokes the existing `openModel` owner, project-folder actions invoke
+the existing `runProjectAction` owner, and selected folder registration
+retains existing Rust authorization. Before a file picker/Explorer/model-open
+action can change native focus, the view awaits **the same P0 Detach** receipt;
+an uncertain or busy native lease blocks the action without triggering
+another placement. Ordinary direct model browsing remains possible without
+AI readiness. Search Enter cannot guess an ambiguous/missing model, and
+Escape only resets the query. No paths are accepted from frontend input.
+
+The right pane labels AI status using the same `aiStatusPresentation`
+and full-observation freshness rules as existing Workspace/Support. It
+identifies Geometry/Particle controls as Blockbench-plugin owned and
+Texture/Animation as native Blockbench owned; it does not claim they have
+run or duplicate controls and authoring state. Status refresh and Support
+routing are existing actions. Panels reflow without overlaying the native
+aperture. At narrow effective widths, their content stacks rather than
+floating above Blockbench. Native 200% zoom, focus, screen-reader, model
+persistence, and real editor composition remain NOT_EXECUTED/UNVERIFIED.
+
+Deterministic browser fixtures may now render `?fixture=ready&view=editor`,
+`?fixture=many-projects&view=editor` and
+`?fixture=fresh-install&view=editor` with **all native/file actions disabled**.
+Any Playwright screenshot of those fixtures is authentic frontend render
+evidence only, not an interactive native Blockbench screenshot or a usability
+score. No renderer replacement, SetParent or release promotion.

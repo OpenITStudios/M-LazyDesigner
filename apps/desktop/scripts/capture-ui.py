@@ -16,6 +16,9 @@ from urllib.parse import urlencode, urlsplit
 SCENARIOS = (
     ("fresh-install", "workspace"),
     ("ready", "workspace"),
+    ("ready", "editor"),
+    ("many-projects", "editor"),
+    ("fresh-install", "editor"),
     ("ready-aged", "workspace"),
     ("ready-aged", "support"),
     ("many-projects", "workspace"),
@@ -500,6 +503,40 @@ def inspect_opening_model_row(page, activity, view):
     return issues
 
 
+def inspect_unified_editor(page, fixture, view):
+    """Browser-only P1 layout contract: never invoke a native editor action."""
+    if view != "editor":
+        return []
+    issues = []
+    workspace = page.locator('main[aria-label="LazyDesigner unified editor workspace"]')
+    if workspace.count() != 1:
+        return ["unified editor view was not rendered"]
+    if page.get_by_role("region", name="Blockbench native editor area").count() != 1:
+        issues.append("native editor area missing from unified workspace")
+    if page.get_by_role("complementary", name="Project Explorer").count() != 1:
+        issues.append("Project Explorer unavailable")
+    if page.get_by_role("button", name="AI & QA", exact=True).count() != 1:
+        issues.append("collapsible AI/QA panel control unavailable")
+    native_action = page.get_by_role("button", name="Show Blockbench here", exact=True)
+    if native_action.count() != 1 or native_action.is_enabled():
+        issues.append("fixture must show a disabled native Blockbench placement action")
+
+    if fixture in {"ready", "many-projects"}:
+        search = page.locator("#ld-unified-model-search")
+        if search.count() != 1:
+            issues.append("project/model search is missing in Editor view")
+        else:
+            target = "Needle asset" if fixture == "many-projects" else "Sofa"
+            search.fill(target)
+            model = page.get_by_role("button", name="Open model " + target, exact=True)
+            if model.count() != 1 or model.is_enabled():
+                issues.append("fixture search must find target but never open a native model")
+            search.press("Escape")
+            if search.input_value() != "":
+                issues.append("Escape did not clear unified Editor search")
+    return issues
+
+
 def main():
     args = parse_args()
     target = urlsplit(args.base_url)
@@ -555,6 +592,13 @@ def main():
                             page.locator(target).wait_for(timeout=10000)
                         if activity:
                             page.locator(".model-opening-notice").wait_for(timeout=10000)
+                        if view == "editor":
+                            page.locator(".native-editor-aperture").wait_for(timeout=10000)
+                        editor_issues = inspect_unified_editor(page, fixture, view)
+                        if view == "editor":
+                            entry["unifiedEditorChecks"] = {"issues": editor_issues}
+                        for issue in editor_issues:
+                            failures.append(name + ": " + issue)
                         snapshot = inspect(page)
                         action_checks = inspect_action_states(page, fixture, view) if activity is None and feedback is None else {"checked": 0, "issues": []}
                         entry["actionChecks"] = action_checks

@@ -51,7 +51,9 @@ describe("Native Blockbench composition P0 owner and recovery contract", () => {
     expect(stage).toContain("receipt.status === 'DETACHED'");
     expect(stage).toContain("receipt.status === 'DEFERRED'");
     expect(stage).toContain("unlistenLayout?.()");
-    expect(app).toContain("<NativeEditorStage");
+    const unified = await source("../apps/desktop/src/UnifiedWorkspacePage.svelte");
+    expect(app).toContain("<UnifiedWorkspacePage");
+    expect(unified).toContain("<NativeEditorStage");
     expect(app).toContain("<WorkspacePage");
     expect(app).toContain("<SupportPage");
   });

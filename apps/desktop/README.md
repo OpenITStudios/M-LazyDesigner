@@ -933,3 +933,22 @@ of both components. Tauri move/resize/focus events request layout observation
 through the same Svelte presenter; a minimized manager attempts native detach.
 Unknown native receipts block automatic placement. The release app remains
 unmodified, and none of this proves functioning native visuals or input.
+
+
+## Unified Workspace P1 — development-only
+
+The experimental Editor navigation now mounts
+`src/UnifiedWorkspacePage.svelte` (Project Explorer | native Blockbench
+stage | AI & QA status) instead of the isolated stage alone. Desktop's
+existing project navigation, file picker, connection status and plugin
+owners are reused. The center remains `NativeEditorStage` and the original
+Blockbench.exe; panels are layout-only surfaces that never copy the 3D
+scene or intercept authoring. Model/file navigation awaits the native
+window's Detach/restore acknowledgement, and does not retry a mutation on
+an uncertain native lease.
+
+Browser-only screenshots of the exact Svelte UI can be captured with
+`?fixture=ready&view=editor` using the existing `capture-ui.py`
+script. Fixture actions are disabled and there is no native 3D view.
+Only a real Windows debug Tauri build and actual Blockbench window can
+verify the interactive composition. The release layout is unchanged.

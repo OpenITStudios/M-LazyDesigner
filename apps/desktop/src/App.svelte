@@ -3,7 +3,7 @@
   import { listen } from '@tauri-apps/api/event';
   import { onMount, tick } from 'svelte';
   import WorkspacePage from './WorkspacePage.svelte';
-  import NativeEditorStage from './NativeEditorStage.svelte';
+  import UnifiedWorkspacePage from './UnifiedWorkspacePage.svelte';
   import ProjectDeleteDialog from './ProjectDeleteDialog.svelte';
   import SupportPage from './SupportPage.svelte';
   import AnalyticsPage from './AnalyticsPage.svelte';
@@ -695,6 +695,7 @@
       // A direct, development-only view selector for deterministic screenshots.
       const view = new URLSearchParams(window.location.search).get('view');
       if (view === 'support') page = 'Support';
+      else if (view === 'editor') page = 'Editor';
       else if (view === 'analytics') {
         page = 'Analytics';
         void refreshAnalytics();
@@ -787,9 +788,9 @@
       </div>
 
       <nav class="global-nav">
-        {#if import.meta.env.DEV && !devFixture}
+        {#if import.meta.env.DEV && (!devFixture || page === 'Editor')}
           <button class:active={page === 'Editor'} aria-current={page === 'Editor' ? 'page' : undefined} onclick={() => navigate('Editor')}>
-            <span class="nav-icon">{@render navIcon('Overview')}</span><span>Editor preview</span>
+            <span class="nav-icon">{@render navIcon('Overview')}</span><span>Unified Editor</span>
           </button>
         {/if}
         <button class:active={page === 'Overview'} aria-current={page === 'Overview' ? 'page' : undefined} onclick={() => navigate('Overview')}>
@@ -844,7 +845,12 @@
           refresh={refreshAnalytics} copyJson={copyAnalyticsJson} exportJson={exportAnalyticsJson}
           backToSupport={() => navigate('Support')}/>
       {:else if page === 'Editor' && import.meta.env.DEV}
-        <NativeEditorStage bind:this={nativeEditorStage} fixture={devFixture !== null} />
+        <UnifiedWorkspacePage bind:this={nativeEditorStage}
+          {status} {loading} {busyAction} {openingModelId} {statusProbeFailures} {statusPresentationNowMs}
+          fixture={devFixture !== null}
+          {openModel} {addProjectFolder} {runProjectAction} {focusCurrentEditor} {openBlockbenchEditor} {refresh}
+          navigateSupport={() => navigate('Support')}
+        />
 
       {:else if !status}
         <main class="page-content">

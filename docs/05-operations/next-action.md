@@ -2,6 +2,12 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Unified Editor P1 — 2026-11-08
+
+- **SOURCE_AUTHORED:** New `UnifiedWorkspacePage.svelte` dev-only editor shell with project/model navigation, central original Blockbench native stage, and collapsible AI/QA status. Uses the existing typed Rust project/model/connection owners, preserves `openModel` and read-only file operations, and awaits native Detach before opening model pickers or Explorer. AI/QA remains truthful status and native plugin signposting, not a chat client or separate QA processor.
+- **Preview:** Editor browser-only fixtures added to `capture-ui.py`; all native/file actions are disabled in fixtures. New source contract cases AUTHORED_NOT_EXECUTED. No production route, Gateway/Runtime, CI, installer, release or native editor process changes.
+- **Remaining:** Svelte typecheck/build, browser render screenshots and native Windows/Blockbench input/focus/persistence/accessibility remain NOT_EXECUTED/UNVERIFIED under the user testing hold. Next development should close actual identified source defects; never use synthetic fixture screenshots as native evidence.
+
 ## Native Blockbench composition P0 — 2026-11-08
 
 - **Next source increment:** Added owned native GDI aperture and exact cutout checks, independent two-part restoration, minimize-to-restore, and bounded UI layout updates that distinguish DEFERRED from failure. Source-only, not Windows/Tauri/Blockbench acceptance. Preserve original process and model owner, debug-only feature gate, and no SetParent or taskbar suppression.
