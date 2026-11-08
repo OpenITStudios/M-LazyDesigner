@@ -210,8 +210,8 @@ async function main() {
       checks.unified_editor_header = await frame.locator("header.editor-header").isVisible();
       checks.real_blockbench_placeholder = await frame.locator(".native-editor-aperture .native-placeholder").count() === 1;
       checks.actual_blockbench_not_claimed = await frame.locator(".native-editor-page").count() === 1;
-      const showPanels = dims.width >= 1320;
-      checks.explorer_visible = await frame.locator('#ld-unified-explorer').count() === 1;
+      const showPanels = dims.width >= 1810;
+      checks.explorer_visible = (await frame.locator('#ld-unified-explorer').count() === 1) === (dims.width >= 920);
       checks.inspector_responsive = (await frame.locator('#ld-unified-inspector').count() === 1) === showPanels;
     }
     if (view === "workspace")

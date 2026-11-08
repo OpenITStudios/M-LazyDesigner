@@ -4,6 +4,7 @@
   import { onMount, tick } from 'svelte';
   import WorkspacePage from './WorkspacePage.svelte';
   import UnifiedWorkspacePage from './UnifiedWorkspacePage.svelte';
+  import { INITIAL_EDITOR_LAYOUT, type EditorLayoutState } from './editorLayout';
   import ProjectDeleteDialog from './ProjectDeleteDialog.svelte';
   import SupportPage from './SupportPage.svelte';
   import AnalyticsPage from './AnalyticsPage.svelte';
@@ -66,6 +67,9 @@
   type Page = 'Overview' | 'Editor' | 'Analytics' | 'Support';
   let page: Page = 'Overview';
   let nativeEditorStage: { detach: () => Promise<boolean> } | undefined;
+  // Retain UI-only panel preferences across Workspace/Support navigation.
+  // This is not a model setting, native status, or persisted file.
+  let editorLayout: EditorLayoutState = { ...INITIAL_EDITOR_LAYOUT };
   let analytics: AnalyticsOverview | null = null;
   let analyticsLoading = false;
   let analyticsError = '';
@@ -850,7 +854,7 @@
           refresh={refreshAnalytics} copyJson={copyAnalyticsJson} exportJson={exportAnalyticsJson}
           backToSupport={() => navigate('Support')}/>
       {:else if page === 'Editor' && import.meta.env.DEV}
-        <UnifiedWorkspacePage bind:this={nativeEditorStage}
+        <UnifiedWorkspacePage bind:this={nativeEditorStage} bind:layout={editorLayout}
           {status} {loading} {busyAction} {openingModelId} {statusProbeFailures} {statusPresentationNowMs}
           fixture={devFixture !== null}
           {openModel} {addProjectFolder} {runProjectAction} {focusCurrentEditor} {openBlockbenchEditor} {refresh}

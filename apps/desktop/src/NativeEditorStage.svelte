@@ -205,10 +205,10 @@
   .placeholder-icon{display:block;font-size:28px;margin-bottom:6px;color:var(--surface-4)}
   .native-editor-note{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;color:var(--muted-2);font-size:var(--font-xs)}
   .native-editor-page.compact{
-    padding:5px;gap:5px;background:var(--ed-bg,var(--bg));color:var(--ed-text,var(--text));
+    padding:2px;gap:3px;background:var(--ed-bg,var(--bg));color:var(--ed-text,var(--text));
   }
   .native-editor-page.compact .native-editor-heading{
-    min-height:30px;gap:8px;flex-wrap:wrap;padding:0 5px;
+    min-height:27px;gap:7px;flex-wrap:wrap;padding:0 5px;
   }
   .native-editor-page.compact .native-editor-aperture{
     border:1px solid var(--ed-border,var(--border));border-radius:4px;
@@ -226,7 +226,7 @@
     outline:2px solid var(--ed-accent,var(--info));outline-offset:1px;
   }
   .native-editor-page.compact .native-editor-note{
-    gap:8px;min-height:21px;white-space:normal;color:var(--ed-muted-soft,var(--muted-2));
+    gap:8px;min-height:18px;white-space:normal;color:var(--ed-muted-soft,var(--muted-2));
     font-size:10px;line-height:1.35;
   }
   .native-editor-page.compact .native-editor-note span:first-child{

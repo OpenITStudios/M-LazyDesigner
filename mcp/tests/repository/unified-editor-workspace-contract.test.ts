@@ -50,7 +50,13 @@ describe("Unified Editor P1 source-owned workspace", () => {
       "return afterDetach(() => openModel(id));",
       "function launchBlockbench() { return afterDetach(openBlockbenchEditor); }",
       "if (statusProbeFailures >= 2 || !status)",
-      "disabled={model.active || !model.exists || actionBusy || fixture}",
+      "disabled={!model.exists || actionBusy || fixture || (model.active && statusProbeFailures >= 2)}",
+      "onclick={() => void chooseModel(model)}",
+      "aria-current={model.active ? 'true' : undefined}",
+      "aria-busy={openingModelId === model.id}",
+      "aria-label=\"Clear project search\"",
+      "runProjectAction(project.pinned ? 'unpin-project' : 'pin-project', project.id)",
+      "recentExpanded = !recentExpanded",
     ]) expect(unified).toContain(term);
     expect(unified).not.toContain("window.confirm");
     expect(unified).not.toContain("Delete Project");
@@ -58,7 +64,7 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).not.toContain("fetch(");
   });
 
-  test("AI and QA panel is a truthful existing-owner projection, not duplicate authoring", async () => {
+  test("Model Tools is a truthful, clearly labelled Blockbench companion, not duplicate authoring", async () => {
     const unified = await source("../apps/desktop/src/UnifiedWorkspacePage.svelte");
     expect(unified).toContain("aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs)");
     expect(unified).toContain("Geometry checks</strong><span>Blockbench plugin");
@@ -66,31 +72,70 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("Animation</strong><span>Blockbench native");
     expect(unified).toContain("Particle Studio</strong><span>Blockbench plugin");
     expect(unified).toContain("No separate QA result or AI prompt is generated");
+    expect(unified).toContain('aria-label="Model Tools"');
+    expect(unified).toContain('aria-label="Toggle Model Tools"');
+    expect(unified).toContain('Model Overview</h4>');
+    expect(unified).toContain('Checks in Blockbench</h4>');
+    expect(unified).toContain('AI Connection</h4>');
+    expect(unified).not.toContain('aria-label="AI and QA"');
     expect(unified).toContain("navigateSupport");
     expect(unified).toContain("statusProbeFailures >= 2");
     expect(unified).not.toContain("QA passed");
     expect(unified).not.toContain("ChatGPT API");
   });
 
-  test("panel collapse is non-overlay and keeps native viewport fixed at high zoom", async () => {
-    const unified = await source("../apps/desktop/src/UnifiedWorkspacePage.svelte");
-    expect(unified).toContain("class:with-projects={projectsVisible}");
-    expect(unified).toContain("class:with-inspector={inspectorVisible}");
-    expect(unified).toContain("projectsVisible = next >= 1");
-    expect(unified).toContain("inspectorVisible = next === 2");
-    expect(unified).toContain("if (projectsVisible && window.innerWidth < 1320)");
-    expect(unified).toContain("if (inspectorVisible && window.innerWidth < 1320)");
+  test("viewport-first docks keep the native editor in-flow, with focus and keyboard resize", async () => {
+    const [unified, app] = await Promise.all([
+      source("../apps/desktop/src/UnifiedWorkspacePage.svelte"),
+      source("../apps/desktop/src/App.svelte"),
+    ]);
+    expect(unified).toContain("class:with-projects={showProjects}");
+    expect(unified).toContain("class:with-inspector={showTools}");
+    expect(unified).toContain("class:rail={explorerRail}");
+    expect(unified).toContain("editorLayoutBand(editorRoot.getBoundingClientRect().width)");
+    expect(unified).toContain("defaultEditorPanels(band)");
+    expect(unified).toContain("editorDockWidth(drag.dock");
+    expect(unified).toContain("toggleFocusMode");
+    expect(unified).toContain("role=\"separator\" tabindex=\"0\"");
+    expect(unified).toContain("Resize Project Explorer");
+    expect(unified).toContain("Resize Model Tools");
+    expect(unified).toContain("aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}");
+    expect(unified).toContain("grid-template-columns:var(--explorer-width,200px)");
+    expect(unified).toContain("grid-template-columns:48px minmax(0,1fr)");
+    expect(unified).toContain("grid-template-rows:140px minmax(220px,1fr)");
     expect(unified).toContain("overflow:hidden");
-    expect(unified).toContain("grid-template-rows:126px minmax(220px,1fr)");
     expect(unified).toContain("--ed-bg: #1b1f27");
     expect(unified).toContain("--ed-accent: #85a9df");
     expect(unified).toContain('aria-label="Project Explorer"');
-    expect(unified).toContain('aria-label="AI and QA"');
+    expect(unified).toContain('aria-label="Model Tools"');
     expect(unified).toContain('aria-label="Blockbench native editor area"');
-    expect(unified).toContain('aria-expanded={projectsVisible}');
-    expect(unified).toContain('aria-expanded={inspectorVisible}');
+    expect(unified).toContain('aria-expanded={showProjects}');
+    expect(unified).toContain('aria-expanded={showTools}');
     expect(unified).toContain('aria-label="Toggle Project Explorer"');
-    expect(unified).toContain('aria-label="Toggle AI and QA"');
+    expect(unified).toContain('aria-label="Toggle Model Tools"');
+    expect(app).toContain("let editorLayout: EditorLayoutState = { ...INITIAL_EDITOR_LAYOUT }");
+    expect(app).toContain("bind:layout={editorLayout}");
+    expect(unified).not.toContain("position:fixed");
+    expect(unified).not.toContain(".native-stage{position:absolute");
+  });
+
+  test("responsive bands favor Blockbench width and never assume native visual proof", async () => {
+    const { editorLayoutBand, defaultEditorPanels, editorDockWidth, INITIAL_EDITOR_LAYOUT } =
+      await import("../../../apps/desktop/src/editorLayout");
+    expect(editorLayoutBand(1920)).toBe("wide");
+    expect(editorLayoutBand(1800)).toBe("standard");
+    expect(editorLayoutBand(1600)).toBe("standard");
+    expect(editorLayoutBand(1280)).toBe("rail");
+    expect(editorLayoutBand(780)).toBe("compact");
+    expect(defaultEditorPanels("wide")).toEqual({ projectsVisible: true, toolsVisible: true, railExpanded: false });
+    expect(defaultEditorPanels("standard").toolsVisible).toBe(false);
+    expect(defaultEditorPanels("compact").projectsVisible).toBe(false);
+    expect(editorDockWidth("projects", 20)).toBe(160);
+    expect(editorDockWidth("projects", 800)).toBe(260);
+    expect(editorDockWidth("tools", 100)).toBe(220);
+    expect(editorDockWidth("tools", 999)).toBe(300);
+    expect(1920 - INITIAL_EDITOR_LAYOUT.projectsWidth - INITIAL_EDITOR_LAYOUT.toolsWidth - 12).toBeGreaterThan(1400);
+    expect(1600 - INITIAL_EDITOR_LAYOUT.projectsWidth - 6).toBeGreaterThan(1300);
   });
 
   test("browser fixture captures real Svelte layout only, never native Blockbench", async () => {

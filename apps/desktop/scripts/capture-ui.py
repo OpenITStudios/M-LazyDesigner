@@ -529,22 +529,22 @@ def inspect_unified_editor(page, fixture, view):
         issues.append("fixture must never be able to place a native Blockbench window")
 
     project_toggle = page.get_by_role("button", name="Toggle Project Explorer", exact=True)
-    qa_toggle = page.get_by_role("button", name="Toggle AI and QA", exact=True)
-    if project_toggle.count() != 1 or qa_toggle.count() != 1:
-        return issues + ["Project Explorer and AI/QA toggles must both be available"]
+    tools_toggle = page.get_by_role("button", name="Toggle Model Tools", exact=True)
+    if project_toggle.count() != 1 or tools_toggle.count() != 1:
+        return issues + ["Project Explorer and Model Tools toggles must both be available"]
 
     width = page.viewport_size["width"]
     explorer = page.get_by_role("complementary", name="Project Explorer")
-    inspector = page.get_by_role("complementary", name="AI and QA")
+    inspector = page.get_by_role("complementary", name="Model Tools")
     compact = width < 920
     if compact and explorer.count():
         issues.append("compact Editor must start with Project Explorer collapsed")
     if compact and inspector.count():
-        issues.append("compact Editor must start with AI/QA collapsed")
+        issues.append("compact Editor must start with Model Tools collapsed")
     if not compact and explorer.count() != 1:
         issues.append("standard Editor must start with Project Explorer")
     if inspector.count() != 0:
-        issues.append("standard-width Editor should leave AI/QA closed for native viewport space")
+        issues.append("standard-width Editor should leave Model Tools closed for native viewport space")
 
     # Toggle only Svelte-local presentation controls. Native actions stay disabled.
     opened_for_check = compact
@@ -552,6 +552,14 @@ def inspect_unified_editor(page, fixture, view):
         project_toggle.click()
         if explorer.count() != 1:
             issues.append("Project Explorer cannot be opened from the compact toolbar")
+    # The narrow editor uses a real 48px explorer rail. Expand it only for
+    # the search interaction test; this changes Svelte UI state, not Blockbench.
+    if explorer.count() == 1 and explorer.locator(".rail-actions").count() == 1:
+        expand = page.get_by_role("button", name="Expand Project Explorer", exact=True)
+        if expand.count() != 1:
+            issues.append("Project Explorer rail has no accessible expand action")
+        else:
+            expand.click()
     if fixture in {"ready", "many-projects"}:
         search = page.locator("#ld-unified-model-search")
         if search.count() != 1:
@@ -569,6 +577,14 @@ def inspect_unified_editor(page, fixture, view):
         project_toggle.click()
         if explorer.count() != 0:
             issues.append("Project Explorer did not collapse cleanly")
+    # Model Tools is a companion, not a second editor or a simulated QA pass.
+    if inspector.count() == 0:
+        tools_toggle.click()
+        if inspector.count() != 1:
+            issues.append("Model Tools cannot be opened")
+        elif inspector.get_by_text("Checks in Blockbench").count() != 1:
+            issues.append("Model Tools lacks the native checks section")
+        tools_toggle.click()
     return issues
 
 def main():
