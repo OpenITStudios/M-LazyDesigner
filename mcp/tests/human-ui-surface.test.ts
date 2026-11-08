@@ -5,6 +5,56 @@ const source = (relative: string) =>
 
 describe("human-facing Blockbench UI", () => {
 
+  test("stale project actions explain their disabled state without blocking safe file access", async () => {
+    const [workspace, navigator, app, support] = await Promise.all([
+      source("../apps/desktop/src/WorkspacePage.svelte"),
+      source("../apps/desktop/src/ProjectNavigator.svelte"),
+      source("../apps/desktop/src/App.svelte"),
+      source("../apps/desktop/src/SupportPage.svelte"),
+    ]);
+    expect(workspace).toContain("statusUnverified={statusProbeFailures >= 2}");
+    expect(navigator).toContain('id="ld-project-action-note"');
+    expect(navigator).toContain("Refresh required for project changes.");
+    expect(navigator).toContain("You can still open models and folders.");
+    expect(navigator).toContain("aria-describedby={statusUnverified ? 'ld-project-action-note' : undefined}");
+    expect(navigator).toContain("disabled={busy || !canEditProjectPrefs}>Add Project Folder</button>");
+    expect(navigator).toContain("disabled={!project.available || busy}>Open Folder</button>");
+    expect(navigator).toContain("disabled={!model.exists || busy || !canOpenModel}>Open</button>");
+    expect(app).toContain("statusProbeFailures >= 2 && !isSafeFileNavigationAction(action)");
+    expect(workspace).toContain("updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED'");
+    expect(workspace).toContain("Staged package unverified");
+    expect(support).toContain('aria-label="Last unsuccessful action"');
+    expect(support).toContain("<h2>{errorTitle}</h2>");
+    expect(app).toContain("{errorTitle} {errorDetail} {operations}");
+    expect(app).toContain("errorTitle = 'Blockbench connection needs attention'");
+    expect(app).toContain("errorTitle = 'Setup needs attention'");
+    expect(app).toContain("{#if error && status}<button");
+  });
+
+  test("small-window layouts wrap controls while retaining semantic focus and recovery", async () => {
+    const [navigator, workspace, app, support, shared, capture] = await Promise.all([
+      source("../apps/desktop/src/ProjectNavigator.svelte"),
+      source("../apps/desktop/src/WorkspacePage.svelte"),
+      source("../apps/desktop/src/App.svelte"),
+      source("../apps/desktop/src/SupportPage.svelte"),
+      source("../apps/desktop/src/styles.css"),
+      source("../apps/desktop/scripts/capture-ui.py"),
+    ]);
+    expect(navigator).toContain("@media(max-width:680px)");
+    expect(navigator).toContain(".project-actions,.model-actions{flex:1 1 100%");
+    expect(navigator).toContain(".project-search-controls{flex-wrap:wrap}");
+    expect(workspace).toContain("@media(max-width:680px)");
+    expect(workspace).toContain(".definition-row{flex-wrap:wrap");
+    expect(support).toContain("@media(max-width:680px)");
+    expect(support).toContain(".recovery-list code{display:block;max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere}");
+    expect(app).toContain("@media(max-width:520px)");
+    expect(app).toContain(".page-toolbar{min-height:48px;flex-wrap:wrap");
+    expect(shared).toContain("prefers-reduced-motion: reduce");
+    expect(shared).toContain("button:focus-visible");
+    expect(capture).toContain("VIEWPORTS = ((390, 640), (780, 560), (980, 680))");
+    expect(capture).toContain("ld-project-action-note");
+  });
+
   test("AI labels reflect recent verification, missing handshake and stale observations", async () => {
     const { aiStatusPresentation } = await import("../../apps/desktop/src/desktopPresentation");
     const { createDevFixtureStatus } = await import("../../apps/desktop/src/desktopFixtures");
@@ -267,7 +317,7 @@ describe("human-facing Blockbench UI", () => {
     expect(capture).toContain('"Go to Blockbench for Modern Chair": False');
     expect(capture).toContain('"Open Model…": True');
     expect(capture).toContain('"Choose…": False');
-    expect(capture).toContain('VIEWPORTS = ((780, 560), (980, 680))');
+    expect(capture).toContain('VIEWPORTS = ((390, 640), (780, 560), (980, 680))');
   });
 
 

@@ -749,7 +749,9 @@ describe("Desktop calm connection summary", () => {
     expect(app).toContain("error ? errorTitle");
     const support = await source("../apps/desktop/src/SupportPage.svelte");
     expect(app).toContain("<SupportPage");
-    expect(support).toContain("<h2>Last unsuccessful action</h2>");
+    expect(support).toContain('aria-label="Last unsuccessful action"');
+    expect(support).toContain("<h2>{errorTitle}</h2>");
+    expect(app).toContain("{errorTitle} {errorDetail} {operations}");
     expect(support).toContain("<code>{errorDetail}</code>");
     expect(await workspaceSource).toContain("<h2>AI connection and updates</h2>");
     expect(support).toContain("<strong>Installed Blockbench plugin</strong>");

@@ -50,6 +50,7 @@
     canOpenModel={true}
     canFocusCurrentEditor={statusProbeFailures < 2}
     canEditProjectPrefs={statusProbeFailures < 2}
+    statusUnverified={statusProbeFailures >= 2}
     onOpenModel={openModel}
     onAddProjectFolder={addProjectFolder}
     onDeleteProject={beginDeleteProject}
@@ -240,7 +241,7 @@
 
     {@render projectNavigator(status)}
 
-    {#if (productMode(status) !== 'ready' && productMode(status) !== 'client-wait') || status.gateway.state === 'gateway-detected' || status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED' || updateCheck?.status === 'DESKTOP_UPDATE_REQUIRED'}
+    {#if (productMode(status) !== 'ready' && productMode(status) !== 'client-wait') || status.gateway.state === 'gateway-detected' || status.managed?.pending || updateCheck?.status === 'UPDATE_AVAILABLE' || updateCheck?.status === 'UPDATE_STAGED' || updateCheck?.status === 'UPDATE_STAGED_UNVERIFIED' || updateCheck?.status === 'DESKTOP_UPDATE_REQUIRED'}
     <section class="content-section">
       <div class="section-heading">
         <div><h2>AI connection and updates</h2><p>Editing remains available independently of AI connectivity.</p></div>
@@ -309,4 +310,13 @@
   .quiet-link{min-height:34px;flex:none;padding:4px 6px;border-radius:6px;background:transparent;color:var(--text-soft);font-size:var(--font-sm);font-weight:650;cursor:pointer}
   .quiet-link:hover{background:var(--surface-2);color:var(--text)}
   @media(max-width:760px){.workspace-connection{flex-wrap:wrap}.connection-actions{justify-content:flex-start}}
+  @media(max-width:680px){
+    .section-heading{align-items:flex-start;flex-wrap:wrap;gap:10px}
+    .resource-actions{flex-wrap:wrap;justify-content:flex-start;min-width:0}
+    .resource-actions button,.setup-footer button{white-space:normal;max-width:100%}
+    .inline-action,.inline-alert{flex-wrap:wrap;gap:9px}
+    .definition-row{flex-wrap:wrap;align-items:flex-start;gap:7px}
+    .definition-row .inline-action{width:100%}
+    .setup-footer{align-items:flex-start;gap:10px}
+  }
 </style>

@@ -25,7 +25,8 @@ SCENARIOS = (
     ("runtime-offline", "workspace"),
     ("unsupported", "workspace"),
 )
-VIEWPORTS = ((780, 560), (980, 680))
+# The narrow layout is a source-level proxy for high-zoom/small effective width, not native proof.
+VIEWPORTS = ((390, 640), (780, 560), (980, 680))
 
 
 def parse_args():
@@ -136,6 +137,13 @@ def inspect_stale_file_navigation(page, fixture, view):
         button = page.get_by_role("button", name=name, exact=True)
         if button.count() != 1 or button.is_enabled() != enabled:
             issues.append(f"'{name}' expected enabled={enabled}")
+    note = page.locator("#ld-project-action-note")
+    if note.count() != 1 or not note.is_visible() or "Refresh required" not in note.inner_text():
+        issues.append("stale project actions need a visible recovery explanation")
+    for name in ("Go to Blockbench for Modern Chair", "Add Project Folder"):
+        disabled = page.get_by_role("button", name=name, exact=True)
+        if disabled.count() != 1 or disabled.get_attribute("aria-describedby") != "ld-project-action-note":
+            issues.append(f"'{name}' must reference the visible recovery explanation")
     check_control("Open References folder for project Furniture", True)
     page.locator('summary[aria-label="Actions for project Furniture"]').click()
     check_control("Unpin project", False)
@@ -235,7 +243,7 @@ def main():
                             failures.append(name + ": " + issue)
                         stale_action_issues = inspect_stale_file_navigation(page, fixture, view)
                         if fixture == "status-unverified" and view == "workspace":
-                            entry["staleFileNavigationChecks"] = {"checked": 6, "issues": stale_action_issues}
+                            entry["staleFileNavigationChecks"] = {"checked": 9, "issues": stale_action_issues}
                         for issue in stale_action_issues:
                             failures.append(name + ": " + issue)
                         first_run_issues = inspect_first_run(page, fixture, view)

@@ -352,7 +352,9 @@
           : `Blockbench is ready. Select it from the taskbar if needed. ${connection}`,
           result.status === 'READY' && result.reason !== 'MCP_SESSION_UNVERIFIED' ? 'success' : 'pending');
       } else if (result.status === 'NEEDS_ATTENTION' && result.reason !== 'PLUGIN_MISSING_WHILE_BLOCKBENCH_RUNNING') {
+        errorTitle = 'Blockbench connection needs attention';
         error = connectionReadinessError(result);
+        errorDetail = null;
       }
     } catch (cause) {
       reportError(cause);
@@ -400,7 +402,9 @@
       if (ready.status === 'READY') showActionToast('Setup complete. LazyDesigner is ready.');
       else if (ready.status === 'RUNTIME_READY') showActionToast('Setup complete. Blockbench is ready.');
       else if (ready.status === 'NEEDS_ATTENTION') {
+        errorTitle = 'Setup needs attention';
         error = installationReadinessError(ready);
+        errorDetail = null;
       }
     } catch (cause) {
       recordOperation('Install LazyDesigner', 'failed', errorCode(cause));
@@ -699,7 +703,7 @@
       {:else}
         <SupportPage
           {status} {loading} {busyAction} {statusProbeFailures}
-          {migrationConflict} {migrationConflictKind} {error} {errorDetail} {operations}
+          {migrationConflict} {migrationConflictKind} {error} {errorTitle} {errorDetail} {operations}
           {refresh} {showRetiredPluginFile} {chooseBlockbenchExecutable}
           {showPluginFile} {exportDiagnostics} {runManagedAction}
           openAnalytics={() => navigate('Analytics')}
@@ -719,7 +723,7 @@
     <div class="attention-icon">{error ? '!' : actionMessage ? (actionMessageKind === 'success' ? '✓' : 'i') : '•'}</div>
     <div class="attention-copy"><strong>{error ? errorTitle : actionMessage ? (actionMessageKind === 'pending' ? 'Next step' : actionMessageKind === 'unchanged' ? 'No change' : 'Done') : 'Working'}</strong><span>{error || actionMessage || progressLabel(progressStage)}</span></div>
     <div class="attention-actions">
-      {#if error}<button onclick={() => navigate('Support')}>Support</button>{/if}
+      {#if error && status}<button onclick={() => navigate('Support')}>Support</button>{/if}
       {#if error || actionMessage}<button class="dismiss" aria-label="Dismiss notification" onclick={clearActionFeedback}>×</button>{/if}
     </div>
   </aside>
@@ -750,5 +754,16 @@
     .navigation-brand strong,.global-nav button>span:not(.nav-icon){display:inline}
     .global-nav button{padding:0 8px;gap:5px}
     .page-toolbar{padding:0 16px}
+  }
+  @media(max-width:520px){
+    .navigation{gap:8px;padding:0 10px}
+    .navigation-brand strong{display:none}
+    .global-nav button{padding:0 6px}
+    .page-toolbar{min-height:48px;flex-wrap:wrap;gap:6px;padding:8px 12px}
+    .toolbar-actions{min-width:0;max-width:100%;flex-wrap:wrap;justify-content:flex-end}
+    .status-probe-warning{max-width:100%;line-height:1.45;overflow-wrap:anywhere}
+    .message-state{display:flex;align-items:flex-start;flex-wrap:wrap;gap:10px}
+    .message-copy{flex:1 1 200px;min-width:0}
+    .message-state button{max-width:100%;white-space:normal}
   }
 </style>

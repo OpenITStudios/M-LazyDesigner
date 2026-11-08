@@ -9,6 +9,7 @@
   // Native .bbmodel browsing remains available when AI status is unverified.
   export let canBrowseModel = true;
   export let canEditProjectPrefs = true;
+  export let statusUnverified = false;
   export let onOpenModel: (id?: string) => void | Promise<void>;
   export let onAddProjectFolder: () => void | Promise<void>;
   export let onDeleteProject: (id: string) => void | Promise<void>;
@@ -42,6 +43,10 @@
   }
 </script>
 
+{#if statusUnverified}
+  <p id="ld-project-action-note" class="project-state-note" role="status"><strong>Refresh required for project changes.</strong> You can still open models and folders. Choose Refresh from Workspace's More actions before changing shortcuts, deleting projects or returning to the current editor.</p>
+{/if}
+
 {#if navigation.preferences_issue}
   <section class="preferences-recovery" role="alert">
     <div>
@@ -49,7 +54,7 @@
       <span>Saved shortcuts could not be read. Your model files are unchanged.</span>
     </div>
     {#if navigation.preferences_issue === 'RECOVERABLE'}
-      <button class="secondary-button small-button" onclick={() => onProjectAction('restore-project-preferences', '')} disabled={busy || !canEditProjectPrefs}>Restore shortcuts</button>
+      <button class="secondary-button small-button" onclick={() => onProjectAction('restore-project-preferences', '')} aria-describedby={statusUnverified ? 'ld-project-action-note' : undefined} disabled={busy || !canEditProjectPrefs}>Restore shortcuts</button>
     {:else}
       <span>Open Support to review the existing preferences. Nothing was overwritten.</span>
     {/if}
@@ -70,7 +75,7 @@
           <div class="project-meta">{active.project_name || (active.saved ? 'Saved model' : 'Not saved yet')}{active.dirty ? ' · Modified' : ''}</div>
         </div>
         <div class="project-actions">
-          <button class="primary-button small-button" aria-label={`Go to Blockbench for ${active.model_name}`} onclick={onFocusEditor} disabled={busy || !canFocusCurrentEditor}>Go to Blockbench</button>
+          <button class="primary-button small-button" aria-label={`Go to Blockbench for ${active.model_name}`} onclick={onFocusEditor} aria-describedby={statusUnverified ? 'ld-project-action-note' : undefined} disabled={busy || !canFocusCurrentEditor}>Go to Blockbench</button>
         </div>
       </div>
     </div>
@@ -98,7 +103,7 @@
 <section class="content-section" aria-label="Projects and models">
   <div class="section-heading">
     <div><h2>Projects &amp; Models</h2></div>
-    <button class="secondary-button small-button" onclick={onAddProjectFolder} disabled={busy || !canEditProjectPrefs}>Add Project Folder</button>
+    <button class="secondary-button small-button" onclick={onAddProjectFolder} aria-describedby={statusUnverified ? 'ld-project-action-note' : undefined} disabled={busy || !canEditProjectPrefs}>Add Project Folder</button>
   </div>
   {#if navigation.projects.length > 0 || projectSearch.trim().length > 0}
   <div class="project-search-bar">
@@ -129,10 +134,10 @@
           <details class="more-menu">
             <summary aria-label={`Actions for project ${project.name}`}>•••</summary>
             <div class="menu-popover">
-              <button onclick={() => onProjectAction(project.pinned ? 'unpin-project' : 'pin-project', project.id)} disabled={busy || !canEditProjectPrefs}>{project.pinned ? 'Unpin project' : 'Pin project'}</button>
+              <button onclick={() => onProjectAction(project.pinned ? 'unpin-project' : 'pin-project', project.id)} aria-describedby={statusUnverified ? 'ld-project-action-note' : undefined} disabled={busy || !canEditProjectPrefs}>{project.pinned ? 'Unpin project' : 'Pin project'}</button>
               {#if project.registered}
-                <button onclick={() => onProjectAction('remove-project-folder', project.id)} disabled={busy || !canEditProjectPrefs}>Remove from Workspace</button>
-                <button class="menu-danger" onclick={() => onDeleteProject(project.id)} disabled={!project.available || busy || !canEditProjectPrefs}>Delete Project…</button>
+                <button onclick={() => onProjectAction('remove-project-folder', project.id)} aria-describedby={statusUnverified ? 'ld-project-action-note' : undefined} disabled={busy || !canEditProjectPrefs}>Remove from Workspace</button>
+                <button class="menu-danger" onclick={() => onDeleteProject(project.id)} aria-describedby={statusUnverified ? 'ld-project-action-note' : undefined} disabled={!project.available || busy || !canEditProjectPrefs}>Delete Project…</button>
               {/if}
             </div>
           </details>
@@ -254,4 +259,17 @@
   .menu-popover button:hover:not(:disabled){background:var(--surface-3)}
   .menu-popover .menu-danger{color:#e28b8b;font-weight:700}
   .menu-popover .menu-danger:hover:not(:disabled){background:rgba(192,70,70,.12)}
+  .project-state-note{margin:0 0 14px;padding:7px 10px;border-left:2px solid var(--warning);color:var(--text-soft);font-size:var(--font-sm);line-height:1.5}
+  .project-state-note strong{font-weight:700}
+  @media(max-width:680px){
+    .section-heading{align-items:flex-start;flex-wrap:wrap;gap:9px}
+    .preferences-recovery,.project-row,.model-row{align-items:flex-start;flex-wrap:wrap;gap:9px}
+    .project-main,.model-main{flex:1 1 165px;min-width:0}
+    .project-title{white-space:normal;overflow-wrap:anywhere}
+    .model-main{flex-wrap:wrap}
+    .model-main strong{overflow-wrap:anywhere}
+    .project-actions,.model-actions{flex:1 1 100%;justify-content:flex-end;flex-wrap:wrap;min-width:0}
+    .project-search-controls{flex-wrap:wrap}
+    .menu-popover{max-width:calc(100vw - 36px)}
+  }
 </style>

@@ -728,8 +728,12 @@ interactions remain in place; only their source ownership changes.
 ### Accurate status and action feedback
 
 When a full status observation becomes unverified, Support explicitly marks
-its data as last-known and provides a direct Refresh control. Project path
-actions remain blocked while relying on stale navigation projection. The
+its data as last-known and provides a direct Refresh control. Workspace
+also explains beside the project list why preference edits, deletion and
+current-session editor focus are disabled; these actions reference the visible
+explanation for assistive technology. Explicit native model-file, folder
+reveal and Copy path actions remain usable through their existing Rust
+revalidation even while status is unverified. The
 utility action for displaying a plugin file does not claim that Blockbench
 approval is universally required: approval is mentioned conditionally and
 never marked complete merely because a file was highlighted. User-facing
@@ -744,4 +748,17 @@ for staged updates, unverified launches, trust approval or handshake checks
 remain visible until dismissed or replaced by a later action; short success
 and no-change notices still expire automatically. A native launch without
 confirmed window focus is not reported as a completed foreground handoff.
+Support displays the specific already-classified error title for failed
+actions, with technical details behind its existing disclosure. Direct setup
+and connection readiness failures receive matching plain-language titles;
+when no machine status is available, the toast no longer sends users to a
+Support page that cannot render, and the unavailable view keeps Try again
+and Open Model available. The Workspace update section explicitly includes
+an unverified staged package in its visible warning conditions.
+
+At a narrow effective viewport, project/model action rows and search controls
+wrap instead of clipping, while Support diagnostics and the top navigation
+wrap long copy. The optional offline screenshot fixture includes a 390×640
+small-effective-width proxy alongside 780×560 and 980×680; it is not evidence
+that native 200% Windows zoom or screen-reader use was executed.
 This is source-authored UI behavior, not executed Svelte/Windows acceptance.
