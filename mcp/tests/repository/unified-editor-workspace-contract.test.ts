@@ -20,6 +20,7 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(app).toContain("{#if page !== 'Editor' || !import.meta.env.DEV}");
     expect(app).toContain("navigateWorkspace={() => navigate('Overview')}");
     expect(app).toContain("navigateSupport={() => navigate('Support')}");
+    expect(app).toContain("navigateActivity={() => navigate('Analytics')}");
     expect(app).toContain("document.querySelector<HTMLElement>('.editor-header h1')?.focus()");
     expect(unified).toContain('aria-label="LazyDesigner editor controls"');
     expect(unified).toContain('aria-label="Return to Workspace"');
@@ -63,8 +64,8 @@ describe("Unified Editor P1 source-owned workspace", () => {
       "'Open ' + folder.label + ' folder for project ' + project.name",
       "No project folders added yet.",
       'aria-label="Modified at last observation"',
-      "restoreProjectsAfterTools: layout.projectsVisible",
-      "projectsVisible: layout.restoreProjectsAfterTools",
+      "projectsExpanded: true",
+      "assistantExpanded: false",
     ]) expect(unified).toContain(term);
     expect(unified).not.toContain("window.confirm");
     expect(unified).not.toContain("Delete Project");
@@ -72,24 +73,26 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).not.toContain("fetch(");
   });
 
-  test("Model Tools is a truthful, clearly labelled Blockbench companion, not duplicate authoring", async () => {
-    const unified = await source("../apps/desktop/src/UnifiedWorkspacePage.svelte");
+  test("LazyDesigner companion names real functions without invented AI chat or QA results", async () => {
+    const [unified, app] = await Promise.all([
+      source("../apps/desktop/src/UnifiedWorkspacePage.svelte"),
+      source("../apps/desktop/src/App.svelte"),
+    ]);
     expect(unified).toContain("aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs)");
-    expect(unified).toContain("Geometry checks</strong><span>Blockbench plugin");
-    expect(unified).toContain("Texturing</strong><span>Blockbench native");
-    expect(unified).toContain("Animation</strong><span>Blockbench native");
-    expect(unified).toContain("Particle Studio</strong><span>Blockbench plugin");
-    expect(unified).toContain("No separate QA result or AI prompt is generated");
-    expect(unified).toContain('aria-label="Model Tools"');
-    expect(unified).toContain('aria-label="Toggle Model Tools"');
-    expect(unified).toContain('Model Overview</h4>');
-    expect(unified).toContain('Checks in Blockbench</h4>');
-    expect(unified).toContain('AI Connection</h4>');
-    expect(unified).not.toContain('aria-label="AI and QA"');
-    expect(unified).toContain("navigateSupport");
-    expect(unified).toContain("statusProbeFailures >= 2");
+    expect(unified).toContain('aria-label="LazyDesigner companion"');
+    expect(unified).toContain('aria-label="Toggle LazyDesigner companion"');
+    expect(unified).toContain('id="ld-inspector-assistant">Assistant</h4>');
+    expect(unified).toContain('id="ld-inspector-checks">Model Review</h4>');
+    expect(unified).toContain('id="ld-inspector-activity">Activity</h4>');
+    expect(unified).toContain("Review findings are not synchronized to this panel");
+    expect(unified).toContain("Model-edit history is not available here");
+    expect(unified).toContain("Model requests run through your connected AI client");
+    expect(unified).toContain("onclick={navigateActivity}>View technical activity");
+    expect(app).toContain("navigateActivity={() => navigate('Analytics')}");
+    expect(unified).not.toContain('aria-label="Model Tools"');
     expect(unified).not.toContain("QA passed");
     expect(unified).not.toContain("ChatGPT API");
+    expect(unified).not.toContain('class="tool-row"');
   });
 
   test("viewport-first docks keep the native editor in-flow, with focus and keyboard resize", async () => {
@@ -100,27 +103,31 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("class:with-projects={showProjects}");
     expect(unified).toContain("class:with-inspector={showTools}");
     expect(unified).toContain("class:rail={explorerRail}");
+    expect(unified).toContain("class:tools-rail={assistantRail}");
+    expect(unified).toContain("showProjects = !layout.focusMode");
+    expect(unified).toContain("showTools = !layout.focusMode");
     expect(unified).toContain("editorLayoutBand(editorRoot.getBoundingClientRect().width)");
     expect(unified).toContain("defaultEditorPanels(band)");
     expect(unified).toContain("editorDockWidth(drag.dock");
     expect(unified).toContain("toggleFocusMode");
     expect(unified).toContain("role=\"separator\" tabindex=\"0\"");
     expect(unified).toContain("Resize Project Explorer");
-    expect(unified).toContain("Resize Model Tools");
+    expect(unified).toContain("Resize LazyDesigner companion");
     expect(unified).toContain("aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}");
     expect(unified).toContain("grid-template-columns:var(--explorer-width,200px)");
-    expect(unified).toContain("grid-template-columns:48px minmax(0,1fr)");
-    expect(unified).toContain("grid-template-rows:140px minmax(220px,1fr)");
+    expect(unified).toContain("grid-template-columns:48px minmax(0,1fr) 48px");
+    expect(unified).not.toContain("grid-template-rows:140px minmax(220px,1fr)");
     expect(unified).toContain("overflow:hidden");
-    expect(unified).toContain("--ed-bg: #1b1f27");
-    expect(unified).toContain("--ed-accent: #85a9df");
+    expect(unified).toContain("--color-ui: #1e2127");
+    expect(unified).toContain("--color-back: #181b1f");
+    expect(unified).toContain("--color-accent: #3e90ff");
     expect(unified).toContain('aria-label="Project Explorer"');
-    expect(unified).toContain('aria-label="Model Tools"');
+    expect(unified).toContain('aria-label="LazyDesigner companion"');
     expect(unified).toContain('aria-label="Blockbench native editor area"');
-    expect(unified).toContain('aria-expanded={showProjects}');
-    expect(unified).toContain('aria-expanded={showTools}');
+    expect(unified).toContain('aria-expanded={showProjects && !explorerRail}');
+    expect(unified).toContain('aria-expanded={showTools && !assistantRail}');
     expect(unified).toContain('aria-label="Toggle Project Explorer"');
-    expect(unified).toContain('aria-label="Toggle Model Tools"');
+    expect(unified).toContain('aria-label="Toggle LazyDesigner companion"');
     expect(app).toContain("let editorLayout: EditorLayoutState = { ...INITIAL_EDITOR_LAYOUT }");
     expect(app).toContain("bind:layout={editorLayout}");
     expect(unified).not.toContain("position:fixed");
@@ -135,18 +142,16 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(editorLayoutBand(1600)).toBe("standard");
     expect(editorLayoutBand(1280)).toBe("rail");
     expect(editorLayoutBand(780)).toBe("compact");
-    expect(defaultEditorPanels("wide")).toEqual({
-      projectsVisible: true, toolsVisible: true, railExpanded: false,
-      restoreProjectsAfterTools: false, restoreRailAfterTools: false,
-    });
-    expect(defaultEditorPanels("standard").toolsVisible).toBe(false);
-    expect(defaultEditorPanels("compact").projectsVisible).toBe(false);
+    expect(defaultEditorPanels("wide")).toEqual({ projectsExpanded: true, assistantExpanded: true });
+    expect(defaultEditorPanels("standard")).toEqual({ projectsExpanded: true, assistantExpanded: true });
+    expect(defaultEditorPanels("rail")).toEqual({ projectsExpanded: false, assistantExpanded: false });
+    expect(defaultEditorPanels("compact")).toEqual({ projectsExpanded: false, assistantExpanded: false });
     expect(editorDockWidth("projects", 20)).toBe(160);
     expect(editorDockWidth("projects", 800)).toBe(260);
     expect(editorDockWidth("tools", 100)).toBe(220);
     expect(editorDockWidth("tools", 999)).toBe(300);
     expect(1920 - INITIAL_EDITOR_LAYOUT.projectsWidth - INITIAL_EDITOR_LAYOUT.toolsWidth - 12).toBeGreaterThan(1400);
-    expect(1600 - INITIAL_EDITOR_LAYOUT.projectsWidth - 6).toBeGreaterThan(1300);
+    expect(1600 - INITIAL_EDITOR_LAYOUT.projectsWidth - INITIAL_EDITOR_LAYOUT.toolsWidth - 12).toBeGreaterThan(1100);
   });
 
   test("browser fixture captures real Svelte layout only, never native Blockbench", async () => {
@@ -162,13 +167,30 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain('("fresh-install", "editor")');
     expect(script).toContain("OFFLINE_BROWSER_FIXTURE_ONLY");
     expect(script).toContain("Editor duplicates the global navigation/toolbar");
-    expect(script).toContain("compact Editor must start with Project Explorer collapsed");
+    expect(script).toContain("both companion side docks must remain mounted at every normal viewport");
     expect(script).toContain("fixture must never be able to place a native Blockbench window");
     expect(script).toContain("(1920, 1080)");
-    expect(script).toContain("Focus Mode did not restore Model Tools visibility");
-    expect(script).toContain("Expanded Project Explorer cannot return to the narrow icon rail");
+    expect(script).toContain("Focus Mode must restore both side docks");
+    expect(script).toContain("Expanded Project Explorer cannot return to icon rail");
     expect(stage).toContain("disabled={busy || fixture}");
   });
+  test("Svelte host icon controls are real components, not generated screenshots", async () => {
+    const [icons, unified, stage] = await Promise.all([
+      source("../apps/desktop/src/EditorChromeIcon.svelte"),
+      source("../apps/desktop/src/UnifiedWorkspacePage.svelte"),
+      source("../apps/desktop/src/NativeEditorStage.svelte"),
+    ]);
+    expect(icons).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
+    expect(icons).toContain('aria-hidden="true"');
+    expect(unified).toContain("import EditorChromeIcon from './EditorChromeIcon.svelte'");
+    expect(unified).toContain('<EditorChromeIcon name="projects"/>');
+    expect(unified).toContain('<EditorChromeIcon name="assistant"/>');
+    expect(stage).toContain('data-native-editor-reservation="true"');
+    expect(stage).not.toContain('class="native-placeholder"');
+    expect(icons).not.toContain("image_gen");
+    expect(icons).not.toContain("WebGLRenderer");
+  });
+
   test("scoped Blockbench-compatible theme retains native and legacy product ownership", async () => {
     const [app, unified, stage, tokens] = await Promise.all([
       source("../apps/desktop/src/App.svelte"),
@@ -180,9 +202,9 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain('<h1 tabindex="-1"');
     expect(unified).toContain('navigateWorkspace');
     expect(unified).toContain('navigateSupport');
-    expect(unified).toContain("--ed-bg: #1b1f27");
-    expect(unified).toContain("--ed-panel: #232833");
-    expect(unified).toContain("--ed-accent: #85a9df");
+    expect(unified).toContain("--color-ui: #1e2127");
+    expect(unified).toContain("--color-back: #181b1f");
+    expect(unified).toContain("--color-accent: #3e90ff");
     expect(stage).toContain('data-native-editor-reservation="true"');
     expect(stage).toContain("{#if !compact}");
     expect(stage).toContain("export async function present(): Promise<void>");

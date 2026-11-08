@@ -1,5 +1,6 @@
 <script lang="ts">
   import NativeEditorStage from './NativeEditorStage.svelte';
+  import EditorChromeIcon from './EditorChromeIcon.svelte';
   import {
     defaultEditorPanels, editorDockWidth, editorLayoutBand,
     type EditorDock, type EditorLayoutState,
@@ -28,6 +29,7 @@
   export let openBlockbenchEditor: () => Promise<void>;
   export let refresh: () => Promise<void>;
   export let navigateSupport: () => void;
+  export let navigateActivity: () => void;
   export let navigateWorkspace: () => void;
 
   type NativePlacementState = 'PRESENTED' | 'DETACHED' | 'DEFERRED' | 'UNAVAILABLE' | 'UNCERTAIN';
@@ -52,9 +54,12 @@
   $: continuing = navigation ? continueTarget(navigation) : null;
   $: aiStatus = status ? aiStatusPresentation(status, statusProbeFailures, statusPresentationNowMs) : null;
   $: actionBusy = Boolean(busyAction) || executing;
-  $: showProjects = layout.projectsVisible && !layout.focusMode;
-  $: showTools = layout.toolsVisible && !layout.focusMode;
-  $: explorerRail = showProjects && layout.band === 'rail' && !layout.railExpanded;
+  // Both sides are always present in ordinary editor mode. Only Focus Editor
+  // hides them. Narrow widths collapse content to reachable shortcut rails.
+  $: showProjects = !layout.focusMode;
+  $: showTools = !layout.focusMode;
+  $: explorerRail = showProjects && !layout.projectsExpanded;
+  $: assistantRail = showTools && !layout.assistantExpanded;
 
   function expanded(project: ProjectNavigationProject): boolean {
     return expandedProjectId === project.id
@@ -67,42 +72,44 @@
     layout = { ...layout, ...next };
   }
   function toggleProjectsPanel() {
-    const opening = layout.focusMode || !layout.projectsVisible;
+    const opening = layout.focusMode || !layout.projectsExpanded;
     changeLayout({
       focusMode: false,
-      projectsVisible: opening,
-      railExpanded: opening ? false : layout.railExpanded,
-      ...(opening && layout.band !== 'wide'
-        ? { toolsVisible: false, restoreProjectsAfterTools: false, restoreRailAfterTools: false }
-        : {}),
+      projectsExpanded: opening,
+      ...(opening && (layout.band === 'rail' || layout.band === 'compact')
+        ? { assistantExpanded: false } : {}),
     });
   }
   function expandExplorer() {
-    // Rail mode is intentionally compact until the user asks for full browsing.
     changeLayout({
-      projectsVisible: true, railExpanded: true, toolsVisible: false,
-      restoreProjectsAfterTools: false, restoreRailAfterTools: false,
+      focusMode: false,
+      projectsExpanded: true,
+      ...(layout.band === 'rail' || layout.band === 'compact'
+        ? { assistantExpanded: false } : {}),
     });
   }
+  function collapseExplorer() {
+    changeLayout({ projectsExpanded: false });
+  }
   function toggleToolsPanel() {
-    const opening = layout.focusMode || !layout.toolsVisible;
-    if (layout.band !== 'wide' && opening) {
-      changeLayout({
-        focusMode: false, toolsVisible: true,
-        restoreProjectsAfterTools: layout.projectsVisible,
-        restoreRailAfterTools: layout.railExpanded,
-        projectsVisible: false, railExpanded: false,
-      });
-    } else if (layout.band !== 'wide' && !opening) {
-      changeLayout({
-        focusMode: false, toolsVisible: false,
-        projectsVisible: layout.restoreProjectsAfterTools,
-        railExpanded: layout.restoreRailAfterTools,
-        restoreProjectsAfterTools: false, restoreRailAfterTools: false,
-      });
-    } else {
-      changeLayout({ focusMode: false, toolsVisible: opening });
-    }
+    const opening = layout.focusMode || !layout.assistantExpanded;
+    changeLayout({
+      focusMode: false,
+      assistantExpanded: opening,
+      ...(opening && (layout.band === 'rail' || layout.band === 'compact')
+        ? { projectsExpanded: false } : {}),
+    });
+  }
+  function expandAssistant() {
+    changeLayout({
+      focusMode: false,
+      assistantExpanded: true,
+      ...(layout.band === 'rail' || layout.band === 'compact'
+        ? { projectsExpanded: false } : {}),
+    });
+  }
+  function collapseAssistant() {
+    changeLayout({ assistantExpanded: false });
   }
   function toggleFocusMode() {
     changeLayout({ focusMode: !layout.focusMode });
@@ -110,8 +117,8 @@
   function syncWidthBand() {
     const band = editorLayoutBand(editorRoot.getBoundingClientRect().width);
     if (band === layout.band) return;
-    // Preserve the user's explicit state within each width band and across
-    // Workspace/Support navigation; only crossing a band resets the defaults.
+    // Keep both sides present; crossing a responsive band chooses whether
+    // they show full content or shortcut rails, not whether they disappear.
     changeLayout({ band, ...defaultEditorPanels(band) });
   }
   function startDockResize(event: PointerEvent, dock: EditorDock) {
@@ -257,12 +264,12 @@
 <main class="unified-workspace" bind:this={editorRoot} aria-label="LazyDesigner unified editor workspace">
   <header class="editor-header" aria-label="LazyDesigner editor controls">
     <div class="editor-leading">
-      <span class="editor-brand-mark" aria-hidden="true">◇</span>
+      <span class="editor-brand-mark" aria-hidden="true"><EditorChromeIcon name="model"/></span>
       <span class="editor-brand">LazyDesigner</span>
       <span class="header-divider" aria-hidden="true"></span>
       <button class="workspace-return" type="button" aria-label="Return to Workspace"
         title="Workspace" onclick={navigateWorkspace}>
-        <span aria-hidden="true">▦</span><span class="workspace-label">Workspace</span>
+        <EditorChromeIcon name="workspace"/><span class="workspace-label">Workspace</span>
       </button>
       <div class="editor-context">
         <h1 tabindex="-1" title={active?.model_name ?? continuing?.model.name ?? 'Blockbench workspace'}>
@@ -283,21 +290,21 @@
           class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
         <span class="ai-label">{aiStatus?.label ?? 'AI unverified'}</span>
       </span>
-      <button type="button" class="dock-toggle" class:chosen={showProjects}
-        aria-label="Toggle Project Explorer" title="Project Explorer"
-        aria-expanded={showProjects}
+      <button type="button" class="dock-toggle" class:chosen={showProjects && !explorerRail}
+        aria-label="Toggle Project Explorer" title="Expand or collapse Project Explorer"
+        aria-expanded={showProjects && !explorerRail}
         aria-controls={showProjects ? 'ld-unified-explorer' : undefined}
-        onclick={toggleProjectsPanel}><span aria-hidden="true">▤</span><span class="dock-label">Projects</span></button>
-      <button type="button" class="dock-toggle" class:chosen={showTools}
-        aria-label="Toggle Model Tools" title="Model Tools"
-        aria-expanded={showTools}
+        onclick={toggleProjectsPanel}><EditorChromeIcon name="projects"/><span class="dock-label">Projects</span></button>
+      <button type="button" class="dock-toggle" class:chosen={showTools && !assistantRail}
+        aria-label="Toggle LazyDesigner companion" title="Expand or collapse LazyDesigner companion"
+        aria-expanded={showTools && !assistantRail}
         aria-controls={showTools ? 'ld-unified-inspector' : undefined}
-        onclick={toggleToolsPanel}><span aria-hidden="true">⚒</span><span class="dock-label">Model Tools</span></button>
+        onclick={toggleToolsPanel}><EditorChromeIcon name="assistant"/><span class="dock-label">Assistant</span></button>
       <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
         aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
         aria-pressed={layout.focusMode}
         title={layout.focusMode ? 'Restore side panels' : 'Maximize Blockbench working area'}
-        onclick={toggleFocusMode}><span aria-hidden="true">⛶</span><span class="dock-label">Focus</span></button>
+        onclick={toggleFocusMode}><EditorChromeIcon name="focus"/><span class="dock-label">Focus</span></button>
       {#if !status?.blockbench.running}
         <button type="button" class="launch-editor" disabled={actionBusy || fixture || statusProbeFailures >= 2}
           onclick={() => void launchBlockbench()}>Open Blockbench</button>
@@ -322,7 +329,7 @@
         {/if}
       {/if}
       <button type="button" class="support-button" title="Support and settings"
-        aria-label="Open Support" onclick={navigateSupport}><span aria-hidden="true">⚙</span></button>
+        aria-label="Open Support" onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
     </div>
   </header>
 
@@ -331,32 +338,30 @@
   {/if}
 
   <div class="unified-body" class:with-projects={showProjects} class:with-inspector={showTools}
-    class:rail={explorerRail}
+    class:rail={explorerRail} class:tools-rail={assistantRail}
     style={`--explorer-width: ${layout.projectsWidth}px; --tools-width: ${layout.toolsWidth}px;`}>
     {#if showProjects}
       <aside id="ld-unified-explorer" class="explorer dock-panel" class:rail={explorerRail} aria-label="Project Explorer">
         {#if explorerRail}
           <div class="rail-actions" role="group" aria-label="Project Explorer shortcuts">
             <button type="button" aria-label="Expand Project Explorer" title="Expand Project Explorer"
-              onclick={expandExplorer}>▤</button>
+              onclick={expandExplorer}><EditorChromeIcon name="projects"/></button>
             <button type="button" aria-label="Open Model from Project Explorer" title="Open Model…"
-              disabled={actionBusy || fixture} onclick={() => void openModelSafely()}>◇</button>
+              disabled={actionBusy || fixture} onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/></button>
             <button type="button" aria-label="Add Project Folder from Project Explorer" title="Add Project Folder"
               disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
-              onclick={() => void registerFolder()}>+</button>
+              onclick={() => void registerFolder()}><EditorChromeIcon name="add"/></button>
           </div>
         {:else}
         <div class="pane-heading">
           <h3>Project Explorer</h3>
           <div class="pane-actions">
-            {#if layout.band === 'rail'}
-              <button type="button" aria-label="Collapse Project Explorer to icons"
-                title="Collapse Project Explorer to icons"
-                onclick={() => changeLayout({ railExpanded: false })}>◀</button>
-            {/if}
+            <button type="button" aria-label="Collapse Project Explorer to icons"
+              title="Collapse Project Explorer to icons"
+              onclick={collapseExplorer}><EditorChromeIcon name="chevron-left"/></button>
             <button type="button" title="Add existing project folder" aria-label="Add Project Folder"
               disabled={actionBusy || fixture || !status || statusProbeFailures >= 2}
-              onclick={() => void registerFolder()}>+</button>
+              onclick={() => void registerFolder()}><EditorChromeIcon name="add"/></button>
           </div>
         </div>
         {#if statusProbeFailures >= 2}
@@ -425,7 +430,7 @@
                         aria-busy={openingModelId === model.id}
                         disabled={!model.exists || actionBusy || fixture || (model.active && statusProbeFailures >= 2)}
                         onclick={() => void chooseModel(model)}>
-                        <span class="model-symbol" aria-hidden="true">◇</span>
+                        <span class="model-symbol" aria-hidden="true"><EditorChromeIcon name="model"/></span>
                         <span class="model-name">{model.name}</span>
                       </button>
                       {#if openingModelId === model.id}
@@ -503,7 +508,7 @@
         {/if}
         {/if}
       </aside>
-      {#if layout.band !== 'compact' && !explorerRail}
+      {#if !explorerRail}
         <div class="dock-resizer" role="separator" tabindex="0"
           aria-label="Resize Project Explorer" aria-orientation="vertical"
           aria-valuemin={160} aria-valuemax={260} aria-valuenow={layout.projectsWidth}
@@ -520,83 +525,115 @@
     </section>
 
     {#if showTools}
-      {#if layout.band !== 'compact'}
+      {#if !assistantRail}
         <div class="dock-resizer" role="separator" tabindex="0"
-          aria-label="Resize Model Tools" aria-orientation="vertical"
+          aria-label="Resize LazyDesigner companion" aria-orientation="vertical"
           aria-valuemin={220} aria-valuemax={300} aria-valuenow={layout.toolsWidth}
-          title="Drag or use arrow keys to resize Model Tools"
+          title="Drag or use arrow keys to resize LazyDesigner companion"
           onpointerdown={(event) => startDockResize(event, 'tools')}
           onkeydown={(event) => resizeDockWithKeyboard(event, 'tools')}></div>
       {/if}
-      <aside id="ld-unified-inspector" class="inspector dock-panel" aria-label="Model Tools">
-        <div class="pane-heading"><h3>Model Tools</h3><span class="read-only-label">BLOCKBENCH</span></div>
-        {#if !fixture && nativePlacementDetail}
-          <section class="inspector-section" aria-label="Native Blockbench window status">
-            <h4>Blockbench Window</h4>
-            <p>{nativePlacementDetail}</p>
-          </section>
-        {/if}
-        <section class="inspector-section" aria-labelledby="ld-inspector-model">
-          <h4 id="ld-inspector-model">Model Overview</h4>
-          {#if active}
-            <div class="model-detail"><strong>{active.model_name}</strong>
-              <span>{active.project_name ?? (active.saved ? 'Saved model' : 'Unsaved model')}</span>
-              <span>{active.dirty ? 'Modified · save in Blockbench' : active.saved ? 'Saved at last observation' : 'Not saved'}</span>
-            </div>
-          {:else}
-            <p>{continuing ? 'Previously opened: ' + continuing.model.name + '. Reopen it from Project Explorer.' : 'No verified active model.'}</p>
-          {/if}
-        </section>
-        <section class="inspector-section" aria-labelledby="ld-inspector-checks">
-          <h4 id="ld-inspector-checks">Checks in Blockbench</h4>
-          <div class="tool-row"><strong>Geometry checks</strong><span>Blockbench plugin</span></div>
-          <div class="tool-row"><strong>Texturing</strong><span>Blockbench native</span></div>
-          <div class="tool-row"><strong>Animation</strong><span>Blockbench native</span></div>
-          <div class="tool-row"><strong>Particle Studio</strong><span>Blockbench plugin</span></div>
-          <p>Use the existing Blockbench tools. No separate QA result or AI prompt is generated by this panel.</p>
-          {#if status?.blockbench.running}
-            <button type="button" disabled={actionBusy || fixture || statusProbeFailures >= 2}
-              onclick={() => void focusCurrentEditor()}>Focus Blockbench</button>
-          {/if}
-        </section>
-        <section class="inspector-section" aria-labelledby="ld-inspector-connection">
-          <h4 id="ld-inspector-connection">AI Connection</h4>
-          <div class="connection-status">
-            <i class:verified={Boolean(aiStatus?.recentlyVerified)} class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
-            <strong>{aiStatus?.label ?? 'Status unavailable'}</strong>
+      <aside id="ld-unified-inspector" class="inspector dock-panel" class:rail={assistantRail}
+        aria-label="LazyDesigner companion">
+        {#if assistantRail}
+          <div class="rail-actions" role="group" aria-label="LazyDesigner companion shortcuts">
+            <button type="button" title="Expand LazyDesigner Assistant and Review"
+              aria-label="Expand LazyDesigner companion" onclick={expandAssistant}><EditorChromeIcon name="assistant"/></button>
+            <button type="button" title="Connection and Support" aria-label="Open connection Support"
+              onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
+            <button type="button" title="Technical activity" aria-label="Open technical activity"
+              onclick={navigateActivity}><EditorChromeIcon name="activity"/></button>
           </div>
-          <p>{aiStatus?.detail ?? 'Desktop has not verified the AI connection. You can still open and edit models.'}</p>
-          <button type="button" disabled={actionBusy || fixture || loading}
-            onclick={() => void refresh()}>{aiStatus?.needsRefresh ? 'Refresh status' : 'Check status'}</button>
-          <button type="button" class="text-action" onclick={navigateSupport}>Connection details</button>
-        </section>
-        <div class="inspector-footnote">Window composition is experimental. Blockbench owns all editing, Undo and Save.</div>
+        {:else}
+          <div class="pane-heading">
+            <h3>LazyDesigner</h3>
+            <div class="pane-actions">
+              <button type="button" class="collapse-dock" title="Collapse to right rail"
+                aria-label="Collapse LazyDesigner companion to icons"
+                onclick={collapseAssistant}><EditorChromeIcon name="chevron-right"/></button>
+            </div>
+          </div>
+          <section class="inspector-section assistant-section" aria-labelledby="ld-inspector-assistant">
+            <h4 id="ld-inspector-assistant">Assistant</h4>
+            <div class="connection-status" role="status">
+              <i class:verified={Boolean(aiStatus?.recentlyVerified)}
+                class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
+              <strong>{aiStatus?.label ?? 'AI status unverified'}</strong>
+            </div>
+            <p>Model requests run through your connected AI client.</p>
+            <details class="panel-disclosure">
+              <summary>Connection details</summary>
+              <p class="subtle-note">{aiStatus?.detail ?? 'Connection status has not been verified.'}</p>
+            </details>
+            <button type="button" disabled={actionBusy || fixture || loading}
+              onclick={() => void refresh()}>{aiStatus?.needsRefresh ? 'Refresh AI status' : 'Check AI status'}</button>
+            <button type="button" class="text-action" onclick={navigateSupport}>Connection &amp; setup</button>
+          </section>
+          <section class="inspector-section review-section" aria-labelledby="ld-inspector-checks">
+            <h4 id="ld-inspector-checks">Model Review</h4>
+            {#if active}
+              <div class="model-detail"><strong>{active.model_name}</strong>
+                <span>{active.project_name ?? 'Unregistered project'} · {active.dirty ? 'Modified at last observation' : active.saved ? 'Saved at last observation' : 'Not saved'}</span>
+              </div>
+            {:else}
+              <p>{continuing ? 'Recently used: ' + continuing.model.name : 'No active model has been verified.'}</p>
+            {/if}
+            <p>Use <strong>Geometry Checks</strong> or <strong>Review Latest Edit</strong> in the Blockbench plugin.</p>
+            <p class="subtle-note">Review findings are not synchronized to this panel.</p>
+            {#if status?.blockbench.running}
+              <button type="button" disabled={actionBusy || fixture || statusProbeFailures >= 2}
+                onclick={() => void focusCurrentEditor()}>Go to Blockbench</button>
+            {:else}
+              <p class="subtle-note">Open Blockbench to use Geometry checks or Particle Studio.</p>
+            {/if}
+          </section>
+          <section class="inspector-section activity-section" aria-labelledby="ld-inspector-activity">
+            <h4 id="ld-inspector-activity">Activity</h4>
+            <p>View read-only Gateway metrics. Model-edit history is not available here.</p>
+            <button type="button" class="text-action" onclick={navigateActivity}>View technical activity</button>
+          </section>
+          {#if !fixture && nativePlacementDetail}
+            <div class="inspector-footnote" role="status">Blockbench window: {nativePlacementDetail}</div>
+          {/if}
+        {/if}
       </aside>
     {/if}
   </div>
 </main>
 
 <style>
-  /* Scoped, Blockbench-compatible dark palette. Never mutate its native theme. */
+  /* Default (Dark) source of truth: JannisX11/blockbench, v5.2.1,
+     themes/dark.bbtheme. A custom installed Blockbench theme cannot be
+     truthfully inferred across a separate Windows process. Never modify it. */
   .unified-workspace {
-    --ed-bg: #1b1f27;
-    --ed-header: #252b35;
-    --ed-panel: #232833;
-    --ed-raised: #2b3240;
-    --ed-border: #374250;
-    --ed-border-soft: #303a47;
-    --ed-text: #e7ebf2;
-    --ed-muted: #adb7c5;
-    --ed-muted-soft: #8f9dad;
-    --ed-select: #344c68;
-    --ed-accent: #85a9df;
+    --color-ui: #1e2127;
+    --color-back: #181b1f;
+    --color-dark: #101316;
+    --color-border: #101316;
+    --color-selected: #3b3e49;
+    --color-elevated: #272a31;
+    --color-button: #33383f;
+    --color-accent: #3e90ff;
+    --color-text: #cacad4;
+    --color-subtle_text: #848891;
+    --ed-bg: var(--color-back);
+    --ed-header: var(--color-ui);
+    --ed-panel: var(--color-ui);
+    --ed-raised: var(--color-elevated);
+    --ed-border: var(--color-border);
+    --ed-border-soft: var(--color-dark);
+    --ed-text: var(--color-text);
+    --ed-muted: #a6a8b0;
+    --ed-muted-soft: var(--color-subtle_text);
+    --ed-select: var(--color-selected);
+    --ed-accent: var(--color-accent);
     display:flex; flex-direction:column; flex:1; min-width:0; min-height:0;
     overflow:hidden; background:var(--ed-bg); color:var(--ed-text);
-    font-family:Inter,"Segoe UI",system-ui,sans-serif;
+    font-family:"Segoe UI",Arial,system-ui,sans-serif;
   }
   .editor-header {
     flex:none; display:flex; align-items:center; justify-content:space-between; gap:12px;
-    min-height:44px; padding:4px 10px; border-bottom:1px solid var(--ed-border);
+    min-height:40px; padding:4px 8px; border-bottom:1px solid var(--ed-border);
     background:var(--ed-header);
   }
   .editor-leading,.editor-controls {display:flex;align-items:center;gap:7px;min-width:0}
@@ -604,7 +641,7 @@
   .editor-controls {flex:none;justify-content:flex-end}
   .editor-brand-mark {
     display:grid;place-items:center;flex:none;width:22px;height:22px;border-radius:5px;
-    background:#3d5572;color:#d9eaff;font-size:17px;font-weight:750;
+    background:var(--ed-select);color:var(--ed-accent);font-size:16px;font-weight:700;
   }
   .editor-brand {font-size:13px;font-weight:750;letter-spacing:-.025em;white-space:nowrap}
   .header-divider {width:1px;height:21px;background:var(--ed-border);margin:0 4px;flex:none}
@@ -618,7 +655,7 @@
   .model-opening {font-size:10px;color:var(--ed-accent);font-weight:600}
   .workspace-return,.editor-controls button {
     display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;
-    min-height:32px;padding:5px 9px;border:1px solid transparent;border-radius:5px;
+    min-height:29px;padding:4px 8px;border:1px solid transparent;border-radius:3px;
     color:var(--ed-muted);background:transparent;font-size:12px;font-weight:650;
     cursor:pointer;white-space:nowrap;
   }
@@ -626,14 +663,16 @@
     color:var(--ed-text);background:var(--ed-raised);
   }
   .workspace-return {margin-right:3px}
-  .workspace-return>span:first-child,.dock-toggle>span:first-child{font-size:15px;line-height:1}
-  .editor-controls .dock-toggle.chosen{background:var(--ed-raised);color:var(--ed-text);border-color:var(--ed-border)}
-  .editor-controls .open-model {
-    color:#0e1826;background:var(--ed-accent);border-color:var(--ed-accent);
-    font-weight:750;margin-left:3px;
+  .workspace-return,.dock-toggle{line-height:1}
+  .editor-controls .dock-toggle.chosen{
+    background:var(--ed-select);color:var(--ed-text);border-bottom:2px solid var(--ed-accent);
   }
-  .editor-controls .open-model:hover:not(:disabled){background:#a2bde8;color:#0e1826}
-  .editor-controls .launch-editor {border-color:var(--ed-border);background:#303947;color:var(--ed-text)}
+  .editor-controls .open-model {
+    color:var(--ed-text);background:var(--color-button);border-color:var(--ed-border);
+    font-weight:650;margin-left:3px;
+  }
+  .editor-controls .open-model:hover:not(:disabled){background:var(--ed-select);color:var(--ed-text)}
+  .editor-controls .launch-editor {border-color:var(--ed-border);background:var(--color-button);color:var(--ed-text)}
   .editor-controls .native-window-action {
     border-color:var(--ed-border);background:var(--ed-raised);color:var(--ed-text);
   }
@@ -658,7 +697,16 @@
   .unified-body.with-projects.with-inspector {
     grid-template-columns:var(--explorer-width,200px) 6px minmax(0,1fr) 6px var(--tools-width,240px);
   }
-  .unified-body.rail.with-projects {grid-template-columns:48px minmax(0,1fr)}
+  /* All combinations keep left and right as real in-flow dock surfaces. */
+  .unified-body.rail.with-projects.with-inspector {
+    grid-template-columns:48px minmax(0,1fr) 6px var(--tools-width,240px);
+  }
+  .unified-body.tools-rail.with-projects.with-inspector {
+    grid-template-columns:var(--explorer-width,200px) 6px minmax(0,1fr) 48px;
+  }
+  .unified-body.rail.tools-rail.with-projects.with-inspector {
+    grid-template-columns:48px minmax(0,1fr) 48px;
+  }
   .dock-resizer {
     width:6px;min-width:6px;min-height:0;background:var(--ed-bg);
     border-left:1px solid var(--ed-border-soft);
@@ -670,8 +718,8 @@
   }
   .dock-resizer:active{background:var(--ed-accent)}
   .dock-panel {min-width:0;min-height:0;overflow:auto;scrollbar-width:thin;background:var(--ed-panel)}
-  .explorer {border-right:1px solid var(--ed-border);padding:9px 7px 18px}
-  .explorer.rail {padding:7px 3px;overflow:hidden}
+  .explorer {border-right:1px solid var(--ed-border);padding:0 7px 18px}
+  .explorer.rail,.inspector.rail {padding:5px 3px;overflow:hidden}
   .rail-actions{display:grid;gap:7px;justify-items:center}
   .rail-actions button{
     display:grid;place-items:center;width:38px;min-height:36px;border:1px solid transparent;
@@ -680,19 +728,28 @@
   .rail-actions button:hover:not(:disabled),.rail-actions button:focus-visible{
     background:var(--ed-raised);border-color:var(--ed-border);outline-color:var(--ed-accent);
   }
-  .inspector {border-left:1px solid var(--ed-border);padding:9px 11px 18px}
-  .pane-heading {display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 3px 9px}
-  .pane-actions{display:flex;align-items:center;gap:4px}
-  .pane-heading h3 {margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:750;color:var(--ed-text)}
+  .inspector {border-left:1px solid var(--ed-border);padding:0 9px 18px}
+  /* Blockbench panel tab bars are 40px in the v5.2.1 source. */
+  .pane-heading {
+    display:flex;align-items:center;justify-content:space-between;gap:4px;
+    height:40px;margin:0 -7px 10px;padding:0 9px;
+    background:var(--color-back);border-bottom:1px solid var(--ed-border);
+  }
+  .inspector .pane-heading{margin:0 -9px 10px}
+  .pane-actions{display:flex;align-items:center;gap:3px;min-width:0}
+  .pane-heading h3 {
+    margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    text-transform:uppercase;letter-spacing:.03em;font-size:12px;font-weight:650;color:var(--ed-text);
+  }
   .pane-heading button {
     display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--ed-border);
-    border-radius:5px;background:var(--ed-raised);color:var(--ed-text);font-size:17px;cursor:pointer;
+    border-radius:3px;background:transparent;color:var(--ed-muted);font-size:17px;cursor:pointer;
   }
   .search-label{display:block;margin:0 4px 5px;font-size:11px;color:var(--ed-muted)}
   .search-controls{display:flex;align-items:center;gap:4px;min-width:0}
   .explorer input {
     flex:1 1 auto;width:100%;min-width:0;min-height:34px;border:1px solid var(--ed-border);
-    border-radius:5px;background:#1c222c;color:var(--ed-text);padding:6px 8px;font-size:12px;
+    border-radius:3px;background:var(--ed-bg);color:var(--ed-text);padding:6px 8px;font-size:12px;
   }
   .search-controls button{
     flex:none;width:27px;min-height:32px;border:0;border-radius:4px;
@@ -784,9 +841,27 @@
   .native-stage{display:flex;min-width:0;min-height:0;overflow:hidden;background:var(--ed-bg)}
   .native-stage :global(.native-editor-page){min-width:0;width:100%}
   .read-only-label {font-size:10px;color:var(--ed-muted-soft);letter-spacing:.04em}
-  .inspector-section{padding:5px 1px 14px;margin-bottom:12px;border-bottom:1px solid var(--ed-border-soft)}
-  .inspector-section h4{font-size:12px;font-weight:700;color:var(--ed-text);margin:0 0 9px}
-  .inspector-section p {margin:7px 0;font-size:11px;color:var(--ed-muted);line-height:1.5}
+  .inspector-section{padding:9px 2px 13px;margin-bottom:5px;border-bottom:1px solid var(--ed-border)}
+  .inspector-section h4{
+    font-size:12px;font-weight:650;color:var(--ed-text);margin:0 0 10px;
+    text-transform:uppercase;letter-spacing:.03em;
+  }
+  .inspector-section p{margin:7px 0;font-size:11px;color:var(--ed-muted);line-height:1.5}
+  .inspector-section .subtle-note{color:var(--ed-muted-soft);font-size:11px}
+  .pane-actions .read-only-label{font-size:9px;white-space:nowrap}
+  .inspector-section button.text-action{color:var(--ed-accent);padding-left:0}
+  .model-detail{display:grid;gap:4px;margin:5px 0 10px}
+  .model-detail strong{font-size:12px;font-weight:650;overflow-wrap:anywhere}
+  .model-detail span{font-size:11px;color:var(--ed-muted)}
+  .inspector.rail .rail-actions{padding-top:4px}
+  .panel-disclosure{margin:6px 0 8px;border-bottom:1px solid var(--ed-border)}
+  .panel-disclosure summary{
+    padding:5px 0;color:var(--ed-muted);font-size:11px;cursor:pointer;
+  }
+  .panel-disclosure summary:hover{color:var(--ed-text)}
+  .panel-disclosure summary:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
+  .panel-disclosure p{margin:5px 0 8px}
+
   .connection-status{display:flex;align-items:center;gap:7px;color:var(--ed-text);font-size:12px}
   .connection-status i{height:7px;width:7px;border-radius:100%;background:#8f9bad;flex:none}
   .connection-status i.verified{background:#6bc493}
@@ -796,12 +871,6 @@
     border-radius:5px;background:var(--ed-raised);color:var(--ed-text);font-size:11px;font-weight:650;cursor:pointer;
   }
   .inspector-section button.text-action{background:transparent;border:0;color:var(--ed-accent);padding:5px 4px}
-  .model-detail{display:grid;gap:3px}
-  .model-detail strong{font-size:12px;font-weight:700;overflow-wrap:anywhere}
-  .model-detail span{font-size:11px;color:var(--ed-muted)}
-  .tool-row{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:8px 0;border-bottom:1px solid var(--ed-border-soft);font-size:11px}
-  .tool-row strong{font-weight:650;color:var(--ed-text)}
-  .tool-row span{font-size:10px;color:var(--ed-muted-soft);text-align:right}
   .inspector-footnote {font-size:11px;color:var(--ed-muted-soft);line-height:1.5}
   .state-note {
     display:grid;gap:6px;margin:0 0 11px;padding:8px;border-left:2px solid #e1b65f;
@@ -828,23 +897,18 @@
     .ai-indicator{max-width:105px}
   }
   @media(max-width:919px){
-    /* Compact shelves occupy normal layout; they never overlay the native
-       Window Region or steal its physical rectangle. */
-    .unified-body,.unified-body.with-projects,.unified-body.with-inspector,
-    .unified-body.with-projects.with-inspector{
-      grid-template-columns:minmax(0,1fr);
-      grid-template-rows:minmax(220px,1fr);
+    /* The companions remain on BOTH sides; do not stack over native Blockbench. */
+    .unified-body.rail.with-projects.with-inspector{
+      grid-template-columns:44px minmax(0,1fr) 6px var(--tools-width,240px);
     }
-    .unified-body.with-projects{grid-template-rows:140px minmax(220px,1fr)}
-    .unified-body.with-inspector{grid-template-rows:minmax(220px,1fr) 140px}
-    .unified-body.with-projects.with-inspector{grid-template-rows:140px minmax(220px,1fr) 140px}
-    .dock-resizer{display:none}
-    .explorer{grid-column:1;grid-row:1;overflow:auto;border-right:0;border-bottom:1px solid var(--ed-border)}
-    .native-stage{grid-column:1;grid-row:1}
-    .with-projects .native-stage{grid-row:2}
-    .inspector{grid-column:1;grid-row:2;overflow:auto;border-left:0;border-top:1px solid var(--ed-border)}
-    .with-projects.with-inspector .inspector{grid-row:3}
-    .ai-label {display:none}
+    .unified-body.tools-rail.with-projects.with-inspector{
+      grid-template-columns:var(--explorer-width,200px) 6px minmax(0,1fr) 44px;
+    }
+    .unified-body.rail.tools-rail.with-projects.with-inspector{
+      grid-template-columns:44px minmax(0,1fr) 44px;
+    }
+    .rail-actions button{width:34px}
+    .ai-label{display:none}
     .ai-indicator{margin:0;padding:5px}
   }
   @media(max-width:600px){

@@ -860,6 +860,7 @@
           {openModel} {addProjectFolder} {runProjectAction} {focusCurrentEditor} {openBlockbenchEditor} {refresh}
           navigateWorkspace={() => navigate('Overview')}
           navigateSupport={() => navigate('Support')}
+          navigateActivity={() => navigate('Analytics')}
         />
 
       {:else if !status}
@@ -935,8 +936,8 @@
 
   /* The experimental editor owns exactly one host topbar. Native Blockbench
      owns its menu, modes, Outliner, UV panels and status independently. */
-  .desktop-shell.editor-shell{background:#1b1f27}
-  .desktop-shell.editor-shell .main-view{background:#1b1f27}
+  .desktop-shell.editor-shell{background:#181b1f}
+  .desktop-shell.editor-shell .main-view{background:#181b1f}
   .desktop-shell.editor-shell .operation-attention{padding:7px 14px;min-height:40px;background:#242a35;border-color:#394451}
   .desktop-shell.editor-shell .operation-attention.error{background:#312729}
 

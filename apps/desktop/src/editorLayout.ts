@@ -1,27 +1,23 @@
-// Presentation-only editor layout. No native or persisted workspace ownership.
+// Presentation-only editor layout. Both companion side docks stay present
+// (expanded or as shortcut rails); only explicit Focus Editor hides them.
+// Neither dock creates/owns the Blockbench editor or persists model state.
 export type EditorLayoutBand = 'wide' | 'standard' | 'rail' | 'compact';
 export type EditorDock = 'projects' | 'tools';
 
 export type EditorLayoutState = {
   band: EditorLayoutBand | null;
-  projectsVisible: boolean;
-  toolsVisible: boolean;
+  projectsExpanded: boolean;
+  assistantExpanded: boolean;
   focusMode: boolean;
-  railExpanded: boolean;
-  restoreProjectsAfterTools: boolean;
-  restoreRailAfterTools: boolean;
   projectsWidth: number;
   toolsWidth: number;
 };
 
 export const INITIAL_EDITOR_LAYOUT: EditorLayoutState = {
   band: null,
-  projectsVisible: true,
-  toolsVisible: false,
+  projectsExpanded: true,
+  assistantExpanded: true,
   focusMode: false,
-  railExpanded: false,
-  restoreProjectsAfterTools: false,
-  restoreRailAfterTools: false,
   projectsWidth: 200,
   toolsWidth: 240,
 };
@@ -34,13 +30,8 @@ export function editorLayoutBand(width: number): EditorLayoutBand {
 }
 
 export function defaultEditorPanels(band: EditorLayoutBand) {
-  return {
-    projectsVisible: band !== 'compact',
-    toolsVisible: band === 'wide',
-    railExpanded: false,
-    restoreProjectsAfterTools: false,
-    restoreRailAfterTools: false,
-  };
+  const expanded = band === 'wide' || band === 'standard';
+  return { projectsExpanded: expanded, assistantExpanded: expanded };
 }
 
 export function editorDockWidth(dock: EditorDock, proposed: number): number {

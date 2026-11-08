@@ -83,7 +83,10 @@ describe("Desktop UI Preview: real application only", () => {
     expect(script).toContain("native_editor_dominates_layout");
     expect(script).toContain("native_reservation_has_real_area");
     expect(script).toContain("side_docks_have_accessible_names");
-    expect(script).toContain("model_tools_sections_truthful");
+    expect(script).toContain("both_side_docks_present");
+    expect(script).toContain("dock_responsive_rails");
+    expect(script).toContain("assistant_review_activity_truthful");
+    expect(script).toContain("default_dark_matches_blockbench_source");
     expect(nativeStage).toContain('data-native-editor-reservation="true"');
     expect(nativeStage).not.toContain('class="native-placeholder"');
     expect(script).not.toMatch(/image_gen|(?:npm|pnpm|yarn)\s+(?:install|add|ci)|npx\s/);

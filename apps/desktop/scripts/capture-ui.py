@@ -535,44 +535,33 @@ def inspect_unified_editor(page, fixture, view):
         issues.append("fixture must never be able to place a native Blockbench window")
 
     project_toggle = page.get_by_role("button", name="Toggle Project Explorer", exact=True)
-    tools_toggle = page.get_by_role("button", name="Toggle Model Tools", exact=True)
-    if project_toggle.count() != 1 or tools_toggle.count() != 1:
-        return issues + ["Project Explorer and Model Tools toggles must both be available"]
+    assistant_toggle = page.get_by_role("button", name="Toggle LazyDesigner companion", exact=True)
+    if project_toggle.count() != 1 or assistant_toggle.count() != 1:
+        return issues + ["Project Explorer and LazyDesigner companion toggles must both be available"]
 
     width = page.viewport_size["width"]
     explorer = page.get_by_role("complementary", name="Project Explorer")
-    inspector = page.get_by_role("complementary", name="Model Tools")
-    compact = width < 920
-    wide = width >= 1810
-    if compact and explorer.count():
-        issues.append("compact Editor must start with Project Explorer collapsed")
-    if compact and inspector.count():
-        issues.append("compact Editor must start with Model Tools collapsed")
-    if not compact and explorer.count() != 1:
-        issues.append("standard Editor must start with Project Explorer")
-    if inspector.count() != (1 if wide else 0):
-        issues.append("Model Tools default visibility does not respect native editor width")
+    assistant = page.get_by_role("complementary", name="LazyDesigner companion")
+    should_rail = width < 1320
+    if explorer.count() != 1 or assistant.count() != 1:
+        issues.append("both companion side docks must remain mounted at every normal viewport")
+        return issues
+    if (explorer.locator(".rail-actions").count() == 1) != should_rail:
+        issues.append("Project Explorer rail default does not match viewport width")
+    if (assistant.locator(".rail-actions").count() == 1) != should_rail:
+        issues.append("LazyDesigner companion rail default does not match viewport width")
 
-    # Toggle only Svelte-local presentation controls. Native actions stay disabled.
-    opened_for_check = compact
-    if opened_for_check:
-        project_toggle.click()
-        if explorer.count() != 1:
-            issues.append("Project Explorer cannot be opened from the compact toolbar")
-    # The narrow editor uses a real 48px explorer rail. Expand it only for
-    # the search interaction test; this changes Svelte UI state, not Blockbench.
-    expanded_rail_for_check = False
-    if explorer.count() == 1 and explorer.locator(".rail-actions").count() == 1:
+    # Expand the actual Svelte Explorer only to exercise source-owned search.
+    if should_rail:
         expand = page.get_by_role("button", name="Expand Project Explorer", exact=True)
-        if expand.count() != 1:
-            issues.append("Project Explorer rail has no accessible expand action")
-        else:
+        if expand.count() == 1:
             expand.click()
-            expanded_rail_for_check = True
+        else:
+            issues.append("Project Explorer shortcut rail has no expand action")
     if fixture in {"ready", "many-projects"}:
         search = page.locator("#ld-unified-model-search")
         if search.count() != 1:
-            issues.append("project/model search is missing in Editor view")
+            issues.append("project/model search is missing in the expanded Project Explorer")
         else:
             target = "Needle asset" if fixture == "many-projects" else "Sofa"
             search.fill(target)
@@ -582,49 +571,55 @@ def inspect_unified_editor(page, fixture, view):
             search.press("Escape")
             if search.input_value() != "":
                 issues.append("Escape did not clear Editor project search")
-    if opened_for_check:
-        project_toggle.click()
-        if explorer.count() != 0:
-            issues.append("Project Explorer did not collapse cleanly")
-    elif expanded_rail_for_check:
+    if should_rail:
         collapse = page.get_by_role("button", name="Collapse Project Explorer to icons", exact=True)
         if collapse.count() != 1:
-            issues.append("Expanded Project Explorer cannot return to the narrow icon rail")
+            issues.append("Expanded Project Explorer cannot return to icon rail")
         else:
             collapse.click()
+        if explorer.count() != 1:
+            issues.append("Project Explorer disappeared instead of collapsing into a rail")
 
-    # Exercise only Svelte-local navigation; no simulated native editing.
-    if inspector.count() == 0:
-        tools_toggle.click()
-        if inspector.count() != 1:
-            issues.append("Model Tools cannot be opened")
-        elif inspector.get_by_text("Checks in Blockbench").count() != 1:
-            issues.append("Model Tools lacks the native checks section")
-        tools_toggle.click()
-    else:
-        if inspector.get_by_text("Model Overview", exact=True).count() != 1:
-            issues.append("Model Tools overview is missing at wide viewport")
-        tools_toggle.click()
-        if inspector.count() != 0:
-            issues.append("Model Tools cannot collapse at wide viewport")
-        tools_toggle.click()
+    # The right side is a real navigation companion, not a fabricated QA output.
+    if should_rail:
+        expand = page.get_by_role("button", name="Expand LazyDesigner companion", exact=True)
+        if expand.count() == 1:
+            expand.click()
+        else:
+            issues.append("LazyDesigner rail has no expand action")
+    for heading in ("Assistant", "Model Review", "Activity"):
+        if assistant.get_by_role("heading", name=heading, exact=True).count() != 1:
+            issues.append("LazyDesigner lacks the " + heading + " section")
+    if assistant.get_by_role("button", name="View technical activity", exact=True).count() != 1:
+        issues.append("Activity must link to real read-only technical analytics")
+    if assistant.locator(".tool-row").count():
+        issues.append("Do not present static tool-name rows as usable QA functions")
+    assistant_toggle.click()
+    if assistant.count() != 1 or assistant.locator(".rail-actions").count() != 1:
+        issues.append("Collapsing LazyDesigner must retain its shortcut rail")
+    assistant_toggle.click()
+    if assistant.count() != 1 or assistant.locator(".rail-actions").count() != (1 if should_rail else 0):
+        issues.append("LazyDesigner rail/full state cannot be restored")
+    if should_rail:
+        # Restore the default rail after testing a full-size companion panel.
+        page.get_by_role("button", name="Collapse LazyDesigner companion to icons", exact=True).click()
 
     focus = page.get_by_role("button", name="Focus Editor", exact=True)
     if focus.count() != 1:
         issues.append("Focus Editor action is unavailable")
     else:
         focus.click()
-        if explorer.count() or inspector.count():
-            issues.append("Focus Editor must clear both side docks")
+        if explorer.count() or assistant.count():
+            issues.append("Only explicit Focus Editor may hide both side docks")
         if native_area.count() != 1:
             issues.append("Focus Editor must preserve the real native reservation")
         exit_focus = page.get_by_role("button", name="Exit Focus Editor", exact=True)
         if exit_focus.count() == 1:
             exit_focus.click()
         else:
-            issues.append("Focus Editor has no restoration action")
-    if inspector.count() != (1 if wide else 0):
-        issues.append("Focus Mode did not restore Model Tools visibility")
+            issues.append("Focus Editor has no restore action")
+    if explorer.count() != 1 or assistant.count() != 1:
+        issues.append("Focus Mode must restore both side docks")
     return issues
 
 def main():

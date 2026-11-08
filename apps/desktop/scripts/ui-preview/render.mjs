@@ -230,21 +230,35 @@ async function main() {
           nativeSize: centerRect ? { width: centerRect.width, height: centerRect.height } : null,
           explorerLabel: explorer?.getAttribute('aria-label') ?? null,
           toolsLabel: tools?.getAttribute('aria-label') ?? null,
-          modelOverview: Boolean(tools?.querySelector('#ld-inspector-model')),
-          checksInBlockbench: Boolean(tools?.querySelector('#ld-inspector-checks')),
+          explorerRail: explorer?.classList.contains('rail') ?? false,
+          assistantRail: tools?.classList.contains('rail') ?? false,
+          assistantSections: ['ld-inspector-assistant', 'ld-inspector-checks', 'ld-inspector-activity']
+            .every(id => Boolean(tools?.querySelector('#' + id))),
+          theme: {
+            ui: getComputedStyle(element.closest('.desktop-shell')?.querySelector('.unified-workspace') ?? element)
+              .getPropertyValue('--color-ui').trim(),
+            back: getComputedStyle(element.closest('.desktop-shell')?.querySelector('.unified-workspace') ?? element)
+              .getPropertyValue('--color-back').trim(),
+            accent: getComputedStyle(element.closest('.desktop-shell')?.querySelector('.unified-workspace') ?? element)
+              .getPropertyValue('--color-accent').trim(),
+          },
         };
       });
       checks.native_reservation_has_real_area = Boolean(sidePanels.nativeSize
         && sidePanels.nativeSize.width > 600 && sidePanels.nativeSize.height > 300);
       checks.native_editor_dominates_layout = sidePanels.nativeFraction >=
-        (dims.width >= 1810 ? 0.70 : dims.width >= 1320 ? 0.80 : 0.90);
+        (dims.width >= 1320 ? 0.70 : 0.80);
+      checks.both_side_docks_present = (await frame.locator('#ld-unified-explorer').count()) === 1
+        && (await frame.locator('#ld-unified-inspector').count()) === 1;
       checks.side_docks_have_accessible_names = sidePanels.explorerLabel === 'Project Explorer'
-        && (dims.width < 1810 || sidePanels.toolsLabel === 'Model Tools');
-      checks.model_tools_sections_truthful = dims.width < 1810
-        || (sidePanels.modelOverview && sidePanels.checksInBlockbench);
-      const showPanels = dims.width >= 1810;
-      checks.explorer_visible = (await frame.locator('#ld-unified-explorer').count() === 1) === (dims.width >= 920);
-      checks.inspector_responsive = (await frame.locator('#ld-unified-inspector').count() === 1) === showPanels;
+        && sidePanels.toolsLabel === 'LazyDesigner companion';
+      const shouldRail = dims.width < 1320;
+      checks.dock_responsive_rails = sidePanels.explorerRail === shouldRail
+        && sidePanels.assistantRail === shouldRail;
+      checks.assistant_review_activity_truthful = shouldRail || sidePanels.assistantSections;
+      checks.default_dark_matches_blockbench_source = sidePanels.theme.ui === '#1e2127'
+        && sidePanels.theme.back === '#181b1f'
+        && sidePanels.theme.accent === '#3e90ff';
     }
     if (view === "workspace")
       checks.workspace_heading = await frame.locator('.page-toolbar h1').first().textContent() === "Workspace";

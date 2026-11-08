@@ -935,31 +935,24 @@ Unknown native receipts block automatic placement. The release app remains
 unmodified, and none of this proves functioning native visuals or input.
 
 
-## Unified Editor — Blockbench-first native companion (development-only)
+## Unified Editor — Blockbench-native companion (development-only)
 
-The editor is intentionally a three-column **window composition**, not three authored editing panes:
+The Editor consists of **Project Explorer (left)**, an **empty central reserved region for the original Blockbench Windows window**, and **LazyDesigner — Assistant & Review (right)**. It never renders or rebuilds Blockbench UI within the host. Editing, viewport, UV, Outliner, Animation, Undo, Save and native context remain owned by Blockbench. The Tauri/Win32 debug-only placement, resize and recovery mechanisms remain separate and keep the original lease/Detach safety checks.
 
-- **Left — Project Explorer:** searchable project/model tree with clear results, last-observed active/Modified/Missing state, pin/unpin, folder shortcuts (Models/References/Textures/Exports), recent models and in-flow empty states.
-- **Center — an entirely blank native window reservation:** `NativeEditorStage.svelte` supplies only an empty DOM rectangle for the original Blockbench top-level Windows window. There is no placeholder, faux viewport, editor header/footer, simulated toolbar, screenshot or new renderer inside the center. Actual Blockbench remains the sole editor and owner of 3D, Undo, UV, Outliner, Paint, Animation and Save.
-- **Right — Model Tools:** last-observed model overview, references to checks in the Blockbench plugin/native editor, and a qualified AI connection state. These are not fake QA PASS or a duplicate interactive model/AI editor.
+The Svelte host colors come from the exact Blockbench v5.2.1 Default (Dark) fallback (`JannisX11/blockbench/themes/dark.bbtheme`), with 40px-style panel-tab headers. This is a default-theme alignment, **not runtime synchronization** with a customized native Blockbench theme.
 
-A single compact LazyDesigner host header owns Project Explorer / Model Tools / Focus Editor toggles, Open Model, the native **Place Blockbench** / **Detach Blockbench** actions (only when not in an offline fixture), navigation and Support. Native placement/detachment retains the existing guarded Win32 cutout, exact-window ownership, delayed update, fail-closed recovery and Rust-authorized model/file operations. The center intentionally stays blank when the original Blockbench window is not actively composed.
+Both companion docks remain present by default, including in narrow viewports:
 
-### Editor layout defaults
-
-| Application width | Left dock | Right dock | Native center |
+| Window width | Project Explorer | Native center | LazyDesigner |
 | --- | --- | --- | --- |
-| ≥1810px | Project Explorer (200px) | Model Tools (240px) | Remainder |
-| 1320–1809px | Project Explorer | Closed; open on demand | Dominant |
-| 920–1319px | 48px Explorer rail, expand on demand | Closed | Dominant |
-| <920px | Closed | Closed | Full width; open one in-flow compact shelf |
+| >= 1320px | Full, default 200px | Remaining space | Full, default 240px |
+| 920–1319px | 48px shortcut rail | Remaining space | 48px shortcut rail |
+| Under 920px | 44px shortcut rail | Remaining space | 44px shortcut rail |
 
-Side docks resize within safe widths with a keyboard-operable separator. Opening Model Tools on a non-wide display temporarily closes Project Explorer; closing it restores the previously shown Explorer and its rail/expanded state. Focus Editor hides both without discarding the prior layout. View-only layout preferences persist across Workspace/Support navigation inside the current session; they are not saved to models.
+A user can explicitly expand either rail; on narrow windows the other stays a rail. Splitters resize expanded panels using pointer or keyboard. **Only Focus Editor intentionally hides both**. UI-only preferences persist within the Desktop session across Workspace/Support navigation, but not as saved model data.
 
-### Preview and evidence boundary
+**Project Explorer:** source-backed project/model search, active/dirty/missing state, safe project folder shortcuts, pin/unpin and collapsible recent models. Model opening and native file/folder navigation still await Detach/restore confirmation. Project Explorer is **not** Blockbench's cube Outliner.
 
-A true Svelte preview is **F2_BROWSER_COMPONENT**: the existing `apps/desktop/scripts/ui-preview/` harness loads production `src/main.ts` → `App.svelte` with deterministic development fixtures, uses a genuine iframe viewport, and captures a real browser screenshot. The default is **Editor ready, 1920×1080** so that both side docks are visible. The screenshot must show the **empty center**, not a synthetic Blockbench screenshot. The optional `scripts/capture-ui.py` suite has additional wide Editor fixture assertions for dock behavior, Focus Mode and blank native reservation.
+**LazyDesigner:** (1) **Assistant** shows observed AI connection and Support entry; actual AI prompts run in a separate connected AI client, not inside this panel. (2) **Model Review** identifies the current model and explains that Geometry diagnostics/Latest Edit review and Particle Studio run inside the existing Blockbench plugin; the only direct action is the existing Go to Blockbench focus when available. (3) **Activity** links to the real read-only Gateway `Analytics` page, not an invented model edit history. The Desktop does not claim to display live QA outcomes or execute AI prompts.
 
-**F2 does not prove native composition.** Only a matching installed Windows debug Tauri + Blockbench session can establish F3 native placement, focus, DPI, input and restoration. In browser fixture mode native controls/operations are disabled. A new Windows non-debug release is not enabled by this UI-only work; native cutout is still debug-gated in Rust. Do not use generated images or HTML reconstructions as UI preview evidence.
-
-Desktop UI source updates and authored assertions are not executed test or browser evidence. Record each proof tier only after it actually runs.
+For genuine **F2_BROWSER_COMPONENT** visual verification, the existing `apps/desktop/scripts/ui-preview/` loads the production Svelte App with deterministic development fixtures and defaults to 1920×1080. It must verify both side docks remain present, default Blockbench colors, native-center dominance, no overlay/overflow and the middle **entirely empty**. The optional `scripts/capture-ui.py` includes interactive fixture checks. A successful F2 cannot prove native Windows composition, which separately requires actual matching `LIVE_BLOCKBENCH`/F3 evidence. No UI generated images or HTML mockups may be substituted for F2/F3 proof. Build/test and native claims remain NOT_EXECUTED unless actually run.
