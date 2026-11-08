@@ -55,6 +55,46 @@ describe("human-facing Blockbench UI", () => {
     expect(capture).toContain("ld-project-action-note");
   });
 
+  test("Desktop feedback is in flow, contextual and never overlaps model actions", async () => {
+    const [app, workspace, navigator, fixture] = await Promise.all([
+      source("../apps/desktop/src/App.svelte"),
+      source("../apps/desktop/src/WorkspacePage.svelte"),
+      source("../apps/desktop/src/ProjectNavigator.svelte"),
+      source("../apps/desktop/scripts/capture-ui.py"),
+    ]);
+    const header = app.indexOf('<header class="page-toolbar">');
+    const notice = app.indexOf('class="operation-attention"');
+    const content = app.indexOf("{#if page === 'Analytics'}", header);
+    expect(header).toBeGreaterThan(0);
+    expect(notice).toBeGreaterThan(header);
+    expect(notice).toBeLessThan(content);
+    expect(app).not.toContain("position:fixed;z-index:220");
+    expect(app).toContain("$: attentionError = page === 'Support' && status ? '' : error;");
+    expect(app).toContain("page !== 'Overview'");
+    expect(app).toContain("clearActionToast();\n    const notice = desktopErrorNotice(cause);");
+    expect(app).toContain("role={attentionError ? 'alert' : 'status'}");
+    expect(app).toContain('aria-label="Dismiss notification" onclick={clearActionFeedback}');
+    expect(app).toContain(".operation-attention{flex:none;min-width:0;display:grid");
+    expect(app).toContain(".attention-copy span{min-width:0");
+    expect(app).toContain(".attention-actions{grid-column:2;justify-content:flex-end}");
+    expect(app).toContain("if (kind === 'pending') return;");
+
+    // One dominant action on first run; optional AI setup uses the secondary style.
+    expect(workspace).toContain('<button class="primary-button" onclick={() => openModel()}');
+    expect(workspace).toContain('<button class="secondary-button" onclick={installLazyDesigner}');
+    expect(workspace).toContain(".setup-panel{max-width:760px;margin:8px 0 18px");
+    expect(navigator).toContain(".content-section{margin-bottom:24px}");
+    expect(navigator).toContain(".project-list{border:1px solid var(--border-soft);border-radius:var(--radius-sm)");
+
+    expect(app).toContain("if (preview === 'pending')");
+    expect(app).toContain("else if (preview === 'error')");
+    expect(fixture).toContain("FEEDBACK_SCENARIOS = (");
+    expect(fixture).toContain("def inspect_feedback_presentation(page, feedback, view):");
+    expect(fixture).toContain('dismiss.press("Enter")');
+    expect(fixture).toContain('"feedbackEvidence": "SOURCE_FIXED_DEV_FIXTURES_ONLY"');
+    expect(fixture).not.toContain("repair.click()");
+  });
+
   test("AI labels reflect recent verification, missing handshake and stale observations", async () => {
     const { aiStatusPresentation } = await import("../../apps/desktop/src/desktopPresentation");
     const { createDevFixtureStatus } = await import("../../apps/desktop/src/desktopFixtures");
@@ -94,7 +134,7 @@ describe("human-facing Blockbench UI", () => {
     expect(app).toContain("if (kind === 'pending') return;");
     expect(app).toContain("actionToastTimer = window.setTimeout");
     expect(app).toContain("onclick={clearActionFeedback}");
-    expect(app).toContain("role={error ? 'alert' : 'status'}");
+    expect(app).toContain("role={attentionError ? 'alert' : 'status'}");
     expect(app).toContain("feedback.verification === 'focused' ? 'success' : 'pending'");
     expect(app).toContain("approvalPending ? 'pending' : 'success'");
     expect(app).toContain("result.reason !== 'MCP_SESSION_UNVERIFIED' ? 'success' : 'pending'");

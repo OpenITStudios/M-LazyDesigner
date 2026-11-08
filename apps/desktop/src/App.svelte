@@ -64,6 +64,9 @@
   let workspaceScrollTop = 0;
   let workspaceMain: HTMLElement | undefined;
   let deleteReview: ProjectDeletePreview | null = null;
+  // Support already presents the full classified error in its own section.
+  // Keep one non-blocking announcement elsewhere; do not cover model controls.
+  $: attentionError = page === 'Support' && status ? '' : error;
 
 
   let operations: DesktopOperationRecord[] = [];
@@ -143,6 +146,8 @@
   }
 
   function reportError(cause: unknown) {
+    // A failed action supersedes any earlier success or pending guidance.
+    clearActionToast();
     const notice = desktopErrorNotice(cause);
     error = notice.message;
     errorTitle = notice.title;
@@ -591,6 +596,19 @@
     if (devFixture) {
       void refresh().then(() => {
         if (devFixture === 'status-unverified') statusProbeFailures = 2;
+        // Fixed development-only feedback specimens for layout/copy review.
+        // Do not invoke native commands or accept arbitrary query text.
+        const preview = new URLSearchParams(window.location.search).get('feedback');
+        if (preview === 'pending') {
+          actionMessageKind = 'pending';
+          actionMessage = 'Model launch sent, but the active tab is not verified. Select Blockbench and check the model.';
+        } else if (preview === 'success') {
+          actionMessageKind = 'success';
+          actionMessage = 'Model confirmed active in the matching Blockbench session.';
+        } else if (preview === 'error') {
+          errorTitle = 'Model could not be opened';
+          error = 'The model launch was not confirmed. Open Support for technical details before trying again.';
+        }
       });
     } else {
       void refresh().then(() => {
@@ -669,6 +687,17 @@
         </div>
       </header>
 
+      {#if attentionError || actionMessage || (busyAction && progressStage && page !== 'Overview')}
+        <aside class:error={Boolean(attentionError)} class:success={Boolean(actionMessage) && !attentionError && actionMessageKind === 'success'} class:notice={Boolean(actionMessage) && !attentionError && actionMessageKind !== 'success'} class="operation-attention" role={attentionError ? 'alert' : 'status'} aria-live={attentionError ? 'assertive' : 'polite'}>
+          <div class="attention-icon" aria-hidden="true">{attentionError ? '!' : actionMessage ? (actionMessageKind === 'success' ? '✓' : 'i') : '•'}</div>
+          <div class="attention-copy"><strong>{attentionError ? errorTitle : actionMessage ? (actionMessageKind === 'pending' ? 'Next step' : actionMessageKind === 'unchanged' ? 'No change' : 'Done') : 'Working'}</strong><span>{attentionError || actionMessage || progressLabel(progressStage)}</span></div>
+          <div class="attention-actions">
+            {#if attentionError && status}<button type="button" onclick={() => navigate('Support')}>Open Support</button>{/if}
+            {#if attentionError || actionMessage}<button type="button" class="dismiss" aria-label="Dismiss notification" onclick={clearActionFeedback}>×</button>{/if}
+          </div>
+        </aside>
+      {/if}
+
       {#if page === 'Analytics'}
         <AnalyticsPage data={analytics} loading={analyticsLoading}
           error={analyticsError} exporting={analyticsExporting}
@@ -718,17 +747,6 @@
   <ProjectDeleteDialog review={deleteReview} busy={busyAction !== null} confirmBlocked={statusProbeFailures >= 2} onCancel={cancelDeleteProject} onConfirm={confirmDeleteProject} />
 {/if}
 
-{#if error || actionMessage || (busyAction && progressStage && busyAction !== 'repair')}
-  <aside class:error={Boolean(error)} class:success={Boolean(actionMessage) && !error && actionMessageKind === 'success'} class:notice={Boolean(actionMessage) && !error && actionMessageKind !== 'success'} class="operation-attention" role={error ? 'alert' : 'status'} aria-live={error ? 'assertive' : 'polite'}>
-    <div class="attention-icon">{error ? '!' : actionMessage ? (actionMessageKind === 'success' ? '✓' : 'i') : '•'}</div>
-    <div class="attention-copy"><strong>{error ? errorTitle : actionMessage ? (actionMessageKind === 'pending' ? 'Next step' : actionMessageKind === 'unchanged' ? 'No change' : 'Done') : 'Working'}</strong><span>{error || actionMessage || progressLabel(progressStage)}</span></div>
-    <div class="attention-actions">
-      {#if error && status}<button onclick={() => navigate('Support')}>Support</button>{/if}
-      {#if error || actionMessage}<button class="dismiss" aria-label="Dismiss notification" onclick={clearActionFeedback}>×</button>{/if}
-    </div>
-  </aside>
-{/if}
-
 <style>
   .loading-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--bg);color:var(--muted);font-size:var(--font-ui)}.loading-spinner{width:12px;height:12px;border:2px solid var(--surface-4);border-top-color:var(--accent);border-radius:50%;animation:desktop-spin .8s linear infinite}
   .skip-link{position:fixed;z-index:1000;top:8px;left:8px;transform:translateY(-150%);padding:8px 10px;border:1px solid var(--accent);border-radius:7px;background:var(--surface);color:var(--text);font-weight:700;text-decoration:none}.skip-link:focus{transform:translateY(0)}
@@ -736,10 +754,25 @@
   .navigation{display:flex;flex-direction:column;padding:12px 9px;border-right:1px solid var(--border-soft);background:#0f1113}.navigation-brand{display:flex;align-items:center;gap:9px;padding:7px 8px 18px}.navigation-brand strong{font-size:var(--font-title);font-weight:700;letter-spacing:-.01em}.brand-mark{width:10px;height:10px;border-radius:3px;background:var(--accent)}.global-nav{display:grid;gap:2px}.global-nav button{min-height:36px;display:flex;align-items:center;gap:9px;padding:0 9px;border-radius:7px;background:transparent;color:var(--muted);font-size:var(--font-ui);font-weight:600;text-align:left;cursor:pointer}.global-nav button:hover{background:var(--surface);color:var(--text-soft)}.global-nav button.active{background:var(--surface);color:var(--text)}.nav-icon{width:17px;height:17px;display:grid;place-items:center}.nav-icon :global(svg){width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
   .main-view{min-width:0;height:100vh;display:flex;flex-direction:column;overflow:hidden}.page-toolbar{min-height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid var(--border-soft);background:var(--bg)}.page-toolbar h1{margin:0;font-size:16px;font-weight:680;letter-spacing:-.015em}.toolbar-actions{display:flex;align-items:center;gap:6px}.fixture-badge{padding:3px 6px;border:1px solid var(--border);border-radius:5px;color:var(--muted-2);font-size:var(--font-xs)}
   .status-probe-warning{font-size:var(--font-sm);color:var(--warning)}
-  .more-menu{position:relative}.more-menu summary{width:30px;height:30px;display:grid;place-items:center;list-style:none;border-radius:6px;color:var(--muted);cursor:pointer}.more-menu summary:hover,.more-menu[open] summary{background:var(--surface-2);color:var(--text)}.more-menu summary::-webkit-details-marker{display:none}.menu-popover{position:absolute;z-index:20;right:0;top:34px;width:168px;display:grid;padding:5px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);box-shadow:var(--shadow-popover)}.menu-popover button{width:100%;padding:7px 8px;border-radius:5px;background:transparent;color:var(--text-soft);text-align:left;cursor:pointer;font-size:var(--font-sm)}.menu-popover button:hover:not(:disabled){background:var(--surface-3)}
+  .more-menu{position:relative}.more-menu summary{width:34px;height:34px;display:grid;place-items:center;list-style:none;border-radius:var(--radius-xs);color:var(--muted);cursor:pointer}.more-menu summary:hover,.more-menu[open] summary{background:var(--surface-2);color:var(--text)}.more-menu summary::-webkit-details-marker{display:none}.menu-popover{position:absolute;z-index:20;right:0;top:34px;width:168px;display:grid;padding:5px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);box-shadow:var(--shadow-popover)}.menu-popover button{width:100%;padding:7px 8px;border-radius:5px;background:transparent;color:var(--text-soft);text-align:left;cursor:pointer;font-size:var(--font-sm)}.menu-popover button:hover:not(:disabled){background:var(--surface-3)}
   .message-state{max-width:760px;display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:start;gap:12px;padding-top:12px}.message-icon{width:26px;height:26px;display:grid;place-items:center;border-radius:6px;background:var(--surface-2);font-size:var(--font-ui);font-weight:800}.message-icon.danger{background:var(--danger-bg);color:var(--danger)}.message-copy h2{margin:0;font-size:16px}.message-copy p{margin:5px 0 0;color:var(--muted);font-size:var(--font-sm)}
-  .operation-attention{position:fixed;z-index:220;right:16px;bottom:16px;width:min(360px,calc(100vw - 32px));display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;align-items:start;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);box-shadow:var(--shadow-popover)}.operation-attention.success{border-color:var(--accent-border)}.operation-attention.notice{border-color:var(--border-strong)}.operation-attention.error{border-color:#705c26}.attention-icon{width:23px;height:23px;display:grid;place-items:center;border-radius:6px;background:var(--surface-3);font-size:var(--font-sm);font-weight:800}.success .attention-icon{background:var(--accent-soft);color:#9ee8b9}.error .attention-icon{background:var(--warning-bg);color:#fde68a}.attention-copy{display:grid;gap:2px}.attention-copy strong{font-size:var(--font-sm)}.attention-copy span{color:var(--muted);font-size:var(--font-xs);line-height:1.4}.attention-actions{display:flex;gap:4px}.attention-actions button{min-height:24px;padding:4px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface-3);font-size:var(--font-xs);font-weight:700}.attention-actions .dismiss{width:24px;padding:0;border:0;background:transparent;color:var(--muted);font-size:15px}
-  @media(max-width:760px){.desktop-shell{grid-template-columns:62px minmax(0,1fr)}.navigation{padding-inline:7px}.navigation-brand strong,.global-nav button>span:not(.nav-icon){display:none}.navigation-brand{justify-content:center;padding-inline:0}.global-nav button{justify-content:center;padding:0}.page-toolbar{padding:0 16px}.operation-attention{right:10px;bottom:10px;width:calc(100vw - 20px);grid-template-columns:auto minmax(0,1fr)}.attention-actions{grid-column:2}}
+  /* In-flow, contextual feedback: never obscures the model/project action area. */
+  .operation-attention{flex:none;min-width:0;display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 24px;border-bottom:1px solid var(--border-soft);background:var(--bg-elevated)}
+  .operation-attention.success{border-color:var(--accent-border)}
+  .operation-attention.notice{border-color:var(--border-strong)}
+  .operation-attention.error{background:var(--warning-bg);border-color:var(--warning)}
+  .attention-icon{width:24px;height:24px;display:grid;place-items:center;border-radius:var(--radius-xs);background:var(--surface-3);font-size:var(--font-sm);font-weight:800}
+  .success .attention-icon{background:var(--accent-soft);color:var(--accent)}
+  .error .attention-icon{background:var(--surface-2);color:var(--warning)}
+  .attention-copy{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;min-width:0}
+  .attention-copy strong{font-size:var(--font-sm);font-weight:700}
+  .attention-copy span{min-width:0;color:var(--text-soft);font-size:var(--font-sm);line-height:1.45;overflow-wrap:anywhere}
+  .attention-actions{display:flex;align-items:center;gap:6px}
+  .attention-actions button{min-height:32px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface-2);color:var(--text-soft);font-size:var(--font-sm);font-weight:650;cursor:pointer}
+  .attention-actions button:hover{background:var(--surface-3);color:var(--text)}
+  .attention-actions .dismiss{width:32px;padding:0;border:0;background:transparent;font-size:19px}
+  @media(max-width:760px){.operation-attention{padding:10px 16px;align-items:start}.attention-copy{display:grid;gap:3px}}
+
   /* Workspace First: preserve content width with two top-level destinations. */
   .desktop-shell{display:flex;flex-direction:column}
   .navigation{min-height:56px;flex-direction:row;align-items:center;gap:20px;padding:0 24px;border-right:0;border-bottom:1px solid var(--border-soft)}
@@ -756,6 +789,8 @@
     .page-toolbar{padding:0 16px}
   }
   @media(max-width:520px){
+    .operation-attention{grid-template-columns:24px minmax(0,1fr);gap:8px;padding:10px 12px}
+    .attention-actions{grid-column:2;justify-content:flex-end}
     .navigation{gap:8px;padding:0 10px}
     .navigation-brand strong{display:none}
     .global-nav button{padding:0 6px}

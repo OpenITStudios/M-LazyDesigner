@@ -746,7 +746,7 @@ describe("Desktop calm connection summary", () => {
 
     const app = await Bun.file("../apps/desktop/src/App.svelte").text();
     expect(app).toContain("desktopErrorNotice(cause)");
-    expect(app).toContain("error ? errorTitle");
+    expect(app).toContain("attentionError ? errorTitle");
     const support = await source("../apps/desktop/src/SupportPage.svelte");
     expect(app).toContain("<SupportPage");
     expect(support).toContain('aria-label="Last unsuccessful action"');

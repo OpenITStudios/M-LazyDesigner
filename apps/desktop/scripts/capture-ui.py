@@ -27,6 +27,13 @@ SCENARIOS = (
     ("runtime-offline", "workspace"),
     ("unsupported", "workspace"),
 )
+# Development-only fixed feedback specimens: no native actions or user files.
+FEEDBACK_SCENARIOS = (
+    ("ready", "workspace", "pending"),
+    ("ready", "workspace", "success"),
+    ("ready", "workspace", "error"),
+    ("ready", "support", "error"),
+)
 # The narrow layout is a source-level proxy for high-zoom/small effective width, not native proof.
 VIEWPORTS = ((390, 640), (780, 560), (980, 680))
 
@@ -346,6 +353,44 @@ def inspect_task_journey(page, fixture, view):
     }
 
 
+def inspect_feedback_presentation(page, feedback, view):
+    """Check source-driven status placement and keyboard dismissal without native actions."""
+    if feedback is None:
+        return []
+    issues = []
+    notice = page.locator(".operation-attention")
+    if feedback == "error" and view == "support":
+        if notice.count() != 0:
+            issues.append("Support must not repeat its inline error in a second notification")
+        if page.locator('section[aria-label="Last unsuccessful action"]').count() != 1:
+            issues.append("Support must provide its own classified error section")
+        return issues
+
+    if notice.count() != 1:
+        return ["one in-flow feedback notice is required"]
+    expected_role = "alert" if feedback == "error" else "status"
+    if notice.get_attribute("role") != expected_role:
+        issues.append(f"feedback must have role={expected_role}")
+    if notice.evaluate("(node) => getComputedStyle(node).position") == "fixed":
+        issues.append("feedback must not float over model/project controls")
+    content = page.locator(".page-content")
+    if content.count() == 1:
+        bottom = notice.bounding_box()
+        top = content.bounding_box()
+        if bottom and top and bottom["y"] + bottom["height"] > top["y"] + 2:
+            issues.append("feedback is overlapping the scrollable work area")
+
+    dismiss = notice.get_by_role("button", name="Dismiss notification", exact=True)
+    if dismiss.count() != 1:
+        issues.append("feedback must expose an accessible dismiss action")
+    else:
+        dismiss.focus()
+        dismiss.press("Enter")
+        if notice.count() != 0:
+            issues.append("Enter did not dismiss the feedback notice")
+    return issues
+
+
 def main():
     args = parse_args()
     target = urlsplit(args.base_url)
@@ -368,14 +413,19 @@ def main():
             opts["executable_path"] = args.browser
         browser = playwright.chromium.launch(**opts)
         try:
+            scenarios = [(fixture, view, None) for fixture, view in SCENARIOS] + list(FEEDBACK_SCENARIOS)
             for width, height in VIEWPORTS:
-                for fixture, view in SCENARIOS:
-                    name = f"{fixture}-{view}-{width}x{height}"
+                for fixture, view, feedback in scenarios:
+                    suffix = f"-feedback-{feedback}" if feedback else ""
+                    name = f"{fixture}-{view}{suffix}-{width}x{height}"
                     page = browser.new_page(viewport={"width": width, "height": height}, device_scale_factor=1, reduced_motion="reduce")
                     page_errors = []
                     page.on("pageerror", lambda error, target=page_errors: target.append(str(error)))
-                    url = args.base_url.rstrip("/") + "/?" + urlencode({"fixture": fixture, "view": view})
-                    entry = {"fixture": fixture, "view": view, "requestedViewport": [width, height], "url": url}
+                    query = {"fixture": fixture, "view": view}
+                    if feedback:
+                        query["feedback"] = feedback
+                    url = args.base_url.rstrip("/") + "/?" + urlencode(query)
+                    entry = {"fixture": fixture, "view": view, "feedback": feedback, "requestedViewport": [width, height], "url": url}
                     try:
                         page.goto(url, wait_until="domcontentloaded", timeout=20000)
                         page.locator(f'[data-qa-fixture="{fixture}"]').wait_for(timeout=15000)
@@ -387,6 +437,9 @@ def main():
                             page.get_by_text("AI status needs verification", exact=True).wait_for(timeout=10000)
                         if fixture == "status-unverified" and view == "support":
                             page.get_by_text("AI status needs verification", exact=True).wait_for(timeout=10000)
+                        if feedback:
+                            target = 'section[aria-label="Last unsuccessful action"]' if feedback == "error" and view == "support" else ".operation-attention"
+                            page.locator(target).wait_for(timeout=10000)
                         snapshot = inspect(page)
                         action_checks = inspect_action_states(page, fixture, view)
                         entry["actionChecks"] = action_checks
@@ -404,7 +457,12 @@ def main():
                             failures.append(name + ": viewport size mismatch")
                         if snapshot["horizontalOverflow"] or snapshot["offscreenControls"]:
                             failures.append(name + ": horizontal overflow or clipped controls")
-                        navigation_issues = inspect_project_expansion(page, fixture, view)
+                        feedback_issues = inspect_feedback_presentation(page, feedback, view)
+                        if feedback:
+                            entry["feedbackChecks"] = {"issues": feedback_issues}
+                        for issue in feedback_issues:
+                            failures.append(name + ": " + issue)
+                        navigation_issues = inspect_project_expansion(page, fixture, view) if feedback is None else []
                         if fixture == "ready" and view == "workspace":
                             entry["navigationChecks"] = {"checked": 3, "issues": navigation_issues}
                         for issue in navigation_issues:
@@ -419,7 +477,7 @@ def main():
                             entry["firstRunChecks"] = {"checked": 5, "issues": first_run_issues}
                         for issue in first_run_issues:
                             failures.append(name + ": " + issue)
-                        journey = inspect_task_journey(page, fixture, view)
+                        journey = inspect_task_journey(page, fixture, view) if feedback is None else None
                         if journey is not None:
                             entry["taskJourney"] = journey
                             for issue in journey["issues"]:
@@ -440,6 +498,7 @@ def main():
         "purpose": "development fixture layout inspection",
         "nativeOrVisualApproval": "NOT_VERIFIED",
         "taskEvidence": "OFFLINE_BROWSER_FIXTURE_ONLY",
+        "feedbackEvidence": "SOURCE_FIXED_DEV_FIXTURES_ONLY",
         "humanTaskSuccess": "NOT_MEASURED",
         "timingInterpretation": "Playwright automation elapsed time, not user completion time",
         "scenarios": records,

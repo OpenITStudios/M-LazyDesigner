@@ -448,6 +448,8 @@ python scripts/capture-ui.py
 # Optional: --browser <path-to-Chrome-or-Chromium> --out <temporary-qa-directory>
 ```
 
+Fixed, development-only `?fixture=ready&feedback=pending|success|error` specimens show truthful feedback copy without native actions. Support's error specimen uses `?view=support&feedback=error` to verify the classified in-page error instead of a duplicate notification. These query options do not work in production and never receive arbitrary message text.
+
 The script captures Workspace, Support and Analytics at **390×640** (narrow-layout proxy), **780×560** (minimum window baseline), and **980×680** (default comparison), plus relevant failure/setup states. It records horizontal overflow, offscreen controls, browser JS errors, and top/bottom screenshots when scrolling is needed. The `many-projects` synthetic fixture contains eight uniquely identified projects, with the `Needle asset` in the final project to check discovery beyond the initial six rows.
 
 The same existing screenshot helper now records bounded `taskJourney` evidence for five synthetic UI paths: finding the native model-open action without AI setup, searching and clearing normal model results, finding an item in the hidden eighth project, discovering Refresh when status is stale, and navigating to the existing Repair control without activating it. Records include UI availability, browser interaction count, automation elapsed milliseconds, and explicit `native_action: NOT_ATTEMPTED` / `human_task_success: NOT_MEASURED`. The scripted timing is **not** a human completion-time or product-speed benchmark. The path checker does not click model-open, Refresh, Install, Delete, or Repair actions.
@@ -763,6 +765,10 @@ approval is universally required: approval is mentioned conditionally and
 never marked complete merely because a file was highlighted. User-facing
 managed-component update progress and activity labels deliberately distinguish
 managed distribution updates from updates to the Desktop executable.
+
+Desktop presents action feedback **in the layout, directly below the main toolbar**, not as a fixed bottom-right overlay that can obscure model controls. A pending next step persists until dismissal/replacement; success and unchanged notices retain their bounded automatic timeout. While Workspace already displays a task-progress strip, it does not also render a second 'Working' announcement. Support's classified error section is authoritative on that page, so the global strip suppresses duplicate error copy there. Reporting a new failed action clears outdated success/pending copy before showing the error. The dismiss button remains keyboard-accessible, and no native operation is triggered by its use.
+
+The initial **Open Model…** CTA retains the primary visual treatment. Optional **Set up AI tools** uses the secondary treatment and its descriptive steps remain behind a native disclosure. Project list spacing/radii and more-actions hit targets reuse existing Desktop tokens; no new design system or palette was added.
 
 The shared `aiStatusPresentation()` maps only the canonical Desktop product
 state and observation freshness into Workspace/Support copy. `Recently verified`
