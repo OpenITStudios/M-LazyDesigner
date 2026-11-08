@@ -1,6 +1,6 @@
 <script lang="ts">
   import { version as desktopVersion } from '../package.json';
-  import { compatibilityLabel, productMode, productHeadline, productMessage, aiStatusPresentation, type ManagedAction } from './desktopPresentation';
+  import { compatibilityLabel, productMode, productHeadline, productMessage, aiStatusPresentation, type ManagedAction, type DesktopErrorRecovery } from './desktopPresentation';
   import type { SystemStatus, DesktopBusyAction, DesktopOperationRecord } from './desktopTypes';
 
   export let status: SystemStatus;
@@ -13,6 +13,7 @@
   export let error: string;
   export let errorTitle: string;
   export let errorDetail: string | null;
+  export let errorRecovery: DesktopErrorRecovery | null;
   export let operations: DesktopOperationRecord[];
   export let refresh: () => Promise<void>;
   export let showRetiredPluginFile: () => Promise<void>;
@@ -57,6 +58,16 @@
     <section class="settings-section" aria-label="Last unsuccessful action">
       <h2>{errorTitle}</h2>
       <p role="alert">{error}</p>
+      {#if errorRecovery}
+        <div class="error-recovery">
+          <strong>Next step</strong>
+          <p>{errorRecovery.nextStep}</p>
+          <small>Still to verify: {errorRecovery.confirmationNeeded}</small>
+          {#if errorRecovery.action === 'refresh-status' && !aiStatus.needsRefresh}
+            <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh status</button>
+          {/if}
+        </div>
+      {/if}
       {#if errorDetail}
         <details class="advanced-recovery">
           <summary><span><strong>Technical details</strong><small>For troubleshooting only. No information is uploaded.</small></span><span class="disclosure-state"><span class="when-closed">Show</span><span class="when-open">Hide</span></span></summary>
@@ -104,7 +115,7 @@
   <section class="settings-section">
     <div class="settings-heading">
       <h2>About</h2>
-      {#if !aiStatus.needsRefresh}
+      {#if !aiStatus.needsRefresh && !(error && errorRecovery?.action === 'refresh-status')}
         <button class="secondary-button small-button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh</button>
       {/if}
     </div>
@@ -163,6 +174,11 @@
   .support-banner{display:flex;align-items:flex-start;gap:9px;margin-bottom:24px;padding:10px 0 18px;border-bottom:1px solid var(--border-soft)}.support-banner-dot{width:7px;height:7px;margin-top:4px;border-radius:50%;background:var(--warning)}.support-banner>div{display:grid;gap:2px}.support-banner strong{font-size:var(--font-sm)}.support-banner span{color:var(--muted);font-size:var(--font-sm)}.settings-section{max-width:780px;margin-bottom:30px}.settings-section h2{margin:0 0 9px;font-size:var(--font-title)}.settings-row{min-height:54px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-top:1px solid var(--border-soft)}.settings-row.compact{min-height:42px}.settings-row>div{display:grid;gap:2px}.settings-row strong{font-size:var(--font-sm)}.settings-row span{color:var(--muted);font-size:var(--font-sm);line-height:1.4}
   .advanced-recovery,.recent-activity{margin-top:8px;border-top:1px solid var(--border-soft)}.advanced-recovery summary,.recent-activity summary{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:12px 0;list-style:none;cursor:pointer}.advanced-recovery summary::-webkit-details-marker,.recent-activity summary::-webkit-details-marker{display:none}.advanced-recovery summary>span:first-child,.recent-activity summary>span:first-child{display:grid;gap:2px}.advanced-recovery summary strong,.recent-activity summary strong{font-size:var(--font-sm)}.advanced-recovery summary small,.recent-activity summary small{color:var(--muted);font-size:var(--font-xs)}.advanced-recovery summary>.disclosure-state,.recent-activity summary>.disclosure-state{color:var(--muted);font-size:var(--font-sm);white-space:nowrap}.advanced-recovery .disclosure-state .when-open,.recent-activity .disclosure-state .when-open{display:none}.advanced-recovery[open] .disclosure-state .when-open,.recent-activity[open] .disclosure-state .when-open{display:inline}.advanced-recovery[open] .disclosure-state .when-closed,.recent-activity[open] .disclosure-state .when-closed{display:none}.recovery-list,.recent-list{border-top:1px solid var(--border-soft)}.recovery-list>div,.recent-list>div{min-height:48px;display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--border-soft)}.recovery-list>div>span{display:grid;gap:2px}.recovery-list strong{font-size:var(--font-sm)}.recovery-list small{color:var(--muted);font-size:var(--font-xs)}.recent-list span{font-size:var(--font-sm)}.recent-list strong{font-size:var(--font-xs);color:#9ee8b9}.recent-list strong.failed{color:#ff9aa2}.recent-list strong.pending{color:var(--warning)}.recent-list strong.unchanged{color:var(--muted)}
   @media(max-width:760px){.settings-row,.recovery-list>div{align-items:flex-start;flex-direction:column}}
+  .error-recovery{display:grid;gap:5px;margin:10px 0 12px;padding:11px 12px;border-left:2px solid var(--info);background:var(--surface);border-radius:var(--radius-xs)}
+  .error-recovery strong{font-size:var(--font-sm)}
+  .error-recovery p{margin:0;color:var(--text-soft);font-size:var(--font-sm);line-height:1.45}
+  .error-recovery small{color:var(--muted);font-size:var(--font-xs);line-height:1.45;overflow-wrap:anywhere}
+  .error-recovery button{justify-self:start;margin-top:4px}
   @media(max-width:680px){
     .support-banner{flex-wrap:wrap;gap:10px}
     .support-banner>div{flex:1 1 160px;min-width:0}

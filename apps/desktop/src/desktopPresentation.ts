@@ -230,13 +230,21 @@ export function managedActionPresentation(
   throw new Error(`Unexpected managed ${action} result (${status}). Refresh and open Support.`);
 }
 
-// Surface short actionable copy in Workspace. The original command output is
-// available only through Support, so incidental filesystem paths and flags
-// do not become the primary instruction for a normal user.
+// Classify user-facing error recovery without owning any native operation.
+// Only a full status Refresh or navigation to Support can be offered directly;
+// destructive retry, migration and repair always remain explicit separate tasks.
+export type DesktopRecoveryAction = 'refresh-status' | 'open-support' | null;
+export type DesktopErrorRecovery = {
+  nextStep: string;
+  confirmationNeeded: string;
+  action: DesktopRecoveryAction;
+};
+
 export type DesktopErrorNotice = {
   title: string;
   message: string;
   detail: string | null;
+  recovery: DesktopErrorRecovery;
 };
 
 export function desktopErrorNotice(cause: unknown): DesktopErrorNotice {
@@ -247,52 +255,90 @@ export function desktopErrorNotice(cause: unknown): DesktopErrorNotice {
   const detail = typeof record?.message === 'string'
     ? record.message
     : cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : null;
-  const known = (title: string, message: string): DesktopErrorNotice => ({
-    title, message, detail,
+  const known = (
+    title: string, message: string, nextStep: string, confirmationNeeded: string,
+    action: DesktopRecoveryAction = 'open-support',
+  ): DesktopErrorNotice => ({
+    title, message, detail, recovery: { nextStep, confirmationNeeded, action },
   });
-  if (/DESKTOP_UPDATE_REQUIRED/.test(detail ?? '')) return known('Desktop update required',
-    'The selected package needs a compatible Desktop installer. The active installation was preserved.');
-  if (/INSTALLATION_MISMATCH/.test(detail ?? '')) return known('Installed components need verification',
-    'Open Support to check the managed package, plugin and AI client entry before reconnecting.');
+
+  // Prefer exact native error codes before interpreting incidental message
+  // text. A typed DELETE result cannot become an "update required" error
+  // merely because an error detail contains a similar marker.
+  const updateRequired = () => known('Desktop update required',
+    'The selected package needs a compatible Desktop installer. The active installation was preserved.',
+    'Review the Desktop version before choosing a compatible verified installer.',
+    'Whether this Desktop version supports the selected managed package.');
+  const installationMismatch = () => known('Installed components need verification',
+    'Open Support to check the managed package, plugin and AI client entry before reconnecting.',
+    'Review the installed component alignment before reconnecting.',
+    'Whether the Desktop, plugin and managed package match.');
+  if (code === 'DESKTOP_UPDATE_REQUIRED') return updateRequired();
+  if (code === 'INSTALLATION_MISMATCH') return installationMismatch();
   if (code === 'PROJECT_DELETE_REVIEW_FAILED' || code === 'PROJECT_RECYCLE_FAILED') {
     if (/close all Blockbench|close Blockbench/i.test(detail ?? '')) {
       return known('Close Blockbench first',
-        'Save your models and close every Blockbench window, then review Delete Project again.');
+        'Save your models and close every Blockbench window, then review Delete Project again.',
+        'Save work, close Blockbench yourself, and start a new deletion review only if you still intend to delete the project.',
+        'The folder has not been confirmed recycled by this attempt.', null);
     }
     if (/protected|system|broad|overlaps|linked|special|network|fixed drive/i.test(detail ?? '')) {
       return known('Folder is not safe to delete here',
-        'This folder cannot be recycled as a Project. Review its contents in File Explorer.');
+        'This folder cannot be recycled as a Project. Review its contents in File Explorer.',
+        'Inspect the original folder in File Explorer; do not repeat Delete Project on this unsafe location.',
+        'The selected folder is not verified eligible for safe recycling here.', null);
     }
     return known('Project deletion not confirmed',
-      'Windows did not confirm that the entire folder was recycled. Check the folder in Explorer before retrying. No permanent-delete fallback was attempted.');
+      'Windows did not confirm that the entire folder was recycled. Check the folder in Explorer before retrying. No permanent-delete fallback was attempted.',
+      'Inspect both the original folder and Windows Recycle Bin before considering another deletion review.',
+      'Whether Windows recycled the selected project folder remains unknown.', null);
   }
   if (code === 'LEGACY_PLUGIN_MIGRATION_REQUIRED') {
     return known('Existing plugin needs review',
-      'An older Blockbench plugin was found. No files were replaced. Open Support for safe migration steps.');
+      'An older Blockbench plugin was found. No files were replaced. Open Support for safe migration steps.',
+      'Inspect the existing plugin and the separate backed-up migration path.',
+      'A safe plugin migration and new connection have not been confirmed.');
   }
   if (code === 'LEGACY_CLIENT_MIGRATION_REQUIRED') {
     return known('Existing AI connection needs review',
-      'An older AI client entry was found. Your settings were preserved. Open Support for migration steps.');
+      'An older AI client entry was found. Your settings were preserved. Open Support for migration steps.',
+      'Review the previous client entry and the explicit backed-up migration path.',
+      'The replacement client configuration and new handshake have not been confirmed.');
+  }
+  if (code === 'UPDATE_CHECK_FAILED') {
+    return known('Update check unavailable',
+      'Could not verify updates right now. You can continue using the current installation.',
+      'Continue working with the current installation; review update information later from Support.',
+      'Whether a newer verified managed package is available.', null);
   }
   if (code === 'BLOCKBENCH_PROFILE_UNVERIFIED' ||
       /multiple Blockbench installations|different userData profile|Blockbench.*(?:profile|executable).*unavailable|(?:multiple|different).*blockbench.*profile|profile.*(?:ambiguous|unavailable|another)/i.test(detail ?? '')) {
     return known('Blockbench profile needs review',
-      'LazyDesigner could not verify which Blockbench profile to use. Keep your models open and check Support.');
+      'LazyDesigner could not verify which Blockbench profile to use. Keep your models open and check Support.',
+      'Check the installed Blockbench executable and profile before changing either.',
+      'The identity of the intended Blockbench installation and profile.');
   }
   if (/Local file is not owned or was edited|Retired BlockIT plugin exists/i.test(detail ?? '')) {
     return known('Existing file needs review',
-      'An existing plugin or managed file was preserved rather than overwritten. Open Support to review the conflict.');
+      'An existing plugin or managed file was preserved rather than overwritten. Open Support to review the conflict.',
+      'Inspect the existing file; do not overwrite or adopt it automatically.',
+      'Whether the existing file belongs to the intended installation.');
   }
+  // Compatibility fallback for legacy plain-text diagnostics only; explicit
+  // typed errors have already been given their own recovery paths.
+  if (/DESKTOP_UPDATE_REQUIRED/.test(detail ?? '')) return updateRequired();
+  if (/INSTALLATION_MISMATCH/.test(detail ?? '')) return installationMismatch();
   if (/timed out|timeout/i.test(detail ?? '')) {
     return known('Connection check timed out',
-      'The system did not respond in time. File opening remains available; Refresh or open Support to check the AI connection.');
-  }
-  if (code === 'UPDATE_CHECK_FAILED') {
-    return known('Update check unavailable',
-      'Could not verify updates right now. You can continue using the current installation.');
+      'The system did not respond in time. File opening remains available; Refresh or open Support to check the AI connection.',
+      'Use Refresh status for a new full observation. This does not repeat the original action.',
+      'The current connection status and outcome of the original action.',
+      'refresh-status');
   }
   return known('Action could not be completed',
-    'The requested action was not confirmed. Open Support for the technical details before trying again.');
+    'The requested action was not confirmed. Open Support for the technical details before trying again.',
+    'Review the recorded technical error before deciding whether to try again.',
+    'Whether the requested operation completed.');
 }
 
 export function connectionReadinessError(result: EnsureReadyResult): string {
@@ -325,6 +371,54 @@ export function installationReadinessError(ready: EnsureReadyResult): string {
     default:
       return 'Setup completed, but Blockbench could not become ready automatically.';
   }
+}
+
+/**
+ * An explicit ensure_ready receipt may report NEEDS_ATTENTION without throwing
+ * a command error. Convert it through the same presentation-only recovery
+ * contract; never classify a failed handshake as installation success.
+ */
+export function readinessFailureNotice(
+  result: EnsureReadyResult, context: 'connect' | 'install',
+): DesktopErrorNotice {
+  const title = context === 'connect'
+    ? 'Blockbench connection needs attention' : 'Setup needs attention';
+  const message = context === 'connect'
+    ? connectionReadinessError(result) : installationReadinessError(result);
+  let nextStep = 'Review the current Blockbench and AI connection setup.';
+  let action: DesktopRecoveryAction = 'open-support';
+  switch (result.reason) {
+    case 'BLOCKBENCH_PROFILE_MISMATCH':
+      nextStep = 'Save your models, then review the installed Blockbench profile before switching editors.';
+      break;
+    case 'PLUGIN_INTEGRITY':
+      nextStep = 'Review the existing plugin; do not replace an edited file automatically.';
+      break;
+    case 'RUNTIME_ENDPOINT_MISMATCH':
+      nextStep = 'Compare the active local connection settings before reconnecting.';
+      break;
+    case 'RUNTIME_START_FAILED':
+      nextStep = 'Review the Runtime startup details before reconnecting.';
+      break;
+    case 'BLOCKBENCH_EXITED':
+      nextStep = 'Open Blockbench explicitly from Workspace, then reconnect if needed.';
+      action = null;
+      break;
+    case 'CONNECTION_PROBE_UNKNOWN':
+      nextStep = 'Refresh status to check the current connection. A status check does not repeat setup.';
+      action = 'refresh-status';
+      break;
+  }
+  return {
+    title, message, detail: null,
+    recovery: {
+      nextStep,
+      confirmationNeeded: context === 'connect'
+        ? 'The intended Blockbench Runtime and AI connection have not been confirmed ready.'
+        : 'Setup completion does not confirm an active Blockbench Runtime and AI session.',
+      action,
+    },
+  };
 }
 
 export const progressLabel = (stage: string) => stage.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');

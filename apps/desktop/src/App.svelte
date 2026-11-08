@@ -21,13 +21,14 @@
     ProjectPathResult, ManagedProgress, BlockbenchSelectionResult,
     AnalyticsOverview, AnalyticsExportResult,
   } from './desktopTypes';
-  import { productMode, progressLabel, managedActionLabel, connectionReadinessError, installationReadinessError, desktopErrorNotice } from './desktopPresentation';
+  import { productMode, progressLabel, managedActionLabel, desktopErrorNotice, readinessFailureNotice, type DesktopErrorRecovery } from './desktopPresentation';
 
   let status: SystemStatus | null = null;
   let loading = true;
   let error = '';
   let errorTitle = 'Action could not be completed';
   let errorDetail: string | null = null;
+  let errorRecovery: DesktopErrorRecovery | null = null;
   let busyAction: DesktopBusyAction | null = null;
   let openingModelId: string | null = null;
   // UI-only clock. Updated by the existing watcher and foreground events;
@@ -122,6 +123,7 @@
   function clearActionFeedback() {
     error = '';
     errorDetail = null;
+    errorRecovery = null;
     clearActionToast();
   }
 
@@ -133,6 +135,7 @@
     actionToastTimer = null;
     error = '';
     errorDetail = null;
+    errorRecovery = null;
     actionMessageKind = kind;
     actionMessage = message;
     // A next step must stay available until dismissed or superseded.
@@ -159,6 +162,16 @@
     error = notice.message;
     errorTitle = notice.title;
     errorDetail = notice.detail;
+    errorRecovery = notice.recovery;
+  }
+
+  function reportReadinessFailure(result: EnsureReadyResult, context: 'connect' | 'install') {
+    clearActionToast();
+    const notice = readinessFailureNotice(result, context);
+    error = notice.message;
+    errorTitle = notice.title;
+    errorDetail = notice.detail;
+    errorRecovery = notice.recovery;
   }
 
   async function refresh() {
@@ -166,6 +179,7 @@
     loading = true;
     error = '';
     errorDetail = null;
+    errorRecovery = null;
     // Development-only visual fixtures render without Tauri, Runtime, or filesystem access.
     if (devFixture) {
       status = createDevFixtureStatus(devFixture);
@@ -379,9 +393,7 @@
           : `Blockbench is ready. Select it from the taskbar if needed. ${connection}`,
           result.status === 'READY' && result.reason !== 'MCP_SESSION_UNVERIFIED' ? 'success' : 'pending');
       } else if (result.status === 'NEEDS_ATTENTION' && result.reason !== 'PLUGIN_MISSING_WHILE_BLOCKBENCH_RUNNING') {
-        errorTitle = 'Blockbench connection needs attention';
-        error = connectionReadinessError(result);
-        errorDetail = null;
+        reportReadinessFailure(result, 'connect');
       }
     } catch (cause) {
       reportError(cause);
@@ -429,9 +441,7 @@
       if (ready.status === 'READY') showActionToast('Setup complete. LazyDesigner is ready.');
       else if (ready.status === 'RUNTIME_READY') showActionToast('Setup complete. Blockbench is ready.');
       else if (ready.status === 'NEEDS_ATTENTION') {
-        errorTitle = 'Setup needs attention';
-        error = installationReadinessError(ready);
-        errorDetail = null;
+        reportReadinessFailure(ready, 'install');
       }
     } catch (cause) {
       recordOperation('Install LazyDesigner', 'failed', errorCode(cause));
@@ -441,6 +451,7 @@
         migrationConflict = true;
         error = '';
         errorDetail = null;
+        errorRecovery = null;
       } else {
         reportError(cause);
       }
@@ -456,6 +467,7 @@
     busyAction = 'show-plugin';
     error = '';
     errorDetail = null;
+    errorRecovery = null;
     try {
       await invoke<PluginFileActionResult>('show_plugin_file');
       const approvalPending = pluginApprovalNeeded && productMode(status) === 'plugin-setup';
@@ -642,6 +654,11 @@
         } else if (preview === 'error') {
           errorTitle = 'Model could not be opened';
           error = 'The model launch was not confirmed. Open Support for technical details before trying again.';
+          errorRecovery = desktopErrorNotice({ code: 'UNVERIFIED_MODEL_LAUNCH', message: 'Model launch was not confirmed.' }).recovery;
+        } else if (preview === 'timeout') {
+          reportError(new Error('Status request timed out. Refresh to retry.'));
+        } else if (preview === 'delete-uncertain') {
+          reportError({ code: 'PROJECT_RECYCLE_FAILED', message: 'Native recycle status uncertain.' });
         }
       });
     } else {
@@ -724,9 +741,17 @@
       {#if attentionError || actionMessage || (busyAction && progressStage && page !== 'Overview')}
         <aside class:error={Boolean(attentionError)} class:success={Boolean(actionMessage) && !attentionError && actionMessageKind === 'success'} class:notice={Boolean(actionMessage) && !attentionError && actionMessageKind !== 'success'} class="operation-attention" role={attentionError ? 'alert' : 'status'} aria-live={attentionError ? 'assertive' : 'polite'}>
           <div class="attention-icon" aria-hidden="true">{attentionError ? '!' : actionMessage ? (actionMessageKind === 'success' ? '✓' : 'i') : '•'}</div>
-          <div class="attention-copy"><strong>{attentionError ? errorTitle : actionMessage ? (actionMessageKind === 'pending' ? 'Next step' : actionMessageKind === 'unchanged' ? 'No change' : 'Done') : 'Working'}</strong><span>{attentionError || actionMessage || progressLabel(progressStage)}</span></div>
+          <div class="attention-copy">
+            <strong>{attentionError ? errorTitle : actionMessage ? (actionMessageKind === 'pending' ? 'Next step' : actionMessageKind === 'unchanged' ? 'No change' : 'Done') : 'Working'}</strong>
+            <span>{attentionError || actionMessage || progressLabel(progressStage)}</span>
+            {#if attentionError && errorRecovery}<span class="attention-next-step">Next: {errorRecovery.nextStep}</span>{/if}
+          </div>
           <div class="attention-actions">
-            {#if attentionError && status}<button type="button" onclick={() => navigate('Support')}>Open Support</button>{/if}
+            {#if attentionError && status && errorRecovery?.action === 'refresh-status'}
+              <button type="button" onclick={refresh} disabled={loading || busyAction !== null}>Refresh status</button>
+            {:else if attentionError && status && errorRecovery?.action === 'open-support'}
+              <button type="button" onclick={() => navigate('Support')}>Open Support</button>
+            {/if}
             {#if attentionError || actionMessage}<button type="button" class="dismiss" aria-label="Dismiss notification" onclick={clearActionFeedback}>×</button>{/if}
           </div>
         </aside>
@@ -766,7 +791,7 @@
       {:else}
         <SupportPage
           {status} {loading} {busyAction} {statusPresentationNowMs} {statusProbeFailures}
-          {migrationConflict} {migrationConflictKind} {error} {errorTitle} {errorDetail} {operations}
+          {migrationConflict} {migrationConflictKind} {error} {errorTitle} {errorDetail} {errorRecovery} {operations}
           {refresh} {showRetiredPluginFile} {chooseBlockbenchExecutable}
           {showPluginFile} {exportDiagnostics} {runManagedAction}
           openAnalytics={() => navigate('Analytics')}
@@ -801,6 +826,7 @@
   .attention-copy{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;min-width:0}
   .attention-copy strong{font-size:var(--font-sm);font-weight:700}
   .attention-copy span{min-width:0;color:var(--text-soft);font-size:var(--font-sm);line-height:1.45;overflow-wrap:anywhere}
+  .attention-copy .attention-next-step{width:100%;color:var(--muted);font-size:var(--font-sm);font-weight:600}
   .attention-actions{display:flex;align-items:center;gap:6px}
   .attention-actions button{min-height:32px;padding:5px 9px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface-2);color:var(--text-soft);font-size:var(--font-sm);font-weight:650;cursor:pointer}
   .attention-actions button:hover{background:var(--surface-3);color:var(--text)}

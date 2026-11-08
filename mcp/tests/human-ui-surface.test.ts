@@ -25,9 +25,9 @@ describe("human-facing Blockbench UI", () => {
     expect(workspace).toContain("Staged package unverified");
     expect(support).toContain('aria-label="Last unsuccessful action"');
     expect(support).toContain("<h2>{errorTitle}</h2>");
-    expect(app).toContain("{errorTitle} {errorDetail} {operations}");
-    expect(app).toContain("errorTitle = 'Blockbench connection needs attention'");
-    expect(app).toContain("errorTitle = 'Setup needs attention'");
+    expect(app).toContain("{errorTitle} {errorDetail} {errorRecovery} {operations}");
+    expect(app).toContain("reportReadinessFailure(result, 'connect')");
+    expect(app).toContain("reportReadinessFailure(ready, 'install')");
     expect(app).toContain("{#if error && status}<button");
   });
 
@@ -92,6 +92,113 @@ describe("human-facing Blockbench UI", () => {
     expect(fixture).toContain("def inspect_feedback_presentation(page, feedback, view):");
     expect(fixture).toContain('dismiss.press("Enter")');
     expect(fixture).toContain('"feedbackEvidence": "SOURCE_FIXED_DEV_FIXTURES_ONLY"');
+    expect(fixture).not.toContain("repair.click()");
+  });
+
+  test("recovery notices separate action, next step and unverified result without unsafe retries", async () => {
+    const { desktopErrorNotice, readinessFailureNotice } =
+      await import("../../apps/desktop/src/desktopPresentation");
+
+    const timeout = desktopErrorNotice(new Error("Status request timed out. Refresh to retry."));
+    expect(timeout.title).toBe("Connection check timed out");
+    expect(timeout.recovery.action).toBe("refresh-status");
+    expect(timeout.recovery.nextStep).toContain("does not repeat the original action");
+    expect(timeout.recovery.confirmationNeeded).toContain("outcome of the original action");
+
+    const unknownDeletion = desktopErrorNotice({
+      code: "PROJECT_RECYCLE_FAILED", message: "Native recycle status uncertain",
+    });
+    expect(unknownDeletion.title).toBe("Project deletion not confirmed");
+    expect(unknownDeletion.recovery.action).toBeNull();
+    expect(unknownDeletion.recovery.nextStep).toContain("Windows Recycle Bin");
+    expect(unknownDeletion.recovery.confirmationNeeded).toContain("remains unknown");
+    expect(unknownDeletion.message).toContain("No permanent-delete fallback was attempted");
+    const deletionWithMisleadingDetail = desktopErrorNotice({
+      code: "PROJECT_RECYCLE_FAILED",
+      message: "DESKTOP_UPDATE_REQUIRED INSTALLATION_MISMATCH Native recycle status uncertain",
+    });
+    expect(deletionWithMisleadingDetail.title).toBe("Project deletion not confirmed");
+    expect(deletionWithMisleadingDetail.recovery.action).toBeNull();
+
+    const blocked = desktopErrorNotice({
+      code: "PROJECT_DELETE_REVIEW_FAILED", message: "System folder protected",
+    });
+    expect(blocked.recovery.action).toBeNull();
+    expect(blocked.recovery.nextStep).toContain("do not repeat Delete Project");
+    const openEditor = desktopErrorNotice({
+      code: "PROJECT_DELETE_REVIEW_FAILED", message: "Save and close all Blockbench windows",
+    });
+    expect(openEditor.recovery.action).toBeNull();
+    expect(openEditor.recovery.nextStep).toContain("start a new deletion review only if");
+
+    const oldPlugin = desktopErrorNotice({ code: "LEGACY_PLUGIN_MIGRATION_REQUIRED", message: "legacy plugin" });
+    expect(oldPlugin.recovery.action).toBe("open-support");
+    expect(oldPlugin.recovery.nextStep).toContain("backed-up migration path");
+
+    const update = desktopErrorNotice({
+      code: "UPDATE_CHECK_FAILED", message: "status timed out at C:/private/directory",
+    });
+    expect(update.title).toBe("Update check unavailable"); // Typed error wins over timeout text.
+    expect(update.recovery.action).toBeNull();
+    expect(update.message).not.toContain("C:/private");
+    expect(update.recovery.nextStep).not.toContain("C:/private");
+    expect(update.detail).toContain("C:/private");
+    const updateWithMisleadingDetail = desktopErrorNotice({
+      code: "UPDATE_CHECK_FAILED",
+      message: "INSTALLATION_MISMATCH Multiple Blockbench installations were detected",
+    });
+    expect(updateWithMisleadingDetail.title).toBe("Update check unavailable");
+    expect(updateWithMisleadingDetail.recovery.action).toBeNull();
+
+    const unknown = desktopErrorNotice({ code: "UNEXPECTED", message: "opaque-machine-path" });
+    expect(unknown.recovery.action).toBe("open-support");
+    expect(unknown.recovery.nextStep).not.toContain("opaque-machine-path");
+    expect(unknown.recovery.confirmationNeeded).toContain("operation completed");
+
+    const failure = (reason: string) => ({
+      status: "NEEDS_ATTENTION" as const,
+      reason, runtime_online: false, gateway_active: false,
+      blockbench_running: true, plugin_integrity: "ready" as const,
+      manual_plugin_approval_recommended: false,
+    });
+    const probe = readinessFailureNotice(failure("CONNECTION_PROBE_UNKNOWN"), "connect");
+    expect(probe.title).toBe("Blockbench connection needs attention");
+    expect(probe.recovery.action).toBe("refresh-status");
+    expect(probe.recovery.nextStep).toContain("does not repeat setup");
+    const setup = readinessFailureNotice(failure("PLUGIN_INTEGRITY"), "install");
+    expect(setup.title).toBe("Setup needs attention");
+    expect(setup.recovery.action).toBe("open-support");
+    expect(setup.recovery.confirmationNeeded).toContain("does not confirm");
+    expect(readinessFailureNotice(failure("BLOCKBENCH_EXITED"), "connect").recovery.action).toBeNull();
+  });
+
+  test("recovery controls are safe, contextual and visible without exposing raw paths", async () => {
+    const [app, support, fixture, presentation] = await Promise.all([
+      source("../apps/desktop/src/App.svelte"),
+      source("../apps/desktop/src/SupportPage.svelte"),
+      source("../apps/desktop/scripts/capture-ui.py"),
+      source("../apps/desktop/src/desktopPresentation.ts"),
+    ]);
+    expect(app).toContain("errorRecovery = notice.recovery");
+    expect(app).toContain("function reportReadinessFailure(");
+    expect(app).toContain("errorRecovery?.action === 'refresh-status'");
+    expect(app).toContain("errorRecovery?.action === 'open-support'");
+    expect(app).toContain("Next: {errorRecovery.nextStep}");
+    expect(app).toContain("onclick={refresh} disabled={loading || busyAction !== null}>Refresh status</button>");
+    expect(app).toContain("{errorRecovery} {operations}");
+    const notice = app.slice(app.indexOf("{#if attentionError || actionMessage"), app.indexOf("{#if page === 'Analytics'}", app.indexOf("{#if attentionError || actionMessage")));
+    expect(notice).not.toContain("runManagedAction(");
+    expect(notice).not.toContain("confirmDeleteProject(");
+    expect(notice).not.toContain("performInstall(");
+    expect(support).toContain("Still to verify: {errorRecovery.confirmationNeeded}");
+    expect(support).toContain("{errorRecovery.nextStep}");
+    expect(support).toContain("errorRecovery.action === 'refresh-status' && !aiStatus.needsRefresh");
+    expect(support).toContain("<code>{errorDetail}</code>");
+    expect(presentation).toContain("type DesktopRecoveryAction");
+    expect(fixture).toContain('"delete-uncertain"');
+    expect(fixture).toContain("def inspect_feedback_presentation(page, feedback, view):");
+    expect(fixture).toContain("uncertain deletion must not expose an automatic retry");
+    expect(fixture).not.toContain("delete.click()");
     expect(fixture).not.toContain("repair.click()");
   });
 

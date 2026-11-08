@@ -35,6 +35,10 @@ FEEDBACK_SCENARIOS = (
     ("ready", "workspace", "success"),
     ("ready", "workspace", "error"),
     ("ready", "support", "error"),
+    ("ready", "workspace", "timeout"),
+    ("ready", "support", "timeout"),
+    ("ready", "workspace", "delete-uncertain"),
+    ("ready", "support", "delete-uncertain"),
 )
 # One fixed busy-row specimen. Opening a model is never invoked by this script.
 OPENING_SCENARIOS = (("ready", "workspace", "opening-model"),)
@@ -401,16 +405,28 @@ def inspect_feedback_presentation(page, feedback, view):
         return []
     issues = []
     notice = page.locator(".operation-attention")
-    if feedback == "error" and view == "support":
+    if feedback in {"error", "timeout", "delete-uncertain"} and view == "support":
         if notice.count() != 0:
             issues.append("Support must not repeat its inline error in a second notification")
-        if page.locator('section[aria-label="Last unsuccessful action"]').count() != 1:
+        section = page.locator('section[aria-label="Last unsuccessful action"]')
+        if section.count() != 1:
             issues.append("Support must provide its own classified error section")
+        else:
+            recovery = section.locator(".error-recovery")
+            if recovery.count() != 1 or "Still to verify" not in recovery.inner_text():
+                issues.append("Support must show a concrete next step and remaining uncertainty")
+            if feedback == "timeout" and recovery.get_by_role("button", name="Refresh status").count() != 1:
+                issues.append("timeout should expose one read-only status Refresh")
+            if feedback == "delete-uncertain":
+                if recovery.get_by_role("button").count() != 0:
+                    issues.append("uncertain deletion must not expose an automatic retry")
+                if "remains unknown" not in recovery.inner_text():
+                    issues.append("uncertain deletion must not claim the folder is preserved or gone")
         return issues
 
     if notice.count() != 1:
         return ["one in-flow feedback notice is required"]
-    expected_role = "alert" if feedback == "error" else "status"
+    expected_role = "alert" if feedback in {"error", "timeout", "delete-uncertain"} else "status"
     if notice.get_attribute("role") != expected_role:
         issues.append(f"feedback must have role={expected_role}")
     if notice.evaluate("(node) => getComputedStyle(node).position") == "fixed":
@@ -422,6 +438,16 @@ def inspect_feedback_presentation(page, feedback, view):
         if bottom and top and bottom["y"] + bottom["height"] > top["y"] + 2:
             issues.append("feedback is overlapping the scrollable work area")
 
+    if feedback in {"error", "timeout", "delete-uncertain"}:
+        next_step = notice.locator(".attention-next-step")
+        if next_step.count() != 1 or "Next:" not in next_step.inner_text():
+            issues.append("error needs one explicit next step")
+        expected_action = {"error": "Open Support", "timeout": "Refresh status", "delete-uncertain": None}[feedback]
+        if expected_action is None:
+            if notice.get_by_role("button", name="Refresh status").count() or notice.get_by_role("button", name="Open Support").count():
+                issues.append("uncertain deletion must never offer automatic retry or false recovery")
+        elif notice.get_by_role("button", name=expected_action, exact=True).count() != 1:
+            issues.append(f"error should offer the safe '{expected_action}' action")
     dismiss = notice.get_by_role("button", name="Dismiss notification", exact=True)
     if dismiss.count() != 1:
         issues.append("feedback must expose an accessible dismiss action")
@@ -518,12 +544,12 @@ def main():
                         if fixture == "status-unverified" and view == "support":
                             page.get_by_text("AI status needs verification", exact=True).wait_for(timeout=10000)
                         if feedback:
-                            target = 'section[aria-label="Last unsuccessful action"]' if feedback == "error" and view == "support" else ".operation-attention"
+                            target = 'section[aria-label="Last unsuccessful action"]' if feedback in {"error", "timeout", "delete-uncertain"} and view == "support" else ".operation-attention"
                             page.locator(target).wait_for(timeout=10000)
                         if activity:
                             page.locator(".model-opening-notice").wait_for(timeout=10000)
                         snapshot = inspect(page)
-                        action_checks = inspect_action_states(page, fixture, view) if activity is None else {"checked": 0, "issues": []}
+                        action_checks = inspect_action_states(page, fixture, view) if activity is None and feedback is None else {"checked": 0, "issues": []}
                         entry["actionChecks"] = action_checks
                         for issue in action_checks["issues"]:
                             failures.append(name + ": " + issue)

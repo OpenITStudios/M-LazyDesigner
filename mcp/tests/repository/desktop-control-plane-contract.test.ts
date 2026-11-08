@@ -751,7 +751,7 @@ describe("Desktop calm connection summary", () => {
     expect(app).toContain("<SupportPage");
     expect(support).toContain('aria-label="Last unsuccessful action"');
     expect(support).toContain("<h2>{errorTitle}</h2>");
-    expect(app).toContain("{errorTitle} {errorDetail} {operations}");
+    expect(app).toContain("{errorTitle} {errorDetail} {errorRecovery} {operations}");
     expect(support).toContain("<code>{errorDetail}</code>");
     expect(await workspaceSource).toContain("<h2>AI connection and updates</h2>");
     expect(support).toContain("<strong>Installed Blockbench plugin</strong>");

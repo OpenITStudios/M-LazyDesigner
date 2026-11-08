@@ -449,7 +449,7 @@ python scripts/capture-ui.py
 # Optional: --browser <path-to-Chrome-or-Chromium> --out <temporary-qa-directory>
 ```
 
-Fixed, development-only `?fixture=ready&feedback=pending|success|error` specimens show truthful feedback copy without native actions. Support's error specimen uses `?view=support&feedback=error` to verify the classified in-page error instead of a duplicate notification. These query options do not work in production and never receive arbitrary message text.
+Fixed, development-only `?fixture=ready&feedback=pending|success|error|timeout|delete-uncertain` specimens show truthful feedback copy without native actions. The `&view=support` versions verify classified in-page errors instead of duplicate notifications. Timeout shows a **Refresh status** action that does not retry the original operation; uncertain deletion shows **no** direct retry or assumed file outcome. These query options do not work in production and never receive arbitrary message text.
 
 The additional `?fixture=ready-aged` specimen contains a synthetic full status
 observation older than 30 seconds; both Desktop pages should ask for Refresh
@@ -773,6 +773,36 @@ as a presentation-only input, not re-derived as another readiness policy.
 Neither module owns IPC calls, stored project state, Gateway lifecycle, or
 managed maintenance. The original messages, Tauri commands and Workspace
 interactions remain in place; only their source ownership changes.
+
+### Contextual error recovery
+
+The existing `desktopErrorNotice()` is the sole display-only classifier for
+command errors. It prioritizes exact native/manager error codes, using bounded
+message matching only for compatibility with plain-text errors. Each classified
+failure carries a short title/message, a specific **Next step**, a
+**Still to verify** statement, and an optional safe action. The raw error detail
+is shown only inside Support's technical disclosure, never on the normal
+Workspace path.
+
+The only directly offered actions are **Refresh status** (a new full status
+observation, never repetition of the original action) and **Open Support**.
+A missing or uncertain native Recycle Bin confirmation cannot offer an
+automatic retry. The user must inspect both the source folder and Windows
+Recycle Bin before deciding whether to start a *new* explicit deletion
+review. Other mutation, setup, migration and managed-maintenance actions
+retain their separate user triggers, permissions and native receipts.
+`readinessFailureNotice()` applies the same guidance contract to
+nonthrowing `NEEDS_ATTENTION` results from the existing setup/connection
+workflow, which are not completion evidence. Support shows the next step
+and remaining uncertainty beside the classified error, while the global
+in-flow notice only offers an action appropriate to that specific error.
+An unavailable initial machine status continues to offer `Try again`
+rather than a link to a page that cannot render.
+
+All changes concern presentation state and existing handler selection; no
+recovery retry queue, second status/router, new stored state, implicit
+repair, or change to Rust/Gateway authority was introduced. Bun/source and
+Playwright recovery specimens are authored but still `NOT_EXECUTED`.
 
 ### Accurate status and action feedback
 
