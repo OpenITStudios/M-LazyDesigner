@@ -142,19 +142,40 @@
     }
     element?.focus();
   }
+  // Place menus within the visible sidebar instead of clipping the last rows.
+  function fitContextMenu(id: string, kind: 'project' | 'model') {
+    void tick().then(() => {
+      const menu = editorRoot.ownerDocument.getElementById('ld-' + kind + '-actions-' + id);
+      if (!menu || !menu.isConnected) return;
+      const viewport = menu.closest('.sidebar-content');
+      if (!(viewport instanceof HTMLElement)) return;
+      menu.classList.remove('open-up');
+      const menuRect = menu.getBoundingClientRect();
+      const viewRect = viewport.getBoundingClientRect();
+      if (menuRect.bottom > viewRect.bottom - 8 && menuRect.top - menuRect.height - 36 >= viewRect.top + 8) {
+        menu.classList.add('open-up');
+      }
+    });
+  }
   function toggleProjectActions(id: string) {
     modelActionsId = null;
     const opening = projectActionsId !== id;
     projectActionsId = opening ? id : null;
-    if (opening) void tick().then(() =>
-      editorRoot.ownerDocument.getElementById('ld-project-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
+    if (opening) {
+      fitContextMenu(id, 'project');
+      void tick().then(() =>
+        editorRoot.ownerDocument.getElementById('ld-project-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
+    }
   }
   function toggleModelActions(id: string) {
     projectActionsId = null;
     const opening = modelActionsId !== id;
     modelActionsId = opening ? id : null;
-    if (opening) void tick().then(() =>
-      editorRoot.ownerDocument.getElementById('ld-model-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
+    if (opening) {
+      fitContextMenu(id, 'model');
+      void tick().then(() =>
+        editorRoot.ownerDocument.getElementById('ld-model-actions-' + id)?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus());
+    }
   }
   function closeModelActions(event: KeyboardEvent, id: string) {
     if (event.key !== 'Escape' || modelActionsId !== id) return;
@@ -1546,4 +1567,6 @@
   .sidebar-page .active-project-focus:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .sidebar-page .active-project-empty{font-size:12px;color:var(--ed-muted);line-height:1.4}
   .sidebar-status .status-overview-value:focus-visible{outline:2px solid var(--ed-accent);outline-offset:3px;border-radius:3px}
+  .sidebar-page .project-inline-actions.open-up,
+  .sidebar-page .model-context-actions.open-up{top:auto;bottom:calc(100% + 4px)}
 </style>
