@@ -152,26 +152,22 @@
       menu.classList.remove('open-up');
       const menuRect = menu.getBoundingClientRect();
       const viewRect = viewport.getBoundingClientRect();
-      const trigger = editorRoot.ownerDocument.querySelector<HTMLButtonElement>(
-        kind === 'project' ? '.project-actions-toggle[data-project-id]' : '.model-actions-toggle[data-model-id]',
-      );
-      // The menu's own row is the placement anchor; the first matching
-      // toolbar action elsewhere in the tree must never influence placement.
+      // Use the menu's own row, never another row's context trigger.
       const row = menu.closest(kind === 'project' ? '.project-group' : '.model-line');
       const anchor = row?.querySelector<HTMLButtonElement>(
         kind === 'project' ? '.project-actions-toggle' : '.model-actions-toggle',
-      ) ?? trigger;
+      );
       const anchorRect = anchor?.getBoundingClientRect();
       const roomAbove = (anchorRect?.top ?? menuRect.top) - viewRect.top - 8;
       const roomBelow = viewRect.bottom - (anchorRect?.bottom ?? menuRect.top) - 8;
       if (menuRect.bottom > viewRect.bottom - 8 && roomAbove > roomBelow) {
-        menu.style.setProperty('--context-menu-height', menuRect.height + 'px');
         menu.classList.add('open-up');
       }
-      // If neither side fits fully, keep the menu scrollable within the
-      // available vertical space rather than obscuring unrelated controls.
-      const available = Math.max(64, Math.floor(menu.classList.contains('open-up') ? roomAbove : roomBelow));
-      menu.style.maxHeight = Math.min(280, available) + 'px';
+      // When neither side fits, scroll the menu instead of covering the footer.
+      const available = Math.max(48, Math.floor(menu.classList.contains('open-up') ? roomAbove : roomBelow));
+      const cappedHeight = Math.min(280, available);
+      menu.style.maxHeight = cappedHeight + 'px';
+      menu.style.setProperty('--context-menu-height', Math.min(menuRect.height, cappedHeight) + 'px');
     });
   }
   function toggleProjectActions(id: string) {
