@@ -146,3 +146,9 @@ Every interactive control has: accessible name, visible affordance, action desti
 - **Status keyboard accessibility:** footer now exposes the observed timestamp to screen-reader users and Details has a larger target. These are authored source changes, not measured runtime accessibility.
 - **Current remaining acceptance blockers:** native composition and restore, production-only Unified Editor route, viewport clipping under real window resizing, screen-reader/zoom checks, and executable tests. Source cleanup is not proof that these pass.
 - **Preview readiness:** a source-grounded HTML review can be prepared **when explicitly requested**, with the native Blockbench center empty and fixture limitations stated. It must not be presented as an executable/native app.
+
+## N. Model context action parity audit — 2026-11-09
+
+- **Source gap found and corrected:** the main model row disabled focusing an active model when two or more status probes failed, but the same action in its context menu did not expose the same disabled state. The context action now uses the row's eligibility condition and an explanatory tooltip.
+- **Generalized rule:** when the same action appears in a row, context menu, toolbar or shortcut, all entry points must share the same eligibility and truthful disabled reason. The Rust operation remains authoritative; UI parity is an additional guard, not a security boundary.
+- **Unverified:** actual keyboard/pointer interactions and Windows native state are still `NOT_EXECUTED`.
