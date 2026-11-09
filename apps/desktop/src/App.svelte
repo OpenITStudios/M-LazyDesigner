@@ -1,4 +1,5 @@
 <script lang="ts">
+  import brandLogoUrl from '../branding/lazydesigner-ld-master.svg?url';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
   import { onMount, tick } from 'svelte';
@@ -840,7 +841,7 @@
     {#if page !== 'Editor' || !import.meta.env.DEV}
     <aside class="navigation" aria-label="LazyDesigner navigation">
       <div class="navigation-brand">
-        <span class="brand-mark" aria-hidden="true"></span>
+        <img class="brand-mark" src={brandLogoUrl} alt="" aria-hidden="true" width="26" height="26" />
         <strong>LazyDesigner</strong>
       </div>
 
