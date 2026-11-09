@@ -1032,7 +1032,7 @@
     color:var(--ed-text);background:var(--ed-raised);
   }
   .editor-context h1{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap;font-size:13px}
-  .editor-project-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:550;color:var(--ed-muted)}
+  .editor-project-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ed-text)}
   .editor-title-divider{flex:none;color:var(--ed-muted-soft)}
   .dock-toggle{line-height:1}
   .editor-controls .dock-toggle.chosen{
@@ -1462,7 +1462,7 @@
   .sidebar-collapse{display:grid;place-items:center;margin-left:auto;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--ed-muted);cursor:pointer}
   .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 12px}
   .sidebar-tabs button{display:flex;justify-content:center;align-items:center;gap:7px;height:40px;border:0;border-radius:6px;background:transparent;color:var(--ed-muted);font-size:13px;font-weight:550;cursor:pointer}
-  .sidebar-tabs button.selected{background:var(--ed-raised);color:var(--ed-text);font-weight:650}
+  .sidebar-tabs button.selected{background:var(--ed-raised);color:var(--ed-text);font-weight:650;box-shadow:inset 0 -2px 0 var(--ed-accent)}
   .sidebar-tabs button:hover:not(.selected){background:var(--ed-select);color:var(--ed-text)}
   .sidebar-content{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin}
   .sidebar-page{padding:0 12px 16px}
@@ -1587,7 +1587,7 @@
   .sidebar-page .create-folder-form input[aria-invalid="true"]{border-color:#b46b6b}
 
   /* Active project is the first contextual item, not another model picker. */
-  .sidebar-page .active-project-summary{margin:2px 0 15px;padding:12px;border:1px solid var(--ed-border-soft);border-radius:7px;background:var(--ed-raised)}
+  .sidebar-page .active-project-summary{margin:2px 0 15px;padding:12px;border:1px solid var(--ed-border-soft);border-left:2px solid var(--ed-accent);border-radius:7px;background:var(--ed-raised)}
   .sidebar-page .active-project-heading{margin-bottom:9px;color:var(--ed-muted);font-size:11px;font-weight:650}
   .sidebar-page .active-project-name,.sidebar-page .active-project-model{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px}
   .sidebar-page .active-project-name strong,.sidebar-page .active-project-model span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1596,6 +1596,7 @@
   .sidebar-page .active-project-unsaved{color:#e9bb6d}
   .sidebar-page .active-project-focus{width:100%;border:0;border-radius:5px;background:transparent;text-align:left;cursor:pointer;padding:5px 7px}
   .sidebar-page .active-project-focus:hover:not(:disabled){background:var(--ed-select);color:var(--ed-text)}
+  .sidebar-page .active-project-focus:active:not(:disabled){background:var(--ed-bg)}
   .sidebar-page .active-project-focus:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .sidebar-page .active-project-empty{font-size:12px;color:var(--ed-muted);line-height:1.4}
   /* Unified keyboard affordance for the sidebar's primary controls.
