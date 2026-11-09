@@ -9,6 +9,7 @@ const read = path => readFileSync(resolve(root, path), 'utf8');
 const app = read('src/App.svelte');
 const editor = read('src/UnifiedWorkspacePage.svelte');
 const icons = read('src/EditorChromeIcon.svelte');
+const nativeStage = read('src/NativeEditorStage.svelte');
 const brand = read('branding/lazydesigner-ld-master.svg').trim();
 const tauriBrand = read('src-tauri/app-icon.svg').trim();
 const config = JSON.parse(read('src-tauri/tauri.conf.json'));
@@ -33,6 +34,13 @@ check(editor.includes('Help & settings'), 'Help & settings label missing');
 check(editor.includes('readinessOutdated'), 'Stale-readiness guard missing');
 check(editor.includes('@container ld-sidebar'), 'Width-aware sidebar rule missing');
 check(!editor.includes('class="workspace-return"'), 'Removed Workspace header button reintroduced');
+check(nativeStage.includes("action: 'detach', viewport: null"), 'Native stage must request explicit Rust detach');
+check(nativeStage.includes("receipt.status !== 'DETACHED'"), 'Native detach must require a confirmed DETACHED receipt');
+check(nativeStage.includes("onPlacementChange('UNCERTAIN'"), 'Native stage must report uncertain recovery');
+check(app.includes('editorNavigationPending = true;'), 'Editor navigation must lock while detaching');
+check(app.includes('nativeEditorStage.detach().then(restored =>'), 'Leaving Editor must await native detach');
+check(app.includes('if (restored) finishNavigate(next);'), 'Editor route must change only after confirmed detach');
+check(editor.includes('nativeStage.detach()'), 'Editor file-picker/recovery path must use native detach');
 
 const iconNames = [...editor.matchAll(/<EditorChromeIcon\s+name="([^"]+)"/g)].map(match => match[1]);
 for (const name of new Set(iconNames)) {
