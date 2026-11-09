@@ -601,6 +601,11 @@
               </div>
             {/if}
           </section>
+        {:else if !search.trim()}
+          <section class="active-project-summary" aria-label="Current model">
+            <div class="active-project-heading">Active project</div>
+            <div class="active-project-empty">No active model</div>
+          </section>
         {/if}
 
         <div class="project-primary-action">
@@ -823,7 +828,7 @@
             <h3>Status</h3>
             <div class="status-overview-row">
               <span class="status-overview-label">System</span>
-              <span class="status-overview-value" title={status?.observed_at_unix_ms ? `Last checked: ${new Date(status.observed_at_unix_ms).toLocaleString()}` : 'Last check time unavailable'}>
+              <span class="status-overview-value" tabindex="0" aria-label={status?.observed_at_unix_ms ? `System: ${readinessLabel}. Last checked: ${new Date(status.observed_at_unix_ms).toLocaleString()}` : `System: ${readinessLabel}. Last check time unavailable`} title={status?.observed_at_unix_ms ? `Last checked: ${new Date(status.observed_at_unix_ms).toLocaleString()}` : 'Last check time unavailable'}>
                 <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
                   class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
                 {readinessLabel === 'Ready at last check' ? 'Ready' : readinessLabel}
@@ -1527,4 +1532,6 @@
   .sidebar-page .active-project-focus{width:100%;border:0;border-radius:5px;background:transparent;text-align:left;cursor:pointer;padding:5px 7px}
   .sidebar-page .active-project-focus:hover:not(:disabled){background:var(--ed-select);color:var(--ed-text)}
   .sidebar-page .active-project-focus:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
+  .sidebar-page .active-project-empty{font-size:12px;color:var(--ed-muted);line-height:1.4}
+  .sidebar-status .status-overview-value:focus-visible{outline:2px solid var(--ed-accent);outline-offset:3px;border-radius:3px}
 </style>
