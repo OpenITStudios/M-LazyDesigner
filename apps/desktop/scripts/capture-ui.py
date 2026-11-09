@@ -651,6 +651,24 @@ def inspect_unified_editor(page, fixture, view):
         if diagnostic_toggle.is_enabled():
             issues.append("Diagnostic must not expand into the minimum native viewport")
     if diagnostic_expanded_for_check:
+        # Native Blockbench has one panel-tab strip, not an extra titled bar.
+        panel_bar = diagnostic.locator(".diagnostic-panel-bar")
+        if diagnostic.locator(".pane-heading").count() != 0:
+            issues.append("Diagnostic duplicates its panel title above the tabs")
+        if panel_bar.count() != 1:
+            issues.append("Diagnostic needs exactly one compact 40px tab bar")
+        else:
+            bar_box = panel_bar.bounding_box()
+            dock_box = diagnostic.bounding_box()
+            if (not bar_box or not dock_box
+                    or abs(bar_box["height"] - 40) > 1
+                    or abs(bar_box["y"] - dock_box["y"]) > 1):
+                issues.append("Diagnostic tab bar is not flush to the dock top")
+            collapse = panel_bar.get_by_role(
+                "button", name="Collapse Diagnostic panel to icons", exact=True
+            )
+            if collapse.count() != 1:
+                issues.append("Diagnostic collapse button must sit beside its tablist")
         tabs = diagnostic.get_by_role("tablist", name="Diagnostic sections")
         if tabs.count() != 1 or tabs.get_by_role("tab").count() != 2:
             issues.append("Diagnostic must have exactly Diagnostic and Activity tabs")
@@ -659,6 +677,9 @@ def inspect_unified_editor(page, fixture, view):
             activity_tab = tabs.get_by_role("tab", name="Activity", exact=True)
             if diagnostic_tab.get_attribute("aria-selected") != "true":
                 issues.append("Diagnostic must be the default tab")
+            if should_rail and page.evaluate(
+                    "() => document.activeElement?.id") != "ld-tab-diagnostic":
+                issues.append("Expanding Diagnostic must focus its selected tab")
             if diagnostic.get_by_role("tabpanel", name="Diagnostic").count() != 1:
                 issues.append("Diagnostic readiness panel is missing")
             if diagnostic.get_by_role("heading", name="Readiness").count() != 1:

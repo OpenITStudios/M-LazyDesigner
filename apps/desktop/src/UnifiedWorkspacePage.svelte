@@ -52,7 +52,6 @@
   let explorerToggle: HTMLButtonElement | undefined;
   let diagnosticToggle: HTMLButtonElement | undefined;
   let explorerHeading: HTMLHeadingElement | undefined;
-  let diagnosticHeading: HTMLHeadingElement | undefined;
 
   $: navigation = status?.project_navigation ?? null;
   $: active = navigation?.active ?? null;
@@ -181,7 +180,10 @@
       ...(opening && (layout.band === 'rail' || layout.band === 'compact')
         ? { projectsExpanded: false } : {}),
     });
-    void focusAfterLayout(() => opening ? diagnosticHeading ?? diagnosticToggle : diagnosticToggle);
+    void focusAfterLayout(() => opening
+      ? editorRoot?.querySelector<HTMLButtonElement>('.diagnostic-tabs [role="tab"][aria-selected="true"]')
+        ?? diagnosticToggle
+      : diagnosticToggle);
   }
   function expandDiagnostic() {
     if (!canExpandDiagnostic) return;
@@ -191,7 +193,9 @@
       ...(layout.band === 'rail' || layout.band === 'compact'
         ? { projectsExpanded: false } : {}),
     });
-    void focusAfterLayout(() => diagnosticHeading ?? diagnosticToggle);
+    void focusAfterLayout(() =>
+      editorRoot?.querySelector<HTMLButtonElement>('.diagnostic-tabs [role="tab"][aria-selected="true"]')
+        ?? diagnosticToggle);
   }
   function collapseDiagnostic() {
     changeLayout({ diagnosticExpanded: false });
@@ -682,15 +686,9 @@
               onclick={navigateActivity}><EditorChromeIcon name="activity"/></button>
           </div>
         {:else}
-          <div class="pane-heading">
-            <h3 tabindex="-1" bind:this={diagnosticHeading}>Diagnostic</h3>
-            <div class="pane-actions">
-              <button type="button" class="collapse-dock" title="Collapse to right rail"
-                aria-label="Collapse Diagnostic panel to icons"
-                onclick={collapseDiagnostic}><EditorChromeIcon name="chevron-right"/></button>
-            </div>
-          </div>
-          <div class="diagnostic-tabs" role="tablist" aria-label="Diagnostic sections">
+          <!-- One Blockbench-style 40px panel bar; the selected tab IS the title. -->
+          <div class="diagnostic-panel-bar">
+            <div class="diagnostic-tabs" role="tablist" aria-label="Diagnostic sections">
             <button type="button" role="tab" id="ld-tab-diagnostic"
               data-companion-tab="diagnostic"
               class:selected={diagnosticTab === 'diagnostic'}
@@ -707,6 +705,11 @@
               tabindex={diagnosticTab === 'activity' ? 0 : -1}
               onclick={() => diagnosticTab = 'activity'}
               onkeydown={(event) => onDiagnosticTabKeydown(event, 'activity')}>Activity</button>
+            </div>
+            <button type="button" class="diagnostic-collapse"
+              title="Collapse Diagnostic to right rail"
+              aria-label="Collapse Diagnostic panel to icons"
+              onclick={collapseDiagnostic}><EditorChromeIcon name="chevron-right"/></button>
           </div>
           <section role="tabpanel" tabindex="0" class="inspector-section diagnostic-section"
             id="ld-inspector-diagnostic" aria-labelledby="ld-tab-diagnostic"
@@ -894,19 +897,32 @@
     height:40px;margin:0 -7px 10px;padding:0 9px;
     background:var(--color-back);border-bottom:1px solid var(--ed-border);
   }
-  .inspector .pane-heading{margin:0 -9px 10px}
   .pane-actions{display:flex;align-items:center;gap:3px;min-width:0}
   .pane-heading h3 {
     margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
     text-transform:uppercase;letter-spacing:.03em;font-size:12px;font-weight:650;color:var(--ed-text);
   }
-  /* Blockbench v5.2.1 uses a 40px panel tab bar and a selected tab
-     that blends into --color-ui; this is the same visual construction. */
-  .diagnostic-tabs {
-    display:flex;align-items:stretch;height:40px;
-    margin:0 -9px 9px;padding:3px 4px 0;gap:1px;
-    background:var(--color-back);border-bottom:1px solid var(--ed-border);
+  /* Blockbench v5.2.1: one 40px panel tab bar, not a heading plus another
+     bar. The collapse control sits beside the tablist, never inside it. */
+  .diagnostic-panel-bar {
+    display:flex;align-items:stretch;height:40px;min-width:0;
+    margin:0 -9px 9px;padding:0 3px;
+    background:var(--color-back);box-shadow:inset 0 -1px var(--ed-border);
   }
+  .diagnostic-tabs {
+    display:flex;align-items:stretch;flex:1 1 auto;min-width:0;
+    height:40px;padding:3px 0 0;gap:1px;
+    background:var(--color-back);
+  }
+  .diagnostic-collapse{
+    align-self:center;flex:none;width:28px;height:28px;
+    display:grid;place-items:center;
+    margin:0 0 0 2px;padding:0;
+    border:0;border-radius:3px;background:transparent;
+    color:var(--ed-muted);cursor:pointer;
+  }
+  .diagnostic-collapse:hover{background:var(--ed-raised);color:var(--ed-text)}
+  .diagnostic-collapse:focus-visible{outline:2px solid var(--ed-accent);outline-offset:-2px}
   .diagnostic-tabs button {
     flex:1 1 0;min-width:0;height:36px;margin:0;padding:0 4px;
     border:0;border-radius:5px 5px 0 0;

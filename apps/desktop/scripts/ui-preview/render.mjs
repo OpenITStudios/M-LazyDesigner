@@ -244,6 +244,17 @@ async function main() {
           diagnosticPanelCount: tools?.querySelectorAll('[role="tabpanel"]').length ?? 0,
           diagnosticTabBarHeight: tools?.querySelector('.diagnostic-tabs')
             ?.getBoundingClientRect().height ?? 0,
+          diagnosticPanelBarHeight: tools?.querySelector('.diagnostic-panel-bar')
+            ?.getBoundingClientRect().height ?? 0,
+          diagnosticHeadingCount: tools?.querySelectorAll('.pane-heading').length ?? 0,
+          diagnosticBarAtTop: (() => {
+            const bar = tools?.querySelector('.diagnostic-panel-bar');
+            return !!bar && !!tools &&
+              Math.abs(bar.getBoundingClientRect().top - tools.getBoundingClientRect().top) < 1;
+          })(),
+          diagnosticCollapseBesideTabs: Boolean(
+            tools?.querySelector('.diagnostic-panel-bar > button.diagnostic-collapse')
+          ) && !tools?.querySelector('.diagnostic-tabs > button.diagnostic-collapse'),
           selectedTabBackground: (() => {
             const chosen = tools?.querySelector('.diagnostic-tabs [role="tab"][aria-selected="true"]');
             return chosen ? getComputedStyle(chosen).backgroundColor : null;
@@ -292,7 +303,13 @@ async function main() {
           && sidePanels.diagnosticTabs[0].selected
           && sidePanels.diagnosticPanelCount === 2
           && sidePanels.diagnosticSelectedPanel === "ld-inspector-diagnostic");
-      checks.blockbench_tab_strip_geometry = shouldRail || Math.abs(sidePanels.diagnosticTabBarHeight - 40) < 1;
+      checks.blockbench_tab_strip_geometry = shouldRail
+        || (Math.abs(sidePanels.diagnosticTabBarHeight - 40) < 1
+          && Math.abs(sidePanels.diagnosticPanelBarHeight - 40) < 1);
+      checks.single_diagnostic_panel_bar = shouldRail
+        || (sidePanels.diagnosticHeadingCount === 0
+          && sidePanels.diagnosticBarAtTop
+          && sidePanels.diagnosticCollapseBesideTabs);
       checks.blockbench_selected_tab_colors = shouldRail
         || (sidePanels.selectedTabBackground === "rgb(30, 33, 39)"
           && sidePanels.tabStripBackground === "rgb(24, 27, 31)");

@@ -89,6 +89,12 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain('aria-label="Diagnostic"');
     expect(unified).toContain('aria-label="Toggle Diagnostic panel"');
     expect(unified).toContain('role="tablist" aria-label="Diagnostic sections"');
+    expect(unified).toContain('class="diagnostic-panel-bar"');
+    expect(unified).toContain('class="diagnostic-collapse"');
+    expect(unified).toContain(".diagnostic-tabs [role=\"tab\"][aria-selected=\"true\"]");
+    expect(unified).not.toContain('bind:this={diagnosticHeading}');
+    expect(unified).not.toContain('>Diagnostic</h3>');
+    expect(unified).toContain("height:40px;padding:3px 0 0;gap:1px;");
     for (const id of ["diagnostic", "activity"]) {
       expect(unified).toContain('data-companion-tab="' + id + '"');
       expect(unified).toContain("aria-selected={diagnosticTab === '" + id + "'}");
@@ -246,6 +252,10 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain("Diagnostic must have exactly Diagnostic and Activity tabs");
     expect(script).toContain("Activity must show observed project statistics");
     expect(script).toContain("Diagnostic tabs must retain Blockbench's 40px bar");
+    expect(script).toContain("Diagnostic duplicates its panel title above the tabs");
+    expect(script).toContain("Diagnostic tab bar is not flush to the dock top");
+    expect(script).toContain("Diagnostic collapse button must sit beside its tablist");
+    expect(script).toContain("Expanding Diagnostic must focus its selected tab");
     expect(stage).toContain("disabled={busy || fixture}");
   });
   test("Svelte host icon controls are real components, not generated screenshots", async () => {

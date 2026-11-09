@@ -91,6 +91,7 @@ describe("Desktop UI Preview: real application only", () => {
     expect(script).toContain("ai_connection_not_duplicated_in_header");
     expect(script).toContain("diagnosticPanelCount === 2");
     expect(script).toContain("blockbench_tab_strip_geometry");
+    expect(script).toContain("single_diagnostic_panel_bar");
     expect(script).toContain("blockbench_selected_tab_colors");
     expect(script).toContain("blockbench_outliner_row_density");
     expect(script).toContain("blank_native_area_uses_real_dark_token");
