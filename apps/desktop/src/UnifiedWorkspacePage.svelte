@@ -135,9 +135,15 @@
     const element = target();
     if (element instanceof HTMLButtonElement && element.disabled) {
       // A narrow-window rail cannot expand without squeezing Blockbench.
-      // Send keyboard focus to the still-operable Support route.
-      const fallback = '.sidebar-utility-actions .support-button, .focus-exit-overlay';
-      editorRoot?.querySelector<HTMLButtonElement>(fallback)?.focus();
+      // A collapsed dock must not strand keyboard focus in hidden content.
+      // Prefer the visible Focus exit, then an enabled Help action, then the title.
+      const candidates = [
+        editorRoot?.querySelector<HTMLButtonElement>('.focus-exit-overlay'),
+        editorRoot?.querySelector<HTMLButtonElement>('.sidebar-utility-actions .support-button'),
+      ];
+      const fallback = candidates.find(button => button && button.isConnected && !button.disabled && button.getClientRects().length > 0);
+      if (fallback) fallback.focus();
+      else editorRoot?.querySelector<HTMLElement>('.editor-context h1')?.focus();
       return;
     }
     element?.focus();
