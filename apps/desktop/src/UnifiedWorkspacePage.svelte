@@ -317,7 +317,7 @@
     else if (state === 'UNCERTAIN') nativePlacement = 'UNCERTAIN';
     // DEFERRED is a window-focus observation, not permission to place again.
     if (state === 'UNCERTAIN') {
-      localNotice = 'Blockbench window restoration is unverified. Use Detach Blockbench before other actions. ' + detail;
+      localNotice = 'Blockbench window restoration is unverified. Use Restore window to recover the original window. ' + detail;
     } else if (state === 'UNAVAILABLE') {
       localNotice = 'Native Blockbench placement is unavailable in this build. ' + detail;
     } else if (state === 'DETACHED' || state === 'PRESENTED') {
@@ -342,7 +342,7 @@
     }
     const restored = await nativeStage.detach();
     if (!restored) {
-      localNotice = 'The original Blockbench window was not confirmed restored. The Editor remains open. Use Detach Blockbench to retry after any native operation finishes.';
+      localNotice = 'The original Blockbench window was not confirmed restored. The Editor remains open. Use Restore window if recovery is available.';
     }
     return restored;
   }
@@ -356,7 +356,7 @@
     try {
       const restored = await detach();
       if (!restored) {
-        localNotice = 'Blockbench window restoration is unverified. Use Detach & restore window before opening another model or folder.';
+        localNotice = 'Blockbench window restoration is unverified. Restore the original window before opening another model or folder.';
         return;
       }
       await action();
@@ -448,41 +448,30 @@
         aria-controls={showProjects ? 'ld-unified-explorer' : undefined}
         onclick={toggleProjectsPanel}><EditorChromeIcon name="projects"/><span class="dock-label">Projects</span></button>
       <button type="button" bind:this={diagnosticToggle} class="dock-toggle" class:chosen={showTools && !diagnosticRail}
-        aria-label="Toggle Diagnostic panel"
-        title={canExpandDiagnostic ? 'Expand or collapse Diagnostic panel' : 'Use Support to inspect the connection at this width'}
+        aria-label="Toggle Inspector panel"
+        title={canExpandDiagnostic ? 'Expand or collapse Inspector panel' : 'Use Support to inspect the connection at this width'}
         disabled={diagnosticRail && !canExpandDiagnostic}
         aria-expanded={showTools && !diagnosticRail}
         aria-controls={showTools ? 'ld-unified-inspector' : undefined}
-        onclick={toggleDiagnosticPanel}><EditorChromeIcon name="diagnostic"/><span class="dock-label">Diagnostic</span></button>
+        onclick={toggleDiagnosticPanel}><EditorChromeIcon name="diagnostic"/><span class="dock-label">Inspector</span></button>
       <span class="toolbar-separator" aria-hidden="true"></span>
       <button type="button" class="dock-toggle" class:chosen={layout.focusMode}
         aria-label={layout.focusMode ? 'Exit Focus Editor' : 'Focus Editor'}
         aria-pressed={layout.focusMode}
         title={layout.focusMode ? 'Restore side panels' : 'Maximize Blockbench working area'}
-        onclick={toggleFocusMode}><EditorChromeIcon name="focus"/><span class="dock-label">Focus</span></button>
-      <span class="toolbar-separator" aria-hidden="true"></span>
+        onclick={toggleFocusMode}><EditorChromeIcon name="focus"/></button>
       {#if !status?.blockbench.running}
         <button type="button" class="launch-editor" disabled={actionBusy || fixture || statusProbeFailures >= 2}
           onclick={() => void launchBlockbench()}>Open Blockbench</button>
       {/if}
       <button type="button" class="open-model" disabled={actionBusy || fixture}
         onclick={() => void openModelSafely()}>Open Model…</button>
-      {#if !fixture}
-        {#if nativePlacement === 'DETACHED'}
-          <button type="button" class="native-window-action"
-            aria-label="Place original Blockbench window in workspace"
-            title="Position the existing Blockbench window in the reserved center area"
-            disabled={actionBusy || !status?.blockbench.running}
-            onclick={requestNativePlacement}>Place Blockbench</button>
-        {:else}
-          <button type="button" class="native-window-action"
-            aria-label="Detach and restore original Blockbench window"
-            title={nativePlacement === 'UNCERTAIN'
-              ? 'Native placement is unverified; restore the original Blockbench window'
-              : 'Detach Blockbench and restore its original window bounds'}
-            disabled={actionBusy}
-            onclick={restoreNativeWindow}>Detach Blockbench</button>
-        {/if}
+      {#if !fixture && nativePlacement === 'UNCERTAIN'}
+        <button type="button" class="native-window-action"
+          aria-label="Recover original Blockbench window"
+          title="Window placement is unverified; restore the original Blockbench window"
+          disabled={actionBusy}
+          onclick={restoreNativeWindow}>Restore window</button>
       {/if}
       <span class="toolbar-separator" aria-hidden="true"></span>
       <button type="button" class="support-button"
