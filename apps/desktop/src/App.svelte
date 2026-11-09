@@ -319,19 +319,24 @@
     }
   }
 
-  async function createProjectFolder(name: string) {
-    if (devFixture || busyAction || statusProbeFailures >= 2) return;
+  async function createProjectFolder(name: string): Promise<'created' | 'cancelled' | 'failed'> {
+    if (devFixture || busyAction || statusProbeFailures >= 2) return 'failed';
     closeActionDisclosures(true);
     busyAction = 'project-action';
     clearActionFeedback();
     try {
       const result = await invoke<ProjectNavigationActionResult>('create_project_folder', { name });
+      if (result.status === 'CANCELLED') return 'cancelled';
       if (result.status === 'ADDED' || result.status === 'ALREADY_ADDED') {
-        if (!(await refreshAfterAcknowledgment('New project folder'))) return;
+        if (!(await refreshAfterAcknowledgment('New project folder'))) return 'failed';
         showActionToast('Empty project folder created and added. No model was generated.');
+        return 'created';
       }
+      reportError(new Error('Folder creation returned an unexpected result. Refresh Projects to check.'));
+      return 'failed';
     } catch (cause) {
       reportError(cause);
+      return 'failed';
     } finally {
       busyAction = null;
     }
