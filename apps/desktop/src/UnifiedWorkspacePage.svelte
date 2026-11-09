@@ -136,7 +136,7 @@
     if (element instanceof HTMLButtonElement && element.disabled) {
       // A narrow-window rail cannot expand without squeezing Blockbench.
       // Send keyboard focus to the still-operable Support route.
-      const fallback = '.support-button';
+      const fallback = '.sidebar-utility-actions .support-button, .focus-exit-overlay';
       editorRoot?.querySelector<HTMLButtonElement>(fallback)?.focus();
       return;
     }
@@ -602,11 +602,13 @@
           disabled={actionBusy}
           onclick={restoreNativeWindow}>Restore window</button>
       {/if}
-      <span class="toolbar-separator" aria-hidden="true"></span>
       <button type="button" class="support-button"
-        title={nativePlacement === 'DETACHED' ? 'Support and settings' : 'Restore original Blockbench window before opening Support'}
-        aria-label="Open Support" disabled={navigationPending}
-        onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
+        title={nativePlacement === 'DETACHED'
+          ? 'Open Help & settings: diagnostics, connection recovery, and application settings'
+          : 'Restore the original Blockbench window before opening Help & settings'}
+        aria-label="Open Help and settings"
+        disabled={navigationPending}
+        onclick={navigateSupport}><EditorChromeIcon name="support"/><span>Help & settings</span></button>
     </div>
             <div class="sidebar-tabs" role="tablist" aria-label="LazyDesigner sections">
               <button type="button" role="tab" id="ld-sidebar-projects-tab"
@@ -1006,12 +1008,16 @@
     --ed-muted-soft: var(--color-subtle_text);
     --ed-select: var(--color-selected);
     --ed-accent: var(--color-accent);
-    display:flex; flex-direction:column; flex:1; min-width:0; min-height:0;
+    position:relative;display:flex; flex-direction:column; flex:1; min-width:0; min-height:0;
     overflow:hidden; background:var(--ed-bg); color:var(--ed-text);
     font-family:"Segoe UI",Arial,system-ui,sans-serif;
   }
   /* Title-bar-style identity only; utility actions live in the sidebar. */
-  .sidebar-utility-actions{display:flex;align-items:center;justify-content:flex-start;gap:5px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--ed-border)}
+  .sidebar-utility-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:nowrap;padding:7px 0;border-bottom:1px solid var(--ed-border)}
+  .sidebar-utility-actions .support-button{flex:1;min-width:0;justify-content:center;gap:7px;width:auto;min-height:32px;padding:5px 8px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);font-size:12px;font-weight:600}
+  .sidebar-utility-actions .support-button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sidebar-utility-actions .dock-toggle{width:32px;height:32px;padding:5px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised)}
+  .sidebar-utility-actions .support-button:hover:not(:disabled),.sidebar-utility-actions .dock-toggle:hover:not(:disabled){background:var(--ed-select);color:var(--ed-text)}
   .focus-exit-overlay{position:absolute;top:44px;right:12px;z-index:10;display:flex;align-items:center;gap:6px;min-height:32px;padding:6px 10px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-panel);color:var(--ed-text);cursor:pointer}
   .focus-exit-overlay:hover{background:var(--ed-select)}
   .editor-header {
@@ -1062,7 +1068,7 @@
   .editor-controls .native-window-action {
     border-color:var(--ed-border);background:var(--ed-raised);color:var(--ed-text);
   }
-  .editor-controls .support-button {width:29px;padding:4px;font-size:16px}
+  .editor-controls .support-button {font-size:12px}
   .editor-header button:focus-visible,.dock-panel button:focus-visible,.dock-panel input:focus-visible {
     outline:2px solid var(--ed-accent);outline-offset:1px;
   }
