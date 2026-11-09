@@ -26,6 +26,36 @@ The primary user outcome is **continue asset work**. Connection and installation
 
 The Editor has one real Blockbench native-window reservation between **two permanently present LazyDesigner side docks**: **Project Explorer** (left) and **Diagnostic** (right). Both are mounted during ordinary editing, even on narrow windows. Only the explicitly selected **Focus Editor** action hides both. This is not a WebView clone or substitute Blockbench workspace. The middle DOM reservation is completely empty; the original Blockbench Windows window alone provides its viewport, menus, Outliner, UV, Paint, Animation, Undo and Save when native placement succeeds.
 
+### Single native Blockbench surface — P0 source contract
+
+The central source is exactly one independently running, verified Blockbench
+top-level HWND, following the selected-game window approach in
+[M-Minecraft-Emulator Local](https://github.com/OpenITStudios/M-Minecraft-Emulator/blob/f24a1aad133ad80eb15d779545805769eca492f4/Development/apps/desktop/src-tauri/src/engine/workspace_surface/native.rs).
+Do not import the Emulator's 5-session/parking/preview tiles, DWM
+thumbnails, FPS/input virtualization or managed game lifecycle. The Desktop
+does not own Blockbench model data, process termination, or app input.
+
+A manually initiated Windows debug-only Place captures exact process/window
+identity, native geometry and original frame flags. It temporarily removes
+only caption/thickframe/maximized frame bits; it does not modify taskbar/
+extended styles, parent ownership or user input. It positions the existing
+real HWND into the screen-space native reservation, maintains the exact GDI
+manager cutout, verifies actual bounds and checks that a center mouse hit
+belongs to the original HWND. Z-order correction is bounded to the
+foreground LazyDesigner/Blockbench pair and any temporary topmost pulse
+must be undone. Only an explicit user Place may request keyboard focus;
+neither that request nor a center hit confirms full native keyboard, modal,
+save/Undo, DPI or crash behavior.
+
+Detach attempts independent window/frame restoration and aperture removal
+even if the other fails, with forced manager/WebView child invalidation.
+Unknown recovery retains its original lease; it never promotes a new HWND,
+restarts an action automatically, or terminates Blockbench. The current
+in-process lease offers best-effort clean-exit recovery, not the Emulator's
+separate crash-surviving recovery helper. F3 Windows/native acceptance is
+required before enabling release. Until then all executable/native behavior
+remains UNVERIFIED; GitHub source checks are not a runtime PASS.
+
 ### Blockbench visual authority
 
 For an uncustomized Blockbench installation, align the desktop host with the **actual Blockbench v5.2.1 Default (Dark)** source:

@@ -913,8 +913,11 @@ Blockbench top-level window within the Editor viewport. Update is
 ResizeObserver/foreground-driven only while a lease is present. Detach
 restores original window bounds before navigating away; normal app
 exit also attempts restoration. It does not create/delete model files,
-change native window styles, reparent, inject input, or assert that
-the editor is interactive under all focus conditions.
+change native taskbar/extended styles, reparent, inject input, or assert that
+the editor is interactive under all focus conditions. The single original
+Blockbench HWND temporarily drops its outer frame flags for in-flow
+presentation; the lease restores those exact flags and original geometry
+independently of the manager-region cutout.
 
 Gate: `cfg(all(windows, debug_assertions))` on Rust actions and
 `import.meta.env.DEV` in Svelte navigation. All other builds
@@ -931,8 +934,13 @@ The current lease owns only its exact window region and original editor
 rectangle. Source guards include non-overwriting region readback and recovery
 of both components. Tauri move/resize/focus events request layout observation
 through the same Svelte presenter; a minimized manager attempts native detach.
-Unknown native receipts block automatic placement. The release app remains
-unmodified, and none of this proves functioning native visuals or input.
+Unknown native receipts block automatic placement. The source now also
+confirms that the native window is the mouse hit target at viewport center,
+using the existing lease identity, bounded topmost pulse only if covered,
+and explicit user-only foreground activation. Detach invalidates the
+manager/WebView child drawing even if the region was already cleared.
+The release app remains unmodified, and none of this proves Windows
+build, keyboard input, plugin save/undo, dialogs or crash recovery.
 
 
 ## Unified Editor — Blockbench-native companion (development-only)

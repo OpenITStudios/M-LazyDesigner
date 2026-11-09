@@ -1,6 +1,7 @@
 //! Debug-only, user-initiated Blockbench native window composition.
 //! Blockbench stays an independent top-level process. No SetParent, input
-//! forwarding, DWM fake-interactivity, taskbar style changes or model mutation.
+//! forwarding, DWM fake-interactivity, taskbar changes or model mutation.
+//! Only the native frame bits are temporarily adjusted and restored.
 //! Do not enable in release until real Windows focus/dialog/crash recovery proof.
 use serde::{Deserialize, Serialize};
 
@@ -43,11 +44,25 @@ mod platform {
     type Handle = *mut c_void;
     const GW_OWNER: u32 = 4;
     const GWL_EXSTYLE: i32 = -20;
+    const GWL_STYLE: i32 = -16;
+    const WS_CAPTION: isize = 0x00c00000;
+    const WS_THICKFRAME: isize = 0x00040000;
+    const WS_MAXIMIZE: isize = 0x01000000;
+    const WS_DISABLED: isize = 0x08000000;
+    const FRAME_FLAGS: isize = WS_CAPTION | WS_THICKFRAME | WS_MAXIMIZE;
     const WS_EX_TOPMOST: isize = 0x00000008;
     const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
     const SWP_NOACTIVATE: u32 = 0x0010;
     const SWP_NOZORDER: u32 = 0x0004;
     const SWP_SHOWWINDOW: u32 = 0x0040;
+    const SWP_FRAMECHANGED: u32 = 0x0020;
+    const SWP_NOMOVE: u32 = 0x0002;
+    const SWP_NOSIZE: u32 = 0x0001;
+    const RDW_INVALIDATE: u32 = 0x0001;
+    const RDW_ERASE: u32 = 0x0004;
+    const RDW_ALLCHILDREN: u32 = 0x0080;
+    const RDW_FRAME: u32 = 0x0400;
+    const GA_ROOT: u32 = 2;
     const HWND_TOP: Hwnd = ptr::null_mut();
     const RGN_DIFF: i32 = 4;
     const RGN_ERROR: i32 = 0;
@@ -77,11 +92,17 @@ mod platform {
         fn IsIconic(hwnd: Hwnd) -> i32;
         fn IsZoomed(hwnd: Hwnd) -> i32;
         fn GetForegroundWindow() -> Hwnd;
+        fn WindowFromPoint(point: Point) -> Hwnd;
+        fn GetAncestor(hwnd: Hwnd, flags: u32) -> Hwnd;
+        fn SetForegroundWindow(hwnd: Hwnd) -> i32;
+        fn IsHungAppWindow(hwnd: Hwnd) -> i32;
         fn GetClientRect(hwnd: Hwnd, rect: *mut Rect) -> i32;
         fn GetWindowRect(hwnd: Hwnd, rect: *mut Rect) -> i32;
         fn ClientToScreen(hwnd: Hwnd, point: *mut Point) -> i32;
         fn GetDpiForWindow(hwnd: Hwnd) -> u32;
         fn GetWindowLongPtrW(hwnd: Hwnd, index: i32) -> isize;
+        fn SetWindowLongPtrW(hwnd: Hwnd, index: i32, value: isize) -> isize;
+        fn RedrawWindow(hwnd: Hwnd, update: *const Rect, region: Handle, flags: u32) -> i32;
         fn GetWindowRgn(hwnd: Hwnd, region: Handle) -> i32;
         fn SetWindowRgn(hwnd: Hwnd, region: Handle, redraw: i32) -> i32;
         fn SetWindowPos(hwnd: Hwnd, insert_after: Hwnd, x: i32, y: i32, width: i32, height: i32, flags: u32) -> i32;
@@ -91,6 +112,8 @@ mod platform {
         fn OpenProcess(access: u32, inherit: i32, pid: u32) -> Handle;
         fn GetProcessTimes(process: Handle, created: *mut FileTime, exited: *mut FileTime, kernel: *mut FileTime, user: *mut FileTime) -> i32;
         fn CloseHandle(process: Handle) -> i32;
+        fn SetLastError(code: u32);
+        fn GetLastError() -> u32;
     }
 
     #[link(name = "gdi32")]
@@ -189,16 +212,25 @@ mod platform {
     }
 
     fn clear_aperture(lease: &mut Lease) -> Result<(), String> {
-        if lease.aperture.is_none() { return Ok(()); }
         let manager = lease.manager as Hwnd;
         if unsafe { IsWindow(manager) } == 0 || pid_and_thread(manager).0 != std::process::id() {
             return Err("LazyDesigner native window is unavailable for aperture restoration.".into());
         }
         assert_owned_region(manager, lease.aperture)?;
-        if unsafe { SetWindowRgn(manager, ptr::null_mut(), 1) } == 0 {
-            return Err(win_error("Unable to clear the editor aperture"));
+        if lease.aperture.is_some() {
+            if unsafe { SetWindowRgn(manager, ptr::null_mut(), 1) } == 0 {
+                return Err(win_error("Unable to clear the editor aperture"));
+            }
+            lease.aperture = None;
         }
-        lease.aperture = None;
+        // Clearing a top-level region does not reliably repaint its WebView children.
+        // Retry invalidation even after partial recovery, rather than leaving a hole.
+        if unsafe {
+            RedrawWindow(manager, ptr::null(), ptr::null_mut(),
+                RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN)
+        } == 0 {
+            return Err(win_error("LazyDesigner child redraw after native detach was refused"));
+        }
         Ok(())
     }
 
@@ -328,6 +360,7 @@ mod platform {
         thread: u32,
         class: String,
         original: Rect,
+        original_frame_style: isize,
         aperture: Option<Aperture>,
     }
     impl Lease {
@@ -347,35 +380,133 @@ mod platform {
     static ACTIVE: OnceLock<Mutex<Option<Lease>>> = OnceLock::new();
     fn lease() -> &'static Mutex<Option<Lease>> { ACTIVE.get_or_init(|| Mutex::new(None)) }
 
+    // A zero previous style can be valid; use the explicit Win32 error value.
+    fn change_frame_style(hwnd: Hwnd, next: isize) -> Result<(), String> {
+        unsafe {
+            SetLastError(0);
+            let previous = SetWindowLongPtrW(hwnd, GWL_STYLE, next);
+            if previous == 0 && GetLastError() != 0 {
+                return Err(win_error("Unable to change the Blockbench window frame"));
+            }
+        }
+        Ok(())
+    }
+
+    fn adopted_frame_style(style: isize) -> isize { style & !FRAME_FLAGS }
+    fn restored_frame_style(current: isize, original: isize) -> isize {
+        (current & !FRAME_FLAGS) | (original & FRAME_FLAGS)
+    }
+
+    // No SetParent, persistent topmost, taskbar changes or input injection.
+    // Keep Blockbench-owned modal/disabled flags; adopt only the frame.
     fn place(lease: &Lease, target: Placement, raise: bool) -> Result<(), String> {
         lease.verify()?;
         let hwnd = lease.editor as Hwnd;
         if unsafe { IsIconic(hwnd) != 0 || IsZoomed(hwnd) != 0 } {
             return Err("Restore Blockbench from minimized/maximized state before placing it.".into());
         }
+        if unsafe { IsHungAppWindow(hwnd) } != 0 {
+            return Err("Blockbench is not responding; no native placement was attempted.".into());
+        }
+        let current_style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
+        if current_style & WS_DISABLED != 0 {
+            return Err("Close the active Blockbench dialog before repositioning its window.".into());
+        }
+        let framed = adopted_frame_style(current_style);
+        let frame_changed = framed != current_style;
+        if frame_changed { change_frame_style(hwnd, framed)?; }
         if unsafe {
             SetWindowPos(hwnd, if raise { HWND_TOP } else { ptr::null_mut() },
                 target.x, target.y, target.width, target.height,
-                SWP_NOACTIVATE | SWP_SHOWWINDOW | if raise { 0 } else { SWP_NOZORDER })
+                SWP_NOACTIVATE | SWP_SHOWWINDOW
+                    | (if raise { 0 } else { SWP_NOZORDER })
+                    | (if frame_changed { SWP_FRAMECHANGED } else { 0 }))
         } == 0 {
             return Err(win_error("Unable to position Blockbench"));
         }
         lease.verify()?;
-        verify_rect(hwnd, target)
+        verify_rect(hwnd, target)?;
+        if unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) } & FRAME_FLAGS != 0 {
+            return Err("Blockbench frame did not enter native workspace presentation.".into());
+        }
+        Ok(())
     }
+
+    // Restore original frame flags while leaving Blockbench-owned modal flags
+    // untouched. Always attempt original bounds even if frame restoration fails.
     fn restore_window(lease: &Lease) -> Result<(), String> {
         lease.verify()?;
+        let hwnd = lease.editor as Hwnd;
+        let current = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
+        let restored = restored_frame_style(current, lease.original_frame_style);
+        let changed = current != restored;
+        let frame_error = if changed { change_frame_style(hwnd, restored).err() } else { None };
         let r = lease.original;
-        if unsafe {
-            SetWindowPos(lease.editor as Hwnd, ptr::null_mut(), r.left, r.top,
-                r.right-r.left, r.bottom-r.top, SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW)
+        let position_error = if unsafe {
+            SetWindowPos(hwnd, ptr::null_mut(), r.left, r.top,
+                r.right-r.left, r.bottom-r.top,
+                SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW
+                    | (if changed { SWP_FRAMECHANGED } else { 0 }))
         } == 0 {
-            return Err(win_error("Unable to restore Blockbench window bounds"));
-        }
+            Some(win_error("Unable to restore Blockbench window bounds"))
+        } else { None };
+        if let Some(error) = frame_error { return Err(error); }
+        if let Some(error) = position_error { return Err(error); }
         lease.verify()?;
-        verify_rect(lease.editor as Hwnd, Placement {
+        verify_rect(hwnd, Placement {
             x: r.left, y: r.top, width: r.right-r.left, height: r.bottom-r.top,
-        })
+        })?;
+        if unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) } & FRAME_FLAGS
+            != lease.original_frame_style & FRAME_FLAGS {
+            return Err("Blockbench native frame restoration was not confirmed.".into());
+        }
+        Ok(())
+    }
+
+    fn editor_at_native_center(lease: &Lease, target: Placement) -> Result<bool, String> {
+        lease.verify()?;
+        verify_rect(lease.editor as Hwnd, target)?;
+        let hwnd = lease.editor as Hwnd;
+        if unsafe { IsWindowVisible(hwnd) } == 0 || unsafe { IsIconic(hwnd) } != 0 {
+            return Err("Blockbench window is not visibly presented.".into());
+        }
+        let style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
+        if style & (WS_DISABLED | FRAME_FLAGS) != 0 {
+            return Err("Blockbench has an active dialog or its original frame reappeared.".into());
+        }
+        let center = Point { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+        let hit = unsafe { GetAncestor(WindowFromPoint(center), GA_ROOT) };
+        lease.verify()?;
+        Ok(hit == hwnd)
+    }
+
+    // Use Emulator's real-HWND hit test for ONE editor, not its other DWM tiles.
+    // A temporary topmost pulse is synchronously undone; never leave it latched.
+    fn confirm_native_hit(lease: &Lease, target: Placement, activate: bool) -> Result<(), String> {
+        let manager = lease.manager as Hwnd;
+        let editor = lease.editor as Hwnd;
+        let foreground = unsafe { GetForegroundWindow() };
+        if foreground != manager && foreground != editor {
+            return Err("Another app owns the foreground; Blockbench mouse target is unverified.".into());
+        }
+        if !editor_at_native_center(lease, target)? && foreground == manager {
+            let flags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE;
+            let raised = unsafe { SetWindowPos(editor, -1isize as Hwnd, 0, 0, 0, 0, flags) };
+            // Attempt rollback even when the raise call fails.
+            let lowered = unsafe { SetWindowPos(editor, -2isize as Hwnd, 0, 0, 0, 0, flags) };
+            if raised == 0 || lowered == 0 {
+                return Err("Blockbench stacking pulse could not be safely completed; detach to restore.".into());
+            }
+        }
+        if !editor_at_native_center(lease, target)? {
+            return Err("Blockbench is covered at the viewport center; native presentation is not confirmed.".into());
+        }
+        // Only explicit user Place may request keyboard focus. Windows can deny
+        // activation; the user can click the actual Blockbench window afterward.
+        if activate && foreground == manager {
+            unsafe { let _ = SetForegroundWindow(editor); }
+        }
+        Ok(())
     }
 
     fn restore(lease: &mut Lease) -> Result<(), String> {
@@ -424,13 +555,15 @@ mod platform {
                     // Win32 mutation when the window and cutout still match.
                     if existing.aperture == Some(expected_aperture)
                         && verify_rect(existing.editor as Hwnd, geometry).is_ok() {
-                        return Ok(receipt("PRESENTED", "Native editor geometry already matches the workspace."));
+                        confirm_native_hit(existing, geometry, false)?;
+                        return Ok(receipt("PRESENTED", "Native Blockbench bounds and mouse hit target confirmed at last check."));
                     }
                     // A failed update retains the original admission checkpoint;
                     // the Svelte caller must stop automatic retry on uncertainty.
                     place(existing, geometry, foreground == manager as Hwnd)?;
                     apply_aperture(existing, geometry)?;
-                    return Ok(receipt("PRESENTED", "Native Blockbench placement and aperture were updated."));
+                    confirm_native_hit(existing, geometry, false)?;
+                    return Ok(receipt("PRESENTED", "Native Blockbench bounds and mouse hit target confirmed after layout."));
                 }
                 if action == "update" { return Ok(receipt("DETACHED", "No native editor lease was active.")); }
                 let (manager, editor, pid) = discover()?;
@@ -450,6 +583,7 @@ mod platform {
                     thread: pid_and_thread(editor as Hwnd).1,
                     class: window_class(editor as Hwnd),
                     original,
+                    original_frame_style: unsafe { GetWindowLongPtrW(editor as Hwnd, GWL_STYLE) },
                     aperture: None,
                 };
                 if candidate.thread == 0 || candidate.class.is_empty() {
@@ -457,7 +591,8 @@ mod platform {
                 }
                 let mut candidate = candidate;
                 let placement_result = place(&candidate, target, true)
-                    .and_then(|_| apply_aperture(&mut candidate, target));
+                    .and_then(|_| apply_aperture(&mut candidate, target))
+                    .and_then(|_| confirm_native_hit(&candidate, target, true));
                 if let Err(failure) = placement_result {
                     // The window and region can change independently. Attempt
                     // both restorations and retain any uncertain checkpoint.
@@ -470,7 +605,7 @@ mod platform {
                     };
                 }
                 *state = Some(candidate);
-                Ok(receipt("PRESENTED", "Blockbench positioned in the native window aperture; interaction is not yet verified."))
+                Ok(receipt("PRESENTED", "Original Blockbench window and mouse hit target confirmed; keyboard editing is not yet verified."))
             }
             _ => Err("Unsupported native editor surface action.".into()),
         }
@@ -484,6 +619,24 @@ mod platform {
             assert!(super::unique(&[15, 16], "Blockbench").is_err());
         }
     }
+    #[cfg(test)]
+    mod frame_tests {
+        use super::*;
+
+        #[test]
+        fn frame_restoration_preserves_live_blockbench_owned_flags() {
+            let original = WS_CAPTION | WS_THICKFRAME | WS_DISABLED | 0x00010000isize;
+            let adopted = adopted_frame_style(original);
+            assert_eq!(adopted & FRAME_FLAGS, 0);
+            assert_ne!(adopted & WS_DISABLED, 0);
+            let current = adopted & !WS_DISABLED | 0x00020000isize;
+            let restored = restored_frame_style(current, original);
+            assert_eq!(restored & FRAME_FLAGS, original & FRAME_FLAGS);
+            assert_eq!(restored & WS_DISABLED, 0);
+            assert_ne!(restored & 0x00020000isize, 0);
+        }
+    }
+
     #[cfg(test)]
     mod aperture_tests {
         use super::*;

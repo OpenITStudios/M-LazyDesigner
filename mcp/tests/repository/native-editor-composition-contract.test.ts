@@ -13,7 +13,9 @@ describe("Native Blockbench composition P0 owner and recovery contract", () => {
     expect(native).toContain("#[cfg(all(windows, debug_assertions))]");
     expect(native).toContain("#[cfg(not(all(windows, debug_assertions)))]");
     expect(native).not.toContain("SetParent(");
-    expect(native).not.toContain("SetWindowLongPtrW(");
+    expect(native).toContain("SetWindowLongPtrW(");
+    expect(native).not.toContain("SetWindowLongPtrW(hwnd, GWL_EXSTYLE");
+    expect(native).not.toContain("WS_EX_TOOLWINDOW");
     expect(native).not.toContain("TerminateProcess(");
     expect(native).not.toContain("SendInput(");
     expect(main).toContain("blockbench_surface::restore_on_exit()");
@@ -40,6 +42,23 @@ describe("Native Blockbench composition P0 owner and recovery contract", () => {
       "fn release_if_manager_minimized()",
       'receipt("DEFERRED"', 'receipt("DETACHED"'
     ]) expect(native).toContain(term);
+  });
+
+  test("adopts one real HWND with frame rollback, hit-test and WebView repaint", async () => {
+    const native = await source("../apps/desktop/src-tauri/src/blockbench_surface.rs");
+    for (const term of [
+      "original_frame_style: isize", "adopted_frame_style(", "restored_frame_style(",
+      "fn change_frame_style(", "SWP_FRAMECHANGED", "WS_DISABLED",
+      "fn confirm_native_hit(", "editor_at_native_center(",
+      "GetAncestor(WindowFromPoint(center), GA_ROOT)",
+      "SetForegroundWindow(editor)", "RedrawWindow(manager, ptr::null()",
+      "RDW_ALLCHILDREN", "fn frame_restoration_preserves_live_blockbench_owned_flags()",
+      ".and_then(|_| confirm_native_hit(&candidate, target, true))",
+      "confirm_native_hit(existing, geometry, false)?",
+    ]) expect(native).toContain(term);
+    expect(native).not.toContain("SetParent(");
+    expect(native).not.toContain("SendInput(");
+    expect(native).not.toContain("TerminateProcess(");
   });
 
   test("coalesces native location changes and preserves an unverified failure", async () => {
