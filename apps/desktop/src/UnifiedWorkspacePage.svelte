@@ -1013,7 +1013,7 @@
     font-family:"Segoe UI",Arial,system-ui,sans-serif;
   }
   /* Title-bar-style identity only; utility actions live in the sidebar. */
-  .sidebar-utility-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:nowrap;padding:7px 0;border-bottom:1px solid var(--ed-border)}
+  .sidebar-utility-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:nowrap;padding:10px 0;border-bottom:1px solid var(--ed-border)}
   .sidebar-utility-actions .support-button{flex:1;min-width:0;justify-content:center;gap:7px;width:auto;min-height:32px;padding:5px 8px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);font-size:12px;font-weight:600}
   .sidebar-utility-actions .support-button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sidebar-utility-actions .dock-toggle{width:32px;height:32px;padding:5px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised)}
@@ -1495,7 +1495,7 @@
   .ld-brand-logo{width:24px;height:24px}
   .ld-header-logo{width:20px;height:20px}
   .sidebar-collapse{display:grid;place-items:center;margin-left:auto;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:var(--ed-muted);cursor:pointer}
-  .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:10px 0 10px}
+  .sidebar-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:14px 0 14px}
   .sidebar-tabs button{display:flex;justify-content:center;align-items:center;gap:7px;height:36px;border:0;border-radius:5px;background:transparent;color:var(--ed-muted);font-size:13px;font-weight:550;cursor:pointer}
   .sidebar-tabs button.selected{background:var(--ed-raised);color:var(--ed-text);font-weight:650;box-shadow:inset 0 -2px 0 var(--ed-accent)}
   .sidebar-tabs button:hover:not(.selected){background:var(--ed-select);color:var(--ed-text)}
@@ -1572,12 +1572,12 @@
   .sidebar-page .model-context-actions button{min-height:32px;padding:6px 9px;text-align:left;border:0;border-radius:4px;background:transparent;color:var(--ed-text);font-size:12px;cursor:pointer}
   .sidebar-page .model-context-actions button:hover:not(:disabled){background:var(--ed-select)}
   .sidebar-page .model-context-actions button:disabled{opacity:.55;cursor:not-allowed}
-  .sidebar-page .recent-group{margin:3px 0 12px;padding:0 0 9px;border-top:0;border-bottom:1px solid var(--ed-border-soft)}
+  .sidebar-page .recent-group{margin:8px 0 18px;padding:4px 0 14px;border-top:0;border-bottom:1px solid var(--ed-border-soft)}
   .sidebar-page .recent-heading{font-weight:650}
   @media(hover:none){.sidebar-page .model-actions-toggle{opacity:1}}
 
   /* Projects are folders, not model generators. Keep folder management with the tree. */
-  .sidebar-page .project-section-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 9px}
+  .sidebar-page .project-section-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:18px 0 12px}
   .sidebar-page .project-section-heading h3{margin:0;color:var(--ed-text);font-size:13px;font-weight:650}
   .sidebar-page .project-section-heading .sidebar-add-folder{display:flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:5px 9px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);color:var(--ed-text);font-size:12px;font-weight:550;cursor:pointer}
   .sidebar-page .project-section-heading .sidebar-add-folder:hover:not(:disabled){background:var(--ed-select);border-color:var(--ed-accent)}
@@ -1622,7 +1622,7 @@
   .sidebar-page .create-folder-form input[aria-invalid="true"]{border-color:#b46b6b}
 
   /* Active project is the first contextual item, not another model picker. */
-  .sidebar-page .active-project-summary{margin:2px 0 13px;padding:10px 11px;border:1px solid transparent;border-left:2px solid var(--ed-accent);border-radius:5px;background:var(--ed-raised)}
+  .sidebar-page .active-project-summary{margin:3px 0 17px;padding:13px 12px;border:1px solid transparent;border-left:2px solid var(--ed-accent);border-radius:6px;background:var(--ed-raised)}
   .sidebar-page .active-project-heading{margin-bottom:9px;color:var(--ed-muted);font-size:11px;font-weight:650}
   .sidebar-page .active-project-name,.sidebar-page .active-project-model{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px}
   .sidebar-page .active-project-name strong,.sidebar-page .active-project-model span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
