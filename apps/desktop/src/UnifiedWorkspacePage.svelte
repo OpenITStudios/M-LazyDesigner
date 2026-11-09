@@ -833,7 +833,11 @@
                           <div id={'ld-model-actions-' + model.id} class="model-context-actions" role="group"
                             aria-label={'Actions for model ' + model.name}
                             onkeydown={(event) => closeModelActions(event, model.id)}>
-                            <button type="button" disabled={actionBusy || fixture}
+                            <button type="button"
+                              disabled={!model.exists || actionBusy || fixture || (model.active && statusProbeFailures >= 2)}
+                              title={model.active && statusProbeFailures >= 2
+                                ? 'Refresh status before focusing the current model'
+                                : model.active ? 'Focus current model in Blockbench' : 'Open model in Blockbench'}
                               onclick={() => { modelActionsId = null; void chooseModel(model); }}>{model.active ? 'Focus model' : 'Open model'}</button>
                             <button type="button" disabled={actionBusy || fixture}
                               onclick={() => { modelActionsId = null; void showModelFile(model.id); }}>Show in Explorer</button>
