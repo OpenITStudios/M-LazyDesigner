@@ -1552,6 +1552,10 @@
   .sidebar-page .create-folder-actions{display:flex;justify-content:flex-end;gap:6px}
   .sidebar-page .create-folder-actions button{min-height:30px;padding:5px 8px;border:1px solid var(--ed-border);border-radius:5px;background:var(--ed-bg);color:var(--ed-text);font-size:12px;cursor:pointer}
   .sidebar-page .create-folder-actions button[type=submit]{background:var(--ed-select)}
+  .sidebar-page .create-folder-actions button:disabled{opacity:.55;cursor:not-allowed}
+  .sidebar-page .create-folder-form input:disabled{opacity:.65;cursor:not-allowed}
+  .sidebar-page .create-folder-form input:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
+  .sidebar-page .create-folder-form .folder-name-error{line-height:1.45}
 
   /* Status V4: concise operational summary, diagnostics only on demand. */
   .sidebar-status .status-overview{padding:16px 2px 12px}
