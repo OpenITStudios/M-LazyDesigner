@@ -1475,7 +1475,7 @@
   .sidebar-page .inspector-section{border:0;padding:10px 0}
   .sidebar-footer{flex:none;display:flex;align-items:center;gap:9px;min-height:48px;margin:0 12px;padding:8px 2px;border:0;border-top:1px solid var(--ed-border);background:transparent;color:var(--ed-muted);font-size:12px;text-align:left;cursor:pointer}
   .sidebar-footer>span:nth-child(2){flex:1}
-  .sidebar-footer:hover{color:var(--ed-text)}
+  .sidebar-footer:hover{color:var(--ed-text);background:var(--ed-raised)}
   .sidebar-footer .connection-status{gap:0}
   .sidebar-footer .connection-status i{display:block}
   .unified-sidebar.rail{padding:5px 3px}
@@ -1545,7 +1545,7 @@
   .sidebar-page .project-section-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 9px}
   .sidebar-page .project-section-heading h3{margin:0;color:var(--ed-text);font-size:13px;font-weight:650}
   .sidebar-page .project-section-heading .sidebar-add-folder{display:flex;align-items:center;justify-content:center;gap:6px;min-height:32px;padding:5px 9px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);color:var(--ed-text);font-size:12px;font-weight:550;cursor:pointer}
-  .sidebar-page .project-section-heading .sidebar-add-folder:hover:not(:disabled){background:var(--ed-select)}
+  .sidebar-page .project-section-heading .sidebar-add-folder:hover:not(:disabled){background:var(--ed-select);border-color:var(--ed-accent)}
   .sidebar-page .project-section-heading .sidebar-add-folder:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .sidebar-page .project-primary-action{margin-bottom:12px}
 
@@ -1574,7 +1574,7 @@
   .sidebar-status .status-overview-value i.stale{background:#d5a052}
   .sidebar-status .status-overview-help{margin:10px 0 0;font-size:12px;line-height:1.5;color:var(--ed-muted)}
   .sidebar-status .status-overview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:17px 0}
-  .sidebar-status .status-overview-actions button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:6px 9px;border:1px solid var(--ed-border);border-radius:5px;background:var(--ed-raised);color:var(--ed-text);font-size:12px;cursor:pointer}
+  .sidebar-status .status-overview-actions button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:6px 9px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);color:var(--ed-text);font-size:12px;cursor:pointer}
   .sidebar-status .status-overview-actions .text-action{background:transparent;border-color:transparent;color:var(--ed-muted)}
   .sidebar-status .status-overview-actions button:disabled,
   .sidebar-status .status-advanced button:disabled{opacity:.55;cursor:not-allowed}
