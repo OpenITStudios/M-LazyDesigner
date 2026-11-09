@@ -13,6 +13,7 @@
     "preview:quick": "node scripts/ui-preview/render.mjs --execute --current-local",
     "preview:render": "node scripts/ui-preview/render.mjs",
     "preview:typecheck": "node scripts/ui-preview/typecheck.mjs",
+    "check:ui-contract": "node scripts/check-ui-contract.mjs",
     "prepare:icons": "node scripts/check-brand-icon.mjs && tauri icon src-tauri/app-icon.svg",
     "prepare:managed-resource": "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./scripts/prepare-managed-resource.ps1",
     "dev:app": "npm run prepare:icons && tauri dev",
