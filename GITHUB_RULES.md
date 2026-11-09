@@ -1,5 +1,9 @@
 # GitHub Rules — LazyDesigner
 
+## Explicit Harness experiment branch (2026-11-09)
+
+The user selected `Harness` for isolated M-LazyDesigner deep-scan and Harness² source experiments, based on `Local` at `4015a05518b17f978adf10d29e0374183b2a283d`. For this bounded task, pin/read/write the explicitly selected `Harness` ref; retain `Local` as untouched comparison authority and `main` as stable default. The preflight admits `Harness` only with existing task, path, scope and security gates. Never auto-merge/promote, enable CI, release, or call authored tests executed. This explicit branch selection is a narrow exception to the older Local-only wording below, not general branch-selection authority.
+
 ## Two-surface project workflow (user-corrected 2026-11-05)
 
 **Active workflow:** development occurs in ChatGPT with authenticated GitHub access to branch `Local`. **Codex** is the second work surface: it is used for actual executable testing, debugging, and operating LazyDesigner **when a coherent system implementation is ready**. The user does not require a third cloud testing service, GitHub verification Actions, or a handoff to their own PC.

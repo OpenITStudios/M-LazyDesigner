@@ -61,6 +61,51 @@
       "expected": "allow"
     },
     {
+      "id": "develop-harness-owned",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "path": "mcp/gateway/development/intent.ts",
+        "authorized_scope": true,
+        "branch": "Harness",
+        "task_scope_paths": [
+          "mcp/gateway/development/intent.ts"
+        ]
+      },
+      "expected": "allow"
+    },
+    {
+      "id": "harness-outside-exact-scope-denied",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "path": "docs/README.md",
+        "authorized_scope": true,
+        "branch": "Harness",
+        "task_scope_paths": [
+          "mcp/server/net.ts"
+        ]
+      },
+      "expected": "deny"
+    },
+    {
+      "id": "unknown-experiment-branch-denied",
+      "request": {
+        "lane": "DEVELOPMENT",
+        "task": "DEVELOP",
+        "action": "source-write",
+        "path": "docs/README.md",
+        "authorized_scope": true,
+        "branch": "Harness2",
+        "task_scope_paths": [
+          "docs/README.md"
+        ]
+      },
+      "expected": "deny"
+    },
+    {
       "id": "develop-missing-authority",
       "request": {
         "lane": "DEVELOPMENT",

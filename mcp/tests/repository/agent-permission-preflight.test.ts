@@ -21,7 +21,7 @@ describe("repository agent permission preflight", () => {
     }
   });
 
-  test("source mutations require pinned Local and explicitly declared file paths", () => {
+  test("source mutations require pinned working branch and explicitly declared file paths", () => {
     const request = {
       lane: "DEVELOPMENT", task: "DEVELOP", action: "source-write",
       path: "docs/README.md", authorized_scope: true,
@@ -34,6 +34,12 @@ describe("repository agent permission preflight", () => {
     expect(evaluatePreflight({
       ...request, branch: "Local", task_scope_paths: ["docs/README.md"],
     }).decision).toBe("allow");
+    expect(evaluatePreflight({
+      ...request, branch: "Harness", task_scope_paths: ["docs/README.md"],
+    }).decision).toBe("allow");
+    expect(evaluatePreflight({
+      ...request, branch: "Harness2", task_scope_paths: ["docs/README.md"],
+    }).decision).toBe("deny");
   });
 
   test("specialist selection never enlarges the active work-lane permission", () => {

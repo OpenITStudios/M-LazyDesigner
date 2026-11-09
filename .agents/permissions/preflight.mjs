@@ -24,7 +24,7 @@ function evaluatePreflight(request) {
  const context=request.execution_context??"REMOTE_GITHUB";
  if(!CONTEXTS.has(context))return deny("Unknown execution context.");
  const branch=request.branch;
- if(branch!==undefined&&branch!=="Local"&&branch!=="main")return deny("Unrecognized branch authority.");
+ if(branch!==undefined&&branch!=="Local"&&branch!=="Harness"&&branch!=="main")return deny("Unrecognized branch authority.");
  if(request.authorized_scope!==undefined&&typeof request.authorized_scope!=="boolean")return deny("Invalid scope authorization claim.");
  if(request.path!==undefined&&!safeRepoPath(request.path))return deny("Unsafe or sensitive repository path.");
  if(action==="force-push"||action==="execute-untrusted"||action==="secret-access")return deny("Unsafe action is prohibited.");
@@ -44,7 +44,7 @@ function evaluatePreflight(request) {
     : (path.startsWith(".agents/skills/")||SKILL_OWNER_PATHS.has(path));
    if(!allowed)return deny("Path is outside the selected lane canonical owner.");
    if(branch===undefined)return ask("Source writes require an explicitly pinned branch.");
-   if(branch!=="Local")return ask("Main is stable/release authority; separate approval required.");
+   if(branch!=="Local"&&branch!=="Harness")return ask("Only explicitly selected working branches permit scoped source writes.");
    if(request.authorized_scope!==true)return ask("Current user has not authorized this exact write scope.");
    if(!Array.isArray(request.task_scope_paths)||request.task_scope_paths.length===0){
      return ask("Source writes require a nonempty exact-file task_scope_paths list.");
@@ -55,7 +55,7 @@ function evaluatePreflight(request) {
    if(!request.task_scope_paths.includes(path)){
      return deny("Target file is outside the explicitly declared task scope.");
    }
-   return allow("Local canonical file is inside the declared task scope.");
+   return allow("Selected working branch canonical file is inside the declared task scope.");
  }
  if(action==="run-verifier"){
    if(!["DEVELOP","REPAIR","VALIDATE"].includes(task))return deny("Task does not authorize verification execution.");
