@@ -764,69 +764,58 @@
             </section>
             <section id="ld-sidebar-status" role="tabpanel" aria-labelledby="ld-sidebar-status-tab"
               hidden={sidebarTab !== 'status'} class="sidebar-page sidebar-status">
-          <section class="inspector-section diagnostic-section">
-            <div class="inspector-context" aria-label="Current model context">
-              <div class="context-heading">Current model</div>
-              <div class="context-model" title={active?.model_name ?? continuing?.model.name ?? 'No active model'}>
-                <EditorChromeIcon name="model"/>
-                <strong>{active?.model_name ?? continuing?.model.name ?? 'No active model'}</strong>
-              </div>
-              <div class="context-project">
-                <EditorChromeIcon name="folder"/>
-                <span>{active?.project_name ?? continuing?.project.name ?? 'No project selected'}</span>
-              </div>
-              {#if active?.dirty}<span class="context-dirty">Unsaved changes at last observation</span>{/if}
+          <section class="status-overview" aria-label="System status">
+            <h3>Connection status</h3>
+            <div class="status-overview-row">
+              <span class="status-overview-label">Blockbench</span>
+              <span class="status-overview-value">
+                <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
+                  class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
+                {readinessLabel}
+              </span>
             </div>
-            <div class="inspector-status-heading">Readiness</div>
-            <div class="connection-status" role="status">
-              <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
-                class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
-              <strong>{readinessLabel}</strong>
+            <div class="status-overview-row">
+              <span class="status-overview-label">AI connection</span>
+              <span class="status-overview-value">
+                <i class:verified={Boolean(aiStatus?.recentlyVerified)}
+                  class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
+                {aiStatus?.label ?? 'Not verified'}
+              </span>
             </div>
-            <p class="status-summary">{readinessDetail}</p>
-            <details class="panel-disclosure">
-              <summary>Component status</summary>
-              <div class="diagnostic-facts" aria-label="Last observed Blockbench and plugin status">
-                <div><span>Blockbench</span><strong>{status
+            {#if statusProbeFailures >= 2 || readinessOutdated || !status?.readiness.ready}
+              <p class="status-overview-help" role="status">{readinessDetail}</p>
+            {/if}
+            {#if aiStatus?.needsRefresh}
+              <p class="status-overview-help">{aiStatus.detail}</p>
+            {/if}
+            <div class="status-overview-actions">
+              <button type="button" disabled={actionBusy || fixture || loading}
+                onclick={() => void refresh()}><EditorChromeIcon name="refresh"/> Refresh</button>
+              <button type="button" class="text-action" disabled={navigationPending}
+                onclick={navigateSupport}>Help & troubleshooting</button>
+            </div>
+            <details class="status-advanced">
+              <summary>Technical details</summary>
+              <div class="diagnostic-facts" aria-label="Last observed component status">
+                <div><span>Blockbench process</span><strong>{status
                   ? status.blockbench.running ? 'Detected' : 'Not running'
                   : 'Unverified'}</strong></div>
-                <div><span>Plugin</span><strong>{status
+                <div><span>Plugin integrity</span><strong>{status
                   ? status.plugin_integrity === 'ready' ? 'Ready at last check'
                     : status.plugin_integrity === 'missing' ? 'Missing'
                     : status.plugin_integrity === 'modified' ? 'Modified'
                     : status.plugin_integrity === 'invalid' ? 'Invalid'
                     : 'Unverified'
                   : 'Unverified'}</strong></div>
+                <div><span>Projects observed</span><strong>{observedProjectCount ?? '—'}</strong></div>
+                <div><span>Models observed</span><strong>{observedModelCount ?? '—'}</strong></div>
               </div>
+              <p class="subtle-note">{aiStatus?.detail ?? 'AI connection has not been verified.'}</p>
+              {#if status?.diagnostic}<p class="subtle-note">{status.diagnostic}</p>{/if}
+              {#if status?.blockbench.diagnostic}<p class="subtle-note">{status.blockbench.diagnostic}</p>{/if}
+              <button type="button" class="text-action" disabled={navigationPending}
+                onclick={navigateActivity}>Gateway statistics</button>
             </details>
-            {#if status?.diagnostic || status?.blockbench.diagnostic}
-              <details class="panel-disclosure">
-                <summary>Diagnostic details</summary>
-                {#if status?.diagnostic}<p class="subtle-note">{status.diagnostic}</p>{/if}
-                {#if status?.blockbench.diagnostic}<p class="subtle-note">{status.blockbench.diagnostic}</p>{/if}
-              </details>
-            {/if}
-            <button type="button" disabled={actionBusy || fixture || loading}
-              onclick={() => void refresh()}>Refresh status</button>
-            <button type="button" class="text-action" disabled={navigationPending} onclick={navigateSupport}>Troubleshooting</button>
-          </section>
-          <section class="inspector-section activity-section">
-            <div class="inspector-status-heading">AI connection</div>
-            <div class="connection-status" role="status">
-              <i class:verified={Boolean(aiStatus?.recentlyVerified)}
-                class:stale={Boolean(aiStatus?.needsRefresh)} aria-hidden="true"></i>
-              <strong>{aiStatus?.label ?? 'Status unavailable'}</strong>
-            </div>
-            <p class="subtle-note">{aiStatus?.detail ?? 'Connection has not been verified.'}</p>
-            <details class="panel-disclosure">
-              <summary>Observed project data</summary>
-              <div class="diagnostic-facts" aria-label="Project statistics at last observation">
-                <div><span>Projects</span><strong>{observedProjectCount ?? '—'}</strong></div>
-                <div><span>Models</span><strong>{observedModelCount ?? '—'}</strong></div>
-              </div>
-              <p class="subtle-note">Project totals come from the last Desktop observation. Gateway statistics are available separately.</p>
-            </details>
-            <button type="button" class="text-action" disabled={navigationPending} onclick={navigateActivity}>View Gateway statistics</button>
           </section>
 
               {#if !fixture && nativePlacementDetail}
@@ -1446,4 +1435,23 @@
   .sidebar-page .create-folder-actions{display:flex;justify-content:flex-end;gap:6px}
   .sidebar-page .create-folder-actions button{min-height:30px;padding:5px 8px;border:1px solid var(--ed-border);border-radius:5px;background:var(--ed-bg);color:var(--ed-text);font-size:12px;cursor:pointer}
   .sidebar-page .create-folder-actions button[type=submit]{background:var(--ed-select)}
+
+  /* Status V4: concise operational summary, diagnostics only on demand. */
+  .sidebar-status .status-overview{padding:16px 2px 12px}
+  .sidebar-status .status-overview h3{margin:0 0 14px;font-size:13px;font-weight:650;color:var(--ed-text)}
+  .sidebar-status .status-overview-row{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;padding:11px 0;border-bottom:1px solid var(--ed-border-soft)}
+  .sidebar-status .status-overview-label{font-size:12px;color:var(--ed-muted)}
+  .sidebar-status .status-overview-value{display:inline-flex;align-items:center;justify-content:flex-end;gap:7px;min-width:0;text-align:right;font-size:12px;font-weight:600;color:var(--ed-text)}
+  .sidebar-status .status-overview-value i{display:block;flex:none;width:7px;height:7px;border-radius:50%;background:var(--ed-muted-soft)}
+  .sidebar-status .status-overview-value i.verified{background:#54bb86}
+  .sidebar-status .status-overview-value i.stale{background:#d5a052}
+  .sidebar-status .status-overview-help{margin:10px 0 0;font-size:12px;line-height:1.5;color:var(--ed-muted)}
+  .sidebar-status .status-overview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:17px 0}
+  .sidebar-status .status-overview-actions button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:6px 9px;border:1px solid var(--ed-border);border-radius:5px;background:var(--ed-raised);color:var(--ed-text);font-size:12px;cursor:pointer}
+  .sidebar-status .status-overview-actions .text-action{background:transparent;border-color:transparent;color:var(--ed-muted)}
+  .sidebar-status .status-advanced{border-top:1px solid var(--ed-border);padding:12px 0}
+  .sidebar-status .status-advanced summary{cursor:pointer;color:var(--ed-muted);font-size:12px}
+  .sidebar-status .status-advanced[open] summary{margin-bottom:12px;color:var(--ed-text)}
+  .sidebar-status .status-advanced .diagnostic-facts{margin:8px 0}
+  .sidebar-status .status-overview button:focus-visible,.sidebar-status .status-advanced summary:focus-visible{outline:2px solid var(--ed-accent);outline-offset:2px}
 </style>
