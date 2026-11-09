@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   evaluateHarnessProbe,
   verifyHarnessContextBytes,
+  requireHarnessContextBytes,
   type HarnessProbeInput,
 } from "../../scripts/evaluate/evaluate-harness-candidate";
 import { describe, expect, test } from "bun:test";
@@ -636,6 +637,36 @@ describe("Harness² candidate evidence gate (authored contracts)", () => {
       .toThrow("1..262144 bytes");
     expect(() => verifyHarnessContextBytes(input, original, Buffer.alloc(262145)))
       .toThrow("1..262144 bytes");
+  });
+
+  test("Harness CLI review and quality veto require verified selected context files", () => {
+    const input = probe();
+    const original = Buffer.from("harness-geometry-baseline", "utf8");
+    const revised = Buffer.from("harness-geometry-candidate", "utf8");
+    input.baseline_harness_sha256 = createHash("sha256").update(original).digest("hex");
+    input.candidate_harness_sha256 = createHash("sha256").update(revised).digest("hex");
+    const acceptedPair = evaluateHarnessProbe(input);
+    expect(acceptedPair.status).toBe("REVIEW_REQUIRED");
+    const withoutFiles = requireHarnessContextBytes(acceptedPair, null);
+    expect(withoutFiles.status).toBe("INCONCLUSIVE");
+    expect(withoutFiles.reasons).toContain("HARNESS_CONTEXT_BYTES_NOT_CHECKED");
+    expect(withoutFiles.comparison).toBeNull();
+    const checked = verifyHarnessContextBytes(input, original, revised);
+    expect(requireHarnessContextBytes(acceptedPair, checked).status).toBe("REVIEW_REQUIRED");
+
+    input.candidate.quality_verdict = "FAIL";
+    input.candidate.state = "INCOMPLETE";
+    input.candidate.accepted_result = false;
+    input.candidate.metrics = null;
+    const qualityVeto = evaluateHarnessProbe(input);
+    expect(qualityVeto.status).toBe("REJECTED_QUALITY");
+    expect(requireHarnessContextBytes(qualityVeto, null).status).toBe("INCONCLUSIVE");
+    expect(requireHarnessContextBytes(qualityVeto, checked).status).toBe("REJECTED_QUALITY");
+
+    input.session_pair = undefined;
+    const unresolved = evaluateHarnessProbe(input);
+    expect(unresolved.status).toBe("INCONCLUSIVE");
+    expect(requireHarnessContextBytes(unresolved, null)).toBe(unresolved);
   });
 
   test("identical context bytes are not a second candidate", () => {

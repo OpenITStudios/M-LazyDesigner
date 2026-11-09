@@ -222,6 +222,24 @@ export function evaluateHarnessProbe(input: HarnessProbeInput): HarnessProbeResu
   return result(input, "REVIEW_REQUIRED", ["MATCHED_ACCEPTED_REPORTS"], comparison);
 }
 
+/**
+ * A declared pair of context hashes is not proof that either selected file
+ * was provided. Gate CLI review/rejection on actual byte verification; even
+ * verified bytes do not attest what an agent loaded or a native outcome.
+ */
+export function requireHarnessContextBytes(
+  assessed: HarnessProbeResult,
+  checked: HarnessContextByteCheck | null
+): HarnessProbeResult {
+  if (checked || assessed.status === "INCONCLUSIVE") return assessed;
+  return {
+    ...assessed,
+    status: "INCONCLUSIVE",
+    reasons: [...assessed.reasons, "HARNESS_CONTEXT_BYTES_NOT_CHECKED"],
+    comparison: null,
+  };
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.length !== 1 && args.length !== 3) {
@@ -256,7 +274,7 @@ async function main(): Promise<void> {
   }
 
   console.log(JSON.stringify({
-    ...evaluated,
+    ...requireHarnessContextBytes(evaluated, contextByteCheck),
     context_file_check: contextByteCheck ?? { status: "NOT_CHECKED" },
   }, null, 2));
 }
