@@ -152,7 +152,9 @@
       menu.classList.remove('open-up');
       const menuRect = menu.getBoundingClientRect();
       const viewRect = viewport.getBoundingClientRect();
-      if (menuRect.bottom > viewRect.bottom - 8 && menuRect.top - menuRect.height - 36 >= viewRect.top + 8) {
+      const roomAbove = menuRect.top - viewRect.top - 8;
+      const roomBelow = viewRect.bottom - menuRect.top - 8;
+      if (menuRect.bottom > viewRect.bottom - 8 && roomAbove > roomBelow) {
         menu.style.setProperty('--context-menu-height', menuRect.height + 'px');
         menu.classList.add('open-up');
       }
