@@ -20,6 +20,11 @@ export type CrossViewIssue =
       kind: "attachment_conflict";
       part_id: string;
       observations: Array<{ view: string; parent: string | null }>;
+    }
+  | {
+      kind: "attachment_cycle";
+      part_id: string;
+      cycle: string[];
     };
 
 const DEFAULT_RELATIVE_TOLERANCE = 0.08;
@@ -101,6 +106,7 @@ export function analyzeReferenceCrossViewEvidence(input: {
   const issues: CrossViewIssue[] = [];
   let comparableDimensionCount = 0;
   let attachmentComparisonCount = 0;
+  const unambiguousParents = new Map<string, string>();
 
   for (const [partId, observations] of byPart) {
     for (const axis of ["x", "y", "z"] as const) {
@@ -133,6 +139,43 @@ export function analyzeReferenceCrossViewEvidence(input: {
       if (new Set(parents.map((entry) => entry.view)).size >= 2) attachmentComparisonCount += 1;
       if (new Set(parents.map((entry) => entry.parent ?? "<root>")).size > 1) {
         issues.push({ kind: "attachment_conflict", part_id: partId, observations: parents });
+      }
+    }
+    // A single unambiguous declared parent is enough to disprove a cyclic
+    // assembly, but missing or contradictory parent claims never create edges.
+    if (parents.length > 0 &&
+        new Set(parents.map((entry) => entry.parent ?? "<root>")).size === 1 &&
+        parents[0]!.parent !== null) {
+      unambiguousParents.set(partId, parents[0]!.parent!);
+    }
+  }
+
+  // Follow each part's single parent edge once. Canonicalize cycle rotation
+  // by its lexicographically smallest part ID to avoid duplicate reports.
+  const reportedCycles = new Set<string>();
+  for (const start of unambiguousParents.keys()) {
+    const path: string[] = [];
+    const positions = new Map<string, number>();
+    let current: string | undefined = start;
+    while (current !== undefined && unambiguousParents.has(current) &&
+           !positions.has(current)) {
+      positions.set(current, path.length);
+      path.push(current);
+      current = unambiguousParents.get(current);
+    }
+    if (current !== undefined && positions.has(current)) {
+      const cycle = path.slice(positions.get(current)!);
+      const first = cycle.reduce((best, part, index) =>
+        part < cycle[best]! ? index : best, 0);
+      const normalized = [...cycle.slice(first), ...cycle.slice(0, first)];
+      const identity = normalized.join("\u0000");
+      if (!reportedCycles.has(identity)) {
+        reportedCycles.add(identity);
+        issues.push({
+          kind: "attachment_cycle",
+          part_id: normalized[0]!,
+          cycle: [...normalized, normalized[0]!],
+        });
       }
     }
   }

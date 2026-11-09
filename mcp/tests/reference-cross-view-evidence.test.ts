@@ -189,3 +189,46 @@ test("malformed Reference observation identity or attachment cannot become usabl
     reason: "observations_invalid",
   });
 });
+
+test("cross-view parent cycle is a structural conflict even when every view agrees", () => {
+  const result = analyzeReferenceCrossViewEvidence({
+    observations: [
+      { view: "front", part_id: "frame", attachment_parent: "panel" },
+      { view: "side", part_id: "frame", attachment_parent: "panel" },
+      { view: "front", part_id: "panel", attachment_parent: "frame" },
+      { view: "side", part_id: "panel", attachment_parent: "frame" },
+    ],
+  });
+  expect(result).toMatchObject({
+    state: "available",
+    readiness: "conflicting",
+    conflict_count: 1,
+    conflict_examples: [{ kind: "attachment_cycle", part_id: "frame", cycle: ["frame", "panel", "frame"] }],
+    visual_verdict: "not_evaluated",
+  });
+});
+
+test("single-view self-parent is rejected without fabricating cross-view support", () => {
+  const result = analyzeReferenceCrossViewEvidence({
+    observations: [{ view: "front", part_id: "hinge", attachment_parent: "hinge" }],
+  });
+  expect(result).toMatchObject({
+    readiness: "conflicting", attachment_comparison_count: 0,
+    conflict_examples: [{ kind: "attachment_cycle", part_id: "hinge", cycle: ["hinge", "hinge"] }],
+  });
+});
+
+test("missing or contradictory parent claims do not fabricate a cycle", () => {
+  const result = analyzeReferenceCrossViewEvidence({
+    observations: [
+      { view: "front", part_id: "a", attachment_parent: "b" },
+      { view: "side", part_id: "a", attachment_parent: null },
+      { view: "front", part_id: "b", attachment_parent: "a" },
+    ],
+  });
+  expect(result.conflict_examples.map(issue => issue.kind)).toEqual(["attachment_conflict"]);
+  const partial = analyzeReferenceCrossViewEvidence({
+    observations: [{ view: "front", part_id: "a", attachment_parent: "unobserved" }],
+  });
+  expect(partial).toMatchObject({ readiness: "insufficient_comparable_constraints", conflict_count: 0 });
+});

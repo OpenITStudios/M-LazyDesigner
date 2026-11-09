@@ -62,3 +62,13 @@ This document is isolated experimental analysis, **not** a production authority 
 ## STOP / next causal decision
 
 The highest-value next investigation is **not** to add more agent methods or a new planner: isolate failures in the current reference → Geometry/part-relation reasoning → Control execution → native evidence chain. Create one falsifiable cross-profile failure case at a time in the existing quality corpus, prefer an existing evaluator, and require native acceptance before claiming superiority. Do not mutate `Local`, `main`, live projects or release configuration.
+
+## Harness² iteration C — cross-view assembly causality (2026-11-09)
+
+**Observed source defect:** `analyzeReferenceCrossViewEvidence` compared each part's parent claims only within that part. A two-part cycle (`frame → panel → frame`) could report `consistent_with_available_constraints` even when both views agreed, although no finite native parent hierarchy can realize the relation. This is a **semantic dependency** failure, not an object-specific modelling heuristic.
+
+**Candidate:** use only unambiguous explicit parent edges, detect self-parent and longer cycles, canonicalize each cycle once, emit `attachment_cycle` with the exact part-ID chain. Conflicting or missing parent evidence is not converted into a guessed edge. Existing dimensions, optional planar spans, native approval and Control routing remain unchanged.
+
+**Falsifiers authored:** two-view mutually cyclic assembly, single-view self-parent without independent support, conflicting parent claims and incomplete external parent evidence. These are deterministic source regression cases; **NOT_EXECUTED**. The evaluator cannot establish whether an image really depicts the claimed parent or whether a native Blockbench rig is correct.
+
+**Expected value (unmeasured):** prevent internally impossible parent plans from being called cross-view consistent before Geometry/rig construction. No visual quality gain, time saving or native PASS is claimed.
