@@ -102,6 +102,12 @@
     (sum, project) => sum + project.model_count, 0,
   ) ?? null;
   $: actionBusy = Boolean(busyAction) || executing || navigationPending;
+  // Absence is shown only from a fresh, successful Desktop observation. A stale
+  // or unavailable check must never be mistaken for a stopped native process.
+  $: blockbenchConfirmedStopped = Boolean(status && !status.blockbench.running
+    && !loading && statusProbeFailures < 2 && !readinessOutdated);
+  $: blockbenchObservationUnknown = !blockbenchConfirmedStopped && Boolean(
+    !status || loading || statusProbeFailures >= 2 || readinessOutdated);
   // Both sides are always present in ordinary editor mode. Only Focus Editor
   // hides them. Narrow widths collapse content to reachable shortcut rails.
   $: showProjects = false; // Projects now lives inside the single right sidebar.
@@ -454,7 +460,10 @@
     }
   }
   function openModelSafely(id?: string) { return afterDetach(() => openModel(id)); }
-  function launchBlockbench() { return afterDetach(openBlockbenchEditor); }
+  function launchBlockbench() {
+    if (!blockbenchConfirmedStopped || fixture || actionBusy) return Promise.resolve();
+    return afterDetach(openBlockbenchEditor);
+  }
   function openProjectFolder(id: string) {
     return afterDetach(() => runProjectAction('open-project-folder', id));
   }
@@ -564,10 +573,32 @@
   <div class="unified-body" class:with-projects={showProjects} class:with-inspector={showTools}
     class:rail={explorerRail} class:tools-rail={diagnosticRail}
     style={`--explorer-width: ${layout.projectsWidth}px; --tools-width: ${layout.toolsWidth}px;`}>
-    <!-- Empty native window reservation, never a recreated editor or a visual placeholder. -->
+    <!-- The native aperture always remains authoritative. The host-only recovery
+         surface is visible only while no Blockbench editor can be presented. -->
     <section class="native-stage" aria-label="Blockbench native editor area">
       <NativeEditorStage bind:this={nativeStage} {fixture} compact={true}
         onPlacementChange={onNativePlacementChange}/>
+      {#if blockbenchConfirmedStopped || blockbenchObservationUnknown}
+        <div class="native-recovery-layer" role="region" aria-label="Blockbench availability">
+          <div class="native-recovery-content">
+            <span class="native-recovery-symbol" aria-hidden="true"><EditorChromeIcon name="model"/></span>
+            <h2>{blockbenchConfirmedStopped ? 'Blockbench is closed' : 'Checking Blockbench'}</h2>
+            <p>{blockbenchConfirmedStopped
+              ? 'Reopen the original Blockbench application to continue working on your models.'
+              : 'The latest Blockbench state is not verified. Refresh before attempting to reopen the editor.'}</p>
+            <div class="native-recovery-actions">
+              {#if blockbenchConfirmedStopped}
+                <button type="button" class="native-recovery-primary" disabled={actionBusy || fixture}
+                  onclick={() => void launchBlockbench()}>
+                  {busyAction === 'open-editor' ? 'Opening Blockbench…' : 'Open Blockbench'}
+                </button>
+              {/if}
+              <button type="button" class="native-recovery-secondary" disabled={actionBusy || fixture || loading}
+                onclick={() => void refresh()}>{loading ? 'Checking…' : 'Refresh status'}</button>
+            </div>
+          </div>
+        </div>
+      {/if}
     </section>
 
     {#if showTools}
@@ -1359,11 +1390,27 @@
   .recent-model:disabled{cursor:not-allowed;opacity:.72}
   .recent-model:focus-visible{outline:2px solid var(--ed-accent);outline-offset:1px}
   .native-stage{
-    display:flex;min-width:0;min-height:0;overflow:hidden;
+    position:relative;display:flex;min-width:0;min-height:0;overflow:hidden;
     --ed-native-bg:var(--color-dark);
     background:var(--color-dark);
   }
   .native-stage :global(.native-editor-page){min-width:0;width:100%}
+  /* Host recovery is NOT a fake Blockbench editor and never triggers native
+     placement. It disappears when a fresh running observation is available. */
+  .native-recovery-layer{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;overflow:auto;padding:24px;background:var(--ed-native-bg,var(--color-dark))}
+  .native-recovery-content{display:flex;flex-direction:column;align-items:center;gap:12px;width:min(100%,360px);text-align:center;color:var(--ed-text)}
+  .native-recovery-symbol{display:grid;place-items:center;width:48px;height:48px;border:1px solid var(--ed-border);border-radius:10px;background:var(--ed-raised);color:var(--ed-accent)}
+  .native-recovery-symbol :global(svg){display:block;width:24px;height:24px}
+  .native-recovery-content h2{margin:0;font-size:17px;font-weight:650;line-height:1.35}
+  .native-recovery-content p{margin:0;color:var(--ed-muted);font-size:13px;line-height:1.55}
+  .native-recovery-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:9px;margin-top:6px}
+  .native-recovery-actions button{min-height:36px;padding:8px 13px;border:1px solid var(--ed-border);border-radius:6px;font-size:13px;font-weight:600;cursor:pointer}
+  .native-recovery-actions .native-recovery-primary{border-color:var(--ed-accent);background:var(--ed-accent);color:#101316}
+  .native-recovery-actions .native-recovery-secondary{background:var(--ed-raised);color:var(--ed-text)}
+  .native-recovery-actions button:hover:not(:disabled){filter:brightness(1.12)}
+  .native-recovery-actions button:focus-visible{outline:2px solid var(--ed-accent);outline-offset:2px}
+  .native-recovery-actions button:disabled{opacity:.55;cursor:default}
+  @media(max-width:600px){.native-recovery-layer{padding:16px}.native-recovery-content{gap:10px}}
   .read-only-label {font-size:10px;color:var(--ed-muted-soft);letter-spacing:.04em}
   .inspector-section{padding:8px 3px 12px;margin-bottom:3px;border-bottom:1px solid var(--ed-border)}
   .inspector-context{padding:5px 0 14px;margin-bottom:12px;border-bottom:1px solid var(--ed-border)}
