@@ -622,10 +622,12 @@
           <div class="sidebar-content">
             <section id="ld-sidebar-projects" role="tabpanel" aria-labelledby="ld-sidebar-projects-tab"
               hidden={sidebarTab !== 'projects'} class="sidebar-page explorer">
-        {#if statusProbeFailures >= 2}
+        {#if statusProbeFailures >= 2 || readinessOutdated}
           <div class="state-note" role="status">
             <strong>Refresh required</strong>
-            <span>Folder navigation remains available. Refresh before changing project shortcuts.</span>
+            <span>{statusProbeFailures >= 2
+              ? 'Status could not be verified. Folder browsing remains available; refresh before changing project shortcuts.'
+              : 'The last status check is out of date. Refresh before adding folders or changing project shortcuts.'}</span>
             <button type="button" disabled={actionBusy || fixture || loading} onclick={() => void refresh()}>Refresh status</button>
           </div>
         {/if}
@@ -689,7 +691,8 @@
 
         <div class="project-section-heading">
           <h3>Project folders</h3>
-          <button type="button" class="sidebar-add-folder" title="Create a new empty project folder"
+          <button type="button" class="sidebar-add-folder" title={statusProbeFailures >= 2 || readinessOutdated
+              ? 'Refresh status before creating a project folder' : 'Create a new empty project folder'}
             disabled={actionBusy || fixture || !status || statusProbeFailures >= 2 || readinessOutdated}
             onclick={() => { if (creatingFolder) closeNewFolderForm(); else { creatingFolder = true; folderNameError = ''; void tick().then(() => editorRoot.querySelector<HTMLInputElement>('#ld-new-folder-name')?.focus()); } }}><EditorChromeIcon name="add"/> New folder</button>
         </div>
