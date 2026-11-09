@@ -531,7 +531,7 @@
   <header class="editor-header" aria-label="LazyDesigner editor controls" aria-busy={navigationPending}>
     <div class="editor-leading">
       <div class="editor-context">
-        <h1 tabindex="-1" title={active?.project_name ?? 'No active project'}>
+        <h1 tabindex="-1" title={'LazyDesigner — ' + (active?.project_name ?? 'No active project')}>
           LazyDesigner <span class="editor-title-divider" aria-hidden="true">—</span>
           <span class="editor-project-title">{active?.project_name ?? 'No active project'}</span>
         </h1>
@@ -1032,7 +1032,7 @@
   .editor-controls button:hover:not(:disabled){
     color:var(--ed-text);background:var(--ed-raised);
   }
-  .editor-context h1{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap}
+  .editor-context h1{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap;font-size:13px}
   .editor-project-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:550;color:var(--ed-muted)}
   .editor-title-divider{flex:none;color:var(--ed-muted-soft)}
   .dock-toggle{line-height:1}
