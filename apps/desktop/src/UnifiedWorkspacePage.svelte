@@ -470,7 +470,7 @@
     void tick().then(() => editorRoot.querySelector<HTMLButtonElement>('.sidebar-add-folder')?.focus());
   }
   async function submitNewFolder(name: string) {
-    if (creatingFolderPending || fixture || actionBusy || !status || statusProbeFailures >= 2) return;
+    if (creatingFolderPending || fixture || actionBusy || !status || statusProbeFailures >= 2 || readinessOutdated) return;
     creatingFolderPending = true;
     folderNameError = '';
     try {
@@ -700,7 +700,7 @@
           <form class="create-folder-form" onsubmit={(event) => {
             event.preventDefault();
             const name = newFolderName;
-            if (actionBusy || fixture || creatingFolderPending) return;
+            if (actionBusy || fixture || creatingFolderPending || readinessOutdated || statusProbeFailures >= 2) return;
             if (!validateModelRenameStem(name)) {
               folderNameError = 'Enter a valid folder name without reserved Windows characters or trailing spaces.';
               return;
@@ -719,7 +719,7 @@
             <p id="ld-new-folder-help">Choose the parent location next. This creates a folder only, not a model.</p>
             <div class="create-folder-actions">
               <button type="button" disabled={creatingFolderPending} onclick={closeNewFolderForm}>Cancel</button>
-              <button type="submit" disabled={!newFolderName.trim() || actionBusy || fixture || creatingFolderPending}>{creatingFolderPending ? 'Creating…' : 'Choose location…'}</button>
+              <button type="submit" disabled={!newFolderName.trim() || actionBusy || fixture || creatingFolderPending || readinessOutdated || statusProbeFailures >= 2}>{creatingFolderPending ? 'Creating…' : 'Choose location…'}</button>
             </div>
           </form>
         {/if}
