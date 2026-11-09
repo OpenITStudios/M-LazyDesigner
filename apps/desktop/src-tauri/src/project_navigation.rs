@@ -1064,6 +1064,28 @@ pub(crate) fn action(action: &str, id: &str, profile_id: Option<&str>) -> Result
     }
 }
 
+/// Validation is deliberately independent of UI checks. The eventual native
+/// rename command must call this again immediately before touching the disk.
+fn validated_model_rename_stem(raw: &str) -> Result<&str, String> {
+    if raw.is_empty() || raw.chars().count() > 120 || raw.trim() != raw
+        || raw.ends_with('.') || raw.ends_with(' ')
+        || raw.chars().any(|c| c.is_control() || "<>:\\"/\\|?*".contains(c))
+        || raw == "." || raw == ".." || raw.to_ascii_lowercase().ends_with(".bbmodel")
+    {
+        return Err("Invalid model name. Enter a filename without the .bbmodel extension.".to_string());
+    }
+    let base = raw.split('.').next().unwrap_or("");
+    let reserved = matches!(base.to_ascii_uppercase().as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "COM1" | "COM2" | "COM3" |
+        "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9" |
+        "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" |
+        "LPT6" | "LPT7" | "LPT8" | "LPT9");
+    if reserved {
+        return Err("Reserved Windows filename.".to_string());
+    }
+    Ok(raw)
+}
+
 pub(crate) fn path(id: &str, profile_id: Option<&str>) -> Result<ProjectPathResult, String> {
     let (projects, models, folders) = navigation_paths(profile_id);
     let path = models.get(id).or_else(|| projects.get(id)).or_else(|| folders.get(id))
@@ -1075,6 +1097,19 @@ pub(crate) fn path(id: &str, profile_id: Option<&str>) -> Result<ProjectPathResu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_rename_stem_rejects_windows_unsafe_names() {
+        assert_eq!(validated_model_rename_stem("Modern Chair").unwrap(), "Modern Chair");
+        assert_eq!(validated_model_rename_stem("Sofa_v2").unwrap(), "Sofa_v2");
+        for invalid in ["", " ", " CON", "Sofa.", "Sofa ", ".", "..", "CON",
+            "nul", "LPT1", "COM9.txt", "Sofa.bbmodel", "Sofa/Other",
+            "a\\\\b", "a:b", "a?b", "a*b", "a|b", "a<b", "a>b", "a\\\"b",
+            "a\\n"] {
+            assert!(validated_model_rename_stem(invalid).is_err(), "{invalid:?}");
+        }
+        assert!(validated_model_rename_stem(&"x".repeat(121)).is_err());
+    }
 
     #[test]
     fn persisted_navigation_hashes_preserve_sha256_bytes() {
