@@ -118,3 +118,15 @@ Every interactive control has: accessible name, visible affordance, action desti
 | P2 | Empty/missing/dirty/refresh-failure paths need end-to-end review | State inventory and real operation receipts |
 
 **Rule:** an item stays open until there is matching evidence. A document alone does not close an implementation gap.
+
+## K. Source inspection record — 2026-11-09
+
+**Pinned scope:** `apps/desktop/src/EditorChromeIcon.svelte`, `tokens.css`, `UnifiedWorkspacePage.svelte`, `App.svelte`, the existing standards and skill owner. **Context:** REMOTE_GITHUB. **Evidence:** source inspection and commits only; no native/browser runtime.
+
+- **SVG baseline observed:** `EditorChromeIcon` uses a typed union of 13 glyph names, a common 24×24 viewBox, 16px output, currentColor, 1.85 stroke, round caps/joins, and decorative aria-hidden SVG. This is an existing positive baseline; it is **not** proof of optical alignment or contrast at runtime.
+- **Token split observed:** global Desktop tokens have a green accent while Unified Editor uses blue Blockbench-compatible local tokens. Preserve their scoped ownership until a deliberate cross-surface mapping is implemented.
+- **CSS debt observed:** Unified Editor is a large component with historical style rules and repeated overrides; blind deletion risks breaking responsive layout and native placement. Cleanup should be selector-by-selector, not a broad rewrite.
+- **Closed in source:** missing Recent Models now visibly identify missing files and disable opening; AI verified label is concise and detailed observation text is available on focus/hover. These are source-authored, **not executed**.
+- **Open:** native acceptance, production Editor route, safe Rename/Delete, responsive/zoom measurements, contrast measurements, menu clipping, and systematic dead-selector removal. The UI must not be labeled package-ready while these remain unverified.
+
+**Review rule:** each subsequent UI change must update this record or the blind-spot register with exact source evidence, and must never mark a runtime gap closed based on a document or a preview alone.
