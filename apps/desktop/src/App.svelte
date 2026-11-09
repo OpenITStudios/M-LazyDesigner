@@ -319,7 +319,7 @@
     }
   }
 
-  async function createProjectFolder(name: string): Promise<'created' | 'cancelled' | 'failed'> {
+  async function createProjectFolder(name: string): Promise<'created' | 'created-unverified' | 'cancelled' | 'failed'> {
     if (devFixture || busyAction || statusProbeFailures >= 2) return 'failed';
     closeActionDisclosures(true);
     busyAction = 'project-action';
@@ -328,7 +328,7 @@
       const result = await invoke<ProjectNavigationActionResult>('create_project_folder', { name });
       if (result.status === 'CANCELLED') return 'cancelled';
       if (result.status === 'ADDED' || result.status === 'ALREADY_ADDED') {
-        if (!(await refreshAfterAcknowledgment('New project folder'))) return 'failed';
+        if (!(await refreshAfterAcknowledgment('New project folder'))) return 'created-unverified';
         showActionToast('Empty project folder created and added. No model was generated.');
         return 'created';
       }
