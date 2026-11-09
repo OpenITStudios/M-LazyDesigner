@@ -2,6 +2,12 @@
 
 This is the **single current continuation** owner. Proof: [current-validation.md](current-validation.md); native steps: [local-acceptance-runbook.md](local-acceptance-runbook.md); test policy: [test-architecture.md](../04-system/test-architecture.md). Git commits own completed work; this file is not a history log.
 
+## Editor navigation and native Detach UX — 2026-11-09
+
+- **SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN:** The existing `App.svelte` admits at most one in-flight Detach before leaving Unified Editor and clears the pending state on success or failure. The same `UnifiedWorkspacePage.svelte` displays in-flow, non-shifting status through its subtitle, prevents competing route/model actions, and leaves the Editor open with explicit recovery guidance if Detach is not confirmed. Workspace, Support, Diagnostic and Activity navigation share this original route gate.
+- **Proof:** Exact GitHub source/consumer checks and browser-only fixture route expectations were authored; Bun/Svelte/F2 NOT_EXECUTED. Native Windows F3 remains UNVERIFIED. A synthetic fixture route is not evidence of actual HWND restoration, mouse/keyboard focus or Blockbench persistence.
+- **Scope:** No native Blockbench Rust, Gateway, model file, new window service, added toolbar row, CI, release or screenshot preview. P0 native validation is still required for release.
+
 ## Support navigation and missing-status recovery — 2026-11-09
 
 - **SOURCE_AUTHORED / REGRESSION_AUTHORED_NOT_RUN:** Support now renders through the existing `SupportPage.svelte` even when `SystemStatus` is null, rather than falling into the generic unavailable Workspace fallback. It shows a truthful unavailable observation, classified error, one Refresh status action, independently callable Export diagnostics and Desktop version. Installed state, plugin/build readiness and all status-dependent native selection/migration/repair actions remain unavailable until a full observation succeeds.

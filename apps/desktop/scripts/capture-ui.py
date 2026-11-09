@@ -965,6 +965,35 @@ def inspect_unified_editor(page, fixture, view):
         issues.append("Focus Mode must restore both side docks")
     return issues
 
+
+def inspect_editor_navigation(page, fixture, view):
+    """Navigation in the production Svelte fixture, never native Blockbench."""
+    if view != "editor" or fixture not in {"ready", "ready-aged"}:
+        return []
+    issues = []
+    if fixture == "ready":
+        route = page.get_by_role("button", name="Return to Workspace", exact=True)
+        if route.count() != 1:
+            return ["Editor has no unique Workspace return route"]
+        route.click()
+        page.get_by_role("heading", name="Workspace", exact=True).wait_for(timeout=10000)
+        if page.locator(".native-editor-aperture").count() != 0:
+            issues.append("Native reservation remained after fixture navigation")
+        page.get_by_role("button", name="Support", exact=True).click()
+        page.get_by_role("heading", name="Troubleshooting", exact=True).wait_for(timeout=10000)
+    else:
+        # Compact Editor routes through the Activity rail; wide Editor
+        # routes through the Activity tab. Neither can place a native window.
+        shortcut = page.get_by_role("button", name="Open technical activity", exact=True)
+        if shortcut.count() == 1:
+            shortcut.click()
+        else:
+            page.get_by_role("tab", name="Activity", exact=True).click()
+            page.get_by_role("button", name="View Gateway statistics", exact=True).click()
+        page.get_by_role("heading", name="Gateway analytics", exact=True).wait_for(timeout=10000)
+    return issues
+
+
 def main():
     args = parse_args()
     target = urlsplit(args.base_url)
@@ -1098,6 +1127,11 @@ def main():
                             entry["taskJourney"] = journey
                             for issue in journey["issues"]:
                                 failures.append(name + ": " + journey["task"] + ": " + issue)
+                        editor_navigation_issues = inspect_editor_navigation(page, fixture, view)
+                        if view == "editor" and fixture in {"ready", "ready-aged"}:
+                            entry["editorNavigationChecks"] = {"issues": editor_navigation_issues}
+                        for issue in editor_navigation_issues:
+                            failures.append(name + ": " + issue)
                         if page_errors:
                             failures.append(name + ": JS errors: " + "; ".join(page_errors[:3]))
                             entry["pageErrors"] = page_errors

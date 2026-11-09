@@ -35,6 +35,39 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(native).toContain("#[cfg(not(all(windows, debug_assertions)))]");
   });
 
+  test("one in-flight Editor Detach gates navigation and explains uncertain restoration", async () => {
+    const [app, unified, stage, capture] = await Promise.all([
+      source("../apps/desktop/src/App.svelte"),
+      source("../apps/desktop/src/UnifiedWorkspacePage.svelte"),
+      source("../apps/desktop/src/NativeEditorStage.svelte"),
+      source("../apps/desktop/scripts/capture-ui.py"),
+    ]);
+    const route = app.slice(app.indexOf("function navigate(next: Page)"), app.indexOf("function finishNavigate(next: Page)"));
+    expect(app).toContain("let editorNavigationPending = false;");
+    expect(route).toContain("if (editorNavigationPending) return;");
+    expect(route).toContain("editorNavigationPending = true;");
+    expect(route).toContain("if (restored) finishNavigate(next);");
+    expect(route).toContain(".finally(() => {");
+    expect(route).toContain("editorNavigationPending = false;");
+    expect(route).toContain("if (!nativeEditorStage) {");
+    expect(app).toContain("navigationPending={editorNavigationPending}");
+    expect(unified).toContain("export let navigationPending = false;");
+    expect(unified).toContain("|| executing || navigationPending;");
+    expect(unified).toContain("const restored = await nativeStage.detach();");
+    expect(unified).toContain("if (!restored) {");
+    expect(unified).toContain("The original Blockbench window was not confirmed restored.");
+    expect(unified).toContain("aria-busy={navigationPending}");
+    expect(unified).toContain("Restoring original Blockbench window before leaving Editor");
+    expect(unified).toContain("disabled={navigationPending} onclick={navigateWorkspace}");
+    expect(unified).toContain("disabled={navigationPending} onclick={navigateSupport}");
+    expect(unified).toContain("disabled={navigationPending} onclick={navigateActivity}");
+    expect(stage).toContain("if (fixture) return true;");
+    expect(stage).toContain("if (busy) {");
+    expect(capture).toContain("def inspect_editor_navigation(page, fixture, view):");
+    expect(capture).toContain('entry["editorNavigationChecks"]');
+    expect(capture).not.toContain("native_stage.present()");
+  });
+
   test("project search and actions retain existing model ID and Rust authorization boundaries", async () => {
     const unified = await source("../apps/desktop/src/UnifiedWorkspacePage.svelte");
     for (const term of [

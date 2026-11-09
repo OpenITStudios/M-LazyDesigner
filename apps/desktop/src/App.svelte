@@ -67,6 +67,9 @@
   type Page = 'Overview' | 'Editor' | 'Analytics' | 'Support';
   let page: Page = 'Overview';
   let nativeEditorStage: { detach: () => Promise<boolean> } | undefined;
+  // At most one in-flight native Detach. Duplicate route requests must
+  // never start parallel window restoration or unmount the Editor early.
+  let editorNavigationPending = false;
   // Retain UI-only panel preferences across Workspace/Support navigation.
   // This is not a model setting, native status, or persisted file.
   let editorLayout: EditorLayoutState = { ...INITIAL_EDITOR_LAYOUT };
@@ -98,6 +101,7 @@
   // A composed native editor must be restored BEFORE showing another
   // application page, not merely after Svelte has removed its aperture.
   function navigate(next: Page) {
+    if (editorNavigationPending) return;
     if (page === 'Editor' && next !== 'Editor') {
       // A missing Svelte ref is NOT proof the Rust-owned native window lease
       // ended. Never remove the native aperture without a Detach receipt.
@@ -105,9 +109,14 @@
         reportError(new Error('Native Blockbench recovery control is unavailable; navigation was stopped.'));
         return;
       }
+      editorNavigationPending = true;
       void nativeEditorStage.detach().then(restored => {
         if (restored) finishNavigate(next);
-      }).catch(reportError);
+        // A failed/uncertain Detach leaves the Editor mounted and its
+        // local native-recovery notice visible for an explicit next action.
+      }).catch(reportError).finally(() => {
+        editorNavigationPending = false;
+      });
       return;
     }
     finishNavigate(next);
@@ -868,7 +877,7 @@
       {:else if page === 'Editor' && import.meta.env.DEV}
         <UnifiedWorkspacePage bind:this={nativeEditorStage} bind:layout={editorLayout}
           {status} {loading} {busyAction} {openingModelId} {statusProbeFailures} {statusPresentationNowMs}
-          fixture={devFixture !== null}
+          fixture={devFixture !== null} navigationPending={editorNavigationPending}
           {openModel} {addProjectFolder} {runProjectAction} {focusCurrentEditor} {openBlockbenchEditor} {refresh}
           navigateWorkspace={() => navigate('Overview')}
           navigateSupport={() => navigate('Support')}

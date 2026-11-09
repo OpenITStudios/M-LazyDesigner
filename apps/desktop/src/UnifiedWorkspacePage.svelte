@@ -22,6 +22,7 @@
   export let statusProbeFailures: number;
   export let statusPresentationNowMs: number;
   export let fixture = false;
+  export let navigationPending = false;
   export let layout: EditorLayoutState;
   export let openModel: (id?: string) => Promise<void>;
   export let addProjectFolder: () => Promise<void>;
@@ -87,7 +88,7 @@
   $: observedModelCount = status?.project_navigation.projects.reduce(
     (sum, project) => sum + project.model_count, 0,
   ) ?? null;
-  $: actionBusy = Boolean(busyAction) || executing;
+  $: actionBusy = Boolean(busyAction) || executing || navigationPending;
   // Both sides are always present in ordinary editor mode. Only Focus Editor
   // hides them. Narrow widths collapse content to reachable shortcut rails.
   $: showProjects = !layout.focusMode;
@@ -320,7 +321,11 @@
       localNotice = 'Native Blockbench recovery control is unavailable. Navigation is blocked to protect the original window.';
       return false;
     }
-    return nativeStage.detach();
+    const restored = await nativeStage.detach();
+    if (!restored) {
+      localNotice = 'The original Blockbench window was not confirmed restored. The Editor remains open. Use Detach Blockbench to retry after any native operation finishes.';
+    }
+    return restored;
   }
 
   // Native file pickers and Explorer must not appear behind a clipped window.
@@ -388,13 +393,14 @@
 </script>
 
 <main class="unified-workspace" bind:this={editorRoot} aria-label="LazyDesigner unified editor workspace">
-  <header class="editor-header" aria-label="LazyDesigner editor controls">
+  <header class="editor-header" aria-label="LazyDesigner editor controls" aria-busy={navigationPending}>
     <div class="editor-leading">
       <span class="editor-brand-mark" aria-hidden="true"><EditorChromeIcon name="model"/></span>
       <span class="editor-brand">LazyDesigner</span>
       <span class="header-divider" aria-hidden="true"></span>
       <button class="workspace-return" type="button" aria-label="Return to Workspace"
-        title="Workspace" onclick={navigateWorkspace}>
+        title={nativePlacement === 'DETACHED' ? 'Workspace' : 'Restore original Blockbench window before opening Workspace'}
+        disabled={navigationPending} onclick={navigateWorkspace}>
         <EditorChromeIcon name="workspace"/><span class="workspace-label">Workspace</span>
       </button>
       <div class="editor-context">
@@ -402,9 +408,14 @@
           {active?.model_name ?? continuing?.model.name ?? 'Blockbench workspace'}
           {#if active?.dirty}<span class="unsaved" title="Unsaved changes at last observation">●</span>{/if}
         </h1>
-        <span class="subtitle">
-          {active?.project_name ?? continuing?.project.name ?? 'No active model'}
-          · {active ? 'Last observed' : 'Development preview'}
+        <span class="subtitle" role={navigationPending ? 'status' : undefined}
+          title={navigationPending ? 'Restoring original Blockbench window before opening another page' : undefined}>
+          {#if navigationPending}
+            Restoring original Blockbench window before leaving Editor…
+          {:else}
+            {active?.project_name ?? continuing?.project.name ?? 'No active model'}
+            · {active ? 'Last observed' : 'Development preview'}
+          {/if}
         </span>
         {#if openingModelId}<span class="model-opening" role="status">Opening requested model…</span>{/if}
       </div>
@@ -452,8 +463,10 @@
             onclick={restoreNativeWindow}>Detach Blockbench</button>
         {/if}
       {/if}
-      <button type="button" class="support-button" title="Support and settings"
-        aria-label="Open Support" onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
+      <button type="button" class="support-button"
+        title={nativePlacement === 'DETACHED' ? 'Support and settings' : 'Restore original Blockbench window before opening Support'}
+        aria-label="Open Support" disabled={navigationPending}
+        onclick={navigateSupport}><EditorChromeIcon name="support"/></button>
     </div>
   </header>
 
@@ -473,8 +486,8 @@
                 onclick={expandExplorer}><EditorChromeIcon name="projects"/></button>
             {:else}
               <button type="button" aria-label="Browse projects in Workspace"
-                title="Open Workspace to browse models without shrinking Blockbench"
-                onclick={navigateWorkspace}><EditorChromeIcon name="projects"/></button>
+                title="Open Workspace after restoring the original Blockbench window"
+                disabled={navigationPending} onclick={navigateWorkspace}><EditorChromeIcon name="projects"/></button>
             {/if}
             <button type="button" aria-label="Open Model from Project Explorer" title="Open Model…"
               disabled={actionBusy || fixture} onclick={() => void openModelSafely()}><EditorChromeIcon name="model"/></button>
@@ -691,12 +704,12 @@
                 aria-label="Expand Diagnostic panel"
                 onclick={expandDiagnostic}><EditorChromeIcon name="diagnostic"/></button>
             {:else}
-              <button type="button" title="Open connection Support without shrinking Blockbench"
-                aria-label="Open Diagnostic Support"
+              <button type="button" title="Open connection Support after restoring Blockbench"
+                aria-label="Open Diagnostic Support" disabled={navigationPending}
                 onclick={navigateSupport}><EditorChromeIcon name="diagnostic"/></button>
             {/if}
             <button type="button" title="Technical activity" aria-label="Open technical activity"
-              onclick={navigateActivity}><EditorChromeIcon name="activity"/></button>
+              disabled={navigationPending} onclick={navigateActivity}><EditorChromeIcon name="activity"/></button>
           </div>
         {:else}
           <!-- One Blockbench-style 40px panel bar; the selected tab IS the title. -->
@@ -755,7 +768,7 @@
             {/if}
             <button type="button" disabled={actionBusy || fixture || loading}
               onclick={() => void refresh()}>Refresh status</button>
-            <button type="button" class="text-action" onclick={navigateSupport}>Troubleshooting</button>
+            <button type="button" class="text-action" disabled={navigationPending} onclick={navigateSupport}>Troubleshooting</button>
           </section>
           <section role="tabpanel" tabindex="0" class="inspector-section activity-section"
             id="ld-inspector-activity" aria-labelledby="ld-tab-activity"
@@ -773,7 +786,7 @@
               <div><span>Models</span><strong>{observedModelCount ?? '—'}</strong></div>
             </div>
             <p class="subtle-note">Project totals come from the last Desktop observation. Gateway statistics are available separately.</p>
-            <button type="button" class="text-action" onclick={navigateActivity}>View Gateway statistics</button>
+            <button type="button" class="text-action" disabled={navigationPending} onclick={navigateActivity}>View Gateway statistics</button>
           </section>
           {#if !fixture && nativePlacementDetail}
             <div class="inspector-footnote" role="status">Blockbench window: {nativePlacementDetail}</div>

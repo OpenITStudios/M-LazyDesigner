@@ -26,6 +26,8 @@ The primary user outcome is **continue asset work**. Connection and installation
 
 The Editor has one real Blockbench native-window reservation between **two permanently present LazyDesigner side docks**: **Project Explorer** (left) and **Diagnostic** (right). Both are mounted during ordinary editing, even on narrow windows. Only the explicitly selected **Focus Editor** action hides both. This is not a WebView clone or substitute Blockbench workspace. The middle DOM reservation is completely empty; the original Blockbench Windows window alone provides its viewport, menus, Outliner, UV, Paint, Animation, Undo and Save when native placement succeeds.
 
+**Navigation and recovery:** Leaving the development Editor for Workspace, Support, or Analytics admits exactly one native Detach at a time and awaits its Rust `DETACHED` receipt before removing the editor view. The existing small subtitle communicates restoration in progress without adding a toolbar row or shrinking the native viewport; competing page/model/file actions are disabled during the transition. If restoration is refused, interrupted or unverified, the Editor remains visible, provides a next step near the existing Detach action, and does not claim Blockbench was restored. Route titles explain when the original native window must be restored first. Synthetic browser fixtures can verify the page routes only with native effects disabled; installed Windows focus and window recovery remain unverified.
+
 ### Single native Blockbench surface — P0 source contract
 
 The central source is exactly one independently running, verified Blockbench
