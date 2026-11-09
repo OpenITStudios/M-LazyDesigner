@@ -1446,7 +1446,7 @@
   .sidebar-page .project-expand{font-weight:550}
   .sidebar-page .model-line.current{background:var(--ed-select)}
   .sidebar-page .inspector-section{border:0;padding:10px 0}
-  .sidebar-footer{flex:none;display:flex;align-items:center;gap:9px;min-height:44px;margin:0 12px;padding:8px 2px;border:0;border-top:1px solid var(--ed-border);background:transparent;color:var(--ed-muted);font-size:11px;text-align:left;cursor:pointer}
+  .sidebar-footer{flex:none;display:flex;align-items:center;gap:9px;min-height:48px;margin:0 12px;padding:8px 2px;border:0;border-top:1px solid var(--ed-border);background:transparent;color:var(--ed-muted);font-size:12px;text-align:left;cursor:pointer}
   .sidebar-footer>span:nth-child(2){flex:1}
   .sidebar-footer:hover{color:var(--ed-text)}
   .sidebar-footer .connection-status{gap:0}
@@ -1455,7 +1455,6 @@
 
   /* V2: quiet navigation, single right sidebar, contextual project commands. */
   .unified-sidebar{background:#15171b}
-  .sidebar-brand{height:48px;font-size:13px}
   .sidebar-tabs{margin:14px 0 12px;gap:8px}
   .sidebar-tabs button{height:40px;border-radius:6px}
   .sidebar-tabs button.selected{background:#24262c}
@@ -1486,8 +1485,6 @@
   .sidebar-page .model-current-indicator{
     width:auto;margin-right:5px;color:#b7c5dc;font-size:10px;white-space:nowrap
   }
-  .sidebar-page .recent-group{margin-top:15px;padding-top:10px}
-  .sidebar-footer{min-height:48px}
   @media(hover:none){.sidebar-page .project-actions-toggle{opacity:1}}
 
   /* V3: one obvious model-opening action, readable navigation at 260-300px. */
@@ -1510,7 +1507,6 @@
   .sidebar-page .recent-model{font-size:13px}
   .sidebar-page .project-resources summary{font-size:12px}
   .sidebar-page .search-count{font-size:11px}
-  .sidebar-footer{font-size:12px}
   .sidebar-page .project-inline-actions{top:36px}
 
   /* Model-specific actions are contextual; never pretend unsupported rename/delete exists. */
