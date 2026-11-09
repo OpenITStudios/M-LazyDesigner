@@ -64,6 +64,16 @@ describe("Unified Editor P1 source-owned workspace", () => {
       "'Open ' + folder.label + ' folder for project ' + project.name",
       "No project folders added yet.",
       'aria-label="Modified at last observation"',
+      'class="search-label sr-only"',
+      'class="search-icon"',
+      'class:sr-only={!search.trim()}',
+      'disabled={Boolean(search.trim())}',
+      "Filtered models in project ",
+      '<EditorChromeIcon name="folder"/>',
+      '<EditorChromeIcon name="search"/>',
+      '<EditorChromeIcon name="more-horizontal"/>',
+      "matching project",
+      'class="tree-caret"',
       "projectsExpanded: true",
       "diagnosticExpanded: false",
       "projectActionsId = projectActionsId === id ? null : id;",
@@ -256,6 +266,10 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(script).toContain("Compact editor toolbar wraps instead of staying on one row");
     expect(script).toContain("Compact editor actions cannot scroll when clipped");
     expect(script).toContain("Last editor toolbar action is not reachable by horizontal scrolling");
+    expect(script).toContain("Explorer search must have a compact but accessible label");
+    expect(script).toContain("Project rows need the same folder icon system");
+    expect(script).toContain("Filtered projects must stay visibly expanded without a misleading toggle");
+    expect(script).toContain("Cleared search must hide the redundant project-count row");
     expect(script).toContain('("ready-aged", "editor")');
     expect(script).toContain('("status-unverified", "editor")');
     expect(script).toContain("Diagnostic tabs lack arrow-key navigation");
@@ -279,6 +293,11 @@ describe("Unified Editor P1 source-owned workspace", () => {
     expect(unified).toContain("import EditorChromeIcon from './EditorChromeIcon.svelte'");
     expect(unified).toContain('<EditorChromeIcon name="projects"/>');
     expect(unified).toContain('<EditorChromeIcon name="diagnostic"/>');
+    expect(unified).toContain('<EditorChromeIcon name="search"/>');
+    expect(unified).toContain('<EditorChromeIcon name="folder"/>');
+    expect(unified).toContain('<EditorChromeIcon name="more-horizontal"/>');
+    expect(icons).toContain("name === 'search'");
+    expect(icons).toContain("name === 'more-horizontal'");
     expect(stage).toContain('data-native-editor-reservation="true"');
     expect(stage).not.toContain('class="native-placeholder"');
     expect(icons).not.toContain("image_gen");

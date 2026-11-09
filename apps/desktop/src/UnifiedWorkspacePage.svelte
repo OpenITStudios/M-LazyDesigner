@@ -498,8 +498,9 @@
         {/if}
 
         {#if navigation && navigation.projects.length > 0}
-          <label class="search-label" for="ld-unified-model-search">Find a project or model</label>
+          <label class="search-label sr-only" for="ld-unified-model-search">Find a project or model</label>
           <div class="search-controls">
+            <span class="search-icon" aria-hidden="true"><EditorChromeIcon name="search"/></span>
             <input id="ld-unified-model-search" bind:this={searchInput} type="search"
               placeholder="Search project or model…" bind:value={search} onkeydown={searchKeydown}
               aria-describedby="ld-unified-search-count ld-unified-search-help"/>
@@ -507,9 +508,10 @@
               <button type="button" aria-label="Clear project search" title="Clear search" onclick={clearSearch}>×</button>
             {/if}
           </div>
-          <div id="ld-unified-search-count" class="search-count" role="status" aria-live="polite">
+          <div id="ld-unified-search-count" class="search-count" class:sr-only={!search.trim()}
+            role="status" aria-live="polite">
             {search.trim()
-              ? `${projects.length} ${projects.length === 1 ? 'project matches' : 'projects match'} your search`
+              ? `${projects.length} ${projects.length === 1 ? 'matching project' : 'matching projects'}`
               : `${navigation.projects.length} ${navigation.projects.length === 1 ? 'project' : 'projects'}`}
           </div>
           {#if search.trim()}
@@ -526,17 +528,22 @@
               <div class="project-group">
                 <div class="project-line">
                   <button type="button" class="project-expand"
-                    aria-label={(expanded(project) ? 'Hide models for ' : 'Show models for ') + project.name}
+                    aria-label={search.trim()
+                      ? 'Filtered models in project ' + project.name
+                      : (expanded(project) ? 'Hide models for ' : 'Show models for ') + project.name}
                     aria-expanded={expanded(project) || Boolean(search.trim())}
+                    disabled={Boolean(search.trim())}
                     onclick={() => toggleProject(project)}>
-                    <span aria-hidden="true">{expanded(project) || search.trim() ? '▾' : '▸'}</span>
+                    <span class="tree-caret" class:expanded={Boolean(expanded(project) || search.trim())}
+                      aria-hidden="true"><EditorChromeIcon name="chevron-right"/></span>
+                    <span class="project-icon" aria-hidden="true"><EditorChromeIcon name="folder"/></span>
                     <span class="project-name" title={project.name}>{project.name}</span>
                   </button>
                   <button type="button" class="project-actions-toggle"
                     aria-label={'Show actions for project ' + project.name}
                     title={'Project actions for ' + project.name}
                     aria-expanded={projectActionsId === project.id}
-                    onclick={() => toggleProjectActions(project.id)}>···</button>
+                    onclick={() => toggleProjectActions(project.id)}><EditorChromeIcon name="more-horizontal"/></button>
                 </div>
                 {#if projectActionsId === project.id}
                   <div class="project-inline-actions" role="group"
@@ -585,7 +592,7 @@
                         <button type="button" class="reveal-model" disabled={actionBusy || fixture}
                           title={'Show ' + model.name + ' in Explorer'}
                           aria-label={'Show model ' + model.name + ' in Explorer'}
-                          onclick={() => void showModelFile(model.id)}>···</button>
+                          onclick={() => void showModelFile(model.id)}><EditorChromeIcon name="more-horizontal"/></button>
                       {/if}
                     </div>
                   {/each}
@@ -599,7 +606,7 @@
                             title={'Open ' + folder.label + ' in File Explorer'}
                             disabled={actionBusy || fixture}
                             onclick={() => void openProjectSubfolder(folder.id)}>
-                            <span aria-hidden="true">▤</span><span>{folder.label}</span>
+                            <span class="project-icon" aria-hidden="true"><EditorChromeIcon name="folder"/></span><span>{folder.label}</span>
                           </button>
                         {/each}
                       </div>
@@ -627,7 +634,8 @@
           <div class="recent-group">
             <button type="button" class="recent-heading" aria-expanded={recentExpanded}
               onclick={() => recentExpanded = !recentExpanded}>
-              <span aria-hidden="true">{recentExpanded ? '▾' : '▸'}</span>
+              <span class="tree-caret" class:expanded={recentExpanded}
+                aria-hidden="true"><EditorChromeIcon name="chevron-right"/></span>
               Recent Models <span class="recent-count">{recentTargets.length}</span>
             </button>
             {#if recentExpanded}
@@ -952,11 +960,17 @@
     border-radius:3px;background:transparent;color:var(--ed-muted);font-size:17px;cursor:pointer;
   }
   .search-label{display:block;margin:0 4px 5px;font-size:11px;color:var(--ed-muted)}
-  .search-controls{display:flex;align-items:center;gap:4px;min-width:0}
-  .explorer input {
-    flex:1 1 auto;width:100%;min-width:0;min-height:34px;border:1px solid var(--ed-border);
-    border-radius:3px;background:var(--ed-bg);color:var(--ed-text);padding:6px 8px;font-size:12px;
+  .search-controls{position:relative;display:flex;align-items:center;gap:4px;min-width:0;margin-top:5px}
+  .search-icon{
+    position:absolute;left:8px;top:8px;display:grid;place-items:center;
+    pointer-events:none;color:var(--ed-muted-soft);
   }
+  .explorer input {
+    flex:1 1 auto;width:100%;min-width:0;min-height:32px;border:1px solid var(--ed-border);
+    border-radius:3px;background:var(--ed-bg);color:var(--ed-text);padding:5px 8px 5px 29px;font-size:12px;
+  }
+  /* The Editor provides an explicit clear control when filtered. */
+  .explorer input::-webkit-search-cancel-button{display:none}
   .search-controls button{
     flex:none;width:27px;min-height:32px;border:0;border-radius:4px;
     background:transparent;color:var(--ed-muted);font-size:17px;cursor:pointer;
@@ -965,7 +979,8 @@
   .search-hint{margin:0 4px 6px;color:var(--ed-muted-soft);font-size:10px;line-height:1.4}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .explorer input::placeholder{color:var(--ed-muted-soft)}
-  .search-count{font-size:10px;color:var(--ed-muted-soft);padding:7px 4px 8px}
+  .search-count{font-size:10px;color:var(--ed-muted-soft);padding:5px 4px 6px}
+  .search-count.sr-only{padding:0}
   .project-tree {display:grid;gap:2px}
   .project-group {min-width:0}
   .project-line {display:flex;align-items:center;gap:2px;min-height:28px}
@@ -975,15 +990,23 @@
     border:0;background:transparent;color:var(--ed-text);text-align:left;
     font-size:12px;font-weight:650;border-radius:4px;cursor:pointer;
   }
-  .project-expand:hover,.model-open:hover:not(:disabled),.recent-model:hover:not(:disabled){
+  .project-expand:hover:not(:disabled),.model-open:hover:not(:disabled),.recent-model:hover:not(:disabled){
     background:var(--ed-raised);color:var(--ed-text);
   }
+  .project-expand:disabled{opacity:1;cursor:default}
+  .tree-caret{
+    display:grid;place-items:center;flex:none;
+    width:13px;height:16px;color:var(--ed-muted-soft);
+    transition:transform 80ms linear;
+  }
+  .tree-caret.expanded{transform:rotate(90deg)}
+  .project-icon{display:grid;place-items:center;flex:none;color:var(--ed-muted-soft)}
   .project-name,.model-name {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* One compact action affordance preserves project-name width; its commands
      are expanded as normal layout content, never over the native cutout. */
   .project-actions-toggle,.reveal-model {
-    flex:none;width:26px;height:28px;border:0;border-radius:3px;
-    background:transparent;color:var(--ed-muted);cursor:pointer;
+    display:grid;place-items:center;flex:none;width:26px;height:28px;
+    border:0;border-radius:3px;background:transparent;color:var(--ed-muted);cursor:pointer;
   }
   .project-actions-toggle:hover,.reveal-model:hover,
   .project-actions-toggle[aria-expanded="true"]{background:var(--ed-raised);color:var(--ed-text)}

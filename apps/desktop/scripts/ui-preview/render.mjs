@@ -302,6 +302,22 @@ async function main() {
             const strip = tools?.querySelector('.diagnostic-tabs');
             return strip ? getComputedStyle(strip).backgroundColor : null;
           })(),
+          explorerSearchCompact: (() => {
+            const label = explorer?.querySelector('.search-label');
+            const search = explorer?.querySelector('#ld-unified-model-search');
+            const count = explorer?.querySelector('#ld-unified-search-count');
+            return !search || Boolean(label && count
+              && label.classList.contains('sr-only')
+              && count.classList.contains('sr-only')
+              && explorer?.querySelector('.search-icon svg')
+              && getComputedStyle(label).position === 'absolute');
+          })(),
+          explorerTreeIconConsistency: (() => {
+            const project = explorer?.querySelector('.project-expand');
+            return !project || Boolean(project.querySelector('.tree-caret svg')
+              && project.querySelector('.project-icon svg')
+              && explorer?.querySelector('.project-actions-toggle svg'));
+          })(),
           projectRowHeight: explorer?.querySelector('.project-line')
             ?.getBoundingClientRect().height ?? 0,
           modelRowHeight: explorer?.querySelector('.model-line')
@@ -321,6 +337,10 @@ async function main() {
         && sidePanels.nativeSize.width > 600 && sidePanels.nativeSize.height > 300);
       checks.native_editor_dominates_layout = sidePanels.nativeFraction >=
         (dims.width >= 1320 ? 0.70 : 0.80);
+      checks.explorer_search_compact_when_unfiltered = dims.width >= 1320
+        ? sidePanels.explorerSearchCompact : true;
+      checks.explorer_icons_consistent = dims.width >= 1320
+        ? sidePanels.explorerTreeIconConsistency : true;
       checks.active_model_name_readable_default = dims.width < 1320 || await frame
         .locator('#ld-unified-explorer')
         .evaluate(explorer => {

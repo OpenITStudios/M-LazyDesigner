@@ -630,14 +630,35 @@ def inspect_unified_editor(page, fixture, view):
         if search.count() != 1:
             issues.append("project/model search is missing in the expanded Project Explorer")
         else:
+            if explorer.locator(".search-label.sr-only").count() != 1:
+                issues.append("Explorer search must have a compact but accessible label")
+            if explorer.locator(".search-icon svg").count() != 1:
+                issues.append("Explorer search needs its native-style icon")
+            if explorer.locator(".search-count.sr-only").count() != 1:
+                issues.append("Unfiltered project count must not consume visible space")
+            if explorer.locator(".project-expand .tree-caret svg").count() == 0:
+                issues.append("Project expansion needs consistent icon geometry")
+            if explorer.locator(".project-expand .project-icon svg").count() == 0:
+                issues.append("Project rows need the same folder icon system")
             target = "Needle asset" if fixture == "many-projects" else "Sofa"
             search.fill(target)
             model = page.get_by_role("button", name="Open model " + target, exact=True)
             if model.count() != 1 or model.is_enabled():
                 issues.append("fixture must locate target but never open a native model")
+            filtered_project = explorer.locator(".project-expand[aria-expanded='true']")
+            if (filtered_project.count() != 1 or filtered_project.is_enabled()
+                    or not (filtered_project.get_attribute("aria-label") or "").startswith(
+                        "Filtered models in project ")):
+                issues.append("Filtered projects must stay visibly expanded without a misleading toggle")
+            count = explorer.locator("#ld-unified-search-count")
+            if (count.count() != 1 or "1 matching project" not in count.inner_text()
+                    or count.evaluate("(node) => node.classList.contains('sr-only')")):
+                issues.append("Filtered project count must be compact and visible during search")
             search.press("Escape")
             if search.input_value() != "":
                 issues.append("Escape did not clear Editor project search")
+            if explorer.locator(".search-count.sr-only").count() != 1:
+                issues.append("Cleared search must hide the redundant project-count row")
     if fixture == "ready" and (not should_rail or explorer_expanded_for_check):
         project_actions = page.get_by_role(
             "button", name="Show actions for project Furniture", exact=True
