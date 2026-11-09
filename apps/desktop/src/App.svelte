@@ -907,7 +907,6 @@
           {status} {loading} {busyAction} {openingModelId} {statusProbeFailures} {statusPresentationNowMs}
           fixture={devFixture !== null} navigationPending={editorNavigationPending}
           {openModel} {addProjectFolder} {createProjectFolder} {runProjectAction} {focusCurrentEditor} {openBlockbenchEditor} {refresh}
-          navigateWorkspace={() => navigate('Overview')}
           navigateSupport={() => navigate('Support')}
           navigateActivity={() => navigate('Analytics')}
         />
