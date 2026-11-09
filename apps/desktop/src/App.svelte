@@ -319,6 +319,24 @@
     }
   }
 
+  async function createProjectFolder(name: string) {
+    if (devFixture || busyAction || statusProbeFailures >= 2) return;
+    closeActionDisclosures(true);
+    busyAction = 'project-action';
+    clearActionFeedback();
+    try {
+      const result = await invoke<ProjectNavigationActionResult>('create_project_folder', { name });
+      if (result.status === 'ADDED' || result.status === 'ALREADY_ADDED') {
+        if (!(await refreshAfterAcknowledgment('New project folder'))) return;
+        showActionToast('Empty project folder created and added. No model was generated.');
+      }
+    } catch (cause) {
+      reportError(cause);
+    } finally {
+      busyAction = null;
+    }
+  }
+
   async function beginDeleteProject(id: string) {
     if (devFixture || busyAction || deleteReview || statusProbeFailures >= 2) return;
     closeActionDisclosures(true);
@@ -878,7 +896,7 @@
         <UnifiedWorkspacePage bind:this={nativeEditorStage} bind:layout={editorLayout}
           {status} {loading} {busyAction} {openingModelId} {statusProbeFailures} {statusPresentationNowMs}
           fixture={devFixture !== null} navigationPending={editorNavigationPending}
-          {openModel} {addProjectFolder} {runProjectAction} {focusCurrentEditor} {openBlockbenchEditor} {refresh}
+          {openModel} {addProjectFolder} {createProjectFolder} {runProjectAction} {focusCurrentEditor} {openBlockbenchEditor} {refresh}
           navigateWorkspace={() => navigate('Overview')}
           navigateSupport={() => navigate('Support')}
           navigateActivity={() => navigate('Analytics')}
