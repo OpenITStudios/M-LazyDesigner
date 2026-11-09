@@ -903,9 +903,9 @@
             <div class="status-overview-row">
               <span class="status-overview-label">System</span>
               <span class="status-overview-value" tabindex="0" aria-label={status?.observed_at_unix_ms ? `System: ${readinessLabel}. Last checked: ${new Date(status.observed_at_unix_ms).toLocaleString()}` : `System: ${readinessLabel}. Last check time unavailable`} title={status?.observed_at_unix_ms ? `Last checked: ${new Date(status.observed_at_unix_ms).toLocaleString()}` : 'Last check time unavailable'}>
-                <i class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
-                  class:stale={statusProbeFailures >= 2 || readinessOutdated} aria-hidden="true"></i>
-                {readinessLabel === 'Ready at last check' ? 'Ready' : readinessLabel}
+                <span class="status-indicator" class:verified={Boolean(status?.readiness.ready && statusProbeFailures < 2 && !loading && !readinessOutdated)}
+                  class:stale={statusProbeFailures >= 2 || readinessOutdated || loading} aria-hidden="true"></span>
+                <span class="status-short-label">{readinessLabel === 'Ready at last check' ? 'Ready' : readinessLabel}</span>
               </span>
             </div>
             <div class="status-overview-row">
@@ -913,9 +913,9 @@
               <span class="status-overview-value" tabindex="0"
                 aria-label={`AI: ${loading ? 'Checking' : aiStatus?.label ?? 'Not verified'}. ${aiStatus?.detail ?? 'Connection has not been verified.'}`}
                 title={aiStatus?.detail ?? 'Connection has not been verified.'}>
-                <i class:verified={Boolean(aiStatus?.recentlyVerified && !loading)}
-                  class:stale={Boolean(aiStatus?.needsRefresh || loading)} aria-hidden="true"></i>
-                {loading ? 'Checking…' : aiStatus?.label === 'Verified at last check' ? 'Verified' : aiStatus?.label ?? 'Not verified'}
+                <span class="status-indicator" class:verified={Boolean(aiStatus?.recentlyVerified && !loading)}
+                  class:stale={Boolean(aiStatus?.needsRefresh || loading)} aria-hidden="true"></span>
+                <span class="status-short-label">{loading ? 'Checking…' : aiStatus?.label === 'Verified at last check' ? 'Verified' : aiStatus?.label ?? 'Not verified'}</span>
               </span>
             </div>
             {#if statusProbeFailures >= 2 || readinessOutdated || !status?.readiness.ready}
@@ -1593,12 +1593,13 @@
   /* Status V4: concise operational summary, diagnostics only on demand. */
   .sidebar-status .status-overview{padding:16px 2px 12px}
   .sidebar-status .status-overview h3{margin:0 0 14px;font-size:13px;font-weight:650;color:var(--ed-text)}
-  .sidebar-status .status-overview-row{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;padding:11px 0;border-bottom:1px solid var(--ed-border-soft)}
+  .sidebar-status .status-overview-row{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:11px 0;border-bottom:1px solid var(--ed-border-soft)}
   .sidebar-status .status-overview-label{font-size:12px;color:var(--ed-muted)}
   .sidebar-status .status-overview-value{display:inline-flex;align-items:center;justify-content:flex-end;gap:7px;min-width:0;text-align:right;font-size:12px;font-weight:600;color:var(--ed-text)}
-  .sidebar-status .status-overview-value i{display:block;flex:none;width:7px;height:7px;border-radius:50%;background:var(--ed-muted-soft)}
-  .sidebar-status .status-overview-value i.verified{background:#54bb86}
-  .sidebar-status .status-overview-value i.stale{background:#d5a052}
+  .sidebar-status .status-overview-value .status-indicator{display:inline-block;flex:0 0 8px;width:8px;height:8px;min-width:8px;min-height:8px;border-radius:50%;background-color:#8f9bad}
+  .sidebar-status .status-overview-value .status-indicator.verified{background-color:#54bb86}
+  .sidebar-status .status-overview-value .status-indicator.stale{background-color:#d5a052}
+  .sidebar-status .status-short-label{min-width:0;overflow-wrap:anywhere}
   .sidebar-status .status-overview-help{margin:10px 0 0;font-size:12px;line-height:1.5;color:var(--ed-muted)}
   .sidebar-status .status-overview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:17px 0}
   .sidebar-status .status-overview-actions button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:6px 9px;border:1px solid var(--ed-border);border-radius:6px;background:var(--ed-raised);color:var(--ed-text);font-size:12px;cursor:pointer}
