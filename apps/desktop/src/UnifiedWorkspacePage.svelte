@@ -935,7 +935,7 @@
               <p class="subtle-note">AI: {aiStatus?.detail ?? 'Connection has not been verified.'}</p>
               {#if status?.diagnostic}<p class="subtle-note">{status.diagnostic}</p>{/if}
               {#if status?.blockbench.diagnostic}<p class="subtle-note">{status.blockbench.diagnostic}</p>{/if}
-              <button type="button" class="text-action" disabled={navigationPending}
+              <button type="button" class="text-action" disabled={navigationPending || fixture}
                 title="Open the AI activity and Gateway statistics page"
                 onclick={navigateActivity}>Open AI activity page</button>
             </details>
@@ -1570,6 +1570,8 @@
   .sidebar-status .status-overview-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:17px 0}
   .sidebar-status .status-overview-actions button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:6px 9px;border:1px solid var(--ed-border);border-radius:5px;background:var(--ed-raised);color:var(--ed-text);font-size:12px;cursor:pointer}
   .sidebar-status .status-overview-actions .text-action{background:transparent;border-color:transparent;color:var(--ed-muted)}
+  .sidebar-status .status-overview-actions button:disabled,
+  .sidebar-status .status-advanced button:disabled{opacity:.55;cursor:not-allowed}
   .sidebar-status .status-advanced{border-top:1px solid var(--ed-border);padding:12px 0}
   .sidebar-status .status-advanced summary{cursor:pointer;color:var(--ed-muted);font-size:12px}
   .sidebar-status .status-advanced[open] summary{margin-bottom:12px;color:var(--ed-text)}
